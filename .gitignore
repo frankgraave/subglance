@@ -22,3 +22,14 @@ logs/
 node_modules/
 dist/
 build/
+
+# Go
+bin/
+tmp/
+coverage.out
+*.test
+
+# SQLite
+*.db
+*.db-shm
+*.db-wal
