@@ -36,6 +36,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/health", s.handleHealth)
 	mux.HandleFunc("GET /api/v1/ready", s.handleReady)
 
+	mux.HandleFunc("GET /api/v1/monitors", s.handleListMonitors)
+	mux.HandleFunc("POST /api/v1/monitors", s.handleCreateMonitor)
+	mux.HandleFunc("GET /api/v1/monitors/{id}", s.handleGetMonitor)
+	mux.HandleFunc("DELETE /api/v1/monitors/{id}", s.handleDeleteMonitor)
+	mux.HandleFunc("POST /api/v1/monitors/{id}/pause", s.handlePauseMonitor)
+	mux.HandleFunc("POST /api/v1/monitors/{id}/resume", s.handleResumeMonitor)
+	mux.HandleFunc("GET /api/v1/monitors/{id}/heartbeats", s.handleListHeartbeats)
+
 	return s.withRecovery(s.withLogging(mux))
 }
 

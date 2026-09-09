@@ -20,6 +20,7 @@ import (
 	"github.com/frankgraave/subglance/internal/buildinfo"
 	"github.com/frankgraave/subglance/internal/config"
 	"github.com/frankgraave/subglance/internal/logging"
+	"github.com/frankgraave/subglance/internal/monitor"
 	"github.com/frankgraave/subglance/internal/store"
 )
 
@@ -85,6 +86,23 @@ func run(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	runner := monitor.New(monitor.Options{
+		DB:                  db,
+		Log:                 log,
+		AllowPrivateTargets: cfg.AllowPrivateTargets,
+		Workers:             cfg.CheckWorkers,
+	})
+
+	schedulerDone := make(chan struct{})
+	go func() {
+		defer close(schedulerDone)
+		// Run returns ctx.Err() on shutdown, which is expected rather than a
+		// failure worth reporting.
+		if err := runner.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			log.Error("scheduler stopped unexpectedly", "error", err)
+		}
+	}()
+
 	errCh := make(chan error, 1)
 	go func() {
 		log.Info("http server listening", "addr", cfg.Addr)
@@ -108,6 +126,14 @@ func run(args []string) error {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("graceful shutdown: %w", err)
 	}
+
+	// Wait for in-flight checks so no result is lost mid-write.
+	select {
+	case <-schedulerDone:
+	case <-shutdownCtx.Done():
+		log.Warn("scheduler did not stop within the shutdown timeout")
+	}
+
 	log.Info("shutdown complete")
 	return nil
 }
