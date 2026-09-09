@@ -63,6 +63,12 @@ type Monitor struct {
 	// SSLWarnDays sets how many days before certificate expiry a check starts
 	// failing. Zero disables the check.
 	SSLWarnDays int
+
+	// Retries is how many consecutive failures confirm an incident. The
+	// checker itself ignores it — a probe is a probe — but it travels with
+	// the monitor so the state engine can apply a per-monitor threshold
+	// without a second database lookup on every result.
+	Retries int
 }
 
 // FailureKind classifies why a check failed.

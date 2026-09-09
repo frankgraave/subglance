@@ -25,11 +25,17 @@ type monitorResponse struct {
 	TimeoutS  int  `json:"timeout_s"`
 	Enabled   bool `json:"enabled"`
 
-	Status     string     `json:"status"` // up, down, or pending
+	Status     string     `json:"status"` // up, pending, or down
 	LastCheck  *time.Time `json:"last_check,omitempty"`
 	LatencyMS  int        `json:"latency_ms,omitempty"`
 	StatusCode int        `json:"status_code,omitempty"`
 	Error      string     `json:"error,omitempty"`
+
+	// IncidentID and IncidentSince describe the open incident, if any. They
+	// let the UI link straight from a red row to the incident without a
+	// second round trip.
+	IncidentID    int64      `json:"incident_id,omitempty"`
+	IncidentSince *time.Time `json:"incident_since,omitempty"`
 
 	Uptime24h float64 `json:"uptime_24h"`
 
@@ -276,9 +282,16 @@ func (s *Server) describeMonitor(r *http.Request, m store.Monitor) monitorRespon
 	hb, err := s.db.LatestHeartbeat(ctx, m.ID)
 	switch {
 	case err == nil:
-		resp.Status = "down"
-		if hb.OK {
-			resp.Status = "up"
+		// The last heartbeat says what the last probe saw; it does not say
+		// whether the monitor is down. A single failed check is a blip until
+		// the failure threshold is crossed, so the reported status comes from
+		// the incident record — the same source the alerting uses. Deriving
+		// it from the heartbeat alone would put the dashboard and the
+		// notifications into disagreement, which is worse than either being
+		// slightly stale.
+		resp.Status = "up"
+		if !hb.OK {
+			resp.Status = "pending"
 		}
 		ts := hb.TS
 		resp.LastCheck = &ts
@@ -286,9 +299,29 @@ func (s *Server) describeMonitor(r *http.Request, m store.Monitor) monitorRespon
 		resp.StatusCode = hb.StatusCode
 		resp.Error = hb.Error
 	case errors.Is(err, sql.ErrNoRows):
-		// Never checked yet; "pending" is correct.
+		// Never checked yet.
+		resp.Status = "pending"
 	default:
 		s.log.Error("latest heartbeat", "monitor_id", m.ID, "error", err)
+		resp.Status = "pending"
+	}
+
+	// A confirmed open incident is what "down" means.
+	inc, err := s.db.OpenIncidentFor(ctx, m.ID)
+	switch {
+	case err == nil:
+		resp.IncidentID = inc.ID
+		resp.IncidentSince = &inc.StartedAt
+		if inc.Confirmed() {
+			resp.Status = "down"
+		}
+		if resp.Error == "" {
+			resp.Error = inc.LastError
+		}
+	case errors.Is(err, store.ErrNoOpenIncident):
+		// Nothing wrong.
+	default:
+		s.log.Error("open incident", "monitor_id", m.ID, "error", err)
 	}
 
 	if stats, err := s.db.Uptime(ctx, m.ID, 24*time.Hour); err == nil {

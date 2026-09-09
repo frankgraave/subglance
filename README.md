@@ -84,6 +84,48 @@ defaults.
 monitor, and without that guard SubGlance would happily act as an SSRF proxy into
 the host network. Turn it on only if you intend to monitor internal services.
 
+### How a failure becomes an alert
+
+A monitor does not go down because one check failed. Each monitor has a failure
+threshold (`retries`, default 2), and the state engine walks it through four
+states:
+
+| State | Meaning | Alerts? |
+|---|---|---|
+| `up` | Last check passed | — |
+| `pending` | Failing, threshold not yet reached | No |
+| `down` | Threshold reached, incident confirmed | Yes, once |
+| `up` again | Recovered | Only if it was confirmed |
+
+An incident record is opened on the **first** failure, so its start time is when
+the outage actually began — not when the system became sure of it. The gap
+between `started_at` and `confirmed_at` is the confirmation delay, and it is
+visible in the API.
+
+A blip that recovers before the threshold is recorded but never notified, in
+either direction. A monitor that oscillates rapidly is marked as flapping, and
+further notifications are held back until it settles; suppressed transitions are
+flagged rather than silently dropped.
+
+### API
+
+```
+GET    /api/v1/monitors                    list monitors with current status
+POST   /api/v1/monitors                    create a monitor
+GET    /api/v1/monitors/{id}               one monitor
+DELETE /api/v1/monitors/{id}               delete a monitor
+POST   /api/v1/monitors/{id}/pause         stop checking
+POST   /api/v1/monitors/{id}/resume        start checking again
+GET    /api/v1/monitors/{id}/heartbeats    recent check results
+GET    /api/v1/monitors/{id}/incidents     incident history
+
+GET    /api/v1/incidents                   every unresolved incident
+POST   /api/v1/incidents/{id}/ack          acknowledge — seen, being worked on
+```
+
+Acknowledging is not resolving: it stops repeat notifications without claiming
+the problem is fixed.
+
 ## Contributing
 
 Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) first — every

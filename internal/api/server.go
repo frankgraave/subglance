@@ -43,6 +43,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/monitors/{id}/pause", s.handlePauseMonitor)
 	mux.HandleFunc("POST /api/v1/monitors/{id}/resume", s.handleResumeMonitor)
 	mux.HandleFunc("GET /api/v1/monitors/{id}/heartbeats", s.handleListHeartbeats)
+	mux.HandleFunc("GET /api/v1/monitors/{id}/incidents", s.handleListMonitorIncidents)
+
+	mux.HandleFunc("GET /api/v1/incidents", s.handleListOpenIncidents)
+	mux.HandleFunc("POST /api/v1/incidents/{id}/ack", s.handleAckIncident)
 
 	return s.withRecovery(s.withLogging(mux))
 }
