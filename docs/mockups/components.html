@@ -55,6 +55,9 @@ body {
 .led[data-state="down"]{background:var(--down);box-shadow:var(--glow-down)}
 
 .page-head { max-width: 1080px; margin: 0 auto 40px; display:flex; align-items:flex-start; gap:16px; }
+.back-link { display:inline-block; font-size:12px; color:var(--ink-3); text-decoration:none; margin-bottom:10px;
+  transition:color 140ms var(--ease); }
+.back-link:hover { color:var(--ink); }
 h1 { font-size:22px; font-weight:500; letter-spacing:-.025em; }
 .page-sub { font-size:13px; color:var(--ink-3); margin-top:6px; line-height:1.55; max-width:60ch; }
 
@@ -290,6 +293,7 @@ code { font-family:var(--font-mono); font-size:11.5px; color:var(--ink-2); backg
 
 <div class="page-head">
   <div>
+    <a href="dashboard-directions.html" class="back-link">← Dashboard layouts</a>
     <h1>Components</h1>
     <p class="page-sub">Everything the dashboard mockup did not cover: the forms, controls and states that make up the other 80% of the product. Each one is here because a specific screen needs it — add a monitor, edit a name, configure a channel, delete something you cannot undo.</p>
   </div>

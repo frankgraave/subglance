@@ -582,6 +582,12 @@ body:not([data-focus="on"]) .focus-exit { display: none; }
 .switcher button[aria-pressed="true"] { background: var(--surface-hi); color: var(--ink); }
 .switcher button:hover:not([aria-pressed="true"]) { color: var(--ink); }
 .switcher .div { width: 1px; height: 18px; background: var(--border-hi); margin: 0 4px; }
+.switcher-link {
+  font-size: 12px; color: var(--ink-3); text-decoration: none;
+  padding: 6px 13px; border-radius: 999px; white-space: nowrap;
+  transition: all 160ms var(--ease);
+}
+.switcher-link:hover { color: var(--ink); background: var(--surface-hi); }
 
 [data-variant="a"] .v-b, [data-variant="a"] .v-c, [data-variant="a"] .v-d,
 [data-variant="b"] .v-a, [data-variant="b"] .v-c, [data-variant="b"] .v-d,
@@ -878,6 +884,8 @@ body[data-focus="on"] .switcher:hover { opacity: 1; }
   <button data-v="d">Status wall</button>
   <span class="div"></span>
   <button id="simulate">Simulate outage</button>
+  <span class="div"></span>
+  <a class="switcher-link" href="components.html">Components &amp; forms →</a>
 </nav>
 
 <script>

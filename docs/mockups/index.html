@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SubGlance — design review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500&family=Geist+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+:root { --font-sans:"Geist",ui-sans-serif,system-ui,sans-serif; --font-mono:"Geist Mono",ui-monospace,monospace;
+  --canvas:#08090a; --surface:#0e1011; --surface-2:#141719; --border:#1e2224; --border-hi:#2a2f32;
+  --ink:#e8eaec; --ink-2:#9ba1a6; --ink-3:#61686d; --up:#34d399; --warn:#fbbf24; --down:#f43f5e;
+  --ease:cubic-bezier(.32,.72,0,1); color-scheme:dark; }
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:var(--font-sans); background:var(--canvas); color:var(--ink);
+  -webkit-font-smoothing:antialiased; min-height:100vh; display:grid; place-items:center; padding:48px 24px; }
+.wrap { width:min(680px,100%); }
+.brand { display:flex; align-items:center; gap:11px; margin-bottom:8px; }
+.led { display:inline-block; width:20px; height:7px; border-radius:2.5px; background:var(--up);
+  box-shadow:0 0 0 1px rgba(52,211,153,.35), 0 0 7px -1px rgba(52,211,153,.6); position:relative; }
+.led::after { content:""; position:absolute; inset:1px 1px 3px; border-radius:1.5px;
+  background:linear-gradient(180deg,rgba(255,255,255,.55),rgba(255,255,255,0)); opacity:.5; }
+h1 { font-size:20px; font-weight:500; letter-spacing:-.02em; }
+.sub { font-size:13px; color:var(--ink-3); line-height:1.6; margin-bottom:32px; max-width:56ch; }
+a.card { display:block; text-decoration:none; color:inherit; border:1px solid var(--border);
+  border-radius:14px; background:var(--surface); padding:20px 22px; margin-bottom:12px;
+  transition:border-color 160ms var(--ease), background 160ms var(--ease), transform 160ms var(--ease); }
+a.card:hover { border-color:var(--border-hi); background:var(--surface-2); transform:translateY(-1px); }
+.card-top { display:flex; align-items:baseline; gap:10px; margin-bottom:7px; }
+.card-title { font-size:15px; font-weight:500; letter-spacing:-.01em; }
+.card-file { font-family:var(--font-mono); font-size:10.5px; color:var(--ink-3); margin-left:auto; }
+.card-desc { font-size:12.5px; color:var(--ink-2); line-height:1.6; }
+.card-list { font-size:11.5px; color:var(--ink-3); margin-top:11px; line-height:1.7; }
+.note { font-size:11.5px; color:var(--ink-3); margin-top:26px; line-height:1.65; padding-top:18px; border-top:1px solid var(--border); }
+kbd { font-family:var(--font-mono); font-size:10.5px; border:1px solid var(--border-hi); border-radius:4px; padding:1px 5px; color:var(--ink-2); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><span class="led"></span><h1>SubGlance — design review</h1></div>
+  <p class="sub">Two clickable mockups. Nothing here is wired to a backend: the data is fixed and the interactions are simulated, so it is safe to click anything.</p>
+
+  <a class="card" href="dashboard-directions.html">
+    <div class="card-top">
+      <span class="card-title">Dashboard layouts</span>
+      <span class="card-file">dashboard-directions.html</span>
+    </div>
+    <div class="card-desc">Four ways to show the same fourteen monitors. The layout is a real setting — pick one from the grid icon in the toolbar and it is remembered.</div>
+    <div class="card-list">
+      Rows · Cards · Compact · Status wall<br>
+      Try: “Simulate outage”, the live check ticks, <kbd>⌘B</kbd> to collapse the sidebar
+    </div>
+  </a>
+
+  <a class="card" href="components.html">
+    <div class="card-top">
+      <span class="card-title">Components &amp; forms</span>
+      <span class="card-file">components.html</span>
+    </div>
+    <div class="card-desc">Everything the dashboard does not cover — the other 80% of the product. Add-monitor form, inline renaming, switches, buttons, dialogs, and the empty/loading/error states.</div>
+    <div class="card-list">
+      Try: click a monitor name to rename it, “Test now”, <kbd>⌘K</kbd> for the command palette, “Delete monitor…”
+    </div>
+  </a>
+
+  <p class="note">Both pages remember your theme and layout in localStorage. If something looks stale after a <code>git pull</code>, hard-refresh with <kbd>⌘⇧R</kbd>.</p>
+</div>
+</body>
+</html>
