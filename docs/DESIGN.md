@@ -46,17 +46,17 @@ a component.**
 ### 2.1 Colour — dark (default)
 
 ```css
---canvas:     #08090a;   /* paginaachtergrond */
---surface:    #0e1011;   /* kaart, sidebar, drawer */
---surface-2:  #141719;   /* invoervelden, hover */
---surface-hi: #1a1e20;   /* actieve segmenten, tracks */
---border:     #1e2224;   /* standaard rand, scheidingslijn */
---border-hi:  #2a2f32;   /* rand van interactieve elementen */
+--canvas:     #08090a;   /* page background */
+--surface:    #0e1011;   /* card, sidebar, drawer */
+--surface-2:  #141719;   /* inputs, hover */
+--surface-hi: #1a1e20;   /* active segments, tracks */
+--border:     #1e2224;   /* default border, divider */
+--border-hi:  #2a2f32;   /* border on interactive elements */
 
---ink:        #e8eaec;   /* primaire tekst */
---ink-2:      #9ba1a6;   /* secundaire tekst */
---ink-3:      #61686d;   /* labels, hulptekst */
---ink-4:      #3d4347;   /* placeholders, uitgeschakeld */
+--ink:        #e8eaec;   /* primary text */
+--ink-2:      #9ba1a6;   /* secondary text */
+--ink-3:      #61686d;   /* labels, help text */
+--ink-4:      #3d4347;   /* placeholders, disabled */
 ```
 
 ### 2.2 Colour — light
@@ -127,12 +127,12 @@ comparing them, you're reading them.
 ### 2.6 Shape, space, motion
 
 ```css
---r-sm: 6px;    /* knoppen, invoer, kleine controls */
---r-md: 10px;   /* rijen, lijstitems */
---r-lg: 14px;   /* kaarten, dialogen, drawer */
+--r-sm: 6px;    /* buttons, inputs, small controls */
+--r-md: 10px;   /* rows, list items */
+--r-lg: 14px;   /* cards, dialogs, drawer */
 
 --ease: cubic-bezier(.32, .72, 0, 1);
---dur:  420ms;  /* thema-overgang */
+--dur:  420ms;  /* theme transition */
 ```
 
 Space moves in steps of 4px. Duration follows role: 140ms for hover, 200–280ms

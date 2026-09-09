@@ -89,7 +89,7 @@ The part that separates SubGlance from "curl in a loop". It handles:
 - **Confirmation:** N consecutive failures before anything goes down (default 2)
 - **Incident lifecycle:** open → confirmed → resolved, with a cause
 - **Flapping detection:** rapidly toggling status is suppressed, not forwarded
-- **Maintenance windows:** scheduled silence (post-v0.1)
+- **Maintenance windows:** scheduled muting (post-v0.1)
 
 ### Notifier
 A queue with exponential backoff. A failing Slack webhook must never block the
@@ -178,9 +178,9 @@ decide whether the process should be restarted — and restarting doesn't fix a
 sick database. `/ready` does check the dependencies. So `/health` 200 with
 `/ready` 503 means: leave this process alone, but don't send it traffic yet.
 
-**Authentication:** session cookie for the UI, `Authorization: Bearer *** with
-API tokens for machines. Both hit exactly the same endpoints — the UI gets no
-privileges the API doesn't have.
+**Authentication:** session cookie for the UI, `Authorization: Bearer <token>`
+with API tokens for machines. Both hit exactly the same endpoints — the UI gets
+no privileges the API does not have.
 
 ## 5. Frontend structure
 
