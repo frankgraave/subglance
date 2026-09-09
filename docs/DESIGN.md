@@ -1,49 +1,49 @@
-# SubGlance — Designsysteem
+# SubGlance — Design system
 
-> Interne bron van waarheid voor visuele en interactiekeuzes. Zie
-> `ARCHITECTURE.md` voor de technische keuzes.
+> Internal source of truth for visual and interaction decisions. See
+> `ARCHITECTURE.md` for the technical calls.
 >
-> **Levende voorbeelden:** open `docs/mockups/index.html` in een browser. Elke
-> regel hieronder is daar te zien en aan te klikken. Wijkt de code af van dit
-> document, dan is dit document leidend — of het is verouderd en moet het
-> bijgewerkt worden in dezelfde PR.
+> **Living examples:** open `docs/mockups/index.html` in a browser. Every rule
+> below is visible and clickable there. If the code disagrees with this
+> document, this document wins — or it's out of date and needs updating in the
+> same PR.
 
 ---
 
-## 1. Uitgangspunt
+## 1. Starting point
 
-SubGlance beantwoordt één vraag: **werkt het nog?** Alles in de interface
-verdient zijn plek door die vraag sneller te beantwoorden, of het hoort er niet.
+SubGlance answers one question: **is it still working?** Everything in the
+interface earns its place by answering that question faster, or it doesn't
+belong.
 
-Het product concurreert met Uptime Kuma en Better Stack. Onze inzet is niet meer
-functies, maar een dashboard dat je een halve seconde hoeft aan te kijken. Dat is
-een designclaim, en die moet het ontwerp dus waarmaken.
+The obvious comparisons are Uptime Kuma and Better Stack. My bet isn't more
+features — it's a dashboard you only need to look at for half a second. That's a
+design claim, so the design has to deliver on it.
 
-### De vijf regels
+### The five rules
 
-1. **Status is kleur, activiteit is beweging.** De led vertelt wát er aan de hand
-   is. Beweging vertelt dát er iets gebeurde. Zodra die twee door elkaar lopen,
-   betekent geen van beide nog iets.
-2. **Stilte is de standaard.** Een gezond dashboard hoort saai te zijn. Alles dat
-   permanent pulseert, knippert of kleurt, leert de kijker om weg te kijken —
-   precies op het moment dat je zijn aandacht nodig hebt.
-3. **Afwezigheid is luid.** Een mislukte check tekent op volle hoogte. Wat er
-   níét is, mag er niet uitzien als een snelle response.
-4. **Eén signaal per betekenis.** Zodra twee dingen hetzelfde zeggen, verwatert
-   het signaal dat ertoe doet.
-5. **Grootte is voor structuur, niet voor nadruk.** Nadruk komt van kleur en
-   contrast. Componenten die per weergave van maat veranderen, houden op
-   referentiepunten te zijn.
+1. **Status is colour, activity is motion.** The LED tells you *what* is going
+   on. Motion tells you *that* something happened. The moment those two blur
+   together, neither means anything.
+2. **Silence is the default.** A healthy dashboard should be boring. Anything
+   that pulses, blinks or glows permanently teaches the viewer to look away —
+   exactly when you need their attention.
+3. **Absence is loud.** A failed check draws at full height. What *isn't* there
+   must never look like a fast response.
+4. **One signal per meaning.** As soon as two things say the same thing, the
+   signal that matters gets diluted.
+5. **Size is for structure, not for emphasis.** Emphasis comes from colour and
+   contrast. Components that change size per view stop being reference points.
 
 ---
 
 ## 2. Tokens
 
-Alle waarden zijn CSS custom properties. Bij de overstap naar Tailwind v4 worden
-dit `@theme`-tokens; de namen blijven gelijk. **Hardcode nooit een kleur of
-radius in een component.**
+Every value is a CSS custom property. On Tailwind v4 these become
+`@theme` tokens; the names stay the same. **Never hardcode a colour or radius in
+a component.**
 
-### 2.1 Kleur — donker (standaard)
+### 2.1 Colour — dark (default)
 
 ```css
 --canvas:     #08090a;   /* paginaachtergrond */
@@ -59,7 +59,7 @@ radius in een component.**
 --ink-4:      #3d4347;   /* placeholders, uitgeschakeld */
 ```
 
-### 2.2 Kleur — licht
+### 2.2 Colour — light
 
 ```css
 --canvas:     #fbfbfa;   --surface:    #ffffff;
@@ -69,30 +69,30 @@ radius in een component.**
 --ink-3:      #8b9196;   --ink-4:      #b6bbbf;
 ```
 
-Licht is geen omgekeerd donker. `--canvas` is warmgrijs (`#fbfbfa`), niet wit;
-kaarten zijn wél wit. Zo staan kaarten vóór de pagina in plaats van erin te
-verdwijnen. De statuskleuren zijn in licht donkerder en verzadigder, omdat het
-donkere origineel op wit onleesbaar wordt.
+Light isn't dark flipped. `--canvas` is a warm grey (`#fbfbfa`), not white;
+cards *are* white. That way cards sit in front of the page instead of
+disappearing into it. The status colours are darker and more saturated in light
+mode, because the dark originals are unreadable on white.
 
 ### 2.3 Status
 
-| Status | Donker | Licht | Betekenis |
+| Status | Dark | Light | Meaning |
 |---|---|---|---|
-| `--up` | `#34d399` | `#059669` | Laatste check geslaagd |
-| `--warn` | `#fbbf24` | `#b45309` | Traag, of certificaat verloopt |
-| `--down` | `#f43f5e` | `#e11d48` | Laatste check mislukt |
-| `--idle` | `#4b5257` | `#c2c7cb` | Gepauzeerd, of nog geen data |
+| `--up` | `#34d399` | `#059669` | Last check passed |
+| `--warn` | `#fbbf24` | `#b45309` | Slow, or certificate expiring |
+| `--down` | `#f43f5e` | `#e11d48` | Last check failed |
+| `--idle` | `#4b5257` | `#c2c7cb` | Paused, or no data yet |
 
-Elke statuskleur heeft een `-dim`-variant voor achtergronden van badges en
-rijen (`--up-dim`, `--warn-dim`, `--down-dim`).
+Every status colour has a `-dim` variant for badge and row backgrounds
+(`--up-dim`, `--warn-dim`, `--down-dim`).
 
-**Kleur staat nooit alleen.** Ongeveer 8% van de mannen ziet rood en groen niet
-betrouwbaar uit elkaar — voor een product dat draait om rood-versus-groen is dat
-geen randgeval. Status wordt daarom altijd dubbel gedragen: kleur plus positie
-(kapot sorteert naar boven), kleur plus vorm (de hoogte van de heartbeat-balk),
-of kleur plus tekst (`502 Bad Gateway` in plaats van alleen rood).
+**Colour never stands alone.** Roughly 8% of men can't reliably tell red from
+green — for a product built around red-versus-green that isn't an edge case. So
+status is always carried twice: colour plus position (broken sorts to the top),
+colour plus shape (the height of the heartbeat bar), or colour plus text
+(`502 Bad Gateway` rather than just red).
 
-### 2.4 Gloed
+### 2.4 Glow
 
 ```css
 --glow-up:   0 0 0 1px rgba(52,211,153,.35), 0 0 7px -1px rgba(52,211,153,.6);
@@ -100,31 +100,31 @@ of kleur plus tekst (`502 Bad Gateway` in plaats van alleen rood).
 --glow-down: 0 0 0 1px rgba(244,63,94,.4),   0 0 8px -1px rgba(244,63,94,.72);
 ```
 
-Een strakke ring van 1px plus een korte bloom. Een brede zachte gloed leest op
-dit formaat als een onscherpe vlek; de ring houdt de rand van de lamp leesbaar
-terwijl hij toch verlicht oogt.
+A tight 1px ring plus a short bloom. A wide soft glow reads as an out-of-focus
+smudge at this size; the ring keeps the edge of the lamp crisp while still
+letting it look lit.
 
-### 2.5 Typografie
+### 2.5 Typography
 
 ```css
 --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
 --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
 ```
 
-| Rol | Grootte | Gewicht |
+| Role | Size | Weight |
 |---|---|---|
-| Paginatitel | 20–22px | 500, `letter-spacing: -.02em` |
-| Kaarttitel | 15px | 500 |
-| Rijtitel | 13.5px | 450 |
+| Page title | 20–22px | 500, `letter-spacing: -.02em` |
+| Card title | 15px | 500 |
+| Row title | 13.5px | 450 |
 | Body / label | 12.5–13px | 400–450 |
-| Hulptekst | 11.5px | 400 |
-| Sectiekop | 12px | 500, uppercase, `letter-spacing: .09em` |
+| Helper text | 11.5px | 400 |
+| Section heading | 12px | 500, uppercase, `letter-spacing: .09em` |
 
-**Mono is verplicht voor alles wat meetbaar is:** URL's, latency, uptime,
-intervallen, statuscodes. Cijfers die naast elkaar in een kolom staan moeten
-uitlijnen — anders vergelijk je ze niet, je leest ze.
+**Mono is mandatory for anything measurable:** URLs, latency, uptime, intervals,
+status codes. Numbers stacked in a column have to line up — otherwise you're not
+comparing them, you're reading them.
 
-### 2.6 Vorm, ruimte, beweging
+### 2.6 Shape, space, motion
 
 ```css
 --r-sm: 6px;    /* knoppen, invoer, kleine controls */
@@ -135,227 +135,288 @@ uitlijnen — anders vergelijk je ze niet, je leest ze.
 --dur:  420ms;  /* thema-overgang */
 ```
 
-Ruimte gaat in stappen van 4px. Duur naar rol: 140ms voor hover, 200–280ms voor
-panelen, 320–520ms voor iets dat je aandacht vraagt. `--ease` start snel en komt
-zacht tot stilstand — beweging die uitdempt voelt mechanisch, niet zwevend.
+Space moves in steps of 4px. Duration follows role: 140ms for hover, 200–280ms
+for panels, 320–520ms for anything asking for your attention. `--ease` starts
+fast and settles softly — motion that decays feels mechanical rather than
+floaty.
 
 ---
 
-## 3. De led
+## 3. The LED
 
-Het merkicoon van het product. Als er één component goed moet zijn, is dit het.
+The product's brand mark. If one component has to be right, it's this one.
 
 ```
-20 × 7 px   ·   border-radius: 2.5px   ·   één maat, overal
+20 × 7 px   ·   border-radius: 2.5px   ·   one size, everywhere
 ```
 
-**Waarom een pill en geen stip.** Een horizontale vorm leest als een lampje in
-apparatuur; een cirkel leest als een bolletje in een lijst. Het verschil is klein
-en het bepaalt of het dashboard aanvoelt als instrumentarium of als een webpagina.
+**Why a pill and not a dot.** A horizontal shape reads as an indicator lamp on
+equipment; a circle reads as a bullet in a list. It's a small difference, and it
+decides whether the dashboard feels like instrumentation or like a web page.
 
-**Waarom 2.5px en niet volledig rond.** Bij `999px` heeft het oog geen rechte
-lijn om op scherp te stellen en oogt de vorm vaag. 2.5px houdt de pill-vorm maar
-geeft de zijkanten een leesbare rand.
+**Why 2.5px and not fully round.** At `999px` the eye has no straight line to
+focus on and the shape goes soft. 2.5px keeps the pill silhouette but gives the
+sides a readable edge.
 
-**De highlight.** Een verloop van boven, `inset: 1px 1px 3px`, opacity `.5`. Het
-suggereert een gebogen lens die licht vangt. Zonder highlight is het een gekleurd
-rechthoekje; met een te sterke highlight is het een knopje.
+**The highlight.** A gradient from the top, `inset: 1px 1px 3px`, opacity `.5`.
+It suggests a curved lens catching light. Without the highlight it's a coloured
+rectangle; with too much of it, it's a button.
 
-**Regels.**
+**Rules.**
 
-- Eén maat in de hele applicatie — sidebar, rijen, kaarten, groepskoppen, toasts.
-- De led knippert **nooit** bij een routinecheck. Alleen bij een echte
-  statuswijziging speelt hij één korte overgang (`.changed`), en dan is het klaar.
-- Geen pulserende animatie in rust. Veertien pulserende lampjes zijn geen
-  dashboard maar een screensaver.
+- One size across the entire app — sidebar, rows, cards, group headers, toasts.
+- The LED **never** blinks on a routine check. Only a real status change plays a
+  single short transition (`.changed`), and then it's done.
+- No pulsing animation at rest. Fourteen pulsing lamps aren't a dashboard,
+  they're a screensaver.
 
 ---
 
-## 4. De heartbeat-balk
+## 4. The heartbeat bar
 
-Draagt twee dingen tegelijk, en dat is bewust:
+It carries two things at once, deliberately:
 
-- **Kleur = status** van die check.
-- **Hoogte = latency**, relatief aan het bereik van die monitor.
+- **Colour = status** of that check.
+- **Height = latency**, relative to that monitor's own range.
 
-Eén blik beantwoordt dus zowel "draait het" als "wordt het trager". Een
-mislukte check tekent **op volle hoogte** — afwezigheid moet luid zijn, niet
-lijken op een snelle response.
+So a single glance answers both "is it running" and "is it getting slower". A
+failed check draws at **full height** — absence has to be loud, not look like a
+fast response.
 
-Nieuwste check staat rechts. De laatste 28 checks zijn zichtbaar; dat is genoeg
-om een patroon te zien en weinig genoeg om per balk nog iets te onderscheiden.
+Newest check sits on the right. The last 28 checks are visible; that's enough to
+see a pattern and few enough that individual bars stay distinguishable.
 
 ---
 
 ## 5. Live checks
 
-De scheduler draait continu; de SSE-stream levert elk resultaat binnen. Dat
-tonen is het verschil tussen "deze pagina leeft" en "deze pagina is een uur
-geleden stilletjes doodgegaan".
+The scheduler runs continuously; the SSE stream delivers every result as it
+lands. Showing that is the difference between "this page is alive" and "this
+page quietly died an hour ago".
 
-**Wat er gebeurt als een check binnenkomt:**
+**What happens when a check arrives:**
 
-1. Het nieuwste heartbeat-balkje schuift in — komt binnen op 35% hoogte, schiet
-   licht door, zakt terug, met een korte oplichting (520ms). De oudste balk valt weg.
-2. Het latencygetal tickt mee (320ms), want dat is het getal dat de check opleverde.
+1. The newest heartbeat bar slides in — enters at 35% height, slightly
+   overshoots, settles back, with a brief flare (520ms). The oldest bar drops off.
+2. The latency figure ticks along with it (320ms), because that's the number the
+   check produced.
 
-**Wat er nadrukkelijk niet gebeurt:**
+**What emphatically does not happen:**
 
-- De led knippert niet mee. Zie regel 1 en 4: als de led ook op elke check
-  reageert, betekent knipperen niets meer.
-- Er is **geen rij-brede flits of veeg**. Een tint over de hele rij is een grote,
-  laagfrequente verandering die leest als "deze rij doet iets" — dat is de taal
-  die gereserveerd is voor een statuswijziging. Dit is geprobeerd en bewust
-  teruggedraaid.
+- The LED doesn't blink along. See rules 1 and 4: if the LED also reacts to every
+  check, blinking stops meaning anything.
+- There is **no row-wide flash or sweep**. A tint across the whole row is a
+  large, low-frequency change that reads as "this row is doing something" — and
+  that's the language reserved for a status change. I tried it and deliberately
+  rolled it back.
 
-Het effect is uitschakelbaar via de layoutinstellingen ("Show live checks",
-onthouden per gebruiker) en gaat automatisch uit bij `prefers-reduced-motion`.
+The effect can be switched off in the layout settings ("Show live checks",
+remembered per user) and turns itself off under `prefers-reduced-motion`.
 
 ---
 
 ## 6. Layouts
 
-De layout is een **gebruikersinstelling**, geen ontwerpbesluit dat wij voor
-iedereen nemen. Vier weergaven van dezelfde data, te kiezen via het grid-icoon
-in de toolbar, onthouden per gebruiker.
+Layout is a **user setting**, not a design decision made on everyone's
+behalf. Four views of the same data, picked from the grid icon in the toolbar,
+remembered per user.
 
-| Layout | Voor | Kenmerk |
+| Layout | For | Character |
 |---|---|---|
-| **Rows** | Laptop, dagelijks scannen | Eén rij per monitor, kapot sorteert naar boven |
-| **Cards** | Tweede scherm op het bureau | Tegels, grotere leds, minder woorden |
-| **Compact** | 100+ monitors | Gegroepeerd per klant/omgeving, één regel per monitor |
-| **Status wall** | Scherm aan de muur | Alleen led en naam, verder niets |
+| **Rows** | Laptop, daily scanning | One row per monitor, broken sorts to the top |
+| **Cards** | Second screen on the desk | Tiles, bigger LEDs, fewer words |
+| **Compact** | 100+ monitors | Grouped by customer/environment, one line per monitor |
+| **Status wall** | Screen on the wall | LED and name, nothing else |
 
-**Status wall** verbergt sidebar én topbar volledig. Dat is de hele reden dat
-hij bestaat. Twee dingen blijven: een fluisterregel met naam en telling, en een
-klok. De klok is geen versiering — op een scherm dat bijna nooit verandert is een
-tikkende seconde het enige bewijs dat je naar iets levends kijkt.
+**Status wall** hides both the sidebar and the topbar entirely. That's the whole
+reason it exists. Two things remain: a whispered line with the name and a count,
+and a clock. The clock isn't decoration — on a screen that almost never changes,
+a ticking second is the only proof you're looking at something alive.
 
-In Status wall krijgen kapotte kaarten een **warme rand**, geen gekleurde
-vulling. Een muur vol gekleurde kaarten is ruis; een muur stille kaarten met twee
-warme randen is informatie.
+In Status wall, broken cards get a **warm border**, not a coloured fill. A wall
+full of coloured cards is noise; a wall of quiet cards with two warm borders is
+information.
 
-**Sidebar.** Inklapbaar in alle layouts, via de knop links in de topbar of
-`Cmd/Ctrl + B`. Ingeklapt wordt het een rail van 56px met alleen iconen — niet
-weg, want dan is je navigatie onbereikbaar. Status wall verbergt hem volledig en
-onthoudt jouw voorkeur apart, zodat je bij terugkeer de rail terugkrijgt zoals
-je hem had.
+**Sidebar.** Collapsible in every layout, via the button on the left of the
+topbar or `Cmd/Ctrl + B`. Collapsed it becomes a 56px rail with icons only — not
+gone, because then your navigation is unreachable. Status wall hides it
+completely and remembers your preference separately, so you get the rail back
+exactly as you left it.
 
 ---
 
-## 7. Componenten
+## 7. Components
 
-Zie `docs/mockups/components.html` voor de werkende versie van alles hieronder.
+See `docs/mockups/components.html` for a working version of everything below.
 
-### 7.1 Knoppen
+### 7.1 Buttons
 
-| Variant | Gebruik |
+| Variant | Use |
 |---|---|
-| `primary` | De ene actie die het scherm bedoelt. Eén per scherm. |
-| `secondary` | Nevenacties met gelijk gewicht |
-| `ghost` | Annuleren, sluiten, alles wat de gebruiker terugbrengt |
-| `danger` | Verwijderen en onomkeerbare acties |
+| `primary` | The one action the screen is for. One per screen. |
+| `secondary` | Side actions of equal weight |
+| `ghost` | Cancel, close, anything that takes the user back |
+| `danger` | Delete and other irreversible actions |
 
-**Destructief is een rode omlijning, geen rood vlak.** Een fel rode knop die
-permanent in beeld staat wordt behang — en dan klikt iemand hem per ongeluk. Het
-vlak vult pas bij hover, wanneer de intentie er al is.
+**Destructive is a red outline, not a red fill.** A bright red button sitting on
+screen permanently becomes wallpaper — and then somebody clicks it by accident.
+The fill only arrives on hover, once the intent is already there.
 
-Laadstaat: de knop houdt zijn breedte en toont een spinner in plaats van tekst.
-Zo springt de layout niet op het moment dat je klikt.
+Loading state: the button keeps its width and swaps the label for a spinner. That
+way the layout doesn't jump the instant you click.
 
-### 7.2 Formulieren
+### 7.2 Forms
 
-De **60-secondentest** is de norm: URL plakken, al het andere heeft een
-verstandige default. Elk verplicht veld dat we toevoegen kost installaties.
+The **60-second test** is the bar: paste a URL, everything else has a sensible
+default. Every required field costs installs.
 
-- Focus is een groene rand plus een ring van 3px op 14% — zichtbaar zonder de
-  blauwe browserglow.
-- Fouten staan onder het veld, met icoon, en noemen het juiste formaat in plaats
-  van alleen te melden dat het fout is.
-- Eenheden (`sec`, `ms`) horen in een addon aan het veld, niet in het label.
-- Drie tot vier elkaar uitsluitende opties: segmented control, geen dropdown.
-  Zichtbare opties zijn goedkoper te lezen dan verborgen opties.
+- Focus is a green border plus a 3px ring at 14% opacity — visible without the
+  blue browser glow.
+- Errors sit under the field, with an icon, and name the correct format instead
+  of just announcing that something is wrong.
+- Units (`sec`, `ms`) belong in an addon on the field, not in the label.
+- Three or four mutually exclusive options: segmented control, not a dropdown.
+  Visible options are cheaper to read than hidden ones.
 
-### 7.3 Schakelaars
+### 7.3 Switches
 
-Een toggle is voor iets dat direct effect heeft (monitor aan/uit). Een checkbox
-is voor een keuze die pas telt bij opslaan. De thumb reist, de track vult —
-anders klikt iemand twee keer omdat hij niet ziet of het aankwam.
+A toggle is for something that takes effect immediately (monitor on/off). A
+checkbox is for a choice that only counts once you save. The thumb travels, the
+track fills — otherwise someone clicks twice because they can't tell it landed.
 
-### 7.4 Inline bewerken
+### 7.4 Inline editing
 
-Een monitor hernoemen hoort geen modal te zijn. Klik de naam, typ, `Enter`
-bevestigt, `Esc` zet terug. Bij hover verschijnt een subtiel potlood; zonder dat
-weet niemand dat het kan.
+Renaming a monitor shouldn't be a modal. Click the name, type, `Enter` commits,
+`Esc` reverts. A subtle pencil appears on hover; without it nobody knows it's
+possible.
 
-### 7.5 Destructieve bevestiging
+### 7.5 Destructive confirmation
 
-Verwijderen vraagt om de naam **overgetypt**, niet om een "weet je het zeker?".
-Het tweede is een reflex, het eerste een beslissing. De dialoog benoemt precies
-wat er verdwijnt, inclusief openstaande incidenten.
+Deleting asks you to **retype the name**, not to answer "are you sure?". The
+second is a reflex, the first is a decision. The dialog spells out exactly what
+disappears, including open incidents.
 
-### 7.6 Lege, ladende en foutstaten
+### 7.6 Empty, loading and error states
 
-Dit is het verschil tussen af en bijna af.
+This is the difference between finished and nearly finished.
 
-- **Leeg dashboard is de onboarding.** Het is het eerste wat een nieuwe
-  self-hoster ziet. Het verdient een echt ontwerp, geen schouderophalen.
-- **Skeletons, geen spinners.** Een spinner kondigt een wachttijd aan die er niet
-  is. Skeletons houden de pagina stil.
-- **Toasts bevestigen, ze informeren niet.** Verdwijnen na 5 seconden en dragen
-  nooit informatie die je nog nodig hebt.
+- **The empty dashboard is the onboarding.** It's the first thing a new
+  self-hoster sees. It deserves a real design, not a shrug.
+- **Skeletons, not spinners.** A spinner announces a wait that isn't happening.
+  Skeletons keep the page still.
+- **Toasts confirm, they don't inform.** They disappear after 5 seconds and never
+  carry information you'll still need.
 
-### 7.7 Commandopalet
+### 7.7 Command palette
 
-`Cmd/Ctrl + K`. Bij 100+ monitors is zoeken sneller dan scrollen. Bevat zowel
-monitors als acties, want de gebruiker weet niet welke van de twee hij zoekt.
-
----
-
-## 8. Toegankelijkheid
-
-Geen sluitpost — een aantal keuzes hierboven bestaat er juist om.
-
-- **Nooit alleen kleur.** Zie §2.3.
-- **Contrast:** `--ink` en `--ink-2` halen AA op hun achtergrond. `--ink-3` is
-  voor labels en hulptekst, `--ink-4` uitsluitend voor placeholders en
-  uitgeschakelde staat — nooit voor tekst die gelezen moet worden.
-- **Focus is altijd zichtbaar.** `:focus-visible` krijgt een ring, ook op
-  toggles en aangepaste controls. Nooit `outline: none` zonder vervanging.
-- **`prefers-reduced-motion`** schakelt live checks, statusovergangen en alle
-  transitions uit. De informatie blijft, alleen de beweging verdwijnt.
-- Toetsenbord: `Esc` sluit drawer, dialoog en palet, en verlaat Status wall.
-  Alles wat klikbaar is moet bereikbaar zijn met Tab.
+`Cmd/Ctrl + K`. Past 100 monitors, searching beats scrolling. It holds both
+monitors and actions, because the user doesn't know which of the two they're
+after.
 
 ---
 
-## 9. Wat we niet doen
+## 8. Accessibility
 
-Even belangrijk als de rest, want dit zijn de dingen die terugkomen:
+Not an afterthought — several of the decisions above exist precisely for it.
 
-- **Geen pulserende animaties in rust.** Zie regel 2.
-- **Geen kant-en-klare chartlibrary.** De heartbeat-balk is ons merkicoon;
-  generieke charts zien er generiek uit.
-- **Geen standaard shadcn-uiterlijk.** shadcn/ui is het startpunt, niet het
-  eindpunt. Als het eruitziet als elk ander shadcn-dashboard, is het mislukt.
-- **Geen kleurvlakken voor status waar een rand voldoet.** Zie §6.
-- **Geen instelling die maar in één weergave werkt.** Een S/M/L-dichtheidsregelaar
-  is geprobeerd en verwijderd: hij deed alleen iets in Status wall, en een knop
-  die meestal niets doet leert mensen dat knoppen niets doen.
+- **Never colour alone.** See §2.3.
+- **Contrast:** `--ink` and `--ink-2` clear AA against their backgrounds.
+  `--ink-3` is for labels and helper text, `--ink-4` exclusively for placeholders
+  and disabled state — never for text meant to be read.
+- **Focus is always visible.** `:focus-visible` gets a ring, including on toggles
+  and custom controls. Never `outline: none` without a replacement.
+- **`prefers-reduced-motion`** disables live checks, status transitions and every
+  transition. The information stays, only the movement goes.
+- Keyboard: `Esc` closes the drawer, the dialog and the palette, and exits Status
+  wall. Anything clickable has to be reachable with Tab.
 
 ---
 
-## 10. Van mockup naar code
+## 9. What this design does not do
 
-De mockups zijn losse HTML-bestanden zonder build. Bij de implementatie in
+Just as important as the rest, because these are the ones that keep coming back:
+
+- **No pulsing animations at rest.** See rule 2.
+- **No off-the-shelf chart library.** The heartbeat bar is the brand mark;
+  generic charts look generic.
+- **No default shadcn look.** shadcn/ui is the starting point, not the finish
+  line. If it looks like every other shadcn dashboard, it failed.
+- **No colour fills for status where a border does the job.** See §6.
+- **No setting that only works in one view.** I tried an S/M/L density slider
+  and removed it: it only did anything in Status wall, and a control that usually
+  does nothing teaches people that controls do nothing.
+
+---
+
+## 10. From mockup to code
+
+The mockups are standalone HTML files with no build step. When implementing in
 React + Tailwind v4:
 
-1. **Tokens eerst.** §2 wordt één `@theme`-blok. Geen enkele component bevat een
-   letterlijke hexwaarde.
-2. **De led wordt een component**, geen utility-klassen. Eén plek waar formaat,
-   radius, highlight en gloed vastliggen.
-3. **Layouts zijn een gebruikersinstelling** in de database, geen route.
-4. **Live checks komen uit de bestaande SSE-stream.** De simulatie in de mockup
-   (`landCheck()`) laat zien wat er per binnengekomen resultaat moet gebeuren.
-5. Dit document wordt bijgewerkt in dezelfde PR als de afwijking. Een styleguide
-   die achterloopt is erger dan geen styleguide.
+1. **Tokens first.** §2 becomes a single `@theme` block. Not one component
+   contains a literal hex value.
+2. **The LED becomes a component**, not a set of utility classes. One place where
+   size, radius, highlight and glow are pinned down.
+3. **Layouts are a user setting** in the database, not a route.
+4. **Live checks come from the existing SSE stream.** The simulation in the
+   mockup (`landCheck()`) shows what should happen for each incoming result.
+5. This document gets updated in the same PR as the deviation. A styleguide that
+   lags behind is worse than no styleguide.
+
+---
+
+## 11. Known gaps
+
+An honest list of what the mockups do *not* yet answer. Written down so it stays
+a decision instead of an oversight. Roughly in order of how much it would hurt
+to discover late.
+
+### Blocking — the design does not survive without these
+
+- **Mobile.** Below 900px the sidebar disappears and the row collapses to
+  name + interval: the heartbeat, latency and uptime all drop out. What remains
+  is a list of names, which is not what this product is for. The phone is where
+  you look *after* the alert fires, so it is arguably the most important screen
+  we have not designed. Needs its own decision, not a narrower desktop.
+- **Loss of connection.** The dashboard is fed by SSE. When that stream drops,
+  every LED keeps showing its last known state and the screen calmly lies to
+  you. This is the one failure mode that directly attacks the product's promise.
+  Needs a visible degraded state, not a silent reconnect.
+- **Scale.** The mockup shows 14 monitors; the target audience runs 10–200. No
+  search, no filter, no grouping in the row views, no virtualisation, no
+  pagination. Compact was designed for density but not tested at 200 rows.
+
+### Screens promised but not designed
+
+The sidebar advertises five destinations; one exists.
+
+- **Incidents** — the badge says 2, there is no screen. Needs at least:
+  acknowledge, resolve, a cause, and a note.
+- **Monitors** — the management list. Bulk actions (pause 20 monitors at once)
+  have no design; today that would be 20 individual clicks.
+- **Notifications** — channel configuration (Discord, Slack, Telegram, webhook,
+  SMTP), a test button, and a per-channel routing rule.
+- **Settings** — users, roles, API keys, retention.
+
+### Smaller, but they will come up
+
+- **Maintenance windows** are a v0.1 feature. A monitor that is
+  intentionally down needs its own visual state, distinct from `--idle`. Today
+  it would read as broken.
+- **Error toasts.** Only the success path is designed. A failed save, a rejected
+  form, a check that cannot start — none of those have a visual.
+- **Tags/groups** are used in the Compact layout but there is no screen to
+  create, rename or assign them.
+- **A paused monitor** shows `--idle`, which is the same colour as "no data
+  yet". Two very different meanings sharing one signal — a direct violation of
+  rule 4.
+- **Keyboard shortcuts** exist (`⌘K`, `⌘B`, `Esc`) but are undiscoverable. Needs
+  a `?` overlay.
+- **Onboarding beyond the empty state.** First run, creating the first user,
+  what the very first minute after `docker run` looks like.
+
+### Deliberately out of scope for now
+
+Status pages, config-as-code YAML, multi-region and on-call schedules are all
+post-v0.1. Not designing them yet is correct — but the
+navigation should not promise them either.
