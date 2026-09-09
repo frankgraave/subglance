@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/frankgraave/subglance/internal/store"
@@ -22,7 +25,16 @@ func testServer() *Server {
 	return New(testLogger(), nil)
 }
 
-// testServerWithDB returns a Server backed by a real temporary database.
+// testCredentials remembers the seeded admin token per test server, so that
+// existing tests can authenticate without every call site having to thread a
+// token through.
+var (
+	testCredentialsMu sync.Mutex
+	testCredentials   = map[*Server]string{}
+)
+
+// testServerWithDB returns a Server backed by a real temporary database, with
+// an admin account already seeded.
 func testServerWithDB(t *testing.T) (*Server, *store.DB) {
 	t.Helper()
 	db, err := store.Open(context.Background(), store.Options{
@@ -32,8 +44,83 @@ func testServerWithDB(t *testing.T) (*Server, *store.DB) {
 		t.Fatalf("open store: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	return New(testLogger(), db), db
+
+	srv := New(testLogger(), db)
+	seedUser(t, srv, db, "admin@example.com", store.RoleAdmin)
+
+	t.Cleanup(func() {
+		testCredentialsMu.Lock()
+		delete(testCredentials, srv)
+		testCredentialsMu.Unlock()
+	})
+	return srv, db
 }
+
+// seedUser creates an account and records an API token for it.
+func seedUser(t *testing.T, srv *Server, db *store.DB, email string, role store.Role) string {
+	t.Helper()
+	ctx := context.Background()
+
+	user, err := db.CreateUser(ctx, email, "correct-horse-battery-staple", role)
+	if err != nil {
+		t.Fatalf("create %s user: %v", role, err)
+	}
+	token, _, err := db.CreateAPIToken(ctx, user.ID, "test", nil)
+	if err != nil {
+		t.Fatalf("create token: %v", err)
+	}
+
+	testCredentialsMu.Lock()
+	if _, exists := testCredentials[srv]; !exists {
+		testCredentials[srv] = token
+	}
+	testCredentialsMu.Unlock()
+	return token
+}
+
+// authedHandler returns the server's handler with the seeded admin token
+// attached to every request, so tests written before authentication existed
+// keep exercising the behaviour they were written for.
+func authedHandler(srv *Server) http.Handler {
+	testCredentialsMu.Lock()
+	token := testCredentials[srv]
+	testCredentialsMu.Unlock()
+
+	inner := srv.Handler()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if token != "" && r.Header.Get("Authorization") == "" {
+			r.Header.Set("Authorization", "Bearer "+token)
+		}
+		inner.ServeHTTP(w, r)
+	})
+}
+
+// openEmptyDB returns a database with no users, for testing the setup flow.
+func openEmptyDB(t *testing.T) *store.DB {
+	t.Helper()
+	db, err := store.Open(context.Background(), store.Options{
+		Path: filepath.Join(t.TempDir(), "empty.db"),
+	})
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	return db
+}
+
+// jsonRequest builds a request with a JSON body and the matching content type.
+func jsonRequest(method, path, body string) *http.Request {
+	var r *http.Request
+	if body == "" {
+		r = httptest.NewRequest(method, path, nil)
+	} else {
+		r = httptest.NewRequest(method, path, strings.NewReader(body))
+	}
+	r.Header.Set("Content-Type", "application/json")
+	return r
+}
+
+func itoa(i int64) string { return strconv.FormatInt(i, 10) }
 
 func TestHealth(t *testing.T) {
 	srv := testServer()

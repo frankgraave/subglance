@@ -84,6 +84,43 @@ defaults.
 monitor, and without that guard SubGlance would happily act as an SSRF proxy into
 the host network. Turn it on only if you intend to monitor internal services.
 
+### First run
+
+There is no default account and no seeded password. On first start SubGlance
+logs that setup is pending; you create the first administrator through the API
+(and, once it exists, the web interface):
+
+```sh
+curl -X POST http://localhost:8080/api/v1/setup \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"you@example.com","password":"a-long-passphrase"}'
+```
+
+That endpoint closes permanently once an account exists.
+
+### Authentication
+
+Two credential types reach the same endpoints with the same rights:
+
+- **Session cookie** — for the browser. HttpOnly, SameSite=Lax, and
+  `__Host-`-prefixed when served over HTTPS.
+- **API token** — for scripts and CI: `Authorization: Bearer sgp_…`.
+
+```sh
+# create a token (requires an existing session)
+curl -X POST http://localhost:8080/api/v1/tokens \
+  -H 'Content-Type: application/json' -d '{"name":"ci"}'
+
+# use it
+curl -H "Authorization: Bearer sgp_…" http://localhost:8080/api/v1/monitors
+```
+
+A token's plaintext is shown once and stored only as a hash; it cannot be
+recovered, only replaced.
+
+Three roles: **viewer** (read-only), **editor** (manage monitors, acknowledge
+incidents) and **admin** (also manages users and tokens).
+
 ### Check types
 
 | Type | Target shape | What it verifies |

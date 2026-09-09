@@ -22,7 +22,7 @@ func post(t *testing.T, srv *Server, path, body string) *httptest.ResponseRecord
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, req)
+	authedHandler(srv).ServeHTTP(rec, req)
 	return rec
 }
 
@@ -152,7 +152,7 @@ func TestListMonitors(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/monitors", nil))
+	authedHandler(srv).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/monitors", nil))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
@@ -175,7 +175,7 @@ func TestListMonitorsEmptyIsAnArray(t *testing.T) {
 	srv, _ := testServerWithDB(t)
 
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/monitors", nil))
+	authedHandler(srv).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/monitors", nil))
 
 	if !strings.Contains(rec.Body.String(), `"monitors":[]`) {
 		t.Errorf("empty list should serialise as [], got: %s", rec.Body.String())
@@ -238,7 +238,7 @@ func TestDeleteMonitor(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/v1/monitors/"+id, nil)
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, req)
+	authedHandler(srv).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want 204: %s", rec.Code, rec.Body.String())
@@ -258,7 +258,7 @@ func TestMonitorEndpointsRejectBadIDs(t *testing.T) {
 	}
 	for _, p := range paths {
 		rec := httptest.NewRecorder()
-		srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
+		authedHandler(srv).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
 		if rec.Code != http.StatusBadRequest {
 			t.Errorf("GET %s: status = %d, want 400", p, rec.Code)
 		}
@@ -269,7 +269,7 @@ func TestGetUnknownMonitorIs404(t *testing.T) {
 	srv, _ := testServerWithDB(t)
 
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/monitors/9999", nil))
+	authedHandler(srv).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/monitors/9999", nil))
 
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", rec.Code)
@@ -301,7 +301,7 @@ func TestListHeartbeats(t *testing.T) {
 
 	id := strconv.FormatInt(m.ID, 10)
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet,
+	authedHandler(srv).ServeHTTP(rec, httptest.NewRequest(http.MethodGet,
 		"/api/v1/monitors/"+id+"/heartbeats?limit=3", nil))
 
 	if rec.Code != http.StatusOK {
@@ -332,7 +332,7 @@ func TestListHeartbeatsRejectsBadLimit(t *testing.T) {
 
 	for _, limit := range []string{"0", "-5", "9999", "abc"} {
 		rec := httptest.NewRecorder()
-		srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet,
+		authedHandler(srv).ServeHTTP(rec, httptest.NewRequest(http.MethodGet,
 			"/api/v1/monitors/"+id+"/heartbeats?limit="+limit, nil))
 		if rec.Code != http.StatusBadRequest {
 			t.Errorf("limit=%s: status = %d, want 400", limit, rec.Code)

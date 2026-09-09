@@ -102,7 +102,7 @@ func TestListOpenIncidentsEndpoint(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/incidents", nil))
+	authedHandler(srv).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/incidents", nil))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
@@ -148,7 +148,7 @@ func TestMonitorIncidentHistoryEndpoint(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet,
+	authedHandler(srv).ServeHTTP(rec, httptest.NewRequest(http.MethodGet,
 		"/api/v1/monitors/"+strconv.FormatInt(m.ID, 10)+"/incidents", nil))
 
 	if rec.Code != http.StatusOK {
@@ -187,7 +187,7 @@ func TestAckIncidentEndpoint(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost,
+	authedHandler(srv).ServeHTTP(rec, httptest.NewRequest(http.MethodPost,
 		"/api/v1/incidents/"+strconv.FormatInt(inc.ID, 10)+"/ack", nil))
 
 	if rec.Code != http.StatusNoContent {
@@ -211,7 +211,7 @@ func TestAckUnknownIncidentIs404(t *testing.T) {
 	srv, _ := testServerWithDB(t)
 
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/v1/incidents/9999/ack", nil))
+	authedHandler(srv).ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/v1/incidents/9999/ack", nil))
 
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", rec.Code)
@@ -222,7 +222,7 @@ func getMonitor(t *testing.T, srv *Server, id int64) monitorResponse {
 	t.Helper()
 
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/monitors/"+strconv.FormatInt(id, 10), nil))
+	authedHandler(srv).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/monitors/"+strconv.FormatInt(id, 10), nil))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("get monitor %d: status = %d, body = %s", id, rec.Code, rec.Body.String())

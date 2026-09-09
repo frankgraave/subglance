@@ -10,9 +10,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -68,6 +70,17 @@ func run(args []string) error {
 	}()
 	log.Info("database ready", "path", db.Path())
 
+	// Tell the operator plainly when the instance has no account yet. There is
+	// no seeded user and no default password to change — an instance exposed
+	// before setup has no credentials to guess — but that only helps if the
+	// person running it knows to go and finish setup.
+	if n, err := db.CountUsers(openCtx); err != nil {
+		log.Error("could not count users", "error", err)
+	} else if n == 0 {
+		log.Warn("no accounts yet: open the web interface to create the first administrator",
+			"setup_url", "http://"+displayAddr(cfg.Addr)+"/")
+	}
+
 	srv := &http.Server{
 		Addr:    cfg.Addr,
 		Handler: api.New(log, db).Handler(),
@@ -103,6 +116,10 @@ func run(args []string) error {
 		}
 	}()
 
+	// Expired sessions and stale login-attempt rows accumulate forever
+	// otherwise. Cheap deletes, so hourly is plenty.
+	go reapExpired(ctx, db, log)
+
 	errCh := make(chan error, 1)
 	go func() {
 		log.Info("http server listening", "addr", cfg.Addr)
@@ -136,4 +153,41 @@ func run(args []string) error {
 
 	log.Info("shutdown complete")
 	return nil
+}
+
+// displayAddr turns a listen address into something a person can paste into a
+// browser: ":8080" alone is not a URL anyone can click.
+func displayAddr(addr string) string {
+	if strings.HasPrefix(addr, ":") {
+		return "localhost" + addr
+	}
+	return addr
+}
+
+// reapExpired periodically clears expired sessions and old login attempts.
+//
+// Neither is urgent, so failures are logged and retried on the next tick
+// rather than treated as fatal.
+func reapExpired(ctx context.Context, db *store.DB, log *slog.Logger) {
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if n, err := db.PurgeExpiredSessions(ctx); err != nil {
+				log.Error("purge expired sessions", "error", err)
+			} else if n > 0 {
+				log.Debug("purged expired sessions", "count", n)
+			}
+
+			if n, err := db.PurgeOldLoginAttempts(ctx, 24*time.Hour); err != nil {
+				log.Error("purge login attempts", "error", err)
+			} else if n > 0 {
+				log.Debug("purged old login attempts", "count", n)
+			}
+		}
+	}
 }

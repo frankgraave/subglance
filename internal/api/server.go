@@ -29,26 +29,81 @@ func New(log *slog.Logger, db *store.DB) *Server {
 }
 
 // Handler returns the root HTTP handler with all routes and middleware applied.
+//
+// Routes are split into three groups by what they require:
+//
+//	public   — health, readiness, setup and login
+//	read     — any authenticated user, including viewers
+//	write    — editors and admins
+//	admin    — administrators only
+//
+// Everything that is not explicitly public requires authentication. That
+// default matters: forgetting to guard a new route should fail closed, not
+// silently expose it.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
+	// Public.
 	mux.HandleFunc("GET /health", s.handleHealth)
 	mux.HandleFunc("GET /api/v1/health", s.handleHealth)
 	mux.HandleFunc("GET /api/v1/ready", s.handleReady)
+	mux.HandleFunc("GET /api/v1/setup", s.handleSetupStatus)
+	mux.HandleFunc("POST /api/v1/setup", s.handleSetup)
+	mux.HandleFunc("POST /api/v1/auth/login", s.handleLogin)
+	mux.HandleFunc("POST /api/v1/auth/logout", s.handleLogout)
 
-	mux.HandleFunc("GET /api/v1/monitors", s.handleListMonitors)
-	mux.HandleFunc("POST /api/v1/monitors", s.handleCreateMonitor)
-	mux.HandleFunc("GET /api/v1/monitors/{id}", s.handleGetMonitor)
-	mux.HandleFunc("DELETE /api/v1/monitors/{id}", s.handleDeleteMonitor)
-	mux.HandleFunc("POST /api/v1/monitors/{id}/pause", s.handlePauseMonitor)
-	mux.HandleFunc("POST /api/v1/monitors/{id}/resume", s.handleResumeMonitor)
-	mux.HandleFunc("GET /api/v1/monitors/{id}/heartbeats", s.handleListHeartbeats)
-	mux.HandleFunc("GET /api/v1/monitors/{id}/incidents", s.handleListMonitorIncidents)
+	// Authenticated: any role.
+	read := func(pattern string, h http.HandlerFunc) {
+		mux.Handle(pattern, s.requireAuth(h))
+	}
+	read("GET /api/v1/auth/me", s.handleMe)
+	read("POST /api/v1/auth/password", s.handleChangePassword)
 
-	mux.HandleFunc("GET /api/v1/incidents", s.handleListOpenIncidents)
-	mux.HandleFunc("POST /api/v1/incidents/{id}/ack", s.handleAckIncident)
+	read("GET /api/v1/monitors", s.handleListMonitors)
+	read("GET /api/v1/monitors/{id}", s.handleGetMonitor)
+	read("GET /api/v1/monitors/{id}/heartbeats", s.handleListHeartbeats)
+	read("GET /api/v1/monitors/{id}/incidents", s.handleListMonitorIncidents)
+	read("GET /api/v1/incidents", s.handleListOpenIncidents)
 
-	return s.withRecovery(s.withLogging(mux))
+	read("GET /api/v1/tokens", s.handleListTokens)
+	read("POST /api/v1/tokens", s.handleCreateToken)
+	read("DELETE /api/v1/tokens/{id}", s.handleRevokeToken)
+
+	// Authenticated: editor or admin.
+	requireWrite := s.requireRole(store.Role.CanWrite, "your role does not allow changes")
+	write := func(pattern string, h http.HandlerFunc) {
+		mux.Handle(pattern, s.requireAuth(requireWrite(h)))
+	}
+	write("POST /api/v1/monitors", s.handleCreateMonitor)
+	write("DELETE /api/v1/monitors/{id}", s.handleDeleteMonitor)
+	write("POST /api/v1/monitors/{id}/pause", s.handlePauseMonitor)
+	write("POST /api/v1/monitors/{id}/resume", s.handleResumeMonitor)
+	write("POST /api/v1/incidents/{id}/ack", s.handleAckIncident)
+
+	// Authenticated: admin only.
+	requireAdmin := s.requireRole(store.Role.CanAdmin, "this action requires an administrator")
+	admin := func(pattern string, h http.HandlerFunc) {
+		mux.Handle(pattern, s.requireAuth(requireAdmin(h)))
+	}
+	admin("GET /api/v1/users", s.handleListUsers)
+	admin("POST /api/v1/users", s.handleCreateUser)
+	admin("DELETE /api/v1/users/{id}", s.handleDeleteUser)
+
+	return s.withRecovery(s.withSecurityHeaders(s.withLogging(mux)))
+}
+
+// withSecurityHeaders sets defensive headers on every response.
+func (s *Server) withSecurityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Referrer-Policy", "same-origin")
+		// The API returns only JSON, so the strictest possible policy applies.
+		// The UI will need its own policy when it is served from here.
+		h.Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+		next.ServeHTTP(w, r)
+	})
 }
 
 type healthResponse struct {
