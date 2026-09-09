@@ -186,6 +186,90 @@ body {
 }
 .num.ticked { animation: valueTick 320ms var(--ease); }
 
+/* ─────────────────────────────────────────────────────────────
+   STALE — the connection is gone and we no longer know anything
+
+   This is the most important state in the product and the easiest
+   to forget, because it never shows up while you are developing
+   against a working stream.
+
+   The failure it prevents: SSE drops, every LED keeps showing its
+   last known colour, and the dashboard calmly asserts "all good"
+   for as long as the tab stays open. A monitoring tool that lies
+   confidently is worse than one that is honestly broken — the
+   whole product promise is "you can trust this screen".
+
+   The design rule: when we stop knowing, we must stop asserting.
+   Colour is our claim about reality, so colour is what we drain.
+   The layout does not move, nothing is hidden, no modal blocks the
+   view — the last known state is still useful information, it just
+   stops being presented as current truth.
+   ───────────────────────────────────────────────────────────── */
+body[data-conn="stale"] .led {
+  filter: saturate(.18) brightness(.72);
+  box-shadow: none;
+}
+body[data-conn="stale"] .beat { filter: saturate(.18) brightness(.66); }
+body[data-conn="stale"] .row::before,
+body[data-conn="stale"] .strip::before,
+body[data-conn="stale"] .card::before { filter: saturate(.18) brightness(.72); }
+body[data-conn="stale"] .num,
+body[data-conn="stale"] .summary-item b { color: var(--ink-3); }
+.led, .beat { transition: filter 600ms var(--ease), background var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
+
+/* Live checks are meaningless without a connection. */
+body[data-conn="stale"] .beat.arriving,
+body[data-conn="stale"] .num.ticked { animation: none; }
+
+/* The banner. Warm, not red: this is our problem, not the user's
+   infrastructure. Red here would be a false alarm — the monitored
+   services may well be fine; it is our knowledge that failed. */
+/* Presence is a display toggle, not an animated height. Animating
+   a collapsing box (height/max-height) is where this kind of banner
+   goes subtly wrong: the computed value sticks and you are left
+   debugging a ghost. The slide-in is a transform on a box that is
+   already laid out, which is cheap and cannot get stuck. */
+.conn-bar { display: none; }
+body[data-conn="stale"] .conn-bar {
+  display: flex; align-items: center; gap: 11px;
+  padding: 9px 16px;
+  background: var(--warn-dim);
+  border-bottom: 1px solid color-mix(in srgb, var(--warn) 32%, transparent);
+  font-size: 12.5px; color: var(--ink);
+  animation: connIn 300ms var(--ease);
+}
+@keyframes connIn {
+  from { transform: translateY(-100%); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+.conn-bar svg { width: 15px; height: 15px; stroke: var(--warn); fill: none; stroke-width: 1.9; flex: none; }
+.conn-bar b { font-weight: 500; }
+.conn-since { color: var(--ink-2); font-family: var(--font-mono); font-size: 11.5px; }
+.conn-bar .spacer { flex: 1; }
+.conn-retry {
+  font-family: inherit; font-size: 12px; color: var(--ink);
+  background: transparent; border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
+  padding: 4px 11px; border-radius: var(--r-sm); cursor: pointer;
+  transition: background 140ms var(--ease);
+}
+.conn-retry:hover { background: color-mix(in srgb, var(--warn) 16%, transparent); }
+
+/* Status wall has no chrome, so the whole canvas carries the
+   message instead of a banner: a wall that cannot be trusted must
+   not look calm, but it also must not grow a toolbar. */
+body[data-conn="stale"][data-focus="on"] .conn-bar { display: none; }
+body[data-conn="stale"][data-focus="on"] .quiet-stage::before {
+  content: "";
+  position: fixed; inset: 0;
+  border: 2px solid color-mix(in srgb, var(--warn) 55%, transparent);
+  pointer-events: none;
+  z-index: 5;
+}
+body[data-conn="stale"][data-focus="on"] .quiet-meta::after {
+  content: " · connection lost — showing last known state";
+  color: var(--warn);
+}
+
 /* No row-wide flash. A tint across the whole row is a large, low-
    frequency change: it registers as the row itself doing something,
    which is the vocabulary reserved for a state change. The arriving
@@ -732,6 +816,14 @@ body[data-focus="on"] .switcher:hover { opacity: 1; }
   </aside>
 
   <main class="main">
+    <div class="conn-bar" id="connBar" role="status" aria-live="polite">
+      <svg viewBox="0 0 24 24"><path d="M1 1l22 22M16.7 16.7A10.9 10.9 0 0 1 12 18M5 12.6a10.9 10.9 0 0 1 4-2.4M2 8.8a16 16 0 0 1 4.6-2.9M22 8.8a16 16 0 0 0-8.9-3.7M12 21h.01"/></svg>
+      <span><b>Connection lost.</b> Showing the last known state — this may no longer be accurate.</span>
+      <span class="conn-since" id="connSince">since 21:47</span>
+      <div class="spacer"></div>
+      <button class="conn-retry" id="connRetry">Reconnect now</button>
+    </div>
+
     <header class="topbar">
       <button class="icon-btn" id="navBtn" title="Toggle sidebar (Cmd/Ctrl + B)">
         <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
@@ -884,6 +976,7 @@ body[data-focus="on"] .switcher:hover { opacity: 1; }
   <button data-v="d">Status wall</button>
   <span class="div"></span>
   <button id="simulate">Simulate outage</button>
+  <button id="simulateConn">Simulate disconnect</button>
   <span class="div"></span>
   <a class="switcher-link" href="components.html">Components &amp; forms →</a>
 </nav>
@@ -1093,6 +1186,56 @@ function startLiveChecks() {
 function stopLiveChecks() {
   while (liveTimers.length) clearInterval(liveTimers.pop());
 }
+
+/* ── Connection state ─────────────────────────────────────────
+   In production this is driven by the SSE readyState plus a
+   watchdog: if no event (not even a heartbeat comment) arrives
+   within ~2.5 check intervals, we are stale regardless of what
+   the socket claims. A TCP connection that is technically open but
+   silent is the failure mode that fools naive implementations.
+
+   Reconnect uses exponential backoff, but the button is always
+   there: someone staring at a broken dashboard should never have
+   to wait out the backoff timer. */
+let connLostAt = null;
+let connTimer = null;
+
+function setConnection(state) {
+  document.body.dataset.conn = state;
+
+  if (state === "stale") {
+    connLostAt = connLostAt || new Date();
+    stopLiveChecks();
+    const tick = () => {
+      const secs = Math.floor((Date.now() - connLostAt) / 1000);
+      const el = document.getElementById("connSince");
+      if (!el) return;
+      if (secs < 60) el.textContent = `${secs}s ago`;
+      else el.textContent = `${Math.floor(secs / 60)}m ${secs % 60}s ago`;
+    };
+    tick();
+    connTimer = setInterval(tick, 1000);
+  } else {
+    connLostAt = null;
+    clearInterval(connTimer);
+    if (document.body.dataset.pulse !== "off") startLiveChecks();
+  }
+}
+
+document.getElementById("connRetry").addEventListener("click", e => {
+  const b = e.currentTarget;
+  b.textContent = "Reconnecting…";
+  b.disabled = true;
+  setTimeout(() => {
+    setConnection("live");
+    b.textContent = "Reconnect now";
+    b.disabled = false;
+  }, 1100);
+});
+
+document.getElementById("simulateConn").addEventListener("click", () => {
+  setConnection(document.body.dataset.conn === "stale" ? "live" : "stale");
+});
 
 /* ── Drawer ── */
 const scrim = document.getElementById("scrim"), drawer = document.getElementById("drawer");

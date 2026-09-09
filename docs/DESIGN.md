@@ -215,7 +215,50 @@ remembered per user) and turns itself off under `prefers-reduced-motion`.
 
 ---
 
-## 6. Layouts
+## 6. Losing the connection
+
+The dashboard is fed by SSE. When that stream drops, the naive implementation
+keeps every LED at its last known colour and the screen quietly asserts "all
+good" for as long as the tab stays open. **A monitoring tool that lies
+confidently is worse than one that is visibly broken** — the entire promise of
+this product is that you can trust the screen.
+
+**The rule: when it stops knowing, it stops asserting.** Colour is a claim about
+reality, so colour is what drains.
+
+What happens when the connection is lost (`body[data-conn="stale"]`):
+
+- Every LED and heartbeat bar desaturates to ~18% and loses its glow, over
+  600ms. Slow on purpose: this is not an alarm, it is a withdrawal.
+- Latency figures and the summary counts drop to `--ink-3`.
+- Live check animations stop — they would be fiction.
+- A warm banner appears above the toolbar with a live "since" counter and a
+  **Reconnect now** button.
+
+**The banner is warm, not red.** Red would be a false alarm: the monitored
+services may well be perfectly healthy. It is *the dashboard's* knowledge that
+failed, not
+their infrastructure. Red is reserved for things that are actually down.
+
+**Nothing is hidden and nothing moves.** The last known state is still useful —
+it just stops being presented as current truth. No modal, no overlay, no
+skeletons replacing real data.
+
+**Status wall** has no chrome to put a banner in, so the whole canvas carries
+the message: a 2px warm border around the viewport and a suffix on the header
+line. A wall that cannot be trusted must not look calm — but it must not grow a
+toolbar either.
+
+In production the trigger is SSE `readyState` **plus a watchdog**: if no event
+arrives within ~2.5 check intervals the view is stale regardless of what the socket
+claims. A TCP connection that is open but silent is the failure mode that fools
+naive implementations. Reconnect uses exponential backoff, but the button is
+always available — someone staring at a broken dashboard should never have to
+wait out the backoff timer.
+
+---
+
+## 7. Layouts
 
 Layout is a **user setting**, not a design decision made on everyone's
 behalf. Four views of the same data, picked from the grid icon in the toolbar,
@@ -245,7 +288,7 @@ exactly as you left it.
 
 ---
 
-## 7. Components
+## 8. Components
 
 See `docs/mockups/components.html` for a working version of everything below.
 
@@ -315,7 +358,7 @@ after.
 
 ---
 
-## 8. Accessibility
+## 9. Accessibility
 
 Not an afterthought — several of the decisions above exist precisely for it.
 
@@ -332,7 +375,7 @@ Not an afterthought — several of the decisions above exist precisely for it.
 
 ---
 
-## 9. What this design does not do
+## 10. What this design does not do
 
 Just as important as the rest, because these are the ones that keep coming back:
 
@@ -348,7 +391,7 @@ Just as important as the rest, because these are the ones that keep coming back:
 
 ---
 
-## 10. From mockup to code
+## 11. From mockup to code
 
 The mockups are standalone HTML files with no build step. When implementing in
 React + Tailwind v4:
@@ -365,7 +408,7 @@ React + Tailwind v4:
 
 ---
 
-## 11. Known gaps
+## 12. Known gaps
 
 An honest list of what the mockups do *not* yet answer. Written down so it stays
 a decision instead of an oversight. Roughly in order of how much it would hurt
@@ -378,10 +421,6 @@ to discover late.
   is a list of names, which is not what this product is for. The phone is where
   you look *after* the alert fires, so it is arguably the most important screen
   we have not designed. Needs its own decision, not a narrower desktop.
-- **Loss of connection.** The dashboard is fed by SSE. When that stream drops,
-  every LED keeps showing its last known state and the screen calmly lies to
-  you. This is the one failure mode that directly attacks the product's promise.
-  Needs a visible degraded state, not a silent reconnect.
 - **Scale.** The mockup shows 14 monitors; the target audience runs 10–200. No
   search, no filter, no grouping in the row views, no virtualisation, no
   pagination. Compact was designed for density but not tested at 200 rows.
