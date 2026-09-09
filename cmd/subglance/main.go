@@ -20,6 +20,7 @@ import (
 	"github.com/frankgraave/subglance/internal/buildinfo"
 	"github.com/frankgraave/subglance/internal/config"
 	"github.com/frankgraave/subglance/internal/logging"
+	"github.com/frankgraave/subglance/internal/store"
 )
 
 func main() {
@@ -49,9 +50,26 @@ func run(args []string) error {
 		return fmt.Errorf("create data dir %s: %w", cfg.DataDir, err)
 	}
 
+	// Give startup its own bounded context: a database that hangs on open
+	// should fail loudly rather than leave the process wedged before it ever
+	// serves a request.
+	openCtx, cancelOpen := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancelOpen()
+
+	db, err := store.Open(openCtx, store.Options{Path: cfg.DBPath()})
+	if err != nil {
+		return fmt.Errorf("open database: %w", err)
+	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Error("closing database", "error", err)
+		}
+	}()
+	log.Info("database ready", "path", db.Path())
+
 	srv := &http.Server{
 		Addr:    cfg.Addr,
-		Handler: api.New(log).Handler(),
+		Handler: api.New(log, db).Handler(),
 
 		// Bounded timeouts: an unbounded server is a resource leak waiting
 		// for one slow client. ReadHeaderTimeout in particular defends

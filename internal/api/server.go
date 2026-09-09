@@ -6,23 +6,26 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/frankgraave/subglance/internal/buildinfo"
+	"github.com/frankgraave/subglance/internal/store"
 )
 
 // Server wires the HTTP routes together.
 type Server struct {
 	log       *slog.Logger
+	db        *store.DB
 	startedAt time.Time
 }
 
 // New returns a Server ready to be mounted.
-func New(log *slog.Logger) *Server {
-	return &Server{log: log, startedAt: time.Now()}
+func New(log *slog.Logger, db *store.DB) *Server {
+	return &Server{log: log, db: db, startedAt: time.Now()}
 }
 
 // Handler returns the root HTTP handler with all routes and middleware applied.
@@ -31,6 +34,7 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("GET /health", s.handleHealth)
 	mux.HandleFunc("GET /api/v1/health", s.handleHealth)
+	mux.HandleFunc("GET /api/v1/ready", s.handleReady)
 
 	return s.withRecovery(s.withLogging(mux))
 }
@@ -52,6 +56,40 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		Version: buildinfo.Short(),
 		Uptime:  time.Since(s.startedAt).Truncate(time.Second).String(),
 	})
+}
+
+type readyResponse struct {
+	Status   string `json:"status"`
+	Database string `json:"database"`
+	Error    string `json:"error,omitempty"`
+}
+
+// handleReady reports whether SubGlance can actually serve traffic, which
+// unlike /health means checking its dependencies.
+//
+// The split matters operationally: /health answering 200 while /ready returns
+// 503 tells an orchestrator "leave this process alone, but send it no traffic
+// yet" — restarting it would not fix a database that is still coming up.
+func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+
+	if s.db == nil {
+		writeJSON(w, http.StatusServiceUnavailable, readyResponse{
+			Status: "unavailable", Database: "down", Error: "no database configured",
+		})
+		return
+	}
+
+	if err := s.db.Reader.PingContext(ctx); err != nil {
+		s.log.Warn("readiness check failed", "error", err)
+		writeJSON(w, http.StatusServiceUnavailable, readyResponse{
+			Status: "unavailable", Database: "down", Error: err.Error(),
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, readyResponse{Status: "ready", Database: "up"})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

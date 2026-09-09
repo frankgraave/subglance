@@ -10,7 +10,7 @@
 | HTTP | chi of stdlib `net/http` | Licht, geen framework-lock-in |
 | Database | SQLite (standaard), Postgres (optioneel) | Nul configuratie is de #1 reden dat self-hosted software daadwerkelijk geïnstalleerd wordt |
 | DB-driver | `modernc.org/sqlite` | Pure Go, geen cgo — cross-compileren blijft triviaal |
-| Migraties | goose of golang-migrate | Voorspelbaar schema-beheer |
+| Migraties | Eigen, embed.FS + transacties | Zie §3.1: een externe library voegt hier niets toe |
 | Frontend | React 19 + Vite + TypeScript | Rijkste ecosysteem voor precies de UI-kwaliteit die dit product nodig heeft |
 | Styling | Tailwind CSS v4 | Snel itereren, consistente design tokens |
 | Componenten | shadcn/ui (basis, zwaar aangepast) | Startpunt, geen eindpunt — het mag er niet uitzien als standaard shadcn |
@@ -117,6 +117,32 @@ opslag. Een achtergrondtaak draait dit dagelijks.
 **SQLite-instellingen:** WAL-modus, `synchronous=NORMAL`, `busy_timeout`. Eén
 schrijver, meerdere lezers; schrijfacties gaan via één kanaal.
 
+### 3.1 Twee connectiepools
+
+SQLite staat veel gelijktijdige lezers toe, maar slechts één schrijver. In
+plaats van dat via willekeurige `SQLITE_BUSY`-fouten te ontdekken, biedt
+`store.DB` twee pools:
+
+- **`Writer`** — exact één verbinding. Alle INSERT/UPDATE/DELETE gaat hierheen,
+  zodat schrijfacties in Go netjes in de rij staan in plaats van in de driver
+  te vechten.
+- **`Reader`** — meerdere verbindingen voor gelijktijdige SELECT's.
+
+In WAL-modus blokkeren lezers de schrijver nooit en andersom ook niet.
+
+Pragma's worden via de DSN gezet, niet met een losse `PRAGMA`-statement na
+`Open()`. Dat laatste zou alleen gelden voor de ene verbinding die dat
+statement toevallig uitvoerde; via de DSN geldt het voor elke verbinding in de
+pool. Bij het openen wordt geverifieerd dat `foreign_keys` daadwerkelijk aan
+staat — een stil genegeerde pragma zou maandenlang wezen laten ontstaan zonder
+dat iemand het merkt.
+
+**Migraties** zijn eigen code: `.sql`-bestanden in `embed.FS`, op
+bestandsnaamvolgorde toegepast, elk in één transactie samen met de regel die
+de migratie registreert. Een mislukking halverwege laat dus geen half schema
+achter én geen valse registratie van succes. Een externe library voegt hier
+niets aan toe.
+
 ## 4. API-ontwerp
 
 Basis: `/api/v1`. OpenAPI-spec wordt gegenereerd en meegeleverd.
@@ -143,7 +169,15 @@ POST   /channels/{id}/test
 
 GET    /stream                  Server-Sent Events, live updates
 GET    /health                  liveness van SubGlance zelf
+GET    /ready                   readiness: kan de database bereikt worden?
 ```
+
+**Liveness vs. readiness.** `/health` is bewust dependency-vrij: het moet ook
+antwoorden als de database ongelukkig is, want een orchestrator beslist hierop
+of het proces herstart moet worden — en herstarten repareert geen zieke
+database. `/ready` controleert wél de afhankelijkheden. `/health` 200 met
+`/ready` 503 betekent dus: laat dit proces met rust, maar stuur er nog geen
+verkeer heen.
 
 **Authenticatie:** sessiecookie voor de UI, `Authorization: Bearer <token>` met
 API-tokens voor machines. Beide raken exact dezelfde endpoints — de UI krijgt

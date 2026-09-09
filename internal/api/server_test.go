@@ -1,16 +1,38 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
+
+	"github.com/frankgraave/subglance/internal/store"
 )
 
+func testLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
+
+// testServer returns a Server with no database, for routes that do not need one.
 func testServer() *Server {
-	return New(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	return New(testLogger(), nil)
+}
+
+// testServerWithDB returns a Server backed by a real temporary database.
+func testServerWithDB(t *testing.T) (*Server, *store.DB) {
+	t.Helper()
+	db, err := store.Open(context.Background(), store.Options{
+		Path: filepath.Join(t.TempDir(), "api.db"),
+	})
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	return New(testLogger(), db), db
 }
 
 func TestHealth(t *testing.T) {
@@ -96,5 +118,65 @@ func TestRecoveryMiddleware(t *testing.T) {
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("status = %d, want 500", rec.Code)
+	}
+}
+
+func TestReadyWithHealthyDatabase(t *testing.T) {
+	srv, _ := testServerWithDB(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/ready", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body.String())
+	}
+	var got readyResponse
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Status != "ready" || got.Database != "up" {
+		t.Errorf("got %+v, want status=ready database=up", got)
+	}
+}
+
+// A closed database must make readiness fail. If it did not, an orchestrator
+// would keep routing traffic to an instance that cannot answer a single query.
+func TestReadyWithBrokenDatabase(t *testing.T) {
+	srv, db := testServerWithDB(t)
+	if err := db.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/ready", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503", rec.Code)
+	}
+	var got readyResponse
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Database != "down" {
+		t.Errorf("database = %q, want down", got.Database)
+	}
+}
+
+// /health must keep answering even when the database is gone: it decides
+// whether to restart the process, and a restart would not fix a sick database.
+func TestHealthStaysUpWhenDatabaseIsDown(t *testing.T) {
+	srv, db := testServerWithDB(t)
+	if err := db.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200: /health must not depend on the database", rec.Code)
 	}
 }
