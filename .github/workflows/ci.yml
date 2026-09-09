@@ -34,7 +34,7 @@ env:
   # resolves to whatever the runner has newest, which makes builds
   # irreproducible and, worse, makes the vulnerability scan's result depend
   # on the day it ran. Bump this deliberately.
-  GO_VERSION: "1.25.14"
+  GO_VERSION: "1.26.8"
 
 jobs:
   test:
@@ -115,10 +115,10 @@ jobs:
       # read the config at all.
       #
       # Bumping the `go` directive means checking that a golangci-lint
-      # release built with that Go exists. v2.5.0 is built with go1.25.1.
+      # release built with that Go exists.
       - uses: golangci/golangci-lint-action@v8
         with:
-          version: v2.5.0
+          version: v2.13.2
           args: --timeout=5m
 
   build:
@@ -178,5 +178,5 @@ jobs:
       # release, so GO_VERSION above is the real remedy: keep it current.
       - name: Run govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+          go install golang.org/x/vuln/cmd/govulncheck@v1.1.6
           govulncheck ./...
