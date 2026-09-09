@@ -1,0 +1,104 @@
+# Network-dependent checks.
+#
+# The main CI workflow runs `go test -short`, which skips everything that
+# needs a real resolver, an outbound socket or ICMP. That keeps pull requests
+# honest: a red build means someone broke the code, never that badssl.com had
+# a bad morning.
+#
+# But those tests are the ones that prove the product actually works against
+# the internet, so they cannot simply be deleted. They run here instead —
+# daily, and on demand. A failure here opens an issue for a human to look at;
+# it does not block anybody's merge.
+
+name: Network checks
+
+on:
+  schedule:
+    # 06:00 UTC daily. Early enough that a broken third-party endpoint is
+    # noticed before the working day, late enough not to compete with the
+    # nightly load on GitHub's runners.
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  network:
+    name: Full suite with network
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+
+      # GitHub's runners allow unprivileged ICMP sockets, but the range is
+      # not open by default. Without this the ping tests skip rather than
+      # fail — which would quietly hide a real regression in the ping path.
+      - name: Allow unprivileged ICMP
+        run: sudo sysctl -w net.ipv4.ping_group_range="0 2147483647"
+
+      - name: Confirm ping is actually available
+        run: |
+          if ! ping -c1 -W2 1.1.1.1 >/dev/null 2>&1; then
+            echo "::warning::ICMP is blocked on this runner; ping tests will skip"
+          fi
+
+      - name: Full test suite
+        env:
+          SUBGLANCE_TEST_NETWORK: "1"
+        run: go test -race -count=1 ./...
+
+      # A live end-to-end run against real endpoints. This is the check that
+      # would have caught the empty-incident bug that unit tests missed: it
+      # exercises the whole path from probe to alert payload.
+      - name: Live end-to-end run
+        env:
+          SUBGLANCE_TEST_NETWORK: "1"
+        run: go run ./cmd/statedemo
+
+      - name: Open an issue when the scheduled run fails
+        if: failure() && github.event_name == 'schedule'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = "Scheduled network checks failed";
+            const url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            // Reuse an existing open issue rather than filing one per day.
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "ci-network",
+            });
+
+            if (existing.data.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.data[0].number,
+                body: `Failed again: ${url}`,
+              });
+              return;
+            }
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              labels: ["ci-network"],
+              body: [
+                "The daily network-dependent test run failed.",
+                "",
+                `Run: ${url}`,
+                "",
+                "This suite talks to real endpoints, so a failure may mean a",
+                "third-party service changed rather than a bug in SubGlance.",
+                "Check the log before assuming a regression.",
+              ].join("\n"),
+            });

@@ -1,0 +1,155 @@
+# Continuous integration.
+#
+# Three jobs, deliberately separated:
+#
+#   test   — the fast, hermetic suite that gates every push and PR
+#   lint   — formatting, vet and golangci-lint
+#   build  — proves the binary compiles for the platforms we ship
+#
+# Tests that need outbound network are excluded here via the `-short` flag
+# (see TestMain in internal/checker). A CI runner's network is not the
+# internet: DNS may be filtered, ICMP is usually blocked, and badssl.com
+# going down must never turn this repository red. Those checks run in the
+# separate `network` workflow on a schedule, where a failure means
+# "investigate", not "your PR is broken".
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A new push to the same branch makes the previous run irrelevant.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.25"
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Verify go.mod is tidy
+        run: |
+          go mod tidy
+          if ! git diff --exit-code go.mod go.sum; then
+            echo "::error::go.mod or go.sum is not tidy — run 'go mod tidy' and commit the result"
+            exit 1
+          fi
+
+      # The race detector is not optional here. This service runs checks from
+      # a worker pool against shared state; a data race that only shows up
+      # under load in production is exactly what it catches.
+      - name: Test with race detector
+        run: go test -race -short -count=1 -coverprofile=coverage.out ./...
+
+      - name: Coverage summary
+        run: |
+          go tool cover -func=coverage.out | tail -1
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ {print substr($3, 1, length($3)-1)}')
+          echo "Total coverage: ${total}%"
+          echo "### Coverage: ${total}%" >> "$GITHUB_STEP_SUMMARY"
+          # The state engine and incident store decide whether users get
+          # woken up. Letting their coverage rot is not acceptable.
+          awk -v t="$total" 'BEGIN { if (t+0 < 65) { print "::error::coverage " t "% is below the 65% floor"; exit 1 } }'
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage.out
+          retention-days: 7
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::these files are not gofmt'd:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=5m
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      # Pure Go, no cgo: cross-compiling has to stay this boring. The SQLite
+      # driver is modernc's precisely so this step needs no C toolchain.
+      - name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+        env:
+          CGO_ENABLED: "0"
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          go build -trimpath -ldflags "-s -w" -o /tmp/subglance ./cmd/subglance
+          ls -lh /tmp/subglance
+
+  govulncheck:
+    name: Vulnerability scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      # govulncheck only reports vulnerabilities on code paths actually
+      # reachable from this binary, so a finding here is worth acting on
+      # rather than triaging away.
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
