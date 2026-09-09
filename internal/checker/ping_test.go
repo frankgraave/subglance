@@ -40,6 +40,7 @@ func TestPingReachesLoopback(t *testing.T) {
 }
 
 func TestPingResolvesHostname(t *testing.T) {
+	requireNetwork(t)
 	c := requirePing(t)
 
 	res := c.Check(context.Background(), Monitor{
@@ -56,6 +57,7 @@ func TestPingResolvesHostname(t *testing.T) {
 // A URL is a reasonable thing to paste into a ping monitor by mistake, and
 // pinging its host is what the user meant.
 func TestPingAcceptsURLShapedTarget(t *testing.T) {
+	requireNetwork(t)
 	c := requirePing(t)
 
 	res := c.Check(context.Background(), Monitor{
@@ -70,6 +72,7 @@ func TestPingAcceptsURLShapedTarget(t *testing.T) {
 }
 
 func TestPingTimesOutOnDeadAddress(t *testing.T) {
+	requireNetwork(t)
 	c := requirePing(t)
 
 	// TEST-NET-2: routable-looking, guaranteed to answer nothing.
@@ -90,6 +93,7 @@ func TestPingTimesOutOnDeadAddress(t *testing.T) {
 }
 
 func TestPingFailsOnUnknownHost(t *testing.T) {
+	requireNetwork(t)
 	c := requirePing(t)
 
 	res := c.Check(context.Background(), Monitor{
@@ -144,6 +148,30 @@ func TestPingEmptyTarget(t *testing.T) {
 	}
 	if res.Kind != FailInternal {
 		t.Errorf("kind = %q, want %q", res.Kind, FailInternal)
+	}
+}
+
+// Every checker constructor must fail closed on a nil guard. Ping is the one
+// that cannot rely on a Dialer Control hook, so a nil guard here would mean no
+// SSRF protection at all rather than merely a missing convenience.
+func TestPingNilGuardFailsClosed(t *testing.T) {
+	c := NewPingChecker(nil)
+	c.once.Do(c.detectMode)
+	if c.err != nil {
+		t.Skipf("ICMP not permitted: %v", c.err)
+	}
+
+	res := c.Check(context.Background(), Monitor{
+		Type:    TypePing,
+		Target:  "127.0.0.1",
+		Timeout: 5 * time.Second,
+	})
+
+	if res.OK {
+		t.Fatal("a nil guard must fail closed, not disable the SSRF check")
+	}
+	if !strings.Contains(res.Error, "loopback") && !strings.Contains(res.Error, "private") {
+		t.Errorf("error = %q, want the guard's rejection", res.Error)
 	}
 }
 

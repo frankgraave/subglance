@@ -223,14 +223,19 @@ func TestFlappingSuppression(t *testing.T) {
 	}
 
 	// Cycle 2: down (change 3), up (change 4) — the fourth change trips the
-	// threshold, and the engine reports flapping instead of the flip.
+	// threshold. The recovery is still reported as a resolve, because the
+	// incident really did close; flapping is signalled alongside it.
 	if tr := obs(false); !tr.Notify || tr.Event != EventIncidentConfirmed {
 		t.Fatalf("second down: got event=%q notify=%v", tr.Event, tr.Notify)
 	}
 
 	tr := obs(true)
-	if tr.Event != EventFlappingStarted {
-		t.Fatalf("expected flapping to start on the 4th change, got event=%q", tr.Event)
+	if tr.Event != EventIncidentResolved {
+		t.Fatalf("the incident must still resolve when flapping trips, got event=%q", tr.Event)
+	}
+	if !tr.Flapping || !tr.FlappingChanged {
+		t.Errorf("expected flapping to start on the 4th change: flapping=%v changed=%v",
+			tr.Flapping, tr.FlappingChanged)
 	}
 	if !tr.Notify {
 		t.Error("flapping start should notify once, so the user knows why alerts stopped")
@@ -249,6 +254,11 @@ func TestFlappingSuppression(t *testing.T) {
 	}
 	if tr.To != StatusDown {
 		t.Errorf("state must still advance during flapping: got %q", tr.To)
+	}
+	// The event still has to reach the persistence layer, or the incident
+	// would never be recorded.
+	if tr.Event != EventIncidentConfirmed {
+		t.Errorf("suppression must not erase the event: got %q", tr.Event)
 	}
 }
 
@@ -276,11 +286,19 @@ func TestFlappingEndsAfterWindow(t *testing.T) {
 	if e.Flapping(1) {
 		t.Error("flapping should end once old changes fall outside the window")
 	}
-	if tr.Event != EventFlappingEnded {
-		t.Errorf("expected flapping-ended event, got %q", tr.Event)
+	if tr.Flapping {
+		t.Error("transition should report flapping as over")
+	}
+	if !tr.FlappingChanged {
+		t.Error("expected the flapping status change to be signalled")
 	}
 	if !tr.Notify {
 		t.Error("flapping ending should notify so the user knows alerts resumed")
+	}
+	// Nothing happened to the incident on this check, so there is no event to
+	// report — flapping travels in its own fields.
+	if tr.Event != EventNone {
+		t.Errorf("event = %q, want none: no incident changed on this check", tr.Event)
 	}
 }
 
@@ -343,6 +361,110 @@ func TestForgetDropsState(t *testing.T) {
 	if got := e.Status(1); got != StatusUnknown {
 		t.Errorf("after Forget, status = %q, want unknown", got)
 	}
+}
+
+// Retain is what keeps the engine's map bounded. Monitors are deleted and
+// paused through several code paths; reconciling against the authoritative
+// set on every reload cannot drift the way per-path Forget calls would.
+func TestRetainDropsMonitorsNotInLiveSet(t *testing.T) {
+	c := newClock()
+	e := New(Options{Now: c.Now})
+
+	for id := int64(1); id <= 5; id++ {
+		e.Observe(Observation{MonitorID: id, OK: false, At: c.Now(), FailureThreshold: 1})
+	}
+	if got := e.Len(); got != 5 {
+		t.Fatalf("tracking %d monitors, want 5", got)
+	}
+
+	// Monitors 2 and 4 survive; the rest were deleted or paused.
+	e.Retain(map[int64]struct{}{2: {}, 4: {}})
+
+	if got := e.Len(); got != 2 {
+		t.Errorf("after Retain, tracking %d monitors, want 2", got)
+	}
+	for _, id := range []int64{2, 4} {
+		if got := e.Status(id); got != StatusDown {
+			t.Errorf("monitor %d status = %q, want down (it should have survived)", id, got)
+		}
+	}
+	for _, id := range []int64{1, 3, 5} {
+		if got := e.Status(id); got != StatusUnknown {
+			t.Errorf("monitor %d status = %q, want unknown (it should have been dropped)", id, got)
+		}
+	}
+}
+
+// An empty live set means every monitor is gone — the map must empty, not be
+// left untouched by a guard clause that mistakes empty for "no information".
+func TestRetainWithEmptyLiveSetDropsEverything(t *testing.T) {
+	c := newClock()
+	e := New(Options{Now: c.Now})
+
+	e.Observe(Observation{MonitorID: 1, OK: false, At: c.Now(), FailureThreshold: 1})
+	e.Observe(Observation{MonitorID: 2, OK: true, At: c.Now(), FailureThreshold: 1})
+
+	e.Retain(map[int64]struct{}{})
+
+	if got := e.Len(); got != 0 {
+		t.Errorf("tracking %d monitors after an empty Retain, want 0", got)
+	}
+}
+
+// A monitor that is paused mid-incident and later resumed must start clean:
+// resuming a failure streak from before the pause would alert on the first
+// failure after a resume, which is exactly the false alarm this product
+// promises not to send.
+func TestRetainClearsFailureStreak(t *testing.T) {
+	c := newClock()
+	e := New(Options{Now: c.Now, FlapThreshold: 99})
+
+	// Two failures with a threshold of 3: pending, one short of confirming.
+	e.Observe(Observation{MonitorID: 1, OK: false, At: c.Now(), FailureThreshold: 3})
+	tr := e.Observe(Observation{MonitorID: 1, OK: false, At: c.Now(), FailureThreshold: 3})
+	if tr.ConsecutiveFails != 2 {
+		t.Fatalf("streak = %d, want 2", tr.ConsecutiveFails)
+	}
+
+	// Paused, then resumed.
+	e.Retain(map[int64]struct{}{})
+
+	tr = e.Observe(Observation{MonitorID: 1, OK: false, At: c.Now(), FailureThreshold: 3})
+	if tr.ConsecutiveFails != 1 {
+		t.Errorf("streak after resume = %d, want 1 — the old streak survived", tr.ConsecutiveFails)
+	}
+	if tr.Notify {
+		t.Error("first failure after a resume must not alert")
+	}
+}
+
+func TestRetainIsSafeUnderConcurrentObserve(t *testing.T) {
+	e := New(Options{})
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		for i := range 200 {
+			e.Observe(Observation{
+				MonitorID:        int64(i % 20),
+				OK:               i%2 == 0,
+				At:               time.Now(),
+				FailureThreshold: 2,
+			})
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		for range 200 {
+			e.Retain(map[int64]struct{}{1: {}, 2: {}, 3: {}})
+			e.Len()
+		}
+	}()
+
+	wg.Wait()
 }
 
 func TestCausePropagates(t *testing.T) {

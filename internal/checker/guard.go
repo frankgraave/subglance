@@ -1,6 +1,7 @@
 package checker
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -122,7 +123,11 @@ func (g *Guard) ControlFunc() func(network, address string, c syscall.RawConn) e
 // obviously bad target is rejected immediately with a clear message rather than
 // failing silently on every check. It is not a substitute for ControlFunc:
 // between this call and the actual connection, DNS can change.
-func (g *Guard) CheckHost(host string) error {
+//
+// The context is not optional. A hostile or merely broken resolver can hang,
+// and this runs on the request path when a user saves a monitor — an
+// unbounded lookup here would hold an HTTP handler open indefinitely.
+func (g *Guard) CheckHost(ctx context.Context, host string) error {
 	if g.AllowPrivate {
 		return nil
 	}
@@ -130,18 +135,14 @@ func (g *Guard) CheckHost(host string) error {
 		return g.CheckAddr(addr)
 	}
 
-	ips, err := net.LookupIP(host)
+	addrs, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
 	if err != nil {
 		return fmt.Errorf("resolve %s: %w", host, err)
 	}
-	if len(ips) == 0 {
+	if len(addrs) == 0 {
 		return fmt.Errorf("resolve %s: no addresses", host)
 	}
-	for _, ip := range ips {
-		addr, ok := netip.AddrFromSlice(ip)
-		if !ok {
-			return fmt.Errorf("guard: unusable address for %s", host)
-		}
+	for _, addr := range addrs {
 		if err := g.CheckAddr(addr); err != nil {
 			return err
 		}

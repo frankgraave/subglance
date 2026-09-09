@@ -174,6 +174,8 @@ func TestTCPCheckRespectsGuard(t *testing.T) {
 }
 
 func TestTCPCheckTimesOut(t *testing.T) {
+	requireNetwork(t)
+
 	// 198.51.100.0/24 is TEST-NET-2: routable-looking and guaranteed dead.
 	c := NewTCPChecker(NewGuard(true))
 

@@ -45,6 +45,15 @@ type Job struct {
 type Outcome struct {
 	Monitor checker.Monitor
 	Result  checker.Result
+
+	// Aborted marks a check that was cut short by shutdown rather than by
+	// anything the target did.
+	//
+	// Every checker turns a cancelled context into a failed Result, and the
+	// scheduler waits for in-flight checks before stopping — so without this
+	// flag the consumer cannot tell "the site is down" from "we are exiting",
+	// and every restart would manufacture a burst of outages.
+	Aborted bool
 }
 
 // Registry supplies the set of monitors to run.
@@ -339,7 +348,13 @@ func (s *Scheduler) runCheck(ctx context.Context, job Job) {
 	}
 
 	res := c.Check(ctx, job.Monitor)
-	s.report(Outcome{Monitor: job.Monitor, Result: res})
+
+	// Distinguish "the check failed" from "we were told to stop". The
+	// checkers cannot make this call themselves: from inside a probe a
+	// cancelled context looks the same either way.
+	aborted := !res.OK && ctx.Err() != nil
+
+	s.report(Outcome{Monitor: job.Monitor, Result: res, Aborted: aborted})
 }
 
 func (s *Scheduler) report(o Outcome) {
@@ -347,6 +362,17 @@ func (s *Scheduler) report(o Outcome) {
 		return
 	}
 	s.onResult(o)
+}
+
+// Reload re-reads the monitor set immediately, rather than waiting for the
+// next reload tick.
+//
+// The API calls this after creating, deleting, pausing or resuming a monitor,
+// so a change the user just made takes effect now instead of up to
+// ReloadInterval later. Waiting would make the UI feel broken: you delete a
+// monitor and it keeps checking for another thirty seconds.
+func (s *Scheduler) Reload(ctx context.Context) error {
+	return s.reload(ctx)
 }
 
 // reload re-reads the monitor set, adding new monitors, dropping removed ones

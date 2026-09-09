@@ -59,7 +59,14 @@ const (
 // A ping socket has no Control hook the way a Dialer does, so the check is
 // explicit rather than automatic — losing it would let anyone sweep the
 // internal network for live hosts by watching which monitors go green.
+//
+// A nil guard fails closed, matching the other constructors. Storing nil and
+// skipping the check would turn a caller's oversight into an unguarded ICMP
+// prober.
 func NewPingChecker(guard *Guard) *PingChecker {
+	if guard == nil {
+		guard = NewGuard(false)
+	}
 	return &PingChecker{
 		guard: guard,
 		// The lower 16 bits are what fits in an ICMP echo ID.
@@ -126,10 +133,8 @@ func (c *PingChecker) resolve(ctx context.Context, host string) (netip.Addr, err
 	}
 
 	addr := addrs[0].Unmap()
-	if c.guard != nil {
-		if err := c.guard.CheckAddr(addr); err != nil {
-			return netip.Addr{}, err
-		}
+	if err := c.guard.CheckAddr(addr); err != nil {
+		return netip.Addr{}, err
 	}
 	return addr, nil
 }

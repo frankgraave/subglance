@@ -50,7 +50,14 @@ const monitorColumns = `
 	method, expected_status, keyword, keyword_mode, follow_redirects,
 	headers_json, body, ssl_warn_days, enabled, created_at, updated_at`
 
+// queryMonitors runs a monitor SELECT with a caller-supplied WHERE clause.
+//
+// The clause is concatenated into the SQL, so it must never contain anything
+// derived from user input. Every caller in this package passes a compile-time
+// constant, and that is the rule: if a filter ever needs a value, it takes a
+// bound parameter rather than string formatting.
 func (db *DB) queryMonitors(ctx context.Context, where string) ([]Monitor, error) {
+	// #nosec G202 -- `where` is a package-internal constant, never user input.
 	q := "SELECT " + monitorColumns + " FROM monitors " + where + " ORDER BY id"
 
 	rows, err := db.Reader.QueryContext(ctx, q)

@@ -1,41 +1,72 @@
+# golangci-lint configuration.
+#
+# The linters here are chosen to catch bugs, not to enforce taste. Anything
+# that would produce a wall of stylistic noise on an otherwise correct change
+# is deliberately absent: a linter people learn to ignore is worse than no
+# linter.
+
 version: "2"
+
+run:
+  timeout: 5m
 
 linters:
   enable:
-    - errcheck
-    - govet
-    - ineffassign
-    - staticcheck
-    - unused
-    - bodyclose
-    - errorlint
+    # Defaults worth naming explicitly.
+    - errcheck      # unchecked errors
+    - govet         # suspicious constructs
+    - ineffassign   # assignments that are never used
+    - staticcheck   # correctness and simplification
+    - unused        # dead code
+
+    # Correctness beyond the defaults.
+    - bodyclose     # unclosed HTTP response bodies — a leak only visible under load
+    - errorlint     # == on errors instead of errors.Is; breaks silently on wrapping
+    - copyloopvar   # loop variable capture
+    - durationcheck # multiplying two durations, which is almost never intended
+    - makezero      # make([]T, n) then append, which silently prepends zeros
+    - nilerr        # returning nil after checking a non-nil error
+    - noctx         # network calls without a context, i.e. without a deadline
+    - rowserrcheck  # sql.Rows errors that go unchecked
+    - sqlclosecheck # unclosed sql.Rows
+    - unconvert     # redundant type conversions
+    - wastedassign  # values assigned and never read
+
+    # Security and hygiene.
     - gosec
     - misspell
     - revive
-    - unconvert
-    - wastedassign
 
   settings:
     revive:
       rules:
+        # Doc comments are expected on exported identifiers here as a matter
+        # of course; the linter's version of the rule fires on cases where a
+        # comment would add nothing.
         - name: exported
           disabled: true
+
     gosec:
       excludes:
-        - G104 # duplicates errcheck
+        - G104  # duplicates errcheck
+        - G115  # int/int64 conversions we control; noisy on latency arithmetic
 
   exclusions:
     rules:
+      # Test files may dial, sleep and ignore errors in ways production code
+      # may not.
       - path: _test\.go
         linters:
-          - gosec
           - errcheck
+          - gosec
+          - noctx
+
+      # The demo commands are illustrative programs, not library code.
+      - path: cmd/(statedemo|checkdemo|loadtest)/
+        linters:
+          - errcheck
+          - gosec
 
 formatters:
   enable:
     - gofmt
-    - goimports
-
-issues:
-  max-issues-per-linter: 0
-  max-same-issues: 0

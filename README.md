@@ -127,7 +127,37 @@ visible in the API.
 A blip that recovers before the threshold is recorded but never notified, in
 either direction. A monitor that oscillates rapidly is marked as flapping, and
 further notifications are held back until it settles; suppressed transitions are
-flagged rather than silently dropped.
+flagged rather than silently dropped. Suppression hides the alert, never the
+record — incidents are written to the database throughout, so history stays
+accurate.
+
+Checks cut short by a shutdown are discarded rather than recorded as failures.
+Otherwise every restart would manufacture an outage on healthy monitors.
+
+Monitors that are deleted or paused have their in-memory state dropped. A
+monitor resumed an hour later starts clean rather than resuming a failure
+streak from before the pause.
+
+### Tests
+
+```sh
+make check         # format, vet and the hermetic suite — run before committing
+make test          # the same suite with the race detector
+go test ./...      # everything, including tests that need the network
+```
+
+The suite is split in two. Most tests are hermetic: they parse strings or talk
+to a loopback server the test starts itself, and they run everywhere. A few need
+a real resolver, an outbound socket or an ICMP-capable kernel; those skip under
+`go test -short`, which is what CI runs on every push.
+
+That split is deliberate. A CI runner's network is not the internet — DNS may be
+filtered, ICMP is usually blocked, and a third-party host having a bad morning
+must never turn this repository red. The network-dependent tests still run daily
+in a separate workflow, where a failure means "go look at it" rather than "your
+pull request is broken".
+
+Set `SUBGLANCE_TEST_NETWORK=1` to force them on locally.
 
 ### API
 

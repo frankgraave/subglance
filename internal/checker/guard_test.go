@@ -1,6 +1,7 @@
 package checker
 
 import (
+	"context"
 	"net/netip"
 	"testing"
 )
@@ -113,10 +114,10 @@ func TestGuardRejectsInvalidAddress(t *testing.T) {
 func TestCheckHostWithLiteralIP(t *testing.T) {
 	g := NewGuard(false)
 
-	if err := g.CheckHost("127.0.0.1"); err == nil {
+	if err := g.CheckHost(context.Background(), "127.0.0.1"); err == nil {
 		t.Error("CheckHost accepted a loopback literal")
 	}
-	if err := g.CheckHost("1.1.1.1"); err != nil {
+	if err := g.CheckHost(context.Background(), "1.1.1.1"); err != nil {
 		t.Errorf("CheckHost rejected a public literal: %v", err)
 	}
 }

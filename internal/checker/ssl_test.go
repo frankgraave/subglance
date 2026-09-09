@@ -281,6 +281,8 @@ func TestSSLCheckUntrustedIssuer(t *testing.T) {
 }
 
 func TestSSLCheckDefaultsToPort443(t *testing.T) {
+	requireNetwork(t)
+
 	// No server needed: the check should attempt 443 and fail on connection,
 	// not on a missing port.
 	c := NewSSLChecker(NewGuard(true))

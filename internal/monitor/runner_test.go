@@ -374,3 +374,87 @@ func TestAlertAfterPendingCarriesFullIncident(t *testing.T) {
 		t.Errorf("confirmed_at %v should not precede started_at %v", got.ConfirmedAt, got.StartedAt)
 	}
 }
+
+// A monitor that is deleted or paused must have its in-memory state dropped.
+// Without this the state engine keeps one entry per monitor forever, so an
+// instance where monitors come and go leaks memory for the life of the
+// process.
+func TestDeletedMonitorStateIsForgotten(t *testing.T) {
+	ctx := context.Background()
+	db := testDB(t)
+
+	m, err := db.CreateMonitor(ctx, store.Monitor{
+		Name: "temporary", Type: "http", Target: "https://example.com",
+		IntervalS: 20, TimeoutS: 5, Retries: 2, Enabled: true,
+	})
+	if err != nil {
+		t.Fatalf("CreateMonitor: %v", err)
+	}
+
+	r := New(Options{DB: db, Log: quietLogger()})
+
+	// Build up some state: one failure leaves a streak and a pending status.
+	r.record(outcomeFor(m, "https://example.com", false))
+	if got := r.engine.Status(m.ID); got != state.StatusPending {
+		t.Fatalf("status = %q, want pending", got)
+	}
+
+	// Delete the monitor and reload the scheduler, which is what happens in
+	// production when the API deletes one.
+	if err := db.DeleteMonitor(ctx, m.ID); err != nil {
+		t.Fatalf("DeleteMonitor: %v", err)
+	}
+	if err := r.sch.Reload(ctx); err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+
+	if got := r.engine.Status(m.ID); got != state.StatusUnknown {
+		t.Errorf("status after deletion = %q, want unknown — state was leaked", got)
+	}
+}
+
+// Pausing is treated like deletion: a monitor resumed an hour later should be
+// judged on what it does now, not resume a stale failure streak.
+func TestPausedMonitorStateIsForgotten(t *testing.T) {
+	ctx := context.Background()
+	db := testDB(t)
+
+	m, err := db.CreateMonitor(ctx, store.Monitor{
+		Name: "pausable", Type: "http", Target: "https://example.com",
+		IntervalS: 20, TimeoutS: 5, Retries: 3, Enabled: true,
+	})
+	if err != nil {
+		t.Fatalf("CreateMonitor: %v", err)
+	}
+
+	r := New(Options{DB: db, Log: quietLogger()})
+
+	// Two failures: pending, one short of the threshold.
+	r.record(outcomeFor(m, "https://example.com", false))
+	r.record(outcomeFor(m, "https://example.com", false))
+
+	if err := db.SetMonitorEnabled(ctx, m.ID, false); err != nil {
+		t.Fatalf("SetMonitorEnabled: %v", err)
+	}
+	if err := r.sch.Reload(ctx); err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+
+	if got := r.engine.Status(m.ID); got != state.StatusUnknown {
+		t.Errorf("status after pause = %q, want unknown", got)
+	}
+
+	// Resume it. The next failure must start a fresh streak rather than
+	// immediately confirming on the third strike from before the pause.
+	if err := db.SetMonitorEnabled(ctx, m.ID, true); err != nil {
+		t.Fatalf("SetMonitorEnabled: %v", err)
+	}
+
+	rec := &alertRecorder{}
+	r.notify = rec.record
+	r.record(outcomeFor(m, "https://example.com", false))
+
+	if got := rec.events(); len(got) != 0 {
+		t.Errorf("first failure after resume alerted: %v — the streak survived the pause", got)
+	}
+}

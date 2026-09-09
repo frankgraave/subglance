@@ -140,19 +140,30 @@ func (r *Runner) restore(ctx context.Context) error {
 }
 
 // jobs converts enabled monitors into scheduler jobs.
+//
+// It also reconciles the state engine against the live monitor set: any
+// monitor the engine still tracks that is no longer enabled gets forgotten.
+// Doing it here rather than from a scheduler callback covers two cases the
+// queue diff misses — state restored from open incidents at startup for a
+// monitor that has since been deleted, and a monitor paused before the
+// scheduler ever queued it.
 func (r *Runner) jobs(ctx context.Context) ([]scheduler.Job, error) {
 	monitors, err := r.db.ListEnabledMonitors(ctx)
 	if err != nil {
 		return nil, err
 	}
 
+	live := make(map[int64]struct{}, len(monitors))
 	jobs := make([]scheduler.Job, 0, len(monitors))
 	for _, m := range monitors {
+		live[m.ID] = struct{}{}
 		jobs = append(jobs, scheduler.Job{
 			Monitor:  toCheckerMonitor(m),
 			Interval: time.Duration(m.IntervalS) * time.Second,
 		})
 	}
+
+	r.engine.Retain(live)
 	return jobs, nil
 }
 
@@ -181,6 +192,21 @@ func toCheckerMonitor(m store.Monitor) checker.Monitor {
 // A failure to write must never stop the scheduler: losing one heartbeat is
 // survivable, a monitoring system that stops monitoring is not.
 func (r *Runner) record(o scheduler.Outcome) {
+	// A check aborted by shutdown says nothing about the target. Every
+	// checker turns a cancelled context into a failed Result, and the
+	// scheduler waits for those in-flight results before stopping — so
+	// without this guard, every restart would inject a burst of false
+	// failures into the state engine, open incidents for healthy monitors,
+	// and page someone about an outage that never happened.
+	//
+	// The heartbeat is dropped too: recording it would put a phantom red bar
+	// in the timeline and dent the uptime figure at every deploy.
+	if o.Aborted {
+		r.log.Debug("discarding check cancelled by shutdown",
+			"monitor", o.Monitor.Name)
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -226,13 +252,15 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 	switch tr.Event {
 	case state.EventNone:
 		// Nothing structural changed. Keep the open incident's error text
-		// current so the UI shows the latest symptom.
+		// current so the UI shows the latest symptom. Do not return: a
+		// flapping status can change on a check that produced no event, and
+		// swallowing that would leave the log claiming a monitor is still
+		// flapping long after it settled.
 		if !o.Result.OK {
 			if err := r.db.UpdateIncidentError(ctx, o.Monitor.ID, tr.Cause, tr.Error); err != nil {
 				r.log.Error("failed to update incident error", "monitor_id", o.Monitor.ID, "error", err)
 			}
 		}
-		return
 
 	case state.EventIncidentOpened:
 		inc, err = r.db.OpenIncident(ctx, o.Monitor.ID, tr.At, tr.Cause, tr.Error)
@@ -292,14 +320,18 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 			"monitor", o.Monitor.Name,
 			"duration", inc.Duration().Round(time.Second),
 			"was_confirmed", inc.Confirmed())
+	}
 
-	case state.EventFlappingStarted:
-		r.log.Warn("monitor is flapping, notifications suppressed",
-			"monitor", o.Monitor.Name)
-
-	case state.EventFlappingEnded:
-		r.log.Info("monitor stopped flapping, notifications resumed",
-			"monitor", o.Monitor.Name)
+	// Flapping is reported alongside the incident lifecycle rather than in
+	// place of it, so this runs after the incident has been persisted.
+	if tr.FlappingChanged {
+		if tr.Flapping {
+			r.log.Warn("monitor is flapping, notifications suppressed",
+				"monitor", o.Monitor.Name)
+		} else {
+			r.log.Info("monitor stopped flapping, notifications resumed",
+				"monitor", o.Monitor.Name)
+		}
 	}
 
 	if tr.Suppressed {
@@ -308,6 +340,13 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 	}
 
 	if !tr.Notify || r.notify == nil {
+		return
+	}
+
+	// A notification with no incident behind it would be an empty alert. That
+	// happens when flapping starts or ends on an otherwise uneventful check:
+	// worth a log line, not worth waking anyone.
+	if tr.Event == state.EventNone {
 		return
 	}
 

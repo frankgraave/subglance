@@ -108,6 +108,8 @@ func TestHTTPConnectionRefused(t *testing.T) {
 }
 
 func TestHTTPDNSFailure(t *testing.T) {
+	requireNetwork(t)
+
 	m := monitor("http://this-host-does-not-exist.invalid")
 	m.Timeout = 5 * time.Second
 

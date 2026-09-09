@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"flag"
 	"testing"
 	"time"
@@ -113,7 +114,7 @@ func TestValidationRejectsBadInput(t *testing.T) {
 
 func TestHelpReturnsErrHelp(t *testing.T) {
 	_, err := Load([]string{"-h"})
-	if err != flag.ErrHelp {
+	if !errors.Is(err, flag.ErrHelp) {
 		t.Errorf("Load(-h) error = %v, want flag.ErrHelp", err)
 	}
 }

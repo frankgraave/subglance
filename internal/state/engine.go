@@ -65,13 +65,6 @@ const (
 	// closes was confirmed: nobody wants a "resolved" for an outage they were
 	// never told about.
 	EventIncidentResolved Event = "incident_resolved"
-
-	// EventFlappingStarted means the monitor is oscillating and further
-	// notifications are being held back.
-	EventFlappingStarted Event = "flapping_started"
-
-	// EventFlappingEnded means it settled down.
-	EventFlappingEnded Event = "flapping_ended"
 )
 
 // Observation is one check result as the engine needs it.
@@ -113,6 +106,18 @@ type Transition struct {
 	// The UI shows these so suppression is visible rather than mysterious —
 	// silently dropping alerts is how monitoring tools lose trust.
 	Suppressed bool
+
+	// Flapping reports whether the monitor is currently oscillating, and
+	// FlappingChanged whether that status just changed.
+	//
+	// These are separate from Event on purpose. Event is an instruction to
+	// the persistence layer — open, confirm or resolve an incident — while
+	// flapping only concerns whether a human hears about it. Folding the two
+	// together previously let a flapping signal overwrite a resolve, leaving
+	// the incident open in the database forever while the engine believed
+	// the monitor was up.
+	Flapping        bool
+	FlappingChanged bool
 
 	// Cause and Error carry the failure classification through to the
 	// incident record and the notification body.
@@ -317,6 +322,11 @@ func (ms *monitorState) recordChange(at time.Time, window time.Duration) {
 
 // applyFlapping decides whether this monitor is oscillating, and suppresses
 // the notification if so.
+//
+// It never touches t.Event. Event is what the persistence layer acts on, and
+// an incident that was opened, confirmed or resolved must be recorded whether
+// or not a human is told about it. Flapping is reported alongside, in its own
+// fields.
 func (e *Engine) applyFlapping(ms *monitorState, t *Transition) {
 	// Expire old flips even on checks that did not change state, otherwise a
 	// monitor that settles stays marked as flapping until it next flips.
@@ -331,26 +341,26 @@ func (e *Engine) applyFlapping(ms *monitorState, t *Transition) {
 
 	flappingNow := len(ms.changes) >= e.flapThreshold
 
+	t.Flapping = flappingNow
+	t.FlappingChanged = flappingNow != ms.flapping
+
 	switch {
 	case flappingNow && !ms.flapping:
+		// Just started oscillating. Notify once so the user understands why
+		// the alerts are about to stop, and let this transition's own event
+		// stand — the incident it describes still has to be recorded.
 		ms.flapping = true
-		// The state change itself is the news; report flapping rather than
-		// the flip that triggered it, and notify once so the user knows why
-		// the alerts stopped.
-		t.Event = EventFlappingStarted
 		t.Notify = true
 		t.Suppressed = false
 
 	case !flappingNow && ms.flapping:
+		// Settled down. Notify so the user knows alerts have resumed.
 		ms.flapping = false
-		if t.Event == EventNone {
-			t.Event = EventFlappingEnded
-			t.Notify = true
-		}
+		t.Notify = true
 
 	case flappingNow && ms.flapping:
-		// Hold everything back while it oscillates. The incident records keep
-		// being written; only the notification is withheld.
+		// Still oscillating. Hold the notification back; the incident record
+		// is written regardless.
 		if t.Notify {
 			t.Notify = false
 			t.Suppressed = true
@@ -386,6 +396,35 @@ func (e *Engine) Forget(monitorID int64) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	delete(e.state, monitorID)
+}
+
+// Retain drops every monitor not present in live.
+//
+// This is the reconciliation the engine needs to stay bounded: monitors are
+// deleted and paused through several different paths, and relying on each of
+// them to call Forget is the kind of bookkeeping that eventually gets missed.
+// Comparing against the authoritative set on every reload cannot drift.
+//
+// A paused monitor is forgotten along with a deleted one, deliberately. A
+// monitor resumed an hour later should be judged on what it does now rather
+// than resuming a failure streak from before the pause.
+func (e *Engine) Retain(live map[int64]struct{}) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	for id := range e.state {
+		if _, ok := live[id]; !ok {
+			delete(e.state, id)
+		}
+	}
+}
+
+// Len reports how many monitors the engine is tracking. It exists so tests
+// and metrics can assert the map does not grow without bound.
+func (e *Engine) Len() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return len(e.state)
 }
 
 // Restore seeds a monitor's state from the database at startup.

@@ -28,8 +28,12 @@ run: ## Run locally with a ./tmp data dir
 	$(GO) run $(CMD) --data-dir ./tmp --log-level debug
 
 .PHONY: test
-test: ## Run all tests with the race detector
-	$(GO) test -race -count=1 ./...
+test: ## Run the hermetic suite with the race detector (what CI runs)
+	$(GO) test -race -short -count=1 ./...
+
+.PHONY: test-network
+test-network: ## Run everything, including tests that need real network access
+	SUBGLANCE_TEST_NETWORK=1 $(GO) test -race -count=1 ./...
 
 .PHONY: cover
 cover: ## Run tests and open a coverage report
