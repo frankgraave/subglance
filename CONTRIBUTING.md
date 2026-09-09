@@ -106,6 +106,12 @@ Design decisions live in `docs/`:
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — stack, components, data model,
   API design
+- [`docs/DESIGN.md`](docs/DESIGN.md) — design system: tokens, the LED, layouts,
+  components, and the reasoning behind them. Read this before touching UI.
+
+Working mockups live in [`docs/mockups/`](docs/mockups/) — open `index.html` in
+a browser. No build step, no dependencies. They are the reference implementation
+of `DESIGN.md`: if the two disagree, `DESIGN.md` wins.
 
 Both are currently written in Dutch, as internal working documents. If you need
 them in English to contribute, say so in an issue and they will be translated.
