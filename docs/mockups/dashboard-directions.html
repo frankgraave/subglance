@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-variant="a">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SubGlance — design directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ─────────────────────────────────────────────────────────────
+   TOKENS
+   Dark is the primary theme; light is a real second citizen,
+   not an inversion. Colour carries meaning only: a healthy
+   board is almost monochrome.
+   ───────────────────────────────────────────────────────────── */
+:root {
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+
+  --ease: cubic-bezier(.32, .72, 0, 1);
+  --dur: 420ms;
+}
+
+[data-theme="dark"] {
+  --canvas:      #08090a;
+  --surface:     #0e1011;
+  --surface-2:   #141719;
+  --surface-hi:  #1a1e20;
+  --border:      #1e2224;
+  --border-hi:   #2a2f32;
+
+  --ink:         #e8eaec;
+  --ink-2:       #9ba1a6;
+  --ink-3:       #61686d;
+  --ink-4:       #3d4347;
+
+  --up:          #34d399;
+  --up-dim:      #10241d;
+  --warn:        #fbbf24;
+  --warn-dim:    #2a2110;
+  --down:        #f43f5e;
+  --down-dim:    #2c1017;
+  --idle:        #4b5257;
+
+  --glow-up:     0 0 0 1px rgba(52,211,153,.28), 0 0 12px -1px rgba(52,211,153,.55), 0 0 26px -6px rgba(52,211,153,.4);
+  --glow-warn:   0 0 0 1px rgba(251,191,36,.3),  0 0 12px -1px rgba(251,191,36,.6),  0 0 26px -6px rgba(251,191,36,.45);
+  --glow-down:   0 0 0 1px rgba(244,63,94,.32),  0 0 14px -1px rgba(244,63,94,.7),   0 0 30px -6px rgba(244,63,94,.5);
+  --glow-idle:   none;
+
+  --shadow-card: 0 1px 2px rgba(0,0,0,.4);
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --canvas:      #fbfbfa;
+  --surface:     #ffffff;
+  --surface-2:   #f6f6f5;
+  --surface-hi:  #f0f0ef;
+  --border:      #e6e6e4;
+  --border-hi:   #d6d6d3;
+
+  --ink:         #16181a;
+  --ink-2:       #5c6165;
+  --ink-3:       #8b9196;
+  --ink-4:       #b6bbbf;
+
+  --up:          #059669;
+  --up-dim:      #d9f5e9;
+  --warn:        #b45309;
+  --warn-dim:    #fdf0d5;
+  --down:        #e11d48;
+  --down-dim:    #fde4e9;
+  --idle:        #c2c7cb;
+
+  /* In light the glow reads as a soft halo, not a light bulb. */
+  --glow-up:     0 0 0 1px rgba(5,150,105,.22),  0 0 8px -2px rgba(5,150,105,.45);
+  --glow-warn:   0 0 0 1px rgba(180,83,9,.22),   0 0 8px -2px rgba(180,83,9,.45);
+  --glow-down:   0 0 0 1px rgba(225,29,72,.24),  0 0 9px -2px rgba(225,29,72,.5);
+  --glow-idle:   none;
+
+  --shadow-card: 0 1px 2px rgba(16,24,40,.05), 0 0 0 1px rgba(16,24,40,.02);
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-sans);
+  background: var(--canvas);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv11", "ss01";
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   THE LED — the one component this whole product hangs on.
+   A small horizontal pill with a lit core and a halo. It does
+   not pulse: a room full of pulsing lights is a room you stop
+   looking at. It only animates when the state actually changes.
+   ───────────────────────────────────────────────────────────── */
+.led {
+  display: inline-block;
+  width: 26px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--idle);
+  box-shadow: var(--glow-idle);
+  position: relative;
+  flex: none;
+  transition: background var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+/* A brighter core sold through an inset highlight: reads as a lit
+   lamp rather than a flat coloured rectangle. */
+.led::after {
+  content: "";
+  position: absolute;
+  inset: 1.5px 3px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255,255,255,.5), rgba(255,255,255,0));
+  opacity: .55;
+  pointer-events: none;
+}
+.led[data-state="up"]   { background: var(--up);   box-shadow: var(--glow-up); }
+.led[data-state="warn"] { background: var(--warn); box-shadow: var(--glow-warn); }
+.led[data-state="down"] { background: var(--down); box-shadow: var(--glow-down); }
+.led[data-state="idle"] { background: var(--idle); box-shadow: none; }
+.led[data-state="idle"]::after { opacity: .2; }
+
+.led.lg { width: 34px; height: 11px; }
+.led.sm { width: 18px; height: 7px; }
+
+/* The state-change flash. Fires once, on transition only. */
+@keyframes ledSettle {
+  0%   { transform: scaleX(1); filter: brightness(1); }
+  22%  { transform: scaleX(1.16); filter: brightness(1.7); }
+  100% { transform: scaleX(1); filter: brightness(1); }
+}
+.led.changed { animation: ledSettle 620ms var(--ease); }
+
+@media (prefers-reduced-motion: reduce) {
+  .led.changed { animation: none; }
+  * { transition-duration: .01ms !important; }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   CHROME
+   ───────────────────────────────────────────────────────────── */
+.shell { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
+
+.sidebar {
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  padding: 18px 12px;
+  display: flex; flex-direction: column; gap: 2px;
+  position: sticky; top: 0; height: 100vh;
+}
+.brand {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 10px 20px;
+}
+.brand-mark {
+  width: 26px; height: 26px; border-radius: 7px;
+  background: var(--surface-hi);
+  border: 1px solid var(--border-hi);
+  display: grid; place-items: center;
+  flex: none;
+}
+.brand-mark .led { width: 14px; height: 5px; }
+.brand-name { font-size: 13.5px; font-weight: 500; letter-spacing: -.01em; }
+.brand-sub { font-size: 11px; color: var(--ink-3); margin-top: 1px; }
+
+.nav-label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .1em;
+  color: var(--ink-4); font-weight: 500;
+  padding: 16px 10px 6px;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 10px; border-radius: var(--r-sm);
+  font-size: 13px; color: var(--ink-2); cursor: pointer;
+  transition: background 140ms var(--ease), color 140ms var(--ease);
+  text-decoration: none;
+}
+.nav-item:hover { background: var(--surface-2); color: var(--ink); }
+.nav-item[aria-current="true"] { background: var(--surface-hi); color: var(--ink); font-weight: 500; }
+.nav-item svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.6; opacity: .8; flex: none; }
+.nav-count {
+  margin-left: auto; font-family: var(--font-mono); font-size: 11px;
+  color: var(--ink-3); background: var(--surface-2);
+  padding: 1px 6px; border-radius: 4px;
+}
+.nav-count.alert { color: var(--down); background: var(--down-dim); }
+
+.main { min-width: 0; }
+
+.topbar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 20px 28px;
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 20;
+  background: color-mix(in srgb, var(--canvas) 86%, transparent);
+  backdrop-filter: blur(12px);
+}
+h1 { font-size: 19px; font-weight: 500; letter-spacing: -.02em; }
+
+.summary {
+  display: flex; align-items: center; gap: 18px;
+  margin-left: 4px; padding-left: 18px;
+  border-left: 1px solid var(--border);
+}
+.summary-item { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink-2); }
+.summary-item b { font-family: var(--font-mono); font-weight: 500; color: var(--ink); font-size: 13px; }
+
+.spacer { flex: 1; }
+
+.seg { display: flex; background: var(--surface-2); border-radius: var(--r-sm); padding: 2px; gap: 1px; }
+.seg button {
+  font-family: inherit; font-size: 11.5px; color: var(--ink-3);
+  background: none; border: 0; padding: 4px 9px; border-radius: 4px;
+  cursor: pointer; transition: all 140ms var(--ease);
+}
+.seg button[aria-pressed="true"] { background: var(--surface-hi); color: var(--ink); }
+.seg button:hover:not([aria-pressed="true"]) { color: var(--ink-2); }
+
+.icon-btn {
+  width: 30px; height: 30px; border-radius: var(--r-sm);
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--ink-2); cursor: pointer; display: grid; place-items: center;
+  transition: all 140ms var(--ease);
+}
+.icon-btn:hover { background: var(--surface-2); color: var(--ink); border-color: var(--border-hi); }
+.icon-btn svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+
+.content { padding: 26px 28px 60px; }
+
+/* ─────────────────────────────────────────────────────────────
+   VARIANT A — THE BOARD
+   One row per monitor. Reads top to bottom like a list of
+   facts. Broken things sort to the top on their own.
+   ───────────────────────────────────────────────────────────── */
+.board { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); overflow: hidden; }
+
+.board-head, .row {
+  display: grid;
+  grid-template-columns: 46px minmax(180px, 1.4fr) 1fr 108px 86px 78px;
+  align-items: center;
+  gap: 16px;
+  padding: 0 18px;
+}
+.board-head {
+  height: 34px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.board-head span {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .09em;
+  color: var(--ink-4); font-weight: 500;
+}
+.board-head .num, .row .num { text-align: right; }
+
+.row {
+  height: 58px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 140ms var(--ease);
+}
+.row:last-child { border-bottom: 0; }
+.row:hover { background: var(--surface-2); }
+
+.row-name { min-width: 0; }
+.row-title { font-size: 13.5px; font-weight: 450; letter-spacing: -.005em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row-target {
+  font-family: var(--font-mono); font-size: 11px; color: var(--ink-3);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px;
+}
+
+/* Heartbeat bar — the second signature component. Bars, not a
+   line chart: each bar is one real check, and gaps are honest. */
+.beats { display: flex; gap: 2px; align-items: flex-end; height: 26px; }
+.beat {
+  flex: 1; min-width: 2px; max-width: 5px; border-radius: 1.5px;
+  height: 100%;
+  background: var(--up); opacity: .5;
+  transition: opacity 140ms var(--ease), transform 140ms var(--ease);
+  transform-origin: bottom;
+}
+.beat[data-s="up"]   { background: var(--up); }
+.beat[data-s="warn"] { background: var(--warn); opacity: .85; }
+.beat[data-s="down"] { background: var(--down); opacity: .9; }
+.beat[data-s="none"] { background: var(--ink-4); opacity: .25; }
+.beats:hover .beat { opacity: .3; }
+.beats .beat:hover { opacity: 1; transform: scaleY(1.12); }
+
+.num { font-family: var(--font-mono); font-size: 12.5px; color: var(--ink-2); }
+.num.strong { color: var(--ink); }
+.num.bad { color: var(--down); }
+.num.warn { color: var(--warn); }
+.muted { color: var(--ink-3); }
+
+.uptime-cell { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.uptime-track { width: 52px; height: 3px; border-radius: 2px; background: var(--surface-hi); overflow: hidden; }
+.uptime-fill { height: 100%; background: var(--up); border-radius: 2px; }
+.uptime-fill.warn { background: var(--warn); }
+.uptime-fill.bad { background: var(--down); }
+
+/* ─────────────────────────────────────────────────────────────
+   VARIANT B — THE WALL
+   Built for a second monitor across the room. Fewer words,
+   bigger targets, status legible from two metres away.
+   ───────────────────────────────────────────────────────────── */
+.wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 12px; }
+.tile {
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  padding: 16px 16px 14px;
+  cursor: pointer;
+  transition: border-color 160ms var(--ease), background 160ms var(--ease), transform 160ms var(--ease);
+}
+.tile:hover { border-color: var(--border-hi); background: var(--surface-2); transform: translateY(-1px); }
+.tile[data-state="down"] { border-color: color-mix(in srgb, var(--down) 32%, var(--border)); }
+.tile[data-state="warn"] { border-color: color-mix(in srgb, var(--warn) 28%, var(--border)); }
+
+.tile-top { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.tile-name { font-size: 13.5px; font-weight: 450; letter-spacing: -.005em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile-menu { margin-left: auto; color: var(--ink-4); font-size: 15px; line-height: 1; }
+.tile .beats { height: 30px; margin-bottom: 13px; }
+.tile-foot { display: flex; align-items: baseline; justify-content: space-between; }
+.tile-metric { font-family: var(--font-mono); font-size: 15px; font-weight: 500; letter-spacing: -.01em; }
+.tile-label { font-size: 10px; text-transform: uppercase; letter-spacing: .09em; color: var(--ink-4); margin-top: 3px; }
+.tile-note { font-size: 11.5px; color: var(--down); font-family: var(--font-mono); }
+.tile-note.ok { color: var(--ink-3); }
+
+/* ─────────────────────────────────────────────────────────────
+   VARIANT C — THE STRIP
+   Compressed to one line per monitor. For 100+ monitors where
+   the only question is "is anything red".
+   ───────────────────────────────────────────────────────────── */
+.groups { display: flex; flex-direction: column; gap: 22px; }
+.group-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 2px 10px; border-bottom: 1px solid var(--border); margin-bottom: 8px;
+}
+.group-title { font-size: 12px; font-weight: 500; letter-spacing: .01em; }
+.group-meta { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+.group-leds { display: flex; gap: 3px; margin-left: auto; }
+.group-leds .led { width: 12px; height: 6px; }
+
+.strip { display: flex; align-items: center; gap: 14px; padding: 9px 10px; border-radius: var(--r-sm); cursor: pointer; transition: background 140ms var(--ease); }
+.strip:hover { background: var(--surface-2); }
+.strip-name { font-size: 13px; width: 190px; flex: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.strip .beats { flex: 1; height: 18px; }
+.strip .num { width: 62px; text-align: right; flex: none; font-size: 12px; }
+
+/* Detail drawer, shared by all three variants. */
+.scrim {
+  position: fixed; inset: 0; background: rgba(0,0,0,.5);
+  opacity: 0; pointer-events: none; transition: opacity 260ms var(--ease); z-index: 40;
+}
+.scrim.open { opacity: 1; pointer-events: auto; }
+[data-theme="light"] .scrim { background: rgba(16,24,40,.28); }
+
+.drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; width: min(460px, 92vw);
+  background: var(--surface); border-left: 1px solid var(--border);
+  transform: translateX(100%); transition: transform 340ms var(--ease);
+  z-index: 50; padding: 24px; overflow-y: auto;
+}
+.drawer.open { transform: translateX(0); }
+.drawer-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 22px; }
+.drawer h2 { font-size: 16px; font-weight: 500; letter-spacing: -.015em; }
+.drawer-target { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-3); margin-top: 4px; }
+.drawer-close { margin-left: auto; }
+
+.stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; margin-bottom: 22px; }
+.stat { background: var(--surface); padding: 13px 14px; }
+.stat-val { font-family: var(--font-mono); font-size: 17px; font-weight: 500; letter-spacing: -.02em; }
+.stat-key { font-size: 10px; text-transform: uppercase; letter-spacing: .09em; color: var(--ink-4); margin-top: 5px; }
+
+.section-key { font-size: 10px; text-transform: uppercase; letter-spacing: .09em; color: var(--ink-4); font-weight: 500; margin-bottom: 12px; }
+
+.event { display: flex; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--border); }
+.event:last-child { border-bottom: 0; }
+.event-body { min-width: 0; flex: 1; }
+.event-title { font-size: 12.5px; }
+.event-time { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); margin-top: 3px; }
+.event .led { margin-top: 3px; }
+
+/* Variant switcher — a scaffold for review, not part of the design. */
+.switcher {
+  position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 3px; z-index: 60;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border-hi); border-radius: 999px;
+  padding: 5px; box-shadow: 0 8px 30px rgba(0,0,0,.4);
+}
+[data-theme="light"] .switcher { box-shadow: 0 8px 28px rgba(16,24,40,.12); }
+.switcher button {
+  font-family: inherit; font-size: 12px; color: var(--ink-3);
+  background: none; border: 0; padding: 6px 13px; border-radius: 999px;
+  cursor: pointer; transition: all 160ms var(--ease); white-space: nowrap;
+}
+.switcher button[aria-pressed="true"] { background: var(--surface-hi); color: var(--ink); }
+.switcher button:hover:not([aria-pressed="true"]) { color: var(--ink); }
+.switcher .div { width: 1px; height: 18px; background: var(--border-hi); margin: 0 4px; }
+
+[data-variant="a"] .v-b, [data-variant="a"] .v-c,
+[data-variant="b"] .v-a, [data-variant="b"] .v-c,
+[data-variant="c"] .v-a, [data-variant="c"] .v-b { display: none; }
+
+.hint {
+  font-size: 11.5px; color: var(--ink-3); margin-bottom: 18px;
+  padding: 10px 13px; border: 1px dashed var(--border-hi); border-radius: var(--r-md);
+  line-height: 1.55;
+}
+.hint b { color: var(--ink-2); font-weight: 500; }
+
+@media (max-width: 900px) {
+  .shell { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+  .board-head, .row { grid-template-columns: 34px 1fr 78px; gap: 12px; }
+  .board-head span:nth-child(3), .row > *:nth-child(3),
+  .board-head span:nth-child(4), .row > *:nth-child(4),
+  .board-head span:nth-child(5), .row > *:nth-child(5) { display: none; }
+  .summary { display: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark"><span class="led" data-state="up"></span></div>
+      <div>
+        <div class="brand-name">SubGlance</div>
+        <div class="brand-sub">acme.co</div>
+      </div>
+    </div>
+
+    <a class="nav-item" aria-current="true">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+      Dashboard
+    </a>
+    <a class="nav-item">
+      <svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+      Incidents <span class="nav-count alert">2</span>
+    </a>
+    <a class="nav-item">
+      <svg viewBox="0 0 24 24"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
+      Monitors <span class="nav-count">14</span>
+    </a>
+
+    <div class="nav-label">Configure</div>
+    <a class="nav-item">
+      <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+      Notifications
+    </a>
+    <a class="nav-item">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Settings
+    </a>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <h1>Dashboard</h1>
+      <div class="summary">
+        <span class="summary-item"><span class="led sm" data-state="up"></span> <b>11</b> up</span>
+        <span class="summary-item"><span class="led sm" data-state="warn"></span> <b>1</b> degraded</span>
+        <span class="summary-item"><span class="led sm" data-state="down"></span> <b>2</b> down</span>
+      </div>
+      <div class="spacer"></div>
+      <div class="seg">
+        <button aria-pressed="true">1H</button>
+        <button>24H</button>
+        <button>7D</button>
+        <button>30D</button>
+      </div>
+      <button class="icon-btn" id="themeBtn" title="Toggle theme">
+        <svg viewBox="0 0 24 24" id="themeIcon"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
+    </header>
+
+    <div class="content">
+
+      <!-- ── A: THE BOARD ───────────────────────────────── -->
+      <div class="v-a">
+        <p class="hint"><b>Direction A — The Board.</b> One row per monitor, sorted so anything broken is already at the top. The row is the unit: name, live heartbeat, latency, uptime. Made for a laptop where you scan, then click through.</p>
+        <div class="board" id="boardRows"></div>
+      </div>
+
+      <!-- ── B: THE WALL ────────────────────────────────── -->
+      <div class="v-b">
+        <p class="hint"><b>Direction B — The Wall.</b> For the second screen on your desk. Bigger LEDs, fewer words, status readable from across the room. Cards with a problem take a coloured edge; healthy ones stay quiet.</p>
+        <div class="wall" id="wallTiles"></div>
+      </div>
+
+      <!-- ── C: THE STRIP ───────────────────────────────── -->
+      <div class="v-c">
+        <p class="hint"><b>Direction C — The Strip.</b> Grouped by client or environment, one compressed line each. Built for 100+ monitors where the only question is whether anything is red. Group header carries a row of LEDs so a collapsed group still tells you.</p>
+        <div class="groups" id="stripGroups"></div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawer-head">
+    <span class="led lg" data-state="down" id="dLed" style="margin-top:5px"></span>
+    <div>
+      <h2 id="dName">Checkout API</h2>
+      <div class="drawer-target" id="dTarget">https://api.acme.co/v2/checkout</div>
+    </div>
+    <button class="icon-btn drawer-close" id="dClose">
+      <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat"><div class="stat-val" id="dUp">—</div><div class="stat-key">24h uptime</div></div>
+    <div class="stat"><div class="stat-val" id="dLat">—</div><div class="stat-key">Avg latency</div></div>
+    <div class="stat"><div class="stat-val" id="dChecks">—</div><div class="stat-key">Checks today</div></div>
+  </div>
+
+  <div class="section-key">Last 60 checks</div>
+  <div class="beats" style="height:38px;margin-bottom:26px" id="dBeats"></div>
+
+  <div class="section-key">Timeline</div>
+  <div id="dEvents"></div>
+</aside>
+
+<nav class="switcher">
+  <button data-v="a" aria-pressed="true">The Board</button>
+  <button data-v="b">The Wall</button>
+  <button data-v="c">The Strip</button>
+  <span class="div"></span>
+  <button id="simulate">Simulate outage</button>
+</nav>
+
+<script>
+/* ── Data. Shaped like the real API response, so nothing here
+      promises something the backend cannot deliver. ────────── */
+const MONITORS = [
+  { id:1,  name:"Checkout API",        target:"https://api.acme.co/v2/checkout", state:"down", latency:null, uptime:97.2, note:"502 Bad Gateway", group:"Production" },
+  { id:2,  name:"Payments webhook",    target:"https://api.acme.co/hooks/stripe", state:"down", latency:null, uptime:98.9, note:"Timed out after 10s", group:"Production" },
+  { id:3,  name:"Search cluster",      target:"https://search.acme.co:9200", state:"warn", latency:1840, uptime:99.4, note:"Slow: p95 1.8s", group:"Production" },
+  { id:4,  name:"Marketing site",      target:"https://acme.co", state:"up", latency:142, uptime:100, group:"Production" },
+  { id:5,  name:"App dashboard",       target:"https://app.acme.co", state:"up", latency:210, uptime:99.99, group:"Production" },
+  { id:6,  name:"Auth service",        target:"https://auth.acme.co/health", state:"up", latency:88, uptime:100, group:"Production" },
+  { id:7,  name:"CDN edge",            target:"https://cdn.acme.co/ping", state:"up", latency:24, uptime:100, group:"Production" },
+  { id:8,  name:"Postgres primary",    target:"db.acme.internal:5432", state:"up", latency:6, uptime:100, group:"Infrastructure" },
+  { id:9,  name:"Redis",               target:"cache.acme.internal:6379", state:"up", latency:3, uptime:100, group:"Infrastructure" },
+  { id:10, name:"SMTP relay",          target:"smtp.acme.co:587", state:"up", latency:412, uptime:99.8, group:"Infrastructure" },
+  { id:11, name:"TLS — acme.co",       target:"acme.co:443", state:"up", latency:null, uptime:100, note:"84 days left", group:"Infrastructure" },
+  { id:12, name:"Staging API",         target:"https://staging.acme.co/health", state:"up", latency:190, uptime:99.1, group:"Staging" },
+  { id:13, name:"Staging worker",      target:"https://staging.acme.co/jobs", state:"up", latency:340, uptime:98.4, group:"Staging" },
+  { id:14, name:"Nightly backup",      target:"cron: backup-nightly", state:"idle", latency:null, uptime:100, note:"Next run 02:00", group:"Staging" },
+];
+
+const RANK = { down: 0, warn: 1, idle: 2, up: 3 };
+const sorted = () => [...MONITORS].sort((a, b) =>
+  RANK[a.state] - RANK[b.state] || a.name.localeCompare(b.name));
+
+/* Deterministic pseudo-random, so the same monitor always draws
+   the same history: a bar chart that reshuffles on every render
+   teaches the eye to distrust it.
+
+   Each bar carries two dimensions — colour is status, height is
+   latency. That is the whole point of the component: one glance
+   answers "is it up" and "is it getting slower". */
+function beatsFor(m, count = 40) {
+  const out = [];
+  let seed = m.id * 7919;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+
+  for (let i = 0; i < count; i++) {
+    const recent = i >= count - 6;
+    let state;
+    if (m.state === "idle")      state = rnd() > .6 ? "up" : "none";
+    else if (m.state === "down") state = recent ? "down" : (rnd() > .05 ? "up" : "down");
+    else if (m.state === "warn") state = recent && rnd() > .5 ? "warn" : (rnd() > .12 ? "up" : "warn");
+    else                         state = rnd() > .02 ? "up" : "warn";
+
+    // A failed check has no latency to report, so it draws full
+    // height: absence should look loud, not like a fast response.
+    let h;
+    if (state === "down") h = 100;
+    else if (state === "none") h = 22;
+    else if (state === "warn") h = 74 + rnd() * 26;
+    else h = 34 + rnd() * 34;
+
+    out.push({ state, h: Math.round(h) });
+  }
+  return out;
+}
+
+const beatsHTML = (m, n = 40) =>
+  beatsFor(m, n).map(b =>
+    `<span class="beat" data-s="${b.state}" style="height:${b.h}%"></span>`).join("");
+
+const fmtLatency = m => m.latency == null ? "—" : m.latency + " ms";
+const uptimeClass = u => u >= 99.9 ? "" : u >= 99 ? "warn" : "bad";
+
+/* ── A ── */
+document.getElementById("boardRows").innerHTML = `
+  <div class="board-head">
+    <span></span><span>Monitor</span><span>Last 28 checks</span>
+    <span class="num">Latency</span><span class="num">24h</span><span class="num">Interval</span>
+  </div>` + sorted().map(m => `
+  <div class="row" data-id="${m.id}">
+    <span class="led" data-state="${m.state}"></span>
+    <div class="row-name">
+      <div class="row-title">${m.name}</div>
+      <div class="row-target">${m.target}</div>
+    </div>
+    <div class="beats">${beatsHTML(m, 28)}</div>
+    <div class="num ${m.state === "down" ? "bad" : m.state === "warn" ? "warn" : "strong"}">
+      ${m.state === "down" ? (m.note || "down") : fmtLatency(m)}
+    </div>
+    <div class="uptime-cell">
+      <span class="num">${m.uptime}%</span>
+      <span class="uptime-track"><span class="uptime-fill ${uptimeClass(m.uptime)}" style="width:${Math.max(2, m.uptime)}%"></span></span>
+    </div>
+    <div class="num muted">60s</div>
+  </div>`).join("");
+
+/* ── B ── */
+document.getElementById("wallTiles").innerHTML = sorted().map(m => `
+  <div class="tile" data-id="${m.id}" data-state="${m.state}">
+    <div class="tile-top">
+      <span class="led lg" data-state="${m.state}"></span>
+      <span class="tile-name">${m.name}</span>
+      <span class="tile-menu">·</span>
+    </div>
+    <div class="beats">${beatsHTML(m, 26)}</div>
+    <div class="tile-foot">
+      <div>
+        <div class="tile-metric ${m.state === "down" ? "num bad" : ""}">${m.state === "down" ? "Down" : fmtLatency(m)}</div>
+        <div class="tile-label">${m.state === "down" ? "since 14:03" : "latency"}</div>
+      </div>
+      <div class="tile-note ${m.state === "down" ? "" : "ok"}">${m.state === "down" ? (m.note || "") : m.uptime + "%"}</div>
+    </div>
+  </div>`).join("");
+
+/* ── C ── */
+const groups = [...new Set(MONITORS.map(m => m.group))];
+document.getElementById("stripGroups").innerHTML = groups.map(g => {
+  const items = sorted().filter(m => m.group === g);
+  const bad = items.filter(m => m.state === "down").length;
+  return `<section>
+    <div class="group-head">
+      <span class="group-title">${g}</span>
+      <span class="group-meta">${items.length} monitors${bad ? ` · ${bad} down` : ""}</span>
+      <span class="group-leds">${items.map(m => `<span class="led" data-state="${m.state}"></span>`).join("")}</span>
+    </div>
+    ${items.map(m => `
+      <div class="strip" data-id="${m.id}">
+        <span class="led" data-state="${m.state}"></span>
+        <span class="strip-name">${m.name}</span>
+        <div class="beats">${beatsHTML(m, 36)}</div>
+        <span class="num ${m.state === "down" ? "bad" : ""}">${m.state === "down" ? "down" : fmtLatency(m)}</span>
+        <span class="num muted">${m.uptime}%</span>
+      </div>`).join("")}
+  </section>`;
+}).join("");
+
+/* ── Drawer ── */
+const scrim = document.getElementById("scrim"), drawer = document.getElementById("drawer");
+function openDrawer(id) {
+  const m = MONITORS.find(x => x.id === +id);
+  if (!m) return;
+  document.getElementById("dLed").dataset.state = m.state;
+  document.getElementById("dName").textContent = m.name;
+  document.getElementById("dTarget").textContent = m.target;
+  document.getElementById("dUp").textContent = m.uptime + "%";
+  document.getElementById("dLat").textContent = fmtLatency(m);
+  document.getElementById("dChecks").textContent = "1,440";
+  document.getElementById("dBeats").innerHTML = beatsHTML(m, 60);
+
+  const events = m.state === "down"
+    ? [["down", "Went down — " + (m.note || "check failed"), "Today 14:03"],
+       ["warn", "Degraded — latency above threshold", "Today 13:58"],
+       ["up",   "Recovered after 4m", "Today 09:12"]]
+    : m.state === "warn"
+    ? [["warn", "Degraded — " + (m.note || "slow response"), "Today 15:20"],
+       ["up",   "Recovered after 2m", "Yesterday 22:41"]]
+    : [["up", "No incidents in 30 days", "—"]];
+
+  document.getElementById("dEvents").innerHTML = events.map(([s, t, when]) => `
+    <div class="event">
+      <span class="led sm" data-state="${s}"></span>
+      <div class="event-body">
+        <div class="event-title">${t}</div>
+        <div class="event-time">${when}</div>
+      </div>
+    </div>`).join("");
+
+  scrim.classList.add("open"); drawer.classList.add("open");
+}
+function closeDrawer() { scrim.classList.remove("open"); drawer.classList.remove("open"); }
+
+document.addEventListener("click", e => {
+  const hit = e.target.closest("[data-id]");
+  if (hit) openDrawer(hit.dataset.id);
+});
+scrim.addEventListener("click", closeDrawer);
+document.getElementById("dClose").addEventListener("click", closeDrawer);
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeDrawer(); });
+
+/* ── Variant + theme ── */
+document.querySelectorAll(".switcher [data-v]").forEach(b => {
+  b.addEventListener("click", () => {
+    document.querySelectorAll(".switcher [data-v]").forEach(x => x.setAttribute("aria-pressed", "false"));
+    b.setAttribute("aria-pressed", "true");
+    document.documentElement.dataset.variant = b.dataset.v;
+    localStorage.setItem("sg-variant", b.dataset.v);
+  });
+});
+
+const sun = '<path d="M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/>';
+const moon = '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>';
+document.getElementById("themeBtn").addEventListener("click", () => {
+  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  document.getElementById("themeIcon").innerHTML = next === "dark" ? moon : sun;
+  localStorage.setItem("sg-theme", next);
+});
+
+/* ── Outage simulation: the only way to judge whether the state
+      transition reads well without waiting for a real outage. ── */
+document.getElementById("simulate").addEventListener("click", () => {
+  const order = ["up", "warn", "down", "up"];
+  const targets = [...document.querySelectorAll('[data-id="4"] .led, [data-id="5"] .led, [data-id="7"] .led')];
+  order.forEach((state, i) => {
+    setTimeout(() => {
+      targets.forEach(led => {
+        led.dataset.state = state;
+        led.classList.remove("changed");
+        void led.offsetWidth;
+        led.classList.add("changed");
+      });
+    }, i * 1100);
+  });
+});
+
+/* Restore preferences. */
+const savedV = localStorage.getItem("sg-variant");
+if (savedV) document.querySelector(`.switcher [data-v="${savedV}"]`)?.click();
+const savedT = localStorage.getItem("sg-theme");
+if (savedT === "light") document.getElementById("themeBtn").click();
+</script>
+</body>
+</html>
