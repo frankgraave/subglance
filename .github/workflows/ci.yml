@@ -66,6 +66,11 @@ jobs:
           echo "### Coverage: ${total}%" >> "$GITHUB_STEP_SUMMARY"
           # The state engine and incident store decide whether users get
           # woken up. Letting their coverage rot is not acceptable.
+          #
+          # This number is a few points below a local `make cover` run:
+          # the network-dependent tests skip here, so the ICMP and dial
+          # paths they cover go unmeasured. Compare like for like before
+          # concluding coverage dropped.
           awk -v t="$total" 'BEGIN { if (t+0 < 65) { print "::error::coverage " t "% is below the 65% floor"; exit 1 } }'
 
       - uses: actions/upload-artifact@v4
@@ -98,9 +103,18 @@ jobs:
       - name: go vet
         run: go vet ./...
 
-      - uses: golangci/golangci-lint-action@v6
+      # golangci-lint must be v2 (the config uses the v2 schema) AND built
+      # with a Go at least as new as this module's `go` directive — it
+      # refuses to run otherwise. Both are pinned rather than left on
+      # "latest": the action's major version selects the linter's major
+      # version, so `latest` silently resolved to a v1 build that could not
+      # read the config at all.
+      #
+      # Bumping the `go` directive means checking that a golangci-lint
+      # release built with that Go exists. v2.5.0 is built with go1.25.1.
+      - uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
+          version: v2.5.0
           args: --timeout=5m
 
   build:
