@@ -152,8 +152,67 @@ body {
 }
 .led.changed { animation: ledSettle 620ms var(--ease); }
 
+/* ─────────────────────────────────────────────────────────────
+   THE CHECK TICK
+   Every check that lands is a real event arriving over SSE. Showing
+   it is the difference between "this page is live" and "this page
+   might have died an hour ago" — the same job the clock does on the
+   status wall, but per monitor.
+
+   Three deliberate restraints:
+
+   1. It touches the newest bar, not the LED. The LED means state;
+      if it also blinked on every check, blinking would stop meaning
+      anything and the one signal that matters would be diluted.
+   2. It runs once and settles. No loop, no pulse — a screen with
+      fourteen things pulsing is a screen you learn to ignore.
+   3. It is a brightness and scale nudge, not a movement. Motion
+      pulls the eye; brightness reads as "something happened here"
+      without demanding attention.
+
+   The latency figure ticks over at the same moment, because that is
+   the number the check actually produced.
+   ───────────────────────────────────────────────────────────── */
+@keyframes beatArrive {
+  0%   { transform: scaleY(.35); filter: brightness(1.9); opacity: .55; }
+  60%  { transform: scaleY(1.04); filter: brightness(1.35); opacity: 1; }
+  100% { transform: scaleY(1); filter: brightness(1); opacity: 1; }
+}
+.beat.arriving { animation: beatArrive 520ms var(--ease); }
+
+@keyframes valueTick {
+  0%   { opacity: .35; transform: translateY(-2px); }
+  100% { opacity: 1; transform: none; }
+}
+.num.ticked { animation: valueTick 320ms var(--ease); }
+
+/* A hairline that sweeps the row when a check lands. Almost
+   subliminal on a healthy board; the only thing that says the
+   page is still breathing. */
+@keyframes rowSweep {
+  0%   { opacity: 0; }
+  30%  { opacity: .5; }
+  100% { opacity: 0; }
+}
+.row.checked::after, .strip.checked::after {
+  content: "";
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--up) 8%, transparent), transparent);
+  pointer-events: none;
+  animation: rowSweep 700ms var(--ease);
+}
+.strip { position: relative; }
+
+/* The whole effect is opt-out, and reduced-motion opts out for you. */
+body[data-pulse="off"] .beat.arriving,
+body[data-pulse="off"] .num.ticked,
+body[data-pulse="off"] .row.checked::after,
+body[data-pulse="off"] .strip.checked::after { animation: none; }
+
 @media (prefers-reduced-motion: reduce) {
   .led.changed { animation: none; }
+  .beat.arriving, .num.ticked { animation: none; }
+  .row.checked::after, .strip.checked::after { animation: none; }
   * { transition-duration: .01ms !important; }
 }
 
@@ -593,10 +652,34 @@ body:not([data-focus="on"]) .focus-exit { display: none; }
 
 .menu-div { height: 1px; background: var(--border); margin: 6px 4px; }
 .layout-toggle-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 10px; font-size: 12.5px; color: var(--ink-2);
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 9px 10px; font-size: 12.5px; color: var(--ink-2);
+  cursor: pointer; border-radius: var(--r-sm);
+  transition: background 140ms var(--ease);
 }
-.layout-toggle-row .seg { margin-left: auto; }
+.layout-toggle-row:hover { background: var(--surface-2); }
+.layout-toggle-row .switch { margin-left: auto; margin-top: 2px; }
+
+/* ── SWITCH ──────────────────────────────────────────────────
+   The one control that has to feel physical: the thumb travels,
+   the track fills. Anything less and people click it twice
+   because they cannot tell whether it took. */
+.switch { position: relative; display: inline-block; flex: none; }
+.switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; z-index: 1; }
+.switch-track {
+  display: block; width: 30px; height: 18px; border-radius: 999px;
+  background: var(--surface-hi); border: 1px solid var(--border-hi);
+  transition: background 220ms var(--ease), border-color 220ms var(--ease);
+}
+.switch-track::after {
+  content: ""; position: absolute; top: 3px; left: 3px;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--ink-3);
+  transition: transform 220ms var(--ease), background 220ms var(--ease);
+}
+.switch input:checked + .switch-track { background: var(--up); border-color: var(--up); }
+.switch input:checked + .switch-track::after { transform: translateX(12px); background: #fff; }
+.switch input:focus-visible + .switch-track { outline: 2px solid var(--up); outline-offset: 2px; }
 
 body[data-focus="on"] .switcher { opacity: .25; }
 body[data-focus="on"] .switcher:hover { opacity: 1; }
@@ -718,6 +801,16 @@ body[data-focus="on"] .switcher:hover { opacity: 1; }
             </span>
             <span class="layout-check"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span>
           </button>
+
+          <div class="menu-div"></div>
+
+          <label class="layout-toggle-row" for="pulseToggle">
+            <span>
+              <span class="layout-opt-name">Show live checks</span>
+              <span class="layout-opt-desc">A brief flicker as each check lands.</span>
+            </span>
+            <span class="switch"><input type="checkbox" id="pulseToggle" checked><span class="switch-track"></span></span>
+          </label>
         </div>
       </div>
 
@@ -951,6 +1044,66 @@ function tickClock() {
 tickClock();
 setInterval(tickClock, 1000);
 
+/* ── Live checks ──────────────────────────────────────────────
+   Stands in for the SSE stream. Each monitor fires on its own
+   interval, so the board ticks over irregularly the way it will in
+   production — a synchronised blink every second would look like a
+   screensaver, not like work being done. */
+const liveTimers = [];
+
+function landCheck(id) {
+  const m = MONITORS.find(x => x.id === id);
+  if (!m) return;
+
+  document.querySelectorAll(`[data-id="${id}"]`).forEach(el => {
+    // Shift the history: newest bar in, oldest out.
+    const bars = [...el.querySelectorAll(".beat")];
+    if (bars.length) {
+      const first = bars[0];
+      const fresh = first.cloneNode(true);
+
+      let h;
+      if (m.state === "down") h = 100;
+      else if (m.state === "warn") h = 74 + Math.random() * 26;
+      else h = 34 + Math.random() * 34;
+
+      fresh.dataset.s = m.state === "idle" ? "none" : m.state;
+      fresh.style.height = Math.round(h) + "%";
+      fresh.classList.add("arriving");
+
+      first.remove();
+      el.querySelector(".beats")?.appendChild(fresh);
+    }
+
+    // The latency figure is what the check actually produced.
+    const num = el.querySelector(".num:not(.muted)");
+    if (num && m.latency != null && m.state !== "down") {
+      const jitter = Math.round(m.latency * (0.88 + Math.random() * 0.24));
+      num.textContent = jitter + " ms";
+      num.classList.remove("ticked");
+      void num.offsetWidth;
+      num.classList.add("ticked");
+    }
+
+    el.classList.remove("checked");
+    void el.offsetWidth;
+    el.classList.add("checked");
+  });
+}
+
+function startLiveChecks() {
+  stopLiveChecks();
+  MONITORS.forEach(m => {
+    // Compressed intervals: a real 60s cadence is impossible to
+    // judge in a prototype.
+    const period = 2600 + (m.id * 370) % 3200;
+    liveTimers.push(setInterval(() => landCheck(m.id), period));
+  });
+}
+function stopLiveChecks() {
+  while (liveTimers.length) clearInterval(liveTimers.pop());
+}
+
 /* ── Drawer ── */
 const scrim = document.getElementById("scrim"), drawer = document.getElementById("drawer");
 function openDrawer(id) {
@@ -1142,12 +1295,23 @@ function updateSummary() {
   void leds;
 }
 
+/* Live-check flicker: on by default, remembered, and off means off. */
+const pulseToggle = document.getElementById("pulseToggle");
+function applyPulse(on) {
+  document.body.dataset.pulse = on ? "on" : "off";
+  pulseToggle.checked = on;
+  localStorage.setItem("sg-pulse", on ? "on" : "off");
+  if (on) startLiveChecks(); else stopLiveChecks();
+}
+pulseToggle.addEventListener("change", () => applyPulse(pulseToggle.checked));
+
 /* Restore preferences. */
 document.body.dataset.nav = navPref;
 const savedV = localStorage.getItem("sg-variant");
 if (savedV) setLayout(savedV); else setLayout("a");
 const savedT = localStorage.getItem("sg-theme");
 if (savedT === "light") document.getElementById("themeBtn").click();
+applyPulse(localStorage.getItem("sg-pulse") !== "off");
 
 /* Esc leaves the status wall as well as closing the drawer. */
 document.addEventListener("keydown", e => {

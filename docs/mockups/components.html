@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SubGlance — components</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Same tokens as the dashboard mockup. When this becomes real code
+   these live in one tokens.css and nowhere else. */
+:root {
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, Menlo, monospace;
+  --r-sm: 6px; --r-md: 10px; --r-lg: 14px;
+  --ease: cubic-bezier(.32,.72,0,1);
+  --dur: 420ms;
+}
+[data-theme="dark"] {
+  --canvas:#08090a; --surface:#0e1011; --surface-2:#141719; --surface-hi:#1a1e20;
+  --border:#1e2224; --border-hi:#2a2f32;
+  --ink:#e8eaec; --ink-2:#9ba1a6; --ink-3:#61686d; --ink-4:#3d4347;
+  --up:#34d399; --up-dim:#10241d; --warn:#fbbf24; --warn-dim:#2a2110;
+  --down:#f43f5e; --down-dim:#2c1017; --idle:#4b5257;
+  --glow-up:0 0 0 1px rgba(52,211,153,.35), 0 0 7px -1px rgba(52,211,153,.6);
+  --glow-warn:0 0 0 1px rgba(251,191,36,.38), 0 0 7px -1px rgba(251,191,36,.62);
+  --glow-down:0 0 0 1px rgba(244,63,94,.4), 0 0 8px -1px rgba(244,63,94,.72);
+  color-scheme: dark;
+}
+[data-theme="light"] {
+  --canvas:#fbfbfa; --surface:#fff; --surface-2:#f6f6f5; --surface-hi:#f0f0ef;
+  --border:#e6e6e4; --border-hi:#d6d6d3;
+  --ink:#16181a; --ink-2:#5c6165; --ink-3:#8b9196; --ink-4:#b6bbbf;
+  --up:#059669; --up-dim:#d9f5e9; --warn:#b45309; --warn-dim:#fdf0d5;
+  --down:#e11d48; --down-dim:#fde4e9; --idle:#c2c7cb;
+  --glow-up:0 0 0 1px rgba(5,150,105,.28), 0 0 5px -1px rgba(5,150,105,.4);
+  --glow-warn:0 0 0 1px rgba(180,83,9,.28), 0 0 5px -1px rgba(180,83,9,.4);
+  --glow-down:0 0 0 1px rgba(225,29,72,.3), 0 0 6px -1px rgba(225,29,72,.45);
+  color-scheme: light;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-sans); background: var(--canvas); color: var(--ink);
+  -webkit-font-smoothing: antialiased; padding: 40px clamp(20px,5vw,64px) 80px;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+
+.led { display:inline-block; width:20px; height:7px; border-radius:2.5px; background:var(--idle); position:relative; flex:none;
+  transition: background var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
+.led::after { content:""; position:absolute; inset:1px 1px 3px; border-radius:1.5px;
+  background:linear-gradient(180deg,rgba(255,255,255,.55),rgba(255,255,255,0)); opacity:.5; }
+.led[data-state="up"]{background:var(--up);box-shadow:var(--glow-up)}
+.led[data-state="warn"]{background:var(--warn);box-shadow:var(--glow-warn)}
+.led[data-state="down"]{background:var(--down);box-shadow:var(--glow-down)}
+
+.page-head { max-width: 1080px; margin: 0 auto 40px; display:flex; align-items:flex-start; gap:16px; }
+h1 { font-size:22px; font-weight:500; letter-spacing:-.025em; }
+.page-sub { font-size:13px; color:var(--ink-3); margin-top:6px; line-height:1.55; max-width:60ch; }
+
+section { max-width: 1080px; margin: 0 auto 48px; }
+.sec-head { display:flex; align-items:baseline; gap:12px; padding-bottom:12px; margin-bottom:20px; border-bottom:1px solid var(--border); }
+h2 { font-size:12px; font-weight:500; text-transform:uppercase; letter-spacing:.09em; color:var(--ink-3); }
+.sec-note { font-size:11.5px; color:var(--ink-4); }
+
+.card { border:1px solid var(--border); border-radius:var(--r-lg); background:var(--surface); padding:22px; }
+.row-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+@media (max-width: 820px) { .row-2 { grid-template-columns:1fr; } }
+
+/* ── BUTTONS ─────────────────────────────────────────────── */
+.btn {
+  font-family:inherit; font-size:13px; font-weight:450; line-height:1;
+  padding:8px 14px; border-radius:var(--r-sm); border:1px solid transparent;
+  cursor:pointer; display:inline-flex; align-items:center; gap:7px;
+  transition: background 140ms var(--ease), border-color 140ms var(--ease), color 140ms var(--ease), transform 80ms var(--ease);
+}
+.btn:active { transform: translateY(.5px); }
+.btn svg { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:1.8; }
+.btn-primary { background:var(--ink); color:var(--canvas); }
+.btn-primary:hover { opacity:.88; }
+.btn-secondary { background:var(--surface-2); color:var(--ink); border-color:var(--border-hi); }
+.btn-secondary:hover { background:var(--surface-hi); }
+.btn-ghost { background:transparent; color:var(--ink-2); }
+.btn-ghost:hover { background:var(--surface-2); color:var(--ink); }
+/* Destructive stays quiet until you reach for it: a red button in
+   the corner of every screen turns into wallpaper, and then someone
+   clicks it by accident. */
+.btn-danger { background:transparent; color:var(--down); border-color:color-mix(in srgb, var(--down) 30%, var(--border)); }
+.btn-danger:hover { background:var(--down-dim); border-color:var(--down); }
+.btn:disabled { opacity:.4; cursor:not-allowed; }
+.btn-sm { font-size:12px; padding:5px 10px; }
+
+/* Loading state — the button keeps its width so the layout does not
+   jump the moment you click it. */
+.btn.loading { color:transparent; position:relative; pointer-events:none; }
+.btn.loading::after {
+  content:""; position:absolute; inset:0; margin:auto; width:13px; height:13px;
+  border:1.5px solid currentColor; border-top-color:transparent; border-radius:50%;
+  color:var(--canvas); animation:spin 620ms linear infinite;
+}
+.btn-secondary.loading::after, .btn-ghost.loading::after { color:var(--ink-2); }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* ── FORM ────────────────────────────────────────────────── */
+.field { margin-bottom:18px; }
+.label { display:block; font-size:12.5px; font-weight:450; margin-bottom:7px; }
+.label .opt { color:var(--ink-4); font-weight:400; }
+.help { font-size:11.5px; color:var(--ink-3); margin-top:6px; line-height:1.5; }
+
+.input, .select, textarea.input {
+  width:100%; font-family:inherit; font-size:13px; color:var(--ink);
+  background:var(--surface-2); border:1px solid var(--border-hi);
+  border-radius:var(--r-sm); padding:9px 11px;
+  transition: border-color 140ms var(--ease), background 140ms var(--ease), box-shadow 140ms var(--ease);
+}
+.input::placeholder { color:var(--ink-4); }
+.input:hover, .select:hover { border-color:var(--ink-4); }
+.input:focus, .select:focus {
+  outline:none; border-color:var(--up); background:var(--surface);
+  box-shadow:0 0 0 3px color-mix(in srgb, var(--up) 14%, transparent);
+}
+.input.mono { font-family:var(--font-mono); font-size:12.5px; }
+.input.invalid { border-color:var(--down); }
+.input.invalid:focus { box-shadow:0 0 0 3px color-mix(in srgb, var(--down) 14%, transparent); }
+.error-text { font-size:11.5px; color:var(--down); margin-top:6px; display:flex; align-items:center; gap:5px; }
+.error-text svg { width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2; flex:none; }
+
+.input-group { display:flex; }
+.input-group .input { border-radius:var(--r-sm) 0 0 var(--r-sm); }
+.input-group .addon {
+  display:flex; align-items:center; padding:0 11px; font-size:12.5px; color:var(--ink-3);
+  background:var(--surface-hi); border:1px solid var(--border-hi); border-left:0;
+  border-radius:0 var(--r-sm) var(--r-sm) 0; font-family:var(--font-mono);
+}
+
+.select { appearance:none; cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2361686d' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right 9px center; background-size:15px; padding-right:32px; }
+
+.row-inline { display:flex; gap:12px; }
+.row-inline > * { flex:1; }
+
+/* Segmented control for small mutually-exclusive choices — cheaper
+   to read than a dropdown when there are three or four options. */
+.seg { display:inline-flex; background:var(--surface-2); border:1px solid var(--border-hi); border-radius:var(--r-sm); padding:2px; gap:1px; }
+.seg button { font-family:inherit; font-size:12px; color:var(--ink-3); background:none; border:0;
+  padding:5px 11px; border-radius:4px; cursor:pointer; transition:all 140ms var(--ease); }
+.seg button[aria-pressed="true"] { background:var(--surface-hi); color:var(--ink); }
+.seg button:hover:not([aria-pressed="true"]) { color:var(--ink-2); }
+
+/* Switch */
+.switch { position:relative; display:inline-block; flex:none; }
+.switch input { position:absolute; opacity:0; width:100%; height:100%; margin:0; cursor:pointer; z-index:1; }
+.switch-track { display:block; width:30px; height:18px; border-radius:999px; background:var(--surface-hi);
+  border:1px solid var(--border-hi); transition:background 220ms var(--ease), border-color 220ms var(--ease); }
+.switch-track::after { content:""; position:absolute; top:3px; left:3px; width:12px; height:12px; border-radius:50%;
+  background:var(--ink-3); transition:transform 220ms var(--ease), background 220ms var(--ease); }
+.switch input:checked + .switch-track { background:var(--up); border-color:var(--up); }
+.switch input:checked + .switch-track::after { transform:translateX(12px); background:#fff; }
+.switch input:focus-visible + .switch-track { outline:2px solid var(--up); outline-offset:2px; }
+
+.switch-row { display:flex; align-items:flex-start; gap:14px; padding:13px 0; border-bottom:1px solid var(--border); cursor:pointer; }
+.switch-row:last-child { border-bottom:0; }
+.switch-row .switch { margin-left:auto; margin-top:1px; }
+.switch-title { font-size:13px; font-weight:450; }
+.switch-desc { font-size:11.5px; color:var(--ink-3); margin-top:3px; line-height:1.5; max-width:52ch; }
+
+/* Checkbox */
+.check { display:flex; align-items:center; gap:9px; cursor:pointer; font-size:12.5px; padding:5px 0; }
+.check input { position:absolute; opacity:0; }
+.check-box { width:15px; height:15px; border-radius:4px; border:1px solid var(--border-hi); background:var(--surface-2);
+  display:grid; place-items:center; flex:none; transition:all 140ms var(--ease); }
+.check-box svg { width:10px; height:10px; stroke:var(--canvas); fill:none; stroke-width:3; opacity:0; transition:opacity 120ms var(--ease); }
+.check input:checked + .check-box { background:var(--up); border-color:var(--up); }
+.check input:checked + .check-box svg { opacity:1; }
+
+/* ── INLINE EDIT ─────────────────────────────────────────────
+   Renaming a monitor should not require a modal. Click the name,
+   type, Enter. Escape puts it back. */
+.inline-edit { display:inline-flex; align-items:center; gap:7px; border-radius:var(--r-sm); padding:3px 7px; margin:-3px -7px;
+  cursor:text; transition:background 140ms var(--ease); }
+.inline-edit:hover { background:var(--surface-2); }
+.inline-edit:hover .inline-pencil { opacity:.6; }
+.inline-pencil { width:12px; height:12px; stroke:var(--ink-3); fill:none; stroke-width:1.8; opacity:0; transition:opacity 140ms var(--ease); }
+.inline-input { font-family:inherit; font-size:inherit; font-weight:inherit; color:inherit; background:var(--surface);
+  border:1px solid var(--up); border-radius:var(--r-sm); padding:2px 6px; margin:-3px -7px; outline:none;
+  box-shadow:0 0 0 3px color-mix(in srgb, var(--up) 14%, transparent); }
+
+/* ── TABS ────────────────────────────────────────────────── */
+.tabs { display:flex; gap:2px; border-bottom:1px solid var(--border); margin-bottom:20px; }
+.tab { font-family:inherit; font-size:13px; color:var(--ink-3); background:none; border:0; padding:9px 13px;
+  cursor:pointer; position:relative; transition:color 140ms var(--ease); }
+.tab:hover { color:var(--ink-2); }
+.tab[aria-selected="true"] { color:var(--ink); }
+.tab[aria-selected="true"]::after { content:""; position:absolute; left:0; right:0; bottom:-1px; height:1.5px; background:var(--ink); }
+
+/* ── TABLE ROW ACTIONS ───────────────────────────────────── */
+.demo-row { display:flex; align-items:center; gap:14px; padding:13px 14px; border:1px solid var(--border);
+  border-radius:var(--r-md); background:var(--surface); }
+.demo-row + .demo-row { margin-top:8px; }
+.demo-row:hover .row-actions { opacity:1; }
+.row-actions { margin-left:auto; display:flex; gap:4px; opacity:0; transition:opacity 140ms var(--ease); }
+.icon-btn { width:28px; height:28px; border-radius:var(--r-sm); border:1px solid var(--border);
+  background:var(--surface); color:var(--ink-2); cursor:pointer; display:grid; place-items:center;
+  transition:all 140ms var(--ease); }
+.icon-btn:hover { background:var(--surface-2); color:var(--ink); border-color:var(--border-hi); }
+.icon-btn.danger:hover { color:var(--down); border-color:color-mix(in srgb,var(--down) 40%,var(--border)); background:var(--down-dim); }
+.icon-btn svg { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:1.7; }
+
+/* ── BADGES ──────────────────────────────────────────────── */
+.badge { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:450;
+  padding:3px 8px; border-radius:999px; border:1px solid var(--border-hi); color:var(--ink-2); background:var(--surface-2); }
+.badge.up { color:var(--up); background:var(--up-dim); border-color:color-mix(in srgb,var(--up) 26%,transparent); }
+.badge.warn { color:var(--warn); background:var(--warn-dim); border-color:color-mix(in srgb,var(--warn) 26%,transparent); }
+.badge.down { color:var(--down); background:var(--down-dim); border-color:color-mix(in srgb,var(--down) 26%,transparent); }
+.badge.mono { font-family:var(--font-mono); font-size:10.5px; }
+
+/* ── EMPTY STATE ─────────────────────────────────────────────
+   The empty dashboard is the onboarding. It is the first thing a
+   new self-hoster sees, so it gets a real design, not a shrug. */
+.empty { text-align:center; padding:52px 24px; }
+.empty-led { display:flex; justify-content:center; gap:5px; margin-bottom:20px; }
+.empty-led .led { opacity:.28; }
+.empty h3 { font-size:15px; font-weight:500; letter-spacing:-.01em; margin-bottom:7px; }
+.empty p { font-size:12.5px; color:var(--ink-3); line-height:1.6; max-width:42ch; margin:0 auto 20px; }
+
+/* ── SKELETON ────────────────────────────────────────────────
+   No spinners for things that take 50ms. A skeleton keeps the page
+   from flashing; a spinner announces a wait that is not happening. */
+@keyframes shimmer { 100% { background-position:-200% 0; } }
+.skel { background:linear-gradient(90deg,var(--surface-2) 25%,var(--surface-hi) 50%,var(--surface-2) 75%);
+  background-size:200% 100%; animation:shimmer 1.4s linear infinite; border-radius:4px; }
+.skel-row { display:flex; align-items:center; gap:14px; padding:14px; border:1px solid var(--border); border-radius:var(--r-md); }
+.skel-row + .skel-row { margin-top:8px; }
+
+/* ── TOAST ───────────────────────────────────────────────── */
+.toast-wrap { position:fixed; bottom:22px; right:22px; display:flex; flex-direction:column; gap:8px; z-index:80; }
+.toast { display:flex; align-items:flex-start; gap:11px; min-width:280px; max-width:380px;
+  padding:13px 15px; border-radius:var(--r-md); border:1px solid var(--border-hi); background:var(--surface);
+  box-shadow:0 12px 32px rgba(0,0,0,.4); animation:toastIn 320ms var(--ease); }
+[data-theme="light"] .toast { box-shadow:0 12px 30px rgba(16,24,40,.14); }
+@keyframes toastIn { from { opacity:0; transform:translateY(10px) scale(.97); } }
+.toast-title { font-size:12.5px; font-weight:450; }
+.toast-body { font-size:11.5px; color:var(--ink-3); margin-top:3px; line-height:1.5; }
+.toast-close { margin-left:auto; background:none; border:0; color:var(--ink-4); cursor:pointer; padding:0; line-height:1; }
+
+/* ── COMMAND PALETTE ─────────────────────────────────────── */
+.cmd-scrim { position:fixed; inset:0; background:rgba(0,0,0,.42); backdrop-filter:blur(3px);
+  opacity:0; pointer-events:none; transition:opacity 200ms var(--ease); z-index:90; }
+.cmd-scrim.open { opacity:1; pointer-events:auto; }
+.cmd { position:fixed; top:18vh; left:50%; transform:translateX(-50%) scale(.97); width:min(560px,92vw);
+  background:var(--surface); border:1px solid var(--border-hi); border-radius:var(--r-lg);
+  box-shadow:0 24px 60px rgba(0,0,0,.5); opacity:0; pointer-events:none; z-index:91;
+  transition:opacity 200ms var(--ease), transform 200ms var(--ease); overflow:hidden; }
+.cmd.open { opacity:1; pointer-events:auto; transform:translateX(-50%) scale(1); }
+.cmd-input { width:100%; font-family:inherit; font-size:14.5px; color:var(--ink); background:none;
+  border:0; border-bottom:1px solid var(--border); padding:16px 18px; outline:none; }
+.cmd-input::placeholder { color:var(--ink-4); }
+.cmd-list { max-height:340px; overflow-y:auto; padding:6px; }
+.cmd-group { font-size:10px; text-transform:uppercase; letter-spacing:.09em; color:var(--ink-4); padding:9px 12px 5px; }
+.cmd-item { display:flex; align-items:center; gap:11px; padding:8px 12px; border-radius:var(--r-sm);
+  font-size:13px; cursor:pointer; }
+.cmd-item[aria-selected="true"] { background:var(--surface-hi); }
+.cmd-item svg { width:15px; height:15px; stroke:var(--ink-3); fill:none; stroke-width:1.7; flex:none; }
+.kbd { margin-left:auto; font-family:var(--font-mono); font-size:10.5px; color:var(--ink-4);
+  border:1px solid var(--border-hi); border-radius:4px; padding:2px 6px; }
+
+/* ── CONFIRM DIALOG ──────────────────────────────────────── */
+.dlg { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%) scale(.97); width:min(400px,92vw);
+  background:var(--surface); border:1px solid var(--border-hi); border-radius:var(--r-lg); padding:22px;
+  box-shadow:0 24px 60px rgba(0,0,0,.5); opacity:0; pointer-events:none; z-index:91;
+  transition:opacity 200ms var(--ease), transform 200ms var(--ease); }
+.dlg.open { opacity:1; pointer-events:auto; transform:translate(-50%,-50%) scale(1); }
+.dlg h3 { font-size:15px; font-weight:500; letter-spacing:-.01em; margin-bottom:8px; }
+.dlg p { font-size:12.5px; color:var(--ink-2); line-height:1.6; margin-bottom:20px; }
+.dlg-actions { display:flex; gap:8px; justify-content:flex-end; }
+
+.theme-btn { position:fixed; top:20px; right:20px; z-index:60; }
+.stack { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.mt { margin-top:18px; }
+code { font-family:var(--font-mono); font-size:11.5px; color:var(--ink-2); background:var(--surface-2);
+  padding:1px 5px; border-radius:4px; }
+</style>
+</head>
+<body>
+
+<button class="icon-btn theme-btn" id="themeBtn" title="Toggle theme">
+  <svg viewBox="0 0 24 24" id="themeIcon"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+</button>
+
+<div class="page-head">
+  <div>
+    <h1>Components</h1>
+    <p class="page-sub">Everything the dashboard mockup did not cover: the forms, controls and states that make up the other 80% of the product. Each one is here because a specific screen needs it — add a monitor, edit a name, configure a channel, delete something you cannot undo.</p>
+  </div>
+</div>
+
+<!-- ── ADD MONITOR: the 60-second test ─────────────────────── -->
+<section>
+  <div class="sec-head">
+    <h2>Add monitor</h2>
+    <span class="sec-note">The 60-second test: paste a URL, everything else has a sane default.</span>
+  </div>
+  <div class="card" style="max-width:560px">
+    <div class="field">
+      <label class="label" for="f-url">URL or host</label>
+      <input class="input mono" id="f-url" value="https://api.acme.co/health" placeholder="https://example.com">
+      <div class="help">SubGlance picks the check type from what you paste.</div>
+    </div>
+
+    <div class="field">
+      <label class="label" for="f-name">Name <span class="opt">— optional</span></label>
+      <input class="input" id="f-name" placeholder="Derived from the URL">
+    </div>
+
+    <div class="field">
+      <label class="label">Check type</label>
+      <div class="seg" role="group">
+        <button aria-pressed="true">HTTP</button>
+        <button>TCP</button>
+        <button>Ping</button>
+        <button>TLS</button>
+      </div>
+    </div>
+
+    <div class="row-inline">
+      <div class="field">
+        <label class="label" for="f-int">Interval</label>
+        <div class="input-group">
+          <input class="input mono" id="f-int" value="60">
+          <span class="addon">sec</span>
+        </div>
+      </div>
+      <div class="field">
+        <label class="label" for="f-to">Timeout</label>
+        <div class="input-group">
+          <input class="input mono" id="f-to" value="10">
+          <span class="addon">sec</span>
+        </div>
+      </div>
+      <div class="field">
+        <label class="label" for="f-retry">Retries</label>
+        <select class="select" id="f-retry">
+          <option>1</option><option selected>2</option><option>3</option><option>5</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="label" for="f-bad">Expected status</label>
+      <input class="input mono invalid" id="f-bad" value="2xx-ish">
+      <div class="error-text">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+        Use a code, a range or a shorthand: <code>200</code>, <code>200-299</code>, <code>2xx</code>
+      </div>
+    </div>
+
+    <div class="stack mt" style="justify-content:space-between">
+      <button class="btn btn-ghost btn-sm" id="advBtn">Advanced options</button>
+      <div class="stack">
+        <button class="btn btn-ghost">Cancel</button>
+        <button class="btn btn-secondary" id="testBtn">Test now</button>
+        <button class="btn btn-primary">Create monitor</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CONTROLS ────────────────────────────────────────────── -->
+<section>
+  <div class="sec-head"><h2>Controls</h2></div>
+  <div class="row-2">
+    <div class="card">
+      <div class="switch-row">
+        <div>
+          <div class="switch-title">Monitor enabled</div>
+          <div class="switch-desc">Paused monitors keep their history but run no checks.</div>
+        </div>
+        <label class="switch"><input type="checkbox" checked><span class="switch-track"></span></label>
+      </div>
+      <div class="switch-row">
+        <div>
+          <div class="switch-title">Follow redirects</div>
+          <div class="switch-desc">Off means a 301 counts as the answer.</div>
+        </div>
+        <label class="switch"><input type="checkbox" checked><span class="switch-track"></span></label>
+      </div>
+      <div class="switch-row">
+        <div>
+          <div class="switch-title">Allow private addresses</div>
+          <div class="switch-desc">Lets this monitor reach internal networks. Off by default for good reason.</div>
+        </div>
+        <label class="switch"><input type="checkbox"><span class="switch-track"></span></label>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="label" style="margin-bottom:12px">Notify on</div>
+      <label class="check"><input type="checkbox" checked><span class="check-box"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span> Goes down</label>
+      <label class="check"><input type="checkbox" checked><span class="check-box"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span> Recovers</label>
+      <label class="check"><input type="checkbox"><span class="check-box"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span> Becomes degraded</label>
+      <label class="check"><input type="checkbox" checked><span class="check-box"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span> Certificate expiring</label>
+
+      <div class="label mt" style="margin-bottom:10px">Buttons</div>
+      <div class="stack">
+        <button class="btn btn-primary btn-sm">Primary</button>
+        <button class="btn btn-secondary btn-sm">Secondary</button>
+        <button class="btn btn-ghost btn-sm">Ghost</button>
+        <button class="btn btn-danger btn-sm">Delete</button>
+        <button class="btn btn-secondary btn-sm" disabled>Disabled</button>
+      </div>
+
+      <div class="label mt" style="margin-bottom:10px">Badges</div>
+      <div class="stack">
+        <span class="badge up"><span class="led" data-state="up" style="width:12px;height:5px"></span> Up</span>
+        <span class="badge warn">Degraded</span>
+        <span class="badge down">Down</span>
+        <span class="badge">Paused</span>
+        <span class="badge mono">60s</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── INLINE EDIT + ROW ACTIONS ──────────────────────────── -->
+<section>
+  <div class="sec-head">
+    <h2>Inline editing</h2>
+    <span class="sec-note">Renaming should not need a modal. Click the name, Enter to save, Esc to cancel.</span>
+  </div>
+  <div class="demo-row">
+    <span class="led" data-state="up"></span>
+    <div>
+      <span class="inline-edit" data-editable>
+        <span style="font-size:13.5px">Marketing site</span>
+        <svg class="inline-pencil" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+      </span>
+      <div style="font-family:var(--font-mono);font-size:11px;color:var(--ink-3);margin-top:3px">https://acme.co</div>
+    </div>
+    <div class="row-actions">
+      <button class="icon-btn" title="Check now"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg></button>
+      <button class="icon-btn" title="Pause"><svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></button>
+      <button class="icon-btn danger" id="delBtn" title="Delete"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>
+    </div>
+  </div>
+  <div class="demo-row">
+    <span class="led" data-state="down"></span>
+    <div>
+      <span class="inline-edit" data-editable><span style="font-size:13.5px">Checkout API</span>
+        <svg class="inline-pencil" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></span>
+      <div style="font-family:var(--font-mono);font-size:11px;color:var(--ink-3);margin-top:3px">https://api.acme.co/v2/checkout</div>
+    </div>
+    <div class="row-actions">
+      <button class="icon-btn" title="Check now"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg></button>
+      <button class="icon-btn" title="Pause"><svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></button>
+      <button class="icon-btn danger" title="Delete"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>
+    </div>
+  </div>
+</section>
+
+<!-- ── STATES ──────────────────────────────────────────────── -->
+<section>
+  <div class="sec-head">
+    <h2>Empty, loading and error states</h2>
+    <span class="sec-note">The difference between finished and nearly finished.</span>
+  </div>
+  <div class="row-2">
+    <div class="card empty">
+      <div class="empty-led">
+        <span class="led"></span><span class="led"></span><span class="led"></span>
+      </div>
+      <h3>Nothing monitored yet</h3>
+      <p>Add your first site or API and SubGlance starts checking within a minute.</p>
+      <button class="btn btn-primary">Add your first monitor</button>
+    </div>
+
+    <div class="card">
+      <div class="skel-row">
+        <div class="skel" style="width:20px;height:7px;border-radius:2.5px"></div>
+        <div style="flex:1">
+          <div class="skel" style="width:38%;height:11px"></div>
+          <div class="skel" style="width:58%;height:9px;margin-top:7px"></div>
+        </div>
+        <div class="skel" style="width:60px;height:11px"></div>
+      </div>
+      <div class="skel-row">
+        <div class="skel" style="width:20px;height:7px;border-radius:2.5px"></div>
+        <div style="flex:1">
+          <div class="skel" style="width:52%;height:11px"></div>
+          <div class="skel" style="width:34%;height:9px;margin-top:7px"></div>
+        </div>
+        <div class="skel" style="width:60px;height:11px"></div>
+      </div>
+      <div class="help" style="margin-top:14px">Skeletons, not spinners. A spinner announces a wait that is not happening.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── TABS + DANGEROUS ACTIONS ───────────────────────────── -->
+<section>
+  <div class="sec-head"><h2>Navigation and destructive actions</h2></div>
+  <div class="card">
+    <div class="tabs">
+      <button class="tab" aria-selected="true">Overview</button>
+      <button class="tab" aria-selected="false">History</button>
+      <button class="tab" aria-selected="false">Notifications</button>
+      <button class="tab" aria-selected="false">Settings</button>
+    </div>
+    <div class="stack">
+      <button class="btn btn-secondary" id="toastBtn">Show a toast</button>
+      <button class="btn btn-secondary" id="cmdBtn">Command palette <span class="kbd" style="margin-left:4px">⌘K</span></button>
+      <button class="btn btn-danger" id="dlgBtn">Delete monitor…</button>
+    </div>
+    <div class="help mt">Destructive actions confirm with the name typed back, not a bare “are you sure”. The second is a reflex; the first is a decision.</div>
+  </div>
+</section>
+
+<div class="toast-wrap" id="toasts"></div>
+
+<div class="cmd-scrim" id="cmdScrim"></div>
+<div class="cmd" id="cmd">
+  <input class="cmd-input" id="cmdInput" placeholder="Search monitors or run a command…" autocomplete="off">
+  <div class="cmd-list">
+    <div class="cmd-group">Monitors</div>
+    <div class="cmd-item" aria-selected="true"><span class="led" data-state="down"></span> Checkout API <span class="kbd">↵</span></div>
+    <div class="cmd-item"><span class="led" data-state="up"></span> Marketing site</div>
+    <div class="cmd-item"><span class="led" data-state="warn"></span> Search cluster</div>
+    <div class="cmd-group">Actions</div>
+    <div class="cmd-item"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> Add monitor <span class="kbd">N</span></div>
+    <div class="cmd-item"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg> Check all now</div>
+    <div class="cmd-item"><svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg> Toggle theme <span class="kbd">⌘⇧L</span></div>
+  </div>
+</div>
+
+<div class="dlg" id="dlg">
+  <h3>Delete “Checkout API”?</h3>
+  <p>This removes the monitor and its entire history, including 2 open incidents. It cannot be undone.</p>
+  <div class="field">
+    <label class="label" for="confirmName">Type <code>Checkout API</code> to confirm</label>
+    <input class="input" id="confirmName" placeholder="Checkout API" autocomplete="off">
+  </div>
+  <div class="dlg-actions">
+    <button class="btn btn-ghost" id="dlgCancel">Cancel</button>
+    <button class="btn btn-danger" id="dlgConfirm" disabled>Delete monitor</button>
+  </div>
+</div>
+
+<script>
+/* Theme */
+const sun='<path d="M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/>';
+const moon='<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>';
+document.getElementById("themeBtn").addEventListener("click", () => {
+  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  document.getElementById("themeIcon").innerHTML = next === "dark" ? moon : sun;
+  localStorage.setItem("sg-theme", next);
+});
+if (localStorage.getItem("sg-theme") === "light") document.getElementById("themeBtn").click();
+
+/* Segmented controls and tabs */
+document.querySelectorAll(".seg").forEach(seg => {
+  seg.addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    seg.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", "false"));
+    b.setAttribute("aria-pressed", "true");
+  });
+});
+document.querySelectorAll(".tabs").forEach(tabs => {
+  tabs.addEventListener("click", e => {
+    const t = e.target.closest(".tab"); if (!t) return;
+    tabs.querySelectorAll(".tab").forEach(x => x.setAttribute("aria-selected", "false"));
+    t.setAttribute("aria-selected", "true");
+  });
+});
+
+/* Inline edit */
+document.querySelectorAll("[data-editable]").forEach(el => {
+  el.addEventListener("click", () => {
+    if (el.querySelector("input")) return;
+    const label = el.querySelector("span");
+    const original = label.textContent;
+
+    const input = document.createElement("input");
+    input.className = "inline-input";
+    input.value = original;
+    input.style.fontSize = "13.5px";
+    el.replaceChildren(input);
+    input.focus();
+    input.select();
+
+    const finish = save => {
+      const value = save && input.value.trim() ? input.value.trim() : original;
+      el.replaceChildren();
+      const s = document.createElement("span");
+      s.style.fontSize = "13.5px";
+      s.textContent = value;
+      el.appendChild(s);
+      el.insertAdjacentHTML("beforeend",
+        '<svg class="inline-pencil" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>');
+      if (save && value !== original) toast("Renamed", `“${original}” is now “${value}”.`);
+    };
+
+    input.addEventListener("keydown", e => {
+      if (e.key === "Enter") finish(true);
+      if (e.key === "Escape") finish(false);
+    });
+    input.addEventListener("blur", () => finish(true));
+  });
+});
+
+/* Button loading state */
+document.getElementById("testBtn").addEventListener("click", e => {
+  const b = e.currentTarget;
+  b.classList.add("loading");
+  setTimeout(() => {
+    b.classList.remove("loading");
+    toast("Check passed", "200 OK in 142 ms. Certificate valid for 84 days.");
+  }, 1400);
+});
+
+/* Toasts */
+function toast(title, body) {
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.innerHTML = `<span class="led" data-state="up" style="margin-top:3px"></span>
+    <div><div class="toast-title">${title}</div><div class="toast-body">${body}</div></div>
+    <button class="toast-close">✕</button>`;
+  el.querySelector(".toast-close").onclick = () => el.remove();
+  document.getElementById("toasts").appendChild(el);
+  setTimeout(() => el.remove(), 5000);
+}
+document.getElementById("toastBtn").addEventListener("click", () =>
+  toast("Monitor created", "“API health” is now checking every 60 seconds."));
+
+/* Command palette */
+const cmd = document.getElementById("cmd"), cmdScrim = document.getElementById("cmdScrim");
+function openCmd() { cmd.classList.add("open"); cmdScrim.classList.add("open"); document.getElementById("cmdInput").focus(); }
+function closeCmd() { cmd.classList.remove("open"); cmdScrim.classList.remove("open"); }
+document.getElementById("cmdBtn").addEventListener("click", openCmd);
+cmdScrim.addEventListener("click", closeCmd);
+document.addEventListener("keydown", e => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openCmd(); }
+  if (e.key === "Escape") { closeCmd(); closeDlg(); }
+});
+document.querySelectorAll(".cmd-item").forEach(item => {
+  item.addEventListener("mouseenter", () => {
+    document.querySelectorAll(".cmd-item").forEach(i => i.setAttribute("aria-selected", "false"));
+    item.setAttribute("aria-selected", "true");
+  });
+});
+
+/* Confirm dialog: the name has to be typed back. */
+const dlg = document.getElementById("dlg");
+const confirmName = document.getElementById("confirmName");
+const dlgConfirm = document.getElementById("dlgConfirm");
+function openDlg() { dlg.classList.add("open"); cmdScrim.classList.add("open"); confirmName.value = ""; dlgConfirm.disabled = true; setTimeout(() => confirmName.focus(), 60); }
+function closeDlg() { dlg.classList.remove("open"); cmdScrim.classList.remove("open"); }
+document.getElementById("dlgBtn").addEventListener("click", openDlg);
+document.getElementById("delBtn").addEventListener("click", openDlg);
+document.getElementById("dlgCancel").addEventListener("click", closeDlg);
+confirmName.addEventListener("input", () => { dlgConfirm.disabled = confirmName.value.trim() !== "Checkout API"; });
+dlgConfirm.addEventListener("click", () => { closeDlg(); toast("Monitor deleted", "“Checkout API” and its history are gone."); });
+cmdScrim.addEventListener("click", closeDlg);
+
+/* Advanced options placeholder */
+document.getElementById("advBtn").addEventListener("click", e => {
+  const open = e.currentTarget.textContent.startsWith("Hide");
+  e.currentTarget.textContent = open ? "Advanced options" : "Hide advanced options";
+});
+</script>
+</body>
+</html>
