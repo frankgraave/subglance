@@ -1,70 +1,66 @@
 # Contributor License Agreement
 
-Deze overeenkomst is gebaseerd op de Apache Software Foundation Individual
-Contributor License Agreement v2.0 en is aangepast voor Subglance.
+This agreement is based on the Apache Software Foundation Individual Contributor
+License Agreement v2.0, adapted for SubGlance.
 
-> **Let op:** dit is een template. Laat het controleren door een jurist voordat
-> je het als bindende overeenkomst gebruikt.
+> **Note:** this is a template. Have it reviewed by a lawyer before relying on it
+> as a binding agreement.
 
 ---
 
-Om de bijdragen aan Subglance duidelijk te regelen, moet iedere bijdrager deze
-overeenkomst aanvaarden. Je behoudt het volledige auteursrecht op je eigen werk;
-deze overeenkomst geeft Frank Graave (hierna "de Beheerder") uitsluitend het
-recht om jouw bijdrage te distribueren en te licentiëren.
+To keep the ownership of contributions to SubGlance unambiguous, every
+contributor must accept this agreement. You retain full copyright in your own
+work; this agreement grants Frank Graave (the "Maintainer") only the right to
+distribute and license your contribution.
 
-Je aanvaardt deze voorwaarden door in een pull request te bevestigen dat je
-akkoord gaat.
+You accept these terms by confirming your agreement in a pull request.
 
-## 1. Definities
+## 1. Definitions
 
-**"Jij"** is de natuurlijke of rechtspersoon die deze overeenkomst aanvaardt.
+**"You"** is the natural person or legal entity accepting this agreement.
 
-**"Bijdrage"** is elk werk dat je bewust ter opname in Subglance aan de
-Beheerder aanbiedt, inclusief wijzigingen van bestaand werk.
+**"Contribution"** is any work you knowingly submit to the Maintainer for
+inclusion in SubGlance, including modifications of existing work.
 
-## 2. Verlening van auteursrechtlicentie
+## 2. Grant of copyright license
 
-Je verleent de Beheerder een eeuwigdurende, wereldwijde, niet-exclusieve,
-kosteloze, royaltyvrije en onherroepelijke licentie om je Bijdrage te
-verveelvoudigen, te bewerken, openbaar te maken, in sublicentie te geven en te
-distribueren — zowel als onderdeel van Subglance als op zichzelf, en onder
-willekeurig welke licentievoorwaarden, met inbegrip van commerciële licenties.
+You grant the Maintainer a perpetual, worldwide, non-exclusive, no-charge,
+royalty-free and irrevocable license to reproduce, modify, publish, sublicense
+and distribute your Contribution — both as part of SubGlance and on its own, and
+under any license terms whatsoever, including commercial licenses.
 
-## 3. Verlening van octrooilicentie
+## 3. Grant of patent license
 
-Je verleent de Beheerder een eeuwigdurende, wereldwijde, niet-exclusieve,
-kosteloze en royaltyvrije octrooilicentie om je Bijdrage te maken, te laten
-maken, te gebruiken, aan te bieden, te verkopen en te importeren, voor zover je
-over de betreffende octrooirechten beschikt.
+You grant the Maintainer a perpetual, worldwide, non-exclusive, no-charge and
+royalty-free patent license to make, have made, use, offer to sell, sell and
+import your Contribution, to the extent you hold the patent rights concerned.
 
-Start je een octrooiprocedure tegen wie dan ook waarin je stelt dat Subglance
-inbreuk maakt op een octrooi, dan vervallen de octrooilicenties die je onder
-deze overeenkomst hebt verleend per de datum waarop die procedure aanhangig
-wordt gemaakt.
+If you initiate patent litigation against anyone alleging that SubGlance
+infringes a patent, the patent licenses you granted under this agreement
+terminate as of the date that litigation is filed.
 
-## 4. Jouw verklaringen
+## 4. Your representations
 
-Je verklaart dat:
+You represent that:
 
-1. je bevoegd bent deze overeenkomst aan te gaan en de bovenstaande licenties te
-   verlenen;
-2. elke Bijdrage je eigen oorspronkelijke werk is;
-3. je Bijdrage geen rechten van derden schendt, en dat je bekende rechten van
-   derden — waaronder licenties en octrooien — expliciet vermeldt bij het
-   indienen;
-4. je, als je werkgever rechten heeft op werk dat je maakt, toestemming hebt om
-   de Bijdrage namens jezelf in te dienen, dan wel dat je werkgever afstand van
-   die rechten heeft gedaan.
+1. you are legally entitled to enter into this agreement and to grant the
+   licenses above;
+2. each Contribution is your own original work;
+3. your Contribution does not infringe third-party rights, and that you
+   explicitly identify any third-party rights you are aware of — including
+   licenses and patents — when submitting;
+4. if your employer holds rights in work you create, you have permission to
+   submit the Contribution on your own behalf, or your employer has waived those
+   rights.
 
-## 5. Geen garantie en geen verplichting
+## 5. No warranty and no obligation
 
-Je levert je Bijdrage "as is", zonder enige garantie, voor zover het toepasselijk
-recht dat toestaat.
+You provide your Contribution "as is", without any warranty, to the extent
+permitted by applicable law.
 
-De Beheerder is niet verplicht je Bijdrage op te nemen in Subglance of te
-onderhouden.
+The Maintainer is under no obligation to include your Contribution in SubGlance
+or to maintain it.
 
-## 6. Toepasselijk recht
+## 6. Governing law
 
-Op deze overeenkomst is Nederlands recht van toepassing.
+This agreement is governed by the laws of the Netherlands.
