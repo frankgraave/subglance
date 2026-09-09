@@ -116,7 +116,7 @@ jobs:
       #
       # Bumping the `go` directive means checking that a golangci-lint
       # release built with that Go exists.
-      - uses: golangci/golangci-lint-action@v8
+      - uses: golangci/golangci-lint-action@v9
         with:
           version: v2.13.2
           args: --timeout=5m
@@ -178,5 +178,5 @@ jobs:
       # release, so GO_VERSION above is the real remedy: keep it current.
       - name: Run govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.1.6
+          go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
           govulncheck ./...

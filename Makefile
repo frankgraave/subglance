@@ -47,7 +47,7 @@ vet: ## Run go vet
 .PHONY: lint
 lint: ## Run golangci-lint (installs it if missing)
 	@command -v $(GOBIN)/golangci-lint >/dev/null 2>&1 || \
-		$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+		$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
 	$(GOBIN)/golangci-lint run
 
 .PHONY: fmt

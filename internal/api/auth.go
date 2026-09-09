@@ -402,6 +402,11 @@ func (s *Server) issueSession(w http.ResponseWriter, r *http.Request, user store
 		name = insecureSessionCookieName
 	}
 
+	// gosec flags Secure being a variable rather than a literal true. It is
+	// deliberate: browsers refuse Secure cookies over plain HTTP, and a
+	// self-hoster running on a LAN without TLS must still be able to log in.
+	// Over HTTPS this is true and the cookie also gains the __Host- prefix.
+	//nolint:gosec // G124: Secure is conditional on TLS by design, see above
 	http.SetCookie(w, &http.Cookie{
 		Name:     name,
 		Value:    token,
@@ -420,6 +425,7 @@ func (s *Server) clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 	if !secure {
 		name = insecureSessionCookieName
 	}
+	//nolint:gosec // G124: mirrors issueSession; Secure is conditional on TLS by design
 	http.SetCookie(w, &http.Cookie{
 		Name: name, Value: "", Path: "/",
 		HttpOnly: true, Secure: secure, SameSite: http.SameSiteLaxMode, MaxAge: -1,

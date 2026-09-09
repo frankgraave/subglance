@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -99,10 +100,10 @@ func TestCreateAndGetUser(t *testing.T) {
 func TestGetUserNotFound(t *testing.T) {
 	db := openTestDB(t)
 
-	if _, err := db.GetUser(t.Context(), 99999); err != ErrNotFound {
+	if _, err := db.GetUser(t.Context(), 99999); !errors.Is(err, ErrNotFound) {
 		t.Errorf("err = %v, want ErrNotFound", err)
 	}
-	if _, err := db.GetUserByEmail(t.Context(), "ghost@example.com"); err != ErrNotFound {
+	if _, err := db.GetUserByEmail(t.Context(), "ghost@example.com"); !errors.Is(err, ErrNotFound) {
 		t.Errorf("err = %v, want ErrNotFound", err)
 	}
 }
@@ -245,7 +246,7 @@ func TestSessionLifecycle(t *testing.T) {
 	if err := db.DeleteSession(ctx, token); err != nil {
 		t.Fatalf("DeleteSession: %v", err)
 	}
-	if _, err := db.LookupSession(ctx, token); err != ErrNotFound {
+	if _, err := db.LookupSession(ctx, token); !errors.Is(err, ErrNotFound) {
 		t.Errorf("the session still resolves after deletion (err = %v)", err)
 	}
 }
@@ -270,7 +271,7 @@ func TestExpiredSessionIsRejectedAndPurged(t *testing.T) {
 		t.Fatalf("expire session: %v", err)
 	}
 
-	if _, err := db.LookupSession(ctx, token); err != ErrNotFound {
+	if _, err := db.LookupSession(ctx, token); !errors.Is(err, ErrNotFound) {
 		t.Errorf("an expired session still authenticates (err = %v)", err)
 	}
 
@@ -306,7 +307,7 @@ func TestDeleteUserSessionsLogsOutEverywhere(t *testing.T) {
 		t.Fatalf("DeleteUserSessions: %v", err)
 	}
 	for i, tok := range tokens {
-		if _, err := db.LookupSession(ctx, tok); err != ErrNotFound {
+		if _, err := db.LookupSession(ctx, tok); !errors.Is(err, ErrNotFound) {
 			t.Errorf("session %d still works after a global logout", i)
 		}
 	}
@@ -395,7 +396,7 @@ func TestAPITokenLifecycle(t *testing.T) {
 	if err := db.RevokeAPIToken(ctx, meta.ID, user.ID); err != nil {
 		t.Fatalf("RevokeAPIToken: %v", err)
 	}
-	if _, err := db.LookupAPIToken(ctx, plaintext); err != ErrNotFound {
+	if _, err := db.LookupAPIToken(ctx, plaintext); !errors.Is(err, ErrNotFound) {
 		t.Errorf("a revoked token still resolves (err = %v)", err)
 	}
 
@@ -421,7 +422,7 @@ func TestExpiredAPITokenIsRejected(t *testing.T) {
 		t.Fatalf("CreateAPIToken: %v", err)
 	}
 
-	if _, err := db.LookupAPIToken(ctx, plaintext); err != ErrNotFound {
+	if _, err := db.LookupAPIToken(ctx, plaintext); !errors.Is(err, ErrNotFound) {
 		t.Errorf("an expired token still resolves (err = %v)", err)
 	}
 }
@@ -446,7 +447,7 @@ func TestCannotRevokeAnotherUsersToken(t *testing.T) {
 		t.Fatalf("CreateAPIToken: %v", err)
 	}
 
-	if err := db.RevokeAPIToken(ctx, meta.ID, other.ID); err != ErrNotFound {
+	if err := db.RevokeAPIToken(ctx, meta.ID, other.ID); !errors.Is(err, ErrNotFound) {
 		t.Errorf("err = %v, want ErrNotFound when revoking someone else's token", err)
 	}
 	if _, err := db.LookupAPIToken(ctx, plaintext); err != nil {
@@ -457,10 +458,10 @@ func TestCannotRevokeAnotherUsersToken(t *testing.T) {
 func TestUnknownTokenIsRejected(t *testing.T) {
 	db := openTestDB(t)
 
-	if _, err := db.LookupAPIToken(t.Context(), "sgp_this-token-never-existed"); err != ErrNotFound {
+	if _, err := db.LookupAPIToken(t.Context(), "sgp_this-token-never-existed"); !errors.Is(err, ErrNotFound) {
 		t.Errorf("err = %v, want ErrNotFound", err)
 	}
-	if _, err := db.LookupSession(t.Context(), "no-such-session"); err != ErrNotFound {
+	if _, err := db.LookupSession(t.Context(), "no-such-session"); !errors.Is(err, ErrNotFound) {
 		t.Errorf("err = %v, want ErrNotFound", err)
 	}
 }
