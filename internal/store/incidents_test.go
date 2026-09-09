@@ -89,8 +89,15 @@ func TestOpenIncidentRejectsDuplicate(t *testing.T) {
 		t.Fatalf("first open: %v", err)
 	}
 
-	if _, err := db.OpenIncident(ctx, m.ID, time.Now(), "status", "500"); err == nil {
+	_, err := db.OpenIncident(ctx, m.ID, time.Now(), "status", "500")
+	if err == nil {
 		t.Fatal("expected the second open incident to be rejected by the unique index")
+	}
+	// The caller has to be able to tell a benign race from a broken database,
+	// so the collision must surface as its own error rather than a raw driver
+	// message.
+	if !errors.Is(err, ErrIncidentAlreadyOpen) {
+		t.Errorf("error = %v, want ErrIncidentAlreadyOpen", err)
 	}
 }
 

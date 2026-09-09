@@ -247,7 +247,13 @@ func (c *PingChecker) awaitReply(ctx context.Context, conn *icmp.PacketConn, add
 		case *icmp.Echo:
 			// On an unprivileged socket the kernel rewrites the ID, so it
 			// cannot be matched. The sequence number survives, and the peer
-			// address confirms the rest.
+			// address confirms the rest. On a raw socket the ID is ours and
+			// worth checking: every ICMP message on the host arrives here,
+			// so concurrent monitors would otherwise read each other's
+			// replies.
+			if c.mode == pingModeRaw && body.ID != c.id {
+				continue
+			}
 			if body.Seq != seq {
 				continue
 			}
@@ -257,12 +263,87 @@ func (c *PingChecker) awaitReply(ctx context.Context, conn *icmp.PacketConn, add
 			return nil
 
 		case *icmp.DstUnreach:
+			// An ICMP error carries the header of the datagram that caused
+			// it. Without checking that, an unrelated flow's "destination
+			// unreachable" — which a raw socket also receives — would fail a
+			// healthy monitor. That is a false-alarm generator, so anything
+			// we cannot positively attribute to our own probe is ignored.
+			if !errorRefersToOurProbe(body.Data, addr, c.id, seq, c.mode) {
+				continue
+			}
 			return fmt.Errorf("destination unreachable")
 
 		case *icmp.TimeExceeded:
+			if !errorRefersToOurProbe(body.Data, addr, c.id, seq, c.mode) {
+				continue
+			}
 			return fmt.Errorf("TTL exceeded in transit")
 		}
 	}
+}
+
+// errorRefersToOurProbe reports whether an ICMP error message was caused by
+// the echo request we sent.
+//
+// ICMP errors quote the offending datagram: the IP header plus at least the
+// first eight bytes of its payload, which for an echo request covers type,
+// code, checksum, identifier and sequence number. Matching on that is what
+// separates "the host we are checking is unreachable" from "some other
+// connection on this machine got an error" — and on a raw socket, where every
+// ICMP message on the host is delivered, the difference is a false alarm.
+//
+// Anything that cannot be parsed is treated as not ours. Ignoring a real error
+// costs one check that times out instead; acting on someone else's costs a
+// page in the middle of the night.
+func errorRefersToOurProbe(quoted []byte, want netip.Addr, id, seq int, mode pingMode) bool {
+	if want.Is4() {
+		// IPv4 header is at least 20 bytes; the payload follows.
+		if len(quoted) < 20 {
+			return false
+		}
+		ihl := int(quoted[0]&0x0f) * 4
+		if ihl < 20 || len(quoted) < ihl+8 {
+			return false
+		}
+
+		// Destination address of the original datagram, bytes 16-19.
+		dst, ok := netip.AddrFromSlice(quoted[16:20])
+		if !ok || dst.Unmap() != want.Unmap() {
+			return false
+		}
+		return echoHeaderMatches(quoted[ihl:], id, seq, mode)
+	}
+
+	// IPv6 has a fixed 40-byte header; the destination sits at bytes 24-39.
+	if len(quoted) < 40+8 {
+		return false
+	}
+	dst, ok := netip.AddrFromSlice(quoted[24:40])
+	if !ok || dst.Unmap() != want.Unmap() {
+		return false
+	}
+	return echoHeaderMatches(quoted[40:], id, seq, mode)
+}
+
+// echoHeaderMatches checks the quoted ICMP echo header's identifier and
+// sequence number.
+func echoHeaderMatches(hdr []byte, id, seq int, mode pingMode) bool {
+	if len(hdr) < 8 {
+		return false
+	}
+
+	gotID := int(hdr[4])<<8 | int(hdr[5])
+	gotSeq := int(hdr[6])<<8 | int(hdr[7])
+
+	if gotSeq != seq {
+		return false
+	}
+	// The kernel rewrites the identifier on an unprivileged socket, so it is
+	// only meaningful on the raw path.
+	if mode == pingModeRaw && gotID != id {
+		return false
+	}
+	return true
 }
 
 func peerMatches(peer net.Addr, want netip.Addr) bool {

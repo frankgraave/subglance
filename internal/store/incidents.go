@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -47,6 +48,14 @@ func (i Incident) Duration() time.Duration {
 // and there is none.
 var ErrNoOpenIncident = errors.New("store: no open incident for monitor")
 
+// ErrIncidentAlreadyOpen is returned when opening an incident collides with
+// one that is already open for the same monitor.
+//
+// It is a distinct error because callers should treat it as the benign race it
+// usually is — two workers reporting the same monitor at once — rather than as
+// a database fault worth logging at error level.
+var ErrIncidentAlreadyOpen = errors.New("store: an incident is already open for this monitor")
+
 const incidentColumns = `
 	id, monitor_id, started_at, confirmed_at, resolved_at, acked_at, cause, last_error`
 
@@ -62,6 +71,12 @@ func (db *DB) OpenIncident(ctx context.Context, monitorID int64, at time.Time, c
 		VALUES (?, ?, ?, ?)`,
 		monitorID, at.Unix(), cause, lastError)
 	if err != nil {
+		// The partial unique index rejected a second open incident. Report it
+		// as the specific, expected condition rather than a raw driver error,
+		// so callers can distinguish a race from a broken database.
+		if isUniqueViolation(err) {
+			return Incident{}, fmt.Errorf("%w (monitor %d)", ErrIncidentAlreadyOpen, monitorID)
+		}
 		return Incident{}, fmt.Errorf("open incident for monitor %d: %w", monitorID, err)
 	}
 
@@ -179,13 +194,18 @@ func (db *DB) AckIncident(ctx context.Context, incidentID int64, at time.Time) e
 }
 
 // ListIncidents returns incidents for a monitor, newest first.
+//
+// Timestamps have second granularity, so two incidents in the same second are
+// common in tests and possible in production. The id tiebreaker keeps
+// "newest first" a real guarantee rather than whatever the query planner
+// happened to do.
 func (db *DB) ListIncidents(ctx context.Context, monitorID int64, limit int) ([]Incident, error) {
 	if limit <= 0 {
 		limit = 50
 	}
 
 	rows, err := db.Reader.QueryContext(ctx,
-		"SELECT "+incidentColumns+" FROM incidents WHERE monitor_id = ? ORDER BY started_at DESC LIMIT ?",
+		"SELECT "+incidentColumns+" FROM incidents WHERE monitor_id = ? ORDER BY started_at DESC, id DESC LIMIT ?",
 		monitorID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("query incidents: %w", err)
@@ -199,13 +219,28 @@ func (db *DB) ListIncidents(ctx context.Context, monitorID int64, limit int) ([]
 // which is what the dashboard's "what is broken right now" view needs.
 func (db *DB) ListOpenIncidents(ctx context.Context) ([]Incident, error) {
 	rows, err := db.Reader.QueryContext(ctx,
-		"SELECT "+incidentColumns+" FROM incidents WHERE resolved_at IS NULL ORDER BY started_at DESC")
+		"SELECT "+incidentColumns+" FROM incidents WHERE resolved_at IS NULL ORDER BY started_at DESC, id DESC")
 	if err != nil {
 		return nil, fmt.Errorf("query open incidents: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
 	return scanIncidents(rows)
+}
+
+// isUniqueViolation reports whether an error came from a UNIQUE constraint.
+//
+// The pure-Go SQLite driver does not export a typed error for this, so the
+// message is the only signal available. It is matched loosely on purpose: the
+// alternative is depending on a driver-internal error code that would break on
+// upgrade, and a false negative here only costs a less specific error message.
+func isUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "unique constraint") ||
+		strings.Contains(msg, "constraint failed: unique")
 }
 
 func scanIncidents(rows *sql.Rows) ([]Incident, error) {

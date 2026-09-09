@@ -141,12 +141,15 @@ func (r *Runner) restore(ctx context.Context) error {
 
 // jobs converts enabled monitors into scheduler jobs.
 //
-// It also reconciles the state engine against the live monitor set: any
-// monitor the engine still tracks that is no longer enabled gets forgotten.
-// Doing it here rather than from a scheduler callback covers two cases the
-// queue diff misses — state restored from open incidents at startup for a
-// monitor that has since been deleted, and a monitor paused before the
-// scheduler ever queued it.
+// It also reconciles against the live monitor set: any monitor the engine
+// still tracks that is no longer enabled gets forgotten, and any incident it
+// left open gets closed.
+//
+// Closing matters as much as forgetting. Once a monitor is paused or deleted
+// it stops being checked, so nothing will ever arrive to resolve its incident
+// — the row would stay open forever, the dashboard would show a paused
+// monitor as permanently down, a restart would re-seed the phantom, and the
+// partial unique index would block every future incident for that monitor.
 func (r *Runner) jobs(ctx context.Context) ([]scheduler.Job, error) {
 	monitors, err := r.db.ListEnabledMonitors(ctx)
 	if err != nil {
@@ -164,7 +167,36 @@ func (r *Runner) jobs(ctx context.Context) ([]scheduler.Job, error) {
 	}
 
 	r.engine.Retain(live)
+	r.closeOrphanedIncidents(ctx, live)
+
 	return jobs, nil
+}
+
+// closeOrphanedIncidents resolves incidents belonging to monitors that are no
+// longer being checked.
+//
+// The incident is resolved rather than deleted: it really did happen, and the
+// history should say so. What is not true is that it is still ongoing.
+func (r *Runner) closeOrphanedIncidents(ctx context.Context, live map[int64]struct{}) {
+	open, err := r.db.ListOpenIncidents(ctx)
+	if err != nil {
+		r.log.Error("failed to list open incidents while reconciling", "error", err)
+		return
+	}
+
+	now := time.Now()
+	for _, inc := range open {
+		if _, still := live[inc.MonitorID]; still {
+			continue
+		}
+		if _, err := r.db.ResolveIncident(ctx, inc.MonitorID, now); err != nil {
+			r.log.Error("failed to close incident for a monitor that is no longer checked",
+				"monitor_id", inc.MonitorID, "incident_id", inc.ID, "error", err)
+			continue
+		}
+		r.log.Info("closed incident for a paused or deleted monitor",
+			"monitor_id", inc.MonitorID, "incident_id", inc.ID)
+	}
 }
 
 // toCheckerMonitor maps the stored shape onto what a checker needs.

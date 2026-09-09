@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/frankgraave/subglance/internal/checker"
@@ -199,13 +200,27 @@ func validateTargetForType(typ, target string) string {
 		}
 
 	case "ping":
-		// ICMP has no ports, and a port in the target means the user picked
-		// the wrong check type. Saying so is more useful than ignoring it.
+		// ICMP has no ports. A URL or a host:port here means the user picked
+		// the wrong check type, so say which one they wanted rather than
+		// complaining about a port they may not have realised they typed.
+		if strings.Contains(target, "://") {
+			return "a ping monitor takes a hostname or IP address, not a URL — " +
+				"use " + hostOnly(target) + ", or an http monitor for the full URL"
+		}
 		if _, port, err := checker.ParseHostPort(target, 0); err == nil && port != 0 {
 			return "a ping monitor cannot use a port; use a tcp monitor instead"
 		}
 	}
 	return ""
+}
+
+// hostOnly extracts the host from a URL-shaped target, for use in error
+// messages that suggest a correction.
+func hostOnly(target string) string {
+	if u, err := url.Parse(target); err == nil && u.Hostname() != "" {
+		return u.Hostname()
+	}
+	return target
 }
 
 func (s *Server) handleGetMonitor(w http.ResponseWriter, r *http.Request) {

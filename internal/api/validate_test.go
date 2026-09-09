@@ -35,6 +35,10 @@ func TestValidateTargetForType(t *testing.T) {
 		{name: "ping bare host", typ: "ping", target: "example.com"},
 		{name: "ping ip", typ: "ping", target: "192.0.2.10"},
 		{name: "ping with port", typ: "ping", target: "example.com:80", wantErr: true, wantMsg: "tcp monitor"},
+		// A URL in a ping monitor used to be rejected for "using a port" —
+		// which the user never typed. The message must name the real mistake.
+		{name: "ping with url", typ: "ping", target: "http://example.com", wantErr: true, wantMsg: "not a URL"},
+		{name: "ping with url and path", typ: "ping", target: "https://example.com/health", wantErr: true, wantMsg: "example.com"},
 	}
 
 	for _, tc := range tests {
