@@ -41,24 +41,34 @@ func run() error {
 	defer func() { _ = db.Close() }()
 
 	targets := []struct {
-		name    string
-		target  string
-		retries int
+		name     string
+		typ      string
+		target   string
+		retries  int
+		warnDays int
 	}{
-		{"example.com (healthy)", "https://example.com", 2},
-		{"404 page (patient)", "https://example.com/definitely-not-here", 3},
-		{"expired cert (immediate)", "https://expired.badssl.com", 1},
+		{name: "HTTP: example.com", typ: "http", target: "https://example.com", retries: 2},
+		{name: "HTTP: 404 (patient)", typ: "http", target: "https://example.com/definitely-not-here", retries: 3},
+		{name: "TCP: cloudflare DNS:53", typ: "tcp", target: "1.1.1.1:53", retries: 2},
+		{name: "TCP: closed port", typ: "tcp", target: "example.com:9999", retries: 1},
+		{name: "PING: cloudflare", typ: "ping", target: "1.1.1.1", retries: 2},
+		{name: "PING: unknown host", typ: "ping", target: "no-such-host.invalid", retries: 1},
+		{name: "SSL: example.com", typ: "ssl", target: "example.com", retries: 2, warnDays: 14},
+		{name: "SSL: expired cert", typ: "ssl", target: "expired.badssl.com", retries: 1, warnDays: 14},
+		{name: "SSL: wrong host", typ: "ssl", target: "wrong.host.badssl.com", retries: 1, warnDays: 14},
+		{name: "SSL: self-signed", typ: "ssl", target: "self-signed.badssl.com", retries: 1, warnDays: 14},
 	}
 
 	for _, t := range targets {
 		if _, err := db.CreateMonitor(ctx, store.Monitor{
-			Name:      t.name,
-			Type:      "http",
-			Target:    t.target,
-			IntervalS: 20,
-			TimeoutS:  10,
-			Retries:   t.retries,
-			Enabled:   true,
+			Name:        t.name,
+			Type:        t.typ,
+			Target:      t.target,
+			IntervalS:   20,
+			TimeoutS:    10,
+			Retries:     t.retries,
+			SSLWarnDays: t.warnDays,
+			Enabled:     true,
 		}); err != nil {
 			return fmt.Errorf("create monitor %s: %w", t.name, err)
 		}
@@ -79,9 +89,9 @@ func run() error {
 		},
 	})
 
-	fmt.Println("Running for 90 seconds. Watch the 404 monitor: it needs three")
-	fmt.Println("consecutive failures before it alerts, while the expired cert")
-	fmt.Println("alerts on the first.")
+	fmt.Println("Running all four check types for 90 seconds against real endpoints.")
+	fmt.Println("Watch the patient monitors: they need several consecutive failures")
+	fmt.Println("before they alert, while the immediate ones alert on the first.")
 	fmt.Println()
 
 	runCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
@@ -106,7 +116,7 @@ func run() error {
 		incidents, _ := db.ListIncidents(context.Background(), m.ID, 10)
 
 		fmt.Printf("\n%s\n", m.Name)
-		fmt.Printf("  threshold: %d consecutive failures\n", m.Retries)
+		fmt.Printf("  type: %-4s  threshold: %d consecutive failures\n", m.Type, m.Retries)
 		fmt.Printf("  checks:    %d (%d up, %d down, %.1f%% uptime)\n",
 			stats.Total, stats.Up, stats.Down, stats.Percentage)
 

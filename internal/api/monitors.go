@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
+	"github.com/frankgraave/subglance/internal/checker"
 	"github.com/frankgraave/subglance/internal/store"
 )
 
@@ -149,6 +151,59 @@ func validateCreateMonitor(req createMonitorRequest) string {
 	}
 	if req.TimeoutS != 0 && (req.TimeoutS < 1 || req.TimeoutS > 120) {
 		return "timeout_s must be between 1 and 120"
+	}
+	if msg := validateTargetForType(req.Type, req.Target); msg != "" {
+		return msg
+	}
+	return ""
+}
+
+// validateTargetForType rejects target shapes that cannot work for a type.
+//
+// Catching this at creation beats letting the monitor fail forever with an
+// internal error: a mistake made while typing should be corrected while the
+// user is still looking at the form.
+func validateTargetForType(typ, target string) string {
+	switch typ {
+	case "http":
+		u, err := url.Parse(target)
+		if err != nil {
+			return "target is not a valid URL: " + err.Error()
+		}
+		if u.Scheme != "http" && u.Scheme != "https" {
+			return "an http monitor needs a target starting with http:// or https://"
+		}
+		if u.Host == "" {
+			return "target has no host"
+		}
+
+	case "tcp":
+		host, port, err := checker.ParseHostPort(target, 0)
+		if err != nil {
+			return "invalid target: " + err.Error()
+		}
+		if host == "" {
+			return "target has no host"
+		}
+		if port == 0 {
+			return "a tcp monitor needs a port, for example db.example.com:5432"
+		}
+
+	case "ssl":
+		host, _, err := checker.ParseHostPort(target, 443)
+		if err != nil {
+			return "invalid target: " + err.Error()
+		}
+		if host == "" {
+			return "target has no host"
+		}
+
+	case "ping":
+		// ICMP has no ports, and a port in the target means the user picked
+		// the wrong check type. Saying so is more useful than ignoring it.
+		if _, port, err := checker.ParseHostPort(target, 0); err == nil && port != 0 {
+			return "a ping monitor cannot use a port; use a tcp monitor instead"
+		}
 	}
 	return ""
 }

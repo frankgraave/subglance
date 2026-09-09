@@ -25,6 +25,7 @@ package scheduler
 import (
 	"container/heap"
 	"context"
+	"errors"
 	"log/slog"
 	"math/rand/v2"
 	"runtime"
@@ -211,6 +212,11 @@ func (s *Scheduler) Run(ctx context.Context) error {
 
 		case <-reloadTicker.C:
 			if err := s.reload(ctx); err != nil {
+				// A reload racing a shutdown fails by design; logging it as an
+				// error trains operators to ignore the error level.
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					continue
+				}
 				s.log.Error("monitor reload failed", "error", err)
 			}
 

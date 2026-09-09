@@ -86,6 +86,9 @@ func New(opts Options) *Runner {
 		Registry: scheduler.RegistryFunc(r.jobs),
 		Checkers: map[checker.Type]checker.Checker{
 			checker.TypeHTTP: httpChecker,
+			checker.TypeTCP:  checker.NewTCPChecker(guard),
+			checker.TypeSSL:  checker.NewSSLChecker(guard),
+			checker.TypePing: checker.NewPingChecker(guard),
 		},
 		OnResult:       r.record,
 		Workers:        opts.Workers,

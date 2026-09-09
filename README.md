@@ -84,6 +84,28 @@ defaults.
 monitor, and without that guard SubGlance would happily act as an SSRF proxy into
 the host network. Turn it on only if you intend to monitor internal services.
 
+### Check types
+
+| Type | Target shape | What it verifies |
+|---|---|---|
+| `http` | `https://example.com/health` | Status code, response time, keyword present or absent, certificate expiry |
+| `tcp` | `db.example.com:5432` | A TCP handshake completes within the timeout |
+| `ping` | `example.com` or `192.0.2.10` | ICMP echo reply |
+| `ssl` | `example.com` (port optional, defaults to 443) | Certificate validity, hostname match, chain of trust, days until expiry |
+
+A TCP check completes the handshake and hangs up without sending a payload —
+speaking a protocol badly is a good way to end up in someone's fail2ban rules.
+
+The SSL check verifies the certificate itself rather than letting the handshake
+fail, so an expired certificate still reports *when* it expired and by how much.
+Set `ssl_warn_days` to fail the check while there is still time to renew, instead
+of at the moment the site breaks.
+
+Ping needs either unprivileged ICMP sockets or `CAP_NET_RAW`. SubGlance tries the
+unprivileged socket first and falls back to the raw one; when neither is allowed
+the error names both fixes. If ICMP is blocked entirely on your network, a TCP
+check against a known port answers the same question more reliably.
+
 ### How a failure becomes an alert
 
 A monitor does not go down because one check failed. Each monitor has a failure
