@@ -186,33 +186,19 @@ body {
 }
 .num.ticked { animation: valueTick 320ms var(--ease); }
 
-/* A hairline that sweeps the row when a check lands. Almost
-   subliminal on a healthy board; the only thing that says the
-   page is still breathing. */
-@keyframes rowSweep {
-  0%   { opacity: 0; }
-  30%  { opacity: .5; }
-  100% { opacity: 0; }
-}
-.row.checked::after, .strip.checked::after {
-  content: "";
-  position: absolute; inset: 0;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--up) 8%, transparent), transparent);
-  pointer-events: none;
-  animation: rowSweep 700ms var(--ease);
-}
-.strip { position: relative; }
+/* No row-wide flash. A tint across the whole row is a large, low-
+   frequency change: it registers as the row itself doing something,
+   which is the vocabulary reserved for a state change. The arriving
+   bar and the ticking number are already local, small and precise —
+   they say "a check landed here" without shouting it. */
 
 /* The whole effect is opt-out, and reduced-motion opts out for you. */
 body[data-pulse="off"] .beat.arriving,
-body[data-pulse="off"] .num.ticked,
-body[data-pulse="off"] .row.checked::after,
-body[data-pulse="off"] .strip.checked::after { animation: none; }
+body[data-pulse="off"] .num.ticked { animation: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .led.changed { animation: none; }
   .beat.arriving, .num.ticked { animation: none; }
-  .row.checked::after, .strip.checked::after { animation: none; }
   * { transition-duration: .01ms !important; }
 }
 
@@ -1084,10 +1070,6 @@ function landCheck(id) {
       void num.offsetWidth;
       num.classList.add("ticked");
     }
-
-    el.classList.remove("checked");
-    void el.offsetWidth;
-    el.classList.add("checked");
   });
 }
 
