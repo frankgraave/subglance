@@ -47,9 +47,12 @@
   --down-dim:    #2c1017;
   --idle:        #4b5257;
 
-  --glow-up:     0 0 0 1px rgba(52,211,153,.28), 0 0 12px -1px rgba(52,211,153,.55), 0 0 26px -6px rgba(52,211,153,.4);
-  --glow-warn:   0 0 0 1px rgba(251,191,36,.3),  0 0 12px -1px rgba(251,191,36,.6),  0 0 26px -6px rgba(251,191,36,.45);
-  --glow-down:   0 0 0 1px rgba(244,63,94,.32),  0 0 14px -1px rgba(244,63,94,.7),   0 0 30px -6px rgba(244,63,94,.5);
+  /* Tight halo, not a haze. A wide soft glow at this size reads as
+     an out-of-focus smudge; a 1px ring plus a short bloom keeps the
+     lamp's edge legible while still looking lit. */
+  --glow-up:     0 0 0 1px rgba(52,211,153,.35), 0 0 7px -1px rgba(52,211,153,.6);
+  --glow-warn:   0 0 0 1px rgba(251,191,36,.38), 0 0 7px -1px rgba(251,191,36,.62);
+  --glow-down:   0 0 0 1px rgba(244,63,94,.4),   0 0 8px -1px rgba(244,63,94,.72);
   --glow-idle:   none;
 
   --shadow-card: 0 1px 2px rgba(0,0,0,.4);
@@ -78,9 +81,9 @@
   --idle:        #c2c7cb;
 
   /* In light the glow reads as a soft halo, not a light bulb. */
-  --glow-up:     0 0 0 1px rgba(5,150,105,.22),  0 0 8px -2px rgba(5,150,105,.45);
-  --glow-warn:   0 0 0 1px rgba(180,83,9,.22),   0 0 8px -2px rgba(180,83,9,.45);
-  --glow-down:   0 0 0 1px rgba(225,29,72,.24),  0 0 9px -2px rgba(225,29,72,.5);
+  --glow-up:     0 0 0 1px rgba(5,150,105,.28),  0 0 5px -1px rgba(5,150,105,.4);
+  --glow-warn:   0 0 0 1px rgba(180,83,9,.28),   0 0 5px -1px rgba(180,83,9,.4);
+  --glow-down:   0 0 0 1px rgba(225,29,72,.3),   0 0 6px -1px rgba(225,29,72,.45);
   --glow-idle:   none;
 
   --shadow-card: 0 1px 2px rgba(16,24,40,.05), 0 0 0 1px rgba(16,24,40,.02);
@@ -103,27 +106,35 @@ body {
    A small horizontal pill with a lit core and a halo. It does
    not pulse: a room full of pulsing lights is a room you stop
    looking at. It only animates when the state actually changes.
+
+   One size everywhere. An indicator that changes size per view
+   stops being a fixed reference point — you want the eye to
+   recognise it instantly, not re-measure it on every screen.
+
+   The corners are rounded but not fully: a true pill (999px)
+   reads soft and slightly out of focus at this scale, because
+   the eye gets no straight edge to lock onto. A 2.5px radius
+   keeps the SMD-indicator silhouette and stays crisp.
    ───────────────────────────────────────────────────────────── */
 .led {
   display: inline-block;
   width: 20px;
   height: 7px;
-  border-radius: 999px;
+  border-radius: 2.5px;
   background: var(--idle);
   box-shadow: var(--glow-idle);
   position: relative;
   flex: none;
   transition: background var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
-/* A brighter core sold through an inset highlight: reads as a lit
-   lamp rather than a flat coloured rectangle. Kept tight — the
-   highlight should suggest a lens, not paint a stripe. */
+/* A lit core, sold through a tight highlight across the top half.
+   Inset by one pixel so the lamp keeps a visible rim. */
 .led::after {
   content: "";
   position: absolute;
-  inset: 1px 2.5px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, rgba(255,255,255,.5), rgba(255,255,255,0));
+  inset: 1px 1px 3px;
+  border-radius: 1.5px;
+  background: linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,0));
   opacity: .5;
   pointer-events: none;
 }
@@ -132,10 +143,6 @@ body {
 .led[data-state="down"] { background: var(--down); box-shadow: var(--glow-down); }
 .led[data-state="idle"] { background: var(--idle); box-shadow: none; }
 .led[data-state="idle"]::after { opacity: .2; }
-
-.led.lg { width: 26px; height: 9px; }
-.led.sm { width: 15px; height: 6px; }
-.led.xl { width: 34px; height: 11px; }
 
 /* The state-change flash. Fires once, on transition only. */
 @keyframes ledSettle {
@@ -153,7 +160,15 @@ body {
 /* ─────────────────────────────────────────────────────────────
    CHROME
    ───────────────────────────────────────────────────────────── */
-.shell { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
+.shell { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; transition: grid-template-columns 280ms var(--ease); }
+
+/* Collapsed sidebar: a rail wide enough for the icons, so the
+   navigation stays reachable instead of disappearing behind a
+   menu button. Status wall collapses it entirely — that view
+   exists to have nothing on screen but state. */
+body[data-nav="collapsed"] .shell { grid-template-columns: 56px 1fr; }
+body[data-nav="hidden"] .shell { grid-template-columns: 0 1fr; }
+body[data-nav="hidden"] .sidebar { transform: translateX(-100%); opacity: 0; pointer-events: none; }
 
 .sidebar {
   border-right: 1px solid var(--border);
@@ -161,7 +176,27 @@ body {
   padding: 18px 12px;
   display: flex; flex-direction: column; gap: 2px;
   position: sticky; top: 0; height: 100vh;
+  width: 100%; min-width: 0;
+  overflow: hidden;
+  transition: transform 280ms var(--ease), opacity 200ms var(--ease), padding 280ms var(--ease);
 }
+body[data-nav="collapsed"] .sidebar { padding: 18px 8px; }
+
+/* Labels are pulled out of the flow entirely when collapsed, not
+   just faded: a fade alone leaves them sitting under the icons and
+   still claiming width. */
+.nav-text, .brand-copy, .nav-count {
+  transition: opacity 140ms var(--ease);
+  white-space: nowrap;
+  min-width: 0; overflow: hidden;
+}
+body[data-nav="collapsed"] .nav-text,
+body[data-nav="collapsed"] .brand-copy,
+body[data-nav="collapsed"] .nav-count { display: none; }
+body[data-nav="collapsed"] .nav-label { font-size: 0; height: 1px; background: var(--border); margin: 12px 6px 8px; padding: 0; }
+body[data-nav="collapsed"] .nav-item { justify-content: center; padding: 8px 0; }
+body[data-nav="collapsed"] .brand { justify-content: center; padding: 6px 0 20px; }
+
 .brand {
   display: flex; align-items: center; gap: 10px;
   padding: 6px 10px 20px;
@@ -173,7 +208,7 @@ body {
   display: grid; place-items: center;
   flex: none;
 }
-.brand-mark .led { width: 14px; height: 5px; }
+
 .brand-name { font-size: 13.5px; font-weight: 500; letter-spacing: -.01em; }
 .brand-sub { font-size: 11px; color: var(--ink-3); margin-top: 1px; }
 
@@ -270,8 +305,21 @@ h1 { font-size: 19px; font-weight: 500; letter-spacing: -.02em; }
   height: 58px;
   border-bottom: 1px solid var(--border);
   cursor: pointer;
+  position: relative;
   transition: background 140ms var(--ease);
 }
+/* A hairline on the leading edge, warm only when something is
+   wrong. Not a coloured bar for decoration: it is the one cue
+   that survives when you are scanning the list peripherally. */
+.row::before {
+  content: "";
+  position: absolute; left: 0; top: 0; bottom: 0; width: 2px;
+  background: transparent;
+  transition: background var(--dur) var(--ease);
+}
+.row[data-state="down"]::before { background: var(--down); }
+.row[data-state="warn"]::before { background: var(--warn); }
+.row[data-state="down"] { background: color-mix(in srgb, var(--down) 4%, transparent); }
 .row:last-child { border-bottom: 0; }
 .row:hover { background: var(--surface-2); }
 
@@ -352,7 +400,7 @@ h1 { font-size: 19px; font-weight: 500; letter-spacing: -.02em; }
 .group-title { font-size: 12px; font-weight: 500; letter-spacing: .01em; }
 .group-meta { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
 .group-leds { display: flex; gap: 3px; margin-left: auto; }
-.group-leds .led { width: 12px; height: 6px; }
+
 
 .strip { display: flex; align-items: center; gap: 14px; padding: 9px 10px; border-radius: var(--r-sm); cursor: pointer; transition: background 140ms var(--ease); }
 .strip:hover { background: var(--surface-2); }
@@ -423,12 +471,10 @@ body[data-focus="on"] .content { padding: 0; }
 }
 .quiet-card[data-state="idle"] .quiet-name { color: var(--ink-3); }
 
-/* Density control, because 12 monitors and 200 monitors are not
-   the same screen. */
-body[data-density="comfortable"] .quiet-card { padding: 21px 20px; }
-body[data-density="compact"] .quiet-grid { grid-template-columns: repeat(auto-fill, minmax(186px, 1fr)); gap: 7px; }
-body[data-density="compact"] .quiet-card { padding: 12px 14px; gap: 10px; }
-body[data-density="compact"] .quiet-name { font-size: 12.5px; }
+/* Density is a per-view concern, not a global setting: the row
+   layout already has one density that works, and a control that
+   only affects one of four layouts is a control that teaches
+   people it does nothing. */
 
 .focus-exit {
   position: fixed; top: 18px; right: 18px; z-index: 30;
@@ -440,11 +486,12 @@ body:not([data-focus="on"]) .focus-exit { display: none; }
 
 /* Detail drawer, shared by all variants. */
 .scrim {
-  position: fixed; inset: 0; background: rgba(0,0,0,.5);
+  position: fixed; inset: 0; background: rgba(0,0,0,.42);
+  backdrop-filter: blur(3px) saturate(.85);
   opacity: 0; pointer-events: none; transition: opacity 260ms var(--ease); z-index: 40;
 }
 .scrim.open { opacity: 1; pointer-events: auto; }
-[data-theme="light"] .scrim { background: rgba(16,24,40,.28); }
+[data-theme="light"] .scrim { background: rgba(16,24,40,.2); }
 
 .drawer {
   position: fixed; top: 0; right: 0; bottom: 0; width: min(460px, 92vw);
@@ -579,43 +626,46 @@ body[data-focus="on"] .switcher:hover { opacity: 1; }
   <aside class="sidebar">
     <div class="brand">
       <div class="brand-mark"><span class="led" data-state="up"></span></div>
-      <div>
+      <div class="brand-copy">
         <div class="brand-name">SubGlance</div>
         <div class="brand-sub">acme.co</div>
       </div>
     </div>
 
-    <a class="nav-item" aria-current="true">
+    <a class="nav-item" aria-current="true" title="Dashboard">
       <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
-      Dashboard
+      <span class="nav-text">Dashboard</span>
     </a>
-    <a class="nav-item">
+    <a class="nav-item" title="Incidents">
       <svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
-      Incidents <span class="nav-count alert">2</span>
+      <span class="nav-text">Incidents</span> <span class="nav-count alert">2</span>
     </a>
-    <a class="nav-item">
+    <a class="nav-item" title="Monitors">
       <svg viewBox="0 0 24 24"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
-      Monitors <span class="nav-count">14</span>
+      <span class="nav-text">Monitors</span> <span class="nav-count">14</span>
     </a>
 
     <div class="nav-label">Configure</div>
-    <a class="nav-item">
+    <a class="nav-item" title="Notifications">
       <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
-      Notifications
+      <span class="nav-text">Notifications</span>
     </a>
-    <a class="nav-item">
+    <a class="nav-item" title="Settings">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-      Settings
+      <span class="nav-text">Settings</span>
     </a>
   </aside>
 
   <main class="main">
     <header class="topbar">
+      <button class="icon-btn" id="navBtn" title="Toggle sidebar (Cmd/Ctrl + B)">
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
+      </button>
       <h1>Dashboard</h1>
       <div class="summary">
-        <span class="summary-item"><span class="led sm" data-state="up"></span> <b>11</b> up</span>
-        <span class="summary-item"><span class="led sm" data-state="warn"></span> <b>1</b> degraded</span>
-        <span class="summary-item"><span class="led sm" data-state="down"></span> <b>2</b> down</span>
+        <span class="summary-item"><span class="led" data-state="up"></span> <b>11</b> up</span>
+        <span class="summary-item"><span class="led" data-state="warn"></span> <b>1</b> degraded</span>
+        <span class="summary-item"><span class="led" data-state="down"></span> <b>2</b> down</span>
       </div>
       <div class="spacer"></div>
       <div class="seg">
@@ -668,17 +718,6 @@ body[data-focus="on"] .switcher:hover { opacity: 1; }
             </span>
             <span class="layout-check"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span>
           </button>
-
-          <div class="menu-div"></div>
-
-          <div class="layout-toggle-row">
-            Density
-            <div class="seg" id="densitySeg">
-              <button data-d="compact">S</button>
-              <button data-d="default" aria-pressed="true">M</button>
-              <button data-d="comfortable">L</button>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -730,7 +769,7 @@ body[data-focus="on"] .switcher:hover { opacity: 1; }
 <div class="scrim" id="scrim"></div>
 <aside class="drawer" id="drawer">
   <div class="drawer-head">
-    <span class="led lg" data-state="down" id="dLed" style="margin-top:5px"></span>
+    <span class="led" data-state="down" id="dLed" style="margin-top:5px"></span>
     <div>
       <h2 id="dName">Checkout API</h2>
       <div class="drawer-target" id="dTarget">https://api.acme.co/v2/checkout</div>
@@ -832,7 +871,7 @@ document.getElementById("boardRows").innerHTML = `
     <span></span><span>Monitor</span><span>Last 28 checks</span>
     <span class="num">Latency</span><span class="num">24h</span><span class="num">Interval</span>
   </div>` + sorted().map(m => `
-  <div class="row" data-id="${m.id}">
+  <div class="row" data-id="${m.id}" data-state="${m.state}">
     <span class="led" data-state="${m.state}"></span>
     <div class="row-name">
       <div class="row-title">${m.name}</div>
@@ -853,7 +892,7 @@ document.getElementById("boardRows").innerHTML = `
 document.getElementById("wallTiles").innerHTML = sorted().map(m => `
   <div class="tile" data-id="${m.id}" data-state="${m.state}">
     <div class="tile-top">
-      <span class="led lg" data-state="${m.state}"></span>
+      <span class="led" data-state="${m.state}"></span>
       <span class="tile-name">${m.name}</span>
       <span class="tile-menu">·</span>
     </div>
@@ -879,7 +918,7 @@ document.getElementById("stripGroups").innerHTML = groups.map(g => {
       <span class="group-leds">${items.map(m => `<span class="led" data-state="${m.state}"></span>`).join("")}</span>
     </div>
     ${items.map(m => `
-      <div class="strip" data-id="${m.id}">
+      <div class="strip" data-id="${m.id}" data-state="${m.state}">
         <span class="led" data-state="${m.state}"></span>
         <span class="strip-name">${m.name}</span>
         <div class="beats">${beatsHTML(m, 36)}</div>
@@ -936,7 +975,7 @@ function openDrawer(id) {
 
   document.getElementById("dEvents").innerHTML = events.map(([s, t, when]) => `
     <div class="event">
-      <span class="led sm" data-state="${s}"></span>
+      <span class="led" data-state="${s}"></span>
       <div class="event-body">
         <div class="event-title">${t}</div>
         <div class="event-time">${when}</div>
@@ -964,6 +1003,7 @@ function setLayout(v) {
   // "Status wall" is the one layout that hides the chrome: its whole
   // reason to exist is a screen with nothing on it but state.
   document.body.dataset.focus = v === "d" ? "on" : "off";
+  document.body.dataset.nav = v === "d" ? "hidden" : (navPref || "expanded");
 
   document.querySelectorAll(".layout-opt").forEach(o =>
     o.setAttribute("aria-pressed", String(o.dataset.v === v)));
@@ -972,6 +1012,28 @@ function setLayout(v) {
 
   localStorage.setItem("sg-variant", v);
 }
+
+/* The sidebar preference is remembered separately from the layout,
+   so leaving the status wall restores the rail the way the user
+   had it rather than always springing back open. */
+let navPref = localStorage.getItem("sg-nav") || "expanded";
+
+document.getElementById("navBtn").addEventListener("click", () => {
+  navPref = navPref === "expanded" ? "collapsed" : "expanded";
+  localStorage.setItem("sg-nav", navPref);
+  // In the status wall the rail stays hidden; the toggle only sets
+  // what you return to.
+  if (document.documentElement.dataset.variant !== "d") {
+    document.body.dataset.nav = navPref;
+  }
+});
+
+document.addEventListener("keydown", e => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
+    e.preventDefault();
+    document.getElementById("navBtn").click();
+  }
+});
 
 layoutBtn.addEventListener("click", e => {
   e.stopPropagation();
@@ -1018,27 +1080,72 @@ document.getElementById("themeBtn").addEventListener("click", () => {
 });
 
 /* ── Outage simulation: the only way to judge whether the state
-      transition reads well without waiting for a real outage. ── */
+      transition reads well without waiting for a real outage.
+
+      It walks the whole element, not just the lamp: the card
+      border, the tile edge and the summary counts all carry state
+      too, and a transition that only moves the light would look
+      right here and wrong in production. ── */
 document.getElementById("simulate").addEventListener("click", () => {
-  const order = ["up", "warn", "down", "up"];
-  const targets = [...document.querySelectorAll('[data-id="4"] .led, [data-id="5"] .led, [data-id="7"] .led')];
-  order.forEach((state, i) => {
+  const ids = [4, 5, 7];
+  const sequence = ["warn", "down", "up"];
+
+  sequence.forEach((state, step) => {
     setTimeout(() => {
-      targets.forEach(led => {
-        led.dataset.state = state;
-        led.classList.remove("changed");
-        void led.offsetWidth;
-        led.classList.add("changed");
+      ids.forEach(id => {
+        document.querySelectorAll(`[data-id="${id}"]`).forEach(el => {
+          // Anything that paints itself from state gets the update.
+          if (el.dataset.state !== undefined) el.dataset.state = state;
+
+          const led = el.querySelector(".led");
+          if (led) {
+            led.dataset.state = state;
+            led.classList.remove("changed");
+            void led.offsetWidth; // restart the animation
+            led.classList.add("changed");
+          }
+
+          // The newest bars follow the monitor, so the history does
+          // not contradict the light sitting next to it.
+          const bars = [...el.querySelectorAll(".beat")].slice(-4);
+          bars.forEach(b => {
+            b.dataset.s = state;
+            if (state === "down") b.style.height = "100%";
+          });
+        });
       });
-    }, i * 1100);
+      updateSummary();
+    }, step * 1300);
   });
 });
 
+/* Keep the header and the quiet-wall meta honest while states move. */
+function updateSummary() {
+  const leds = [...document.querySelectorAll('.board .row .led, .row > .led')];
+  const count = s => document.querySelectorAll(`.row[data-id] .led[data-state="${s}"]`).length;
+
+  const up = count("up"), warn = count("warn"), down = count("down");
+  const items = document.querySelectorAll(".summary-item b");
+  if (items.length === 3 && (up + warn + down) > 0) {
+    items[0].textContent = up;
+    items[1].textContent = warn;
+    items[2].textContent = down;
+  }
+
+  const meta = document.getElementById("quietMeta");
+  if (meta) {
+    const qDown = document.querySelectorAll('.quiet-card[data-state="down"]').length;
+    const qWarn = document.querySelectorAll('.quiet-card[data-state="warn"]').length;
+    meta.innerHTML = `${MONITORS.length} monitors` +
+      (qDown ? ` · <b>${qDown} down</b>` : qWarn ? ` · ${qWarn} degraded` : " · all healthy");
+  }
+  void leds;
+}
+
 /* Restore preferences. */
+document.body.dataset.nav = navPref;
 const savedV = localStorage.getItem("sg-variant");
-if (savedV) setLayout(savedV);
-const savedD = localStorage.getItem("sg-density");
-if (savedD) document.querySelector(`#densitySeg [data-d="${savedD}"]`)?.click();
+if (savedV) setLayout(savedV); else setLayout("a");
 const savedT = localStorage.getItem("sg-theme");
 if (savedT === "light") document.getElementById("themeBtn").click();
 
