@@ -106,8 +106,8 @@ body {
    ───────────────────────────────────────────────────────────── */
 .led {
   display: inline-block;
-  width: 26px;
-  height: 9px;
+  width: 20px;
+  height: 7px;
   border-radius: 999px;
   background: var(--idle);
   box-shadow: var(--glow-idle);
@@ -116,14 +116,15 @@ body {
   transition: background var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
 /* A brighter core sold through an inset highlight: reads as a lit
-   lamp rather than a flat coloured rectangle. */
+   lamp rather than a flat coloured rectangle. Kept tight — the
+   highlight should suggest a lens, not paint a stripe. */
 .led::after {
   content: "";
   position: absolute;
-  inset: 1.5px 3px;
+  inset: 1px 2.5px;
   border-radius: 999px;
   background: linear-gradient(180deg, rgba(255,255,255,.5), rgba(255,255,255,0));
-  opacity: .55;
+  opacity: .5;
   pointer-events: none;
 }
 .led[data-state="up"]   { background: var(--up);   box-shadow: var(--glow-up); }
@@ -132,8 +133,9 @@ body {
 .led[data-state="idle"] { background: var(--idle); box-shadow: none; }
 .led[data-state="idle"]::after { opacity: .2; }
 
-.led.lg { width: 34px; height: 11px; }
-.led.sm { width: 18px; height: 7px; }
+.led.lg { width: 26px; height: 9px; }
+.led.sm { width: 15px; height: 6px; }
+.led.xl { width: 34px; height: 11px; }
 
 /* The state-change flash. Fires once, on transition only. */
 @keyframes ledSettle {
@@ -358,7 +360,85 @@ h1 { font-size: 19px; font-weight: 500; letter-spacing: -.02em; }
 .strip .beats { flex: 1; height: 18px; }
 .strip .num { width: 62px; text-align: right; flex: none; font-size: 12px; }
 
-/* Detail drawer, shared by all three variants. */
+/* ─────────────────────────────────────────────────────────────
+   VARIANT D — THE QUIET WALL
+   Nothing but a light and a name. No charts, no numbers, no
+   chrome. This is the view you leave on a spare screen and stop
+   thinking about — the whole design succeeds if a healthy board
+   is boring to look at and a broken one catches your eye from
+   across the room without ever raising its voice.
+   ───────────────────────────────────────────────────────────── */
+body[data-focus="on"] .sidebar,
+body[data-focus="on"] .topbar { display: none; }
+body[data-focus="on"] .shell { grid-template-columns: 1fr; }
+body[data-focus="on"] .content { padding: 0; }
+
+.quiet-stage {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 72px clamp(24px, 5vw, 72px) 96px;
+}
+
+/* A single line of context at the top, set almost to a whisper.
+   Without it the screen is beautiful and useless: you cannot tell
+   whose infrastructure you are looking at. */
+.quiet-head {
+  display: flex; align-items: baseline; gap: 14px;
+  margin-bottom: 34px;
+  padding-bottom: 0;
+}
+.quiet-title { font-size: 13px; font-weight: 500; letter-spacing: -.005em; color: var(--ink-2); }
+.quiet-meta { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-4); }
+.quiet-meta b { color: var(--down); font-weight: 500; }
+.quiet-clock { margin-left: auto; font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-4); }
+
+.quiet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(226px, 1fr));
+  gap: 10px;
+}
+
+.quiet-card {
+  display: flex; align-items: center; gap: 13px;
+  padding: 17px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 200ms var(--ease), background 200ms var(--ease);
+}
+.quiet-card:hover { border-color: var(--border-hi); background: var(--surface-2); }
+
+/* Trouble is signalled by the border warming up, not by a fill.
+   A wall of coloured cards is noise; a wall of quiet cards with
+   two warm edges is information. */
+.quiet-card[data-state="down"] { border-color: color-mix(in srgb, var(--down) 40%, var(--border)); }
+.quiet-card[data-state="warn"] { border-color: color-mix(in srgb, var(--warn) 34%, var(--border)); }
+
+.quiet-name {
+  font-size: 13.5px; font-weight: 450; letter-spacing: -.005em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.quiet-card[data-state="idle"] .quiet-name { color: var(--ink-3); }
+
+/* Density control, because 12 monitors and 200 monitors are not
+   the same screen. */
+body[data-density="comfortable"] .quiet-card { padding: 21px 20px; }
+body[data-density="compact"] .quiet-grid { grid-template-columns: repeat(auto-fill, minmax(186px, 1fr)); gap: 7px; }
+body[data-density="compact"] .quiet-card { padding: 12px 14px; gap: 10px; }
+body[data-density="compact"] .quiet-name { font-size: 12.5px; }
+
+.focus-exit {
+  position: fixed; top: 18px; right: 18px; z-index: 30;
+  opacity: 0; transition: opacity 200ms var(--ease);
+}
+body[data-focus="on"] .focus-exit { opacity: .25; }
+body[data-focus="on"] .focus-exit:hover { opacity: 1; }
+body:not([data-focus="on"]) .focus-exit { display: none; }
+
+/* Detail drawer, shared by all variants. */
 .scrim {
   position: fixed; inset: 0; background: rgba(0,0,0,.5);
   opacity: 0; pointer-events: none; transition: opacity 260ms var(--ease); z-index: 40;
@@ -411,9 +491,69 @@ h1 { font-size: 19px; font-weight: 500; letter-spacing: -.02em; }
 .switcher button:hover:not([aria-pressed="true"]) { color: var(--ink); }
 .switcher .div { width: 1px; height: 18px; background: var(--border-hi); margin: 0 4px; }
 
-[data-variant="a"] .v-b, [data-variant="a"] .v-c,
-[data-variant="b"] .v-a, [data-variant="b"] .v-c,
-[data-variant="c"] .v-a, [data-variant="c"] .v-b { display: none; }
+[data-variant="a"] .v-b, [data-variant="a"] .v-c, [data-variant="a"] .v-d,
+[data-variant="b"] .v-a, [data-variant="b"] .v-c, [data-variant="b"] .v-d,
+[data-variant="c"] .v-a, [data-variant="c"] .v-b, [data-variant="c"] .v-d,
+[data-variant="d"] .v-a, [data-variant="d"] .v-b, [data-variant="d"] .v-c { display: none; }
+
+/* ─────────────────────────────────────────────────────────────
+   LAYOUT PICKER
+   Not a review scaffold: this is how the setting would actually
+   ship. It sits in the toolbar where a view control belongs, and
+   the choice persists per user.
+   ───────────────────────────────────────────────────────────── */
+.layout-picker { position: relative; }
+.layout-menu {
+  position: absolute; top: calc(100% + 8px); right: 0;
+  width: 260px; padding: 6px;
+  background: var(--surface); border: 1px solid var(--border-hi);
+  border-radius: var(--r-md); box-shadow: 0 12px 32px rgba(0,0,0,.45);
+  opacity: 0; transform: translateY(-4px) scale(.98); pointer-events: none;
+  transition: opacity 160ms var(--ease), transform 160ms var(--ease);
+  z-index: 30;
+}
+[data-theme="light"] .layout-menu { box-shadow: 0 12px 30px rgba(16,24,40,.12); }
+.layout-menu.open { opacity: 1; transform: none; pointer-events: auto; }
+.layout-menu-label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .09em;
+  color: var(--ink-4); font-weight: 500; padding: 8px 10px 6px;
+}
+.layout-opt {
+  display: flex; align-items: flex-start; gap: 11px;
+  width: 100%; text-align: left;
+  padding: 9px 10px; border: 0; border-radius: var(--r-sm);
+  background: none; color: var(--ink); font-family: inherit; cursor: pointer;
+  transition: background 140ms var(--ease);
+}
+.layout-opt:hover { background: var(--surface-2); }
+.layout-opt[aria-pressed="true"] { background: var(--surface-hi); }
+.layout-opt-glyph {
+  width: 26px; height: 20px; flex: none; margin-top: 1px;
+  border: 1px solid var(--border-hi); border-radius: 3px;
+  display: grid; gap: 2px; padding: 3px; align-content: start;
+}
+.layout-opt-glyph i { display: block; background: var(--ink-4); border-radius: 1px; height: 2px; }
+.layout-opt[aria-pressed="true"] .layout-opt-glyph i { background: var(--up); }
+.glyph-b { grid-template-columns: 1fr 1fr; }
+.glyph-b i { height: 5px; }
+.glyph-d { grid-template-columns: 1fr 1fr; }
+.glyph-d i { height: 6px; }
+.layout-opt-name { font-size: 12.5px; font-weight: 450; }
+.layout-opt-desc { font-size: 11px; color: var(--ink-3); margin-top: 2px; line-height: 1.4; }
+.layout-check { margin-left: auto; color: var(--up); opacity: 0; }
+.layout-opt[aria-pressed="true"] .layout-check { opacity: 1; }
+.layout-check svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+.menu-div { height: 1px; background: var(--border); margin: 6px 4px; }
+.layout-toggle-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; font-size: 12.5px; color: var(--ink-2);
+}
+.layout-toggle-row .seg { margin-left: auto; }
+
+body[data-focus="on"] .switcher { opacity: .25; }
+body[data-focus="on"] .switcher:hover { opacity: 1; }
+.switcher { transition: opacity 240ms var(--ease); }
 
 .hint {
   font-size: 11.5px; color: var(--ink-3); margin-bottom: 18px;
@@ -484,6 +624,64 @@ h1 { font-size: 19px; font-weight: 500; letter-spacing: -.02em; }
         <button>7D</button>
         <button>30D</button>
       </div>
+
+      <div class="layout-picker">
+        <button class="icon-btn" id="layoutBtn" title="Layout" aria-haspopup="true" aria-expanded="false">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        </button>
+
+        <div class="layout-menu" id="layoutMenu" role="menu">
+          <div class="layout-menu-label">Dashboard layout</div>
+
+          <button class="layout-opt" data-v="a" aria-pressed="true" role="menuitemradio">
+            <span class="layout-opt-glyph"><i></i><i></i><i></i><i></i></span>
+            <span>
+              <span class="layout-opt-name">Rows</span>
+              <span class="layout-opt-desc">Everything on one line. Best for scanning and clicking through.</span>
+            </span>
+            <span class="layout-check"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span>
+          </button>
+
+          <button class="layout-opt" data-v="b" role="menuitemradio">
+            <span class="layout-opt-glyph glyph-b"><i></i><i></i><i></i><i></i></span>
+            <span>
+              <span class="layout-opt-name">Cards</span>
+              <span class="layout-opt-desc">Tiles with history and latency. Readable from a distance.</span>
+            </span>
+            <span class="layout-check"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span>
+          </button>
+
+          <button class="layout-opt" data-v="c" role="menuitemradio">
+            <span class="layout-opt-glyph"><i></i><i></i><i></i><i></i><i></i></span>
+            <span>
+              <span class="layout-opt-name">Compact</span>
+              <span class="layout-opt-desc">Grouped, one dense line each. For a hundred monitors or more.</span>
+            </span>
+            <span class="layout-check"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span>
+          </button>
+
+          <button class="layout-opt" data-v="d" role="menuitemradio">
+            <span class="layout-opt-glyph glyph-d"><i></i><i></i><i></i><i></i></span>
+            <span>
+              <span class="layout-opt-name">Status wall</span>
+              <span class="layout-opt-desc">Just a light and a name. For the screen you leave on.</span>
+            </span>
+            <span class="layout-check"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span>
+          </button>
+
+          <div class="menu-div"></div>
+
+          <div class="layout-toggle-row">
+            Density
+            <div class="seg" id="densitySeg">
+              <button data-d="compact">S</button>
+              <button data-d="default" aria-pressed="true">M</button>
+              <button data-d="comfortable">L</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <button class="icon-btn" id="themeBtn" title="Toggle theme">
         <svg viewBox="0 0 24 24" id="themeIcon"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
       </button>
@@ -493,25 +691,41 @@ h1 { font-size: 19px; font-weight: 500; letter-spacing: -.02em; }
 
       <!-- ── A: THE BOARD ───────────────────────────────── -->
       <div class="v-a">
-        <p class="hint"><b>Direction A — The Board.</b> One row per monitor, sorted so anything broken is already at the top. The row is the unit: name, live heartbeat, latency, uptime. Made for a laptop where you scan, then click through.</p>
+        <p class="hint"><b>Rows.</b> One row per monitor, sorted so anything broken is already at the top. The row is the unit: name, live heartbeat, latency, uptime. Made for a laptop where you scan, then click through.</p>
         <div class="board" id="boardRows"></div>
       </div>
 
       <!-- ── B: THE WALL ────────────────────────────────── -->
       <div class="v-b">
-        <p class="hint"><b>Direction B — The Wall.</b> For the second screen on your desk. Bigger LEDs, fewer words, status readable from across the room. Cards with a problem take a coloured edge; healthy ones stay quiet.</p>
+        <p class="hint"><b>Cards.</b> For the second screen on your desk. Bigger LEDs, fewer words, status readable from across the room. Cards with a problem take a coloured edge; healthy ones stay quiet.</p>
         <div class="wall" id="wallTiles"></div>
       </div>
 
       <!-- ── C: THE STRIP ───────────────────────────────── -->
       <div class="v-c">
-        <p class="hint"><b>Direction C — The Strip.</b> Grouped by client or environment, one compressed line each. Built for 100+ monitors where the only question is whether anything is red. Group header carries a row of LEDs so a collapsed group still tells you.</p>
+        <p class="hint"><b>Compact.</b> Grouped by client or environment, one compressed line each. Built for 100+ monitors where the only question is whether anything is red. Group header carries a row of LEDs so a collapsed group still tells you.</p>
         <div class="groups" id="stripGroups"></div>
+      </div>
+
+      <!-- ── D: THE QUIET WALL ──────────────────────────── -->
+      <div class="v-d">
+        <div class="quiet-stage">
+          <div class="quiet-head">
+            <span class="quiet-title">acme.co</span>
+            <span class="quiet-meta" id="quietMeta">14 monitors · <b>2 down</b></span>
+            <span class="quiet-clock" id="quietClock">—</span>
+          </div>
+          <div class="quiet-grid" id="quietGrid"></div>
+        </div>
       </div>
 
     </div>
   </main>
 </div>
+
+<button class="icon-btn focus-exit" id="focusExit" title="Exit full screen (Esc)">
+  <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+</button>
 
 <div class="scrim" id="scrim"></div>
 <aside class="drawer" id="drawer">
@@ -540,9 +754,10 @@ h1 { font-size: 19px; font-weight: 500; letter-spacing: -.02em; }
 </aside>
 
 <nav class="switcher">
-  <button data-v="a" aria-pressed="true">The Board</button>
-  <button data-v="b">The Wall</button>
-  <button data-v="c">The Strip</button>
+  <button data-v="a" aria-pressed="true">Rows</button>
+  <button data-v="b">Cards</button>
+  <button data-v="c">Compact</button>
+  <button data-v="d">Status wall</button>
   <span class="div"></span>
   <button id="simulate">Simulate outage</button>
 </nav>
@@ -674,6 +889,29 @@ document.getElementById("stripGroups").innerHTML = groups.map(g => {
   </section>`;
 }).join("");
 
+/* ── D ── */
+document.getElementById("quietGrid").innerHTML = sorted().map(m => `
+  <div class="quiet-card" data-id="${m.id}" data-state="${m.state}">
+    <span class="led" data-state="${m.state}"></span>
+    <span class="quiet-name">${m.name}</span>
+  </div>`).join("");
+
+const down = MONITORS.filter(m => m.state === "down").length;
+const degraded = MONITORS.filter(m => m.state === "warn").length;
+document.getElementById("quietMeta").innerHTML =
+  `${MONITORS.length} monitors` +
+  (down ? ` · <b>${down} down</b>` : degraded ? ` · ${degraded} degraded` : " · all healthy");
+
+/* A clock earns its place here: on a screen that rarely changes,
+   it is the proof that you are looking at something live rather
+   than a page that quietly died an hour ago. */
+function tickClock() {
+  const el = document.getElementById("quietClock");
+  if (el) el.textContent = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+tickClock();
+setInterval(tickClock, 1000);
+
 /* ── Drawer ── */
 const scrim = document.getElementById("scrim"), drawer = document.getElementById("drawer");
 function openDrawer(id) {
@@ -717,14 +955,57 @@ scrim.addEventListener("click", closeDrawer);
 document.getElementById("dClose").addEventListener("click", closeDrawer);
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeDrawer(); });
 
-/* ── Variant + theme ── */
-document.querySelectorAll(".switcher [data-v]").forEach(b => {
-  b.addEventListener("click", () => {
-    document.querySelectorAll(".switcher [data-v]").forEach(x => x.setAttribute("aria-pressed", "false"));
-    b.setAttribute("aria-pressed", "true");
-    document.documentElement.dataset.variant = b.dataset.v;
-    localStorage.setItem("sg-variant", b.dataset.v);
+/* ── Layout picker: the setting as it would actually ship ── */
+const layoutBtn = document.getElementById("layoutBtn");
+const layoutMenu = document.getElementById("layoutMenu");
+
+function setLayout(v) {
+  document.documentElement.dataset.variant = v;
+  // "Status wall" is the one layout that hides the chrome: its whole
+  // reason to exist is a screen with nothing on it but state.
+  document.body.dataset.focus = v === "d" ? "on" : "off";
+
+  document.querySelectorAll(".layout-opt").forEach(o =>
+    o.setAttribute("aria-pressed", String(o.dataset.v === v)));
+  document.querySelectorAll(".switcher [data-v]").forEach(o =>
+    o.setAttribute("aria-pressed", String(o.dataset.v === v)));
+
+  localStorage.setItem("sg-variant", v);
+}
+
+layoutBtn.addEventListener("click", e => {
+  e.stopPropagation();
+  const open = layoutMenu.classList.toggle("open");
+  layoutBtn.setAttribute("aria-expanded", String(open));
+});
+document.addEventListener("click", e => {
+  if (!layoutMenu.contains(e.target) && e.target !== layoutBtn) {
+    layoutMenu.classList.remove("open");
+    layoutBtn.setAttribute("aria-expanded", "false");
+  }
+});
+document.querySelectorAll(".layout-opt").forEach(opt => {
+  opt.addEventListener("click", () => {
+    setLayout(opt.dataset.v);
+    layoutMenu.classList.remove("open");
+    layoutBtn.setAttribute("aria-expanded", "false");
   });
+});
+
+document.querySelectorAll("#densitySeg button").forEach(b => {
+  b.addEventListener("click", () => {
+    document.querySelectorAll("#densitySeg button").forEach(x => x.setAttribute("aria-pressed", "false"));
+    b.setAttribute("aria-pressed", "true");
+    document.body.dataset.density = b.dataset.d;
+    localStorage.setItem("sg-density", b.dataset.d);
+  });
+});
+
+document.getElementById("focusExit").addEventListener("click", () => setLayout("a"));
+
+/* Review scaffold, not part of the design. */
+document.querySelectorAll(".switcher [data-v]").forEach(b => {
+  b.addEventListener("click", () => setLayout(b.dataset.v));
 });
 
 const sun = '<path d="M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/>';
@@ -755,9 +1036,18 @@ document.getElementById("simulate").addEventListener("click", () => {
 
 /* Restore preferences. */
 const savedV = localStorage.getItem("sg-variant");
-if (savedV) document.querySelector(`.switcher [data-v="${savedV}"]`)?.click();
+if (savedV) setLayout(savedV);
+const savedD = localStorage.getItem("sg-density");
+if (savedD) document.querySelector(`#densitySeg [data-d="${savedD}"]`)?.click();
 const savedT = localStorage.getItem("sg-theme");
 if (savedT === "light") document.getElementById("themeBtn").click();
+
+/* Esc leaves the status wall as well as closing the drawer. */
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && document.body.dataset.focus === "on" && !drawer.classList.contains("open")) {
+    setLayout("a");
+  }
+});
 </script>
 </body>
 </html>
