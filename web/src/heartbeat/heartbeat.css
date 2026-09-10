@@ -1,0 +1,82 @@
+/*
+ * Heartbeat bar styling. Colour lives in tokens.css; this file only maps a
+ * status onto a token and owns the entry animation.
+ */
+
+.hb-track {
+  position: relative;
+  display: block;
+  width: 100%;
+  border-radius: var(--r-sm);
+}
+
+.hb-bar {
+  transition: fill var(--dur-hover) var(--ease), opacity var(--dur-hover) var(--ease);
+}
+
+.hb-bar--up { fill: var(--up); }
+.hb-bar--down { fill: var(--down); }
+.hb-bar--unknown { fill: var(--warn); }
+.hb-bar--empty { fill: var(--idle-dim); }
+
+/* The hovered or keyboard-focused column lifts out of the row without moving:
+   a colour shift only, because shifting geometry under the pointer makes the
+   bar you are aiming at run away. */
+.hb-bar--active { fill: var(--ink); }
+
+/*
+ * A new check arrives (DESIGN.md §5): the bar enters at 35% height, overshoots
+ * a little and settles. Scaling from the bottom keeps the baseline still, so
+ * the row does not appear to jump. 520ms total; the flare rides along.
+ */
+@keyframes hb-enter {
+  0% { transform: scaleY(.35); opacity: .55; }
+  62% { transform: scaleY(1.06); opacity: 1; }
+  100% { transform: scaleY(1); opacity: 1; }
+}
+
+.hb-bar--new {
+  transform-origin: bottom;
+  animation: hb-enter var(--dur-attention) var(--ease);
+}
+
+@keyframes hb-flare {
+  0% { opacity: .5; }
+  100% { opacity: 0; }
+}
+
+.hb-flare {
+  transform-origin: bottom;
+  animation: hb-flare 520ms var(--ease) forwards;
+  fill: var(--ink);
+  pointer-events: none;
+}
+
+.hb-tooltip {
+  position: absolute;
+  bottom: calc(100% + var(--space-2));
+  z-index: 10;
+  min-width: 148px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-hi);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-card);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* Screen-reader-only: the data table that carries the real content. Clipped
+   rather than display:none, which would remove it from the accessibility tree
+   along with the pixels. */
+.hb-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
