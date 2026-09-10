@@ -224,6 +224,14 @@ Manual checks are limited to one per monitor per five seconds.
 Acknowledging is not resolving: it stops repeat notifications without claiming
 the problem is fixed.
 
+That listing is the monitor and incident surface only. The complete API —
+authentication, users, API tokens, notification channels, uptime windows and
+the live event stream — is specified in [`docs/openapi.yaml`](docs/openapi.yaml),
+an OpenAPI 3.1 document you can feed to a client generator or an editor such as
+Swagger UI. It is checked against the server's own route table on every test
+run, so a route cannot be added, removed or change privilege level without the
+specification following it.
+
 ## Contributing
 
 Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) first — every

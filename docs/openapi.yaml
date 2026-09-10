@@ -1,0 +1,2347 @@
+openapi: 3.1.0
+info:
+  title: SubGlance API
+  version: v1
+  description: |
+    The HTTP API of SubGlance, a self-hosted uptime monitor.
+
+    The web UI is a client of this API and has no private endpoints: anything
+    the dashboard can do, a script can do (product principle 4).
+
+    Authentication accepts either a browser session cookie or a bearer API
+    token; both resolve to the same user with the same rights. Routes are
+    grouped by what they require — `public`, `read` (any authenticated user,
+    including viewers), `write` (editor or admin) and `admin`. Every operation
+    records its level in the `x-subglance-access` extension, which is checked
+    against the server's route table by an automated drift test.
+
+    Timestamps are RFC 3339 / ISO 8601 in UTC. Errors always share one shape:
+    a JSON object with a single `error` string.
+  license:
+    name: AGPL-3.0-only
+    identifier: AGPL-3.0-only
+servers:
+  - url: /
+    description: The SubGlance instance itself; the API is served from its own origin.
+tags:
+  - name: Health
+    description: Liveness and readiness probes for orchestrators.
+  - name: Setup
+    description: First-run bootstrap of the initial administrator account.
+  - name: Auth
+    description: Sessions, the current user and password changes.
+  - name: Monitors
+    description: Monitor definitions and their current state.
+  - name: Heartbeats
+    description: Individual check results recorded for a monitor.
+  - name: Uptime
+    description: Availability statistics over time windows.
+  - name: Incidents
+    description: Confirmed and unconfirmed outages, and their acknowledgement.
+  - name: Channels
+    description: Notification targets and their assignment to monitors.
+  - name: Stream
+    description: The live Server-Sent Events feed.
+  - name: Tokens
+    description: API tokens for scripts and CI.
+  - name: Users
+    description: Account administration.
+security:
+  - sessionCookie: []
+  - bearerToken: []
+paths:
+  /health:
+    get:
+      tags: [Health]
+      operationId: getHealth
+      summary: Liveness probe
+      description: |
+        Reports whether the SubGlance process itself is alive. Deliberately
+        dependency-free: it answers even when the database is unhappy, because
+        an orchestrator uses it to decide whether to restart the process.
+        Dependency health lives in `/api/v1/ready` instead.
+
+        This is an unversioned alias of `GET /api/v1/health`, kept because most
+        orchestrators are configured to probe `/health` by convention.
+      security: []
+      responses:
+        '200':
+          description: The process is running.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+      x-subglance-access: public
+  /api/v1/health:
+    get:
+      tags: [Health]
+      operationId: getApiHealth
+      summary: Liveness probe (versioned path)
+      description: |
+        Identical to `GET /health`. Answers 200 as long as the process is
+        serving, regardless of the state of the database.
+      security: []
+      responses:
+        '200':
+          description: The process is running.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+      x-subglance-access: public
+  /api/v1/ready:
+    get:
+      tags: [Health]
+      operationId: getReady
+      summary: Readiness probe
+      description: |
+        Reports whether SubGlance can actually serve traffic, which unlike
+        `/health` means pinging the database (with a 2 second timeout).
+
+        The split matters operationally: `/health` answering 200 while `/ready`
+        answers 503 tells an orchestrator "leave this process alone, but send
+        it no traffic yet" — restarting it would not fix a database that is
+        still coming up.
+      security: []
+      responses:
+        '200':
+          description: The database responded; the instance is ready.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadyResponse'
+              example:
+                status: ready
+                database: up
+        '503':
+          description: |
+            No database is configured, or the ping failed. The `error` field
+            carries the underlying reason.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadyResponse'
+              example:
+                status: unavailable
+                database: down
+                error: 'context deadline exceeded'
+      x-subglance-access: public
+  /api/v1/setup:
+    get:
+      tags: [Setup]
+      operationId: getSetupStatus
+      summary: Report whether first-run setup is still needed
+      description: |
+        Unauthenticated by necessity: the UI has to know which screen to show
+        before anyone can log in. `setup_required` is true only while the
+        instance has no users at all.
+      security: []
+      responses:
+        '200':
+          description: The current setup state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetupStatus'
+        '500':
+          description: The user count could not be determined.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: public
+    post:
+      tags: [Setup]
+      operationId: completeSetup
+      summary: Create the first administrator
+      description: |
+        Creates the initial admin account and signs it in by setting the
+        session cookie.
+
+        There is no default password and no seeded account, so an instance
+        exposed before setup has no credentials to guess. Once any user exists
+        this endpoint is permanently closed and answers 409.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Credentials'
+      responses:
+        '201':
+          description: |
+            The administrator was created and a session cookie was issued via
+            `Set-Cookie`.
+          headers:
+            Set-Cookie:
+              description: The new session cookie.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: |
+            Malformed or unknown-field JSON, an email address without an `@`,
+            or a password that fails the strength rules.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Setup has already been completed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: setup has already been completed
+        '500':
+          description: The account could not be created, or was created but sign-in failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: public
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: Exchange credentials for a session cookie
+      description: |
+        On success a session cookie is set and the authenticated user is
+        returned.
+
+        Failed attempts are rate limited on both the email address and the
+        client IP — ten failures per fifteen minutes each. Email alone would
+        let an attacker spray many addresses from one host; IP alone would let
+        a botnet grind a single account. A successful login clears both
+        counters. An unknown address and a wrong password take the same time
+        and return the same message, so responses never reveal which accounts
+        exist.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Credentials'
+      responses:
+        '200':
+          description: Signed in; a session cookie was issued.
+          headers:
+            Set-Cookie:
+              description: The new session cookie.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: The request body was not valid JSON, or carried unknown fields.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Invalid email or password.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: invalid email or password
+        '429':
+          description: |
+            Too many failed attempts for this email address or IP within the
+            last fifteen minutes.
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying.
+              schema:
+                type: integer
+                example: 900
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: The session could not be created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: public
+  /api/v1/auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      summary: End the current session
+      description: |
+        Deletes the server-side session, if a session cookie was presented, and
+        clears the cookie. Public rather than authenticated on purpose: logging
+        out must succeed even when the session has already expired, so it is
+        never possible to be stuck holding a stale cookie.
+      security: []
+      responses:
+        '204':
+          description: Signed out; the session cookie was cleared.
+          headers:
+            Set-Cookie:
+              description: The expired session cookie.
+              schema:
+                type: string
+      x-subglance-access: public
+  /api/v1/auth/me:
+    get:
+      tags: [Auth]
+      operationId: getCurrentUser
+      summary: Return the authenticated user
+      description: |
+        Resolves whichever credential was presented — session cookie or bearer
+        token — to the account behind it, including its role. Clients use this
+        to decide which actions to offer.
+      responses:
+        '200':
+          description: The authenticated user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+      x-subglance-access: read
+  /api/v1/auth/password:
+    post:
+      tags: [Auth]
+      operationId: changePassword
+      summary: Change the caller's own password
+      description: |
+        Requires the current password even though the caller is already
+        authenticated: that is what stops an unattended browser from becoming a
+        permanent account takeover.
+
+        A successful change invalidates every other session for the account —
+        the whole point of changing a password after a suspected compromise —
+        and issues a fresh session cookie for the caller so they are not logged
+        out of the tab they are using.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '204':
+          description: The password was changed and all other sessions were revoked.
+          headers:
+            Set-Cookie:
+              description: A freshly issued session cookie for the caller.
+              schema:
+                type: string
+        '400':
+          description: Malformed JSON, or the new password fails the strength rules.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Not authenticated, or the supplied current password is incorrect.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: current password is incorrect
+        '500':
+          description: The password could not be stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: read
+  /api/v1/monitors:
+    get:
+      tags: [Monitors]
+      operationId: listMonitors
+      summary: List all monitors with their current state
+      description: |
+        Each monitor is enriched with the result of its latest heartbeat, its
+        open incident (if any) and its 24-hour uptime, so a dashboard can be
+        drawn from a single request.
+
+        `status` comes from the incident record rather than the last heartbeat:
+        a single failed check is `pending` until the monitor's retry threshold
+        is crossed. Deriving it from the heartbeat alone would put the
+        dashboard and the notifications into disagreement.
+      responses:
+        '200':
+          description: Every monitor, in creation order.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [monitors]
+                properties:
+                  monitors:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Monitor'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: The monitors could not be listed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: read
+    post:
+      tags: [Monitors]
+      operationId: createMonitor
+      summary: Create a monitor
+      description: |
+        Unknown JSON fields are rejected rather than ignored. Silently dropping
+        them is a trap: a client that sends `interval_seconds` instead of
+        `interval_s` would get a 201, believe it configured a fast check and
+        quietly receive the default instead.
+
+        The target is validated against the check type at creation time, so a
+        typo is an error while the user is still looking at the form rather
+        than a monitor that fails forever.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMonitorRequest'
+      responses:
+        '201':
+          description: The monitor was created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Monitor'
+        '400':
+          description: |
+            Malformed or unknown-field JSON, a missing name/type/target, an
+            out-of-range interval or timeout, a target that cannot work for the
+            chosen type, or a rejection from the storage layer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: 'a ping monitor cannot use a port; use a tcp monitor instead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      x-subglance-access: write
+  /api/v1/monitors/{id}:
+    parameters:
+      - $ref: '#/components/parameters/MonitorId'
+    get:
+      tags: [Monitors]
+      operationId: getMonitor
+      summary: Fetch one monitor with its current state
+      description: Same enrichment as the list endpoint, for a single monitor.
+      responses:
+        '200':
+          description: The monitor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Monitor'
+        '400':
+          $ref: '#/components/responses/InvalidId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          description: The monitor could not be loaded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: read
+    patch:
+      tags: [Monitors]
+      operationId: patchMonitor
+      summary: Partially update a monitor
+      description: |
+        Every field is optional, and "not sent" is distinguished from "sent as
+        the zero value". That distinction is the whole point of PATCH: with
+        plain values, `{"name":"x"}` would also read as `interval_s: 0` and
+        `enabled: false`, so a rename would silently pause the monitor and
+        reset its schedule.
+
+        Validation runs against the merged monitor, not the request: changing
+        only the type can invalidate a target that was never touched, and that
+        combination is rejected just as firmly as a bad create.
+
+        Unlike create, an explicit `0` for `interval_s`, `timeout_s` or
+        `ssl_warn_days` is an error rather than "use the default" — the client
+        asked for something impossible on a monitor that already works.
+
+        Updating preserves heartbeats, uptime history and any open incident;
+        correcting a typo in a URL should not erase the record of last week's
+        outage.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchMonitorRequest'
+      responses:
+        '200':
+          description: The updated monitor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Monitor'
+        '400':
+          description: |
+            An invalid id, malformed or unknown-field JSON, an empty name or
+            target, an out-of-range value, an unknown type, HTTP method or
+            keyword mode, or a rejection from the storage layer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: |
+            No such monitor — either at read time, or because it was deleted
+            between the read and the write.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: The monitor could not be loaded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: write
+    delete:
+      tags: [Monitors]
+      operationId: deleteMonitor
+      summary: Delete a monitor
+      description: |
+        Removes the monitor and, by cascade, its heartbeats, incidents and
+        channel assignments. The manual-check cooldown for the id is forgotten
+        so the in-memory table cannot grow without bound.
+
+        Deleting an id that does not exist is not an error: the endpoint is
+        idempotent.
+      responses:
+        '204':
+          description: The monitor no longer exists.
+        '400':
+          $ref: '#/components/responses/InvalidId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          description: The monitor could not be deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: write
+  /api/v1/monitors/{id}/heartbeats:
+    parameters:
+      - $ref: '#/components/parameters/MonitorId'
+    get:
+      tags: [Heartbeats]
+      operationId: listHeartbeats
+      summary: List a monitor's recent check results
+      description: |
+        Newest first. This backs the dashboard's beat bar, which is the single
+        most frequent read in the product.
+
+        Note that an unknown monitor id yields an empty list rather than a 404;
+        the handler does not pre-check existence here.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: How many heartbeats to return.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+      responses:
+        '200':
+          description: The requested heartbeats.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [heartbeats]
+                properties:
+                  heartbeats:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Heartbeat'
+        '400':
+          description: An invalid monitor id, or a limit outside 1–1000.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: limit must be between 1 and 1000
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: The heartbeats could not be loaded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: read
+  /api/v1/monitors/{id}/uptime:
+    parameters:
+      - $ref: '#/components/parameters/MonitorId'
+    get:
+      tags: [Uptime]
+      operationId: getMonitorUptime
+      summary: Availability statistics for a monitor
+      description: |
+        Without `window`, the three periods a dashboard almost always shows at
+        once — 24h, 7d and 30d — are returned together, keeping the common case
+        to a single round trip.
+
+        `uptime` is null rather than 0 when the window contains no samples:
+        "no data yet" and "0% up" are different facts, and collapsing them
+        would make a brand new monitor look like a total outage.
+
+        The monitor's existence is confirmed first, so a typo in a script gets
+        a 404 instead of a tidy zero-sample answer that reads as "no data yet".
+      parameters:
+        - name: window
+          in: query
+          required: false
+          description: |
+            A single window instead of the three defaults. Go duration syntax
+            plus a `d` suffix for whole days (`7d`); mixed forms such as
+            `7d12h` are not accepted. Must be between 1m and 90d.
+          schema:
+            type: string
+            examples: ['24h', '7d', '30m']
+      responses:
+        '200':
+          description: One entry per requested window.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UptimeResponse'
+        '400':
+          description: An invalid monitor id, or an unparseable/out-of-range window.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: window must be between 1m and 90d
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          description: The monitor could not be loaded or the uptime could not be computed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: read
+  /api/v1/monitors/{id}/incidents:
+    parameters:
+      - $ref: '#/components/parameters/MonitorId'
+    get:
+      tags: [Incidents]
+      operationId: listMonitorIncidents
+      summary: Incident history for one monitor
+      description: |
+        Returns both resolved and open incidents, newest first. An unknown
+        monitor id yields an empty list rather than a 404.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: How many incidents to return.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 50
+      responses:
+        '200':
+          description: The incident history.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentList'
+        '400':
+          description: An invalid monitor id, or a limit outside 1–500.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: The incidents could not be listed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: read
+  /api/v1/monitors/{id}/channels:
+    parameters:
+      - $ref: '#/components/parameters/MonitorId'
+    get:
+      tags: [Channels]
+      operationId: listMonitorChannels
+      summary: List the channels a monitor alerts through
+      description: |
+        Secret config values are masked exactly as on the channel endpoints.
+      responses:
+        '200':
+          description: The channels assigned to this monitor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelList'
+        '400':
+          $ref: '#/components/responses/InvalidId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          description: The channels could not be listed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: read
+    put:
+      tags: [Channels]
+      operationId: setMonitorChannels
+      summary: Replace a monitor's channel assignments
+      description: |
+        The supplied list becomes the complete set of channels for the monitor;
+        anything not listed is unassigned. Sending an empty array detaches all
+        of them. The updated set is returned, with secrets masked.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetMonitorChannelsRequest'
+      responses:
+        '200':
+          description: The monitor's channels after the update.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelList'
+        '400':
+          description: |
+            An invalid monitor id, malformed or unknown-field JSON, or a
+            channel id that does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          description: The assignment could not be stored or read back.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: write
+  /api/v1/monitors/{id}/check:
+    parameters:
+      - $ref: '#/components/parameters/MonitorId'
+    post:
+      tags: [Monitors]
+      operationId: checkMonitorNow
+      summary: Run one check immediately
+      description: |
+        Exists because otherwise the only way to find out whether a fix worked
+        is to wait out the interval, which for a fifteen-minute check makes the
+        feedback loop useless precisely when someone is mid-incident.
+
+        For an **enabled** monitor the result goes through the ordinary
+        recording path — heartbeat, state engine, incident bookkeeping, live
+        stream — so a monitor you have just fixed goes green now instead of at
+        the next tick. It is a real observation of the target, so counting it
+        toward uptime is honest.
+
+        For a **paused** monitor nothing is recorded and `recorded` is false.
+        A paused monitor is one the monitor promised not to watch; writing heartbeats
+        into that gap would misrepresent an unmonitored period as a monitored
+        one. The probe still runs and the result is still returned, because "is
+        it back yet?" is exactly what someone asks before un-pausing.
+
+        Rate limited to one manual check per monitor per five seconds, so a
+        held-down button cannot turn one authenticated click into unbounded
+        outbound traffic.
+
+        A target that is down is a 200 with `ok: false`, not an error status.
+      responses:
+        '200':
+          description: The check ran; `ok` says what it found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckResult'
+        '400':
+          $ref: '#/components/responses/InvalidId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          description: A check for this monitor ran within the last five seconds.
+          headers:
+            Retry-After:
+              description: Whole seconds to wait, rounded up and never below 1.
+              schema:
+                type: integer
+                minimum: 1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: The monitor could not be loaded, or the probe could not be run at all.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: |
+            This instance runs without a checker attached, so manual checks are
+            unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: write
+  /api/v1/monitors/{id}/pause:
+    parameters:
+      - $ref: '#/components/parameters/MonitorId'
+    post:
+      tags: [Monitors]
+      operationId: pauseMonitor
+      summary: Pause a monitor
+      description: |
+        Sets `enabled` to false. The monitor keeps its history but is no longer
+        scheduled, and no heartbeats are recorded for the paused period.
+        Returns the monitor in its new state.
+      responses:
+        '200':
+          description: The paused monitor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Monitor'
+        '400':
+          $ref: '#/components/responses/InvalidId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          description: The monitor could not be updated or reloaded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: write
+  /api/v1/monitors/{id}/resume:
+    parameters:
+      - $ref: '#/components/parameters/MonitorId'
+    post:
+      tags: [Monitors]
+      operationId: resumeMonitor
+      summary: Resume a paused monitor
+      description: |
+        Sets `enabled` to true and puts the monitor back on the schedule.
+        Returns the monitor in its new state.
+      responses:
+        '200':
+          description: The resumed monitor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Monitor'
+        '400':
+          $ref: '#/components/responses/InvalidId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          description: The monitor could not be updated or reloaded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: write
+  /api/v1/incidents:
+    get:
+      tags: [Incidents]
+      operationId: listOpenIncidents
+      summary: List every unresolved incident
+      description: |
+        Answers "what is broken right now" — the query the dashboard's landing
+        view is built around. Includes incidents that have started but are not
+        yet confirmed, so `confirmed` should be checked before treating one as
+        a real outage.
+      responses:
+        '200':
+          description: All open incidents.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: The incidents could not be listed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: read
+  /api/v1/incidents/{id}/ack:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: The incident's numeric id.
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+        example: 7
+    post:
+      tags: [Incidents]
+      operationId: ackIncident
+      summary: Acknowledge an incident
+      description: |
+        Acknowledging says "seen, working on it". It stops repeat
+        notifications without claiming the problem is solved — the honest
+        middle state between alerting and resolving. Resolution happens on its
+        own when the monitor recovers.
+      responses:
+        '204':
+          description: The incident is acknowledged.
+        '400':
+          description: The incident id was not a positive integer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: invalid incident id
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: No such incident.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: incident not found
+        '500':
+          description: The acknowledgement could not be stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: write
+  /api/v1/channels:
+    get:
+      tags: [Channels]
+      operationId: listChannels
+      summary: List notification channels
+      description: |
+        Secret-looking config values (`url`, `token`, `password`, `bot_token`)
+        are masked as `****` plus the last four characters. A webhook URL is
+        itself the credential for Slack and Discord, so returning it verbatim
+        would let any viewer exfiltrate it. The tail is shown rather than the
+        head because that is the part that differs between two Slack webhooks.
+      responses:
+        '200':
+          description: Every channel, with secrets masked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: The channels could not be listed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: read
+    post:
+      tags: [Channels]
+      operationId: createChannel
+      summary: Create a notification channel
+      description: |
+        Each type has one config field it cannot work without: `url` for
+        webhook, discord and slack; `bot_token` for telegram; `to` for email.
+        Types are validated in Go rather than left to the database CHECK
+        constraint, so an unknown type is a 400 and not a 500.
+
+        A `url` target is fetched on the user's behalf, so its scheme and host
+        are checked here as well as at delivery time: rejecting a bad scheme
+        now turns a silently, permanently failing channel into an error at the
+        moment the mistake is made.
+
+        The response masks secrets, so the full value is only ever seen by the
+        client that sent it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChannelRequest'
+      responses:
+        '201':
+          description: The channel was created; secrets are masked in the response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Channel'
+        '400':
+          description: |
+            Malformed or unknown-field JSON, a missing or over-long name, an
+            unknown type, a missing required config key, a config value that is
+            not a valid http/https URL, or over-long config keys or values.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: config.url is required for a slack channel
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          description: The channel could not be stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: write
+  /api/v1/channels/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ChannelId'
+    get:
+      tags: [Channels]
+      operationId: getChannel
+      summary: Fetch one notification channel
+      description: Secret config values are masked; see `listChannels`.
+      responses:
+        '200':
+          description: The channel, with secrets masked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Channel'
+        '400':
+          $ref: '#/components/responses/InvalidId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/ChannelNotFound'
+        '500':
+          description: The channel could not be loaded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: read
+    put:
+      tags: [Channels]
+      operationId: updateChannel
+      summary: Replace a notification channel
+      description: |
+        A PUT rather than a PATCH: a channel is a small, self-contained
+        document, and a partial config merge would leave no way to remove a
+        key. Sending the whole object each time keeps deletion expressible.
+
+        A client that read a channel and writes it back sends the *masked*
+        secret, because that is all it ever saw. A secret value that still
+        equals its own mask is therefore treated as "unchanged" and the stored
+        credential is preserved — otherwise every round trip would silently
+        destroy it.
+
+        `enabled` is left as-is when the field is omitted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChannelRequest'
+      responses:
+        '200':
+          description: The updated channel, with secrets masked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Channel'
+        '400':
+          description: An invalid id, malformed JSON, or a channel that fails validation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ChannelNotFound'
+        '500':
+          description: The channel could not be loaded or stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: write
+    delete:
+      tags: [Channels]
+      operationId: deleteChannel
+      summary: Delete a notification channel
+      description: |
+        Also removes the channel from every monitor it was assigned to, by
+        cascade. Unlike monitor deletion this is not idempotent: deleting an
+        unknown id returns 404.
+      responses:
+        '204':
+          description: The channel no longer exists.
+        '400':
+          $ref: '#/components/responses/InvalidId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ChannelNotFound'
+        '500':
+          description: The channel could not be deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: write
+  /api/v1/stream:
+    get:
+      tags: [Stream]
+      operationId: streamEvents
+      summary: Live event stream (Server-Sent Events)
+      description: |
+        A long-lived `text/event-stream` connection carrying check results,
+        status changes and incident transitions as they happen.
+
+        SSE rather than WebSockets because the traffic is one-directional: the
+        server tells the browser what happened and the browser never needs to
+        answer on the same channel. SSE also reconnects on its own and survives
+        proxies that mangle WebSocket upgrades.
+
+        The stream sits behind the same authentication as everything else — an
+        unguarded stream would leak every monitor name and outage to anyone who
+        can reach the port — but it is a *read*: watching is all it does.
+
+        Frame format:
+
+        ```
+        retry: 3000
+
+        event: hello
+        data: {"seq":42,"gap":false,"server_time":"2026-01-01T12:00:00Z"}
+
+        id: 43
+        event: heartbeat
+        data: {"kind":"heartbeat","monitor_id":1,"at":"...","data":{...},"seq":43}
+
+        : ping
+        ```
+
+        - A `retry:` line is sent first, fixing the browser's reconnect delay
+          at 3000 ms instead of leaving it to per-browser defaults.
+        - A `hello` event then states the sequence number the stream starts at.
+          A client reconnecting with a `Last-Event-ID` older than that is told
+          `gap: true` and how many events it `missed`, so it knows to re-fetch
+          rather than assume its view is current.
+        - Each subsequent frame carries `id:` (the bus sequence number, usable
+          as `Last-Event-ID`) and `event:` set to the event kind — `heartbeat`,
+          `status` or `incident`.
+        - A `lagged` event is emitted when this subscriber's buffer overflowed
+          and events were dropped. Dropping is deliberate — a browser tab on a
+          bad connection must never stall the scheduler — but it is never
+          silent.
+        - `: ping` comment lines every 20 seconds keep proxies (nginx defaults
+          to a 60 s idle timeout) from reaping the connection and let a client
+          tell "nothing happened" apart from "this socket is dead".
+      parameters:
+        - name: last_event_id
+          in: query
+          required: false
+          description: |
+            Resume point, as a fallback for clients that cannot set request
+            headers on an `EventSource` — browsers cannot. The `Last-Event-ID`
+            header takes precedence when present.
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+        - name: Last-Event-ID
+          in: header
+          required: false
+          description: The standard SSE resume header, sent automatically on reconnect.
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+      responses:
+        '200':
+          description: The stream is open and will remain so until either side closes it.
+          headers:
+            Cache-Control:
+              description: Always `no-cache, no-transform`.
+              schema:
+                type: string
+            X-Accel-Buffering:
+              description: Always `no`, to defeat nginx response buffering.
+              schema:
+                type: string
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: A sequence of SSE frames; see the endpoint description.
+              example: |
+                retry: 3000
+
+                event: hello
+                data: {"seq":42,"gap":false,"server_time":"2026-01-01T12:00:00Z"}
+
+                id: 43
+                event: heartbeat
+                data: {"kind":"heartbeat","monitor_id":1,"at":"2026-01-01T12:00:05Z","seq":43}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: |
+            The response writer does not support flushing, so events would sit
+            in a buffer until a response that never ends.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: This instance runs without an event bus, so live updates are unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: live updates are not available
+      x-subglance-access: read
+  /api/v1/tokens:
+    get:
+      tags: [Tokens]
+      operationId: listTokens
+      summary: List the caller's API tokens
+      description: |
+        Scoped to the authenticated user's own tokens. Only the prefix is
+        returned; the token itself is stored as a hash and cannot be recovered.
+      responses:
+        '200':
+          description: The caller's tokens.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tokens]
+                properties:
+                  tokens:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ApiToken'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: The tokens could not be listed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: read
+    post:
+      tags: [Tokens]
+      operationId: createToken
+      summary: Issue a new API token
+      description: |
+        The plaintext token appears in this response and nowhere else, ever —
+        only its hash is stored. The response therefore carries an explicit
+        `warning`, because a user who misses the value and closes the tab must
+        understand that the token is gone rather than assume it can be looked
+        up later.
+
+        A token inherits the role of the user who created it, so a viewer's
+        token cannot write. Any authenticated user may mint tokens for
+        themselves.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTokenRequest'
+      responses:
+        '201':
+          description: The token was created; store the plaintext now.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateTokenResponse'
+        '400':
+          description: |
+            Malformed or unknown-field JSON, a missing or over-long name, or an
+            `expires_in` that is unparseable or not positive.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: expires_in must be a duration such as 720h
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: The token could not be created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: read
+  /api/v1/tokens/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: The token's numeric id.
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+        example: 3
+    delete:
+      tags: [Tokens]
+      operationId: revokeToken
+      summary: Revoke an API token
+      description: |
+        Scoped to the caller's own tokens, so an id belonging to another
+        account cannot be revoked by guessing the number — such an id is
+        reported as 404, which also avoids confirming that it exists.
+      responses:
+        '204':
+          description: The token is revoked and no longer authenticates.
+        '400':
+          $ref: '#/components/responses/InvalidId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: No such token belonging to the caller.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: token not found
+        '500':
+          description: The token could not be revoked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: read
+  /api/v1/users:
+    get:
+      tags: [Users]
+      operationId: listUsers
+      summary: List all accounts
+      description: Administrators only. Password hashes are never returned.
+      responses:
+        '200':
+          description: Every account.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [users]
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenAdmin'
+        '500':
+          description: The users could not be listed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: admin
+    post:
+      tags: [Users]
+      operationId: createUser
+      summary: Create an account
+      description: |
+        Administrators only. An omitted `role` defaults to `viewer`, which is
+        least privilege: granting write access should be a deliberate act.
+
+        A duplicate email address is the common failure here and is reported as
+        a 400 — the caller's problem to fix, not a server fault.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: The account was created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: |
+            Malformed or unknown-field JSON, an email address without an `@`,
+            an unknown role, a password that fails the strength rules, or an
+            address that is already in use.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: role must be admin, editor or viewer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenAdmin'
+      x-subglance-access: admin
+  /api/v1/users/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: The account's numeric id.
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+        example: 2
+    delete:
+      tags: [Users]
+      operationId: deleteUser
+      summary: Delete an account
+      description: |
+        Administrators only, with two lockout guards: you cannot delete your
+        own account, and you cannot delete the last remaining administrator.
+        Either mistake is how an instance ends up with no administrator and no
+        way back in, so both are refused with a 400 rather than a 403.
+      responses:
+        '204':
+          description: The account no longer exists.
+        '400':
+          description: |
+            An invalid id, an attempt to delete your own account, or an attempt
+            to delete the last administrator.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: cannot delete the last administrator
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenAdmin'
+        '404':
+          description: No such account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: user not found
+        '500':
+          description: The account could not be verified or deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: admin
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-subglance_session
+      description: |
+        The browser session cookie, set by `POST /api/v1/auth/login`, by
+        `POST /api/v1/setup` and by `POST /api/v1/auth/password`. It is
+        HttpOnly, SameSite=Lax, Path=/ and valid for seven days of inactivity
+        (refreshed on use).
+
+        The `__Host-` prefix is a browser-enforced guarantee that the cookie is
+        Secure, has Path=/ and carries no Domain attribute — that last part is
+        what stops a subdomain from writing a cookie this origin would accept.
+        Over plain HTTP browsers refuse Secure cookies, so an instance without
+        TLS falls back to the name `subglance_session`; a self-hoster on a LAN
+        must still be able to log in. Both names are accepted on requests.
+
+        Cookie-authenticated state-changing requests additionally pass a CSRF
+        check based on `Sec-Fetch-Site` (falling back to an `Origin` match for
+        non-browser clients). Bearer-token calls skip it, because a browser
+        will not attach a bearer token to a cross-site request.
+    bearerToken:
+      type: http
+      scheme: bearer
+      description: |
+        An API token in `Authorization: Bearer <token>`, created via
+        `POST /api/v1/tokens`. Intended for scripts and CI.
+
+        A token carries exactly the rights of the user who created it, so the
+        UI has no privileges a script cannot have. When an `Authorization`
+        header is present it is the only credential considered: a malformed one
+        is rejected rather than falling back to the session cookie.
+  parameters:
+    MonitorId:
+      name: id
+      in: path
+      required: true
+      description: The monitor's numeric id.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+      example: 1
+    ChannelId:
+      name: id
+      in: path
+      required: true
+      description: The channel's numeric id.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+      example: 1
+  responses:
+    Unauthorized:
+      description: No valid credentials were presented.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: authentication required
+    Forbidden:
+      description: The caller is authenticated but its role does not allow changes.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: your role does not allow changes
+    ForbiddenAdmin:
+      description: The caller is authenticated but is not an administrator.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: this action requires an administrator
+    NotFound:
+      description: No monitor with that id.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: monitor not found
+    ChannelNotFound:
+      description: No channel with that id.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: channel not found
+    InvalidId:
+      description: The path id was not a positive integer.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: invalid monitor id
+  schemas:
+    Error:
+      type: object
+      description: |
+        The single error shape used by every endpoint. Handlers write exactly
+        one field, so clients can rely on `error` always being present and
+        always being a human-readable sentence.
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: A human-readable explanation of what went wrong.
+          example: monitor not found
+      additionalProperties: false
+    HealthResponse:
+      type: object
+      required: [status, version, uptime]
+      properties:
+        status:
+          type: string
+          description: Always `ok` when the process answers at all.
+          const: ok
+        version:
+          type: string
+          description: The short build version.
+          example: v0.4.1
+        uptime:
+          type: string
+          description: Process uptime as a Go duration, truncated to whole seconds.
+          example: 3h12m7s
+    ReadyResponse:
+      type: object
+      required: [status, database]
+      properties:
+        status:
+          type: string
+          enum: [ready, unavailable]
+        database:
+          type: string
+          enum: [up, down]
+        error:
+          type: string
+          description: Present only when the database check failed.
+          example: no database configured
+    SetupStatus:
+      type: object
+      required: [setup_required]
+      properties:
+        setup_required:
+          type: boolean
+          description: True while the instance has no users at all.
+          example: true
+    Credentials:
+      type: object
+      description: An email address and password pair.
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          description: Must contain an `@`. Stored case-insensitively.
+          example: ops@example.com
+        password:
+          type: string
+          format: password
+          description: Must satisfy the instance's password strength rules.
+          example: correct-horse-battery-staple
+      additionalProperties: false
+    ChangePasswordRequest:
+      type: object
+      required: [current_password, new_password]
+      properties:
+        current_password:
+          type: string
+          format: password
+          description: Re-authenticates the caller before the change is allowed.
+        new_password:
+          type: string
+          format: password
+          description: Must satisfy the password strength rules.
+      additionalProperties: false
+    Role:
+      type: string
+      description: |
+        What an account may do. `viewer` reads, `editor` also changes monitors
+        and channels, `admin` additionally manages accounts.
+      enum: [admin, editor, viewer]
+      example: editor
+    User:
+      type: object
+      description: An account. Password hashes are never exposed.
+      required: [id, email, role, created_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        email:
+          type: string
+          format: email
+          example: ops@example.com
+        role:
+          $ref: '#/components/schemas/Role'
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-01-01T12:00:00Z'
+    CreateUserRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          description: Must contain an `@` and be unique.
+          example: dev@example.com
+        password:
+          type: string
+          format: password
+          description: Must satisfy the password strength rules.
+        role:
+          allOf:
+            - $ref: '#/components/schemas/Role'
+          description: Defaults to `viewer` when omitted, for least privilege.
+          default: viewer
+      additionalProperties: false
+    MonitorType:
+      type: string
+      description: |
+        The kind of check. `http` needs an http/https URL, `tcp` needs
+        `host:port`, `ssl` takes a host with an optional port (443 assumed),
+        and `ping` takes a bare hostname or IP — ICMP has no ports.
+      enum: [http, tcp, ping, ssl]
+      example: http
+    KeywordMode:
+      type: string
+      description: |
+        How the response body is matched against `keyword`. `absent_ok` does no
+        matching at all, `must_contain` fails the check when the keyword is
+        missing, `must_not_contain` fails when it is present.
+      enum: [absent_ok, must_contain, must_not_contain]
+      default: absent_ok
+    HttpMethod:
+      type: string
+      description: The HTTP method used by an `http` monitor.
+      enum: [GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS]
+      default: GET
+    MonitorStatus:
+      type: string
+      description: |
+        The monitor's current state. `up` means the last check succeeded,
+        `down` means a *confirmed* incident is open, and `pending` covers both
+        "never checked yet" and "failing but not yet past the retry threshold".
+        A single failed check is deliberately not `down`: the dashboard and the
+        notifications must agree on what an outage is.
+      enum: [up, pending, down]
+      example: up
+    Monitor:
+      type: object
+      description: |
+        A monitor definition plus its current state. The wire shape
+        deliberately differs from the storage shape so the contract can stay
+        stable while storage evolves.
+      required: [id, name, type, target, interval_s, timeout_s, enabled, status, uptime_24h, created_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        name:
+          type: string
+          example: Public website
+        type:
+          $ref: '#/components/schemas/MonitorType'
+        target:
+          type: string
+          description: What to check; its shape depends on `type`.
+          example: https://example.com/health
+        interval_s:
+          type: integer
+          description: Seconds between scheduled checks.
+          minimum: 20
+          maximum: 86400
+          default: 60
+          example: 60
+        timeout_s:
+          type: integer
+          description: How long a single probe may take.
+          minimum: 1
+          maximum: 120
+          default: 10
+          example: 10
+        enabled:
+          type: boolean
+          description: False while paused; a paused monitor is not scheduled.
+          example: true
+        status:
+          $ref: '#/components/schemas/MonitorStatus'
+        last_check:
+          type: string
+          format: date-time
+          description: When the most recent heartbeat was recorded. Absent if never checked.
+        latency_ms:
+          type: integer
+          description: Latency of the most recent check. Omitted when zero.
+          example: 143
+        status_code:
+          type: integer
+          description: HTTP status of the most recent check, for `http` monitors.
+          example: 200
+        error:
+          type: string
+          description: |
+            The most recent failure message; falls back to the open incident's
+            last error when the heartbeat itself carried none.
+        incident_id:
+          type: integer
+          format: int64
+          description: |
+            The open incident, if any. Present so a UI can link straight from a
+            red row to the incident without a second round trip.
+        incident_since:
+          type: string
+          format: date-time
+          description: When the open incident started.
+        uptime_24h:
+          type: number
+          format: double
+          description: |
+            Availability over the last 24 hours as a percentage. 0 when the
+            figure could not be computed.
+          minimum: 0
+          maximum: 100
+          example: 99.86
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-01-01T12:00:00Z'
+    CreateMonitorRequest:
+      type: object
+      description: |
+        Unknown fields are rejected. Omitted optional fields take the schema
+        defaults; note that `enabled` and `follow_redirects` default to true
+        and `retries` to 2.
+      required: [name, type, target]
+      properties:
+        name:
+          type: string
+          description: Required and non-empty.
+          example: Public website
+        type:
+          $ref: '#/components/schemas/MonitorType'
+        target:
+          type: string
+          description: Required, and validated against `type`.
+          example: https://example.com/health
+        interval_s:
+          type: integer
+          description: 0 or omitted means the server default of 60.
+          minimum: 20
+          maximum: 86400
+          example: 60
+        timeout_s:
+          type: integer
+          description: 0 or omitted means the server default of 10.
+          minimum: 1
+          maximum: 120
+          example: 10
+        retries:
+          type: integer
+          description: |
+            Consecutive failures required before an incident is confirmed —
+            "no false alarms" in numeric form.
+          minimum: 0
+          maximum: 10
+          default: 2
+        method:
+          $ref: '#/components/schemas/HttpMethod'
+        expected_status:
+          type: string
+          description: |
+            Acceptable HTTP status codes as a comma-separated list of values
+            and ranges.
+          default: 200-299
+          example: 200-299
+        keyword:
+          type: string
+          description: Body text to match, used together with `keyword_mode`.
+          example: OK
+        keyword_mode:
+          $ref: '#/components/schemas/KeywordMode'
+        follow_redirects:
+          type: boolean
+          default: true
+        headers:
+          type: object
+          description: Extra request headers for `http` monitors.
+          additionalProperties:
+            type: string
+          example:
+            X-Api-Key: secret
+        body:
+          type: string
+          description: Request body for `http` monitors using a method that takes one.
+        ssl_warn_days:
+          type: integer
+          description: |
+            Days before certificate expiry at which to warn; applies to https
+            and ssl checks. Defaults to 14.
+          minimum: 0
+          maximum: 365
+          default: 14
+        enabled:
+          type: boolean
+          description: Defaults to true, so a new monitor starts checking immediately.
+          default: true
+      additionalProperties: false
+    PatchMonitorRequest:
+      type: object
+      description: |
+        Every field is optional; only the ones present are changed. Unknown
+        fields are rejected. Unlike create, explicit zeroes are validated
+        rather than treated as "use the default".
+      properties:
+        name:
+          type: string
+          description: Must not be blank.
+        type:
+          $ref: '#/components/schemas/MonitorType'
+        target:
+          type: string
+          description: Must not be blank. Re-validated against the resulting type.
+        interval_s:
+          type: integer
+          minimum: 20
+          maximum: 86400
+        timeout_s:
+          type: integer
+          minimum: 1
+          maximum: 120
+        retries:
+          type: integer
+          minimum: 0
+          maximum: 10
+        method:
+          $ref: '#/components/schemas/HttpMethod'
+        expected_status:
+          type: string
+        keyword:
+          type: string
+        keyword_mode:
+          $ref: '#/components/schemas/KeywordMode'
+        follow_redirects:
+          type: boolean
+        headers:
+          type: object
+          description: Replaces the whole header map.
+          additionalProperties:
+            type: string
+        body:
+          type: string
+        ssl_warn_days:
+          type: integer
+          description: |
+            0 is rejected rather than read as "never warn", because the stored
+            default would turn it back into 14 and the client would be told it
+            had disabled a warning it still gets.
+          minimum: 1
+          maximum: 365
+        enabled:
+          type: boolean
+      additionalProperties: false
+    Heartbeat:
+      type: object
+      description: One recorded check result.
+      required: [ts, ok, latency_ms]
+      properties:
+        ts:
+          type: string
+          format: date-time
+          example: '2026-01-01T12:00:05Z'
+        ok:
+          type: boolean
+          example: true
+        latency_ms:
+          type: integer
+          example: 143
+        status_code:
+          type: integer
+          description: HTTP status, when the check type produces one.
+          example: 200
+        error:
+          type: string
+          description: Present only on failure.
+    UptimeWindow:
+      type: object
+      required: [window, window_s, total, up, down, uptime]
+      properties:
+        window:
+          type: string
+          description: The window as requested.
+          example: 24h
+        window_s:
+          type: integer
+          description: The same window in seconds.
+          example: 86400
+        total:
+          type: integer
+          description: Samples in the window.
+          example: 1440
+        up:
+          type: integer
+          example: 1438
+        down:
+          type: integer
+          example: 2
+        uptime:
+          type: [number, 'null']
+          format: double
+          description: |
+            Percentage up, or null when the window contains no samples at all.
+            "No data yet" and "0% up" are different facts and must not share
+            one number.
+          minimum: 0
+          maximum: 100
+          example: 99.86
+        avg_latency_ms:
+          type: integer
+          description: Mean latency across successful samples. Omitted when zero.
+          example: 143
+    UptimeResponse:
+      type: object
+      required: [monitor_id, windows]
+      properties:
+        monitor_id:
+          type: integer
+          format: int64
+          example: 1
+        windows:
+          type: array
+          description: One entry per requested window, in request order.
+          items:
+            $ref: '#/components/schemas/UptimeWindow'
+    FailureKind:
+      type: string
+      description: What class of problem a failed check hit. Absent when the check succeeded.
+      enum: [dns, connection, tls, timeout, status, keyword, cert_expiry, internal]
+      example: timeout
+    CheckResult:
+      type: object
+      description: The outcome of a manual, on-demand check.
+      required: [monitor_id, ok, checked_at, latency_ms, recorded]
+      properties:
+        monitor_id:
+          type: integer
+          format: int64
+          example: 1
+        ok:
+          type: boolean
+          description: Whether the target passed. A target that is down is `false`, not an error.
+          example: true
+        checked_at:
+          type: string
+          format: date-time
+          example: '2026-01-01T12:00:05Z'
+        latency_ms:
+          type: integer
+          example: 143
+        status_code:
+          type: integer
+          example: 200
+        kind:
+          $ref: '#/components/schemas/FailureKind'
+        error:
+          type: string
+          description: Present only on failure.
+        cert_expiry:
+          type: string
+          format: date-time
+          description: Certificate expiry, for checks that inspected one.
+        recorded:
+          type: boolean
+          description: |
+            Whether this result became part of the monitor's history. False for
+            a paused monitor — the UI needs to know, because a green result
+            that did not move the dashboard would otherwise look like a bug.
+          example: true
+    Incident:
+      type: object
+      description: |
+        An outage. Both timestamps are exposed on purpose: `started_at` is when
+        the first check failed, `confirmed_at` is when the failure count
+        crossed the monitor's threshold and a human was told. Support
+        conversations turn on that gap.
+      required: [id, monitor_id, started_at, confirmed, resolved, acked, duration_s]
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 7
+        monitor_id:
+          type: integer
+          format: int64
+          example: 1
+        started_at:
+          type: string
+          format: date-time
+          example: '2026-01-01T14:02:00Z'
+        confirmed_at:
+          type: string
+          format: date-time
+          description: Present once the retry threshold was crossed.
+          example: '2026-01-01T14:04:00Z'
+        resolved_at:
+          type: string
+          format: date-time
+          description: Present once the monitor recovered.
+        acked_at:
+          type: string
+          format: date-time
+          description: Present once someone acknowledged the incident.
+        confirmed:
+          type: boolean
+          description: Only a confirmed incident makes a monitor read as `down`.
+          example: true
+        resolved:
+          type: boolean
+          example: false
+        acked:
+          type: boolean
+          example: false
+        duration_s:
+          type: integer
+          description: Seconds from `started_at` to resolution, or to now while open.
+          example: 320
+        cause:
+          type: string
+          description: Short classification of why the incident opened.
+          example: connection refused
+        last_error:
+          type: string
+          description: The most recent failure message seen during the incident.
+    IncidentList:
+      type: object
+      required: [incidents]
+      properties:
+        incidents:
+          type: array
+          items:
+            $ref: '#/components/schemas/Incident'
+    ChannelType:
+      type: string
+      description: |
+        The delivery mechanism. Each type has one config key it cannot work
+        without: `url` for webhook, discord and slack; `bot_token` for
+        telegram; `to` for email.
+      enum: [webhook, discord, slack, telegram, email]
+      example: slack
+    Channel:
+      type: object
+      description: |
+        A notification target as returned by the API. Secret-looking config
+        values are masked — see `config`.
+      required: [id, name, type, config, enabled, created_at, updated_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        name:
+          type: string
+          maxLength: 100
+          example: Ops Slack
+        type:
+          $ref: '#/components/schemas/ChannelType'
+        config:
+          type: object
+          description: |
+            Type-specific settings. The keys `url`, `token`, `password` and
+            `bot_token` are never echoed in full: their values are replaced
+            with `****` followed by the last four characters (or all asterisks
+            when the value is four characters or shorter). Writing a masked
+            value back is understood as "leave this credential unchanged".
+          additionalProperties:
+            type: string
+          example:
+            url: '****g7Kd'
+        enabled:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    ChannelList:
+      type: object
+      required: [channels]
+      properties:
+        channels:
+          type: array
+          items:
+            $ref: '#/components/schemas/Channel'
+    ChannelRequest:
+      type: object
+      description: |
+        The full channel document, used for both create and replace. On
+        replace, a secret value that still equals the mask returned by a read
+        means "unchanged".
+      required: [name, type, config]
+      properties:
+        name:
+          type: string
+          description: Required, non-blank, at most 100 characters.
+          maxLength: 100
+          example: Ops Slack
+        type:
+          $ref: '#/components/schemas/ChannelType'
+        config:
+          type: object
+          description: |
+            Keys are at most 64 characters and values at most 2048. The type's
+            required key must be present and non-blank; a `url` must parse and
+            use http or https with a host.
+          additionalProperties:
+            type: string
+          example:
+            url: https://hooks.slack.com/services/T000/B000/XXXXXXXXg7Kd
+        enabled:
+          type: boolean
+          description: |
+            Defaults to true on create; on replace, omitting it leaves the
+            existing value untouched.
+      additionalProperties: false
+    SetMonitorChannelsRequest:
+      type: object
+      required: [channel_ids]
+      properties:
+        channel_ids:
+          type: array
+          description: |
+            The complete set of channels for this monitor. An empty array
+            detaches all of them.
+          items:
+            type: integer
+            format: int64
+          example: [1, 3]
+      additionalProperties: false
+    ApiToken:
+      type: object
+      description: An API token's metadata. The token value itself is never returned here.
+      required: [id, name, prefix, created_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 3
+        name:
+          type: string
+          maxLength: 100
+          example: ci-deploy
+        prefix:
+          type: string
+          description: |
+            The first characters of the token, kept in clear so a human can
+            tell two tokens apart without seeing enough to be useful to a
+            thief.
+          example: sgp_a1b2
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+          description: Absent when the token never expires.
+        last_used_at:
+          type: string
+          format: date-time
+          description: Absent until the token has authenticated a request.
+        revoked_at:
+          type: string
+          format: date-time
+          description: Present once the token has been revoked.
+    CreateTokenRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Required, at most 100 characters. Used to tell tokens apart.
+          maxLength: 100
+          example: ci-deploy
+        expires_in:
+          type: string
+          description: |
+            A positive Go duration measured from now. Omitted or empty means
+            the token never expires.
+          example: 720h
+      additionalProperties: false
+    CreateTokenResponse:
+      type: object
+      description: |
+        The only response that ever contains the plaintext token. Only its hash
+        is stored, so the value cannot be recovered afterwards.
+      required: [token, warning, details]
+      properties:
+        token:
+          type: string
+          description: The plaintext token. Store it now.
+          example: sgp_a1b2c3d4e5f6g7h8i9j0
+        warning:
+          type: string
+          const: 'This is the only time the token is shown. Store it now; it cannot be recovered.'
+        details:
+          $ref: '#/components/schemas/ApiToken'
