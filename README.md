@@ -202,6 +202,7 @@ Set `SUBGLANCE_TEST_NETWORK=1` to force them on locally.
 GET    /api/v1/monitors                    list monitors with current status
 POST   /api/v1/monitors                    create a monitor
 GET    /api/v1/monitors/{id}               one monitor
+PATCH  /api/v1/monitors/{id}               edit a monitor (partial; keeps history)
 DELETE /api/v1/monitors/{id}               delete a monitor
 POST   /api/v1/monitors/{id}/pause         stop checking
 POST   /api/v1/monitors/{id}/resume        start checking again
