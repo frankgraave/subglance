@@ -74,6 +74,7 @@ func (s *Server) Handler() http.Handler {
 	read("GET /api/v1/monitors", s.handleListMonitors)
 	read("GET /api/v1/monitors/{id}", s.handleGetMonitor)
 	read("GET /api/v1/monitors/{id}/heartbeats", s.handleListHeartbeats)
+	read("GET /api/v1/monitors/{id}/uptime", s.handleMonitorUptime)
 	read("GET /api/v1/monitors/{id}/incidents", s.handleListMonitorIncidents)
 	read("GET /api/v1/incidents", s.handleListOpenIncidents)
 
