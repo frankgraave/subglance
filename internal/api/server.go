@@ -27,6 +27,14 @@ type Server struct {
 	// stream endpoint rather than crashing it, so the API stays usable in
 	// tests and in any deployment that runs without a checker pipeline.
 	bus *events.Bus
+
+	// prober runs on-demand checks. Nil disables that endpoint, for the same
+	// reason as bus: an API without a checker behind it should still serve
+	// everything else.
+	prober Prober
+
+	// manualChecks rate-limits POST /monitors/{id}/check per monitor.
+	manualChecks cooldown
 }
 
 // New returns a Server ready to be mounted.
@@ -37,6 +45,12 @@ func New(log *slog.Logger, db *store.DB) *Server {
 // WithBus attaches an event bus, enabling GET /api/v1/stream.
 func (s *Server) WithBus(b *events.Bus) *Server {
 	s.bus = b
+	return s
+}
+
+// WithProber attaches a prober, enabling POST /api/v1/monitors/{id}/check.
+func (s *Server) WithProber(p Prober) *Server {
+	s.prober = p
 	return s
 }
 
@@ -96,6 +110,7 @@ func (s *Server) Handler() http.Handler {
 	write("POST /api/v1/monitors", s.handleCreateMonitor)
 	write("PATCH /api/v1/monitors/{id}", s.handlePatchMonitor)
 	write("DELETE /api/v1/monitors/{id}", s.handleDeleteMonitor)
+	write("POST /api/v1/monitors/{id}/check", s.handleCheckMonitor)
 	write("POST /api/v1/monitors/{id}/pause", s.handlePauseMonitor)
 	write("POST /api/v1/monitors/{id}/resume", s.handleResumeMonitor)
 	write("POST /api/v1/incidents/{id}/ack", s.handleAckIncident)

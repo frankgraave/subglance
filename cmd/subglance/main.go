@@ -87,9 +87,20 @@ func run(args []string) error {
 	// other's lifetime.
 	bus := events.NewBus(0)
 
+	runner := monitor.New(monitor.Options{
+		DB:                  db,
+		Log:                 log,
+		AllowPrivateTargets: cfg.AllowPrivateTargets,
+		Workers:             cfg.CheckWorkers,
+		Bus:                 bus,
+	})
+
 	srv := &http.Server{
-		Addr:    cfg.Addr,
-		Handler: api.New(log, db).WithBus(bus).Handler(),
+		Addr: cfg.Addr,
+		// The runner doubles as the API's prober, so a manual check uses
+		// the same checkers, the same SSRF guard and the same recording
+		// path as a scheduled one.
+		Handler: api.New(log, db).WithBus(bus).WithProber(runner).Handler(),
 
 		// Bounded timeouts: an unbounded server is a resource leak waiting
 		// for one slow client. ReadHeaderTimeout in particular defends
@@ -109,14 +120,6 @@ func run(args []string) error {
 	// and (later) the database closes without corrupting the WAL.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-
-	runner := monitor.New(monitor.Options{
-		DB:                  db,
-		Log:                 log,
-		AllowPrivateTargets: cfg.AllowPrivateTargets,
-		Workers:             cfg.CheckWorkers,
-		Bus:                 bus,
-	})
 
 	schedulerDone := make(chan struct{})
 	go func() {

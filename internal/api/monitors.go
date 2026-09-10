@@ -262,6 +262,7 @@ func (s *Server) handleDeleteMonitor(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "could not delete monitor")
 		return
 	}
+	s.manualChecks.forget(id)
 	s.log.Info("monitor deleted", "id", id)
 	w.WriteHeader(http.StatusNoContent)
 }

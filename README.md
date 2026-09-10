@@ -204,6 +204,7 @@ POST   /api/v1/monitors                    create a monitor
 GET    /api/v1/monitors/{id}               one monitor
 PATCH  /api/v1/monitors/{id}               edit a monitor (partial; keeps history)
 DELETE /api/v1/monitors/{id}               delete a monitor
+POST   /api/v1/monitors/{id}/check         run one check now, return the result
 POST   /api/v1/monitors/{id}/pause         stop checking
 POST   /api/v1/monitors/{id}/resume        start checking again
 GET    /api/v1/monitors/{id}/heartbeats    recent check results
@@ -212,6 +213,13 @@ GET    /api/v1/monitors/{id}/incidents     incident history
 GET    /api/v1/incidents                   every unresolved incident
 POST   /api/v1/incidents/{id}/ack          acknowledge — seen, being worked on
 ```
+
+`check` exists so a fix can be verified without waiting out the interval. For
+an enabled monitor the result is recorded like any other check, so the
+dashboard turns green immediately; for a paused monitor it is returned but not
+recorded, because writing into a period the monitor promised not to watch
+would misrepresent it. The response says which happened in its `recorded` field.
+Manual checks are limited to one per monitor per five seconds.
 
 Acknowledging is not resolving: it stops repeat notifications without claiming
 the problem is fixed.

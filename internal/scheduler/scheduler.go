@@ -483,6 +483,19 @@ func (s *Scheduler) Size() int {
 	return s.queue.Len()
 }
 
+// CheckerFor returns the implementation registered for a check type.
+//
+// It exists so an on-demand check can reuse exactly the checkers the schedule
+// runs, rather than building a second set that could drift out of step — a
+// "check now" button that probes differently from the schedule would be worse
+// than no button at all. The map itself is not exposed: it is written once in
+// New and read concurrently by the workers, so handing it out would invite a
+// data race.
+func (s *Scheduler) CheckerFor(t checker.Type) (checker.Checker, bool) {
+	c, ok := s.checkers[t]
+	return c, ok
+}
+
 // queueItem is one monitor waiting for its turn.
 type queueItem struct {
 	job   Job

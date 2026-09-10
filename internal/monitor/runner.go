@@ -8,6 +8,7 @@ package monitor
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -476,4 +477,38 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 	}
 
 	r.notify(Alert{Monitor: m, Incident: inc, Event: tr.Event, At: tr.At})
+}
+
+// ErrUnsupportedType is returned when a monitor names a check type that has no
+// implementation. It is a configuration fault, not a check failure.
+var ErrUnsupportedType = errors.New("unsupported monitor type")
+
+// CheckNow probes a monitor once, outside its schedule, and returns the result.
+//
+// It implements the API's Prober interface, which is why it takes a
+// store.Monitor rather than the checker's shape: the caller has just loaded
+// the row and should not have to know about the mapping.
+//
+// An enabled monitor's result goes through the same recording path as a
+// scheduled one, so a monitor that has just been fixed turns green immediately
+// instead of at the next tick. A paused monitor's result is returned but not
+// recorded: the monitor promised not to watch it, and writing heartbeats into that gap
+// would present an unmonitored period as a monitored one.
+func (r *Runner) CheckNow(ctx context.Context, m store.Monitor) (checker.Result, error) {
+	cm := toCheckerMonitor(m)
+
+	c, ok := r.sch.CheckerFor(cm.Type)
+	if !ok {
+		return checker.Result{}, fmt.Errorf("%w: %q", ErrUnsupportedType, cm.Type)
+	}
+
+	res := c.Check(ctx, cm)
+
+	if m.Enabled {
+		// Record on the caller's behalf but not on its context: a client
+		// that disconnects the instant the probe returns must not abort the
+		// heartbeat write half-way. record uses its own bounded context.
+		r.record(scheduler.Outcome{Monitor: cm, Result: res})
+	}
+	return res, nil
 }
