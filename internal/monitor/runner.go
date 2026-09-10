@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/frankgraave/subglance/internal/checker"
+	"github.com/frankgraave/subglance/internal/events"
 	"github.com/frankgraave/subglance/internal/scheduler"
 	"github.com/frankgraave/subglance/internal/state"
 	"github.com/frankgraave/subglance/internal/store"
@@ -28,6 +29,10 @@ type Runner struct {
 	// rather than a hard dependency on a notifier package so SUB-15 can plug
 	// in without touching this file.
 	notify func(Alert)
+
+	// bus fans check results out to live listeners (the SSE endpoint). Nil
+	// means nobody is watching, which is the normal case in tests.
+	bus *events.Bus
 }
 
 // Alert is a state change worth telling someone about.
@@ -60,6 +65,10 @@ type Options struct {
 
 	// Notify receives alerts. Optional; nil means log only.
 	Notify func(Alert)
+
+	// Bus receives every heartbeat and status change for live streaming.
+	// Optional; nil means nothing is published.
+	Bus *events.Bus
 }
 
 // New builds a Runner with the standard set of checkers.
@@ -76,6 +85,7 @@ func New(opts Options) *Runner {
 		db:     opts.DB,
 		log:    log,
 		notify: opts.Notify,
+		bus:    opts.Bus,
 		engine: state.New(state.Options{
 			FlapWindow:    opts.FlapWindow,
 			FlapThreshold: opts.FlapThreshold,
@@ -156,13 +166,25 @@ func (r *Runner) jobs(ctx context.Context) ([]scheduler.Job, error) {
 		return nil, err
 	}
 
+	// Monitors with no heartbeat yet get a fast first check rather than a full
+	// interval's wait. A failure here is not fatal: falling back to the normal
+	// schedule is slower, not wrong.
+	checked, err := r.db.CheckedMonitorIDs(ctx)
+	if err != nil {
+		r.log.Warn("could not determine which monitors are new; "+
+			"first checks will follow the normal interval", "error", err)
+		checked = nil
+	}
+
 	live := make(map[int64]struct{}, len(monitors))
 	jobs := make([]scheduler.Job, 0, len(monitors))
 	for _, m := range monitors {
 		live[m.ID] = struct{}{}
+		_, seen := checked[m.ID]
 		jobs = append(jobs, scheduler.Job{
-			Monitor:  toCheckerMonitor(m),
-			Interval: time.Duration(m.IntervalS) * time.Second,
+			Monitor:      toCheckerMonitor(m),
+			Interval:     time.Duration(m.IntervalS) * time.Second,
+			NeverChecked: checked != nil && !seen,
 		})
 	}
 
@@ -270,7 +292,52 @@ func (r *Runner) record(o scheduler.Outcome) {
 		FailureThreshold: o.Monitor.Retries,
 	})
 
+	// Publish before applying the transition so the dashboard paints the new
+	// bar immediately, rather than waiting on incident bookkeeping.
+	r.publish(events.Event{
+		Kind:      events.KindHeartbeat,
+		MonitorID: o.Monitor.ID,
+		At:        hb.TS,
+		Payload: heartbeatPayload{
+			OK:         hb.OK,
+			LatencyMS:  hb.LatencyMS,
+			StatusCode: hb.StatusCode,
+			Error:      hb.Error,
+		},
+	})
+
 	r.applyTransition(ctx, o, tr)
+}
+
+// heartbeatPayload is the wire shape of a single check result.
+//
+// It is deliberately not store.Heartbeat: the stored row carries an ID and a
+// monitor ID that the envelope already provides, and pinning the wire format
+// here means a schema change cannot silently alter the public API.
+type heartbeatPayload struct {
+	OK         bool   `json:"ok"`
+	LatencyMS  int    `json:"latency_ms"`
+	StatusCode int    `json:"status_code,omitempty"`
+	Error      string `json:"error,omitempty"`
+}
+
+// statusPayload describes a monitor changing state.
+type statusPayload struct {
+	Event string `json:"event"`
+	Cause string `json:"cause,omitempty"`
+	Error string `json:"error,omitempty"`
+	// Suppressed marks a transition the flapping filter decided not to
+	// alert on. The dashboard still shows it; a human just is not paged.
+	Suppressed bool `json:"suppressed,omitempty"`
+}
+
+// publish sends an event if anyone is listening. Nil bus is the normal case in
+// tests and must stay a no-op rather than a panic.
+func (r *Runner) publish(e events.Event) {
+	if r.bus == nil {
+		return
+	}
+	r.bus.Publish(e)
 }
 
 // applyTransition writes the incident side of a transition and emits an alert
@@ -364,6 +431,26 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 			r.log.Info("monitor stopped flapping, notifications resumed",
 				"monitor", o.Monitor.Name)
 		}
+	}
+
+	// Stream every structural change, including suppressed ones.
+	//
+	// Suppression is about not waking a human at 3am; it is not about hiding
+	// what happened from someone actively looking at the dashboard. A screen
+	// that silently omits a flapping monitor's transitions is lying by
+	// omission — the exact failure this product exists to prevent.
+	if tr.Event != state.EventNone {
+		r.publish(events.Event{
+			Kind:      events.KindStatus,
+			MonitorID: o.Monitor.ID,
+			At:        tr.At,
+			Payload: statusPayload{
+				Event:      string(tr.Event),
+				Cause:      tr.Cause,
+				Error:      tr.Error,
+				Suppressed: tr.Suppressed,
+			},
+		})
 	}
 
 	if tr.Suppressed {

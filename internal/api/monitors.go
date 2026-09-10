@@ -82,7 +82,16 @@ func (s *Server) handleListMonitors(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCreateMonitor(w http.ResponseWriter, r *http.Request) {
 	var req createMonitorRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	// Reject fields the API does not know.
+	//
+	// Silently ignoring them is a trap: a client that sends interval_seconds
+	// instead of interval_s gets a 201, believes it configured a 5-second
+	// check, and receives the default instead. The failure surfaces much
+	// later as "why is this monitor so slow" — a typo should be an error at
+	// the moment it is made.
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}

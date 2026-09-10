@@ -21,6 +21,7 @@ import (
 	"github.com/frankgraave/subglance/internal/api"
 	"github.com/frankgraave/subglance/internal/buildinfo"
 	"github.com/frankgraave/subglance/internal/config"
+	"github.com/frankgraave/subglance/internal/events"
 	"github.com/frankgraave/subglance/internal/logging"
 	"github.com/frankgraave/subglance/internal/monitor"
 	"github.com/frankgraave/subglance/internal/store"
@@ -81,17 +82,27 @@ func run(args []string) error {
 			"setup_url", "http://"+displayAddr(cfg.Addr)+"/")
 	}
 
+	// One bus, shared by the checker pipeline (publisher) and the API
+	// (subscriber). Created before both so neither has to know about the
+	// other's lifetime.
+	bus := events.NewBus(0)
+
 	srv := &http.Server{
 		Addr:    cfg.Addr,
-		Handler: api.New(log, db).Handler(),
+		Handler: api.New(log, db).WithBus(bus).Handler(),
 
 		// Bounded timeouts: an unbounded server is a resource leak waiting
 		// for one slow client. ReadHeaderTimeout in particular defends
 		// against Slowloris.
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      60 * time.Second,
-		IdleTimeout:       120 * time.Second,
+
+		// No WriteTimeout: it is an absolute deadline on the whole response,
+		// so any value would sever every SSE connection that lived longer
+		// than it — a dashboard that silently dies after a minute. Slow
+		// clients are bounded by IdleTimeout and by the stream's own
+		// non-blocking fan-out instead.
+		IdleTimeout: 120 * time.Second,
 	}
 
 	// Shut down cleanly on SIGINT/SIGTERM so that in-flight requests finish
@@ -104,6 +115,7 @@ func run(args []string) error {
 		Log:                 log,
 		AllowPrivateTargets: cfg.AllowPrivateTargets,
 		Workers:             cfg.CheckWorkers,
+		Bus:                 bus,
 	})
 
 	schedulerDone := make(chan struct{})

@@ -306,6 +306,35 @@ func (db *DB) Uptime(ctx context.Context, monitorID int64, window time.Duration)
 	return stats, nil
 }
 
+// CheckedMonitorIDs returns the set of monitors that have at least one
+// heartbeat.
+//
+// The scheduler needs this to tell a brand-new monitor from one that is simply
+// due later. It is one grouped query rather than a LatestHeartbeat call per
+// monitor, because this runs on every reload and an N+1 there would scale with
+// the monitor count several times a minute.
+func (db *DB) CheckedMonitorIDs(ctx context.Context) (map[int64]struct{}, error) {
+	rows, err := db.Reader.QueryContext(ctx,
+		`SELECT DISTINCT monitor_id FROM heartbeats`)
+	if err != nil {
+		return nil, fmt.Errorf("list checked monitors: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	ids := make(map[int64]struct{})
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan checked monitor id: %w", err)
+		}
+		ids[id] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list checked monitors: %w", err)
+	}
+	return ids, nil
+}
+
 // LatestHeartbeat returns the most recent heartbeat for a monitor.
 // It returns sql.ErrNoRows when the monitor has never been checked.
 func (db *DB) LatestHeartbeat(ctx context.Context, monitorID int64) (Heartbeat, error) {

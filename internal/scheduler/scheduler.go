@@ -35,10 +35,24 @@ import (
 	"github.com/frankgraave/subglance/internal/checker"
 )
 
+// firstCheckDelay is how long a never-checked monitor waits before its first
+// run. Short enough that someone who just saved a monitor sees the result while
+// still looking at the screen, long enough that the standard jitter can still
+// spread a bulk import.
+const firstCheckDelay = 2 * time.Second
+
 // Job is one monitor as the scheduler sees it.
 type Job struct {
 	Monitor  checker.Monitor
 	Interval time.Duration
+
+	// NeverChecked marks a monitor that has no result yet, so its first check
+	// should happen promptly instead of one full interval from now.
+	//
+	// Without this, adding a monitor with a 6-hour interval means waiting six
+	// hours to discover the URL was mistyped. The moment right after saving a
+	// monitor is exactly when someone is watching to see whether it works.
+	NeverChecked bool
 }
 
 // Outcome pairs a check result with the monitor that produced it.
@@ -421,7 +435,16 @@ func (s *Scheduler) reload(ctx context.Context) error {
 		// New monitors get a jittered first run rather than firing instantly,
 		// so importing fifty monitors does not produce fifty simultaneous
 		// requests.
-		*next = append(*next, &queueItem{job: job, next: s.nextRun(now, job.Interval)})
+		//
+		// A monitor that has never been checked is the exception: it gets a
+		// short jittered delay instead of a full interval, so someone who just
+		// saved a monitor sees a result while still looking at the screen. The
+		// jitter still applies, so a bulk import stays spread out.
+		first := s.nextRun(now, job.Interval)
+		if job.NeverChecked {
+			first = s.nextRun(now, firstCheckDelay)
+		}
+		*next = append(*next, &queueItem{job: job, next: first})
 		added++
 	}
 

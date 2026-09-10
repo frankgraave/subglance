@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/frankgraave/subglance/internal/buildinfo"
+	"github.com/frankgraave/subglance/internal/events"
 	"github.com/frankgraave/subglance/internal/store"
 )
 
@@ -21,11 +22,22 @@ type Server struct {
 	log       *slog.Logger
 	db        *store.DB
 	startedAt time.Time
+
+	// bus carries live check results to streaming clients. Nil disables the
+	// stream endpoint rather than crashing it, so the API stays usable in
+	// tests and in any deployment that runs without a checker pipeline.
+	bus *events.Bus
 }
 
 // New returns a Server ready to be mounted.
 func New(log *slog.Logger, db *store.DB) *Server {
 	return &Server{log: log, db: db, startedAt: time.Now()}
+}
+
+// WithBus attaches an event bus, enabling GET /api/v1/stream.
+func (s *Server) WithBus(b *events.Bus) *Server {
+	s.bus = b
+	return s
 }
 
 // Handler returns the root HTTP handler with all routes and middleware applied.
@@ -64,6 +76,12 @@ func (s *Server) Handler() http.Handler {
 	read("GET /api/v1/monitors/{id}/heartbeats", s.handleListHeartbeats)
 	read("GET /api/v1/monitors/{id}/incidents", s.handleListMonitorIncidents)
 	read("GET /api/v1/incidents", s.handleListOpenIncidents)
+
+	// The live stream is a read: a viewer may watch, but watching is all it
+	// does. It sits behind the same auth as everything else — an unguarded
+	// stream would leak every monitor name and outage to anyone who can
+	// reach the port.
+	read("GET /api/v1/stream", s.handleStream)
 
 	read("GET /api/v1/tokens", s.handleListTokens)
 	read("POST /api/v1/tokens", s.handleCreateToken)
@@ -189,6 +207,18 @@ func (r *statusRecorder) Write(b []byte) (int, error) {
 	n, err := r.ResponseWriter.Write(b)
 	r.bytes += n
 	return n, err
+}
+
+// Flush forwards to the underlying writer so streaming responses still work.
+//
+// Wrapping a ResponseWriter silently drops any optional interface it
+// implemented — here http.Flusher. Without this, the SSE endpoint cannot push
+// anything to the client and correctly refuses to start, which looks like a
+// bug in the stream but is really a bug in this wrapper.
+func (r *statusRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 func (s *Server) withLogging(next http.Handler) http.Handler {
