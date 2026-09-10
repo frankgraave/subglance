@@ -91,6 +91,13 @@ func (s *Server) Handler() http.Handler {
 	read("GET /api/v1/monitors/{id}/uptime", s.handleMonitorUptime)
 	read("GET /api/v1/monitors/{id}/incidents", s.handleListMonitorIncidents)
 	read("GET /api/v1/incidents", s.handleListOpenIncidents)
+	read("GET /api/v1/monitors/{id}/channels", s.handleListMonitorChannels)
+
+	// Channel secrets are masked on read (see maskConfig), so a viewer may
+	// see which targets exist without being handed the credentials to post
+	// to them.
+	read("GET /api/v1/channels", s.handleListChannels)
+	read("GET /api/v1/channels/{id}", s.handleGetChannel)
 
 	// The live stream is a read: a viewer may watch, but watching is all it
 	// does. It sits behind the same auth as everything else — an unguarded
@@ -114,6 +121,11 @@ func (s *Server) Handler() http.Handler {
 	write("POST /api/v1/monitors/{id}/pause", s.handlePauseMonitor)
 	write("POST /api/v1/monitors/{id}/resume", s.handleResumeMonitor)
 	write("POST /api/v1/incidents/{id}/ack", s.handleAckIncident)
+	write("PUT /api/v1/monitors/{id}/channels", s.handleSetMonitorChannels)
+
+	write("POST /api/v1/channels", s.handleCreateChannel)
+	write("PUT /api/v1/channels/{id}", s.handleUpdateChannel)
+	write("DELETE /api/v1/channels/{id}", s.handleDeleteChannel)
 
 	// Authenticated: admin only.
 	requireAdmin := s.requireRole(store.Role.CanAdmin, "this action requires an administrator")
