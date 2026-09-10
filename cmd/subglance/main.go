@@ -132,6 +132,10 @@ func run(args []string) error {
 	// otherwise. Cheap deletes, so hourly is plenty.
 	go reapExpired(ctx, db, log)
 
+	// Raw heartbeats are the fastest-growing table in the product. Rolling
+	// them up keeps history unlimited at a bounded cost.
+	go rollupHeartbeats(ctx, db, log)
+
 	errCh := make(chan error, 1)
 	go func() {
 		log.Info("http server listening", "addr", cfg.Addr)
@@ -180,6 +184,46 @@ func displayAddr(addr string) string {
 //
 // Neither is urgent, so failures are logged and retried on the next tick
 // rather than treated as fatal.
+// rollupHeartbeats folds raw heartbeats older than the retention window into
+// hourly buckets, once a day.
+//
+// It runs once at startup rather than waiting out the first interval: an
+// instance that is restarted more often than the interval would otherwise
+// never roll up at all, and that is exactly the instance whose database grows
+// without anyone noticing.
+func rollupHeartbeats(ctx context.Context, db *store.DB, log *slog.Logger) {
+	const interval = 24 * time.Hour
+
+	run := func() {
+		res, err := db.RollupHeartbeats(ctx, store.DefaultRawRetention)
+		if err != nil {
+			// A failed rollup costs disk, not correctness: the raw rows are
+			// still there and the next pass picks them up.
+			log.Error("heartbeat rollup", "error", err)
+			return
+		}
+		if res.Heartbeats > 0 {
+			log.Info("rolled up heartbeats",
+				"heartbeats", res.Heartbeats,
+				"buckets", res.Buckets,
+				"cutoff", res.Cutoff)
+		}
+	}
+
+	run()
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			run()
+		}
+	}
+}
+
 func reapExpired(ctx context.Context, db *store.DB, log *slog.Logger) {
 	ticker := time.NewTicker(time.Hour)
 	defer ticker.Stop()

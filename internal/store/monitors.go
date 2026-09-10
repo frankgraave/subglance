@@ -280,26 +280,60 @@ type UptimeStats struct {
 }
 
 // Uptime computes availability for a monitor over the given window.
+//
+// Availability has to span the rollup boundary: raw heartbeats only reach back
+// DefaultRawRetention, and everything older lives in heartbeat_hourly. The two
+// sources are disjoint — RollupHeartbeats deletes the raw rows in the same
+// transaction that writes the bucket — so their counts simply add up.
+//
+// An hourly bucket that straddles the start of the window is left out rather
+// than counted whole or scaled: it holds no timestamps to split on, so any
+// split would be a guess. The cost is bounded at one hour, and only for
+// windows long enough to reach past the retention horizon.
 func (db *DB) Uptime(ctx context.Context, monitorID int64, window time.Duration) (UptimeStats, error) {
 	since := time.Now().Add(-window).Unix()
 
 	var (
-		stats   UptimeStats
-		upCount sql.NullInt64
-		avgLat  sql.NullFloat64
+		stats     UptimeStats
+		rawTotal  int
+		rawUp     sql.NullInt64
+		rawLatSum sql.NullFloat64
+		rawLatN   int
 	)
 	err := db.Reader.QueryRowContext(ctx, `
-		SELECT count(*), sum(ok), avg(latency_ms)
+		SELECT count(*), sum(ok), sum(latency_ms), count(latency_ms)
 		FROM heartbeats
 		WHERE monitor_id = ? AND ts >= ?`, monitorID, since,
-	).Scan(&stats.Total, &upCount, &avgLat)
+	).Scan(&rawTotal, &rawUp, &rawLatSum, &rawLatN)
 	if err != nil {
 		return UptimeStats{}, fmt.Errorf("compute uptime for monitor %d: %w", monitorID, err)
 	}
 
-	stats.Up = int(upCount.Int64)
-	stats.Down = stats.Total - stats.Up
-	stats.AvgLatency = int(avgLat.Float64)
+	var (
+		aggUp     sql.NullInt64
+		aggDown   sql.NullInt64
+		aggLatSum sql.NullFloat64
+		aggLatN   sql.NullInt64
+	)
+	err = db.Reader.QueryRowContext(ctx, `
+		SELECT sum(up_count), sum(down_count),
+		       sum(COALESCE(latency_avg, 0) * latency_count), sum(latency_count)
+		FROM heartbeat_hourly
+		WHERE monitor_id = ? AND bucket >= ?`, monitorID, since,
+	).Scan(&aggUp, &aggDown, &aggLatSum, &aggLatN)
+	if err != nil {
+		return UptimeStats{}, fmt.Errorf("compute uptime for monitor %d: %w", monitorID, err)
+	}
+
+	stats.Up = int(rawUp.Int64) + int(aggUp.Int64)
+	stats.Down = (rawTotal - int(rawUp.Int64)) + int(aggDown.Int64)
+	stats.Total = stats.Up + stats.Down
+
+	latSum := rawLatSum.Float64 + aggLatSum.Float64
+	latN := rawLatN + int(aggLatN.Int64)
+	if latN > 0 {
+		stats.AvgLatency = int(latSum / float64(latN))
+	}
 	if stats.Total > 0 {
 		stats.Percentage = float64(stats.Up) / float64(stats.Total) * 100
 	}
