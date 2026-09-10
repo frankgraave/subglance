@@ -395,3 +395,54 @@ func nullInt(i int) any {
 	}
 	return i
 }
+
+// UpdateMonitor writes every mutable column of a monitor and returns the row
+// as stored, with a refreshed UpdatedAt.
+//
+// It takes a whole Monitor rather than a set of changed fields: partial-update
+// semantics belong to the API layer, which knows which fields the client
+// actually sent. Here the rule is simpler — what you pass is what the row
+// becomes.
+//
+// It returns sql.ErrNoRows when the monitor does not exist, so callers can map
+// a missing id to 404 without a separate existence query.
+func (db *DB) UpdateMonitor(ctx context.Context, m Monitor) (Monitor, error) {
+	now := time.Now().Unix()
+	applyMonitorDefaults(&m)
+
+	var headersJSON any
+	if len(m.Headers) > 0 {
+		b, err := json.Marshal(m.Headers)
+		if err != nil {
+			return Monitor{}, fmt.Errorf("encode headers: %w", err)
+		}
+		headersJSON = string(b)
+	}
+
+	res, err := db.Writer.ExecContext(ctx, `
+		UPDATE monitors SET
+			name = ?, type = ?, target = ?, interval_s = ?, timeout_s = ?, retries = ?,
+			method = ?, expected_status = ?, keyword = ?, keyword_mode = ?,
+			follow_redirects = ?, headers_json = ?, body = ?, ssl_warn_days = ?,
+			enabled = ?, updated_at = ?
+		WHERE id = ?`,
+		m.Name, m.Type, m.Target, m.IntervalS, m.TimeoutS, m.Retries,
+		m.Method, m.ExpectedStatus, nullString(m.Keyword), m.KeywordMode,
+		m.FollowRedirects, headersJSON, nullString(m.Body), m.SSLWarnDays,
+		m.Enabled, now, m.ID,
+	)
+	if err != nil {
+		return Monitor{}, fmt.Errorf("update monitor %d: %w", m.ID, err)
+	}
+
+	n, err := res.RowsAffected()
+	if err != nil {
+		return Monitor{}, fmt.Errorf("rows affected: %w", err)
+	}
+	if n == 0 {
+		return Monitor{}, sql.ErrNoRows
+	}
+
+	m.UpdatedAt = time.Unix(now, 0).UTC()
+	return m, nil
+}

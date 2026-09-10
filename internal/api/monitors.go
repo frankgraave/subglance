@@ -425,3 +425,185 @@ func pathID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
 }
+
+// patchMonitorRequest is a partial update: every field is a pointer so that
+// "not sent" and "sent as the zero value" stay distinguishable.
+//
+// That distinction is the whole point of PATCH. With plain values, sending
+// {"name":"x"} would also read as interval_s=0 and enabled=false, and a rename
+// would silently pause the monitor and reset its schedule.
+type patchMonitorRequest struct {
+	Name            *string            `json:"name"`
+	Type            *string            `json:"type"`
+	Target          *string            `json:"target"`
+	IntervalS       *int               `json:"interval_s"`
+	TimeoutS        *int               `json:"timeout_s"`
+	Retries         *int               `json:"retries"`
+	Method          *string            `json:"method"`
+	ExpectedStatus  *string            `json:"expected_status"`
+	Keyword         *string            `json:"keyword"`
+	KeywordMode     *string            `json:"keyword_mode"`
+	FollowRedirects *bool              `json:"follow_redirects"`
+	Headers         *map[string]string `json:"headers"`
+	Body            *string            `json:"body"`
+	SSLWarnDays     *int               `json:"ssl_warn_days"`
+	Enabled         *bool              `json:"enabled"`
+}
+
+// handlePatchMonitor applies a partial update to an existing monitor.
+//
+// Until now the only way to change a monitor was to delete and recreate it,
+// which throws away its heartbeats, its uptime history and any open incident.
+// Correcting a typo in a URL should not erase the record of last week's
+// outage.
+func (s *Server) handlePatchMonitor(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+
+	var req patchMonitorRequest
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+
+	ctx := r.Context()
+
+	m, err := s.db.GetMonitor(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "monitor not found")
+		return
+	}
+	if err != nil {
+		s.log.Error("get monitor for patch", "id", id, "error", err)
+		writeError(w, http.StatusInternalServerError, "could not load monitor")
+		return
+	}
+
+	if msg := applyMonitorPatch(&m, req); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
+
+	updated, err := s.db.UpdateMonitor(ctx, m)
+	if errors.Is(err, sql.ErrNoRows) {
+		// Deleted between the read and the write.
+		writeError(w, http.StatusNotFound, "monitor not found")
+		return
+	}
+	if err != nil {
+		s.log.Error("update monitor", "id", id, "error", err)
+		writeError(w, http.StatusBadRequest, "could not update monitor: "+err.Error())
+		return
+	}
+
+	s.log.Info("monitor updated", "id", updated.ID, "name", updated.Name, "target", updated.Target)
+	writeJSON(w, http.StatusOK, s.describeMonitor(r, updated))
+}
+
+// applyMonitorPatch merges the request into m and validates the result. It
+// returns an error message, or "" when the merged monitor is valid.
+//
+// Validation runs on the merged monitor, not on the request. Changing only the
+// type of an existing monitor can invalidate a target that was never touched,
+// and that combination has to be rejected just as firmly as a bad create.
+func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) string {
+	if req.Name != nil {
+		if strings.TrimSpace(*req.Name) == "" {
+			return "name cannot be empty"
+		}
+		m.Name = *req.Name
+	}
+	if req.Type != nil {
+		switch *req.Type {
+		case "http", "tcp", "ping", "ssl":
+			m.Type = *req.Type
+		default:
+			return "unknown type " + *req.Type
+		}
+	}
+	if req.Target != nil {
+		if strings.TrimSpace(*req.Target) == "" {
+			return "target cannot be empty"
+		}
+		m.Target = *req.Target
+	}
+
+	// Unlike create, an explicit 0 here is a mistake rather than "use the
+	// default": the client asked for a 0-second interval on a monitor that
+	// already has a working one.
+	if req.IntervalS != nil {
+		if *req.IntervalS < 20 || *req.IntervalS > 86400 {
+			return "interval_s must be between 20 and 86400"
+		}
+		m.IntervalS = *req.IntervalS
+	}
+	if req.TimeoutS != nil {
+		if *req.TimeoutS < 1 || *req.TimeoutS > 120 {
+			return "timeout_s must be between 1 and 120"
+		}
+		m.TimeoutS = *req.TimeoutS
+	}
+	if req.Retries != nil {
+		if *req.Retries < 0 || *req.Retries > 10 {
+			return "retries must be between 0 and 10"
+		}
+		m.Retries = *req.Retries
+	}
+	if req.Method != nil {
+		switch strings.ToUpper(*req.Method) {
+		case "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS":
+			m.Method = strings.ToUpper(*req.Method)
+		default:
+			return "unsupported HTTP method " + *req.Method
+		}
+	}
+	if req.ExpectedStatus != nil {
+		m.ExpectedStatus = *req.ExpectedStatus
+	}
+	if req.Keyword != nil {
+		m.Keyword = *req.Keyword
+	}
+	if req.KeywordMode != nil {
+		switch *req.KeywordMode {
+		case "absent_ok", "must_contain", "must_not_contain":
+			m.KeywordMode = *req.KeywordMode
+		default:
+			return "unknown keyword_mode " + *req.KeywordMode
+		}
+	}
+	if req.FollowRedirects != nil {
+		m.FollowRedirects = *req.FollowRedirects
+	}
+	if req.Headers != nil {
+		m.Headers = *req.Headers
+	}
+	if req.Body != nil {
+		m.Body = *req.Body
+	}
+	if req.SSLWarnDays != nil {
+		// 0 is rejected rather than accepted as "never warn", because
+		// applyMonitorDefaults would turn it back into 14 and the client
+		// would be told it had disabled a warning it still gets.
+		if *req.SSLWarnDays < 1 || *req.SSLWarnDays > 365 {
+			return "ssl_warn_days must be between 1 and 365"
+		}
+		m.SSLWarnDays = *req.SSLWarnDays
+	}
+	if req.Enabled != nil {
+		m.Enabled = *req.Enabled
+	}
+
+	// Re-validate whenever either half of the pair moved. The target the
+	// monitor ends up with is what the checker will dial, so that is what has
+	// to be legal — the SSRF guard itself runs at dial time, in the checker.
+	if req.Target != nil || req.Type != nil {
+		if msg := validateTargetForType(m.Type, m.Target); msg != "" {
+			return msg
+		}
+	}
+	return ""
+}

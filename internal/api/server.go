@@ -94,6 +94,7 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle(pattern, s.requireAuth(requireWrite(h)))
 	}
 	write("POST /api/v1/monitors", s.handleCreateMonitor)
+	write("PATCH /api/v1/monitors/{id}", s.handlePatchMonitor)
 	write("DELETE /api/v1/monitors/{id}", s.handleDeleteMonitor)
 	write("POST /api/v1/monitors/{id}/pause", s.handlePauseMonitor)
 	write("POST /api/v1/monitors/{id}/resume", s.handleResumeMonitor)
