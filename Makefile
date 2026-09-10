@@ -61,6 +61,27 @@ tidy: ## Tidy go.mod
 .PHONY: check
 check: fmt vet test ## Format, vet and test — run before every commit
 
+# --- Frontend -----------------------------------------------------------
+# The dashboard lives in web/ and is built separately from the Go binary.
+# `npm ci` needs a lockfile, so these targets assume `web/node_modules` is
+# either present or installable; CI runs them in their own job.
+
+.PHONY: web-install
+web-install: ## Install frontend dependencies (npm ci)
+	cd web && npm ci
+
+.PHONY: web-build
+web-build: ## Build the dashboard into web/dist
+	cd web && npm run build
+
+.PHONY: web-test
+web-test: ## Run the frontend suite (token and theme guards)
+	cd web && npm test
+
+.PHONY: web-lint
+web-lint: ## Lint the frontend
+	cd web && npm run lint
+
 .PHONY: clean
 clean: ## Remove build artefacts
-	rm -rf bin tmp coverage.out
+	rm -rf bin tmp coverage.out web/dist

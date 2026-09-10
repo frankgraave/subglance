@@ -1,0 +1,54 @@
+@import "tailwindcss";
+@import "./styles/tokens.css";
+
+/*
+ * Base layer only. Anything that is not a genuine document-wide default
+ * belongs in a component, not here.
+ */
+@layer base {
+  html {
+    background-color: var(--canvas);
+  }
+
+  body {
+    background-color: var(--canvas);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Theme switches are the one place a page-wide transition is justified:
+     without it the flip between light and dark is a jarring flash. Elements
+     opt in via `transition-colors`; this only sets the shared timing. */
+  :root {
+    --theme-transition: background-color var(--dur-attention) var(--ease),
+                        border-color var(--dur-attention) var(--ease),
+                        color var(--dur-attention) var(--ease);
+  }
+
+  /* Focus is never removed, only restyled. The ring uses the ink scale so it
+     stays visible in both themes without introducing a brand colour. */
+  :focus-visible {
+    outline: 2px solid var(--ink-2);
+    outline-offset: 2px;
+  }
+
+  /* Anything measurable is mono so digits line up in a column. */
+  code, kbd, samp, pre {
+    font-family: var(--font-mono);
+  }
+}
+
+/*
+ * Rule 2: silence is the default. A user who has asked for less motion gets
+ * none of the attention-seeking kind, and transitions collapse to
+ * imperceptible rather than zero so state changes still commit correctly.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
