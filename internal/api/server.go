@@ -54,9 +54,59 @@ func (s *Server) WithProber(p Prober) *Server {
 	return s
 }
 
-// Handler returns the root HTTP handler with all routes and middleware applied.
+// access says what a route requires from its caller.
 //
-// Routes are split into three groups by what they require:
+// The zero value is deliberately not "public": a route added without an
+// explicit access level must fail closed, not silently expose itself.
+type access int
+
+const (
+	// accessPublic is reachable without credentials — health, readiness,
+	// setup and login.
+	accessPublic access = iota + 1
+
+	// accessRead is any authenticated user, including viewers.
+	accessRead
+
+	// accessWrite is editors and admins.
+	accessWrite
+
+	// accessAdmin is administrators only.
+	accessAdmin
+)
+
+// String renders the access level for error messages and for the OpenAPI
+// drift test.
+func (a access) String() string {
+	switch a {
+	case accessPublic:
+		return "public"
+	case accessRead:
+		return "read"
+	case accessWrite:
+		return "write"
+	case accessAdmin:
+		return "admin"
+	default:
+		return "unknown"
+	}
+}
+
+// route is one entry in the API surface.
+type route struct {
+	Method  string
+	Pattern string // path only, e.g. "/api/v1/monitors/{id}"
+	Access  access
+}
+
+// routes is the single source of truth for the API surface.
+//
+// It is a table rather than a series of registration calls so the surface can
+// be inspected programmatically: docs/openapi.yaml is checked against this
+// list by TestOpenAPIMatchesRoutes, which makes it impossible for a route and
+// its documentation to drift apart unnoticed.
+//
+// Groups are ordered by what they require:
 //
 //	public   — health, readiness, setup and login
 //	read     — any authenticated user, including viewers
@@ -66,75 +116,187 @@ func (s *Server) WithProber(p Prober) *Server {
 // Everything that is not explicitly public requires authentication. That
 // default matters: forgetting to guard a new route should fail closed, not
 // silently expose it.
+func (s *Server) routes() []route {
+	return []route{
+		// Public.
+		{http.MethodGet, "/health", accessPublic},
+		{http.MethodGet, "/api/v1/health", accessPublic},
+		{http.MethodGet, "/api/v1/ready", accessPublic},
+		{http.MethodGet, "/api/v1/setup", accessPublic},
+		{http.MethodPost, "/api/v1/setup", accessPublic},
+		{http.MethodPost, "/api/v1/auth/login", accessPublic},
+		{http.MethodPost, "/api/v1/auth/logout", accessPublic},
+
+		// Authenticated: any role.
+		{http.MethodGet, "/api/v1/auth/me", accessRead},
+		{http.MethodPost, "/api/v1/auth/password", accessRead},
+
+		{http.MethodGet, "/api/v1/monitors", accessRead},
+		{http.MethodGet, "/api/v1/monitors/{id}", accessRead},
+		{http.MethodGet, "/api/v1/monitors/{id}/heartbeats", accessRead},
+		{http.MethodGet, "/api/v1/monitors/{id}/uptime", accessRead},
+		{http.MethodGet, "/api/v1/monitors/{id}/incidents", accessRead},
+		{http.MethodGet, "/api/v1/incidents", accessRead},
+		{http.MethodGet, "/api/v1/monitors/{id}/channels", accessRead},
+
+		// Channel secrets are masked on read (see maskConfig), so a viewer may
+		// see which targets exist without being handed the credentials to post
+		// to them.
+		{http.MethodGet, "/api/v1/channels", accessRead},
+		{http.MethodGet, "/api/v1/channels/{id}", accessRead},
+
+		// The live stream is a read: a viewer may watch, but watching is all it
+		// does. It sits behind the same auth as everything else — an unguarded
+		// stream would leak every monitor name and outage to anyone who can
+		// reach the port.
+		{http.MethodGet, "/api/v1/stream", accessRead},
+
+		{http.MethodGet, "/api/v1/tokens", accessRead},
+		{http.MethodPost, "/api/v1/tokens", accessRead},
+		{http.MethodDelete, "/api/v1/tokens/{id}", accessRead},
+
+		// Authenticated: editor or admin.
+		{http.MethodPost, "/api/v1/monitors", accessWrite},
+		{http.MethodPatch, "/api/v1/monitors/{id}", accessWrite},
+		{http.MethodDelete, "/api/v1/monitors/{id}", accessWrite},
+		{http.MethodPost, "/api/v1/monitors/{id}/check", accessWrite},
+		{http.MethodPost, "/api/v1/monitors/{id}/pause", accessWrite},
+		{http.MethodPost, "/api/v1/monitors/{id}/resume", accessWrite},
+		{http.MethodPost, "/api/v1/incidents/{id}/ack", accessWrite},
+		{http.MethodPut, "/api/v1/monitors/{id}/channels", accessWrite},
+
+		{http.MethodPost, "/api/v1/channels", accessWrite},
+		{http.MethodPut, "/api/v1/channels/{id}", accessWrite},
+		{http.MethodDelete, "/api/v1/channels/{id}", accessWrite},
+
+		// Authenticated: admin only.
+		{http.MethodGet, "/api/v1/users", accessAdmin},
+		{http.MethodPost, "/api/v1/users", accessAdmin},
+		{http.MethodDelete, "/api/v1/users/{id}", accessAdmin},
+	}
+}
+
+// handlerFor maps a route to the handler that serves it.
+//
+// Keeping this separate from routes() is what lets the drift test walk the
+// surface without constructing handlers, and it makes an unrouted entry a
+// startup panic instead of a silent 404 in production.
+func (s *Server) handlerFor(rt route) http.HandlerFunc {
+	switch rt.Method + " " + rt.Pattern {
+	case "GET /health", "GET /api/v1/health":
+		return s.handleHealth
+	case "GET /api/v1/ready":
+		return s.handleReady
+	case "GET /api/v1/setup":
+		return s.handleSetupStatus
+	case "POST /api/v1/setup":
+		return s.handleSetup
+	case "POST /api/v1/auth/login":
+		return s.handleLogin
+	case "POST /api/v1/auth/logout":
+		return s.handleLogout
+
+	case "GET /api/v1/auth/me":
+		return s.handleMe
+	case "POST /api/v1/auth/password":
+		return s.handleChangePassword
+
+	case "GET /api/v1/monitors":
+		return s.handleListMonitors
+	case "GET /api/v1/monitors/{id}":
+		return s.handleGetMonitor
+	case "GET /api/v1/monitors/{id}/heartbeats":
+		return s.handleListHeartbeats
+	case "GET /api/v1/monitors/{id}/uptime":
+		return s.handleMonitorUptime
+	case "GET /api/v1/monitors/{id}/incidents":
+		return s.handleListMonitorIncidents
+	case "GET /api/v1/incidents":
+		return s.handleListOpenIncidents
+	case "GET /api/v1/monitors/{id}/channels":
+		return s.handleListMonitorChannels
+
+	case "GET /api/v1/channels":
+		return s.handleListChannels
+	case "GET /api/v1/channels/{id}":
+		return s.handleGetChannel
+
+	case "GET /api/v1/stream":
+		return s.handleStream
+
+	case "GET /api/v1/tokens":
+		return s.handleListTokens
+	case "POST /api/v1/tokens":
+		return s.handleCreateToken
+	case "DELETE /api/v1/tokens/{id}":
+		return s.handleRevokeToken
+
+	case "POST /api/v1/monitors":
+		return s.handleCreateMonitor
+	case "PATCH /api/v1/monitors/{id}":
+		return s.handlePatchMonitor
+	case "DELETE /api/v1/monitors/{id}":
+		return s.handleDeleteMonitor
+	case "POST /api/v1/monitors/{id}/check":
+		return s.handleCheckMonitor
+	case "POST /api/v1/monitors/{id}/pause":
+		return s.handlePauseMonitor
+	case "POST /api/v1/monitors/{id}/resume":
+		return s.handleResumeMonitor
+	case "POST /api/v1/incidents/{id}/ack":
+		return s.handleAckIncident
+	case "PUT /api/v1/monitors/{id}/channels":
+		return s.handleSetMonitorChannels
+
+	case "POST /api/v1/channels":
+		return s.handleCreateChannel
+	case "PUT /api/v1/channels/{id}":
+		return s.handleUpdateChannel
+	case "DELETE /api/v1/channels/{id}":
+		return s.handleDeleteChannel
+
+	case "GET /api/v1/users":
+		return s.handleListUsers
+	case "POST /api/v1/users":
+		return s.handleCreateUser
+	case "DELETE /api/v1/users/{id}":
+		return s.handleDeleteUser
+	}
+	return nil
+}
+
+// Handler returns the root HTTP handler with all routes and middleware applied.
+//
+// It iterates routes() and wraps each handler in the guards its access level
+// demands. An entry with no handler, or with an access level this function
+// does not know, panics at construction time rather than being registered
+// unguarded — the fail-closed default in executable form.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
-	// Public.
-	mux.HandleFunc("GET /health", s.handleHealth)
-	mux.HandleFunc("GET /api/v1/health", s.handleHealth)
-	mux.HandleFunc("GET /api/v1/ready", s.handleReady)
-	mux.HandleFunc("GET /api/v1/setup", s.handleSetupStatus)
-	mux.HandleFunc("POST /api/v1/setup", s.handleSetup)
-	mux.HandleFunc("POST /api/v1/auth/login", s.handleLogin)
-	mux.HandleFunc("POST /api/v1/auth/logout", s.handleLogout)
-
-	// Authenticated: any role.
-	read := func(pattern string, h http.HandlerFunc) {
-		mux.Handle(pattern, s.requireAuth(h))
-	}
-	read("GET /api/v1/auth/me", s.handleMe)
-	read("POST /api/v1/auth/password", s.handleChangePassword)
-
-	read("GET /api/v1/monitors", s.handleListMonitors)
-	read("GET /api/v1/monitors/{id}", s.handleGetMonitor)
-	read("GET /api/v1/monitors/{id}/heartbeats", s.handleListHeartbeats)
-	read("GET /api/v1/monitors/{id}/uptime", s.handleMonitorUptime)
-	read("GET /api/v1/monitors/{id}/incidents", s.handleListMonitorIncidents)
-	read("GET /api/v1/incidents", s.handleListOpenIncidents)
-	read("GET /api/v1/monitors/{id}/channels", s.handleListMonitorChannels)
-
-	// Channel secrets are masked on read (see maskConfig), so a viewer may
-	// see which targets exist without being handed the credentials to post
-	// to them.
-	read("GET /api/v1/channels", s.handleListChannels)
-	read("GET /api/v1/channels/{id}", s.handleGetChannel)
-
-	// The live stream is a read: a viewer may watch, but watching is all it
-	// does. It sits behind the same auth as everything else — an unguarded
-	// stream would leak every monitor name and outage to anyone who can
-	// reach the port.
-	read("GET /api/v1/stream", s.handleStream)
-
-	read("GET /api/v1/tokens", s.handleListTokens)
-	read("POST /api/v1/tokens", s.handleCreateToken)
-	read("DELETE /api/v1/tokens/{id}", s.handleRevokeToken)
-
-	// Authenticated: editor or admin.
 	requireWrite := s.requireRole(store.Role.CanWrite, "your role does not allow changes")
-	write := func(pattern string, h http.HandlerFunc) {
-		mux.Handle(pattern, s.requireAuth(requireWrite(h)))
-	}
-	write("POST /api/v1/monitors", s.handleCreateMonitor)
-	write("PATCH /api/v1/monitors/{id}", s.handlePatchMonitor)
-	write("DELETE /api/v1/monitors/{id}", s.handleDeleteMonitor)
-	write("POST /api/v1/monitors/{id}/check", s.handleCheckMonitor)
-	write("POST /api/v1/monitors/{id}/pause", s.handlePauseMonitor)
-	write("POST /api/v1/monitors/{id}/resume", s.handleResumeMonitor)
-	write("POST /api/v1/incidents/{id}/ack", s.handleAckIncident)
-	write("PUT /api/v1/monitors/{id}/channels", s.handleSetMonitorChannels)
-
-	write("POST /api/v1/channels", s.handleCreateChannel)
-	write("PUT /api/v1/channels/{id}", s.handleUpdateChannel)
-	write("DELETE /api/v1/channels/{id}", s.handleDeleteChannel)
-
-	// Authenticated: admin only.
 	requireAdmin := s.requireRole(store.Role.CanAdmin, "this action requires an administrator")
-	admin := func(pattern string, h http.HandlerFunc) {
-		mux.Handle(pattern, s.requireAuth(requireAdmin(h)))
+
+	for _, rt := range s.routes() {
+		h := s.handlerFor(rt)
+		if h == nil {
+			panic("api: no handler for route " + rt.Method + " " + rt.Pattern)
+		}
+
+		pattern := rt.Method + " " + rt.Pattern
+		switch rt.Access {
+		case accessPublic:
+			mux.Handle(pattern, h)
+		case accessRead:
+			mux.Handle(pattern, s.requireAuth(h))
+		case accessWrite:
+			mux.Handle(pattern, s.requireAuth(requireWrite(h)))
+		case accessAdmin:
+			mux.Handle(pattern, s.requireAuth(requireAdmin(h)))
+		default:
+			panic("api: unknown access level for route " + pattern)
+		}
 	}
-	admin("GET /api/v1/users", s.handleListUsers)
-	admin("POST /api/v1/users", s.handleCreateUser)
-	admin("DELETE /api/v1/users/{id}", s.handleDeleteUser)
 
 	return s.withRecovery(s.withSecurityHeaders(s.withLogging(mux)))
 }
