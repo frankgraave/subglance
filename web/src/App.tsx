@@ -3,6 +3,7 @@ import { useTheme } from "./theme/useTheme";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { TokenSheet } from "./components/TokenSheet";
 import { HeartbeatGallery } from "./heartbeat/Gallery";
+import { DashboardWorkbench } from "./monitors/Workbench";
 
 /**
  * Component workbench. Not the product: the dashboard itself arrives with
@@ -11,6 +12,7 @@ import { HeartbeatGallery } from "./heartbeat/Gallery";
  */
 
 const TABS = [
+  { id: "dashboard", label: "Dashboard" },
   { id: "heartbeat", label: "Heartbeat bar" },
   { id: "tokens", label: "Design tokens" },
 ] as const;
@@ -19,7 +21,7 @@ type Tab = (typeof TABS)[number]["id"];
 
 export default function App() {
   const { preference, resolved, setPreference } = useTheme();
-  const [tab, setTab] = useState<Tab>("heartbeat");
+  const [tab, setTab] = useState<Tab>("dashboard");
 
   return (
     <div className="min-h-dvh bg-canvas text-ink transition-colors">
@@ -49,8 +51,10 @@ export default function App() {
           ))}
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-6 py-8">
-        {tab === "heartbeat" ? <HeartbeatGallery /> : <TokenSheet />}
+      <main className={`mx-auto px-6 py-8 ${tab === "dashboard" ? "max-w-6xl" : "max-w-5xl"}`}>
+        {tab === "dashboard" && <DashboardWorkbench />}
+        {tab === "heartbeat" && <HeartbeatGallery />}
+        {tab === "tokens" && <TokenSheet />}
       </main>
     </div>
   );

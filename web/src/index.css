@@ -3,6 +3,8 @@
 /* Component styles live next to their component; they are collected here so
    the app keeps a single CSS entrypoint. */
 @import "./heartbeat/heartbeat.css";
+@import "./monitors/led.css";
+@import "./monitors/monitors.css";
 
 /*
  * Base layer only. Anything that is not a genuine document-wide default

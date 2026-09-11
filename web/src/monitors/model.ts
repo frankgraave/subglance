@@ -1,0 +1,147 @@
+/**
+ * Ordering, grouping, filtering and announcing for the dashboard.
+ *
+ * All of it is pure and DOM-free, for the same reason the heartbeat maths is:
+ * the hard decisions here are about *order and wording*, not markup. Whether a
+ * broken monitor jumps to the top, whether a list re-sorts under the cursor,
+ * and what a screen reader is told when 200 rows tick over are the questions
+ * this file answers, and each of them is testable without a browser.
+ */
+
+import type { Monitor, MonitorStatus } from "./types";
+
+/**
+ * Deterministic name ordering.
+ *
+ * A fixed locale rather than the visitor's: the tests, the server and two
+ * different browsers must agree on the order, and `localeCompare` without an
+ * explicit locale does not guarantee that. The id breaks ties so two monitors
+ * sharing a name still have exactly one correct order.
+ */
+function byName(a: Monitor, b: Monitor): number {
+  const byLabel = a.name.localeCompare(b.name, "en", { sensitivity: "base", numeric: true });
+  return byLabel !== 0 ? byLabel : a.id.localeCompare(b.id);
+}
+
+export type Partitioned = {
+  /** The short, volatile section at the top. Usually empty. */
+  attention: Monitor[];
+  /** Everything else, in a stable alphabetical order. */
+  rest: Monitor[];
+};
+
+/**
+ * Splits the list into "needs attention" and "everything else".
+ *
+ * **Only `down` is attention, deliberately — not `pending`.** Pending is the
+ * ordinary state of a monitor that has not finished its first check yet, so a
+ * fresh install or a restarted scheduler would fill the attention section with
+ * monitors that are merely young. The section earns its position by being
+ * almost always empty; diluting it with routine states teaches people to skip
+ * it, which is exactly the failure mode it exists to prevent. Pending stays in
+ * the main list, where its LED and label still say what is going on.
+ *
+ * **Paused is not attention either**, for a blunter reason: nobody is
+ * watching it because the user said so.
+ *
+ * The main list never re-sorts on status, only on name (research note 4). A
+ * row that moves out from under the cursor while you are reaching for it is
+ * worse than a row in a slightly stale position — and with the attention
+ * section on top, the thing you needed to see moved anyway.
+ */
+export function partition(monitors: readonly Monitor[]): Partitioned {
+  const attention: Monitor[] = [];
+  const rest: Monitor[] = [];
+  for (const monitor of monitors) {
+    (monitor.status === "down" ? attention : rest).push(monitor);
+  }
+  // Both halves sort by the same stable comparator, so the same input always
+  // produces the same output — no dependence on the caller's array order.
+  return { attention: attention.sort(byName), rest: rest.sort(byName) };
+}
+
+/**
+ * Substring match on name and target, case-insensitive.
+ *
+ * Target is searched as well as name because at 200 monitors people look for
+ * "the one on api.example.com" at least as often as they look for one by
+ * name. Substring rather than fuzzy matching: fuzzy scoring turns "no match"
+ * into "a bad match", and on a monitoring screen an unexpected row is worse
+ * than an empty result (DESIGN.md §12 lists search as a blocking gap).
+ *
+ * An empty or whitespace-only query returns the input untouched, so "not
+ * searching" costs nothing.
+ */
+export function filterMonitors(monitors: readonly Monitor[], query: string): Monitor[] {
+  const needle = query.trim().toLowerCase();
+  if (needle === "") return [...monitors];
+  return monitors.filter(
+    (m) =>
+      m.name.toLowerCase().includes(needle) || m.target.toLowerCase().includes(needle),
+  );
+}
+
+export type Summary = Record<MonitorStatus, number> & { total: number };
+
+/** Counts per status for the heading. */
+export function summarise(monitors: readonly Monitor[]): Summary {
+  const summary: Summary = { up: 0, down: 0, pending: 0, paused: 0, total: monitors.length };
+  for (const monitor of monitors) summary[monitor.status] += 1;
+  return summary;
+}
+
+/** How many names a live announcement will read out before summarising. */
+export const MAX_ANNOUNCED_NAMES = 5;
+
+function names(monitors: readonly Monitor[]): string {
+  const shown = monitors.slice(0, MAX_ANNOUNCED_NAMES).map((m) => m.name);
+  const hidden = monitors.length - shown.length;
+  // A screen reader reading 200 names is not an announcement, it is a
+  // filibuster. Past a handful the count carries the same information.
+  return hidden > 0 ? `${shown.join(", ")} and ${hidden} more` : shown.join(", ");
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/**
+ * A sentence for the live region, or null when nothing worth saying happened.
+ *
+ * Null is the important half. The scheduler produces a result per monitor per
+ * interval, and every one of those updates the latency, the uptime and the
+ * heartbeat bar without changing anything a listener needs to hear. Only a
+ * *status transition* is announced; routine ticks are silent. Without that
+ * rule the live region would talk continuously and be turned off, taking the
+ * outage announcement with it.
+ *
+ * The sentence describes the resulting state rather than the delta ("2
+ * monitors down: api, db. 198 up.") because that is what someone who missed
+ * the previous announcement needs — a delta is only meaningful if you heard
+ * all the ones before it.
+ */
+export function describeTransitions(
+  prev: readonly Monitor[],
+  next: readonly Monitor[],
+): string | null {
+  const before = new Map(prev.map((m) => [m.id, m.status]));
+  const changed = next.filter((m) => {
+    const was = before.get(m.id);
+    // A monitor that was not in the previous list is new, not a transition.
+    // Announcing the whole list on first render would speak over the page.
+    return was !== undefined && was !== m.status;
+  });
+  if (changed.length === 0) return null;
+
+  const { down, up, pending, paused, total } = summarise(next);
+  const downNames = names(next.filter((m) => m.status === "down").sort(byName));
+
+  if (down > 0) {
+    const parts = [`${plural(down, "monitor")} down: ${downNames}.`, `${up} up.`];
+    if (pending > 0) parts.push(`${pending} pending.`);
+    return parts.join(" ");
+  }
+  // Everything recovered. Say so explicitly: silence after an outage is
+  // indistinguishable from a page that stopped updating.
+  if (paused > 0 && up === 0) return `All ${plural(total, "monitor")} paused.`;
+  if (pending > 0) return `No monitors down. ${up} up, ${pending} pending.`;
+  return `All ${plural(up, "monitor")} up.`;
+}

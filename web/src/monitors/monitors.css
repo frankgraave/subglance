@@ -1,0 +1,231 @@
+/*
+ * Dashboard table styling. Colour lives in tokens.css; this file owns layout.
+ *
+ * CRITICAL: nothing here may set `display: flex`, `grid` or `contents` on a
+ * table element (table, thead, tbody, tr, th, td). Safari drops the table's
+ * semantics when you do — the rows stop being rows for a screen reader — and
+ * the failure is invisible in Chrome. Column widths come from `table-layout:
+ * fixed` plus the <colgroup>, which is the reason that colgroup exists.
+ */
+
+.mon-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.mon-topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.mon-title {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -.01em;
+}
+
+.mon-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.mon-count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.mon-count-value {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.mon-search-input {
+  width: 240px;
+  max-width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  transition: border-color var(--dur-hover) var(--ease);
+}
+
+.mon-search-input::placeholder { color: var(--ink-4); }
+.mon-search-input:hover { border-color: var(--border-hi); }
+
+.mon-result-count {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.mon-board {
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.mon-table {
+  width: 100%;
+  /* Fixed layout keeps all 200 rows on one set of column widths without the
+     browser measuring every cell, and stops a long target from shoving the
+     numeric columns around. */
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.mon-col--led { width: 46px; }
+.mon-col--name { width: auto; }
+.mon-col--beats { width: 184px; }
+.mon-col--num { width: 92px; }
+
+.mon-head {
+  height: 34px;
+  padding: 0 var(--space-3);
+  text-align: left;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--ink-4);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.mon-head--num { text-align: right; }
+
+.mon-section-title {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--ink-3);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.mon-row {
+  border-bottom: 1px solid var(--border);
+  transition: background var(--dur-hover) var(--ease);
+}
+
+.mon-row:last-child { border-bottom: 0; }
+.mon-row:hover { background: var(--surface-2); }
+
+/* Trouble warms the row's leading edge instead of filling it. A coloured fill
+   across a list of 200 is noise; two warm edges in a quiet list is
+   information (DESIGN.md §6, §10). border-left rather than a ::before,
+   because absolutely positioning inside a <td> is unreliable across engines. */
+.mon-row[data-status="down"] {
+  border-left: 2px solid var(--down);
+  background: var(--down-dim);
+}
+
+.mon-row[data-status="pending"] { border-left: 2px solid var(--warn); }
+.mon-row[data-status="paused"] { opacity: .62; }
+
+.mon-cell {
+  height: 58px;
+  padding: 0 var(--space-3);
+  vertical-align: middle;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.mon-cell--led { text-align: left; }
+
+.mon-cell--name {
+  /* min-width:0 on a fixed-layout cell is what lets the ellipsis engage
+     instead of the text forcing the column wider. */
+  min-width: 0;
+  text-align: left;
+  font-weight: 400;
+}
+
+.mon-name {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 450;
+  letter-spacing: -.005em;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mon-target {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mon-cell--num {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.mon-error {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  color: var(--down);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The empty dashboard is the onboarding (DESIGN.md §7.6), so it gets real
+   vertical space rather than a one-line apology. */
+.mon-empty {
+  padding: var(--space-12) var(--space-6);
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.mon-empty-leds {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  margin-bottom: var(--space-5);
+}
+
+.mon-empty-leds .led { opacity: .28; }
+
+.mon-empty-title {
+  margin-bottom: var(--space-2);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -.01em;
+  color: var(--ink);
+}
+
+.mon-empty-body {
+  max-width: 42ch;
+  margin: 0 auto;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink-3);
+}
