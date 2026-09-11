@@ -7,8 +7,11 @@ a glance whether everything is running, what is broken, and since when.
 
 One binary, one command, no configuration required.
 
-> **Status: early development.** The check engine is being built. Not usable yet
-> — watch or star the repo if you want to know when it is.
+> **Status: early development, not yet released.** The engine works end to end:
+> monitors are scheduled, checked, confirmed into incidents, and streamed to a
+> live dashboard. What is missing before a first release is listed under
+> [Where it stands](#where-it-stands) — most notably, **notifications are stored
+> but never sent**. Watch or star the repo if you want to know when v0.1 lands.
 
 ## Why another uptime monitor
 
@@ -26,18 +29,60 @@ getting:
 - **Light enough to forget about.** A single static binary with SQLite, not a
   stack of services.
 
-## Planned for v0.1
+## Where it stands
 
-- HTTP(S) checks: status code, response time, keyword present/absent
-- TCP port and ping checks
-- SSL certificate expiry warnings
-- Per-monitor intervals, with retries before an incident is declared
-- Uptime over 24h / 7d / 30d and incident history
-- Dashboard with heartbeat timeline, plus per-monitor detail and latency graph
-- Notifications: webhook, Discord, Slack, Telegram, email
-- Multiple users, sessions, and API tokens
-- REST API with an OpenAPI specification
-- Docker image, SQLite by default — no external database needed
+An honest split, because the roadmap below says nothing about what you can run
+today. Everything below is judged by whether it works end to end, not by whether
+code exists for it.
+
+### Working
+
+- **HTTP(S), TCP, ping and SSL checks**, including keyword matching, response
+  time, and certificate expiry warnings
+- **Failure classification** — a DNS failure, a refused connection and an expired
+  certificate are three different problems, and the API says which one you have
+- **Scheduler**: a timing wheel with a bounded worker pool, so 500 monitors do
+  not mean 500 goroutines or 500 simultaneous requests
+- **State engine**: confirmation before alarming, incident lifecycle, flapping
+  suppression
+- **REST API v1** with an OpenAPI 3.1 specification, checked against the server's
+  own route table on every test run
+- **Authentication**: sessions, API tokens, three roles, first-run setup
+- **Live dashboard**: rows on a laptop, cards on a phone, heartbeat bars, and an
+  SSE stream that warns when it loses the connection
+- **One binary**: the dashboard is compiled in with `go:embed`
+
+### Not working yet
+
+- **Sending notifications.** Channels can be created, stored and validated
+  (webhook, Discord, Slack, Telegram, email), and the state engine decides
+  correctly *when* a human should be told — but nothing delivers the message.
+  This is the largest gap between the README and reality, and the reason there
+  is no release yet.
+- **The stale state.** When the stream drops, a banner says so — but every LED
+  keeps its last known colour, so the screen still asserts a status it can no
+  longer verify. `docs/DESIGN.md` §6 specifies draining the colour instead; that
+  is not implemented yet.
+- **Most of the UI beyond the dashboard.** No monitor detail view, no incident
+  screen, no settings, no notification configuration. The app shell (sidebar,
+  layout switcher, status wall) is designed in `docs/DESIGN.md` but not built.
+- **Scale.** The dashboard is tested with a handful of monitors, not the 200 it
+  targets: no search, no filtering, no virtualisation.
+- **Maintenance windows**, tags, and a paused monitor that looks different from
+  one that has no data yet.
+- **The Docker image.** There is no Dockerfile yet, so the `docker run` below
+  does not work — build from source instead.
+
+## Still planned for v0.1
+
+What the list above does not yet cover, and what has to exist before a first
+release:
+
+- Delivering notifications: webhook, Discord, Slack, Telegram, email
+- Per-monitor detail view with a latency graph
+- Incident, monitor, notification and settings screens
+- Maintenance windows
+- A Docker image, SQLite by default — no external database needed
 
 Deliberately **not** in v0.1: status pages, config-as-code, multi-region checks,
 on-call schedules, SSO, mobile app, CLI, Postgres. They are on the roadmap; they
@@ -45,7 +90,8 @@ are not in the first release.
 
 ## Getting started
 
-Not yet — there is no release to install. Once there is, it will be this:
+There is no release and no image to pull yet, so the only way to run SubGlance
+today is to build it. Once v0.1 ships, this will be the whole installation:
 
 ```sh
 docker run -d -p 8080:8080 -v subglance:/data ghcr.io/frankgraave/subglance
@@ -53,7 +99,7 @@ docker run -d -p 8080:8080 -v subglance:/data ghcr.io/frankgraave/subglance
 
 ### Building from source
 
-Requires Go 1.25 or newer.
+Requires Go 1.26 or newer. Node 24 is needed only if you want the dashboard.
 
 ```sh
 git clone https://github.com/frankgraave/subglance.git
@@ -230,6 +276,8 @@ GET    /api/v1/monitors/{id}/incidents     incident history
 
 GET    /api/v1/incidents                   every unresolved incident
 POST   /api/v1/incidents/{id}/ack          acknowledge — seen, being worked on
+
+GET    /api/v1/stream                      live check results and status changes (SSE)
 ```
 
 `check` exists so a fix can be verified without waiting out the interval. For
@@ -254,6 +302,10 @@ specification following it.
 
 Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) first — every
 contribution requires signing the [CLA](CLA.md).
+
+Work happens on `develop`; `main` only receives releases. Every change arrives
+through a pull request against `develop`, where CI and an automated review run
+before it can be merged. `develop` is protected: direct pushes are rejected.
 
 ## License
 

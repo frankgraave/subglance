@@ -27,13 +27,21 @@ Without that confirmation a pull request cannot be merged.
 
 ## Getting set up
 
-Requires Go 1.25 or newer.
+Requires Go 1.26 or newer. Node 24 is needed only for the dashboard in `web/`;
+the Go side builds and tests without it.
 
 ```sh
 git clone https://github.com/frankgraave/subglance.git
 cd subglance
 make check          # format, vet and test
 make run            # runs locally on :8080 against ./tmp
+```
+
+Working on the dashboard as well:
+
+```sh
+make web-install    # npm ci, once
+make dist           # build the dashboard, then a binary containing it
 ```
 
 `make help` lists every target.
@@ -47,6 +55,11 @@ If you touched anything concurrent, run the tests a few times — race condition
 are shy.
 
 ## Code conventions
+
+**Everything in this repository is written in English** — code, comments,
+documentation, commit messages, branch names, test names, log lines and error
+strings. Contributors should not need to know the maintainer's first language to
+read the history.
 
 **Go.** Standard library first. Every dependency is a thing that can break, needs
 updating, and adds to the binary. There is a size target to defend, so a new
@@ -80,8 +93,11 @@ Write the subject in the imperative: "add SSL expiry check", not "added" or
 1. Open an issue first for anything substantial, so the approach can be agreed
    before you invest time.
 2. Fork the repository and work on a separate branch.
-3. Keep a pull request to one subject.
-4. Describe what you are changing and why. The why is the part reviewers cannot
+3. Target `develop`, not `main`. `main` only receives releases, and `develop` is
+   protected — every change goes through a pull request, all CI checks must pass,
+   and review threads must be resolved before it can be merged.
+4. Keep a pull request to one subject.
+5. Describe what you are changing and why. The why is the part reviewers cannot
    reconstruct from the diff.
 
 ## Reporting bugs
