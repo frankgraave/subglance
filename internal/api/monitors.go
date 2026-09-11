@@ -324,6 +324,7 @@ func (s *Server) handleGetMonitor(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "could not load monitor")
 		return
 	}
+	setMonitorETag(w, m)
 	writeJSON(w, http.StatusOK, s.describeMonitor(r, m))
 }
 
@@ -551,10 +552,31 @@ type patchMonitorRequest struct {
 // which throws away its heartbeats, its uptime history and any open incident.
 // Correcting a typo in a URL should not erase the record of last week's
 // outage.
+//
+// An If-Match header makes the write conditional on the monitor not having
+// changed since the client read it. Without one the write stays
+// last-write-wins, because making the header mandatory would break every
+// script written before it existed.
 func (s *Server) handlePatchMonitor(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok {
 		return
+	}
+
+	// Parse the precondition before the body: a malformed If-Match is a
+	// client error regardless of what it was trying to send.
+	ifMatch := r.Header.Get("If-Match")
+	var (
+		wantTags []string
+		wantAny  bool
+	)
+	if ifMatch != "" {
+		var valid bool
+		wantTags, wantAny, valid = parseIfMatch(ifMatch)
+		if !valid {
+			writeError(w, http.StatusBadRequest, "malformed If-Match header")
+			return
+		}
 	}
 
 	var req patchMonitorRequest
@@ -569,6 +591,13 @@ func (s *Server) handlePatchMonitor(w http.ResponseWriter, r *http.Request) {
 
 	m, err := s.db.GetMonitor(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
+		// 404 rather than 412, even for a conditional request. RFC 9110 would
+		// allow either, and a monitor that never existed is more usefully
+		// described as missing than as a stale version: 412 tells the client to
+		// re-fetch and retry, which would loop forever on an id that is simply
+		// wrong. The genuine race — deleted between this read and the write
+		// below — is answered as a conflict, where re-fetching is the right
+		// advice.
 		writeError(w, http.StatusNotFound, "monitor not found")
 		return
 	}
@@ -578,25 +607,65 @@ func (s *Server) handlePatchMonitor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A conditional request is decided by the UPDATE itself, so nothing is
+	// compared here. `*` asks only that the monitor exist, which the
+	// successful load above already established, so it needs no version
+	// predicate and falls through to the unconditional write.
+	conditional := ifMatch != "" && !wantAny
+
 	if msg := applyMonitorPatch(&m, req); msg != "" {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
 
-	updated, err := s.db.UpdateMonitor(ctx, m)
-	if errors.Is(err, sql.ErrNoRows) {
-		// Deleted between the read and the write.
+	var updated store.Monitor
+	if conditional {
+		updated, err = s.db.UpdateMonitorIfUnchanged(ctx, m, ifMatchVersions(wantTags))
+	} else {
+		updated, err = s.db.UpdateMonitor(ctx, m)
+	}
+	switch {
+	case err == nil:
+	case errors.Is(err, store.ErrVersionConflict):
+		writeConflict(w, id)
+		return
+	case errors.Is(err, sql.ErrNoRows):
+		// Deleted between the read and the write. For `If-Match: *` that is a
+		// failed precondition, not a missing resource: the client asked us to
+		// write only if the monitor still existed, and by the time we wrote it
+		// did not. 404 would describe the row; 412 answers the question that
+		// was actually asked.
+		if wantAny {
+			writeConflict(w, id)
+			return
+		}
 		writeError(w, http.StatusNotFound, "monitor not found")
 		return
-	}
-	if err != nil {
+	default:
 		s.log.Error("update monitor", "id", id, "error", err)
 		writeError(w, http.StatusBadRequest, "could not update monitor: "+err.Error())
 		return
 	}
 
+	// The response carries the new version so a client editing repeatedly can
+	// keep going without re-fetching — without it, every conditional PATCH
+	// would have to be followed by a GET just to learn the next validator.
+	setMonitorETag(w, updated)
+
 	s.log.Info("monitor updated", "id", updated.ID, "name", updated.Name, "target", updated.Target)
 	writeJSON(w, http.StatusOK, s.describeMonitor(r, updated))
+}
+
+// writeConflict reports that the monitor moved on since the caller read it.
+//
+// No fresh ETag is returned with it: the client has to look at what the other
+// editor wrote before deciding whether its own change still makes sense, and
+// handing over a validator it could blindly retry with would invite exactly
+// the overwrite this endpoint refused.
+func writeConflict(w http.ResponseWriter, id int64) {
+	writeError(w, http.StatusPreconditionFailed,
+		"monitor "+strconv.FormatInt(id, 10)+" was modified by someone else; "+
+			"fetch it again and reapply your change")
 }
 
 // applyMonitorPatch merges the request into m and validates the result. It

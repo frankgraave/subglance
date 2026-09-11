@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -197,9 +198,14 @@ func (db *DB) DeleteMonitor(ctx context.Context, id int64) error {
 }
 
 // SetMonitorEnabled pauses or resumes a monitor.
+//
+// updated_at is forced to advance rather than simply set to now: it is the
+// version stamp behind ETag/If-Match, and at second resolution a pause in the
+// same second as a previous write would leave the stamp equal and let a stale
+// conditional PATCH through.
 func (db *DB) SetMonitorEnabled(ctx context.Context, id int64, enabled bool) error {
 	_, err := db.Writer.ExecContext(ctx,
-		"UPDATE monitors SET enabled = ?, updated_at = ? WHERE id = ?",
+		"UPDATE monitors SET enabled = ?, updated_at = MAX(?, updated_at + 1) WHERE id = ?",
 		enabled, time.Now().Unix(), id)
 	if err != nil {
 		return fmt.Errorf("set monitor %d enabled=%v: %w", id, enabled, err)
@@ -480,6 +486,10 @@ func nullInt(i int) any {
 	return i
 }
 
+// ErrVersionConflict reports that a conditional update was refused because the
+// row had already moved on. The API layer maps it to 412 Precondition Failed.
+var ErrVersionConflict = errors.New("monitor was modified by someone else")
+
 // UpdateMonitor writes every mutable column of a monitor and returns the row
 // as stored, with a refreshed UpdatedAt.
 //
@@ -490,9 +500,53 @@ func nullInt(i int) any {
 //
 // It returns sql.ErrNoRows when the monitor does not exist, so callers can map
 // a missing id to 404 without a separate existence query.
+//
+// This is the unconditional, last-write-wins path. Use
+// UpdateMonitorIfUnchanged when the caller has a version to defend.
 func (db *DB) UpdateMonitor(ctx context.Context, m Monitor) (Monitor, error) {
-	now := time.Now().Unix()
+	return db.updateMonitor(ctx, m, nil)
+}
+
+// UpdateMonitorIfUnchanged writes the monitor only while its stored updated_at
+// is one of the accepted versions, and returns ErrVersionConflict otherwise.
+//
+// The comparison happens inside the UPDATE statement, not in Go. A read of
+// updated_at followed by a compare and a write is the very race this guards
+// against: two editors could both read the same stamp, both find it equal, and
+// both write. Letting SQLite match on the old value makes the check and the
+// write a single atomic step.
+//
+// accepted takes a set because If-Match may offer several entity tags, and any
+// one of them matching is enough. An empty set can never match and is refused
+// without touching the database.
+func (db *DB) UpdateMonitorIfUnchanged(ctx context.Context, m Monitor, accepted []time.Time) (Monitor, error) {
+	if len(accepted) == 0 {
+		return Monitor{}, ErrVersionConflict
+	}
+	stamps := make([]int64, 0, len(accepted))
+	for _, t := range accepted {
+		stamps = append(stamps, t.Unix())
+	}
+	return db.updateMonitor(ctx, m, stamps)
+}
+
+// updateMonitor is the shared body of the conditional and unconditional
+// updates. An empty expected means no version check.
+func (db *DB) updateMonitor(ctx context.Context, m Monitor, expected []int64) (Monitor, error) {
 	applyMonitorDefaults(&m)
+
+	// The stamp must strictly advance, because it doubles as the version a
+	// caller compares against. Second resolution means two edits inside the
+	// same second would otherwise leave updated_at unchanged, and a stale
+	// If-Match from before the first edit would sail through the second —
+	// silently reintroducing the overwrite this whole mechanism prevents.
+	//
+	// The guarantee belongs in the statement, not here. This value is only a
+	// floor; `updated_at = MAX(?, updated_at + 1)` compares it against the
+	// row as stored, so two writers working from the same snapshot still get
+	// different stamps. Deciding it in Go would compare against a snapshot
+	// that a concurrent writer may already have superseded.
+	next := time.Now().Unix()
 
 	var headersJSON any
 	if len(m.Headers) > 0 {
@@ -503,18 +557,28 @@ func (db *DB) UpdateMonitor(ctx context.Context, m Monitor) (Monitor, error) {
 		headersJSON = string(b)
 	}
 
-	res, err := db.Writer.ExecContext(ctx, `
-		UPDATE monitors SET
-			name = ?, type = ?, target = ?, interval_s = ?, timeout_s = ?, retries = ?,
-			method = ?, expected_status = ?, keyword = ?, keyword_mode = ?,
-			follow_redirects = ?, headers_json = ?, body = ?, ssl_warn_days = ?,
-			enabled = ?, updated_at = ?
-		WHERE id = ?`,
+	args := []any{
 		m.Name, m.Type, m.Target, m.IntervalS, m.TimeoutS, m.Retries,
 		m.Method, m.ExpectedStatus, nullString(m.Keyword), m.KeywordMode,
 		m.FollowRedirects, headersJSON, nullString(m.Body), m.SSLWarnDays,
-		m.Enabled, now, m.ID,
-	)
+		m.Enabled, next, m.ID,
+	}
+
+	// Both variants are compile-time constants. An IN list sized to the
+	// caller's slice would mean building SQL by concatenation; passing the
+	// accepted versions as one JSON array keeps them a bound parameter, so
+	// there is no string-built query to get wrong.
+	q := updateMonitorSQL
+	if len(expected) > 0 {
+		encoded, err := json.Marshal(expected)
+		if err != nil {
+			return Monitor{}, fmt.Errorf("encode accepted versions: %w", err)
+		}
+		q = updateMonitorIfUnchangedSQL
+		args = append(args, string(encoded))
+	}
+
+	res, err := db.Writer.ExecContext(ctx, q, args...)
 	if err != nil {
 		return Monitor{}, fmt.Errorf("update monitor %d: %w", m.ID, err)
 	}
@@ -524,9 +588,46 @@ func (db *DB) UpdateMonitor(ctx context.Context, m Monitor) (Monitor, error) {
 		return Monitor{}, fmt.Errorf("rows affected: %w", err)
 	}
 	if n == 0 {
+		// With a version predicate in play, "no row matched" cannot be
+		// attributed to a missing id without a second query whose answer
+		// would already be out of date. A monitor deleted underneath a
+		// conditional write is genuinely no longer in the state the caller
+		// based its edit on, so reporting a conflict is the honest answer.
+		if len(expected) > 0 {
+			return Monitor{}, ErrVersionConflict
+		}
 		return Monitor{}, sql.ErrNoRows
 	}
 
-	m.UpdatedAt = time.Unix(now, 0).UTC()
+	// The statement decides the final stamp, not this function: MAX(?, +1)
+	// may have picked the row's own value when a concurrent writer got there
+	// first. Reading it back keeps the returned monitor — and therefore the
+	// ETag the caller hands out — equal to what is actually stored.
+	var stored int64
+	if err := db.Writer.QueryRowContext(ctx,
+		`SELECT updated_at FROM monitors WHERE id = ?`, m.ID).Scan(&stored); err != nil {
+		return Monitor{}, fmt.Errorf("read back updated_at for monitor %d: %w", m.ID, err)
+	}
+
+	m.UpdatedAt = time.Unix(stored, 0).UTC()
 	return m, nil
 }
+
+// updateMonitorSetClause is shared by the conditional and unconditional
+// updates so the two can never drift into writing different columns.
+const updateMonitorSetClause = `
+	UPDATE monitors SET
+		name = ?, type = ?, target = ?, interval_s = ?, timeout_s = ?, retries = ?,
+		method = ?, expected_status = ?, keyword = ?, keyword_mode = ?,
+		follow_redirects = ?, headers_json = ?, body = ?, ssl_warn_days = ?,
+		enabled = ?, updated_at = MAX(?, updated_at + 1)
+	WHERE id = ?`
+
+const updateMonitorSQL = updateMonitorSetClause
+
+// updateMonitorIfUnchangedSQL additionally requires the row to still carry one
+// of the accepted versions, which arrive as a JSON array in a single bound
+// parameter. json_each expands it inside SQLite, so the check and the write
+// remain one atomic statement.
+const updateMonitorIfUnchangedSQL = updateMonitorSetClause +
+	` AND updated_at IN (SELECT value FROM json_each(?))`

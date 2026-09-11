@@ -473,10 +473,23 @@ paths:
       tags: [Monitors]
       operationId: getMonitor
       summary: Fetch one monitor with its current state
-      description: Same enrichment as the list endpoint, for a single monitor.
+      description: |
+        Same enrichment as the list endpoint, for a single monitor.
+
+        The response carries a weak `ETag` derived from the monitor's
+        `updated_at`. Hand it back as `If-Match` on a PATCH to make that update
+        conditional on nobody else having edited the monitor in the meantime.
+
+        The tag is weak on purpose: `updated_at` identifies the monitor's
+        stored configuration, not the exact bytes of this response, which also
+        carry live status, latency and uptime and therefore change without any
+        edit.
       responses:
         '200':
           description: The monitor.
+          headers:
+            ETag:
+              $ref: '#/components/headers/MonitorETag'
           content:
             application/json:
               schema:
@@ -516,6 +529,34 @@ paths:
         Updating preserves heartbeats, uptime history and any open incident;
         correcting a typo in a URL should not erase the record of last week's
         outage.
+
+        ## Optimistic concurrency
+
+        Send the `ETag` you got from `GET /api/v1/monitors/{id}` back as
+        `If-Match` and the update is refused with `412 Precondition Failed`
+        when someone else edited the monitor in the meantime, instead of
+        silently overwriting their change. The check is performed inside the
+        UPDATE statement, so it holds even when both writes arrive at once.
+
+        A successful PATCH returns the new `ETag`, so a client making a series
+        of edits does not need to re-fetch between them.
+
+        Without `If-Match` the endpoint keeps its original last-write-wins
+        behaviour, so existing scripts are unaffected.
+
+        `If-Match: *` requires only that the monitor exists.
+
+        RFC 9110 specifies strong comparison for `If-Match`, under which a weak
+        validator never matches. Because every tag this API issues is a weak
+        version stamp, that rule would make the header useless here, so the
+        opaque part is compared and a client that sends `"<stamp>"` without the
+        `W/` prefix is accepted as well. The stamp still changes on every
+        write, so a stale tag is still refused.
+
+        A syntactically invalid `If-Match` is a `400`, not a silent
+        unconditional write.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
       requestBody:
         required: true
         content:
@@ -525,15 +566,19 @@ paths:
       responses:
         '200':
           description: The updated monitor.
+          headers:
+            ETag:
+              $ref: '#/components/headers/MonitorETag'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Monitor'
         '400':
           description: |
-            An invalid id, malformed or unknown-field JSON, an empty name or
-            target, an out-of-range value, an unknown type, HTTP method or
-            keyword mode, or a rejection from the storage layer.
+            An invalid id, a malformed `If-Match` header, malformed or
+            unknown-field JSON, an empty name or target, an out-of-range value,
+            an unknown type, HTTP method or keyword mode, or a rejection from
+            the storage layer.
           content:
             application/json:
               schema:
@@ -550,6 +595,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '412':
+          description: |
+            An `If-Match` was sent and the monitor no longer has that version:
+            someone else edited it first, or it was deleted underneath the
+            request. Nothing was written. Fetch the monitor again, decide
+            whether your change still applies to what is now there, and retry
+            with the fresh `ETag`.
+
+            No `ETag` accompanies this response, deliberately: a client that
+            could blindly retry with a handed-back validator would perform
+            exactly the overwrite this status refused.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: >-
+                  monitor 1 was modified by someone else; fetch it again and
+                  reapply your change
         '500':
           description: The monitor could not be loaded.
           content:
@@ -1611,6 +1675,25 @@ components:
         format: int64
         minimum: 1
       example: 1
+    IfMatch:
+      name: If-Match
+      in: header
+      required: false
+      description: |
+        A monitor's `ETag`, making the request conditional on the monitor still
+        having that version. Omit it to keep the original last-write-wins
+        behaviour. `*` requires only that the monitor exists.
+      schema:
+        type: string
+      example: W/"1757606400"
+  headers:
+    MonitorETag:
+      description: |
+        A weak entity tag derived from the monitor's `updated_at`. Send it back
+        as `If-Match` to make a subsequent PATCH conditional.
+      schema:
+        type: string
+      example: W/"1757606400"
   responses:
     Unauthorized:
       description: No valid credentials were presented.
