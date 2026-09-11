@@ -23,7 +23,7 @@
 }
 
 .mon-title {
-  font-size: 15px;
+  font-size: var(--type-card);
   font-weight: 500;
   letter-spacing: -.01em;
 }
@@ -33,7 +33,7 @@
   flex-wrap: wrap;
   gap: var(--space-3);
   margin-top: var(--space-2);
-  font-size: 12.5px;
+  font-size: var(--type-helper);
   color: var(--ink-3);
 }
 
@@ -53,7 +53,7 @@
   max-width: 100%;
   padding: var(--space-2) var(--space-3);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--type-body);
   color: var(--ink);
   background: var(--surface);
   border: 1px solid var(--border);
@@ -65,7 +65,7 @@
 .mon-search-input:hover { border-color: var(--border-hi); }
 
 .mon-result-count {
-  font-size: 12px;
+  font-size: var(--type-helper);
   color: var(--ink-3);
 }
 
@@ -94,7 +94,7 @@
   height: 34px;
   padding: 0 var(--space-3);
   text-align: left;
-  font-size: 10px;
+  font-size: var(--type-section);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: .09em;
@@ -108,7 +108,7 @@
 .mon-section-title {
   padding: var(--space-2) var(--space-3);
   text-align: left;
-  font-size: 10px;
+  font-size: var(--type-section);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: .09em;
@@ -141,7 +141,7 @@
   height: 58px;
   padding: 0 var(--space-3);
   vertical-align: middle;
-  font-size: 13px;
+  font-size: var(--type-body);
   color: var(--ink-2);
 }
 
@@ -157,7 +157,7 @@
 
 .mon-name {
   display: block;
-  font-size: 13.5px;
+  font-size: var(--type-row);
   font-weight: 450;
   letter-spacing: -.005em;
   color: var(--ink);
@@ -170,7 +170,7 @@
   display: block;
   margin-top: 3px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--type-helper);
   color: var(--ink-3);
   white-space: nowrap;
   overflow: hidden;
@@ -180,7 +180,7 @@
 .mon-cell--num {
   text-align: right;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--type-helper);
   font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
@@ -188,7 +188,7 @@
 .mon-error {
   display: block;
   font-family: var(--font-sans);
-  font-size: 11.5px;
+  font-size: var(--type-helper);
   color: var(--down);
   white-space: nowrap;
   overflow: hidden;
@@ -216,7 +216,7 @@
 
 .mon-empty-title {
   margin-bottom: var(--space-2);
-  font-size: 15px;
+  font-size: var(--type-card);
   font-weight: 500;
   letter-spacing: -.01em;
   color: var(--ink);
@@ -225,8 +225,8 @@
 .mon-empty-body {
   max-width: 42ch;
   margin: 0 auto;
-  font-size: 12.5px;
-  line-height: 1.6;
+  font-size: var(--type-helper);
+  line-height: var(--lh-prose);
   color: var(--ink-3);
 }
 
@@ -249,7 +249,7 @@
 
 .mon-cards-title {
   margin-bottom: var(--space-2);
-  font-size: 10px;
+  font-size: var(--type-section);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: .09em;
@@ -297,7 +297,7 @@
 /* The lamp's own label is rendered visibly, so the card's status word comes
    from it; this span is the styling hook for that text. */
 .mon-card-status {
-  font-size: 11px;
+  font-size: var(--type-helper);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: .07em;
@@ -306,7 +306,7 @@
 
 .mon-card-name {
   margin-top: var(--space-2);
-  font-size: 15px;
+  font-size: var(--type-card);
   font-weight: 450;
   letter-spacing: -.01em;
   color: var(--ink);
@@ -319,7 +319,7 @@
 .mon-card-target {
   margin-top: 2px;
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--type-helper);
   color: var(--ink-3);
   overflow-wrap: anywhere;
 }
@@ -330,8 +330,8 @@
 
 .mon-card-error {
   margin-top: var(--space-2);
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--type-helper);
+  line-height: var(--lh-body);
   color: var(--down);
   overflow-wrap: anywhere;
 }
@@ -347,7 +347,7 @@
 /* Label above value, not beside it: a two-column dl at 375px either wraps
    unpredictably or leaves the numbers floating far from their nouns. */
 .mon-card-fact dt {
-  font-size: 10px;
+  font-size: var(--type-section);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: .08em;
@@ -357,7 +357,7 @@
 .mon-card-fact dd {
   margin-top: 2px;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--type-body);
   font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
@@ -379,7 +379,7 @@
     width: 100%;
     /* 16px is not a style choice: iOS Safari zooms the page when a focused
        input is smaller, and the zoom does not undo itself on blur. */
-    font-size: 16px;
+    font-size: var(--type-nozoom);
     padding: var(--space-3);
   }
 }
@@ -417,7 +417,7 @@
   padding: 0 var(--space-3);
   height: 30px;
   border-bottom: 1px solid var(--border);
-  font-size: 12.5px;
+  font-size: var(--type-helper);
 }
 
 .mon-line:last-child { border-bottom: 0; }
@@ -437,7 +437,7 @@
 
 .mon-line-target {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--type-helper);
   color: var(--ink-3);
   white-space: nowrap;
   overflow: hidden;
@@ -447,7 +447,7 @@
 .mon-line-num {
   text-align: right;
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--type-helper);
   font-variant-numeric: tabular-nums;
   color: var(--ink-2);
 }

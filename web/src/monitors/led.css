@@ -49,7 +49,7 @@
 }
 
 .led-label {
-  font-size: 12px;
+  font-size: var(--type-helper);
   color: var(--ink-2);
 }
 

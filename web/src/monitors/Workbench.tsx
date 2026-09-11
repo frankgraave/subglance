@@ -57,7 +57,7 @@ export function DashboardWorkbench() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-2 text-[12.5px] text-ink-3">
+      <div className="flex items-center gap-2 text-helper text-ink-3">
         <span>Scale:</span>
         {SCALES.map((n) => (
           <button
@@ -65,7 +65,7 @@ export function DashboardWorkbench() {
             type="button"
             onClick={() => setSize(n)}
             aria-pressed={size === n}
-            className={`rounded-sm border px-2 py-1 text-[12px] transition-colors ${
+            className={`rounded-sm border px-2 py-1 text-helper transition-colors ${
               size === n
                 ? "border-border-hi bg-surface-2 text-ink"
                 : "border-border text-ink-3 hover:text-ink-2"
@@ -79,7 +79,7 @@ export function DashboardWorkbench() {
         </span>
       </div>
 
-      <div className="flex items-center gap-2 text-[12.5px] text-ink-3">
+      <div className="flex items-center gap-2 text-helper text-ink-3">
         <span>Layout:</span>
         {LAYOUTS.map((option) => (
           <button
@@ -87,7 +87,7 @@ export function DashboardWorkbench() {
             type="button"
             onClick={() => setLayout(option.id)}
             aria-pressed={layout === option.id}
-            className={`rounded-sm border px-2 py-1 text-[12px] transition-colors ${
+            className={`rounded-sm border px-2 py-1 text-helper transition-colors ${
               layout === option.id
                 ? "border-border-hi bg-surface-2 text-ink"
                 : "border-border text-ink-3 hover:text-ink-2"

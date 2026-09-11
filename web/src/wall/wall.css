@@ -27,8 +27,8 @@
 
 /* Whispered, not shouted: if the header competes with the lamps for attention
    from across the room, the lamps have lost. */
-.wall-title { font-size: 13px; font-weight: 500; letter-spacing: -.005em; color: var(--ink-2); }
-.wall-meta { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-4); }
+.wall-title { font-size: var(--type-body); font-weight: 500; letter-spacing: -.005em; color: var(--ink-2); }
+.wall-meta { font-family: var(--font-mono); font-size: var(--type-helper); color: var(--ink-4); }
 .wall-meta-down { color: var(--down); font-weight: 500; }
 .wall-meta-stale { color: var(--warn); }
 /* Deliberately not `--down`: a count we can no longer vouch for must not be
@@ -38,7 +38,7 @@
 .wall-clock {
   margin-left: auto;
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--type-helper);
   font-variant-numeric: tabular-nums;
   color: var(--ink-4);
 }
@@ -70,7 +70,7 @@
 .wall-card[data-status="paused"] .wall-card-name { color: var(--ink-3); }
 
 .wall-card-name {
-  font-size: 13.5px;
+  font-size: var(--type-row);
   font-weight: 450;
   letter-spacing: -.005em;
   white-space: nowrap;
@@ -78,7 +78,7 @@
   text-overflow: ellipsis;
 }
 
-.wall-empty { font-size: 13px; color: var(--ink-3); }
+.wall-empty { font-size: var(--type-body); color: var(--ink-3); }
 
 /*
  * Stale: the canvas carries the message, because there is no chrome to put a

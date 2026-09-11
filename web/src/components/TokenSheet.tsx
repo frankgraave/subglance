@@ -11,7 +11,7 @@
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="mb-10">
-      <h2 className="mb-3 text-[12px] font-medium uppercase tracking-[0.09em] text-ink-3">
+      <h2 className="mb-3 text-section font-medium uppercase tracking-[0.09em] text-ink-3">
         {title}
       </h2>
       {children}
@@ -23,7 +23,7 @@ function Swatch({ name, className }: { name: string; className: string }) {
   return (
     <div className="flex items-center gap-3">
       <div className={`size-9 rounded-md border border-border ${className}`} />
-      <code className="text-[12.5px] text-ink-2">{name}</code>
+      <code className="text-helper text-ink-2">{name}</code>
     </div>
   );
 }
@@ -65,7 +65,7 @@ export function TokenSheet() {
       <Section title="Ink">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {INK.map((i) => (
-            <p key={i.name} className={`text-[13.5px] ${i.className}`}>
+            <p key={i.name} className={`text-row ${i.className}`}>
               {i.name}
             </p>
           ))}
@@ -88,8 +88,8 @@ export function TokenSheet() {
                 className={`size-2.5 shrink-0 rounded-full ${s.dot}`}
                 style={{ boxShadow: s.glow }}
               />
-              <code className="w-24 text-[12.5px] text-ink-2">{s.name}</code>
-              <span className="text-[13px] text-ink-3">{s.label}</span>
+              <code className="w-24 text-helper text-ink-2">{s.name}</code>
+              <span className="text-body text-ink-3">{s.label}</span>
             </li>
           ))}
         </ul>
@@ -100,7 +100,7 @@ export function TokenSheet() {
           {["rounded-sm", "rounded-md", "rounded-lg"].map((r) => (
             <div
               key={r}
-              className={`flex size-16 items-center justify-center border border-border-hi bg-surface-2 text-[11.5px] text-ink-3 ${r}`}
+              className={`flex size-16 items-center justify-center border border-border-hi bg-surface-2 text-helper text-ink-3 ${r}`}
             >
               {r.replace("rounded-", "")}
             </div>
@@ -109,8 +109,8 @@ export function TokenSheet() {
       </Section>
 
       <Section title="Type">
-        <p className="text-[13.5px] text-ink">Row title — 13.5px, weight 450</p>
-        <p className="font-mono text-[13px] text-ink-2">
+        <p className="text-row text-ink">Row title — --type-row, weight 450</p>
+        <p className="font-mono text-body text-ink-2">
           200 OK · 142 ms · 99.98% — mono, so columns line up
         </p>
       </Section>

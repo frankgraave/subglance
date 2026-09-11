@@ -12,6 +12,11 @@ import { describe, expect, it } from "vitest";
  *
  * Both are enforced mechanically because both fail silently otherwise: a
  * hardcoded `#34d399` looks correct in dark mode and only breaks in light.
+ *
+ * SUB-67 extends the same two rules to the type scale (§2.5). A hardcoded
+ * `font-size: 11px` fails even more quietly than a colour does: it looks fine
+ * on the machine it was written on and simply makes the product unreadable
+ * one component at a time.
  */
 
 const here = fileURLToPath(new URL(".", import.meta.url));
@@ -96,6 +101,33 @@ describe("tokens.css matches docs/DESIGN.md", () => {
     expect(root.get("--ease")).toBe(ease?.[1].trim());
   });
 
+  it("uses the type scale from the §2.5 table", () => {
+    const root = declarations(tokensCss.slice(tokensCss.indexOf(":root"), tokensCss.indexOf("\n}")));
+    const start = designMd.indexOf("### 2.5 Typography");
+    expect(start, "missing §2.5").toBeGreaterThan(-1);
+    const body = designMd.slice(start, designMd.indexOf("\n### ", start + 10));
+    const rows = [...body.matchAll(/\|\s*`(--(?:type|lh)-[a-z]+)`\s*\|\s*`([^`]+)`\s*\|/g)];
+    expect(rows.length, "expected six type roles and three line heights").toBe(9);
+    for (const [, name, value] of rows) {
+      expect(root.get(name), name).toBe(value);
+    }
+  });
+
+  it("keeps the documented iOS zoom workaround at 16px", () => {
+    // §13: a focused input below 16px zooms iOS Safari in and never back out.
+    const root = declarations(tokensCss.slice(tokensCss.indexOf(":root"), tokensCss.indexOf("\n}")));
+    expect(root.get("--type-nozoom")).toBe("16px");
+    expect(designMd).toContain("--type-nozoom: 16px");
+  });
+
+  it("keeps every type role at 12px or larger", () => {
+    const root = declarations(tokensCss.slice(tokensCss.indexOf(":root"), tokensCss.indexOf("\n}")));
+    for (const [name, value] of root) {
+      if (!name.startsWith("--type-")) continue;
+      expect(Number.parseFloat(value), `${name} is below the 12px floor`).toBeGreaterThanOrEqual(12);
+    }
+  });
+
   it("defines every dark token in light too, so no theme falls back silently", () => {
     for (const name of darkTokens.keys()) {
       expect(lightTokens.has(name), `${name} missing from the light theme`).toBe(true);
@@ -142,6 +174,68 @@ describe("tokens.css is the only source of colour", () => {
       const contents = readFileSync(file, "utf8");
       if (/\b(?:rgba?|hsla?)\(/.test(contents)) {
         offenders.push(relative(repoRoot, file));
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe("tokens.css is the only source of type size", () => {
+  function sourceFiles(dir: string): string[] {
+    const out: string[] = [];
+    for (const entry of readdirSync(dir)) {
+      const full = join(dir, entry);
+      if (statSync(full).isDirectory()) {
+        out.push(...sourceFiles(full));
+        continue;
+      }
+      if (/\.(tsx?|css)$/.test(entry) && entry !== "tokens.css" && !entry.includes(".test.")) {
+        out.push(full);
+      }
+    }
+    return out;
+  }
+
+  it("finds no literal font size anywhere else under web/src", () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      const contents = readFileSync(file, "utf8");
+      // Both spellings: CSS `font-size: 13px` and Tailwind's `text-[13px]`.
+      for (const match of contents.matchAll(/font-size:\s*[\d.]+(?:px|rem|em)|text-\[[\d.]+(?:px|rem|em)\]/g)) {
+        offenders.push(`${relative(repoRoot, file)}: ${match[0]}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe("tokens.css is the only source of line height", () => {
+  function sourceFiles(dir: string): string[] {
+    const out: string[] = [];
+    for (const entry of readdirSync(dir)) {
+      const full = join(dir, entry);
+      if (statSync(full).isDirectory()) {
+        out.push(...sourceFiles(full));
+        continue;
+      }
+      if (/\.(tsx?|css)$/.test(entry) && entry !== "tokens.css" && !entry.includes(".test.")) {
+        out.push(full);
+      }
+    }
+    return out;
+  }
+
+  it("finds no stock Tailwind leading-* preset or literal line-height under web/src", () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      const contents = readFileSync(file, "utf8");
+      // `leading-relaxed` and friends silently override the --lh-* token that
+      // the text-* role utility carries, so a paragraph ends up at Tailwind's
+      // 1.625 instead of --lh-prose. Only `leading-[var(--lh-*)]` is allowed.
+      for (const match of contents.matchAll(
+        /leading-(?!\[var\(--lh-)[\w[\].]+|line-height:\s*[\d.]+(?!\s*\/)/g,
+      )) {
+        offenders.push(`${relative(repoRoot, file)}: ${match[0]}`);
       }
     }
     expect(offenders).toEqual([]);

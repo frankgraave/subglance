@@ -125,7 +125,7 @@ export default function App() {
 function Workbench() {
   return (
     <div className="flex flex-col gap-10">
-      <p className="text-[12.5px] text-ink-3">
+      <p className="text-helper text-ink-3">
         Component workbench — fixtures, not live data. Press Esc to go back to the dashboard.
       </p>
       <DashboardWorkbench />

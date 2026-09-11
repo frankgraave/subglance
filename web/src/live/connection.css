@@ -15,8 +15,8 @@
      sits above, and the border already carries the signal. */
   background: var(--warn-dim);
   color: var(--ink);
-  font-size: 12.5px;
-  line-height: 1.3;
+  font-size: var(--type-helper);
+  line-height: var(--lh-tight);
 }
 
 .conn-badge-dot {

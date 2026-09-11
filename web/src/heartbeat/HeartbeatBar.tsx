@@ -226,12 +226,12 @@ export function HeartbeatBar({
               left: Math.min(Math.max((active ?? 0) * step - 70, 0), Math.max(trackWidth - 148, 0)),
             }}
           >
-            <div className="text-[12px] text-ink-2">
+            <div className="text-helper text-ink-2">
               {activeSlot.count > 1
                 ? `${formatTime(activeSlot.from)} – ${formatTime(activeSlot.to)}`
                 : formatTime(activeSlot.to)}
             </div>
-            <div className="text-[13px] font-medium text-ink">
+            <div className="text-body font-medium text-ink">
               {activeSlot.ok ? formatLatency(activeSlot.latencyMs) : "Failed"}
               {activeSlot.count > 1 && (
                 <span className="text-ink-3">
@@ -242,7 +242,7 @@ export function HeartbeatBar({
               )}
             </div>
             {!activeSlot.ok && (activeSlot.error || activeSlot.statusCode) && (
-              <div className="text-[12px] text-down">
+              <div className="text-helper text-down">
                 {activeSlot.statusCode ? `${activeSlot.statusCode} ` : ""}
                 {activeSlot.error}
               </div>

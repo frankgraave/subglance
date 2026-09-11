@@ -119,14 +119,37 @@ letting it look lit.
 --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
 ```
 
-| Role | Size | Weight |
-|---|---|---|
-| Page title | 20–22px | 500, `letter-spacing: -.02em` |
-| Card title | 15px | 500 |
-| Row title | 13.5px | 450 |
-| Body / label | 12.5–13px | 400–450 |
-| Helper text | 11.5px | 400 |
-| Section heading | 12px | 500, uppercase, `letter-spacing: .09em` |
+Six roles, one scale. A component never spells out a font size, for the same
+reason it never spells out a colour (§2): "make everything a step larger" has to
+be a single edit, and sixty hand-tuned sizes drift out of proportion the moment
+one of them is touched.
+
+| Role | Token | Size | Weight |
+|---|---|---|---|
+| Page title | `--type-page` | `22px` | 500, `letter-spacing: -.02em` |
+| Card title | `--type-card` | `17px` | 500 |
+| Row title | `--type-row` | `15px` | 450 |
+| Body / label | `--type-body` | `14px` | 400–450 |
+| Helper text | `--type-helper` | `12.5px` | 400 |
+| Section heading | `--type-section` | `12px` | 500, uppercase, `letter-spacing: .09em` |
+
+| Line height | Token | Value | Used for |
+|---|---|---|---|
+| Tight | `--lh-tight` | `1.25` | headings, single-line labels |
+| Body | `--lh-body` | `1.45` | running text in a row or card |
+| Prose | `--lh-prose` | `1.6` | paragraphs — empty states, explanations |
+
+**Nothing is smaller than 12px.** Below that, text stops being readable at a
+glance, and reading at a glance is the entire product. The one documented
+exception is `--type-nozoom: 16px` for the search input on phone widths: iOS
+Safari zooms the page in when a focused input renders below 16px and never zooms
+back out (§13). That is a platform workaround, not a typographic role, which is
+why it sits outside the scale.
+
+**The scale grew; the density did not.** Row height stays at 58px and the header
+row at 34px, so a laptop still shows the same number of monitors without
+scrolling (product principle 1). Larger type inside an unchanged row is paid for
+out of the slack that was already there, not out of the viewport.
 
 **Mono is mandatory for anything measurable:** URLs, latency, uptime, intervals,
 status codes. Numbers stacked in a column have to line up — otherwise you're not

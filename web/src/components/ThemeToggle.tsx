@@ -29,7 +29,7 @@ export function ThemeToggle({
           <label
             key={option.value}
             className={[
-              "cursor-pointer rounded-sm px-2.5 py-1 text-[12.5px] transition-colors",
+              "cursor-pointer rounded-sm px-2.5 py-1 text-helper transition-colors",
               active ? "bg-surface-hi text-ink" : "text-ink-3 hover:text-ink-2",
             ].join(" ")}
           >
