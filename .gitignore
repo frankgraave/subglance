@@ -34,5 +34,12 @@ coverage.out
 *.db-shm
 *.db-wal
 
-# Frontend build output
-web/dist/
+# Frontend build output. It is built straight into the Go package that embeds
+# it, so the build artefacts are ignored but the directory itself is not: the
+# committed .gitkeep in there is what keeps `go build ./...` working on a
+# checkout where the frontend was never built. The generic `dist/` rule above
+# would otherwise swallow it, and git cannot re-include a file inside an
+# excluded directory without first re-including the directory.
+!internal/webui/dist/
+internal/webui/dist/*
+!internal/webui/dist/.gitkeep

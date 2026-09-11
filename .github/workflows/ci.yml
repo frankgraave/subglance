@@ -211,3 +211,30 @@ jobs:
       - name: Typecheck and build
         working-directory: web
         run: npm run build
+
+      # The point of the build is that it ends up inside the Go binary. The
+      # `build` job above proves the binary compiles without Node; this proves
+      # the other half, that a binary built *with* the frontend actually
+      # serves it. Without this, a broken embed path would stay green until
+      # someone downloaded a release and found an empty page.
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Smoke test the embedded dashboard
+        run: |
+          go build -o /tmp/subglance ./cmd/subglance
+          /tmp/subglance --addr 127.0.0.1:18099 --data-dir "$(mktemp -d)" &
+          pid=$!
+          trap 'kill $pid' EXIT
+          for _ in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:18099/api/v1/health >/dev/null && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:18099/ | grep -q 'id="root"'
+          # A client-side route must reach the shell, and an unknown API path
+          # must stay JSON.
+          curl -fsS http://127.0.0.1:18099/monitors/42 | grep -q 'id="root"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18099/api/v1/nope)" = 404
+          curl -s http://127.0.0.1:18099/api/v1/nope | grep -q '"error"'

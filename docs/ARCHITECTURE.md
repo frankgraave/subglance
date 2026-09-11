@@ -184,6 +184,22 @@ no privileges the API does not have.
 
 ## 5. Frontend structure
 
+**How it is served.** `npm run build` writes into `internal/webui/dist`, which
+that package embeds with `//go:embed all:dist`. One binary, no static directory
+to deploy next to it. The handler is mounted on the catch-all route `/`, so it
+also receives everything no API pattern matched, and the two cases get opposite
+answers: an unknown page path is client-side routing and gets `index.html`,
+while an unknown path under `/api` stays a JSON 404 — HTML arriving in a JSON
+client's decoder is a bug that surfaces far from its cause. Hashed assets are
+cached immutably; `index.html` never is, because it names those hashes. The
+shell carries its own Content-Security-Policy, which allows the pre-paint theme
+script by SHA-256 hash rather than by `unsafe-inline`.
+
+The embed tolerates a missing build: `webui.Available()` reports false, the
+server logs a warning, `/` returns a 503 explaining how to build the dashboard,
+and the API is untouched. That is what lets `go build ./...` succeed on a
+checkout where Node was never installed.
+
 ```
 web/
   src/

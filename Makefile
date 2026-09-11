@@ -16,8 +16,11 @@ help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
+.PHONY: dist
+dist: web-build build ## Build the dashboard and then a binary with it embedded
+
 .PHONY: build
-build: ## Build the binary into ./bin
+build: ## Build the binary into ./bin (embeds the dashboard if it was built)
 	@mkdir -p bin
 	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/$(BINARY) $(CMD)
 	@echo "built bin/$(BINARY) ($$(du -h bin/$(BINARY) | cut -f1))"
@@ -71,7 +74,8 @@ web-install: ## Install frontend dependencies (npm ci)
 	cd web && npm ci
 
 .PHONY: web-build
-web-build: ## Build the dashboard into web/dist
+web-build: ## Build the dashboard into internal/webui/dist (embedded by `make build`)
+	@rm -rf internal/webui/dist/assets
 	cd web && npm run build
 
 .PHONY: web-test
@@ -84,4 +88,4 @@ web-lint: ## Lint the frontend
 
 .PHONY: clean
 clean: ## Remove build artefacts
-	rm -rf bin tmp coverage.out web/dist
+	rm -rf bin tmp coverage.out internal/webui/dist/assets internal/webui/dist/index.html

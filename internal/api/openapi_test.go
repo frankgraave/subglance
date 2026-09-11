@@ -113,6 +113,9 @@ func TestOpenAPIMatchesRoutes(t *testing.T) {
 	var srv Server
 	inCode := make(map[string]access)
 	for _, rt := range srv.routes() {
+		if !rt.documented() {
+			continue // see route.documented: the SPA catch-all is not an API
+		}
 		inCode[routeKey(rt)] = rt.Access
 	}
 
@@ -150,6 +153,9 @@ func TestOpenAPIAccessLevelsMatch(t *testing.T) {
 
 	var srv Server
 	for _, rt := range srv.routes() {
+		if !rt.documented() {
+			continue
+		}
 		key := routeKey(rt)
 		op, ok := ops[key]
 		if !ok {

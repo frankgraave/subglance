@@ -65,6 +65,24 @@ make check          # format, vet and test — run this before committing
 
 Run `make help` to see every target.
 
+#### The dashboard
+
+The dashboard is a single-page app in `web/`. It is compiled into the binary
+with `go:embed`, so a release is still one file with nothing to serve
+alongside it:
+
+```sh
+make web-install    # npm ci, once
+make dist           # build the dashboard, then a binary that contains it
+./bin/subglance     # the UI is on / and the API on /api/v1
+```
+
+`make build` on its own does not need Node and does not need the dashboard: a
+binary without one serves the full API and says so at startup, which is the
+normal state while working on the Go side. Building the frontend writes into
+`internal/webui/dist`, which is gitignored apart from a `.gitkeep` — that file
+is what keeps `go build ./...` working on a fresh clone.
+
 ### Configuration
 
 Every option has a working default. Flags beat environment variables, which beat

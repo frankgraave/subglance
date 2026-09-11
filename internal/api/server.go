@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/frankgraave/subglance/internal/buildinfo"
@@ -92,12 +93,34 @@ func (a access) String() string {
 	}
 }
 
+// anyMethod is the Method of a route that answers every HTTP verb.
+//
+// Only the catch-all uses it. Registering the catch-all per method would leave
+// the verbs nobody listed — a POST to a mistyped /api path, say — to net/http's
+// own plain-text 404, which is exactly the HTML-to-a-JSON-client trap this
+// route exists to avoid.
+const anyMethod = ""
+
 // route is one entry in the API surface.
 type route struct {
 	Method  string
 	Pattern string // path only, e.g. "/api/v1/monitors/{id}"
 	Access  access
 }
+
+// documented reports whether this route belongs in docs/openapi.yaml.
+//
+// Everything does, with one exception: the catch-all that serves the embedded
+// dashboard. It belongs in the route table — the table is what the mux is
+// built from, and a route registered outside it would escape the fail-closed
+// access check — but docs/openapi.yaml describes an API for programs, and an
+// entry saying "GET / returns an HTML page" would only add noise to every
+// generated client. TestOpenAPIMatchesRoutes skips undocumented routes.
+func (rt route) documented() bool { return rt.Pattern != webUIPattern }
+
+// webUIPattern is the catch-all path that serves the dashboard. It is also
+// where every request that matched no other pattern lands.
+const webUIPattern = "/"
 
 // routes is the single source of truth for the API surface.
 //
@@ -173,6 +196,15 @@ func (s *Server) routes() []route {
 		{http.MethodGet, "/api/v1/users", accessAdmin},
 		{http.MethodPost, "/api/v1/users", accessAdmin},
 		{http.MethodDelete, "/api/v1/users/{id}", accessAdmin},
+
+		// The embedded dashboard, and the catch-all for everything that
+		// matched no pattern above.
+		//
+		// Public by necessity: this serves the login and first-run setup
+		// screens, so requiring authentication would mean nobody could ever
+		// reach the form that authenticates them. The shell itself carries no
+		// data; every byte it displays comes from the guarded API above.
+		{anyMethod, webUIPattern, accessPublic},
 	}
 }
 
@@ -261,6 +293,9 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 		return s.handleCreateUser
 	case "DELETE /api/v1/users/{id}":
 		return s.handleDeleteUser
+
+	case " " + webUIPattern:
+		return s.handleWebUI
 	}
 	return nil
 }
@@ -283,7 +318,8 @@ func (s *Server) Handler() http.Handler {
 			panic("api: no handler for route " + rt.Method + " " + rt.Pattern)
 		}
 
-		pattern := rt.Method + " " + rt.Pattern
+		// net/http wants "METHOD /path", or a bare path for any method.
+		pattern := strings.TrimSpace(rt.Method + " " + rt.Pattern)
 		switch rt.Access {
 		case accessPublic:
 			mux.Handle(pattern, h)
@@ -308,8 +344,10 @@ func (s *Server) withSecurityHeaders(next http.Handler) http.Handler {
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "same-origin")
-		// The API returns only JSON, so the strictest possible policy applies.
-		// The UI will need its own policy when it is served from here.
+		// The API returns only JSON, so the strictest possible policy is the
+		// right default here. The dashboard needs a looser one and sets its
+		// own in webui.Handler, which runs after this middleware and
+		// therefore wins.
 		h.Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
 		next.ServeHTTP(w, r)
 	})

@@ -25,6 +25,7 @@ import (
 	"github.com/frankgraave/subglance/internal/logging"
 	"github.com/frankgraave/subglance/internal/monitor"
 	"github.com/frankgraave/subglance/internal/store"
+	"github.com/frankgraave/subglance/internal/webui"
 )
 
 func main() {
@@ -49,6 +50,15 @@ func run(args []string) error {
 		"addr", cfg.Addr,
 		"data_dir", cfg.DataDir,
 	)
+
+	// A binary built without the frontend still serves the full API, which is
+	// a supported way to work on the Go side. Say so at startup: the
+	// alternative is an operator discovering an empty page and assuming the
+	// release is broken.
+	if !webui.Available() {
+		log.Warn("no dashboard embedded in this binary; the API is unaffected",
+			"fix", "make web-install && make web-build && make build")
+	}
 
 	if err := os.MkdirAll(cfg.DataDir, 0o750); err != nil {
 		return fmt.Errorf("create data dir %s: %w", cfg.DataDir, err)

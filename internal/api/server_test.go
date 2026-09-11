@@ -163,15 +163,60 @@ func TestHealthUnderAPIPrefix(t *testing.T) {
 	}
 }
 
-func TestUnknownRouteIs404(t *testing.T) {
+// TestUnknownAPIRouteIs404JSON: an unmatched path under /api must stay a JSON
+// 404. Since the dashboard is mounted on the catch-all "/", this is the one
+// thing that keeps a mistyped endpoint from answering with an HTML page, which
+// would fail inside a client's JSON decoder far from the actual typo.
+func TestUnknownAPIRouteIs404JSON(t *testing.T) {
 	srv := testServer()
-	req := httptest.NewRequest(http.MethodGet, "/nope", nil)
+
+	for _, target := range []string{"/api", "/api/v1/nope", "/api/v9/monitors"} {
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		rec := httptest.NewRecorder()
+
+		srv.Handler().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("GET %s: status = %d, want 404", target, rec.Code)
+		}
+		if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/json") {
+			t.Errorf("GET %s: Content-Type = %q, want JSON", target, got)
+		}
+	}
+}
+
+// TestUnknownAPIMethodIs404JSON: the catch-all is registered for every method,
+// precisely so that a POST to a mistyped API path also gets JSON instead of
+// net/http's own plain-text 404.
+func TestUnknownAPIMethodIs404JSON(t *testing.T) {
+	srv := testServer()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/nope", nil)
 	rec := httptest.NewRecorder()
 
 	srv.Handler().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", rec.Code)
+	}
+	if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/json") {
+		t.Errorf("Content-Type = %q, want JSON", got)
+	}
+}
+
+// TestUnknownPageRouteGoesToTheUI: a non-API path is a client-side route and
+// belongs to the dashboard. The test binary has no frontend embedded, so the
+// UI answers 503 with an explanation; what matters here is that the request
+// reached the UI at all rather than being 404'd by the mux.
+func TestUnknownPageRouteGoesToTheUI(t *testing.T) {
+	srv := testServer()
+	req := httptest.NewRequest(http.MethodGet, "/monitors/42", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code == http.StatusNotFound {
+		t.Error("a page path was 404'd instead of being handed to the dashboard")
 	}
 }
 
