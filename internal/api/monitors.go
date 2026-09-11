@@ -380,6 +380,9 @@ func (s *Server) handleListHeartbeats(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !s.requireMonitor(w, r, id) {
+		return
+	}
 
 	limit := 100
 	if v := r.URL.Query().Get("limit"); v != "" {
@@ -476,6 +479,32 @@ func (s *Server) describeMonitor(r *http.Request, m store.Monitor) monitorRespon
 	}
 
 	return resp
+}
+
+// requireMonitor confirms a monitor exists before a sub-resource is read.
+//
+// Without it, an unknown id returns a tidy empty list, which reads as "this
+// monitor has no data yet" rather than "this monitor does not exist". A client
+// polling a deleted monitor would keep getting cheerful 200s and never learn it
+// is querying a ghost. Absence and emptiness are different facts, so they get
+// different answers.
+//
+// A lookup failure that is not "no rows" is a 500, not a 404: claiming the
+// monitor is gone because the database hiccuped would be the same confident lie
+// in a different costume.
+func (s *Server) requireMonitor(w http.ResponseWriter, r *http.Request, id int64) bool {
+	_, err := s.db.GetMonitor(r.Context(), id)
+	switch {
+	case err == nil:
+		return true
+	case errors.Is(err, sql.ErrNoRows):
+		writeError(w, http.StatusNotFound, "monitor not found")
+		return false
+	default:
+		s.log.Error("get monitor", "monitor_id", id, "error", err)
+		writeError(w, http.StatusInternalServerError, "could not load monitor")
+		return false
+	}
 }
 
 // pathID parses the {id} path segment, writing an error response when invalid.

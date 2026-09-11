@@ -595,8 +595,9 @@ paths:
         Newest first. This backs the dashboard's beat bar, which is the single
         most frequent read in the product.
 
-        Note that an unknown monitor id yields an empty list rather than a 404;
-        the handler does not pre-check existence here.
+        The monitor's existence is confirmed first: an unknown id is a 404, not
+        an empty list. "This monitor does not exist" and "this monitor has no
+        heartbeats yet" are different facts and must not share one answer.
       parameters:
         - name: limit
           in: query
@@ -630,6 +631,8 @@ paths:
                 error: limit must be between 1 and 1000
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           description: The heartbeats could not be loaded.
           content:
@@ -700,8 +703,9 @@ paths:
       operationId: listMonitorIncidents
       summary: Incident history for one monitor
       description: |
-        Returns both resolved and open incidents, newest first. An unknown
-        monitor id yields an empty list rather than a 404.
+        Returns both resolved and open incidents, newest first. The monitor's
+        existence is confirmed first, so an unknown id is a 404 rather than an
+        empty list that reads as "this monitor has never had an incident".
       parameters:
         - name: limit
           in: query
@@ -727,6 +731,8 @@ paths:
                 $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           description: The incidents could not be listed.
           content:

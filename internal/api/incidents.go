@@ -87,6 +87,9 @@ func (s *Server) handleListMonitorIncidents(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
+	if !s.requireMonitor(w, r, id) {
+		return
+	}
 
 	limit := 50
 	if v := r.URL.Query().Get("limit"); v != "" {

@@ -296,8 +296,7 @@ func (s *Server) handleListMonitorChannels(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if _, err := s.db.GetMonitor(r.Context(), id); err != nil {
-		writeError(w, http.StatusNotFound, "monitor not found")
+	if !s.requireMonitor(w, r, id) {
 		return
 	}
 

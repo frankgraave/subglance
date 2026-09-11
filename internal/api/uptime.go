@@ -1,7 +1,6 @@
 package api
 
 import (
-	"database/sql"
 	"errors"
 	"net/http"
 	"time"
@@ -40,19 +39,10 @@ func (s *Server) handleMonitorUptime(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Confirm the monitor exists first. Without this an unknown id returns a
-	// tidy zero-sample answer, which reads as "this monitor has no data yet"
-	// rather than "this monitor does not exist" — a typo in a script would go
-	// unnoticed for as long as nobody looked closely.
-	ctx := r.Context()
-	if _, err := s.db.GetMonitor(ctx, id); errors.Is(err, sql.ErrNoRows) {
-		writeError(w, http.StatusNotFound, "monitor not found")
-		return
-	} else if err != nil {
-		s.log.Error("get monitor", "id", id, "error", err)
-		writeError(w, http.StatusInternalServerError, "could not load monitor")
+	if !s.requireMonitor(w, r, id) {
 		return
 	}
+	ctx := r.Context()
 
 	requested := standardUptimeWindows
 	if v := r.URL.Query().Get("window"); v != "" {
