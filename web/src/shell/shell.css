@@ -218,14 +218,73 @@
 .shell-seg-button:hover:not([aria-pressed="true"]) { color: var(--ink-2); }
 .shell-seg-button[aria-pressed="true"] { background: var(--surface-hi); color: var(--ink); }
 
+/* ── Phone navigation drawer ───────────────────────────────── */
+
 /*
- * Phone. The sidebar is not a drawer yet (that needs a scrim and focus
- * trapping, which is its own ticket); it collapses to the rail and stays
- * reachable, which is the rule the design actually states — navigation is
- * never unreachable.
+ * The scrim dims the dashboard rather than hiding it: you opened navigation
+ * from a monitoring screen, and the lamps behind it are still the reason you
+ * are here.
+ */
+.shell-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: color-mix(in srgb, var(--canvas) 72%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.shell-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 41;
+  display: flex;
+  width: min(288px, 86vw);
+  height: 100dvh;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+}
+
+/* The drawer supplies its own frame, so the sidebar inside it drops the one
+   it carries for the grid. */
+.shell-drawer .shell-sidebar {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border-right: 0;
+  position: static;
+}
+
+.shell-drawer-close {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .shell-drawer { animation: shell-drawer-in var(--dur-panel) var(--ease); }
+  .shell-scrim { animation: shell-scrim-in var(--dur-panel) var(--ease); }
+}
+
+@keyframes shell-drawer-in {
+  from { transform: translateX(-100%); }
+  to { transform: none; }
+}
+
+@keyframes shell-scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/*
+ * Phone. The rail leaves the grid entirely — at 375px a permanent 56px of
+ * icons is 15% of the screen spent on navigation you are not using, and the
+ * monitors need it more (DESIGN.md §13). Navigation moves into the drawer
+ * above, which the same topbar button opens.
  */
 @media (max-width: 640px) {
-  .shell { --sidebar-w: var(--rail-w); }
+  .shell { grid-template-columns: 1fr; }
   .shell-content { padding: var(--space-4) var(--space-4) var(--space-12); }
   .shell-topbar { padding: var(--space-3) var(--space-4); flex-wrap: wrap; }
   .shell-seg-button { padding: 4px 7px; }

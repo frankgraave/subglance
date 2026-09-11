@@ -549,3 +549,42 @@ page when a focused input is smaller, and does not zoom back out on blur.
 **Ordering is shared with the desktop.** Both layouts call the same
 `partition()` — down first, then alphabetical — so "needs attention" means the
 same thing on both screens.
+
+**Navigation is a drawer, not a rail.** On a laptop the sidebar collapses to a
+56px icon rail, which keeps every destination one click away for almost no
+width. At 375px that same rail is 15% of the screen, held permanently, and
+spent mostly on the four destinations that do not exist yet (§12). Below the
+breakpoint the rail therefore leaves the grid entirely — the grid becomes a
+single column — and the same `Sidebar` is rendered over the content as an
+overlay drawer, opened by the same topbar button that collapses the rail above
+the breakpoint.
+
+That button's accessible name changes with it: on a phone it reads "Open
+navigation", not "Collapse sidebar", because there is no sidebar on screen to
+collapse. One control, two truthful names.
+
+**The drawer is modal, with the obligations that implies.** The page beneath it
+is marked `inert` rather than wrapped in a hand-written focus trap: it is the
+platform's own mechanism, it cannot miss a control added later, it also hides
+the covered content from assistive technology, and it still lets Tab reach the
+browser's own chrome — which a keyboard user is as entitled to as a mouse user.
+Focus moves to the close button on open (a way out, announced before five
+destinations) and returns to the opener on close. Esc closes it, and takes
+priority over Esc's other meanings: the drawer is the newest and most modal
+thing on screen. Body scrolling is frozen while it is open, so closing it never
+reveals a page that moved while you were not looking.
+
+The drawer is rendered only while open, rather than parked off-screen with a
+transform. An off-screen drawer keeps its links focusable and its text readable
+to a screen reader, which is the most common way this pattern is got wrong.
+
+It also closes itself when the viewport grows past 640px — rotating a phone to
+landscape crosses it — so the scrim never lingers over a layout that has room
+for the rail again.
+
+**Rejected here too:** a native `<dialog>` with `showModal()`, which would give
+the inert background and Esc handling for free. jsdom 30 still does not
+implement `showModal`, so every test of the drawer would have to be skipped or
+stubbed — the behaviour that most needs to stay honest is the accessibility
+behaviour, and buying it at the price of never testing it is the wrong trade.
+Revisit when jsdom ships it.

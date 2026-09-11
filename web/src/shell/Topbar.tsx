@@ -20,6 +20,8 @@ import type { LayoutId } from "./preferences";
 
 export type TopbarProps = {
   sidebarCollapsed: boolean;
+  /** True below the breakpoint, where this button opens a drawer. */
+  narrow?: boolean;
   onToggleSidebar: () => void;
   layout: LayoutId;
   effectiveLayout?: LayoutId;
@@ -34,6 +36,7 @@ export type TopbarProps = {
 
 export function Topbar({
   sidebarCollapsed,
+  narrow = false,
   onToggleSidebar,
   layout,
   effectiveLayout,
@@ -51,11 +54,29 @@ export function Topbar({
         className="shell-icon-btn"
         onClick={onToggleSidebar}
         aria-expanded={!sidebarCollapsed}
-        // The shortcut is in the accessible name, not only in a tooltip:
-        // keyboard shortcuts that exist but are undiscoverable are listed as
-        // a known gap in DESIGN.md §12, and this is the cheapest half of it.
-        aria-label={`${sidebarCollapsed ? "Expand" : "Collapse"} sidebar (Ctrl+B)`}
-        title={`${sidebarCollapsed ? "Expand" : "Collapse"} sidebar — Ctrl/Cmd + B`}
+        // The name says what pressing it will do, and on a phone that is not
+        // the same action: there is no rail to collapse, there is a drawer to
+        // open. A label that says "Collapse sidebar" beside a screen with no
+        // sidebar is a small lie told by the one control that has to be
+        // trusted to lead somewhere.
+        //
+        // The shortcut stays in the accessible name on the desktop, where a
+        // keyboard exists: shortcuts that exist but are undiscoverable are a
+        // known gap in DESIGN.md §12, and this is the cheapest half of it.
+        aria-label={
+          narrow
+            ? sidebarCollapsed
+              ? "Open navigation"
+              : "Close navigation"
+            : `${sidebarCollapsed ? "Expand" : "Collapse"} sidebar (Ctrl+B)`
+        }
+        title={
+          narrow
+            ? sidebarCollapsed
+              ? "Open navigation"
+              : "Close navigation"
+            : `${sidebarCollapsed ? "Expand" : "Collapse"} sidebar — Ctrl/Cmd + B`
+        }
       >
         <SidebarIcon />
       </button>
