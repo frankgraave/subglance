@@ -60,7 +60,13 @@ export type ApiHeartbeat = {
 
 /** One monitor as the API returns it. Optional fields really are absent. */
 export type ApiMonitor = {
-  id: string;
+  /**
+   * A JSON number in practice: the server's id is an int64 and encoding/json
+   * writes it unquoted. Typed as either because the render model uses strings
+   * and the difference must be resolved here rather than at a comparison
+   * three components away.
+   */
+  id: string | number;
   name: string;
   type: string;
   target: string;
@@ -113,7 +119,11 @@ function beatFromApi(hb: ApiHeartbeat): Beat {
 /** Translates one API monitor into the render model. Pure. */
 export function fromApi(api: ApiMonitor): Monitor {
   return {
-    id: api.id,
+    // Stringified, always. The list endpoint sends a number and an SSE frame
+    // sends the same id in `monitor_id`; a live update matching one against
+    // the other silently finds nothing, so every heartbeat would be dropped
+    // and the dashboard would sit frozen while claiming to be live.
+    id: String(api.id),
     name: api.name,
     target: api.target,
     status: api.enabled ? api.status : "paused",

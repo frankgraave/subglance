@@ -5,6 +5,7 @@
 @import "./heartbeat/heartbeat.css";
 @import "./monitors/led.css";
 @import "./monitors/monitors.css";
+@import "./live/connection.css";
 
 /*
  * Base layer only. Anything that is not a genuine document-wide default

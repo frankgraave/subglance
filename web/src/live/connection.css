@@ -1,0 +1,42 @@
+/*
+ * The disconnection badge. Only ever rendered while the stream is down, so
+ * every rule here is about being noticed without being an alarm.
+ */
+
+.conn-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--warn);
+  border-radius: var(--r-sm);
+  /* The dim companion token, not the full warn colour: a saturated banner
+     across the top of a monitoring screen competes with the outage colours it
+     sits above, and the border already carries the signal. */
+  background: var(--warn-dim);
+  color: var(--ink);
+  font-size: 12.5px;
+  line-height: 1.3;
+}
+
+.conn-badge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--warn);
+  flex: none;
+  /* Slow, shallow breathing rather than a blink. A blinking element in
+     peripheral vision is read as an emergency; this needs to say "still
+     trying". Reduced-motion users get a static dot from the global rule in
+     index.css, which loses nothing: the text carries the meaning. */
+  animation: conn-pulse 2s var(--ease) infinite;
+}
+
+@keyframes conn-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .35; }
+}
+
+.conn-badge-age {
+  color: var(--ink-2);
+}

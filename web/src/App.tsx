@@ -4,15 +4,21 @@ import { ThemeToggle } from "./components/ThemeToggle";
 import { TokenSheet } from "./components/TokenSheet";
 import { HeartbeatGallery } from "./heartbeat/Gallery";
 import { DashboardWorkbench } from "./monitors/Workbench";
+import { LiveDashboardRoot } from "./live/LiveDashboard";
 
 /**
- * Component workbench. Not the product: the dashboard itself arrives with
- * SUB-22. This shell exists so the pieces the dashboard will be built from can
- * be judged in isolation, in both themes, before they are wired to real data.
+ * The app shell.
+ *
+ * The first tab is the real thing — the live dashboard, fed by the API and the
+ * event stream. The remaining tabs are the component workbench, which stays
+ * because judging a component in isolation and in both themes is not something
+ * the live screen can do: it only ever shows the states the server happens to
+ * be in.
  */
 
 const TABS = [
-  { id: "dashboard", label: "Dashboard" },
+  { id: "live", label: "Live" },
+  { id: "dashboard", label: "Workbench" },
   { id: "heartbeat", label: "Heartbeat bar" },
   { id: "tokens", label: "Design tokens" },
 ] as const;
@@ -21,7 +27,7 @@ type Tab = (typeof TABS)[number]["id"];
 
 export default function App() {
   const { preference, resolved, setPreference } = useTheme();
-  const [tab, setTab] = useState<Tab>("dashboard");
+  const [tab, setTab] = useState<Tab>("live");
 
   return (
     <div className="min-h-dvh bg-canvas text-ink transition-colors">
@@ -29,7 +35,7 @@ export default function App() {
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
           <div>
             <h1 className="text-[19px] font-medium tracking-[-0.02em] sm:text-[21px]">SubGlance</h1>
-            <p className="text-[12.5px] text-ink-3">Component workbench — {resolved} theme</p>
+            <p className="text-[12.5px] text-ink-3">{tab === "live" ? "Live" : "Component workbench"} — {resolved} theme</p>
           </div>
           <ThemeToggle preference={preference} onChange={setPreference} />
         </div>
@@ -51,7 +57,8 @@ export default function App() {
           ))}
         </div>
       </header>
-      <main className={`mx-auto px-4 py-8 sm:px-6 ${tab === "dashboard" ? "max-w-6xl" : "max-w-5xl"}`}>
+      <main className={`mx-auto px-4 py-8 sm:px-6 ${tab === "live" || tab === "dashboard" ? "max-w-6xl" : "max-w-5xl"}`}>
+        {tab === "live" && <LiveDashboardRoot />}
         {tab === "dashboard" && <DashboardWorkbench />}
         {tab === "heartbeat" && <HeartbeatGallery />}
         {tab === "tokens" && <TokenSheet />}

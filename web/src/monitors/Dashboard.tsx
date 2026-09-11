@@ -1,4 +1,5 @@
 import { useId } from "react";
+import type { ReactNode } from "react";
 import { useCompactViewport } from "../layout/useMediaQuery";
 import { Led } from "./Led";
 import { MonitorCardList } from "./MonitorCardList";
@@ -39,6 +40,14 @@ export type DashboardProps = {
    * layouts have to be judged side by side on one desktop screen.
    */
   compact?: boolean;
+  /**
+   * Chrome about the data itself, e.g. the connection badge.
+   *
+   * A slot rather than a `connectionStatus` prop: the dashboard renders
+   * monitors and should not grow an opinion about transports. Whoever owns the
+   * data owns the statement about it, and passes it in.
+   */
+  banner?: ReactNode;
 };
 
 const COUNTED: { status: MonitorStatus; label: string }[] = [
@@ -55,6 +64,7 @@ export function Dashboard({
   announcement = null,
   beatWidth,
   compact,
+  banner = null,
 }: DashboardProps) {
   const searchId = useId();
   // Hooks cannot be skipped, so the query is always subscribed to and the
@@ -69,6 +79,11 @@ export function Dashboard({
 
   return (
     <section className="mon-dashboard" aria-labelledby={`${searchId}-title`}>
+      {/* Above the counts, not below the list: a warning that the numbers are
+          frozen has to be read *before* the numbers, not after scrolling past
+          them. */}
+      {banner}
+
       <header className="mon-topbar">
         <div>
           <h2 id={`${searchId}-title`} className="mon-title">
