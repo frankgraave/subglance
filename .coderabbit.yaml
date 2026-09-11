@@ -1,0 +1,86 @@
+# CodeRabbit review configuration.
+#
+# Every change reaches `develop` through a pull request, so this file decides
+# what an automated reviewer is allowed to spend a human's attention on.
+# The bar: a comment must be something a maintainer would want to act on.
+# Nitpicks that a formatter or linter already enforces are noise here — CI
+# fails on those before a reviewer ever looks.
+
+language: en-GB
+
+reviews:
+  profile: assertive
+  request_changes_workflow: true
+
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: true
+
+  # `develop` is the integration branch; `main` only receives releases.
+  base_branches:
+    - develop
+    - main
+
+  auto_review:
+    enabled: true
+    drafts: false
+
+  path_filters:
+    - "!web/node_modules/**"
+    - "!web/dist/**"
+    - "!**/*.min.js"
+    - "!go.sum"
+    - "!web/package-lock.json"
+
+  path_instructions:
+    - path: "internal/checker/**"
+      instructions: >
+        Failure classification is the product, not an implementation detail.
+        A DNS failure, a refused connection and an expired certificate are
+        three different problems with three different fixes, and whoever gets
+        paged must be told which one they have. Flag any change that collapses
+        distinct FailureKinds into a generic error. Also flag anything that
+        weakens the SSRF guard: a monitor URL is attacker-influenced input.
+
+    - path: "internal/state/**"
+      instructions: >
+        This decides whether a human gets woken up at 03:00. Confirmation
+        counts, incident lifecycle and flapping suppression need table-driven
+        tests for every transition, including the boundaries. A state change
+        without a test covering it is a review blocker, not a nitpick.
+
+    - path: "internal/store/**"
+      instructions: >
+        SQLite allows many readers but exactly one writer. Flag any new
+        connection pool, any write issued through the reader pool, and any
+        migration that is not backwards compatible with an existing database
+        file — self-hosters upgrade in place and cannot be asked to reset.
+
+    - path: "web/src/**"
+      instructions: >
+        docs/DESIGN.md is the source of truth for anything visual, and it wins
+        over the code: a deviation must update that document in the same pull
+        request. Specifically flag literal colour values in components (every
+        colour is a token), a pulsing or blinking animation at rest, status
+        conveyed by colour alone without a second signal, and anything that
+        keeps asserting a status after the SSE stream has gone stale. A
+        monitoring tool that lies confidently is worse than one that is
+        visibly broken.
+
+    - path: "**/*_test.go"
+      instructions: >
+        Prefer table-driven tests. Flag tests that assert nothing meaningful,
+        that depend on wall-clock sleeps, or that need the network without
+        being guarded by the `-short` skip — the short suite must stay
+        hermetic, because a red build has to mean broken code and never a
+        third party having a bad morning.
+
+    - path: ".github/workflows/**"
+      instructions: >
+        Actions and tool versions are pinned on purpose: an unpinned scanner
+        or linter turns a green build red without a commit. Flag any move to
+        a floating tag or version range.
+
+chat:
+  auto_reply: true
