@@ -450,4 +450,24 @@
   font-size: var(--type-helper);
   font-variant-numeric: tabular-nums;
   color: var(--ink-2);
+  /* The latency slot holds an error message when a monitor is down, and one
+     long reason must not push the uptime column out of alignment. */
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* The reason a monitor is down, in the slot where its latency would be.
+   Sans, not mono: this is prose, and the column's tabular alignment is
+   meaningless for it. */
+.mon-line-error {
+  display: block;
+  font-family: var(--font-sans);
+  /* Helper size from the type scale (SUB-67), which has since landed on
+     develop and is merged in here — so the fallback this rule carried while
+     the token did not exist yet is gone. */
+  font-size: var(--type-helper);
+  color: var(--down);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

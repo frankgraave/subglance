@@ -4,6 +4,7 @@ import { formatLatency, formatUptime } from "./format";
 import { Led } from "./Led";
 import { partition } from "./model";
 import type { Monitor } from "./types";
+import { Unknown } from "./Unknown";
 
 /**
  * The dense layout: one line per monitor, for screens holding 100+.
@@ -29,6 +30,13 @@ import type { Monitor } from "./types";
  * shares. Headed "Needs attention" / "All monitors" sections would be grouping
  * by a different name, and half a taxonomy reads worse than none — at this
  * density the broken monitors are already the first lines on the screen.
+ *
+ * **What it does not drop: the reason.** A down monitor has no latency to
+ * report, so this layout borrows the row's rule and puts the error text in
+ * that slot instead. Dropping it would leave a red lamp as the only signal —
+ * colour alone (DESIGN.md §2.3), and a line that says something is broken
+ * without saying what. The line is one line tall, so the text truncates with
+ * an ellipsis and carries a `title` for the rest.
  */
 
 export type MonitorCompactListProps = {
@@ -40,14 +48,26 @@ export type MonitorCompactListProps = {
 };
 
 function CompactLineImpl({ monitor }: { monitor: Monitor }) {
-  const { name, status, target, latencyMs, uptime24h } = monitor;
+  const { name, status, target, latencyMs, uptime24h, error } = monitor;
   return (
     <li className="mon-line" data-status={status} data-testid={`monitor-line-${monitor.id}`}>
       <Led status={status} className="mon-line-led" />
       <span className="mon-line-name">{name}</span>
       <span className="mon-line-target">{target}</span>
-      <span className="mon-line-num">{latencyMs === null ? "—" : formatLatency(latencyMs)}</span>
-      <span className="mon-line-num">{uptime24h === null ? "—" : formatUptime(uptime24h)}</span>
+      <span className="mon-line-num">
+        {status === "down" && error ? (
+          <span className="mon-line-error" title={error}>
+            {error}
+          </span>
+        ) : latencyMs === null ? (
+          <Unknown what="latency" />
+        ) : (
+          formatLatency(latencyMs)
+        )}
+      </span>
+      <span className="mon-line-num">
+        {uptime24h === null ? <Unknown what="uptime" /> : formatUptime(uptime24h)}
+      </span>
     </li>
   );
 }
@@ -62,7 +82,11 @@ const CompactLine = memo(CompactLineImpl, (prev, next) => {
     a.status === b.status &&
     a.target === b.target &&
     a.latencyMs === b.latencyMs &&
-    a.uptime24h === b.uptime24h
+    a.uptime24h === b.uptime24h &&
+    // `error` is compared because the line now renders it. Leaving it out
+    // would pin a stale reason on screen for as long as the other five fields
+    // happened to stay equal.
+    a.error === b.error
   );
 });
 
