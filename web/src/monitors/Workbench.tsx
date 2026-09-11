@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { useCompactViewport } from "../layout/useMediaQuery";
+import { effectiveLayout } from "../shell/preferences";
 import { Dashboard } from "./Dashboard";
 import { demoMonitors } from "./demo";
 import { describeTransitions } from "./model";
@@ -18,22 +20,30 @@ const SCALES = [5, 200] as const;
 /**
  * Layout choices offered by the harness.
  *
- * `auto` is what the product ships: the viewport decides. The two forced
- * options exist so both layouts can be judged on one desktop screen without
- * resizing the window, which is how the phone layout gets reviewed at all.
+ * The point of the workbench is judging the phone layout on a desktop screen
+ * without resizing the window, so the choice is explicit rather than "auto".
+ * The narrow-viewport veto still applies below 640px — the harness cannot
+ * make a row layout fit where it does not. The status wall is not offered: it
+ * deliberately replaces the whole page, so it cannot render inside a harness.
  */
 const LAYOUTS = [
-  { id: "auto", label: "Auto" },
   { id: "rows", label: "Rows" },
   { id: "cards", label: "Cards" },
+  { id: "compact", label: "Compact" },
 ] as const;
 
 type Layout = (typeof LAYOUTS)[number]["id"];
 
 export function DashboardWorkbench() {
   const [size, setSize] = useState<(typeof SCALES)[number]>(5);
-  const [layout, setLayout] = useState<Layout>("auto");
+  const [layout, setLayout] = useState<Layout>("rows");
   const [query, setQuery] = useState("");
+
+  // The buttons report what was asked for; this reports what `Dashboard`
+  // actually renders. Below 640px the two differ, and a harness built for
+  // judging layouts must not claim to be showing one it is not.
+  const narrow = useCompactViewport();
+  const shown = effectiveLayout(layout, narrow);
 
   const monitors = useMemo(() => demoMonitors(size), [size]);
 
@@ -86,7 +96,11 @@ export function DashboardWorkbench() {
             {option.label}
           </button>
         ))}
-        <span className="text-ink-4">Auto switches to cards at 640px.</span>
+        <span className="text-ink-4">
+          {shown === layout
+            ? "Forced, so the phone layout can be judged on a desktop."
+            : `Viewport veto below 640px — rendering ${shown}.`}
+        </span>
       </div>
 
       <Dashboard
@@ -94,7 +108,7 @@ export function DashboardWorkbench() {
         query={query}
         onQueryChange={setQuery}
         announcement={announcement}
-        compact={layout === "auto" ? undefined : layout === "cards"}
+        layout={layout}
       />
     </div>
   );

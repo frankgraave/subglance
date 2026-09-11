@@ -1,0 +1,113 @@
+/*
+ * The status wall (DESIGN.md §7): lamp and name, seen from across a room.
+ *
+ * Everything here is quieter than the dashboard on purpose. A wall of coloured
+ * tiles is noise; a quiet wall with two warm edges is information.
+ */
+
+.wall {
+  min-height: 100dvh;
+  background: var(--canvas);
+}
+
+.wall-stage {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--space-16) clamp(var(--space-6), 5vw, 72px) 96px;
+}
+
+.wall-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  margin-bottom: var(--space-8);
+}
+
+/* Whispered, not shouted: if the header competes with the lamps for attention
+   from across the room, the lamps have lost. */
+.wall-title { font-size: 13px; font-weight: 500; letter-spacing: -.005em; color: var(--ink-2); }
+.wall-meta { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-4); }
+.wall-meta-down { color: var(--down); font-weight: 500; }
+.wall-meta-stale { color: var(--warn); }
+/* Deliberately not `--down`: a count we can no longer vouch for must not be
+   coloured like a live alarm. */
+.wall-meta-lastknown { color: var(--ink-3); }
+
+.wall-clock {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-4);
+}
+
+.wall-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(226px, 1fr));
+  gap: var(--space-2);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.wall-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 17px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  min-width: 0;
+}
+
+/* A warm border, never a coloured fill. `color-mix` keeps the edge a tint of
+   the status colour rather than the full-strength alarm hue. */
+.wall-card[data-status="down"] { border-color: color-mix(in srgb, var(--down) 40%, var(--border)); }
+.wall-card[data-status="pending"] { border-color: color-mix(in srgb, var(--warn) 34%, var(--border)); }
+.wall-card[data-status="paused"] .wall-card-name { color: var(--ink-3); }
+
+.wall-card-name {
+  font-size: 13.5px;
+  font-weight: 450;
+  letter-spacing: -.005em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wall-empty { font-size: 13px; color: var(--ink-3); }
+
+/*
+ * Stale: the canvas carries the message, because there is no chrome to put a
+ * banner in and growing one would defeat the layout. A 2px warm inset border
+ * around the viewport plus the suffix on the header line (DESIGN.md §6).
+ */
+.wall[data-stale="true"] .wall-stage {
+  box-shadow: inset 0 0 0 2px var(--warn);
+}
+
+/* The card edges stop asserting too. A warm border means "this one is broken,
+   right now"; once the stream is stale the only honest claim is that we have
+   stopped hearing, which the inset border and the header already make. */
+.wall[data-stale="true"] .wall-card[data-status="down"],
+.wall[data-stale="true"] .wall-card[data-status="pending"] {
+  border-color: var(--border);
+}
+
+/* Colour drains when we stop knowing: the lamps stop asserting a status. */
+.wall[data-stale="true"] .led {
+  filter: saturate(.18);
+  box-shadow: none;
+  transition: filter var(--dur-attention) var(--ease);
+}
+
+.wall-exit { position: fixed; top: 18px; right: 18px; z-index: 30; opacity: 0; }
+.wall-exit:hover, .wall-exit:focus-visible { opacity: 1; }
+
+/* Touch has no hover, so the exit would be invisible and unreachable. */
+@media (hover: none) {
+  .wall-exit { opacity: 1; }
+}

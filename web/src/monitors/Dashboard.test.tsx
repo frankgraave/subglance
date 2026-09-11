@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { Dashboard } from "./Dashboard";
 import type { Monitor, MonitorStatus } from "./types";
+import type { LayoutId } from "../shell/preferences";
 
 afterEach(cleanup);
 
@@ -29,17 +30,17 @@ const monitor = (id: string, status: MonitorStatus, over: Partial<Monitor> = {})
 function Harness({
   monitors,
   announcement = null,
-  compact,
+  layout,
 }: {
   monitors: Monitor[];
   announcement?: string | null;
-  compact?: boolean;
+  layout?: LayoutId;
 }) {
   const [query, setQuery] = useState("");
   return (
     <Dashboard
       monitors={monitors}
-      compact={compact}
+      layout={layout}
       query={query}
       onQueryChange={setQuery}
       announcement={announcement}
@@ -159,13 +160,13 @@ describe("Dashboard", () => {
 
   describe("layout", () => {
     it("renders rows on a wide viewport", () => {
-      render(<Harness monitors={[monitor("api", "up")]} compact={false} />);
+      render(<Harness monitors={[monitor("api", "up")]} layout="rows" />);
       expect(rowIds()).toEqual(["monitor-row-api"]);
       expect(screen.queryByTestId("monitor-card-api")).toBeNull();
     });
 
     it("renders cards on a narrow viewport", () => {
-      render(<Harness monitors={[monitor("api", "up")]} compact />);
+      render(<Harness monitors={[monitor("api", "up")]} layout="cards" />);
       expect(screen.getByTestId("monitor-card-api")).toBeTruthy();
       // Exactly one of the two, never both: two copies of every monitor would
       // double the DOM and hand a screen reader each one twice.
@@ -176,7 +177,7 @@ describe("Dashboard", () => {
       render(
         <Harness
           monitors={[monitor("api", "up", { name: "API gateway" }), monitor("db", "up")]}
-          compact
+          layout="cards"
         />,
       );
       fireEvent.change(search(), { target: { value: "gateway" } });
@@ -184,9 +185,49 @@ describe("Dashboard", () => {
       expect(screen.queryByTestId("monitor-card-db")).toBeNull();
     });
 
+    it("renders one dense line per monitor in the compact layout", () => {
+      render(<Harness monitors={[monitor("api", "up"), monitor("db", "down")]} layout="compact" />);
+      expect(screen.getByTestId("monitor-line-api")).toBeTruthy();
+      // One list layout at a time, never two copies of the same monitor.
+      expect(rowIds()).toEqual([]);
+      expect(screen.queryByTestId("monitor-card-api")).toBeNull();
+    });
+
+    it("renders compact as one ungrouped list, not headed sections", () => {
+      // DESIGN.md §7 grouping waits for tags to exist (§12). Until then the
+      // layout is one dense stack, ordered by the shared partition — headed
+      // "Needs attention" / "All monitors" sections would be grouping by
+      // another name.
+      render(
+        <Harness
+          monitors={[monitor("api", "up"), monitor("db", "down"), monitor("cache", "up")]}
+          layout="compact"
+        />,
+      );
+      expect(document.querySelectorAll(".mon-line-stack")).toHaveLength(1);
+      expect(screen.queryByText(/needs attention/i)).toBeNull();
+      expect(screen.queryByText(/all monitors/i)).toBeNull();
+      // Ordering survives the flattening: down first, then alphabetical.
+      expect(
+        [...document.querySelectorAll(".mon-line-name")].map((el) => el.textContent),
+      ).toEqual(["db", "api", "cache"]);
+    });
+
+    it("drops the heartbeat bar in the compact layout, and only there", () => {
+      const { unmount } = render(
+        <Harness monitors={[monitor("api", "up")]} layout="compact" />,
+      );
+      // 40 rects x 200 monitors is the cost this layout exists to avoid.
+      expect(document.querySelector(".mon-line svg")).toBeNull();
+      unmount();
+
+      render(<Harness monitors={[monitor("api", "up")]} layout="rows" />);
+      expect(document.querySelector(".mon-row svg")).toBeTruthy();
+    });
+
     it("keeps the live region outside the card list too", () => {
       render(
-        <Harness monitors={[monitor("api", "down")]} announcement="1 monitor down: api." compact />,
+        <Harness monitors={[monitor("api", "down")]} announcement="1 monitor down: api." layout="cards" />,
       );
       const status = screen.getByRole("status");
       expect(status.textContent).toBe("1 monitor down: api.");

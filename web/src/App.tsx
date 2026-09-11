@@ -1,68 +1,87 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useTheme } from "./theme/useTheme";
-import { ThemeToggle } from "./components/ThemeToggle";
 import { TokenSheet } from "./components/TokenSheet";
 import { HeartbeatGallery } from "./heartbeat/Gallery";
 import { DashboardWorkbench } from "./monitors/Workbench";
 import { LiveDashboardRoot } from "./live/LiveDashboard";
+import { AppShell } from "./shell/AppShell";
+import { Topbar } from "./shell/Topbar";
+import { useShellPreferences } from "./shell/useShellPreferences";
+import { useShellShortcuts } from "./shell/useShortcuts";
+import { effectiveLayout } from "./shell/preferences";
+import { useCompactViewport } from "./layout/useMediaQuery";
 
 /**
- * The app shell.
+ * The application shell.
  *
- * The first tab is the real thing — the live dashboard, fed by the API and the
- * event stream. The remaining tabs are the component workbench, which stays
- * because judging a component in isolation and in both themes is not something
- * the live screen can do: it only ever shows the states the server happens to
- * be in.
+ * You land on the real dashboard. That is the whole change from the tab bar
+ * this replaces: a product whose front door is a component gallery reads as a
+ * demo, and the components were never the thing being demonstrated.
+ *
+ * This component owns the two shell preferences and the two shortcuts;
+ * everything below it is presentational and takes them as props.
+ *
+ * The workbench survives as a side track behind the beaker button. Judging a
+ * component in isolation, in both themes and in every status is something the
+ * live screen cannot do — it only ever shows the states the server happens to
+ * be in — but it is a developer tool and does not belong in the navigation.
  */
-
-const TABS = [
-  { id: "live", label: "Live" },
-  { id: "dashboard", label: "Workbench" },
-  { id: "heartbeat", label: "Heartbeat bar" },
-  { id: "tokens", label: "Design tokens" },
-] as const;
-
-type Tab = (typeof TABS)[number]["id"];
-
 export default function App() {
-  const { preference, resolved, setPreference } = useTheme();
-  const [tab, setTab] = useState<Tab>("live");
+  const { preference, setPreference } = useTheme();
+  const { layout, setLayout, sidebarCollapsed, toggleSidebar } =
+    useShellPreferences(window.localStorage);
+  const [workbenchOpen, setWorkbenchOpen] = useState(false);
+
+  const narrow = useCompactViewport();
+  const shown = effectiveLayout(layout, narrow);
+  const isWall = shown === "wall" && !workbenchOpen;
+
+  const leaveWall = useCallback(() => setLayout("rows"), [setLayout]);
+  const toggleWorkbench = useCallback(() => setWorkbenchOpen((open) => !open), []);
+
+  // Esc only means something when there is something to leave. Passing
+  // undefined otherwise leaves the key to the browser.
+  useShellShortcuts({
+    onToggleSidebar: toggleSidebar,
+    onEscape: isWall ? leaveWall : workbenchOpen ? toggleWorkbench : undefined,
+  });
+
+  if (isWall) {
+    return <LiveDashboardRoot layout="wall" onExitWall={leaveWall} />;
+  }
 
   return (
-    <div className="min-h-dvh bg-canvas text-ink transition-colors">
-      <header className="border-b border-border">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
-          <div>
-            <h1 className="text-[19px] font-medium tracking-[-0.02em] sm:text-[21px]">SubGlance</h1>
-            <p className="text-[12.5px] text-ink-3">{tab === "live" ? "Live" : "Component workbench"} — {resolved} theme</p>
-          </div>
-          <ThemeToggle preference={preference} onChange={setPreference} />
-        </div>
-        <div className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-4 sm:px-6">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              aria-current={tab === t.id ? "page" : undefined}
-              className={`-mb-px border-b-2 px-3 py-2 text-[13px] transition-colors ${
-                tab === t.id
-                  ? "border-ink text-ink"
-                  : "border-transparent text-ink-3 hover:text-ink-2"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </header>
-      <main className={`mx-auto px-4 py-8 sm:px-6 ${tab === "live" || tab === "dashboard" ? "max-w-6xl" : "max-w-5xl"}`}>
-        {tab === "live" && <LiveDashboardRoot />}
-        {tab === "dashboard" && <DashboardWorkbench />}
-        {tab === "heartbeat" && <HeartbeatGallery />}
-        {tab === "tokens" && <TokenSheet />}
-      </main>
+    <AppShell
+      sidebarCollapsed={sidebarCollapsed}
+      topbar={
+        <Topbar
+          sidebarCollapsed={sidebarCollapsed}
+          onToggleSidebar={toggleSidebar}
+          layout={layout}
+          effectiveLayout={shown}
+          onLayoutChange={setLayout}
+          themePreference={preference}
+          onThemeChange={setPreference}
+          workbenchOpen={workbenchOpen}
+          onToggleWorkbench={toggleWorkbench}
+        />
+      }
+    >
+      {workbenchOpen ? <Workbench /> : <LiveDashboardRoot layout={shown} />}
+    </AppShell>
+  );
+}
+
+/** The side track: every component, every state, both themes. */
+function Workbench() {
+  return (
+    <div className="flex flex-col gap-10">
+      <p className="text-[12.5px] text-ink-3">
+        Component workbench — fixtures, not live data. Press Esc to go back to the dashboard.
+      </p>
+      <DashboardWorkbench />
+      <HeartbeatGallery />
+      <TokenSheet />
     </div>
   );
 }

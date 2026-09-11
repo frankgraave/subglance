@@ -74,7 +74,7 @@ function renderLive(monitors: unknown[] = [apiMonitor()]) {
   render(
     <LiveDashboardRoot
       client={client}
-      compact={false}
+      layout="rows"
       beatWidth={200}
       createEventSource={() => new FakeSource()}
     />,
@@ -120,6 +120,58 @@ describe("LiveDashboard", () => {
       expect(label.parentElement?.textContent).toContain("1");
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the wall's frame while the first load is still in flight", async () => {
+    // Selecting the wall and then waiting on a slow first request must not
+    // drop the user onto the dashboard's loading sentence: the wall has no
+    // chrome, so that would strand an unattended screen with no way back.
+    let release: (value: unknown) => void = () => {};
+    const pending = new Promise((resolve) => {
+      release = resolve;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockReturnValue(
+        pending.then(() => ({ ok: true, status: 200, json: async () => ({ monitors: [] }) })),
+      ),
+    );
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const exit = vi.fn();
+    render(
+      <LiveDashboardRoot
+        client={client}
+        layout="wall"
+        onExitWall={exit}
+        createEventSource={() => new FakeSource()}
+      />,
+    );
+
+    expect(document.querySelector(".wall")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /leave the status wall/i })).toBeTruthy();
+    expect(screen.getAllByText(/Loading monitors…/).length).toBeGreaterThan(0);
+
+    await act(async () => {
+      release(null);
+      await pending;
+    });
+    await waitFor(() => expect(screen.getByText(/Nothing being watched yet/)).toBeTruthy());
+  });
+
+  it("keeps the wall's frame when the first load fails outright", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <LiveDashboardRoot
+        client={client}
+        layout="wall"
+        onExitWall={vi.fn()}
+        createEventSource={() => new FakeSource()}
+      />,
+    );
+    await waitFor(() => expect(screen.getAllByText(/offline/).length).toBeGreaterThan(0));
+    expect(document.querySelector(".wall")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /leave the status wall/i })).toBeTruthy();
   });
 
   it("announces the transition in the live region", async () => {

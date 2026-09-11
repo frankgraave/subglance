@@ -6,6 +6,8 @@ import { Dashboard } from "../monitors/Dashboard";
 import { ConnectionBadge } from "./ConnectionBadge";
 import { useLiveMonitors } from "./useLiveMonitors";
 import { useNow } from "./useNow";
+import { StatusWall } from "../wall/StatusWall";
+import type { LayoutId } from "../shell/preferences";
 import type { LiveOptions } from "./useLiveMonitors";
 
 /**
@@ -19,10 +21,21 @@ import type { LiveOptions } from "./useLiveMonitors";
 export type LiveDashboardProps = LiveOptions & {
   /** Explicit heartbeat width; required in jsdom, which has no layout. */
   beatWidth?: number;
-  compact?: boolean;
+  /** The user's layout setting, already vetoed by the viewport if need be. */
+  layout?: LayoutId;
+  /** Shown on the status wall's header line. */
+  instance?: string;
+  /** Leaves the status wall. Provided by the shell, which owns the setting. */
+  onExitWall?: () => void;
 };
 
-export function LiveDashboard({ beatWidth, compact, ...live }: LiveDashboardProps) {
+export function LiveDashboard({
+  beatWidth,
+  layout,
+  instance,
+  onExitWall,
+  ...live
+}: LiveDashboardProps) {
   const [query, setQuery] = useState("");
   const { monitors, status, loading, error, announcement } = useLiveMonitors(live);
   const now = useNow();
@@ -32,24 +45,47 @@ export function LiveDashboard({ beatWidth, compact, ...live }: LiveDashboardProp
     null,
   );
 
+  const empty = monitors.length === 0;
   // A failed first load is not a stale dashboard, it is an empty one. Saying
   // so plainly beats an empty state that implies "no monitors configured".
-  if (error !== null && monitors.length === 0) {
+  // Deliberately a sentence and not a skeleton: skeletons of unknown-length
+  // lists guess wrong and flash, and this request is one query.
+  const notice =
+    error !== null && empty
+      ? `Could not load monitors: ${error.message}`
+      : loading && empty
+        ? "Loading monitors…"
+        : undefined;
+
+  // The wall replaces the whole page rather than sitting inside it: hiding the
+  // sidebar and the topbar is the entire reason the layout exists (§7). It
+  // also carries its own stale signal, because there is no chrome to hold a
+  // banner — the canvas takes a warm border instead.
+  //
+  // It is checked *before* the loading and error branches on purpose. Those
+  // render the dashboard's chrome, which the wall does not have — falling into
+  // them would strand whoever selected the wall on a bare sentence with no
+  // header, no clock and, worse, no visible way back out. The wall renders its
+  // own frame and carries the sentence inside it instead.
+  if (layout === "wall") {
     return (
-      <section className="mon-dashboard">
-        <p role="alert" className="mon-result-count">
-          Could not load monitors: {error.message}
-        </p>
-      </section>
+      <StatusWall
+        monitors={monitors}
+        instance={instance}
+        stale={status === "offline"}
+        onExit={onExitWall}
+        notice={notice}
+
+      />
     );
   }
 
-  if (loading && monitors.length === 0) {
+  if (notice !== undefined) {
     return (
       <section className="mon-dashboard">
-        {/* Deliberately a sentence, not a skeleton: skeletons of unknown-length
-            lists guess wrong and flash, and this request is one query. */}
-        <p className="mon-result-count">Loading monitors…</p>
+        <p role={error !== null ? "alert" : undefined} className="mon-result-count">
+          {notice}
+        </p>
       </section>
     );
   }
@@ -61,7 +97,7 @@ export function LiveDashboard({ beatWidth, compact, ...live }: LiveDashboardProp
       onQueryChange={setQuery}
       announcement={announcement}
       beatWidth={beatWidth}
-      compact={compact}
+      layout={layout}
       banner={<ConnectionBadge status={status} since={newest} now={now} />}
     />
   );

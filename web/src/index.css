@@ -6,6 +6,8 @@
 @import "./monitors/led.css";
 @import "./monitors/monitors.css";
 @import "./live/connection.css";
+@import "./shell/shell.css";
+@import "./wall/wall.css";
 
 /*
  * Base layer only. Anything that is not a genuine document-wide default

@@ -1,8 +1,10 @@
 import { useId } from "react";
 import type { ReactNode } from "react";
 import { useCompactViewport } from "../layout/useMediaQuery";
+import { DEFAULT_LAYOUT, effectiveLayout, type LayoutId } from "../shell/preferences";
 import { Led } from "./Led";
 import { MonitorCardList } from "./MonitorCardList";
+import { MonitorCompactList } from "./MonitorCompactList";
 import { MonitorTable } from "./MonitorTable";
 import { ROW_BEAT_WIDTH } from "./MonitorRow";
 import { filterMonitors, summarise } from "./model";
@@ -33,13 +35,15 @@ export type DashboardProps = {
   /** Explicit heartbeat width; required in jsdom, which has no layout. */
   beatWidth?: number;
   /**
-   * Forces the row or card layout instead of asking the viewport.
+   * Which of the three list layouts to render.
    *
-   * The layout is normally chosen by a media query. This escape hatch exists
-   * for tests (jsdom has no `matchMedia`) and for the workbench, where both
-   * layouts have to be judged side by side on one desktop screen.
+   * A user setting handed down as a prop, not a breakpoint (DESIGN.md §7) —
+   * but the viewport still gets a veto: `rows` and `compact` both put five
+   * facts on one line, which is exactly what does not fit below 640px, so
+   * `effectiveLayout` downgrades them to cards there. `wall` is not rendered
+   * here; the shell swaps this whole component out for the wall.
    */
-  compact?: boolean;
+  layout?: LayoutId;
   /**
    * Chrome about the data itself, e.g. the connection badge.
    *
@@ -63,14 +67,14 @@ export function Dashboard({
   onQueryChange,
   announcement = null,
   beatWidth,
-  compact,
+  layout = DEFAULT_LAYOUT,
   banner = null,
 }: DashboardProps) {
   const searchId = useId();
   // Hooks cannot be skipped, so the query is always subscribed to and the
-  // override wins afterwards.
+  // narrow-viewport veto is applied afterwards.
   const narrow = useCompactViewport();
-  const useCards = compact ?? narrow;
+  const shown = effectiveLayout(layout, narrow);
   // Derived during render, not mirrored into state: the filtered list is a
   // function of props and holding a copy would only create a way for the two
   // to disagree.
@@ -149,13 +153,15 @@ export function Dashboard({
        * would keep 200 rows *and* 200 cards in the DOM, double every heartbeat
        * bar's ResizeObserver, and hand a screen reader the same monitor twice.
        */}
-      {useCards ? (
+      {shown === "cards" ? (
         <MonitorCardList
           monitors={visible}
           query={query}
           totalCount={monitors.length}
           beatWidth={beatWidth}
         />
+      ) : shown === "compact" ? (
+        <MonitorCompactList monitors={visible} query={query} totalCount={monitors.length} />
       ) : (
         <MonitorTable
           monitors={visible}

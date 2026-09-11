@@ -383,3 +383,71 @@
     padding: var(--space-3);
   }
 }
+
+/*
+ * ---------------------------------------------------------------------------
+ * Compact layout (SUB-64)
+ *
+ * One line per monitor, for the screen holding 100+. The heartbeat bar is
+ * absent by design — 40 rects x 200 monitors is the cost this layout exists to
+ * avoid, and at this line height it would be 8px of noise. Facts keep the same
+ * order as the row, so switching layouts does not move the columns' meaning.
+ * ---------------------------------------------------------------------------
+ */
+
+.mon-lines { display: flex; flex-direction: column; gap: var(--space-5); }
+
+.mon-line-stack {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.mon-line {
+  display: grid;
+  /* Name and target share the flexible space; the two numbers are fixed so
+     they still line up in a column even without a table. */
+  grid-template-columns: 22px minmax(0, 1.1fr) minmax(0, 1.4fr) 76px 62px;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-3);
+  height: 30px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+}
+
+.mon-line:last-child { border-bottom: 0; }
+.mon-line:hover { background: var(--surface-2); }
+
+/* Same rule as the row and the card: trouble warms the leading edge. */
+.mon-line[data-status="down"] { border-left: 2px solid var(--down); background: var(--down-dim); }
+.mon-line[data-status="pending"] { border-left: 2px solid var(--warn); }
+.mon-line[data-status="paused"] { opacity: .62; }
+
+.mon-line-name {
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mon-line-target {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mon-line-num {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+}

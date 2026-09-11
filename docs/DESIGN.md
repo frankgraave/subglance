@@ -43,6 +43,14 @@ Every value is a CSS custom property. On Tailwind v4 these become
 `@theme` tokens; the names stay the same. **Never hardcode a colour or radius in
 a component.**
 
+**One exception, and only one: geometry inside an `<svg>`.** An icon's `rx` is
+part of a drawing, not part of the interface's shape language — it is expressed
+in the icon's own 24x24 viewBox, so a 4px token would mean something different
+in every icon and scale wrongly the moment the icon is rendered at another size.
+CSS cannot reach those attributes without a rule per shape either. Icon path
+data, including `rx`, therefore stays literal in `web/src/shell/icons.tsx`.
+Everything a user can click, hover or read still takes its radius from a token.
+
 ### 2.1 Colour — dark (default)
 
 ```css
@@ -127,6 +135,7 @@ comparing them, you're reading them.
 ### 2.6 Shape, space, motion
 
 ```css
+--r-xs: 4px;    /* chips, segmented buttons, badges */
 --r-sm: 6px;    /* buttons, inputs, small controls */
 --r-md: 10px;   /* rows, list items */
 --r-lg: 14px;   /* cards, dialogs, drawer */
@@ -247,7 +256,19 @@ skeletons replacing real data.
 **Status wall** has no chrome to put a banner in, so the whole canvas carries
 the message: a 2px warm border around the viewport and a suffix on the header
 line. A wall that cannot be trusted must not look calm — but it must not grow a
-toolbar either.
+toolbar either. The rule above applies to every other claim on that screen too
+(SUB-64): the warm card borders drop back to the neutral border, and the down
+count is relabelled "N down, last known" in `--ink-3` rather than shouted in
+`--down`. From across a room a red edge reads as "that one is broken right
+now", which after the stream died is precisely the assertion it can no longer
+make — it may have recovered, or nine more may have joined it.
+
+**A first load that is still in flight, or that failed, keeps the wall's own
+frame (SUB-64).** The wall renders its header, clock and visible exit and puts
+the sentence inside them, instead of falling through to the dashboard's
+chrome-less loading or error view. A wall display is usually a machine nobody
+is sitting at; a bare sentence with no way back out is the worst state it can
+reach.
 
 In production the trigger is SSE `readyState` **plus a watchdog**: if no event
 arrives within ~2.5 check intervals the view is stale regardless of what the socket
@@ -285,6 +306,28 @@ topbar or `Cmd/Ctrl + B`. Collapsed it becomes a 56px rail with icons only — n
 gone, because then your navigation is unreachable. Status wall hides it
 completely and remembers your preference separately, so you get the rail back
 exactly as you left it.
+
+**The narrow viewport keeps a veto (SUB-64).** Layout is a user setting, but
+Rows and Compact both put five facts on one line and that is precisely what does
+not fit below 640px (§13). Below the breakpoint both fall back to Cards, which
+keeps every fact the row shows; Cards and Status wall are honoured at every
+width. The stored preference is *not* rewritten when this happens — opening the
+dashboard on a phone must not change what the desktop shows tomorrow — and the
+toolbar shows the layout actually on screen rather than the overridden one.
+
+**Compact ships without grouping, for now (SUB-64).** The table above describes
+it as grouped by customer or environment; §12 records that tags have no screen
+to create or assign them, so grouping today would mean inventing a taxonomy in
+the frontend. It ships as one dense line per monitor, ordered by the same
+`partition()` as every other layout, with the heartbeat bar dropped — 40 rects
+x 200 monitors is the cost this layout exists to avoid. Grouping returns with
+tags.
+
+**The sidebar does not advertise what does not exist (SUB-64).** The four
+unbuilt destinations are rendered as plainly unavailable — dimmed, not pressable,
+each saying "Soon" in words rather than by colour alone — and the mockup's "2
+incidents" badge is gone. A badge claiming open incidents that goes nowhere is
+indistinguishable from a real alert.
 
 ---
 
