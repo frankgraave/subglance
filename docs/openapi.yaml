@@ -377,6 +377,23 @@ paths:
         a single failed check is `pending` until the monitor's retry threshold
         is crossed. Deriving it from the heartbeat alone would put the
         dashboard and the notifications into disagreement.
+
+        Pass `heartbeats` to have each monitor's recent check results embedded
+        in the same response. Without it the beat bars would cost one
+        `listHeartbeats` call per monitor, which at a few hundred monitors is a
+        few hundred round trips per page load; with it the whole grid comes out
+        of a single request.
+      parameters:
+        - name: heartbeats
+          in: query
+          required: false
+          description: |
+            How many recent heartbeats to embed per monitor, oldest first.
+            Omit the parameter to leave the `heartbeats` field out altogether.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
       responses:
         '200':
           description: Every monitor, in creation order.
@@ -390,6 +407,14 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Monitor'
+        '400':
+          description: A `heartbeats` value that is not an integer in 1–1000.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: heartbeats must be between 1 and 1000
         '401':
           $ref: '#/components/responses/Unauthorized'
         '500':
@@ -1863,6 +1888,16 @@ components:
           minimum: 0
           maximum: 100
           example: 99.86
+        heartbeats:
+          type: array
+          description: |
+            Recent check results, **oldest first** — the order the dashboard's
+            beat bar reads in, and the reverse of `listHeartbeats`. Present
+            only when the listing was requested with the `heartbeats` query
+            parameter, and only for monitors that have been checked at least
+            once.
+          items:
+            $ref: '#/components/schemas/Heartbeat'
         created_at:
           type: string
           format: date-time

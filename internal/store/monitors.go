@@ -232,14 +232,49 @@ func (db *DB) RecordHeartbeat(ctx context.Context, hb Heartbeat) error {
 	return nil
 }
 
+// heartbeatColumns is the column list every heartbeat scan expects, in the
+// order scanHeartbeat reads them.
+const heartbeatColumns = `id, monitor_id, ts, ok, latency_ms, status_code, error`
+
+// maxHeartbeatsPerQuery caps how many heartbeats a single read may return per
+// monitor, so a client cannot ask the server to materialise the whole table.
+const maxHeartbeatsPerQuery = 1000
+
+// defaultHeartbeatLimit is what a caller gets when it expresses no preference.
+const defaultHeartbeatLimit = 100
+
+// scanHeartbeat reads one row selected with heartbeatColumns.
+//
+// latency_ms, status_code and error are nullable because nullInt/nullString
+// store "no value" as NULL rather than 0 or "". Reading them through the
+// Null* types keeps that absence from becoming a scan error; the Go zero value
+// is the agreed representation of "not applicable" on this path.
+func scanHeartbeat(s scanner) (Heartbeat, error) {
+	var (
+		hb      Heartbeat
+		ts      int64
+		latency sql.NullInt64
+		status  sql.NullInt64
+		errText sql.NullString
+	)
+	if err := s.Scan(&hb.ID, &hb.MonitorID, &ts, &hb.OK, &latency, &status, &errText); err != nil {
+		return Heartbeat{}, err
+	}
+	hb.TS = time.Unix(ts, 0).UTC()
+	hb.LatencyMS = int(latency.Int64)
+	hb.StatusCode = int(status.Int64)
+	hb.Error = errText.String
+	return hb, nil
+}
+
 // ListHeartbeats returns the most recent heartbeats for a monitor, newest first.
 func (db *DB) ListHeartbeats(ctx context.Context, monitorID int64, limit int) ([]Heartbeat, error) {
 	if limit <= 0 {
-		limit = 100
+		limit = defaultHeartbeatLimit
 	}
 
 	rows, err := db.Reader.QueryContext(ctx, `
-		SELECT id, monitor_id, ts, ok, latency_ms, status_code, error
+		SELECT `+heartbeatColumns+`
 		FROM heartbeats
 		WHERE monitor_id = ?
 		ORDER BY ts DESC
@@ -251,23 +286,72 @@ func (db *DB) ListHeartbeats(ctx context.Context, monitorID int64, limit int) ([
 
 	var out []Heartbeat
 	for rows.Next() {
-		var (
-			hb      Heartbeat
-			ts      int64
-			latency sql.NullInt64
-			status  sql.NullInt64
-			errText sql.NullString
-		)
-		if err := rows.Scan(&hb.ID, &hb.MonitorID, &ts, &hb.OK, &latency, &status, &errText); err != nil {
+		hb, err := scanHeartbeat(rows)
+		if err != nil {
 			return nil, err
 		}
-		hb.TS = time.Unix(ts, 0).UTC()
-		hb.LatencyMS = int(latency.Int64)
-		hb.StatusCode = int(status.Int64)
-		hb.Error = errText.String
 		out = append(out, hb)
 	}
 	return out, rows.Err()
+}
+
+// RecentHeartbeatsForAll returns the most recent perMonitor heartbeats for
+// every monitor that has any, keyed by monitor id and newest first — the same
+// order as ListHeartbeats.
+//
+// This exists because the dashboard draws a beat bar per monitor. Doing that
+// with ListHeartbeats means one query per monitor, and at 200 monitors that is
+// 200 round trips through SQLite for a single page load, repeated on every
+// refresh. That N+1 is the scaling problem this endpoint has to survive, so
+// the whole grid comes out of one query instead.
+//
+// The window function does the per-monitor slicing inside SQLite: ROW_NUMBER()
+// partitioned by monitor_id and ordered by ts DESC numbers each monitor's
+// heartbeats independently, and keeping rows with rn <= perMonitor gives the
+// newest N of each without a LIMIT per monitor. The
+// idx_heartbeats_monitor_ts (monitor_id, ts DESC) index already supplies that
+// ordering, so no extra sort is needed.
+//
+// perMonitor <= 0 falls back to the default; anything larger than
+// maxHeartbeatsPerQuery is clamped.
+//
+// Monitors that have never been checked are simply absent from the map. That
+// is deliberate and safe here: the caller renders a missing entry as "never
+// checked", which is exactly what an empty slice would mean too.
+func (db *DB) RecentHeartbeatsForAll(ctx context.Context, perMonitor int) (map[int64][]Heartbeat, error) {
+	if perMonitor <= 0 {
+		perMonitor = defaultHeartbeatLimit
+	}
+	if perMonitor > maxHeartbeatsPerQuery {
+		perMonitor = maxHeartbeatsPerQuery
+	}
+
+	rows, err := db.Reader.QueryContext(ctx, `
+		SELECT `+heartbeatColumns+`
+		FROM (
+			SELECT `+heartbeatColumns+`,
+			       ROW_NUMBER() OVER (PARTITION BY monitor_id ORDER BY ts DESC) AS rn
+			FROM heartbeats
+		)
+		WHERE rn <= ?
+		ORDER BY monitor_id, rn`, perMonitor)
+	if err != nil {
+		return nil, fmt.Errorf("query recent heartbeats for all monitors: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	out := make(map[int64][]Heartbeat)
+	for rows.Next() {
+		hb, err := scanHeartbeat(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan heartbeat: %w", err)
+		}
+		out[hb.MonitorID] = append(out[hb.MonitorID], hb)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("query recent heartbeats for all monitors: %w", err)
+	}
+	return out, nil
 }
 
 // UptimeStats summarises a monitor over a window.

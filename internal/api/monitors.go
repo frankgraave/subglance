@@ -42,7 +42,35 @@ type monitorResponse struct {
 
 	Uptime24h float64 `json:"uptime_24h"`
 
+	// Heartbeats is filled in only when the caller asked for it with the
+	// `heartbeats` query parameter, oldest first. Omitting the field
+	// entirely when it was not requested keeps the default response byte
+	// for byte what it has always been.
+	Heartbeats []heartbeatResponse `json:"heartbeats,omitempty"`
+
 	CreatedAt time.Time `json:"created_at"`
+}
+
+// heartbeatResponse is the wire shape of one recorded check result. It is
+// shared by the per-monitor heartbeat listing and the optional beats embedded
+// in a monitor listing, so both cannot drift apart.
+type heartbeatResponse struct {
+	TS         time.Time `json:"ts"`
+	OK         bool      `json:"ok"`
+	LatencyMS  int       `json:"latency_ms"`
+	StatusCode int       `json:"status_code,omitempty"`
+	Error      string    `json:"error,omitempty"`
+}
+
+// describeHeartbeat converts a stored heartbeat to its wire shape.
+func describeHeartbeat(hb store.Heartbeat) heartbeatResponse {
+	return heartbeatResponse{
+		TS:         hb.TS,
+		OK:         hb.OK,
+		LatencyMS:  hb.LatencyMS,
+		StatusCode: hb.StatusCode,
+		Error:      hb.Error,
+	}
 }
 
 type createMonitorRequest struct {
@@ -66,6 +94,18 @@ type createMonitorRequest struct {
 func (s *Server) handleListMonitors(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	// `heartbeats` is opt-in so the existing response shape is untouched for
+	// callers that do not want the extra payload.
+	perMonitor := 0
+	if v := r.URL.Query().Get("heartbeats"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > 1000 {
+			writeError(w, http.StatusBadRequest, "heartbeats must be between 1 and 1000")
+			return
+		}
+		perMonitor = n
+	}
+
 	monitors, err := s.db.ListMonitors(ctx)
 	if err != nil {
 		s.log.Error("list monitors", "error", err)
@@ -73,11 +113,47 @@ func (s *Server) handleListMonitors(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// One bulk query rather than one per monitor: at a few hundred monitors
+	// the per-monitor version is a few hundred round trips per page load.
+	// A failure here only costs the beat bars, so the listing still goes out.
+	var beats map[int64][]store.Heartbeat
+	if perMonitor > 0 {
+		beats, err = s.db.RecentHeartbeatsForAll(ctx, perMonitor)
+		if err != nil {
+			s.log.Error("recent heartbeats for all monitors", "error", err)
+			beats = nil
+		}
+	}
+
 	out := make([]monitorResponse, 0, len(monitors))
 	for _, m := range monitors {
-		out = append(out, s.describeMonitor(r, m))
+		resp := s.describeMonitor(r, m)
+		if perMonitor > 0 {
+			resp.Heartbeats = oldestFirstHeartbeats(beats[m.ID])
+		}
+		out = append(out, resp)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"monitors": out})
+}
+
+// oldestFirstHeartbeats reverses a newest-first run of heartbeats.
+//
+// The store returns newest first, which is the natural order for "show me the
+// last N". The dashboard's beat bar reads left to right through time, so it
+// needs the opposite. Reversing once here keeps both contracts honest instead
+// of making one of them lie about its order.
+//
+// A monitor with no heartbeats yields nil, so `omitempty` leaves the field out
+// entirely rather than shipping an empty array.
+func oldestFirstHeartbeats(hbs []store.Heartbeat) []heartbeatResponse {
+	if len(hbs) == 0 {
+		return nil
+	}
+	out := make([]heartbeatResponse, 0, len(hbs))
+	for i := len(hbs) - 1; i >= 0; i-- {
+		out = append(out, describeHeartbeat(hbs[i]))
+	}
+	return out
 }
 
 func (s *Server) handleCreateMonitor(w http.ResponseWriter, r *http.Request) {
@@ -322,20 +398,9 @@ func (s *Server) handleListHeartbeats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	type heartbeatResponse struct {
-		TS         time.Time `json:"ts"`
-		OK         bool      `json:"ok"`
-		LatencyMS  int       `json:"latency_ms"`
-		StatusCode int       `json:"status_code,omitempty"`
-		Error      string    `json:"error,omitempty"`
-	}
-
 	out := make([]heartbeatResponse, 0, len(hbs))
 	for _, hb := range hbs {
-		out = append(out, heartbeatResponse{
-			TS: hb.TS, OK: hb.OK, LatencyMS: hb.LatencyMS,
-			StatusCode: hb.StatusCode, Error: hb.Error,
-		})
+		out = append(out, describeHeartbeat(hb))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"heartbeats": out})
 }
