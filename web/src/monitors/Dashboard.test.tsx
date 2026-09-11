@@ -29,14 +29,17 @@ const monitor = (id: string, status: MonitorStatus, over: Partial<Monitor> = {})
 function Harness({
   monitors,
   announcement = null,
+  compact,
 }: {
   monitors: Monitor[];
   announcement?: string | null;
+  compact?: boolean;
 }) {
   const [query, setQuery] = useState("");
   return (
     <Dashboard
       monitors={monitors}
+      compact={compact}
       query={query}
       onQueryChange={setQuery}
       announcement={announcement}
@@ -152,5 +155,42 @@ describe("Dashboard", () => {
   it("has a real label on the search field, not just a placeholder", () => {
     render(<Harness monitors={[monitor("api", "up")]} />);
     expect(search()).toBeTruthy();
+  });
+
+  describe("layout", () => {
+    it("renders rows on a wide viewport", () => {
+      render(<Harness monitors={[monitor("api", "up")]} compact={false} />);
+      expect(rowIds()).toEqual(["monitor-row-api"]);
+      expect(screen.queryByTestId("monitor-card-api")).toBeNull();
+    });
+
+    it("renders cards on a narrow viewport", () => {
+      render(<Harness monitors={[monitor("api", "up")]} compact />);
+      expect(screen.getByTestId("monitor-card-api")).toBeTruthy();
+      // Exactly one of the two, never both: two copies of every monitor would
+      // double the DOM and hand a screen reader each one twice.
+      expect(rowIds()).toEqual([]);
+    });
+
+    it("searches the same list in either layout", () => {
+      render(
+        <Harness
+          monitors={[monitor("api", "up", { name: "API gateway" }), monitor("db", "up")]}
+          compact
+        />,
+      );
+      fireEvent.change(search(), { target: { value: "gateway" } });
+      expect(screen.getByTestId("monitor-card-api")).toBeTruthy();
+      expect(screen.queryByTestId("monitor-card-db")).toBeNull();
+    });
+
+    it("keeps the live region outside the card list too", () => {
+      render(
+        <Harness monitors={[monitor("api", "down")]} announcement="1 monitor down: api." compact />,
+      );
+      const status = screen.getByRole("status");
+      expect(status.textContent).toBe("1 monitor down: api.");
+      expect(document.querySelector(".mon-cards")!.contains(status)).toBe(false);
+    });
   });
 });

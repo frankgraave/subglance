@@ -1,5 +1,7 @@
 import { useId } from "react";
+import { useCompactViewport } from "../layout/useMediaQuery";
 import { Led } from "./Led";
+import { MonitorCardList } from "./MonitorCardList";
 import { MonitorTable } from "./MonitorTable";
 import { ROW_BEAT_WIDTH } from "./MonitorRow";
 import { filterMonitors, summarise } from "./model";
@@ -29,6 +31,14 @@ export type DashboardProps = {
   announcement?: string | null;
   /** Explicit heartbeat width; required in jsdom, which has no layout. */
   beatWidth?: number;
+  /**
+   * Forces the row or card layout instead of asking the viewport.
+   *
+   * The layout is normally chosen by a media query. This escape hatch exists
+   * for tests (jsdom has no `matchMedia`) and for the workbench, where both
+   * layouts have to be judged side by side on one desktop screen.
+   */
+  compact?: boolean;
 };
 
 const COUNTED: { status: MonitorStatus; label: string }[] = [
@@ -43,9 +53,14 @@ export function Dashboard({
   query,
   onQueryChange,
   announcement = null,
-  beatWidth = ROW_BEAT_WIDTH,
+  beatWidth,
+  compact,
 }: DashboardProps) {
   const searchId = useId();
+  // Hooks cannot be skipped, so the query is always subscribed to and the
+  // override wins afterwards.
+  const narrow = useCompactViewport();
+  const useCards = compact ?? narrow;
   // Derived during render, not mirrored into state: the filtered list is a
   // function of props and holding a copy would only create a way for the two
   // to disagree.
@@ -114,12 +129,26 @@ export function Dashboard({
         </p>
       )}
 
-      <MonitorTable
-        monitors={visible}
-        query={query}
-        totalCount={monitors.length}
-        beatWidth={beatWidth}
-      />
+      {/*
+       * Two components, one breakpoint. Rendering both and hiding one with CSS
+       * would keep 200 rows *and* 200 cards in the DOM, double every heartbeat
+       * bar's ResizeObserver, and hand a screen reader the same monitor twice.
+       */}
+      {useCards ? (
+        <MonitorCardList
+          monitors={visible}
+          query={query}
+          totalCount={monitors.length}
+          beatWidth={beatWidth}
+        />
+      ) : (
+        <MonitorTable
+          monitors={visible}
+          query={query}
+          totalCount={monitors.length}
+          beatWidth={beatWidth ?? ROW_BEAT_WIDTH}
+        />
+      )}
     </section>
   );
 }

@@ -416,11 +416,9 @@ to discover late.
 
 ### Blocking — the design does not survive without these
 
-- **Mobile.** Below 900px the sidebar disappears and the row collapses to
-  name + interval: the heartbeat, latency and uptime all drop out. What remains
-  is a list of names, which is not what this product is for. The phone is where
-  you look *after* the alert fires, so it is arguably the most important screen
-  we have not designed. Needs its own decision, not a narrower desktop.
+- ~~**Mobile.**~~ Answered in §13: below 640px the dashboard renders a card per
+  monitor instead of a row, keeping every fact the row shows. The remaining
+  mobile gap is the screens that do not exist yet on any width.
 - **Scale.** The mockup shows 14 monitors; the target audience runs 10–200. No
   search, no filter, no grouping in the row views, no virtualisation, no
   pagination. Compact was designed for density but not tested at 200 rows.
@@ -459,3 +457,52 @@ The sidebar advertises five destinations; one exists.
 Status pages, config-as-code YAML, multi-region and on-call schedules are all
 post-v0.1. Not designing them yet is correct — but the
 navigation should not promise them either.
+
+---
+
+## 13. The phone layout
+
+The phone is not a narrower desktop. You open SubGlance on it *after* an alert
+fired: standing somewhere, one-handed, wanting one monitor's story. The desktop
+screen is built for the opposite task — scanning a column across 200 rows — so
+the two get two layouts rather than one stretched one.
+
+**Breakpoint: 640px.** A layout decision, not a device one: below it the
+five-column row can no longer hold a readable name, a heartbeat and two numbers
+at the same time. The number lives in `web/src/layout/useMediaQuery.ts` as
+`COMPACT_MAX_WIDTH` and in `web/src/monitors/monitors.css`; a test asserts the
+two agree.
+
+**One monitor is one card.** Status word and lamp on top, then the name, the
+target, the heartbeat bar full width, and latency plus 24h uptime as a labelled
+pair at the foot. Nothing from the row is dropped — dropping the heartbeat and
+the uptime is exactly what made the old behaviour "a list of names" (§12).
+
+**Rejected alternatives, and why.**
+
+- *Horizontal scroll with a frozen first column.* Preserves the grid, but asks
+  someone on a platform to swipe sideways to find the column holding the answer.
+  The wrong trade for a screen you open in a hurry.
+- *Hide the low-priority columns.* There are no low-priority columns here.
+  Latency and uptime are the product.
+- *CSS-only reflow of the same `<table>` (`display: block` on the cells).* The
+  popular trick, and it silently drops table semantics in Safari — the same
+  hazard `MonitorTable` already warns about. The card list is a real `<ul>`.
+- *Render both and hide one with CSS.* Doubles the DOM at 200 monitors, doubles
+  every heartbeat bar's `ResizeObserver`, and gives a screen reader each monitor
+  twice. React picks one component; only one is ever mounted.
+
+**Labels become visible.** A table cell inherits its noun from the column
+header. A card has none, so `120 ms` alone is a number without a meaning — the
+card writes `Latency` above it.
+
+**Names wrap, they do not ellipsis.** On the desktop a truncated hostname is
+recoverable by widening the column; on a phone it is not, and the name is the
+heading of the thing you came to read. Two lines of card is the cheaper cost.
+
+**The search field is 16px.** Not a typographic choice: iOS Safari zooms the
+page when a focused input is smaller, and does not zoom back out on blur.
+
+**Ordering is shared with the desktop.** Both layouts call the same
+`partition()` — down first, then alphabetical — so "needs attention" means the
+same thing on both screens.

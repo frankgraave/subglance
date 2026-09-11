@@ -26,14 +26,14 @@ export default function App() {
   return (
     <div className="min-h-dvh bg-canvas text-ink transition-colors">
       <header className="border-b border-border">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
           <div>
-            <h1 className="text-[21px] font-medium tracking-[-0.02em]">SubGlance</h1>
+            <h1 className="text-[19px] font-medium tracking-[-0.02em] sm:text-[21px]">SubGlance</h1>
             <p className="text-[12.5px] text-ink-3">Component workbench — {resolved} theme</p>
           </div>
           <ThemeToggle preference={preference} onChange={setPreference} />
         </div>
-        <div className="mx-auto flex max-w-5xl gap-1 px-6">
+        <div className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-4 sm:px-6">
           {TABS.map((t) => (
             <button
               key={t.id}
@@ -51,7 +51,7 @@ export default function App() {
           ))}
         </div>
       </header>
-      <main className={`mx-auto px-6 py-8 ${tab === "dashboard" ? "max-w-6xl" : "max-w-5xl"}`}>
+      <main className={`mx-auto px-4 py-8 sm:px-6 ${tab === "dashboard" ? "max-w-6xl" : "max-w-5xl"}`}>
         {tab === "dashboard" && <DashboardWorkbench />}
         {tab === "heartbeat" && <HeartbeatGallery />}
         {tab === "tokens" && <TokenSheet />}

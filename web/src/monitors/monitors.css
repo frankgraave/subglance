@@ -229,3 +229,157 @@
   line-height: 1.6;
   color: var(--ink-3);
 }
+
+/*
+ * ---------------------------------------------------------------------------
+ * Phone layout (SUB-29)
+ *
+ * The breakpoint is 640px and it is duplicated in src/layout/useMediaQuery.ts
+ * (COMPACT_MAX_WIDTH), because the *choice of component* happens in React —
+ * the table and the card list are never both in the DOM. A test asserts the
+ * two numbers agree; change one and change the other.
+ * ---------------------------------------------------------------------------
+ */
+
+.mon-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.mon-cards-title {
+  margin-bottom: var(--space-2);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--ink-3);
+}
+
+.mon-card-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.mon-card {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  /* min-width:0 lets the flex/grid children below actually ellipsis instead
+     of pushing the card past the viewport — the 416px-on-a-390px-screen bug
+     this issue opened with. */
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Same rule as the row: trouble warms the leading edge, it does not flood the
+   card. The border is on the left so a stack of cards still scans as a column
+   of lamps down the same axis. */
+.mon-card[data-status="down"] {
+  border-left: 2px solid var(--down);
+  background: var(--down-dim);
+}
+
+.mon-card[data-status="pending"] { border-left: 2px solid var(--warn); }
+.mon-card[data-status="paused"] { opacity: .62; }
+
+.mon-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The lamp's own label is rendered visibly, so the card's status word comes
+   from it; this span is the styling hook for that text. */
+.mon-card-status {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--ink-3);
+}
+
+.mon-card-name {
+  margin-top: var(--space-2);
+  font-size: 15px;
+  font-weight: 450;
+  letter-spacing: -.01em;
+  color: var(--ink);
+  /* Wrap rather than ellipsis: on a phone the name is the heading of the
+     thing you came to read, and a truncated hostname is useless. Two lines of
+     card is cheaper than the wrong monitor. */
+  overflow-wrap: anywhere;
+}
+
+.mon-card-target {
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
+}
+
+.mon-card-beats {
+  margin-top: var(--space-3);
+}
+
+.mon-card-error {
+  margin-top: var(--space-2);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--down);
+  overflow-wrap: anywhere;
+}
+
+.mon-card-facts {
+  display: flex;
+  gap: var(--space-6);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+/* Label above value, not beside it: a two-column dl at 375px either wraps
+   unpredictably or leaves the numbers floating far from their nouns. */
+.mon-card-fact dt {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--ink-4);
+}
+
+.mon-card-fact dd {
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+/*
+ * Chrome that has to shrink too. The card list handles the monitors; these
+ * rules stop the header around it from being the thing that overflows.
+ */
+@media (max-width: 640px) {
+  .mon-topbar {
+    /* Stacked, and the search goes full width: a 240px input beside a heading
+       on a 375px screen leaves neither of them usable. */
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+  }
+
+  .mon-search-input {
+    width: 100%;
+    /* 16px is not a style choice: iOS Safari zooms the page when a focused
+       input is smaller, and the zoom does not undo itself on blur. */
+    font-size: 16px;
+    padding: var(--space-3);
+  }
+}

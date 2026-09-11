@@ -1,6 +1,8 @@
 import { memo } from "react";
 import { HeartbeatBar } from "../heartbeat/HeartbeatBar";
+import { formatLatency, formatUptime } from "./format";
 import { Led } from "./Led";
+import { Unknown } from "./Unknown";
 import type { Monitor } from "./types";
 
 /**
@@ -17,29 +19,6 @@ import type { Monitor } from "./types";
 
 /** How many heartbeat columns a row shows. DESIGN.md §4: the last 28 checks. */
 export const ROW_BEAT_WIDTH = 168;
-
-/**
- * A value we do not have, drawn as an em dash.
- *
- * Never `0`. A monitor that has never reported a latency and one that
- * answered instantly are different facts, and rendering both as `0 ms` makes
- * the dashboard confidently wrong. The dash is decorative; the real reason is
- * in the accessible text beside it.
- */
-function Unknown({ what }: { what: string }) {
-  return (
-    <>
-      <span aria-hidden="true">—</span>
-      <span className="sr-only">No {what} data</span>
-    </>
-  );
-}
-
-const formatLatency = (ms: number) =>
-  ms >= 1000 ? `${(ms / 1000).toFixed(2)} s` : `${Math.round(ms)} ms`;
-
-/** Uptime to one decimal, so 99.95 does not round up to a perfect 100%. */
-const formatUptime = (pct: number) => `${pct.toFixed(pct >= 99.95 || pct === 0 ? 0 : 1)}%`;
 
 export type MonitorRowProps = {
   monitor: Monitor;

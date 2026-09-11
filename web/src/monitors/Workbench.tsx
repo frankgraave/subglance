@@ -15,8 +15,24 @@ import { describeTransitions } from "./model";
 
 const SCALES = [5, 200] as const;
 
+/**
+ * Layout choices offered by the harness.
+ *
+ * `auto` is what the product ships: the viewport decides. The two forced
+ * options exist so both layouts can be judged on one desktop screen without
+ * resizing the window, which is how the phone layout gets reviewed at all.
+ */
+const LAYOUTS = [
+  { id: "auto", label: "Auto" },
+  { id: "rows", label: "Rows" },
+  { id: "cards", label: "Cards" },
+] as const;
+
+type Layout = (typeof LAYOUTS)[number]["id"];
+
 export function DashboardWorkbench() {
   const [size, setSize] = useState<(typeof SCALES)[number]>(5);
+  const [layout, setLayout] = useState<Layout>("auto");
   const [query, setQuery] = useState("");
 
   const monitors = useMemo(() => demoMonitors(size), [size]);
@@ -53,11 +69,32 @@ export function DashboardWorkbench() {
         </span>
       </div>
 
+      <div className="flex items-center gap-2 text-[12.5px] text-ink-3">
+        <span>Layout:</span>
+        {LAYOUTS.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            onClick={() => setLayout(option.id)}
+            aria-pressed={layout === option.id}
+            className={`rounded-sm border px-2 py-1 text-[12px] transition-colors ${
+              layout === option.id
+                ? "border-border-hi bg-surface-2 text-ink"
+                : "border-border text-ink-3 hover:text-ink-2"
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+        <span className="text-ink-4">Auto switches to cards at 640px.</span>
+      </div>
+
       <Dashboard
         monitors={monitors}
         query={query}
         onQueryChange={setQuery}
         announcement={announcement}
+        compact={layout === "auto" ? undefined : layout === "cards"}
       />
     </div>
   );
