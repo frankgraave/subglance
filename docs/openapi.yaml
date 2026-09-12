@@ -1518,9 +1518,11 @@ paths:
         understand that the token is gone rather than assume it can be looked
         up later.
 
-        A token inherits the role of the user who created it, so a viewer's
-        token cannot write. Any authenticated user may mint tokens for
-        themselves.
+        A token inherits the role of the user who created it, so an editor's
+        token cannot administer. Issuing one requires the editor role: a token
+        is a long-lived credential that outlives the session and leaves the
+        browser, which is a broader act than reading in the UI. A viewer may
+        still list and revoke its own tokens.
       requestBody:
         required: true
         content:
@@ -1546,13 +1548,15 @@ paths:
                 error: expires_in must be a duration such as 720h
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '500':
           description: The token could not be created.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-      x-subglance-access: read
+      x-subglance-access: write
   /api/v1/tokens/{id}:
     parameters:
       - name: id
