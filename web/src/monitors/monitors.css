@@ -24,8 +24,8 @@
 
 .mon-title {
   font-size: var(--type-card);
-  font-weight: 500;
-  letter-spacing: -.01em;
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--track-title);
 }
 
 .mon-counts {
@@ -44,7 +44,7 @@
 }
 
 .mon-count-value {
-  font-weight: 500;
+  font-weight: var(--weight-strong);
   color: var(--ink);
 }
 
@@ -95,9 +95,9 @@
   padding: 0 var(--space-3);
   text-align: left;
   font-size: var(--type-section);
-  font-weight: 500;
+  font-weight: var(--weight-strong);
   text-transform: uppercase;
-  letter-spacing: .09em;
+  letter-spacing: var(--track-caps);
   color: var(--ink-4);
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
@@ -109,9 +109,9 @@
   padding: var(--space-2) var(--space-3);
   text-align: left;
   font-size: var(--type-section);
-  font-weight: 500;
+  font-weight: var(--weight-strong);
   text-transform: uppercase;
-  letter-spacing: .09em;
+  letter-spacing: var(--track-caps);
   color: var(--ink-3);
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
@@ -168,14 +168,14 @@
      instead of the text forcing the column wider. */
   min-width: 0;
   text-align: left;
-  font-weight: 400;
+  font-weight: var(--weight-plain);
 }
 
 .mon-name {
   display: block;
   font-size: var(--type-row);
-  font-weight: 450;
-  letter-spacing: -.005em;
+  font-weight: var(--weight-mid);
+  letter-spacing: var(--track-name);
   color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
@@ -233,8 +233,8 @@
 .mon-empty-title {
   margin-bottom: var(--space-2);
   font-size: var(--type-card);
-  font-weight: 500;
-  letter-spacing: -.01em;
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--track-title);
   color: var(--ink);
 }
 
@@ -266,9 +266,9 @@
 .mon-cards-title {
   margin-bottom: var(--space-2);
   font-size: var(--type-section);
-  font-weight: 500;
+  font-weight: var(--weight-strong);
   text-transform: uppercase;
-  letter-spacing: .09em;
+  letter-spacing: var(--track-caps);
   color: var(--ink-3);
 }
 
@@ -318,17 +318,17 @@
    from it; this span is the styling hook for that text. */
 .mon-card-status {
   font-size: var(--type-helper);
-  font-weight: 500;
+  font-weight: var(--weight-strong);
   text-transform: uppercase;
-  letter-spacing: .07em;
+  letter-spacing: var(--track-caps);
   color: var(--ink-3);
 }
 
 .mon-card-name {
   margin-top: var(--space-2);
   font-size: var(--type-card);
-  font-weight: 450;
-  letter-spacing: -.01em;
+  font-weight: var(--weight-mid);
+  letter-spacing: var(--track-title);
   color: var(--ink);
   /* Wrap rather than ellipsis: on a phone the name is the heading of the
      thing you came to read, and a truncated hostname is useless. Two lines of
@@ -368,9 +368,9 @@
    unpredictably or leaves the numbers floating far from their nouns. */
 .mon-card-fact dt {
   font-size: var(--type-section);
-  font-weight: 500;
+  font-weight: var(--weight-strong);
   text-transform: uppercase;
-  letter-spacing: .08em;
+  letter-spacing: var(--track-caps);
   color: var(--ink-4);
 }
 
@@ -512,8 +512,8 @@
 
 .add-title {
   font-size: var(--type-card);
-  font-weight: 500;
-  letter-spacing: -.01em;
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--track-title);
 }
 
 .add-lede {
@@ -531,8 +531,8 @@
 
 .add-label {
   font-size: var(--type-section);
-  font-weight: 500;
-  letter-spacing: .02em;
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--track-caps);
   text-transform: uppercase;
   color: var(--ink-3);
 }

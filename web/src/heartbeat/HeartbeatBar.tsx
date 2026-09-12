@@ -231,7 +231,7 @@ export function HeartbeatBar({
                 ? `${formatTime(activeSlot.from)} – ${formatTime(activeSlot.to)}`
                 : formatTime(activeSlot.to)}
             </div>
-            <div className="text-body font-medium text-ink">
+            <div className="text-body font-strong text-ink">
               {activeSlot.ok ? formatLatency(activeSlot.latencyMs) : "Failed"}
               {activeSlot.count > 1 && (
                 <span className="text-ink-3">

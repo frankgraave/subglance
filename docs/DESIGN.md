@@ -126,12 +126,12 @@ one of them is touched.
 
 | Role | Token | Size | Weight |
 |---|---|---|---|
-| Page title | `--type-page` | `22px` | 500, `letter-spacing: -.02em` |
-| Card title | `--type-card` | `17px` | 500 |
-| Row title | `--type-row` | `15px` | 450 |
-| Body / label | `--type-body` | `14px` | 400–450 |
-| Helper text | `--type-helper` | `12.5px` | 400 |
-| Section heading | `--type-section` | `12px` | 500, uppercase, `letter-spacing: .09em` |
+| Page title | `--type-page` | `22px` | `--weight-strong`, `--track-title` |
+| Card title | `--type-card` | `17px` | `--weight-strong`, `--track-title` |
+| Row title | `--type-row` | `15px` | `--weight-mid`, `--track-name` |
+| Body / label | `--type-body` | `14px` | `--weight-plain`, `--track-name` |
+| Helper text | `--type-helper` | `12.5px` | `--weight-plain` |
+| Section heading | `--type-section` | `12px` | `--weight-strong`, uppercase, `--track-caps` |
 
 | Line height | Token | Value | Used for |
 |---|---|---|---|
@@ -150,6 +150,40 @@ why it sits outside the scale.
 row at 34px, so a laptop still shows the same number of monitors without
 scrolling (product principle 1). Larger type inside an unchanged row is paid for
 out of the slack that was already there, not out of the viewport.
+
+**Weight is a scale of three, not a dial.** The sans ships a real 450, which is
+why the middle step exists at all: a monitor's name has to separate from the
+metadata beside it without becoming a heading, and 500 at 15px is already a
+heading. Anything outside these three is drift.
+
+| Role | Token | Value | Used for |
+|---|---|---|---|
+| Plain | `--weight-plain` | `400` | running text, helper text, table cells |
+| Mid | `--weight-mid` | `450` | the name of a thing, set against its own metadata |
+| Strong | `--weight-strong` | `500` | headings, uppercase micro-labels, an emphasised count |
+
+**Tracking is an optical correction, never emphasis.** Large sans set at its
+default spacing looks loose, and uppercase text set at its default looks glued
+together; both are fixed by tracking. Widening mixed-case text to make it feel
+important is not, and there is no token for it.
+
+| Role | Token | Value | Used for |
+|---|---|---|---|
+| Title | `--track-title` | `-.01em` | titles at `--type-card` and above |
+| Name | `--track-name` | `-.005em` | names at `--type-row` and `--type-body` |
+| Badge | `--track-badge` | `.04em` | small mono badges, where the mono face is already wide |
+| Caps | `--track-caps` | `.09em` | every uppercase micro-label, without exception |
+
+One caps value, not four. The uppercase labels in this product previously ran
+at `.02em`, `.07em`, `.08em`, `.09em` and `.1em` — five spellings of one
+decision, none of which was deliberate. They are the same role and now read the
+same, which is the entire reason the token exists.
+
+The raw custom properties are spelled `--track-*` rather than `--tracking-*`
+because `--tracking-*` is Tailwind v4's own theme namespace: a token of that
+name inside `@theme inline` would have to reference itself. The raw value and
+the utility binding therefore carry different names, exactly as `--canvas` and
+`--color-canvas` already do.
 
 **Mono is mandatory for anything measurable:** URLs, latency, uptime, intervals,
 status codes. Numbers stacked in a column have to line up — otherwise you're not

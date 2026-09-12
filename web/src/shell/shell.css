@@ -69,7 +69,7 @@
 }
 
 .shell-brand-copy { min-width: 0; display: flex; flex-direction: column; }
-.shell-brand-name { font-size: var(--type-row); font-weight: 500; letter-spacing: -.01em; white-space: nowrap; }
+.shell-brand-name { font-size: var(--type-row); font-weight: var(--weight-strong); letter-spacing: var(--track-title); white-space: nowrap; }
 .shell-brand-sub { margin-top: 1px; font-size: var(--type-helper); color: var(--ink-3); white-space: nowrap; }
 
 /* ── Navigation ────────────────────────────────────────────────────────── */
@@ -79,9 +79,9 @@
 .shell-nav-label {
   padding: var(--space-4) var(--space-2) var(--space-1);
   font-size: var(--type-section);
-  font-weight: 500;
+  font-weight: var(--weight-strong);
   text-transform: uppercase;
-  letter-spacing: .1em;
+  letter-spacing: var(--track-caps);
   color: var(--ink-4);
   white-space: nowrap;
 }
@@ -101,7 +101,7 @@
 .shell-nav-item[data-state="current"] {
   background: var(--surface-hi);
   color: var(--ink);
-  font-weight: 500;
+  font-weight: var(--weight-strong);
 }
 
 /* Unbuilt destinations are visibly unavailable, and say so in words as well:
@@ -117,7 +117,7 @@
   background: var(--surface-2);
   font-family: var(--font-mono);
   font-size: var(--type-section);
-  letter-spacing: .04em;
+  letter-spacing: var(--track-badge);
   color: var(--ink-4);
 }
 

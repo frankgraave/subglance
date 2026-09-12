@@ -17,6 +17,10 @@ import { describe, expect, it } from "vitest";
  * `font-size: 11px` fails even more quietly than a colour does: it looks fine
  * on the machine it was written on and simply makes the product unreadable
  * one component at a time.
+ *
+ * SUB-69 extends them again to weight and tracking. Those drift the most
+ * quietly of all: five uppercase labels at .02em, .07em, .08em, .09em and .1em
+ * looked deliberate and were not, and nothing about the page said so.
  */
 
 const here = fileURLToPath(new URL(".", import.meta.url));
@@ -41,6 +45,26 @@ function themeBlock(theme: "dark" | "light"): string {
   expect(start, `missing [data-theme="${theme}"] block`).toBeGreaterThan(-1);
   const end = tokensCss.indexOf("\n}", start);
   return tokensCss.slice(start, end);
+}
+
+/**
+ * Every file that is subject to the token rules: everything under web/src
+ * except tokens.css itself, which is their sanctioned home, and the test
+ * files policing them, which necessarily quote the banned patterns.
+ */
+function sourceFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) {
+      out.push(...sourceFiles(full));
+      continue;
+    }
+    if (/\.(tsx?|css)$/.test(entry) && entry !== "tokens.css" && !entry.includes(".test.")) {
+      out.push(full);
+    }
+  }
+  return out;
 }
 
 const darkTokens = declarations(themeBlock("dark"));
@@ -137,23 +161,6 @@ describe("tokens.css matches docs/DESIGN.md", () => {
 });
 
 describe("tokens.css is the only source of colour", () => {
-  function sourceFiles(dir: string): string[] {
-    const out: string[] = [];
-    for (const entry of readdirSync(dir)) {
-      const full = join(dir, entry);
-      if (statSync(full).isDirectory()) {
-        out.push(...sourceFiles(full));
-        continue;
-      }
-      // tokens.css is the sanctioned home for colour, and the test files
-      // that police it necessarily quote hex patterns in their regexes.
-      if (/\.(tsx?|css)$/.test(entry) && entry !== "tokens.css" && !entry.includes(".test.")) {
-        out.push(full);
-      }
-    }
-    return out;
-  }
-
   it("finds no hex literal anywhere else under web/src", () => {
     const offenders: string[] = [];
     for (const file of sourceFiles(webSrc)) {
@@ -181,21 +188,6 @@ describe("tokens.css is the only source of colour", () => {
 });
 
 describe("tokens.css is the only source of type size", () => {
-  function sourceFiles(dir: string): string[] {
-    const out: string[] = [];
-    for (const entry of readdirSync(dir)) {
-      const full = join(dir, entry);
-      if (statSync(full).isDirectory()) {
-        out.push(...sourceFiles(full));
-        continue;
-      }
-      if (/\.(tsx?|css)$/.test(entry) && entry !== "tokens.css" && !entry.includes(".test.")) {
-        out.push(full);
-      }
-    }
-    return out;
-  }
-
   it("finds no literal font size anywhere else under web/src", () => {
     const offenders: string[] = [];
     for (const file of sourceFiles(webSrc)) {
@@ -210,21 +202,6 @@ describe("tokens.css is the only source of type size", () => {
 });
 
 describe("tokens.css is the only source of line height", () => {
-  function sourceFiles(dir: string): string[] {
-    const out: string[] = [];
-    for (const entry of readdirSync(dir)) {
-      const full = join(dir, entry);
-      if (statSync(full).isDirectory()) {
-        out.push(...sourceFiles(full));
-        continue;
-      }
-      if (/\.(tsx?|css)$/.test(entry) && entry !== "tokens.css" && !entry.includes(".test.")) {
-        out.push(full);
-      }
-    }
-    return out;
-  }
-
   it("finds no stock Tailwind leading-* preset or literal line-height under web/src", () => {
     const offenders: string[] = [];
     for (const file of sourceFiles(webSrc)) {
@@ -236,6 +213,65 @@ describe("tokens.css is the only source of line height", () => {
         /leading-(?!\[var\(--lh-)[\w[\].]+|line-height:\s*[\d.]+(?!\s*\/)/g,
       )) {
         offenders.push(`${relative(repoRoot, file)}: ${match[0]}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe("tokens.css matches the §2.5 weight and tracking scales", () => {
+  it("uses the weight and tracking values from the §2.5 tables", () => {
+    const root = declarations(tokensCss.slice(tokensCss.indexOf(":root"), tokensCss.indexOf("\n}")));
+    // Anchored at the prose that introduces the two tables so the Weight
+    // column of the type-role table above cannot be mistaken for a row here.
+    const start = designMd.indexOf("**Weight is a scale of three");
+    expect(start, "missing the §2.5 weight prose").toBeGreaterThan(-1);
+    const body = designMd.slice(start, designMd.indexOf("\n### ", start));
+    const rows = [...body.matchAll(/\|\s*`(--(?:weight|track)-[a-z]+)`\s*\|\s*`([^`]+)`\s*\|/g)];
+    expect(rows.length, "expected three weights and four tracking roles").toBe(7);
+    for (const [, name, value] of rows) {
+      expect(root.get(name), name).toBe(value);
+    }
+  });
+
+  it("binds every weight and tracking token to a Tailwind utility", () => {
+    // Without a binding the token is reachable from CSS but not from a
+    // className, and the next component quietly reaches for `font-medium`.
+    const inline = tokensCss.slice(tokensCss.lastIndexOf("@theme inline {"));
+    for (const step of ["plain", "mid", "strong"]) {
+      expect(inline, `--font-weight-${step}`).toContain(`--font-weight-${step}: var(--weight-${step});`);
+    }
+    for (const role of ["title", "name", "badge", "caps"]) {
+      expect(inline, `--tracking-${role}`).toContain(`--tracking-${role}: var(--track-${role});`);
+    }
+  });
+});
+
+describe("tokens.css is the only source of weight and tracking", () => {
+  it("finds no literal font weight anywhere else under web/src", () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      const contents = readFileSync(file, "utf8");
+      // CSS `font-weight: 500`, Tailwind's stock `font-medium` presets, and
+      // arbitrary `font-[600]`. `font-sans`/`font-mono` pick a family, not a
+      // weight, and stay allowed.
+      for (const match of contents.matchAll(
+        /font-weight:(?!\s*var\(--weight-)\s*[^;]+|\bfont-(?:thin|extralight|light|normal|medium|semibold|bold|extrabold|black)\b|\bfont-\[\d/g,
+      )) {
+        offenders.push(`${relative(repoRoot, file)}: ${match[0].trim()}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("finds no literal letter spacing anywhere else under web/src", () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      const contents = readFileSync(file, "utf8");
+      for (const match of contents.matchAll(
+        /letter-spacing:(?!\s*var\(--track-)\s*[^;]+|\btracking-(?!title\b|name\b|badge\b|caps\b)[\w[\].-]+/g,
+      )) {
+        offenders.push(`${relative(repoRoot, file)}: ${match[0].trim()}`);
       }
     }
     expect(offenders).toEqual([]);
