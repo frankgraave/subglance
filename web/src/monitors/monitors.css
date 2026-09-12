@@ -471,3 +471,163 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ── Add monitor ───────────────────────────────────────────────────────────
+ *
+ * One column, one required field. The width is capped because a form field
+ * that runs the width of a 27" display is harder to read, not easier — the eye
+ * loses the label before it reaches the input.
+ */
+
+.add-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 34rem;
+}
+
+.add-title {
+  font-size: var(--type-card);
+  font-weight: 500;
+  letter-spacing: -.01em;
+}
+
+.add-lede {
+  margin-top: calc(var(--space-2) * -1);
+  font-size: var(--type-body);
+  line-height: var(--lh-body);
+  color: var(--ink-2);
+}
+
+.add-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.add-label {
+  font-size: var(--type-section);
+  font-weight: 500;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.add-input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+  /* 16px on a phone, because anything smaller makes iOS Safari zoom the page
+     on focus and leave the user scrolled sideways (DESIGN.md §13). */
+  font-size: var(--type-nozoom);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  transition: border-color var(--dur-hover) var(--ease), box-shadow var(--dur-hover) var(--ease);
+}
+
+@media (min-width: 641px) {
+  .add-input { font-size: var(--type-body); }
+}
+
+.add-input::placeholder { color: var(--ink-4); }
+
+/* Green border plus a soft ring, not the blue browser glow (§7.2). */
+.add-input:focus-visible {
+  outline: none;
+  border-color: var(--up);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--up) 14%, transparent);
+}
+
+.add-help {
+  font-size: var(--type-helper);
+  line-height: var(--lh-body);
+  color: var(--ink-3);
+}
+
+.add-addon {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.add-addon .add-input { padding-right: var(--space-10); }
+
+/* The unit sits on the field rather than in the label, so the label can say
+   what the number means and the field can say what it is measured in. */
+.add-unit {
+  position: absolute;
+  right: var(--space-3);
+  font-size: var(--type-helper);
+  color: var(--ink-3);
+  pointer-events: none;
+}
+
+.add-advanced {
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-4);
+}
+
+.add-summary {
+  font-size: var(--type-body);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.add-summary:hover { color: var(--ink); }
+
+.add-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.add-field-wide { grid-column: 1 / -1; }
+
+.add-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.add-button {
+  padding: var(--space-2) var(--space-4);
+  font: inherit;
+  font-size: var(--type-body);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background var(--dur-hover) var(--ease), border-color var(--dur-hover) var(--ease);
+}
+
+.add-button:hover:not(:disabled) { background: var(--surface-2); border-color: var(--border-hi); }
+
+.add-button:disabled { opacity: .5; cursor: not-allowed; }
+
+/* The fill arrives on hover, so a permanently green button on screen does not
+   become wallpaper that gets clicked by accident (§7.1). */
+.add-button-primary { border-color: var(--border-hi); }
+.add-button-primary:hover:not(:disabled) {
+  color: var(--canvas);
+  background: var(--up);
+  border-color: var(--up);
+}
+
+.add-button-quiet { color: var(--ink-3); border-color: transparent; background: transparent; }
+
+.add-result-region:empty { display: none; }
+
+.add-result {
+  font-size: var(--type-body);
+  line-height: var(--lh-body);
+  color: var(--ink-2);
+}
+
+.add-result-good { color: var(--up); }
+.add-result-bad { color: var(--down); }
+
+.add-result-kind { color: var(--ink-3); }

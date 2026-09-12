@@ -44,6 +44,17 @@ func (p *fakeProber) callCount() int {
 	return len(p.calls)
 }
 
+// lastMonitor is what the handler actually asked the prober to check, which is
+// the only place a normalisation the handler performs can be observed.
+func (p *fakeProber) lastMonitor() store.Monitor {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if len(p.calls) == 0 {
+		return store.Monitor{}
+	}
+	return p.calls[len(p.calls)-1]
+}
+
 // seedCheckMonitor inserts a monitor directly, bypassing the API, so a test
 // can choose its enabled state without a second request.
 func seedCheckMonitor(t *testing.T, db *store.DB, name string, enabled bool) store.Monitor {

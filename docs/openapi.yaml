@@ -875,6 +875,94 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
       x-subglance-access: write
+  /api/v1/monitors/preview:
+    post:
+      tags: [Monitors]
+      operationId: previewMonitorCheck
+      summary: Probe a monitor that does not exist yet
+      description: |
+        Runs one check against a target without creating anything. Product
+        principle 2 is sixty seconds from nothing to a working monitor, and
+        what decides whether that holds is being able to tell the target is
+        reachable **before** committing to it — otherwise the only way to
+        discover a missing `https://` is to save, wait out the first scheduled
+        check, and come back to edit.
+
+        Nothing is written: no monitor, no heartbeat, no incident. The probe
+        runs against an unsaved, disabled monitor, which is the same path a
+        paused monitor takes.
+
+        `type` may be omitted. A target with an `http`/`https` scheme, or a
+        bare hostname, is read as an HTTP check (a bare hostname gains
+        `https://`); a `host:port` is read as TCP. Anything the server cannot
+        classify with confidence is a 400 rather than a guess. The response
+        echoes the `type` and `target` that were really probed, so a form can
+        show the user what it inferred.
+
+        The check runs with the same defaults a saved monitor would get, so a
+        passing preview is evidence about the monitor about to be created —
+        except `retries`, which is always 1: retries decide when a failure
+        becomes an incident, and a preview opens none.
+
+        Rate limited to one preview per user per three seconds. There is no
+        monitor id to key on, so this is the one authenticated way to ask the
+        server to fetch an arbitrary address in a loop.
+
+        A target that is down is a 200 with `ok: false`, not an error status.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreviewCheckRequest'
+      responses:
+        '200':
+          description: The check ran; `ok` says what it found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreviewCheckResult'
+        '400':
+          description: |
+            Malformed, trailing or unknown-field JSON, a target that cannot be
+            classified, a target shape that cannot work for its type, or a
+            setting the save would reject — an unsupported `method`, an unknown
+            `keyword_mode`, an out-of-range `timeout_s` or `ssl_warn_days`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          description: This user ran a preview within the last three seconds.
+          headers:
+            Retry-After:
+              description: Whole seconds to wait, rounded up and never below 1.
+              schema:
+                type: integer
+                minimum: 1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: The probe could not be run at all.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: |
+            This instance runs without a checker attached, so preview checks
+            are unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: write
   /api/v1/monitors/{id}/check:
     parameters:
       - $ref: '#/components/parameters/MonitorId'
@@ -2061,8 +2149,11 @@ components:
           type: integer
           description: |
             Days before certificate expiry at which to warn; applies to https
-            and ssl checks. Defaults to 14.
-          minimum: 0
+            and ssl checks. Defaults to 14. 0 is rejected rather than read as
+            "never warn", because the stored default would turn it back into
+            14 and the client would be told it had disabled a warning it
+            still gets.
+          minimum: 1
           maximum: 365
           default: 14
         enabled:
@@ -2201,6 +2292,94 @@ components:
       description: What class of problem a failed check hit. Absent when the check succeeded.
       enum: [dns, connection, tls, timeout, status, keyword, cert_expiry, internal]
       example: timeout
+    PreviewCheckRequest:
+      type: object
+      description: |
+        The settings to probe with. Everything that only matters once a monitor
+        is stored — name, interval, enabled — is absent, because nothing is
+        scheduled and nothing is written.
+      required: [target]
+      properties:
+        type:
+          type: string
+          enum: [http, tcp, ping, ssl]
+          description: |
+            Omit to let the server infer it from `target`. An explicit value is
+            always obeyed.
+        target:
+          type: string
+          description: A URL, a hostname, or a host:port.
+          example: example.com
+        timeout_s:
+          type: integer
+          minimum: 1
+          maximum: 120
+          example: 10
+        method:
+          $ref: '#/components/schemas/HttpMethod'
+        expected_status:
+          type: string
+          example: 200-299
+        keyword:
+          type: string
+        keyword_mode:
+          type: string
+          enum: [absent_ok, must_contain, must_not_contain]
+        follow_redirects:
+          type: boolean
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        body:
+          type: string
+        ssl_warn_days:
+          type: integer
+          description: |
+            Validated exactly as on create, so a preview cannot pass with a
+            value the save would reject.
+          minimum: 1
+          maximum: 365
+    PreviewCheckResult:
+      type: object
+      description: |
+        The outcome of a preview check, plus the settings it was actually run
+        with. `type` and `target` may differ from what was sent: they are what
+        the server inferred and normalised, and a form should show them.
+      required: [ok, checked_at, latency_ms, type, target]
+      properties:
+        ok:
+          type: boolean
+          description: Whether the target passed. A target that is down is `false`, not an error.
+          example: true
+        checked_at:
+          type: string
+          format: date-time
+          example: '2026-01-01T12:00:05Z'
+        latency_ms:
+          type: integer
+          example: 143
+        status_code:
+          type: integer
+          example: 200
+        kind:
+          $ref: '#/components/schemas/FailureKind'
+        error:
+          type: string
+          description: Present only on failure.
+        cert_expiry:
+          type: string
+          format: date-time
+          description: Certificate expiry, for checks that inspected one.
+        type:
+          type: string
+          enum: [http, tcp, ping, ssl]
+          description: The check type that was used, after inference.
+          example: http
+        target:
+          type: string
+          description: The target that was probed, after normalisation.
+          example: https://example.com
     CheckResult:
       type: object
       description: The outcome of a manual, on-demand check.

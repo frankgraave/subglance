@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -119,6 +120,14 @@ func TestCreateMonitorRejectsBadInput(t *testing.T) {
 		{"tcp without port", `{"name":"x","type":"tcp","target":"db.example.com"}`},
 		{"ping with port", `{"name":"x","type":"ping","target":"example.com:80"}`},
 		{"http without scheme", `{"name":"x","type":"http","target":"example.com"}`},
+		// Creation used to accept these three and let them fail later: an
+		// unsupported method reached http.NewRequestWithContext on the first
+		// check, and an out-of-range ssl_warn_days hit a SQLite constraint and
+		// surfaced as "could not create monitor" with a driver error in it.
+		{"unsupported method", `{"name":"x","type":"http","target":"https://e.com","method":"FETCH"}`},
+		{"ssl_warn_days zero", `{"name":"x","type":"http","target":"https://e.com","ssl_warn_days":0}`},
+		{"ssl_warn_days too large", `{"name":"x","type":"http","target":"https://e.com","ssl_warn_days":400}`},
+		{"unknown keyword_mode", `{"name":"x","type":"http","target":"https://e.com","keyword_mode":"maybe"}`},
 	}
 
 	for _, tc := range tests {
@@ -136,6 +145,33 @@ func TestCreateMonitorRejectsBadInput(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestCreateMonitorNormalisesMethodCase: a lowercase method is a valid one
+// typed casually. It has to be stored upper-cased, because the checker hands it
+// straight to http.NewRequestWithContext, which treats "get" and "GET" as two
+// different methods and sends the literal string it was given.
+func TestCreateMonitorNormalisesMethodCase(t *testing.T) {
+	srv, db := testServerWithDB(t)
+
+	rec := post(t, srv, "/api/v1/monitors",
+		`{"name":"x","type":"http","target":"https://e.com","method":"post"}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201 (body %s)", rec.Code, rec.Body.String())
+	}
+	// Read the store, not the response: describeMonitor does not expose
+	// `method`, so the only place the normalisation is observable is the row
+	// the checker will actually read.
+	monitors, err := db.ListMonitors(context.Background())
+	if err != nil {
+		t.Fatalf("list monitors: %v", err)
+	}
+	if len(monitors) != 1 {
+		t.Fatalf("got %d monitors, want 1", len(monitors))
+	}
+	if monitors[0].Method != "POST" {
+		t.Errorf("stored method = %q, want %q", monitors[0].Method, "POST")
 	}
 }
 

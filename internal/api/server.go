@@ -36,6 +36,22 @@ type Server struct {
 
 	// manualChecks rate-limits POST /monitors/{id}/check per monitor.
 	manualChecks cooldown
+
+	// previewChecks rate-limits POST /monitors/preview per user. A preview
+	// has no monitor id to key on, so it cannot share the map above.
+	//
+	// In memory, and therefore per process and lost on restart. That is a
+	// deliberate limit rather than an oversight: SubGlance is one binary with
+	// an embedded SQLite database (ARCHITECTURE.md), and SQLite permits one
+	// writer, so running two API processes against one database is not a
+	// supported deployment. Moving the reservation into a table would buy
+	// nothing today and would put a write on the path of every preview —
+	// a write that exists only to refuse work.
+	//
+	// If SubGlance ever grows a multi-process Postgres deployment, this map
+	// and manualChecks both have to move into shared storage at the same
+	// time; neither survives horizontal scaling on its own.
+	previewChecks cooldown
 }
 
 // New returns a Server ready to be mounted.
@@ -180,6 +196,7 @@ func (s *Server) routes() []route {
 
 		// Authenticated: editor or admin.
 		{http.MethodPost, "/api/v1/monitors", accessWrite},
+		{http.MethodPost, "/api/v1/monitors/preview", accessWrite},
 		{http.MethodPatch, "/api/v1/monitors/{id}", accessWrite},
 		{http.MethodDelete, "/api/v1/monitors/{id}", accessWrite},
 		{http.MethodPost, "/api/v1/monitors/{id}/check", accessWrite},
@@ -265,6 +282,8 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 
 	case "POST /api/v1/monitors":
 		return s.handleCreateMonitor
+	case "POST /api/v1/monitors/preview":
+		return s.handlePreviewCheck
 	case "PATCH /api/v1/monitors/{id}":
 		return s.handlePatchMonitor
 	case "DELETE /api/v1/monitors/{id}":

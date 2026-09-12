@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { ThemeToggle } from "../components/ThemeToggle";
 import type { ThemePreference } from "../theme/theme";
 import { LayoutSwitcher } from "./LayoutSwitcher";
-import { BeakerIcon, SidebarIcon } from "./icons";
+import { BeakerIcon, PlusIcon, SidebarIcon } from "./icons";
 import type { LayoutId } from "./preferences";
 
 /**
@@ -30,6 +30,9 @@ export type TopbarProps = {
   onThemeChange: (next: ThemePreference) => void;
   workbenchOpen: boolean;
   onToggleWorkbench: () => void;
+  /** Opens the add-monitor form. Omitted where there is nothing to add to. */
+  onAddMonitor?: () => void;
+  addOpen?: boolean;
   /** Optional extra controls, e.g. a search field owned by the page. */
   children?: ReactNode;
 };
@@ -45,6 +48,8 @@ export function Topbar({
   onThemeChange,
   workbenchOpen,
   onToggleWorkbench,
+  onAddMonitor,
+  addOpen = false,
   children,
 }: TopbarProps) {
   return (
@@ -84,6 +89,29 @@ export function Topbar({
       {children}
 
       <div className="shell-topbar-right">
+        {/*
+         * First in the group, and an icon button like the rest.
+         *
+         * Product principle 2 starts with finding this control: a monitoring
+         * tool whose primary action is behind a settings page fails the sixty
+         * seconds before the form is even reached. It stays an icon rather
+         * than a filled button because a permanently green button on every
+         * screen becomes wallpaper (DESIGN.md §7.1) — the empty dashboard
+         * carries the loud version of the same action instead.
+         */}
+        {onAddMonitor !== undefined && (
+          <button
+            type="button"
+            className="shell-icon-btn"
+            onClick={onAddMonitor}
+            aria-pressed={addOpen}
+            aria-label="Add a monitor"
+            title="Add a monitor"
+          >
+            <PlusIcon />
+          </button>
+        )}
+
         <LayoutSwitcher layout={layout} effective={effectiveLayout} onChange={onLayoutChange} />
 
         {/*

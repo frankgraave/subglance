@@ -176,14 +176,17 @@ func (s *Server) handleCreateMonitor(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
+	method, _ := normaliseMethod(req.Method)
 
 	m := store.Monitor{
-		Name:            req.Name,
-		Type:            req.Type,
-		Target:          req.Target,
-		IntervalS:       req.IntervalS,
-		TimeoutS:        req.TimeoutS,
-		Method:          req.Method,
+		Name:      req.Name,
+		Type:      req.Type,
+		Target:    req.Target,
+		IntervalS: req.IntervalS,
+		TimeoutS:  req.TimeoutS,
+		// Already validated above; the error is discarded because a second
+		// failure here would be unreachable.
+		Method:          method,
 		ExpectedStatus:  req.ExpectedStatus,
 		Keyword:         req.Keyword,
 		KeywordMode:     req.KeywordMode,
@@ -238,10 +241,72 @@ func validateCreateMonitor(req createMonitorRequest) string {
 	if req.TimeoutS != 0 && (req.TimeoutS < 1 || req.TimeoutS > 120) {
 		return "timeout_s must be between 1 and 120"
 	}
+	// Creation used to skip these three entirely, so a bad method or an
+	// out-of-range ssl_warn_days only surfaced as a SQLite constraint error or,
+	// worse, as a monitor that failed every check forever.
+	if _, msg := normaliseMethod(req.Method); msg != "" {
+		return msg
+	}
+	if msg := validateKeywordMode(req.KeywordMode); msg != "" {
+		return msg
+	}
+	if msg := validateSSLWarnDays(req.SSLWarnDays); msg != "" {
+		return msg
+	}
 	if msg := validateTargetForType(req.Type, req.Target); msg != "" {
 		return msg
 	}
 	return ""
+}
+
+// monitorHTTPMethods is the set an http monitor may use, and the single place
+// the list is written down. (Not `httpMethods`: openapi_test.go already owns
+// that name for the operation keys in a spec path item.) Anything outside it reaches http.NewRequestWithContext
+// and fails there, far from the field that caused it.
+var monitorHTTPMethods = map[string]bool{
+	"GET": true, "HEAD": true, "POST": true, "PUT": true,
+	"PATCH": true, "DELETE": true, "OPTIONS": true,
+}
+
+// normaliseMethod upper-cases a method and rejects anything unsupported.
+//
+// An empty method is left empty rather than defaulted here: the store decides
+// what an unset method becomes, and duplicating that choice in the API is how
+// the two drift apart.
+func normaliseMethod(method string) (string, string) {
+	if method == "" {
+		return "", ""
+	}
+	upper := strings.ToUpper(method)
+	if !monitorHTTPMethods[upper] {
+		return "", "unsupported HTTP method " + method
+	}
+	return upper, ""
+}
+
+// validateSSLWarnDays applies the one range the column allows.
+//
+// 0 is rejected rather than accepted as "never warn", because
+// store.ApplyMonitorDefaults would turn it back into 14 and the client would
+// be told it had disabled a warning it still gets.
+func validateSSLWarnDays(days *int) string {
+	if days == nil {
+		return ""
+	}
+	if *days < 1 || *days > 365 {
+		return "ssl_warn_days must be between 1 and 365"
+	}
+	return ""
+}
+
+// validateKeywordMode rejects modes the checker cannot act on.
+func validateKeywordMode(mode string) string {
+	switch mode {
+	case "", "absent_ok", "must_contain", "must_not_contain":
+		return ""
+	default:
+		return "unknown keyword_mode " + mode
+	}
 }
 
 // validateTargetForType rejects target shapes that cannot work for a type.
@@ -718,12 +783,11 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) string {
 		m.Retries = *req.Retries
 	}
 	if req.Method != nil {
-		switch strings.ToUpper(*req.Method) {
-		case "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS":
-			m.Method = strings.ToUpper(*req.Method)
-		default:
-			return "unsupported HTTP method " + *req.Method
+		method, msg := normaliseMethod(*req.Method)
+		if msg != "" {
+			return msg
 		}
+		m.Method = method
 	}
 	if req.ExpectedStatus != nil {
 		m.ExpectedStatus = *req.ExpectedStatus
@@ -732,12 +796,10 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) string {
 		m.Keyword = *req.Keyword
 	}
 	if req.KeywordMode != nil {
-		switch *req.KeywordMode {
-		case "absent_ok", "must_contain", "must_not_contain":
-			m.KeywordMode = *req.KeywordMode
-		default:
-			return "unknown keyword_mode " + *req.KeywordMode
+		if msg := validateKeywordMode(*req.KeywordMode); msg != "" {
+			return msg
 		}
+		m.KeywordMode = *req.KeywordMode
 	}
 	if req.FollowRedirects != nil {
 		m.FollowRedirects = *req.FollowRedirects
@@ -749,11 +811,8 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) string {
 		m.Body = *req.Body
 	}
 	if req.SSLWarnDays != nil {
-		// 0 is rejected rather than accepted as "never warn", because
-		// applyMonitorDefaults would turn it back into 14 and the client
-		// would be told it had disabled a warning it still gets.
-		if *req.SSLWarnDays < 1 || *req.SSLWarnDays > 365 {
-			return "ssl_warn_days must be between 1 and 365"
+		if msg := validateSSLWarnDays(req.SSLWarnDays); msg != "" {
+			return msg
 		}
 		m.SSLWarnDays = *req.SSLWarnDays
 	}

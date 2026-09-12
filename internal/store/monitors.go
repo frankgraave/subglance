@@ -128,7 +128,7 @@ func scanMonitor(s scanner) (Monitor, error) {
 // CreateMonitor inserts a monitor and returns it with its assigned ID.
 func (db *DB) CreateMonitor(ctx context.Context, m Monitor) (Monitor, error) {
 	now := time.Now().Unix()
-	applyMonitorDefaults(&m)
+	ApplyMonitorDefaults(&m)
 
 	var headersJSON any
 	if len(m.Headers) > 0 {
@@ -164,9 +164,14 @@ func (db *DB) CreateMonitor(ctx context.Context, m Monitor) (Monitor, error) {
 	return m, nil
 }
 
-// applyMonitorDefaults fills in the same defaults the schema declares, so a
+// ApplyMonitorDefaults fills in the same defaults the schema declares, so a
 // caller constructing a Monitor in Go gets the same result as a bare INSERT.
-func applyMonitorDefaults(m *Monitor) {
+//
+// Exported because the API needs it for monitors that are never inserted: a
+// preview check has to probe with exactly the settings the monitor would get
+// once saved, and a second copy of these numbers in the API package would
+// drift from this one the first time a default changed.
+func ApplyMonitorDefaults(m *Monitor) {
 	if m.IntervalS == 0 {
 		m.IntervalS = 60
 	}
@@ -533,7 +538,7 @@ func (db *DB) UpdateMonitorIfUnchanged(ctx context.Context, m Monitor, accepted 
 // updateMonitor is the shared body of the conditional and unconditional
 // updates. An empty expected means no version check.
 func (db *DB) updateMonitor(ctx context.Context, m Monitor, expected []int64) (Monitor, error) {
-	applyMonitorDefaults(&m)
+	ApplyMonitorDefaults(&m)
 
 	// The stamp must strictly advance, because it doubles as the version a
 	// caller compares against. Second resolution means two edits inside the

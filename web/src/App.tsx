@@ -3,6 +3,7 @@ import { useTheme } from "./theme/useTheme";
 import { TokenSheet } from "./components/TokenSheet";
 import { HeartbeatGallery } from "./heartbeat/Gallery";
 import { DashboardWorkbench } from "./monitors/Workbench";
+import { AddMonitor } from "./monitors/AddMonitor";
 import { LiveDashboardRoot } from "./live/LiveDashboard";
 import { AppShell } from "./shell/AppShell";
 import { Topbar } from "./shell/Topbar";
@@ -31,6 +32,7 @@ export default function App() {
   const { layout, setLayout, sidebarCollapsed, toggleSidebar } =
     useShellPreferences(window.localStorage);
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
 
   const [navOpen, setNavOpen] = useState(false);
   /*
@@ -49,7 +51,35 @@ export default function App() {
   const isWall = shown === "wall" && !workbenchOpen;
 
   const leaveWall = useCallback(() => setLayout("rows"), [setLayout]);
-  const toggleWorkbench = useCallback(() => setWorkbenchOpen((open) => !open), []);
+  /*
+   * The workbench and the add form are mutually exclusive, and the toggles —
+   * not the render branch — are where that is enforced.
+   *
+   * The branch below can only show one of them, and it picks the workbench. So
+   * opening the workbench and then pressing Add a monitor used to set
+   * `addOpen`, light the button up as pressed, and leave the workbench on
+   * screen: a control reporting a state the page does not have. Esc then closed
+   * a form nobody could see. Closing the other mode here keeps "what the
+   * buttons claim" and "what is rendered" the same thing, which asserting it
+   * in the branch alone cannot do.
+   */
+  const toggleWorkbench = useCallback(() => {
+    setAddOpen(false);
+    setWorkbenchOpen((open) => !open);
+  }, []);
+  const toggleAdd = useCallback(() => {
+    setWorkbenchOpen(false);
+    setAddOpen((open) => !open);
+  }, []);
+  /*
+   * Closing on success rather than navigating to the new monitor.
+   *
+   * There is no detail view yet (SUB-63), and the dashboard is where the
+   * answer is anyway: the monitor appears in the list within one heartbeat,
+   * which is the confirmation that the thing works. A toast would say the same
+   * thing less durably (DESIGN.md §7.6).
+   */
+  const closeAdd = useCallback(() => setAddOpen(false), []);
   const closeNav = useCallback(() => setNavOpen(false), []);
 
   /*
@@ -76,18 +106,21 @@ export default function App() {
   /*
    * Esc has a queue, and the drawer is at the front of it: it is the newest
    * and most modal thing on screen, so it must be dismissed before Esc means
-   * "leave the wall" or "leave the workbench". Passing undefined when there
-   * is nothing to leave keeps the key's browser meaning everywhere else.
+   * "leave the add form", "leave the wall" or "leave the workbench". Passing
+   * undefined when there is nothing to leave keeps the key's browser meaning
+   * everywhere else.
    */
   useShellShortcuts({
     onToggleSidebar: toggleNav,
     onEscape: navOpen
       ? closeNav
-      : isWall
-        ? leaveWall
-        : workbenchOpen
-          ? toggleWorkbench
-          : undefined,
+      : addOpen
+        ? closeAdd
+        : isWall
+          ? leaveWall
+          : workbenchOpen
+            ? toggleWorkbench
+            : undefined,
   });
 
   if (isWall) {
@@ -113,10 +146,18 @@ export default function App() {
           onThemeChange={setPreference}
           workbenchOpen={workbenchOpen}
           onToggleWorkbench={toggleWorkbench}
+          onAddMonitor={toggleAdd}
+          addOpen={addOpen}
         />
       }
     >
-      {workbenchOpen ? <Workbench /> : <LiveDashboardRoot layout={shown} />}
+      {workbenchOpen ? (
+        <Workbench />
+      ) : addOpen ? (
+        <AddMonitor onCreated={closeAdd} onCancel={closeAdd} />
+      ) : (
+        <LiveDashboardRoot layout={shown} />
+      )}
     </AppShell>
   );
 }

@@ -115,4 +115,41 @@ describe("the app shell", () => {
     // Collapsed is a rail: the destination is still there to be clicked.
     expect(screen.getByText("Dashboard")).toBeTruthy();
   });
+
+  it("reaches the add-monitor form from the topbar, and leaves it with Esc", async () => {
+    render(<App />);
+    await screen.findByText("api");
+
+    // SUB-24: the primary action must be reachable from the screen you land
+    // on. A form behind a settings page fails the sixty seconds before it is
+    // even opened.
+    fireEvent.click(screen.getByRole("button", { name: "Add a monitor" }));
+    await waitFor(() => expect(screen.getByLabelText(/what should be watched/i)).toBeTruthy());
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByLabelText(/what should be watched/i)).toBeNull());
+  });
+
+  it("never shows one content mode while a control claims the other", async () => {
+    render(<App />);
+    await screen.findByText("api");
+
+    const workbench = screen.getByRole("button", { name: "Component workbench" });
+    const add = screen.getByRole("button", { name: "Add a monitor" });
+
+    fireEvent.click(workbench);
+    await waitFor(() => expect(workbench.getAttribute("aria-pressed")).toBe("true"));
+
+    // The render branch prefers the workbench, so without the toggles clearing
+    // each other this left the workbench on screen with the add button lit —
+    // and Esc then closed a form nobody could see.
+    fireEvent.click(add);
+    await waitFor(() => expect(screen.getByLabelText(/what should be watched/i)).toBeTruthy());
+    expect(workbench.getAttribute("aria-pressed")).toBe("false");
+
+    // And the other way round: opening the workbench unlights the add button.
+    fireEvent.click(workbench);
+    await waitFor(() => expect(screen.queryByLabelText(/what should be watched/i)).toBeNull());
+    expect(add.getAttribute("aria-pressed")).toBe("false");
+  });
 });

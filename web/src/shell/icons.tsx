@@ -88,3 +88,12 @@ export function BeakerIcon(props: IconProps) {
     </Icon>
   );
 }
+
+/** A plus in a circle: "add a thing", the one action the empty page needs. */
+export function PlusIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12 5v14M5 12h14" />
+    </Icon>
+  );
+}
