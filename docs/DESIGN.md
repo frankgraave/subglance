@@ -139,13 +139,17 @@ one of them is touched.
 | Body | `--lh-body` | `1.45` | running text in a row or card |
 | Prose | `--lh-prose` | `1.6` | paragraphs — empty states, explanations |
 
-**Known defect: sizes and leadings are multiplied, not paired.** Measured on
-`dc46b9b` across the 79 visible text elements of the workbench, 55 of them sit on
-a fractional line height. The cause is arithmetic, not carelessness: a ratio
+**Known defect: sizes and leadings are multiplied, not paired.** Counted on
+`dc46b9b` from the stylesheet sources and the rendered workbench DOM; the
+element and rule counts below are those counts, not render measurements. Across
+the 79 visible text elements of the workbench, 55 of them sit on a fractional
+line height. The cause is arithmetic, not carelessness: a ratio
 times a size gives `12.5 x 1.45 = 18.125`, `17 x 1.25 = 21.25`, `15 x 1.5 =
-22.5`. The browser rounds each of those per line, so six consecutive rows drift
-about three quarters of a pixel away from a 4px baseline and vertical centring is
-never exact.
+22.5`. None of those land on the 4px baseline grid. What a browser then does
+with the fraction — which way it rounds, and whether the remainder accumulates
+down a column of rows — depends on the engine, the font and the device pixel
+ratio, so the rendered position is outside my control rather than something I
+have measured.
 
 The second half of the defect is inheritance. Of the 50 CSS rules that set
 `font-size`, 42 do not set `line-height` in the same block, so they inherit
@@ -155,8 +159,8 @@ leadings: `--type-helper` appears at 18.125px, 18.75px and 20px on the same
 screen.
 
 `--type-helper: 12.5px` is also the only fractional size in the system, and the
-most used — 49 of 79 elements. A half-pixel font size forces subpixel hinting on
-precisely the smallest text.
+most used — 49 of 79 elements. That puts the engine's glyph-rounding on exactly
+the text that has the least room to absorb it.
 
 The fix is to pair every size with a whole-pixel leading and to set both together
 in every rule, never the size alone. It is not applied here because choosing the
