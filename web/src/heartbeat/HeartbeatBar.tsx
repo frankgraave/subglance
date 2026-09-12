@@ -1,4 +1,11 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   barHeight,
   latencyCeiling,
@@ -6,6 +13,8 @@ import {
   slotStatus,
   summarise,
   toSlots,
+  TOOLTIP_MIN_WIDTH,
+  tooltipLeft,
   type Beat,
   type Slot,
 } from "./model";
@@ -37,7 +46,11 @@ const formatTime = (ts: number) =>
   });
 
 const formatLatency = (ms: number | null) =>
-  ms === null ? "no timing" : ms >= 1000 ? `${(ms / 1000).toFixed(2)} s` : `${ms} ms`;
+  ms === null
+    ? "no timing"
+    : ms >= 1000
+      ? `${(ms / 1000).toFixed(2)} s`
+      : `${ms} ms`;
 
 /**
  * Width of the element, tracked live.
@@ -46,7 +59,10 @@ const formatLatency = (ms: number | null) =>
  * every element as 0 wide and would otherwise render an empty component in
  * every test.
  */
-function useMeasuredWidth(ref: React.RefObject<HTMLElement | null>, fallback?: number): number {
+function useMeasuredWidth(
+  ref: React.RefObject<HTMLElement | null>,
+  fallback?: number,
+): number {
   const [measured, setMeasured] = useState(0);
 
   useLayoutEffect(() => {
@@ -70,7 +86,9 @@ function useMeasuredWidth(ref: React.RefObject<HTMLElement | null>, fallback?: n
 function describe(label: string, slots: Slot[]): string {
   const { checks, failed, span } = summarise(slots);
   if (checks === 0) return `${label}: no checks yet.`;
-  const window = span ? ` between ${formatTime(span[0])} and ${formatTime(span[1])}` : "";
+  const window = span
+    ? ` between ${formatTime(span[0])} and ${formatTime(span[1])}`
+    : "";
   const health = failed === 0 ? "all passed" : `${failed} failed`;
   return `${label}: ${checks} checks${window}, ${health}. Bar height is latency; a failed check is drawn full height.`;
 }
@@ -117,7 +135,11 @@ export function HeartbeatBar({
   const seenTs = useRef<number | null>(newestTs);
   const [arriving, setArriving] = useState<number | null>(null);
   useEffect(() => {
-    if (newestTs !== null && seenTs.current !== null && newestTs !== seenTs.current) {
+    if (
+      newestTs !== null &&
+      seenTs.current !== null &&
+      newestTs !== seenTs.current
+    ) {
       setArriving(newestTs);
       const timer = setTimeout(() => setArriving(null), 560);
       seenTs.current = newestTs;
@@ -159,6 +181,57 @@ export function HeartbeatBar({
   };
 
   const activeSlot = active !== null ? slots[active] : undefined;
+
+  // The tooltip is positioned after it exists, because its width depends on
+  // its text. Measuring in a layout effect keeps that off-screen: the browser
+  // paints once, already in the right place.
+  //
+  // The position is a function of four things that can all change while the
+  // tooltip stays open: the active column, the track's position in the
+  // viewport, the viewport width, and the tooltip's own width (its text
+  // changes when a bucket gains a check). Re-running only on
+  // `active`/`step`/`barWidth` leaves a stale offset behind after a window
+  // resize or a scroll, which is exactly how the tooltip ends up half off
+  // screen again. So the measurement is repeated on every one of those
+  // signals.
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [tooltipX, setTooltipX] = useState(0);
+  const place = useCallback(() => {
+    const track = trackRef.current;
+    const tooltip = tooltipRef.current;
+    if (active === null || !track || !tooltip) return;
+    setTooltipX(
+      tooltipLeft({
+        columnCentre: active * step + barWidth / 2,
+        tooltipWidth:
+          tooltip.getBoundingClientRect().width || TOOLTIP_MIN_WIDTH,
+        trackLeft: track.getBoundingClientRect().left,
+        viewportWidth: window.innerWidth,
+      }),
+    );
+  }, [active, step, barWidth]);
+  useLayoutEffect(() => {
+    if (active === null) return;
+    // `activeSlot` is read so a change of tooltip text re-measures even where
+    // ResizeObserver is unavailable.
+    void activeSlot;
+    place();
+    window.addEventListener("resize", place);
+    // Capturing: the track can be moved by any scrolling ancestor, not only
+    // the window.
+    window.addEventListener("scroll", place, true);
+    const tooltip = tooltipRef.current;
+    const observer =
+      tooltip && typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(place)
+        : undefined;
+    observer?.observe(tooltip!);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+      observer?.disconnect();
+    };
+  }, [active, activeSlot, place]);
   const description = describe(label, slots);
 
   return (
@@ -192,7 +265,10 @@ export function HeartbeatBar({
             const status = slotStatus(slot);
             // An empty slot still draws: a 2px stub reads as "no data here",
             // whereas a gap reads as a rendering bug.
-            const h = slot.kind === "empty" ? 2 : Math.max(barHeight(slot, ceiling) * height, 2);
+            const h =
+              slot.kind === "empty"
+                ? 2
+                : Math.max(barHeight(slot, ceiling) * height, 2);
             const isNew = arriving !== null && index === slots.length - 1;
             const classes = [
               "hb-bar",
@@ -220,11 +296,10 @@ export function HeartbeatBar({
 
         {activeSlot && activeSlot.kind === "beat" && (
           <div
+            ref={tooltipRef}
             className="hb-tooltip"
             data-testid="hb-tooltip"
-            style={{
-              left: Math.min(Math.max((active ?? 0) * step - 70, 0), Math.max(trackWidth - 148, 0)),
-            }}
+            style={{ left: tooltipX }}
           >
             <div className="text-helper text-ink-2">
               {activeSlot.count > 1
@@ -237,7 +312,9 @@ export function HeartbeatBar({
                 <span className="text-ink-3">
                   {" "}
                   · {activeSlot.count} checks
-                  {activeSlot.downCount > 0 ? `, ${activeSlot.downCount} failed` : ""}
+                  {activeSlot.downCount > 0
+                    ? `, ${activeSlot.downCount} failed`
+                    : ""}
                 </span>
               )}
             </div>
@@ -265,12 +342,21 @@ export function HeartbeatBar({
           </thead>
           <tbody>
             {slots
-              .filter((slot): slot is Extract<Slot, { kind: "beat" }> => slot.kind === "beat")
+              .filter(
+                (slot): slot is Extract<Slot, { kind: "beat" }> =>
+                  slot.kind === "beat",
+              )
               .map((slot) => (
                 <tr key={slot.index}>
-                  <td>{slot.count > 1 ? `${formatTime(slot.from)} – ${formatTime(slot.to)}` : formatTime(slot.to)}</td>
                   <td>
-                    {slot.ok ? "passed" : `failed${slot.error ? `: ${slot.error}` : ""}`}
+                    {slot.count > 1
+                      ? `${formatTime(slot.from)} – ${formatTime(slot.to)}`
+                      : formatTime(slot.to)}
+                  </td>
+                  <td>
+                    {slot.ok
+                      ? "passed"
+                      : `failed${slot.error ? `: ${slot.error}` : ""}`}
                     {slot.count > 1 ? ` (${slot.count} checks)` : ""}
                   </td>
                   <td>{formatLatency(slot.latencyMs)}</td>

@@ -57,6 +57,54 @@ export function slotCountFor(width: number, barWidth: number, gap: number): numb
   return Math.max(1, Math.floor((width + gap) / (barWidth + gap)));
 }
 
+/**
+ * Minimum tooltip width in pixels, mirroring `min-width` on `.hb-tooltip` in
+ * heartbeat.css. Used as the fallback when the tooltip has not been measured
+ * yet (first render, or an environment without layout).
+ */
+export const TOOLTIP_MIN_WIDTH = 148;
+
+/** Breathing room kept between the tooltip and the edge of the viewport. */
+export const TOOLTIP_VIEWPORT_MARGIN = 8;
+
+export type TooltipPlacement = {
+  /** Centre of the active column, in track coordinates. */
+  columnCentre: number;
+  tooltipWidth: number;
+  /** Left edge of the track, in viewport coordinates. */
+  trackLeft: number;
+  viewportWidth: number;
+  margin?: number;
+};
+
+/**
+ * Horizontal offset for the tooltip, in track coordinates.
+ *
+ * The tooltip is centred on its column and then clamped against the
+ * **viewport**, not against the track. Clamping to the track is wrong as soon
+ * as the track is narrower than the tooltip (a dashboard row, a sidebar): the
+ * tooltip would be pinned inside a 60px column and cut off, while there is
+ * plenty of room next to it. Clamping to the viewport lets it overhang the
+ * track and only stops at the window edge, which is the edge that actually
+ * clips.
+ *
+ * A tooltip wider than the viewport cannot fit either way; it is aligned to
+ * the left margin so the beginning stays readable.
+ */
+export function tooltipLeft({
+  columnCentre,
+  tooltipWidth,
+  trackLeft,
+  viewportWidth,
+  margin = TOOLTIP_VIEWPORT_MARGIN,
+}: TooltipPlacement): number {
+  const ideal = columnCentre - tooltipWidth / 2;
+  const min = margin - trackLeft;
+  const max = viewportWidth - margin - tooltipWidth - trackLeft;
+  if (max < min) return min;
+  return Math.min(Math.max(ideal, min), max);
+}
+
 function aggregate(group: Beat[], index: number): BeatSlot {
   const downs = group.filter((b) => !b.ok);
   const latencies = group

@@ -8,6 +8,7 @@ import {
   slotCountFor,
   summarise,
   toSlots,
+  tooltipLeft,
   UNKNOWN_LATENCY_HEIGHT,
   type Beat,
   type BeatSlot,
@@ -113,5 +114,33 @@ describe("summarise", () => {
   it("counts the underlying checks, not the drawn columns", () => {
     const slots = toSlots(beats(500, (i) => (i % 100 === 0 ? { ok: false } : {})), 40);
     expect(summarise(slots)).toMatchObject({ checks: 500, failed: 5 });
+  });
+});
+
+describe("tooltipLeft", () => {
+  const base = { trackLeft: 0, viewportWidth: 1000, tooltipWidth: 148 };
+
+  it("centres the tooltip on its column when there is room", () => {
+    expect(tooltipLeft({ ...base, columnCentre: 500 })).toBe(500 - 74);
+  });
+
+  it("overhangs a track narrower than the tooltip instead of squeezing into it", () => {
+    // A 60px track in a wide window: clamping to the track would pin the
+    // tooltip at 0 and cut it off; the viewport has room to spare.
+    const left = tooltipLeft({ ...base, columnCentre: 57, trackLeft: 400 });
+    expect(left).toBe(57 - 74);
+  });
+
+  it("stops at the left edge of the viewport", () => {
+    expect(tooltipLeft({ ...base, columnCentre: 10, trackLeft: 4 })).toBe(8 - 4);
+  });
+
+  it("stops at the right edge of the viewport", () => {
+    // Track starts at 900 in a 1000px window, so the tooltip may reach 1000-8.
+    expect(tooltipLeft({ ...base, columnCentre: 80, trackLeft: 900 })).toBe(1000 - 8 - 148 - 900);
+  });
+
+  it("aligns to the left margin when the tooltip cannot fit at all", () => {
+    expect(tooltipLeft({ ...base, columnCentre: 40, viewportWidth: 100 })).toBe(8);
   });
 });
