@@ -203,11 +203,21 @@ func (s *Server) routes() []route {
 		// reach the port.
 		{http.MethodGet, "/api/v1/stream", accessRead},
 
+		// Listing and revoking are scoped to the caller's own tokens, so a
+		// viewer may always see and shred its own keys.
 		{http.MethodGet, "/api/v1/tokens", accessRead},
-		{http.MethodPost, "/api/v1/tokens", accessRead},
 		{http.MethodDelete, "/api/v1/tokens/{id}", accessRead},
 
 		// Authenticated: editor or admin.
+		//
+		// Minting a token is a write even though the token itself may only
+		// read. A token is a long-lived credential that outlives the session,
+		// leaves the browser, and lands in CI logs and dotfiles; "may read in
+		// the UI" is not the same permission as "may issue a permanent key
+		// that works outside it". Viewers are the least-trusted role, so that
+		// is exactly where the two should not be conflated.
+		{http.MethodPost, "/api/v1/tokens", accessWrite},
+
 		{http.MethodPost, "/api/v1/monitors", accessWrite},
 		{http.MethodPost, "/api/v1/monitors/preview", accessWrite},
 		{http.MethodPatch, "/api/v1/monitors/{id}", accessWrite},

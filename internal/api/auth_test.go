@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -375,6 +376,12 @@ func TestViewerCannotWrite(t *testing.T) {
 		{http.MethodPost, "/api/v1/monitors", `{"name":"x","type":"http","target":"https://a.com"}`},
 		{http.MethodDelete, "/api/v1/monitors/1", ""},
 		{http.MethodPost, "/api/v1/monitors/1/pause", ""},
+
+		// Issuing a token is a write. A viewer's token could only read, but
+		// minting one hands out a long-lived credential that outlives the
+		// session and leaves the browser — a broader act than reading in the
+		// UI, and the least-trusted role is where that distinction matters.
+		{http.MethodPost, "/api/v1/tokens", `{"name":"ci"}`},
 	}
 	for _, tc := range writes {
 		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
@@ -387,6 +394,41 @@ func TestViewerCannotWrite(t *testing.T) {
 				t.Errorf("status = %d, want 403 — a viewer must not be able to write", rec.Code)
 			}
 		})
+	}
+}
+
+// A viewer that cannot mint a token must still be able to see and shred the
+// ones it already has. Locking issuance without leaving revocation open would
+// strand a viewer with a live key it cannot kill.
+func TestViewerCanStillListAndRevokeOwnTokens(t *testing.T) {
+	srv, db := testServerWithDB(t)
+
+	user, err := db.CreateUser(t.Context(), "viewer@example.com",
+		"correct-horse-battery-staple", store.RoleViewer)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	token, meta, err := db.CreateAPIToken(t.Context(), user.ID, "readonly", nil)
+	if err != nil {
+		t.Fatalf("create token: %v", err)
+	}
+	h := srv.Handler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tokens", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list own tokens: status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodDelete,
+		fmt.Sprintf("/api/v1/tokens/%d", meta.ID), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent && rec.Code != http.StatusOK {
+		t.Fatalf("revoke own token: status = %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
