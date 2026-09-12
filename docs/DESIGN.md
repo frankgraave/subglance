@@ -139,6 +139,35 @@ one of them is touched.
 | Body | `--lh-body` | `1.45` | running text in a row or card |
 | Prose | `--lh-prose` | `1.6` | paragraphs — empty states, explanations |
 
+**Known defect: sizes and leadings are multiplied, not paired.** Counted on
+`dc46b9b` from the stylesheet sources and the rendered workbench DOM; the
+element and rule counts below are those counts, not render measurements. Across
+the 79 visible text elements of the workbench, 55 of them sit on a fractional
+line height. The cause is arithmetic, not carelessness: a ratio
+times a size gives `12.5 x 1.45 = 18.125`, `17 x 1.25 = 21.25`, `15 x 1.5 =
+22.5`. None of those land on the 4px baseline grid. What a browser then does
+with the fraction — which way it rounds, and whether the remainder accumulates
+down a column of rows — depends on the engine, the font and the device pixel
+ratio, so the rendered position is outside my control rather than something I
+have measured.
+
+The second half of the defect is inheritance. Of the 50 CSS rules that set
+`font-size`, 42 do not set `line-height` in the same block, so they inherit
+whatever is above them — Tailwind preflight's 1.5, `--lh-body`'s 1.45, or
+`--lh-prose`'s 1.6. That is how one size ends up rendering at three different
+leadings: `--type-helper` appears at 18.125px, 18.75px and 20px on the same
+screen.
+
+`--type-helper: 12.5px` is also the only fractional size in the system, and the
+most used — 49 of 79 elements. That puts the engine's glyph-rounding on exactly
+the text that has the least room to absorb it.
+
+The fix is to pair every size with a whole-pixel leading and to set both together
+in every rule, never the size alone. It is not applied here because choosing the
+helper size is a judgement call rather than a derivation: 12/16 collapses helper
+onto `--type-section`, 13/16 keeps the roles distinct. Until that is decided the
+defect is documented rather than half-fixed.
+
 **Nothing is smaller than 12px.** Below that, text stops being readable at a
 glance, and reading at a glance is the entire product. The one documented
 exception is `--type-nozoom: 16px` for the search input on phone widths: iOS
@@ -610,6 +639,29 @@ a decision instead of an oversight. Roughly in order of how much it would hurt
 to discover late.
 
 ### Blocking — the design does not survive without these
+
+- **Spacing and radius are not enforced.** `tokens.test.ts` mechanically
+  guarantees that `tokens.css` is the only source of colour, font size, line
+  height, weight and letter spacing. Spacing and radius have no such guard, and
+  three values have already been written by hand to hit a target height:
+  `shell.css:93` `padding: 7px`, `:207` `4px 9px`, `:290` `4px 7px`. The ladder
+  is 4/8/12/16/20/24; 7 and 9 are not on it, and a measured 8px radius is not on
+  the radius ladder (4/6/10/14) either. These are not cosmetic slips — each was
+  chosen to reach a specific rendered height, which is reasoning that belongs in
+  a token rather than buried in a padding value somebody will later "tidy up".
+  The 20x7 LED with its 2.5px radius (§2.4) is the counter-example: outside the
+  ladder, argued for in writing, and therefore an exception rather than a leak. A
+  guard is what keeps those two apart.
+- **Optical correction barely lands.** Four tracking tokens exist but 67 of the
+  79 measured elements sit at `normal`. Dense interface type at 12–15px usually
+  wants a slight negative tracking as a single decision on the body, with the
+  caps token as the one exception on top. Four tokens that rarely apply are not a
+  system; they are the appearance of one.
+- **Depth is a single value.** There is one `--shadow-card` for every raised
+  surface, and it is currently used in exactly one place. A popover, a drawer and
+  a card should not read at the same distance from the page. Deliberately not
+  fixed yet: there is no second raised surface to differentiate from, so a ladder
+  now would be inventing distinctions for components that do not exist.
 
 - ~~**Mobile.**~~ Answered in §13: below 640px the dashboard renders a card per
   monitor instead of a row, keeping every fact the row shows. The remaining

@@ -357,7 +357,7 @@ modifications available to its users.
 
 Monitoring your own or client sites does not trigger that: the sites being
 checked are not users of SubGlance. If the AGPL does not work for your
-situation, get in touch and we can look at it.
+situation, get in touch.
 
 ---
 
