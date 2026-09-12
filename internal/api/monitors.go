@@ -172,8 +172,8 @@ func (s *Server) handleCreateMonitor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if msg := validateCreateMonitor(req); msg != "" {
-		writeError(w, http.StatusBadRequest, msg)
+	if p := validateCreateMonitor(req); !p.ok() {
+		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
 	method, _ := normaliseMethod(req.Method)
@@ -221,42 +221,42 @@ func (s *Server) handleCreateMonitor(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, s.describeMonitor(r, created))
 }
 
-func validateCreateMonitor(req createMonitorRequest) string {
+func validateCreateMonitor(req createMonitorRequest) problem {
 	if req.Name == "" {
-		return "name is required"
+		return fieldProblem("name", "name is required")
 	}
 	if req.Target == "" {
-		return "target is required"
+		return fieldProblem("target", "target is required")
 	}
 	switch req.Type {
 	case "http", "tcp", "ping", "ssl":
 	case "":
-		return "type is required"
+		return fieldProblem("type", "type is required")
 	default:
-		return "unknown type " + req.Type
+		return fieldProblem("type", "unknown type "+req.Type)
 	}
 	if req.IntervalS != 0 && (req.IntervalS < 20 || req.IntervalS > 86400) {
-		return "interval_s must be between 20 and 86400"
+		return fieldProblem("interval_s", "interval_s must be between 20 and 86400")
 	}
 	if req.TimeoutS != 0 && (req.TimeoutS < 1 || req.TimeoutS > 120) {
-		return "timeout_s must be between 1 and 120"
+		return fieldProblem("timeout_s", "timeout_s must be between 1 and 120")
 	}
 	// Creation used to skip these three entirely, so a bad method or an
 	// out-of-range ssl_warn_days only surfaced as a SQLite constraint error or,
 	// worse, as a monitor that failed every check forever.
-	if _, msg := normaliseMethod(req.Method); msg != "" {
-		return msg
+	if _, p := normaliseMethod(req.Method); !p.ok() {
+		return p
 	}
-	if msg := validateKeywordMode(req.KeywordMode); msg != "" {
-		return msg
+	if p := validateKeywordMode(req.KeywordMode); !p.ok() {
+		return p
 	}
-	if msg := validateSSLWarnDays(req.SSLWarnDays); msg != "" {
-		return msg
+	if p := validateSSLWarnDays(req.SSLWarnDays); !p.ok() {
+		return p
 	}
-	if msg := validateTargetForType(req.Type, req.Target); msg != "" {
-		return msg
+	if p := validateTargetForType(req.Type, req.Target); !p.ok() {
+		return p
 	}
-	return ""
+	return problem{}
 }
 
 // monitorHTTPMethods is the set an http monitor may use, and the single place
@@ -273,15 +273,15 @@ var monitorHTTPMethods = map[string]bool{
 // An empty method is left empty rather than defaulted here: the store decides
 // what an unset method becomes, and duplicating that choice in the API is how
 // the two drift apart.
-func normaliseMethod(method string) (string, string) {
+func normaliseMethod(method string) (string, problem) {
 	if method == "" {
-		return "", ""
+		return "", problem{}
 	}
 	upper := strings.ToUpper(method)
 	if !monitorHTTPMethods[upper] {
-		return "", "unsupported HTTP method " + method
+		return "", fieldProblem("method", "unsupported HTTP method "+method)
 	}
-	return upper, ""
+	return upper, problem{}
 }
 
 // validateSSLWarnDays applies the one range the column allows.
@@ -289,23 +289,23 @@ func normaliseMethod(method string) (string, string) {
 // 0 is rejected rather than accepted as "never warn", because
 // store.ApplyMonitorDefaults would turn it back into 14 and the client would
 // be told it had disabled a warning it still gets.
-func validateSSLWarnDays(days *int) string {
+func validateSSLWarnDays(days *int) problem {
 	if days == nil {
-		return ""
+		return problem{}
 	}
 	if *days < 1 || *days > 365 {
-		return "ssl_warn_days must be between 1 and 365"
+		return fieldProblem("ssl_warn_days", "ssl_warn_days must be between 1 and 365")
 	}
-	return ""
+	return problem{}
 }
 
 // validateKeywordMode rejects modes the checker cannot act on.
-func validateKeywordMode(mode string) string {
+func validateKeywordMode(mode string) problem {
 	switch mode {
 	case "", "absent_ok", "must_contain", "must_not_contain":
-		return ""
+		return problem{}
 	default:
-		return "unknown keyword_mode " + mode
+		return fieldProblem("keyword_mode", "unknown keyword_mode "+mode)
 	}
 }
 
@@ -314,39 +314,45 @@ func validateKeywordMode(mode string) string {
 // Catching this at creation beats letting the monitor fail forever with an
 // internal error: a mistake made while typing should be corrected while the
 // user is still looking at the form.
-func validateTargetForType(typ, target string) string {
+func validateTargetForType(typ, target string) problem {
+	// Every rejection below is about the target the caller typed, even the
+	// ones whose wording blames the type: "a ping monitor cannot use a port"
+	// is a complaint about the port in the target, and the input a form has
+	// to highlight is the target box.
+	bad := func(msg string) problem { return fieldProblem("target", msg) }
+
 	switch typ {
 	case "http":
 		u, err := url.Parse(target)
 		if err != nil {
-			return "target is not a valid URL: " + err.Error()
+			return bad("target is not a valid URL: " + err.Error())
 		}
 		if u.Scheme != "http" && u.Scheme != "https" {
-			return "an http monitor needs a target starting with http:// or https://"
+			return bad("an http monitor needs a target starting with http:// or https://")
 		}
 		if u.Host == "" {
-			return "target has no host"
+			return bad("target has no host")
 		}
 
 	case "tcp":
 		host, port, err := checker.ParseHostPort(target, 0)
 		if err != nil {
-			return "invalid target: " + err.Error()
+			return bad("invalid target: " + err.Error())
 		}
 		if host == "" {
-			return "target has no host"
+			return bad("target has no host")
 		}
 		if port == 0 {
-			return "a tcp monitor needs a port, for example db.example.com:5432"
+			return bad("a tcp monitor needs a port, for example db.example.com:5432")
 		}
 
 	case "ssl":
 		host, _, err := checker.ParseHostPort(target, 443)
 		if err != nil {
-			return "invalid target: " + err.Error()
+			return bad("invalid target: " + err.Error())
 		}
 		if host == "" {
-			return "target has no host"
+			return bad("target has no host")
 		}
 
 	case "ping":
@@ -354,14 +360,41 @@ func validateTargetForType(typ, target string) string {
 		// the wrong check type, so say which one they wanted rather than
 		// complaining about a port they may not have realised they typed.
 		if strings.Contains(target, "://") {
-			return "a ping monitor takes a hostname or IP address, not a URL — " +
-				"use " + hostOnly(target) + ", or an http monitor for the full URL"
+			return bad("a ping monitor takes a hostname or IP address, not a URL — " +
+				"use " + hostOnly(target) + ", or an http monitor for the full URL")
 		}
-		if _, port, err := checker.ParseHostPort(target, 0); err == nil && port != 0 {
-			return "a ping monitor cannot use a port; use a tcp monitor instead"
+		// A ping target is a bare hostname or IP and nothing else. The other
+		// three types hand the target to a parser that normalises it; ping
+		// hands it to a resolver more or less as typed, so anything the
+		// resolver cannot use has to be caught here. ParseHostPort's error was
+		// previously discarded, which let a whitespace-only target through to
+		// a monitor that failed its lookup forever — the exact fail-forever
+		// case this function exists to prevent.
+		host, port, err := checker.ParseHostPort(target, 0)
+		if err != nil {
+			return bad("a ping monitor takes a hostname or IP address: " + err.Error())
+		}
+		if port != 0 {
+			return bad("a ping monitor cannot use a port; use a tcp monitor instead")
+		}
+		if host == "" {
+			return bad("target has no host")
+		}
+		// ParseHostPort drops a path, query, fragment or credentials because
+		// they are meaningless to a TCP dial. They are meaningless to ping
+		// too, but dropping them silently would store a target that does not
+		// say what it does, so name the part that cannot be used.
+		if strings.ContainsAny(target, "/?#@") {
+			return bad("a ping monitor takes a hostname or IP address, nothing after it — " +
+				"use " + host)
+		}
+		// Whitespace inside the host is never a hostname. ParseHostPort only
+		// trims the ends, so "a b.com" survives it and then fails to resolve.
+		if strings.ContainsAny(host, " \t\r\n") {
+			return bad("a hostname cannot contain spaces")
 		}
 	}
-	return ""
+	return problem{}
 }
 
 // hostOnly extracts the host from a URL-shaped target, for use in error
@@ -583,8 +616,10 @@ func pathID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	return id, true
 }
 
+// writeError renders an error that is not about a particular request field.
+// Validators that do know the field call writeProblem instead.
 func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
+	writeProblem(w, status, bodyProblem(msg))
 }
 
 // patchMonitorRequest is a partial update: every field is a pointer so that
@@ -678,8 +713,8 @@ func (s *Server) handlePatchMonitor(w http.ResponseWriter, r *http.Request) {
 	// predicate and falls through to the unconditional write.
 	conditional := ifMatch != "" && !wantAny
 
-	if msg := applyMonitorPatch(&m, req); msg != "" {
-		writeError(w, http.StatusBadRequest, msg)
+	if p := applyMonitorPatch(&m, req); !p.ok() {
+		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
 
@@ -734,15 +769,15 @@ func writeConflict(w http.ResponseWriter, id int64) {
 }
 
 // applyMonitorPatch merges the request into m and validates the result. It
-// returns an error message, or "" when the merged monitor is valid.
+// returns a problem, or the zero problem when the merged monitor is valid.
 //
 // Validation runs on the merged monitor, not on the request. Changing only the
 // type of an existing monitor can invalidate a target that was never touched,
 // and that combination has to be rejected just as firmly as a bad create.
-func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) string {
+func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 	if req.Name != nil {
 		if strings.TrimSpace(*req.Name) == "" {
-			return "name cannot be empty"
+			return fieldProblem("name", "name cannot be empty")
 		}
 		m.Name = *req.Name
 	}
@@ -751,12 +786,12 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) string {
 		case "http", "tcp", "ping", "ssl":
 			m.Type = *req.Type
 		default:
-			return "unknown type " + *req.Type
+			return fieldProblem("type", "unknown type "+*req.Type)
 		}
 	}
 	if req.Target != nil {
 		if strings.TrimSpace(*req.Target) == "" {
-			return "target cannot be empty"
+			return fieldProblem("target", "target cannot be empty")
 		}
 		m.Target = *req.Target
 	}
@@ -766,26 +801,26 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) string {
 	// already has a working one.
 	if req.IntervalS != nil {
 		if *req.IntervalS < 20 || *req.IntervalS > 86400 {
-			return "interval_s must be between 20 and 86400"
+			return fieldProblem("interval_s", "interval_s must be between 20 and 86400")
 		}
 		m.IntervalS = *req.IntervalS
 	}
 	if req.TimeoutS != nil {
 		if *req.TimeoutS < 1 || *req.TimeoutS > 120 {
-			return "timeout_s must be between 1 and 120"
+			return fieldProblem("timeout_s", "timeout_s must be between 1 and 120")
 		}
 		m.TimeoutS = *req.TimeoutS
 	}
 	if req.Retries != nil {
 		if *req.Retries < 0 || *req.Retries > 10 {
-			return "retries must be between 0 and 10"
+			return fieldProblem("retries", "retries must be between 0 and 10")
 		}
 		m.Retries = *req.Retries
 	}
 	if req.Method != nil {
-		method, msg := normaliseMethod(*req.Method)
-		if msg != "" {
-			return msg
+		method, p := normaliseMethod(*req.Method)
+		if !p.ok() {
+			return p
 		}
 		m.Method = method
 	}
@@ -796,8 +831,8 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) string {
 		m.Keyword = *req.Keyword
 	}
 	if req.KeywordMode != nil {
-		if msg := validateKeywordMode(*req.KeywordMode); msg != "" {
-			return msg
+		if p := validateKeywordMode(*req.KeywordMode); !p.ok() {
+			return p
 		}
 		m.KeywordMode = *req.KeywordMode
 	}
@@ -811,8 +846,8 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) string {
 		m.Body = *req.Body
 	}
 	if req.SSLWarnDays != nil {
-		if msg := validateSSLWarnDays(req.SSLWarnDays); msg != "" {
-			return msg
+		if p := validateSSLWarnDays(req.SSLWarnDays); !p.ok() {
+			return p
 		}
 		m.SSLWarnDays = *req.SSLWarnDays
 	}
@@ -824,9 +859,9 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) string {
 	// monitor ends up with is what the checker will dial, so that is what has
 	// to be legal — the SSRF guard itself runs at dial time, in the checker.
 	if req.Target != nil || req.Type != nil {
-		if msg := validateTargetForType(m.Type, m.Target); msg != "" {
-			return msg
+		if p := validateTargetForType(m.Type, m.Target); !p.ok() {
+			return p
 		}
 	}
-	return ""
+	return problem{}
 }

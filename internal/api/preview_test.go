@@ -298,3 +298,66 @@ func TestPreviewNormalisesMethodCase(t *testing.T) {
 		t.Errorf("probed with method %q, want %q", got, "HEAD")
 	}
 }
+
+// A 400 has to carry the field on the wire, not just inside the validator.
+// The add-monitor form reads `field` to decide which input to mark invalid;
+// if the key is dropped between the validator and the JSON, the message goes
+// back to the global region and no unit test notices, because it still
+// renders. This asserts the contract at the boundary a client actually sees.
+func TestPreviewErrorNamesTheField(t *testing.T) {
+	srv, _ := testServerWithDB(t)
+	srv.WithProber(&fakeProber{result: checker.Result{OK: true}})
+
+	tests := []struct {
+		name  string
+		body  string
+		field string
+	}{
+		{"bad target for type", `{"type":"http","target":"ftp://example.com"}`, "target"},
+		{"unresolvable target", `{"target":"redis://cache:6379"}`, "target"},
+		{"unknown type", `{"type":"gopher","target":"example.com"}`, "type"},
+		{"bad method", `{"target":"https://example.com","method":"FETCH"}`, "method"},
+		{"bad keyword mode", `{"target":"https://example.com","keyword_mode":"maybe"}`, "keyword_mode"},
+		{"timeout out of range", `{"target":"https://example.com","timeout_s":999}`, "timeout_s"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := preview(t, srv, tc.body)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400 (body %s)", rec.Code, rec.Body.String())
+			}
+			var got errorResponse
+			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+				t.Fatalf("decode error body: %v (%s)", err, rec.Body.String())
+			}
+			if got.Error == "" {
+				t.Error("error message is empty")
+			}
+			if got.Field != tc.field {
+				t.Errorf("field = %q, want %q (message: %s)", got.Field, tc.field, got.Error)
+			}
+		})
+	}
+}
+
+// Malformed JSON is not about a field, and the key must be absent rather than
+// empty: in JavaScript `""` and `undefined` both read as falsy on a naive
+// check but differ on `"field" in body`, and a client that trusts the latter
+// would render a global failure beneath an input named "".
+func TestRequestLevelErrorsOmitTheField(t *testing.T) {
+	srv, _ := testServerWithDB(t)
+	srv.WithProber(&fakeProber{result: checker.Result{OK: true}})
+
+	rec := preview(t, srv, `{"target":`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("decode error body: %v", err)
+	}
+	if _, present := raw["field"]; present {
+		t.Errorf("field key present on a malformed-JSON error: %s", rec.Body.String())
+	}
+}

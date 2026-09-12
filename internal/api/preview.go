@@ -108,17 +108,18 @@ func (s *Server) handlePreviewCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	typ, target, msg := resolveTarget(req.Type, req.Target)
-	if msg != "" {
-		writeError(w, http.StatusBadRequest, msg)
+	typ, target, p := resolveTarget(req.Type, req.Target)
+	if !p.ok() {
+		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
 	if req.TimeoutS != 0 && (req.TimeoutS < 1 || req.TimeoutS > 120) {
-		writeError(w, http.StatusBadRequest, "timeout_s must be between 1 and 120")
+		writeProblem(w, http.StatusBadRequest,
+			fieldProblem("timeout_s", "timeout_s must be between 1 and 120"))
 		return
 	}
-	if msg := validateKeywordMode(req.KeywordMode); msg != "" {
-		writeError(w, http.StatusBadRequest, msg)
+	if p := validateKeywordMode(req.KeywordMode); !p.ok() {
+		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
 	// The same validators creation runs (monitors.go). Preview exists to tell
@@ -127,13 +128,13 @@ func (s *Server) handlePreviewCheck(w http.ResponseWriter, r *http.Request) {
 	// produce: an unsupported method reached http.NewRequestWithContext, and
 	// an out-of-range ssl_warn_days passed here and hit a SQLite constraint
 	// on create.
-	method, msg := normaliseMethod(req.Method)
-	if msg != "" {
-		writeError(w, http.StatusBadRequest, msg)
+	method, p := normaliseMethod(req.Method)
+	if !p.ok() {
+		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
-	if msg := validateSSLWarnDays(req.SSLWarnDays); msg != "" {
-		writeError(w, http.StatusBadRequest, msg)
+	if p := validateSSLWarnDays(req.SSLWarnDays); !p.ok() {
+		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
 
@@ -229,23 +230,25 @@ func (s *Server) handlePreviewCheck(w http.ResponseWriter, r *http.Request) {
 // It stays conservative. An explicit type is always obeyed, and an input that
 // does not clearly say what it is becomes an error rather than a guess, so the
 // inference can never quietly monitor something other than what was meant.
-func resolveTarget(typ, target string) (resolvedType, resolvedTarget, problem string) {
+func resolveTarget(typ, target string) (resolvedType, resolvedTarget string, bad problem) {
 	target = strings.TrimSpace(target)
 	if target == "" {
-		return "", "", "target is required"
+		return "", "", fieldProblem("target", "target is required")
 	}
 
 	switch typ {
 	case "":
 		typ = inferType(target)
 		if typ == "" {
-			return "", "", "could not tell what to check from " + strconv.Quote(target) +
-				"; give a URL like https://example.com, a host:port like db.example.com:5432, " +
-				"or set type explicitly"
+			// Blamed on the target, not the type: the caller sent no type,
+			// and the input they can actually correct is what they pasted.
+			return "", "", fieldProblem("target", "could not tell what to check from "+strconv.Quote(target)+
+				"; give a URL like https://example.com, a host:port like db.example.com:5432, "+
+				"or set type explicitly")
 		}
 	case "http", "tcp", "ping", "ssl":
 	default:
-		return "", "", "unknown type " + typ
+		return "", "", fieldProblem("type", "unknown type "+typ)
 	}
 
 	if typ == "http" && !strings.Contains(target, "://") {
@@ -255,10 +258,10 @@ func resolveTarget(typ, target string) (resolvedType, resolvedTarget, problem st
 		target = "https://" + target
 	}
 
-	if msg := validateTargetForType(typ, target); msg != "" {
-		return "", "", msg
+	if p := validateTargetForType(typ, target); !p.ok() {
+		return "", "", p
 	}
-	return typ, target, ""
+	return typ, target, problem{}
 }
 
 // inferType classifies a target that arrived without a type.

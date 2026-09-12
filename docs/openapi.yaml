@@ -1842,15 +1842,27 @@ components:
     Error:
       type: object
       description: |
-        The single error shape used by every endpoint. Handlers write exactly
-        one field, so clients can rely on `error` always being present and
-        always being a human-readable sentence.
+        The single error shape used by every endpoint. `error` is always
+        present and is always a human-readable sentence.
+
+        `field` is present only when the rejection is about one named field of
+        the request body, and it carries the JSON name that was sent, so a
+        client can place the message next to the input that caused it instead
+        of matching on the wording of `error`. Anything not about a single
+        field — malformed JSON, a rate limit, a missing session, a server
+        failure — omits it.
       required: [error]
       properties:
         error:
           type: string
           description: A human-readable explanation of what went wrong.
           example: monitor not found
+        field:
+          type: string
+          description: |
+            The JSON name of the request body field the error is about, when
+            the error is about exactly one. Absent otherwise; never empty.
+          example: target
       additionalProperties: false
     HealthResponse:
       type: object

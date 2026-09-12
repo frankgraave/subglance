@@ -3,6 +3,7 @@ import { AddMonitorForm } from "./AddMonitorForm";
 import type { AddMonitorValues } from "./AddMonitorForm";
 import { ApiError, createMonitor, fingerprintPreview, previewCheck } from "./preview";
 import type { PreviewRequest, PreviewState } from "./preview";
+import type { Rejection } from "./AddMonitorForm";
 
 /**
  * The data owner for the add-monitor form.
@@ -30,7 +31,7 @@ export function AddMonitor({ onCreated, onCancel, api }: AddMonitorProps) {
 
   const [state, setState] = useState<PreviewState>({ phase: "idle" });
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<Rejection | null>(null);
   /*
    * The in-flight preview, so a second press supersedes the first.
    *
@@ -61,7 +62,7 @@ export function AddMonitor({ onCreated, onCancel, api }: AddMonitorProps) {
           }
         } catch (error) {
           if (controller.signal.aborted) return;
-          setState({ phase: "rejected", message: explain(error) });
+          setState({ phase: "rejected", ...explain(error) });
         }
       })();
     },
@@ -78,10 +79,14 @@ export function AddMonitor({ onCreated, onCancel, api }: AddMonitorProps) {
       // user got a validation error about a field they never filled in.
       if (values.type === "" && !previewMatches(values, state)) {
         setSaving(false);
-        setSaveError(
-          "press Test it first, or pick a type — SubGlance works out what a bare address means" +
+        setSaveError({
+          // Tagged as a target problem: the form is telling the user their
+          // address has not been tested, and the address is what they act on.
+          field: "target",
+          message:
+            "press Test it first, or pick a type — SubGlance works out what a bare address means" +
             " by probing it, and the settings changed since the last test",
-        );
+        });
         return;
       }
 
@@ -175,18 +180,32 @@ function resolvedTarget(values: AddMonitorValues, state: PreviewState): string {
   return typed;
 }
 
-/** Turns a thrown value into the sentence the form shows. */
-function explain(error: unknown): string {
+/**
+ * Turns a thrown value into the sentence the form shows, and where to show it.
+ *
+ * The field is whatever the server named, never anything inferred here. A 429
+ * and a network failure deliberately carry none: neither is about an input,
+ * and pinning "you are going too fast" under the target box would tell the
+ * user to edit something that is not wrong.
+ */
+function explain(error: unknown): Rejection {
   if (error instanceof ApiError) {
-    if (error.status === 429 && error.retryAfter !== null) {
-      return `${error.message} (about ${error.retryAfter}s)`;
+    if (error.status === 429) {
+      const suffix = error.retryAfter !== null ? ` (about ${error.retryAfter}s)` : "";
+      return { message: `${error.message}${suffix}` };
     }
-    return error.message;
+    return {
+      message: error.message,
+      ...(error.field !== null ? { field: error.field } : {}),
+    };
   }
   // A network-level failure never reached the server, so there is no server
   // sentence to quote. Say which half broke rather than printing "Failed to
   // fetch", which reads as though the target were down.
-  return error instanceof Error
-    ? `could not reach SubGlance itself: ${error.message}`
-    : "could not reach SubGlance itself";
+  return {
+    message:
+      error instanceof Error
+        ? `could not reach SubGlance itself: ${error.message}`
+        : "could not reach SubGlance itself",
+  };
 }

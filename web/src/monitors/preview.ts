@@ -58,7 +58,7 @@ export type PreviewState =
   | { phase: "idle" }
   | { phase: "checking" }
   | { phase: "done"; result: PreviewResult; request: PreviewFingerprint }
-  | { phase: "rejected"; message: string };
+  | { phase: "rejected"; message: string; field?: string };
 
 /**
  * Everything about a request that changes what a probe proves, in one string.
@@ -85,22 +85,46 @@ export class ApiError extends Error {
   readonly status: number;
   /** Seconds to wait, from Retry-After, when the server rate-limited us. */
   readonly retryAfter: number | null;
+  /**
+   * The request field the server blamed, when it blamed one.
+   *
+   * `null` means the rejection was not about a single field — malformed JSON,
+   * a rate limit, a server failure — and the message belongs in the form's
+   * global region rather than under an input.
+   *
+   * This comes off the wire rather than being worked out here on purpose. The
+   * alternative is classifying the error by matching on the server's wording,
+   * which keeps working right up until a message is reworded and then fails
+   * silently: the text still renders, just in the wrong place.
+   */
+  readonly field: string | null;
 
-  constructor(status: number, message: string, retryAfter: number | null = null) {
+  constructor(
+    status: number,
+    message: string,
+    retryAfter: number | null = null,
+    field: string | null = null,
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.retryAfter = retryAfter;
+    this.field = field;
   }
 }
 
 async function readError(res: Response): Promise<ApiError> {
   let message = `HTTP ${res.status}`;
+  let field: string | null = null;
   try {
-    const body = (await res.json()) as { error?: string; message?: string };
+    const body = (await res.json()) as { error?: string; message?: string; field?: string };
     // The API's own wording is better than anything we could invent here: it
     // knows which field was wrong and what the right shape looks like.
     message = body.error ?? body.message ?? message;
+    // An empty string is treated as absent. The server omits the key rather
+    // than sending "", but a proxy or an older build might not, and a field
+    // named "" would match no input and silently swallow the message.
+    field = typeof body.field === "string" && body.field !== "" ? body.field : null;
   } catch {
     // A non-JSON error body (a proxy's HTML 502, say) leaves the status line,
     // which is still more use than throwing a parse error over the top of it.
@@ -111,6 +135,7 @@ async function readError(res: Response): Promise<ApiError> {
     res.status,
     message,
     retryAfter !== null && Number.isFinite(retryAfter) ? retryAfter : null,
+    field,
   );
 }
 

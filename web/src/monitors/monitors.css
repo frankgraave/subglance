@@ -570,6 +570,30 @@
   color: var(--ink-3);
 }
 
+/*
+ * The message for the input directly above it.
+ *
+ * Same size as the help text and directly beneath it, so the field reads as
+ * one block rather than as a box with something shouting under it. Colour is
+ * the only difference, and colour is deliberately not the only signal: the
+ * input itself carries aria-invalid and a red border, so this still works for
+ * anyone who cannot tell --down from --ink-3 (DESIGN.md §3.1).
+ */
+.add-field-error {
+  font-size: var(--type-helper);
+  line-height: var(--lh-body);
+  color: var(--down);
+}
+
+.add-input[aria-invalid="true"] {
+  border-color: var(--down);
+}
+
+.add-input[aria-invalid="true"]:focus {
+  border-color: var(--down);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--down) 14%, transparent);
+}
+
 .add-addon {
   position: relative;
   display: flex;
