@@ -14,12 +14,19 @@ import (
 
 // SSE tuning.
 //
-// heartbeatInterval is the comment ping that keeps the connection alive. It
-// exists for two reasons, and the second is the one that bites: proxies and
-// load balancers close idle connections (nginx defaults to 60s), and a browser
+// sseHeartbeatInterval is the ping that keeps the connection alive. It exists
+// for two reasons, and the second is the one that bites: proxies and load
+// balancers close idle connections (nginx defaults to 60s), and a browser
 // cannot distinguish "nothing has happened" from "this socket is dead". The
 // ping makes silence meaningful — if the client stops receiving them, the
 // connection really is gone.
+//
+// It is a named `ping` event rather than the `: ping` comment line it used to
+// be. A comment is invisible to EventSource: the browser drops it before any
+// listener runs, so a page could not tell a quiet stream from a dead one, and
+// the client-side watchdog DESIGN.md §6 asks for had nothing to feed on. A
+// named event serves the proxy exactly as well and is observable. It carries
+// no `id:`, so it never moves a client's Last-Event-ID resume point.
 //
 // 20s is comfortably inside common proxy timeouts without being chatty.
 const (
@@ -74,17 +81,19 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	// rather than assume its view is current.
 	lastSeen := parseLastEventID(r)
 	current := s.bus.LastSeq()
+	interval := s.pingInterval()
 	if err := writeSSE(w, "hello", helloPayload{
 		Seq:     current,
 		Gap:     lastSeen > 0 && lastSeen < current,
 		Missed:  gapSize(lastSeen, current),
 		ServerT: time.Now(),
+		PingMS:  interval.Milliseconds(),
 	}); err != nil {
 		return
 	}
 	flusher.Flush()
 
-	ping := time.NewTicker(sseHeartbeatInterval)
+	ping := time.NewTicker(interval)
 	defer ping.Stop()
 
 	ctx := r.Context()
@@ -97,14 +106,14 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 			return
 
 		case <-ping.C:
-			// A comment line: valid SSE, ignored by EventSource, keeps
-			// intermediaries from reaping the connection.
+			// Proof of life on an otherwise idle stream, and the only
+			// thing a silent-but-open socket fails to deliver.
 			//
 			// A failed write here is how a dead connection is usually
 			// discovered: the request context is not always cancelled
 			// promptly, so without this check the handler would keep
 			// writing into a closed socket.
-			if _, err := io.WriteString(w, ": ping\n\n"); err != nil {
+			if err := writeSSE(w, "ping", pingPayload{ServerT: time.Now()}); err != nil {
 				return
 			}
 			flusher.Flush()
@@ -131,9 +140,18 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 }
 
 type helloPayload struct {
-	Seq     uint64    `json:"seq"`
-	Gap     bool      `json:"gap"`
-	Missed  uint64    `json:"missed,omitempty"`
+	Seq    uint64 `json:"seq"`
+	Gap    bool   `json:"gap"`
+	Missed uint64 `json:"missed,omitempty"`
+	// PingMS is how often this server promises to send a `ping`, so the
+	// client can size its own silence watchdog from the server's actual
+	// configuration instead of hardcoding a guess that a future change to
+	// sseHeartbeatInterval would silently invalidate.
+	PingMS  int64     `json:"ping_interval_ms"`
+	ServerT time.Time `json:"server_time"`
+}
+
+type pingPayload struct {
 	ServerT time.Time `json:"server_time"`
 }
 

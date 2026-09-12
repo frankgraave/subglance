@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
 import { LiveDashboardRoot } from "./LiveDashboard";
 import type { EventSourceLike } from "./connection";
@@ -14,6 +14,7 @@ import type { EventSourceLike } from "./connection";
 /** A stub EventSource the test drives directly. */
 class FakeSource implements EventSourceLike {
   static last: FakeSource | null = null;
+  static opened = 0;
   onopen: ((event: Event) => void) | null = null;
   onerror: ((event: Event) => void) | null = null;
   readyState = 0;
@@ -21,6 +22,7 @@ class FakeSource implements EventSourceLike {
 
   constructor() {
     FakeSource.last = this;
+    FakeSource.opened += 1;
   }
 
   addEventListener(type: string, listener: (event: MessageEvent) => void): void {
@@ -84,6 +86,7 @@ function renderLive(monitors: unknown[] = [apiMonitor()]) {
 
 beforeEach(() => {
   FakeSource.last = null;
+  FakeSource.opened = 0;
 });
 
 afterEach(() => {
@@ -230,6 +233,74 @@ describe("LiveDashboard", () => {
     });
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  /*
+   * DESIGN.md §6: when we stop knowing, we stop asserting.
+   *
+   * The colour drain itself is CSS on `[data-conn="stale"]`, which jsdom does
+   * not compute — so what is asserted here is the contract the stylesheet
+   * hangs off, plus the rule that the last known state stays on screen and in
+   * place while it drains.
+   */
+  describe("when the stream dies", () => {
+    const die = () =>
+      act(() => {
+        FakeSource.last?.open();
+        FakeSource.last?.fail();
+      });
+
+    it("marks the dashboard stale so colour can drain", async () => {
+      renderLive();
+      const name = await screen.findByText("api");
+      const dashboard = name.closest(".mon-dashboard");
+      expect(dashboard?.getAttribute("data-conn")).toBe("live");
+
+      die();
+
+      expect(dashboard?.getAttribute("data-conn")).toBe("stale");
+    });
+
+    it("keeps the last known state on screen rather than blanking it", async () => {
+      renderLive();
+      await screen.findByText("api");
+      die();
+      // Nothing is hidden and nothing moves (§6). The last reading is still
+      // the most useful thing here; it just stops being presented as current.
+      expect(screen.queryByText("api")).not.toBeNull();
+    });
+
+    it("offers a reconnect that does not wait out the backoff", async () => {
+      renderLive();
+      await screen.findByText("api");
+      die();
+      const opened = FakeSource.opened;
+
+      const button = await screen.findByRole("button", { name: /Reconnect now/ });
+      act(() => {
+        fireEvent.click(button);
+      });
+
+      // Immediately, not after the ladder's next rung: someone staring at a
+      // dashboard they know is broken must not sit out our patience.
+      expect(FakeSource.opened).toBe(opened + 1);
+    });
+
+    it("clears the warning when the stream comes back, without a reload", async () => {
+      renderLive();
+      await screen.findByText("api");
+      die();
+      await screen.findByText(/Connection lost/);
+
+      act(() => {
+        fireEvent.click(screen.getByRole("button", { name: /Reconnect now/ }));
+      });
+      act(() => FakeSource.last?.open());
+
+      await waitFor(() => expect(screen.queryByText(/Connection lost/)).toBeNull());
+      const name = screen.getByText("api");
+      expect(name.closest(".mon-dashboard")?.getAttribute("data-conn")).toBe("live");
+    });
   });
 
   it("reports a failed first load instead of showing an empty dashboard", async () => {

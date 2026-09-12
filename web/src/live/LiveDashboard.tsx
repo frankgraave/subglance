@@ -37,7 +37,7 @@ export function LiveDashboard({
   ...live
 }: LiveDashboardProps) {
   const [query, setQuery] = useState("");
-  const { monitors, status, loading, error, announcement } = useLiveMonitors(live);
+  const { monitors, status, loading, error, announcement, reconnect } = useLiveMonitors(live);
   const now = useNow();
 
   const newest = monitors.reduce<number | null>(
@@ -98,7 +98,10 @@ export function LiveDashboard({
       announcement={announcement}
       beatWidth={beatWidth}
       layout={layout}
-      banner={<ConnectionBadge status={status} since={newest} now={now} />}
+      stale={status === "offline"}
+      banner={
+        <ConnectionBadge status={status} since={newest} now={now} onReconnect={reconnect} />
+      }
     />
   );
 }

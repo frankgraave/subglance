@@ -50,6 +50,7 @@ describe("parseEvent", () => {
   it("reads hello, including the gap flag", () => {
     expect(parseEvent("hello", frame({ seq: 40, gap: true, missed: 9 }))).toEqual({
       kind: "hello",
+      pingIntervalMs: null,
       seq: 40,
       gap: true,
       missed: 9,
@@ -84,5 +85,27 @@ describe("monitorKey", () => {
   it("maps absent ids to the empty string", () => {
     expect(monitorKey(null)).toBe("");
     expect(monitorKey(undefined)).toBe("");
+  });
+
+  // The client sizes its silence watchdog from what the server promises, so a
+  // server that states its keepalive must be believed over any constant here.
+  it("reads the keepalive interval hello announces", () => {
+    const event = parseEvent("hello", frame({ seq: 1, gap: false, ping_interval_ms: 20000 }));
+    expect(event).toMatchObject({ kind: "hello", pingIntervalMs: 20000 });
+  });
+
+  // A server that predates the field, or a proxy that rewrote the frame. The
+  // client falls back to its default rather than arming a watchdog on NaN.
+  it("reports a missing keepalive interval as null", () => {
+    const event = parseEvent("hello", frame({ seq: 1, gap: false }));
+    expect(event).toMatchObject({ pingIntervalMs: null });
+  });
+
+  // Its arrival is the whole payload: it is what tells a silent-but-open
+  // socket apart from a dead one.
+  it("reads a ping as a frame with no state", () => {
+    expect(parseEvent("ping", frame({ server_time: "2026-09-11T08:00:00Z" }))).toEqual({
+      kind: "ping",
+    });
   });
 });

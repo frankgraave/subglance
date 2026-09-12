@@ -1380,13 +1380,14 @@ paths:
         retry: 3000
 
         event: hello
-        data: {"seq":42,"gap":false,"server_time":"2026-01-01T12:00:00Z"}
+        data: {"seq":42,"gap":false,"ping_interval_ms":20000,"server_time":"2026-01-01T12:00:00Z"}
 
         id: 43
         event: heartbeat
         data: {"kind":"heartbeat","monitor_id":1,"at":"...","data":{...},"seq":43}
 
-        : ping
+        event: ping
+        data: {"server_time":"2026-01-01T12:00:25Z"}
         ```
 
         - A `retry:` line is sent first, fixing the browser's reconnect delay
@@ -1402,9 +1403,15 @@ paths:
           and events were dropped. Dropping is deliberate — a browser tab on a
           bad connection must never stall the scheduler — but it is never
           silent.
-        - `: ping` comment lines every 20 seconds keep proxies (nginx defaults
-          to a 60 s idle timeout) from reaping the connection and let a client
-          tell "nothing happened" apart from "this socket is dead".
+        - `ping` events every 20 seconds keep proxies (nginx defaults to a
+          60 s idle timeout) from reaping the connection and let a client tell
+          "nothing happened" apart from "this socket is dead". They are named
+          events rather than `: ping` comment lines because a comment is
+          dropped by `EventSource` before any listener runs, which leaves a
+          browser unable to distinguish an idle stream from a dead one. A
+          `ping` carries no `id:`, so it never moves a resume point. `hello`
+          reports the interval as `ping_interval_ms` so a client can size its
+          own silence watchdog from the server's configuration.
       parameters:
         - name: last_event_id
           in: query
@@ -1446,7 +1453,7 @@ paths:
                 retry: 3000
 
                 event: hello
-                data: {"seq":42,"gap":false,"server_time":"2026-01-01T12:00:00Z"}
+                data: {"seq":42,"gap":false,"ping_interval_ms":20000,"server_time":"2026-01-01T12:00:00Z"}
 
                 id: 43
                 event: heartbeat

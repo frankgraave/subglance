@@ -52,6 +52,19 @@ type Server struct {
 	// and manualChecks both have to move into shared storage at the same
 	// time; neither survives horizontal scaling on its own.
 	previewChecks cooldown
+
+	// streamPing overrides the SSE keepalive interval. Zero means the
+	// default. It exists so a test can assert the ping behaviour in
+	// milliseconds instead of sitting out twenty real seconds.
+	streamPing time.Duration
+}
+
+// pingInterval is how often the live stream emits a `ping` event.
+func (s *Server) pingInterval() time.Duration {
+	if s.streamPing > 0 {
+		return s.streamPing
+	}
+	return sseHeartbeatInterval
 }
 
 // New returns a Server ready to be mounted.

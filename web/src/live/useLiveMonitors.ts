@@ -24,6 +24,8 @@ import type { Monitor } from "../monitors/types";
 export type UseLiveMonitors = {
   monitors: Monitor[];
   status: ConnectionStatus;
+  /** Reopens the stream now, skipping the backoff ladder. */
+  reconnect: () => void;
   /** True until the first fetch resolves. */
   loading: boolean;
   /** The fetch error, if the list could not be loaded at all. */
@@ -71,10 +73,19 @@ export function useLiveMonitors(options: LiveOptions = {}): UseLiveMonitors {
       if (event === null) return;
 
       if (event.kind === "hello") {
+        // Size the silence watchdog from what this server actually promises,
+        // rather than a constant that a change on the server would silently
+        // invalidate.
+        if (event.pingIntervalMs !== null) connection.setPingInterval(event.pingIntervalMs);
         // The server says this client missed events while it was away. The
         // held list is now provably incomplete, so it is refetched rather
         // than patched — a hole cannot be filled by the frames that follow.
         if (event.gap) void queryClient.invalidateQueries({ queryKey: monitorsQueryKey });
+        return;
+      }
+      if (event.kind === "ping") {
+        // Nothing to apply. The connection already treated its arrival as
+        // proof of life; there is no state in it.
         return;
       }
       if (event.kind === "lagged") {
@@ -117,6 +128,7 @@ export function useLiveMonitors(options: LiveOptions = {}): UseLiveMonitors {
   return {
     monitors,
     status,
+    reconnect: connection.reconnect,
     loading: query.isPending,
     error: query.error instanceof Error ? query.error : null,
     announcement: seen.announcement,

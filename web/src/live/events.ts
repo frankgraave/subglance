@@ -23,7 +23,21 @@ export type HelloEvent = {
   /** True when the server knows this client missed events while away. */
   gap: boolean;
   missed: number;
+  /**
+   * How often this server promises to send a `ping`, in milliseconds, or null
+   * when it did not say — an older server, or one behind a proxy that rewrote
+   * the frame. The client sizes its silence watchdog from this instead of
+   * hardcoding a number that a change to the server's interval would silently
+   * invalidate.
+   */
+  pingIntervalMs: number | null;
 };
+
+/**
+ * `ping`: the keepalive, and the only frame that says "still here" when
+ * nothing is happening. Carries no state; its arrival is the entire payload.
+ */
+export type PingEvent = { kind: "ping" };
 
 /** `lagged`: the server dropped events because this client could not keep up. */
 export type LaggedEvent = { kind: "lagged"; dropped: number };
@@ -49,7 +63,7 @@ export type StatusEvent = {
   error?: string;
 };
 
-export type LiveEvent = HelloEvent | LaggedEvent | HeartbeatEvent | StatusEvent;
+export type LiveEvent = HelloEvent | PingEvent | LaggedEvent | HeartbeatEvent | StatusEvent;
 
 /**
  * Monitor ids are strings on this side of the boundary, always.
@@ -97,7 +111,10 @@ export function parseEvent(type: string, data: string): LiveEvent | null {
         seq: num(body.seq) ?? 0,
         gap: body.gap === true,
         missed: num(body.missed) ?? 0,
+        pingIntervalMs: num(body.ping_interval_ms),
       };
+    case "ping":
+      return { kind: "ping" };
     case "lagged":
       return { kind: "lagged", dropped: num(body.dropped) ?? 0 };
     case "heartbeat": {

@@ -40,3 +40,73 @@
 .conn-badge-age {
   color: var(--ink-2);
 }
+
+.conn-badge-retry {
+  /* A button, not a link: it performs an action on this page rather than
+     navigating. Bordered rather than filled, because a solid button in warn
+     colour next to warn text is two shouts for one message — and this badge
+     already has the reader's attention by existing at all. */
+  margin-left: var(--space-2);
+  padding: 2px var(--space-2);
+  border: 1px solid var(--warn);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--type-helper);
+  line-height: var(--lh-tight);
+  cursor: pointer;
+  transition: background-color var(--dur-hover) var(--ease);
+}
+
+.conn-badge-retry:hover {
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+}
+
+/*
+ * Losing the connection (DESIGN.md §6).
+ *
+ * The rule the whole product hangs on: **when we stop knowing, we stop
+ * asserting**. Colour is our claim about reality, so colour is what drains.
+ * A monitoring tool that keeps a wall of green LEDs lit after it went deaf is
+ * lying confidently, which is worse than being visibly broken.
+ *
+ * It is done here, in CSS, on one attribute set by the data owner. The
+ * alternative — rewriting every monitor's status to "unknown" in the store —
+ * would destroy the last known state, and the last known state is still the
+ * most useful thing on the screen. Nothing is hidden and nothing moves; the
+ * display simply stops presenting itself as current truth.
+ */
+.mon-dashboard[data-conn="stale"] .led {
+  /* ~18%: enough colour left to tell a drained red from a drained green when
+     you look for it, not enough to read as a claim from across the room. */
+  filter: saturate(.18);
+  box-shadow: none;
+  /* 600ms, and slower than every other transition in the product on purpose.
+     This is a withdrawal, not an alarm: a fast desaturation reads as a state
+     change in the monitors themselves, which is precisely the wrong story. */
+  transition: filter 600ms var(--ease), box-shadow 600ms var(--ease);
+}
+
+.mon-dashboard[data-conn="stale"] .hb-bar {
+  filter: saturate(.18);
+  transition: filter 600ms var(--ease);
+}
+
+/* Live check animations stop. A bar flaring into place while the stream is
+   down is fiction — nothing arrived. */
+.mon-dashboard[data-conn="stale"] .hb-bar--new,
+.mon-dashboard[data-conn="stale"] .hb-flare,
+.mon-dashboard[data-conn="stale"] .conn-badge-dot {
+  animation: none;
+}
+
+/* Measurements and counts recede to the dimmest ink. They are history now,
+   and history should not be as loud as fact. `--ink-3` rather than hiding
+   them: an unreadable number invites a reload, and the number is still the
+   best information available. */
+.mon-dashboard[data-conn="stale"] .mon-count-value,
+.mon-dashboard[data-conn="stale"] .mon-line-num,
+.mon-dashboard[data-conn="stale"] .mon-line-error {
+  color: var(--ink-3);
+  transition: color 600ms var(--ease);
+}

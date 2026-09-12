@@ -78,10 +78,18 @@ func openStream(t *testing.T, base string, h http.Handler) (*bufio.Reader, func(
 // streamServer boots an authenticated test server with a bus attached.
 func streamServer(t *testing.T) (*events.Bus, *httptest.Server) {
 	t.Helper()
+	return streamServerPinging(t, 0)
+}
+
+// streamServerPinging is streamServer with an explicit keepalive interval, so
+// a test can observe a ping without waiting out the twenty-second default.
+func streamServerPinging(t *testing.T, ping time.Duration) (*events.Bus, *httptest.Server) {
+	t.Helper()
 
 	srv, _ := testServerWithDB(t)
 	bus := events.NewBus(16)
 	srv.WithBus(bus)
+	srv.streamPing = ping
 
 	ts := httptest.NewServer(authedHandler(srv))
 	t.Cleanup(ts.Close)
@@ -421,4 +429,66 @@ func TestStreamTellsClientItLagged(t *testing.T) {
 	}
 	t.Fatal("client was never told it had lagged; it would present an " +
 		"incomplete picture as if it were complete")
+}
+
+// The keepalive must be an event the browser can see, not an SSE comment.
+//
+// A `: ping` comment is dropped by EventSource before any listener runs, so a
+// page cannot tell an idle stream from a socket that died silently — which is
+// exactly the failure mode DESIGN.md §6 says the client watchdog must catch.
+// It also carries no id, so it must not move a reconnecting client's resume
+// point.
+func TestStreamPingIsAnObservableEvent(t *testing.T) {
+	_, ts := streamServerPinging(t, 20*time.Millisecond)
+
+	br, closeStream := openStream(t, ts.URL, nil)
+	defer closeStream()
+
+	frame := readFrame(t, br)
+	if got := frameField(frame, "event:"); got != "ping" {
+		t.Fatalf("first idle frame = %q, want an event named ping", frame)
+	}
+	if strings.Contains(frame, "id:") {
+		t.Errorf("ping frame = %q, want no id line: it must not move Last-Event-ID", frame)
+	}
+
+	var body struct {
+		ServerT time.Time `json:"server_time"`
+	}
+	if err := json.Unmarshal([]byte(frameField(frame, "data:")), &body); err != nil {
+		t.Fatalf("decoding ping payload: %v", err)
+	}
+	if body.ServerT.IsZero() {
+		t.Error("ping payload has no server_time; a client cannot date the silence")
+	}
+}
+
+// The client sizes its silence watchdog from what the server promises, so the
+// promise has to be on the wire.
+func TestStreamHelloAnnouncesPingInterval(t *testing.T) {
+	_, ts := streamServerPinging(t, 250*time.Millisecond)
+
+	req, _ := http.NewRequest("GET", ts.URL+"/api/v1/stream", nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	resp, err := http.DefaultClient.Do(req.WithContext(ctx))
+	if err != nil {
+		t.Fatalf("opening stream: %v", err)
+	}
+	defer resp.Body.Close()
+
+	br := bufio.NewReader(resp.Body)
+	readFrame(t, br) // retry hint
+	hello := readFrame(t, br)
+
+	var body struct {
+		PingMS int64 `json:"ping_interval_ms"`
+	}
+	if err := json.Unmarshal([]byte(frameField(hello, "data:")), &body); err != nil {
+		t.Fatalf("decoding hello: %v", err)
+	}
+	if body.PingMS != 250 {
+		t.Errorf("hello ping_interval_ms = %d, want 250", body.PingMS)
+	}
 }

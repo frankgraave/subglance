@@ -52,6 +52,21 @@ export type DashboardProps = {
    * data owns the statement about it, and passes it in.
    */
   banner?: ReactNode;
+  /**
+   * True when the live stream is down and everything on screen is history.
+   *
+   * It sets one attribute on the root and nothing else; the draining of colour
+   * is CSS (DESIGN.md §6). Doing it in CSS rather than by rewriting statuses
+   * matters: the last known state is still the most useful thing on the
+   * screen, so it must stay readable and stay in place. Nothing is hidden,
+   * nothing moves, nothing is replaced by a skeleton — the display simply
+   * stops presenting itself as current truth.
+   *
+   * It is a boolean rather than a `ConnectionStatus` for the same reason
+   * `banner` is a slot: this component renders monitors and should not grow an
+   * opinion about transports.
+   */
+  stale?: boolean;
 };
 
 const COUNTED: { status: MonitorStatus; label: string }[] = [
@@ -69,6 +84,7 @@ export function Dashboard({
   beatWidth,
   layout = DEFAULT_LAYOUT,
   banner = null,
+  stale = false,
 }: DashboardProps) {
   const searchId = useId();
   // Hooks cannot be skipped, so the query is always subscribed to and the
@@ -82,7 +98,11 @@ export function Dashboard({
   const visible = filterMonitors(monitors, query);
 
   return (
-    <section className="mon-dashboard" aria-labelledby={`${searchId}-title`}>
+    <section
+      className="mon-dashboard"
+      aria-labelledby={`${searchId}-title`}
+      data-conn={stale ? "stale" : "live"}
+    >
       {/* Above the counts, not below the list: a warning that the numbers are
           frozen has to be read *before* the numbers, not after scrolling past
           them. */}

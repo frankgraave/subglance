@@ -22,6 +22,11 @@ import type { ConnectionStatus } from "./connection";
  * 4. **`--warn`, never `--down`.** A lost connection is not an outage. Using
  *    the outage colour would make the dashboard look like everything failed at
  *    the moment it lost the ability to know anything at all.
+ * 5. **The button is always offered, never a spinner.** Reconnecting runs on a
+ *    backoff ladder that can be sitting on a thirty-second wait, and somebody
+ *    staring at a dashboard they already know is broken must not have to sit
+ *    out our patience (DESIGN.md §6). Disabling it while an attempt is in
+ *    flight would recreate exactly that wait.
  */
 
 import { describeAge } from "./age";
@@ -35,9 +40,11 @@ export type ConnectionBadgeProps = {
    * the owner already holds a clock it can share (see useNow).
    */
   now: number;
+  /** Reopens the stream immediately. Omitted, the button is not rendered. */
+  onReconnect?: () => void;
 };
 
-export function ConnectionBadge({ status, since = null, now }: ConnectionBadgeProps) {
+export function ConnectionBadge({ status, since = null, now, onReconnect }: ConnectionBadgeProps) {
   // Nothing to say: a working connection is the assumption, so it is silent.
   if (status !== "offline") {
     return <div role="status" aria-live="polite" className="sr-only" />;
@@ -52,6 +59,11 @@ export function ConnectionBadge({ status, since = null, now }: ConnectionBadgePr
         Connection lost — reconnecting
         {age !== null && <span className="conn-badge-age"> · updated {age}</span>}
       </span>
+      {onReconnect !== undefined && (
+        <button type="button" className="conn-badge-retry" onClick={onReconnect}>
+          Reconnect now
+        </button>
+      )}
     </div>
   );
 }
