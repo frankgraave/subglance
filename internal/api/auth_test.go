@@ -427,8 +427,8 @@ func TestViewerCanStillListAndRevokeOwnTokens(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusNoContent && rec.Code != http.StatusOK {
-		t.Fatalf("revoke own token: status = %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("revoke own token: status = %d, want 204: %s", rec.Code, rec.Body.String())
 	}
 }
 
