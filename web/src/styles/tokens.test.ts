@@ -277,3 +277,109 @@ describe("tokens.css is the only source of weight and tracking", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+/**
+ * SUB-75 extends the same rule to spacing and radius, which were the last two
+ * scales left unguarded — and had already drifted: a 7px and a 9px padding,
+ * each picked by hand to reach a rendered height that no token stated.
+ *
+ * The rule is not "no literal px". Below the 4px floor of the spacing ladder
+ * there is nothing a token could say: a 1px optical nudge or a 2.5px lamp
+ * radius is a hairline, not a spacing decision. At 4px and above the ladder
+ * can express the value, so a literal there is drift and has to be either a
+ * ladder value or an allow-listed exception with a reason.
+ */
+const SPACING_LADDER_FLOOR = 4;
+
+/**
+ * Documented exceptions, keyed by `<path>: <declaration>`. An entry here is a
+ * deliberate decision with its reasoning attached, which is the difference
+ * between an exception and a leak. Adding one should feel like a small cost.
+ */
+const spacingExceptions = new Map<string, string>([
+  [
+    "web/src/live/connection.css: border-radius: 999px",
+    "Pill: a radius larger than half the height, not a step on the radius ladder.",
+  ],
+  [
+    "web/src/monitors/monitors.css: gap: 5px",
+    "Matches the pitch of the 20x7 LED row it sits under (DESIGN.md §2.4); a ladder step would break the rhythm the lamps set.",
+  ],
+  [
+    "web/src/shell/shell.css: padding: 1px 6px",
+    "SOON badge: sized to the cap height of --type-section so it hugs the label rather than the line box.",
+  ],
+  [
+    "web/src/wall/wall.css: padding: var(--space-16) clamp(var(--space-6), 5vw, 72px) 96px",
+    "Wall gutter is fluid and intentionally above the ladder ceiling; tracked in SUB-77.",
+  ],
+  [
+    "web/src/wall/wall.css: padding: 17px 18px",
+    "Wall card padding, measured rather than derived; tracked in SUB-77.",
+  ],
+]);
+
+describe("tokens.css is the only source of spacing and radius", () => {
+  /** Every padding/margin/gap/radius declaration in a stylesheet. */
+  function spacingDeclarations(css: string): string[] {
+    const found: string[] = [];
+    for (const match of css.matchAll(
+      /(?:^|[\s;{])((?:row-|column-)?gap|padding(?:-[a-z]+)?|margin(?:-[a-z]+)?|(?:border-[a-z]+)?border-radius|border-radius)\s*:\s*([^;{}]+)/g,
+    )) {
+      found.push(`${match[1]}: ${match[2].trim()}`);
+    }
+    return found;
+  }
+
+  it("finds no literal spacing or radius at or above the ladder floor under web/src", () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (!file.endsWith(".css")) continue;
+      const path = relative(repoRoot, file);
+      for (const declaration of spacingDeclarations(readFileSync(file, "utf8"))) {
+        const lengths = [...declaration.matchAll(/(-?[\d.]+)(px|rem|em)\b/g)];
+        const drifted = lengths.some(([, value, unit]) =>
+          unit === "px" ? Math.abs(Number.parseFloat(value)) >= SPACING_LADDER_FLOOR : true,
+        );
+        if (!drifted) continue;
+        const key = `${path}: ${declaration}`;
+        if (spacingExceptions.has(key)) continue;
+        offenders.push(key);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("finds no arbitrary Tailwind spacing or radius utility under web/src", () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      const contents = readFileSync(file, "utf8");
+      for (const match of contents.matchAll(
+        /\b(?:p|px|py|pt|pb|pl|pr|m|mx|my|mt|mb|ml|mr|gap|gap-x|gap-y|rounded(?:-[a-z]+)?)-\[([^\]]+)\]/g,
+      )) {
+        if (match[1].includes("var(--")) continue;
+        offenders.push(`${relative(repoRoot, file)}: ${match[0]}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps every documented exception real, so the allow-list cannot rot", () => {
+    // An allow-list entry whose declaration no longer exists is worse than no
+    // entry: it reads as a justified decision about live code and is not one.
+    const present = new Set<string>();
+    for (const file of sourceFiles(webSrc)) {
+      if (!file.endsWith(".css")) continue;
+      const path = relative(repoRoot, file);
+      for (const declaration of spacingDeclarations(readFileSync(file, "utf8"))) {
+        present.add(`${path}: ${declaration}`);
+      }
+    }
+    expect([...spacingExceptions.keys()].filter((key) => !present.has(key))).toEqual([]);
+  });
+
+  it("states the ladder floor and the exception rule in docs/DESIGN.md", () => {
+    expect(designMd).toContain("### 2.7 Spacing and radius");
+    expect(designMd).toContain("4px floor");
+  });
+});
