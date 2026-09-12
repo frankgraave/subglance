@@ -37,10 +37,36 @@
   color: var(--ink-3);
 }
 
+/* A button that does not look like one until you reach for it. The counts are
+   read far more often than they are clicked, so the resting state stays the
+   plain sentence it has always been; hover and the pressed state are what
+   announce that it is a control. The border is transparent rather than absent
+   so nothing shifts by a pixel when it appears. */
 .mon-count {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  margin: calc(var(--space-1) * -1) calc(var(--space-2) * -1);
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background-color var(--dur-hover) var(--ease),
+              border-color var(--dur-hover) var(--ease);
+}
+
+.mon-count:hover { border-color: var(--border-hi); }
+
+/* Pressed is carried by the filled surface AND the sentence under the search
+   box, never by colour alone (DESIGN.md §9): aria-pressed is what a screen
+   reader gets, the fill is what a sighted user gets, and the sentence is what
+   anyone gets who looked away while it was toggled. */
+.mon-count[aria-pressed="true"] {
+  background: var(--surface-2);
+  border-color: var(--border-hi);
 }
 
 .mon-count-value {

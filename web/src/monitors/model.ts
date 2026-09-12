@@ -107,6 +107,56 @@ export function filterMonitors(monitors: readonly Monitor[], query: string): Mon
   );
 }
 
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/**
+ * Narrows the list to one status, or returns it untouched for `null`.
+ *
+ * Separate from `filterMonitors` rather than folded into it because the two
+ * answer different questions and a caller may want either alone. `null` and
+ * not the string `"all"`: "no status chosen" is the absence of a value, and
+ * encoding it as a fifth status would leak a UI concept into a type that
+ * mirrors what the API actually reports.
+ */
+export function filterByStatus(
+  monitors: readonly Monitor[],
+  status: MonitorStatus | null,
+): Monitor[] {
+  if (status === null) return [...monitors];
+  return monitors.filter((m) => m.status === status);
+}
+
+/**
+ * The sentence under the search box, or null when no filter is active.
+ *
+ * A pure function rather than JSX with two nested ternaries in it: the hard
+ * part here is the *wording* of four combinations, and wording is exactly the
+ * kind of thing that is worth asserting on in a test without mounting a
+ * component. The shape is always "<visible> of <total> monitors ..." so the
+ * first two numbers land in the same place whichever filters are on, and
+ * someone glancing at it does not have to re-read the sentence to find them.
+ */
+export function describeFilter(
+  visible: number,
+  total: number,
+  status: MonitorStatus | null,
+  query: string,
+): string | null {
+  const needle = query.trim();
+  if (status === null && needle === "") return null;
+  // The verb agrees with the number actually on screen, so "1 of 14 monitors
+  // is down" does not read like a bug report about the sentence itself.
+  const one = visible === 1;
+  const clauses: string[] = [];
+  if (status !== null) clauses.push(`${one ? "is" : "are"} ${status}`);
+  if (needle !== "") clauses.push(`${one ? "matches" : "match"} \u201C${needle}\u201D`);
+  const tail = clauses.join(" and ");
+  // Zero is reported as "0 of 14" rather than as prose. `EmptyState` already
+  // owns the sentence about an empty result, and two different phrasings of
+  // the same fact, six lines apart, read like a bug.
+  return `${visible} of ${plural(total, "monitor")} ${tail}`;
+}
+
 export type Summary = Record<MonitorStatus, number> & { total: number };
 
 /** Counts per status for the heading. */
@@ -126,8 +176,6 @@ function names(monitors: readonly Monitor[]): string {
   // filibuster. Past a handful the count carries the same information.
   return hidden > 0 ? `${shown.join(", ")} and ${hidden} more` : shown.join(", ");
 }
-
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 /**
  * A sentence for the live region, or null when nothing worth saying happened.

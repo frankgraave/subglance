@@ -1,13 +1,22 @@
-import { useId } from "react";
+import { useId, useState } from "react";
 import type { ReactNode } from "react";
 import { useCompactViewport } from "../layout/useMediaQuery";
-import { DEFAULT_LAYOUT, effectiveLayout, type LayoutId } from "../shell/preferences";
+import {
+  DEFAULT_LAYOUT,
+  effectiveLayout,
+  type LayoutId,
+} from "../shell/preferences";
 import { Led } from "./Led";
 import { MonitorCardList } from "./MonitorCardList";
 import { MonitorCompactList } from "./MonitorCompactList";
 import { MonitorTable } from "./MonitorTable";
 import { ROW_BEAT_WIDTH } from "./MonitorRow";
-import { filterMonitors, summarise } from "./model";
+import {
+  describeFilter,
+  filterByStatus,
+  filterMonitors,
+  summarise,
+} from "./model";
 import type { Monitor, MonitorStatus } from "./types";
 
 /**
@@ -95,7 +104,21 @@ export function Dashboard({
   // function of props and holding a copy would only create a way for the two
   // to disagree.
   const summary = summarise(monitors);
-  const visible = filterMonitors(monitors, query);
+  // Local state, not a prop: unlike the search query, which the data owner
+  // wants (it drives the empty-state copy and will drive the command palette),
+  // the status chip is a momentary way of looking at the list on screen. It
+  // deliberately does not survive a remount — coming back to a dashboard that
+  // silently hides 198 of 200 monitors is how an outage gets missed.
+  const [status, setStatus] = useState<MonitorStatus | null>(null);
+  // Status first, then text, so the count in the sentence below is the size of
+  // what is actually rendered rather than of an intermediate list.
+  const visible = filterMonitors(filterByStatus(monitors, status), query);
+  const filterNote = describeFilter(
+    visible.length,
+    monitors.length,
+    status,
+    query,
+  );
 
   return (
     <section
@@ -118,12 +141,36 @@ export function Dashboard({
               "Nothing being watched yet"
             ) : (
               <>
-                {COUNTED.filter(({ status }) => summary[status] > 0).map(({ status, label }) => (
-                  <span key={status} className="mon-count">
-                    <Led status={status} labelled={false} />
-                    <b className="mon-count-value">{summary[status]}</b> {label}
-                  </span>
-                ))}
+                {COUNTED
+                  // A chip whose count drops to zero while it is the active
+                  // filter has to stay: it is the only control that turns the
+                  // now-empty list back into the full one.
+                  .filter(
+                    (counted) =>
+                      summary[counted.status] > 0 || counted.status === status,
+                  )
+                  .map((counted) => (
+                    <button
+                      key={counted.status}
+                      type="button"
+                      className="mon-count"
+                      // A toggle, not a radio group: pressing the chip that is
+                      // already on is the obvious way back to the full list, and
+                      // it is the same target the user just hit.
+                      aria-pressed={status === counted.status}
+                      onClick={() =>
+                        setStatus((current) =>
+                          current === counted.status ? null : counted.status,
+                        )
+                      }
+                    >
+                      <Led status={counted.status} labelled={false} />
+                      <b className="mon-count-value">
+                        {summary[counted.status]}
+                      </b>{" "}
+                      {counted.label}
+                    </button>
+                  ))}
               </>
             )}
           </p>
@@ -162,10 +209,8 @@ export function Dashboard({
       {/* Filtering is not announced through the live region: a result count
           that updates as you type belongs next to the input, where it does not
           interrupt. */}
-      {query.trim() !== "" && monitors.length > 0 && (
-        <p className="mon-result-count">
-          {visible.length} of {monitors.length} monitors match “{query.trim()}”
-        </p>
+      {filterNote !== null && monitors.length > 0 && (
+        <p className="mon-result-count">{filterNote}</p>
       )}
 
       {/*
@@ -181,7 +226,11 @@ export function Dashboard({
           beatWidth={beatWidth}
         />
       ) : shown === "compact" ? (
-        <MonitorCompactList monitors={visible} query={query} totalCount={monitors.length} />
+        <MonitorCompactList
+          monitors={visible}
+          query={query}
+          totalCount={monitors.length}
+        />
       ) : (
         <MonitorTable
           monitors={visible}

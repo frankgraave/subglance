@@ -449,6 +449,20 @@ width. The stored preference is *not* rewritten when this happens — opening th
 dashboard on a phone must not change what the desktop shows tomorrow — and the
 toolbar shows the layout actually on screen rather than the overridden one.
 
+**The counts are the status filter (SUB-65).** At 200 monitors the question is
+almost never "show me everything", it is "show me the two that are down" — and
+the four counts in the header already say exactly how many of each there are.
+Making them the control means the answer and the way to reach it are the same
+target, instead of a second filter row that duplicates numbers already on
+screen. They are toggles rather than a radio group, so the way back to the full
+list is the chip you just pressed. The counts themselves are always computed
+from the *whole* list, never the filtered one: chips that vanished as soon as
+you used one would erase both the way back and any idea of what else is going
+on. Pressed state is carried by a filled surface, `aria-pressed`, and the
+sentence under the search box — never by colour alone (§9). The choice is
+component state and does not persist: returning to a dashboard that silently
+hides 198 of 200 monitors is how an outage gets missed.
+
 **Compact ships without grouping, for now (SUB-64).** The table above describes
 it as grouped by customer or environment; §12 records that tags have no screen
 to create or assign them, so grouping today would mean inventing a taxonomy in

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { describeTransitions, filterMonitors, partition, summarise } from "./model";
+import {
+  describeFilter,
+  describeTransitions,
+  filterByStatus,
+  filterMonitors,
+  partition,
+  summarise,
+} from "./model";
 import type { Monitor, MonitorStatus } from "./types";
 
 const monitor = (id: string, status: MonitorStatus, over: Partial<Monitor> = {}): Monitor => ({
@@ -202,5 +209,45 @@ describe("describeTransitions", () => {
     const before = [monitor("api", "up")];
     const after = [monitor("api", "paused")];
     expect(describeTransitions(before, after)).toBe("All 1 monitor paused.");
+  });
+});
+
+describe("describeFilter", () => {
+  it("says nothing when no filter is on", () => {
+    expect(describeFilter(14, 14, null, "   ")).toBeNull();
+  });
+
+  it("names the status on its own", () => {
+    expect(describeFilter(2, 14, "down", "")).toBe("2 of 14 monitors are down");
+  });
+
+  it("joins status and query into one sentence", () => {
+    expect(describeFilter(1, 14, "down", " api ")).toBe(
+      "1 of 14 monitors is down and matches \u201Capi\u201D",
+    );
+  });
+
+  it("leaves the prose about an empty result to EmptyState", () => {
+    expect(describeFilter(0, 14, "paused", "")).toBe("0 of 14 monitors are paused");
+  });
+
+  it("keeps the singular of the total intact", () => {
+    expect(describeFilter(1, 1, "up", "")).toBe("1 of 1 monitor is up");
+  });
+});
+
+describe("filterByStatus", () => {
+  const list = [monitor("api", "up"), monitor("db", "down"), monitor("cdn", "up")];
+
+  it("returns a copy, not the input, when nothing is selected", () => {
+    const out = filterByStatus(list, null);
+    expect(out).toEqual([...list]);
+    expect(out).not.toBe(list);
+  });
+
+  it("keeps only the chosen status", () => {
+    const out = filterByStatus(list, "down");
+    expect(out.length).toBeGreaterThan(0);
+    expect(out.every((m) => m.status === "down")).toBe(true);
   });
 });

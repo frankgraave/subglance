@@ -11,7 +11,11 @@ afterEach(cleanup);
 /** jsdom has no layout, so the heartbeat bar needs an explicit width. */
 const WIDTH = 168;
 
-const monitor = (id: string, status: MonitorStatus, over: Partial<Monitor> = {}): Monitor => ({
+const monitor = (
+  id: string,
+  status: MonitorStatus,
+  over: Partial<Monitor> = {},
+): Monitor => ({
   id,
   name: id,
   status,
@@ -54,7 +58,8 @@ const rowIds = () =>
     (row) => row.dataset.testid ?? "",
   );
 
-const search = () => screen.getByRole("searchbox", { name: /search monitors/i });
+const search = () =>
+  screen.getByRole("searchbox", { name: /search monitors/i });
 
 describe("Dashboard", () => {
   it("filters rows out of the DOM as you search", () => {
@@ -79,7 +84,10 @@ describe("Dashboard", () => {
     render(
       <Harness
         monitors={[
-          monitor("api", "up", { name: "API gateway", target: "https://api.example.com" }),
+          monitor("api", "up", {
+            name: "API gateway",
+            target: "https://api.example.com",
+          }),
           monitor("db", "up", { name: "Postgres", target: "db.internal:5432" }),
         ]}
       />,
@@ -99,6 +107,82 @@ describe("Dashboard", () => {
     fireEvent.change(search(), { target: { value: "kubernetes" } });
     expect(rowIds()).toEqual([]);
     expect(screen.getByText(/No monitors match/)).toBeTruthy();
+  });
+
+  it("narrows the list to one status when its count chip is pressed", () => {
+    render(
+      <Harness
+        monitors={[
+          monitor("api", "up"),
+          monitor("db", "down"),
+          monitor("cdn", "up"),
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /1 down/ }));
+    expect(rowIds()).toEqual(["monitor-row-db"]);
+    expect(screen.getByText(/1 of 3 monitors is down/)).toBeTruthy();
+  });
+
+  it("clears the status filter when the pressed chip is pressed again", () => {
+    render(
+      <Harness monitors={[monitor("api", "up"), monitor("db", "down")]} />,
+    );
+    const chip = () => screen.getByRole("button", { name: /1 down/ });
+    fireEvent.click(chip());
+    expect(chip().getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(chip());
+    expect(chip().getAttribute("aria-pressed")).toBe("false");
+    expect(rowIds()).toHaveLength(2);
+  });
+
+  it("combines the status chip with the search box", () => {
+    render(
+      <Harness
+        monitors={[
+          monitor("api", "down"),
+          monitor("db", "down"),
+          monitor("cdn", "up"),
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /2 down/ }));
+    fireEvent.change(search(), { target: { value: "api" } });
+    expect(rowIds()).toEqual(["monitor-row-api"]);
+    expect(
+      screen.getByText(/1 of 3 monitors is down and matches/),
+    ).toBeTruthy();
+  });
+
+  it("keeps the counts whole while a status is filtered", () => {
+    // The chips are the map of the whole list; recomputing them from the
+    // filtered list would erase every other status the moment you pressed one,
+    // leaving no way back and no idea what else is going on.
+    render(
+      <Harness monitors={[monitor("api", "up"), monitor("db", "down")]} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /1 down/ }));
+    expect(screen.getByRole("button", { name: /1 up/ })).toBeTruthy();
+  });
+
+  it("keeps the pressed chip when a live update empties its status", () => {
+    // A data update, not a click: the last down monitor recovers while "down"
+    // is the active filter. Drop the chip and the list is empty with no way
+    // back; keep it and one press restores the full list.
+    const { rerender } = render(
+      <Harness monitors={[monitor("api", "up"), monitor("db", "down")]} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /1 down/ }));
+    expect(rowIds()).toEqual(["monitor-row-db"]);
+
+    rerender(
+      <Harness monitors={[monitor("api", "up"), monitor("db", "up")]} />,
+    );
+    const chip = screen.getByRole("button", { name: /0 down/ });
+    expect(chip.getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.click(chip);
+    expect(rowIds()).toHaveLength(2);
   });
 
   it("restores every row when the search is cleared", () => {
@@ -176,7 +260,10 @@ describe("Dashboard", () => {
     it("searches the same list in either layout", () => {
       render(
         <Harness
-          monitors={[monitor("api", "up", { name: "API gateway" }), monitor("db", "up")]}
+          monitors={[
+            monitor("api", "up", { name: "API gateway" }),
+            monitor("db", "up"),
+          ]}
           layout="cards"
         />,
       );
@@ -186,7 +273,12 @@ describe("Dashboard", () => {
     });
 
     it("renders one dense line per monitor in the compact layout", () => {
-      render(<Harness monitors={[monitor("api", "up"), monitor("db", "down")]} layout="compact" />);
+      render(
+        <Harness
+          monitors={[monitor("api", "up"), monitor("db", "down")]}
+          layout="compact"
+        />,
+      );
       expect(screen.getByTestId("monitor-line-api")).toBeTruthy();
       // One list layout at a time, never two copies of the same monitor.
       expect(rowIds()).toEqual([]);
@@ -200,7 +292,11 @@ describe("Dashboard", () => {
       // another name.
       render(
         <Harness
-          monitors={[monitor("api", "up"), monitor("db", "down"), monitor("cache", "up")]}
+          monitors={[
+            monitor("api", "up"),
+            monitor("db", "down"),
+            monitor("cache", "up"),
+          ]}
           layout="compact"
         />,
       );
@@ -209,7 +305,9 @@ describe("Dashboard", () => {
       expect(screen.queryByText(/all monitors/i)).toBeNull();
       // Ordering survives the flattening: down first, then alphabetical.
       expect(
-        [...document.querySelectorAll(".mon-line-name")].map((el) => el.textContent),
+        [...document.querySelectorAll(".mon-line-name")].map(
+          (el) => el.textContent,
+        ),
       ).toEqual(["db", "api", "cache"]);
     });
 
@@ -227,11 +325,17 @@ describe("Dashboard", () => {
 
     it("keeps the live region outside the card list too", () => {
       render(
-        <Harness monitors={[monitor("api", "down")]} announcement="1 monitor down: api." layout="cards" />,
+        <Harness
+          monitors={[monitor("api", "down")]}
+          announcement="1 monitor down: api."
+          layout="cards"
+        />,
       );
       const status = screen.getByRole("status");
       expect(status.textContent).toBe("1 monitor down: api.");
-      expect(document.querySelector(".mon-cards")!.contains(status)).toBe(false);
+      expect(document.querySelector(".mon-cards")!.contains(status)).toBe(
+        false,
+      );
     });
   });
 });
