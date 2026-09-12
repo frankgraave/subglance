@@ -353,8 +353,11 @@ before it can be merged. `develop` is protected: direct pushes are rejected.
 [GNU AGPL-3.0](LICENSE) © Frank Graave
 
 If you run SubGlance as a network service, the AGPL requires you to make your
-modifications available to its users. To use SubGlance inside a closed product or
-service, contact us for a commercial license.
+modifications available to its users.
+
+Monitoring your own or client sites does not trigger that: the sites being
+checked are not users of SubGlance. If the AGPL does not work for your
+situation, get in touch and we can look at it.
 
 ---
 

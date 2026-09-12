@@ -9,13 +9,14 @@ request.
 
 ## Contributor License Agreement (CLA)
 
-SubGlance is released under the AGPL-3.0, and the copyright in the codebase is
-held by a single party so that the project can also be licensed commercially to
-people for whom the AGPL does not work.
+SubGlance is released under the AGPL-3.0 and the copyright in the codebase is
+held by a single party. That keeps the licence changeable later without having
+to track down every past contributor for permission — a project that cannot
+relicense is stuck with whatever it picked on day one.
 
-So every contributor is asked to accept the [CLA](CLA.md). You keep the copyright
-to your own work, but grant Frank Graave the right to also release your
-contribution under other licenses, including commercial ones.
+So every contributor is asked to accept the [CLA](CLA.md). You keep the
+copyright to your own work, but grant Frank Graave the right to also release
+your contribution under other licence terms.
 
 You accept it by confirming in your first pull request:
 
