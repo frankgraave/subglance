@@ -579,6 +579,10 @@ Just as important as the rest, because these are the ones that keep coming back:
 - **No setting that only works in one view.** I tried an S/M/L density slider
   and removed it: it only did anything in Status wall, and a control that usually
   does nothing teaches people that controls do nothing.
+- **No virtualised monitor list.** 200 rows is roughly 11k DOM nodes, which the
+  browser handles fine; a window would break `Ctrl-F`, screen-reader row counts
+  and table semantics to save render work that memoised rows already save.
+  See §12 (Scale).
 
 ---
 
@@ -610,9 +614,23 @@ to discover late.
 - ~~**Mobile.**~~ Answered in §13: below 640px the dashboard renders a card per
   monitor instead of a row, keeping every fact the row shows. The remaining
   mobile gap is the screens that do not exist yet on any width.
-- **Scale.** The mockup shows 14 monitors; the target audience runs 10–200. No
-  search, no filter, no grouping in the row views, no virtualisation, no
-  pagination. Compact was designed for density but not tested at 200 rows.
+- **Scale.** The mockup shows 14 monitors; the target audience runs 10–200.
+  Partly answered. The three searchable layouts — rows, cards and the compact
+  list — filter in `Dashboard` and only then partition, so "needs attention
+  first" still means the same thing while filtering. The status wall is the
+  exception: it bypasses `Dashboard` entirely and has no search field, so it
+  always shows everything. Virtualisation was considered and rejected on two
+  counts. It would cost more than it saves: 200 rows is roughly 11k DOM nodes,
+  which the browser handles fine, while a windowed list breaks `Ctrl-F`, breaks
+  screen-reader row counts and breaks table semantics (recorded on
+  `MonitorRow`; `MonitorTable.test.tsx` holds all 200 rows in the DOM to keep
+  those three true). And the render work it would save is work it never does anyway: a
+  heartbeat tick re-renders the one memoised row, card or compact line it
+  belongs to, not all two hundred. The wall's tiles are not memoised, but a
+  tile is an LED and a name. What is still missing is grouping in the row
+  views and filtering on tags — and the second one cannot be built at all
+  until tags exist, which is a data-model gap, not a dashboard gap (SUB-73,
+  and see below).
 
 ### Screens promised but not designed
 
@@ -633,8 +651,11 @@ The sidebar advertises five destinations; one exists.
   model says a monitor is in a window, so it is not implemented.
 - **Error toasts.** Only the success path is designed. A failed save, a rejected
   form, a check that cannot start — none of those have a visual.
-- **Tags/groups** are used in the Compact layout but there is no screen to
-  create, rename or assign them.
+- **Tags/groups** are used in the Compact layout, but they do not exist below
+  the mockup either: no column on the monitor, no field in the API, no type in
+  the frontend. So the missing piece is not only a screen to create, rename and
+  assign them — it is the tag itself. Anything that wants to group or filter by
+  tag waits on that — tracked as SUB-73.
 - **Keyboard shortcuts** exist (`⌘K`, `⌘B`, `Esc`) but are undiscoverable. Needs
   a `?` overlay.
 - **Onboarding beyond the empty state.** First run, creating the first user,
