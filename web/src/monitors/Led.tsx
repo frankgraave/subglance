@@ -16,14 +16,29 @@ const LABELS: Record<MonitorStatus, string> = {
   paused: "Paused",
 };
 
-/** Status to the four lamp colours the mockup's `data-state` defines. */
-const STATE: Record<MonitorStatus, "up" | "down" | "warn" | "idle"> = {
+/**
+ * The lamp's visual states.
+ *
+ * `idle` is a filled but unlit grey lamp: we have no reading. `off` is the
+ * same silhouette with nothing in it: nobody is taking a reading, on purpose.
+ * They are two states rather than one colour because they are two different
+ * facts, and the shape — not the hue — is what separates them (DESIGN.md §3).
+ */
+export type LedState = "up" | "down" | "warn" | "idle" | "off";
+
+/** Status to lamp state. */
+const STATE: Record<MonitorStatus, LedState> = {
   up: "up",
   down: "down",
   // Pending is amber, not grey: it is a monitor we are waiting on, which is
-  // worth a glance. Paused is grey because it is a decision, not a condition.
+  // worth a glance.
   pending: "warn",
-  paused: "idle",
+  // Paused is hollow, not grey-filled. A grey fill is what "no reading yet"
+  // looks like, and a paused monitor is not waiting for a reading — it was
+  // switched off by a person. Sharing one signal meant a monitor someone
+  // paused by accident was indistinguishable from one that had just started
+  // (DESIGN.md rule 4).
+  paused: "off",
 };
 
 export type LedProps = {

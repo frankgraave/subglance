@@ -37,10 +37,30 @@
 .led[data-state="up"]   { background: var(--up);   box-shadow: var(--glow-up); }
 .led[data-state="warn"] { background: var(--warn); box-shadow: var(--glow-warn); }
 .led[data-state="down"] { background: var(--down); box-shadow: var(--glow-down); }
+/* Filled but unlit: we have no reading for this monitor yet. Dropping most of
+   the highlight is what reads as "unlit" rather than "a different colour". */
 .led[data-state="idle"] { background: var(--idle); box-shadow: none; }
-/* A paused lamp is off, not dark-coloured: dropping the highlight is what
-   reads as "unlit" rather than "a different colour". */
 .led[data-state="idle"]::after { opacity: .2; }
+
+/*
+ * Off: deliberately not being measured (paused). The silhouette survives, the
+ * contents do not — an empty lens in the same 20x7 socket, so a wall of lamps
+ * still lines up while this one is visibly not reporting.
+ *
+ * `inset` box-shadow rather than `border`, because a border would grow the
+ * 20x7 box and break the one-size rule. The ring uses --ink-2, not --idle:
+ * a ring in the idle grey measures 2.3:1 against the canvas in dark mode,
+ * under the 3:1 floor for non-text contrast (WCAG 1.4.11), while --ink-2
+ * clears it in both themes. That also puts the hollow lamp's edge *brighter*
+ * than the filled idle lamp, so the two never collapse in greyscale.
+ */
+.led[data-state="off"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--ink-2);
+}
+
+/* No lens highlight at all: there is nothing behind it to catch the light. */
+.led[data-state="off"]::after { opacity: 0; }
 
 .led-wrap {
   display: inline-flex;

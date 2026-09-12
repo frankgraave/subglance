@@ -53,6 +53,9 @@ body {
 .led[data-state="up"]{background:var(--up);box-shadow:var(--glow-up)}
 .led[data-state="warn"]{background:var(--warn);box-shadow:var(--glow-warn)}
 .led[data-state="down"]{background:var(--down);box-shadow:var(--glow-down)}
+/* Off = deliberately not measured (DESIGN.md §3.1). Hollow, not grey-filled. */
+.led[data-state="off"]{background:transparent;box-shadow:inset 0 0 0 1.5px var(--ink-2)}
+.led[data-state="off"]::after{opacity:0}
 
 .page-head { max-width: 1080px; margin: 0 auto 40px; display:flex; align-items:flex-start; gap:16px; }
 .back-link { display:inline-block; font-size:12px; color:var(--ink-3); text-decoration:none; margin-bottom:10px;
@@ -417,6 +420,8 @@ code { font-family:var(--font-mono); font-size:11.5px; color:var(--ink-2); backg
       <div class="label mt" style="margin-bottom:10px">Badges</div>
       <div class="stack">
         <span class="badge up"><span class="led" data-state="up" style="width:12px;height:5px"></span> Up</span>
+      <span class="badge"><span class="led" style="width:12px;height:5px"></span> No data yet</span>
+      <span class="badge"><span class="led" data-state="off" style="width:12px;height:5px"></span> Paused</span>
         <span class="badge warn">Degraded</span>
         <span class="badge down">Down</span>
         <span class="badge">Paused</span>
@@ -471,7 +476,7 @@ code { font-family:var(--font-mono); font-size:11.5px; color:var(--ink-2); backg
   <div class="row-2">
     <div class="card empty">
       <div class="empty-led">
-        <span class="led"></span><span class="led"></span><span class="led"></span>
+        <span class="led" data-state="off"></span><span class="led" data-state="off"></span><span class="led" data-state="off"></span>
       </div>
       <h3>Nothing monitored yet</h3>
       <p>Add your first site or API and SubGlance starts checking within a minute.</p>

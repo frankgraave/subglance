@@ -135,7 +135,23 @@
 }
 
 .mon-row[data-status="pending"] { border-left: 2px solid var(--warn); }
-.mon-row[data-status="paused"] { opacity: .62; }
+/* Paused is not trouble and not a gap in the data: someone switched it off.
+   A dotted neutral edge says "deliberate" where down and pending say "look at
+   this", and it keeps the two apart in greyscale as well as in colour.
+   --ink-3 rather than --ink-4: measured against --surface, ink-3 is 3.4:1
+   (dark) / 3.2:1 (light) and clears the 3:1 non-text floor, ink-4 is 1.9:1 in
+   both and would be a signal only people with good monitors could see.
+   The reduced opacity stays: a monitor nobody is watching should recede. */
+.mon-row[data-status="paused"] {
+  border-left: 2px dotted var(--ink-3);
+}
+
+/* The opacity sits on the children, never on the block itself.
+   `opacity` on the element composites its border too, so `.62` would drop the
+   dotted --ink-3 edge from 3.4:1 to roughly 2:1 against --surface and sink the
+   one signal this rule exists to add below the WCAG 1.4.11 floor of 3:1. The
+   content still recedes; the edge stays at full strength. */
+.mon-row[data-status="paused"] > * { opacity: .62; }
 
 .mon-cell {
   height: 58px;
@@ -286,7 +302,11 @@
 }
 
 .mon-card[data-status="pending"] { border-left: 2px solid var(--warn); }
-.mon-card[data-status="paused"] { opacity: .62; }
+.mon-card[data-status="paused"] {
+  border-left: 2px dotted var(--ink-3);
+}
+
+.mon-card[data-status="paused"] > * { opacity: .62; }
 
 .mon-card-head {
   display: flex;
@@ -426,7 +446,11 @@
 /* Same rule as the row and the card: trouble warms the leading edge. */
 .mon-line[data-status="down"] { border-left: 2px solid var(--down); background: var(--down-dim); }
 .mon-line[data-status="pending"] { border-left: 2px solid var(--warn); }
-.mon-line[data-status="paused"] { opacity: .62; }
+.mon-line[data-status="paused"] {
+  border-left: 2px dotted var(--ink-3);
+}
+
+.mon-line[data-status="paused"] > * { opacity: .62; }
 
 .mon-line-name {
   color: var(--ink);

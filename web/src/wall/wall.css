@@ -68,6 +68,11 @@
 .wall-card[data-status="down"] { border-color: color-mix(in srgb, var(--down) 40%, var(--border)); }
 .wall-card[data-status="pending"] { border-color: color-mix(in srgb, var(--warn) 34%, var(--border)); }
 .wall-card[data-status="paused"] .wall-card-name { color: var(--ink-3); }
+/* Paused earns a dashed edge on the wall too. At across-the-room distance the
+   hollow lamp is the first signal but not a reliable one, and a wall that
+   cannot tell "switched off" from "just started" hides exactly the monitor
+   somebody forgot to switch back on. */
+.wall-card[data-status="paused"] { border-style: dashed; }
 
 .wall-card-name {
   font-size: var(--type-row);

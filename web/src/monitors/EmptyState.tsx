@@ -13,6 +13,10 @@ export function EmptyState({ query, totalCount }: { query: string; totalCount: n
   const searching = query.trim() !== "" && totalCount > 0;
   return (
     <div className="mon-empty">
+      {/* Three empty sockets, not three grey lamps. Decorative and
+          aria-hidden: nothing is being watched at all here, so neither "no
+          reading yet" nor "switched off" applies, and an unfilled lens is the
+          honest drawing of a dashboard with nothing plugged into it. */}
       <div className="mon-empty-leds" aria-hidden="true">
         <Led status="paused" labelled={false} />
         <Led status="paused" labelled={false} />

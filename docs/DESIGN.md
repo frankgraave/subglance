@@ -89,7 +89,7 @@ mode, because the dark originals are unreadable on white.
 | `--up` | `#34d399` | `#059669` | Last check passed |
 | `--warn` | `#fbbf24` | `#b45309` | Slow, or certificate expiring |
 | `--down` | `#f43f5e` | `#e11d48` | Last check failed |
-| `--idle` | `#4b5257` | `#c2c7cb` | Paused, or no data yet |
+| `--idle` | `#4b5257` | `#c2c7cb` | No data yet |
 
 Every status colour has a `-dim` variant for badge and row backgrounds
 (`--up-dim`, `--warn-dim`, `--down-dim`).
@@ -193,6 +193,53 @@ sides a readable edge.
 **The highlight.** A gradient from the top, `inset: 1px 1px 3px`, opacity `.5`.
 It suggests a curved lens catching light. Without the highlight it's a coloured
 rectangle; with too much of it, it's a button.
+
+### 3.1 Lit, unlit and empty
+
+The lamp has five states, and only four of them are a colour.
+
+| State | Looks like | Means |
+|---|---|---|
+| `up` | filled `--up` + glow | last check passed |
+| `warn` | filled `--warn` + glow | pending, slow, or a certificate expiring |
+| `down` | filled `--down` + glow | last check failed |
+| `idle` | filled `--idle`, no glow, dim highlight | **there is no reading yet** |
+| `off` | transparent, 1.5px `--ink-2` inset ring, no highlight | **nobody is taking a reading, on purpose** |
+
+`idle` and `off` used to be the same grey lamp, which broke rule 4 outright: a
+monitor somebody paused by accident looked exactly like one that had just been
+created and had not run yet. Either misreading is expensive — the first hides an
+unwatched service for weeks, the second sends you looking for a bug in the
+scheduler.
+
+**Why shape and not a fifth colour.** A new hue would carry no meaning a viewer
+could guess, would have to survive both themes at 3:1, and would spend the one
+remaining colour the palette has on a *non*-event. Filled-versus-hollow is the
+convention for exactly this distinction (Carbon calls it outline-versus-filled;
+HubSpot's status tag calls the prop `hollow`), it reads in greyscale, and it
+survives a screenshot in a chat window.
+
+**Why the ring is `--ink-2` and not `--idle`.** A ring in the idle grey measures
+2.5:1 against the canvas in dark mode and 1.7:1 on a light card, both under the
+3:1 floor WCAG 1.4.11 sets for non-text contrast. `--ink-2` clears it in both themes, and it puts the
+empty lamp's edge *brighter* than the filled idle lamp — so the two stay apart
+in greyscale, not just in hue.
+
+**The ring is an inset `box-shadow`, never a `border`.** A border would grow the
+20x7 box and break the one-size rule above.
+
+**Paused also gets a second signal per layout**, because a 20x7 lamp is not
+enough on its own once a list is 200 long: rows, cards and compact lines take a
+2px **dotted** `--ink-3` leading edge (down is solid `--down`, pending solid
+`--warn`), and a wall card switches its border to **dashed**. Solid means "look
+at this", dotted and dashed mean "this is deliberate". `--ink-3` and not
+`--ink-4` for the same contrast reason: 3.4:1 / 3.2:1 against `--surface`
+versus 1.9:1.
+
+**Reserved for maintenance windows (SUB-33).** A monitor inside a maintenance
+window is the same hollow socket with a `--warn` ring: still not being measured,
+but on a timer rather than indefinitely. Documented here so the state is a
+decision rather than an improvisation later; not implemented yet.
 
 **Rules.**
 
@@ -503,16 +550,13 @@ The sidebar advertises five destinations; one exists.
 
 ### Smaller, but they will come up
 
-- **Maintenance windows** are a v0.1 feature. A monitor that is
-  intentionally down needs its own visual state, distinct from `--idle`. Today
-  it would read as broken.
+- **Maintenance windows** are a v0.1 feature. The visual state
+  is decided (§3.1: a hollow lamp with a `--warn` ring) but nothing in the data
+  model says a monitor is in a window, so it is not implemented.
 - **Error toasts.** Only the success path is designed. A failed save, a rejected
   form, a check that cannot start — none of those have a visual.
 - **Tags/groups** are used in the Compact layout but there is no screen to
   create, rename or assign them.
-- **A paused monitor** shows `--idle`, which is the same colour as "no data
-  yet". Two very different meanings sharing one signal — a direct violation of
-  rule 4.
 - **Keyboard shortcuts** exist (`⌘K`, `⌘B`, `Esc`) but are undiscoverable. Needs
   a `?` overlay.
 - **Onboarding beyond the empty state.** First run, creating the first user,
