@@ -1,0 +1,25 @@
+# Everything the image build does not read. Size of the build context is the
+# smaller half of the point: an entry here also means a change to that file
+# cannot invalidate a cache layer, which is why CI config and prose are
+# excluded even though they are tiny.
+
+.git
+.github
+bin
+tmp
+coverage.out
+
+# Reinstalled from the lockfile inside the build. Copying the host tree in
+# would be slow and would risk shipping native modules built for the wrong
+# architecture.
+web/node_modules
+
+# A previously built dashboard must not leak in. The web stage rebuilds it
+# and copies the result over this path, so a stale copy here would be
+# silently replaced - after being sent over the wire on every build.
+internal/webui/dist/assets
+internal/webui/dist/index.html
+
+# Prose, except the design document the frontend token guards read.
+*.md
+!docs/DESIGN.md

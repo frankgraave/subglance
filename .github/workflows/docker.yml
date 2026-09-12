@@ -1,0 +1,127 @@
+# Publish the container image to GitHub Container Registry.
+#
+# Separate from ci.yml on purpose. CI answers "is this change sound" and must
+# stay fast enough to gate every push; this workflow answers "can someone pull
+# it", costs minutes because arm64 needs a second compile, and pushes to a
+# registry. Mixing the two would slow every pull request down for an artefact
+# nobody looks at until release.
+#
+# Triggers:
+#   push to develop  -> tags `edge`, the current state of integration
+#   tag v*           -> the version tags people pin
+#   workflow_dispatch-> a build on demand, publishing nothing
+#
+# Pull requests build but never push: a fork must not be able to publish.
+
+name: Docker
+
+on:
+  push:
+    branches: [develop]
+    tags: ["v*"]
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - .github/workflows/docker.yml
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  publish:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      # No QEMU: every stage that compiles runs on the native platform and
+      # cross-compiles (Go does this for free, and the Node stage emits
+      # platform-independent JavaScript). Emulating arm64 would make this
+      # workflow several times slower for no difference in output.
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      - name: Log in to ghcr.io
+        if: github.event_name == 'push'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+          # metadata-action overwrites any LABEL in the Dockerfile with its
+          # own, so the description and licence have to be repeated here or
+          # the published package shows an empty description.
+          labels: |
+            org.opencontainers.image.title=SubGlance
+            org.opencontainers.image.description=Self-hosted uptime and API monitoring dashboard
+            org.opencontainers.image.licenses=AGPL-3.0-only
+          # `edge` for develop, semver for tags, plus a sha tag so a broken
+          # release can be rolled back to an exact build.
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=edge,branch=develop
+            type=sha,format=short
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          # Only a real push publishes. On a pull request, and on a manual
+          # dispatch, nothing is exported at all. `load: true` is not an
+          # option here: the docker exporter cannot write a manifest list, so
+          # asking for one on a two-platform build fails outright. The build
+          # still runs for both architectures and still populates the cache,
+          # which is the whole point of running it without publishing.
+          push: ${{ github.event_name == 'push' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ github.ref_type == 'tag' && github.ref_name || format('edge-{0}', github.sha) }}
+            COMMIT=${{ github.sha }}
+            DATE=${{ github.event.repository.updated_at }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # The size is a claim on the landing page, so it is measured on every
+      # build and the job fails if it regresses past the budget. 30MB is the
+      # promise in SUB-35; the image measured 23.6MB when this landed, so
+      # there is room for the binary to grow without silently breaking it.
+      #
+      # Measured uncompressed and on amd64 — that is the number `docker
+      # images` shows, so it is the one people will check the claim against.
+      - name: Measure and gate the image size
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          ref="${IMAGE}@${{ steps.build.outputs.digest }}"
+          docker pull --platform linux/amd64 "$ref" >/dev/null
+          bytes=$(docker image inspect "$ref" --format '{{ .Size }}')
+          # Gate on bytes, not on the rounded number: integer division would
+          # let 30,999,999 bytes report as 30MB and slip past the budget.
+          limit=30000000
+          mb=$(( bytes / 1000000 ))
+          echo "Uncompressed amd64 image: ${mb}MB (${bytes} bytes)"
+          echo "### Image size: ${mb}MB (budget 30MB)" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$bytes" -gt "$limit" ]; then
+            echo "::error::image is ${bytes} bytes, over the ${limit} byte budget"
+            exit 1
+          fi

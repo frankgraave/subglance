@@ -82,7 +82,6 @@ release:
 - Per-monitor detail view with a latency graph
 - Incident, monitor, notification and settings screens
 - Maintenance windows
-- A Docker image, SQLite by default — no external database needed
 
 Deliberately **not** in v0.1: status pages, config-as-code, multi-region checks,
 on-call schedules, SSO, mobile app, CLI, Postgres. They are on the roadmap; they
@@ -90,12 +89,54 @@ are not in the first release.
 
 ## Getting started
 
-There is no release and no image to pull yet, so the only way to run SubGlance
-today is to build it. Once v0.1 ships, this will be the whole installation:
+### With Docker
 
 ```sh
-docker run -d -p 8080:8080 -v subglance:/data ghcr.io/frankgraave/subglance
+docker run -d -p 8080:8080 -v subglance:/data ghcr.io/frankgraave/subglance:edge
 ```
+
+That is the whole installation. Open <http://localhost:8080/> and the first
+screen asks you to create an administrator; the database is SQLite inside the
+volume, so there is nothing else to run alongside it.
+
+There is no tagged release yet, so every tag that exists points at the head of
+`develop` and will change under you: `:edge` and `:develop` both track that
+branch, and a short-SHA tag is published alongside them for pinning an exact
+build. Once v0.1 ships, pin a version instead.
+
+The image is `linux/amd64` and `linux/arm64`, built from
+[distroless static](https://github.com/GoogleContainerTools/distroless): no
+shell, no package manager, and the process runs as the unprivileged user
+`65532:65532`. It measured **23.6MB uncompressed** on amd64 when it was first
+published, and CI fails the build if that ever passes 30MB.
+
+Flags go after the image name, because the entrypoint is the binary itself:
+
+```sh
+docker run -d -p 9000:9000 -v subglance:/data \
+  ghcr.io/frankgraave/subglance:edge --addr :9000 --log-level debug
+```
+
+One consequence of the unprivileged user is worth knowing about: **ping checks
+need the container to allow unprivileged ICMP.** Measured on Docker 29.1.3, a
+container gets `net.ipv4.ping_group_range = 0 2147483647` by default and ping
+works as `65532` with no extra flags — but that default belongs to the runtime,
+not to this image, and some Kubernetes and Podman setups are stricter. If a ping
+monitor reports a permission error, the binary names both fixes; the narrower
+one is:
+
+```sh
+docker run -d -p 8080:8080 -v subglance:/data \
+  --sysctl net.ipv4.ping_group_range="0 2147483647" \
+  ghcr.io/frankgraave/subglance:edge
+```
+
+`--cap-add=NET_RAW` works too, by making the raw socket available instead. HTTP,
+TCP and SSL checks are unaffected either way.
+
+To build the image yourself, `docker build -t subglance .` — the Dockerfile
+builds the dashboard and the binary from source, so Go and Node are only needed
+inside the build.
 
 ### Building from source
 
