@@ -179,7 +179,7 @@ floaty.
 The product's brand mark. If one component has to be right, it's this one.
 
 ```
-20 × 7 px   ·   border-radius: 2.5px   ·   one size, everywhere
+20 × 7 px   ·   border-radius: 2.5px   ·   one size for the scanned signal
 ```
 
 **Why a pill and not a dot.** A horizontal shape reads as an indicator lamp on
@@ -241,9 +241,39 @@ window is the same hollow socket with a `--warn` ring: still not being measured,
 but on a timer rather than indefinitely. Documented here so the state is a
 decision rather than an improvisation later; not implemented yet.
 
+### 3.2 The two documented sizes
+
+| Size | Where | Why |
+|---|---|---|
+| **20 × 7 px**, radius 2.5px | the status lamp in a list, card, wall tile or group header | it is the signal being scanned, and scanning is what sets the size |
+| **12 × 5 px**, radius 1.5px | a lamp sitting *inside* a text badge | it is punctuation on a line of 11px text, not a signal in its own right |
+
+These are not two versions of one lamp; they are two different jobs. The 20x7
+lamp is the thing your eye lands on when you sweep a list of 200 monitors, so it
+has to win against the name beside it. A lamp inside a badge is the opposite
+case: the badge already says `Up` in words, and the lamp is there to carry the
+colour and the hollow/filled distinction at text scale. Drawn at 20x7 it would
+be wider than the word it belongs to and would turn a quiet inline label into a
+second alarm.
+
+The badge lamp is the **only** exception, and it exists because the badge's own
+type size sets it. Anything else — a lamp that grows in a card and shrinks in a
+row — is decoration, and the one-size rule below still bites.
+
+**The lens highlight scales with it.** At 12x5 the 20x7 highlight inset
+(`1px 1px 3px`) leaves a one-pixel core and the lamp reads as an empty outline,
+so the badge lamp insets `1px 1px 2px` instead. The highlight is meant to
+suggest a curved lens; below a visible core it just erases the colour.
+
+**Neither size is an inline style.** Both live in a rule, because a size that
+carries meaning has to be changeable in one place — repeating `12px` on every
+badge is how a documented decision quietly becomes an accident.
+
 **Rules.**
 
 - One size across the entire app — sidebar, rows, cards, group headers, toasts.
+  The inline badge lamp in §3.2 is the single documented exception, and it is a
+  rule, never an inline style.
 - The LED **never** blinks on a routine check. Only a real status change plays a
   single short transition (`.changed`), and then it's done.
 - No pulsing animation at rest. Fourteen pulsing lamps aren't a dashboard,

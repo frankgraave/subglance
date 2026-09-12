@@ -220,6 +220,13 @@ h2 { font-size:12px; font-weight:500; text-transform:uppercase; letter-spacing:.
 .badge.warn { color:var(--warn); background:var(--warn-dim); border-color:color-mix(in srgb,var(--warn) 26%,transparent); }
 .badge.down { color:var(--down); background:var(--down-dim); border-color:color-mix(in srgb,var(--down) 26%,transparent); }
 .badge.mono { font-family:var(--font-mono); font-size:10.5px; }
+/* The inline badge lamp (DESIGN.md 3.2). Smaller than the 20x7 scanned signal
+   because it is punctuation on an 11px line, not the thing being scanned, and
+   a rule rather than an inline style so the size stays changeable in one place.
+   The lens highlight insets less too: at 5px tall the 20x7 inset would leave a
+   one-pixel core and the lamp would read as an empty outline. */
+.badge .led { width:12px; height:5px; border-radius:1.5px; }
+.badge .led::after { inset:1px 1px 2px; border-radius:1px; }
 
 /* ── EMPTY STATE ─────────────────────────────────────────────
    The empty dashboard is the onboarding. It is the first thing a
@@ -419,9 +426,9 @@ code { font-family:var(--font-mono); font-size:11.5px; color:var(--ink-2); backg
 
       <div class="label mt" style="margin-bottom:10px">Badges</div>
       <div class="stack">
-        <span class="badge up"><span class="led" data-state="up" style="width:12px;height:5px"></span> Up</span>
-      <span class="badge"><span class="led" style="width:12px;height:5px"></span> No data yet</span>
-      <span class="badge"><span class="led" data-state="off" style="width:12px;height:5px"></span> Paused</span>
+        <span class="badge up"><span class="led" data-state="up"></span> Up</span>
+        <span class="badge"><span class="led"></span> No data yet</span>
+        <span class="badge"><span class="led" data-state="off"></span> Paused</span>
         <span class="badge warn">Degraded</span>
         <span class="badge down">Down</span>
         <span class="badge">Paused</span>
