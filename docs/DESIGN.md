@@ -524,13 +524,33 @@ sentence under the search box — never by colour alone (§9). The choice is
 component state and does not persist: returning to a dashboard that silently
 hides 198 of 200 monitors is how an outage gets missed.
 
-**Compact ships without grouping, for now (SUB-64).** The table above describes
-it as grouped by customer or environment; §12 records that tags have no screen
-to create or assign them, so grouping today would mean inventing a taxonomy in
-the frontend. It ships as one dense line per monitor, ordered by the same
-`partition()` as every other layout, with the heartbeat bar dropped — 40 rects
-x 200 monitors is the cost this layout exists to avoid. Grouping returns with
-tags.
+**Grouping is opt-in, on one tag key at a time.** A "Group by" control next to
+the tag filters puts one headed section per value of the chosen key over the
+list, in all three layouts that `Dashboard` renders; without a key the list
+stays flat, ordered by the shared `partition()`. Flat is the default because a
+permanent set of headings costs vertical space in the layout that exists to
+save it, and at this density the broken monitors are already the first lines on
+the screen. Compact still drops the heartbeat bar either way — 40 rects x 200
+monitors is the cost that layout exists to avoid.
+
+Three decisions grouping could not be built without:
+
+- **The attention section survives grouping and is taken out first.** A down
+  monitor sorted into its environment's group would sit wherever that group
+  happens to fall, possibly off-screen, and "needs attention" would stop
+  meaning the same thing in every layout — the one invariant `partition()`
+  exists to hold. The groups below therefore describe the monitors that are
+  fine, which is what grouping is actually asked: "how is production doing",
+  not "where is the broken one". Every heading carries its own count, so the
+  numbers add up to the list and none of them claims to be the whole.
+- **Monitors without the key land in a trailing `Untagged` section**, never
+  dropped. Grouping is not filtering: everything handed in comes back out. That
+  section is last and is the only one whose position is not alphabetical — it
+  is a residue, not a value.
+- **One key at a time.** "By environment" and "by customer" are two
+  arrangements of the same rows, not two that can be layered. The key is local,
+  unpersisted state like the status chip, and it falls back to flat when the
+  tag disappears from the data.
 
 **The sidebar does not advertise what does not exist (SUB-64).** The four
 unbuilt destinations are rendered as plainly unavailable — dimmed, not pressable,
@@ -711,10 +731,11 @@ to discover late.
   those three true). And the render work it would save is work it never does anyway: a
   heartbeat tick re-renders the one memoised row, card or compact line it
   belongs to, not all two hundred. The wall's tiles are not memoised, but a
-  tile is an LED and a name. What is still missing is grouping in the row
-  views and filtering on tags — and the second one cannot be built at all
-  until tags exist, which is a data-model gap, not a dashboard gap (SUB-73,
-  and see below).
+  tile is an LED and a name. Filtering on tags now works in those same three
+  layouts: one native `<select>` per tag key, ANDed across keys, with the
+  options derived from the unfiltered list so choosing a value never removes
+  the way back. Grouping by a tag key ships alongside it, opt-in, with the
+  attention section lifted out above the groups (§7).
 
 ### Screens promised but not designed
 
@@ -735,11 +756,10 @@ The sidebar advertises five destinations; one exists.
   model says a monitor is in a window, so it is not implemented.
 - **Error toasts.** Only the success path is designed. A failed save, a rejected
   form, a check that cannot start — none of those have a visual.
-- **Tags/groups** are used in the Compact layout, but they do not exist below
-  the mockup either: no column on the monitor, no field in the API, no type in
-  the frontend. So the missing piece is not only a screen to create, rename and
-  assign them — it is the tag itself. Anything that wants to group or filter by
-  tag waits on that — tracked as SUB-73.
+- **Tags/groups.** Tags exist end to end now — column, API field, frontend type
+  — and the dashboard both filters and groups on them (§7). One piece is still
+  open: there is no screen to create, rename or assign a tag outside the
+  create/edit form, so a typo in a key is fixed one monitor at a time.
 - **Keyboard shortcuts** exist (`⌘K`, `⌘B`, `Esc`) but are undiscoverable. Needs
   a `?` overlay.
 - **Onboarding beyond the empty state.** First run, creating the first user,

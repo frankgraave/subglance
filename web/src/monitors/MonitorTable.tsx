@@ -1,6 +1,6 @@
 import { EmptyState } from "./EmptyState";
 import { MonitorRow, ROW_BEAT_WIDTH } from "./MonitorRow";
-import { partition } from "./model";
+import { partition, sectionsByTag } from "./model";
 import type { Monitor } from "./types";
 
 /**
@@ -25,6 +25,16 @@ export type MonitorTableProps = {
   query?: string;
   /** Total before filtering, so "no results" can be told from "no monitors". */
   totalCount?: number;
+  /** True when a filter other than the query is narrowing the list. */
+  filtered?: boolean;
+  /**
+   * Tag key to group by, or null for the flat attention/all split.
+   *
+   * A key rather than a boolean because grouping is only meaningful against
+   * one axis at a time: "by environment" and "by customer" are different
+   * arrangements of the same rows, not two that can be layered.
+   */
+  groupKey?: string | null;
   /** Explicit heartbeat width; required in jsdom, which has no layout. */
   beatWidth?: number;
   /** Opens a monitor's detail view client-side. See MonitorLink. */
@@ -74,12 +84,61 @@ export function MonitorTable({
   query = "",
   totalCount,
   beatWidth = ROW_BEAT_WIDTH,
+  filtered = false,
+  groupKey = null,
   onOpen,
 }: MonitorTableProps) {
   const total = totalCount ?? monitors.length;
 
   if (monitors.length === 0) {
-    return <EmptyState query={query} totalCount={total} />;
+    return <EmptyState query={query} totalCount={total} filtered={filtered} />;
+  }
+
+  const rows = (list: readonly Monitor[]) =>
+    list.map((monitor) => (
+      <MonitorRow
+        key={monitor.id}
+        monitor={monitor}
+        beatWidth={beatWidth}
+        onOpen={onOpen}
+      />
+    ));
+
+  const sections = groupKey === null ? null : sectionsByTag(monitors, groupKey);
+
+  if (sections !== null) {
+    // The caption states the arrangement, because a sighted reader infers it
+    // from the headings and someone using a screen reader cannot.
+    const caption = `${monitors.length} monitors, grouped by ${groupKey}. Monitors needing attention are listed first.`;
+    return (
+      <div className="mon-board">
+        <table className="mon-table">
+          <caption className="sr-only">{caption}</caption>
+          <Columns />
+          <Head />
+          {/* One tbody per section: a tbody is the only table element allowed
+              to repeat, so grouping needs no extra nesting and the table stays
+              a single set of columns and a single row list. */}
+          {sections.map((section) => (
+            <tbody
+              key={section.id}
+              className={
+                section.attention
+                  ? "mon-section mon-section--attention"
+                  : "mon-section"
+              }
+            >
+              <tr className="mon-section-head">
+                <th scope="rowgroup" colSpan={5} className="mon-section-title">
+                  {section.label} ({section.monitors.length})
+                </th>
+              </tr>
+              {rows(section.monitors)}
+            </tbody>
+          ))}
+        </table>
+      </div>
+    );
   }
 
   const { attention, rest } = partition(monitors);
@@ -87,11 +146,6 @@ export function MonitorTable({
     attention.length > 0
       ? `${monitors.length} monitors. ${attention.length} needing attention are listed first, the rest alphabetically by name.`
       : `${monitors.length} monitors, alphabetically by name.`;
-
-  const rows = (list: readonly Monitor[]) =>
-    list.map((monitor) => (
-      <MonitorRow key={monitor.id} monitor={monitor} beatWidth={beatWidth} onOpen={onOpen} />
-    ));
 
   return (
     <div className="mon-board">
