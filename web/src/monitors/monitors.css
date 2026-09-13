@@ -84,7 +84,7 @@
   line-height: var(--lead-body);
   color: var(--ink);
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-control);
   border-radius: var(--r-sm);
   transition: border-color var(--dur-hover) var(--ease);
 }
@@ -126,7 +126,7 @@
   line-height: var(--lead-helper);
   color: var(--ink);
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-control);
   border-radius: var(--r-sm);
   cursor: pointer;
   transition: border-color var(--dur-hover) var(--ease);
@@ -659,7 +659,7 @@
   line-height: var(--lead-nozoom);
   color: var(--ink);
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-control);
   border-radius: var(--r-sm);
   transition: border-color var(--dur-hover) var(--ease), box-shadow var(--dur-hover) var(--ease);
 }
@@ -673,11 +673,12 @@
 
 .add-input::placeholder { color: var(--ink-4); }
 
-/* Green border plus a soft ring, not the blue browser glow (§7.2). */
+/* The control accent, not the blue browser glow and not status green (§2.8):
+   a focused field is a control you are driving, not a healthy monitor. */
 .add-input:focus-visible {
   outline: none;
-  border-color: var(--up);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--up) 14%, transparent);
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
 .add-help {
@@ -711,7 +712,7 @@
 
 .add-input[aria-invalid="true"]:focus {
   border-color: var(--down);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--down) 14%, transparent);
+  box-shadow: 0 0 0 3px var(--ring-down);
 }
 
 .add-addon {
@@ -769,7 +770,7 @@
   line-height: var(--lead-body);
   color: var(--ink);
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-control);
   border-radius: var(--r-sm);
   cursor: pointer;
   transition: background var(--dur-hover) var(--ease), border-color var(--dur-hover) var(--ease);
