@@ -117,6 +117,10 @@ export function Dashboard({
   // themselves come from the data, so a selection kept across a reload could
   // name a key that no monitor carries any more.
   const [tags, setTags] = useState<TagSelection>({});
+  // Grouping is one axis at a time: "by environment" and "by customer" are two
+  // arrangements of the same rows, not two that can be layered. Local and not
+  // persisted, like the other view controls on this screen.
+  const [groupKey, setGroupKey] = useState<string | null>(null);
   // Facets are derived from the unfiltered list, never from the visible one.
   // Narrowing the options as you choose would make the second dropdown lose
   // the values the first one just excluded, and there would be no way back.
@@ -128,6 +132,11 @@ export function Dashboard({
       .map((facet) => [facet.key, tags[facet.key] ?? ""] as const)
       .filter(([, value]) => value !== ""),
   );
+  // A grouping key whose tag has vanished from the data would leave the list
+  // headed by a key nothing carries, so it falls back to the flat order for
+  // the same reason a stale tag selection is dropped.
+  const liveGroupKey =
+    groupKey !== null && facets.some((facet) => facet.key === groupKey) ? groupKey : null;
   // Status, then tags, then text, so the count in the sentence below is the
   // size of what is actually rendered rather than of an intermediate list.
   const visible = filterMonitors(
@@ -230,7 +239,10 @@ export function Dashboard({
       {facets.length > 0 && (
         <div className="mon-facets">
           {facets.map((facet) => (
-            <label key={facet.key} className="mon-facet">
+            // The key is also the text of an option in the Group by control,
+            // so an explicit attribute — not the visible text — is what
+            // identifies a facet unambiguously.
+            <label key={facet.key} className="mon-facet" data-facet-key={facet.key}>
               <span className="mon-facet-key">{facet.key}</span>
               <select
                 className="mon-facet-select"
@@ -253,6 +265,31 @@ export function Dashboard({
               </select>
             </label>
           ))}
+
+          {/*
+           * Grouping sits with the filters because it answers a neighbouring
+           * question about the same tags, but it is labelled "Group by" rather
+           * than given a key of its own: it does not narrow the list, and a
+           * control that looks like a filter while changing nothing about what
+           * is visible is the kind of thing people press twice.
+           */}
+          <label className="mon-facet">
+            <span className="mon-facet-key">Group by</span>
+            {/* Its own class, not `mon-facet-select`: it looks the same but it
+                is not a facet, and one selector must not match both. */}
+            <select
+              className="mon-group-select"
+              value={groupKey ?? ""}
+              onChange={(event) => setGroupKey(event.target.value || null)}
+            >
+              <option value="">None</option>
+              {facets.map((facet) => (
+                <option key={facet.key} value={facet.key}>
+                  {facet.key}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
       )}
 
@@ -285,6 +322,7 @@ export function Dashboard({
           query={query}
           totalCount={monitors.length}
           filtered={narrowed}
+          groupKey={liveGroupKey}
           beatWidth={beatWidth}
         />
       ) : shown === "compact" ? (
@@ -293,6 +331,7 @@ export function Dashboard({
           query={query}
           totalCount={monitors.length}
           filtered={narrowed}
+          groupKey={liveGroupKey}
         />
       ) : (
         <MonitorTable
@@ -300,6 +339,7 @@ export function Dashboard({
           query={query}
           totalCount={monitors.length}
           filtered={narrowed}
+          groupKey={liveGroupKey}
           beatWidth={beatWidth ?? ROW_BEAT_WIDTH}
         />
       )}

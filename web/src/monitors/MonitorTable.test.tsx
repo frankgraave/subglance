@@ -181,3 +181,47 @@ describe("MonitorTable", () => {
     expect(rowNames()[0]).toBe("mon-007");
   });
 });
+
+describe("MonitorTable grouped by a tag", () => {
+  const tagged = () => [
+    monitor("api", "up", { tags: { env: "prod" } }),
+    monitor("db", "down", { tags: { env: "prod" } }),
+    monitor("cdn", "up", { tags: { env: "staging" } }),
+    monitor("legacy", "up", {}),
+  ];
+
+  const headings = () =>
+    [...document.querySelectorAll(".mon-section-title")].map((h) => h.textContent);
+
+  it("puts one tbody per tag value, with the untagged group last", () => {
+    render(<MonitorTable monitors={tagged()} groupKey="env" beatWidth={WIDTH} />);
+    expect(headings()).toEqual([
+      "Needs attention (1)",
+      "prod (1)",
+      "staging (1)",
+      "Untagged (1)",
+    ]);
+  });
+
+  it("keeps a down monitor in the attention section, not in its tag group", () => {
+    render(<MonitorTable monitors={tagged()} groupKey="env" beatWidth={WIDTH} />);
+    const bodies = [...document.querySelectorAll("tbody")];
+    expect(bodies[0].querySelector('[data-testid="monitor-row-db"]')).not.toBeNull();
+    expect(bodies[1].querySelector('[data-testid="monitor-row-db"]')).toBeNull();
+  });
+
+  it("renders every monitor exactly once", () => {
+    render(<MonitorTable monitors={tagged()} groupKey="env" beatWidth={WIDTH} />);
+    expect(document.querySelectorAll("tr.mon-row")).toHaveLength(4);
+  });
+
+  it("says in the caption that the table is grouped", () => {
+    render(<MonitorTable monitors={tagged()} groupKey="env" beatWidth={WIDTH} />);
+    expect(document.querySelector("caption")!.textContent).toContain("grouped by env");
+  });
+
+  it("falls back to the flat attention/all split without a key", () => {
+    render(<MonitorTable monitors={tagged()} beatWidth={WIDTH} />);
+    expect(headings()).toEqual(["Needs attention (1)", "All monitors (3)"]);
+  });
+});

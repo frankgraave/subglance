@@ -1,6 +1,6 @@
 import { CARD_BEAT_WIDTH, MonitorCard } from "./MonitorCard";
 import { EmptyState } from "./EmptyState";
-import { partition } from "./model";
+import { partition, sectionsByTag } from "./model";
 import type { Monitor } from "./types";
 
 /**
@@ -27,6 +27,8 @@ export type MonitorCardListProps = {
   totalCount?: number;
   /** True when a filter other than the query is narrowing the list. */
   filtered?: boolean;
+  /** Tag key to group by, or null for the flat attention/all split. */
+  groupKey?: string | null;
   /** Explicit heartbeat width; required in jsdom, which has no layout. */
   beatWidth?: number;
 };
@@ -37,6 +39,7 @@ export function MonitorCardList({
   totalCount,
   beatWidth = CARD_BEAT_WIDTH,
   filtered = false,
+  groupKey = null,
 }: MonitorCardListProps) {
   const total = totalCount ?? monitors.length;
 
@@ -44,12 +47,34 @@ export function MonitorCardList({
     return <EmptyState query={query} totalCount={total} filtered={filtered} />;
   }
 
-  const { attention, rest } = partition(monitors);
-
   const cards = (list: readonly Monitor[]) =>
     list.map((monitor) => (
       <MonitorCard key={monitor.id} monitor={monitor} beatWidth={beatWidth} />
     ));
+
+  if (groupKey !== null) {
+    return (
+      <div className="mon-cards">
+        {sectionsByTag(monitors, groupKey).map((section) => (
+          <section
+            key={section.id}
+            className="mon-cards-section"
+            aria-labelledby={`mon-cards-${section.id}`}
+          >
+            {/* The id is derived from the section key rather than from the
+                label, so two tag values that differ only in case cannot
+                collide into one duplicate id and break the label association. */}
+            <h3 id={`mon-cards-${section.id}`} className="mon-cards-title">
+              {section.label} ({section.monitors.length})
+            </h3>
+            <ul className="mon-card-stack">{cards(section.monitors)}</ul>
+          </section>
+        ))}
+      </div>
+    );
+  }
+
+  const { attention, rest } = partition(monitors);
 
   return (
     <div className="mon-cards">

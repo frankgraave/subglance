@@ -114,7 +114,8 @@
   color: var(--ink-2);
 }
 
-.mon-facet-select {
+.mon-facet-select,
+.mon-group-select {
   padding: var(--space-1) var(--space-2);
   font: inherit;
   font-size: var(--type-helper);
@@ -126,7 +127,8 @@
   transition: border-color var(--dur-hover) var(--ease);
 }
 
-.mon-facet-select:hover { border-color: var(--border-hi); }
+.mon-facet-select:hover,
+.mon-group-select:hover { border-color: var(--border-hi); }
 
 .mon-result-count {
   font-size: var(--type-helper);
@@ -456,7 +458,8 @@
     gap: var(--space-3);
   }
 
-  .mon-facet-select {
+  .mon-facet-select,
+  .mon-group-select {
     /* Same 16px floor as the search input: iOS Safari zooms the page for any
        focused form control below it, including a select, and does not zoom
        back out on blur. */
@@ -485,6 +488,18 @@
  */
 
 .mon-lines { display: flex; flex-direction: column; gap: var(--space-5); }
+
+/* A grouped compact list: one heading per tag value, sharing the section
+   heading style of the card layout so the two layouts do not invent two
+   different vocabularies for the same idea. */
+.mon-line-group-title {
+  margin-bottom: var(--space-2);
+  font-size: var(--type-section);
+  font-weight: var(--weight-strong);
+  text-transform: uppercase;
+  letter-spacing: var(--track-caps);
+  color: var(--ink-3);
+}
 
 .mon-line-stack {
   list-style: none;

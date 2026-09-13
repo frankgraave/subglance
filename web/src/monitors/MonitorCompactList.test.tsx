@@ -113,3 +113,36 @@ describe("MonitorCompactList", () => {
     expect(screen.getByText(/No monitors match/)).toBeTruthy();
   });
 });
+
+describe("MonitorCompactList grouped by a tag", () => {
+  const tagged = () => [
+    monitor("api", "up", { tags: { env: "prod" } }),
+    monitor("db", "down", { tags: { env: "prod" } }),
+    monitor("cdn", "up", { tags: { env: "staging" } }),
+    monitor("legacy", "up", {}),
+  ];
+
+  const headings = () =>
+    [...document.querySelectorAll(".mon-line-group-title")].map((h) => h.textContent);
+
+  it("heads one section per tag value, untagged last", () => {
+    render(<MonitorCompactList monitors={tagged()} groupKey="env" />);
+    expect(headings()).toEqual([
+      "Needs attention (1)",
+      "prod (1)",
+      "staging (1)",
+      "Untagged (1)",
+    ]);
+  });
+
+  it("keeps the lines list items, so the item count still matches the monitors", () => {
+    render(<MonitorCompactList monitors={tagged()} groupKey="env" />);
+    expect(lines()).toHaveLength(4);
+  });
+
+  it("stays one flat list without a grouping key", () => {
+    render(<MonitorCompactList monitors={tagged()} />);
+    expect(headings()).toEqual([]);
+    expect(document.querySelectorAll("ul")).toHaveLength(1);
+  });
+});

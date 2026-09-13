@@ -6,8 +6,11 @@ import {
   filterByStatus,
   filterByTags,
   tagFacets,
+  UNTAGGED_LABEL,
   filterMonitors,
+  groupByTag,
   partition,
+  sectionsByTag,
   summarise,
 } from "./model";
 import type { Monitor, MonitorStatus } from "./types";
@@ -358,5 +361,117 @@ describe("describeFilter with tags", () => {
 
   it("still says nothing when every tag is set to no choice", () => {
     expect(describeFilter(14, 14, null, "", { env: "" })).toBeNull();
+  });
+});
+
+describe("groupByTag", () => {
+  const tagged = (id: string, tags: Record<string, string>) =>
+    monitor(id, "up", { tags });
+
+  it("makes one group per value of the key, sorted by value", () => {
+    const groups = groupByTag(
+      [
+        tagged("a", { env: "prod" }),
+        tagged("b", { env: "dev" }),
+        tagged("c", { env: "prod" }),
+      ],
+      "env",
+    );
+    expect(groups.map((g) => g.label)).toEqual(["dev", "prod"]);
+    expect(groups[1].monitors.map((m) => m.id)).toEqual(["a", "c"]);
+  });
+
+  it("keeps monitors without the key in a trailing Untagged group", () => {
+    const groups = groupByTag(
+      [tagged("a", { env: "prod" }), tagged("b", {}), tagged("c", { team: "ops" })],
+      "env",
+    );
+    expect(groups.map((g) => g.label)).toEqual(["prod", UNTAGGED_LABEL]);
+    expect(groups[1].value).toBeNull();
+    expect(groups[1].monitors.map((m) => m.id)).toEqual(["b", "c"]);
+  });
+
+  it("loses no monitor and duplicates none", () => {
+    const input = [
+      tagged("a", { env: "prod" }),
+      tagged("b", { env: "dev" }),
+      tagged("c", {}),
+      tagged("d", { env: "prod" }),
+    ];
+    const flat = groupByTag(input, "env").flatMap((g) => g.monitors.map((m) => m.id));
+    expect([...flat].sort()).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("sorts monitors inside a group by name, not by input order", () => {
+    const groups = groupByTag(
+      [tagged("zeta", { env: "prod" }), tagged("alpha", { env: "prod" })],
+      "env",
+    );
+    expect(groups[0].monitors.map((m) => m.id)).toEqual(["alpha", "zeta"]);
+  });
+
+  it("keeps values differing only in case apart, in a stable order", () => {
+    const groups = groupByTag(
+      [tagged("a", { env: "Prod" }), tagged("b", { env: "prod" })],
+      "env",
+    );
+    expect(groups).toHaveLength(2);
+    expect(groups.map((g) => g.label)).toEqual(["Prod", "prod"]);
+  });
+
+  it("returns no groups for an empty list", () => {
+    expect(groupByTag([], "env")).toEqual([]);
+  });
+
+  it("puts everything under Untagged when no monitor carries the key", () => {
+    const groups = groupByTag([tagged("a", { team: "ops" })], "env");
+    expect(groups.map((g) => g.label)).toEqual([UNTAGGED_LABEL]);
+  });
+});
+
+describe("sectionsByTag", () => {
+  it("lifts down monitors into their own leading section, out of the groups", () => {
+    const sections = sectionsByTag(
+      [
+        monitor("a", "up", { tags: { env: "prod" } }),
+        monitor("b", "down", { tags: { env: "prod" } }),
+        monitor("c", "up", { tags: { env: "dev" } }),
+      ],
+      "env",
+    );
+    expect(sections.map((s) => [s.label, s.monitors.map((m) => m.id)])).toEqual([
+      ["Needs attention", ["b"]],
+      ["dev", ["c"]],
+      ["prod", ["a"]],
+    ]);
+    expect(sections[0].attention).toBe(true);
+  });
+
+  it("omits the attention section when nothing is down", () => {
+    const sections = sectionsByTag([monitor("a", "up", { tags: { env: "prod" } })], "env");
+    expect(sections.map((s) => s.label)).toEqual(["prod"]);
+  });
+
+  it("gives every section a distinct key", () => {
+    const sections = sectionsByTag(
+      [
+        monitor("a", "down", { tags: { env: "prod" } }),
+        monitor("b", "up", { tags: { env: "prod" } }),
+        monitor("c", "up", {}),
+      ],
+      "env",
+    );
+    expect(new Set(sections.map((s) => s.id)).size).toBe(sections.length);
+  });
+
+  it("renders every monitor exactly once across the sections", () => {
+    const input = [
+      monitor("a", "down", { tags: { env: "prod" } }),
+      monitor("b", "up", { tags: { env: "prod" } }),
+      monitor("c", "up", {}),
+      monitor("d", "paused", { tags: { env: "dev" } }),
+    ];
+    const flat = sectionsByTag(input, "env").flatMap((s) => s.monitors.map((m) => m.id));
+    expect([...flat].sort()).toEqual(["a", "b", "c", "d"]);
   });
 });

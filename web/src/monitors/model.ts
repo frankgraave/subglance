@@ -199,6 +199,117 @@ export function filterByTags(
   return monitors.filter((m) => pairs.every(([key, value]) => m.tags[key] === value));
 }
 
+/** The label shown for monitors that do not carry the grouping key at all. */
+export const UNTAGGED_LABEL = "Untagged";
+
+/** One rendered group: a tag value, or `null` for the monitors lacking the key. */
+export type MonitorGroup = {
+  /** The tag value, or null when the monitors in this group lack the key. */
+  value: string | null;
+  /** What the section heading says. */
+  label: string;
+  /** The group's monitors, in the shared name order. */
+  monitors: Monitor[];
+};
+
+/**
+ * Splits monitors into one group per value of a tag key.
+ *
+ * **Grouping is not filtering.** Filtering answers "show me production";
+ * grouping answers "show me everything, arranged by environment". So every
+ * monitor handed in comes back out exactly once — including the ones that do
+ * not carry the key, which land in a final `Untagged` group rather than
+ * disappearing. A monitor silently missing from a monitoring screen is the
+ * worst failure this component can have, and "it had no tag" is not a reason
+ * the viewer can see.
+ *
+ * The untagged group is last rather than first, and it is the only group whose
+ * position is not alphabetical: it is a residue, not a value, and sorting it
+ * in among real values under some placeholder name would claim a tag that
+ * nobody assigned.
+ *
+ * Groups sort by value and monitors sort by name, both with the same
+ * comparators the rest of the dashboard uses, so nothing reorders when a
+ * heartbeat rebuilds the list in a different order. Empty groups cannot occur:
+ * a group exists exactly because a monitor is in it.
+ */
+export function groupByTag(monitors: readonly Monitor[], key: string): MonitorGroup[] {
+  const byValue = new Map<string, Monitor[]>();
+  const untagged: Monitor[] = [];
+  for (const monitor of monitors) {
+    const value = monitor.tags[key];
+    if (value === undefined) {
+      untagged.push(monitor);
+      continue;
+    }
+    const bucket = byValue.get(value);
+    if (bucket === undefined) byValue.set(value, [monitor]);
+    else bucket.push(monitor);
+  }
+  const groups: MonitorGroup[] = [...byValue.entries()]
+    .sort(([a], [b]) => compareText(a, b))
+    .map(([value, group]) => ({ value, label: value, monitors: group.sort(byName) }));
+  if (untagged.length > 0) {
+    groups.push({ value: null, label: UNTAGGED_LABEL, monitors: untagged.sort(byName) });
+  }
+  return groups;
+}
+
+/** One headed section of a grouped list. */
+export type MonitorSection = {
+  /** Stable React key; unique within one call. */
+  id: string;
+  /** Heading text, without the count. */
+  label: string;
+  monitors: Monitor[];
+  /** True for the "needs attention" section, which is styled apart. */
+  attention: boolean;
+};
+
+/**
+ * The headed sections a grouped list renders, attention section included.
+ *
+ * **The attention section survives grouping, and it is taken out first.** This
+ * is the decision grouping could not be built without. A down monitor sorted
+ * into its environment's group would sit wherever that group happens to fall —
+ * three headings down, possibly off-screen — and "needs attention" would stop
+ * meaning the same thing in every layout, which is the one invariant
+ * `partition` exists to hold. So the down monitors are lifted out before
+ * grouping and keep their own section at the top; the groups below describe
+ * the monitors that are fine, which is the question grouping is actually
+ * asked: "how is production doing", not "where is the broken one".
+ *
+ * The cost is that a group's count excludes its down monitors, which is why
+ * the attention heading carries its own count: the two numbers together always
+ * add up to the list, and neither claims to be the whole.
+ */
+export function sectionsByTag(
+  monitors: readonly Monitor[],
+  key: string,
+): MonitorSection[] {
+  const { attention, rest } = partition(monitors);
+  const sections: MonitorSection[] = [];
+  if (attention.length > 0) {
+    sections.push({
+      id: "attention",
+      label: "Needs attention",
+      monitors: attention,
+      attention: true,
+    });
+  }
+  for (const group of groupByTag(rest, key)) {
+    sections.push({
+      // The `null` value is a residue, not a tag, so it gets its own key
+      // rather than one built from a label a real tag could also produce.
+      id: group.value === null ? "untagged" : `tag:${group.value}`,
+      label: group.label,
+      monitors: group.monitors,
+      attention: false,
+    });
+  }
+  return sections;
+}
+
 /** The chosen pairs as `key:value`, in the order `tagFacets` renders them. */
 export function describeTags(selected: TagSelection): string[] {
   return Object.entries(selected)
