@@ -7,6 +7,15 @@
  * without a network or a fake timer.
  */
 
+import { apiJSON } from "../api/http";
+
+/*
+ * `ApiError` is re-exported rather than re-declared: it moved to the shared
+ * request layer when every fetch in the app started reporting a 401 to the
+ * session, and the form modules here already import it from this file.
+ */
+export { ApiError } from "../api/http";
+
 export type PreviewRequest = {
   /** Omitted means "let the server infer it from the target". */
   type?: string;
@@ -80,79 +89,17 @@ export function fingerprintPreview(req: PreviewRequest): PreviewFingerprint {
   ]);
 }
 
-/** Thrown for a non-2xx response, carrying the server's own sentence. */
-export class ApiError extends Error {
-  readonly status: number;
-  /** Seconds to wait, from Retry-After, when the server rate-limited us. */
-  readonly retryAfter: number | null;
-  /**
-   * The request field the server blamed, when it blamed one.
-   *
-   * `null` means the rejection was not about a single field — malformed JSON,
-   * a rate limit, a server failure — and the message belongs in the form's
-   * global region rather than under an input.
-   *
-   * This comes off the wire rather than being worked out here on purpose. The
-   * alternative is classifying the error by matching on the server's wording,
-   * which keeps working right up until a message is reworded and then fails
-   * silently: the text still renders, just in the wrong place.
-   */
-  readonly field: string | null;
-
-  constructor(
-    status: number,
-    message: string,
-    retryAfter: number | null = null,
-    field: string | null = null,
-  ) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-    this.retryAfter = retryAfter;
-    this.field = field;
-  }
-}
-
-async function readError(res: Response): Promise<ApiError> {
-  let message = `HTTP ${res.status}`;
-  let field: string | null = null;
-  try {
-    const body = (await res.json()) as { error?: string; message?: string; field?: string };
-    // The API's own wording is better than anything we could invent here: it
-    // knows which field was wrong and what the right shape looks like.
-    message = body.error ?? body.message ?? message;
-    // An empty string is treated as absent. The server omits the key rather
-    // than sending "", but a proxy or an older build might not, and a field
-    // named "" would match no input and silently swallow the message.
-    field = typeof body.field === "string" && body.field !== "" ? body.field : null;
-  } catch {
-    // A non-JSON error body (a proxy's HTML 502, say) leaves the status line,
-    // which is still more use than throwing a parse error over the top of it.
-  }
-  const header = res.headers.get("Retry-After");
-  const retryAfter = header === null ? null : Number.parseInt(header, 10);
-  return new ApiError(
-    res.status,
-    message,
-    retryAfter !== null && Number.isFinite(retryAfter) ? retryAfter : null,
-    field,
-  );
-}
-
 /** Probes a target without creating anything. */
 export async function previewCheck(
   req: PreviewRequest,
   signal?: AbortSignal,
 ): Promise<PreviewResult> {
-  const res = await fetch("/api/v1/monitors/preview", {
+  return await apiJSON<PreviewResult>("/api/v1/monitors/preview", {
     method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
     signal,
   });
-  if (!res.ok) throw await readError(res);
-  return (await res.json()) as PreviewResult;
 }
 
 /**
@@ -173,15 +120,15 @@ export async function createMonitor(
   body: Record<string, unknown>,
   signal?: AbortSignal,
 ): Promise<CreatedMonitor> {
-  const res = await fetch("/api/v1/monitors", {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(body),
-    signal,
-  });
-  if (!res.ok) throw await readError(res);
-  const created = (await res.json()) as { id: string | number; push_url?: string };
+  const created = await apiJSON<{ id: string | number; push_url?: string }>(
+    "/api/v1/monitors",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal,
+    },
+  );
   return {
     id: String(created.id),
     ...(typeof created.push_url === "string" && created.push_url !== ""

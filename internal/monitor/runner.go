@@ -287,8 +287,18 @@ func toCheckerMonitor(m store.Monitor) checker.Monitor {
 		Body:            m.Body,
 		SSLWarnDays:     m.SSLWarnDays,
 		Retries:         m.Retries,
+		CaptureResponse: m.CaptureResponse,
 	}
 }
+
+// maxSnapshotsPerIncident bounds how many failure responses one outage stores.
+//
+// Without a bound, a monitor checked every 60 seconds that stays broken for a
+// week would write ten thousand snapshots of the same 2 KiB error page: 20 MB
+// to say one thing. The first few are where the information is — the first
+// failure, and the next couple in case the symptom changes as the outage
+// develops. After that the streak is repeating itself.
+const maxSnapshotsPerIncident = 3
 
 // record persists one check result and advances the state machine.
 //
@@ -343,16 +353,10 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 		hb.TS = time.Now()
 	}
 
-	// The error is kept rather than only logged, but the state machine runs
-	// either way: the check did happen, and an outage should be reported even
-	// if the database is having a bad moment.
-	hbErr := r.db.RecordHeartbeat(ctx, hb)
-	if hbErr != nil {
-		r.log.Error("failed to record heartbeat",
-			"monitor_id", o.Monitor.ID, "monitor", o.Monitor.Name, "error", hbErr)
-		hbErr = fmt.Errorf("record heartbeat: %w", hbErr)
-	}
-
+	// The state engine runs before the write, not after, because the failure
+	// streak it reports decides whether this result's response snapshot is
+	// worth storing. Observe only touches in-memory state, so moving it ahead
+	// of the heartbeat write changes nothing about what either one decides.
 	tr := r.engine.Observe(state.Observation{
 		MonitorID:        o.Monitor.ID,
 		OK:               o.Result.OK,
@@ -361,6 +365,20 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 		Error:            o.Result.Error,
 		FailureThreshold: o.Monitor.Retries,
 	})
+
+	if snap := snapshotToStore(o.Result, tr.ConsecutiveFails); snap != nil {
+		hb.Response = snap
+	}
+
+	// The error is kept rather than only logged, but the state machine has
+	// already run: the check did happen, and an outage should be reported
+	// even if the database is having a bad moment.
+	var hbErr error
+	if err := r.db.RecordHeartbeat(ctx, hb); err != nil {
+		r.log.Error("failed to record heartbeat",
+			"monitor_id", o.Monitor.ID, "monitor", o.Monitor.Name, "error", err)
+		hbErr = fmt.Errorf("record heartbeat: %w", err)
+	}
 
 	// Publish before applying the transition so the dashboard paints the new
 	// bar immediately, rather than waiting on incident bookkeeping.
@@ -377,6 +395,27 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 	})
 
 	return errors.Join(hbErr, r.applyTransition(ctx, o, tr))
+}
+
+// snapshotToStore decides whether this result's captured response is worth a
+// row, and converts it to the storage shape.
+//
+// The rule is the first maxSnapshotsPerIncident failures of a streak. A
+// monitor that has been returning the same 503 for six hours has already said
+// everything it has to say, and every repeat after that is storage spent on a
+// copy of something already on disk.
+func snapshotToStore(res checker.Result, consecutiveFails int) *store.ResponseSnapshot {
+	if res.Response == nil || res.OK {
+		return nil
+	}
+	if consecutiveFails > maxSnapshotsPerIncident {
+		return nil
+	}
+	return &store.ResponseSnapshot{
+		Body:      res.Response.Body,
+		Headers:   res.Response.Headers,
+		Truncated: res.Response.Truncated,
+	}
 }
 
 // heartbeatPayload is the wire shape of a single check result.

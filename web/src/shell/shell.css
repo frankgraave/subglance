@@ -296,3 +296,71 @@
   .shell-topbar { padding: var(--space-3) var(--space-4); flex-wrap: wrap; }
   .shell-seg-button { padding: var(--space-1); }
 }
+
+/* ── Account ───────────────────────────────────────────────────────────── */
+
+/*
+ * Pushed to the bottom of the rail with `margin-top: auto`, which needs the
+ * nav to be a flex column; it already is one for the collapsed rail's
+ * centring. Sitting at the bottom is what makes it findable: it is the
+ * convention every tool with a sidebar shares, and the one control here is
+ * taken once a session, so it should not compete with navigation for the eye.
+ */
+.shell-account {
+  margin-top: auto;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.shell-account-email {
+  padding-inline: var(--space-2);
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell-signout {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-h);
+  padding-inline: var(--space-2);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  font: inherit;
+  font-size: var(--type-body);
+  line-height: var(--lead-body);
+  color: var(--ink-2);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--dur-hover) var(--ease), color var(--dur-hover) var(--ease);
+}
+
+.shell-signout:hover { background: var(--surface-2); color: var(--ink); }
+
+.shell-signout:focus-visible {
+  outline: 2px solid var(--up);
+  outline-offset: -2px;
+}
+
+/* Collapsed, the address would be an ellipsis and nothing else, so it goes
+   entirely; the button keeps its clipped label like every other rail item. */
+.shell-sidebar[data-collapsed="true"] .shell-account-email { display: none; }
+.shell-sidebar[data-collapsed="true"] .shell-signout { justify-content: center; padding-inline: 0; }
+.shell-sidebar[data-collapsed="true"] .shell-signout .shell-nav-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

@@ -43,6 +43,13 @@ code exists for it.
   cron script, a queue worker reports in and silence is what raises the alarm
 - **Failure classification** — a DNS failure, a refused connection and an expired
   certificate are three different problems, and the API says which one you have
+- **The response behind a failure** — when an HTTP check fails, the first 2 KiB
+  of the response is kept, so the answer that arrived at 03:00 is still there in
+  the morning. Capped, limited to the first few failures of an outage, and
+  switchable off per monitor. Only an allowlist of response headers is stored,
+  so no credential headers are kept; the body is stored as it arrived and can
+  hold sensitive data, so see SECURITY.md before enabling it on a target that
+  answers with more than an error message
 - **Scheduler**: a timing wheel with a bounded worker pool, so 500 monitors do
   not mean 500 goroutines or 500 simultaneous requests
 - **State engine**: confirmation before alarming, incident lifecycle, flapping
@@ -268,9 +275,19 @@ better than being told nothing.
 
 ### First run
 
-There is no default account and no seeded password. On first start SubGlance
-logs that setup is pending; you create the first administrator through the API
-(and, once it exists, the web interface):
+There is no default account and no seeded password. Open
+<http://localhost:8080/> and the interface asks for an email address and a
+password, creates the first administrator from them and signs you in. That
+screen closes permanently once an account exists; from then on the same
+address shows a sign-in form, and Sign out sits at the bottom of the sidebar.
+
+Passwords must be at least 12 characters. There is no complexity rule: length
+is what makes a password hard to crack, and demanding a digit and a symbol
+mostly produces predictable substitutions, so a few ordinary words beat a
+short cryptic one. Everything is stored on your own machine.
+
+The same thing can be done from a terminal, which is what an unattended
+install wants:
 
 ```sh
 curl -X POST http://localhost:8080/api/v1/setup \
@@ -278,12 +295,15 @@ curl -X POST http://localhost:8080/api/v1/setup \
   -d '{"email":"you@example.com","password":"a-long-passphrase"}'
 ```
 
-That endpoint closes permanently once an account exists.
-
 ### Your first monitor
 
-Setup returns a session cookie, so with a cookie jar the two calls chain and
-the dashboard has something to show within a minute of `docker compose up -d`:
+Press Add a monitor, paste an address and press Test it: the check runs
+before anything is saved, so you find out immediately whether the target is
+reachable rather than waiting for the first red row. The dashboard has
+something to show within a minute of `docker compose up -d`, and neither
+setup nor the first monitor needs a terminal.
+
+Setup also returns a session cookie, so with a cookie jar the two calls chain:
 
 ```sh
 curl -c jar -X POST http://localhost:8080/api/v1/setup \
@@ -295,10 +315,10 @@ curl -b jar -X POST http://localhost:8080/api/v1/monitors \
   -d '{"name":"Public website","type":"http","target":"https://example.com/","interval_s":60}'
 ```
 
-Reload <http://localhost:8080/> and the row is there, grey until the first
-check lands and then green or red. Everything else has a default, and unknown
-fields are rejected rather than ignored, so a typo tells you instead of
-silently configuring something other than what you asked for.
+Either way the row is there, grey until the first check lands and then green
+or red. Everything else has a default, and unknown fields are rejected rather
+than ignored, so a typo tells you instead of silently configuring something
+other than what you asked for.
 
 ### Authentication
 
