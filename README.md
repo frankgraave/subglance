@@ -341,8 +341,11 @@ turns ordinary jitter into a 3am alert.
 the line with the `curl` on it. It does not prove the work succeeded. A backup
 that writes an empty archive and then pings stays green, and that is a worse
 outcome than no monitoring at all, because it is monitoring that reassures you.
-Ping at the very end, only on success, and use `?status=$?` so a failing run
-reports itself. If the job can check its own output — a non-zero file size, a row
+Pick one of two strategies and stick to it: ping at the very end and only on
+success, so silence is the failure signal; or always ping and pass `?status=$?`,
+so a failing run reports itself immediately instead of waiting out the window.
+Mixing them — pinging unconditionally without a status — reports every run as a
+success. If the job can check its own output — a non-zero file size, a row
 count — check it before pinging.
 
 The URL is the credential. It carries no session and no API token, because a cron
@@ -350,6 +353,13 @@ line cannot hold either, and handing a backup script an API token would give it
 authority over every monitor you have. Anyone holding a push URL can report on
 that one monitor and nothing else. Treat it as a secret anyway: a leaked one lets
 someone tell you a job ran when it did not.
+
+The push URL uses whatever scheme you reached the API on, so on a plain-HTTP
+instance it is an `http://` URL — a bearer credential in cleartext. That is fine
+on a host or a LAN you trust, and it is why HTTP is not refused. It is not fine
+across the internet: anyone on the path can read the URL and then report a job as
+healthy forever. If a job pings from outside the network the instance lives on,
+put the instance behind TLS first.
 
 ### How a failure becomes an alert
 

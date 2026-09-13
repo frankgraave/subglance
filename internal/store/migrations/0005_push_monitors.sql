@@ -80,7 +80,14 @@ CREATE TABLE monitors_new (
     -- other type would be a URL that does nothing. Both are unreachable
     -- through the API, which is exactly why the schema should say so: the
     -- next writer of a migration or a bulk import does not read handlers.
-    CHECK ((type = 'push') = (push_token_hash IS NOT NULL))
+    CHECK ((type = 'push') = (push_token_hash IS NOT NULL)),
+
+    -- The expected interval is what makes a push monitor monitorable at all:
+    -- with it NULL the watchdog has no window to compare against and skips the
+    -- row forever, so the monitor sits in the list looking watched while
+    -- nothing would ever declare it down. Stating it here rather than only in
+    -- the handler means a bulk import cannot create that monitor either.
+    CHECK ((type = 'push') = (push_interval_s IS NOT NULL))
 ) STRICT;
 
 INSERT INTO monitors_new (

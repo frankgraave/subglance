@@ -47,6 +47,11 @@ type Server struct {
 	// dial, the other bounds what anyone holding one token can write.
 	pushReports cooldown
 
+	// pushFlood bounds the public push route as a whole, before a token is
+	// resolved. pushReports cannot: it is keyed on a monitor id that only
+	// exists after the database has already been asked.
+	pushFlood tokenBucket
+
 	// previewChecks rate-limits POST /monitors/preview per user. A preview
 	// has no monitor id to key on, so it cannot share the map above.
 	//

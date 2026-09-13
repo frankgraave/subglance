@@ -297,6 +297,31 @@ func TestSchemaRejectsTokenOnNonPushMonitor(t *testing.T) {
 	}
 }
 
+// TestSchemaRequiresPushInterval guards the column the watchdog compares
+// against. A push monitor with no expected interval is skipped on every sweep,
+// so it would appear in the list as watched while nothing could ever declare it
+// down — the one failure a dead man's switch must not have.
+func TestSchemaRequiresPushInterval(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+
+	_, err := db.Writer.ExecContext(ctx, `
+		INSERT INTO monitors (name, type, target, push_token_hash, created_at, updated_at)
+		VALUES ('windowless', 'push', '', 'cafebabe', 0, 0)`)
+	if err == nil {
+		t.Error("schema accepted a push monitor with no expected interval")
+	}
+
+	// And the mirror case: an interval on a monitor that is dialled would be a
+	// window nothing consults.
+	_, err = db.Writer.ExecContext(ctx, `
+		INSERT INTO monitors (name, type, target, push_interval_s, created_at, updated_at)
+		VALUES ('dialled', 'http', 'https://example.com', 3600, 0, 0)`)
+	if err == nil {
+		t.Error("schema accepted an expected push interval on an http monitor")
+	}
+}
+
 // openUnmigratedDB opens the pools without running migrations, so a test can
 // apply them one at a time.
 //

@@ -354,12 +354,13 @@ paths:
           required: false
           description: |
             A note shown as the failure text, ignored when the report is a
-            success. Truncated to 500 characters on a rune boundary rather
-            than rejected: a job reporting its own failure should never have
-            that report refused because the error it pasted was long.
+            success. Truncated to 500 **bytes** on a rune boundary rather than
+            rejected: a job reporting its own failure should never have that
+            report refused because the error it pasted was long. Bytes rather
+            than characters, so a message of multi-byte runes is cut earlier
+            than its character count suggests.
           schema:
             type: string
-            maxLength: 500
           example: 'restic: repository locked'
       responses:
         '200':
@@ -429,9 +430,10 @@ paths:
         - name: msg
           in: query
           required: false
+          description: |
+            As on the GET form: truncated to 500 bytes on a rune boundary.
           schema:
             type: string
-            maxLength: 500
       responses:
         '200':
           description: The report was accepted.
@@ -2359,7 +2361,27 @@ components:
         Unknown fields are rejected. Omitted optional fields take the schema
         defaults; note that `enabled` and `follow_redirects` default to true
         and `retries` to 2.
-      required: [name, type, target]
+
+        `target` is required for every type except `push`, and `push_interval_s`
+        is required for `push` and rejected for every other type. Both rules are
+        expressed below with `if`/`then`, so a validator enforces the same shape
+        the server does.
+      required: [name, type]
+      allOf:
+        - if:
+            properties:
+              type:
+                const: push
+            required: [type]
+          then:
+            required: [push_interval_s]
+            not:
+              required: [target]
+          else:
+            required: [target]
+            properties:
+              push_interval_s: false
+              push_grace_s: false
       properties:
         name:
           type: string

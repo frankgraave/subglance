@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"math"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -44,6 +46,29 @@ const pushCooldown = 2 * time.Second
 // report refused because the stack trace it pasted was too long.
 const maxPushMessageLen = 500
 
+// maxPushMessageLen is enforced in bytes, and the documented limit says bytes
+// for that reason: a 500-character message of three-byte runes would otherwise
+// be silently cut at a third of its length by a limit claiming to allow it.
+
+// pushFloodRate and pushFloodBurst bound the whole public push route before any
+// database work happens.
+//
+// The per-monitor cooldown above cannot do this job: it is keyed on a monitor
+// that is only known after the token has been looked up, so a flood of made-up
+// tokens reaches the reader pool at whatever rate the network allows and pushes
+// real API queries out of it. This limit is therefore deliberately placed in
+// front of the lookup.
+//
+// Fifty reports a second, bursting to a hundred. The shortest interval a push
+// monitor may have is sixty seconds, so a five-thousand-monitor install with
+// every job on the minimum interval still averages under ninety reports a
+// minute — two orders of magnitude below this ceiling. It bounds an attacker
+// without being reachable by an honest deployment.
+const (
+	pushFloodRate  = 50.0
+	pushFloodBurst = 100.0
+)
+
 // handlePush records a report from a monitored job.
 //
 // This is the one route in the API that is public by necessity rather than by
@@ -73,6 +98,16 @@ func (s *Server) handlePush(w http.ResponseWriter, r *http.Request) {
 	if s.pusher == nil {
 		writeError(w, http.StatusServiceUnavailable,
 			"this instance runs without a checker, so push reports are unavailable")
+		return
+	}
+
+	// Before the lookup, deliberately: see pushFloodRate.
+	if !s.pushFlood.allow(time.Now(), pushFloodRate, pushFloodBurst) {
+		s.log.Warn("push reports are arriving faster than the route accepts them",
+			"remote", r.RemoteAddr)
+		w.Header().Set("Retry-After", "1")
+		writeError(w, http.StatusTooManyRequests,
+			"too many push reports are arriving at once; try again in a moment")
 		return
 	}
 
@@ -176,9 +211,12 @@ func parsePushReport(r *http.Request) (monitor.PushReport, problem) {
 			"status must be up, down, or a shell exit code")
 	}
 
-	// Truncate on a rune boundary. Cutting mid-sequence would store invalid
-	// UTF-8 in a STRICT TEXT column and render as a replacement character in
-	// the one place the text exists to be read.
+	// Truncate at maxPushMessageLen bytes, backing off to a rune boundary.
+	// Cutting mid-sequence would store invalid UTF-8 in a STRICT TEXT column
+	// and render as a replacement character in the one place the text exists
+	// to be read. Bytes rather than runes because the limit exists to bound
+	// what one token can write to disk, and a byte is what disk is measured
+	// in.
 	msg := q.Get("msg")
 	if len(msg) > maxPushMessageLen {
 		msg = msg[:maxPushMessageLen]
@@ -254,4 +292,36 @@ func pushURL(r *http.Request, token string) string {
 		scheme = "https"
 	}
 	return scheme + "://" + r.Host + "/api/v1/push/" + token
+}
+
+// tokenBucket is a rate limit with no background goroutine: it refills lazily
+// from the timestamp of the last call.
+//
+// A bucket rather than a fixed window, because a window lets a burst of twice
+// the limit through across its boundary — and a burst is precisely the shape of
+// the flood this guards against.
+type tokenBucket struct {
+	mu     sync.Mutex
+	tokens float64
+	last   time.Time
+}
+
+// allow takes one token if the bucket has one, refilling at rate per second up
+// to burst.
+func (b *tokenBucket) allow(now time.Time, rate, burst float64) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if b.last.IsZero() {
+		b.tokens = burst
+	} else if elapsed := now.Sub(b.last).Seconds(); elapsed > 0 {
+		b.tokens = math.Min(burst, b.tokens+elapsed*rate)
+	}
+	b.last = now
+
+	if b.tokens < 1 {
+		return false
+	}
+	b.tokens--
+	return true
 }

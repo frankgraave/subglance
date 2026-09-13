@@ -56,11 +56,17 @@ var ErrNotPushMonitor = store.ErrNotPushMonitor
 // RecordPush turns an incoming ping into a heartbeat and runs it through the
 // ordinary state machine.
 //
-// The whole point of routing it through record() rather than writing a
-// heartbeat directly is that a push monitor then behaves like every other
-// monitor from the state engine down: incidents open, confirm and resolve by
-// the same rules, the live stream sees the same events, and uptime is computed
-// from the same table. The only thing that differs is who started the check.
+// The whole point of routing it through the ordinary recording path rather
+// than writing a heartbeat directly is that a push monitor then behaves like
+// every other monitor from the state engine down: incidents open, confirm and
+// resolve by the same rules, the live stream sees the same events, and uptime
+// is computed from the same table. The only thing that differs is who started
+// the check.
+//
+// Unlike a scheduled check, a persistence failure is returned to the caller.
+// The job on the other end is waiting for an answer, and a 200 that says
+// "recorded" for a heartbeat the database refused would make the dead man's
+// switch lie in the one direction that matters: silence read as health.
 func (r *Runner) RecordPush(ctx context.Context, m store.Monitor, rep PushReport) error {
 	if m.Type != store.TypePush {
 		return fmt.Errorf("%w: monitor %d is type %q", ErrNotPushMonitor, m.ID, m.Type)
@@ -80,8 +86,7 @@ func (r *Runner) RecordPush(ctx context.Context, m store.Monitor, rep PushReport
 		}
 	}
 
-	r.record(scheduler.Outcome{Monitor: pushCheckerMonitor(m), Result: res})
-	return nil
+	return r.recordOutcome(scheduler.Outcome{Monitor: pushCheckerMonitor(m), Result: res})
 }
 
 // pushCheckerMonitor is the checker-shaped view of a push monitor.

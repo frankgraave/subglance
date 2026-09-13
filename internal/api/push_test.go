@@ -251,6 +251,63 @@ func TestPushEndpointRejectsUnknownTokens(t *testing.T) {
 	}
 }
 
+// TestPushEndpointQuotaPrecedesTheTokenLookup guards the route as a whole
+// rather than one monitor. The per-monitor cooldown is keyed on an id that only
+// exists after the token has been resolved, so without this a flood of made-up
+// tokens reaches the reader pool at network speed and crowds out real queries.
+//
+// An unknown token answered with 429 instead of 404 is the proof: the only way
+// to say "too many" without saying "unknown" is to have refused before asking
+// the database. The bucket is drained directly rather than by firing a burst of
+// requests, so the assertion does not depend on how fast the test host is.
+func TestPushEndpointQuotaPrecedesTheTokenLookup(t *testing.T) {
+	srv, _ := testServerWithDB(t)
+	pusher := &fakePusher{}
+	srv.WithPushRecorder(pusher)
+
+	now := time.Now()
+	for i := range int(pushFloodBurst) {
+		if !srv.pushFlood.allow(now, pushFloodRate, pushFloodBurst) {
+			t.Fatalf("the bucket refused claim %d, which is inside its burst", i)
+		}
+	}
+
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec,
+		httptest.NewRequest(http.MethodGet, "/api/v1/push/sgu_nosuchtoken", nil))
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Errorf("status = %d, want 429: an unknown token reached the database past an empty quota", rec.Code)
+	}
+	if rec.Header().Get("Retry-After") == "" {
+		t.Error("a refused report does not say when to try again")
+	}
+	if len(pusher.calls) != 0 {
+		t.Errorf("%d reports recorded while the quota was empty", len(pusher.calls))
+	}
+}
+
+// TestPushFloodBucketRefills keeps the limit from being a one-way gate: a burst
+// is refused, and an honest job pinging a second later is not.
+func TestPushFloodBucketRefills(t *testing.T) {
+	var b tokenBucket
+	start := time.Now()
+
+	for i := range int(pushFloodBurst) {
+		if !b.allow(start, pushFloodRate, pushFloodBurst) {
+			t.Fatalf("refused request %d, which is inside the burst", i)
+		}
+	}
+	if b.allow(start, pushFloodRate, pushFloodBurst) {
+		t.Fatal("the bucket let through one more than its burst")
+	}
+
+	// One second later there are pushFloodRate tokens back, and no more.
+	if !b.allow(start.Add(time.Second), pushFloodRate, pushFloodBurst) {
+		t.Error("the bucket never refilled")
+	}
+}
+
 // TestPushEndpointRateLimits: this is the only unauthenticated write in the
 // product, so an unbounded one is a way to fill the disk with one valid token.
 func TestPushEndpointRateLimits(t *testing.T) {

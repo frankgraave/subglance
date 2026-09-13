@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/frankgraave/subglance/internal/checker"
+	"github.com/frankgraave/subglance/internal/events"
 	"github.com/frankgraave/subglance/internal/state"
 	"github.com/frankgraave/subglance/internal/store"
 )
@@ -17,6 +18,13 @@ func newPushRunner(t *testing.T, db *store.DB, rec *alertRecorder) *Runner {
 		opts.Notify = rec.record
 	}
 	return New(opts)
+}
+
+// newPushRunnerWithBus is newPushRunner plus a live event bus, so a test can
+// wait for a heartbeat to be published instead of polling the database.
+func newPushRunnerWithBus(t *testing.T, db *store.DB, bus *events.Bus) *Runner {
+	t.Helper()
+	return New(Options{DB: db, Log: quietLogger(), PushSweep: 10 * time.Millisecond, Bus: bus})
 }
 
 func mustPushMonitor(t *testing.T, db *store.DB, every, grace int) store.Monitor {
@@ -108,6 +116,31 @@ func TestPushReportedFailureOpensAConfirmedIncident(t *testing.T) {
 	}
 }
 
+// TestRecordPushReportsAFailedWrite is the reason RecordPush returns an error
+// at all. The handler answers the job with `recorded`, and a report that was
+// acknowledged but never stored is the one lie a dead man's switch cannot
+// afford: the next window would go quiet with nothing in the timeline to say
+// the job ever reported.
+//
+// The monitor is deleted underneath the in-memory copy, which is exactly the
+// race a long-lived push URL can hit: the heartbeat insert then fails on the
+// foreign key.
+func TestRecordPushReportsAFailedWrite(t *testing.T) {
+	db := testDB(t)
+	ctx := context.Background()
+	r := newPushRunner(t, db, nil)
+	m := mustPushMonitor(t, db, 3600, 60)
+
+	if _, err := db.Writer.ExecContext(ctx,
+		"DELETE FROM monitors WHERE id = ?", m.ID); err != nil {
+		t.Fatalf("delete monitor: %v", err)
+	}
+
+	if err := r.RecordPush(ctx, m, PushReport{OK: true}); err == nil {
+		t.Fatal("RecordPush reported success for a heartbeat that was never stored")
+	}
+}
+
 // TestRecordPushRefusesNonPushMonitors keeps the push path from being a second
 // way to write heartbeats for a probe-based monitor.
 func TestRecordPushRefusesNonPushMonitors(t *testing.T) {
@@ -125,7 +158,10 @@ func TestRecordPushRefusesNonPushMonitors(t *testing.T) {
 	if err := r.RecordPush(ctx, m, PushReport{OK: true}); err == nil {
 		t.Fatal("RecordPush accepted an http monitor")
 	}
-	beats, _ := db.ListHeartbeats(ctx, m.ID, 10)
+	beats, err := db.ListHeartbeats(ctx, m.ID, 10)
+	if err != nil {
+		t.Fatalf("ListHeartbeats: %v", err)
+	}
 	if len(beats) != 0 {
 		t.Errorf("%d heartbeats written for a rejected report", len(beats))
 	}
@@ -178,7 +214,10 @@ func TestWatchdogLeavesMonitorsInsideTheirWindowAlone(t *testing.T) {
 
 	r.sweepOverduePushMonitors(ctx)
 
-	beats, _ := db.ListHeartbeats(ctx, m.ID, 10)
+	beats, err := db.ListHeartbeats(ctx, m.ID, 10)
+	if err != nil {
+		t.Fatalf("ListHeartbeats: %v", err)
+	}
 	if len(beats) != 0 {
 		t.Fatalf("%d beats written for a monitor well inside its window", len(beats))
 	}
@@ -198,7 +237,10 @@ func TestWatchdogRespectsGrace(t *testing.T) {
 
 	r.sweepOverduePushMonitors(ctx)
 
-	beats, _ := db.ListHeartbeats(ctx, m.ID, 10)
+	beats, err := db.ListHeartbeats(ctx, m.ID, 10)
+	if err != nil {
+		t.Fatalf("ListHeartbeats: %v", err)
+	}
 	if len(beats) != 0 {
 		t.Fatalf("%d beats written for a job still inside its grace period", len(beats))
 	}
@@ -220,7 +262,10 @@ func TestWatchdogDoesNotRepeatEverySweep(t *testing.T) {
 		r.sweepOverduePushMonitors(ctx)
 	}
 
-	beats, _ := db.ListHeartbeats(ctx, m.ID, 20)
+	beats, err := db.ListHeartbeats(ctx, m.ID, 20)
+	if err != nil {
+		t.Fatalf("ListHeartbeats: %v", err)
+	}
 	if len(beats) != 1 {
 		t.Errorf("got %d beats from 5 sweeps, want 1 — the watchdog is beating per sweep", len(beats))
 	}
@@ -242,7 +287,10 @@ func TestWatchdogSkipsPausedMonitors(t *testing.T) {
 
 	r.sweepOverduePushMonitors(ctx)
 
-	beats, _ := db.ListHeartbeats(ctx, m.ID, 10)
+	beats, err := db.ListHeartbeats(ctx, m.ID, 10)
+	if err != nil {
+		t.Fatalf("ListHeartbeats: %v", err)
+	}
 	if len(beats) != 0 {
 		t.Errorf("%d beats written for a paused push monitor", len(beats))
 	}
@@ -336,9 +384,15 @@ func TestCheckNowRefusesPushMonitors(t *testing.T) {
 // by hand.
 func TestWatchdogRunsUnderRun(t *testing.T) {
 	db := testDB(t)
-	r := newPushRunner(t, db, nil)
+	bus := events.NewBus(8)
+	r := newPushRunnerWithBus(t, db, bus)
 	m := mustPushMonitor(t, db, 60, 0)
 	backdate(t, db, m.ID, 2*time.Hour)
+
+	// Subscribe before Run starts, so the first sweep's beat cannot be missed
+	// between starting the runner and starting to listen.
+	sub := bus.Subscribe()
+	defer sub.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
@@ -346,20 +400,32 @@ func TestWatchdogRunsUnderRun(t *testing.T) {
 		defer close(done)
 		_ = r.Run(ctx)
 	}()
+	defer func() {
+		cancel()
+		<-done
+	}()
 
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		if beats, _ := db.ListHeartbeats(context.Background(), m.ID, 5); len(beats) > 0 {
-			cancel()
-			<-done
+	// Wait for the watchdog's own signal rather than polling the clock. The
+	// timeout is only a failure guard: the test passes on the event, so how
+	// busy the machine is changes how long it waits, not what it concludes.
+	for {
+		select {
+		case e := <-sub.C():
+			if e.Kind != events.KindHeartbeat || e.MonitorID != m.ID {
+				continue
+			}
+			beats, err := db.ListHeartbeats(context.Background(), m.ID, 5)
+			if err != nil {
+				t.Fatalf("ListHeartbeats: %v", err)
+			}
+			if len(beats) == 0 {
+				t.Fatal("the watchdog published a heartbeat it never stored")
+			}
 			return
+		case <-time.After(10 * time.Second):
+			t.Fatal("Run never swept for overdue push monitors")
 		}
-		time.Sleep(10 * time.Millisecond)
 	}
-
-	cancel()
-	<-done
-	t.Fatal("Run never swept for overdue push monitors")
 }
 
 // TestOverdueFailureKind keeps the two push failure modes distinguishable.
