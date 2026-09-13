@@ -24,9 +24,9 @@ export const ROW_BEAT_WIDTH = 168;
 export type MonitorRowProps = {
   monitor: Monitor;
   /**
-   * Explicit heartbeat width. jsdom reports every element as 0 wide, so
-   * without this the bar renders empty in tests; in the browser the default
-   * lets the bar measure its own column.
+   * Heartbeat width for environments without layout. jsdom reports every
+   * element as 0 wide, so without this the bar renders empty in tests; in the
+   * browser the bar measures its own column and this is not used.
    */
   beatWidth?: number;
   /** Opens this monitor's detail view client-side. See MonitorLink. */

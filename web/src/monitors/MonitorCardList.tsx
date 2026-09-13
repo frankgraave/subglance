@@ -25,7 +25,7 @@ export type MonitorCardListProps = {
   query?: string;
   /** Total before filtering, so "no results" can be told from "no monitors". */
   totalCount?: number;
-  /** Explicit heartbeat width; required in jsdom, which has no layout. */
+  /** Heartbeat width for environments without layout, such as jsdom. */
   beatWidth?: number;
   /** Opens a monitor's detail view client-side. See MonitorLink. */
   onOpen?: (id: string) => void;

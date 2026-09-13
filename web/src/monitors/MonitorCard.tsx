@@ -34,14 +34,14 @@ import type { Monitor } from "./types";
  *
  * Wider than the row's 168 because the card gives the bar the full content
  * width: a 375px phone minus page and card padding. The bar buckets checks to
- * fit whatever width it measures, so this is only the jsdom fallback and the
- * starting point before the container is measured.
+ * fit whatever width it measures, so this is only the fallback for
+ * environments that have no layout to measure.
  */
 export const CARD_BEAT_WIDTH = 295;
 
 export type MonitorCardProps = {
   monitor: Monitor;
-  /** Explicit heartbeat width; required in jsdom, which has no layout. */
+  /** Heartbeat width for environments without layout, such as jsdom. */
   beatWidth?: number;
   /** Opens this monitor's detail view client-side. See MonitorLink. */
   onOpen?: (id: string) => void;

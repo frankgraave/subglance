@@ -36,6 +36,54 @@ describe("HeartbeatBar", () => {
     expect(bars[40].getAttribute("data-status")).toBe("up");
   });
 
+  /*
+   * The regression this pair exists for (SUB-29).
+   *
+   * `width` used to switch measurement off, so every caller's jsdom fallback
+   * became the width in the browser as well: the detail view drew a 720px bar
+   * inside a 317px panel and pushed a 375px page out to 746px. jsdom has no
+   * layout, so a real container width has to be faked — which is exactly the
+   * condition the fallback must yield to.
+   */
+  const withLayout = (width: number, run: () => void) => {
+    const realRect = Element.prototype.getBoundingClientRect;
+    const realRO = globalThis.ResizeObserver;
+    Element.prototype.getBoundingClientRect = function (this: Element) {
+      return this.classList.contains("hb-track")
+        ? ({ left: 0, top: 0, width, height: 34 } as DOMRect)
+        : realRect.call(this);
+    };
+    // Observing is what the component does after measuring; a no-op class is
+    // enough, because the fake width never changes.
+    globalThis.ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+    try {
+      run();
+    } finally {
+      Element.prototype.getBoundingClientRect = realRect;
+      globalThis.ResizeObserver = realRO;
+    }
+  };
+
+  it("sizes itself to its container, not to the width it was handed", () => {
+    // A phone-sized panel with a desktop-sized fallback: the container wins.
+    withLayout(317, () => {
+      render(<HeartbeatBar beats={beats(140)} label="API" width={720} />);
+      const svg = document.querySelector("svg")!;
+      expect(Number(svg.getAttribute("width"))).toBeLessThanOrEqual(317);
+      // 317px at 6 + 3 per column is 35 columns, not the 80 a 720px bar draws.
+      expect(document.querySelectorAll(".hb-bar")).toHaveLength(35);
+    });
+  });
+
+  it("falls back to the given width only where there is no layout to measure", () => {
+    render(<HeartbeatBar beats={beats(5)} label="API" width={WIDTH} />);
+    expect(document.querySelectorAll(".hb-bar")).toHaveLength(41);
+  });
+
   it("stays readable at 500 checks: still one column per slot, none dropped", () => {
     render(<HeartbeatBar beats={beats(500)} label="API" width={WIDTH} />);
     expect(document.querySelectorAll(".hb-bar")).toHaveLength(41);

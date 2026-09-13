@@ -832,6 +832,23 @@ It also closes itself when the viewport grows past 640px — rotating a phone to
 landscape crosses it — so the scrim never lingers over a layout that has room
 for the rail again.
 
+**The detail view fits because the heartbeat measures its own panel.** Every
+component that draws a heartbeat takes a `beatWidth`, and that number is only a
+fallback for environments with no layout to measure — jsdom and SSR report
+every element as 0 wide. It is deliberately not a layout choice: the width a
+bar should have depends on the viewport, which the caller does not know. When
+it did act as an override, the detail view drew its 720px desktop bar inside a
+317px panel and pushed a 375px page out to 746px — the horizontal scrolling
+this section exists to prevent, on the screen it matters most. Measured in a
+real browser at 320, 375 and 414px: the bar now buckets to 29, 35 and 39
+columns and the page scrolls only downward.
+
+**The back link is 24px tall, not 19.** WCAG 2.2 SC 2.5.8 asks 24 by 24 CSS
+pixels and exempts targets inside a sentence; this one sits alone on its own
+line, so the exemption does not apply. The height is added under the text
+rather than as padding around a box, so it keeps reading as a link — the
+affordance is the arrow, not a filled rectangle.
+
 **Rejected here too:** a native `<dialog>` with `showModal()`, which would give
 the inert background and Esc handling for free. jsdom 30 still does not
 implement `showModal`, so every test of the drawer would have to be skipped or

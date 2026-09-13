@@ -31,6 +31,13 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+  /* 24px is WCAG 2.2 SC 2.5.8's minimum target, and this control needs it:
+     the inline exception covers links sitting inside a sentence, and this is
+     a standalone button on its own line. At the helper type size its text box
+     is under 19px tall, which is a thumb-sized miss on the one control the
+     phone user reaches for most. The height is added below the text rather
+     than around it so the button still reads as a link, not a bar. */
+  min-height: var(--space-6);
   padding: 0;
   border: 0;
   background: none;
@@ -113,7 +120,7 @@
 
 .mon-detail-beats {
   /* The bar measures this box and buckets the checks to fit it, so it must be
-     allowed to fill the panel rather than sit at its jsdom fallback width. */
+     allowed to fill the panel rather than sit at a fixed width. */
   width: 100%;
 }
 

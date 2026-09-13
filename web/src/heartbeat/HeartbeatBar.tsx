@@ -29,8 +29,10 @@ export type HeartbeatBarProps = {
   barWidth?: number;
   gap?: number;
   /**
-   * Overrides the measured width. Only for environments without layout
-   * (tests, SSR); in the browser the component sizes itself to its container.
+   * Width to use when the container cannot be measured — jsdom and SSR report
+   * every element as 0 wide. Never an override: wherever there is real layout
+   * the bar sizes itself to its container, because a fixed pixel width is a
+   * guess about the viewport and the guess is wrong on a phone.
    */
   width?: number;
   className?: string;
@@ -55,9 +57,13 @@ const formatLatency = (ms: number | null) =>
 /**
  * Width of the element, tracked live.
  *
- * Falls back to `fallback` when there is no layout to measure — jsdom reports
- * every element as 0 wide and would otherwise render an empty component in
- * every test.
+ * Measurement always runs, and `fallback` only stands in when it yields
+ * nothing. The earlier version skipped measuring entirely whenever a
+ * `fallback` was passed, which made every caller's "jsdom fallback" the real
+ * width in the browser too: the detail view drew a 720px bar inside a 317px
+ * panel on a 375px phone and pushed the whole page 371px wide (SUB-29). A
+ * width the caller cannot know — it depends on the viewport — must never win
+ * over one the browser can measure.
  */
 function useMeasuredWidth(
   ref: React.RefObject<HTMLElement | null>,
@@ -66,7 +72,6 @@ function useMeasuredWidth(
   const [measured, setMeasured] = useState(0);
 
   useLayoutEffect(() => {
-    if (fallback !== undefined) return;
     const node = ref.current;
     if (!node) return;
     const measure = () => setMeasured(node.getBoundingClientRect().width);
@@ -75,11 +80,11 @@ function useMeasuredWidth(
     const observer = new ResizeObserver(measure);
     observer.observe(node);
     return () => observer.disconnect();
-  }, [ref, fallback]);
+  }, [ref]);
 
-  // Derived during render rather than mirrored into state: an explicit width
-  // is an input, not something to synchronise.
-  return fallback ?? measured;
+  // A measured 0 means "no layout here" (jsdom, SSR, a display:none ancestor),
+  // never "zero pixels wide", so it is the one case the fallback covers.
+  return measured > 0 ? measured : (fallback ?? 0);
 }
 
 /** Sentence read out when the graphic receives focus, and shown to nobody else. */
