@@ -21,5 +21,11 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src/**/*.test.ts", "src/**/*.test.tsx"]
+  "include": [
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    /* The browser-check harness is test-only support code, not part of
+       the bundle, so it is type-checked here where node types exist. */
+    "src/layout/harness/**/*.ts"
+  ]
 }
