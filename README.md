@@ -39,6 +39,8 @@ code exists for it.
 
 - **HTTP(S), TCP, ping and SSL checks**, including keyword matching, response
   time, and certificate expiry warnings
+- **Push monitors** for jobs that cannot be reached from outside — a backup, a
+  cron script, a queue worker reports in and silence is what raises the alarm
 - **Failure classification** — a DNS failure, a refused connection and an expired
   certificate are three different problems, and the API says which one you have
 - **The response behind a failure** — when an HTTP check fails, the first 2 KiB
@@ -216,10 +218,57 @@ defaults.
 | `--shutdown-timeout` | `SUBGLANCE_SHUTDOWN_TIMEOUT` | `15s` | Grace period for in-flight requests |
 | `--check-workers` | `SUBGLANCE_CHECK_WORKERS` | `0` (auto) | Maximum concurrent checks |
 | `--allow-private-targets` | `SUBGLANCE_ALLOW_PRIVATE_TARGETS` | `false` | Permit monitoring private/loopback addresses |
+| `--watchdog-url` | `SUBGLANCE_WATCHDOG_URL` | empty (off) | External dead man's switch to ping while checks are running |
+| `--watchdog-interval` | `SUBGLANCE_WATCHDOG_INTERVAL` | `5m` | How often to ping that URL |
 
 `--allow-private-targets` is off by default on purpose. Users supply the URLs to
 monitor, and without that guard SubGlance would happily act as an SSRF proxy into
 the host network. Turn it on only if you intend to monitor internal services.
+
+### Watching the watcher
+
+SubGlance cannot report its own death. If the process is killed, runs out of
+memory or the host goes down, the dashboard does not turn red — it stops
+existing, and silence looks exactly like good news. That is the worst failure
+this product can have, and no amount of code inside the process can fix it.
+
+So the judgement goes somewhere else. Set `--watchdog-url` to a dead man's
+switch — Healthchecks.io, Dead Man's Snitch, the push endpoint of a second
+SubGlance — and SubGlance pings it on a schedule. When the pings stop, that
+service raises the alarm.
+
+```sh
+subglance --watchdog-url https://hc-ping.com/your-uuid --watchdog-interval 5m
+```
+
+Two details matter:
+
+- The ping is tied to evidence, not to a timer. It is only sent when at least
+  one check has completed since the previous ping, so a process whose check
+  pipeline has wedged goes quiet instead of reporting health from a corpse. An
+  instance with no monitors scheduled still pings; there, zero checks is the
+  correct answer rather than a symptom.
+- A clean shutdown sends one final ping marked `stopped`, so a planned restart
+  does not page anyone. The marker is the `X-SubGlance-Event` header, and a
+  generic provider ignores it: Healthchecks.io and Dead Man's Snitch read that
+  final ping as an ordinary check-in, which resets the switch and keeps the
+  pager quiet. Only a receiver that reads the header — a second SubGlance, or
+  your own endpoint — can tell a clean stop apart from a normal ping.
+- Redirects are refused. The URL you configure is trusted; wherever it might
+  redirect to is not, so a `3xx` is logged as a rejected ping instead of being
+  followed.
+
+Only a ping is sent: the event, the number of monitors scheduled and the number
+of checks completed. No monitor names, targets or results leave the instance.
+Those counts are still information about the install, and over `http` they go
+out in cleartext — use an `https` URL unless the whole network path is trusted.
+The feature is off unless you set the URL, because it is the one part of
+SubGlance that talks outbound to a third party.
+
+It is not a complete answer. An instance that is running fine but has lost
+outbound network stops pinging too, and that reads as an outage at the other
+end. Being told about a problem that turns out to be the messenger is still
+better than being told nothing.
 
 ### First run
 
@@ -286,6 +335,7 @@ incidents) and **admin** (also manages users and tokens).
 | `tcp` | `db.example.com:5432` | A TCP handshake completes within the timeout |
 | `ping` | `example.com` or `192.0.2.10` | ICMP echo reply |
 | `ssl` | `example.com` (port optional, defaults to 443) | Certificate validity, hostname match, chain of trust, days until expiry |
+| `push` | none — the job reports in | That the job reported inside its window |
 
 A TCP check completes the handshake and hangs up without sending a payload —
 speaking a protocol badly is a good way to end up in someone's fail2ban rules.
@@ -299,6 +349,68 @@ Ping needs either unprivileged ICMP sockets or `CAP_NET_RAW`. SubGlance tries th
 unprivileged socket first and falls back to the raw one; when neither is allowed
 the error names both fixes. If ICMP is blocked entirely on your network, a TCP
 check against a known port answers the same question more reliably.
+
+### Push monitors
+
+The four types above all look inward from outside. Anything without a reachable
+port is invisible to them: a nightly backup, an import script, a queue worker on
+a laptop behind NAT. Those are exactly the things that fail quietly and are only
+discovered when you need them.
+
+A push monitor turns the direction around. It gets a secret URL, the job calls it
+when it finishes, and if nothing arrives inside the window the monitor goes down.
+
+```bash
+curl -X POST http://localhost:8080/api/v1/monitors \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Nightly backup","type":"push","push_interval_s":86400,"push_grace_s":3600}'
+```
+
+The response contains `push_url`, **once**. Only a hash is stored, so it cannot
+be looked up afterwards — copy it now or recreate the monitor. Then, at the end
+of the job:
+
+```bash
+restic backup /data && curl -fsS "$PUSH_URL"
+```
+
+Or report the outcome either way, so a failing run says so immediately instead
+of waiting out the window:
+
+```bash
+restic backup /data
+curl -fsS "$PUSH_URL?status=$?&msg=restic+backup"
+```
+
+`push_interval_s` is how often the job is expected to report; `push_grace_s` is
+how late it may be before that silence counts as failure. Grace is *added* to the
+interval, so an hourly job with five minutes of grace is late at 65 minutes. It
+defaults to 60 seconds rather than 0, because cron drifts and a zero tolerance
+turns ordinary jitter into a 3am alert.
+
+**What a push monitor does and does not tell you.** It proves your script reached
+the line with the `curl` on it. It does not prove the work succeeded. A backup
+that writes an empty archive and then pings stays green, and that is a worse
+outcome than no monitoring at all, because it is monitoring that reassures you.
+Pick one of two strategies and stick to it: ping at the very end and only on
+success, so silence is the failure signal; or always ping and pass `?status=$?`,
+so a failing run reports itself immediately instead of waiting out the window.
+Mixing them — pinging unconditionally without a status — reports every run as a
+success. If the job can check its own output — a non-zero file size, a row
+count — check it before pinging.
+
+The URL is the credential. It carries no session and no API token, because a cron
+line cannot hold either, and handing a backup script an API token would give it
+authority over every monitor you have. Anyone holding a push URL can report on
+that one monitor and nothing else. Treat it as a secret anyway: a leaked one lets
+someone tell you a job ran when it did not.
+
+The push URL uses whatever scheme you reached the API on, so on a plain-HTTP
+instance it is an `http://` URL — a bearer credential in cleartext. That is fine
+on a host or a LAN you trust, and it is why HTTP is not refused. It is not fine
+across the internet: anyone on the path can read the URL and then report a job as
+healthy forever. If a job pings from outside the network the instance lives on,
+put the instance behind TLS first.
 
 ### How a failure becomes an alert
 

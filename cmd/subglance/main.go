@@ -29,6 +29,7 @@ import (
 	"github.com/frankgraave/subglance/internal/logging"
 	"github.com/frankgraave/subglance/internal/monitor"
 	"github.com/frankgraave/subglance/internal/store"
+	"github.com/frankgraave/subglance/internal/watchdog"
 	"github.com/frankgraave/subglance/internal/webui"
 )
 
@@ -130,7 +131,8 @@ func run(args []string) error {
 		// The runner doubles as the API's prober, so a manual check uses
 		// the same checkers, the same SSRF guard and the same recording
 		// path as a scheduled one.
-		Handler: api.New(log, db).WithBus(bus).WithProber(runner).Handler(),
+		Handler: api.New(log, db).WithBus(bus).
+			WithProber(runner).WithPushRecorder(runner).Handler(),
 
 		// Bounded timeouts: an unbounded server is a resource leak waiting
 		// for one slow client. ReadHeaderTimeout in particular defends
@@ -159,6 +161,29 @@ func run(args []string) error {
 		if err := runner.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 			log.Error("scheduler stopped unexpectedly", "error", err)
 		}
+	}()
+
+	// The watchdog is the only part of SubGlance that talks outbound to
+	// something other than a monitored target, so it stays silent unless an
+	// operator asked for it.
+	dog, err := watchdog.New(watchdog.Options{
+		URL:      cfg.WatchdogURL,
+		Interval: cfg.WatchdogInterval,
+		Log:      log,
+		Liveness: func() watchdog.Liveness {
+			return watchdog.Liveness{
+				ChecksCompleted: runner.ChecksCompleted(),
+				Scheduled:       runner.Size(),
+			}
+		},
+	})
+	if err != nil {
+		return err
+	}
+	watchdogDone := make(chan struct{})
+	go func() {
+		defer close(watchdogDone)
+		dog.Run(ctx)
 	}()
 
 	// Expired sessions and stale login-attempt rows accumulate forever
@@ -198,6 +223,14 @@ func run(args []string) error {
 	case <-schedulerDone:
 	case <-shutdownCtx.Done():
 		log.Warn("scheduler did not stop within the shutdown timeout")
+	}
+
+	// And for the watchdog's farewell ping, so a planned restart does not
+	// read as a crash at the other end.
+	select {
+	case <-watchdogDone:
+	case <-shutdownCtx.Done():
+		log.Warn("watchdog did not stop within the shutdown timeout")
 	}
 
 	log.Info("shutdown complete")

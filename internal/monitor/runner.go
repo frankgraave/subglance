@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	"github.com/frankgraave/subglance/internal/checker"
@@ -31,9 +32,18 @@ type Runner struct {
 	// in without touching this file.
 	notify func(Alert)
 
+	// checks counts completed checks. It is the liveness evidence the
+	// watchdog needs: a process whose scheduler has wedged keeps running
+	// and keeps serving HTTP, but this number stops moving.
+	checks atomic.Uint64
+
 	// bus fans check results out to live listeners (the SSE endpoint). Nil
 	// means nobody is watching, which is the normal case in tests.
 	bus *events.Bus
+
+	// pushSweep is how often the push watchdog looks for overdue monitors.
+	// Zero means defaultPushSweep.
+	pushSweep time.Duration
 }
 
 // Alert is a state change worth telling someone about.
@@ -70,6 +80,11 @@ type Options struct {
 	// Bus receives every heartbeat and status change for live streaming.
 	// Optional; nil means nothing is published.
 	Bus *events.Bus
+
+	// PushSweep is how often push monitors are checked for being overdue.
+	// Zero means defaultPushSweep. Tests set it small; nothing else needs
+	// to set it at all.
+	PushSweep time.Duration
 }
 
 // New builds a Runner with the standard set of checkers.
@@ -83,10 +98,11 @@ func New(opts Options) *Runner {
 	httpChecker := checker.NewHTTPChecker(checker.HTTPOptions{Guard: guard})
 
 	r := &Runner{
-		db:     opts.DB,
-		log:    log,
-		notify: opts.Notify,
-		bus:    opts.Bus,
+		db:        opts.DB,
+		log:       log,
+		notify:    opts.Notify,
+		bus:       opts.Bus,
+		pushSweep: opts.PushSweep,
 		engine: state.New(state.Options{
 			FlapWindow:    opts.FlapWindow,
 			FlapThreshold: opts.FlapThreshold,
@@ -113,6 +129,11 @@ func New(opts Options) *Runner {
 //
 // It first restores state from the database, so a restart does not re-announce
 // outages that were already reported.
+//
+// The push watchdog runs alongside the scheduler rather than inside it: the
+// scheduler's whole model is a queue of things to go and dial, and absence is
+// not something that can be dialled. It is started here and stopped by the
+// same context, so there is still exactly one lifetime to manage.
 func (r *Runner) Run(ctx context.Context) error {
 	if err := r.restore(ctx); err != nil {
 		// A failed restore is not fatal — monitoring with a clean slate beats
@@ -120,11 +141,29 @@ func (r *Runner) Run(ctx context.Context) error {
 		// is logged at error level.
 		r.log.Error("failed to restore incident state; duplicate alerts are possible", "error", err)
 	}
-	return r.sch.Run(ctx)
+
+	watchdogDone := make(chan struct{})
+	go func() {
+		defer close(watchdogDone)
+		r.runPushWatchdog(ctx)
+	}()
+
+	err := r.sch.Run(ctx)
+
+	// Wait for the watchdog before returning, for the same reason the
+	// scheduler waits for in-flight checks: a sweep half-way through writing
+	// a heartbeat must not be cut off by the process exiting underneath it.
+	<-watchdogDone
+	return err
 }
 
 // Size reports how many monitors are currently scheduled.
 func (r *Runner) Size() int { return r.sch.Size() }
+
+// ChecksCompleted reports how many checks have finished since start.
+//
+// Only its movement is meaningful; it is not persisted and resets on restart.
+func (r *Runner) ChecksCompleted() uint64 { return r.checks.Load() }
 
 // Engine exposes the state engine so the API can report current status.
 func (r *Runner) Engine() *state.Engine { return r.engine }
@@ -180,7 +219,16 @@ func (r *Runner) jobs(ctx context.Context) ([]scheduler.Job, error) {
 	live := make(map[int64]struct{}, len(monitors))
 	jobs := make([]scheduler.Job, 0, len(monitors))
 	for _, m := range monitors {
+		// A push monitor is live — its incidents are real and must not be
+		// reconciled away — but it is never scheduled. Nothing dials it;
+		// the watchdog decides when its silence has gone on too long.
+		// Queueing it would mean dispatching a check with no checker
+		// behind it, which the scheduler would correctly report as an
+		// internal error on every interval.
 		live[m.ID] = struct{}{}
+		if m.Type == store.TypePush {
+			continue
+		}
 		_, seen := checked[m.ID]
 		jobs = append(jobs, scheduler.Job{
 			Monitor:      toCheckerMonitor(m),
@@ -256,7 +304,20 @@ const maxSnapshotsPerIncident = 3
 //
 // A failure to write must never stop the scheduler: losing one heartbeat is
 // survivable, a monitoring system that stops monitoring is not.
+// record stores one outcome for the scheduler, where a failed write is logged
+// and the pipeline carries on: a check that could not be stored still happened,
+// and an outage still has to be reported.
 func (r *Runner) record(o scheduler.Outcome) {
+	_ = r.recordOutcome(o)
+}
+
+// recordOutcome stores one outcome and reports whether anything durable failed.
+//
+// Callers that answer a client need that answer. RecordPush sits behind the
+// public push endpoint and must not tell a job "recorded" when the heartbeat
+// or the incident never reached the database, because the whole promise of a
+// push monitor is that the report it acknowledges is the one it will remember.
+func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 	// A check aborted by shutdown says nothing about the target. Every
 	// checker turns a cancelled context into a failed Result, and the
 	// scheduler waits for those in-flight results before stopping — so
@@ -269,8 +330,13 @@ func (r *Runner) record(o scheduler.Outcome) {
 	if o.Aborted {
 		r.log.Debug("discarding check cancelled by shutdown",
 			"monitor", o.Monitor.Name)
-		return
+		return nil
 	}
+
+	// Counted before the write: the check itself is what proves the
+	// pipeline is alive, and a database that has gone read-only must not
+	// make a working scheduler look dead to the watchdog.
+	r.checks.Add(1)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -304,11 +370,14 @@ func (r *Runner) record(o scheduler.Outcome) {
 		hb.Response = snap
 	}
 
+	// The error is kept rather than only logged, but the state machine has
+	// already run: the check did happen, and an outage should be reported
+	// even if the database is having a bad moment.
+	var hbErr error
 	if err := r.db.RecordHeartbeat(ctx, hb); err != nil {
 		r.log.Error("failed to record heartbeat",
 			"monitor_id", o.Monitor.ID, "monitor", o.Monitor.Name, "error", err)
-		// Carry on: the check did happen, and an outage should be reported
-		// even if the database is having a bad moment.
+		hbErr = fmt.Errorf("record heartbeat: %w", err)
 	}
 
 	// Publish before applying the transition so the dashboard paints the new
@@ -325,7 +394,7 @@ func (r *Runner) record(o scheduler.Outcome) {
 		},
 	})
 
-	r.applyTransition(ctx, o, tr)
+	return errors.Join(hbErr, r.applyTransition(ctx, o, tr))
 }
 
 // snapshotToStore decides whether this result's captured response is worth a
@@ -382,10 +451,15 @@ func (r *Runner) publish(e events.Event) {
 
 // applyTransition writes the incident side of a transition and emits an alert
 // when one is warranted.
-func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr state.Transition) {
+//
+// It returns the first persistence failure it hit. Alert delivery problems are
+// logged but not returned: a caller deciding whether to acknowledge a report
+// cares about what was stored, not about who was told.
+func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr state.Transition) error {
 	var (
-		inc store.Incident
-		err error
+		inc        store.Incident
+		err        error
+		persistErr error
 	)
 
 	switch tr.Event {
@@ -398,6 +472,7 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 		if !o.Result.OK {
 			if err := r.db.UpdateIncidentError(ctx, o.Monitor.ID, tr.Cause, tr.Error); err != nil {
 				r.log.Error("failed to update incident error", "monitor_id", o.Monitor.ID, "error", err)
+				persistErr = fmt.Errorf("update incident error: %w", err)
 			}
 		}
 
@@ -405,7 +480,7 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 		inc, err = r.db.OpenIncident(ctx, o.Monitor.ID, tr.At, tr.Cause, tr.Error)
 		if err != nil {
 			r.log.Error("failed to open incident", "monitor_id", o.Monitor.ID, "error", err)
-			return
+			return fmt.Errorf("open incident: %w", err)
 		}
 		r.log.Info("incident opened, awaiting confirmation",
 			"monitor", o.Monitor.Name,
@@ -419,15 +494,15 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 		if err := r.db.ConfirmIncident(ctx, o.Monitor.ID, tr.At, tr.Cause, tr.Error); errors.Is(err, store.ErrNoOpenIncident) {
 			if _, err := r.db.OpenIncident(ctx, o.Monitor.ID, tr.At, tr.Cause, tr.Error); err != nil {
 				r.log.Error("failed to open incident on confirm", "monitor_id", o.Monitor.ID, "error", err)
-				return
+				return fmt.Errorf("open incident on confirm: %w", err)
 			}
 			if err := r.db.ConfirmIncident(ctx, o.Monitor.ID, tr.At, tr.Cause, tr.Error); err != nil {
 				r.log.Error("failed to confirm incident", "monitor_id", o.Monitor.ID, "error", err)
-				return
+				return fmt.Errorf("confirm incident: %w", err)
 			}
 		} else if err != nil {
 			r.log.Error("failed to confirm incident", "monitor_id", o.Monitor.ID, "error", err)
-			return
+			return fmt.Errorf("confirm incident: %w", err)
 		}
 
 		// Read the incident back rather than reusing whatever the branch above
@@ -449,11 +524,11 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 	case state.EventIncidentResolved:
 		inc, err = r.db.ResolveIncident(ctx, o.Monitor.ID, tr.At)
 		if errors.Is(err, store.ErrNoOpenIncident) {
-			return
+			return nil
 		}
 		if err != nil {
 			r.log.Error("failed to resolve incident", "monitor_id", o.Monitor.ID, "error", err)
-			return
+			return fmt.Errorf("resolve incident: %w", err)
 		}
 		r.log.Info("incident resolved",
 			"monitor", o.Monitor.Name,
@@ -499,28 +574,34 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 	}
 
 	if !tr.Notify || r.notify == nil {
-		return
+		return persistErr
 	}
 
 	// A notification with no incident behind it would be an empty alert. That
 	// happens when flapping starts or ends on an otherwise uneventful check:
 	// worth a log line, not worth waking anyone.
 	if tr.Event == state.EventNone {
-		return
+		return persistErr
 	}
 
 	m, err := r.db.GetMonitor(ctx, o.Monitor.ID)
 	if err != nil {
 		r.log.Error("failed to load monitor for alert", "monitor_id", o.Monitor.ID, "error", err)
-		return
+		return persistErr
 	}
 
 	r.notify(Alert{Monitor: m, Incident: inc, Event: tr.Event, At: tr.At})
+	return persistErr
 }
 
 // ErrUnsupportedType is returned when a monitor names a check type that has no
 // implementation. It is a configuration fault, not a check failure.
 var ErrUnsupportedType = errors.New("unsupported monitor type")
+
+// ErrPushNotProbeable is returned when something asks for an on-demand check
+// of a push monitor. It is a client mistake, not a server fault, which is why
+// it is distinguishable from ErrUnsupportedType.
+var ErrPushNotProbeable = errors.New("push monitors cannot be checked on demand")
 
 // CheckNow probes a monitor once, outside its schedule, and returns the result.
 //
@@ -534,6 +615,15 @@ var ErrUnsupportedType = errors.New("unsupported monitor type")
 // recorded: the monitor promised not to watch it, and writing heartbeats into that gap
 // would present an unmonitored period as a monitored one.
 func (r *Runner) CheckNow(ctx context.Context, m store.Monitor) (checker.Result, error) {
+	// There is nothing to probe on demand: a push monitor's health is a
+	// statement about whether its job reported in, and the server cannot
+	// make that happen by asking. Falling through would produce "unsupported
+	// monitor type push", which is true of the checker table and misleading
+	// about the product.
+	if m.Type == store.TypePush {
+		return checker.Result{}, fmt.Errorf("%w: a push monitor is reported to, not checked", ErrPushNotProbeable)
+	}
+
 	cm := toCheckerMonitor(m)
 
 	c, ok := r.sch.CheckerFor(cm.Type)

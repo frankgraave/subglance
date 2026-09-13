@@ -37,6 +37,21 @@ type Server struct {
 	// manualChecks rate-limits POST /monitors/{id}/check per monitor.
 	manualChecks cooldown
 
+	// pusher records reports arriving on a push URL. Nil disables the push
+	// endpoint, matching how bus and prober are treated.
+	pusher PushRecorder
+
+	// pushReports rate-limits the public push endpoint per monitor. It is
+	// separate from manualChecks because the two protect against different
+	// things: one bounds what an authenticated human can ask the server to
+	// dial, the other bounds what anyone holding one token can write.
+	pushReports cooldown
+
+	// pushFlood bounds the public push route as a whole, before a token is
+	// resolved. pushReports cannot: it is keyed on a monitor id that only
+	// exists after the database has already been asked.
+	pushFlood tokenBucket
+
 	// previewChecks rate-limits POST /monitors/preview per user. A preview
 	// has no monitor id to key on, so it cannot share the map above.
 	//
@@ -81,6 +96,12 @@ func (s *Server) WithBus(b *events.Bus) *Server {
 // WithProber attaches a prober, enabling POST /api/v1/monitors/{id}/check.
 func (s *Server) WithProber(p Prober) *Server {
 	s.prober = p
+	return s
+}
+
+// WithPushRecorder attaches a push recorder, enabling the push URL endpoint.
+func (s *Server) WithPushRecorder(p PushRecorder) *Server {
+	s.pusher = p
 	return s
 }
 
@@ -179,6 +200,18 @@ func (s *Server) routes() []route {
 		{http.MethodPost, "/api/v1/auth/login", accessPublic},
 		{http.MethodPost, "/api/v1/auth/logout", accessPublic},
 
+		// The push URL. Public by necessity, not by choice: a cron line
+		// cannot hold a session, and handing a backup script an API token
+		// would give it permission over every monitor in the instance. The
+		// token in the path is the credential, and it authorises exactly
+		// one thing on exactly one monitor.
+		//
+		// GET as well as POST because `curl URL` in a crontab is the whole
+		// use case, and a great many wrappers people already have will only
+		// issue a GET.
+		{http.MethodGet, "/api/v1/push/{token}", accessPublic},
+		{http.MethodPost, "/api/v1/push/{token}", accessPublic},
+
 		// Authenticated: any role.
 		{http.MethodGet, "/api/v1/auth/me", accessRead},
 		{http.MethodPost, "/api/v1/auth/password", accessRead},
@@ -267,6 +300,8 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 		return s.handleLogin
 	case "POST /api/v1/auth/logout":
 		return s.handleLogout
+	case "GET /api/v1/push/{token}", "POST /api/v1/push/{token}":
+		return s.handlePush
 
 	case "GET /api/v1/auth/me":
 		return s.handleMe
