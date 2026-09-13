@@ -18,6 +18,41 @@ import type { Session } from "./session";
  * cookie expires mid-session, the request that discovers it is usually a
  * background refetch on a screen nobody is looking at.
  */
+
+/**
+ * Where an unfinished sign-out is remembered between page loads.
+ *
+ * Signing out changes the screen before the server has answered, which is the
+ * right trade for a slow server but leaves a real hole when the request never
+ * lands at all: the cookie is HttpOnly and still valid, so the next reload
+ * discovers it through `/auth/me` and signs the browser straight back in —
+ * the session outlives the sign-out (CWE-613). Writing the intent down makes
+ * it survive the reload too, so it can be retried before anything is
+ * discovered.
+ */
+const PENDING_LOGOUT_KEY = "subglance.pending-logout";
+
+/*
+ * Every access is guarded: `localStorage` throws on access in a browser with
+ * cookies blocked, and a sign-out that crashes the app is worse than one that
+ * cannot be remembered.
+ */
+function readPendingLogout(): boolean {
+  try {
+    return window.localStorage.getItem(PENDING_LOGOUT_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+function writePendingLogout(pending: boolean): void {
+  try {
+    if (pending) window.localStorage.setItem(PENDING_LOGOUT_KEY, "1");
+    else window.localStorage.removeItem(PENDING_LOGOUT_KEY);
+  } catch {
+    // Nothing to fall back to; the in-memory session is still anonymous.
+  }
+}
 export type UseSession = {
   session: Session;
   /** Adopts the user a completed login or setup returned. */
@@ -45,6 +80,29 @@ export function useSession(): UseSession {
 
     void (async () => {
       try {
+        /*
+         * An unfinished sign-out is settled before anything is discovered.
+         *
+         * Order matters: asking `/auth/me` first would hand back the very
+         * session the user asked to end, and the screen would restore itself
+         * behind their back. If the retry fails again the cookie must be
+         * assumed alive, so this stops at an error screen — whose retry
+         * button runs this same effect — rather than quietly signing in.
+         */
+        if (readPendingLogout()) {
+          try {
+            await postLogout();
+            writePendingLogout(false);
+          } catch {
+            if (controller.signal.aborted) return;
+            setSession({
+              state: "error",
+              message: "signing out could not be confirmed by the server; this session may still be open",
+            });
+            return;
+          }
+        }
+
         const user = await fetchCurrentUser(controller.signal);
         if (controller.signal.aborted) return;
         if (user !== null) {
@@ -77,13 +135,17 @@ export function useSession(): UseSession {
      * Waiting for the 204 before switching screens means a slow or dead
      * server leaves a signed-out user staring at a dashboard, and the local
      * intent — "I am done here" — is honoured either way: the cookie is
-     * HttpOnly, so if the request fails the session survives on the server,
-     * but nothing on this machine will use it until someone signs in again.
+     * HttpOnly, so a failed request leaves the session alive on the server —
+     * which is exactly why the intent is written down first and retried on
+     * the next load instead of being dropped here.
      */
     setSession({ state: "anonymous" });
-    void postLogout().catch(() => {
-      // Already signed out locally; a failed logout has nothing left to report.
-    });
+    writePendingLogout(true);
+    void postLogout()
+      .then(() => writePendingLogout(false))
+      .catch(() => {
+        // Left pending on purpose: the next resolution retries it.
+      });
   }, []);
 
   const refresh = useCallback(() => {

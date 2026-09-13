@@ -16,6 +16,7 @@ import { useSession } from "./useSession";
  */
 
 afterEach(cleanup);
+afterEach(() => window.localStorage.clear());
 
 type Fetch = typeof globalThis.fetch;
 
@@ -189,6 +190,70 @@ describe("losing and ending a session", () => {
     // server leaves a signed-out user looking at a dashboard.
     expect(await screen.findByRole("button", { name: /Sign in/ })).toBeTruthy();
     expect(logout).toHaveBeenCalled();
+  });
+
+  it("does not restore the session on reload when the sign-out request failed", async () => {
+    /*
+     * The hole this closes: the cookie is HttpOnly, so a logout that never
+     * reached the server leaves it valid, and the next load discovers it
+     * through `/auth/me` and signs the browser back in — after the user has
+     * been shown the login screen.
+     */
+    const me = () => json({ id: 1, email: "me@example.com", role: "admin", created_at: "" });
+    globalThis.fetch = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/auth/logout")) return Promise.reject(new TypeError("Failed to fetch"));
+      if (url.includes("/auth/me")) return Promise.resolve(me());
+      return Promise.resolve(json({ setup_required: false }));
+    }) as unknown as Fetch;
+
+    const first = render(<Harness />);
+    fireEvent.click(await screen.findByRole("button", { name: /Sign out/ }));
+    expect(await screen.findByRole("button", { name: /Sign in/ })).toBeTruthy();
+    first.unmount();
+
+    // A fresh mount is what a reload looks like from here, and `/auth/me`
+    // would still answer with a user.
+    render(<Harness />);
+    expect(await screen.findByText(/Cannot reach this instance/)).toBeTruthy();
+    expect(screen.queryByText("the dashboard")).toBeNull();
+  });
+
+  it("retries the failed sign-out on the next load and then stops", async () => {
+    let logouts = 0;
+    globalThis.fetch = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/auth/logout")) {
+        logouts += 1;
+        if (logouts === 1) return Promise.reject(new TypeError("Failed to fetch"));
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      // The cookie stays valid until a logout actually reaches the server,
+      // which is the whole reason the retry has to run before this question
+      // is asked.
+      if (url.includes("/auth/me")) {
+        if (logouts >= 2) return Promise.resolve(json({ error: "authentication required" }, 401));
+        return Promise.resolve(json({ id: 1, email: "me@example.com", role: "admin", created_at: "" }));
+      }
+      return Promise.resolve(json({ setup_required: false }));
+    }) as unknown as Fetch;
+
+    const first = render(<Harness />);
+    fireEvent.click(await screen.findByRole("button", { name: /Sign out/ }));
+    await waitFor(() => expect(logouts).toBe(1));
+    first.unmount();
+
+    // The retry succeeds, so this load reaches the login screen...
+    const second = render(<Harness />);
+    expect(await screen.findByRole("button", { name: /Sign in/ })).toBeTruthy();
+    await waitFor(() => expect(logouts).toBe(2));
+    second.unmount();
+
+    // ...and the intent is cleared: a settled sign-out must not be replayed
+    // on every load for the rest of the browser's life.
+    render(<Harness />);
+    expect(await screen.findByRole("button", { name: /Sign in/ })).toBeTruthy();
+    expect(logouts).toBe(2);
   });
 
   it("keeps a signed-out browser on the form when a public request gets a 401", async () => {

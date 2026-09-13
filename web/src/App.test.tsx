@@ -32,6 +32,26 @@ class FakeSource {
   }
 }
 
+/** A complete `User`, as `/api/v1/auth/me` really answers. */
+const USER = {
+  id: 1,
+  email: "me@example.com",
+  role: "admin",
+  created_at: "2026-09-01T00:00:00Z",
+};
+
+const MONITOR = {
+  id: 1,
+  name: "api",
+  type: "http",
+  target: "https://api.example.com",
+  interval_s: 20,
+  timeout_s: 5,
+  enabled: true,
+  status: "up",
+  created_at: "2026-09-01T00:00:00Z",
+};
+
 beforeEach(() => {
   window.localStorage.clear();
   vi.stubGlobal("matchMedia", (query: string) => ({
@@ -45,26 +65,25 @@ beforeEach(() => {
     dispatchEvent: () => false,
   }));
   vi.stubGlobal("EventSource", FakeSource);
+  /*
+   * Answered per endpoint, not one body for every request.
+   *
+   * A single `{ monitors: [...] }` for everything also satisfies
+   * `/api/v1/auth/me`, which casts it to a `User` — so the shell rendered a
+   * signed-in dashboard for a response with no id, email or role, and these
+   * tests would have passed against an app that asked the wrong endpoint or
+   * skipped the session entirely.
+   */
   vi.stubGlobal(
     "fetch",
-    vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        monitors: [
-          {
-            id: 1,
-            name: "api",
-            type: "http",
-            target: "https://api.example.com",
-            interval_s: 20,
-            timeout_s: 5,
-            enabled: true,
-            status: "up",
-            created_at: "2026-09-01T00:00:00Z",
-          },
-        ],
-      }),
+    vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      const body = url.includes("/auth/me") ? USER : { monitors: [MONITOR] };
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => body,
+      });
     }),
   );
 });
@@ -78,6 +97,10 @@ afterEach(() => {
 describe("the app shell", () => {
   it("lands on the dashboard, not on a component gallery", async () => {
     render(<App />);
+    // The session resolves first: the shell only renders the dashboard once
+    // `/api/v1/auth/me` has returned a real user, and the account footer is
+    // where that user becomes visible.
+    expect(await screen.findByText(USER.email)).toBeTruthy();
     expect(await screen.findByText("api")).toBeTruthy();
     // The tab bar this replaced made the workbench the front door.
     expect(screen.queryByRole("tab")).toBeNull();

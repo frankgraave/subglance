@@ -4,6 +4,7 @@ import {
   MonitorsIcon,
   NotificationsIcon,
   SettingsIcon,
+  SignOutIcon,
 } from "./icons";
 
 /**
@@ -130,8 +131,10 @@ export function Sidebar({ collapsed, instance, account, onSignOut }: SidebarProp
             {account}
           </p>
           <button type="button" className="shell-signout" onClick={onSignOut}>
-            {/* The label survives the rail: collapsed, it is clipped rather
-                than dropped, so the button is never an unnamed icon. */}
+            {/* The icon is what remains visible on the collapsed rail; the
+                label survives it too, clipped rather than dropped, so the
+                button is never an unnamed icon to a screen reader. */}
+            <SignOutIcon />
             <span className="shell-nav-text">Sign out</span>
           </button>
         </div>

@@ -291,8 +291,8 @@ curl -X POST http://localhost:8080/api/v1/setup \
 Press Add a monitor, paste an address and press Test it: the check runs
 before anything is saved, so you find out immediately whether the target is
 reachable rather than waiting for the first red row. The dashboard has
-something to show within a minute of `docker compose up -d`, without a
-terminal at any point.
+something to show within a minute of `docker compose up -d`, and neither
+setup nor the first monitor needs a terminal.
 
 Setup also returns a session cookie, so with a cookie jar the two calls chain:
 

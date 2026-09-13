@@ -89,6 +89,22 @@ export function BeakerIcon(props: IconProps) {
   );
 }
 
+/**
+ * A door with an arrow leaving through it.
+ *
+ * The collapsed sidebar is a 56px icon rail, so a control whose only visible
+ * child is a clipped label would be a blank button there. This gives sign-out
+ * the same shape every other rail item has.
+ */
+export function SignOutIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3" />
+      <path d="M10 8l-4 4 4 4M6 12h9" />
+    </Icon>
+  );
+}
+
 /** A plus in a circle: "add a thing", the one action the empty page needs. */
 export function PlusIcon(props: IconProps) {
   return (

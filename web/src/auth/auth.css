@@ -132,7 +132,7 @@
 .auth-input:focus-visible {
   outline: none;
   border-color: var(--up);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--up) 14%, transparent);
+  box-shadow: 0 0 0 3px var(--ring-up);
 }
 
 .auth-input[aria-invalid="true"] {
@@ -141,7 +141,7 @@
 
 .auth-input[aria-invalid="true"]:focus {
   border-color: var(--down);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--down) 14%, transparent);
+  box-shadow: 0 0 0 3px var(--ring-down);
 }
 
 /*
