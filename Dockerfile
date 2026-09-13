@@ -119,7 +119,25 @@ USER nonroot:nonroot
 
 EXPOSE 8080
 
-# ENTRYPOINT, not CMD, so `docker run <image> --addr :9000` appends a flag
+# The image has no shell, no curl and no wget, so the usual
+# `CMD curl -f http://localhost:8080/health` cannot run here. The binary can
+# probe itself instead, and it is already in the image, so this costs no bytes.
+#
+# Exec form, because there is no shell to parse the string form. No --addr is
+# passed, and it could not be: Docker runs this command as its own process, so
+# it never sees the flags appended to the ENTRYPOINT. Only the environment is
+# shared, so `-e SUBGLANCE_ADDR=:9000` is what moves the server and the
+# healthcheck together; a bare `--addr :9000` moves only the server and leaves
+# this check probing :8080.
+#
+# --start-period covers the first start, where the database is still being
+# opened and migrated: failures during it do not count against --retries.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD ["/usr/local/bin/subglance", "healthcheck"]
+
+# ENTRYPOINT, not CMD, so `docker run <image> --log-level debug` appends a flag
 # instead of replacing the command. The defaults already match the image
-# layout (:8080, /data), so the documented run needs no flags at all.
+# layout (:8080, /data), so the documented run needs no flags at all. Set the
+# listen address with SUBGLANCE_ADDR rather than --addr, see the HEALTHCHECK
+# note above.
 ENTRYPOINT ["/usr/local/bin/subglance"]
