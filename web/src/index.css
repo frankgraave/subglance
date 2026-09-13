@@ -5,6 +5,7 @@
 @import "./heartbeat/heartbeat.css";
 @import "./monitors/led.css";
 @import "./monitors/monitors.css";
+@import "./monitors/detail.css";
 @import "./live/connection.css";
 @import "./shell/shell.css";
 @import "./wall/wall.css";

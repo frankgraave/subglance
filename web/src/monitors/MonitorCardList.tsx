@@ -27,6 +27,8 @@ export type MonitorCardListProps = {
   totalCount?: number;
   /** Explicit heartbeat width; required in jsdom, which has no layout. */
   beatWidth?: number;
+  /** Opens a monitor's detail view client-side. See MonitorLink. */
+  onOpen?: (id: string) => void;
 };
 
 export function MonitorCardList({
@@ -34,6 +36,7 @@ export function MonitorCardList({
   query = "",
   totalCount,
   beatWidth = CARD_BEAT_WIDTH,
+  onOpen,
 }: MonitorCardListProps) {
   const total = totalCount ?? monitors.length;
 
@@ -45,7 +48,7 @@ export function MonitorCardList({
 
   const cards = (list: readonly Monitor[]) =>
     list.map((monitor) => (
-      <MonitorCard key={monitor.id} monitor={monitor} beatWidth={beatWidth} />
+      <MonitorCard key={monitor.id} monitor={monitor} beatWidth={beatWidth} onOpen={onOpen} />
     ));
 
   return (

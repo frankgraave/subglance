@@ -2,6 +2,7 @@ import { memo } from "react";
 import { HeartbeatBar } from "../heartbeat/HeartbeatBar";
 import { formatLatency, formatUptime } from "./format";
 import { Led } from "./Led";
+import { MonitorLink } from "./MonitorLink";
 import { Unknown } from "./Unknown";
 import type { Monitor } from "./types";
 
@@ -42,9 +43,11 @@ export type MonitorCardProps = {
   monitor: Monitor;
   /** Explicit heartbeat width; required in jsdom, which has no layout. */
   beatWidth?: number;
+  /** Opens this monitor's detail view client-side. See MonitorLink. */
+  onOpen?: (id: string) => void;
 };
 
-function MonitorCardImpl({ monitor, beatWidth = CARD_BEAT_WIDTH }: MonitorCardProps) {
+function MonitorCardImpl({ monitor, beatWidth = CARD_BEAT_WIDTH, onOpen }: MonitorCardProps) {
   const { name, status, target, latencyMs, uptime24h, beats, error } = monitor;
 
   return (
@@ -58,7 +61,9 @@ function MonitorCardImpl({ monitor, beatWidth = CARD_BEAT_WIDTH }: MonitorCardPr
         <Led status={status} hideLabel={false} className="mon-card-led" />
       </div>
 
-      <h3 className="mon-card-name">{name}</h3>
+      <h3 className="mon-card-name">
+        <MonitorLink id={monitor.id} name={name} onOpen={onOpen} />
+      </h3>
       <p className="mon-card-target">{target}</p>
 
       {/* The heartbeat survives the move to the phone unchanged. It is the
@@ -93,6 +98,7 @@ export const MonitorCard = memo(MonitorCardImpl, (prev, next) => {
   const b = next.monitor;
   return (
     prev.beatWidth === next.beatWidth &&
+    prev.onOpen === next.onOpen &&
     a.id === b.id &&
     a.name === b.name &&
     a.status === b.status &&
