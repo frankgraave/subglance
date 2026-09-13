@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/frankgraave/subglance/internal/auth"
 )
 
 // Monitor is a stored monitor definition.
@@ -31,6 +33,27 @@ type Monitor struct {
 	SSLWarnDays int
 	Enabled     bool
 
+	// CaptureResponse allows a failed HTTP check to keep the beginning of the
+	// response body. Stored as a column so it travels with the monitor into
+	// the checker without a second lookup per result.
+	CaptureResponse bool
+
+	// PushToken is the plaintext push URL token. It is set exactly once, by
+	// CreateMonitor, and is never read back from the database — only its
+	// hash is stored. Every other code path sees it empty.
+	PushToken string
+
+	// PushTokenPrefix is the first few characters of the token, kept in
+	// clear so a list can tell two push monitors apart without being able
+	// to reconstruct either.
+	PushTokenPrefix string
+
+	// PushIntervalS is how often the job is expected to report in, and
+	// PushGraceS how late it may be before that silence counts as a
+	// failure. Both are zero for every other monitor type.
+	PushIntervalS int
+	PushGraceS    int
+
 	// Tags are key/value pairs such as `env` -> `prod`. See tags.go for the
 	// shape and the normalisation rules; nil and empty mean the same thing.
 	Tags map[string]string
@@ -50,22 +73,30 @@ func (db *DB) ListEnabledMonitors(ctx context.Context) ([]Monitor, error) {
 	return db.queryMonitors(ctx, "WHERE enabled = 1")
 }
 
+// monitorColumns is every column a Monitor is scanned from, in the order
+// scanMonitor reads them.
+//
+// push_token_hash is deliberately absent. It is a credential, and a SELECT
+// that never asks for it cannot leak it into a log line, an error message or a
+// debug dump of a Monitor value.
 const monitorColumns = `
 	id, name, type, target, interval_s, timeout_s, retries,
 	method, expected_status, keyword, keyword_mode, follow_redirects,
-	headers_json, body, ssl_warn_days, enabled, created_at, updated_at`
+	headers_json, body, ssl_warn_days, enabled, capture_response,
+	push_token_prefix, push_interval_s, push_grace_s,
+	created_at, updated_at`
 
 // queryMonitors runs a monitor SELECT with a caller-supplied WHERE clause.
 //
 // The clause is concatenated into the SQL, so it must never contain anything
 // derived from user input. Every caller in this package passes a compile-time
-// constant, and that is the rule: if a filter ever needs a value, it takes a
-// bound parameter rather than string formatting.
-func (db *DB) queryMonitors(ctx context.Context, where string) ([]Monitor, error) {
+// constant, and that is the rule: a filter that needs a value writes a `?` in
+// the constant and passes the value through args, never through formatting.
+func (db *DB) queryMonitors(ctx context.Context, where string, args ...any) ([]Monitor, error) {
 	// #nosec G202 -- `where` is a package-internal constant, never user input.
 	q := "SELECT " + monitorColumns + " FROM monitors " + where + " ORDER BY id"
 
-	rows, err := db.Reader.QueryContext(ctx, q)
+	rows, err := db.Reader.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query monitors: %w", err)
 	}
@@ -126,6 +157,9 @@ func scanMonitor(s scanner) (Monitor, error) {
 		keyword     sql.NullString
 		headersJSON sql.NullString
 		body        sql.NullString
+		pushPrefix  sql.NullString
+		pushEvery   sql.NullInt64
+		pushGrace   sql.NullInt64
 		created     int64
 		updated     int64
 	)
@@ -134,7 +168,9 @@ func scanMonitor(s scanner) (Monitor, error) {
 		&m.ID, &m.Name, &m.Type, &m.Target,
 		&m.IntervalS, &m.TimeoutS, &m.Retries,
 		&m.Method, &m.ExpectedStatus, &keyword, &m.KeywordMode, &m.FollowRedirects,
-		&headersJSON, &body, &m.SSLWarnDays, &m.Enabled, &created, &updated,
+		&headersJSON, &body, &m.SSLWarnDays, &m.Enabled, &m.CaptureResponse,
+		&pushPrefix, &pushEvery, &pushGrace,
+		&created, &updated,
 	)
 	if err != nil {
 		return Monitor{}, err
@@ -142,6 +178,9 @@ func scanMonitor(s scanner) (Monitor, error) {
 
 	m.Keyword = keyword.String
 	m.Body = body.String
+	m.PushTokenPrefix = pushPrefix.String
+	m.PushIntervalS = int(pushEvery.Int64)
+	m.PushGraceS = int(pushGrace.Int64)
 	m.CreatedAt = time.Unix(created, 0).UTC()
 	m.UpdatedAt = time.Unix(updated, 0).UTC()
 
@@ -178,15 +217,35 @@ func (db *DB) CreateMonitor(ctx context.Context, m Monitor) (Monitor, error) {
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	// A push monitor is issued its token here rather than by the caller, so
+	// there is exactly one place in the codebase that decides what a push
+	// credential looks like and exactly one moment at which the plaintext
+	// exists.
+	var tokenHash any
+	if m.Type == TypePush {
+		token, prefix, err := auth.GeneratePushToken()
+		if err != nil {
+			return Monitor{}, err
+		}
+		m.PushToken = token
+		m.PushTokenPrefix = prefix
+		tokenHash = auth.HashToken(token)
+	}
+
 	res, err := tx.ExecContext(ctx, `
 		INSERT INTO monitors (
 			name, type, target, interval_s, timeout_s, retries,
 			method, expected_status, keyword, keyword_mode, follow_redirects,
-			headers_json, body, ssl_warn_days, enabled, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			headers_json, body, ssl_warn_days, enabled, capture_response,
+			push_token_hash, push_token_prefix, push_interval_s, push_grace_s,
+			created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		m.Name, m.Type, m.Target, m.IntervalS, m.TimeoutS, m.Retries,
 		m.Method, m.ExpectedStatus, nullString(m.Keyword), m.KeywordMode, m.FollowRedirects,
-		headersJSON, nullString(m.Body), m.SSLWarnDays, m.Enabled, now, now,
+		headersJSON, nullString(m.Body), m.SSLWarnDays, m.Enabled, m.CaptureResponse,
+		tokenHash, nullString(m.PushTokenPrefix),
+		nullInt(m.PushIntervalS), pushGraceValue(m),
+		now, now,
 	)
 	if err != nil {
 		return Monitor{}, fmt.Errorf("insert monitor: %w", err)
@@ -273,11 +332,40 @@ type Heartbeat struct {
 	LatencyMS  int
 	StatusCode int
 	Error      string
+
+	// Response is the captured failure response, nil when there is none.
+	// ListHeartbeats fills it in; the bulk beat-bar read deliberately does
+	// not, because that view never shows it.
+	Response *ResponseSnapshot
 }
 
-// RecordHeartbeat stores one check result.
+// ResponseSnapshot is the beginning of a failed response, kept for diagnosis.
+//
+// It lives in its own table rather than as columns on heartbeats: the beat bar
+// reads the newest N heartbeats for every monitor in one query, and a 2 KiB
+// text column would ride along on every one of those rows for a view that
+// never shows it.
+type ResponseSnapshot struct {
+	Body      string
+	Headers   map[string]string
+	Truncated bool
+}
+
+// RecordHeartbeat stores one check result, and its response snapshot when the
+// result carries one.
+//
+// Both rows go in one transaction. A snapshot without its heartbeat is
+// impossible anyway (the foreign key forbids it), but a committed heartbeat
+// whose snapshot write failed would show the UI a failure that claims to have
+// captured a response and then has none.
 func (db *DB) RecordHeartbeat(ctx context.Context, hb Heartbeat) error {
-	_, err := db.Writer.ExecContext(ctx, `
+	tx, err := db.Writer.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin record heartbeat: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	res, err := tx.ExecContext(ctx, `
 		INSERT INTO heartbeats (monitor_id, ts, ok, latency_ms, status_code, error)
 		VALUES (?, ?, ?, ?, ?, ?)`,
 		hb.MonitorID, hb.TS.Unix(), hb.OK,
@@ -285,6 +373,32 @@ func (db *DB) RecordHeartbeat(ctx context.Context, hb Heartbeat) error {
 	)
 	if err != nil {
 		return fmt.Errorf("insert heartbeat for monitor %d: %w", hb.MonitorID, err)
+	}
+
+	if hb.Response != nil {
+		id, err := res.LastInsertId()
+		if err != nil {
+			return fmt.Errorf("heartbeat id for monitor %d: %w", hb.MonitorID, err)
+		}
+		var headersJSON any
+		if len(hb.Response.Headers) > 0 {
+			b, err := json.Marshal(hb.Response.Headers)
+			if err != nil {
+				return fmt.Errorf("encode response headers: %w", err)
+			}
+			headersJSON = string(b)
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO heartbeat_responses (heartbeat_id, body, headers_json, truncated)
+			VALUES (?, ?, ?, ?)`,
+			id, hb.Response.Body, headersJSON, hb.Response.Truncated,
+		); err != nil {
+			return fmt.Errorf("insert response snapshot for monitor %d: %w", hb.MonitorID, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit record heartbeat: %w", err)
 	}
 	return nil
 }
@@ -324,8 +438,16 @@ func scanHeartbeat(s scanner) (Heartbeat, error) {
 	return hb, nil
 }
 
-// ListHeartbeats returns the most recent heartbeats for a monitor, newest first.
+// ListHeartbeats returns the most recent heartbeats for a monitor, newest
+// first, with the captured response attached to every failure that has one.
 func (db *DB) ListHeartbeats(ctx context.Context, monitorID int64, limit int) ([]Heartbeat, error) {
+	return db.listHeartbeats(ctx, monitorID, limit, true)
+}
+
+// listHeartbeats is the shared body. withResponses is false for callers that
+// only need the beat itself: attaching snapshots costs a second query, and the
+// monitor listing makes this call once per monitor for a field it never shows.
+func (db *DB) listHeartbeats(ctx context.Context, monitorID int64, limit int, withResponses bool) ([]Heartbeat, error) {
 	if limit <= 0 {
 		limit = defaultHeartbeatLimit
 	}
@@ -349,7 +471,80 @@ func (db *DB) ListHeartbeats(ctx context.Context, monitorID int64, limit int) ([
 		}
 		out = append(out, hb)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if withResponses {
+		if err := db.attachResponses(ctx, out); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// attachResponses fills in the snapshot for every heartbeat in the page that
+// has one.
+//
+// One query for the page rather than one per beat: a 1000-beat listing would
+// otherwise be 1001 round trips through SQLite for a panel that is collapsed
+// by default. Successful checks never have a snapshot, so the WHERE clause
+// normally matches a handful of rows out of the thousand asked for.
+func (db *DB) attachResponses(ctx context.Context, hbs []Heartbeat) error {
+	ids := make([]int64, 0, len(hbs))
+	for _, hb := range hbs {
+		if !hb.OK {
+			ids = append(ids, hb.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	// The ids go in as one JSON array bound to a single parameter, so there
+	// is no SQL built by concatenation and no per-page statement to cache.
+	encoded, err := json.Marshal(ids)
+	if err != nil {
+		return fmt.Errorf("encode heartbeat ids: %w", err)
+	}
+
+	rows, err := db.Reader.QueryContext(ctx, `
+		SELECT heartbeat_id, body, headers_json, truncated
+		FROM heartbeat_responses
+		WHERE heartbeat_id IN (SELECT value FROM json_each(?))`, string(encoded))
+	if err != nil {
+		return fmt.Errorf("query response snapshots: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	found := make(map[int64]*ResponseSnapshot, len(ids))
+	for rows.Next() {
+		var (
+			id          int64
+			snap        ResponseSnapshot
+			headersJSON sql.NullString
+		)
+		if err := rows.Scan(&id, &snap.Body, &headersJSON, &snap.Truncated); err != nil {
+			return fmt.Errorf("scan response snapshot: %w", err)
+		}
+		if headersJSON.Valid && headersJSON.String != "" {
+			if err := json.Unmarshal([]byte(headersJSON.String), &snap.Headers); err != nil {
+				// A malformed stored header map must not blank the body it
+				// belongs to; the body is the part worth reading.
+				snap.Headers = nil
+			}
+		}
+		found[id] = &snap
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("query response snapshots: %w", err)
+	}
+
+	for i := range hbs {
+		if snap, present := found[hbs[i].ID]; present {
+			hbs[i].Response = snap
+		}
+	}
+	return nil
 }
 
 // RecentHeartbeatsForAll returns the most recent perMonitor heartbeats for
@@ -513,7 +708,7 @@ func (db *DB) CheckedMonitorIDs(ctx context.Context) (map[int64]struct{}, error)
 // LatestHeartbeat returns the most recent heartbeat for a monitor.
 // It returns sql.ErrNoRows when the monitor has never been checked.
 func (db *DB) LatestHeartbeat(ctx context.Context, monitorID int64) (Heartbeat, error) {
-	hbs, err := db.ListHeartbeats(ctx, monitorID, 1)
+	hbs, err := db.listHeartbeats(ctx, monitorID, 1, false)
 	if err != nil {
 		return Heartbeat{}, err
 	}
@@ -608,11 +803,18 @@ func (db *DB) updateMonitor(ctx context.Context, m Monitor, expected []int64) (M
 		headersJSON = string(b)
 	}
 
+	// The token columns are absent on purpose: an update writes everything
+	// mutable, and a push token is not. Rotating one is a separate,
+	// deliberate act, not something a PATCH of the name should be able to do
+	// by accident — the old URL would stop working the moment it happened,
+	// silently, in whatever script holds it.
 	args := []any{
 		m.Name, m.Type, m.Target, m.IntervalS, m.TimeoutS, m.Retries,
 		m.Method, m.ExpectedStatus, nullString(m.Keyword), m.KeywordMode,
 		m.FollowRedirects, headersJSON, nullString(m.Body), m.SSLWarnDays,
-		m.Enabled, next, m.ID,
+		m.Enabled, m.CaptureResponse,
+		nullInt(m.PushIntervalS), pushGraceValue(m),
+		next, m.ID,
 	}
 
 	// Both variants are compile-time constants. An IN list sized to the
@@ -686,7 +888,8 @@ const updateMonitorSetClause = `
 		name = ?, type = ?, target = ?, interval_s = ?, timeout_s = ?, retries = ?,
 		method = ?, expected_status = ?, keyword = ?, keyword_mode = ?,
 		follow_redirects = ?, headers_json = ?, body = ?, ssl_warn_days = ?,
-		enabled = ?, updated_at = MAX(?, updated_at + 1)
+		enabled = ?, capture_response = ?, push_interval_s = ?, push_grace_s = ?,
+		updated_at = MAX(?, updated_at + 1)
 	WHERE id = ?`
 
 const updateMonitorSQL = updateMonitorSetClause

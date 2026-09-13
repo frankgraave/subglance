@@ -28,6 +28,12 @@ type monitorResponse struct {
 	TimeoutS  int  `json:"timeout_s"`
 	Enabled   bool `json:"enabled"`
 
+	// CaptureResponse says whether a failed check keeps the start of the
+	// response body. Always present rather than omitempty: it governs what
+	// this monitor stores about someone else's service, and a field that
+	// disappears when false reads as "the server does not know about this".
+	CaptureResponse bool `json:"capture_response"`
+
 	Status     string     `json:"status"` // up, pending, or down
 	LastCheck  *time.Time `json:"last_check,omitempty"`
 	LatencyMS  int        `json:"latency_ms,omitempty"`
@@ -41,6 +47,20 @@ type monitorResponse struct {
 	IncidentSince *time.Time `json:"incident_since,omitempty"`
 
 	Uptime24h float64 `json:"uptime_24h"`
+
+	// PushURL is the full, secret URL a job pings. It is present exactly
+	// once, in the response that created the monitor, and never again —
+	// only its hash is stored, so it genuinely cannot be looked up later.
+	PushURL string `json:"push_url,omitempty"`
+
+	// PushTokenPrefix identifies the push URL without revealing it, so a
+	// list can show which credential a monitor carries.
+	PushTokenPrefix string `json:"push_token_prefix,omitempty"`
+
+	// PushIntervalS is how often the job is expected to report and
+	// PushGraceS how late it may be. Both omitted for non-push monitors.
+	PushIntervalS int `json:"push_interval_s,omitempty"`
+	PushGraceS    int `json:"push_grace_s,omitempty"`
 
 	// Tags is a key/value map (`{"env":"prod"}`), omitted when empty so the
 	// response stays byte for byte what it was for untagged monitors.
@@ -69,17 +89,41 @@ type heartbeatResponse struct {
 	LatencyMS  int       `json:"latency_ms"`
 	StatusCode int       `json:"status_code,omitempty"`
 	Error      string    `json:"error,omitempty"`
+
+	// Response is the captured failure response, present only on failures of
+	// a monitor with capture enabled. Omitted otherwise, so every response
+	// that had no snapshot stays byte for byte what it was.
+	Response *responseSnapshotResponse `json:"response,omitempty"`
+}
+
+// responseSnapshotResponse is the wire shape of a captured failure response.
+//
+// This is diagnostic detail, not dashboard information: it is returned so a
+// detail view can show it behind a disclosure, and it is never part of the
+// bulk beat-bar payload.
+type responseSnapshotResponse struct {
+	Body      string            `json:"body"`
+	Headers   map[string]string `json:"headers,omitempty"`
+	Truncated bool              `json:"truncated,omitempty"`
 }
 
 // describeHeartbeat converts a stored heartbeat to its wire shape.
 func describeHeartbeat(hb store.Heartbeat) heartbeatResponse {
-	return heartbeatResponse{
+	out := heartbeatResponse{
 		TS:         hb.TS,
 		OK:         hb.OK,
 		LatencyMS:  hb.LatencyMS,
 		StatusCode: hb.StatusCode,
 		Error:      hb.Error,
 	}
+	if hb.Response != nil {
+		out.Response = &responseSnapshotResponse{
+			Body:      hb.Response.Body,
+			Headers:   hb.Response.Headers,
+			Truncated: hb.Response.Truncated,
+		}
+	}
+	return out
 }
 
 type createMonitorRequest struct {
@@ -98,7 +142,10 @@ type createMonitorRequest struct {
 	Body            string            `json:"body"`
 	SSLWarnDays     *int              `json:"ssl_warn_days"`
 	Enabled         *bool             `json:"enabled"`
+	CaptureResponse *bool             `json:"capture_response"`
 	Tags            map[string]string `json:"tags"`
+	PushIntervalS   *int              `json:"push_interval_s"`
+	PushGraceS      *int              `json:"push_grace_s"`
 }
 
 func (s *Server) handleListMonitors(w http.ResponseWriter, r *http.Request) {
@@ -204,6 +251,7 @@ func (s *Server) handleCreateMonitor(w http.ResponseWriter, r *http.Request) {
 		Headers:         req.Headers,
 		Body:            req.Body,
 		Enabled:         true,
+		CaptureResponse: true,
 	}
 	if req.Retries != nil {
 		m.Retries = *req.Retries
@@ -219,10 +267,21 @@ func (s *Server) handleCreateMonitor(w http.ResponseWriter, r *http.Request) {
 	if req.Enabled != nil {
 		m.Enabled = *req.Enabled
 	}
+	if req.CaptureResponse != nil {
+		m.CaptureResponse = *req.CaptureResponse
+	}
 	// Already validated above by validateCreateMonitor; normalising again
 	// here rather than storing the raw map keeps the stored keys canonical
 	// without the validator having to hand a value back.
 	m.Tags, _ = store.NormaliseTags(req.Tags)
+
+	if req.Type == store.TypePush {
+		m.PushIntervalS = *req.PushIntervalS
+		m.PushGraceS = store.DefaultPushGraceS
+		if req.PushGraceS != nil {
+			m.PushGraceS = *req.PushGraceS
+		}
+	}
 
 	created, err := s.db.CreateMonitor(r.Context(), m)
 	if err != nil {
@@ -232,22 +291,41 @@ func (s *Server) handleCreateMonitor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.log.Info("monitor created", "id", created.ID, "name", created.Name, "target", created.Target)
-	writeJSON(w, http.StatusCreated, s.describeMonitor(r, created))
+
+	// The plaintext push URL exists only in this response. The monitor is
+	// useless without it and it can never be retrieved again, so it is
+	// assembled here — from the request's own host, so a user behind a
+	// reverse proxy is handed a URL that actually works from outside.
+	resp := s.describeMonitor(r, created)
+	if created.PushToken != "" {
+		resp.PushURL = pushURL(r, created.PushToken)
+	}
+	writeJSON(w, http.StatusCreated, resp)
 }
 
 func validateCreateMonitor(req createMonitorRequest) problem {
 	if req.Name == "" {
 		return fieldProblem("name", "name is required")
 	}
-	if req.Target == "" {
+	// A push monitor has nothing to dial, so it has nothing to put in
+	// target. Requiring one anyway would force every client to invent a
+	// placeholder, and a column full of invented placeholders is worse than
+	// an empty one: it looks like data.
+	if req.Target == "" && req.Type != store.TypePush {
 		return fieldProblem("target", "target is required")
 	}
+	if req.Target != "" && req.Type == store.TypePush {
+		return fieldProblem("target", "a push monitor has no target; it is reported to, not probed")
+	}
 	switch req.Type {
-	case "http", "tcp", "ping", "ssl":
+	case "http", "tcp", "ping", "ssl", store.TypePush:
 	case "":
 		return fieldProblem("type", "type is required")
 	default:
 		return fieldProblem("type", "unknown type "+req.Type)
+	}
+	if p := validatePushWindow(req.Type, req.PushIntervalS, req.PushGraceS); !p.ok() {
+		return p
 	}
 	if req.IntervalS != 0 && (req.IntervalS < 20 || req.IntervalS > 86400) {
 		return fieldProblem("interval_s", "interval_s must be between 20 and 86400")
@@ -549,9 +627,16 @@ func (s *Server) describeMonitor(r *http.Request, m store.Monitor) monitorRespon
 		IntervalS: m.IntervalS,
 		TimeoutS:  m.TimeoutS,
 		Enabled:   m.Enabled,
+
+		CaptureResponse: m.CaptureResponse,
+
 		Status:    "pending",
 		Tags:      m.Tags,
 		CreatedAt: m.CreatedAt,
+
+		PushTokenPrefix: m.PushTokenPrefix,
+		PushIntervalS:   m.PushIntervalS,
+		PushGraceS:      m.PushGraceS,
 	}
 
 	ctx := r.Context()
@@ -674,9 +759,17 @@ type patchMonitorRequest struct {
 	Body            *string            `json:"body"`
 	SSLWarnDays     *int               `json:"ssl_warn_days"`
 	Enabled         *bool              `json:"enabled"`
+	CaptureResponse *bool              `json:"capture_response"`
 	// Tags replaces the whole set, like Headers. Sending `{}` clears them;
 	// omitting the field leaves them alone.
 	Tags *map[string]string `json:"tags"`
+
+	// The push window may be retuned after the fact — a backup that moved
+	// from hourly to nightly should not have to be recreated, which would
+	// throw away its history and invalidate the URL already in the crontab.
+	// The token itself is not patchable; see UpdateMonitor.
+	PushIntervalS *int `json:"push_interval_s"`
+	PushGraceS    *int `json:"push_grace_s"`
 }
 
 // handlePatchMonitor applies a partial update to an existing monitor.
@@ -815,8 +908,18 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 		m.Name = *req.Name
 	}
 	if req.Type != nil {
+		// A monitor cannot become a push monitor or stop being one. Both
+		// directions would silently break something the user cannot see:
+		// converting away leaves a live URL pointing at a monitor that no
+		// longer listens, and converting to would need a token this
+		// endpoint has no way to hand back. Delete and recreate is the
+		// honest answer, and it is what the user means anyway.
+		if (*req.Type == store.TypePush) != (m.Type == store.TypePush) {
+			return fieldProblem("type",
+				"a monitor cannot be converted to or from push; create a new one instead")
+		}
 		switch *req.Type {
-		case "http", "tcp", "ping", "ssl":
+		case "http", "tcp", "ping", "ssl", store.TypePush:
 			m.Type = *req.Type
 		default:
 			return fieldProblem("type", "unknown type "+*req.Type)
@@ -887,12 +990,30 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 	if req.Enabled != nil {
 		m.Enabled = *req.Enabled
 	}
+	if req.CaptureResponse != nil {
+		m.CaptureResponse = *req.CaptureResponse
+	}
 	if req.Tags != nil {
 		tags, err := store.NormaliseTags(*req.Tags)
 		if err != nil {
 			return fieldProblem("tags", err.Error())
 		}
 		m.Tags = tags
+	}
+	if req.PushIntervalS != nil || req.PushGraceS != nil {
+		if m.Type != store.TypePush {
+			return fieldProblem("push_interval_s",
+				"push_interval_s and push_grace_s apply only to push monitors")
+		}
+		if req.PushIntervalS != nil {
+			m.PushIntervalS = *req.PushIntervalS
+		}
+		if req.PushGraceS != nil {
+			m.PushGraceS = *req.PushGraceS
+		}
+		if p := validatePushRange(m.PushIntervalS, m.PushGraceS); !p.ok() {
+			return p
+		}
 	}
 
 	// Re-validate whenever either half of the pair moved. The target the

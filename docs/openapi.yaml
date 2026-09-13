@@ -295,6 +295,188 @@ paths:
               schema:
                 type: string
       x-subglance-access: public
+  /api/v1/push/{token}:
+    parameters:
+      - name: token
+        in: path
+        required: true
+        description: |
+          The secret push token, issued once as part of `push_url` when the
+          monitor was created. It is the credential: anyone holding it can
+          report on this one monitor, and nothing else.
+        schema:
+          type: string
+        example: sgu_Ej4k2QfM...
+    get:
+      tags: [Monitors]
+      operationId: pushReportGet
+      summary: Report that a job ran (GET)
+      description: |
+        Records a heartbeat for a `push` monitor. This is the direction the
+        other check types cannot go: a nightly backup, an import script or a
+        queue worker on a machine with no public port cannot be dialled, so it
+        reports for itself and silence is what counts as failure.
+
+        Public by necessity, not by choice. A cron line cannot hold a session,
+        and handing a backup script an API token would give it authority over
+        every monitor in the instance. The token in the path is the narrowest
+        possible credential instead.
+
+        GET is accepted as well as POST because `curl URL` in a crontab is the
+        whole use case. The two behave identically; no request body is read.
+
+        **A push monitor proves that your script reached its last line, not
+        that the work succeeded.** A backup that silently writes an empty
+        archive and then pings will stay green. Ping at the end, only on
+        success, and use `?status=$?` so a failing run says so.
+
+        Rate limited to one accepted report per monitor per two seconds. The
+        shortest window a push monitor may have is sixty seconds, so no honest
+        job can reach that limit.
+
+        Reporting to a **paused** monitor returns 200 with `recorded: false`
+        and writes nothing, exactly as a manual check does: a paused monitor
+        is one the instance promised not to watch.
+      security: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: |
+            `up` (or omitted, or `0`) records success. `down`, `fail`, or any
+            non-zero integer records failure. The numeric forms exist so that
+            `?status=$?` works straight out of a shell for both outcomes.
+          schema:
+            type: string
+          example: '0'
+        - name: msg
+          in: query
+          required: false
+          description: |
+            A note shown as the failure text, ignored when the report is a
+            success. Truncated to 500 **bytes** on a rune boundary rather than
+            rejected: a job reporting its own failure should never have that
+            report refused because the error it pasted was long. Bytes rather
+            than characters, so a message of multi-byte runes is cut earlier
+            than its character count suggests.
+          schema:
+            type: string
+          example: 'restic: repository locked'
+      responses:
+        '200':
+          description: The report was accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushResult'
+        '400':
+          description: The `status` parameter was not a recognised value.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: |
+            Unknown push URL. Deliberately the same answer whether the token
+            is wrong or the monitor is gone: distinguishing them would make
+            the endpoint an oracle for testing guesses.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: This monitor was reported to within the last two seconds.
+          headers:
+            Retry-After:
+              description: Whole seconds to wait, rounded up and never below 1.
+              schema:
+                type: integer
+                minimum: 1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: The report could not be recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: |
+            This instance runs without a checker attached, so push reports are
+            unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: public
+    post:
+      tags: [Monitors]
+      operationId: pushReportPost
+      summary: Report that a job ran (POST)
+      description: |
+        Identical to the GET form in every respect, including the query
+        parameters. No request body is read: accepting both a body and a query
+        string would mean deciding which wins when they disagree.
+      security: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+          example: down
+        - name: msg
+          in: query
+          required: false
+          description: |
+            As on the GET form: truncated to 500 bytes on a rune boundary.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The report was accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushResult'
+        '400':
+          description: The `status` parameter was not a recognised value.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Unknown push URL.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: This monitor was reported to within the last two seconds.
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: The report could not be recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: This instance runs without a checker attached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: public
   /api/v1/auth/me:
     get:
       tags: [Auth]
@@ -1986,7 +2168,13 @@ components:
         The kind of check. `http` needs an http/https URL, `tcp` needs
         `host:port`, `ssl` takes a host with an optional port (443 assumed),
         and `ping` takes a bare hostname or IP — ICMP has no ports.
-      enum: [http, tcp, ping, ssl]
+
+        `push` is the one type nothing dials. The monitor is given a secret
+        URL, the job pings it when it finishes, and silence past
+        `push_interval_s` + `push_grace_s` is what counts as failure. It takes
+        no `target`, cannot be checked on demand, and cannot be converted to
+        or from another type.
+      enum: [http, tcp, ping, ssl, push]
       example: http
     KeywordMode:
       type: string
@@ -2051,7 +2239,7 @@ components:
         A monitor definition plus its current state. The wire shape
         deliberately differs from the storage shape so the contract can stay
         stable while storage evolves.
-      required: [id, name, type, target, interval_s, timeout_s, enabled, status, uptime_24h, created_at]
+      required: [id, name, type, target, interval_s, timeout_s, enabled, capture_response, status, uptime_24h, created_at]
       properties:
         id:
           type: integer
@@ -2083,6 +2271,13 @@ components:
         enabled:
           type: boolean
           description: False while paused; a paused monitor is not scheduled.
+          example: true
+        capture_response:
+          type: boolean
+          description: |
+            Whether a failed HTTP check keeps the beginning of the response
+            body for diagnosis. Always present, never omitted when false: it
+            governs what this instance stores about someone else's service.
           example: true
         status:
           $ref: '#/components/schemas/MonitorStatus'
@@ -2138,6 +2333,31 @@ components:
             once.
           items:
             $ref: '#/components/schemas/Heartbeat'
+        push_url:
+          type: string
+          description: |
+            The full secret URL the job should ping. Present **only** in the
+            response that created the monitor, and never again: only a hash is
+            stored, so it genuinely cannot be looked up afterwards. Lose it and
+            the monitor has to be recreated.
+          example: https://status.example.com/api/v1/push/sgu_Ej4k2...
+        push_token_prefix:
+          type: string
+          description: |
+            The first few characters of the push token, so a list can tell two
+            push monitors apart without revealing either URL.
+          example: sgu_Ej4k2
+        push_interval_s:
+          type: integer
+          description: How often the job is expected to report in.
+          example: 3600
+        push_grace_s:
+          type: integer
+          description: |
+            How late the job may report before the silence counts as a
+            failure. Added to `push_interval_s`, not subtracted from it: an
+            hourly job with 300 seconds of grace is late at 65 minutes.
+          example: 300
         created_at:
           type: string
           format: date-time
@@ -2148,7 +2368,27 @@ components:
         Unknown fields are rejected. Omitted optional fields take the schema
         defaults; note that `enabled` and `follow_redirects` default to true
         and `retries` to 2.
-      required: [name, type, target]
+
+        `target` is required for every type except `push`, and `push_interval_s`
+        is required for `push` and rejected for every other type. Both rules are
+        expressed below with `if`/`then`, so a validator enforces the same shape
+        the server does.
+      required: [name, type]
+      allOf:
+        - if:
+            properties:
+              type:
+                const: push
+            required: [type]
+          then:
+            required: [push_interval_s]
+            not:
+              required: [target]
+          else:
+            required: [target]
+            properties:
+              push_interval_s: false
+              push_grace_s: false
       properties:
         name:
           type: string
@@ -2158,7 +2398,10 @@ components:
           $ref: '#/components/schemas/MonitorType'
         target:
           type: string
-          description: Required, and validated against `type`.
+          description: |
+            Required for every type except `push`, and validated against
+            `type`. A `push` monitor must **not** send one: there is nothing
+            to dial, and a placeholder in that column would look like data.
           example: https://example.com/health
         interval_s:
           type: integer
@@ -2223,12 +2466,44 @@ components:
           type: boolean
           description: Defaults to true, so a new monitor starts checking immediately.
           default: true
+        capture_response:
+          type: boolean
+          description: |
+            Whether a failed HTTP check keeps the beginning of the response
+            body for diagnosis. Defaults to true: a capture nobody enabled is
+            a capture that is absent on the night it is needed. Turn it off
+            for a target whose responses may carry a session token or
+            personal data — a keyword check in particular reads the body
+            already, so the decision is worth making deliberately.
+          default: true
         tags:
           $ref: '#/components/schemas/TagMap'
           description: |
             Key/value labels carried as metadata on the monitor. Nothing in
             the dashboard groups or filters by them yet; they are stored,
             returned and echoed back exactly as described by `TagMap`.
+        push_interval_s:
+          type: integer
+          description: |
+            **Required for `push`, rejected for every other type.** How often
+            the job is expected to report in. There is no default, because the
+            server cannot guess how often someone's backup runs and guessing
+            wrong produces either a monitor that never alerts or one that
+            alerts every night.
+          minimum: 60
+          maximum: 2592000
+          example: 3600
+        push_grace_s:
+          type: integer
+          description: |
+            How late the job may be before the silence counts as failure.
+            Defaults to 60 rather than 0: cron drifts, machines are busy, and
+            a zero tolerance turns ordinary jitter into an outage. Choosing 0
+            has to be deliberate.
+          minimum: 0
+          maximum: 2592000
+          default: 60
+          example: 300
       additionalProperties: false
     PatchMonitorRequest:
       type: object
@@ -2242,6 +2517,11 @@ components:
           description: Must not be blank.
         type:
           $ref: '#/components/schemas/MonitorType'
+          description: |
+            A monitor cannot be converted to or from `push`. Converting away
+            would leave a live URL pointing at a monitor that no longer
+            listens; converting to it would need a token this endpoint has no
+            way to hand back.
         target:
           type: string
           description: Must not be blank. Re-validated against the resulting type.
@@ -2284,12 +2564,32 @@ components:
           maximum: 365
         enabled:
           type: boolean
+        capture_response:
+          type: boolean
+          description: |
+            Turns response capture on or off for this monitor. Turning it off
+            stops new captures; snapshots already stored age out with their
+            heartbeats.
         tags:
           $ref: '#/components/schemas/TagMap'
           description: |
             Replaces the whole tag map, like `headers`. Send `{}` to clear
             every tag; omit the field to leave them alone. Same rules as
             `TagMap`.
+        push_interval_s:
+          type: integer
+          description: |
+            Push monitors only. Retuning the window is supported so a backup
+            that moved from hourly to nightly does not have to be recreated,
+            which would throw away its history and invalidate the URL already
+            sitting in a crontab.
+          minimum: 60
+          maximum: 2592000
+        push_grace_s:
+          type: integer
+          description: Push monitors only.
+          minimum: 0
+          maximum: 2592000
       additionalProperties: false
     Heartbeat:
       type: object
@@ -2313,6 +2613,46 @@ components:
         error:
           type: string
           description: Present only on failure.
+        response:
+          $ref: '#/components/schemas/ResponseSnapshot'
+          description: |
+            The captured response, present only on a failed HTTP check of a
+            monitor with `capture_response` on, and only for the first few
+            failures of a streak. Absent everywhere else.
+    ResponseSnapshot:
+      type: object
+      description: |
+        The beginning of the response that explains a failed check. This is
+        diagnostic detail rather than dashboard information: it is stored so
+        the answer that arrived at 03:00 is still there in the morning, and a
+        client should show it behind a disclosure rather than inline.
+
+        It holds content fetched from the monitored service, so it is the one
+        part of the API that may echo back text SubGlance did not produce.
+        Treat it as untrusted: render it as plain text, never as HTML.
+      required: [body]
+      properties:
+        body:
+          type: string
+          description: |
+            The first 2048 bytes of the response, cut on a character boundary
+            and scrubbed to valid UTF-8.
+          example: '{"status":"degraded","detail":"upstream database timeout"}'
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+          description: |
+            An allowlist of response headers that help triage. Never the full
+            set: credentials and cookies are deliberately not stored.
+          example:
+            Content-Type: application/json
+            Retry-After: '120'
+        truncated:
+          type: boolean
+          description: |
+            True when the body was longer than the cap, so a reader knows the
+            text stops rather than ends.
     UptimeWindow:
       type: object
       required: [window, window_s, total, up, down, uptime]
@@ -2365,7 +2705,9 @@ components:
     FailureKind:
       type: string
       description: What class of problem a failed check hit. Absent when the check succeeded.
-      enum: [dns, connection, tls, timeout, status, keyword, cert_expiry, internal]
+      enum:
+        [dns, connection, tls, timeout, status, keyword, cert_expiry, internal,
+         push_overdue, push_reported]
       example: timeout
     PreviewCheckRequest:
       type: object
@@ -2415,7 +2757,6 @@ components:
             value the save would reject.
           minimum: 1
           maximum: 365
-        tags:
           $ref: '#/components/schemas/TagMap'
           description: |
             Accepted and validated exactly as on create, but not used by the
@@ -2468,6 +2809,33 @@ components:
             before it saves.
           additionalProperties:
             type: string
+    PushResult:
+      type: object
+      description: |
+        What was made of an incoming push report. Deliberately small: the
+        caller is a shell one-liner whose output goes to a cron mail nobody
+        reads, so the useful thing is the status code.
+      required: [monitor_id, ok, recorded, received_at]
+      properties:
+        monitor_id:
+          type: integer
+          format: int64
+          example: 12
+        ok:
+          type: boolean
+          description: What the job claimed about itself, after parsing `status`.
+          example: true
+        recorded:
+          type: boolean
+          description: |
+            False when the monitor is paused, in which case the report was
+            accepted and deliberately not written. A 200 that changed nothing
+            would otherwise look like a bug.
+          example: true
+        received_at:
+          type: string
+          format: date-time
+          example: '2026-01-01T03:00:04Z'
     CheckResult:
       type: object
       description: The outcome of a manual, on-demand check.

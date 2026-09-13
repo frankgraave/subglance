@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Browser downloaded by `npm run test:browser:setup` for the layout checks.
+chrome-headless-shell/
