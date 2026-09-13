@@ -76,6 +76,14 @@ export type DashboardProps = {
    * opinion about transports.
    */
   stale?: boolean;
+  /**
+   * Opens one monitor's detail view client-side.
+   *
+   * Optional, and absent in the workbench: the harness has no router, and a
+   * link that navigates out of it would be a dead end. Without it the names
+   * are still real links — see MonitorLink — they just cost a page load.
+   */
+  onOpenMonitor?: (id: string) => void;
 };
 
 const COUNTED: { status: MonitorStatus; label: string }[] = [
@@ -94,6 +102,7 @@ export function Dashboard({
   layout = DEFAULT_LAYOUT,
   banner = null,
   stale = false,
+  onOpenMonitor,
 }: DashboardProps) {
   const searchId = useId();
   // Hooks cannot be skipped, so the query is always subscribed to and the
@@ -224,12 +233,14 @@ export function Dashboard({
           query={query}
           totalCount={monitors.length}
           beatWidth={beatWidth}
+          onOpen={onOpenMonitor}
         />
       ) : shown === "compact" ? (
         <MonitorCompactList
           monitors={visible}
           query={query}
           totalCount={monitors.length}
+          onOpen={onOpenMonitor}
         />
       ) : (
         <MonitorTable
@@ -237,6 +248,7 @@ export function Dashboard({
           query={query}
           totalCount={monitors.length}
           beatWidth={beatWidth ?? ROW_BEAT_WIDTH}
+          onOpen={onOpenMonitor}
         />
       )}
     </section>

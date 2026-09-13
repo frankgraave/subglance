@@ -27,6 +27,8 @@ export type LiveDashboardProps = LiveOptions & {
   instance?: string;
   /** Leaves the status wall. Provided by the shell, which owns the setting. */
   onExitWall?: () => void;
+  /** Opens one monitor's detail view. Provided by the shell, which routes. */
+  onOpenMonitor?: (id: string) => void;
 };
 
 export function LiveDashboard({
@@ -34,6 +36,7 @@ export function LiveDashboard({
   layout,
   instance,
   onExitWall,
+  onOpenMonitor,
   ...live
 }: LiveDashboardProps) {
   const [query, setQuery] = useState("");
@@ -99,6 +102,7 @@ export function LiveDashboard({
       beatWidth={beatWidth}
       layout={layout}
       stale={status === "offline"}
+      onOpenMonitor={onOpenMonitor}
       banner={
         <ConnectionBadge status={status} since={newest} now={now} onReconnect={reconnect} />
       }

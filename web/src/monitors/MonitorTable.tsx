@@ -27,6 +27,8 @@ export type MonitorTableProps = {
   totalCount?: number;
   /** Explicit heartbeat width; required in jsdom, which has no layout. */
   beatWidth?: number;
+  /** Opens a monitor's detail view client-side. See MonitorLink. */
+  onOpen?: (id: string) => void;
 };
 
 function Columns() {
@@ -72,6 +74,7 @@ export function MonitorTable({
   query = "",
   totalCount,
   beatWidth = ROW_BEAT_WIDTH,
+  onOpen,
 }: MonitorTableProps) {
   const total = totalCount ?? monitors.length;
 
@@ -87,7 +90,7 @@ export function MonitorTable({
 
   const rows = (list: readonly Monitor[]) =>
     list.map((monitor) => (
-      <MonitorRow key={monitor.id} monitor={monitor} beatWidth={beatWidth} />
+      <MonitorRow key={monitor.id} monitor={monitor} beatWidth={beatWidth} onOpen={onOpen} />
     ));
 
   return (

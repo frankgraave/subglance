@@ -700,3 +700,32 @@
 .add-result-bad { color: var(--down); }
 
 .add-result-kind { color: var(--ink-3); }
+
+/*
+ * The monitor name is a link into its detail view, in every layout.
+ *
+ * Undecorated at rest and underlined on hover or focus. A dashboard whose
+ * every row carries a blue underlined name would turn a status board into a
+ * page of links, and the status is what the screen is for — but a control
+ * that never shows it is interactive is a control nobody finds, so the
+ * affordance appears the moment a pointer or the keyboard arrives.
+ *
+ * `color: inherit` keeps each layout's own name colour; only the interaction
+ * is shared.
+ */
+.mon-name,
+.mon-line-name,
+.mon-card-name > a {
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.mon-name:hover,
+.mon-name:focus-visible,
+.mon-line-name:hover,
+.mon-line-name:focus-visible,
+.mon-card-name > a:hover,
+.mon-card-name > a:focus-visible {
+  text-decoration: underline;
+}

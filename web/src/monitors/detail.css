@@ -1,0 +1,232 @@
+/*
+ * The monitor detail view.
+ *
+ * Layout only; every colour, size, radius and weight comes from tokens.css.
+ *
+ * The page is a single column with a hard max width rather than a
+ * multi-column dashboard. Its content is read top to bottom in the order the
+ * questions are asked — what is it, is it up, what has it looked like, how
+ * reliable is it, what has broken — and a two-column layout would turn that
+ * sequence into a scan, which is the dashboard's job, not this page's.
+ */
+
+.mon-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  /* ~70 characters of target/error text. Past this the eye loses the line on
+     the way back, and none of the content here benefits from being wider. */
+  max-width: 860px;
+}
+
+.mon-detail-nav {
+  margin-bottom: calc(var(--space-2) * -1);
+}
+
+/* A button that reads as a link: the affordance is the arrow and the
+   underline on hover, not a filled rectangle. Back is a frequent, low-stakes
+   action; a primary-looking button here would out-shout the status it sits
+   above. */
+.mon-detail-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: var(--type-helper);
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: color var(--dur-hover) var(--ease);
+}
+
+.mon-detail-back:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.mon-detail-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.mon-detail-name {
+  font-size: var(--type-page);
+  line-height: var(--lh-tight);
+  font-weight: var(--weight-strong);
+  color: var(--ink);
+  /* Wrap, never truncate. This is the page's title: a hostname cut off with
+     an ellipsis leaves the reader unsure which monitor they opened. */
+  overflow-wrap: anywhere;
+}
+
+.mon-detail-target {
+  font-family: var(--font-mono);
+  font-size: var(--type-body);
+  color: var(--ink-3);
+  /* Selectable and wrapping, because people copy this into a terminal. */
+  overflow-wrap: anywhere;
+}
+
+/* The one sentence the page exists for, so it is the largest body text on it
+   and sits directly under the name with nothing competing. */
+.mon-detail-status {
+  font-size: var(--type-card);
+  line-height: var(--lh-body);
+  color: var(--ink);
+}
+
+/* The lamp sits on the sentence's baseline rather than on its box top, so it
+   reads as part of the line instead of a bullet beside it. */
+.mon-detail-led {
+  display: inline-block;
+  margin-right: var(--space-2);
+  vertical-align: middle;
+}
+
+.mon-detail-age {
+  color: var(--ink-3);
+  font-size: var(--type-body);
+}
+
+.mon-detail-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+/* Panel headings are labels, not headlines: small, capitalised and dim, so
+   the content inside each panel stays the loudest thing in it. */
+.mon-detail-panel-title {
+  font-size: var(--type-section);
+  line-height: var(--lh-tight);
+  font-weight: var(--weight-mid);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.mon-detail-beats {
+  /* The bar measures this box and buckets the checks to fit it, so it must be
+     allowed to fill the panel rather than sit at its jsdom fallback width. */
+  width: 100%;
+}
+
+.mon-detail-note,
+.mon-detail-empty {
+  font-size: var(--type-helper);
+  line-height: var(--lh-body);
+  color: var(--ink-3);
+}
+
+/* Uptime windows: as many across as fit, each at least 150px. `auto-fit`
+   rather than a fixed column count means the three default windows sit side
+   by side on a laptop and stack on a phone with no breakpoint of their own. */
+.mon-detail-windows {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-4);
+}
+
+.mon-detail-window {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.mon-detail-window > dt {
+  font-size: var(--type-helper);
+  color: var(--ink-3);
+}
+
+/* Mono and tabular, so 99.9% and 100% line up their decimal points when the
+   windows sit in a row. */
+.mon-detail-window-value {
+  font-family: var(--font-mono);
+  font-size: var(--type-card);
+  font-weight: var(--weight-mid);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.mon-detail-window-detail {
+  font-size: var(--type-helper);
+  color: var(--ink-4);
+}
+
+.mon-detail-incidents {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  list-style: none;
+}
+
+.mon-detail-incident {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border);
+}
+
+.mon-detail-incident:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+/* An open incident is the only thing on this page allowed a status colour of
+   its own: it is the one fact that changes what you do next. Resolved ones
+   stay in the ink scale — they are history, and a list of red rows from last
+   month reads as an outage happening now. */
+.mon-detail-incident[data-resolved="false"] .mon-detail-incident-state {
+  color: var(--down);
+  font-weight: var(--weight-mid);
+}
+
+.mon-detail-incident-when {
+  font-size: var(--type-helper);
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.mon-detail-incident-state {
+  font-size: var(--type-body);
+  color: var(--ink);
+}
+
+.mon-detail-incident-error {
+  font-family: var(--font-mono);
+  font-size: var(--type-helper);
+  line-height: var(--lh-body);
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
+}
+
+/*
+ * Phone. The page already stacks, so this only reclaims the horizontal
+ * padding the panels spend on a screen that has none to spare, and drops the
+ * page title to the card size — 22px across a 375px screen costs two lines
+ * for a hostname that fits on one at 17px.
+ */
+@media (max-width: 640px) {
+  .mon-detail {
+    gap: var(--space-4);
+  }
+
+  .mon-detail-panel {
+    padding: var(--space-3);
+  }
+
+  .mon-detail-name {
+    font-size: var(--type-card);
+  }
+
+  .mon-detail-status {
+    font-size: var(--type-row);
+  }
+}

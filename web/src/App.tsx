@@ -5,6 +5,9 @@ import { HeartbeatGallery } from "./heartbeat/Gallery";
 import { DashboardWorkbench } from "./monitors/Workbench";
 import { AddMonitor } from "./monitors/AddMonitor";
 import { LiveDashboardRoot } from "./live/LiveDashboard";
+import { LiveMonitorDetailRoot } from "./live/LiveMonitorDetail";
+import { createQueryClient } from "./live/queryClient";
+import { useRoute } from "./shell/useRoute";
 import { AppShell } from "./shell/AppShell";
 import { Topbar } from "./shell/Topbar";
 import { useShellPreferences } from "./shell/useShellPreferences";
@@ -33,6 +36,34 @@ export default function App() {
     useShellPreferences(window.localStorage);
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const { route, navigate } = useRoute();
+  /*
+   * One query client for both screens, created here rather than inside each
+   * root.
+   *
+   * The two roots each fall back to their own client when given none, which is
+   * right for a test mounting one in isolation and wrong for the app: the
+   * dashboard unmounts when a monitor opens, and with a per-root client its
+   * cache would go with it. Every trip back to the list would then refetch
+   * every monitor and replay the SSE handshake, so the Back button — the most
+   * used control on this screen — would be the slowest one. Sharing the cache
+   * makes both directions instant.
+   */
+  const [queryClient] = useState(createQueryClient);
+
+  const openMonitor = useCallback(
+    (id: string) => {
+      setWorkbenchOpen(false);
+      setAddOpen(false);
+      navigate({ name: "monitor", id });
+      // A new page starts at the top. Without this the browser keeps the
+      // dashboard's scroll offset, so opening a monitor from row 80 lands
+      // halfway down its incident list.
+      window.scrollTo(0, 0);
+    },
+    [navigate],
+  );
+  const showDashboard = useCallback(() => navigate({ name: "dashboard" }), [navigate]);
 
   const [navOpen, setNavOpen] = useState(false);
   /*
@@ -48,7 +79,13 @@ export default function App() {
 
   const narrow = useCompactViewport();
   const shown = effectiveLayout(layout, narrow);
-  const isWall = shown === "wall" && !workbenchOpen;
+  const onDetail = route.name === "monitor";
+  /*
+   * The wall is a dashboard layout, so it cannot be showing while a single
+   * monitor is open. Without this, choosing the wall from the detail page
+   * would replace it with a chrome-less grid and no way back.
+   */
+  const isWall = shown === "wall" && !workbenchOpen && !onDetail;
 
   const leaveWall = useCallback(() => setLayout("rows"), [setLayout]);
   /*
@@ -74,10 +111,11 @@ export default function App() {
   /*
    * Closing on success rather than navigating to the new monitor.
    *
-   * There is no detail view yet (SUB-63), and the dashboard is where the
-   * answer is anyway: the monitor appears in the list within one heartbeat,
-   * which is the confirmation that the thing works. A toast would say the same
-   * thing less durably (DESIGN.md §7.6).
+   * The dashboard is where the answer is: the monitor appears in the list
+   * within one heartbeat, which is the confirmation that the thing works.
+   * Jumping straight to its detail view would trade that confirmation for a
+   * page that has nothing on it yet — no checks, no uptime, no incidents. A
+   * toast would say the same thing less durably (DESIGN.md §7.6).
    */
   const closeAdd = useCallback(() => setAddOpen(false), []);
   const closeNav = useCallback(() => setNavOpen(false), []);
@@ -120,11 +158,16 @@ export default function App() {
           ? leaveWall
           : workbenchOpen
             ? toggleWorkbench
-            : undefined,
+            : onDetail
+              ? // Last in the queue, because the detail view is a place rather
+                // than an overlay: anything layered on top of it must be
+                // dismissed before Esc means "leave this monitor".
+                showDashboard
+              : undefined,
   });
 
   if (isWall) {
-    return <LiveDashboardRoot layout="wall" onExitWall={leaveWall} />;
+    return <LiveDashboardRoot client={queryClient} layout="wall" onExitWall={leaveWall} />;
   }
 
   return (
@@ -155,8 +198,18 @@ export default function App() {
         <Workbench />
       ) : addOpen ? (
         <AddMonitor onCreated={closeAdd} onCancel={closeAdd} />
+      ) : onDetail ? (
+        <LiveMonitorDetailRoot
+          client={queryClient}
+          id={route.id}
+          onBack={showDashboard}
+        />
       ) : (
-        <LiveDashboardRoot layout={shown} />
+        <LiveDashboardRoot
+          client={queryClient}
+          layout={shown}
+          onOpenMonitor={openMonitor}
+        />
       )}
     </AppShell>
   );
