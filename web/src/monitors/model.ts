@@ -127,28 +127,122 @@ export function filterByStatus(
 }
 
 /**
+ * Orders two tag strings the way the collator orders names, but totally.
+ *
+ * The shared `NAME_COLLATOR` is `sensitivity: "base"`, so it reports `Prod`
+ * and `prod` as equal. Those are two different tag values — a facet has to
+ * offer both, in a fixed order — so the raw comparison breaks the tie for the
+ * same reason `byName` does: a tie left unbroken makes the rendered order
+ * depend on which monitor the API happened to send first.
+ */
+function compareText(a: string, b: string): number {
+  const byLabel = NAME_COLLATOR.compare(a, b);
+  if (byLabel !== 0) return byLabel;
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/** One tag key and every value seen for it, both in a stable order. */
+export type TagFacet = {
+  key: string;
+  values: string[];
+};
+
+/**
+ * The tag keys present in the data, each with its distinct values.
+ *
+ * Derived from the monitors rather than from a fixed list because there is no
+ * tag registry: a key exists exactly as long as some monitor carries it. That
+ * is also why a facet disappears when its last monitor loses the tag — an
+ * offered filter that can only ever return nothing is worse than no filter.
+ *
+ * Both levels are sorted, so the controls do not reorder themselves when a
+ * heartbeat arrives and the list is rebuilt in a different order.
+ */
+export function tagFacets(monitors: readonly Monitor[]): TagFacet[] {
+  const seen = new Map<string, Set<string>>();
+  for (const monitor of monitors) {
+    for (const [key, value] of Object.entries(monitor.tags)) {
+      const values = seen.get(key);
+      if (values === undefined) seen.set(key, new Set([value]));
+      else values.add(value);
+    }
+  }
+  return [...seen.entries()]
+    .map(([key, values]) => ({ key, values: [...values].sort(compareText) }))
+    .sort((a, b) => compareText(a.key, b.key));
+}
+
+/** A chosen value per tag key. An absent key means "any value for this key". */
+export type TagSelection = Readonly<Record<string, string>>;
+
+/**
+ * Narrows the list to monitors carrying every chosen key/value pair.
+ *
+ * **AND across keys, one value per key.** Picking `env: prod` and then
+ * `customer: acme` means "the acme monitors in production", which is the
+ * question someone with 200 monitors actually asks; OR across different keys
+ * would widen the list as you add controls, which reads as the filter being
+ * broken. Within a key the choice is single-valued because the backend stores
+ * at most one value per key per monitor (types.ts), so "env is prod or
+ * staging" is the only multi-select that would mean anything — and that needs
+ * a control this screen does not have yet.
+ *
+ * An empty selection returns a copy, so "not filtering" costs one array copy
+ * and no special case at the call site.
+ */
+export function filterByTags(
+  monitors: readonly Monitor[],
+  selected: TagSelection,
+): Monitor[] {
+  const pairs = Object.entries(selected).filter(([, value]) => value !== "");
+  if (pairs.length === 0) return [...monitors];
+  return monitors.filter((m) => pairs.every(([key, value]) => m.tags[key] === value));
+}
+
+/** The chosen pairs as `key:value`, in the order `tagFacets` renders them. */
+export function describeTags(selected: TagSelection): string[] {
+  return Object.entries(selected)
+    .filter(([, value]) => value !== "")
+    .sort(([a], [b]) => compareText(a, b))
+    .map(([key, value]) => `${key}:${value}`);
+}
+
+/**
  * The sentence under the search box, or null when no filter is active.
  *
  * A pure function rather than JSX with two nested ternaries in it: the hard
- * part here is the *wording* of four combinations, and wording is exactly the
- * kind of thing that is worth asserting on in a test without mounting a
- * component. The shape is always "<visible> of <total> monitors ..." so the
- * first two numbers land in the same place whichever filters are on, and
- * someone glancing at it does not have to re-read the sentence to find them.
+ * part here is the *wording* of the filter combinations, and wording is
+ * exactly the kind of thing that is worth asserting on in a test without
+ * mounting a component. The shape is always "<visible> of <total> monitors
+ * ..." so the first two numbers land in the same place whichever filters are
+ * on, and someone glancing at it does not have to re-read the sentence to
+ * find them.
+ *
+ * Status and tags share one copula ("are down and tagged env:prod") because
+ * both describe what the monitor *is*; the query gets its own verb because
+ * "matches" is not something the same "are" can carry.
  */
 export function describeFilter(
   visible: number,
   total: number,
   status: MonitorStatus | null,
   query: string,
+  tags: TagSelection = {},
 ): string | null {
   const needle = query.trim();
-  if (status === null && needle === "") return null;
+  const pairs = describeTags(tags);
+  if (status === null && needle === "" && pairs.length === 0) return null;
   // The verb agrees with the number actually on screen, so "1 of 14 monitors
   // is down" does not read like a bug report about the sentence itself.
   const one = visible === 1;
+  const copula = one ? "is" : "are";
+  const states: string[] = [];
+  if (status !== null) states.push(status);
+  // Comma-separated inside the clause, so the "and" between clauses stays the
+  // only one and the sentence does not turn into a chain of them.
+  if (pairs.length > 0) states.push(`tagged ${pairs.join(", ")}`);
   const clauses: string[] = [];
-  if (status !== null) clauses.push(`${one ? "is" : "are"} ${status}`);
+  if (states.length > 0) clauses.push(`${copula} ${states.join(" and ")}`);
   if (needle !== "") clauses.push(`${one ? "matches" : "match"} \u201C${needle}\u201D`);
   const tail = clauses.join(" and ");
   // Zero is reported as "0 of 14" rather than as prose. `EmptyState` already

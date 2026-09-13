@@ -23,9 +23,12 @@ import { Unknown } from "./Unknown";
  * Anyone who wants the trend switches to Rows, which is one click away.
  *
  * **No grouping yet, deliberately.** DESIGN.md §7 groups this layout by
- * customer or environment; §12 records that tags have no screen to create or
- * assign them, so grouping today would mean inventing a taxonomy in the
- * frontend. So this renders one flat `<ul>`: `partition` (down first, then
+ * customer or environment. Tags now exist and the dashboard filters on them,
+ * but filtering and grouping are different questions: filtering answers "show
+ * me production", grouping answers "show me everything, arranged by
+ * environment" — and the second one has to decide what happens to the
+ * attention section, which is the whole reason this list has a fixed order.
+ * §12 tracks it. So this renders one flat `<ul>`: `partition` (down first, then
  * alphabetical) only orders it, which is the ordering every other layout
  * shares. Headed "Needs attention" / "All monitors" sections would be grouping
  * by a different name, and half a taxonomy reads worse than none — at this
@@ -45,6 +48,8 @@ export type MonitorCompactListProps = {
   query?: string;
   /** Total before filtering, so "no results" can be told from "no monitors". */
   totalCount?: number;
+  /** True when a filter other than the query is narrowing the list. */
+  filtered?: boolean;
 };
 
 function CompactLineImpl({ monitor }: { monitor: Monitor }) {
@@ -94,10 +99,11 @@ export function MonitorCompactList({
   monitors,
   query = "",
   totalCount,
+  filtered = false,
 }: MonitorCompactListProps) {
   const total = totalCount ?? monitors.length;
   if (monitors.length === 0) {
-    return <EmptyState query={query} totalCount={total} />;
+    return <EmptyState query={query} totalCount={total} filtered={filtered} />;
   }
 
   // `partition` orders the list — down first, then alphabetical — and that is

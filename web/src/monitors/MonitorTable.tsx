@@ -25,6 +25,8 @@ export type MonitorTableProps = {
   query?: string;
   /** Total before filtering, so "no results" can be told from "no monitors". */
   totalCount?: number;
+  /** True when a filter other than the query is narrowing the list. */
+  filtered?: boolean;
   /** Explicit heartbeat width; required in jsdom, which has no layout. */
   beatWidth?: number;
 };
@@ -72,11 +74,12 @@ export function MonitorTable({
   query = "",
   totalCount,
   beatWidth = ROW_BEAT_WIDTH,
+  filtered = false,
 }: MonitorTableProps) {
   const total = totalCount ?? monitors.length;
 
   if (monitors.length === 0) {
-    return <EmptyState query={query} totalCount={total} />;
+    return <EmptyState query={query} totalCount={total} filtered={filtered} />;
   }
 
   const { attention, rest } = partition(monitors);

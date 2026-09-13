@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   describeFilter,
   describeTransitions,
+  describeTags,
   filterByStatus,
+  filterByTags,
+  tagFacets,
   filterMonitors,
   partition,
   summarise,
@@ -250,5 +253,110 @@ describe("filterByStatus", () => {
     const out = filterByStatus(list, "down");
     expect(out.length).toBeGreaterThan(0);
     expect(out.every((m) => m.status === "down")).toBe(true);
+  });
+});
+
+describe("tagFacets", () => {
+  it("collects every key with its distinct values", () => {
+    const list = [
+      monitor("api", "up", { tags: { env: "prod", customer: "acme" } }),
+      monitor("db", "up", { tags: { env: "staging" } }),
+      monitor("cdn", "up", { tags: { env: "prod" } }),
+    ];
+    expect(tagFacets(list)).toEqual([
+      { key: "customer", values: ["acme"] },
+      { key: "env", values: ["prod", "staging"] },
+    ]);
+  });
+
+  it("orders keys and values the same whichever order the monitors arrive in", () => {
+    const a = monitor("a", "up", { tags: { env: "prod" } });
+    const b = monitor("b", "up", { tags: { env: "edge" } });
+    expect(tagFacets([a, b])).toEqual(tagFacets([b, a]));
+  });
+
+  it("keeps values that differ only in case, since they are different tags", () => {
+    const list = [
+      monitor("a", "up", { tags: { env: "Prod" } }),
+      monitor("b", "up", { tags: { env: "prod" } }),
+    ];
+    expect(tagFacets(list)[0].values).toHaveLength(2);
+  });
+
+  it("offers nothing when no monitor carries a tag", () => {
+    expect(tagFacets([monitor("api", "up")])).toEqual([]);
+  });
+});
+
+describe("filterByTags", () => {
+  const list = [
+    monitor("api", "up", { tags: { env: "prod", customer: "acme" } }),
+    monitor("db", "up", { tags: { env: "prod", customer: "globex" } }),
+    monitor("cdn", "up", { tags: { env: "staging", customer: "acme" } }),
+  ];
+
+  it("returns a copy, not the input, when nothing is chosen", () => {
+    const out = filterByTags(list, {});
+    expect(out).toEqual([...list]);
+    expect(out).not.toBe(list);
+  });
+
+  it("keeps only monitors carrying the chosen pair", () => {
+    expect(filterByTags(list, { env: "prod" }).map((m) => m.id)).toEqual(["api", "db"]);
+  });
+
+  it("ANDs across keys rather than widening the list", () => {
+    expect(
+      filterByTags(list, { env: "prod", customer: "acme" }).map((m) => m.id),
+    ).toEqual(["api"]);
+  });
+
+  it("treats an empty value as no choice for that key", () => {
+    expect(filterByTags(list, { env: "" })).toHaveLength(3);
+  });
+
+  it("drops monitors that lack the key entirely", () => {
+    const untagged = monitor("mail", "up");
+    expect(filterByTags([...list, untagged], { env: "prod" }).map((m) => m.id)).toEqual([
+      "api",
+      "db",
+    ]);
+  });
+});
+
+describe("describeTags", () => {
+  it("renders chosen pairs in key order", () => {
+    expect(describeTags({ env: "prod", customer: "acme" })).toEqual([
+      "customer:acme",
+      "env:prod",
+    ]);
+  });
+
+  it("ignores keys set to no choice", () => {
+    expect(describeTags({ env: "", customer: "acme" })).toEqual(["customer:acme"]);
+  });
+});
+
+describe("describeFilter with tags", () => {
+  it("names the tags on their own", () => {
+    expect(describeFilter(3, 14, null, "", { env: "prod" })).toBe(
+      "3 of 14 monitors are tagged env:prod",
+    );
+  });
+
+  it("shares one copula with the status", () => {
+    expect(describeFilter(2, 14, "down", "", { env: "prod" })).toBe(
+      "2 of 14 monitors are down and tagged env:prod",
+    );
+  });
+
+  it("lists several tags inside one clause", () => {
+    expect(describeFilter(1, 14, null, "", { env: "prod", customer: "acme" })).toBe(
+      "1 of 14 monitors is tagged customer:acme, env:prod",
+    );
+  });
+
+  it("still says nothing when every tag is set to no choice", () => {
+    expect(describeFilter(14, 14, null, "", { env: "" })).toBeNull();
   });
 });

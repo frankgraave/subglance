@@ -14,9 +14,12 @@ import { ROW_BEAT_WIDTH } from "./MonitorRow";
 import {
   describeFilter,
   filterByStatus,
+  filterByTags,
   filterMonitors,
   summarise,
+  tagFacets,
 } from "./model";
+import type { TagSelection } from "./model";
 import type { Monitor, MonitorStatus } from "./types";
 
 /**
@@ -110,14 +113,35 @@ export function Dashboard({
   // deliberately does not survive a remount — coming back to a dashboard that
   // silently hides 198 of 200 monitors is how an outage gets missed.
   const [status, setStatus] = useState<MonitorStatus | null>(null);
-  // Status first, then text, so the count in the sentence below is the size of
-  // what is actually rendered rather than of an intermediate list.
-  const visible = filterMonitors(filterByStatus(monitors, status), query);
+  // Tag choices are local for the same reason, and for one more: the facets
+  // themselves come from the data, so a selection kept across a reload could
+  // name a key that no monitor carries any more.
+  const [tags, setTags] = useState<TagSelection>({});
+  // Facets are derived from the unfiltered list, never from the visible one.
+  // Narrowing the options as you choose would make the second dropdown lose
+  // the values the first one just excluded, and there would be no way back.
+  const facets = tagFacets(monitors);
+  // A selection whose key has since vanished from the data would silently
+  // empty the list with no control left to clear it, so only live keys count.
+  const liveTags: TagSelection = Object.fromEntries(
+    facets
+      .map((facet) => [facet.key, tags[facet.key] ?? ""] as const)
+      .filter(([, value]) => value !== ""),
+  );
+  // Status, then tags, then text, so the count in the sentence below is the
+  // size of what is actually rendered rather than of an intermediate list.
+  const visible = filterMonitors(
+    filterByTags(filterByStatus(monitors, status), liveTags),
+    query,
+  );
+  // Only the non-query narrowing: `EmptyState` already words the query case.
+  const narrowed = status !== null || Object.keys(liveTags).length > 0;
   const filterNote = describeFilter(
     visible.length,
     monitors.length,
     status,
     query,
+    liveTags,
   );
 
   return (
@@ -196,6 +220,43 @@ export function Dashboard({
       </header>
 
       {/*
+       * One native <select> per tag key, and native on purpose: a custom
+       * listbox would have to re-earn keyboard support, screen-reader
+       * semantics and the OS picker on a phone, and these lists are a handful
+       * of values long — the case where a native select is simply better. The
+       * key is the visible label, so the control reads "env: prod" without a
+       * separate legend.
+       */}
+      {facets.length > 0 && (
+        <div className="mon-facets">
+          {facets.map((facet) => (
+            <label key={facet.key} className="mon-facet">
+              <span className="mon-facet-key">{facet.key}</span>
+              <select
+                className="mon-facet-select"
+                value={tags[facet.key] ?? ""}
+                onChange={(event) =>
+                  setTags((current) => ({
+                    ...current,
+                    [facet.key]: event.target.value,
+                  }))
+                }
+              >
+                {/* "Any" rather than a blank first option: an empty entry in a
+                    filter reads as a value someone forgot to name. */}
+                <option value="">Any</option>
+                {facet.values.map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
+        </div>
+      )}
+
+      {/*
        * The single live region, and it lives *outside* the table
        * (research note 3). `aria-live` on the table itself would make a
        * screen reader re-read rows on every heartbeat tick, which is both
@@ -223,6 +284,7 @@ export function Dashboard({
           monitors={visible}
           query={query}
           totalCount={monitors.length}
+          filtered={narrowed}
           beatWidth={beatWidth}
         />
       ) : shown === "compact" ? (
@@ -230,12 +292,14 @@ export function Dashboard({
           monitors={visible}
           query={query}
           totalCount={monitors.length}
+          filtered={narrowed}
         />
       ) : (
         <MonitorTable
           monitors={visible}
           query={query}
           totalCount={monitors.length}
+          filtered={narrowed}
           beatWidth={beatWidth ?? ROW_BEAT_WIDTH}
         />
       )}

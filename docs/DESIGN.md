@@ -711,10 +711,11 @@ to discover late.
   those three true). And the render work it would save is work it never does anyway: a
   heartbeat tick re-renders the one memoised row, card or compact line it
   belongs to, not all two hundred. The wall's tiles are not memoised, but a
-  tile is an LED and a name. What is still missing is grouping in the row
-  views and filtering on tags — and the second one cannot be built at all
-  until tags exist, which is a data-model gap, not a dashboard gap (SUB-73,
-  and see below).
+  tile is an LED and a name. Filtering on tags now works in those same three
+  layouts: one native `<select>` per tag key, ANDed across keys, with the
+  options derived from the unfiltered list so choosing a value never removes
+  the way back. What is still missing is *grouping* in the row views — headed
+  sections per tag value rather than one flat ordered list.
 
 ### Screens promised but not designed
 
@@ -735,11 +736,11 @@ The sidebar advertises five destinations; one exists.
   model says a monitor is in a window, so it is not implemented.
 - **Error toasts.** Only the success path is designed. A failed save, a rejected
   form, a check that cannot start — none of those have a visual.
-- **Tags/groups** are used in the Compact layout, but they do not exist below
-  the mockup either: no column on the monitor, no field in the API, no type in
-  the frontend. So the missing piece is not only a screen to create, rename and
-  assign them — it is the tag itself. Anything that wants to group or filter by
-  tag waits on that — tracked as SUB-73.
+- **Tags/groups.** Tags exist end to end now — column, API field, frontend type
+  — and the dashboard filters on them. Two pieces are still open: there is no
+  screen to create, rename or assign a tag outside the create/edit form, and
+  the Compact layout still renders one flat list where the mockup shows headed
+  groups per customer or environment.
 - **Keyboard shortcuts** exist (`⌘K`, `⌘B`, `Esc`) but are undiscoverable. Needs
   a `?` overlay.
 - **Onboarding beyond the empty state.** First run, creating the first user,
