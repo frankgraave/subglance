@@ -70,6 +70,11 @@ type Monitor struct {
 	// failing. Zero disables the check.
 	SSLWarnDays int
 
+	// CaptureResponse allows a failed HTTP check to keep the beginning of the
+	// response body. It is off for a monitor whose responses may carry a
+	// session token or personal data; see ResponseSnapshot.
+	CaptureResponse bool
+
 	// Retries is how many consecutive failures confirm an incident. The
 	// checker itself ignores it — a probe is a probe — but it travels with
 	// the monitor so the state engine can apply a per-monitor threshold
@@ -129,6 +134,35 @@ type Result struct {
 
 	// CheckedAt is when the probe started.
 	CheckedAt time.Time
+
+	// Response holds the beginning of the failed response, when the monitor
+	// asked for it and the check got far enough to have one. Nil on success
+	// and on every failure that never reached a response — a DNS failure has
+	// no body to keep.
+	Response *ResponseSnapshot
+}
+
+// ResponseSnapshot is the part of a failed response worth keeping.
+//
+// A check that fails on its status code stores one line: `status 503, expected
+// 200-299`. That says a thing is broken, not what broke. The body usually
+// does — an upstream timeout, a database connection, a maintenance page — and
+// at the moment the check fails it is already in hand.
+//
+// It is capped rather than complete on purpose. This is a monitor, not a log
+// collector: the point is to have the 3am answer that is gone by morning, not
+// to accumulate a second copy of someone else's application logs.
+type ResponseSnapshot struct {
+	// Body is the first MaxSnapshotBytes of the response, valid UTF-8 and cut
+	// on a rune boundary.
+	Body string
+
+	// Headers holds the allowlisted response headers, canonical-cased.
+	Headers map[string]string
+
+	// Truncated reports that the body was longer than the cap. The UI has to
+	// say so: a sentence that stops mid-thought reads as the whole answer.
+	Truncated bool
 }
 
 // Checker runs one kind of probe.
