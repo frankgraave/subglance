@@ -44,7 +44,10 @@ services:
       # the host goes down, nothing turns red — the dashboard just stops
       # existing. Point this at a dead man's switch (Healthchecks.io, Dead
       # Man's Snitch, another SubGlance) and it will ping while it is still
-      # completing checks. Only a ping is sent; no monitor data leaves here.
+      # completing checks. Monitor names, target URLs and check results never
+      # leave here; the ping does carry how many monitors are scheduled and how
+      # many checks have completed. Prefer an https URL, since over http those
+      # counts travel in cleartext.
       # SUBGLANCE_WATCHDOG_URL: ""
       # SUBGLANCE_WATCHDOG_INTERVAL: 5m
 

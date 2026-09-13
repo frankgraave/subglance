@@ -243,10 +243,19 @@ Two details matter:
   instance with no monitors scheduled still pings; there, zero checks is the
   correct answer rather than a symptom.
 - A clean shutdown sends one final ping marked `stopped`, so a planned restart
-  does not page anyone.
+  does not page anyone. The marker is the `X-SubGlance-Event` header, and a
+  generic provider ignores it: Healthchecks.io and Dead Man's Snitch read that
+  final ping as an ordinary check-in, which resets the switch and keeps the
+  pager quiet. Only a receiver that reads the header — a second SubGlance, or
+  your own endpoint — can tell a clean stop apart from a normal ping.
+- Redirects are refused. The URL you configure is trusted; wherever it might
+  redirect to is not, so a `3xx` is logged as a rejected ping instead of being
+  followed.
 
 Only a ping is sent: the event, the number of monitors scheduled and the number
 of checks completed. No monitor names, targets or results leave the instance.
+Those counts are still information about the install, and over `http` they go
+out in cleartext — use an `https` URL unless the whole network path is trusted.
 The feature is off unless you set the URL, because it is the one part of
 SubGlance that talks outbound to a third party.
 

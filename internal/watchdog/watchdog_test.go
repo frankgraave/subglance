@@ -173,6 +173,51 @@ func TestRejectedPingIsSurvivable(t *testing.T) {
 	}
 }
 
+func TestRedirectsAreNotFollowed(t *testing.T) {
+	var mu sync.Mutex
+	var reached bool
+	final := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		reached = true
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer final.Close()
+
+	redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		http.Redirect(w, req, final.URL, http.StatusFound)
+	}))
+	defer redirector.Close()
+
+	w := newTestWatchdog(t, redirector.URL, func() Liveness { return Liveness{Scheduled: 1, ChecksCompleted: 1} })
+	w.send(context.Background(), "alive", "alive")
+
+	mu.Lock()
+	defer mu.Unlock()
+	if reached {
+		t.Fatal("watchdog followed a redirect to a second host; a configured endpoint must not be able to steer the request")
+	}
+}
+
+func TestSuppliedClientKeepsItsRedirectPolicy(t *testing.T) {
+	// A caller who hands in a client with its own CheckRedirect keeps it:
+	// only the default client is hardened.
+	sentinel := func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	supplied := &http.Client{CheckRedirect: sentinel}
+	w, err := New(Options{
+		URL:      "https://example.com/ping",
+		Liveness: func() Liveness { return Liveness{} },
+		Log:      quiet(),
+		Client:   supplied,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if w.client != supplied {
+		t.Fatal("a client supplied with a redirect policy should be used as-is")
+	}
+}
+
 func TestValidateURL(t *testing.T) {
 	valid := []string{
 		"https://hc-ping.com/abc",

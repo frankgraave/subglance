@@ -27,13 +27,26 @@
 // completed checks is the correct outcome rather than a symptom, and staying
 // silent would alarm someone about a perfectly healthy install.
 //
-// # Why there is no SSRF guard here
+// # Why there is no address guard here, but redirects are still refused
 //
 // The guard in package checker exists because monitor targets come from users
 // of the web interface. This URL comes from whoever starts the process, and
 // pointing it at a second instance on the same LAN is a reasonable thing to
 // want. Someone who can set the command line can already reach the host
 // network.
+//
+// Redirects are a different question. The configured host is trusted; the host
+// it points at next is not, and ValidateURL never sees that second address. So
+// the client refuses to follow redirects and a 3xx is recorded as a rejected
+// ping.
+//
+// # What a ping discloses
+//
+// A ping carries the event name, the number of monitors scheduled and the
+// number of checks completed. Monitor names, target URLs and check results
+// never leave the instance. Those counts are still information about the
+// install, and over http they travel in cleartext: on any network path that is
+// not trusted end to end, use an https URL.
 package watchdog
 
 import (
@@ -127,6 +140,13 @@ func New(opts Options) (*Watchdog, error) {
 	if client == nil {
 		client = &http.Client{Timeout: pingTimeout}
 	}
+	if client.CheckRedirect == nil {
+		// ValidateURL only ever sees the configured URL. Following a
+		// redirect would send this request to an address nobody
+		// checked, which is a blind SSRF primitive from the SubGlance
+		// host. Hand the 3xx back instead and let send reject it.
+		client = cloneWithoutRedirects(client)
+	}
 
 	return &Watchdog{
 		url:      opts.URL,
@@ -135,6 +155,17 @@ func New(opts Options) (*Watchdog, error) {
 		log:      log,
 		client:   client,
 	}, nil
+}
+
+// cloneWithoutRedirects copies a client and makes it stop at the first
+// response. The copy keeps the caller's client untouched: a client passed in
+// through Options may well be shared with something that does want redirects.
+func cloneWithoutRedirects(c *http.Client) *http.Client {
+	clone := *c
+	clone.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	return &clone
 }
 
 // ValidateURL reports whether a string is usable as a ping target.
@@ -212,6 +243,12 @@ func (w *Watchdog) tick(ctx context.Context) {
 // watching, and an operator who gets paged by their own deploy learns to
 // ignore the pager. It uses a fresh context because the one that triggered
 // shutdown is already cancelled.
+//
+// The X-SubGlance-Event header is the only thing that marks this ping as
+// different, and a generic provider ignores it: Healthchecks.io and Dead Man's
+// Snitch both read it as an ordinary check-in. That is the intended outcome —
+// the switch is reset, so nobody is paged for a planned restart — but only a
+// receiver that reads the header can tell a clean stop from a normal ping.
 func (w *Watchdog) pingStopped() {
 	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
 	defer cancel()
@@ -246,6 +283,8 @@ func (w *Watchdog) send(ctx context.Context, event, body string) {
 	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		// A 3xx lands here rather than being followed; see the client
+		// setup in New.
 		w.log.Error("watchdog ping rejected", "event", event, "status", resp.StatusCode)
 		return
 	}
