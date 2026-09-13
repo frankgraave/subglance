@@ -11,7 +11,10 @@ afterEach(cleanup);
 const WIDTH = 720;
 const NOW = 1_700_000_060_000;
 
-const monitor = (status: MonitorStatus, over: Partial<Monitor> = {}): Monitor => ({
+const monitor = (
+  status: MonitorStatus,
+  over: Partial<Monitor> = {},
+): Monitor => ({
   id: "7",
   name: "api.example.com",
   status,
@@ -20,6 +23,7 @@ const monitor = (status: MonitorStatus, over: Partial<Monitor> = {}): Monitor =>
   uptime24h: 99.9,
   beats: [{ ts: 1_700_000_000_000, ok: true, latencyMs: 120 }],
   lastCheck: 1_700_000_000_000,
+  tags: {},
   ...over,
 });
 
@@ -83,7 +87,9 @@ describe("the status sentence", () => {
 
 describe("uptime windows", () => {
   it("shows a window per row with its failure count", () => {
-    view({ windows: [window_({ window: "7d", total: 1000, down: 3, uptime: 99.7 })] });
+    view({
+      windows: [window_({ window: "7d", total: 1000, down: 3, uptime: 99.7 })],
+    });
     expect(screen.getByText("7d")).toBeTruthy();
     expect(document.body.textContent).toContain("3 of 1000 failed");
   });
@@ -91,7 +97,11 @@ describe("uptime windows", () => {
   it("renders an unknown uptime as unknown, never as 0%", () => {
     // A monitor created an hour ago has no 30d uptime. "0%" would read as a
     // month-long outage.
-    view({ windows: [window_({ window: "30d", total: 0, up: 0, down: 0, uptime: null })] });
+    view({
+      windows: [
+        window_({ window: "30d", total: 0, up: 0, down: 0, uptime: null }),
+      ],
+    });
     expect(document.body.textContent).toContain("No uptime data");
     expect(document.body.textContent).not.toContain("0%");
     expect(document.body.textContent).toContain("no checks");
@@ -105,7 +115,11 @@ describe("uptime windows", () => {
 
 describe("incidents", () => {
   it("distinguishes an ongoing incident from a resolved one", () => {
-    view({ incidents: [incident({ resolved: false, resolvedAt: null, durationS: 900 })] });
+    view({
+      incidents: [
+        incident({ resolved: false, resolvedAt: null, durationS: 900 }),
+      ],
+    });
     expect(document.body.textContent).toContain("Ongoing for 15 min");
     const item = document.querySelector(".mon-detail-incident");
     expect(item?.getAttribute("data-resolved")).toBe("false");
@@ -142,13 +156,18 @@ describe("loading and failure", () => {
     const alerts = document.querySelectorAll('[role="alert"]');
     expect(alerts.length).toBeGreaterThan(0);
     expect(document.body.textContent).toContain("HTTP 500");
-    expect(document.body.textContent).not.toContain("Nothing has gone wrong yet");
+    expect(document.body.textContent).not.toContain(
+      "Nothing has gone wrong yet",
+    );
   });
 
   it("still shows the live status when the extra panels failed", () => {
     // The monitor comes from the stream, not from the failed request. Losing
     // incident history must not blank out the answer the page exists to give.
-    view({ monitor: monitor("down", { error: "timeout" }), error: new Error("HTTP 500") });
+    view({
+      monitor: monitor("down", { error: "timeout" }),
+      error: new Error("HTTP 500"),
+    });
     expect(screen.getByText("Down")).toBeTruthy();
   });
 });
@@ -156,11 +175,15 @@ describe("loading and failure", () => {
 describe("the stale signal", () => {
   it("carries the same attribute the dashboard uses, so one CSS rule covers both", () => {
     view({ stale: true });
-    expect(document.querySelector(".mon-detail")?.getAttribute("data-conn")).toBe("stale");
+    expect(
+      document.querySelector(".mon-detail")?.getAttribute("data-conn"),
+    ).toBe("stale");
   });
 
   it("is live by default", () => {
     view();
-    expect(document.querySelector(".mon-detail")?.getAttribute("data-conn")).toBe("live");
+    expect(
+      document.querySelector(".mon-detail")?.getAttribute("data-conn"),
+    ).toBe("live");
   });
 });
