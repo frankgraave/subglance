@@ -31,6 +31,10 @@ type Monitor struct {
 	SSLWarnDays int
 	Enabled     bool
 
+	// Tags are key/value pairs such as `env` -> `prod`. See tags.go for the
+	// shape and the normalisation rules; nil and empty mean the same thing.
+	Tags map[string]string
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -75,14 +79,40 @@ func (db *DB) queryMonitors(ctx context.Context, where string) ([]Monitor, error
 		}
 		out = append(out, m)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Tags come from a second table, read in one query for the whole page
+	// rather than one per monitor.
+	ids := make([]int64, 0, len(out))
+	for _, m := range out {
+		ids = append(ids, m.ID)
+	}
+	tags, err := db.tagsForMonitors(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		out[i].Tags = tags[out[i].ID]
+	}
+	return out, nil
 }
 
 // GetMonitor returns one monitor by ID. It returns sql.ErrNoRows when absent.
 func (db *DB) GetMonitor(ctx context.Context, id int64) (Monitor, error) {
 	q := "SELECT " + monitorColumns + " FROM monitors WHERE id = ?"
 	row := db.Reader.QueryRowContext(ctx, q, id)
-	return scanMonitor(row)
+	m, err := scanMonitor(row)
+	if err != nil {
+		return Monitor{}, err
+	}
+	tags, err := db.tagsForMonitors(ctx, []int64{id})
+	if err != nil {
+		return Monitor{}, err
+	}
+	m.Tags = tags[id]
+	return m, nil
 }
 
 // scanner covers both *sql.Row and *sql.Rows.
@@ -139,7 +169,16 @@ func (db *DB) CreateMonitor(ctx context.Context, m Monitor) (Monitor, error) {
 		headersJSON = string(b)
 	}
 
-	res, err := db.Writer.ExecContext(ctx, `
+	// Monitor row and tag rows go in together: a monitor that briefly exists
+	// without the tags it was created with would be shown ungrouped on any
+	// dashboard that happened to load in between.
+	tx, err := db.Writer.BeginTx(ctx, nil)
+	if err != nil {
+		return Monitor{}, fmt.Errorf("begin create monitor: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	res, err := tx.ExecContext(ctx, `
 		INSERT INTO monitors (
 			name, type, target, interval_s, timeout_s, retries,
 			method, expected_status, keyword, keyword_mode, follow_redirects,
@@ -159,6 +198,13 @@ func (db *DB) CreateMonitor(ctx context.Context, m Monitor) (Monitor, error) {
 	}
 
 	m.ID = id
+	if err := replaceTags(ctx, tx, id, m.Tags); err != nil {
+		return Monitor{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return Monitor{}, fmt.Errorf("commit create monitor: %w", err)
+	}
+
 	m.CreatedAt = time.Unix(now, 0).UTC()
 	m.UpdatedAt = m.CreatedAt
 	return m, nil
@@ -583,7 +629,13 @@ func (db *DB) updateMonitor(ctx context.Context, m Monitor, expected []int64) (M
 		args = append(args, string(encoded))
 	}
 
-	res, err := db.Writer.ExecContext(ctx, q, args...)
+	tx, err := db.Writer.BeginTx(ctx, nil)
+	if err != nil {
+		return Monitor{}, fmt.Errorf("begin update monitor %d: %w", m.ID, err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	res, err := tx.ExecContext(ctx, q, args...)
 	if err != nil {
 		return Monitor{}, fmt.Errorf("update monitor %d: %w", m.ID, err)
 	}
@@ -608,10 +660,19 @@ func (db *DB) updateMonitor(ctx context.Context, m Monitor, expected []int64) (M
 	// may have picked the row's own value when a concurrent writer got there
 	// first. Reading it back keeps the returned monitor — and therefore the
 	// ETag the caller hands out — equal to what is actually stored.
+	// Tags are replaced, not merged: the API models them as one field of the
+	// monitor, exactly like headers, so there has to be a way to remove one.
+	if err := replaceTags(ctx, tx, m.ID, m.Tags); err != nil {
+		return Monitor{}, err
+	}
+
 	var stored int64
-	if err := db.Writer.QueryRowContext(ctx,
+	if err := tx.QueryRowContext(ctx,
 		`SELECT updated_at FROM monitors WHERE id = ?`, m.ID).Scan(&stored); err != nil {
 		return Monitor{}, fmt.Errorf("read back updated_at for monitor %d: %w", m.ID, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return Monitor{}, fmt.Errorf("commit update monitor %d: %w", m.ID, err)
 	}
 
 	m.UpdatedAt = time.Unix(stored, 0).UTC()

@@ -45,6 +45,13 @@ type previewRequest struct {
 	Headers         map[string]string `json:"headers"`
 	Body            string            `json:"body"`
 	SSLWarnDays     *int              `json:"ssl_warn_days"`
+	// Tags do not affect a probe — nothing is stored and nothing is
+	// grouped. They are accepted and validated anyway so that a form can
+	// preview the draft it holds without stripping fields first: the
+	// decoder rejects unknown fields, so an ignored `tags` would be a 400,
+	// and a tag that previews fine but fails to save is exactly the outcome
+	// this endpoint exists to prevent.
+	Tags map[string]string `json:"tags"`
 }
 
 // previewResponse is a check result plus the settings it was run with.
@@ -69,6 +76,10 @@ type previewResponse struct {
 	// normalisation. They may differ from what was sent.
 	Type   string `json:"type"`
 	Target string `json:"target"`
+
+	// Tags echoes the normalised tags, so a form can see that `Env: Prod `
+	// will be stored as `env` -> `Prod` before it saves.
+	Tags map[string]string `json:"tags,omitempty"`
 }
 
 // handlePreviewCheck probes a monitor that does not exist yet.
@@ -135,6 +146,11 @@ func (s *Server) handlePreviewCheck(w http.ResponseWriter, r *http.Request) {
 	}
 	if p := validateSSLWarnDays(req.SSLWarnDays); !p.ok() {
 		writeProblem(w, http.StatusBadRequest, p)
+		return
+	}
+	tags, err := store.NormaliseTags(req.Tags)
+	if err != nil {
+		writeProblem(w, http.StatusBadRequest, fieldProblem("tags", err.Error()))
 		return
 	}
 
@@ -207,6 +223,7 @@ func (s *Server) handlePreviewCheck(w http.ResponseWriter, r *http.Request) {
 		Error:      res.Error,
 		Type:       typ,
 		Target:     target,
+		Tags:       tags,
 	}
 	if !res.CertExpiry.IsZero() {
 		expiry := res.CertExpiry
