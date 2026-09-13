@@ -41,6 +41,10 @@ code exists for it.
   time, and certificate expiry warnings
 - **Failure classification** — a DNS failure, a refused connection and an expired
   certificate are three different problems, and the API says which one you have
+- **The response behind a failure** — when an HTTP check fails, the first 2 KiB
+  of the response is kept, so the answer that arrived at 03:00 is still there in
+  the morning. Capped, limited to the first few failures of an outage, stripped
+  of credentials, and switchable off per monitor; see SECURITY.md
 - **Scheduler**: a timing wheel with a bounded worker pool, so 500 monitors do
   not mean 500 goroutines or 500 simultaneous requests
 - **State engine**: confirmation before alarming, incident lifecycle, flapping
