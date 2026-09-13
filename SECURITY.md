@@ -72,11 +72,13 @@ What that means for an operator:
   identifier, an internal hostname or a stack trace. If that matters for a
   given target, turn capture off for that monitor with
   `"capture_response": false`.
-- Request and response credentials are not stored. Only an allowlist of
-  response headers is kept (content type, server, date, retry-after, location
+- No credentials are stored from request or response headers. Only an allowlist
+  of response headers is kept (content type, server, date, retry-after, location
   and a few request identifiers); `Set-Cookie`, `Authorization` and everything
   else are dropped rather than filtered, so a header invented tomorrow is not
-  stored either.
+  stored either. The response body is a different matter: it is stored as it
+  arrived, truncated but not redacted, so a body that echoes a token or a
+  session identifier keeps it until the snapshot expires.
 - Snapshots expire with the heartbeat they belong to. When raw heartbeats are
   rolled up into hourly buckets after the retention window, the snapshots are
   deleted with them by a foreign key, so there is no second retention policy

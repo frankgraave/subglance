@@ -45,8 +45,11 @@ code exists for it.
   certificate are three different problems, and the API says which one you have
 - **The response behind a failure** — when an HTTP check fails, the first 2 KiB
   of the response is kept, so the answer that arrived at 03:00 is still there in
-  the morning. Capped, limited to the first few failures of an outage, stripped
-  of credentials, and switchable off per monitor; see SECURITY.md
+  the morning. Capped, limited to the first few failures of an outage, and
+  switchable off per monitor. Only an allowlist of response headers is stored,
+  so no credential headers are kept; the body is stored as it arrived and can
+  hold sensitive data, so see SECURITY.md before enabling it on a target that
+  answers with more than an error message
 - **Scheduler**: a timing wheel with a bounded worker pool, so 500 monitors do
   not mean 500 goroutines or 500 simultaneous requests
 - **State engine**: confirmation before alarming, incident lifecycle, flapping

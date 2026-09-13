@@ -3,6 +3,7 @@ package checker
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -222,8 +223,26 @@ func TestCaptureOnKeywordFailureReusesTheBodyAlreadyRead(t *testing.T) {
 // A failure that never reached a response has nothing to capture, and must not
 // invent an empty snapshot that a UI would then render as an empty panel.
 func TestCaptureIsAbsentWhenThereIsNoResponse(t *testing.T) {
+	// A listener that accepts and hangs up without writing a response: the
+	// request fails after the dial, so there is nothing to snapshot. Owning the
+	// listener keeps the test hermetic instead of betting on a closed port.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			conn.Close()
+		}
+	}()
+
 	res := testChecker().Check(context.Background(),
-		captureMonitor("http://127.0.0.1:1/nothing-listens-here"))
+		captureMonitor("http://"+ln.Addr().String()+"/nothing-answers-here"))
 
 	if res.OK {
 		t.Fatal("check passed against a closed port")
