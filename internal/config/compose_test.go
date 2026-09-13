@@ -135,7 +135,10 @@ func TestComposeMatchesImageDefaults(t *testing.T) {
 	}
 	foundPort := false
 	for _, p := range svc.Ports {
-		if _, container, ok := strings.Cut(p, ":"); ok && container == wantPort {
+		// A published port is "[host_ip:][host:]container[/protocol]", so the
+		// container port is the last colon-separated segment.
+		mapping := strings.TrimSuffix(strings.TrimSuffix(p, "/tcp"), "/udp")
+		if idx := strings.LastIndex(mapping, ":"); idx >= 0 && mapping[idx+1:] == wantPort {
 			foundPort = true
 		}
 	}
@@ -172,5 +175,32 @@ func TestComposeEnvironmentValuesAreValid(t *testing.T) {
 	}
 	if _, err := Load(nil); err != nil {
 		t.Fatalf("Load with the compose environment: %v", err)
+	}
+}
+
+// TestComposePublishesOnLoopback guards the host side of the mapping. The
+// setup endpoint that creates the first administrator is reachable by anyone
+// who can open the dashboard before that account exists, so the shipped file
+// must not publish the port on every interface. Exposing it wider is a choice
+// an operator makes knowingly, not a default they inherit.
+func TestComposePublishesOnLoopback(t *testing.T) {
+	cf, _ := readCompose(t)
+	svc, ok := cf.Services["subglance"]
+	if !ok {
+		t.Fatalf("no service named subglance in %s", composePath)
+	}
+	if len(svc.Ports) == 0 {
+		t.Fatalf("service subglance publishes no ports in %s", composePath)
+	}
+	for _, p := range svc.Ports {
+		mapping := strings.TrimSuffix(strings.TrimSuffix(p, "/tcp"), "/udp")
+		if strings.Count(mapping, ":") < 2 {
+			t.Errorf("port %q has no host IP, so it publishes on every interface; bind it to 127.0.0.1", p)
+			continue
+		}
+		hostIP := mapping[:strings.Index(mapping, ":")]
+		if hostIP != "127.0.0.1" && hostIP != "::1" {
+			t.Errorf("port %q publishes on host IP %q, want loopback", p, hostIP)
+		}
 	}
 }

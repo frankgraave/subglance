@@ -15,10 +15,14 @@ services:
     container_name: subglance
     restart: unless-stopped
     ports:
-      # host:container. Change only the left-hand side to move the dashboard to
-      # another host port; the right-hand side is the image's own default and
-      # changing it also means setting SUBGLANCE_ADDR below.
-      - "8080:8080"
+      # host:container, bound to loopback on purpose. The first start has no
+      # users yet, so whoever reaches the dashboard first becomes the
+      # administrator; keeping it on 127.0.0.1 means that has to be someone on
+      # this machine. Reach it from elsewhere over a reverse proxy or an SSH
+      # tunnel, or drop the 127.0.0.1 prefix as a deliberate choice once an
+      # administrator exists. The right-hand side is the image's own default
+      # and changing it also means setting SUBGLANCE_ADDR below.
+      - "127.0.0.1:8080:8080"
     volumes:
       # /data is the default --data-dir and holds subglance.db. The image
       # pre-creates it owned by the unprivileged user the process runs as.
