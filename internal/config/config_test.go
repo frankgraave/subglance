@@ -5,6 +5,8 @@ import (
 	"flag"
 	"testing"
 	"time"
+
+	"github.com/frankgraave/subglance/internal/watchdog"
 )
 
 func TestLoadDefaults(t *testing.T) {
@@ -116,5 +118,61 @@ func TestHelpReturnsErrHelp(t *testing.T) {
 	_, err := Load([]string{"-h"})
 	if !errors.Is(err, flag.ErrHelp) {
 		t.Errorf("Load(-h) error = %v, want flag.ErrHelp", err)
+	}
+}
+
+func TestWatchdogDefaultsToOff(t *testing.T) {
+	c, err := Load(nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if c.WatchdogURL != "" {
+		t.Fatalf("WatchdogURL = %q, want it off by default", c.WatchdogURL)
+	}
+	if c.WatchdogInterval != watchdog.DefaultInterval {
+		t.Fatalf("WatchdogInterval = %s, want %s", c.WatchdogInterval, watchdog.DefaultInterval)
+	}
+}
+
+func TestWatchdogFlagsAndEnv(t *testing.T) {
+	t.Setenv("SUBGLANCE_WATCHDOG_URL", "https://hc-ping.com/from-env")
+	t.Setenv("SUBGLANCE_WATCHDOG_INTERVAL", "90s")
+
+	c, err := Load(nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if c.WatchdogURL != "https://hc-ping.com/from-env" {
+		t.Fatalf("WatchdogURL = %q", c.WatchdogURL)
+	}
+	if c.WatchdogInterval != 90*time.Second {
+		t.Fatalf("WatchdogInterval = %s, want 90s", c.WatchdogInterval)
+	}
+
+	c, err = Load([]string{"--watchdog-url", "https://hc-ping.com/from-flag", "--watchdog-interval", "2m"})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if c.WatchdogURL != "https://hc-ping.com/from-flag" {
+		t.Fatalf("flag should beat environment, got %q", c.WatchdogURL)
+	}
+	if c.WatchdogInterval != 2*time.Minute {
+		t.Fatalf("WatchdogInterval = %s, want 2m", c.WatchdogInterval)
+	}
+}
+
+func TestWatchdogURLIsValidated(t *testing.T) {
+	// A typo here is silent otherwise: the operator believes they are
+	// covered and nothing ever pings.
+	if _, err := Load([]string{"--watchdog-url", "hc-ping.com/abc"}); err == nil {
+		t.Fatal("a URL without a scheme should be rejected")
+	}
+	if _, err := Load([]string{"--watchdog-url", "https://hc-ping.com/abc", "--watchdog-interval", "0"}); err == nil {
+		t.Fatal("a zero interval with a configured URL should be rejected")
+	}
+	// An interval is irrelevant while the watchdog is off, so it must not
+	// block startup.
+	if _, err := Load([]string{"--watchdog-interval", "0"}); err != nil {
+		t.Fatalf("interval should not be validated while the watchdog is off: %v", err)
 	}
 }

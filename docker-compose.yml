@@ -40,6 +40,16 @@ services:
       # SubGlance into an SSRF proxy into whatever this container can reach.
       # Turn it on only if you mean to monitor services on your own network.
       # SUBGLANCE_ALLOW_PRIVATE_TARGETS: "false"
+      # SubGlance cannot report its own death: if this container is killed or
+      # the host goes down, nothing turns red — the dashboard just stops
+      # existing. Point this at a dead man's switch (Healthchecks.io, Dead
+      # Man's Snitch, another SubGlance) and it will ping while it is still
+      # completing checks. Monitor names, target URLs and check results never
+      # leave here; the ping does carry how many monitors are scheduled and how
+      # many checks have completed. Prefer an https URL, since over http those
+      # counts travel in cleartext.
+      # SUBGLANCE_WATCHDOG_URL: ""
+      # SUBGLANCE_WATCHDOG_INTERVAL: 5m
 
     # ICMP ping checks need the container to allow unprivileged ICMP for the
     # process GID. Docker's own default already does; some Podman and
