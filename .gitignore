@@ -3,6 +3,9 @@
 .AppleDouble
 .LSOverride
 
+# Local scratch directory. Never part of the project, and never committed.
+.orca/
+
 # Editors
 .vscode/
 .idea/

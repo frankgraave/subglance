@@ -76,7 +76,8 @@
  * most useful thing on the screen. Nothing is hidden and nothing moves; the
  * display simply stops presenting itself as current truth.
  */
-.mon-dashboard[data-conn="stale"] .led {
+.mon-dashboard[data-conn="stale"] .led,
+.mon-detail[data-conn="stale"] .led {
   /* ~18%: enough colour left to tell a drained red from a drained green when
      you look for it, not enough to read as a claim from across the room. */
   filter: saturate(.18);
@@ -87,7 +88,8 @@
   transition: filter 600ms var(--ease), box-shadow 600ms var(--ease);
 }
 
-.mon-dashboard[data-conn="stale"] .hb-bar {
+.mon-dashboard[data-conn="stale"] .hb-bar,
+.mon-detail[data-conn="stale"] .hb-bar {
   filter: saturate(.18);
   transition: filter 600ms var(--ease);
 }
@@ -96,7 +98,9 @@
    down is fiction — nothing arrived. */
 .mon-dashboard[data-conn="stale"] .hb-bar--new,
 .mon-dashboard[data-conn="stale"] .hb-flare,
-.mon-dashboard[data-conn="stale"] .conn-badge-dot {
+.mon-dashboard[data-conn="stale"] .conn-badge-dot,
+.mon-detail[data-conn="stale"] .hb-bar--new,
+.mon-detail[data-conn="stale"] .hb-flare {
   animation: none;
 }
 
@@ -104,9 +108,14 @@
    and history should not be as loud as fact. `--ink-3` rather than hiding
    them: an unreadable number invites a reload, and the number is still the
    best information available. */
+/* The detail view carries the same attribute and inherits the same rules:
+   the reasoning above is about what the screen is claiming, not about which
+   screen is claiming it. */
 .mon-dashboard[data-conn="stale"] .mon-count-value,
 .mon-dashboard[data-conn="stale"] .mon-line-num,
-.mon-dashboard[data-conn="stale"] .mon-line-error {
+.mon-dashboard[data-conn="stale"] .mon-line-error,
+.mon-detail[data-conn="stale"] .mon-detail-status,
+.mon-detail[data-conn="stale"] .mon-detail-window-value {
   color: var(--ink-3);
   transition: color 600ms var(--ease);
 }
