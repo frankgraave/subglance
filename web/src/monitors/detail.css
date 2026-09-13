@@ -29,7 +29,11 @@
    above. */
 .mon-detail-back {
   display: inline-flex;
-  align-items: center;
+  /* flex-start, not center: centring would split the extra height evenly above
+     and below the text, which lifts the arrow off the line it belongs to and
+     puts half the target above it. Starting at the top keeps the text where it
+     would sit without the minimum, and all the added height lands underneath. */
+  align-items: flex-start;
   gap: var(--space-2);
   /* 24px is WCAG 2.2 SC 2.5.8's minimum target, and this control needs it:
      the inline exception covers links sitting inside a sentence, and this is
