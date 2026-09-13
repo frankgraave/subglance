@@ -70,6 +70,7 @@
 
 .led-label {
   font-size: var(--type-helper);
+  line-height: var(--lead-helper);
   color: var(--ink-2);
 }
 

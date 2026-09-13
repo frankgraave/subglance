@@ -124,56 +124,66 @@ reason it never spells out a colour (§2): "make everything a step larger" has t
 be a single edit, and sixty hand-tuned sizes drift out of proportion the moment
 one of them is touched.
 
-| Role | Token | Size | Weight |
+**A size and its leading are one decision, so they are one pair.** Every role is
+a whole number of pixels paired with a whole-pixel leading, and every rule that
+sets the size sets its partner in the same block. Leading is never a ratio: a
+ratio times a size lands between device pixels (`12.5 x 1.45 = 18.125`), and what
+the engine then does with the fraction depends on the font and the device pixel
+ratio. A stated `16px` does not have that question.
+
+Leadings are multiples of 4 so a column of rows keeps the baseline grid. Single
+line roles set the leading equal to the size — with no half-leading above and
+below, vertical centring is exact, which is what a 30px list row and a 36px
+control need.
+
+| Role | Token | Size | Leading | Weight |
+|---|---|---|---|---|
+| Page title | `--type-page` | `24px` | `--lead-page` `32px` | `--weight-strong` |
+| Card title | `--type-card` | `18px` | `--lead-card` `24px` | `--weight-strong` |
+| Row title | `--type-row` | `15px` | `--lead-row` `20px` | `--weight-mid` |
+| Body / label | `--type-body` | `14px` | `--lead-body` `20px` | `--weight-plain` |
+| Helper text | `--type-helper` | `13px` | `--lead-helper` `16px` | `--weight-plain` |
+| Section heading | `--type-section` | `12px` | `--lead-section` `12px` | `--weight-strong`, uppercase, `--track-caps` |
+
+One leading is opted into rather than inherited:
+
+| Leading | Token | Value | Used for |
 |---|---|---|---|
-| Page title | `--type-page` | `22px` | `--weight-strong` |
-| Card title | `--type-card` | `17px` | `--weight-strong` |
-| Row title | `--type-row` | `15px` | `--weight-mid` |
-| Body / label | `--type-body` | `14px` | `--weight-plain` |
-| Helper text | `--type-helper` | `12.5px` | `--weight-plain` |
-| Section heading | `--type-section` | `12px` | `--weight-strong`, uppercase, `--track-caps` |
+| Prose | `--lead-prose` | `20px` | helper-size text that wraps: empty states, error text, field help |
 
-| Line height | Token | Value | Used for |
-|---|---|---|---|
-| Tight | `--lh-tight` | `1.25` | headings, single-line labels |
-| Body | `--lh-body` | `1.45` | running text in a row or card |
-| Prose | `--lh-prose` | `1.6` | paragraphs — empty states, explanations |
+That is the helper role's running-text partner, not a general ratio. Body size
+and up already sit on 20px, so only helper text needs the wider option; five
+rules use it and each one wraps to several lines. A sixth token per size would be
+the old drift wearing new names.
 
-**Known defect: sizes and leadings are multiplied, not paired.** Counted on
-`dc46b9b` from the stylesheet sources and the rendered workbench DOM; the
-element and rule counts below are those counts, not render measurements. Across
-the 79 visible text elements of the workbench, 55 of them sit on a fractional
-line height. The cause is arithmetic, not carelessness: a ratio
-times a size gives `12.5 x 1.45 = 18.125`, `17 x 1.25 = 21.25`, `15 x 1.5 =
-22.5`. None of those land on the 4px baseline grid. What a browser then does
-with the fraction — which way it rounds, and whether the remainder accumulates
-down a column of rows — depends on the engine, the font and the device pixel
-ratio, so the rendered position is outside my control rather than something I
-have measured.
+**Why the helper size changed.** `--type-helper` was `12.5px` — the only
+fractional size in the system and the most used role in the product, which put
+the engine's glyph rounding on exactly the text with the least room to absorb it.
+It is now `13px` rather than `12px`: `--type-section` is already 12px, and
+collapsing the two documented roles onto one size to gain a round number trades a
+visible distinction for an invisible one. Rounding down would also have shrunk
+the most-used text in a product where SUB-67 exists because everything was judged
+too small. Page and card titles moved with it (22 to 24, 17 to 18) to keep whole
+sizes without flattening the steps between the roles.
 
-The second half of the defect is inheritance. Of the 50 CSS rules that set
-`font-size`, 42 do not set `line-height` in the same block, so they inherit
-whatever is above them — Tailwind preflight's 1.5, `--lh-body`'s 1.45, or
-`--lh-prose`'s 1.6. That is how one size ends up rendering at three different
-leadings: `--type-helper` appears at 18.125px, 18.75px and 20px on the same
-screen.
-
-`--type-helper: 12.5px` is also the only fractional size in the system, and the
-most used — 49 of 79 elements. That puts the engine's glyph-rounding on exactly
-the text that has the least room to absorb it.
-
-The fix is to pair every size with a whole-pixel leading and to set both together
-in every rule, never the size alone. It is not applied here because choosing the
-helper size is a judgement call rather than a derivation: 12/16 collapses helper
-onto `--type-section`, 13/16 keeps the roles distinct. Until that is decided the
-defect is documented rather than half-fixed.
+`tokens.test.ts` reads the table above and fails when the stylesheet disagrees,
+when any size or leading is fractional, when a leading is not a multiple of 4,
+and when any rule under `web/src` sets a font size without its paired leading.
+The last of those is the one that actually rotted: counted on `bedcde0`, 56 of
+the 69 rules that set a size set no leading beside it and inherited whatever sat
+above them — Tailwind preflight's 1.5, or one of the old `--lh-*` ratios — so a
+single size rendered at three different leadings on one screen. (SUB-74 was
+filed against `dc46b9b` and cited 42 of 50; the detail view and the tag filter
+landed in between.)
 
 **Nothing is smaller than 12px.** Below that, text stops being readable at a
 glance, and reading at a glance is the entire product. The one documented
-exception is `--type-nozoom: 16px` for the search input on phone widths: iOS
-Safari zooms the page in when a focused input renders below 16px and never zooms
-back out (§13). That is a platform workaround, not a typographic role, which is
-why it sits outside the scale.
+exception is `--type-nozoom: 16px`, paired with `--lead-nozoom: 20px`, for the
+search input and selects on phone widths: iOS Safari zooms the page in when a
+focused input renders below 16px and never zooms back out (§13). That is a
+platform workaround, not a typographic role, which is why it sits outside the
+scale — but it is paired like everything else, because an input that inherits
+its leading has the same defect as a label that does.
 
 **The scale grew; the density did not.** Row height stays at 58px and the header
 row at 34px, so a laptop still shows the same number of monitors without

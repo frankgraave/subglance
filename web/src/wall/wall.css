@@ -27,8 +27,8 @@
 
 /* Whispered, not shouted: if the header competes with the lamps for attention
    from across the room, the lamps have lost. */
-.wall-title { font-size: var(--type-body); font-weight: var(--weight-strong); color: var(--ink-2); }
-.wall-meta { font-family: var(--font-mono); font-size: var(--type-helper); color: var(--ink-4); }
+.wall-title { font-size: var(--type-body); line-height: var(--lead-body); font-weight: var(--weight-strong); color: var(--ink-2); }
+.wall-meta { font-family: var(--font-mono); font-size: var(--type-helper); line-height: var(--lead-helper); color: var(--ink-4); }
 .wall-meta-down { color: var(--down); font-weight: var(--weight-strong); }
 .wall-meta-stale { color: var(--warn); }
 /* Deliberately not `--down`: a count we can no longer vouch for must not be
@@ -39,6 +39,7 @@
   margin-left: auto;
   font-family: var(--font-mono);
   font-size: var(--type-helper);
+  line-height: var(--lead-helper);
   font-variant-numeric: tabular-nums;
   color: var(--ink-4);
 }
@@ -76,13 +77,14 @@
 
 .wall-card-name {
   font-size: var(--type-row);
+  line-height: var(--lead-row);
   font-weight: var(--weight-mid);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.wall-empty { font-size: var(--type-body); color: var(--ink-3); }
+.wall-empty { font-size: var(--type-body); line-height: var(--lead-body); color: var(--ink-3); }
 
 /*
  * Stale: the canvas carries the message, because there is no chrome to put a

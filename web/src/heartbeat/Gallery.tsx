@@ -99,7 +99,7 @@ function Case({ title, note, beats }: { title: string; note: string; beats: Beat
   return (
     <section className="rounded-lg border border-border bg-surface p-5 shadow-card">
       <h3 className="text-card font-strong text-ink">{title}</h3>
-      <p className="mb-4 mt-1 max-w-prose text-helper leading-[var(--lh-prose)] text-ink-3">{note}</p>
+      <p className="mb-4 mt-1 max-w-prose text-helper leading-prose text-ink-3">{note}</p>
       <HeartbeatBar beats={beats} label={title} />
     </section>
   );
@@ -111,7 +111,7 @@ export function HeartbeatGallery() {
     <div className="grid gap-5">
       <section className="rounded-lg border border-border bg-surface p-5 shadow-card">
         <h3 className="text-card font-strong text-ink">Live — a check every 3 seconds</h3>
-        <p className="mb-4 mt-1 max-w-prose text-helper leading-[var(--lh-prose)] text-ink-3">
+        <p className="mb-4 mt-1 max-w-prose text-helper leading-prose text-ink-3">
           The newest bar enters at 35% height, overshoots and settles (DESIGN.md §5). The row itself
           stays still; nothing flashes. Hover or focus the track and use the arrow keys.
         </p>
@@ -122,7 +122,7 @@ export function HeartbeatGallery() {
       ))}
       <section className="rounded-lg border border-border bg-surface p-5 shadow-card">
         <h3 className="text-card font-strong text-ink">Sizes</h3>
-        <p className="mb-4 mt-1 max-w-prose text-helper leading-[var(--lh-prose)] text-ink-3">
+        <p className="mb-4 mt-1 max-w-prose text-helper leading-prose text-ink-3">
           The same series at row height, card height and hero height. The column count follows the
           available width, so the component never needs to be told how much data to show.
         </p>

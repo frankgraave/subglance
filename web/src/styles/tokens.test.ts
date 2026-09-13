@@ -21,6 +21,11 @@ import { describe, expect, it } from "vitest";
  * SUB-69 extends them again to weight and tracking. Those drift the most
  * quietly of all: five uppercase labels at .02em, .07em, .08em, .09em and .1em
  * looked deliberate and were not, and nothing about the page said so.
+ *
+ * SUB-74 pairs each size with a whole-pixel leading and guards the pairing
+ * itself. A size declared alone is the defect: it inherits whatever leading is
+ * above it, which is how one token rendered at three leadings on one screen,
+ * and no amount of reading the stylesheet made that visible.
  */
 
 const here = fileURLToPath(new URL(".", import.meta.url));
@@ -73,6 +78,58 @@ function sourceFiles(dir: string): string[] {
 
 const darkTokens = declarations(themeBlock("dark"));
 const lightTokens = declarations(themeBlock("light"));
+
+/**
+ * The §2.5 role table, as the document states it: one row per role carrying
+ * both the size token and its paired leading token. Reading the table rather
+ * than restating its numbers here is the point — a test with the values copied
+ * into it drifts alongside the code it guards.
+ */
+function typeRoleRows(): {
+  size: string;
+  sizeValue: string;
+  lead: string;
+  leadValue: string;
+}[] {
+  const start = designMd.indexOf("### 2.5 Typography");
+  expect(start, "missing §2.5").toBeGreaterThan(-1);
+  const body = designMd.slice(start, designMd.indexOf("\n### ", start + 10));
+  // The leading cell holds a token and its value; tolerate a pipe, a space or
+  // nothing between them so reformatting the table reads as formatting rather
+  // than as token drift. Row count is asserted by the caller, so a regex that
+  // stopped matching fails loudly instead of passing vacuously.
+  return [
+    ...body.matchAll(
+      /\|\s*`(--type-[a-z]+)`\s*\|\s*`([^`]+)`\s*\|\s*`(--lead-[a-z]+)`\s*\|?\s*`([^`]+)`\s*\|/g,
+    ),
+  ].map(([, size, sizeValue, lead, leadValue]) => ({
+    size,
+    sizeValue,
+    lead,
+    leadValue,
+  }));
+}
+
+/**
+ * Every `{ … }` declaration block in a stylesheet, as `[selector, body]`.
+ * Comments are blanked to spaces first: a commented-out rule still contains
+ * braces, and scanning them yields a phantom block whose "selector" is a
+ * fragment of prose. None of these stylesheets use CSS nesting, so a flat brace
+ * scan is exact; a nested rule would need a real parser.
+ */
+function declarationBlocks(css: string): { selector: string; body: string }[] {
+  const bare = css.replace(/\/\*[\s\S]*?\*\//g, (c) =>
+    c.replace(/[^\n]/g, " "),
+  );
+  const blocks: { selector: string; body: string }[] = [];
+  for (const match of bare.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    blocks.push({
+      selector: match[1].split(/\s+/).join(" ").trim(),
+      body: match[2],
+    });
+  }
+  return blocks;
+}
 
 describe("tokens.css matches docs/DESIGN.md", () => {
   // §2.1 and §2.2 are fenced CSS blocks; §2.3 is a markdown table. Reading the
@@ -137,31 +194,86 @@ describe("tokens.css matches docs/DESIGN.md", () => {
     expect(root.get("--ease")).toBe(ease?.[1].trim());
   });
 
-  it("uses the type scale from the §2.5 table", () => {
+  it("uses the type scale and its paired leadings from the §2.5 tables", () => {
     const root = declarations(
       tokensCss.slice(tokensCss.indexOf(":root"), tokensCss.indexOf("\n}")),
     );
-    const start = designMd.indexOf("### 2.5 Typography");
-    expect(start, "missing §2.5").toBeGreaterThan(-1);
-    const body = designMd.slice(start, designMd.indexOf("\n### ", start + 10));
-    const rows = [
-      ...body.matchAll(/\|\s*`(--(?:type|lh)-[a-z]+)`\s*\|\s*`([^`]+)`\s*\|/g),
-    ];
-    expect(rows.length, "expected six type roles and three line heights").toBe(
-      9,
+    const rows = typeRoleRows();
+    expect(rows.length, "expected six type roles").toBe(6);
+    for (const { size, sizeValue, lead, leadValue } of rows) {
+      expect(root.get(size), size).toBe(sizeValue);
+      expect(root.get(lead), lead).toBe(leadValue);
+    }
+    // The opt-in leading has its own single-column table.
+    const prose = designMd.match(/\|\s*`(--lead-prose)`\s*\|\s*`([^`]+)`\s*\|/);
+    expect(prose, "missing the --lead-prose row").not.toBeNull();
+    expect(root.get(prose![1])).toBe(prose![2]);
+  });
+
+  it("keeps every size and leading a whole number of pixels", () => {
+    // The defect SUB-74 closes: `12.5px` times a ratio produced leadings like
+    // 18.125px, and which way the engine rounded that depended on the font and
+    // the device pixel ratio. A stated integer has no such question.
+    const root = declarations(
+      tokensCss.slice(tokensCss.indexOf(":root"), tokensCss.indexOf("\n}")),
     );
-    for (const [, name, value] of rows) {
-      expect(root.get(name), name).toBe(value);
+    for (const [name, value] of root) {
+      if (!/^--(?:type|lead)-/.test(name)) continue;
+      expect(value, `${name} must be a whole number of px`).toMatch(
+        /^\d+px$/,
+      );
     }
   });
 
-  it("keeps the documented iOS zoom workaround at 16px", () => {
+  it("keeps every leading on the 4px baseline grid", () => {
+    const root = declarations(
+      tokensCss.slice(tokensCss.indexOf(":root"), tokensCss.indexOf("\n}")),
+    );
+    for (const [name, value] of root) {
+      if (!name.startsWith("--lead-")) continue;
+      // Anchored rather than parseInt: `parseInt("0.5rem")` is 0, which divides
+      // by 4 and would pass. The whole-pixel test above blocks that today, but
+      // a guard that depends on another guard's coverage is one edit from
+      // being silently useless.
+      const px = value.match(/^(\d+)px$/);
+      expect(px, `${name} is ${value}, which is not a whole-pixel length`)
+        .not.toBeNull();
+      expect(
+        Number(px![1]) % 4,
+        `${name} is ${value}, which is off the 4px grid`,
+      ).toBe(0);
+    }
+  });
+
+  it("gives every type role a leading partner, and every leading a role", () => {
+    // A size with no partner is a size that will inherit one, which is the
+    // half of the defect that rotted quietly rather than visibly.
+    const root = declarations(
+      tokensCss.slice(tokensCss.indexOf(":root"), tokensCss.indexOf("\n}")),
+    );
+    const suffix = (prefix: string) =>
+      [...root.keys()]
+        .filter((name) => name.startsWith(prefix))
+        .map((name) => name.slice(prefix.length))
+        .sort();
+    // `--lead-prose` is the documented opt-in and has no `--type-prose`.
+    expect(suffix("--lead-").filter((s) => s !== "prose")).toEqual(
+      suffix("--type-"),
+    );
+  });
+
+  it("keeps the documented iOS zoom workaround paired, at 16px", () => {
     // §13: a focused input below 16px zooms iOS Safari in and never back out.
+    // It sits outside the role table but inside the pairing rule, so the
+    // document has to state both halves or the test cannot check them.
     const root = declarations(
       tokensCss.slice(tokensCss.indexOf(":root"), tokensCss.indexOf("\n}")),
     );
     expect(root.get("--type-nozoom")).toBe("16px");
-    expect(designMd).toContain("--type-nozoom: 16px");
+    expect(designMd).toContain("`--type-nozoom: 16px`");
+    const lead = designMd.match(/`--lead-nozoom:\s*(\d+px)`/);
+    expect(lead, "DESIGN.md must state the nozoom leading").not.toBeNull();
+    expect(root.get("--lead-nozoom")).toBe(lead![1]);
   });
 
   it("keeps every type role at 12px or larger", () => {
@@ -231,6 +343,22 @@ describe("tokens.css is the only source of type size", () => {
     }
     expect(offenders).toEqual([]);
   });
+
+  it("finds no inline fontSize style object under web/src", () => {
+    // A `style={{ fontSize: … }}` sets a size in a place no stylesheet rule
+    // covers, so the pairing guard below — which reads .css files — cannot see
+    // it, and the size arrives with whatever leading it inherits. Size belongs
+    // in a class, where its partner can sit beside it.
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (file.endsWith(".css")) continue;
+      const contents = readFileSync(file, "utf8");
+      for (const match of contents.matchAll(/\bfontSize\s*:/g)) {
+        offenders.push(`${relative(repoRoot, file)}: ${match[0]}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
 });
 
 describe("tokens.css is the only source of line height", () => {
@@ -238,16 +366,112 @@ describe("tokens.css is the only source of line height", () => {
     const offenders: string[] = [];
     for (const file of sourceFiles(webSrc)) {
       const contents = readFileSync(file, "utf8");
-      // `leading-relaxed` and friends silently override the --lh-* token that
-      // the text-* role utility carries, so a paragraph ends up at Tailwind's
-      // 1.625 instead of --lh-prose. Only `leading-[var(--lh-*)]` is allowed.
+      // `leading-relaxed` and friends silently override the leading that the
+      // text-* role utility carries, so a paragraph ends up at Tailwind's 1.625
+      // instead of its paired value. Only the bound `leading-prose` utility and
+      // an explicit `leading-[var(--lead-*)]` are allowed.
       for (const match of contents.matchAll(
-        /leading-(?!\[var\(--lh-)[\w[\].]+|line-height:\s*[\d.]+(?!\s*\/)/g,
+        /leading-(?!prose\b|\[var\(--lead-)[\w[\].]+|line-height:\s*[\d.]+(?!\s*\/)/g,
       )) {
         offenders.push(`${relative(repoRoot, file)}: ${match[0]}`);
       }
     }
     expect(offenders).toEqual([]);
+  });
+
+  it("pairs every font-size declaration with a line-height in the same block", () => {
+    // The half of SUB-74's defect that failed silently: 56 rules set a size and
+    // inherited whatever leading sat above them — Tailwind preflight's 1.5 or
+    // one of the old ratios — so `--type-helper` rendered at three different
+    // leadings on one screen. A rule that states only the size is that bug.
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (!file.endsWith(".css")) continue;
+      for (const { selector, body } of declarationBlocks(
+        readFileSync(file, "utf8"),
+      )) {
+        if (!/font-size:/.test(body)) continue;
+        if (/line-height:/.test(body)) continue;
+        offenders.push(`${relative(repoRoot, file)}: ${selector}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("pairs each size with its own leading, or with the documented prose opt-in", () => {
+    // Pairing the wrong leading is as much a defect as pairing none: it is how
+    // a 13px helper ends up on a 24px card leading and looks like a mistake
+    // nobody can name. The only allowed mismatch is helper text that wraps,
+    // which opts into --lead-prose.
+    const partner = new Map(
+      typeRoleRows().map(({ size, lead }) => [size, lead]),
+    );
+    // Named explicitly: with an empty map every paired rule becomes an
+    // offender, which fails, but blames the stylesheet for a parse that broke
+    // in DESIGN.md.
+    expect(partner.size, "§2.5 table did not parse into six roles").toBe(6);
+    // §13's zoom workaround is outside the role table but still paired.
+    partner.set("--type-nozoom", "--lead-nozoom");
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (!file.endsWith(".css")) continue;
+      for (const { selector, body } of declarationBlocks(
+        readFileSync(file, "utf8"),
+      )) {
+        const size = body.match(/font-size:\s*var\((--type-[a-z]+)\)/);
+        const lead = body.match(/line-height:\s*var\((--lead-[a-z]+)\)/);
+        if (!size || !lead) continue;
+        const want = partner.get(size[1]);
+        const prose = lead[1] === "--lead-prose" && size[1] === "--type-helper";
+        if (lead[1] === want || prose) continue;
+        offenders.push(
+          `${relative(repoRoot, file)}: ${selector} pairs ${size[1]} with ${lead[1]}, want ${want}`,
+        );
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("catches a size-only rule, a mispaired rule and a nested rule in a fixture", () => {
+    // Guards the guard: a brace scan that silently matched nothing, or that
+    // read a commented-out rule as live, would let the defects back in while
+    // the suite stayed green.
+    const css = `
+      /* .commented { font-size: var(--type-body); } */
+      .size-only { font-size: var(--type-helper); color: red; }
+      .paired { font-size: var(--type-helper); line-height: var(--lead-helper); }
+      @media (max-width: 640px) {
+        .nested-size-only { font-size: var(--type-body); }
+      }
+      .mispaired { font-size: var(--type-card); line-height: var(--lead-section); }
+    `;
+    const blocks = declarationBlocks(css);
+    const named = (selector: string) =>
+      blocks.find((b) => b.selector.endsWith(selector));
+
+    expect(named(".commented"), "a commented-out rule is not a rule").toBe(
+      undefined,
+    );
+    // The size-only check, including the rule nested inside the media query.
+    expect(
+      blocks
+        .filter((b) => /font-size:/.test(b.body) && !/line-height:/.test(b.body))
+        .map((b) => b.selector.replace(/^.*\{\s*/, "")),
+    ).toEqual([".size-only", ".nested-size-only"]);
+
+    // The partner check: same shape as the real guard, run over the fixture.
+    const partner = new Map([
+      ["--type-card", "--lead-card"],
+      ["--type-helper", "--lead-helper"],
+      ["--type-body", "--lead-body"],
+    ]);
+    const mismatched = blocks.filter((b) => {
+      const size = b.body.match(/font-size:\s*var\((--type-[a-z]+)\)/);
+      const lead = b.body.match(/line-height:\s*var\((--lead-[a-z]+)\)/);
+      return size && lead && partner.get(size[1]) !== lead[1];
+    });
+    expect(mismatched.map((b) => b.selector)).toEqual([".mispaired"]);
+    expect(named(".paired")).toBeDefined();
   });
 });
 

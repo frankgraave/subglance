@@ -24,6 +24,7 @@
 
 .mon-title {
   font-size: var(--type-card);
+  line-height: var(--lead-card);
   font-weight: var(--weight-strong);
 }
 
@@ -33,6 +34,7 @@
   gap: var(--space-3);
   margin-top: var(--space-2);
   font-size: var(--type-helper);
+  line-height: var(--lead-helper);
   color: var(--ink-3);
 }
 
@@ -79,6 +81,7 @@
   padding: var(--space-2) var(--space-3);
   font: inherit;
   font-size: var(--type-body);
+  line-height: var(--lead-body);
   color: var(--ink);
   background: var(--surface);
   border: 1px solid var(--border);
@@ -106,6 +109,7 @@
   align-items: center;
   gap: var(--space-2);
   font-size: var(--type-helper);
+  line-height: var(--lead-helper);
   color: var(--ink-3);
 }
 
@@ -119,6 +123,7 @@
   padding: var(--space-1) var(--space-2);
   font: inherit;
   font-size: var(--type-helper);
+  line-height: var(--lead-helper);
   color: var(--ink);
   background: var(--surface);
   border: 1px solid var(--border);
@@ -132,6 +137,7 @@
 
 .mon-result-count {
   font-size: var(--type-helper);
+  line-height: var(--lead-helper);
   color: var(--ink-3);
 }
 
@@ -161,6 +167,7 @@
   padding: 0 var(--space-3);
   text-align: left;
   font-size: var(--type-section);
+  line-height: var(--lead-section);
   font-weight: var(--weight-strong);
   text-transform: uppercase;
   letter-spacing: var(--track-caps);
@@ -175,6 +182,7 @@
   padding: var(--space-2) var(--space-3);
   text-align: left;
   font-size: var(--type-section);
+  line-height: var(--lead-section);
   font-weight: var(--weight-strong);
   text-transform: uppercase;
   letter-spacing: var(--track-caps);
@@ -224,6 +232,7 @@
   padding: 0 var(--space-3);
   vertical-align: middle;
   font-size: var(--type-body);
+  line-height: var(--lead-body);
   color: var(--ink-2);
 }
 
@@ -240,6 +249,7 @@
 .mon-name {
   display: block;
   font-size: var(--type-row);
+  line-height: var(--lead-row);
   font-weight: var(--weight-mid);
   color: var(--ink);
   white-space: nowrap;
@@ -252,6 +262,7 @@
   margin-top: 3px;
   font-family: var(--font-mono);
   font-size: var(--type-helper);
+  line-height: var(--lead-helper);
   color: var(--ink-3);
   white-space: nowrap;
   overflow: hidden;
@@ -262,6 +273,7 @@
   text-align: right;
   font-family: var(--font-mono);
   font-size: var(--type-helper);
+  line-height: var(--lead-helper);
   font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
@@ -270,6 +282,7 @@
   display: block;
   font-family: var(--font-sans);
   font-size: var(--type-helper);
+  line-height: var(--lead-helper);
   color: var(--down);
   white-space: nowrap;
   overflow: hidden;
@@ -298,6 +311,7 @@
 .mon-empty-title {
   margin-bottom: var(--space-2);
   font-size: var(--type-card);
+  line-height: var(--lead-card);
   font-weight: var(--weight-strong);
   color: var(--ink);
 }
@@ -306,7 +320,7 @@
   max-width: 42ch;
   margin: 0 auto;
   font-size: var(--type-helper);
-  line-height: var(--lh-prose);
+  line-height: var(--lead-prose);
   color: var(--ink-3);
 }
 
@@ -330,6 +344,7 @@
 .mon-cards-title {
   margin-bottom: var(--space-2);
   font-size: var(--type-section);
+  line-height: var(--lead-section);
   font-weight: var(--weight-strong);
   text-transform: uppercase;
   letter-spacing: var(--track-caps);
@@ -382,6 +397,7 @@
    from it; this span is the styling hook for that text. */
 .mon-card-status {
   font-size: var(--type-helper);
+  line-height: var(--lead-helper);
   font-weight: var(--weight-strong);
   text-transform: uppercase;
   letter-spacing: var(--track-caps);
@@ -391,6 +407,7 @@
 .mon-card-name {
   margin-top: var(--space-2);
   font-size: var(--type-card);
+  line-height: var(--lead-card);
   font-weight: var(--weight-mid);
   color: var(--ink);
   /* Wrap rather than ellipsis: on a phone the name is the heading of the
@@ -403,6 +420,7 @@
   margin-top: 2px;
   font-family: var(--font-mono);
   font-size: var(--type-helper);
+  line-height: var(--lead-helper);
   color: var(--ink-3);
   overflow-wrap: anywhere;
 }
@@ -414,7 +432,7 @@
 .mon-card-error {
   margin-top: var(--space-2);
   font-size: var(--type-helper);
-  line-height: var(--lh-body);
+  line-height: var(--lead-prose);
   color: var(--down);
   overflow-wrap: anywhere;
 }
@@ -431,6 +449,7 @@
    unpredictably or leaves the numbers floating far from their nouns. */
 .mon-card-fact dt {
   font-size: var(--type-section);
+  line-height: var(--lead-section);
   font-weight: var(--weight-strong);
   text-transform: uppercase;
   letter-spacing: var(--track-caps);
@@ -441,6 +460,7 @@
   margin-top: 2px;
   font-family: var(--font-mono);
   font-size: var(--type-body);
+  line-height: var(--lead-body);
   font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
@@ -464,6 +484,7 @@
        focused form control below it, including a select, and does not zoom
        back out on blur. */
     font-size: var(--type-nozoom);
+    line-height: var(--lead-nozoom);
     padding: var(--space-2) var(--space-3);
   }
 
@@ -472,6 +493,7 @@
     /* 16px is not a style choice: iOS Safari zooms the page when a focused
        input is smaller, and the zoom does not undo itself on blur. */
     font-size: var(--type-nozoom);
+    line-height: var(--lead-nozoom);
     padding: var(--space-3);
   }
 }
@@ -495,6 +517,7 @@
 .mon-line-group-title {
   margin-bottom: var(--space-2);
   font-size: var(--type-section);
+  line-height: var(--lead-section);
   font-weight: var(--weight-strong);
   text-transform: uppercase;
   letter-spacing: var(--track-caps);
@@ -522,6 +545,7 @@
   height: 30px;
   border-bottom: 1px solid var(--border);
   font-size: var(--type-helper);
+  line-height: var(--lead-helper);
 }
 
 .mon-line:last-child { border-bottom: 0; }
@@ -546,6 +570,7 @@
 .mon-line-target {
   font-family: var(--font-mono);
   font-size: var(--type-helper);
+  line-height: var(--lead-helper);
   color: var(--ink-3);
   white-space: nowrap;
   overflow: hidden;
@@ -556,6 +581,7 @@
   text-align: right;
   font-family: var(--font-mono);
   font-size: var(--type-helper);
+  line-height: var(--lead-helper);
   font-variant-numeric: tabular-nums;
   color: var(--ink-2);
   /* The latency slot holds an error message when a monitor is down, and one
@@ -574,6 +600,7 @@
      develop and is merged in here — so the fallback this rule carried while
      the token did not exist yet is gone. */
   font-size: var(--type-helper);
+  line-height: var(--lead-helper);
   color: var(--down);
   white-space: nowrap;
   overflow: hidden;
@@ -596,13 +623,14 @@
 
 .add-title {
   font-size: var(--type-card);
+  line-height: var(--lead-card);
   font-weight: var(--weight-strong);
 }
 
 .add-lede {
   margin-top: calc(var(--space-2) * -1);
   font-size: var(--type-body);
-  line-height: var(--lh-body);
+  line-height: var(--lead-body);
   color: var(--ink-2);
 }
 
@@ -614,6 +642,7 @@
 
 .add-label {
   font-size: var(--type-section);
+  line-height: var(--lead-section);
   font-weight: var(--weight-strong);
   letter-spacing: var(--track-caps);
   text-transform: uppercase;
@@ -627,6 +656,7 @@
   /* 16px on a phone, because anything smaller makes iOS Safari zoom the page
      on focus and leave the user scrolled sideways (DESIGN.md §13). */
   font-size: var(--type-nozoom);
+  line-height: var(--lead-nozoom);
   color: var(--ink);
   background: var(--surface);
   border: 1px solid var(--border);
@@ -635,7 +665,10 @@
 }
 
 @media (min-width: 641px) {
-  .add-input { font-size: var(--type-body); }
+  .add-input {
+    font-size: var(--type-body);
+    line-height: var(--lead-body);
+  }
 }
 
 .add-input::placeholder { color: var(--ink-4); }
@@ -649,7 +682,7 @@
 
 .add-help {
   font-size: var(--type-helper);
-  line-height: var(--lh-body);
+  line-height: var(--lead-prose);
   color: var(--ink-3);
 }
 
@@ -661,10 +694,14 @@
  * the only difference, and colour is deliberately not the only signal: the
  * input itself carries aria-invalid and a red border, so this still works for
  * anyone who cannot tell --down from --ink-3 (DESIGN.md §3.1).
+ *
+ * It takes the prose leading rather than the single-line pair: the message is
+ * a sentence, not a word — "press Test it first, or pick a type…" wraps at any
+ * realistic field width — which is the case --lead-prose exists for.
  */
 .add-field-error {
   font-size: var(--type-helper);
-  line-height: var(--lh-body);
+  line-height: var(--lead-prose);
   color: var(--down);
 }
 
@@ -691,6 +728,7 @@
   position: absolute;
   right: var(--space-3);
   font-size: var(--type-helper);
+  line-height: var(--lead-helper);
   color: var(--ink-3);
   pointer-events: none;
 }
@@ -702,6 +740,7 @@
 
 .add-summary {
   font-size: var(--type-body);
+  line-height: var(--lead-body);
   color: var(--ink-2);
   cursor: pointer;
 }
@@ -727,6 +766,7 @@
   padding: var(--space-2) var(--space-4);
   font: inherit;
   font-size: var(--type-body);
+  line-height: var(--lead-body);
   color: var(--ink);
   background: var(--surface);
   border: 1px solid var(--border);
@@ -754,7 +794,7 @@
 
 .add-result {
   font-size: var(--type-body);
-  line-height: var(--lh-body);
+  line-height: var(--lead-body);
   color: var(--ink-2);
 }
 
