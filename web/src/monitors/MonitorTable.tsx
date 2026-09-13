@@ -129,7 +129,7 @@ export function MonitorTable({
               }
             >
               <tr className="mon-section-head">
-                <th scope="colgroup" colSpan={5} className="mon-section-title">
+                <th scope="rowgroup" colSpan={5} className="mon-section-title">
                   {section.label} ({section.monitors.length})
                 </th>
               </tr>

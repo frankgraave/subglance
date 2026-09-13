@@ -425,7 +425,31 @@ describe("Dashboard", () => {
       expect(rowIds()).toEqual(["monitor-row-cdn"]);
       // A live update strips the tags. The stale selection must not survive
       // and hide every monitor with no control left to clear it.
-      rerender(<Harness monitors={[monitor("api", "up"), monitor("db", "up")]} />);
+      rerender(
+        <Harness monitors={[monitor("api", "up"), monitor("db", "up")]} />,
+      );
+      expect(rowIds()).toEqual(["monitor-row-api", "monitor-row-db"]);
+    });
+
+    it("drops a selection whose value disappears while the key stays", () => {
+      const { rerender } = render(<Harness monitors={tagged()} />);
+      fireEvent.change(facet("env"), { target: { value: "staging" } });
+      expect(rowIds()).toEqual(["monitor-row-cdn"]);
+      // The key survives, so the select stays on screen, but it no longer
+      // offers "staging". A filter you cannot see or clear must not keep
+      // hiding rows.
+      rerender(
+        <Harness
+          monitors={[
+            monitor("api", "up", { tags: { env: "prod" } }),
+            monitor("db", "up", { tags: { env: "prod" } }),
+          ]}
+        />,
+      );
+      expect([...facet("env").options].map((o) => o.value)).toEqual([
+        "",
+        "prod",
+      ]);
       expect(rowIds()).toEqual(["monitor-row-api", "monitor-row-db"]);
     });
   });
@@ -441,7 +465,9 @@ describe("Dashboard grouping", () => {
   const groupSelect = () =>
     document.querySelector<HTMLSelectElement>(".mon-group-select")!;
   const headings = () =>
-    [...document.querySelectorAll(".mon-section-title")].map((h) => h.textContent);
+    [...document.querySelectorAll(".mon-section-title")].map(
+      (h) => h.textContent,
+    );
 
   it("offers one grouping option per tag key, plus None", () => {
     render(<Harness monitors={tagged()} />);
@@ -464,7 +490,9 @@ describe("Dashboard grouping", () => {
     render(<Harness monitors={tagged()} />);
     fireEvent.change(groupSelect(), { target: { value: "env" } });
     fireEvent.change(
-      document.querySelector<HTMLSelectElement>('[data-facet-key="env"] .mon-facet-select')!,
+      document.querySelector<HTMLSelectElement>(
+        '[data-facet-key="env"] .mon-facet-select',
+      )!,
       { target: { value: "prod" } },
     );
     expect(headings()).toEqual(["prod (1)"]);
@@ -477,7 +505,9 @@ describe("Dashboard grouping", () => {
     expect(headings()).toEqual(["prod (1)", "staging (1)", "Untagged (1)"]);
     // A live update strips the tags; the list must not stay headed by a key
     // that nothing carries any more.
-    rerender(<Harness monitors={[monitor("api", "up"), monitor("db", "up")]} />);
+    rerender(
+      <Harness monitors={[monitor("api", "up"), monitor("db", "up")]} />,
+    );
     expect(headings()).toEqual([]);
     expect(rowIds()).toHaveLength(2);
   });

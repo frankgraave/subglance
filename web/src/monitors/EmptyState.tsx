@@ -38,21 +38,25 @@ export function EmptyState({
       {narrowed ? (
         <>
           <h3 className="mon-empty-title">
-            {needle === "" ? "No monitors match this filter" : `No monitors match \u201C${needle}\u201D`}
+            {needle === ""
+              ? "No monitors match this filter"
+              : `No monitors match \u201C${needle}\u201D`}
           </h3>
           <p className="mon-empty-body">
             {needle === ""
               ? `Clear the status or tag filter to see all ${totalCount} monitors.`
-              : `Search looks at monitor names and targets. Check the spelling, or clear the search to see all ${totalCount} monitors.`}
+              : filtered
+                ? `Search looks at monitor names and targets. Check the spelling, or clear the search and the active filters to see all ${totalCount} monitors.`
+                : `Search looks at monitor names and targets. Check the spelling, or clear the search to see all ${totalCount} monitors.`}
           </p>
         </>
       ) : (
         <>
           <h3 className="mon-empty-title">No monitors yet</h3>
           <p className="mon-empty-body">
-            Add the first thing you want watched — a URL, a host and port, or a cron job that
-            should check in. SubGlance starts probing it straight away and this page fills in as
-            the first results land.
+            Add the first thing you want watched — a URL, a host and port, or a
+            cron job that should check in. SubGlance starts probing it straight
+            away and this page fills in as the first results land.
           </p>
         </>
       )}

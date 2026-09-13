@@ -24,7 +24,10 @@ import type { Monitor, MonitorStatus } from "./types";
  * different browsers must agree on the order, and `localeCompare` without an
  * explicit locale does not guarantee that.
  */
-const NAME_COLLATOR = new Intl.Collator("en", { sensitivity: "base", numeric: true });
+const NAME_COLLATOR = new Intl.Collator("en", {
+  sensitivity: "base",
+  numeric: true,
+});
 
 /**
  * Deterministic name ordering.
@@ -98,12 +101,16 @@ export function partition(monitors: readonly Monitor[]): Partitioned {
  * An empty or whitespace-only query returns the input untouched, so "not
  * searching" costs nothing.
  */
-export function filterMonitors(monitors: readonly Monitor[], query: string): Monitor[] {
+export function filterMonitors(
+  monitors: readonly Monitor[],
+  query: string,
+): Monitor[] {
   const needle = query.trim().toLowerCase();
   if (needle === "") return [...monitors];
   return monitors.filter(
     (m) =>
-      m.name.toLowerCase().includes(needle) || m.target.toLowerCase().includes(needle),
+      m.name.toLowerCase().includes(needle) ||
+      m.target.toLowerCase().includes(needle),
   );
 }
 
@@ -196,7 +203,9 @@ export function filterByTags(
 ): Monitor[] {
   const pairs = Object.entries(selected).filter(([, value]) => value !== "");
   if (pairs.length === 0) return [...monitors];
-  return monitors.filter((m) => pairs.every(([key, value]) => m.tags[key] === value));
+  return monitors.filter((m) =>
+    pairs.every(([key, value]) => m.tags[key] === value),
+  );
 }
 
 /** The label shown for monitors that do not carry the grouping key at all. */
@@ -233,7 +242,10 @@ export type MonitorGroup = {
  * heartbeat rebuilds the list in a different order. Empty groups cannot occur:
  * a group exists exactly because a monitor is in it.
  */
-export function groupByTag(monitors: readonly Monitor[], key: string): MonitorGroup[] {
+export function groupByTag(
+  monitors: readonly Monitor[],
+  key: string,
+): MonitorGroup[] {
   const byValue = new Map<string, Monitor[]>();
   const untagged: Monitor[] = [];
   for (const monitor of monitors) {
@@ -248,9 +260,17 @@ export function groupByTag(monitors: readonly Monitor[], key: string): MonitorGr
   }
   const groups: MonitorGroup[] = [...byValue.entries()]
     .sort(([a], [b]) => compareText(a, b))
-    .map(([value, group]) => ({ value, label: value, monitors: group.sort(byName) }));
+    .map(([value, group]) => ({
+      value,
+      label: value,
+      monitors: group.sort(byName),
+    }));
   if (untagged.length > 0) {
-    groups.push({ value: null, label: UNTAGGED_LABEL, monitors: untagged.sort(byName) });
+    groups.push({
+      value: null,
+      label: UNTAGGED_LABEL,
+      monitors: untagged.sort(byName),
+    });
   }
   return groups;
 }
@@ -301,7 +321,13 @@ export function sectionsByTag(
     sections.push({
       // The `null` value is a residue, not a tag, so it gets its own key
       // rather than one built from a label a real tag could also produce.
-      id: group.value === null ? "untagged" : `tag:${group.value}`,
+      // Real values are percent-encoded: the id ends up in `aria-labelledby`,
+      // and a value like `US East` would otherwise split into two id tokens
+      // that match nothing, costing the section its accessible name.
+      id:
+        group.value === null
+          ? "untagged"
+          : `tag:${encodeURIComponent(group.value)}`,
       label: group.label,
       monitors: group.monitors,
       attention: false,
@@ -354,7 +380,8 @@ export function describeFilter(
   if (pairs.length > 0) states.push(`tagged ${pairs.join(", ")}`);
   const clauses: string[] = [];
   if (states.length > 0) clauses.push(`${copula} ${states.join(" and ")}`);
-  if (needle !== "") clauses.push(`${one ? "matches" : "match"} \u201C${needle}\u201D`);
+  if (needle !== "")
+    clauses.push(`${one ? "matches" : "match"} \u201C${needle}\u201D`);
   const tail = clauses.join(" and ");
   // Zero is reported as "0 of 14" rather than as prose. `EmptyState` already
   // owns the sentence about an empty result, and two different phrasings of
@@ -366,7 +393,13 @@ export type Summary = Record<MonitorStatus, number> & { total: number };
 
 /** Counts per status for the heading. */
 export function summarise(monitors: readonly Monitor[]): Summary {
-  const summary: Summary = { up: 0, down: 0, pending: 0, paused: 0, total: monitors.length };
+  const summary: Summary = {
+    up: 0,
+    down: 0,
+    pending: 0,
+    paused: 0,
+    total: monitors.length,
+  };
   for (const monitor of monitors) summary[monitor.status] += 1;
   return summary;
 }
@@ -379,7 +412,9 @@ function names(monitors: readonly Monitor[]): string {
   const hidden = monitors.length - shown.length;
   // A screen reader reading 200 names is not an announcement, it is a
   // filibuster. Past a handful the count carries the same information.
-  return hidden > 0 ? `${shown.join(", ")} and ${hidden} more` : shown.join(", ");
+  return hidden > 0
+    ? `${shown.join(", ")} and ${hidden} more`
+    : shown.join(", ");
 }
 
 /**
@@ -414,7 +449,10 @@ export function describeTransitions(
   const downNames = names(next.filter((m) => m.status === "down").sort(byName));
 
   if (down > 0) {
-    const parts = [`${plural(down, "monitor")} down: ${downNames}.`, `${up} up.`];
+    const parts = [
+      `${plural(down, "monitor")} down: ${downNames}.`,
+      `${up} up.`,
+    ];
     if (pending > 0) parts.push(`${pending} pending.`);
     return parts.join(" ");
   }

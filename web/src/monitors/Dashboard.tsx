@@ -134,12 +134,18 @@ export function Dashboard({
   // Narrowing the options as you choose would make the second dropdown lose
   // the values the first one just excluded, and there would be no way back.
   const facets = tagFacets(monitors);
-  // A selection whose key has since vanished from the data would silently
-  // empty the list with no control left to clear it, so only live keys count.
+  // A selection whose key *or value* has since vanished from the data would
+  // silently empty the list with no control left to clear it: the select can
+  // only offer values that still exist, so a stale one is unreachable. Both
+  // halves of a pair therefore have to be live for it to keep filtering.
   const liveTags: TagSelection = Object.fromEntries(
     facets
       .map((facet) => [facet.key, tags[facet.key] ?? ""] as const)
-      .filter(([, value]) => value !== ""),
+      .filter(([key, value]) => {
+        if (value === "") return false;
+        const facet = facets.find((candidate) => candidate.key === key);
+        return facet !== undefined && facet.values.includes(value);
+      }),
   );
   // A grouping key whose tag has vanished from the data would leave the list
   // headed by a key nothing carries, so it falls back to the flat order for
