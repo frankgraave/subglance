@@ -231,8 +231,15 @@ describe("tokens.css matches docs/DESIGN.md", () => {
     );
     for (const [name, value] of root) {
       if (!name.startsWith("--lead-")) continue;
+      // Anchored rather than parseInt: `parseInt("0.5rem")` is 0, which divides
+      // by 4 and would pass. The whole-pixel test above blocks that today, but
+      // a guard that depends on another guard's coverage is one edit from
+      // being silently useless.
+      const px = value.match(/^(\d+)px$/);
+      expect(px, `${name} is ${value}, which is not a whole-pixel length`)
+        .not.toBeNull();
       expect(
-        Number.parseInt(value, 10) % 4,
+        Number(px![1]) % 4,
         `${name} is ${value}, which is off the 4px grid`,
       ).toBe(0);
     }
@@ -336,6 +343,22 @@ describe("tokens.css is the only source of type size", () => {
     }
     expect(offenders).toEqual([]);
   });
+
+  it("finds no inline fontSize style object under web/src", () => {
+    // A `style={{ fontSize: … }}` sets a size in a place no stylesheet rule
+    // covers, so the pairing guard below — which reads .css files — cannot see
+    // it, and the size arrives with whatever leading it inherits. Size belongs
+    // in a class, where its partner can sit beside it.
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (file.endsWith(".css")) continue;
+      const contents = readFileSync(file, "utf8");
+      for (const match of contents.matchAll(/\bfontSize\s*:/g)) {
+        offenders.push(`${relative(repoRoot, file)}: ${match[0]}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
 });
 
 describe("tokens.css is the only source of line height", () => {
@@ -383,6 +406,10 @@ describe("tokens.css is the only source of line height", () => {
     const partner = new Map(
       typeRoleRows().map(({ size, lead }) => [size, lead]),
     );
+    // Named explicitly: with an empty map every paired rule becomes an
+    // offender, which fails, but blames the stylesheet for a parse that broke
+    // in DESIGN.md.
+    expect(partner.size, "§2.5 table did not parse into six roles").toBe(6);
     // §13's zoom workaround is outside the role table but still paired.
     partner.set("--type-nozoom", "--lead-nozoom");
     const offenders: string[] = [];
@@ -405,21 +432,46 @@ describe("tokens.css is the only source of line height", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("catches a size-only rule and a mispaired rule in a fixture", () => {
-    // Guards the guard: a brace scan that silently matched nothing would let
-    // both defects back in while the suite stayed green.
+  it("catches a size-only rule, a mispaired rule and a nested rule in a fixture", () => {
+    // Guards the guard: a brace scan that silently matched nothing, or that
+    // read a commented-out rule as live, would let the defects back in while
+    // the suite stayed green.
     const css = `
       /* .commented { font-size: var(--type-body); } */
       .size-only { font-size: var(--type-helper); color: red; }
       .paired { font-size: var(--type-helper); line-height: var(--lead-helper); }
+      @media (max-width: 640px) {
+        .nested-size-only { font-size: var(--type-body); }
+      }
+      .mispaired { font-size: var(--type-card); line-height: var(--lead-section); }
     `;
     const blocks = declarationBlocks(css);
-    expect(blocks.map((b) => b.selector)).toEqual([".size-only", ".paired"]);
+    const named = (selector: string) =>
+      blocks.find((b) => b.selector.endsWith(selector));
+
+    expect(named(".commented"), "a commented-out rule is not a rule").toBe(
+      undefined,
+    );
+    // The size-only check, including the rule nested inside the media query.
     expect(
       blocks
         .filter((b) => /font-size:/.test(b.body) && !/line-height:/.test(b.body))
-        .map((b) => b.selector),
-    ).toEqual([".size-only"]);
+        .map((b) => b.selector.replace(/^.*\{\s*/, "")),
+    ).toEqual([".size-only", ".nested-size-only"]);
+
+    // The partner check: same shape as the real guard, run over the fixture.
+    const partner = new Map([
+      ["--type-card", "--lead-card"],
+      ["--type-helper", "--lead-helper"],
+      ["--type-body", "--lead-body"],
+    ]);
+    const mismatched = blocks.filter((b) => {
+      const size = b.body.match(/font-size:\s*var\((--type-[a-z]+)\)/);
+      const lead = b.body.match(/line-height:\s*var\((--lead-[a-z]+)\)/);
+      return size && lead && partner.get(size[1]) !== lead[1];
+    });
+    expect(mismatched.map((b) => b.selector)).toEqual([".mispaired"]);
+    expect(named(".paired")).toBeDefined();
   });
 });
 

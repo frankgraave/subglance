@@ -169,10 +169,12 @@ sizes without flattening the steps between the roles.
 `tokens.test.ts` reads the table above and fails when the stylesheet disagrees,
 when any size or leading is fractional, when a leading is not a multiple of 4,
 and when any rule under `web/src` sets a font size without its paired leading.
-The last of those is the one that actually rotted: 56 rules set a size alone and
-inherited whatever leading sat above them — Tailwind preflight's 1.5, or one of
-the old `--lh-*` ratios — so a single size rendered at three different leadings
-on one screen.
+The last of those is the one that actually rotted: counted on `bedcde0`, 56 of
+the 69 rules that set a size set no leading beside it and inherited whatever sat
+above them — Tailwind preflight's 1.5, or one of the old `--lh-*` ratios — so a
+single size rendered at three different leadings on one screen. (SUB-74 was
+filed against `dc46b9b` and cited 42 of 50; the detail view and the tag filter
+landed in between.)
 
 **Nothing is smaller than 12px.** Below that, text stops being readable at a
 glance, and reading at a glance is the entire product. The one documented

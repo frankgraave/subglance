@@ -694,10 +694,14 @@
  * the only difference, and colour is deliberately not the only signal: the
  * input itself carries aria-invalid and a red border, so this still works for
  * anyone who cannot tell --down from --ink-3 (DESIGN.md §3.1).
+ *
+ * It takes the prose leading rather than the single-line pair: the message is
+ * a sentence, not a word — "press Test it first, or pick a type…" wraps at any
+ * realistic field width — which is the case --lead-prose exists for.
  */
 .add-field-error {
   font-size: var(--type-helper);
-  line-height: var(--lead-helper);
+  line-height: var(--lead-prose);
   color: var(--down);
 }
 
