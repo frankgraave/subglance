@@ -783,6 +783,25 @@
   cursor: pointer;
 }
 
+/*
+ * The card's name link is a 24px target (WCAG 2.2 SC 2.5.8).
+ *
+ * As an inline anchor it took the height of its text — 21px at
+ * `--type-card` — and a short name like "cdn" gave a 26x21 box. SC 2.5.8
+ * exempts a link inside a sentence; this one is the card's heading, on its own
+ * line, so the exemption does not apply.
+ *
+ * `inline-block` with a minimum height rather than padding: padding would push
+ * the target's box out past the text and start reading as a button, and the
+ * affordance here is the name itself. `line-height` stays where the type scale
+ * put it, so nothing moves — the extra pixels sit under the text, inside a box
+ * that was previously only as tall as the glyphs.
+ */
+.mon-card-name > a {
+  display: inline-block;
+  min-height: 24px;
+}
+
 .mon-name:hover,
 .mon-name:focus-visible,
 .mon-line-name:hover,

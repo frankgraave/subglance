@@ -28,6 +28,11 @@ export default defineConfig({
     environment: "node",
     // Component suites opt into jsdom with a `@vitest-environment` docblock;
     // node stays the default so the file-reading tests keep their real fs.
+    //
+    // `*.browser.test.ts` is excluded: those need a built bundle and a real
+    // Chromium, so they run separately via `npm run test:browser`. Leaving
+    // them in here would make a unit-test run depend on a browser download.
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    exclude: ["src/**/*.browser.test.ts", "node_modules/**"],
   },
 });

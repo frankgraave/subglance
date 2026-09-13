@@ -212,6 +212,27 @@ jobs:
         working-directory: web
         run: npm run build
 
+      # Layout checks in a real browser, because jsdom has no layout engine:
+      # it reports every element as zero-wide and never evaluates a media
+      # query, so nothing about *size* can fail there. A detail view once
+      # shipped drawing a 720px bar inside a 317px panel with 404 tests green.
+      #
+      # Deliberately here rather than beside `npm test`: these need the built
+      # bundle that the previous step just produced, and a browser. Keeping
+      # them out of the unit suite means someone editing Go is never asked to
+      # download Chromium.
+      - name: Install Chromium
+        working-directory: web
+        run: |
+          # The installer prints "<build> <path>"; take the path it actually
+          # wrote rather than reconstructing it from a version number.
+          path="$(npm run --silent test:browser:setup | awk '{print $NF}')"
+          echo "PUPPETEER_EXECUTABLE_PATH=$path" >> "$GITHUB_ENV"
+
+      - name: Browser layout checks
+        working-directory: web
+        run: npx vitest run --config vitest.browser.config.ts
+
       # The point of the build is that it ends up inside the Go binary. The
       # `build` job above proves the binary compiles without Node; this proves
       # the other half, that a binary built *with* the frontend actually

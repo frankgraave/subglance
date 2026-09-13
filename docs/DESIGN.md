@@ -858,3 +858,39 @@ implement `showModal`, so every test of the drawer would have to be skipped or
 stubbed — the behaviour that most needs to stay honest is the accessibility
 behaviour, and buying it at the price of never testing it is the wrong trade.
 Revisit when jsdom ships it.
+
+### Size is checked in a real browser
+
+jsdom has no layout engine. Every element reports a width of zero,
+`getBoundingClientRect` returns zeros and media queries never evaluate, so no
+assertion about *size* can fail there. That is not a gap in the tests but a
+property of the environment, and it hides exactly the class of bug this section
+is about: the detail view once shipped drawing a 720px heartbeat bar inside a
+317px panel, pushing a 375px page out to 746px, while the whole suite stayed
+green.
+
+So a second, small suite runs the built bundle in headless Chromium at 320, 375
+and 414px — `web/src/layout/phone-layout.browser.test.ts`, behind
+`npm run test:browser`. It asserts three things per screen:
+
+* the page does not scroll sideways (`scrollWidth` equals `clientWidth`);
+* no element that the user can actually see extends past the viewport;
+* every visible control is at least 24 by 24 CSS pixels (WCAG 2.2 SC 2.5.8).
+
+**Screenshot diffing was rejected.** Font rendering differs per platform, so
+every legitimate design change turns into a pile of blessed images and the
+suite becomes something people re-bless rather than read. A horizontal overflow
+is a number that is either bigger than the viewport or is not; it never needs
+blessing, and when it fails it names the element.
+
+**Two exemptions, both load-bearing.** Content inside a clipping or scrolling
+ancestor does not count as overflow — the heartbeat bar's accessibility table
+is 1370px wide inside a clipped container, read by screen readers and never
+painted, and counting it would fail every screen for something working as
+designed. Visually-hidden inputs are exempt from the target-size rule for the
+same reason: the theme control is `sr-only` radios inside labels, where the
+label is the target and the input's 1x1 box is its clipping rectangle.
+
+Keeping these out of `npm test` is deliberate. They need a built bundle and a
+browser download, and a unit suite that depends on either is one that people
+stop running.

@@ -24,5 +24,9 @@
   },
   "include": ["src"],
   /* Tests are a node environment and are type-checked by tsconfig.test.json. */
-  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/layout/harness/**/*.ts"
+  ]
 }
