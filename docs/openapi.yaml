@@ -2088,6 +2088,23 @@ components:
           minimum: 0
           maximum: 100
           example: 99.86
+        tags:
+          type: object
+          description: |
+            Key/value labels such as `env: prod` or `customer: acme`, used to
+            group and filter the dashboard. An object rather than a list of
+            `key:value` strings, so a value may itself contain a colon
+            (`docs: https://example.com:8443`); `key:value` is how a tag is
+            written and displayed, not how it travels.
+
+            At most one value per key per monitor, at most 20 tags. Keys are
+            trimmed and lowercased; values are trimmed and keep their case.
+          additionalProperties:
+            type: string
+          maxProperties: 20
+          example:
+            env: prod
+            customer: acme
         heartbeats:
           type: array
           description: |
@@ -2183,6 +2200,23 @@ components:
           type: boolean
           description: Defaults to true, so a new monitor starts checking immediately.
           default: true
+        tags:
+          type: object
+          description: |
+            Key/value labels such as `env: prod` or `customer: acme`, used to
+            group and filter the dashboard. An object rather than a list of
+            `key:value` strings, so a value may itself contain a colon
+            (`docs: https://example.com:8443`); `key:value` is how a tag is
+            written and displayed, not how it travels.
+
+            At most one value per key per monitor, at most 20 tags. Keys are
+            trimmed and lowercased; values are trimmed and keep their case.
+          additionalProperties:
+            type: string
+          maxProperties: 20
+          example:
+            env: prod
+            customer: acme
       additionalProperties: false
     PatchMonitorRequest:
       type: object
@@ -2238,6 +2272,14 @@ components:
           maximum: 365
         enabled:
           type: boolean
+        tags:
+          type: object
+          description: |
+            Replaces the whole tag map, like `headers`. Send `{}` to clear
+            every tag; omit the field to leave them alone.
+          additionalProperties:
+            type: string
+          maxProperties: 20
       additionalProperties: false
     Heartbeat:
       type: object
@@ -2363,6 +2405,15 @@ components:
             value the save would reject.
           minimum: 1
           maximum: 365
+        tags:
+          type: object
+          description: |
+            Accepted and validated but not used by the probe, so a form can
+            preview the draft it holds without stripping fields first. The
+            normalised map is echoed back in the result.
+          additionalProperties:
+            type: string
+          maxProperties: 20
     PreviewCheckResult:
       type: object
       description: |
@@ -2403,6 +2454,13 @@ components:
           type: string
           description: The target that was probed, after normalisation.
           example: https://example.com
+        tags:
+          type: object
+          description: |
+            The normalised tags, so a form can see how they will be stored
+            before it saves.
+          additionalProperties:
+            type: string
     CheckResult:
       type: object
       description: The outcome of a manual, on-demand check.
