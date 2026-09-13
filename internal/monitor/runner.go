@@ -40,6 +40,15 @@ type Runner struct {
 	// bus fans check results out to live listeners (the SSE endpoint). Nil
 	// means nobody is watching, which is the normal case in tests.
 	bus *events.Bus
+
+	// reminderInterval is how often reminders are swept for. See
+	// Options.ReminderInterval.
+	reminderInterval time.Duration
+
+	// now is the clock, swappable in tests. Reminder logic is time-driven
+	// rather than check-driven, so a test that had to wait real minutes for
+	// an escalating schedule would not be written at all.
+	now func() time.Time
 }
 
 // Alert is a state change worth telling someone about.
@@ -76,6 +85,11 @@ type Options struct {
 	// Bus receives every heartbeat and status change for live streaming.
 	// Optional; nil means nothing is published.
 	Bus *events.Bus
+
+	// ReminderInterval is how often open incidents are checked for a due
+	// reminder. Zero means 30 seconds. It is not the reminder delay itself —
+	// that is per monitor — only the resolution at which one can fire.
+	ReminderInterval time.Duration
 }
 
 // New builds a Runner with the standard set of checkers.
@@ -88,11 +102,18 @@ func New(opts Options) *Runner {
 	guard := checker.NewGuard(opts.AllowPrivateTargets)
 	httpChecker := checker.NewHTTPChecker(checker.HTTPOptions{Guard: guard})
 
+	reminderInterval := opts.ReminderInterval
+	if reminderInterval <= 0 {
+		reminderInterval = 30 * time.Second
+	}
+
 	r := &Runner{
-		db:     opts.DB,
-		log:    log,
-		notify: opts.Notify,
-		bus:    opts.Bus,
+		db:               opts.DB,
+		log:              log,
+		notify:           opts.Notify,
+		bus:              opts.Bus,
+		reminderInterval: reminderInterval,
+		now:              time.Now,
 		engine: state.New(state.Options{
 			FlapWindow:    opts.FlapWindow,
 			FlapThreshold: opts.FlapThreshold,
@@ -126,7 +147,108 @@ func (r *Runner) Run(ctx context.Context) error {
 		// is logged at error level.
 		r.log.Error("failed to restore incident state; duplicate alerts are possible", "error", err)
 	}
+	// The reminder sweep is time-driven while everything else here is
+	// check-driven, so it gets its own goroutine rather than riding along on
+	// check results: a monitor on a one-hour interval would otherwise have
+	// its 15-minute reminder delayed to the next check.
+	go r.remindLoop(ctx)
+
 	return r.sch.Run(ctx)
+}
+
+// remindLoop repeats alerts for confirmed incidents nobody has acknowledged,
+// until ctx is cancelled.
+func (r *Runner) remindLoop(ctx context.Context) {
+	t := time.NewTicker(r.reminderInterval)
+	defer t.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			r.sendDueReminders(ctx)
+		}
+	}
+}
+
+// sendDueReminders emits one reminder for every incident whose schedule has
+// come due.
+//
+// Ordering note: the stamp is written before the alert is handed over. If the
+// notifier fails, the reminder is lost rather than retried — which is the
+// right way round, because the alternative is a crash loop that re-sends the
+// same alert every tick. Delivery retries belong in the notifier.
+func (r *Runner) sendDueReminders(ctx context.Context) {
+	if r.notify == nil {
+		return
+	}
+
+	candidates, err := r.db.RemindableIncidents(ctx)
+	if err != nil {
+		r.log.Error("failed to list incidents needing a reminder", "error", err)
+		return
+	}
+
+	now := r.now()
+	for _, c := range candidates {
+		inc := c.Incident
+		if !state.ReminderDue(now, inc.ConfirmedAt, inc.RemindedAt, inc.ReminderCount, c.RepeatAfter) {
+			continue
+		}
+
+		// Flapping monitors are excluded here rather than in SQL: whether a
+		// monitor is oscillating is engine state, not a column. Repeating an
+		// alert for a monitor that is already being suppressed would reinstate
+		// exactly the noise the suppression removed.
+		if r.engine.Flapping(inc.MonitorID) {
+			continue
+		}
+
+		if err := r.db.RecordReminder(ctx, inc.ID, now); err != nil {
+			if !errors.Is(err, store.ErrNoOpenIncident) {
+				r.log.Error("failed to stamp reminder",
+					"incident_id", inc.ID, "error", err)
+			}
+			// Acknowledged or resolved between the query and the write. That
+			// is the acknowledge button doing its job, not an error.
+			continue
+		}
+
+		m, err := r.db.GetMonitor(ctx, inc.MonitorID)
+		if err != nil {
+			r.log.Error("failed to load monitor for reminder",
+				"monitor_id", inc.MonitorID, "error", err)
+			continue
+		}
+
+		inc.RemindedAt = now
+		inc.ReminderCount++
+
+		r.log.Warn("repeating unacknowledged alert",
+			"monitor", m.Name,
+			"incident_id", inc.ID,
+			"down_for", now.Sub(inc.StartedAt).Round(time.Second),
+			"reminder", inc.ReminderCount)
+
+		r.publish(events.Event{
+			Kind:      events.KindIncident,
+			MonitorID: inc.MonitorID,
+			At:        now,
+			Payload: statusPayload{
+				Event: string(state.EventIncidentReminder),
+				Cause: inc.Cause,
+				Error: inc.LastError,
+			},
+		})
+
+		r.notify(Alert{
+			Monitor:  m,
+			Incident: inc,
+			Event:    state.EventIncidentReminder,
+			At:       now,
+		})
+	}
 }
 
 // Size reports how many monitors are currently scheduled.

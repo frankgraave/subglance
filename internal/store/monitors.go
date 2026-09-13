@@ -31,6 +31,11 @@ type Monitor struct {
 	SSLWarnDays int
 	Enabled     bool
 
+	// RepeatAfterS is how long an unacknowledged, confirmed incident waits
+	// before the first reminder. Zero disables reminders for this monitor.
+	// The gaps after the first one grow; see state.ReminderGap.
+	RepeatAfterS int
+
 	// Tags are key/value pairs such as `env` -> `prod`. See tags.go for the
 	// shape and the normalisation rules; nil and empty mean the same thing.
 	Tags map[string]string
@@ -53,7 +58,7 @@ func (db *DB) ListEnabledMonitors(ctx context.Context) ([]Monitor, error) {
 const monitorColumns = `
 	id, name, type, target, interval_s, timeout_s, retries,
 	method, expected_status, keyword, keyword_mode, follow_redirects,
-	headers_json, body, ssl_warn_days, enabled, created_at, updated_at`
+	headers_json, body, ssl_warn_days, enabled, repeat_after_s, created_at, updated_at`
 
 // queryMonitors runs a monitor SELECT with a caller-supplied WHERE clause.
 //
@@ -134,7 +139,7 @@ func scanMonitor(s scanner) (Monitor, error) {
 		&m.ID, &m.Name, &m.Type, &m.Target,
 		&m.IntervalS, &m.TimeoutS, &m.Retries,
 		&m.Method, &m.ExpectedStatus, &keyword, &m.KeywordMode, &m.FollowRedirects,
-		&headersJSON, &body, &m.SSLWarnDays, &m.Enabled, &created, &updated,
+		&headersJSON, &body, &m.SSLWarnDays, &m.Enabled, &m.RepeatAfterS, &created, &updated,
 	)
 	if err != nil {
 		return Monitor{}, err
@@ -182,11 +187,11 @@ func (db *DB) CreateMonitor(ctx context.Context, m Monitor) (Monitor, error) {
 		INSERT INTO monitors (
 			name, type, target, interval_s, timeout_s, retries,
 			method, expected_status, keyword, keyword_mode, follow_redirects,
-			headers_json, body, ssl_warn_days, enabled, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			headers_json, body, ssl_warn_days, enabled, repeat_after_s, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		m.Name, m.Type, m.Target, m.IntervalS, m.TimeoutS, m.Retries,
 		m.Method, m.ExpectedStatus, nullString(m.Keyword), m.KeywordMode, m.FollowRedirects,
-		headersJSON, nullString(m.Body), m.SSLWarnDays, m.Enabled, now, now,
+		headersJSON, nullString(m.Body), m.SSLWarnDays, m.Enabled, m.RepeatAfterS, now, now,
 	)
 	if err != nil {
 		return Monitor{}, fmt.Errorf("insert monitor: %w", err)
@@ -612,7 +617,7 @@ func (db *DB) updateMonitor(ctx context.Context, m Monitor, expected []int64) (M
 		m.Name, m.Type, m.Target, m.IntervalS, m.TimeoutS, m.Retries,
 		m.Method, m.ExpectedStatus, nullString(m.Keyword), m.KeywordMode,
 		m.FollowRedirects, headersJSON, nullString(m.Body), m.SSLWarnDays,
-		m.Enabled, next, m.ID,
+		m.Enabled, m.RepeatAfterS, next, m.ID,
 	}
 
 	// Both variants are compile-time constants. An IN list sized to the
@@ -686,7 +691,7 @@ const updateMonitorSetClause = `
 		name = ?, type = ?, target = ?, interval_s = ?, timeout_s = ?, retries = ?,
 		method = ?, expected_status = ?, keyword = ?, keyword_mode = ?,
 		follow_redirects = ?, headers_json = ?, body = ?, ssl_warn_days = ?,
-		enabled = ?, updated_at = MAX(?, updated_at + 1)
+		enabled = ?, repeat_after_s = ?, updated_at = MAX(?, updated_at + 1)
 	WHERE id = ?`
 
 const updateMonitorSQL = updateMonitorSetClause

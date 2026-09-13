@@ -28,6 +28,10 @@ type monitorResponse struct {
 	TimeoutS  int  `json:"timeout_s"`
 	Enabled   bool `json:"enabled"`
 
+	// RepeatAfterS is the delay before a confirmed, unacknowledged incident
+	// is alerted about again. 0 means reminders are off for this monitor.
+	RepeatAfterS int `json:"repeat_after_s"`
+
 	Status     string     `json:"status"` // up, pending, or down
 	LastCheck  *time.Time `json:"last_check,omitempty"`
 	LatencyMS  int        `json:"latency_ms,omitempty"`
@@ -97,6 +101,7 @@ type createMonitorRequest struct {
 	Headers         map[string]string `json:"headers"`
 	Body            string            `json:"body"`
 	SSLWarnDays     *int              `json:"ssl_warn_days"`
+	RepeatAfterS    *int              `json:"repeat_after_s"`
 	Enabled         *bool             `json:"enabled"`
 	Tags            map[string]string `json:"tags"`
 }
@@ -216,6 +221,14 @@ func (s *Server) handleCreateMonitor(w http.ResponseWriter, r *http.Request) {
 	if req.SSLWarnDays != nil {
 		m.SSLWarnDays = *req.SSLWarnDays
 	}
+	// Unlike the other defaults this one is not in ApplyMonitorDefaults: the
+	// column default is 0, which is a meaningful value ("no reminders"), so a
+	// zero cannot be read as "unset" once the row exists. Only a create
+	// request that omits the field entirely gets the opinionated default.
+	m.RepeatAfterS = defaultRepeatAfterS
+	if req.RepeatAfterS != nil {
+		m.RepeatAfterS = *req.RepeatAfterS
+	}
 	if req.Enabled != nil {
 		m.Enabled = *req.Enabled
 	}
@@ -265,6 +278,9 @@ func validateCreateMonitor(req createMonitorRequest) problem {
 		return p
 	}
 	if p := validateSSLWarnDays(req.SSLWarnDays); !p.ok() {
+		return p
+	}
+	if p := validateRepeatAfterS(req.RepeatAfterS); !p.ok() {
 		return p
 	}
 	if p := validateTargetForType(req.Type, req.Target); !p.ok() {
@@ -324,6 +340,35 @@ func validateSSLWarnDays(days *int) problem {
 	}
 	if *days < 1 || *days > 365 {
 		return fieldProblem("ssl_warn_days", "ssl_warn_days must be between 1 and 365")
+	}
+	return problem{}
+}
+
+// defaultRepeatAfterS is how long a new monitor waits before repeating an
+// unacknowledged alert.
+//
+// Fifteen minutes, and on by default. Off by default would leave the
+// acknowledge button decorative for everyone who never finds the setting,
+// which is the state this ticket exists to fix. Fifteen minutes is long enough
+// that a short outage resolves itself before anyone is told twice.
+const defaultRepeatAfterS = 900
+
+// validateRepeatAfterS applies the range the column allows.
+//
+// 0 is accepted here where ssl_warn_days rejects it, because 0 has a meaning:
+// no reminders for this monitor. The lower bound of 60 on the non-zero side is
+// not arbitrary — anything shorter reminds faster than most monitors check, so
+// the second alert would carry exactly the information the first one did.
+func validateRepeatAfterS(seconds *int) problem {
+	if seconds == nil {
+		return problem{}
+	}
+	if *seconds == 0 {
+		return problem{}
+	}
+	if *seconds < 60 || *seconds > 86400 {
+		return fieldProblem("repeat_after_s",
+			"repeat_after_s must be 0 to disable reminders, or between 60 and 86400")
 	}
 	return problem{}
 }
@@ -542,16 +587,17 @@ func (s *Server) handleListHeartbeats(w http.ResponseWriter, r *http.Request) {
 // monitors with unknown status beats a dashboard that shows nothing.
 func (s *Server) describeMonitor(r *http.Request, m store.Monitor) monitorResponse {
 	resp := monitorResponse{
-		ID:        m.ID,
-		Name:      m.Name,
-		Type:      m.Type,
-		Target:    m.Target,
-		IntervalS: m.IntervalS,
-		TimeoutS:  m.TimeoutS,
-		Enabled:   m.Enabled,
-		Status:    "pending",
-		Tags:      m.Tags,
-		CreatedAt: m.CreatedAt,
+		ID:           m.ID,
+		Name:         m.Name,
+		Type:         m.Type,
+		Target:       m.Target,
+		IntervalS:    m.IntervalS,
+		TimeoutS:     m.TimeoutS,
+		Enabled:      m.Enabled,
+		RepeatAfterS: m.RepeatAfterS,
+		Status:       "pending",
+		Tags:         m.Tags,
+		CreatedAt:    m.CreatedAt,
 	}
 
 	ctx := r.Context()
@@ -673,6 +719,7 @@ type patchMonitorRequest struct {
 	Headers         *map[string]string `json:"headers"`
 	Body            *string            `json:"body"`
 	SSLWarnDays     *int               `json:"ssl_warn_days"`
+	RepeatAfterS    *int               `json:"repeat_after_s"`
 	Enabled         *bool              `json:"enabled"`
 	// Tags replaces the whole set, like Headers. Sending `{}` clears them;
 	// omitting the field leaves them alone.
@@ -883,6 +930,12 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 			return p
 		}
 		m.SSLWarnDays = *req.SSLWarnDays
+	}
+	if req.RepeatAfterS != nil {
+		if p := validateRepeatAfterS(req.RepeatAfterS); !p.ok() {
+			return p
+		}
+		m.RepeatAfterS = *req.RepeatAfterS
 	}
 	if req.Enabled != nil {
 		m.Enabled = *req.Enabled
