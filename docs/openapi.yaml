@@ -2051,7 +2051,7 @@ components:
         A monitor definition plus its current state. The wire shape
         deliberately differs from the storage shape so the contract can stay
         stable while storage evolves.
-      required: [id, name, type, target, interval_s, timeout_s, enabled, status, uptime_24h, created_at]
+      required: [id, name, type, target, interval_s, timeout_s, enabled, capture_response, status, uptime_24h, created_at]
       properties:
         id:
           type: integer
@@ -2083,6 +2083,13 @@ components:
         enabled:
           type: boolean
           description: False while paused; a paused monitor is not scheduled.
+          example: true
+        capture_response:
+          type: boolean
+          description: |
+            Whether a failed HTTP check keeps the beginning of the response
+            body for diagnosis. Always present, never omitted when false: it
+            governs what this instance stores about someone else's service.
           example: true
         status:
           $ref: '#/components/schemas/MonitorStatus'
@@ -2223,6 +2230,16 @@ components:
           type: boolean
           description: Defaults to true, so a new monitor starts checking immediately.
           default: true
+        capture_response:
+          type: boolean
+          description: |
+            Whether a failed HTTP check keeps the beginning of the response
+            body for diagnosis. Defaults to true: a capture nobody enabled is
+            a capture that is absent on the night it is needed. Turn it off
+            for a target whose responses may carry a session token or
+            personal data — a keyword check in particular reads the body
+            already, so the decision is worth making deliberately.
+          default: true
         tags:
           $ref: '#/components/schemas/TagMap'
           description: |
@@ -2284,6 +2301,12 @@ components:
           maximum: 365
         enabled:
           type: boolean
+        capture_response:
+          type: boolean
+          description: |
+            Turns response capture on or off for this monitor. Turning it off
+            stops new captures; snapshots already stored age out with their
+            heartbeats.
         tags:
           $ref: '#/components/schemas/TagMap'
           description: |
@@ -2313,6 +2336,46 @@ components:
         error:
           type: string
           description: Present only on failure.
+        response:
+          $ref: '#/components/schemas/ResponseSnapshot'
+          description: |
+            The captured response, present only on a failed HTTP check of a
+            monitor with `capture_response` on, and only for the first few
+            failures of a streak. Absent everywhere else.
+    ResponseSnapshot:
+      type: object
+      description: |
+        The beginning of the response that explains a failed check. This is
+        diagnostic detail rather than dashboard information: it is stored so
+        the answer that arrived at 03:00 is still there in the morning, and a
+        client should show it behind a disclosure rather than inline.
+
+        It holds content fetched from the monitored service, so it is the one
+        part of the API that may echo back text SubGlance did not produce.
+        Treat it as untrusted: render it as plain text, never as HTML.
+      required: [body]
+      properties:
+        body:
+          type: string
+          description: |
+            The first 2048 bytes of the response, cut on a character boundary
+            and scrubbed to valid UTF-8.
+          example: '{"status":"degraded","detail":"upstream database timeout"}'
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+          description: |
+            An allowlist of response headers that help triage. Never the full
+            set: credentials and cookies are deliberately not stored.
+          example:
+            Content-Type: application/json
+            Retry-After: '120'
+        truncated:
+          type: boolean
+          description: |
+            True when the body was longer than the cap, so a reader knows the
+            text stops rather than ends.
     UptimeWindow:
       type: object
       required: [window, window_s, total, up, down, uptime]
@@ -2415,7 +2478,6 @@ components:
             value the save would reject.
           minimum: 1
           maximum: 365
-        tags:
           $ref: '#/components/schemas/TagMap'
           description: |
             Accepted and validated exactly as on create, but not used by the

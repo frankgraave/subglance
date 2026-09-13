@@ -28,6 +28,12 @@ type monitorResponse struct {
 	TimeoutS  int  `json:"timeout_s"`
 	Enabled   bool `json:"enabled"`
 
+	// CaptureResponse says whether a failed check keeps the start of the
+	// response body. Always present rather than omitempty: it governs what
+	// this monitor stores about someone else's service, and a field that
+	// disappears when false reads as "the server does not know about this".
+	CaptureResponse bool `json:"capture_response"`
+
 	Status     string     `json:"status"` // up, pending, or down
 	LastCheck  *time.Time `json:"last_check,omitempty"`
 	LatencyMS  int        `json:"latency_ms,omitempty"`
@@ -69,17 +75,41 @@ type heartbeatResponse struct {
 	LatencyMS  int       `json:"latency_ms"`
 	StatusCode int       `json:"status_code,omitempty"`
 	Error      string    `json:"error,omitempty"`
+
+	// Response is the captured failure response, present only on failures of
+	// a monitor with capture enabled. Omitted otherwise, so every response
+	// that had no snapshot stays byte for byte what it was.
+	Response *responseSnapshotResponse `json:"response,omitempty"`
+}
+
+// responseSnapshotResponse is the wire shape of a captured failure response.
+//
+// This is diagnostic detail, not dashboard information: it is returned so a
+// detail view can show it behind a disclosure, and it is never part of the
+// bulk beat-bar payload.
+type responseSnapshotResponse struct {
+	Body      string            `json:"body"`
+	Headers   map[string]string `json:"headers,omitempty"`
+	Truncated bool              `json:"truncated,omitempty"`
 }
 
 // describeHeartbeat converts a stored heartbeat to its wire shape.
 func describeHeartbeat(hb store.Heartbeat) heartbeatResponse {
-	return heartbeatResponse{
+	out := heartbeatResponse{
 		TS:         hb.TS,
 		OK:         hb.OK,
 		LatencyMS:  hb.LatencyMS,
 		StatusCode: hb.StatusCode,
 		Error:      hb.Error,
 	}
+	if hb.Response != nil {
+		out.Response = &responseSnapshotResponse{
+			Body:      hb.Response.Body,
+			Headers:   hb.Response.Headers,
+			Truncated: hb.Response.Truncated,
+		}
+	}
+	return out
 }
 
 type createMonitorRequest struct {
@@ -98,6 +128,7 @@ type createMonitorRequest struct {
 	Body            string            `json:"body"`
 	SSLWarnDays     *int              `json:"ssl_warn_days"`
 	Enabled         *bool             `json:"enabled"`
+	CaptureResponse *bool             `json:"capture_response"`
 	Tags            map[string]string `json:"tags"`
 }
 
@@ -204,6 +235,7 @@ func (s *Server) handleCreateMonitor(w http.ResponseWriter, r *http.Request) {
 		Headers:         req.Headers,
 		Body:            req.Body,
 		Enabled:         true,
+		CaptureResponse: true,
 	}
 	if req.Retries != nil {
 		m.Retries = *req.Retries
@@ -218,6 +250,9 @@ func (s *Server) handleCreateMonitor(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Enabled != nil {
 		m.Enabled = *req.Enabled
+	}
+	if req.CaptureResponse != nil {
+		m.CaptureResponse = *req.CaptureResponse
 	}
 	// Already validated above by validateCreateMonitor; normalising again
 	// here rather than storing the raw map keeps the stored keys canonical
@@ -549,6 +584,9 @@ func (s *Server) describeMonitor(r *http.Request, m store.Monitor) monitorRespon
 		IntervalS: m.IntervalS,
 		TimeoutS:  m.TimeoutS,
 		Enabled:   m.Enabled,
+
+		CaptureResponse: m.CaptureResponse,
+
 		Status:    "pending",
 		Tags:      m.Tags,
 		CreatedAt: m.CreatedAt,
@@ -674,6 +712,7 @@ type patchMonitorRequest struct {
 	Body            *string            `json:"body"`
 	SSLWarnDays     *int               `json:"ssl_warn_days"`
 	Enabled         *bool              `json:"enabled"`
+	CaptureResponse *bool              `json:"capture_response"`
 	// Tags replaces the whole set, like Headers. Sending `{}` clears them;
 	// omitting the field leaves them alone.
 	Tags *map[string]string `json:"tags"`
@@ -886,6 +925,9 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 	}
 	if req.Enabled != nil {
 		m.Enabled = *req.Enabled
+	}
+	if req.CaptureResponse != nil {
+		m.CaptureResponse = *req.CaptureResponse
 	}
 	if req.Tags != nil {
 		tags, err := store.NormaliseTags(*req.Tags)
