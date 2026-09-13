@@ -185,13 +185,8 @@ type migration struct {
 // so a failure halfway leaves neither a partial schema nor a false record of
 // success.
 func (db *DB) Migrate(ctx context.Context) error {
-	if _, err := db.Writer.ExecContext(ctx, `
-		CREATE TABLE IF NOT EXISTS schema_migrations (
-			name       TEXT    PRIMARY KEY,
-			applied_at INTEGER NOT NULL
-		) STRICT, WITHOUT ROWID;
-	`); err != nil {
-		return fmt.Errorf("create schema_migrations: %w", err)
+	if err := db.prepareMigrationTable(ctx); err != nil {
+		return err
 	}
 
 	applied, err := db.appliedMigrations(ctx)
@@ -211,6 +206,23 @@ func (db *DB) Migrate(ctx context.Context) error {
 		if err := db.applyMigration(ctx, m); err != nil {
 			return fmt.Errorf("apply %s: %w", m.name, err)
 		}
+	}
+	return nil
+}
+
+// prepareMigrationTable creates the ledger Migrate reads and writes.
+//
+// Separate from Migrate so a test can apply migrations one at a time and
+// observe what a particular one does to data that already exists — which is
+// the only way to test a migration that rewrites a table.
+func (db *DB) prepareMigrationTable(ctx context.Context) error {
+	if _, err := db.Writer.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+			name       TEXT    PRIMARY KEY,
+			applied_at INTEGER NOT NULL
+		) STRICT, WITHOUT ROWID;
+	`); err != nil {
+		return fmt.Errorf("create schema_migrations: %w", err)
 	}
 	return nil
 }

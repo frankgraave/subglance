@@ -39,6 +39,8 @@ code exists for it.
 
 - **HTTP(S), TCP, ping and SSL checks**, including keyword matching, response
   time, and certificate expiry warnings
+- **Push monitors** for jobs that cannot be reached from outside — a backup, a
+  cron script, a queue worker reports in and silence is what raises the alarm
 - **Failure classification** — a DNS failure, a refused connection and an expired
   certificate are three different problems, and the API says which one you have
 - **Scheduler**: a timing wheel with a bounded worker pool, so 500 monitors do
@@ -282,6 +284,7 @@ incidents) and **admin** (also manages users and tokens).
 | `tcp` | `db.example.com:5432` | A TCP handshake completes within the timeout |
 | `ping` | `example.com` or `192.0.2.10` | ICMP echo reply |
 | `ssl` | `example.com` (port optional, defaults to 443) | Certificate validity, hostname match, chain of trust, days until expiry |
+| `push` | none — the job reports in | That the job reported inside its window |
 
 A TCP check completes the handshake and hangs up without sending a payload —
 speaking a protocol badly is a good way to end up in someone's fail2ban rules.
@@ -295,6 +298,58 @@ Ping needs either unprivileged ICMP sockets or `CAP_NET_RAW`. SubGlance tries th
 unprivileged socket first and falls back to the raw one; when neither is allowed
 the error names both fixes. If ICMP is blocked entirely on your network, a TCP
 check against a known port answers the same question more reliably.
+
+### Push monitors
+
+The four types above all look inward from outside. Anything without a reachable
+port is invisible to them: a nightly backup, an import script, a queue worker on
+a laptop behind NAT. Those are exactly the things that fail quietly and are only
+discovered when you need them.
+
+A push monitor turns the direction around. It gets a secret URL, the job calls it
+when it finishes, and if nothing arrives inside the window the monitor goes down.
+
+```bash
+curl -X POST http://localhost:8080/api/v1/monitors \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Nightly backup","type":"push","push_interval_s":86400,"push_grace_s":3600}'
+```
+
+The response contains `push_url`, **once**. Only a hash is stored, so it cannot
+be looked up afterwards — copy it now or recreate the monitor. Then, at the end
+of the job:
+
+```bash
+restic backup /data && curl -fsS "$PUSH_URL"
+```
+
+Or report the outcome either way, so a failing run says so immediately instead
+of waiting out the window:
+
+```bash
+restic backup /data
+curl -fsS "$PUSH_URL?status=$?&msg=restic+backup"
+```
+
+`push_interval_s` is how often the job is expected to report; `push_grace_s` is
+how late it may be before that silence counts as failure. Grace is *added* to the
+interval, so an hourly job with five minutes of grace is late at 65 minutes. It
+defaults to 60 seconds rather than 0, because cron drifts and a zero tolerance
+turns ordinary jitter into a 3am alert.
+
+**What a push monitor does and does not tell you.** It proves your script reached
+the line with the `curl` on it. It does not prove the work succeeded. A backup
+that writes an empty archive and then pings stays green, and that is a worse
+outcome than no monitoring at all, because it is monitoring that reassures you.
+Ping at the very end, only on success, and use `?status=$?` so a failing run
+reports itself. If the job can check its own output — a non-zero file size, a row
+count — check it before pinging.
+
+The URL is the credential. It carries no session and no API token, because a cron
+line cannot hold either, and handing a backup script an API token would give it
+authority over every monitor you have. Anyone holding a push URL can report on
+that one monitor and nothing else. Treat it as a secret anyway: a leaked one lets
+someone tell you a job ran when it did not.
 
 ### How a failure becomes an alert
 

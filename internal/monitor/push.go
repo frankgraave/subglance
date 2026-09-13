@@ -112,7 +112,7 @@ func (r *Runner) runPushWatchdog(ctx context.Context) {
 
 	// Sweep once immediately. After a restart, a monitor that went overdue
 	// while the process was down should be reported now rather than at the
-	// end of the first tick — the outage did not pause because we did.
+	// end of the first tick — the outage did not pause because the process did.
 	r.sweepOverduePushMonitors(ctx)
 
 	for {
