@@ -1,0 +1,48 @@
+# SubGlance with Docker Compose.
+#
+#   docker compose up -d
+#
+# Then open http://localhost:8080/ and create the first administrator. That is
+# the whole installation: the database is SQLite inside the named volume, so
+# there is nothing to run alongside this service.
+#
+# There is no tagged release yet. `:edge` tracks the head of `develop` and will
+# change under you; pin a version once v0.1 ships.
+
+services:
+  subglance:
+    image: ghcr.io/frankgraave/subglance:edge
+    container_name: subglance
+    restart: unless-stopped
+    ports:
+      # host:container. Change only the left-hand side to move the dashboard to
+      # another host port; the right-hand side is the image's own default and
+      # changing it also means setting SUBGLANCE_ADDR below.
+      - "8080:8080"
+    volumes:
+      # /data is the default --data-dir and holds subglance.db. The image
+      # pre-creates it owned by the unprivileged user the process runs as.
+      - subglance-data:/data
+    environment:
+      # Every option has a working default, so this block is optional. Flags
+      # beat environment variables, which beat defaults.
+      SUBGLANCE_LOG_LEVEL: info
+      SUBGLANCE_LOG_FORMAT: text
+      # SUBGLANCE_ADDR: ":8080"
+      # SUBGLANCE_DATA_DIR: /data
+      # SUBGLANCE_SHUTDOWN_TIMEOUT: 15s
+      # SUBGLANCE_CHECK_WORKERS: "0"
+      # Off by default on purpose: without the guard, a user-supplied URL turns
+      # SubGlance into an SSRF proxy into whatever this container can reach.
+      # Turn it on only if you mean to monitor services on your own network.
+      # SUBGLANCE_ALLOW_PRIVATE_TARGETS: "false"
+
+    # ICMP ping checks need the container to allow unprivileged ICMP for the
+    # process GID. Docker's own default already does; some Podman and
+    # Kubernetes setups are stricter. Uncomment if a ping monitor reports a
+    # permission error. HTTP, TCP and SSL checks are unaffected.
+    # sysctls:
+    #   net.ipv4.ping_group_range: "0 2147483647"
+
+volumes:
+  subglance-data:

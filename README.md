@@ -70,8 +70,6 @@ code exists for it.
   targets: no search, no filtering, no virtualisation.
 - **Maintenance windows**, tags, and a paused monitor that looks different from
   one that has no data yet.
-- **The Docker image.** There is no Dockerfile yet, so the `docker run` below
-  does not work — build from source instead.
 
 ## Still planned for v0.1
 
@@ -89,7 +87,30 @@ are not in the first release.
 
 ## Getting started
 
+### With Docker Compose
+
+Copy [`docker-compose.yml`](docker-compose.yml) out of this repository and run:
+
+```sh
+docker compose up -d
+```
+
+That is the whole installation. The file needs no edits to work: it publishes
+8080, keeps the database in a named volume, and every option in it is commented
+out with the default it would override. `internal/config` has a test that fails
+if an option is added to the binary without reaching that file, or named there
+without the binary reading it.
+
+To follow the logs or stop it again:
+
+```sh
+docker compose logs -f
+docker compose down          # add -v to delete the database too
+```
+
 ### With Docker
+
+Compose is only a wrapper here; a single `docker run` is equivalent:
 
 ```sh
 docker run -d -p 8080:8080 -v subglance:/data ghcr.io/frankgraave/subglance:edge
@@ -202,6 +223,26 @@ curl -X POST http://localhost:8080/api/v1/setup \
 ```
 
 That endpoint closes permanently once an account exists.
+
+### Your first monitor
+
+Setup returns a session cookie, so with a cookie jar the two calls chain and
+the dashboard has something to show within a minute of `docker compose up -d`:
+
+```sh
+curl -c jar -X POST http://localhost:8080/api/v1/setup \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"you@example.com","password":"a-long-passphrase"}'
+
+curl -b jar -X POST http://localhost:8080/api/v1/monitors \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Public website","type":"http","target":"https://example.com/","interval_s":60}'
+```
+
+Reload <http://localhost:8080/> and the row is there, grey until the first
+check lands and then green or red. Everything else has a default, and unknown
+fields are rejected rather than ignored, so a typo tells you instead of
+silently configuring something other than what you asked for.
 
 ### Authentication
 
