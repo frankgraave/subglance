@@ -114,8 +114,15 @@ Flags go after the image name, because the entrypoint is the binary itself:
 
 ```sh
 docker run -d -p 9000:9000 -v subglance:/data \
-  ghcr.io/frankgraave/subglance:edge --addr :9000 --log-level debug
+  -e SUBGLANCE_ADDR=:9000 \
+  ghcr.io/frankgraave/subglance:edge --log-level debug
 ```
+
+The listen address is the one setting to pass as an environment variable rather
+than a flag. Docker runs the image's `HEALTHCHECK` as a separate process that
+inherits the environment but not the entrypoint's flags, so `--addr :9000` would
+move the server while the healthcheck kept probing `:8080` and reported the
+container unhealthy. `SUBGLANCE_ADDR` reaches both.
 
 One consequence of the unprivileged user is worth knowing about: **ping checks
 need the container to allow unprivileged ICMP.** Measured on Docker 29.1.3, a

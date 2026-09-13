@@ -29,8 +29,11 @@ const healthcheckTimeout = 5 * time.Second
 // /health answers the narrower "is the process alive", which for an in-process
 // check is already implied by the binary running at all.
 //
-// It reads the same configuration as the server, so a non-default --addr or
-// SUBGLANCE_ADDR is honoured and the check cannot quietly probe the wrong port.
+// It reads the same configuration as the server, so a non-default address is
+// honoured and the check cannot quietly probe the wrong port. Inside the
+// shipped image that means SUBGLANCE_ADDR: Docker runs a HEALTHCHECK as its own
+// process, which inherits the container environment but not the flags given to
+// the entrypoint.
 func runHealthcheck(args []string, out io.Writer) error {
 	cfg, err := config.Load(args)
 	if err != nil {
