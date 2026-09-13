@@ -33,8 +33,11 @@ import type { Monitor } from "./types";
  * the bar buckets checks to fit its width. At 168px the row folds 100 checks
  * into 28 slots, each one an aggregate that hides which check failed. At this
  * width the same 100 checks get a slot each, so an isolated blip stops being
- * averaged away. Only the jsdom fallback — in a browser the bar measures its
- * own container and uses the real width.
+ * averaged away.
+ *
+ * Only the fallback for environments without layout. In a browser the bar
+ * measures its own panel, which is what keeps this number off a phone: 720px
+ * inside a 317px panel used to push the page sideways (SUB-29).
  */
 export const DETAIL_BEAT_WIDTH = 720;
 
@@ -50,7 +53,7 @@ export type MonitorDetailProps = {
   error?: Error | null;
   /** Returns to the dashboard. */
   onBack?: () => void;
-  /** Explicit heartbeat width; required in jsdom, which has no layout. */
+  /** Heartbeat width for environments without layout, such as jsdom. */
   beatWidth?: number;
   /** True when the live stream is down; drains colour exactly as on the list. */
   stale?: boolean;

@@ -27,7 +27,7 @@ import type { LiveOptions } from "./useLiveMonitors";
 
 export type LiveMonitorDetailProps = LiveOptions & {
   id: string;
-  /** Explicit heartbeat width; required in jsdom, which has no layout. */
+  /** Heartbeat width for environments without layout, such as jsdom. */
   beatWidth?: number;
   onBack?: () => void;
 };
