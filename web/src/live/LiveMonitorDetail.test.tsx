@@ -22,7 +22,10 @@ class FakeSource implements EventSourceLike {
     FakeSource.last = this;
   }
 
-  addEventListener(type: string, listener: (event: MessageEvent) => void): void {
+  addEventListener(
+    type: string,
+    listener: (event: MessageEvent) => void,
+  ): void {
     this.listeners.set(type, listener);
   }
 
@@ -41,7 +44,10 @@ class FakeSource implements EventSourceLike {
   }
 
   send(type: string, body: unknown): void {
-    this.listeners.get(type)?.({ data: JSON.stringify(body), lastEventId: "" } as MessageEvent);
+    this.listeners.get(type)?.({
+      data: JSON.stringify(body),
+      lastEventId: "",
+    } as MessageEvent);
   }
 }
 
@@ -65,8 +71,23 @@ const apiMonitor = (over: Record<string, unknown> = {}) => ({
 const UPTIME = {
   monitor_id: 1,
   windows: [
-    { window: "24h", window_s: 86400, total: 100, up: 99, down: 1, uptime: 99, avg_latency_ms: 30 },
-    { window: "30d", window_s: 2592000, total: 0, up: 0, down: 0, uptime: null },
+    {
+      window: "24h",
+      window_s: 86400,
+      total: 100,
+      up: 99,
+      down: 1,
+      uptime: 99,
+      avg_latency_ms: 30,
+    },
+    {
+      window: "30d",
+      window_s: 2592000,
+      total: 0,
+      up: 0,
+      down: 0,
+      uptime: null,
+    },
   ],
 };
 
@@ -99,7 +120,9 @@ function renderDetail(options: { monitors?: unknown[]; id?: string } = {}) {
     return { ok: true, status: 200, json: async () => body };
   });
   vi.stubGlobal("fetch", fetchMock);
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   render(
     <LiveMonitorDetailRoot
       client={client}
@@ -157,6 +180,24 @@ describe("LiveMonitorDetail", () => {
     expect(fetchMock.mock.calls.length).toBe(before);
   });
 
+  it("stays stale until the stream is actually connected", async () => {
+    // The monitor can arrive from the shared cache before the SSE connection
+    // is up. Showing live colours then presents cached data as current truth.
+    renderDetail();
+    await screen.findByText("api");
+    expect(
+      document.querySelector(".mon-detail")?.getAttribute("data-conn"),
+    ).toBe("stale");
+    act(() => {
+      FakeSource.last?.open();
+    });
+    await waitFor(() => {
+      expect(
+        document.querySelector(".mon-detail")?.getAttribute("data-conn"),
+      ).toBe("live");
+    });
+  });
+
   it("drains the colour when the stream drops, like the dashboard does", async () => {
     renderDetail();
     await screen.findByText("api");
@@ -167,7 +208,9 @@ describe("LiveMonitorDetail", () => {
       FakeSource.last?.fail();
     });
     await waitFor(() => {
-      expect(document.querySelector(".mon-detail")?.getAttribute("data-conn")).toBe("stale");
+      expect(
+        document.querySelector(".mon-detail")?.getAttribute("data-conn"),
+      ).toBe("stale");
     });
   });
 

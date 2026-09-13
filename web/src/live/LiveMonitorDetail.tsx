@@ -32,7 +32,12 @@ export type LiveMonitorDetailProps = LiveOptions & {
   onBack?: () => void;
 };
 
-export function LiveMonitorDetail({ id, beatWidth, onBack, ...live }: LiveMonitorDetailProps) {
+export function LiveMonitorDetail({
+  id,
+  beatWidth,
+  onBack,
+  ...live
+}: LiveMonitorDetailProps) {
   const { monitors, status, loading, error } = useLiveMonitors(live);
   const now = useNow();
 
@@ -88,13 +93,21 @@ export function LiveMonitorDetail({ id, beatWidth, onBack, ...live }: LiveMonito
       error={detail.error instanceof Error ? detail.error : null}
       onBack={onBack}
       beatWidth={beatWidth}
-      stale={status === "offline"}
+      /*
+       * Anything other than a confirmed live stream is stale. The monitor can
+       * come out of the shared cache while the new SSE connection is still
+       * "connecting", and painting that as live states old data as current
+       * truth. Only "live" earns the live colours.
+       */
+      stale={status !== "live"}
     />
   );
 }
 
 /** Mounts the detail screen with its own query client. */
-export function LiveMonitorDetailRoot(props: LiveMonitorDetailProps & { client?: QueryClient }) {
+export function LiveMonitorDetailRoot(
+  props: LiveMonitorDetailProps & { client?: QueryClient },
+) {
   const { client, ...rest } = props;
   const [fallback] = useState(createQueryClient);
   return (
