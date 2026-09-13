@@ -46,6 +46,18 @@ export type Monitor = {
   lastCheck: number | null;
   /** Failure reason for the last check, when there was one. */
   error?: string;
+  /**
+   * Key/value labels: `{ env: "prod", customer: "acme" }`.
+   *
+   * Always an object here, never undefined, so a component that groups or
+   * filters can read `Object.entries(m.tags)` without a guard at every call
+   * site. The API omits the field for untagged monitors; that absence is
+   * resolved once, in `fromApi`.
+   *
+   * At most one value per key — the backend enforces it with a primary key,
+   * so grouping by a key yields exactly one bucket per monitor.
+   */
+  tags: Record<string, string>;
 };
 
 /** One heartbeat as GET /api/v1/monitors?heartbeats=N returns it. */
@@ -83,6 +95,11 @@ export type ApiMonitor = {
   uptime_24h?: number | null;
   created_at: string;
   heartbeats?: ApiHeartbeat[];
+  /**
+   * Omitted entirely when the monitor has no tags, which is why this is
+   * optional while the render model's `tags` is not.
+   */
+  tags?: Record<string, string>;
 };
 
 /**
@@ -116,6 +133,22 @@ function beatFromApi(hb: ApiHeartbeat): Beat {
   };
 }
 
+/**
+ * Keeps only string values from the tag object.
+ *
+ * The payload is JSON from a server this build does not control the version
+ * of, and a non-string value would reach a component expecting to render it.
+ * Dropping the entry is better than rendering `[object Object]` in a filter.
+ */
+function sanitiseTags(tags: Record<string, string> | null | undefined): Record<string, string> {
+  if (!tags) return {};
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(tags)) {
+    if (typeof value === "string" && value !== "") out[key] = value;
+  }
+  return out;
+}
+
 /** Translates one API monitor into the render model. Pure. */
 export function fromApi(api: ApiMonitor): Monitor {
   return {
@@ -134,6 +167,9 @@ export function fromApi(api: ApiMonitor): Monitor {
     beats: (api.heartbeats ?? []).map(beatFromApi),
     lastCheck: toUnixMs(api.last_check),
     error: api.error,
+    // Absent and empty both mean "no tags", so they collapse to one shape
+    // and no consumer needs a null check.
+    tags: sanitiseTags(api.tags),
   };
 }
 

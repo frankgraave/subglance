@@ -42,6 +42,15 @@ type monitorResponse struct {
 
 	Uptime24h float64 `json:"uptime_24h"`
 
+	// Tags is a key/value map (`{"env":"prod"}`), omitted when empty so the
+	// response stays byte for byte what it was for untagged monitors.
+	//
+	// An object rather than a list of `key:value` strings: the API then
+	// never splits on a colon, so a value may contain one
+	// (`url: https://example.com`). `key:value` is how a human writes a tag,
+	// not how it travels.
+	Tags map[string]string `json:"tags,omitempty"`
+
 	// Heartbeats is filled in only when the caller asked for it with the
 	// `heartbeats` query parameter, oldest first. Omitting the field
 	// entirely when it was not requested keeps the default response byte
@@ -89,6 +98,7 @@ type createMonitorRequest struct {
 	Body            string            `json:"body"`
 	SSLWarnDays     *int              `json:"ssl_warn_days"`
 	Enabled         *bool             `json:"enabled"`
+	Tags            map[string]string `json:"tags"`
 }
 
 func (s *Server) handleListMonitors(w http.ResponseWriter, r *http.Request) {
@@ -209,6 +219,10 @@ func (s *Server) handleCreateMonitor(w http.ResponseWriter, r *http.Request) {
 	if req.Enabled != nil {
 		m.Enabled = *req.Enabled
 	}
+	// Already validated above by validateCreateMonitor; normalising again
+	// here rather than storing the raw map keeps the stored keys canonical
+	// without the validator having to hand a value back.
+	m.Tags, _ = store.NormaliseTags(req.Tags)
 
 	created, err := s.db.CreateMonitor(r.Context(), m)
 	if err != nil {
@@ -255,6 +269,21 @@ func validateCreateMonitor(req createMonitorRequest) problem {
 	}
 	if p := validateTargetForType(req.Type, req.Target); !p.ok() {
 		return p
+	}
+	if p := validateTags(req.Tags); !p.ok() {
+		return p
+	}
+	return problem{}
+}
+
+// validateTags reports a bad tag map as a field problem.
+//
+// The rules themselves live in the store package, next to the table that has
+// to hold the result: a key that this package accepted and the schema refused
+// would surface as a 500 on a request that was wrong from the start.
+func validateTags(tags map[string]string) problem {
+	if _, err := store.NormaliseTags(tags); err != nil {
+		return fieldProblem("tags", err.Error())
 	}
 	return problem{}
 }
@@ -521,6 +550,7 @@ func (s *Server) describeMonitor(r *http.Request, m store.Monitor) monitorRespon
 		TimeoutS:  m.TimeoutS,
 		Enabled:   m.Enabled,
 		Status:    "pending",
+		Tags:      m.Tags,
 		CreatedAt: m.CreatedAt,
 	}
 
@@ -644,6 +674,9 @@ type patchMonitorRequest struct {
 	Body            *string            `json:"body"`
 	SSLWarnDays     *int               `json:"ssl_warn_days"`
 	Enabled         *bool              `json:"enabled"`
+	// Tags replaces the whole set, like Headers. Sending `{}` clears them;
+	// omitting the field leaves them alone.
+	Tags *map[string]string `json:"tags"`
 }
 
 // handlePatchMonitor applies a partial update to an existing monitor.
@@ -853,6 +886,13 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 	}
 	if req.Enabled != nil {
 		m.Enabled = *req.Enabled
+	}
+	if req.Tags != nil {
+		tags, err := store.NormaliseTags(*req.Tags)
+		if err != nil {
+			return fieldProblem("tags", err.Error())
+		}
+		m.Tags = tags
 	}
 
 	// Re-validate whenever either half of the pair moved. The target the

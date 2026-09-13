@@ -7,6 +7,7 @@ const monitor = (over: Partial<Monitor> = {}): Monitor => ({
   id: "1",
   name: "api",
   status: "up",
+  tags: {},
   target: "https://api.example.com",
   latencyMs: 30,
   uptime24h: 99.5,

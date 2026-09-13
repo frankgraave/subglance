@@ -2011,6 +2011,40 @@ components:
         notifications must agree on what an outage is.
       enum: [up, pending, down]
       example: up
+    TagMap:
+      type: object
+      description: |
+        Key/value labels on a monitor, such as `env: prod` or `customer: acme`.
+        An object rather than a list of `key:value` strings, so a value may
+        itself contain a colon (`docs: https://example.com:8443`);
+        `key:value` is how a tag is written and displayed, not how it travels.
+
+        On a request the server first normalises: keys are trimmed and
+        lowercased, values are trimmed. The constraints below describe the
+        normalised form, so `  Env ` is accepted and stored as `env`. Two keys
+        that normalise to the same key are rejected rather than one silently
+        winning.
+
+        After normalisation a key must be 1-32 characters of lowercase
+        letters, digits, dash, underscore or dot, starting and ending with a
+        letter or digit. A value must be 1-64 characters and must not contain
+        line breaks or tabs; a blank value is rejected, because a bare tag is
+        not a tag. At most 20 tags per monitor, one value per key. Anything
+        else is a 400.
+      propertyNames:
+        type: string
+        minLength: 1
+        maxLength: 32
+        pattern: '^[a-z0-9]([a-z0-9_.-]*[a-z0-9])?$'
+      additionalProperties:
+        type: string
+        minLength: 1
+        maxLength: 64
+        pattern: '^[^\n\r\t]+$'
+      maxProperties: 20
+      example:
+        env: prod
+        customer: acme
     Monitor:
       type: object
       description: |
@@ -2088,6 +2122,12 @@ components:
           minimum: 0
           maximum: 100
           example: 99.86
+        tags:
+          $ref: '#/components/schemas/TagMap'
+          description: |
+            Key/value labels carried as metadata on the monitor. Nothing in
+            the dashboard groups or filters by them yet; they are stored,
+            returned and echoed back exactly as described by `TagMap`.
         heartbeats:
           type: array
           description: |
@@ -2183,6 +2223,12 @@ components:
           type: boolean
           description: Defaults to true, so a new monitor starts checking immediately.
           default: true
+        tags:
+          $ref: '#/components/schemas/TagMap'
+          description: |
+            Key/value labels carried as metadata on the monitor. Nothing in
+            the dashboard groups or filters by them yet; they are stored,
+            returned and echoed back exactly as described by `TagMap`.
       additionalProperties: false
     PatchMonitorRequest:
       type: object
@@ -2238,6 +2284,12 @@ components:
           maximum: 365
         enabled:
           type: boolean
+        tags:
+          $ref: '#/components/schemas/TagMap'
+          description: |
+            Replaces the whole tag map, like `headers`. Send `{}` to clear
+            every tag; omit the field to leave them alone. Same rules as
+            `TagMap`.
       additionalProperties: false
     Heartbeat:
       type: object
@@ -2363,6 +2415,12 @@ components:
             value the save would reject.
           minimum: 1
           maximum: 365
+        tags:
+          $ref: '#/components/schemas/TagMap'
+          description: |
+            Accepted and validated exactly as on create, but not used by the
+            probe, so a form can preview the draft it holds without stripping
+            fields first. The normalised map is echoed back in the result.
     PreviewCheckResult:
       type: object
       description: |
@@ -2403,6 +2461,13 @@ components:
           type: string
           description: The target that was probed, after normalisation.
           example: https://example.com
+        tags:
+          type: object
+          description: |
+            The normalised tags, so a form can see how they will be stored
+            before it saves.
+          additionalProperties:
+            type: string
     CheckResult:
       type: object
       description: The outcome of a manual, on-demand check.

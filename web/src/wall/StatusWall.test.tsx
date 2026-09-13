@@ -10,6 +10,7 @@ const monitor = (id: string, status: MonitorStatus, name = id): Monitor => ({
   id,
   name,
   status,
+  tags: {},
   target: `https://${id}.example.com`,
   latencyMs: 120,
   uptime24h: 99.9,
