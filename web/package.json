@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:browser": "npm run build && vitest run --config vitest.browser.config.ts",
-    "test:browser:setup": "npx --yes @puppeteer/browsers install chrome-headless-shell@stable"
+    "test:browser:setup": "npx --yes @puppeteer/browsers install chrome-headless-shell@152.0.7977.75"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.102.8",

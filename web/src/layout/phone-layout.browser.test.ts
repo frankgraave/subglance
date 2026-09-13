@@ -127,7 +127,7 @@ describe.each(WIDTHS)("at %ipx", (width) => {
       try {
         const offenders = await page.evaluate(() => {
           const vw = document.documentElement.clientWidth;
-          const out: { tag: string; cls: string; right: number }[] = [];
+          const out: { tag: string; cls: string; left: number; right: number }[] = [];
 
           /*
            * An element wider than the viewport is only a bug if the user can
@@ -156,11 +156,15 @@ describe.each(WIDTHS)("at %ipx", (width) => {
           for (const el of Array.from(document.body.querySelectorAll<HTMLElement>("*"))) {
             const r = el.getBoundingClientRect();
             if (r.width === 0 && r.height === 0) continue; // not rendered
-            if (r.right <= vw + 1) continue; // one pixel for sub-pixel rounding
+            // One pixel of slack for sub-pixel rounding. Both edges matter: a
+            // negative `left` hangs off the left side without ever growing
+            // `scrollWidth`, so the page-level test above cannot see it.
+            if (r.left >= -1 && r.right <= vw + 1) continue;
             if (isClippedBy(el)) continue;
             out.push({
               tag: el.tagName.toLowerCase(),
               cls: typeof el.className === "string" ? el.className.slice(0, 50) : "",
+              left: Math.round(r.left),
               right: Math.round(r.right),
             });
           }
@@ -194,8 +198,18 @@ describe.each(WIDTHS)("at %ipx", (width) => {
              * a native radio's keyboard and screen-reader behaviour instead of
              * reimplementing it on a <div>. The 1x1 box is the input's
              * clipping rectangle, not the thing a finger lands on.
+             *
+             * All three conditions are required: label ancestry on its own
+             * would also wave through a *visible* checkbox or radio that is
+             * genuinely too small to hit.
              */
-            if (el.classList.contains("sr-only") || el.closest("label") !== null) continue;
+            if (
+              el instanceof HTMLInputElement &&
+              el.classList.contains("sr-only") &&
+              el.closest("label") !== null
+            ) {
+              continue;
+            }
 
             const r = el.getBoundingClientRect();
             if (r.width === 0 && r.height === 0) continue;
