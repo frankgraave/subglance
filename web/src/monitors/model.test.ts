@@ -13,6 +13,7 @@ const monitor = (id: string, status: MonitorStatus, over: Partial<Monitor> = {})
   id,
   name: id,
   status,
+  tags: {},
   target: `https://${id}.example.com`,
   latencyMs: 100,
   uptime24h: 99.9,
