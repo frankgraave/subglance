@@ -40,6 +40,8 @@ const SERVICES = [
 
 const ENVIRONMENTS = ["prod", "staging", "eu", "us", "edge"];
 
+const CUSTOMERS = ["acme", "globex", "initech", "umbrella"];
+
 /** A fixed clock, so snapshots of the workbench are comparable across runs. */
 const NOW = Date.parse("2026-09-11T12:00:00Z");
 
@@ -109,6 +111,14 @@ export function demoMonitors(count: number, seed = 20260911): Monitor[] {
       error: status === "down" ? "502 Bad Gateway" : undefined,
       uptime_24h: neverChecked ? null : Math.round((health * 100 - rand() * 1.4) * 100) / 100,
       created_at: new Date(NOW - 86_400_000 * 30).toISOString(),
+      // Two keys with a handful of values each, which is the shape the tag
+      // facets are designed for. `customer` is deliberately absent on some
+      // monitors: a fixture where every monitor carries every key never
+      // exercises the "lacks the key entirely" path the filter has to handle.
+      tags: {
+        env,
+        ...(i % 3 === 0 ? {} : { customer: CUSTOMERS[i % CUSTOMERS.length] }),
+      },
       heartbeats: neverChecked ? [] : makeHeartbeats(rand, 40, health, baseLatency),
     });
   }

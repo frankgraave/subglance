@@ -132,3 +132,45 @@ describe("MonitorCardList", () => {
     expect(screen.queryByRole("table", { name: /monitors/ })).toBeNull();
   });
 });
+
+describe("MonitorCardList grouped by a tag", () => {
+  const tagged = () => [
+    monitor("api", "up", { tags: { env: "Prod" } }),
+    monitor("db", "down", { tags: { env: "prod" } }),
+    monitor("cdn", "up", { tags: { env: "prod" } }),
+    monitor("legacy", "up", {}),
+  ];
+
+  const headings = () =>
+    [...document.querySelectorAll(".mon-cards-title")].map((h) => h.textContent);
+
+  it("heads one section per tag value, untagged last", () => {
+    render(<MonitorCardList monitors={tagged()} groupKey="env" beatWidth={WIDTH} />);
+    expect(headings()).toEqual([
+      "Needs attention (1)",
+      "Prod (1)",
+      "prod (1)",
+      "Untagged (1)",
+    ]);
+  });
+
+  it("gives each section a unique heading id even for values differing in case", () => {
+    render(<MonitorCardList monitors={tagged()} groupKey="env" beatWidth={WIDTH} />);
+    const ids = [...document.querySelectorAll(".mon-cards-title")].map((h) => h.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const section of document.querySelectorAll("section.mon-cards-section")) {
+      const labelledBy = section.getAttribute("aria-labelledby")!;
+      expect(document.getElementById(labelledBy)).not.toBeNull();
+    }
+  });
+
+  it("renders every monitor exactly once", () => {
+    render(<MonitorCardList monitors={tagged()} groupKey="env" beatWidth={WIDTH} />);
+    expect(cards()).toHaveLength(4);
+  });
+
+  it("falls back to the flat split without a key", () => {
+    render(<MonitorCardList monitors={tagged()} beatWidth={WIDTH} />);
+    expect(headings()).toEqual(["Needs attention (1)", "All monitors (3)"]);
+  });
+});

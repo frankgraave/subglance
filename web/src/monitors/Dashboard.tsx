@@ -14,9 +14,12 @@ import { ROW_BEAT_WIDTH } from "./MonitorRow";
 import {
   describeFilter,
   filterByStatus,
+  filterByTags,
   filterMonitors,
   summarise,
+  tagFacets,
 } from "./model";
+import type { TagSelection } from "./model";
 import type { Monitor, MonitorStatus } from "./types";
 
 /**
@@ -119,14 +122,52 @@ export function Dashboard({
   // deliberately does not survive a remount — coming back to a dashboard that
   // silently hides 198 of 200 monitors is how an outage gets missed.
   const [status, setStatus] = useState<MonitorStatus | null>(null);
-  // Status first, then text, so the count in the sentence below is the size of
-  // what is actually rendered rather than of an intermediate list.
-  const visible = filterMonitors(filterByStatus(monitors, status), query);
+  // Tag choices are local for the same reason, and for one more: the facets
+  // themselves come from the data, so a selection kept across a reload could
+  // name a key that no monitor carries any more.
+  const [tags, setTags] = useState<TagSelection>({});
+  // Grouping is one axis at a time: "by environment" and "by customer" are two
+  // arrangements of the same rows, not two that can be layered. Local and not
+  // persisted, like the other view controls on this screen.
+  const [groupKey, setGroupKey] = useState<string | null>(null);
+  // Facets are derived from the unfiltered list, never from the visible one.
+  // Narrowing the options as you choose would make the second dropdown lose
+  // the values the first one just excluded, and there would be no way back.
+  const facets = tagFacets(monitors);
+  // A selection whose key *or value* has since vanished from the data would
+  // silently empty the list with no control left to clear it: the select can
+  // only offer values that still exist, so a stale one is unreachable. Both
+  // halves of a pair therefore have to be live for it to keep filtering.
+  const liveTags: TagSelection = Object.fromEntries(
+    facets
+      .map((facet) => [facet.key, tags[facet.key] ?? ""] as const)
+      .filter(([key, value]) => {
+        if (value === "") return false;
+        const facet = facets.find((candidate) => candidate.key === key);
+        return facet !== undefined && facet.values.includes(value);
+      }),
+  );
+  // A grouping key whose tag has vanished from the data would leave the list
+  // headed by a key nothing carries, so it falls back to the flat order for
+  // the same reason a stale tag selection is dropped.
+  const liveGroupKey =
+    groupKey !== null && facets.some((facet) => facet.key === groupKey)
+      ? groupKey
+      : null;
+  // Status, then tags, then text, so the count in the sentence below is the
+  // size of what is actually rendered rather than of an intermediate list.
+  const visible = filterMonitors(
+    filterByTags(filterByStatus(monitors, status), liveTags),
+    query,
+  );
+  // Only the non-query narrowing: `EmptyState` already words the query case.
+  const narrowed = status !== null || Object.keys(liveTags).length > 0;
   const filterNote = describeFilter(
     visible.length,
     monitors.length,
     status,
     query,
+    liveTags,
   );
 
   return (
@@ -205,6 +246,75 @@ export function Dashboard({
       </header>
 
       {/*
+       * One native <select> per tag key, and native on purpose: a custom
+       * listbox would have to re-earn keyboard support, screen-reader
+       * semantics and the OS picker on a phone, and these lists are a handful
+       * of values long — the case where a native select is simply better. The
+       * key is the visible label, so the control reads "env: prod" without a
+       * separate legend.
+       */}
+      {facets.length > 0 && (
+        <div className="mon-facets">
+          {facets.map((facet) => (
+            // The key is also the text of an option in the Group by control,
+            // so an explicit attribute — not the visible text — is what
+            // identifies a facet unambiguously.
+            <label
+              key={facet.key}
+              className="mon-facet"
+              data-facet-key={facet.key}
+            >
+              <span className="mon-facet-key">{facet.key}</span>
+              <select
+                className="mon-facet-select"
+                value={tags[facet.key] ?? ""}
+                onChange={(event) =>
+                  setTags((current) => ({
+                    ...current,
+                    [facet.key]: event.target.value,
+                  }))
+                }
+              >
+                {/* "Any" rather than a blank first option: an empty entry in a
+                    filter reads as a value someone forgot to name. */}
+                <option value="">Any</option>
+                {facet.values.map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
+
+          {/*
+           * Grouping sits with the filters because it answers a neighbouring
+           * question about the same tags, but it is labelled "Group by" rather
+           * than given a key of its own: it does not narrow the list, and a
+           * control that looks like a filter while changing nothing about what
+           * is visible is the kind of thing people press twice.
+           */}
+          <label className="mon-facet">
+            <span className="mon-facet-key">Group by</span>
+            {/* Its own class, not `mon-facet-select`: it looks the same but it
+                is not a facet, and one selector must not match both. */}
+            <select
+              className="mon-group-select"
+              value={groupKey ?? ""}
+              onChange={(event) => setGroupKey(event.target.value || null)}
+            >
+              <option value="">None</option>
+              {facets.map((facet) => (
+                <option key={facet.key} value={facet.key}>
+                  {facet.key}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+
+      {/*
        * The single live region, and it lives *outside* the table
        * (research note 3). `aria-live` on the table itself would make a
        * screen reader re-read rows on every heartbeat tick, which is both
@@ -232,6 +342,8 @@ export function Dashboard({
           monitors={visible}
           query={query}
           totalCount={monitors.length}
+          filtered={narrowed}
+          groupKey={liveGroupKey}
           beatWidth={beatWidth}
           onOpen={onOpenMonitor}
         />
@@ -240,6 +352,8 @@ export function Dashboard({
           monitors={visible}
           query={query}
           totalCount={monitors.length}
+          filtered={narrowed}
+          groupKey={liveGroupKey}
           onOpen={onOpenMonitor}
         />
       ) : (
@@ -247,6 +361,8 @@ export function Dashboard({
           monitors={visible}
           query={query}
           totalCount={monitors.length}
+          filtered={narrowed}
+          groupKey={liveGroupKey}
           beatWidth={beatWidth ?? ROW_BEAT_WIDTH}
           onOpen={onOpenMonitor}
         />

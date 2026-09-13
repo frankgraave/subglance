@@ -9,7 +9,11 @@ afterEach(cleanup);
 /** jsdom has no layout, so the heartbeat bar needs an explicit width. */
 const WIDTH = 168;
 
-const monitor = (id: string, status: MonitorStatus, over: Partial<Monitor> = {}): Monitor => ({
+const monitor = (
+  id: string,
+  status: MonitorStatus,
+  over: Partial<Monitor> = {},
+): Monitor => ({
   id,
   name: id,
   status,
@@ -34,14 +38,18 @@ const monitor = (id: string, status: MonitorStatus, over: Partial<Monitor> = {})
  * pins down the right one and asserts the caption is doing its job.
  */
 function monTable(): HTMLTableElement {
-  return screen.getByRole("table", { name: /alphabetically by name/ }) as HTMLTableElement;
+  return screen.getByRole("table", {
+    name: /alphabetically by name/,
+  }) as HTMLTableElement;
 }
 
 /** Row order as the DOM has it, read off the row header of each monitor row. */
 function rowNames(): string[] {
-  return [...document.querySelectorAll<HTMLElement>("tr.mon-row th[scope='row'] .mon-name")].map(
-    (node) => node.textContent ?? "",
-  );
+  return [
+    ...document.querySelectorAll<HTMLElement>(
+      "tr.mon-row th[scope='row'] .mon-name",
+    ),
+  ].map((node) => node.textContent ?? "");
 }
 
 describe("MonitorTable", () => {
@@ -73,7 +81,10 @@ describe("MonitorTable", () => {
 
   it("uses real table semantics: th scope=col in the head, th scope=row per row", () => {
     render(
-      <MonitorTable monitors={[monitor("api", "up"), monitor("db", "up")]} beatWidth={WIDTH} />,
+      <MonitorTable
+        monitors={[monitor("api", "up"), monitor("db", "up")]}
+        beatWidth={WIDTH}
+      />,
     );
     const table = monTable();
 
@@ -83,7 +94,9 @@ describe("MonitorTable", () => {
     expect(head).not.toBeNull();
     const colHeaders = [...head!.querySelectorAll(":scope > tr > th")];
     expect(colHeaders).toHaveLength(5);
-    expect(colHeaders.every((th) => th.getAttribute("scope") === "col")).toBe(true);
+    expect(colHeaders.every((th) => th.getAttribute("scope") === "col")).toBe(
+      true,
+    );
     expect(colHeaders.map((th) => th.textContent)).toEqual([
       "Status",
       "Monitor",
@@ -94,7 +107,9 @@ describe("MonitorTable", () => {
 
     const rowHeaders = [...table.querySelectorAll("tr.mon-row > th")];
     expect(rowHeaders).toHaveLength(2);
-    expect(rowHeaders.every((th) => th.getAttribute("scope") === "row")).toBe(true);
+    expect(rowHeaders.every((th) => th.getAttribute("scope") === "row")).toBe(
+      true,
+    );
 
     // A colgroup, because the layout is table-layout: fixed.
     expect(table.querySelectorAll(":scope > colgroup > col")).toHaveLength(5);
@@ -106,19 +121,30 @@ describe("MonitorTable", () => {
 
   it("does not carry aria-live anywhere inside the table", () => {
     render(
-      <MonitorTable monitors={[monitor("api", "down"), monitor("db", "up")]} beatWidth={WIDTH} />,
+      <MonitorTable
+        monitors={[monitor("api", "down"), monitor("db", "up")]}
+        beatWidth={WIDTH}
+      />,
     );
     const table = monTable();
     expect(table.getAttribute("aria-live")).toBeNull();
     // The heartbeat bar's own live region sits in the row's <figure>; what
     // must never exist is a live region wrapping the rows themselves.
-    expect(table.querySelectorAll("tbody[aria-live], tr[aria-live], td[aria-live]")).toHaveLength(0);
+    expect(
+      table.querySelectorAll("tbody[aria-live], tr[aria-live], td[aria-live]"),
+    ).toHaveLength(0);
   });
 
   it("shows an em dash and an explanation instead of 0% for missing uptime", () => {
     render(
       <MonitorTable
-        monitors={[monitor("api", "pending", { uptime24h: null, latencyMs: null, beats: [] })]}
+        monitors={[
+          monitor("api", "pending", {
+            uptime24h: null,
+            latencyMs: null,
+            beats: [],
+          }),
+        ]}
         beatWidth={WIDTH}
       />,
     );
@@ -131,7 +157,10 @@ describe("MonitorTable", () => {
 
   it("still renders a real 0% uptime, which is a fact and not missing data", () => {
     render(
-      <MonitorTable monitors={[monitor("api", "down", { uptime24h: 0 })]} beatWidth={WIDTH} />,
+      <MonitorTable
+        monitors={[monitor("api", "down", { uptime24h: 0 })]}
+        beatWidth={WIDTH}
+      />,
     );
     const row = screen.getByTestId("monitor-row-api");
     expect(row.textContent).toContain("0%");
@@ -162,10 +191,38 @@ describe("MonitorTable", () => {
   });
 
   it("distinguishes an empty search result from an empty install", () => {
-    render(<MonitorTable monitors={[]} query="kubernetes" totalCount={12} beatWidth={WIDTH} />);
+    render(
+      <MonitorTable
+        monitors={[]}
+        query="kubernetes"
+        totalCount={12}
+        beatWidth={WIDTH}
+      />,
+    );
     expect(screen.getByText(/No monitors match/)).toBeTruthy();
-    expect(screen.getByText(/clear the search to see all 12 monitors/)).toBeTruthy();
+    expect(
+      screen.getByText(/clear the search to see all 12 monitors/),
+    ).toBeTruthy();
     expect(screen.queryByText("No monitors yet")).toBeNull();
+  });
+
+  it("tells the user to clear the filters too when one is also active", () => {
+    render(
+      <MonitorTable
+        monitors={[]}
+        query="kubernetes"
+        totalCount={12}
+        filtered
+        beatWidth={WIDTH}
+      />,
+    );
+    // Clearing only the search would still leave the list narrowed, so the
+    // copy must not promise all 12 monitors back.
+    expect(
+      screen.getByText(
+        /clear the search and the active filters to see all 12 monitors/,
+      ),
+    ).toBeTruthy();
   });
 
   it("renders all 200 rows: the deliberate choice against virtualisation", () => {
@@ -179,5 +236,76 @@ describe("MonitorTable", () => {
     expect(document.querySelectorAll("tr.mon-row")).toHaveLength(200);
     expect(screen.getByTestId("monitor-row-mon-199")).toBeTruthy();
     expect(rowNames()[0]).toBe("mon-007");
+  });
+});
+
+describe("MonitorTable grouped by a tag", () => {
+  const tagged = () => [
+    monitor("api", "up", { tags: { env: "prod" } }),
+    monitor("db", "down", { tags: { env: "prod" } }),
+    monitor("cdn", "up", { tags: { env: "staging" } }),
+    monitor("legacy", "up", {}),
+  ];
+
+  const headings = () =>
+    [...document.querySelectorAll(".mon-section-title")].map(
+      (h) => h.textContent,
+    );
+
+  it("puts one tbody per tag value, with the untagged group last", () => {
+    render(
+      <MonitorTable monitors={tagged()} groupKey="env" beatWidth={WIDTH} />,
+    );
+    expect(headings()).toEqual([
+      "Needs attention (1)",
+      "prod (1)",
+      "staging (1)",
+      "Untagged (1)",
+    ]);
+  });
+
+  it("keeps a down monitor in the attention section, not in its tag group", () => {
+    render(
+      <MonitorTable monitors={tagged()} groupKey="env" beatWidth={WIDTH} />,
+    );
+    const bodies = [...document.querySelectorAll("tbody")];
+    expect(
+      bodies[0].querySelector('[data-testid="monitor-row-db"]'),
+    ).not.toBeNull();
+    expect(
+      bodies[1].querySelector('[data-testid="monitor-row-db"]'),
+    ).toBeNull();
+  });
+
+  it("renders every monitor exactly once", () => {
+    render(
+      <MonitorTable monitors={tagged()} groupKey="env" beatWidth={WIDTH} />,
+    );
+    expect(document.querySelectorAll("tr.mon-row")).toHaveLength(4);
+  });
+
+  it("scopes a section heading to its row group, not to a colgroup", () => {
+    render(
+      <MonitorTable monitors={tagged()} groupKey="env" beatWidth={WIDTH} />,
+    );
+    // Each section is its own tbody, so the heading describes the rows below
+    // it rather than a set of columns.
+    for (const th of document.querySelectorAll(".mon-section-title")) {
+      expect(th.getAttribute("scope")).toBe("rowgroup");
+    }
+  });
+
+  it("says in the caption that the table is grouped", () => {
+    render(
+      <MonitorTable monitors={tagged()} groupKey="env" beatWidth={WIDTH} />,
+    );
+    expect(document.querySelector("caption")!.textContent).toContain(
+      "grouped by env",
+    );
+  });
+
+  it("falls back to the flat attention/all split without a key", () => {
+    render(<MonitorTable monitors={tagged()} beatWidth={WIDTH} />);
+    expect(headings()).toEqual(["Needs attention (1)", "All monitors (3)"]);
   });
 });

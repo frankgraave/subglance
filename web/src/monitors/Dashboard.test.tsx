@@ -339,4 +339,176 @@ describe("Dashboard", () => {
       );
     });
   });
+
+  describe("tag filtering", () => {
+    const tagged = () => [
+      monitor("api", "up", { tags: { env: "prod", customer: "acme" } }),
+      monitor("db", "up", { tags: { env: "prod", customer: "globex" } }),
+      monitor("cdn", "up", { tags: { env: "staging", customer: "acme" } }),
+    ];
+
+    const facet = (key: string) =>
+      document.querySelector<HTMLSelectElement>(
+        `[data-facet-key="${key}"] .mon-facet-select`,
+      )!;
+
+    it("offers one select per tag key, with Any first", () => {
+      render(<Harness monitors={tagged()} />);
+      const selects = [...document.querySelectorAll(".mon-facet-select")];
+      expect(selects).toHaveLength(2);
+      expect([...facet("env").options].map((o) => o.value)).toEqual([
+        "",
+        "prod",
+        "staging",
+      ]);
+    });
+
+    it("renders no facets at all when nothing is tagged", () => {
+      render(<Harness monitors={[monitor("api", "up")]} />);
+      expect(document.querySelector(".mon-facets")).toBeNull();
+    });
+
+    it("narrows the list to the chosen value", () => {
+      render(<Harness monitors={tagged()} />);
+      fireEvent.change(facet("env"), { target: { value: "staging" } });
+      expect(rowIds()).toEqual(["monitor-row-cdn"]);
+    });
+
+    it("ANDs two keys together", () => {
+      render(<Harness monitors={tagged()} />);
+      fireEvent.change(facet("env"), { target: { value: "prod" } });
+      fireEvent.change(facet("customer"), { target: { value: "acme" } });
+      expect(rowIds()).toEqual(["monitor-row-api"]);
+    });
+
+    it("keeps offering every value of a key after one is chosen", () => {
+      render(<Harness monitors={tagged()} />);
+      fireEvent.change(facet("env"), { target: { value: "prod" } });
+      // The facets come from the unfiltered list, so "staging" must still be
+      // reachable — otherwise choosing it once removes the way back.
+      expect([...facet("env").options].map((o) => o.value)).toEqual([
+        "",
+        "prod",
+        "staging",
+      ]);
+    });
+
+    it("returns to the full list via Any", () => {
+      render(<Harness monitors={tagged()} />);
+      fireEvent.change(facet("env"), { target: { value: "staging" } });
+      fireEvent.change(facet("env"), { target: { value: "" } });
+      expect(rowIds()).toHaveLength(3);
+    });
+
+    it("names the tag filter in the sentence under the search box", () => {
+      render(<Harness monitors={tagged()} />);
+      fireEvent.change(facet("env"), { target: { value: "prod" } });
+      expect(document.querySelector(".mon-result-count")!.textContent).toBe(
+        "2 of 3 monitors are tagged env:prod",
+      );
+    });
+
+    it("says the filter is empty, not that there are no monitors", () => {
+      render(<Harness monitors={tagged()} />);
+      fireEvent.change(facet("env"), { target: { value: "prod" } });
+      fireEvent.change(facet("customer"), { target: { value: "globex" } });
+      fireEvent.change(facet("env"), { target: { value: "staging" } });
+      expect(rowIds()).toEqual([]);
+      expect(document.querySelector(".mon-empty-title")!.textContent).toBe(
+        "No monitors match this filter",
+      );
+    });
+
+    it("drops a selection whose key disappears from the data", () => {
+      const { rerender } = render(<Harness monitors={tagged()} />);
+      fireEvent.change(facet("env"), { target: { value: "staging" } });
+      expect(rowIds()).toEqual(["monitor-row-cdn"]);
+      // A live update strips the tags. The stale selection must not survive
+      // and hide every monitor with no control left to clear it.
+      rerender(
+        <Harness monitors={[monitor("api", "up"), monitor("db", "up")]} />,
+      );
+      expect(rowIds()).toEqual(["monitor-row-api", "monitor-row-db"]);
+    });
+
+    it("drops a selection whose value disappears while the key stays", () => {
+      const { rerender } = render(<Harness monitors={tagged()} />);
+      fireEvent.change(facet("env"), { target: { value: "staging" } });
+      expect(rowIds()).toEqual(["monitor-row-cdn"]);
+      // The key survives, so the select stays on screen, but it no longer
+      // offers "staging". A filter you cannot see or clear must not keep
+      // hiding rows.
+      rerender(
+        <Harness
+          monitors={[
+            monitor("api", "up", { tags: { env: "prod" } }),
+            monitor("db", "up", { tags: { env: "prod" } }),
+          ]}
+        />,
+      );
+      expect([...facet("env").options].map((o) => o.value)).toEqual([
+        "",
+        "prod",
+      ]);
+      expect(rowIds()).toEqual(["monitor-row-api", "monitor-row-db"]);
+    });
+  });
+});
+
+describe("Dashboard grouping", () => {
+  const tagged = () => [
+    monitor("api", "up", { tags: { env: "prod" } }),
+    monitor("db", "up", { tags: { env: "staging" } }),
+    monitor("legacy", "up", {}),
+  ];
+
+  const groupSelect = () =>
+    document.querySelector<HTMLSelectElement>(".mon-group-select")!;
+  const headings = () =>
+    [...document.querySelectorAll(".mon-section-title")].map(
+      (h) => h.textContent,
+    );
+
+  it("offers one grouping option per tag key, plus None", () => {
+    render(<Harness monitors={tagged()} />);
+    expect([...groupSelect().options].map((o) => o.value)).toEqual(["", "env"]);
+  });
+
+  it("is flat until a key is chosen", () => {
+    render(<Harness monitors={tagged()} />);
+    expect(headings()).toEqual([]);
+  });
+
+  it("groups the list by the chosen key", () => {
+    render(<Harness monitors={tagged()} />);
+    fireEvent.change(groupSelect(), { target: { value: "env" } });
+    expect(headings()).toEqual(["prod (1)", "staging (1)", "Untagged (1)"]);
+    expect(rowIds()).toHaveLength(3);
+  });
+
+  it("groups only what the filters left visible", () => {
+    render(<Harness monitors={tagged()} />);
+    fireEvent.change(groupSelect(), { target: { value: "env" } });
+    fireEvent.change(
+      document.querySelector<HTMLSelectElement>(
+        '[data-facet-key="env"] .mon-facet-select',
+      )!,
+      { target: { value: "prod" } },
+    );
+    expect(headings()).toEqual(["prod (1)"]);
+    expect(rowIds()).toEqual(["monitor-row-api"]);
+  });
+
+  it("falls back to flat when the grouping key disappears from the data", () => {
+    const { rerender } = render(<Harness monitors={tagged()} />);
+    fireEvent.change(groupSelect(), { target: { value: "env" } });
+    expect(headings()).toEqual(["prod (1)", "staging (1)", "Untagged (1)"]);
+    // A live update strips the tags; the list must not stay headed by a key
+    // that nothing carries any more.
+    rerender(
+      <Harness monitors={[monitor("api", "up"), monitor("db", "up")]} />,
+    );
+    expect(headings()).toEqual([]);
+    expect(rowIds()).toHaveLength(2);
+  });
 });

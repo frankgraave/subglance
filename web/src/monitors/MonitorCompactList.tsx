@@ -3,7 +3,7 @@ import { EmptyState } from "./EmptyState";
 import { formatLatency, formatUptime } from "./format";
 import { Led } from "./Led";
 import { MonitorLink } from "./MonitorLink";
-import { partition } from "./model";
+import { partition, sectionsByTag } from "./model";
 import type { Monitor } from "./types";
 import { Unknown } from "./Unknown";
 
@@ -23,14 +23,13 @@ import { Unknown } from "./Unknown";
  * layout exists to avoid, and at this line height it would be 8px of noise.
  * Anyone who wants the trend switches to Rows, which is one click away.
  *
- * **No grouping yet, deliberately.** DESIGN.md §7 groups this layout by
- * customer or environment; §12 records that tags have no screen to create or
- * assign them, so grouping today would mean inventing a taxonomy in the
- * frontend. So this renders one flat `<ul>`: `partition` (down first, then
- * alphabetical) only orders it, which is the ordering every other layout
- * shares. Headed "Needs attention" / "All monitors" sections would be grouping
- * by a different name, and half a taxonomy reads worse than none — at this
- * density the broken monitors are already the first lines on the screen.
+ * **Grouping is opt-in, and flat is the default.** DESIGN.md §7 groups this
+ * layout by customer or environment, and it now can: choosing a tag key puts
+ * one heading per value over the lines. Without a key it stays a single flat
+ * `<ul>` ordered by `partition` (down first, then alphabetical), which is the
+ * ordering every layout shares — at this density the broken monitors are
+ * already the first lines on the screen, and permanent headings would cost
+ * vertical space the layout exists to save.
  *
  * **What it does not drop: the reason.** A down monitor has no latency to
  * report, so this layout borrows the row's rule and puts the error text in
@@ -46,6 +45,10 @@ export type MonitorCompactListProps = {
   query?: string;
   /** Total before filtering, so "no results" can be told from "no monitors". */
   totalCount?: number;
+  /** True when a filter other than the query is narrowing the list. */
+  filtered?: boolean;
+  /** Tag key to group by, or null for one flat list. */
+  groupKey?: string | null;
   /** Opens a monitor's detail view client-side. See MonitorLink. */
   onOpen?: (id: string) => void;
 };
@@ -55,9 +58,18 @@ type CompactLineProps = { monitor: Monitor; onOpen?: (id: string) => void };
 function CompactLineImpl({ monitor, onOpen }: CompactLineProps) {
   const { name, status, target, latencyMs, uptime24h, error } = monitor;
   return (
-    <li className="mon-line" data-status={status} data-testid={`monitor-line-${monitor.id}`}>
+    <li
+      className="mon-line"
+      data-status={status}
+      data-testid={`monitor-line-${monitor.id}`}
+    >
       <Led status={status} className="mon-line-led" />
-      <MonitorLink id={monitor.id} name={name} onOpen={onOpen} className="mon-line-name" />
+      <MonitorLink
+        id={monitor.id}
+        name={name}
+        onOpen={onOpen}
+        className="mon-line-name"
+      />
       <span className="mon-line-target">{target}</span>
       <span className="mon-line-num">
         {status === "down" && error ? (
@@ -71,7 +83,11 @@ function CompactLineImpl({ monitor, onOpen }: CompactLineProps) {
         )}
       </span>
       <span className="mon-line-num">
-        {uptime24h === null ? <Unknown what="uptime" /> : formatUptime(uptime24h)}
+        {uptime24h === null ? (
+          <Unknown what="uptime" />
+        ) : (
+          formatUptime(uptime24h)
+        )}
       </span>
     </li>
   );
@@ -100,25 +116,58 @@ export function MonitorCompactList({
   monitors,
   query = "",
   totalCount,
+  filtered = false,
+  groupKey = null,
   onOpen,
 }: MonitorCompactListProps) {
   const total = totalCount ?? monitors.length;
   if (monitors.length === 0) {
-    return <EmptyState query={query} totalCount={total} />;
+    return <EmptyState query={query} totalCount={total} filtered={filtered} />;
+  }
+
+  const lines = (list: readonly Monitor[]) =>
+    list.map((monitor) => (
+      <CompactLine key={monitor.id} monitor={monitor} onOpen={onOpen} />
+    ));
+
+  if (groupKey !== null) {
+    return (
+      <div className="mon-lines">
+        {sectionsByTag(monitors, groupKey).map((section) => (
+          <section
+            key={section.id}
+            className={
+              section.attention
+                ? "mon-line-group mon-line-group--attention"
+                : "mon-line-group"
+            }
+            aria-labelledby={`mon-line-${section.id}`}
+          >
+            {/* A real heading rather than a styled <li>: the list has to stay a
+                list of monitors, so a screen reader's item count keeps
+                matching what is on screen. */}
+            <h3 id={`mon-line-${section.id}`} className="mon-line-group-title">
+              {section.label} ({section.monitors.length})
+            </h3>
+            <ul className="mon-line-stack">{lines(section.monitors)}</ul>
+          </section>
+        ))}
+      </div>
+    );
   }
 
   // `partition` orders the list — down first, then alphabetical — and that is
-  // all it does here. Splitting the result into headed sections would be the
-  // grouping this layout deliberately ships without.
+  // all it does here: without a grouping key this layout stays flat.
   const { attention, rest } = partition(monitors);
   const ordered = [...attention, ...rest];
 
   return (
     <div className="mon-lines">
-      <ul className="mon-line-stack" aria-label={`Monitors (${ordered.length})`}>
-        {ordered.map((monitor) => (
-          <CompactLine key={monitor.id} monitor={monitor} onOpen={onOpen} />
-        ))}
+      <ul
+        className="mon-line-stack"
+        aria-label={`Monitors (${ordered.length})`}
+      >
+        {lines(ordered)}
       </ul>
     </div>
   );

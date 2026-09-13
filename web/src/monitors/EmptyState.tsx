@@ -9,8 +9,21 @@ import { Led } from "./Led";
  * Shared by the desktop table and the phone card list: the words a beginner
  * reads first should not depend on which device they opened.
  */
-export function EmptyState({ query, totalCount }: { query: string; totalCount: number }) {
-  const searching = query.trim() !== "" && totalCount > 0;
+export function EmptyState({
+  query,
+  totalCount,
+  filtered = false,
+}: {
+  query: string;
+  totalCount: number;
+  /** True when a status or tag filter is on, even with an empty query. */
+  filtered?: boolean;
+}) {
+  const needle = query.trim();
+  // A filter that hides every monitor used to render "No monitors yet", which
+  // tells a self-hoster their install is empty when in fact they pressed a
+  // chip. Any active narrowing counts, not just a typed query.
+  const narrowed = (needle !== "" || filtered) && totalCount > 0;
   return (
     <div className="mon-empty">
       {/* Three empty sockets, not three grey lamps. Decorative and
@@ -22,21 +35,28 @@ export function EmptyState({ query, totalCount }: { query: string; totalCount: n
         <Led status="paused" labelled={false} />
         <Led status="paused" labelled={false} />
       </div>
-      {searching ? (
+      {narrowed ? (
         <>
-          <h3 className="mon-empty-title">No monitors match “{query.trim()}”</h3>
+          <h3 className="mon-empty-title">
+            {needle === ""
+              ? "No monitors match this filter"
+              : `No monitors match \u201C${needle}\u201D`}
+          </h3>
           <p className="mon-empty-body">
-            Search looks at monitor names and targets. Check the spelling, or clear the search to
-            see all {totalCount} monitors.
+            {needle === ""
+              ? `Clear the status or tag filter to see all ${totalCount} monitors.`
+              : filtered
+                ? `Search looks at monitor names and targets. Check the spelling, or clear the search and the active filters to see all ${totalCount} monitors.`
+                : `Search looks at monitor names and targets. Check the spelling, or clear the search to see all ${totalCount} monitors.`}
           </p>
         </>
       ) : (
         <>
           <h3 className="mon-empty-title">No monitors yet</h3>
           <p className="mon-empty-body">
-            Add the first thing you want watched — a URL, a host and port, or a cron job that
-            should check in. SubGlance starts probing it straight away and this page fills in as
-            the first results land.
+            Add the first thing you want watched — a URL, a host and port, or a
+            cron job that should check in. SubGlance starts probing it straight
+            away and this page fills in as the first results land.
           </p>
         </>
       )}

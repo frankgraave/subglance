@@ -89,6 +89,47 @@
 .mon-search-input::placeholder { color: var(--ink-4); }
 .mon-search-input:hover { border-color: var(--border-hi); }
 
+/* One labelled native select per tag key. Native because these lists are
+   short and a custom listbox would have to re-earn keyboard support, the
+   screen-reader contract and the OS picker on a phone. Wrapping in a <label>
+   means the key text is the accessible name, so no visually hidden legend is
+   needed and the key stays clickable. */
+.mon-facets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.mon-facet {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--type-helper);
+  color: var(--ink-3);
+}
+
+.mon-facet-key {
+  font-weight: var(--weight-strong);
+  color: var(--ink-2);
+}
+
+.mon-facet-select,
+.mon-group-select {
+  padding: var(--space-1) var(--space-2);
+  font: inherit;
+  font-size: var(--type-helper);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: border-color var(--dur-hover) var(--ease);
+}
+
+.mon-facet-select:hover,
+.mon-group-select:hover { border-color: var(--border-hi); }
+
 .mon-result-count {
   font-size: var(--type-helper);
   color: var(--ink-3);
@@ -417,6 +458,15 @@
     gap: var(--space-3);
   }
 
+  .mon-facet-select,
+  .mon-group-select {
+    /* Same 16px floor as the search input: iOS Safari zooms the page for any
+       focused form control below it, including a select, and does not zoom
+       back out on blur. */
+    font-size: var(--type-nozoom);
+    padding: var(--space-2) var(--space-3);
+  }
+
   .mon-search-input {
     width: 100%;
     /* 16px is not a style choice: iOS Safari zooms the page when a focused
@@ -438,6 +488,18 @@
  */
 
 .mon-lines { display: flex; flex-direction: column; gap: var(--space-5); }
+
+/* A grouped compact list: one heading per tag value, sharing the section
+   heading style of the card layout so the two layouts do not invent two
+   different vocabularies for the same idea. */
+.mon-line-group-title {
+  margin-bottom: var(--space-2);
+  font-size: var(--type-section);
+  font-weight: var(--weight-strong);
+  text-transform: uppercase;
+  letter-spacing: var(--track-caps);
+  color: var(--ink-3);
+}
 
 .mon-line-stack {
   list-style: none;
