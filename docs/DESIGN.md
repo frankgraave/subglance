@@ -230,10 +230,30 @@ comparing them, you're reading them.
 --dur:  420ms;  /* theme transition */
 ```
 
-Space moves in steps of 4px. Duration follows role: 140ms for hover, 200–280ms
-for panels, 320–520ms for anything asking for your attention. `--ease` starts
-fast and settles softly — motion that decays feels mechanical rather than
-floaty.
+Space moves in steps of 4px; §2.7 states the ladder and how it is enforced.
+
+### 2.7 Spacing and radius
+
+The ladder is `--space-1..16` = 4/8/12/16/20/24/32/40/48/64 and the radius
+ladder is `--r-xs/sm/md/lg` = 4/6/10/14. Both are guarded by `tokens.test.ts`
+the way colour and type already were, because both had drifted: a `7px` and a
+`9px` padding, each chosen by hand to reach a rendered height that nothing
+stated.
+
+The guard has a **4px floor**. Below it a literal is a hairline, not a spacing
+decision — a 1px optical nudge, the 2.5px radius of the lamp, the `-1px` of a
+screen-reader clip. There is no token that could say those better. At 4px and
+above the ladder can express the value, so a literal there is either replaced
+or written into the allow-list in `tokens.test.ts` with a reason.
+
+A height is the intent more often than a padding is. `--control-h: 36px` is the
+height a row of interactive chrome settles on; the nav item now states that and
+centres its label, instead of encoding it as a padding the next edit would
+round to 8px and silently shrink.
+
+Duration follows role: 140ms for hover, 200–280ms for panels, 320–520ms for
+anything asking for your attention. `--ease` starts fast and settles softly —
+motion that decays feels mechanical rather than floaty.
 
 ---
 
