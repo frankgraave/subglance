@@ -2,6 +2,7 @@ import { memo } from "react";
 import { EmptyState } from "./EmptyState";
 import { formatLatency, formatUptime } from "./format";
 import { Led } from "./Led";
+import { MonitorLink } from "./MonitorLink";
 import { partition, sectionsByTag } from "./model";
 import type { Monitor } from "./types";
 import { Unknown } from "./Unknown";
@@ -48,14 +49,27 @@ export type MonitorCompactListProps = {
   filtered?: boolean;
   /** Tag key to group by, or null for one flat list. */
   groupKey?: string | null;
+  /** Opens a monitor's detail view client-side. See MonitorLink. */
+  onOpen?: (id: string) => void;
 };
 
-function CompactLineImpl({ monitor }: { monitor: Monitor }) {
+type CompactLineProps = { monitor: Monitor; onOpen?: (id: string) => void };
+
+function CompactLineImpl({ monitor, onOpen }: CompactLineProps) {
   const { name, status, target, latencyMs, uptime24h, error } = monitor;
   return (
-    <li className="mon-line" data-status={status} data-testid={`monitor-line-${monitor.id}`}>
+    <li
+      className="mon-line"
+      data-status={status}
+      data-testid={`monitor-line-${monitor.id}`}
+    >
       <Led status={status} className="mon-line-led" />
-      <span className="mon-line-name">{name}</span>
+      <MonitorLink
+        id={monitor.id}
+        name={name}
+        onOpen={onOpen}
+        className="mon-line-name"
+      />
       <span className="mon-line-target">{target}</span>
       <span className="mon-line-num">
         {status === "down" && error ? (
@@ -69,7 +83,11 @@ function CompactLineImpl({ monitor }: { monitor: Monitor }) {
         )}
       </span>
       <span className="mon-line-num">
-        {uptime24h === null ? <Unknown what="uptime" /> : formatUptime(uptime24h)}
+        {uptime24h === null ? (
+          <Unknown what="uptime" />
+        ) : (
+          formatUptime(uptime24h)
+        )}
       </span>
     </li>
   );
@@ -80,6 +98,7 @@ const CompactLine = memo(CompactLineImpl, (prev, next) => {
   const a = prev.monitor;
   const b = next.monitor;
   return (
+    prev.onOpen === next.onOpen &&
     a.id === b.id &&
     a.name === b.name &&
     a.status === b.status &&
@@ -99,6 +118,7 @@ export function MonitorCompactList({
   totalCount,
   filtered = false,
   groupKey = null,
+  onOpen,
 }: MonitorCompactListProps) {
   const total = totalCount ?? monitors.length;
   if (monitors.length === 0) {
@@ -106,7 +126,9 @@ export function MonitorCompactList({
   }
 
   const lines = (list: readonly Monitor[]) =>
-    list.map((monitor) => <CompactLine key={monitor.id} monitor={monitor} />);
+    list.map((monitor) => (
+      <CompactLine key={monitor.id} monitor={monitor} onOpen={onOpen} />
+    ));
 
   if (groupKey !== null) {
     return (
@@ -141,7 +163,10 @@ export function MonitorCompactList({
 
   return (
     <div className="mon-lines">
-      <ul className="mon-line-stack" aria-label={`Monitors (${ordered.length})`}>
+      <ul
+        className="mon-line-stack"
+        aria-label={`Monitors (${ordered.length})`}
+      >
         {lines(ordered)}
       </ul>
     </div>

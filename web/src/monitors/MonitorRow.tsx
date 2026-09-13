@@ -2,6 +2,7 @@ import { memo } from "react";
 import { HeartbeatBar } from "../heartbeat/HeartbeatBar";
 import { formatLatency, formatUptime } from "./format";
 import { Led } from "./Led";
+import { MonitorLink } from "./MonitorLink";
 import { Unknown } from "./Unknown";
 import type { Monitor } from "./types";
 
@@ -28,9 +29,11 @@ export type MonitorRowProps = {
    * lets the bar measure its own column.
    */
   beatWidth?: number;
+  /** Opens this monitor's detail view client-side. See MonitorLink. */
+  onOpen?: (id: string) => void;
 };
 
-function MonitorRowImpl({ monitor, beatWidth = ROW_BEAT_WIDTH }: MonitorRowProps) {
+function MonitorRowImpl({ monitor, beatWidth = ROW_BEAT_WIDTH, onOpen }: MonitorRowProps) {
   const { name, status, target, latencyMs, uptime24h, beats, error } = monitor;
 
   return (
@@ -45,7 +48,7 @@ function MonitorRowImpl({ monitor, beatWidth = ROW_BEAT_WIDTH }: MonitorRowProps
           announces "api.example.com, Latency, 120 ms" when you move across
           the row instead of reading a bare number. */}
       <th scope="row" className="mon-cell mon-cell--name">
-        <span className="mon-name">{name}</span>
+        <MonitorLink id={monitor.id} name={name} onOpen={onOpen} className="mon-name" />
         <span className="mon-target">{target}</span>
       </th>
 
@@ -85,6 +88,10 @@ export const MonitorRow = memo(MonitorRowImpl, (prev, next) => {
   const b = next.monitor;
   return (
     prev.beatWidth === next.beatWidth &&
+    // Compared, not ignored: the row renders it into a link's handler, so a
+    // changed callback must reach the DOM. It is a stable useCallback in
+    // practice, so this costs nothing.
+    prev.onOpen === next.onOpen &&
     a.id === b.id &&
     a.name === b.name &&
     a.status === b.status &&

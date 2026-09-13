@@ -31,6 +31,8 @@ export type MonitorCardListProps = {
   groupKey?: string | null;
   /** Explicit heartbeat width; required in jsdom, which has no layout. */
   beatWidth?: number;
+  /** Opens a monitor's detail view client-side. See MonitorLink. */
+  onOpen?: (id: string) => void;
 };
 
 export function MonitorCardList({
@@ -40,6 +42,7 @@ export function MonitorCardList({
   beatWidth = CARD_BEAT_WIDTH,
   filtered = false,
   groupKey = null,
+  onOpen,
 }: MonitorCardListProps) {
   const total = totalCount ?? monitors.length;
 
@@ -49,7 +52,12 @@ export function MonitorCardList({
 
   const cards = (list: readonly Monitor[]) =>
     list.map((monitor) => (
-      <MonitorCard key={monitor.id} monitor={monitor} beatWidth={beatWidth} />
+      <MonitorCard
+        key={monitor.id}
+        monitor={monitor}
+        beatWidth={beatWidth}
+        onOpen={onOpen}
+      />
     ));
 
   if (groupKey !== null) {
@@ -79,7 +87,10 @@ export function MonitorCardList({
   return (
     <div className="mon-cards">
       {attention.length > 0 && (
-        <section className="mon-cards-section" aria-labelledby="mon-cards-attention">
+        <section
+          className="mon-cards-section"
+          aria-labelledby="mon-cards-attention"
+        >
           <h3 id="mon-cards-attention" className="mon-cards-title">
             Needs attention ({attention.length})
           </h3>
@@ -89,7 +100,9 @@ export function MonitorCardList({
 
       <section className="mon-cards-section" aria-labelledby="mon-cards-all">
         <h3 id="mon-cards-all" className="mon-cards-title">
-          {attention.length > 0 ? `All monitors (${rest.length})` : `Monitors (${rest.length})`}
+          {attention.length > 0
+            ? `All monitors (${rest.length})`
+            : `Monitors (${rest.length})`}
         </h3>
         <ul className="mon-card-stack">{cards(rest)}</ul>
       </section>

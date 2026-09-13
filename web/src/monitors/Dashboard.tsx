@@ -79,6 +79,14 @@ export type DashboardProps = {
    * opinion about transports.
    */
   stale?: boolean;
+  /**
+   * Opens one monitor's detail view client-side.
+   *
+   * Optional, and absent in the workbench: the harness has no router, and a
+   * link that navigates out of it would be a dead end. Without it the names
+   * are still real links — see MonitorLink — they just cost a page load.
+   */
+  onOpenMonitor?: (id: string) => void;
 };
 
 const COUNTED: { status: MonitorStatus; label: string }[] = [
@@ -97,6 +105,7 @@ export function Dashboard({
   layout = DEFAULT_LAYOUT,
   banner = null,
   stale = false,
+  onOpenMonitor,
 }: DashboardProps) {
   const searchId = useId();
   // Hooks cannot be skipped, so the query is always subscribed to and the
@@ -136,7 +145,9 @@ export function Dashboard({
   // headed by a key nothing carries, so it falls back to the flat order for
   // the same reason a stale tag selection is dropped.
   const liveGroupKey =
-    groupKey !== null && facets.some((facet) => facet.key === groupKey) ? groupKey : null;
+    groupKey !== null && facets.some((facet) => facet.key === groupKey)
+      ? groupKey
+      : null;
   // Status, then tags, then text, so the count in the sentence below is the
   // size of what is actually rendered rather than of an intermediate list.
   const visible = filterMonitors(
@@ -242,7 +253,11 @@ export function Dashboard({
             // The key is also the text of an option in the Group by control,
             // so an explicit attribute — not the visible text — is what
             // identifies a facet unambiguously.
-            <label key={facet.key} className="mon-facet" data-facet-key={facet.key}>
+            <label
+              key={facet.key}
+              className="mon-facet"
+              data-facet-key={facet.key}
+            >
               <span className="mon-facet-key">{facet.key}</span>
               <select
                 className="mon-facet-select"
@@ -324,6 +339,7 @@ export function Dashboard({
           filtered={narrowed}
           groupKey={liveGroupKey}
           beatWidth={beatWidth}
+          onOpen={onOpenMonitor}
         />
       ) : shown === "compact" ? (
         <MonitorCompactList
@@ -332,6 +348,7 @@ export function Dashboard({
           totalCount={monitors.length}
           filtered={narrowed}
           groupKey={liveGroupKey}
+          onOpen={onOpenMonitor}
         />
       ) : (
         <MonitorTable
@@ -341,6 +358,7 @@ export function Dashboard({
           filtered={narrowed}
           groupKey={liveGroupKey}
           beatWidth={beatWidth ?? ROW_BEAT_WIDTH}
+          onOpen={onOpenMonitor}
         />
       )}
     </section>
