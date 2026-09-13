@@ -68,6 +68,7 @@ describe("the id tiebreak", () => {
     id,
     name,
     status: "up",
+    tags: {},
     target: `https://${id}.example.com`,
     latencyMs: 10,
     uptime24h: 100,

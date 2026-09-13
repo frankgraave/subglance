@@ -111,6 +111,22 @@ describe("fromApi", () => {
   });
 });
 
+describe("fromApi tags", () => {
+  it("carries tags through unchanged", () => {
+    const m = fromApi(api({ tags: { env: "prod", customer: "Acme" } }));
+    expect(m.tags).toEqual({ env: "prod", customer: "Acme" });
+  });
+
+  it("turns an absent tag object into an empty one, so consumers need no guard", () => {
+    expect(fromApi(api()).tags).toEqual({});
+  });
+
+  it("drops values that are not non-empty strings rather than rendering them", () => {
+    const hostile = { env: "prod", broken: 7, blank: "" } as unknown as Record<string, string>;
+    expect(fromApi(api({ tags: hostile })).tags).toEqual({ env: "prod" });
+  });
+});
+
 describe("monitorsFromApi", () => {
   it("maps a whole payload", () => {
     const list = monitorsFromApi({ monitors: [api(), api({ id: "m2", name: "db" })] });

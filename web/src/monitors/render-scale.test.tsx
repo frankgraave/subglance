@@ -53,6 +53,7 @@ function monitors(count: number): Monitor[] {
     id: `mon-${String(i).padStart(3, "0")}`,
     name: `service-${String(i).padStart(3, "0")}`,
     status: "up" as const,
+    tags: {},
     target: `https://service-${i}.example.com`,
     latencyMs: 100 + i,
     uptime24h: 99.9,
