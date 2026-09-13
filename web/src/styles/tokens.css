@@ -77,6 +77,10 @@
 
   /* Space moves in steps of 4px. Named so a row's rhythm is a decision
      that can be changed in one place, not 40 ad-hoc paddings. */
+  /* Control height. Not a spacing step: it is the height a row of interactive
+     chrome settles on, and stating it beats padding chosen to reach it. */
+  --control-h: 36px;
+
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
