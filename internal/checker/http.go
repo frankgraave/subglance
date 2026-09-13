@@ -14,6 +14,36 @@ import (
 	"time"
 )
 
+// MaxSnapshotBytes caps how much of a failed response is kept.
+//
+// 2 KiB is enough for a JSON health report or the readable part of an error
+// page, and small enough that a monitor failing every 60 seconds for a week
+// could not fill a disk even if every one of those failures were stored — and
+// they are not; see the runner, which keeps only the first few of an incident.
+const MaxSnapshotBytes = 2048
+
+// snapshotHeaders is the allowlist of response headers kept with a snapshot.
+//
+// An allowlist, never the whole set. Set-Cookie and Authorization would put a
+// live session token in a database that every user with read access can query,
+// and "capture everything except the ones I thought of" fails the first time a
+// service invents a header.
+//
+// Each of these answers a triage question: what did it send, who sent it, when
+// should I retry, and which request was it — the identifier you would quote to
+// the other side's support desk.
+var snapshotHeaders = []string{
+	"Content-Type",
+	"Content-Length",
+	"Server",
+	"Date",
+	"Retry-After",
+	"Location",
+	"X-Request-Id",
+	"X-Correlation-Id",
+	"Cf-Ray",
+}
+
 // maxBodyRead caps how much of a response body is read for keyword matching.
 //
 // Without a cap, one monitored endpoint streaming an endless body would pin a
@@ -173,6 +203,10 @@ func (c *HTTPChecker) Check(ctx context.Context, m Monitor) Result {
 	}
 
 	if !matcher.Matches(resp.StatusCode) {
+		// Capture before stamping the latency: reading the first 2 KiB is
+		// part of the check's cost and hiding it would make the recorded
+		// latency disagree with the time the check actually took.
+		res.Response = captureResponse(m, resp, nil)
 		res.Latency = time.Since(start)
 		res.OK = false
 		res.Kind = FailStatus
@@ -194,6 +228,7 @@ func (c *HTTPChecker) Check(ctx context.Context, m Monitor) Result {
 		switch m.KeywordMode {
 		case KeywordMustContain:
 			if !present {
+				res.Response = captureResponse(m, resp, payload)
 				res.Latency = time.Since(start)
 				res.OK = false
 				res.Kind = FailKeyword
@@ -202,6 +237,7 @@ func (c *HTTPChecker) Check(ctx context.Context, m Monitor) Result {
 			}
 		case KeywordMustNotContain:
 			if present {
+				res.Response = captureResponse(m, resp, payload)
 				res.Latency = time.Since(start)
 				res.OK = false
 				res.Kind = FailKeyword
@@ -231,6 +267,93 @@ func (c *HTTPChecker) Check(ctx context.Context, m Monitor) Result {
 
 	res.Latency = time.Since(start)
 	return res
+}
+
+// captureResponse keeps the beginning of a failed response, when the monitor
+// asked for it.
+//
+// payload is the body if the caller has already read it — the keyword check
+// has — and nil otherwise. Reading it twice is not possible: the body is a
+// stream, and a second read would return nothing and quietly store an empty
+// snapshot next to a failure that did have a body.
+func captureResponse(m Monitor, resp *http.Response, payload []byte) *ResponseSnapshot {
+	if !m.CaptureResponse || resp == nil {
+		return nil
+	}
+
+	var (
+		raw       []byte
+		truncated bool
+	)
+	if payload != nil {
+		raw = payload
+		if len(raw) > MaxSnapshotBytes {
+			raw, truncated = raw[:MaxSnapshotBytes], true
+		}
+	} else {
+		// One byte past the cap, so a body of exactly MaxSnapshotBytes is not
+		// reported as truncated while a longer one is.
+		buf, err := io.ReadAll(io.LimitReader(resp.Body, MaxSnapshotBytes+1))
+		if err != nil && len(buf) == 0 {
+			// A body that cannot be read is not a second failure worth
+			// reporting: the check has already failed for its own reason.
+			return nil
+		}
+		raw = buf
+		if len(raw) > MaxSnapshotBytes {
+			raw, truncated = raw[:MaxSnapshotBytes], true
+		}
+	}
+
+	snap := &ResponseSnapshot{
+		Body:      sanitiseBody(raw),
+		Truncated: truncated,
+	}
+
+	for _, name := range snapshotHeaders {
+		if v := resp.Header.Get(name); v != "" {
+			if snap.Headers == nil {
+				snap.Headers = make(map[string]string, len(snapshotHeaders))
+			}
+			snap.Headers[http.CanonicalHeaderKey(name)] = v
+		}
+	}
+
+	if !snap.informative() {
+		// Nothing was learned. An empty row would still cost a write and
+		// would show the UI a "response" panel with nothing in it.
+		return nil
+	}
+	return snap
+}
+
+// informative reports whether a snapshot says anything the heartbeat does not.
+//
+// An empty body is not automatically worthless: `Retry-After: 120` or a
+// request id on a bodyless 503 is real triage material. What is worthless is
+// an empty body whose only header restates that emptiness, which is what a
+// bodyless error response from net/http produces — `Content-Length: 0`.
+func (s *ResponseSnapshot) informative() bool {
+	if s.Body != "" {
+		return true
+	}
+	for name := range s.Headers {
+		if name != "Content-Length" {
+			return true
+		}
+	}
+	return false
+}
+
+// sanitiseBody makes arbitrary bytes safe to store in a STRICT TEXT column.
+//
+// A monitored endpoint may answer with anything — a gzip frame, an image, a
+// latin-1 error page — and the cut above can leave a trailing partial
+// character. Invalid bytes are dropped rather than replaced: a truncated
+// snapshot that ends in U+FFFD reads as corruption in the monitored service's
+// response, when it is only an artefact of where the cut landed.
+func sanitiseBody(b []byte) string {
+	return strings.ToValidUTF8(string(b), "")
 }
 
 // classifyRequestError turns a transport error into a FailureKind.
