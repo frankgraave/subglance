@@ -181,11 +181,25 @@
   font-weight: var(--weight-strong);
   color: var(--canvas);
   background: var(--up);
+  /* See the light-theme override below: this pairing is only legible on the
+     dark palette. */
   border: 1px solid var(--up);
   border-radius: var(--r-sm);
   cursor: pointer;
   transition: opacity var(--dur-hover) var(--ease);
 }
+
+/*
+ * Light theme puts dark text on the same green.
+ *
+ * Measured, not guessed: light `--canvas` on light `--up` is 3.64:1, and this
+ * label is body size at weight 500 — normal text by WCAG's definition, which
+ * needs 4.5:1. Light `--ink` on the same green is 4.72:1 and passes. Dark
+ * theme is 10.37:1 either way and keeps the light-on-green it already had.
+ * Flipping the *text* rather than darkening the green keeps the one loud
+ * button the same colour as the "up" state it borrows its meaning from.
+ */
+[data-theme="light"] .auth-submit { color: var(--ink); }
 
 .auth-submit:hover:not(:disabled) { opacity: .9; }
 
