@@ -284,3 +284,32 @@ func TestPausedMonitorIsNotReminded(t *testing.T) {
 		t.Errorf("alerts = %v, want only the original — a paused monitor was reminded about", got)
 	}
 }
+
+// A nil notifier means log-only operation, which the option documents. It must
+// not also mean "no reminders": the stamp and the event bus are what a
+// deployment without a notifier watches.
+func TestRemindersStillRunWithoutNotifier(t *testing.T) {
+	ctx := context.Background()
+	db := testDB(t)
+
+	clock := time.Now()
+	r := New(Options{DB: db, Log: quietLogger()})
+	r.now = func() time.Time { return clock }
+
+	m, _ := downMonitor(t, db, r, 900)
+
+	clock = clock.Add(15 * time.Minute)
+	r.sendDueReminders(ctx)
+
+	inc, err := db.OpenIncidentFor(ctx, m.ID)
+	if err != nil {
+		t.Fatalf("OpenIncidentFor: %v", err)
+	}
+	if inc.ReminderCount != 1 {
+		t.Errorf("ReminderCount = %d, want 1 — a nil notifier skipped the reminder entirely",
+			inc.ReminderCount)
+	}
+	if inc.RemindedAt.IsZero() {
+		t.Error("RemindedAt was not stamped without a notifier")
+	}
+}

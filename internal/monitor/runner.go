@@ -166,7 +166,11 @@ func (r *Runner) Run(ctx context.Context) error {
 	// check-driven, so it gets its own goroutine rather than riding along on
 	// check results: a monitor on a one-hour interval would otherwise have
 	// its 15-minute reminder delayed to the next check.
-	go r.remindLoop(ctx)
+	reminderDone := make(chan struct{})
+	go func() {
+		defer close(reminderDone)
+		r.remindLoop(ctx)
+	}()
 
 	watchdogDone := make(chan struct{})
 	go func() {
@@ -176,10 +180,12 @@ func (r *Runner) Run(ctx context.Context) error {
 
 	err := r.sch.Run(ctx)
 
-	// Wait for the watchdog before returning, for the same reason the
-	// scheduler waits for in-flight checks: a sweep half-way through writing
-	// a heartbeat must not be cut off by the process exiting underneath it.
+	// Wait for both background loops before returning, for the same reason
+	// the scheduler waits for in-flight checks: a sweep half-way through
+	// writing a heartbeat, or a reminder half-way through a synchronous
+	// notifier, must not be cut off by the process exiting underneath it.
 	<-watchdogDone
+	<-reminderDone
 	return err
 }
 
@@ -207,10 +213,6 @@ func (r *Runner) remindLoop(ctx context.Context) {
 // right way round, because the alternative is a crash loop that re-sends the
 // same alert every tick. Delivery retries belong in the notifier.
 func (r *Runner) sendDueReminders(ctx context.Context) {
-	if r.notify == nil {
-		return
-	}
-
 	candidates, err := r.db.RemindableIncidents(ctx)
 	if err != nil {
 		r.log.Error("failed to list incidents needing a reminder", "error", err)
@@ -232,6 +234,17 @@ func (r *Runner) sendDueReminders(ctx context.Context) {
 			continue
 		}
 
+		// The monitor is loaded before the schedule is advanced. The other
+		// way round, a failed read still consumed the reminder: the count
+		// was already incremented, so the next attempt waited the longer
+		// gap for an alert nobody ever received.
+		m, err := r.db.GetMonitor(ctx, inc.MonitorID)
+		if err != nil {
+			r.log.Error("failed to load monitor for reminder",
+				"monitor_id", inc.MonitorID, "error", err)
+			continue
+		}
+
 		if err := r.db.RecordReminder(ctx, inc.ID, now); err != nil {
 			if !errors.Is(err, store.ErrNoOpenIncident) {
 				r.log.Error("failed to stamp reminder",
@@ -239,13 +252,6 @@ func (r *Runner) sendDueReminders(ctx context.Context) {
 			}
 			// Acknowledged or resolved between the query and the write. That
 			// is the acknowledge button doing its job, not an error.
-			continue
-		}
-
-		m, err := r.db.GetMonitor(ctx, inc.MonitorID)
-		if err != nil {
-			r.log.Error("failed to load monitor for reminder",
-				"monitor_id", inc.MonitorID, "error", err)
 			continue
 		}
 
@@ -269,12 +275,17 @@ func (r *Runner) sendDueReminders(ctx context.Context) {
 			},
 		})
 
-		r.notify(Alert{
-			Monitor:  m,
-			Incident: inc,
-			Event:    state.EventIncidentReminder,
-			At:       now,
-		})
+		// A nil notifier means log-only operation, not "skip reminders":
+		// the warning above, the stamp and the event bus are the whole
+		// point of a deployment that watches the log or the dashboard.
+		if r.notify != nil {
+			r.notify(Alert{
+				Monitor:  m,
+				Incident: inc,
+				Event:    state.EventIncidentReminder,
+				At:       now,
+			})
+		}
 	}
 }
 
