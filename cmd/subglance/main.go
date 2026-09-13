@@ -2,6 +2,10 @@
 //
 //	subglance --addr :8080 --data-dir /data
 //
+// It also answers one subcommand, used by the container image to probe itself:
+//
+//	subglance healthcheck [--addr :8080]
+//
 // See docs/ARCHITECTURE.md for how the pieces fit together.
 package main
 
@@ -29,7 +33,23 @@ import (
 )
 
 func main() {
-	if err := run(os.Args[1:]); err != nil {
+	args := os.Args[1:]
+
+	// One subcommand, and it is deliberately the only one: the shipped image
+	// is distroless with no shell, so a container HEALTHCHECK has nothing to
+	// invoke except this binary. Everything else stays flags-only.
+	if len(args) > 0 && args[0] == "healthcheck" {
+		if err := runHealthcheck(args[1:], os.Stdout); err != nil {
+			if errors.Is(err, flag.ErrHelp) {
+				return
+			}
+			fmt.Fprintf(os.Stderr, "subglance healthcheck: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if err := run(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return // the user asked for usage; not a failure
 		}
