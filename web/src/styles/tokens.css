@@ -146,6 +146,12 @@
   --glow-down:   0 0 0 1px rgba(244,63,94,.4),   0 0 8px -1px rgba(244,63,94,.72);
   --glow-idle:   none;
 
+  /* The focus ring around a field, as a token rather than a `color-mix` at
+     the call site: the ring is one decision that applies to every input, and
+     a raw `transparent` in the mix is still a colour literal in `web/src`. */
+  --ring-up:     rgba(52,211,153,.14);
+  --ring-down:   rgba(244,63,94,.14);
+
   --shadow-card: 0 1px 2px rgba(0,0,0,.4);
   --scrim:       rgba(0,0,0,.5);
 
@@ -184,6 +190,11 @@
   --glow-down:   0 0 0 1px rgba(225,29,72,.3),   0 0 6px -1px rgba(225,29,72,.45);
   --glow-idle:   none;
 
+  /* Slightly stronger than in dark: the same alpha over white all but
+     disappears. */
+  --ring-up:     rgba(5,150,105,.18);
+  --ring-down:   rgba(225,29,72,.18);
+
   --shadow-card: 0 1px 2px rgba(16,24,40,.05), 0 0 0 1px rgba(16,24,40,.02);
   --scrim:       rgba(16,24,40,.2);
 
@@ -218,6 +229,9 @@
   --color-down-dim: var(--down-dim);
   --color-idle: var(--idle);
   --color-idle-dim: var(--idle-dim);
+
+  --color-ring-up: var(--ring-up);
+  --color-ring-down: var(--ring-down);
 
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);

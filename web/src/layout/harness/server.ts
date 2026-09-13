@@ -1,8 +1,9 @@
 /**
  * A real HTTP server for the browser layout checks.
  *
- * Serves the production bundle from `internal/webui/dist` and stubs the two
- * API calls the dashboard makes on load. The stub is deliberate: these tests
+ * Serves the production bundle from `internal/webui/dist` and stubs the API
+ * calls the dashboard makes on load, including the session lookup that now
+ * gates it. The stub is deliberate: these tests
  * are about layout, so binding a database and a session cookie would add two
  * ways for them to fail that have nothing to do with what they measure. The
  * fixture instead pins the *content* — the longest name, the longest URL, the
@@ -135,6 +136,30 @@ export interface Server {
 export async function serveBuild(): Promise<Server> {
   const http: HttpServer = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
+
+    /*
+     * The session, answered as a signed-in administrator.
+     *
+     * `useSession` asks `/auth/me` before anything else and treats any status
+     * other than 200 or 401 as "this instance is unreachable", which renders
+     * an error card instead of the dashboard. Leaving it to the generic 404
+     * below therefore measures the layout of the wrong screen — and does so by
+     * timing out on a missing selector, which reads as a layout failure rather
+     * than a missing stub. The identity is irrelevant to a layout
+     * measurement; that a session resolves at all is not.
+     */
+    if (url.pathname === "/api/v1/auth/me") {
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      res.end(
+        JSON.stringify({
+          id: 1,
+          email: "operator@example.com",
+          role: "admin",
+          created_at: new Date(Date.now() - 86_400_000).toISOString(),
+        }),
+      );
+      return;
+    }
 
     if (url.pathname === "/api/v1/monitors") {
       res.writeHead(200, { "content-type": "application/json; charset=utf-8" });

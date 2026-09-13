@@ -13,6 +13,7 @@
  * together and a screen that half-loads is worse than one that loads.
  */
 
+import { apiFetch } from "../api/http";
 import { toUnixMs } from "./types";
 
 /** One uptime window as GET /api/v1/monitors/:id/uptime returns it. */
@@ -121,11 +122,7 @@ export function incidentFromApi(api: ApiIncident): Incident {
 }
 
 async function getJSON<T>(url: string, what: string, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(url, {
-    credentials: "same-origin",
-    headers: { Accept: "application/json" },
-    signal,
-  });
+  const res = await apiFetch(url, { signal });
   if (!res.ok) {
     throw new Error(`could not load ${what}: HTTP ${res.status}`);
   }
