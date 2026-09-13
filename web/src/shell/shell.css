@@ -69,8 +69,8 @@
 }
 
 .shell-brand-copy { min-width: 0; display: flex; flex-direction: column; }
-.shell-brand-name { font-size: var(--type-row); font-weight: var(--weight-strong); white-space: nowrap; }
-.shell-brand-sub { margin-top: 1px; font-size: var(--type-helper); color: var(--ink-3); white-space: nowrap; }
+.shell-brand-name { font-size: var(--type-row); line-height: var(--lead-row); font-weight: var(--weight-strong); white-space: nowrap; }
+.shell-brand-sub { margin-top: 1px; font-size: var(--type-helper); line-height: var(--lead-helper); color: var(--ink-3); white-space: nowrap; }
 
 /* ── Navigation ────────────────────────────────────────────────────────── */
 
@@ -79,6 +79,7 @@
 .shell-nav-label {
   padding: var(--space-4) var(--space-2) var(--space-1);
   font-size: var(--type-section);
+  line-height: var(--lead-section);
   font-weight: var(--weight-strong);
   text-transform: uppercase;
   letter-spacing: var(--track-caps);
@@ -96,6 +97,7 @@
   padding: 0 var(--space-2);
   border-radius: var(--r-sm);
   font-size: var(--type-body);
+  line-height: var(--lead-body);
   color: var(--ink-2);
   white-space: nowrap;
   min-width: 0;
@@ -120,6 +122,7 @@
   background: var(--surface-2);
   font-family: var(--font-mono);
   font-size: var(--type-section);
+  line-height: var(--lead-section);
   letter-spacing: var(--track-badge);
   color: var(--ink-4);
 }
@@ -213,6 +216,7 @@
   background: none;
   font: inherit;
   font-size: var(--type-helper);
+  line-height: var(--lead-helper);
   color: var(--ink-3);
   cursor: pointer;
   transition: background var(--dur-hover) var(--ease), color var(--dur-hover) var(--ease);

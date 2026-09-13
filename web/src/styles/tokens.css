@@ -38,12 +38,15 @@
      a step larger" has to be one edit, not sixty, and sixty hand-tuned sizes
      drift out of proportion the first time one of them is touched.
      Nothing here is below 12px; smaller than that stops being readable at a
-     glance, which is the entire product. */
-  --type-page: 22px;
-  --type-card: 17px;
+     glance, which is the entire product.
+     Every size is a whole number of pixels: a fractional size puts the
+     engine's glyph rounding on the text, and it was the 12.5px helper — the
+     most used role in the product — that carried it. */
+  --type-page: 24px;
+  --type-card: 18px;
   --type-row: 15px;
   --type-body: 14px;
-  --type-helper: 12.5px;
+  --type-helper: 13px;
   --type-section: 12px;
 
   /* iOS Safari zooms the page in when a focused input renders below 16px and
@@ -51,11 +54,29 @@
      typographic choice, which is why it sits outside the scale. */
   --type-nozoom: 16px;
 
-  /* Line height follows the role: headings sit tight, running text breathes,
-     paragraphs breathe more. */
-  --lh-tight: 1.25;
-  --lh-body: 1.45;
-  --lh-prose: 1.6;
+  /* Leading is paired with a size, not multiplied by it. A ratio times a size
+     lands between device pixels (12.5 x 1.45 = 18.125) and the result depends
+     on engine, font and pixel ratio; a whole-pixel leading does not. Each
+     value is a multiple of 4 so a column of rows keeps the baseline grid.
+     Every rule that sets a size sets its partner in the same block — the
+     defect this replaces was 56 rules that set only the size and inherited
+     whatever leading was above them, so one size rendered at three leadings.
+     Single-line roles set leading equal to the size: no half-leading above
+     and below means vertical centring is exact. */
+  --lead-page: 32px;
+  --lead-card: 24px;
+  --lead-row: 20px;
+  --lead-body: 20px;
+  --lead-helper: 16px;
+  --lead-section: 12px;
+  --lead-nozoom: 20px;
+
+  /* The one leading a role opts into rather than inherits: helper-size text
+     that wraps to several lines needs more room than the same size gets on a
+     single line. Body size and up already have it — 14px sits on 20px either
+     way — so this is the helper role's running-text partner, not a general
+     "prose" ratio. Whole-pixel and on the grid like the rest. */
+  --lead-prose: 20px;
 
   /* Weight. Three steps, §2.5. The middle step is not a rounding artefact:
      Geist ships a real 450, which is what lets a monitor's name separate from
@@ -202,17 +223,21 @@
   --font-mono: var(--font-mono);
 
   --text-page: var(--type-page);
-  --text-page--line-height: var(--lh-tight);
+  --text-page--line-height: var(--lead-page);
   --text-card: var(--type-card);
-  --text-card--line-height: var(--lh-tight);
+  --text-card--line-height: var(--lead-card);
   --text-row: var(--type-row);
-  --text-row--line-height: var(--lh-tight);
+  --text-row--line-height: var(--lead-row);
   --text-body: var(--type-body);
-  --text-body--line-height: var(--lh-body);
+  --text-body--line-height: var(--lead-body);
   --text-helper: var(--type-helper);
-  --text-helper--line-height: var(--lh-body);
+  --text-helper--line-height: var(--lead-helper);
   --text-section: var(--type-section);
-  --text-section--line-height: var(--lh-tight);
+  --text-section--line-height: var(--lead-section);
+
+  /* So a wrapping paragraph can ask for prose leading as `leading-prose`
+     rather than an arbitrary `leading-[var(…)]` value. */
+  --leading-prose: var(--lead-prose);
 
   --font-weight-plain: var(--weight-plain);
   --font-weight-mid: var(--weight-mid);

@@ -35,6 +35,7 @@
   border: 0;
   background: none;
   font-size: var(--type-helper);
+  line-height: var(--lead-helper);
   color: var(--ink-3);
   cursor: pointer;
   transition: color var(--dur-hover) var(--ease);
@@ -53,7 +54,7 @@
 
 .mon-detail-name {
   font-size: var(--type-page);
-  line-height: var(--lh-tight);
+  line-height: var(--lead-page);
   font-weight: var(--weight-strong);
   color: var(--ink);
   /* Wrap, never truncate. This is the page's title: a hostname cut off with
@@ -64,6 +65,7 @@
 .mon-detail-target {
   font-family: var(--font-mono);
   font-size: var(--type-body);
+  line-height: var(--lead-body);
   color: var(--ink-3);
   /* Selectable and wrapping, because people copy this into a terminal. */
   overflow-wrap: anywhere;
@@ -73,7 +75,7 @@
    and sits directly under the name with nothing competing. */
 .mon-detail-status {
   font-size: var(--type-card);
-  line-height: var(--lh-body);
+  line-height: var(--lead-card);
   color: var(--ink);
 }
 
@@ -88,6 +90,7 @@
 .mon-detail-age {
   color: var(--ink-3);
   font-size: var(--type-body);
+  line-height: var(--lead-body);
 }
 
 .mon-detail-panel {
@@ -104,7 +107,7 @@
    the content inside each panel stays the loudest thing in it. */
 .mon-detail-panel-title {
   font-size: var(--type-section);
-  line-height: var(--lh-tight);
+  line-height: var(--lead-section);
   font-weight: var(--weight-mid);
   letter-spacing: var(--track-caps);
   text-transform: uppercase;
@@ -120,7 +123,7 @@
 .mon-detail-note,
 .mon-detail-empty {
   font-size: var(--type-helper);
-  line-height: var(--lh-body);
+  line-height: var(--lead-prose);
   color: var(--ink-3);
 }
 
@@ -141,6 +144,7 @@
 
 .mon-detail-window > dt {
   font-size: var(--type-helper);
+  line-height: var(--lead-helper);
   color: var(--ink-3);
 }
 
@@ -149,6 +153,7 @@
 .mon-detail-window-value {
   font-family: var(--font-mono);
   font-size: var(--type-card);
+  line-height: var(--lead-card);
   font-weight: var(--weight-mid);
   color: var(--ink);
   font-variant-numeric: tabular-nums;
@@ -156,6 +161,7 @@
 
 .mon-detail-window-detail {
   font-size: var(--type-helper);
+  line-height: var(--lead-helper);
   color: var(--ink-4);
 }
 
@@ -190,19 +196,21 @@
 
 .mon-detail-incident-when {
   font-size: var(--type-helper);
+  line-height: var(--lead-helper);
   color: var(--ink-3);
   font-variant-numeric: tabular-nums;
 }
 
 .mon-detail-incident-state {
   font-size: var(--type-body);
+  line-height: var(--lead-body);
   color: var(--ink);
 }
 
 .mon-detail-incident-error {
   font-family: var(--font-mono);
   font-size: var(--type-helper);
-  line-height: var(--lh-body);
+  line-height: var(--lead-prose);
   color: var(--ink-3);
   overflow-wrap: anywhere;
 }
@@ -224,9 +232,11 @@
 
   .mon-detail-name {
     font-size: var(--type-card);
+    line-height: var(--lead-card);
   }
 
   .mon-detail-status {
     font-size: var(--type-row);
+    line-height: var(--lead-row);
   }
 }
