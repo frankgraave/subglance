@@ -266,8 +266,8 @@ describe("tokens.css matches the §2.5 weight and tracking scales", () => {
         /\|\s*`(--(?:weight|track)-[a-z]+)`\s*\|\s*`([^`]+)`\s*\|/g,
       ),
     ];
-    expect(rows.length, "expected three weights and four tracking roles").toBe(
-      7,
+    expect(rows.length, "expected three weights and three tracking roles").toBe(
+      6,
     );
     for (const [, name, value] of rows) {
       expect(root.get(name), name).toBe(value);
@@ -283,11 +283,42 @@ describe("tokens.css matches the §2.5 weight and tracking scales", () => {
         `--font-weight-${step}: var(--weight-${step});`,
       );
     }
-    for (const role of ["title", "name", "badge", "caps"]) {
+    for (const role of ["body", "badge", "caps"]) {
       expect(inline, `--tracking-${role}`).toContain(
         `--tracking-${role}: var(--track-${role});`,
       );
     }
+  });
+});
+
+describe("tracking is decided once, on the body", () => {
+  const indexCss = readFileSync(join(webSrc, "index.css"), "utf8");
+
+  it("sets the body tracking in the base layer", () => {
+    // The point of SUB-76: a component that forgets to ask for tracking still
+    // gets it. If this declaration goes, 67 of 79 text elements silently fall
+    // back to `normal` again and nothing on screen says so.
+    const body = indexCss.slice(indexCss.indexOf("  body {"));
+    expect(body.slice(0, body.indexOf("\n  }"))).toContain(
+      "letter-spacing: var(--track-body);",
+    );
+  });
+
+  it("keeps only the exceptions the body value is wrong for", () => {
+    // Two faces the inherited value does not suit: the mono badge, which is
+    // already wide, and uppercase, which needs the opposite sign. Any third
+    // token is a per-component tweak wearing a token's name.
+    const root = declarations(
+      tokensCss.slice(0, tokensCss.indexOf("[data-theme=")),
+    );
+    const tracks = [...root.keys()].filter((name) =>
+      name.startsWith("--track-"),
+    );
+    expect(tracks.sort()).toEqual([
+      "--track-badge",
+      "--track-body",
+      "--track-caps",
+    ]);
   });
 });
 
@@ -313,7 +344,7 @@ describe("tokens.css is the only source of weight and tracking", () => {
     for (const file of sourceFiles(webSrc)) {
       const contents = readFileSync(file, "utf8");
       for (const match of contents.matchAll(
-        /letter-spacing:(?!\s*var\(--track-)\s*[^;]+|\btracking-(?!title\b|name\b|badge\b|caps\b)[\w[\].-]+/g,
+        /letter-spacing:(?!\s*var\(--track-)\s*[^;]+|\btracking-(?!body\b|badge\b|caps\b)[\w[\].-]+/g,
       )) {
         offenders.push(`${relative(repoRoot, file)}: ${match[0].trim()}`);
       }

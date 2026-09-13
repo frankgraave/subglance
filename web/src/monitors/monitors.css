@@ -25,7 +25,6 @@
 .mon-title {
   font-size: var(--type-card);
   font-weight: var(--weight-strong);
-  letter-spacing: var(--track-title);
 }
 
 .mon-counts {
@@ -201,7 +200,6 @@
   display: block;
   font-size: var(--type-row);
   font-weight: var(--weight-mid);
-  letter-spacing: var(--track-name);
   color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
@@ -260,7 +258,6 @@
   margin-bottom: var(--space-2);
   font-size: var(--type-card);
   font-weight: var(--weight-strong);
-  letter-spacing: var(--track-title);
   color: var(--ink);
 }
 
@@ -354,7 +351,6 @@
   margin-top: var(--space-2);
   font-size: var(--type-card);
   font-weight: var(--weight-mid);
-  letter-spacing: var(--track-title);
   color: var(--ink);
   /* Wrap rather than ellipsis: on a phone the name is the heading of the
      thing you came to read, and a truncated hostname is useless. Two lines of
@@ -539,7 +535,6 @@
 .add-title {
   font-size: var(--type-card);
   font-weight: var(--weight-strong);
-  letter-spacing: var(--track-title);
 }
 
 .add-lede {

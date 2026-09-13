@@ -69,7 +69,7 @@
 }
 
 .shell-brand-copy { min-width: 0; display: flex; flex-direction: column; }
-.shell-brand-name { font-size: var(--type-row); font-weight: var(--weight-strong); letter-spacing: var(--track-title); white-space: nowrap; }
+.shell-brand-name { font-size: var(--type-row); font-weight: var(--weight-strong); white-space: nowrap; }
 .shell-brand-sub { margin-top: 1px; font-size: var(--type-helper); color: var(--ink-3); white-space: nowrap; }
 
 /* ── Navigation ────────────────────────────────────────────────────────── */

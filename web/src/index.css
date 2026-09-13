@@ -22,6 +22,9 @@
     background-color: var(--canvas);
     color: var(--ink);
     font-family: var(--font-sans);
+    /* The one optical correction the sans face needs, set once so every
+       element inherits it (§2.5). Faces it is wrong for override it. */
+    letter-spacing: var(--track-body);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }

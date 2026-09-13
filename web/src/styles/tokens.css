@@ -64,14 +64,14 @@
   --weight-mid: 450;
   --weight-strong: 500;
 
-  /* Tracking is an optical correction, never emphasis: large sans set at its
-     default looks loose, uppercase set at its default looks glued together.
-     One caps value covers every micro-label — the five hand-tuned values this
-     replaced were five spellings of a single decision, not five decisions.
+  /* Tracking is an optical correction, never emphasis: sans set at its default
+     looks loose, uppercase set at its default looks glued together. One value
+     on the body covers the first case everywhere, so no component has to
+     remember to ask for it; the two exceptions below are the faces the body
+     value is wrong for, and they are opted into explicitly.
      Spelled `--track-*` because `--tracking-*` is Tailwind v4's own theme
      namespace and a token there would have to reference itself. */
-  --track-title: -.01em;
-  --track-name: -.005em;
+  --track-body: -.01em;
   --track-badge: .04em;
   --track-caps: .09em;
 
@@ -218,8 +218,7 @@
   --font-weight-mid: var(--weight-mid);
   --font-weight-strong: var(--weight-strong);
 
-  --tracking-title: var(--track-title);
-  --tracking-name: var(--track-name);
+  --tracking-body: var(--track-body);
   --tracking-badge: var(--track-badge);
   --tracking-caps: var(--track-caps);
 

@@ -27,7 +27,7 @@
 
 /* Whispered, not shouted: if the header competes with the lamps for attention
    from across the room, the lamps have lost. */
-.wall-title { font-size: var(--type-body); font-weight: var(--weight-strong); letter-spacing: var(--track-name); color: var(--ink-2); }
+.wall-title { font-size: var(--type-body); font-weight: var(--weight-strong); color: var(--ink-2); }
 .wall-meta { font-family: var(--font-mono); font-size: var(--type-helper); color: var(--ink-4); }
 .wall-meta-down { color: var(--down); font-weight: var(--weight-strong); }
 .wall-meta-stale { color: var(--warn); }
@@ -77,7 +77,6 @@
 .wall-card-name {
   font-size: var(--type-row);
   font-weight: var(--weight-mid);
-  letter-spacing: var(--track-name);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -126,10 +126,10 @@ one of them is touched.
 
 | Role | Token | Size | Weight |
 |---|---|---|---|
-| Page title | `--type-page` | `22px` | `--weight-strong`, `--track-title` |
-| Card title | `--type-card` | `17px` | `--weight-strong`, `--track-title` |
-| Row title | `--type-row` | `15px` | `--weight-mid`, `--track-name` |
-| Body / label | `--type-body` | `14px` | `--weight-plain`, `--track-name` |
+| Page title | `--type-page` | `22px` | `--weight-strong` |
+| Card title | `--type-card` | `17px` | `--weight-strong` |
+| Row title | `--type-row` | `15px` | `--weight-mid` |
+| Body / label | `--type-body` | `14px` | `--weight-plain` |
 | Helper text | `--type-helper` | `12.5px` | `--weight-plain` |
 | Section heading | `--type-section` | `12px` | `--weight-strong`, uppercase, `--track-caps` |
 
@@ -191,17 +191,29 @@ heading. Anything outside these three is drift.
 | Mid | `--weight-mid` | `450` | the name of a thing, set against its own metadata |
 | Strong | `--weight-strong` | `500` | headings, uppercase micro-labels, an emphasised count |
 
-**Tracking is an optical correction, never emphasis.** Large sans set at its
-default spacing looks loose, and uppercase text set at its default looks glued
-together; both are fixed by tracking. Widening mixed-case text to make it feel
-important is not, and there is no token for it.
+**Tracking is an optical correction, never emphasis.** Sans set at its default
+spacing looks loose, and uppercase text set at its default looks glued together;
+both are fixed by tracking. Widening mixed-case text to make it feel important
+is not, and there is no token for it.
+
+**It is decided once, on the body.** `--track-body` is set in the base layer of
+`index.css`, so every element inherits the correction and no component has to
+remember to ask for it. The other two tokens are exceptions, opted into where
+the inherited value is wrong for the face.
 
 | Role | Token | Value | Used for |
 |---|---|---|---|
-| Title | `--track-title` | `-.01em` | titles at `--type-card` and above |
-| Name | `--track-name` | `-.005em` | names at `--type-row` and `--type-body` |
+| Body | `--track-body` | `-.01em` | inherited by everything, set once on `body` |
 | Badge | `--track-badge` | `.04em` | small mono badges, where the mono face is already wide |
 | Caps | `--track-caps` | `.09em` | every uppercase micro-label, without exception |
+
+This replaces four tokens — `--track-title`, `--track-name`, `--track-badge`
+and `--track-caps` — of which the first two had to be spelled out per
+component and therefore reached 12 of 79 visible text elements; the other 67 sat
+at `normal`, uncorrected. A correction that has to be remembered is a
+correction that is mostly absent. `--track-title` and `--track-name` are gone
+rather than kept as decoration: two values a hundredth of an em apart were one
+decision written twice.
 
 One caps value, not four. The uppercase labels in this product previously ran
 at `.02em`, `.07em`, `.08em`, `.09em` and `.1em` — five spellings of one
