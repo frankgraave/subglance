@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/frankgraave/subglance/internal/auth"
 )
 
 // Monitor is a stored monitor definition.
@@ -36,6 +38,22 @@ type Monitor struct {
 	// The gaps after the first one grow; see state.ReminderGap.
 	RepeatAfterS int
 
+	// PushToken is the plaintext push URL token. It is set exactly once, by
+	// CreateMonitor, and is never read back from the database — only its
+	// hash is stored. Every other code path sees it empty.
+	PushToken string
+
+	// PushTokenPrefix is the first few characters of the token, kept in
+	// clear so a list can tell two push monitors apart without being able
+	// to reconstruct either.
+	PushTokenPrefix string
+
+	// PushIntervalS is how often the job is expected to report in, and
+	// PushGraceS how late it may be before that silence counts as a
+	// failure. Both are zero for every other monitor type.
+	PushIntervalS int
+	PushGraceS    int
+
 	// Tags are key/value pairs such as `env` -> `prod`. See tags.go for the
 	// shape and the normalisation rules; nil and empty mean the same thing.
 	Tags map[string]string
@@ -55,22 +73,30 @@ func (db *DB) ListEnabledMonitors(ctx context.Context) ([]Monitor, error) {
 	return db.queryMonitors(ctx, "WHERE enabled = 1")
 }
 
+// monitorColumns is every column a Monitor is scanned from, in the order
+// scanMonitor reads them.
+//
+// push_token_hash is deliberately absent. It is a credential, and a SELECT
+// that never asks for it cannot leak it into a log line, an error message or a
+// debug dump of a Monitor value.
 const monitorColumns = `
 	id, name, type, target, interval_s, timeout_s, retries,
 	method, expected_status, keyword, keyword_mode, follow_redirects,
-	headers_json, body, ssl_warn_days, enabled, repeat_after_s, created_at, updated_at`
+	headers_json, body, ssl_warn_days, enabled, repeat_after_s,
+	push_token_prefix, push_interval_s, push_grace_s,
+	created_at, updated_at`
 
 // queryMonitors runs a monitor SELECT with a caller-supplied WHERE clause.
 //
 // The clause is concatenated into the SQL, so it must never contain anything
 // derived from user input. Every caller in this package passes a compile-time
-// constant, and that is the rule: if a filter ever needs a value, it takes a
-// bound parameter rather than string formatting.
-func (db *DB) queryMonitors(ctx context.Context, where string) ([]Monitor, error) {
+// constant, and that is the rule: a filter that needs a value writes a `?` in
+// the constant and passes the value through args, never through formatting.
+func (db *DB) queryMonitors(ctx context.Context, where string, args ...any) ([]Monitor, error) {
 	// #nosec G202 -- `where` is a package-internal constant, never user input.
 	q := "SELECT " + monitorColumns + " FROM monitors " + where + " ORDER BY id"
 
-	rows, err := db.Reader.QueryContext(ctx, q)
+	rows, err := db.Reader.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query monitors: %w", err)
 	}
@@ -131,6 +157,9 @@ func scanMonitor(s scanner) (Monitor, error) {
 		keyword     sql.NullString
 		headersJSON sql.NullString
 		body        sql.NullString
+		pushPrefix  sql.NullString
+		pushEvery   sql.NullInt64
+		pushGrace   sql.NullInt64
 		created     int64
 		updated     int64
 	)
@@ -139,7 +168,9 @@ func scanMonitor(s scanner) (Monitor, error) {
 		&m.ID, &m.Name, &m.Type, &m.Target,
 		&m.IntervalS, &m.TimeoutS, &m.Retries,
 		&m.Method, &m.ExpectedStatus, &keyword, &m.KeywordMode, &m.FollowRedirects,
-		&headersJSON, &body, &m.SSLWarnDays, &m.Enabled, &m.RepeatAfterS, &created, &updated,
+		&headersJSON, &body, &m.SSLWarnDays, &m.Enabled, &m.RepeatAfterS,
+		&pushPrefix, &pushEvery, &pushGrace,
+		&created, &updated,
 	)
 	if err != nil {
 		return Monitor{}, err
@@ -147,6 +178,9 @@ func scanMonitor(s scanner) (Monitor, error) {
 
 	m.Keyword = keyword.String
 	m.Body = body.String
+	m.PushTokenPrefix = pushPrefix.String
+	m.PushIntervalS = int(pushEvery.Int64)
+	m.PushGraceS = int(pushGrace.Int64)
 	m.CreatedAt = time.Unix(created, 0).UTC()
 	m.UpdatedAt = time.Unix(updated, 0).UTC()
 
@@ -183,15 +217,35 @@ func (db *DB) CreateMonitor(ctx context.Context, m Monitor) (Monitor, error) {
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	// A push monitor is issued its token here rather than by the caller, so
+	// there is exactly one place in the codebase that decides what a push
+	// credential looks like and exactly one moment at which the plaintext
+	// exists.
+	var tokenHash any
+	if m.Type == TypePush {
+		token, prefix, err := auth.GeneratePushToken()
+		if err != nil {
+			return Monitor{}, err
+		}
+		m.PushToken = token
+		m.PushTokenPrefix = prefix
+		tokenHash = auth.HashToken(token)
+	}
+
 	res, err := tx.ExecContext(ctx, `
 		INSERT INTO monitors (
 			name, type, target, interval_s, timeout_s, retries,
 			method, expected_status, keyword, keyword_mode, follow_redirects,
-			headers_json, body, ssl_warn_days, enabled, repeat_after_s, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			headers_json, body, ssl_warn_days, enabled, repeat_after_s,
+			push_token_hash, push_token_prefix, push_interval_s, push_grace_s,
+			created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		m.Name, m.Type, m.Target, m.IntervalS, m.TimeoutS, m.Retries,
 		m.Method, m.ExpectedStatus, nullString(m.Keyword), m.KeywordMode, m.FollowRedirects,
-		headersJSON, nullString(m.Body), m.SSLWarnDays, m.Enabled, m.RepeatAfterS, now, now,
+		headersJSON, nullString(m.Body), m.SSLWarnDays, m.Enabled, m.RepeatAfterS,
+		tokenHash, nullString(m.PushTokenPrefix),
+		nullInt(m.PushIntervalS), pushGraceValue(m),
+		now, now,
 	)
 	if err != nil {
 		return Monitor{}, fmt.Errorf("insert monitor: %w", err)
@@ -613,11 +667,18 @@ func (db *DB) updateMonitor(ctx context.Context, m Monitor, expected []int64) (M
 		headersJSON = string(b)
 	}
 
+	// The token columns are absent on purpose: an update writes everything
+	// mutable, and a push token is not. Rotating one is a separate,
+	// deliberate act, not something a PATCH of the name should be able to do
+	// by accident — the old URL would stop working the moment it happened,
+	// silently, in whatever script holds it.
 	args := []any{
 		m.Name, m.Type, m.Target, m.IntervalS, m.TimeoutS, m.Retries,
 		m.Method, m.ExpectedStatus, nullString(m.Keyword), m.KeywordMode,
 		m.FollowRedirects, headersJSON, nullString(m.Body), m.SSLWarnDays,
-		m.Enabled, m.RepeatAfterS, next, m.ID,
+		m.Enabled, m.RepeatAfterS,
+		nullInt(m.PushIntervalS), pushGraceValue(m),
+		next, m.ID,
 	}
 
 	// Both variants are compile-time constants. An IN list sized to the
@@ -691,7 +752,9 @@ const updateMonitorSetClause = `
 		name = ?, type = ?, target = ?, interval_s = ?, timeout_s = ?, retries = ?,
 		method = ?, expected_status = ?, keyword = ?, keyword_mode = ?,
 		follow_redirects = ?, headers_json = ?, body = ?, ssl_warn_days = ?,
-		enabled = ?, repeat_after_s = ?, updated_at = MAX(?, updated_at + 1)
+		enabled = ?, repeat_after_s = ?,
+		push_interval_s = ?, push_grace_s = ?,
+		updated_at = MAX(?, updated_at + 1)
 	WHERE id = ?`
 
 const updateMonitorSQL = updateMonitorSetClause

@@ -24,6 +24,12 @@ const (
 	TypeTCP  Type = "tcp"
 	TypePing Type = "ping"
 	TypeSSL  Type = "ssl"
+
+	// TypePush has no Checker and never will. It is listed here because it
+	// is a monitor type the rest of the system has to recognise, and
+	// because its absence from the checker map is load-bearing: the
+	// scheduler must never be handed one.
+	TypePush Type = "push"
 )
 
 // KeywordMode says how the Keyword field should be interpreted.
@@ -88,6 +94,17 @@ const (
 	FailKeyword    FailureKind = "keyword"
 	FailCertExpiry FailureKind = "cert_expiry"
 	FailInternal   FailureKind = "internal"
+
+	// FailPushOverdue is a push monitor whose job did not report inside its
+	// window. Nothing was dialled, so none of the kinds above apply: the
+	// distinction the person reading it needs is "your job did not run"
+	// versus "your job ran and could not be reached".
+	FailPushOverdue FailureKind = "push_overdue"
+
+	// FailPushReported is a job that reported its own failure. It is kept
+	// apart from FailPushOverdue because the two mean opposite things about
+	// the job: one ran and knew it failed, the other never spoke at all.
+	FailPushReported FailureKind = "push_reported"
 )
 
 // Result is the outcome of a single check.
