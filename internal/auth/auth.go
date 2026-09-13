@@ -177,7 +177,33 @@ func GenerateAPIToken() (token, prefix string, err error) {
 	return token, prefix, nil
 }
 
-// HashToken returns the storage form of a session or API token.
+// PushTokenPrefix marks the token in a push URL.
+//
+// Distinct from TokenPrefix because the two are not interchangeable and must
+// never be confused at a glance: an API token authenticates a user and can do
+// anything that user can, while a push token authenticates one job reporting
+// on one monitor and can do nothing else. A leaked `sgp_` is an incident; a
+// leaked `sgu_` lets someone lie about one backup.
+const PushTokenPrefix = "sgu_"
+
+// GeneratePushToken returns a new push-URL token and the prefix to display.
+//
+// Same 32 bytes of crypto/rand as an API token. The endpoint it opens is
+// unauthenticated by necessity — a cron line cannot hold a session — so the
+// secrecy of this string is the only thing standing between an outsider and
+// the ability to report someone else's job as healthy. That is precisely the
+// wrong place to economise on entropy.
+func GeneratePushToken() (token, prefix string, err error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", "", fmt.Errorf("auth: generate push token: %w", err)
+	}
+	token = PushTokenPrefix + base64.RawURLEncoding.EncodeToString(b)
+	prefix = token[:len(PushTokenPrefix)+6]
+	return token, prefix, nil
+}
+
+// HashToken returns the storage form of a session, API or push token.
 func HashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])

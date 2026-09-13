@@ -34,6 +34,10 @@ type Runner struct {
 	// bus fans check results out to live listeners (the SSE endpoint). Nil
 	// means nobody is watching, which is the normal case in tests.
 	bus *events.Bus
+
+	// pushSweep is how often the push watchdog looks for overdue monitors.
+	// Zero means defaultPushSweep.
+	pushSweep time.Duration
 }
 
 // Alert is a state change worth telling someone about.
@@ -70,6 +74,11 @@ type Options struct {
 	// Bus receives every heartbeat and status change for live streaming.
 	// Optional; nil means nothing is published.
 	Bus *events.Bus
+
+	// PushSweep is how often push monitors are checked for being overdue.
+	// Zero means defaultPushSweep. Tests set it small; nothing else needs
+	// to set it at all.
+	PushSweep time.Duration
 }
 
 // New builds a Runner with the standard set of checkers.
@@ -83,10 +92,11 @@ func New(opts Options) *Runner {
 	httpChecker := checker.NewHTTPChecker(checker.HTTPOptions{Guard: guard})
 
 	r := &Runner{
-		db:     opts.DB,
-		log:    log,
-		notify: opts.Notify,
-		bus:    opts.Bus,
+		db:        opts.DB,
+		log:       log,
+		notify:    opts.Notify,
+		bus:       opts.Bus,
+		pushSweep: opts.PushSweep,
 		engine: state.New(state.Options{
 			FlapWindow:    opts.FlapWindow,
 			FlapThreshold: opts.FlapThreshold,
@@ -113,6 +123,11 @@ func New(opts Options) *Runner {
 //
 // It first restores state from the database, so a restart does not re-announce
 // outages that were already reported.
+//
+// The push watchdog runs alongside the scheduler rather than inside it: the
+// scheduler's whole model is a queue of things to go and dial, and absence is
+// not something that can be dialled. It is started here and stopped by the
+// same context, so there is still exactly one lifetime to manage.
 func (r *Runner) Run(ctx context.Context) error {
 	if err := r.restore(ctx); err != nil {
 		// A failed restore is not fatal — monitoring with a clean slate beats
@@ -120,7 +135,20 @@ func (r *Runner) Run(ctx context.Context) error {
 		// is logged at error level.
 		r.log.Error("failed to restore incident state; duplicate alerts are possible", "error", err)
 	}
-	return r.sch.Run(ctx)
+
+	watchdogDone := make(chan struct{})
+	go func() {
+		defer close(watchdogDone)
+		r.runPushWatchdog(ctx)
+	}()
+
+	err := r.sch.Run(ctx)
+
+	// Wait for the watchdog before returning, for the same reason the
+	// scheduler waits for in-flight checks: a sweep half-way through writing
+	// a heartbeat must not be cut off by the process exiting underneath it.
+	<-watchdogDone
+	return err
 }
 
 // Size reports how many monitors are currently scheduled.
@@ -180,7 +208,16 @@ func (r *Runner) jobs(ctx context.Context) ([]scheduler.Job, error) {
 	live := make(map[int64]struct{}, len(monitors))
 	jobs := make([]scheduler.Job, 0, len(monitors))
 	for _, m := range monitors {
+		// A push monitor is live — its incidents are real and must not be
+		// reconciled away — but it is never scheduled. Nothing dials it;
+		// the watchdog decides when its silence has gone on too long.
+		// Queueing it would mean dispatching a check with no checker
+		// behind it, which the scheduler would correctly report as an
+		// internal error on every interval.
 		live[m.ID] = struct{}{}
+		if m.Type == store.TypePush {
+			continue
+		}
 		_, seen := checked[m.ID]
 		jobs = append(jobs, scheduler.Job{
 			Monitor:      toCheckerMonitor(m),
@@ -483,6 +520,11 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 // implementation. It is a configuration fault, not a check failure.
 var ErrUnsupportedType = errors.New("unsupported monitor type")
 
+// ErrPushNotProbeable is returned when something asks for an on-demand check
+// of a push monitor. It is a client mistake, not a server fault, which is why
+// it is distinguishable from ErrUnsupportedType.
+var ErrPushNotProbeable = errors.New("push monitors cannot be checked on demand")
+
 // CheckNow probes a monitor once, outside its schedule, and returns the result.
 //
 // It implements the API's Prober interface, which is why it takes a
@@ -495,6 +537,15 @@ var ErrUnsupportedType = errors.New("unsupported monitor type")
 // recorded: the monitor promised not to watch it, and writing heartbeats into that gap
 // would present an unmonitored period as a monitored one.
 func (r *Runner) CheckNow(ctx context.Context, m store.Monitor) (checker.Result, error) {
+	// There is nothing to probe on demand: a push monitor's health is a
+	// statement about whether its job reported in, and the server cannot
+	// make that happen by asking. Falling through would produce "unsupported
+	// monitor type push", which is true of the checker table and misleading
+	// about the product.
+	if m.Type == store.TypePush {
+		return checker.Result{}, fmt.Errorf("%w: a push monitor is reported to, not checked", ErrPushNotProbeable)
+	}
+
 	cm := toCheckerMonitor(m)
 
 	c, ok := r.sch.CheckerFor(cm.Type)
