@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/frankgraave/subglance/internal/watchdog"
 )
 
 // Config holds every runtime setting.
@@ -37,6 +39,17 @@ type Config struct {
 	// (derived from CPU count at scheduler start).
 	CheckWorkers int
 
+	// WatchdogURL is an external dead man's switch that SubGlance pings
+	// while it is demonstrably still checking things. Empty disables it.
+	//
+	// Off by default because it is the one thing in SubGlance that talks
+	// outbound to a third party; that has to be a deliberate act, never a
+	// surprise found in a packet capture.
+	WatchdogURL string
+
+	// WatchdogInterval is the gap between watchdog pings.
+	WatchdogInterval time.Duration
+
 	// AllowPrivateTargets permits monitoring of private/loopback/link-local
 	// addresses. Off by default: without it, a user-supplied URL turns
 	// SubGlance into an SSRF proxy into the host network (see SUB-18).
@@ -56,6 +69,8 @@ func defaults() Config {
 		LogFormat:           "text",
 		ShutdownTimeout:     15 * time.Second,
 		CheckWorkers:        0,
+		WatchdogURL:         "",
+		WatchdogInterval:    watchdog.DefaultInterval,
 		AllowPrivateTargets: false,
 	}
 }
@@ -73,6 +88,8 @@ func Load(args []string) (Config, error) {
 	c.LogFormat = envStr("SUBGLANCE_LOG_FORMAT", c.LogFormat)
 	c.ShutdownTimeout = envDur("SUBGLANCE_SHUTDOWN_TIMEOUT", c.ShutdownTimeout)
 	c.CheckWorkers = envInt("SUBGLANCE_CHECK_WORKERS", c.CheckWorkers)
+	c.WatchdogURL = envStr("SUBGLANCE_WATCHDOG_URL", c.WatchdogURL)
+	c.WatchdogInterval = envDur("SUBGLANCE_WATCHDOG_INTERVAL", c.WatchdogInterval)
 	c.AllowPrivateTargets = envBool("SUBGLANCE_ALLOW_PRIVATE_TARGETS", c.AllowPrivateTargets)
 
 	fs := flag.NewFlagSet("subglance", flag.ContinueOnError)
@@ -82,6 +99,10 @@ func Load(args []string) (Config, error) {
 	fs.StringVar(&c.LogFormat, "log-format", c.LogFormat, "log format: text or json")
 	fs.DurationVar(&c.ShutdownTimeout, "shutdown-timeout", c.ShutdownTimeout, "how long to let in-flight requests finish")
 	fs.IntVar(&c.CheckWorkers, "check-workers", c.CheckWorkers, "max concurrent checks (0 = auto)")
+	fs.StringVar(&c.WatchdogURL, "watchdog-url", c.WatchdogURL,
+		"external dead man's switch to ping while checks are running (empty = off)")
+	fs.DurationVar(&c.WatchdogInterval, "watchdog-interval", c.WatchdogInterval,
+		"how often to ping the watchdog URL")
 	fs.BoolVar(&c.AllowPrivateTargets, "allow-private-targets", c.AllowPrivateTargets,
 		"allow monitoring private/loopback addresses (SSRF risk, off by default)")
 
@@ -116,6 +137,14 @@ func (c Config) validate() error {
 	}
 	if c.CheckWorkers < 0 {
 		return fmt.Errorf("check-workers must not be negative, got %d", c.CheckWorkers)
+	}
+	if c.WatchdogURL != "" {
+		if err := watchdog.ValidateURL(c.WatchdogURL); err != nil {
+			return err
+		}
+		if c.WatchdogInterval <= 0 {
+			return fmt.Errorf("watchdog-interval must be positive, got %s", c.WatchdogInterval)
+		}
 	}
 	return nil
 }

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	"github.com/frankgraave/subglance/internal/checker"
@@ -30,6 +31,11 @@ type Runner struct {
 	// rather than a hard dependency on a notifier package so SUB-15 can plug
 	// in without touching this file.
 	notify func(Alert)
+
+	// checks counts completed checks. It is the liveness evidence the
+	// watchdog needs: a process whose scheduler has wedged keeps running
+	// and keeps serving HTTP, but this number stops moving.
+	checks atomic.Uint64
 
 	// bus fans check results out to live listeners (the SSE endpoint). Nil
 	// means nobody is watching, which is the normal case in tests.
@@ -125,6 +131,11 @@ func (r *Runner) Run(ctx context.Context) error {
 
 // Size reports how many monitors are currently scheduled.
 func (r *Runner) Size() int { return r.sch.Size() }
+
+// ChecksCompleted reports how many checks have finished since start.
+//
+// Only its movement is meaningful; it is not persisted and resets on restart.
+func (r *Runner) ChecksCompleted() uint64 { return r.checks.Load() }
 
 // Engine exposes the state engine so the API can report current status.
 func (r *Runner) Engine() *state.Engine { return r.engine }
@@ -261,6 +272,11 @@ func (r *Runner) record(o scheduler.Outcome) {
 			"monitor", o.Monitor.Name)
 		return
 	}
+
+	// Counted before the write: the check itself is what proves the
+	// pipeline is alive, and a database that has gone read-only must not
+	// make a working scheduler look dead to the watchdog.
+	r.checks.Add(1)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

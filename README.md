@@ -212,10 +212,48 @@ defaults.
 | `--shutdown-timeout` | `SUBGLANCE_SHUTDOWN_TIMEOUT` | `15s` | Grace period for in-flight requests |
 | `--check-workers` | `SUBGLANCE_CHECK_WORKERS` | `0` (auto) | Maximum concurrent checks |
 | `--allow-private-targets` | `SUBGLANCE_ALLOW_PRIVATE_TARGETS` | `false` | Permit monitoring private/loopback addresses |
+| `--watchdog-url` | `SUBGLANCE_WATCHDOG_URL` | empty (off) | External dead man's switch to ping while checks are running |
+| `--watchdog-interval` | `SUBGLANCE_WATCHDOG_INTERVAL` | `5m` | How often to ping that URL |
 
 `--allow-private-targets` is off by default on purpose. Users supply the URLs to
 monitor, and without that guard SubGlance would happily act as an SSRF proxy into
 the host network. Turn it on only if you intend to monitor internal services.
+
+### Watching the watcher
+
+SubGlance cannot report its own death. If the process is killed, runs out of
+memory or the host goes down, the dashboard does not turn red — it stops
+existing, and silence looks exactly like good news. That is the worst failure
+this product can have, and no amount of code inside the process can fix it.
+
+So the judgement goes somewhere else. Set `--watchdog-url` to a dead man's
+switch — Healthchecks.io, Dead Man's Snitch, the push endpoint of a second
+SubGlance — and SubGlance pings it on a schedule. When the pings stop, that
+service raises the alarm.
+
+```sh
+subglance --watchdog-url https://hc-ping.com/your-uuid --watchdog-interval 5m
+```
+
+Two details matter:
+
+- The ping is tied to evidence, not to a timer. It is only sent when at least
+  one check has completed since the previous ping, so a process whose check
+  pipeline has wedged goes quiet instead of reporting health from a corpse. An
+  instance with no monitors scheduled still pings; there, zero checks is the
+  correct answer rather than a symptom.
+- A clean shutdown sends one final ping marked `stopped`, so a planned restart
+  does not page anyone.
+
+Only a ping is sent: the event, the number of monitors scheduled and the number
+of checks completed. No monitor names, targets or results leave the instance.
+The feature is off unless you set the URL, because it is the one part of
+SubGlance that talks outbound to a third party.
+
+It is not a complete answer. An instance that is running fine but has lost
+outbound network stops pinging too, and that reads as an outage at the other
+end. Being told about a problem that turns out to be the messenger is still
+better than being told nothing.
 
 ### First run
 
