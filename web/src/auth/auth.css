@@ -1,0 +1,215 @@
+/*
+ * The signed-out screens.
+ *
+ * Layout only; every colour, size, radius and weight comes from tokens.css.
+ *
+ * A single centred card on the canvas, not a split hero. This is the first
+ * screen of a self-hosted tool that someone just started on their own machine:
+ * the job is to be obviously ready and take one action, and a marketing layout
+ * would be the product talking about itself to someone who has already
+ * installed it.
+ */
+
+.auth-screen {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Generous on a laptop, and not wasted on a phone: the card needs the width
+     more than the margin does below 640px. */
+  padding: var(--space-6) var(--space-4);
+  background: var(--canvas);
+}
+
+.auth-card {
+  width: 100%;
+  /* ~26rem: wide enough that an email address does not wrap, narrow enough
+     that the eye does not travel between a label and its field. */
+  max-width: 26rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.auth-brand-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+
+.auth-brand-name {
+  font-size: var(--type-row);
+  line-height: var(--lead-row);
+  font-weight: var(--weight-strong);
+}
+
+.auth-title {
+  font-size: var(--type-page);
+  line-height: var(--lead-page);
+  font-weight: var(--weight-strong);
+}
+
+.auth-intro {
+  font-size: var(--type-body);
+  /* Not --lead-prose: that is the helper role's running-text partner (§2.5),
+     and body size already sits on the same 20px. */
+  line-height: var(--lead-body);
+  color: var(--ink-2);
+}
+
+.auth-note {
+  font-size: var(--type-helper);
+  line-height: var(--lead-prose);
+  color: var(--ink-3);
+}
+
+.auth-waiting {
+  font-size: var(--type-body);
+  line-height: var(--lead-body);
+  color: var(--ink-3);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.auth-label {
+  font-size: var(--type-section);
+  line-height: var(--lead-section);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.auth-input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+  /* 16px on a phone, because anything smaller makes iOS Safari zoom the page
+     on focus and leave the user scrolled sideways (DESIGN.md §13). On the
+     login screen that zoom is especially bad: it lands mid-form on the very
+     first interaction anyone has with the product. */
+  font-size: var(--type-nozoom);
+  line-height: var(--lead-nozoom);
+  color: var(--ink);
+  background: var(--canvas);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  transition: border-color var(--dur-hover) var(--ease), box-shadow var(--dur-hover) var(--ease);
+}
+
+@media (min-width: 641px) {
+  .auth-input {
+    font-size: var(--type-body);
+    line-height: var(--lead-body);
+  }
+}
+
+/* Green border plus a soft ring, not the blue browser glow (§7.2). */
+.auth-input:focus-visible {
+  outline: none;
+  border-color: var(--up);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--up) 14%, transparent);
+}
+
+.auth-input[aria-invalid="true"] {
+  border-color: var(--down);
+}
+
+.auth-input[aria-invalid="true"]:focus {
+  border-color: var(--down);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--down) 14%, transparent);
+}
+
+/*
+ * The strength line.
+ *
+ * Colour is a second channel here, never the only one: the sentence says what
+ * the band means, so a reader who cannot separate the hues loses nothing.
+ * `short` stays neutral rather than going red — the password is not wrong
+ * yet, it is unfinished, and colouring it as an error on the first keystroke
+ * is the meter shouting at someone who is still typing.
+ */
+.auth-strength {
+  font-size: var(--type-helper);
+  line-height: var(--lead-prose);
+  color: var(--ink-3);
+}
+
+.auth-strength[data-band="ok"] { color: var(--warn); }
+.auth-strength[data-band="strong"] { color: var(--up); }
+
+.auth-error {
+  font-size: var(--type-helper);
+  line-height: var(--lead-prose);
+  color: var(--down);
+}
+
+.auth-submit {
+  /* The one loud button in the product. Everywhere else the primary action is
+     an icon in the topbar, because a permanently green button becomes
+     wallpaper (DESIGN.md §7.1) — but this screen has exactly one thing to do,
+     and a quiet button here would be modesty at the cost of the first minute. */
+  min-height: var(--control-h);
+  padding: var(--space-2) var(--space-4);
+  font: inherit;
+  font-size: var(--type-body);
+  line-height: var(--lead-body);
+  font-weight: var(--weight-strong);
+  color: var(--canvas);
+  background: var(--up);
+  border: 1px solid var(--up);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: opacity var(--dur-hover) var(--ease);
+}
+
+.auth-submit:hover:not(:disabled) { opacity: .9; }
+
+.auth-submit:disabled {
+  /* Dimmed rather than hidden: the button is the answer to "what do I do
+     here", and removing it while a field is empty leaves the question open. */
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.auth-submit:focus-visible {
+  outline: 2px solid var(--up);
+  outline-offset: 2px;
+}
+
+/* Announced, not drawn. Clipped rather than display:none, which would take it
+   out of the accessibility tree along with the pixels. */
+.auth-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

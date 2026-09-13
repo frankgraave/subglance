@@ -42,9 +42,18 @@ export type NavDrawerProps = {
    */
   returnFocusRef?: RefObject<HTMLElement | null>;
   instance?: string;
+  account?: string;
+  onSignOut?: () => void;
 };
 
-export function NavDrawer({ open, onClose, returnFocusRef, instance }: NavDrawerProps) {
+export function NavDrawer({
+  open,
+  onClose,
+  returnFocusRef,
+  instance,
+  account,
+  onSignOut,
+}: NavDrawerProps) {
   const closerRef = useRef<HTMLButtonElement | null>(null);
 
   /*
@@ -142,7 +151,12 @@ export function NavDrawer({ open, onClose, returnFocusRef, instance }: NavDrawer
          * The same sidebar the laptop gets, always expanded: a drawer you
          * opened deliberately has no reason to show you icons only.
          */}
-        <Sidebar collapsed={false} instance={instance} />
+        <Sidebar
+          collapsed={false}
+          instance={instance}
+          account={account}
+          onSignOut={onSignOut}
+        />
       </div>
     </>
   );

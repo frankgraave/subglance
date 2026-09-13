@@ -49,6 +49,9 @@ export type SidebarProps = {
   collapsed: boolean;
   /** Shown under the product name; the instance this dashboard watches. */
   instance?: string;
+  /** The signed-in address. Absent means no account footer is drawn. */
+  account?: string;
+  onSignOut?: () => void;
 };
 
 function Planned({ label, Icon }: Destination) {
@@ -68,7 +71,7 @@ function Planned({ label, Icon }: Destination) {
   );
 }
 
-export function Sidebar({ collapsed, instance }: SidebarProps) {
+export function Sidebar({ collapsed, instance, account, onSignOut }: SidebarProps) {
   return (
     <nav
       className="shell-sidebar"
@@ -110,6 +113,29 @@ export function Sidebar({ collapsed, instance }: SidebarProps) {
           <Planned key={item.id} {...item} />
         ))}
       </ul>
+
+      {/*
+        * Who you are, and the way out, at the bottom of the navigation.
+        *
+        * This is where an account menu is looked for, and it is the only
+        * chrome that persists on every screen — putting sign-out in the
+        * topbar would spend one of the few slots a phone has on an action
+        * taken once a session. The address is shown because a self-hoster
+        * with an admin and a viewer account has no other way to tell which
+        * one this browser is holding.
+        */}
+      {account !== undefined && account !== "" && onSignOut !== undefined && (
+        <div className="shell-account">
+          <p className="shell-account-email" title={account}>
+            {account}
+          </p>
+          <button type="button" className="shell-signout" onClick={onSignOut}>
+            {/* The label survives the rail: collapsed, it is clipped rather
+                than dropped, so the button is never an unnamed icon. */}
+            <span className="shell-nav-text">Sign out</span>
+          </button>
+        </div>
+      )}
     </nav>
   );
 }

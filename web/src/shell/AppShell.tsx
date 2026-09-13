@@ -29,6 +29,9 @@ export type AppShellProps = {
   /** Holds the element focus returns to when the drawer closes; see NavDrawer. */
   navReturnFocusRef?: RefObject<HTMLElement | null>;
   instance?: string;
+  /** The signed-in address, shown in the navigation footer. */
+  account?: string;
+  onSignOut?: () => void;
   /** The topbar, rendered sticky above the content column. */
   topbar: ReactNode;
   children: ReactNode;
@@ -41,6 +44,8 @@ export function AppShell({
   onNavClose,
   navReturnFocusRef,
   instance,
+  account,
+  onSignOut,
   topbar,
   children,
 }: AppShellProps) {
@@ -67,7 +72,14 @@ export function AppShell({
          * leave five links in the tab order underneath the drawer, which is
          * the quiet version of the same bug the `inert` above prevents.
          */}
-        {!narrow && <Sidebar collapsed={sidebarCollapsed} instance={instance} />}
+        {!narrow && (
+          <Sidebar
+            collapsed={sidebarCollapsed}
+            instance={instance}
+            account={account}
+            onSignOut={onSignOut}
+          />
+        )}
         <div className="shell-main">
           {topbar}
           {/*
@@ -85,6 +97,8 @@ export function AppShell({
           onClose={onNavClose ?? (() => {})}
           returnFocusRef={navReturnFocusRef}
           instance={instance}
+          account={account}
+          onSignOut={onSignOut}
         />
       )}
     </>

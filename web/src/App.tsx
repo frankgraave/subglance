@@ -1,4 +1,6 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { SessionGate } from "./auth/SessionGate";
+import { useSession } from "./auth/useSession";
 import { useTheme } from "./theme/useTheme";
 import { TokenSheet } from "./components/TokenSheet";
 import { HeartbeatGallery } from "./heartbeat/Gallery";
@@ -32,6 +34,7 @@ import { useCompactViewport } from "./layout/useMediaQuery";
  */
 export default function App() {
   const { preference, setPreference } = useTheme();
+  const { session, onSignedIn, signOut, refresh } = useSession();
   const { layout, setLayout, sidebarCollapsed, toggleSidebar } =
     useShellPreferences(window.localStorage);
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
@@ -166,17 +169,31 @@ export default function App() {
               : undefined,
   });
 
-  if (isWall) {
-    return <LiveDashboardRoot client={queryClient} layout="wall" onExitWall={leaveWall} />;
-  }
+  /*
+   * Throw the cache away when the session ends.
+   *
+   * Without this, signing out and signing in as someone else repaints the
+   * previous account's monitors from the cache before the first refetch
+   * lands. On a shared instance that is a disclosure, not a glitch: the
+   * second person sees names and targets they may have no rights to, and the
+   * screen looks authoritative while it does.
+   */
+  const signedIn = session.state === "signedIn";
+  useEffect(() => {
+    if (!signedIn) queryClient.clear();
+  }, [signedIn, queryClient]);
 
-  return (
+  const screen = isWall ? (
+    <LiveDashboardRoot client={queryClient} layout="wall" onExitWall={leaveWall} />
+  ) : (
     <AppShell
       sidebarCollapsed={sidebarCollapsed}
       narrow={narrow}
       navOpen={navOpen}
       onNavClose={closeNav}
       navReturnFocusRef={navOpenerRef}
+      account={session.state === "signedIn" ? session.user.email : undefined}
+      onSignOut={signOut}
       topbar={
         <Topbar
           sidebarCollapsed={narrow ? !navOpen : sidebarCollapsed}
@@ -212,6 +229,12 @@ export default function App() {
         />
       )}
     </AppShell>
+  );
+
+  return (
+    <SessionGate session={session} onSignedIn={onSignedIn} onRetry={refresh}>
+      {screen}
+    </SessionGate>
   );
 }
 
