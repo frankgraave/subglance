@@ -46,6 +46,13 @@ services:
       # SubGlance into an SSRF proxy into whatever this container can reach.
       # Turn it on only if you mean to monitor services on your own network.
       # SUBGLANCE_ALLOW_PRIVATE_TARGETS: "false"
+      # Behind a reverse proxy, name it here so the login rate limiter sees the
+      # real client address instead of the proxy's. Empty means no forwarding
+      # header is believed at all, which is the safe default: X-Forwarded-For
+      # is set by whoever sends it, so trusting it from an unknown peer lets a
+      # caller pick a fresh rate-limit bucket for every password guess.
+      # Accepts addresses and CIDR blocks, comma-separated.
+      # SUBGLANCE_TRUSTED_PROXIES: "172.16.0.0/12"
       # SubGlance cannot report its own death: if this container is killed or
       # the host goes down, nothing turns red — the dashboard just stops
       # existing. Point this at a dead man's switch (Healthchecks.io, Dead

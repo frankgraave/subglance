@@ -281,11 +281,13 @@ paths:
       operationId: logout
       summary: End the current session
       description: |
-        Deletes the server-side session, if a session cookie was presented, and
-        clears the cookie. Public rather than authenticated on purpose: logging
-        out must succeed even when the session has already expired, so it is
-        never possible to be stuck holding a stale cookie.
-      security: []
+        Deletes the server-side session and clears the cookie.
+
+        Authenticated rather than public, which reads oddly for an endpoint
+        whose job is to discard a credential. The reason is CSRF: that check
+        runs as part of authentication, so a public logout route skips it and
+        any site on the internet can end a visitor's session. A caller holding
+        an expired cookie gets a 401 and is already signed out.
       responses:
         '204':
           description: Signed out; the session cookie was cleared.
@@ -294,7 +296,9 @@ paths:
               description: The expired session cookie.
               schema:
                 type: string
-      x-subglance-access: public
+        '401':
+          description: No valid session, or a cross-site request.
+      x-subglance-access: read
   /api/v1/push/{token}:
     parameters:
       - name: token
@@ -1533,6 +1537,72 @@ paths:
           $ref: '#/components/responses/ChannelNotFound'
         '500':
           description: The channel could not be deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: write
+  /api/v1/channels/{id}/test:
+    parameters:
+      - $ref: '#/components/parameters/ChannelId'
+    post:
+      tags: [Channels]
+      operationId: testChannel
+      summary: Send a test alert through a channel
+      description: |
+        Delivers a real message to the channel's configured destination, so a
+        configuration can be proved before an outage tests it instead.
+
+        Nothing is queued and nothing is recorded: this is a direct send, and
+        its result is the response. That is deliberate — a test that went
+        through the retry queue would answer "accepted" and leave the operator
+        no wiser than before.
+
+        A delivery failure is reported as 502 with the underlying error, not a
+        generic message. Learning that the token is rejected or the mail host
+        unreachable is the entire value of the button.
+
+        Requires write access even though it changes nothing here: it makes the
+        instance post into whatever destination the channel names.
+      responses:
+        '200':
+          description: The message was delivered.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+        '400':
+          $ref: '#/components/responses/InvalidId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ChannelNotFound'
+        '502':
+          description: |
+            The destination rejected the message or could not be reached. The
+            `error` field carries the reason verbatim.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, error]
+                properties:
+                  ok:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                    description: The delivery failure, as reported by the destination.
+                    example: endpoint rejected the alert (401)
+        '503':
+          description: This instance runs without a delivery pipeline.
           content:
             application/json:
               schema:

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/frankgraave/subglance/internal/store"
+	"github.com/frankgraave/subglance/internal/trustedproxy"
 	"github.com/frankgraave/subglance/internal/watchdog"
 )
 
@@ -65,6 +66,18 @@ type Config struct {
 	// kept. Zero means keep them forever, which is what SubGlance did before
 	// this option existed.
 	RollupRetention time.Duration
+
+	// TrustedProxies lists the peers whose X-Forwarded-For and X-Real-Ip
+	// headers may be believed, as a comma-separated list of addresses and
+	// CIDR blocks. Empty means believe nobody.
+	//
+	// Empty by default because those headers are set by whoever sends them.
+	// Trusting one unconditionally means a caller can name its own address,
+	// and the login rate limiter keys on that address — so rotating the
+	// header per request is credential spraying with the limiter off. An
+	// operator running behind a reverse proxy names it here and gets real
+	// client addresses back in the limiter and the session log.
+	TrustedProxies string
 }
 
 // DBPath returns the full path to the SQLite database file.
@@ -85,6 +98,7 @@ func defaults() Config {
 		AllowPrivateTargets: false,
 		RawRetention:        store.DefaultRawRetention,
 		RollupRetention:     store.DefaultRollupRetention,
+		TrustedProxies:      "",
 	}
 }
 
@@ -106,6 +120,7 @@ func Load(args []string) (Config, error) {
 	c.AllowPrivateTargets = envBool("SUBGLANCE_ALLOW_PRIVATE_TARGETS", c.AllowPrivateTargets)
 	c.RawRetention = envDur("SUBGLANCE_RAW_RETENTION", c.RawRetention)
 	c.RollupRetention = envDur("SUBGLANCE_ROLLUP_RETENTION", c.RollupRetention)
+	c.TrustedProxies = envStr("SUBGLANCE_TRUSTED_PROXIES", c.TrustedProxies)
 
 	fs := flag.NewFlagSet("subglance", flag.ContinueOnError)
 	fs.StringVar(&c.Addr, "addr", c.Addr, "HTTP listen address")
@@ -124,6 +139,8 @@ func Load(args []string) (Config, error) {
 		"how long raw heartbeats are kept before being rolled up into hourly buckets")
 	fs.DurationVar(&c.RollupRetention, "rollup-retention", c.RollupRetention,
 		"how long hourly buckets and resolved incidents are kept (0 = forever)")
+	fs.StringVar(&c.TrustedProxies, "trusted-proxies", c.TrustedProxies,
+		"comma-separated addresses or CIDR blocks whose X-Forwarded-For may be believed (empty = none)")
 
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
@@ -171,6 +188,11 @@ func (c Config) validate() error {
 	if c.RollupRetention > 0 && c.RollupRetention < c.RawRetention {
 		return fmt.Errorf("rollup-retention (%s) must be at least raw-retention (%s)",
 			c.RollupRetention, c.RawRetention)
+	}
+	if c.TrustedProxies != "" {
+		if err := trustedproxy.Validate(c.TrustedProxies); err != nil {
+			return err
+		}
 	}
 	if c.WatchdogURL != "" {
 		if err := watchdog.ValidateURL(c.WatchdogURL); err != nil {

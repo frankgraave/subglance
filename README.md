@@ -221,6 +221,7 @@ defaults.
 | `--shutdown-timeout` | `SUBGLANCE_SHUTDOWN_TIMEOUT` | `15s` | Grace period for in-flight requests |
 | `--check-workers` | `SUBGLANCE_CHECK_WORKERS` | `0` (auto) | Maximum concurrent checks |
 | `--allow-private-targets` | `SUBGLANCE_ALLOW_PRIVATE_TARGETS` | `false` | Permit monitoring private/loopback addresses |
+| `--trusted-proxies` | `SUBGLANCE_TRUSTED_PROXIES` | empty (none) | Addresses or CIDR blocks whose `X-Forwarded-For` may be believed |
 | `--watchdog-url` | `SUBGLANCE_WATCHDOG_URL` | empty (off) | External dead man's switch to ping while checks are running |
 | `--watchdog-interval` | `SUBGLANCE_WATCHDOG_INTERVAL` | `5m` | How often to ping that URL |
 | `--raw-retention` | `SUBGLANCE_RAW_RETENTION` | `168h` (7d) | How long raw heartbeats are kept before being rolled up into hourly buckets |
@@ -236,6 +237,23 @@ with a warning if the file is large enough that the pause would hurt.
 `--allow-private-targets` is off by default on purpose. Users supply the URLs to
 monitor, and without that guard SubGlance would happily act as an SSRF proxy into
 the host network. Turn it on only if you intend to monitor internal services.
+
+`--trusted-proxies` is empty by default, which means `X-Forwarded-For` and
+`X-Real-Ip` are ignored and the peer address is used instead. Those headers are
+set by whoever sends them, so honouring one from an unknown caller lets that
+caller name its own address — and the login rate limiter keys on that address,
+so a fresh value per request is credential guessing with the limit switched off.
+
+If SubGlance runs behind nginx, Caddy, Traefik or a load balancer, name it here
+and real client addresses reappear in the rate limiter and the session list:
+
+```
+--trusted-proxies 127.0.0.1,172.16.0.0/12
+```
+
+Getting this wrong fails safe. An unset or too-narrow value means everyone
+behind the proxy shares one bucket, which is inconvenient; a value that is too
+wide hands the limiter back to the attacker.
 
 ### Watching the watcher
 

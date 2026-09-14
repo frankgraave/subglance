@@ -33,23 +33,35 @@ func toChannelResponse(c store.Channel) channelResponse {
 	}
 }
 
-// secretKeys are config fields that must never be echoed back in full.
+// publicKeys are the config fields that may be read back in full.
 //
-// A webhook URL is itself the credential for Slack and Discord: anyone holding
-// it can post to the channel. Returning it verbatim would mean every viewer
-// with read access to the API could exfiltrate it, so reads get a masked form
-// and only the writer who set it ever sees the whole value.
-var secretKeys = map[string]bool{
-	"url":       true,
-	"token":     true,
-	"password":  true,
-	"bot_token": true,
+// Deny by default, which is the opposite of how this started. The first
+// version listed the secret keys instead, and that could not hold: a config
+// accepts any key name, so the mask only ever covered the names someone had
+// thought of. A channel carrying "authorization" or "secret" handed those
+// straight to any viewer — the role that exists specifically to look without
+// touching.
+//
+// Listing what is safe is a smaller and more checkable claim than listing what
+// is dangerous. A new channel type that needs another public field has to say
+// so here, and until it does its value is masked: the failure mode of
+// forgetting is an over-masked field in the interface, not a leaked
+// credential.
+var publicKeys = map[string]bool{
+	// Where a message goes, rather than what proves the right to send it.
+	"to":       true,
+	"from":     true,
+	"chat_id":  true,
+	"channel":  true,
+	"username": true,
+	"host":     true,
+	"port":     true,
 }
 
 func maskConfig(_ string, cfg map[string]string) map[string]string {
 	out := make(map[string]string, len(cfg))
 	for k, v := range cfg {
-		if secretKeys[k] && v != "" {
+		if !publicKeys[k] && v != "" {
 			out[k] = maskValue(v)
 			continue
 		}
@@ -229,9 +241,13 @@ func (s *Server) handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 	// secret, because that is all it ever saw. Treating the mask as a literal
 	// value would silently destroy the credential on every round trip, so a
 	// value that still equals its own mask means "unchanged".
+	//
+	// This follows the same deny-by-default rule as the mask itself: any
+	// field that was masked on read can come back as its mask, which is
+	// exactly the set of fields that are not public.
 	if req.Config != nil {
 		for k, v := range req.Config {
-			if secretKeys[k] && v == maskValue(existing.Config[k]) && existing.Config[k] != "" {
+			if !publicKeys[k] && v == maskValue(existing.Config[k]) && existing.Config[k] != "" {
 				req.Config[k] = existing.Config[k]
 			}
 		}

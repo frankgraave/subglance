@@ -16,6 +16,7 @@ import (
 	"github.com/frankgraave/subglance/internal/buildinfo"
 	"github.com/frankgraave/subglance/internal/events"
 	"github.com/frankgraave/subglance/internal/store"
+	"github.com/frankgraave/subglance/internal/trustedproxy"
 )
 
 // Server wires the HTTP routes together.
@@ -41,6 +42,10 @@ type Server struct {
 	// endpoint, matching how bus and prober are treated.
 	pusher PushRecorder
 
+	// tester sends a real message through a channel, for the test button.
+	// Nil disables that endpoint, on the same principle as the others.
+	tester ChannelTester
+
 	// pushReports rate-limits the public push endpoint per monitor. It is
 	// separate from manualChecks because the two protect against different
 	// things: one bounds what an authenticated human can ask the server to
@@ -51,6 +56,23 @@ type Server struct {
 	// resolved. pushReports cannot: it is keyed on a monitor id that only
 	// exists after the database has already been asked.
 	pushFlood tokenBucket
+
+	// pushFloodByIP bounds each source separately, in front of pushFlood.
+	// Without it the two share one budget, so a flood of made-up tokens from
+	// one host spends the allowance that real jobs need — and a push monitor
+	// whose report was refused goes overdue and alerts. That inverts a dead
+	// man's switch into a generator of outages that are not happening.
+	pushFloodByIP ipBuckets
+
+	// trustedProxies lists the peers whose forwarding headers may be
+	// believed. Empty by default: see clientIP.
+	trustedProxies trustedproxy.Set
+
+	// loginFlood bounds the public login route before any password is
+	// hashed. The keyed limits in handleLogin cannot: an attacker who varies
+	// the email and the address fills neither bucket, and every attempt past
+	// them allocates 64 MiB inside argon2.
+	loginFlood tokenBucket
 
 	// previewChecks rate-limits POST /monitors/preview per user. A preview
 	// has no monitor id to key on, so it cannot share the map above.
@@ -103,6 +125,21 @@ func (s *Server) WithProber(p Prober) *Server {
 func (s *Server) WithPushRecorder(p PushRecorder) *Server {
 	s.pusher = p
 	return s
+}
+
+// WithTrustedProxies names the peers whose X-Forwarded-For and X-Real-Ip may
+// be believed, as a comma-separated list of addresses and CIDR blocks.
+//
+// A malformed entry is an error rather than a silent skip: an operator who
+// mistypes their proxy's subnet should be told at startup, not discover months
+// later that every client behind it shared one rate-limit bucket.
+func (s *Server) WithTrustedProxies(spec string) (*Server, error) {
+	tp, err := trustedproxy.Parse(spec)
+	if err != nil {
+		return nil, err
+	}
+	s.trustedProxies = tp
+	return s, nil
 }
 
 // access says what a route requires from its caller.
@@ -198,7 +235,6 @@ func (s *Server) routes() []route {
 		{http.MethodGet, "/api/v1/setup", accessPublic},
 		{http.MethodPost, "/api/v1/setup", accessPublic},
 		{http.MethodPost, "/api/v1/auth/login", accessPublic},
-		{http.MethodPost, "/api/v1/auth/logout", accessPublic},
 
 		// The push URL. Public by necessity, not by choice: a cron line
 		// cannot hold a session, and handing a backup script an API token
@@ -215,6 +251,18 @@ func (s *Server) routes() []route {
 		// Authenticated: any role.
 		{http.MethodGet, "/api/v1/auth/me", accessRead},
 		{http.MethodPost, "/api/v1/auth/password", accessRead},
+
+		// Logout is authenticated rather than public, which reads oddly for
+		// an endpoint whose whole job is to discard a credential. It is the
+		// CSRF check that makes the difference: that check lives inside
+		// authenticate(), and a public route never calls it. Left public, any
+		// page on the internet could end a visitor's session — an operator
+		// thrown out of the dashboard mid-incident by a link they clicked.
+		//
+		// A logout with no session still answers 401 rather than 204. That is
+		// a worse answer to a harmless request than the alternative is to a
+		// hostile one.
+		{http.MethodPost, "/api/v1/auth/logout", accessRead},
 
 		{http.MethodGet, "/api/v1/monitors", accessRead},
 		{http.MethodGet, "/api/v1/monitors/{id}", accessRead},
@@ -264,6 +312,12 @@ func (s *Server) routes() []route {
 		{http.MethodPost, "/api/v1/channels", accessWrite},
 		{http.MethodPut, "/api/v1/channels/{id}", accessWrite},
 		{http.MethodDelete, "/api/v1/channels/{id}", accessWrite},
+
+		// Testing a channel sends a real message to a configured
+		// destination, so it needs write access even though it changes
+		// nothing here: a viewer who could trigger it could use the
+		// instance to post into someone else's chat room.
+		{http.MethodPost, "/api/v1/channels/{id}/test", accessWrite},
 
 		// Authenticated: admin only.
 		{http.MethodGet, "/api/v1/users", accessAdmin},
@@ -361,6 +415,8 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 		return s.handleCreateChannel
 	case "PUT /api/v1/channels/{id}":
 		return s.handleUpdateChannel
+	case "POST /api/v1/channels/{id}/test":
+		return s.handleTestChannel
 	case "DELETE /api/v1/channels/{id}":
 		return s.handleDeleteChannel
 
@@ -539,12 +595,30 @@ func (s *Server) withLogging(next http.Handler) http.Handler {
 		}
 		s.log.Debug("request",
 			"method", r.Method,
-			"path", r.URL.Path,
+			"path", redactPath(r.URL.Path),
 			"status", rec.status,
 			"bytes", rec.bytes,
 			"duration", time.Since(start),
 		)
 	})
+}
+
+// redactPath removes credentials that travel in the URL path.
+//
+// One route has that shape: a push URL, where the token IS the path. The rest
+// of the code is careful never to store that token in the clear — only its
+// hash — which made writing it to the log the single hole in otherwise
+// deliberate handling. Debug logging is a documented, supported setting, so
+// every push credential would land in stdout, journald and any log shipper.
+//
+// A monitor's target URL is not redacted and should not be: a target is
+// something being watched, not something that proves the right to report.
+func redactPath(path string) string {
+	const pushPrefix = "/api/v1/push/"
+	if strings.HasPrefix(path, pushPrefix) && len(path) > len(pushPrefix) {
+		return pushPrefix + "{token}"
+	}
+	return path
 }
 
 // withRecovery keeps one panicking handler from taking down the whole process.
@@ -556,7 +630,7 @@ func (s *Server) withRecovery(next http.Handler) http.Handler {
 				s.log.Error("panic in handler",
 					"panic", v,
 					"method", r.Method,
-					"path", r.URL.Path,
+					"path", redactPath(r.URL.Path),
 				)
 				writeJSON(w, http.StatusInternalServerError, map[string]string{
 					"error": "internal server error",
