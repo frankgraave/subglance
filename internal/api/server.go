@@ -551,12 +551,30 @@ func (s *Server) withLogging(next http.Handler) http.Handler {
 		}
 		s.log.Debug("request",
 			"method", r.Method,
-			"path", r.URL.Path,
+			"path", redactPath(r.URL.Path),
 			"status", rec.status,
 			"bytes", rec.bytes,
 			"duration", time.Since(start),
 		)
 	})
+}
+
+// redactPath removes credentials that travel in the URL path.
+//
+// One route has that shape: a push URL, where the token IS the path. The rest
+// of the code is careful never to store that token in the clear — only its
+// hash — which made writing it to the log the single hole in otherwise
+// deliberate handling. Debug logging is a documented, supported setting, so
+// every push credential would land in stdout, journald and any log shipper.
+//
+// A monitor's target URL is not redacted and should not be: a target is
+// something being watched, not something that proves the right to report.
+func redactPath(path string) string {
+	const pushPrefix = "/api/v1/push/"
+	if strings.HasPrefix(path, pushPrefix) && len(path) > len(pushPrefix) {
+		return pushPrefix + "{token}"
+	}
+	return path
 }
 
 // withRecovery keeps one panicking handler from taking down the whole process.
@@ -568,7 +586,7 @@ func (s *Server) withRecovery(next http.Handler) http.Handler {
 				s.log.Error("panic in handler",
 					"panic", v,
 					"method", r.Method,
-					"path", r.URL.Path,
+					"path", redactPath(r.URL.Path),
 				)
 				writeJSON(w, http.StatusInternalServerError, map[string]string{
 					"error": "internal server error",
