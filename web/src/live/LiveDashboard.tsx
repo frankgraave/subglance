@@ -44,11 +44,15 @@ export function LiveDashboard({
   ...live
 }: LiveDashboardProps) {
   const [query, setQuery] = useState("");
-  const { monitors, status, loading, error, announcement, reconnect } = useLiveMonitors(live);
+  const { monitors, status, loading, error, announcement, reconnect } =
+    useLiveMonitors(live);
   const now = useNow();
 
   const newest = monitors.reduce<number | null>(
-    (max, m) => (m.lastCheck !== null && (max === null || m.lastCheck > max) ? m.lastCheck : max),
+    (max, m) =>
+      m.lastCheck !== null && (max === null || m.lastCheck > max)
+        ? m.lastCheck
+        : max,
     null,
   );
 
@@ -90,7 +94,10 @@ export function LiveDashboard({
   if (notice !== undefined) {
     return (
       <section className="mon-dashboard">
-        <p role={error !== null ? "alert" : undefined} className="mon-result-count">
+        <p
+          role={error !== null ? "alert" : undefined}
+          className="mon-result-count"
+        >
           {notice}
         </p>
       </section>
@@ -108,14 +115,21 @@ export function LiveDashboard({
       stale={status === "offline"}
       onOpenMonitor={onOpenMonitor}
       banner={
-        <ConnectionBadge status={status} since={newest} now={now} onReconnect={reconnect} />
+        <ConnectionBadge
+          status={status}
+          since={newest}
+          now={now}
+          onReconnect={reconnect}
+        />
       }
     />
   );
 }
 
 /** Mounts the live dashboard with its own query client. */
-export function LiveDashboardRoot(props: LiveDashboardProps & { client?: QueryClient }) {
+export function LiveDashboardRoot(
+  props: LiveDashboardProps & { client?: QueryClient },
+) {
   const { client, ...rest } = props;
   const [fallback] = useState(createQueryClient);
   return (

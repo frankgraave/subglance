@@ -33,11 +33,19 @@ export type MonitorRowProps = {
   onOpen?: (id: string) => void;
 };
 
-function MonitorRowImpl({ monitor, beatWidth = ROW_BEAT_WIDTH, onOpen }: MonitorRowProps) {
+function MonitorRowImpl({
+  monitor,
+  beatWidth = ROW_BEAT_WIDTH,
+  onOpen,
+}: MonitorRowProps) {
   const { name, status, latencyMs, uptime24h, beats, error } = monitor;
 
   return (
-    <tr className="mon-row" data-status={status} data-testid={`monitor-row-${monitor.id}`}>
+    <tr
+      className="mon-row"
+      data-status={status}
+      data-testid={`monitor-row-${monitor.id}`}
+    >
       {/* The word is shown for everything except `up` (SUB-100).
           Hidden for all four statuses, the only difference between down,
           pending and paused in this layout was hue — red, amber and grey at
@@ -54,7 +62,12 @@ function MonitorRowImpl({ monitor, beatWidth = ROW_BEAT_WIDTH, onOpen }: Monitor
           announces "api.example.com, Latency, 120 ms" when you move across
           the row instead of reading a bare number. */}
       <th scope="row" className="mon-cell mon-cell--name">
-        <MonitorLink id={monitor.id} name={name} onOpen={onOpen} className="mon-name" />
+        <MonitorLink
+          id={monitor.id}
+          name={name}
+          onOpen={onOpen}
+          className="mon-name"
+        />
         <span className="mon-target">{describeTarget(monitor)}</span>
       </th>
 
@@ -91,7 +104,11 @@ function MonitorRowImpl({ monitor, beatWidth = ROW_BEAT_WIDTH, onOpen }: Monitor
       </td>
 
       <td className="mon-cell mon-cell--num">
-        {uptime24h === null ? <Unknown what="uptime" /> : formatUptime(uptime24h)}
+        {uptime24h === null ? (
+          <Unknown what="uptime" />
+        ) : (
+          formatUptime(uptime24h)
+        )}
       </td>
     </tr>
   );

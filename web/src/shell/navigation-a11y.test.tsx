@@ -119,11 +119,17 @@ describe("the skip link", () => {
 
   it("gives main a focus target that is not a tab stop of its own", () => {
     const { container } = shell();
-    expect(container.querySelector("main")?.getAttribute("tabindex")).toBe("-1");
+    expect(container.querySelector("main")?.getAttribute("tabindex")).toBe(
+      "-1",
+    );
   });
 
   it("is withdrawn while the drawer is open, because there is nothing to skip to", () => {
-    const { container } = shell({ narrow: true, navOpen: true, onNavClose: () => {} });
+    const { container } = shell({
+      narrow: true,
+      navOpen: true,
+      onNavClose: () => {},
+    });
     expect(container.querySelector(".shell-skip")).toBeNull();
   });
 });

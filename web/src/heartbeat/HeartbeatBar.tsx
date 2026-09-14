@@ -512,47 +512,46 @@ export function HeartbeatBar({
     >
       {plot}
 
-
       {/* The load-bearing text alternative, and the reason the pixels may be
           `aria-hidden`. Bounded by the column count, so a 500-beat series is
           still a readable table. Dropped entirely in list layouts: one table
           per monitor is 5,600 rows the row's own text already covers. */}
       {interactive && (
-      <figcaption className="hb-sr-only">
-        <table>
-          <caption>{description}</caption>
-          <thead>
-            <tr>
-              <th scope="col">Time</th>
-              <th scope="col">Result</th>
-              <th scope="col">Latency</th>
-            </tr>
-          </thead>
-          <tbody>
-            {slots
-              .filter(
-                (slot): slot is Extract<Slot, { kind: "beat" }> =>
-                  slot.kind === "beat",
-              )
-              .map((slot) => (
-                <tr key={slot.index}>
-                  <td>
-                    {slot.count > 1
-                      ? `${formatTime(slot.from)} – ${formatTime(slot.to)}`
-                      : formatTime(slot.to)}
-                  </td>
-                  <td>
-                    {slot.ok
-                      ? "passed"
-                      : `failed${slot.error ? `: ${slot.error}` : ""}`}
-                    {slot.count > 1 ? ` (${slot.count} checks)` : ""}
-                  </td>
-                  <td>{formatLatency(slot.latencyMs)}</td>
-                </tr>
-              ))}
-          </tbody>
-        </table>
-      </figcaption>
+        <figcaption className="hb-sr-only">
+          <table>
+            <caption>{description}</caption>
+            <thead>
+              <tr>
+                <th scope="col">Time</th>
+                <th scope="col">Result</th>
+                <th scope="col">Latency</th>
+              </tr>
+            </thead>
+            <tbody>
+              {slots
+                .filter(
+                  (slot): slot is Extract<Slot, { kind: "beat" }> =>
+                    slot.kind === "beat",
+                )
+                .map((slot) => (
+                  <tr key={slot.index}>
+                    <td>
+                      {slot.count > 1
+                        ? `${formatTime(slot.from)} – ${formatTime(slot.to)}`
+                        : formatTime(slot.to)}
+                    </td>
+                    <td>
+                      {slot.ok
+                        ? "passed"
+                        : `failed${slot.error ? `: ${slot.error}` : ""}`}
+                      {slot.count > 1 ? ` (${slot.count} checks)` : ""}
+                    </td>
+                    <td>{formatLatency(slot.latencyMs)}</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </figcaption>
       )}
 
       {interactive && (

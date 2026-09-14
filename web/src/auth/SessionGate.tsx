@@ -24,16 +24,21 @@ export type SessionGateProps = {
   children: React.ReactNode;
 };
 
-export function SessionGate({ session, onSignedIn, onRetry, children }: SessionGateProps) {
+export function SessionGate({
+  session,
+  onSignedIn,
+  onRetry,
+  children,
+}: SessionGateProps) {
   switch (session.state) {
     case "unknown":
       return (
         <div className="auth-screen">
           {/*
-            * Announced rather than silent: a screen reader on a slow
-            * connection would otherwise be told nothing at all between the
-            * page loading and the login form appearing.
-            */}
+           * Announced rather than silent: a screen reader on a slow
+           * connection would otherwise be told nothing at all between the
+           * page loading and the login form appearing.
+           */}
           <p className="auth-waiting" role="status">
             Checking your session…
           </p>
@@ -46,14 +51,14 @@ export function SessionGate({ session, onSignedIn, onRetry, children }: SessionG
           <div className="auth-card">
             <h1 className="auth-title">Cannot reach this instance</h1>
             {/*
-              * The login form is deliberately not shown here. Presenting one
-              * when the server is unreachable invites someone to type their
-              * password into a page that cannot check it, and then reports
-              * their correct password as a failure.
-              */}
+             * The login form is deliberately not shown here. Presenting one
+             * when the server is unreachable invites someone to type their
+             * password into a page that cannot check it, and then reports
+             * their correct password as a failure.
+             */}
             <p className="auth-intro">
-              SubGlance is running in your browser, but the server behind it did not answer, so
-              there is no way to tell whether you are signed in.
+              SubGlance is running in your browser, but the server behind it did
+              not answer, so there is no way to tell whether you are signed in.
             </p>
             <p className="auth-error" role="alert">
               {session.message}

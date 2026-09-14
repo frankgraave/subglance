@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { IconTile } from "./IconTile";
 
 /**
@@ -56,15 +56,23 @@ export function Card({
   "aria-label": ariaLabel,
 }: CardProps) {
   const Heading = `h${headingLevel}` as "h2" | "h3" | "h4";
+  // The section is named by its own heading rather than by a repeated string.
+  // `useId` rather than a caller-supplied id: two tag values differing only in
+  // case used to collide into one id and silently break the association, and a
+  // generated id cannot collide at all.
+  const headingId = useId();
   return (
     <section
       className={className ? `card ${className}` : "card"}
+      aria-labelledby={headingId}
       {...(ariaLabel ? { "aria-label": ariaLabel } : {})}
     >
       <div className="card-head">
         <div className="card-head-lead">
           {icon ? <IconTile>{icon}</IconTile> : null}
-          <Heading className="card-title">{title}</Heading>
+          <Heading id={headingId} className="card-title">
+            {title}
+          </Heading>
         </div>
         {action ? <div className="card-head-action">{action}</div> : null}
       </div>

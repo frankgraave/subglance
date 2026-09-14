@@ -400,6 +400,8 @@ describe("the panel look does not cost the table its semantics", () => {
     const firstCell = /\.mon-row\s*>\s*:first-child\s*\{([^}]*)\}/.exec(
       monitorsCss,
     );
-    expect(firstCell?.[1]).toMatch(/border-start-start-radius:\s*var\(--r-md\)/);
+    expect(firstCell?.[1]).toMatch(
+      /border-start-start-radius:\s*var\(--r-md\)/,
+    );
   });
 });

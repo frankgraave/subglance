@@ -23,7 +23,11 @@ function Harness() {
       <button type="button" onClick={() => setOpen(true)}>
         Open details
       </button>
-      <Drawer open={open} onClose={() => setOpen(false)} title="Monitor details">
+      <Drawer
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Monitor details"
+      >
         <button type="button">Inside first</button>
         <button type="button">Inside last</button>
       </Drawer>
@@ -92,7 +96,9 @@ describe("Drawer", () => {
   });
 
   it("moves with the panel duration and drops the slide under reduced motion", () => {
-    expect(css).toMatch(/animation:\s*drawer-in var\(--dur-panel\) var\(--ease\)/);
+    expect(css).toMatch(
+      /animation:\s*drawer-in var\(--dur-panel\) var\(--ease\)/,
+    );
     const reduced = css.match(
       /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\n\}/,
     )![0];

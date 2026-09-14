@@ -64,7 +64,9 @@ describe("Value", () => {
     );
     const el = screen.getByText("4.2 s").closest(".value");
     expect(el?.getAttribute("data-warn")).toBe("true");
-    expect(screen.getByRole("img", { name: "Measured from one probe" })).toBeTruthy();
+    expect(
+      screen.getByRole("img", { name: "Measured from one probe" }),
+    ).toBeTruthy();
   });
 
   it("leaves an unwarned value with no glyph and no warning attribute", () => {

@@ -44,7 +44,9 @@ export function AuthScreen({ mode, onSignedIn, api }: AuthScreenProps) {
       setRejection(null);
       void (async () => {
         try {
-          const user = setup ? await create(email, password) : await signIn(email, password);
+          const user = setup
+            ? await create(email, password)
+            : await signIn(email, password);
           onSignedIn(user);
         } catch (error) {
           setRejection(explain(error));
@@ -76,7 +78,9 @@ export function AuthScreen({ mode, onSignedIn, api }: AuthScreenProps) {
           <span className="auth-brand-name">SubGlance</span>
         </div>
 
-        <h1 className="auth-title">{setup ? "Set up this instance" : "Sign in"}</h1>
+        <h1 className="auth-title">
+          {setup ? "Set up this instance" : "Sign in"}
+        </h1>
         <p className="auth-intro">
           {setup
             ? "Nobody has an account here yet. The first one you create is the administrator, and this page closes for good once it exists."
@@ -124,7 +128,8 @@ function explain(error: unknown): Rejection {
       // sat open. Saying so is more use than the API's terser sentence,
       // because the next action is a reload rather than a retry.
       return {
-        message: "This instance already has an account. Reload the page to sign in.",
+        message:
+          "This instance already has an account. Reload the page to sign in.",
       };
     }
     return {
@@ -134,6 +139,7 @@ function explain(error: unknown): Rejection {
   }
   // A network failure has no status and no body: fetch rejects outright.
   return {
-    message: "Could not reach the server. Check that it is still running, then try again.",
+    message:
+      "Could not reach the server. Check that it is still running, then try again.",
   };
 }

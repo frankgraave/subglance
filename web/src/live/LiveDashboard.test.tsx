@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
 import { LiveDashboardRoot } from "./LiveDashboard";
 import type { EventSourceLike } from "./connection";
@@ -25,7 +32,10 @@ class FakeSource implements EventSourceLike {
     FakeSource.opened += 1;
   }
 
-  addEventListener(type: string, listener: (event: MessageEvent) => void): void {
+  addEventListener(
+    type: string,
+    listener: (event: MessageEvent) => void,
+  ): void {
     this.listeners.set(type, listener);
   }
 
@@ -44,7 +54,10 @@ class FakeSource implements EventSourceLike {
   }
 
   send(type: string, body: unknown): void {
-    this.listeners.get(type)?.({ data: JSON.stringify(body), lastEventId: "" } as MessageEvent);
+    this.listeners.get(type)?.({
+      data: JSON.stringify(body),
+      lastEventId: "",
+    } as MessageEvent);
   }
 }
 
@@ -72,7 +85,9 @@ function renderLive(monitors: unknown[] = [apiMonitor()]) {
     json: async () => ({ monitors }),
   });
   vi.stubGlobal("fetch", fetchMock);
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   render(
     <LiveDashboardRoot
       client={client}
@@ -135,11 +150,19 @@ describe("LiveDashboard", () => {
     });
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockReturnValue(
-        pending.then(() => ({ ok: true, status: 200, json: async () => ({ monitors: [] }) })),
-      ),
+      vi
+        .fn()
+        .mockReturnValue(
+          pending.then(() => ({
+            ok: true,
+            status: 200,
+            json: async () => ({ monitors: [] }),
+          })),
+        ),
     );
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     const exit = vi.fn();
     render(
       <LiveDashboardRoot
@@ -151,19 +174,25 @@ describe("LiveDashboard", () => {
     );
 
     expect(document.querySelector(".wall")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /leave the status wall/i })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: /leave the status wall/i }),
+    ).toBeTruthy();
     expect(screen.getAllByText(/Loading monitors…/).length).toBeGreaterThan(0);
 
     await act(async () => {
       release(null);
       await pending;
     });
-    await waitFor(() => expect(screen.getByText(/Nothing being watched yet/)).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByText(/Nothing being watched yet/)).toBeTruthy(),
+    );
   });
 
   it("keeps the wall's frame when the first load fails outright", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     render(
       <LiveDashboardRoot
         client={client}
@@ -172,9 +201,13 @@ describe("LiveDashboard", () => {
         createEventSource={() => new FakeSource()}
       />,
     );
-    await waitFor(() => expect(screen.getAllByText(/offline/).length).toBeGreaterThan(0));
+    await waitFor(() =>
+      expect(screen.getAllByText(/offline/).length).toBeGreaterThan(0),
+    );
     expect(document.querySelector(".wall")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /leave the status wall/i })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: /leave the status wall/i }),
+    ).toBeTruthy();
   });
 
   it("announces the transition in the live region", async () => {
@@ -276,7 +309,9 @@ describe("LiveDashboard", () => {
       die();
       const opened = FakeSource.opened;
 
-      const button = await screen.findByRole("button", { name: /Reconnect now/ });
+      const button = await screen.findByRole("button", {
+        name: /Reconnect now/,
+      });
       act(() => {
         fireEvent.click(button);
       });
@@ -297,19 +332,32 @@ describe("LiveDashboard", () => {
       });
       act(() => FakeSource.last?.open());
 
-      await waitFor(() => expect(screen.queryByText(/Connection lost/)).toBeNull());
+      await waitFor(() =>
+        expect(screen.queryByText(/Connection lost/)).toBeNull(),
+      );
       const name = screen.getByText("api");
-      expect(name.closest(".mon-dashboard")?.getAttribute("data-conn")).toBe("live");
+      expect(name.closest(".mon-dashboard")?.getAttribute("data-conn")).toBe(
+        "live",
+      );
     });
   });
 
   it("reports a failed first load instead of showing an empty dashboard", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({ ok: false, status: 503, json: async () => ({}) }),
+      vi
+        .fn()
+        .mockResolvedValue({ ok: false, status: 503, json: async () => ({}) }),
     );
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(<LiveDashboardRoot client={client} createEventSource={() => new FakeSource()} />);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <LiveDashboardRoot
+        client={client}
+        createEventSource={() => new FakeSource()}
+      />,
+    );
     expect(await screen.findByRole("alert")).toBeTruthy();
   });
 
@@ -331,10 +379,16 @@ describe("LiveDashboard", () => {
       const fetchMock = vi.fn().mockImplementation(() => {
         call += 1;
         const monitors = call === 1 ? first : second;
-        return Promise.resolve({ ok: true, status: 200, json: async () => ({ monitors }) });
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ monitors }),
+        });
       });
       vi.stubGlobal("fetch", fetchMock);
-      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
       render(
         <LiveDashboardRoot
           client={client}
@@ -399,22 +453,28 @@ describe("LiveDashboard", () => {
         apiMonitor({ id: 2, name: "bravo" }),
       ];
       let call = 0;
-      const fetchMock = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
-        call += 1;
-        if (call === 1) {
-          // Never resolves on its own; it only ends when the hook aborts it.
-          return new Promise((_resolve, reject) => {
-            init?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+      const fetchMock = vi
+        .fn()
+        .mockImplementation((_url: string, init?: RequestInit) => {
+          call += 1;
+          if (call === 1) {
+            // Never resolves on its own; it only ends when the hook aborts it.
+            return new Promise((_resolve, reject) => {
+              init?.signal?.addEventListener("abort", () =>
+                reject(new Error("aborted")),
+              );
+            });
+          }
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({ monitors: second }),
           });
-        }
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: async () => ({ monitors: second }),
         });
-      });
       vi.stubGlobal("fetch", fetchMock);
-      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
       render(
         <LiveDashboardRoot
           client={client}
@@ -448,7 +508,9 @@ describe("LiveDashboard", () => {
           data: { event: "incident_confirmed", error: "500" },
         });
       });
-      await waitFor(() => expect(screen.getByText("down", { exact: true })).toBeTruthy());
+      await waitFor(() =>
+        expect(screen.getByText("down", { exact: true })).toBeTruthy(),
+      );
       // The whole point of the stream: no request for a row it already has.
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });

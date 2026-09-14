@@ -22,7 +22,11 @@ describe("MonitorLink", () => {
   it("routes client-side on a plain left click", () => {
     const onOpen = vi.fn();
     render(<MonitorLink id="42" name="api" onOpen={onOpen} />);
-    const event = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+    const event = new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+    });
     fireEvent(link(), event);
     expect(onOpen).toHaveBeenCalledWith("42");
     expect(event.defaultPrevented).toBe(true);
@@ -33,7 +37,12 @@ describe("MonitorLink", () => {
     // would silently break "open in new tab" for every monitor on the page.
     const onOpen = vi.fn();
     render(<MonitorLink id="42" name="api" onOpen={onOpen} />);
-    for (const modifier of ["metaKey", "ctrlKey", "shiftKey", "altKey"] as const) {
+    for (const modifier of [
+      "metaKey",
+      "ctrlKey",
+      "shiftKey",
+      "altKey",
+    ] as const) {
       const event = new MouseEvent("click", {
         bubbles: true,
         cancelable: true,
@@ -49,7 +58,11 @@ describe("MonitorLink", () => {
   it("stands aside for a middle click", () => {
     const onOpen = vi.fn();
     render(<MonitorLink id="42" name="api" onOpen={onOpen} />);
-    const event = new MouseEvent("click", { bubbles: true, cancelable: true, button: 1 });
+    const event = new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      button: 1,
+    });
     fireEvent(link(), event);
     expect(onOpen).not.toHaveBeenCalled();
     expect(event.defaultPrevented).toBe(false);
@@ -57,7 +70,11 @@ describe("MonitorLink", () => {
 
   it("leaves the href working when no handler is given", () => {
     render(<MonitorLink id="42" name="api" />);
-    const event = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+    const event = new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+    });
     fireEvent(link(), event);
     expect(event.defaultPrevented).toBe(false);
   });

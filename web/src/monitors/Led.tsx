@@ -63,10 +63,20 @@ export type LedProps = {
   className?: string;
 };
 
-export function Led({ status, labelled = true, hideLabel = true, className }: LedProps) {
+export function Led({
+  status,
+  labelled = true,
+  hideLabel = true,
+  className,
+}: LedProps) {
   const label = LABELS[status];
   const lamp = (
-    <span className="led" data-state={STATE[status]} data-status={status} aria-hidden="true" />
+    <span
+      className="led"
+      data-state={STATE[status]}
+      data-status={status}
+      aria-hidden="true"
+    />
   );
 
   if (!labelled) {

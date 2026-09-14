@@ -14,17 +14,37 @@ const OPTIONS = [
 describe("SegmentedControl", () => {
   it("shows every option and marks exactly one as pressed", () => {
     render(
-      <SegmentedControl label="Test group" options={OPTIONS} value="bravo" onChange={() => {}} />,
+      <SegmentedControl
+        label="Test group"
+        options={OPTIONS}
+        value="bravo"
+        onChange={() => {}}
+      />,
     );
     const buttons = screen.getAllByRole("button");
-    expect(buttons.map((b) => b.textContent)).toEqual(["Alpha", "Bravo", "Charlie"]);
-    expect(buttons.filter((b) => b.getAttribute("aria-pressed") === "true")).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "Bravo" }).getAttribute("aria-pressed")).toBe("true");
+    expect(buttons.map((b) => b.textContent)).toEqual([
+      "Alpha",
+      "Bravo",
+      "Charlie",
+    ]);
+    expect(
+      buttons.filter((b) => b.getAttribute("aria-pressed") === "true"),
+    ).toHaveLength(1);
+    expect(
+      screen
+        .getByRole("button", { name: "Bravo" })
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
   });
 
   it("names the group, so the buttons are not three loose words", () => {
     render(
-      <SegmentedControl label="Test group" options={OPTIONS} value="alpha" onChange={() => {}} />,
+      <SegmentedControl
+        label="Test group"
+        options={OPTIONS}
+        value="alpha"
+        onChange={() => {}}
+      />,
     );
     expect(screen.getByRole("group", { name: "Test group" })).toBeTruthy();
   });
@@ -32,7 +52,12 @@ describe("SegmentedControl", () => {
   it("reports the option pressed", () => {
     const onChange = vi.fn();
     render(
-      <SegmentedControl label="Test group" options={OPTIONS} value="alpha" onChange={onChange} />,
+      <SegmentedControl
+        label="Test group"
+        options={OPTIONS}
+        value="alpha"
+        onChange={onChange}
+      />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Charlie" }));
     expect(onChange).toHaveBeenCalledWith("charlie");
@@ -40,12 +65,19 @@ describe("SegmentedControl", () => {
 
   it("carries a hint as a title only where one was given", () => {
     render(
-      <SegmentedControl label="Test group" options={OPTIONS} value="alpha" onChange={() => {}} />,
+      <SegmentedControl
+        label="Test group"
+        options={OPTIONS}
+        value="alpha"
+        onChange={() => {}}
+      />,
     );
-    expect(screen.getByRole("button", { name: "Bravo" }).getAttribute("title")).toBe(
-      "The second one.",
-    );
-    expect(screen.getByRole("button", { name: "Alpha" }).getAttribute("title")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Bravo" }).getAttribute("title"),
+    ).toBe("The second one.");
+    expect(
+      screen.getByRole("button", { name: "Alpha" }).getAttribute("title"),
+    ).toBeNull();
   });
 
   it("defaults to the view variant and takes the data variant when asked", () => {
@@ -53,7 +85,12 @@ describe("SegmentedControl", () => {
     // copies: a control that changes *what data* you look at wears the accent,
     // one that changes *how* it is drawn stays neutral (DESIGN.md §7.8).
     const { rerender } = render(
-      <SegmentedControl label="Test group" options={OPTIONS} value="alpha" onChange={() => {}} />,
+      <SegmentedControl
+        label="Test group"
+        options={OPTIONS}
+        value="alpha"
+        onChange={() => {}}
+      />,
     );
     expect(screen.getByRole("group").getAttribute("data-variant")).toBe("view");
     rerender(

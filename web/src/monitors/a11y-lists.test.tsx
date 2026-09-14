@@ -83,7 +83,12 @@ function visibleText(el: Element): string {
 
 describe("status is never hue alone in a list layout", () => {
   it("shows the status word on rows for everything that is not up", () => {
-    render(<MonitorTable monitors={ALL.map((s) => monitor(IDS[s], s))} beatWidth={WIDTH} />);
+    render(
+      <MonitorTable
+        monitors={ALL.map((s) => monitor(IDS[s], s))}
+        beatWidth={WIDTH}
+      />,
+    );
     for (const status of ALL) {
       const row = screen.getByTestId(`monitor-row-${IDS[status]}`);
       const shown = visibleText(row);
@@ -96,7 +101,9 @@ describe("status is never hue alone in a list layout", () => {
   });
 
   it("shows the status word on compact lines for everything that is not up", () => {
-    render(<MonitorCompactList monitors={ALL.map((s) => monitor(IDS[s], s))} />);
+    render(
+      <MonitorCompactList monitors={ALL.map((s) => monitor(IDS[s], s))} />,
+    );
     for (const status of ALL) {
       const line = screen.getByTestId(`monitor-line-${IDS[status]}`);
       const shown = visibleText(line);
@@ -109,7 +116,12 @@ describe("status is never hue alone in a list layout", () => {
   });
 
   it("keeps every status announced, whether or not the word is drawn", () => {
-    render(<MonitorTable monitors={ALL.map((s) => monitor(IDS[s], s))} beatWidth={WIDTH} />);
+    render(
+      <MonitorTable
+        monitors={ALL.map((s) => monitor(IDS[s], s))}
+        beatWidth={WIDTH}
+      />,
+    );
     for (const status of ALL) {
       const row = screen.getByTestId(`monitor-row-${IDS[status]}`);
       expect(row.textContent ?? "").toMatch(new RegExp(status, "i"));
@@ -119,22 +131,32 @@ describe("status is never hue alone in a list layout", () => {
 
 describe("the heartbeat bar costs nothing in a list layout", () => {
   const many = (n: number) =>
-    Array.from({ length: n }, (_, i) => monitor(`m${String(i).padStart(3, "0")}`, "up"));
+    Array.from({ length: n }, (_, i) =>
+      monitor(`m${String(i).padStart(3, "0")}`, "up"),
+    );
 
   it("leaves the rows layout one tab stop per monitor", () => {
-    const { container } = render(<MonitorTable monitors={many(200)} beatWidth={WIDTH} />);
+    const { container } = render(
+      <MonitorTable monitors={many(200)} beatWidth={WIDTH} />,
+    );
     const stops = container.querySelectorAll("a[href], button, [tabindex]");
     // One link per monitor and nothing else. 402 before this change.
     expect(stops.length).toBe(200);
   });
 
   it("leaves the cards layout one tab stop per monitor", () => {
-    const { container } = render(<MonitorCardList monitors={many(200)} beatWidth={WIDTH} />);
-    expect(container.querySelectorAll("a[href], button, [tabindex]").length).toBe(200);
+    const { container } = render(
+      <MonitorCardList monitors={many(200)} beatWidth={WIDTH} />,
+    );
+    expect(
+      container.querySelectorAll("a[href], button, [tabindex]").length,
+    ).toBe(200);
   });
 
   it("keeps a 200-monitor rows render inside the documented node budget", () => {
-    const { container } = render(<MonitorTable monitors={many(200)} beatWidth={WIDTH} />);
+    const { container } = render(
+      <MonitorTable monitors={many(200)} beatWidth={WIDTH} />,
+    );
     const nodes = container.querySelectorAll("*").length;
     // MonitorRow documents ~11k as the basis for not virtualising, and that
     // number is now true again. With one sr-only table per row this fixture
@@ -149,10 +171,14 @@ describe("the heartbeat bar costs nothing in a list layout", () => {
   });
 
   it("hides the list bar from assistive technology rather than half-labelling it", () => {
-    const { container } = render(<MonitorTable monitors={many(1)} beatWidth={WIDTH} />);
+    const { container } = render(
+      <MonitorTable monitors={many(1)} beatWidth={WIDTH} />,
+    );
     const figure = container.querySelector("figure");
     expect(figure?.getAttribute("aria-hidden")).toBe("true");
-    expect(container.querySelector(".hb-track")?.hasAttribute("tabindex")).toBe(false);
+    expect(container.querySelector(".hb-track")?.hasAttribute("tabindex")).toBe(
+      false,
+    );
     // The pixels are still drawn: hiding it must not mean dropping it.
     expect(container.querySelectorAll(".hb-bar").length).toBeGreaterThan(0);
   });
@@ -165,6 +191,8 @@ describe("the detail view keeps the readable instrument", () => {
     const track = document.querySelector(".hb-track") as HTMLElement;
     expect(track.getAttribute("tabindex")).toBe("0");
     expect(track.getAttribute("role")).toBe("group");
-    expect(within(screen.getByRole("table")).getAllByRole("row").length).toBeGreaterThan(1);
+    expect(
+      within(screen.getByRole("table")).getAllByRole("row").length,
+    ).toBeGreaterThan(1);
   });
 });

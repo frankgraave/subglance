@@ -338,9 +338,7 @@ describe("HeartbeatBar", () => {
 describe("HeartbeatBar, framed", () => {
   it("states the window's start and end in the two bottom corners", () => {
     const series = beats(5);
-    render(
-      <HeartbeatBar beats={series} label="API" width={WIDTH} framed />,
-    );
+    render(<HeartbeatBar beats={series} label="API" width={WIDTH} framed />);
     const corner = (ts: number) =>
       new Date(ts).toLocaleString(undefined, {
         month: "short",

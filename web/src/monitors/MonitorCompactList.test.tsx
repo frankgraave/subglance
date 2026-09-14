@@ -6,7 +6,11 @@ import type { Monitor, MonitorStatus } from "./types";
 
 afterEach(cleanup);
 
-const monitor = (id: string, status: MonitorStatus, over: Partial<Monitor> = {}): Monitor => ({
+const monitor = (
+  id: string,
+  status: MonitorStatus,
+  over: Partial<Monitor> = {},
+): Monitor => ({
   id,
   name: id,
   status,
@@ -52,7 +56,11 @@ describe("MonitorCompactList", () => {
   it("orders down monitors first, then alphabetically", () => {
     render(
       <MonitorCompactList
-        monitors={[monitor("zulu", "up"), monitor("alpha", "up"), monitor("mike", "down")]}
+        monitors={[
+          monitor("zulu", "up"),
+          monitor("alpha", "up"),
+          monitor("mike", "down"),
+        ]}
       />,
     );
     // The same `partition` rule the table and the cards use: this is the one
@@ -67,7 +75,12 @@ describe("MonitorCompactList", () => {
   it("says why a monitor is down instead of leaving colour to carry it", () => {
     render(
       <MonitorCompactList
-        monitors={[monitor("api", "down", { error: "connection refused", latencyMs: null })]}
+        monitors={[
+          monitor("api", "down", {
+            error: "connection refused",
+            latencyMs: null,
+          }),
+        ]}
       />,
     );
 
@@ -80,7 +93,11 @@ describe("MonitorCompactList", () => {
   });
 
   it("keeps the latency reading when a down monitor has no error text", () => {
-    render(<MonitorCompactList monitors={[monitor("api", "down", { latencyMs: 40 })]} />);
+    render(
+      <MonitorCompactList
+        monitors={[monitor("api", "down", { latencyMs: 40 })]}
+      />,
+    );
     // Down without a reason is possible — a check can fail on a status code
     // and still have timed the response. The slot falls back to the number
     // rather than going blank.
@@ -90,7 +107,9 @@ describe("MonitorCompactList", () => {
   it("gives a screen reader words where the eye gets an em dash", () => {
     render(
       <MonitorCompactList
-        monitors={[monitor("api", "pending", { latencyMs: null, uptime24h: null })]}
+        monitors={[
+          monitor("api", "pending", { latencyMs: null, uptime24h: null }),
+        ]}
       />,
     );
 
@@ -114,7 +133,9 @@ describe("MonitorCompactList", () => {
     // panel stylesheet hangs off, because jsdom has no layout and computed
     // borders here would be the empty string either way.
     const { container } = render(
-      <MonitorCompactList monitors={[monitor("api", "up"), monitor("db", "up")]} />,
+      <MonitorCompactList
+        monitors={[monitor("api", "up"), monitor("db", "up")]}
+      />,
     );
     expect(container.querySelectorAll(".panel-row")).toHaveLength(2);
     // And the container no longer wears the single box the lines used to sit
@@ -157,7 +178,7 @@ describe("MonitorCompactList grouped by a tag", () => {
   ];
 
   const headings = () =>
-    [...document.querySelectorAll(".mon-line-group-title")].map((h) => h.textContent);
+    [...document.querySelectorAll(".card-title")].map((h) => h.textContent);
 
   it("heads one section per tag value, untagged last", () => {
     render(<MonitorCompactList monitors={tagged()} groupKey="env" />);
@@ -176,7 +197,13 @@ describe("MonitorCompactList grouped by a tag", () => {
 
   it("stays one flat list without a grouping key", () => {
     render(<MonitorCompactList monitors={tagged()} />);
-    expect(headings()).toEqual([]);
+    // One card, not none. The ungrouped list used to carry its label on the
+    // PanelList itself, which meant the flat layout was the only screen in the
+    // product with no card around its content — visible as a list floating on
+    // the page while every other list sat in a frame. It now gets the same
+    // card as the grouped case; what makes it "flat" is that there is exactly
+    // one of them.
+    expect(headings()).toEqual(["Monitors (4)"]);
     expect(document.querySelectorAll("ul")).toHaveLength(1);
   });
 });

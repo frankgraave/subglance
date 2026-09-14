@@ -34,7 +34,10 @@ export type ErrorBoundaryProps = {
 
 type ErrorBoundaryState = { error: Error | null };
 
-export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+export class ErrorBoundary extends Component<
+  ErrorBoundaryProps,
+  ErrorBoundaryState
+> {
   state: ErrorBoundaryState = { error: null };
 
   static getDerivedStateFromError(error: unknown): ErrorBoundaryState {
@@ -67,7 +70,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     const { error } = this.state;
     if (error === null) return this.props.children;
 
-    const title = this.props.title ?? "Something broke while drawing this page.";
+    const title =
+      this.props.title ?? "Something broke while drawing this page.";
     return (
       <section className="crash" role="alert" aria-live="assertive">
         <h2 className="crash-title">{title}</h2>

@@ -63,7 +63,11 @@ export function DashboardWorkbench() {
   // the sentence that *would* be announced if the previous render had been an
   // all-healthy list. With no data source there are no real transitions yet.
   const announcement = useMemo(
-    () => describeTransitions(monitors.map((m) => ({ ...m, status: "up" as const })), monitors),
+    () =>
+      describeTransitions(
+        monitors.map((m) => ({ ...m, status: "up" as const })),
+        monitors,
+      ),
     [monitors],
   );
 
@@ -79,7 +83,8 @@ export function DashboardWorkbench() {
           onChange={(next) => setSize(Number(next) as (typeof SCALES)[number])}
         />
         <span className="text-ink-4">
-          Deterministic fixtures — no virtualisation, all {size} rows are in the DOM.
+          Deterministic fixtures — no virtualisation, all {size} rows are in the
+          DOM.
         </span>
       </div>
 

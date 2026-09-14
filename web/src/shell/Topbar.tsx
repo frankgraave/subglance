@@ -112,7 +112,11 @@ export function Topbar({
           </button>
         )}
 
-        <LayoutSwitcher layout={layout} effective={effectiveLayout} onChange={onLayoutChange} />
+        <LayoutSwitcher
+          layout={layout}
+          effective={effectiveLayout}
+          onChange={onLayoutChange}
+        />
 
         {/*
          * The workbench survives, as a side track rather than a tab beside the

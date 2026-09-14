@@ -28,10 +28,7 @@ export type StatusChipProps = {
 /** A status, filled with its own status colour and labelled in words. */
 export function StatusChip({ status, children, className }: StatusChipProps) {
   return (
-    <span
-      className={join("chip chip--status", className)}
-      data-status={status}
-    >
+    <span className={join("chip chip--status", className)} data-status={status}>
       {children}
     </span>
   );
@@ -45,7 +42,9 @@ export function CountChip({
   children: ReactNode;
   className?: string;
 }) {
-  return <span className={join("chip chip--count", className)}>{children}</span>;
+  return (
+    <span className={join("chip chip--count", className)}>{children}</span>
+  );
 }
 
 /** A label and its value in one object, split by an internal divider. */
@@ -77,7 +76,9 @@ export function StateChip({
   children: ReactNode;
   className?: string;
 }) {
-  return <span className={join("chip chip--state", className)}>{children}</span>;
+  return (
+    <span className={join("chip chip--state", className)}>{children}</span>
+  );
 }
 
 /**

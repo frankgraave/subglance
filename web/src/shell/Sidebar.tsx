@@ -34,7 +34,11 @@ type Destination = {
   Icon: (props: { className?: string }) => React.ReactElement;
 };
 
-const AVAILABLE: Destination = { id: "dashboard", label: "Dashboard", Icon: DashboardIcon };
+const AVAILABLE: Destination = {
+  id: "dashboard",
+  label: "Dashboard",
+  Icon: DashboardIcon,
+};
 
 const PLANNED: readonly Destination[] = [
   { id: "incidents", label: "Incidents", Icon: IncidentsIcon },
@@ -63,7 +67,11 @@ function Planned({ label, Icon }: Destination) {
        * disabled button in a nav list is a promise with the wiring cut. The
        * "Soon" text is read out, so the state does not depend on the dimming.
        */}
-      <span className="shell-nav-item" data-state="planned" title={`${label} — not built yet`}>
+      <span
+        className="shell-nav-item"
+        data-state="planned"
+        title={`${label} — not built yet`}
+      >
         <Icon />
         <span className="shell-nav-text">{label}</span>
         <span className="shell-nav-soon">Soon</span>
@@ -72,7 +80,12 @@ function Planned({ label, Icon }: Destination) {
   );
 }
 
-export function Sidebar({ collapsed, instance, account, onSignOut }: SidebarProps) {
+export function Sidebar({
+  collapsed,
+  instance,
+  account,
+  onSignOut,
+}: SidebarProps) {
   return (
     <nav
       className="shell-sidebar"
@@ -98,7 +111,11 @@ export function Sidebar({ collapsed, instance, account, onSignOut }: SidebarProp
            * built destination is also the one you are always on, and that fact
            * should reach a screen reader without reading the stylesheet.
            */}
-          <span className="shell-nav-item" data-state="current" aria-current="page">
+          <span
+            className="shell-nav-item"
+            data-state="current"
+            aria-current="page"
+          >
             <AVAILABLE.Icon />
             <span className="shell-nav-text">{AVAILABLE.label}</span>
           </span>
@@ -116,15 +133,15 @@ export function Sidebar({ collapsed, instance, account, onSignOut }: SidebarProp
       </ul>
 
       {/*
-        * Who you are, and the way out, at the bottom of the navigation.
-        *
-        * This is where an account menu is looked for, and it is the only
-        * chrome that persists on every screen — putting sign-out in the
-        * topbar would spend one of the few slots a phone has on an action
-        * taken once a session. The address is shown because a self-hoster
-        * with an admin and a viewer account has no other way to tell which
-        * one this browser is holding.
-        */}
+       * Who you are, and the way out, at the bottom of the navigation.
+       *
+       * This is where an account menu is looked for, and it is the only
+       * chrome that persists on every screen — putting sign-out in the
+       * topbar would spend one of the few slots a phone has on an action
+       * taken once a session. The address is shown because a self-hoster
+       * with an admin and a viewer account has no other way to tell which
+       * one this browser is holding.
+       */}
       {account !== undefined && account !== "" && onSignOut !== undefined && (
         <div className="shell-account">
           <p className="shell-account-email" title={account}>

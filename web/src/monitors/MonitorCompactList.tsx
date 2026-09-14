@@ -1,4 +1,6 @@
 import { memo } from "react";
+import { Card, Panel } from "../components/Card";
+import { IconList } from "../components/icons";
 import { PanelList, PanelRow } from "../components/PanelList";
 import { Value } from "../components/Value";
 import { EmptyState } from "./EmptyState";
@@ -69,7 +71,13 @@ function CompactLineImpl({ monitor, onOpen }: CompactLineProps) {
       className="mon-line"
       status={status}
       data-testid={`monitor-line-${monitor.id}`}
-      icon={<Led status={status} hideLabel={status === "up"} className="mon-line-led" />}
+      icon={
+        <Led
+          status={status}
+          hideLabel={status === "up"}
+          className="mon-line-led"
+        />
+      }
     >
       <MonitorLink
         id={monitor.id}
@@ -143,25 +151,26 @@ export function MonitorCompactList({
     return (
       <div className="mon-lines">
         {sectionsByTag(monitors, groupKey).map((section) => (
-          <section
+          <Card
             key={section.id}
             className={
               section.attention
                 ? "mon-line-group mon-line-group--attention"
                 : "mon-line-group"
             }
-            aria-labelledby={`mon-line-${section.id}`}
+            title={`${section.label} (${section.monitors.length})`}
+            icon={<IconList />}
+            headingLevel={3}
           >
-            {/* A real heading rather than a styled <li>: the list has to stay a
-                list of monitors, so a screen reader's item count keeps
-                matching what is on screen. */}
-            <h3 id={`mon-line-${section.id}`} className="mon-line-group-title">
-              {section.label} ({section.monitors.length})
-            </h3>
-            <PanelList className="mon-line-stack">
-              {lines(section.monitors)}
-            </PanelList>
-          </section>
+            {/* The list stays a real list inside the panel, so a screen
+                reader's item count keeps matching what is on screen. The
+                panel is flush: its rows draw to their own edges. */}
+            <Panel padded={false}>
+              <PanelList className="mon-line-stack">
+                {lines(section.monitors)}
+              </PanelList>
+            </Panel>
+          </Card>
         ))}
       </div>
     );
@@ -174,12 +183,15 @@ export function MonitorCompactList({
 
   return (
     <div className="mon-lines">
-      <PanelList
-        className="mon-line-stack"
-        label={`Monitors (${ordered.length})`}
+      <Card
+        title={`Monitors (${ordered.length})`}
+        icon={<IconList />}
+        headingLevel={2}
       >
-        {lines(ordered)}
-      </PanelList>
+        <Panel padded={false}>
+          <PanelList className="mon-line-stack">{lines(ordered)}</PanelList>
+        </Panel>
+      </Card>
     </div>
   );
 }

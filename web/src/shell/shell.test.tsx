@@ -31,7 +31,12 @@ describe("Sidebar", () => {
     render(<Sidebar collapsed={false} />);
     // They are shown — the shape of the product is information — but never as
     // something you can press, and never with a fabricated count beside them.
-    for (const label of ["Incidents", "Monitors", "Notifications", "Settings"]) {
+    for (const label of [
+      "Incidents",
+      "Monitors",
+      "Notifications",
+      "Settings",
+    ]) {
       const item = screen.getByText(label).closest(".shell-nav-item")!;
       expect(item.getAttribute("data-state")).toBe("planned");
       expect(item.querySelector("a, button")).toBeNull();
@@ -44,7 +49,9 @@ describe("Sidebar", () => {
     // Collapsed is a rail, not a disappearance: the text stays in the DOM so
     // the icons are not five unnamed squares.
     expect(screen.getByText("Dashboard")).toBeTruthy();
-    expect(document.querySelector('.shell-sidebar[data-collapsed="true"]')).toBeTruthy();
+    expect(
+      document.querySelector('.shell-sidebar[data-collapsed="true"]'),
+    ).toBeTruthy();
   });
 });
 
@@ -52,18 +59,33 @@ describe("LayoutSwitcher", () => {
   it("offers all four layouts and reports the pressed one", () => {
     render(<LayoutSwitcher layout="compact" onChange={() => {}} />);
     const buttons = screen.getAllByRole("button");
-    expect(buttons.map((b) => b.textContent)).toEqual(["Rows", "Cards", "Compact", "Status wall"]);
-    expect(screen.getByRole("button", { name: "Compact" }).getAttribute("aria-pressed")).toBe(
-      "true",
-    );
+    expect(buttons.map((b) => b.textContent)).toEqual([
+      "Rows",
+      "Cards",
+      "Compact",
+      "Status wall",
+    ]);
+    expect(
+      screen
+        .getByRole("button", { name: "Compact" })
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
   });
 
   it("shows the layout actually rendered, not the overridden preference", () => {
     // A toolbar claiming Rows while cards are on screen is worse than one
     // admitting the narrow viewport won.
-    render(<LayoutSwitcher layout="rows" effective="cards" onChange={() => {}} />);
-    expect(screen.getByRole("button", { name: "Cards" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "Rows" }).getAttribute("aria-pressed")).toBe("false");
+    render(
+      <LayoutSwitcher layout="rows" effective="cards" onChange={() => {}} />,
+    );
+    expect(
+      screen
+        .getByRole("button", { name: "Cards" })
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
+    expect(
+      screen.getByRole("button", { name: "Rows" }).getAttribute("aria-pressed"),
+    ).toBe("false");
   });
 
   it("reports the chosen layout", () => {
@@ -91,7 +113,9 @@ describe("Topbar", () => {
 
   it("puts the shortcut in the button's accessible name", () => {
     render(topbar());
-    const button = screen.getByRole("button", { name: /collapse sidebar \(ctrl\+b\)/i });
+    const button = screen.getByRole("button", {
+      name: /collapse sidebar \(ctrl\+b\)/i,
+    });
     expect(button.getAttribute("aria-expanded")).toBe("true");
   });
 
@@ -117,7 +141,8 @@ describe("AppShell", () => {
 
 describe("useShellPreferences", () => {
   function Probe({ storage }: { storage: ReturnType<typeof fakeStorage> }) {
-    const { layout, setLayout, sidebarCollapsed, toggleSidebar } = useShellPreferences(storage);
+    const { layout, setLayout, sidebarCollapsed, toggleSidebar } =
+      useShellPreferences(storage);
     return (
       <>
         <span data-testid="layout">{layout}</span>
@@ -155,7 +180,13 @@ describe("useShellPreferences", () => {
 });
 
 describe("useShellShortcuts", () => {
-  function Probe({ onToggleSidebar, onEscape }: { onToggleSidebar: () => void; onEscape?: () => void }) {
+  function Probe({
+    onToggleSidebar,
+    onEscape,
+  }: {
+    onToggleSidebar: () => void;
+    onEscape?: () => void;
+  }) {
     useShellShortcuts({ onToggleSidebar, onEscape });
     return <input aria-label="search" />;
   }
@@ -172,7 +203,10 @@ describe("useShellShortcuts", () => {
     const toggle = vi.fn();
     render(<Probe onToggleSidebar={toggle} />);
     // Cmd+B in a text field means "bold" everywhere else on the web.
-    fireEvent.keyDown(screen.getByLabelText("search"), { key: "b", ctrlKey: true });
+    fireEvent.keyDown(screen.getByLabelText("search"), {
+      key: "b",
+      ctrlKey: true,
+    });
     expect(toggle).not.toHaveBeenCalled();
   });
 
@@ -196,7 +230,9 @@ describe("useShellShortcuts", () => {
 
   it("calls Escape only when there is something to leave", () => {
     const escape = vi.fn();
-    const { unmount } = render(<Probe onToggleSidebar={() => {}} onEscape={escape} />);
+    const { unmount } = render(
+      <Probe onToggleSidebar={() => {}} onEscape={escape} />,
+    );
     fireEvent.keyDown(window, { key: "Escape" });
     expect(escape).toHaveBeenCalledTimes(1);
     unmount();

@@ -27,7 +27,11 @@ export type LayoutSwitcherProps = {
   effective?: LayoutId;
 };
 
-export function LayoutSwitcher({ layout, onChange, effective }: LayoutSwitcherProps) {
+export function LayoutSwitcher({
+  layout,
+  onChange,
+  effective,
+}: LayoutSwitcherProps) {
   return (
     <SegmentedControl
       label="Dashboard layout"

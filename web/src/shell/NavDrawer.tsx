@@ -77,7 +77,10 @@ export function NavDrawer({
    */
   useEffect(() => {
     if (!open) return undefined;
-    const fallback = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const fallback =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
     const returnTo = returnFocusRef?.current ?? fallback;
     closerRef.current?.focus();
     return () => {
@@ -97,7 +100,11 @@ export function NavDrawer({
    */
   useEffect(() => {
     if (!open) return undefined;
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
+    if (
+      typeof window === "undefined" ||
+      typeof window.matchMedia !== "function"
+    )
+      return undefined;
     const query = window.matchMedia(`(max-width: ${COMPACT_MAX_WIDTH}px)`);
     const onChange = (event: MediaQueryListEvent) => {
       if (!event.matches) onClose();

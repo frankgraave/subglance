@@ -43,17 +43,17 @@ describe("IconTile", () => {
         <svg />
       </IconTile>,
     );
-    expect(document.querySelector(".icon-tile")!.getAttribute("data-tone")).toBe(
-      "neutral",
-    );
+    expect(
+      document.querySelector(".icon-tile")!.getAttribute("data-tone"),
+    ).toBe("neutral");
     rerender(
       <IconTile tone="down">
         <svg />
       </IconTile>,
     );
-    expect(document.querySelector(".icon-tile")!.getAttribute("data-tone")).toBe(
-      "down",
-    );
+    expect(
+      document.querySelector(".icon-tile")!.getAttribute("data-tone"),
+    ).toBe("down");
   });
 
   it("keeps the extra class beside the base class rather than replacing it", () => {

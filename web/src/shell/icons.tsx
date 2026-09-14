@@ -10,9 +10,17 @@
 
 type IconProps = { className?: string };
 
-function Icon({ children, className }: IconProps & { children: React.ReactNode }) {
+function Icon({
+  children,
+  className,
+}: IconProps & { children: React.ReactNode }) {
   return (
-    <svg viewBox="0 0 24 24" className={className ?? "shell-icon"} aria-hidden="true" focusable="false">
+    <svg
+      viewBox="0 0 24 24"
+      className={className ?? "shell-icon"}
+      aria-hidden="true"
+      focusable="false"
+    >
       {children}
     </svg>
   );

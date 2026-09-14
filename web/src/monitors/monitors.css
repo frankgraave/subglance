@@ -488,24 +488,39 @@
   gap: var(--space-5);
 }
 
-.mon-cards-title {
-  margin-bottom: var(--space-2);
-  @apply caps-legend;
-}
+/* Section headings come from the shared Card component now; this rule drew a
+   second, different treatment for the same idea. */
 
 .mon-card-stack {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  /* Six, matching the card's own padding: a monitor is the same distance from
+     its neighbour as from the panel edge. It was 8px, which put more air
+     between the cards than around them and made the group read as looser than
+     it is. */
+  gap: var(--space-1h);
   list-style: none;
-  padding: 0;
+  /* The panel this sits in is flush so the stack can own its own inset. Six
+     again, for the same reason — this is the third level of the same nesting
+     and it repeats the same number deliberately. */
+  padding: var(--space-1h);
   margin: 0;
 }
 
+/*
+ * A monitor card sits inside a panel, inside a card — three levels deep — so
+ * it takes the innermost radius on the ladder, not the outermost.
+ *
+ * It was --r-lg (12px), which is the radius of the *outer* card now framing
+ * it. Two boxes at the same radius with one inside the other read as a
+ * mistake rather than as nesting: the corners run parallel at the wrong
+ * offset and the inner box looks like it has escaped its container. One step
+ * down per level is the whole grammar.
+ */
 .mon-card {
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--border);
-  border-radius: var(--r-lg);
+  border-radius: var(--r-sm);
   background: var(--surface);
   /* min-width:0 lets the flex/grid children below actually ellipsis instead
      of pushing the card past the viewport — the 416px-on-a-390px-screen bug
@@ -643,13 +658,9 @@
 
 .mon-lines { display: flex; flex-direction: column; gap: var(--space-5); }
 
-/* A grouped compact list: one heading per tag value, sharing the section
-   heading style of the card layout so the two layouts do not invent two
-   different vocabularies for the same idea. */
-.mon-line-group-title {
-  margin-bottom: var(--space-2);
-  @apply caps-legend;
-}
+/* The grouped compact list heads each section with a Card, same as every
+   other list in the product — which is what the comment here used to promise
+   and a duplicated rule could not keep. */
 
 /*
  * The compact list is a stack of panels, not a ruled table (DESIGN.md §10).
@@ -662,7 +673,10 @@
  */
 .mon-line-stack {
   list-style: none;
-  padding: 0;
+  /* Matches the card's padding, for the same reason the monitor card stack
+     does: the panel above is flush so its rows can own their inset, and six
+     keeps a line the same distance from its neighbour as from the edge. */
+  padding: var(--space-1h);
   margin: 0;
 }
 

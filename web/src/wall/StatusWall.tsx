@@ -77,10 +77,17 @@ export function StatusWall({
   const ordered = [...attention, ...rest];
 
   return (
-    <main ref={mainRef} tabIndex={-1} className="wall" data-stale={stale ? "true" : "false"}>
+    <main
+      ref={mainRef}
+      tabIndex={-1}
+      className="wall"
+      data-stale={stale ? "true" : "false"}
+    >
       <div className="wall-stage">
         <header className="wall-head">
-          <h1 className="wall-title">{instance !== undefined && instance !== "" ? instance : "SubGlance"}</h1>
+          <h1 className="wall-title">
+            {instance !== undefined && instance !== "" ? instance : "SubGlance"}
+          </h1>
           <p className="wall-meta">
             {notice !== undefined ? (
               notice
@@ -99,7 +106,9 @@ export function StatusWall({
                      * it.
                      */}
                     {stale ? (
-                      <span className="wall-meta-lastknown">{summary.down} down, last known</span>
+                      <span className="wall-meta-lastknown">
+                        {summary.down} down, last known
+                      </span>
                     ) : (
                       <b className="wall-meta-down">{summary.down} down</b>
                     )}
@@ -113,7 +122,12 @@ export function StatusWall({
              * the warning rides the line that is already there, next to a
              * warm border around the viewport.
              */}
-            {stale && <span className="wall-meta-stale"> · connection lost, not updating</span>}
+            {stale && (
+              <span className="wall-meta-stale">
+                {" "}
+                · connection lost, not updating
+              </span>
+            )}
           </p>
           <p className="wall-clock" aria-hidden="true">
             {/*
@@ -130,7 +144,11 @@ export function StatusWall({
         ) : (
           <ul className="wall-grid">
             {ordered.map((monitor) => (
-              <li key={monitor.id} className="wall-card" data-status={monitor.status}>
+              <li
+                key={monitor.id}
+                className="wall-card"
+                data-status={monitor.status}
+              >
                 <Led status={monitor.status} className="wall-card-led" />
                 <span className="wall-card-name">{monitor.name}</span>
               </li>
@@ -142,9 +160,19 @@ export function StatusWall({
       {onExit !== undefined && (
         // Visible, not Esc-only. A wall display is often a machine nobody is
         // sitting at; a keyboard-only exit strands whoever walks up to it.
-        <button type="button" className="wall-exit shell-icon-btn" onClick={onExit} title="Leave the status wall (Esc)">
+        <button
+          type="button"
+          className="wall-exit shell-icon-btn"
+          onClick={onExit}
+          title="Leave the status wall (Esc)"
+        >
           <span className="sr-only">Leave the status wall</span>
-          <svg viewBox="0 0 24 24" className="shell-icon" aria-hidden="true" focusable="false">
+          <svg
+            viewBox="0 0 24 24"
+            className="shell-icon"
+            aria-hidden="true"
+            focusable="false"
+          >
             <path d="M18 6 6 18M6 6l12 12" />
           </svg>
         </button>

@@ -56,7 +56,12 @@ const ALPHA = {
   created_at: "2026-09-01T00:00:00Z",
 };
 
-const BRAVO = { ...ALPHA, id: 2, name: "bravo", target: "https://bravo.example.com" };
+const BRAVO = {
+  ...ALPHA,
+  id: 2,
+  name: "bravo",
+  target: "https://bravo.example.com",
+};
 
 /** Flipped by the test; the stub server only knows bravo once it is set. */
 let created = false;
@@ -100,7 +105,9 @@ describe("creating a monitor", () => {
     expect(screen.queryByText("bravo")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Add a monitor" }));
-    const save = await screen.findByRole("button", { name: /pretend the monitor saved/ });
+    const save = await screen.findByRole("button", {
+      name: /pretend the monitor saved/,
+    });
     created = true;
     fireEvent.click(save);
 
@@ -111,11 +118,15 @@ describe("creating a monitor", () => {
     render(<App />);
     await screen.findByText("alpha");
     fireEvent.click(screen.getByRole("button", { name: "Add a monitor" }));
-    const save = await screen.findByRole("button", { name: /pretend the monitor saved/ });
+    const save = await screen.findByRole("button", {
+      name: /pretend the monitor saved/,
+    });
     created = true;
     fireEvent.click(save);
 
     await screen.findByText("bravo");
-    expect(screen.queryByRole("button", { name: /pretend the monitor saved/ })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /pretend the monitor saved/ }),
+    ).toBeNull();
   });
 });

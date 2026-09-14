@@ -18,12 +18,16 @@ import {
 import { IconTile } from "./IconTile";
 import { Tooltip } from "./Tooltip";
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <section className="mb-10">
-      <h2 className="mb-3 caps-legend">
-        {title}
-      </h2>
+      <h2 className="mb-3 caps-legend">{title}</h2>
       {children}
     </section>
   );
@@ -55,10 +59,30 @@ const INK = [
 ];
 
 const STATUS = [
-  { name: "--up", dot: "bg-up", glow: "var(--glow-up)", label: "Last check passed" },
-  { name: "--warn", dot: "bg-warn", glow: "var(--glow-warn)", label: "Slow, or cert expiring" },
-  { name: "--down", dot: "bg-down", glow: "var(--glow-down)", label: "Last check failed" },
-  { name: "--idle", dot: "bg-idle", glow: "var(--glow-idle)", label: "Paused, or no data yet" },
+  {
+    name: "--up",
+    dot: "bg-up",
+    glow: "var(--glow-up)",
+    label: "Last check passed",
+  },
+  {
+    name: "--warn",
+    dot: "bg-warn",
+    glow: "var(--glow-warn)",
+    label: "Slow, or cert expiring",
+  },
+  {
+    name: "--down",
+    dot: "bg-down",
+    glow: "var(--glow-down)",
+    label: "Last check failed",
+  },
+  {
+    name: "--idle",
+    dot: "bg-idle",
+    glow: "var(--glow-idle)",
+    label: "Paused, or no data yet",
+  },
 ];
 
 export function TokenSheet() {
@@ -147,8 +171,20 @@ export function TokenSheet() {
               timestamp="14 Sep 09:00 – 09:20"
               unit="ms"
               rows={[
-                { key: "slowest", label: "Slowest", value: "142", marker: "up", status: "Up" },
-                { key: "median", label: "Median", value: "96", marker: "up", status: "Up" },
+                {
+                  key: "slowest",
+                  label: "Slowest",
+                  value: "142",
+                  marker: "up",
+                  status: "Up",
+                },
+                {
+                  key: "median",
+                  label: "Median",
+                  value: "96",
+                  marker: "up",
+                  status: "Up",
+                },
               ]}
               total={{ label: "Total", value: "20 checks" }}
             />
@@ -158,7 +194,13 @@ export function TokenSheet() {
               timestamp="14 Sep 03:00 – 03:20"
               unit="ms"
               rows={[
-                { key: "slowest", label: "Slowest", value: "98", marker: "up", status: "Up" },
+                {
+                  key: "slowest",
+                  label: "Slowest",
+                  value: "98",
+                  marker: "up",
+                  status: "Up",
+                },
               ]}
               total={{ label: "Total", value: "2 checks" }}
               partial

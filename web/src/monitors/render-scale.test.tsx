@@ -71,7 +71,15 @@ function monitors(count: number): Monitor[] {
 function oneBeatLater(list: readonly Monitor[], index: number): Monitor[] {
   return list.map((m, i) =>
     i === index
-      ? { ...m, latencyMs: m.latencyMs! + 7, lastCheck: T0 + 60_000, beats: [...m.beats, { ts: T0 + 60_000, ok: true, latencyMs: m.latencyMs! + 7 }] }
+      ? {
+          ...m,
+          latencyMs: m.latencyMs! + 7,
+          lastCheck: T0 + 60_000,
+          beats: [
+            ...m.beats,
+            { ts: T0 + 60_000, ok: true, latencyMs: m.latencyMs! + 7 },
+          ],
+        }
       : { ...m, beats: [...m.beats] },
   );
 }
@@ -79,32 +87,46 @@ function oneBeatLater(list: readonly Monitor[], index: number): Monitor[] {
 function Harness({ list, layout }: { list: Monitor[]; layout: LayoutId }) {
   const [query, setQuery] = useState("");
   return (
-    <Dashboard monitors={list} query={query} onQueryChange={setQuery} beatWidth={WIDTH} layout={layout} />
+    <Dashboard
+      monitors={list}
+      query={query}
+      onQueryChange={setQuery}
+      beatWidth={WIDTH}
+      layout={layout}
+    />
   );
 }
 
-describe.each<LayoutId>(["rows", "cards"])("one heartbeat in the %s layout", (layout) => {
-  it(`re-renders 1 of ${SCALE} monitors`, () => {
-    const list = monitors(SCALE);
-    const { rerender } = render(<Harness list={list} layout={layout} />);
+describe.each<LayoutId>(["rows", "cards"])(
+  "one heartbeat in the %s layout",
+  (layout) => {
+    it(`re-renders 1 of ${SCALE} monitors`, () => {
+      const list = monitors(SCALE);
+      const { rerender } = render(<Harness list={list} layout={layout} />);
 
-    expect(renders.count).toBe(SCALE); // the first paint draws everything
-    renders.count = 0;
+      expect(renders.count).toBe(SCALE); // the first paint draws everything
+      renders.count = 0;
 
-    rerender(<Harness list={oneBeatLater(list, 42)} layout={layout} />);
+      rerender(<Harness list={oneBeatLater(list, 42)} layout={layout} />);
 
-    // Not "less than 200": a budget that tolerates 199 tolerates the bug.
-    expect(renders.count).toBe(1);
-  });
+      // Not "less than 200": a budget that tolerates 199 tolerates the bug.
+      expect(renders.count).toBe(1);
+    });
 
-  it("re-renders nothing when the payload is identical", () => {
-    const list = monitors(SCALE);
-    const { rerender } = render(<Harness list={list} layout={layout} />);
-    renders.count = 0;
+    it("re-renders nothing when the payload is identical", () => {
+      const list = monitors(SCALE);
+      const { rerender } = render(<Harness list={list} layout={layout} />);
+      renders.count = 0;
 
-    // A poll that found no change still hands down fresh arrays and objects.
-    rerender(<Harness list={list.map((m) => ({ ...m, beats: [...m.beats] }))} layout={layout} />);
+      // A poll that found no change still hands down fresh arrays and objects.
+      rerender(
+        <Harness
+          list={list.map((m) => ({ ...m, beats: [...m.beats] }))}
+          layout={layout}
+        />,
+      );
 
-    expect(renders.count).toBe(0);
-  });
-});
+      expect(renders.count).toBe(0);
+    });
+  },
+);

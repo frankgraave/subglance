@@ -182,7 +182,9 @@ export function Menu({
               </span>
               <span className="menu-item-text">
                 <span className="menu-item-title">{item.title}</span>
-                <span className="menu-item-description">{item.description}</span>
+                <span className="menu-item-description">
+                  {item.description}
+                </span>
               </span>
             </button>
           ))}
