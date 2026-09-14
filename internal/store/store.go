@@ -184,6 +184,9 @@ type migration struct {
 // Each migration runs inside a transaction together with the row recording it,
 // so a failure halfway leaves neither a partial schema nor a false record of
 // success.
+//
+// It also refuses to run against a schema from the future; see
+// checkNotDowngrade.
 func (db *DB) Migrate(ctx context.Context) error {
 	if err := db.prepareMigrationTable(ctx); err != nil {
 		return err
@@ -199,6 +202,10 @@ func (db *DB) Migrate(ctx context.Context) error {
 		return err
 	}
 
+	if err := checkNotDowngrade(applied, all); err != nil {
+		return err
+	}
+
 	for _, m := range all {
 		if applied[m.name] {
 			continue
@@ -208,6 +215,55 @@ func (db *DB) Migrate(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// checkNotDowngrade refuses to run when the ledger records a migration this
+// binary does not know about.
+//
+// Rolling the container tag back is the first thing most self-hosters try when
+// an upgrade goes wrong, and without this the older binary starts happily. It
+// sees a schema that a newer migration has already rewritten — 0005 drops and
+// renames the monitors table, for instance — and keeps writing against the
+// shape it remembers: INSERTs missing columns, SELECTs against columns that
+// moved. Nothing errors. It just writes wrong rows, and by the time anyone
+// notices, the good data is gone.
+//
+// Failing to start is the only safe answer. The database still holds correct
+// data at that point, and the operator can go forward again to the newer image
+// or restore a backup; both are recoverable, and silent corruption is not.
+//
+// The check is on names rather than a PRAGMA user_version counter because the
+// ledger is already the authoritative record and names survive out-of-order
+// merges, which a single integer does not.
+func checkNotDowngrade(applied map[string]bool, known []migration) error {
+	embedded := make(map[string]bool, len(known))
+	for _, m := range known {
+		embedded[m.name] = true
+	}
+
+	var unknown []string
+	for name := range applied {
+		if !embedded[name] {
+			unknown = append(unknown, name)
+		}
+	}
+	if len(unknown) == 0 {
+		return nil
+	}
+	sort.Strings(unknown) // deterministic message, whatever map order gave
+
+	return fmt.Errorf("store: database was migrated by a newer version of SubGlance "+
+		"(unknown migration%s: %s); "+
+		"this binary would write rows against a schema it does not understand, so it refuses to start. "+
+		"Run a build that includes %s, or restore a backup taken before the upgrade",
+		plural(len(unknown)), strings.Join(unknown, ", "), unknown[len(unknown)-1])
+}
+
+func plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
 }
 
 // prepareMigrationTable creates the ledger Migrate reads and writes.
