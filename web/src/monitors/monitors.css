@@ -244,7 +244,7 @@
  */
 .mon-row > * {
   border-block: 1px solid var(--border-control);
-  transition: background var(--dur-hover) var(--ease);
+  transition: border-color var(--dur-hover) var(--ease);
 }
 
 .mon-row > :first-child {
@@ -260,8 +260,17 @@
 }
 
 /* The surface does not move on hover — no transform. A list people stare at
-   all day must not shift under the pointer; the row lights instead. */
-.mon-row:hover > * { background: var(--surface-2); }
+   all day must not shift under the pointer.
+ *
+ * The row lights its edge rather than filling in. Measured against the
+ * reference style, hover lands on the border everywhere in that interface and
+ * never on the fill, and the reason holds here: a filled row competes with the
+ * status tints that mean something, and in a list of 200 a passing pointer
+ * would keep flashing a block of colour the same weight as trouble. An edge
+ * that brightens says "this one" without claiming anything about its health. */
+.mon-row:hover > * { border-block-color: var(--border-hi); }
+.mon-row:hover > :first-child { border-left-color: var(--border-hi); }
+.mon-row:hover > :last-child { border-right-color: var(--border-hi); }
 
 /* Trouble warms the row's leading edge instead of filling it. A coloured fill
    across a list of 200 is noise; two warm edges in a quiet list is
