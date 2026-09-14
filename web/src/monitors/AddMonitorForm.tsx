@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
+import { isPush } from "./push";
 import type { PreviewResult, PreviewState } from "./preview";
 import { describePreview, suggestName } from "./preview";
 
@@ -36,7 +37,12 @@ export type AddMonitorValues = {
   timeoutS: number;
   keyword: string;
   keywordMode: string;
+  /** Push monitors only: how often the job is expected to report, in seconds. */
+  pushIntervalS: number;
+  /** Push monitors only: how late that report may be, in seconds. */
+  pushGraceS: number;
 };
+
 
 /**
  * A rejection the form has to show, and where it belongs.
@@ -69,6 +75,8 @@ const FIELD_CONTROL: Record<string, string> = {
   timeout_s: "timeout",
   keyword: "keyword",
   keyword_mode: "keyword",
+  push_interval_s: "push-interval",
+  push_grace_s: "push-grace",
 };
 
 /**
@@ -105,6 +113,15 @@ const DEFAULTS: AddMonitorValues = {
   timeoutS: 10,
   keyword: "",
   keywordMode: "absent_ok",
+  // An hour, matching the most common thing a push monitor watches: a nightly
+  // or hourly cron line. The API has no default of its own — it requires the
+  // field — so something has to be offered, and an empty number box that
+  // rejects on save is the worst of both.
+  pushIntervalS: 3600,
+  // The server's own default. Repeated rather than left blank so the value is
+  // visible before it is committed: silent grace is how a monitor ends up
+  // alerting a minute later than its owner expects.
+  pushGraceS: 60,
 };
 
 export function AddMonitorForm({
@@ -133,8 +150,20 @@ export function AddMonitorForm({
    */
   const [typedName, setTypedName] = useState<string | null>(null);
 
+  const push = isPush(values);
   const targetEmpty = values.target.trim() === "";
-  const name = typedName ?? suggestName(values.target);
+  /*
+   * What blocks the save.
+   *
+   * A push monitor has no target and must never be asked for one, so the
+   * usual "type something in the one required box" guard would lock its save
+   * button forever. It needs a name instead, which is the only thing it can
+   * be recognised by once it is in the list.
+   */
+  const incomplete = push ? (typedName ?? "").trim() === "" : targetEmpty;
+  const name = push
+    ? (typedName ?? "")
+    : (typedName ?? suggestName(values.target));
   const effective = { ...values, name };
 
   /*
@@ -204,7 +233,7 @@ export function AddMonitorForm({
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (targetEmpty || saving) return;
+    if (incomplete || saving) return;
     onSubmit(effective);
   };
 
@@ -218,36 +247,47 @@ export function AddMonitorForm({
         Add a monitor
       </h2>
       <p className="add-lede">
-        Paste an address. SubGlance works out what kind of check it is and fills
-        in the rest — you can change any of it below.
+        {push
+          ? "Nothing is dialled for a push monitor. Name it, say how often it should report in, and paste the URL it gets into the job."
+          : "Paste an address. SubGlance works out what kind of check it is and fills in the rest — you can change any of it below."}
       </p>
 
-      <div className="add-field">
-        <label className="add-label" htmlFor={`${ids}-target`}>
-          What should be watched
-        </label>
-        <input
-          id={`${ids}-target`}
-          className="add-input"
-          value={values.target}
-          onChange={(event) => setTarget(event.target.value)}
-          placeholder="example.com, https://example.com/health, or db.example.com:5432"
-          autoComplete="off"
-          spellCheck={false}
-          required
-          {...invalidProps("target", `${ids}-target-help`)}
-        />
-        <p id={`${ids}-target-help`} className="add-help">
-          A URL, a hostname, or a host and port. A bare hostname is checked over
-          HTTPS.
-        </p>
-        <FieldError
-          control="target"
-          badControl={badControl}
-          rejection={rejection}
-          ids={ids}
-        />
-      </div>
+      {/*
+       * The target box is removed, not disabled, for a push monitor.
+       *
+       * The API rejects a push monitor that carries a target at all, so a
+       * greyed-out box would be a control that can never be used sitting above
+       * an error explaining it must stay empty. Nothing to dial means nothing
+       * to ask for.
+       */}
+      {!push && (
+        <div className="add-field">
+          <label className="add-label" htmlFor={`${ids}-target`}>
+            What should be watched
+          </label>
+          <input
+            id={`${ids}-target`}
+            className="add-input"
+            value={values.target}
+            onChange={(event) => setTarget(event.target.value)}
+            placeholder="example.com, https://example.com/health, or db.example.com:5432"
+            autoComplete="off"
+            spellCheck={false}
+            required
+            {...invalidProps("target", `${ids}-target-help`)}
+          />
+          <p id={`${ids}-target-help`} className="add-help">
+            A URL, a hostname, or a host and port. A bare hostname is checked
+            over HTTPS.
+          </p>
+          <FieldError
+            control="target"
+            badControl={badControl}
+            rejection={rejection}
+            ids={ids}
+          />
+        </div>
+      )}
 
       <div className="add-field">
         <label className="add-label" htmlFor={`${ids}-name`}>
@@ -258,8 +298,9 @@ export function AddMonitorForm({
           className="add-input"
           value={name}
           onChange={(event) => setTypedName(event.target.value)}
-          placeholder="Taken from the address"
+          placeholder={push ? "Nightly backup" : "Taken from the address"}
           autoComplete="off"
+          required={push}
           {...invalidProps("name", `${ids}-name-help`)}
         />
         <FieldError
@@ -269,9 +310,92 @@ export function AddMonitorForm({
           ids={ids}
         />
         <p id={`${ids}-name-help`} className="add-help">
-          Optional. Left alone, it follows the address.
+          {push
+            ? "Required: there is no address to fall back on. Name it after the job."
+            : "Optional. Left alone, it follows the address."}
         </p>
       </div>
+
+      {/*
+       * The push window sits outside the advanced panel, unlike every other
+       * setting, because for a push monitor it is not advanced: it is the
+       * whole definition. A required field hidden behind a disclosure is a
+       * form that rejects on save for a reason the user cannot see.
+       */}
+      {push && (
+        <div className="add-grid">
+          <div className="add-field">
+            <label className="add-label" htmlFor={`${ids}-push-interval`}>
+              Should report every
+            </label>
+            <div className="add-addon">
+              <input
+                id={`${ids}-push-interval`}
+                className="add-input"
+                type="number"
+                min={60}
+                max={2592000}
+                value={values.pushIntervalS}
+                onChange={(event) =>
+                  setValues((v) => ({
+                    ...v,
+                    pushIntervalS: Number(event.target.value),
+                  }))
+                }
+                {...invalidProps("push-interval", `${ids}-push-interval-help`)}
+              />
+              <span className="add-unit" aria-hidden="true">
+                sec
+              </span>
+            </div>
+            <p id={`${ids}-push-interval-help`} className="add-help">
+              How often the job runs. 3600 is hourly, 86400 is daily.
+            </p>
+            <FieldError
+              control="push-interval"
+              badControl={badControl}
+              rejection={rejection}
+              ids={ids}
+            />
+          </div>
+
+          <div className="add-field">
+            <label className="add-label" htmlFor={`${ids}-push-grace`}>
+              Allow it to be late by
+            </label>
+            <div className="add-addon">
+              <input
+                id={`${ids}-push-grace`}
+                className="add-input"
+                type="number"
+                min={0}
+                max={2592000}
+                value={values.pushGraceS}
+                onChange={(event) =>
+                  setValues((v) => ({
+                    ...v,
+                    pushGraceS: Number(event.target.value),
+                  }))
+                }
+                {...invalidProps("push-grace", `${ids}-push-grace-help`)}
+              />
+              <span className="add-unit" aria-hidden="true">
+                sec
+              </span>
+            </div>
+            <p id={`${ids}-push-grace-help`} className="add-help">
+              Silence past the interval plus this is a failure. A backup that
+              usually takes a few minutes longer needs room here.
+            </p>
+            <FieldError
+              control="push-grace"
+              badControl={badControl}
+              rejection={rejection}
+              ids={ids}
+            />
+          </div>
+        </div>
+      )}
 
       {/*
        * Collapsed, and collapsed by default. The fields below are real — a
@@ -313,6 +437,7 @@ export function AddMonitorForm({
               <option value="tcp">TCP</option>
               <option value="ping">Ping</option>
               <option value="ssl">TLS certificate</option>
+              <option value="push">Push — the job reports in</option>
             </select>
             <FieldError
               control="type"
@@ -322,136 +447,152 @@ export function AddMonitorForm({
             />
           </div>
 
-          <div className="add-field">
-            <label className="add-label" htmlFor={`${ids}-interval`}>
-              Check every
-            </label>
-            <div className="add-addon">
-              <input
-                id={`${ids}-interval`}
-                className="add-input"
-                type="number"
-                min={20}
-                max={86400}
-                value={values.intervalS}
-                onChange={(event) =>
-                  setValues((v) => ({
-                    ...v,
-                    intervalS: Number(event.target.value),
-                  }))
-                }
-                aria-invalid={badControl === "interval" ? true : undefined}
-                aria-describedby={
-                  badControl === "interval" ? `${ids}-field-error` : undefined
-                }
-              />
-              {/* Units live in an addon on the field, not in the label (§7.2). */}
-              <span className="add-unit" aria-hidden="true">
-                sec
-              </span>
-            </div>
-            <FieldError
-              control="interval"
-              badControl={badControl}
-              rejection={rejection}
-              ids={ids}
-            />
-          </div>
+          {!push && (
+            <>
+              <div className="add-field">
+                <label className="add-label" htmlFor={`${ids}-interval`}>
+                  Check every
+                </label>
+                <div className="add-addon">
+                  <input
+                    id={`${ids}-interval`}
+                    className="add-input"
+                    type="number"
+                    min={20}
+                    max={86400}
+                    value={values.intervalS}
+                    onChange={(event) =>
+                      setValues((v) => ({
+                        ...v,
+                        intervalS: Number(event.target.value),
+                      }))
+                    }
+                    aria-invalid={badControl === "interval" ? true : undefined}
+                    aria-describedby={
+                      badControl === "interval"
+                        ? `${ids}-field-error`
+                        : undefined
+                    }
+                  />
+                  {/* Units live in an addon on the field, not in the label (§7.2). */}
+                  <span className="add-unit" aria-hidden="true">
+                    sec
+                  </span>
+                </div>
+                <FieldError
+                  control="interval"
+                  badControl={badControl}
+                  rejection={rejection}
+                  ids={ids}
+                />
+              </div>
 
-          <div className="add-field">
-            <label className="add-label" htmlFor={`${ids}-timeout`}>
-              Give up after
-            </label>
-            <div className="add-addon">
-              <input
-                id={`${ids}-timeout`}
-                className="add-input"
-                type="number"
-                min={1}
-                max={120}
-                value={values.timeoutS}
-                onChange={(event) =>
-                  setValues((v) => ({
-                    ...v,
-                    timeoutS: Number(event.target.value),
-                  }))
-                }
-                aria-invalid={badControl === "timeout" ? true : undefined}
-                aria-describedby={
-                  badControl === "timeout" ? `${ids}-field-error` : undefined
-                }
-              />
-              <span className="add-unit" aria-hidden="true">
-                sec
-              </span>
-            </div>
-            <FieldError
-              control="timeout"
-              badControl={badControl}
-              rejection={rejection}
-              ids={ids}
-            />
-          </div>
+              <div className="add-field">
+                <label className="add-label" htmlFor={`${ids}-timeout`}>
+                  Give up after
+                </label>
+                <div className="add-addon">
+                  <input
+                    id={`${ids}-timeout`}
+                    className="add-input"
+                    type="number"
+                    min={1}
+                    max={120}
+                    value={values.timeoutS}
+                    onChange={(event) =>
+                      setValues((v) => ({
+                        ...v,
+                        timeoutS: Number(event.target.value),
+                      }))
+                    }
+                    aria-invalid={badControl === "timeout" ? true : undefined}
+                    aria-describedby={
+                      badControl === "timeout"
+                        ? `${ids}-field-error`
+                        : undefined
+                    }
+                  />
+                  <span className="add-unit" aria-hidden="true">
+                    sec
+                  </span>
+                </div>
+                <FieldError
+                  control="timeout"
+                  badControl={badControl}
+                  rejection={rejection}
+                  ids={ids}
+                />
+              </div>
 
-          <div className="add-field add-field-wide">
-            <label className="add-label" htmlFor={`${ids}-keyword`}>
-              Body must contain
-            </label>
-            <input
-              id={`${ids}-keyword`}
-              className="add-input"
-              value={values.keyword}
-              onChange={(event) =>
-                setValues((v) => ({
-                  ...v,
-                  keyword: event.target.value,
-                  // A keyword with the mode left at "ignore" is a field that
-                  // silently does nothing — the exact trap DESIGN.md §7.2 is
-                  // about. Typing one means you want it checked.
-                  keywordMode:
-                    v.keywordMode === "absent_ok" && event.target.value !== ""
-                      ? "must_contain"
-                      : v.keywordMode,
-                }))
-              }
-              placeholder="Leave empty to check only that it answers"
-              autoComplete="off"
-              aria-invalid={badControl === "keyword" ? true : undefined}
-              aria-describedby={
-                badControl === "keyword" ? `${ids}-field-error` : undefined
-              }
-            />
-            <FieldError
-              control="keyword"
-              badControl={badControl}
-              rejection={rejection}
-              ids={ids}
-            />
-          </div>
+              <div className="add-field add-field-wide">
+                <label className="add-label" htmlFor={`${ids}-keyword`}>
+                  Body must contain
+                </label>
+                <input
+                  id={`${ids}-keyword`}
+                  className="add-input"
+                  value={values.keyword}
+                  onChange={(event) =>
+                    setValues((v) => ({
+                      ...v,
+                      keyword: event.target.value,
+                      // A keyword with the mode left at "ignore" is a field that
+                      // silently does nothing — the exact trap DESIGN.md §7.2 is
+                      // about. Typing one means you want it checked.
+                      keywordMode:
+                        v.keywordMode === "absent_ok" &&
+                        event.target.value !== ""
+                          ? "must_contain"
+                          : v.keywordMode,
+                    }))
+                  }
+                  placeholder="Leave empty to check only that it answers"
+                  autoComplete="off"
+                  aria-invalid={badControl === "keyword" ? true : undefined}
+                  aria-describedby={
+                    badControl === "keyword" ? `${ids}-field-error` : undefined
+                  }
+                />
+                <FieldError
+                  control="keyword"
+                  badControl={badControl}
+                  rejection={rejection}
+                  ids={ids}
+                />
+              </div>
+            </>
+          )}
         </div>
       </details>
 
       <div className="add-actions">
-        <button
-          type="button"
-          className="add-button"
-          onClick={() => onPreview(effective)}
-          // Deliberately NOT disabled while a probe is in flight. A check can
-          // take the full timeout, and the most common reason to press this
-          // twice is that the typo became obvious the moment the first one
-          // started — locking the button makes the user wait out a request
-          // whose answer they already know is useless. The caller aborts the
-          // previous probe, so a late answer cannot overwrite a newer one.
-          disabled={targetEmpty}
-        >
-          {/* The label keeps the button's width rather than swapping in a
+        {/*
+         * No "Test it" for a push monitor. The button probes a target, and a
+         * push monitor has none: the only way to test one is to run the job,
+         * which is what the curl line handed over after saving is for.
+         */}
+        {!push && (
+          <button
+            type="button"
+            className="add-button"
+            onClick={() => onPreview(effective)}
+            // Deliberately NOT disabled while a probe is in flight. A check can
+            // take the full timeout, and the most common reason to press this
+            // twice is that the typo became obvious the moment the first one
+            // started — locking the button makes the user wait out a request
+            // whose answer they already know is useless. The caller aborts the
+            // previous probe, so a late answer cannot overwrite a newer one.
+            disabled={targetEmpty}
+          >
+            {/* The label keeps the button's width rather than swapping in a
               spinner that resizes it (§7.1). */}
-          {preview.phase === "checking" ? "Testing…" : "Test it"}
-        </button>
+            {preview.phase === "checking" ? "Testing…" : "Test it"}
+          </button>
+        )}
         <button
           type="submit"
           className="add-button add-button-primary"
-          disabled={targetEmpty || saving}
+          disabled={incomplete || saving}
         >
           {saving ? "Saving…" : "Save monitor"}
         </button>

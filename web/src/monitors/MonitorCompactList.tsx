@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { EmptyState } from "./EmptyState";
-import { formatLatency, formatUptime } from "./format";
+import { describeTarget, formatLatency, formatUptime } from "./format";
 import { Led } from "./Led";
 import { MonitorLink } from "./MonitorLink";
 import { partition, sectionsByTag } from "./model";
@@ -61,7 +61,7 @@ export type MonitorCompactListProps = {
 type CompactLineProps = { monitor: Monitor; onOpen?: (id: string) => void };
 
 function CompactLineImpl({ monitor, onOpen }: CompactLineProps) {
-  const { name, status, target, latencyMs, uptime24h, error } = monitor;
+  const { name, status, latencyMs, uptime24h, error } = monitor;
   return (
     <li
       className="mon-line"
@@ -75,7 +75,7 @@ function CompactLineImpl({ monitor, onOpen }: CompactLineProps) {
         onOpen={onOpen}
         className="mon-line-name"
       />
-      <span className="mon-line-target">{target}</span>
+      <span className="mon-line-target">{describeTarget(monitor)}</span>
       <span className="mon-line-num">
         {status === "down" && error ? (
           <span className="mon-line-error" title={error}>

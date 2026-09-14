@@ -398,6 +398,7 @@ export function summarise(monitors: readonly Monitor[]): Summary {
     down: 0,
     pending: 0,
     paused: 0,
+    waiting: 0,
     total: monitors.length,
   };
   for (const monitor of monitors) summary[monitor.status] += 1;

@@ -157,8 +157,9 @@ describe("summarise", () => {
         monitor("c", "down"),
         monitor("d", "pending"),
         monitor("e", "paused"),
+        monitor("f", "waiting"),
       ]),
-    ).toEqual({ up: 2, down: 1, pending: 1, paused: 1, total: 5 });
+    ).toEqual({ up: 2, down: 1, pending: 1, paused: 1, waiting: 1, total: 6 });
   });
 
   it("returns zeroes for an empty list", () => {
@@ -167,6 +168,7 @@ describe("summarise", () => {
       down: 0,
       pending: 0,
       paused: 0,
+      waiting: 0,
       total: 0,
     });
   });
