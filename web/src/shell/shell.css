@@ -387,7 +387,7 @@
   font-size: var(--type-body);
   line-height: var(--lead-body);
   text-decoration: none;
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-float);
   clip-path: inset(50%);
 }
 
