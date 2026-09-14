@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./styles/tokens.css";
+@import "./styles/fonts.css";
 /* Component styles live next to their component; they are collected here so
    the app keeps a single CSS entrypoint. */
 @import "./heartbeat/heartbeat.css";
@@ -25,6 +26,10 @@
     background-color: var(--canvas);
     color: var(--ink);
     font-family: var(--font-sans);
+    /* Pinned rather than left to the browser (§2.5). Which features an engine
+       turns on by default differs between engines, so a page that looks right
+       in one renders with different figures in another. */
+    font-feature-settings: var(--feat-sans);
     /* The one optical correction the sans face needs, set once so every
        element inherits it (§2.5). Faces it is wrong for override it. */
     letter-spacing: var(--track-body);
@@ -50,9 +55,13 @@
     outline-offset: 2px;
   }
 
-  /* Anything measurable is mono so digits line up in a column. */
+  /* Anything measurable is mono so digits line up in a column. The face is
+     monospaced, so that alignment is a property of the file rather than a
+     feature that has to be asked for; the features it does carry are the
+     character sets that keep similar glyphs apart (§2.5). */
   code, kbd, samp, pre {
     font-family: var(--font-mono);
+    font-feature-settings: var(--feat-mono);
   }
 }
 

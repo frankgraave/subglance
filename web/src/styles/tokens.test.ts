@@ -554,7 +554,15 @@ describe("tokens.css is the only source of weight and tracking", () => {
       // CSS `font-weight: 500`, Tailwind's stock `font-medium` presets, and
       // arbitrary `font-[600]`. `font-sans`/`font-mono` pick a family, not a
       // weight, and stay allowed.
-      for (const match of contents.matchAll(
+      //
+      // So are the `font-weight` descriptors inside an `@font-face` rule: they
+      // state which weights the file on disk actually contains, which is a
+      // fact about the face rather than a design decision, and there is no
+      // token that could express it. Stripping the rules is safer than
+      // exempting the file, so a plain declaration added to fonts.css later is
+      // still caught.
+      const source = contents.replace(/@font-face\s*\{[^}]*\}/g, "");
+      for (const match of source.matchAll(
         /font-weight:(?!\s*var\(--weight-)\s*[^;]+|\bfont-(?:thin|extralight|light|normal|medium|semibold|bold|extrabold|black)\b|\bfont-\[\d/g,
       )) {
         offenders.push(`${relative(repoRoot, file)}: ${match[0].trim()}`);
