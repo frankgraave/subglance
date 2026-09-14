@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"math"
 	"math/big"
+	"sync"
 	"time"
 
 	"github.com/frankgraave/subglance/internal/checker"
@@ -79,6 +80,17 @@ type Notifier struct {
 	batch int
 
 	now func() time.Time
+
+	// grouper decides which alerts belong together, and batches holds the
+	// ones still inside their window.
+	//
+	// Guarded by mu: Enqueue runs on the check path, once per monitor, and
+	// the sweep loop flushes on its own goroutine. Those genuinely race —
+	// a shared outage is many monitors calling Enqueue at once, which is
+	// exactly the case grouping exists for.
+	mu      sync.Mutex
+	grouper *Grouper
+	batches map[string]*pending
 }
 
 // Options configures New.
@@ -105,6 +117,17 @@ type Options struct {
 
 	// Now is the clock, swappable in tests.
 	Now func() time.Time
+
+	// GroupWindow is how long an alert waits for others before it is sent.
+	// Zero means groupWindow.
+	//
+	// Negative disables grouping: Enqueue writes to the outbox straight
+	// away, as it did before grouping existed. That is a real preference —
+	// someone with three monitors has nothing to group and may want the
+	// alert the instant it happens — and it is also what the delivery
+	// tests use, since they are about retries and failures rather than
+	// about batching.
+	GroupWindow time.Duration
 }
 
 // New builds a Notifier with the standard set of channels.
@@ -147,14 +170,21 @@ func New(opts Options) *Notifier {
 		interval: interval,
 		batch:    batch,
 		now:      now,
+		grouper:  newGrouper(opts.GroupWindow, now),
+		batches:  make(map[string]*pending),
 	}
 }
 
-// Enqueue turns one alert into one outbox row per assigned channel.
+// Enqueue collects one alert for delivery to every assigned channel.
 //
-// This is what the runner calls, and it is deliberately the only part of
-// notification that happens on the check path. It writes rows and returns; no
-// network call happens here, so a broken channel cannot slow a check down.
+// It does not write to the outbox directly. Alerts go into a batch keyed on
+// channel and direction, and a batch is flushed once its window closes — so a
+// shared outage becomes one message per channel rather than one per monitor.
+// The window is short (see groupWindow) and it never delays a batch that has
+// already been flushed, so a lone failure still arrives promptly.
+//
+// What has not changed is the important part: no network call happens here. A
+// broken channel still cannot slow a check down.
 func (n *Notifier) Enqueue(ctx context.Context, m store.Monitor, inc store.Incident, event state.Event, at time.Time) error {
 	channels, err := n.db.ListMonitorChannels(ctx, m.ID)
 	if err != nil {
@@ -168,38 +198,82 @@ func (n *Notifier) Enqueue(ctx context.Context, m store.Monitor, inc store.Incid
 	}
 
 	alert := AlertFromStore(m, inc, event, at)
-	payload, err := alert.Encode()
-	if err != nil {
-		return err
-	}
 
-	var firstErr error
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	for _, ch := range channels {
 		if !ch.Enabled {
 			continue
 		}
-		if _, err := n.db.EnqueueDelivery(ctx, store.Delivery{
-			ChannelID:  ch.ID,
-			MonitorID:  m.ID,
-			IncidentID: inc.ID,
-			Event:      string(event),
-			Payload:    payload,
-			// Due now, by this notifier's clock rather than the
-			// store's. The worker and the queue have to agree on
-			// what "now" means, or a delivery is written into a
-			// future the sweeper never reaches.
-			NextAttemptAt: n.now(),
-		}); err != nil {
-			// Keep going: one channel failing to enqueue must not
-			// stop the others from being told.
-			n.log.Error("could not queue notification",
-				"monitor", m.Name, "channel", ch.Name, "error", err)
-			if firstErr == nil {
-				firstErr = err
-			}
+
+		b := n.grouper.add(n.batches, ch.ID, m.ID, alert)
+		if !n.grouper.enabled() {
+			// Grouping off: send it now and keep nothing.
+			delete(n.batches, b.key)
+			n.flush(ctx, b)
 		}
 	}
-	return firstErr
+	return nil
+}
+
+// flushDue writes out every batch whose window has closed.
+//
+// Called from the sweep loop rather than from a timer of its own: the sweeper
+// already runs often enough, and one clock is easier to reason about — and to
+// test — than two.
+func (n *Notifier) flushDue(ctx context.Context) {
+	n.mu.Lock()
+	due := n.grouper.due(n.batches)
+	n.mu.Unlock()
+
+	for _, b := range due {
+		n.flush(ctx, b)
+	}
+}
+
+// flushAll writes out every pending batch regardless of its window.
+//
+// Used at shutdown. An alert that is sitting in a window when the process
+// stops must not be lost: it is already a real event, and the outbox is what
+// makes it survive a restart.
+func (n *Notifier) flushAll(ctx context.Context) {
+	n.mu.Lock()
+	var all []*pending
+	for key, b := range n.batches {
+		all = append(all, b)
+		delete(n.batches, key)
+	}
+	n.mu.Unlock()
+
+	for _, b := range all {
+		n.flush(ctx, b)
+	}
+}
+
+// flush turns one batch into one outbox row.
+func (n *Notifier) flush(ctx context.Context, b *pending) {
+	if len(b.alerts) == 0 {
+		return
+	}
+
+	summary := Summarise(b.alerts)
+	payload, err := summary.Encode()
+	if err != nil {
+		n.log.Error("could not encode grouped alert", "channel_id", b.channel, "error", err)
+		return
+	}
+
+	if _, err := n.db.EnqueueDelivery(ctx, b.delivery(payload, state.Event(summary.Event), n.now())); err != nil {
+		n.log.Error("could not queue notification",
+			"channel_id", b.channel, "monitors", len(b.alerts), "error", err)
+		return
+	}
+
+	if summary.Grouped() {
+		n.log.Info("grouped alert queued",
+			"channel_id", b.channel, "monitors", len(b.alerts), "event", summary.Event)
+	}
 }
 
 // Run drains the outbox until the context is cancelled.
@@ -207,6 +281,11 @@ func (n *Notifier) Run(ctx context.Context) {
 	n.log.Info("notifier started", "interval", n.interval)
 
 	for {
+		// Close any grouping window that has expired before looking for
+		// due rows, so a batch that came of age during the last wait is
+		// sent on this pass rather than the next one.
+		n.flushDue(ctx)
+
 		sent, err := n.sweep(ctx)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			n.log.Error("notification sweep failed", "error", err)
@@ -222,6 +301,15 @@ func (n *Notifier) Run(ctx context.Context) {
 
 		select {
 		case <-ctx.Done():
+			// Write out whatever is still inside its window. These
+			// are real events that have already happened; losing
+			// them to a restart would be the one failure mode the
+			// outbox exists to prevent. Use a fresh context, since
+			// the one that just ended cannot carry a write.
+			flushCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			n.flushAll(flushCtx)
+			cancel()
+
 			n.log.Info("notifier stopped")
 			return
 		case <-time.After(delay):

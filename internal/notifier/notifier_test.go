@@ -125,6 +125,10 @@ func newTestNotifier(t *testing.T, db *store.DB, sender Sender, now func() time.
 		Log:     slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Senders: map[string]Sender{store.ChannelWebhook: sender},
 		Now:     now,
+		// These tests are about delivery — retries, failures, payloads —
+		// not about batching, so they enqueue straight through. Grouping
+		// has its own tests in group_test.go.
+		GroupWindow: -1,
 	})
 }
 
@@ -370,6 +374,10 @@ func TestOneBrokenChannelDoesNotStopAnother(t *testing.T) {
 			store.ChannelWebhook: broken,
 			store.ChannelSlack:   working,
 		},
+		// Straight through: this test is about one channel's failure not
+		// affecting another, which is a property of delivery rather than
+		// of batching.
+		GroupWindow: -1,
 	})
 
 	inc := openIncident(t, db, m.ID, time.Now(), "connection refused")
