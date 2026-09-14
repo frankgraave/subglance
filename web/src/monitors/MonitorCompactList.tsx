@@ -31,6 +31,11 @@ import { Unknown } from "./Unknown";
  * already the first lines on the screen, and permanent headings would cost
  * vertical space the layout exists to save.
  *
+ * **What it does not drop: the status in words.** The lamp shows its label
+ * here for every status except `up`, for the reason the row does (SUB-100):
+ * at this density down, pending and paused were three hues of the same 20x7
+ * pill. `up` stays wordless so the exception reads as the exception.
+ *
  * **What it does not drop: the reason.** A down monitor has no latency to
  * report, so this layout borrows the row's rule and puts the error text in
  * that slot instead. Dropping it would leave a red lamp as the only signal —
@@ -63,7 +68,7 @@ function CompactLineImpl({ monitor, onOpen }: CompactLineProps) {
       data-status={status}
       data-testid={`monitor-line-${monitor.id}`}
     >
-      <Led status={status} className="mon-line-led" />
+      <Led status={status} hideLabel={status === "up"} className="mon-line-led" />
       <MonitorLink
         id={monitor.id}
         name={name}

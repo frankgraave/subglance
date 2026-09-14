@@ -50,7 +50,11 @@ describe("MonitorCardList", () => {
     expect(within(card).getByText("Up")).toBeTruthy();
     expect(within(card).getByRole("heading", { name: "api" })).toBeTruthy();
     expect(within(card).getByText("https://api.example.com")).toBeTruthy();
-    expect(within(card).getByRole("table", { name: /^api:/ })).toBeTruthy();
+    // The heartbeat is present but no longer announced (SUB-100): in a list
+    // layout the bar is aria-hidden and the card's own text carries the
+    // facts, so it is asserted by its pixels rather than by its table.
+    expect(card.querySelector(".hb-track")).toBeTruthy();
+    expect(within(card).queryByRole("table")).toBeNull();
     expect(facts(card)).toEqual(["87 ms", "100%"]);
   });
 

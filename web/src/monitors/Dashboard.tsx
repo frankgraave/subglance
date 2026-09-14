@@ -184,9 +184,15 @@ export function Dashboard({
 
       <header className="mon-topbar">
         <div>
-          <h2 id={`${searchId}-title`} className="mon-title">
+          {/* `h1`, not `h2` (SUB-100). This is the top of the page, and the
+              detail view already uses `h1` for the monitor's name — the two
+              screens were disagreeing about where the outline starts, which
+              leaves a screen reader's heading navigation with no level-1
+              landmark on the busier of the two. The visual size is unchanged:
+              it comes from `.mon-title`, not from the element. */}
+          <h1 id={`${searchId}-title`} className="mon-title">
             Monitors
-          </h2>
+          </h1>
           <p className="mon-counts">
             {summary.total === 0 ? (
               "Nothing being watched yet"

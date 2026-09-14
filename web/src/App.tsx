@@ -10,6 +10,9 @@ import { LiveDashboardRoot } from "./live/LiveDashboard";
 import { LiveMonitorDetailRoot } from "./live/LiveMonitorDetail";
 import { createQueryClient } from "./live/queryClient";
 import { useRoute } from "./shell/useRoute";
+import { routePath } from "./shell/route";
+import { useDocumentTitle } from "./shell/documentTitle";
+import { useRouteFocus } from "./shell/useRouteFocus";
 import { AppShell } from "./shell/AppShell";
 import { Topbar } from "./shell/Topbar";
 import { useShellPreferences } from "./shell/useShellPreferences";
@@ -83,6 +86,24 @@ export default function App() {
   const narrow = useCompactViewport();
   const shown = effectiveLayout(layout, narrow);
   const onDetail = route.name === "monitor";
+
+  /*
+   * The screen names itself and takes focus when the route changes
+   * (SUB-100). Both hang off `routePath(route)` rather than the route object,
+   * so the identity of a fresh `{ name: "dashboard" }` on every render cannot
+   * re-fire them.
+   *
+   * The title is the route, not the monitor's name: `App` knows the id, and
+   * the name lives behind a query inside `LiveMonitorDetailRoot`. Naming the
+   * tab after the id would be worse than naming it after the screen, and
+   * threading the name up here to title the page would make the whole shell
+   * re-render on every heartbeat.
+   */
+  const path = routePath(route);
+  useDocumentTitle(onDetail ? "Monitor" : "Monitors");
+  const mainRef = useRef<HTMLElement | null>(null);
+  useRouteFocus(path, mainRef);
+
   /*
    * The wall is a dashboard layout, so it cannot be showing while a single
    * monitor is open. Without this, choosing the wall from the detail page
@@ -184,10 +205,11 @@ export default function App() {
   }, [signedIn, queryClient]);
 
   const screen = isWall ? (
-    <LiveDashboardRoot client={queryClient} layout="wall" onExitWall={leaveWall} />
+    <LiveDashboardRoot client={queryClient} layout="wall" onExitWall={leaveWall} mainRef={mainRef} />
   ) : (
     <AppShell
       sidebarCollapsed={sidebarCollapsed}
+      mainRef={mainRef}
       narrow={narrow}
       navOpen={navOpen}
       onNavClose={closeNav}

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "oxlint src",
+    "lint": "oxlint src --deny-warnings",
     "preview": "vite preview",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",

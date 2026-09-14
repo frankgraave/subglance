@@ -1,3 +1,4 @@
+import type { RefObject } from "react";
 import { partition, summarise } from "../monitors/model";
 import { Led } from "../monitors/Led";
 import type { Monitor } from "../monitors/types";
@@ -45,6 +46,14 @@ export type StatusWallProps = {
   notice?: string;
   /** Injected in tests, which must not depend on the machine's clock. */
   now?: number;
+  /**
+   * Focus target for a client-side navigation, put on `<main>`.
+   *
+   * The wall replaces the shell rather than rendering inside it, so the
+   * shell's `<main>` is unmounted while the wall is up. Without this the
+   * route-change focus move would have nothing to aim at.
+   */
+  mainRef?: RefObject<HTMLElement | null>;
 };
 
 export function StatusWall({
@@ -54,6 +63,7 @@ export function StatusWall({
   onExit,
   now,
   notice,
+  mainRef,
 }: StatusWallProps) {
   // The hook cannot be skipped, so the clock always runs and the override
   // wins afterwards — the same shape `Dashboard` uses for its media query.
@@ -67,7 +77,7 @@ export function StatusWall({
   const ordered = [...attention, ...rest];
 
   return (
-    <main className="wall" data-stale={stale ? "true" : "false"}>
+    <main ref={mainRef} tabIndex={-1} className="wall" data-stale={stale ? "true" : "false"}>
       <div className="wall-stage">
         <header className="wall-head">
           <h1 className="wall-title">{instance !== undefined && instance !== "" ? instance : "SubGlance"}</h1>
