@@ -1,7 +1,14 @@
 import { useCallback, useRef, useState } from "react";
 import { AddMonitorForm } from "./AddMonitorForm";
+import { isPush } from "./push";
 import type { AddMonitorValues } from "./AddMonitorForm";
-import { ApiError, createMonitor, fingerprintPreview, previewCheck } from "./preview";
+import { PushUrlReveal } from "./PushUrlReveal";
+import {
+  ApiError,
+  createMonitor,
+  fingerprintPreview,
+  previewCheck,
+} from "./preview";
 import type { PreviewRequest, PreviewState } from "./preview";
 import type { Rejection } from "./AddMonitorForm";
 
@@ -33,6 +40,19 @@ export function AddMonitor({ onCreated, onCancel, api }: AddMonitorProps) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<Rejection | null>(null);
   /*
+   * The push URL of a monitor that was just created, and its name.
+   *
+   * Held here rather than handed straight to `onCreated` because the caller
+   * closes the dialog on creation, and closing the dialog is exactly what must
+   * not happen while the one and only copy of this URL is on screen. The
+   * caller is told about the monitor when the user dismisses the reveal.
+   */
+  const [revealed, setRevealed] = useState<{
+    id: string;
+    url: string;
+    name: string;
+  } | null>(null);
+  /*
    * The in-flight preview, so a second press supersedes the first.
    *
    * Without this, pressing "Test it" twice can land the slow first answer
@@ -58,7 +78,11 @@ export function AddMonitor({ onCreated, onCancel, api }: AddMonitorProps) {
           // this run with what is in the form right now?" instead of guessing
           // from the target alone.
           if (!controller.signal.aborted) {
-            setState({ phase: "done", result, request: fingerprintPreview(request) });
+            setState({
+              phase: "done",
+              result,
+              request: fingerprintPreview(request),
+            });
           }
         } catch (error) {
           if (controller.signal.aborted) return;
@@ -92,21 +116,19 @@ export function AddMonitor({ onCreated, onCancel, api }: AddMonitorProps) {
 
       void (async () => {
         try {
-          const { id } = await create({
-            name: values.name.trim() !== "" ? values.name.trim() : values.target.trim(),
-            // The server infers the type for a preview, but creating a monitor
-            // requires one. Reusing what the preview resolved is why the
-            // preview echoes it: the alternative is a second copy of the
-            // inference rules in TypeScript, drifting from the Go one.
-            type: resolvedType(values, state),
-            target: resolvedTarget(values, state),
-            interval_s: values.intervalS,
-            timeout_s: values.timeoutS,
-            ...(values.keyword !== ""
-              ? { keyword: values.keyword, keyword_mode: values.keywordMode }
-              : {}),
-          });
-          onCreated?.(id);
+          const created = await create(bodyFor(values, state));
+          if (created.pushUrl !== undefined) {
+            // A push monitor is not finished at "saved": without this URL in
+            // somebody's crontab it can never report, so the flow stops here
+            // rather than closing over the only copy of it.
+            setRevealed({
+              id: created.id,
+              url: created.pushUrl,
+              name: values.name.trim(),
+            });
+            return;
+          }
+          onCreated?.(created.id);
         } catch (error) {
           setSaveError(explain(error));
         } finally {
@@ -116,6 +138,16 @@ export function AddMonitor({ onCreated, onCancel, api }: AddMonitorProps) {
     },
     [create, onCreated, state],
   );
+
+  if (revealed !== null) {
+    return (
+      <PushUrlReveal
+        url={revealed.url}
+        name={revealed.name}
+        onDone={() => onCreated?.(revealed.id)}
+      />
+    );
+  }
 
   return (
     <AddMonitorForm
@@ -127,6 +159,42 @@ export function AddMonitor({ onCreated, onCancel, api }: AddMonitorProps) {
       onCancel={onCancel}
     />
   );
+}
+
+/**
+ * The create body for a set of form values.
+ *
+ * A push monitor and a probed one send almost disjoint fields, and the API
+ * rejects each other’s: a push monitor with a `target` is a 400, and
+ * `push_interval_s` on an HTTP monitor is another. Building the body in one
+ * place keeps that split from being spread over the submit handler.
+ */
+function bodyFor(
+  values: AddMonitorValues,
+  state: PreviewState,
+): Record<string, unknown> {
+  if (isPush(values)) {
+    return {
+      name: values.name.trim(),
+      type: "push",
+      push_interval_s: values.pushIntervalS,
+      push_grace_s: values.pushGraceS,
+    };
+  }
+  return {
+    name: values.name.trim() !== "" ? values.name.trim() : values.target.trim(),
+    // The server infers the type for a preview, but creating a monitor
+    // requires one. Reusing what the preview resolved is why the preview
+    // echoes it: the alternative is a second copy of the inference rules in
+    // TypeScript, drifting from the Go one.
+    type: resolvedType(values, state),
+    target: resolvedTarget(values, state),
+    interval_s: values.intervalS,
+    timeout_s: values.timeoutS,
+    ...(values.keyword !== ""
+      ? { keyword: values.keyword, keyword_mode: values.keywordMode }
+      : {}),
+  };
 }
 
 /** The preview request a given set of form values would send. */
@@ -150,8 +218,14 @@ function previewRequestFor(values: AddMonitorValues): PreviewRequest {
  * choosing Ping saved a ping monitor for a target that had only ever been
  * tested over HTTPS.
  */
-function previewMatches(values: AddMonitorValues, state: PreviewState): boolean {
-  return state.phase === "done" && state.request === fingerprintPreview(previewRequestFor(values));
+function previewMatches(
+  values: AddMonitorValues,
+  state: PreviewState,
+): boolean {
+  return (
+    state.phase === "done" &&
+    state.request === fingerprintPreview(previewRequestFor(values))
+  );
 }
 
 /**
@@ -163,7 +237,8 @@ function previewMatches(values: AddMonitorValues, state: PreviewState): boolean 
  */
 function resolvedType(values: AddMonitorValues, state: PreviewState): string {
   if (values.type !== "") return values.type;
-  if (state.phase === "done" && previewMatches(values, state)) return state.result.type;
+  if (state.phase === "done" && previewMatches(values, state))
+    return state.result.type;
   return "http";
 }
 
@@ -176,7 +251,8 @@ function resolvedType(values: AddMonitorValues, state: PreviewState): string {
  */
 function resolvedTarget(values: AddMonitorValues, state: PreviewState): string {
   const typed = values.target.trim();
-  if (state.phase === "done" && previewMatches(values, state)) return state.result.target;
+  if (state.phase === "done" && previewMatches(values, state))
+    return state.result.target;
   return typed;
 }
 
@@ -191,7 +267,8 @@ function resolvedTarget(values: AddMonitorValues, state: PreviewState): string {
 function explain(error: unknown): Rejection {
   if (error instanceof ApiError) {
     if (error.status === 429) {
-      const suffix = error.retryAfter !== null ? ` (about ${error.retryAfter}s)` : "";
+      const suffix =
+        error.retryAfter !== null ? ` (about ${error.retryAfter}s)` : "";
       return { message: `${error.message}${suffix}` };
     }
     return {

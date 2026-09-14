@@ -92,6 +92,7 @@ export type DashboardProps = {
 const COUNTED: { status: MonitorStatus; label: string }[] = [
   { status: "down", label: "down" },
   { status: "pending", label: "pending" },
+  { status: "waiting", label: "waiting" },
   { status: "paused", label: "paused" },
   { status: "up", label: "up" },
 ];

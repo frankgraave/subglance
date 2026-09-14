@@ -21,7 +21,27 @@ export type { Beat };
  * belongs on this side of the boundary — a paused monitor that last checked
  * green is not "up", it is "not being watched".
  */
-export type MonitorStatus = "up" | "down" | "pending" | "paused";
+export type MonitorStatus = "up" | "down" | "pending" | "paused" | "waiting";
+
+/**
+ * The reporting window of a push monitor.
+ *
+ * Present only for push monitors, and its presence is what marks one: the
+ * wire `type` is not carried into the render model because nothing else on
+ * this side branches on it, and a second way to ask the same question is a
+ * second way for two components to disagree.
+ */
+export type PushWindow = {
+  /** How often the job is expected to report in, in seconds. */
+  intervalS: number;
+  /** How late it may be before silence counts as a failure, in seconds. */
+  graceS: number;
+  /**
+   * The first few characters of the push token, kept so two push monitors
+   * can be told apart. The token itself is never readable again.
+   */
+  tokenPrefix: string;
+};
 
 export type Monitor = {
   id: string;
@@ -46,6 +66,16 @@ export type Monitor = {
   lastCheck: number | null;
   /** Failure reason for the last check, when there was one. */
   error?: string;
+  /**
+   * Set for a push monitor, absent for everything else.
+   *
+   * A push monitor is reported *to* rather than probed, so several things the
+   * dashboard would otherwise do to it are wrong: it has no target to show,
+   * nothing to check on demand, and silence rather than a failed probe is how
+   * it goes down. Its presence is the one test for "is this a push monitor",
+   * so there is never a second way to ask.
+   */
+  push?: PushWindow;
   /**
    * Key/value labels: `{ env: "prod", customer: "acme" }`.
    *
@@ -94,6 +124,10 @@ export type ApiMonitor = {
   incident_since?: string;
   uptime_24h?: number | null;
   created_at: string;
+  /** Push monitors only; omitted for every other type. */
+  push_interval_s?: number;
+  push_grace_s?: number;
+  push_token_prefix?: string;
   heartbeats?: ApiHeartbeat[];
   /**
    * Omitted entirely when the monitor has no tags, which is why this is
@@ -118,7 +152,9 @@ export function toUnixMs(value: string | null | undefined): number | null {
 
 /** Absent, null and non-finite all mean "no number", never 0. */
 function toNumber(value: number | null | undefined): number | null {
-  return value === null || value === undefined || !Number.isFinite(value) ? null : value;
+  return value === null || value === undefined || !Number.isFinite(value)
+    ? null
+    : value;
 }
 
 function beatFromApi(hb: ApiHeartbeat): Beat {
@@ -140,7 +176,9 @@ function beatFromApi(hb: ApiHeartbeat): Beat {
  * of, and a non-string value would reach a component expecting to render it.
  * Dropping the entry is better than rendering `[object Object]` in a filter.
  */
-function sanitiseTags(tags: Record<string, string> | null | undefined): Record<string, string> {
+function sanitiseTags(
+  tags: Record<string, string> | null | undefined,
+): Record<string, string> {
   if (!tags) return {};
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(tags)) {
@@ -149,8 +187,50 @@ function sanitiseTags(tags: Record<string, string> | null | undefined): Record<s
   return out;
 }
 
+/**
+ * The push window, when the monitor has one.
+ *
+ * Driven off the wire `type` rather than off the presence of
+ * `push_interval_s`, because a push monitor whose interval the server happened
+ * to omit is still a push monitor, and treating it as an HTTP one would put a
+ * "Check now" affordance on something with nothing to check.
+ */
+function pushFromApi(api: ApiMonitor): PushWindow | undefined {
+  if (api.type !== "push") return undefined;
+  return {
+    intervalS: api.push_interval_s ?? 0,
+    graceS: api.push_grace_s ?? 0,
+    tokenPrefix: api.push_token_prefix ?? "",
+  };
+}
+
+/**
+ * The status to render, with the two cases the wire does not name.
+ *
+ * `paused` collapses `enabled: false`, as before. `waiting` is new and is
+ * about push monitors only: the API reports a monitor that has never been
+ * checked as `pending`, which for a probed target is right — a check is
+ * coming. A push monitor has no scheduler behind it, so nothing is coming
+ * until somebody wires up the URL, and rendering that as amber "pending" with
+ * an empty beat bar reads as a monitor that is failing to start.
+ */
+function statusFromApi(
+  api: ApiMonitor,
+  push: PushWindow | undefined,
+): MonitorStatus {
+  if (!api.enabled) return "paused";
+  const neverReported =
+    api.last_check === null ||
+    api.last_check === undefined ||
+    api.last_check === "";
+  if (push !== undefined && neverReported && api.status === "pending")
+    return "waiting";
+  return api.status;
+}
+
 /** Translates one API monitor into the render model. Pure. */
 export function fromApi(api: ApiMonitor): Monitor {
+  const push = pushFromApi(api);
   return {
     // Stringified, always. The list endpoint sends a number and an SSE frame
     // sends the same id in `monitor_id`; a live update matching one against
@@ -159,7 +239,7 @@ export function fromApi(api: ApiMonitor): Monitor {
     id: String(api.id),
     name: api.name,
     target: api.target,
-    status: api.enabled ? api.status : "paused",
+    status: statusFromApi(api, push),
     latencyMs: toNumber(api.latency_ms),
     uptime24h: toNumber(api.uptime_24h),
     // Absent `heartbeats` (the caller omitted ?heartbeats=N) and an empty
@@ -167,6 +247,7 @@ export function fromApi(api: ApiMonitor): Monitor {
     beats: (api.heartbeats ?? []).map(beatFromApi),
     lastCheck: toUnixMs(api.last_check),
     error: api.error,
+    ...(push !== undefined ? { push } : {}),
     // Absent and empty both mean "no tags", so they collapse to one shape
     // and no consumer needs a null check.
     tags: sanitiseTags(api.tags),
@@ -174,6 +255,8 @@ export function fromApi(api: ApiMonitor): Monitor {
 }
 
 /** Translates a whole `{ monitors: [...] }` payload. */
-export function monitorsFromApi(payload: { monitors?: ApiMonitor[] } | null | undefined): Monitor[] {
+export function monitorsFromApi(
+  payload: { monitors?: ApiMonitor[] } | null | undefined,
+): Monitor[] {
   return (payload?.monitors ?? []).map(fromApi);
 }
