@@ -1,0 +1,56 @@
+/*
+ * The icon tile (DESIGN.md §8).
+ *
+ * A 32x32 filled square holding one glyph, anchoring the left of a card
+ * header. It carries no border on purpose: the tile is already a plane, and an
+ * edge drawn around a plane adds a second line that separates nothing — the
+ * fill has done the separating. The card's own edge sits a few pixels away,
+ * and two parallel rules that close to each other read as a seam.
+ *
+ * Size comes from the space scale rather than a literal 32px: the tile is one
+ * step of the rhythm the header is built on, not an independent measurement.
+ */
+
+.icon-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Never squeezed by a long title beside it: the tile is the anchor, so it
+     keeps its square while the text takes the slack. */
+  flex: none;
+  width: var(--space-8);
+  height: var(--space-8);
+  border-radius: var(--r-sm);
+  background: var(--surface-hi);
+  color: var(--ink-2);
+}
+
+/*
+ * Tones.
+ *
+ * A toned tile uses the -dim fill and the full-strength ink of its status, not
+ * the status colour as a fill. A solid status block at this size would read as
+ * a status badge — the thing that states a monitor's state in words — and the
+ * product must not say "down" in two different grammars.
+ */
+.icon-tile[data-tone="up"] {
+  background: var(--up-dim);
+  color: var(--up);
+}
+
+.icon-tile[data-tone="warn"] {
+  background: var(--warn-dim);
+  color: var(--warn);
+}
+
+.icon-tile[data-tone="down"] {
+  background: var(--down-dim);
+  color: var(--down);
+}
+
+/* The glyph sizes itself to the tile rather than to whatever the icon file
+   declares, so a mixed set of icons still lands on one optical size. */
+.icon-tile > svg {
+  width: var(--space-4);
+  height: var(--space-4);
+}
