@@ -67,8 +67,20 @@ describe("the faces are self-hosted", () => {
   });
 
   it("preloads every declared file, under the name it is declared with", () => {
+    // The href alone is not the contract. A preload that loses `rel`, `as` or
+    // `crossorigin` still names the right file and still fetches it twice, or
+    // at the wrong priority, or not in the first round trip at all — which is
+    // the whole reason the link exists. So the assertion is on the complete
+    // link element, not on the filename appearing somewhere in the document.
+    const links = [...indexHtml.matchAll(/<link\b[^>]*>/g)].map((m) => m[0]);
     for (const url of declaredFiles()) {
-      expect(indexHtml, `${url} is not preloaded`).toContain(`href="${url}"`);
+      const link = links.find((tag) => tag.includes(`href="${url}"`));
+      expect(link, `${url} has no preload link`).toBeDefined();
+      expect(link, `${url} is not rel="preload"`).toMatch(/\srel="preload"/);
+      expect(link, `${url} is not as="font"`).toMatch(/\sas="font"/);
+      expect(link, `${url} is not crossorigin`).toMatch(
+        /\scrossorigin(?:="(?:anonymous|use-credentials)?")?[\s/>]/,
+      );
     }
   });
 

@@ -39,13 +39,36 @@ const budgets = {
   fonts: 80,
 };
 
+/*
+ * A font only counts once the link that fetches it is complete. A `.woff2`
+ * href alone measures a file the browser may never request in the first round
+ * trip: without `rel="preload"` it is not preloaded at all, without
+ * `as="font"` it is fetched at the wrong priority and again by the stylesheet,
+ * and without `crossorigin` the preload is discarded and fetched twice. So the
+ * budget is spent on links that are actually doing the job, and a link that
+ * loses one of those attributes reads here as a font that stopped being
+ * preloaded.
+ */
+function fontPreloads(html) {
+  const preloaded = [];
+  for (const tag of html.matchAll(/<link\b[^>]*>/g)) {
+    const attrs = tag[0];
+    const href = /\shref="\/?((?:assets|fonts)\/[^"]+\.woff2)"/.exec(attrs);
+    if (!href) continue;
+    if (!/\srel="preload"/.test(attrs)) continue;
+    if (!/\sas="font"/.test(attrs)) continue;
+    if (!/\scrossorigin(?:="(?:anonymous|use-credentials)?")?[\s/>]/.test(attrs)) continue;
+    preloaded.push(href[1]);
+  }
+  return preloaded;
+}
+
 function entries(html) {
-  const found = { js: [], css: [], fonts: [] };
+  const found = { js: [], css: [], fonts: fontPreloads(html) };
   for (const match of html.matchAll(/(?:src|href)="\/?((?:assets|fonts)\/[^"]+)"/g)) {
     const path = match[1];
     if (path.endsWith(".js")) found.js.push(path);
     else if (path.endsWith(".css")) found.css.push(path);
-    else if (path.endsWith(".woff2")) found.fonts.push(path);
   }
   return found;
 }
@@ -61,10 +84,14 @@ if (found.js.length === 0) {
 /*
  * The fonts reach index.html through preload links. If someone drops those the
  * faces still load, from the stylesheet — so an empty list here is a real
- * regression in loading behaviour, not an absence to skip over.
+ * regression in loading behaviour, not an absence to skip over. The check sits
+ * after the filtering above, so an incomplete link counts as no preload.
  */
 if (found.fonts.length === 0) {
-  console.error("bundle-budget: index.html preloads no fonts — see src/styles/fonts.css");
+  console.error(
+    "bundle-budget: index.html has no complete font preload " +
+      '(rel="preload" as="font" crossorigin) — see src/styles/fonts.css',
+  );
   process.exit(1);
 }
 

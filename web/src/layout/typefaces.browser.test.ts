@@ -94,12 +94,64 @@ describe("the shipped faces render", () => {
   it("sets the interface itself in those faces", async () => {
     // The tokens could name the right family and no element use it. This asks
     // the page what it actually resolved for body text and for a metric.
+    //
+    // The mono half was computed and then never asserted, which made it free
+    // to strip the mono role off every measurable element in the product: the
+    // preload and the width probes above load the face on their own, so both
+    // would have stayed green on a page set entirely in the sans. So the
+    // assertion is on a rendered element, and on there being one at all.
     const families = await page.evaluate(() => {
       const body = getComputedStyle(document.body).fontFamily;
-      const mono = document.querySelector("code, kbd, samp, pre");
-      return { body, mono: mono ? getComputedStyle(mono).fontFamily : null };
+      const rendered = [...document.body.querySelectorAll<HTMLElement>("*")].filter(
+        (el) => el.offsetParent !== null || el === document.body,
+      );
+      const mono = rendered.find((el) =>
+        getComputedStyle(el).fontFamily.includes("CommitMono"),
+      );
+      return {
+        body,
+        mono: mono ? getComputedStyle(mono).fontFamily : null,
+        monoTag: mono ? mono.tagName.toLowerCase() : null,
+      };
     });
     expect(families.body).toContain("InterVariable");
+    expect(families.mono, "nothing on the page is set in the mono face").not.toBeNull();
+    expect(families.mono).toContain("CommitMono");
+  });
+
+  it("preloads exactly the faces the stylesheet declares", async () => {
+    // Structural checks read the source index.html. This reads the document
+    // the browser was actually served, and compares sets rather than checking
+    // that the list is non-empty: a preload for a file no @font-face names is
+    // a download nothing uses, and a declared file with no preload is the
+    // blocking round trip the links exist to remove.
+    const sets = await page.evaluate(() => {
+      const preloaded = [
+        ...document.querySelectorAll<HTMLLinkElement>(
+          'link[rel="preload"][as="font"][crossorigin]',
+        ),
+      ].map((link) => new URL(link.getAttribute("href") ?? "", location.href).pathname);
+      const declared = new Set<string>();
+      for (const sheet of [...document.styleSheets]) {
+        let rules: CSSRuleList;
+        try {
+          rules = sheet.cssRules;
+        } catch {
+          continue;
+        }
+        for (const rule of [...rules]) {
+          if (rule.constructor.name !== "CSSFontFaceRule") continue;
+          for (const url of (rule as CSSFontFaceRule).style
+            .getPropertyValue("src")
+            .matchAll(/url\(\s*["']?([^"')]+)["']?\s*\)/g)) {
+            declared.add(new URL(url[1], location.href).pathname);
+          }
+        }
+      }
+      return { preloaded: [...new Set(preloaded)].sort(), declared: [...declared].sort() };
+    });
+    expect(sets.declared, "no @font-face rule reached the browser").not.toHaveLength(0);
+    expect(sets.preloaded).toEqual(sets.declared);
   });
 
   it("gives the sans a continuous weight axis through 450", async () => {
