@@ -1465,7 +1465,13 @@ function uniformGap(body: string): number | undefined {
   const declared = body.match(/(?:^|[;{\s])padding:\s*([^;}]+)/)?.[1];
   if (!declared) return undefined;
 
-  const values = declared.trim().split(/\s+/);
+  // `!important` is a valid tail on the declaration and says nothing about the
+  // gap; left in place it reads as a second, unequal value and the guard goes
+  // quiet on a rule that is still broken.
+  const values = declared
+    .replace(/\s*!\s*important\s*$/i, "")
+    .trim()
+    .split(/\s+/);
   // CSS shorthand expansion: 1 → all four, 2 → block/inline, 3 → the middle
   // value repeats for both inline sides, 4 → top right bottom left.
   const sides =
@@ -1581,6 +1587,17 @@ describe("the concentric radius rule", () => {
         `),
       ).toEqual([{ selector: ".panel .segment", want: 2, got: 6 }]);
     }
+  });
+
+  it("reads a uniform shorthand that carries !important", () => {
+    // The suffix is part of the declaration, not of the gap. Reading it as a
+    // value made the padding look asymmetric and let the pair through.
+    expect(
+      concentricPairs(`
+        .panel { border-radius: var(--r-sm); padding: var(--space-1) !important; }
+        .panel .segment { border-radius: var(--r-sm); }
+      `),
+    ).toEqual([{ selector: ".panel .segment", want: 2, got: 6 }]);
   });
 
   it("ignores a container whose padding is not uniform", () => {
