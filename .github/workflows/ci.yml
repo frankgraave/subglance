@@ -202,15 +202,29 @@ jobs:
       # design document, or if any component grows a literal colour.
       - name: Test
         working-directory: web
-        run: npm test
+        run: npm run test:coverage
 
       - name: Lint
         working-directory: web
         run: npm run lint
 
+      # govulncheck covers the Go half of the binary. The frontend is embedded
+      # in that same artefact, so an unscanned npm dependency reaches users
+      # through a binary whose other half was checked carefully.
+      - name: Audit dependencies
+        working-directory: web
+        run: npm run audit:ci
+
       - name: Typecheck and build
         working-directory: web
         run: npm run build
+
+      # The image has a 30 MB gate in docker.yml; this is the same idea for the
+      # JavaScript that ships inside it. Runs after the build, on the bundle
+      # that build just produced.
+      - name: Bundle budget
+        working-directory: web
+        run: npm run bundle-budget
 
       # Layout checks in a real browser, because jsdom has no layout engine:
       # it reports every element as zero-wide and never evaluates a media

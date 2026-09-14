@@ -9,6 +9,9 @@
     "lint": "oxlint src",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "audit:ci": "npm audit --audit-level=high",
+    "bundle-budget": "node scripts/bundle-budget.mjs",
     "test:browser": "npm run build && vitest run --config vitest.browser.config.ts",
     "test:browser:setup": "npx --yes @puppeteer/browsers install chrome-headless-shell@152.0.7977.75"
   },
@@ -25,6 +28,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
+    "@vitest/coverage-v8": "^5.0.0",
     "jsdom": "^30.0.1",
     "oxlint": "^1.81.0",
     "puppeteer-core": "^25.10.0",
