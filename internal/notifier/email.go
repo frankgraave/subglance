@@ -3,12 +3,15 @@ package notifier
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/smtp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/frankgraave/subglance/internal/checker"
 )
 
 // EmailSender delivers an alert over SMTP.
@@ -24,14 +27,27 @@ type EmailSender struct {
 	dial func(ctx context.Context, addr string) (net.Conn, error)
 }
 
-// NewEmailSender builds an e-mail channel.
-func NewEmailSender() *EmailSender {
-	return &EmailSender{dial: dialContext}
+// NewEmailSender builds an e-mail channel. The guard may be nil, which means
+// the SMTP host is not restricted.
+func NewEmailSender(guard *checker.Guard) *EmailSender {
+	return &EmailSender{dial: guardedDialer(guard)}
 }
 
-func dialContext(ctx context.Context, addr string) (net.Conn, error) {
+// guardedDialer returns the dial function the SMTP path uses.
+//
+// The SMTP host is operator-supplied just like a webhook URL, so it gets the
+// same treatment: a channel pointed at 127.0.0.1:2375 would otherwise have
+// SubGlance open a TCP connection to the Docker socket's port and speak
+// whatever the far end reads as SMTP. The check sits in the dialer's Control
+// hook so it sees the resolved address rather than the name.
+func guardedDialer(guard *checker.Guard) func(ctx context.Context, addr string) (net.Conn, error) {
 	d := net.Dialer{Timeout: defaultTimeout}
-	return d.DialContext(ctx, "tcp", addr)
+	if guard != nil {
+		d.Control = guard.ControlFunc()
+	}
+	return func(ctx context.Context, addr string) (net.Conn, error) {
+		return d.DialContext(ctx, "tcp", addr)
+	}
 }
 
 // Validate checks the SMTP settings.
@@ -74,6 +90,11 @@ func (s *EmailSender) Send(ctx context.Context, cfg map[string]string, a Alert) 
 
 	conn, err := s.dial(ctx, addr)
 	if err != nil {
+		if errors.Is(err, checker.ErrPrivateTarget) {
+			// A refused address stays refused; retrying it five
+			// more times only delays the operator learning why.
+			return fmt.Errorf("delivery blocked: %w", err)
+		}
 		return retryable("connect to %s: %w", addr, err)
 	}
 	defer func() { _ = conn.Close() }()

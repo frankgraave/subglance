@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/frankgraave/subglance/internal/checker"
 	"github.com/frankgraave/subglance/internal/state"
 	"github.com/frankgraave/subglance/internal/store"
 )
@@ -95,6 +96,13 @@ type Options struct {
 	// ones; tests pass fakes.
 	Senders map[string]Sender
 
+	// Guard restricts which addresses a delivery may connect to. It is
+	// optional: nil means no restriction, which is what tests and a
+	// deployment without the checker pipeline need. In the server it is
+	// always set, from the same --allow-private-targets setting the
+	// monitor checkers use.
+	Guard *checker.Guard
+
 	// Now is the clock, swappable in tests.
 	Now func() time.Time
 }
@@ -109,11 +117,11 @@ func New(opts Options) *Notifier {
 	senders := opts.Senders
 	if senders == nil {
 		senders = map[string]Sender{
-			store.ChannelWebhook:  NewWebhookSender(),
-			store.ChannelDiscord:  NewDiscordSender(),
-			store.ChannelSlack:    NewSlackSender(),
-			store.ChannelTelegram: NewTelegramSender(),
-			store.ChannelEmail:    NewEmailSender(),
+			store.ChannelWebhook:  NewWebhookSender(opts.Guard),
+			store.ChannelDiscord:  NewDiscordSender(opts.Guard),
+			store.ChannelSlack:    NewSlackSender(opts.Guard),
+			store.ChannelTelegram: NewTelegramSender(opts.Guard),
+			store.ChannelEmail:    NewEmailSender(opts.Guard),
 		}
 	}
 

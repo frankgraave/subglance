@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"strings"
+
+	"github.com/frankgraave/subglance/internal/checker"
 )
 
 // DiscordSender posts an embed to a Discord webhook.
@@ -14,9 +16,9 @@ import (
 // it.
 type DiscordSender struct{ client *http.Client }
 
-// NewDiscordSender builds a Discord channel.
-func NewDiscordSender() *DiscordSender {
-	return &DiscordSender{client: newHTTPClient()}
+// NewDiscordSender builds a Discord channel. The guard may be nil.
+func NewDiscordSender(guard *checker.Guard) *DiscordSender {
+	return &DiscordSender{client: newHTTPClient(guard)}
 }
 
 // Discord embed colours, as the decimal integers its API expects.

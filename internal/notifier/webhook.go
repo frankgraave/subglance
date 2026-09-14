@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/frankgraave/subglance/internal/checker"
 )
 
 // WebhookSender posts the alert as JSON to a URL of the operator's choosing.
@@ -15,9 +17,10 @@ import (
 // specific product; this one formats for a script.
 type WebhookSender struct{ client *http.Client }
 
-// NewWebhookSender builds a webhook channel.
-func NewWebhookSender() *WebhookSender {
-	return &WebhookSender{client: newHTTPClient()}
+// NewWebhookSender builds a webhook channel. The guard may be nil, which
+// means outbound deliveries are not restricted.
+func NewWebhookSender(guard *checker.Guard) *WebhookSender {
+	return &WebhookSender{client: newHTTPClient(guard)}
 }
 
 // Validate checks the URL and any custom headers.

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/frankgraave/subglance/internal/checker"
 )
 
 // TelegramSender sends a message through the Bot API.
@@ -24,9 +26,13 @@ type TelegramSender struct {
 	apiBase string
 }
 
-// NewTelegramSender builds a Telegram channel.
-func NewTelegramSender() *TelegramSender {
-	return &TelegramSender{client: newHTTPClient(), apiBase: "https://api.telegram.org"}
+// NewTelegramSender builds a Telegram channel. The guard may be nil.
+//
+// Telegram's own API host is public, so the guard rarely has anything to say
+// here, but the client is built the same way as the others so that no channel
+// is the one exception nobody thought about.
+func NewTelegramSender(guard *checker.Guard) *TelegramSender {
+	return &TelegramSender{client: newHTTPClient(guard), apiBase: "https://api.telegram.org"}
 }
 
 // Validate checks that both settings are present.
