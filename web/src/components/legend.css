@@ -1,0 +1,70 @@
+/*
+ * The legend (DESIGN.md §2.5, §8).
+ *
+ * A list of marks and what they mean, sitting on a panel under or beside the
+ * thing it explains.
+ *
+ * The tone is the decision in this file, and it is the one most likely to be
+ * "fixed" back. The label is quiet because it is 12px, monospaced and
+ * uppercase — three things that already push text into the background. Fading
+ * it as well spends contrast to buy a quietness the face and the casing give
+ * for free, and it spends it on the only text that says what the numbers mean.
+ * `--ink-3` measures 3.37:1 on `--surface` in dark and 3.19:1 in light, and
+ * `--ink-4` is at 1.90:1 — under the floor a non-text edge has to clear. So
+ * the legend takes `--ink-2` (7.31:1 / 6.26:1), which clears AA at 12px.
+ * Quiet, not faint. That is the shared `caps-legend` role, which is why this
+ * file applies it rather than restating five declarations.
+ */
+
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+}
+
+/* Marker, label, value: the value column is `max-content` and last, so numbers
+   sit hard against the right edge and line up on their last digit. Comparing
+   them then costs a glance rather than a read. */
+.legend-item {
+  display: grid;
+  grid-template-columns: auto 1fr max-content;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* A row with no value keeps the column so the labels of a mixed list still
+   start and end on the same two vertical lines. */
+.legend-item--flow {
+  grid-template-columns: auto 1fr;
+}
+
+.legend-marker {
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--r-2xs);
+  flex: none;
+  background: var(--ink-3);
+}
+
+.legend-marker[data-status="up"] { background: var(--up); }
+.legend-marker[data-status="warn"] { background: var(--warn); }
+.legend-marker[data-status="down"] { background: var(--down); }
+.legend-marker[data-status="idle"] { background: var(--idle); }
+
+.legend-label {
+  @apply caps-legend;
+}
+
+/* The value is measurable, so it takes the mono role and its tabular figures.
+   It sits at helper size and full ink: the label says what the thing is, the
+   number is what the reader came for. */
+.legend-value {
+  @apply face-mono;
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  font-weight: var(--weight-plain);
+  color: var(--ink);
+  text-align: right;
+}

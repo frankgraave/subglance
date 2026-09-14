@@ -1,0 +1,125 @@
+/*
+ * The menu (DESIGN.md §8).
+ *
+ * Each item is a title with a description under it and a glyph on the left.
+ * The description is not decoration: "Pause" alone makes the reader guess
+ * whether checks stop, alerts stop, or both. The sentence is the actual
+ * content of the item, so it gets a real line rather than a tooltip.
+ *
+ * Focus is drawn with the accent ring, not a neutral outline. The ring is the
+ * product's one statement of "this is where you are"; a grey outline here
+ * would be a second focus language and would sit at the same weight as the
+ * panel's own edges.
+ */
+
+.menu {
+  position: relative;
+  display: inline-block;
+}
+
+.menu-panel {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  min-width: var(--space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  /* Floating, so it takes the top rung of the depth ladder: it is in front of
+     the page rather than part of it. */
+  box-shadow: var(--shadow-float);
+}
+
+.menu-panel[data-align="end"] {
+  left: auto;
+  right: 0;
+}
+
+/* Glyph, then the two lines of text. The glyph column is fixed so the titles
+   of every item start on one vertical line, which is what lets the list be
+   scanned rather than read. */
+.menu-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-hover) var(--ease);
+}
+
+.menu-item:hover:not(:disabled),
+.menu-item[data-active="true"] {
+  background: var(--surface-2);
+}
+
+/* One focus language, and it is the accent. The default outline is removed
+   only because the ring replaces it — not because focus is being hidden. */
+.menu-item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.menu-item:disabled {
+  cursor: default;
+  opacity: .5;
+}
+
+.menu-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--space-4);
+  height: var(--space-4);
+  color: var(--ink-2);
+}
+
+.menu-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.menu-item-title {
+  font-size: var(--type-body);
+  line-height: var(--lead-body);
+  font-weight: var(--weight-mid);
+  letter-spacing: var(--track-body);
+  color: var(--ink);
+}
+
+/* The description wraps, so it takes the running-text leading rather than the
+   single-line helper leading. */
+.menu-item-description {
+  font-size: var(--type-helper);
+  line-height: var(--lead-prose);
+  font-weight: var(--weight-plain);
+  color: var(--ink-2);
+  white-space: normal;
+}
+
+/* A destructive item states itself in its title colour. The description stays
+   neutral: the warning belongs on the verb, and colouring both would make the
+   whole item read as an error message. */
+.menu-item[data-tone="danger"] .menu-item-title,
+.menu-item[data-tone="danger"] .menu-item-icon {
+  color: var(--down);
+}
+
+.menu-separator {
+  height: 1px;
+  margin: var(--space-1) 0;
+  background: var(--border);
+}
