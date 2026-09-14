@@ -68,10 +68,17 @@ export async function login(email: string, password: string): Promise<User> {
 /**
  * Ends the session.
  *
- * The endpoint is public and returns 204 even without a cookie, which is what
- * makes it safe to call from a session that has already expired: it is never
- * possible to be stuck holding a stale cookie you cannot clear.
+ * A 401 is treated as success. The endpoint requires authentication so that it
+ * runs the CSRF check — without it, any site could sign a visitor out — and the
+ * one case that costs is a cookie the server no longer knows. That caller is
+ * already signed out, so reporting a failure would leave the UI stuck on a
+ * session it cannot clear.
  */
 export async function logout(): Promise<void> {
-  await apiPost("/api/v1/auth/logout", {});
+  try {
+    await apiPost("/api/v1/auth/logout", {});
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) return;
+    throw error;
+  }
 }
