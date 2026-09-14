@@ -67,9 +67,12 @@ const IDS: Record<MonitorStatus, string> = {
   down: "bravo",
   pending: "charlie",
   paused: "delta",
+  // A push monitor that has never reported. It shares the grey idle lamp with
+  // nothing else visible, which is exactly the case this file exists for.
+  waiting: "echo",
 };
 
-const ALL: MonitorStatus[] = ["up", "down", "pending", "paused"];
+const ALL: MonitorStatus[] = ["up", "down", "pending", "paused", "waiting"];
 
 /** Text a sighted reader can actually see: `sr-only` text is excluded. */
 function visibleText(el: Element): string {
