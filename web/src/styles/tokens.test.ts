@@ -1938,4 +1938,47 @@ describe("a dashed edge means the chip is about the data (§8.1)", () => {
     expect([...dashed]).toContain(".chip--state");
     expect([...dashed]).toContain(".chip-avatar");
   });
+
+  it("keeps every focus ring on the accent", () => {
+    // Focus is a control state: it says "your keyboard is here". §2.8 gives
+    // that job to the accent precisely so it never reads as a fact about the
+    // data — a neutral ring is the same grey the product uses for text it is
+    // de-emphasising, which is the opposite of what focus means.
+    //
+    // This regressed once already: every ring moved to the accent except one
+    // in shell.css, which kept --ink-2 and went unnoticed because nothing
+    // looked at it. Scanning the rules is what makes "every" true.
+    const offenders: string[] = [];
+    for (const { path, selector, body } of cssRules()) {
+      if (!/:focus(?:-visible|-within)?\b/.test(selector)) continue;
+
+      const clean = stripComments(body);
+      const outline = /(?:^|[;{\s])outline(?:-color)?:\s*([^;]+)/.exec(clean);
+      const ring = /box-shadow:\s*([^;]+)/.exec(clean);
+
+      for (const [property, value] of [
+        ["outline", outline?.[1]],
+        ["box-shadow", ring?.[1]],
+      ] as const) {
+        if (!value) continue;
+        // `outline: none` and a shadow that only lifts the surface are not
+        // rings and carry no colour claim.
+        if (/^\s*(?:none|0)\s*$/.test(value)) continue;
+        if (!/var\(--/.test(value)) continue;
+
+        const tokens = [...value.matchAll(/var\((--[\w-]+)/g)].map((m) => m[1]);
+        const carriesAccent = tokens.some((t) => t.startsWith("--accent"));
+        // A ring may legitimately reference an error tone; what it may not do
+        // is sit on a neutral from the ink or border scale.
+        const carriesNeutral = tokens.some(
+          (t) => /^--ink(?:-|$)/.test(t) || /^--border(?:-|$)/.test(t),
+        );
+
+        if (carriesNeutral && !carriesAccent) {
+          offenders.push(`${path} | ${selector} | ${property}: ${value.trim()}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
 });

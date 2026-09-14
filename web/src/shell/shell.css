@@ -371,6 +371,10 @@
  */
 .shell-content:focus:not(:focus-visible) { outline: none; }
 .shell-content:focus-visible {
-  outline: 2px solid var(--ink-2);
+  /* The accent, not a neutral. Focus is a control state — it says "your
+     keyboard is here" — and §2.8 gives that job to the accent so it never
+     reads as a fact about the data. This was the last neutral focus ring
+     left in the product; every other one already moved. */
+  outline: 2px solid var(--accent-border);
   outline-offset: -3px;
 }
