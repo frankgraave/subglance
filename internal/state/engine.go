@@ -61,6 +61,14 @@ const (
 	// only event that alerts on failure.
 	EventIncidentConfirmed Event = "incident_confirmed"
 
+	// EventIncidentReminder is a repeat of an alert nobody has answered.
+	//
+	// It carries no state change: the incident was already confirmed and is
+	// still down. It exists so the notifier can word a reminder differently
+	// from a first alert ("still down, 6h12m") and so the UI can tell the
+	// two apart.
+	EventIncidentReminder Event = "incident_reminder"
+
 	// EventIncidentResolved is recovery. It alerts only when the incident it
 	// closes was confirmed: nobody wants a "resolved" for an outage they were
 	// never told about.

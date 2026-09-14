@@ -27,10 +27,21 @@ type Incident struct {
 
 	Cause     string
 	LastError string
+
+	// RemindedAt is when the last reminder for this incident went out, and
+	// ReminderCount how many have gone out. They live on the incident rather
+	// than in memory so the escalating schedule survives a restart: without
+	// them, restarting during a three-day outage would alert as if the
+	// incident were new.
+	RemindedAt    time.Time // zero while no reminder has been sent
+	ReminderCount int
 }
 
 // Confirmed reports whether this incident passed the failure threshold.
 func (i Incident) Confirmed() bool { return !i.ConfirmedAt.IsZero() }
+
+// Acked reports whether someone has acknowledged this incident.
+func (i Incident) Acked() bool { return !i.AckedAt.IsZero() }
 
 // Resolved reports whether this incident has ended.
 func (i Incident) Resolved() bool { return !i.ResolvedAt.IsZero() }
@@ -57,7 +68,9 @@ var ErrNoOpenIncident = errors.New("store: no open incident for monitor")
 var ErrIncidentAlreadyOpen = errors.New("store: an incident is already open for this monitor")
 
 const incidentColumns = `
-	id, monitor_id, started_at, confirmed_at, resolved_at, acked_at, cause, last_error`
+	incidents.id, incidents.monitor_id, incidents.started_at, incidents.confirmed_at,
+	incidents.resolved_at, incidents.acked_at, incidents.cause, incidents.last_error,
+	incidents.reminded_at, incidents.reminder_count`
 
 // OpenIncident creates an unconfirmed incident for a monitor.
 //
@@ -256,19 +269,28 @@ func scanIncidents(rows *sql.Rows) ([]Incident, error) {
 }
 
 func scanIncident(s scanner) (Incident, error) {
+	return scanIncidentWith(s)
+}
+
+// scanIncidentWith reads an incident row, plus any extra destinations a joined
+// query appended after the incident columns.
+func scanIncidentWith(s scanner, extra ...any) (Incident, error) {
 	var (
 		inc       Incident
 		started   int64
 		confirmed sql.NullInt64
 		resolved  sql.NullInt64
 		acked     sql.NullInt64
+		reminded  sql.NullInt64
 	)
 
-	err := s.Scan(
+	dest := []any{
 		&inc.ID, &inc.MonitorID, &started,
 		&confirmed, &resolved, &acked,
 		&inc.Cause, &inc.LastError,
-	)
+		&reminded, &inc.ReminderCount,
+	}
+	err := s.Scan(append(dest, extra...)...)
 	if err != nil {
 		return Incident{}, err
 	}
@@ -283,5 +305,96 @@ func scanIncident(s scanner) (Incident, error) {
 	if acked.Valid {
 		inc.AckedAt = time.Unix(acked.Int64, 0).UTC()
 	}
+	if reminded.Valid {
+		inc.RemindedAt = time.Unix(reminded.Int64, 0).UTC()
+	}
 	return inc, nil
+}
+
+// RecordReminder stamps an incident with the reminder that just went out.
+//
+// The count is incremented in SQL rather than written from a value the caller
+// read earlier: two paths can reach this (the reminder ticker and a check that
+// lands at the same moment), and a read-modify-write would let one of them
+// silently reset the escalation.
+//
+// It refuses to stamp a resolved or acknowledged incident. That is the last
+// line of defence for the promise acknowledging makes — the caller checks it
+// too, but the window between deciding to remind and writing the stamp is
+// exactly when someone clicks acknowledge.
+func (db *DB) RecordReminder(ctx context.Context, incidentID int64, at time.Time) error {
+	res, err := db.Writer.ExecContext(ctx, `
+		UPDATE incidents
+		SET reminded_at = ?, reminder_count = reminder_count + 1
+		WHERE id = ? AND resolved_at IS NULL AND acked_at IS NULL`,
+		at.Unix(), incidentID)
+	if err != nil {
+		return fmt.Errorf("record reminder for incident %d: %w", incidentID, err)
+	}
+
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("rows affected: %w", err)
+	}
+	if n == 0 {
+		return ErrNoOpenIncident
+	}
+	return nil
+}
+
+// RemindableIncident is an open incident plus the one monitor setting the
+// reminder schedule needs.
+//
+// Only the interval travels with it, not the whole monitor: the ticker looks
+// at every candidate on every pass but alerts on almost none of them, so
+// loading full monitor rows here would be a join per tick to answer a question
+// two integers can. The monitor is fetched for the few that are actually due.
+type RemindableIncident struct {
+	Incident    Incident
+	RepeatAfter time.Duration
+}
+
+// RemindableIncidents returns every incident that is a candidate for a
+// reminder: confirmed, unresolved, unacknowledged, and belonging to an enabled
+// monitor that has reminders switched on.
+//
+// It deliberately does not decide whether a reminder is *due*. That rule lives
+// in the state package with the rest of the alerting logic, where it is a pure
+// function over timestamps and can be tested as a table. This query only
+// narrows the set the ticker has to look at.
+//
+// A paused monitor is excluded: it is not being checked, so its incident is
+// frozen rather than ongoing, and reminding about an outage nobody is watching
+// for would be alerting on stale information.
+func (db *DB) RemindableIncidents(ctx context.Context) ([]RemindableIncident, error) {
+	rows, err := db.Reader.QueryContext(ctx, `
+		SELECT `+incidentColumns+`, m.repeat_after_s
+		FROM incidents
+		JOIN monitors m ON m.id = incidents.monitor_id
+		WHERE incidents.resolved_at IS NULL
+		  AND incidents.acked_at IS NULL
+		  AND incidents.confirmed_at IS NOT NULL
+		  AND m.enabled = 1
+		  AND m.repeat_after_s > 0
+		ORDER BY incidents.id`)
+	if err != nil {
+		return nil, fmt.Errorf("query remindable incidents: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []RemindableIncident
+	for rows.Next() {
+		var (
+			r       RemindableIncident
+			seconds int64
+		)
+		inc, err := scanIncidentWith(rows, &seconds)
+		if err != nil {
+			return nil, err
+		}
+		r.Incident = inc
+		r.RepeatAfter = time.Duration(seconds) * time.Second
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }
