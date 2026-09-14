@@ -2,9 +2,11 @@
 //
 //	subglance --addr :8080 --data-dir /data
 //
-// It also answers one subcommand, used by the container image to probe itself:
+// It also answers two subcommands, because the shipped image is distroless and
+// has no shell to run anything else:
 //
 //	subglance healthcheck [--addr :8080]
+//	subglance backup <path> [--data-dir /data]
 //
 // See docs/ARCHITECTURE.md for how the pieces fit together.
 package main
@@ -14,6 +16,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -36,18 +39,19 @@ import (
 func main() {
 	args := os.Args[1:]
 
-	// One subcommand, and it is deliberately the only one: the shipped image
-	// is distroless with no shell, so a container HEALTHCHECK has nothing to
-	// invoke except this binary. Everything else stays flags-only.
-	if len(args) > 0 && args[0] == "healthcheck" {
-		if err := runHealthcheck(args[1:], os.Stdout); err != nil {
-			if errors.Is(err, flag.ErrHelp) {
-				return
-			}
-			fmt.Fprintf(os.Stderr, "subglance healthcheck: %v\n", err)
-			os.Exit(1)
+	// Subcommands, and deliberately only these two: the shipped image is
+	// distroless with no shell, so a container HEALTHCHECK and an operator
+	// taking a backup have nothing to invoke except this binary. Everything
+	// else stays flags-only.
+	if len(args) > 0 {
+		switch args[0] {
+		case "healthcheck":
+			runSubcommand("healthcheck", runHealthcheck, args[1:])
+			return
+		case "backup":
+			runSubcommand("backup", runBackup, args[1:])
+			return
 		}
-		return
 	}
 
 	if err := run(args); err != nil {
@@ -55,6 +59,19 @@ func main() {
 			return // the user asked for usage; not a failure
 		}
 		fmt.Fprintf(os.Stderr, "subglance: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// runSubcommand applies the exit conventions every subcommand shares: usage
+// requests are a clean exit, anything else is a failure named after the
+// subcommand so the message says which one failed.
+func runSubcommand(name string, fn func([]string, io.Writer) error, args []string) {
+	if err := fn(args, os.Stdout); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return
+		}
+		fmt.Fprintf(os.Stderr, "subglance %s: %v\n", name, err)
 		os.Exit(1)
 	}
 }

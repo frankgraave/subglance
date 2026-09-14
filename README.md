@@ -273,6 +273,65 @@ outbound network stops pinging too, and that reads as an outage at the other
 end. Being told about a problem that turns out to be the messenger is still
 better than being told nothing.
 
+### Backup and restore
+
+**Copying the database file while SubGlance is running is not a backup.**
+SubGlance runs SQLite in WAL mode, which means `subglance.db` on its own is
+only current up to the last checkpoint — recent writes live in the
+`subglance.db-wal` file beside it. A `docker cp`, a `tar` over the volume or a
+filesystem snapshot taken while the container runs gives you a file that is
+either weeks stale or refuses to open, and you find that out on the day you
+need it.
+
+Use the `backup` subcommand instead. It uses SQLite's `VACUUM INTO`, which runs
+inside a read transaction and writes one self-contained file holding everything
+committed at the moment it started. It is safe to run while SubGlance is
+serving traffic and recording checks.
+
+```sh
+docker compose exec subglance subglance backup /data/subglance-backup.db
+docker compose cp subglance:/data/subglance-backup.db ./subglance-backup.db
+```
+
+Or, running from source:
+
+```sh
+subglance backup ~/backups/subglance-$(date +%F).db --data-dir /var/lib/subglance
+```
+
+The command refuses to overwrite an existing file. That is deliberate: a backup
+command that silently truncates its destination will eventually destroy the one
+good copy you had, most likely when a nightly job reuses a fixed filename and
+that run fails halfway. Give each run a new name — `$(date +%F)` above — and
+prune old ones yourself.
+
+The subcommand exists because the shipped image is distroless: there is no
+shell and no `sqlite3` binary in it, so the only thing that can take a backup
+inside the container is the binary that is already there.
+
+To restore, stop SubGlance and put the file back as `subglance.db` in the data
+directory:
+
+```sh
+docker compose down
+# the SubGlance image has no shell, so borrow one to write into the volume
+# (`docker volume ls` shows the real name; Compose prefixes it with the project)
+docker run --rm -v subglance-data:/data -v "$PWD:/restore" alpine sh -c \
+  'rm -f /data/subglance.db-wal /data/subglance.db-shm && \
+   cp /restore/subglance-backup.db /data/subglance.db'
+docker compose up -d
+```
+
+Two things to check while restoring:
+
+- Remove any leftover `subglance.db-wal` and `subglance.db-shm` next to it, as
+  the command above does. They belong to the old database, and SQLite would
+  try to replay them over the restored one.
+- Restore into a version of SubGlance that is the same as, or newer than, the
+  one that took the backup. An older binary refuses to start against a newer
+  schema rather than writing rows against a table shape it does not
+  understand; the error names the migration it does not recognise.
+
 ### First run
 
 There is no default account and no seeded password. Open
