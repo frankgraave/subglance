@@ -329,3 +329,92 @@ describe("HeartbeatBar", () => {
     expect(document.querySelector(".hb-bar--new")).not.toBeNull();
   });
 });
+
+/*
+ * The chrome (§13). The defect it closes: a reader could see that something
+ * failed and had no way at all to tell when — the track carried no time
+ * context whatsoever.
+ */
+describe("HeartbeatBar, framed", () => {
+  it("states the window's start and end in the two bottom corners", () => {
+    const series = beats(5);
+    render(
+      <HeartbeatBar beats={series} label="API" width={WIDTH} framed />,
+    );
+    const corner = (ts: number) =>
+      new Date(ts).toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    expect(screen.getByTestId("chart-start").textContent).toBe(
+      corner(series[0].ts),
+    );
+    expect(screen.getByTestId("chart-end").textContent).toBe(
+      corner(series[4].ts),
+    );
+  });
+
+  it("labels the corners with the data's window, never with the clock", () => {
+    // The series is historic. A chrome that reached for Date.now() would put
+    // today's date under a bar drawn from last year's checks.
+    render(<HeartbeatBar beats={beats(5)} label="API" width={WIDTH} framed />);
+    const now = new Date().toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    expect(screen.getByTestId("chart-end").textContent).not.toBe(now);
+    expect(screen.getByTestId("chart-start").textContent).not.toBe(now);
+  });
+
+  it("leads with uptime and right-aligns the check breakdown beside it", () => {
+    render(
+      <HeartbeatBar
+        beats={beats(10, (i) => ({ ok: i !== 3 }))}
+        label="API"
+        width={WIDTH}
+        framed
+      />,
+    );
+    expect(screen.getByTestId("chart-headline").textContent).toBe("90.00%");
+    expect(screen.getByTestId("chart-breakdown").textContent).toBe(
+      "10 checks · 1 failed",
+    );
+  });
+
+  it("says so in words when there is nothing to divide", () => {
+    // 0/0 is NaN%, and "NaN%" above an empty track reads as a crash rather
+    // than as a monitor that has not run yet.
+    render(<HeartbeatBar beats={[]} label="API" width={WIDTH} framed />);
+    expect(screen.getByTestId("chart-headline").textContent).toBe("—");
+    expect(screen.getByTestId("chart-breakdown").textContent).toBe(
+      "no checks yet",
+    );
+    expect(screen.queryByTestId("chart-start")).toBeNull();
+  });
+
+  it("fills the legend from the caller rather than inventing one", () => {
+    render(
+      <HeartbeatBar
+        beats={beats(5)}
+        label="API"
+        width={WIDTH}
+        framed
+        legend={<span>Bar height is latency</span>}
+      />,
+    );
+    expect(screen.getByText("Bar height is latency")).toBeTruthy();
+  });
+
+  it("draws no chrome at all unframed, which is what a list row needs", () => {
+    // The chrome is opt-in for a reason: one uptime headline per row, forty
+    // rows deep, is the same fact forty times and the row already states it.
+    render(<HeartbeatBar beats={beats(5)} label="API" width={WIDTH} />);
+    expect(screen.queryByTestId("chart-headline")).toBeNull();
+    expect(screen.queryByTestId("chart-grid")).toBeNull();
+    expect(document.querySelectorAll(".hb-bar")).toHaveLength(41);
+  });
+});

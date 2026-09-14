@@ -1614,6 +1614,51 @@ describe("the concentric radius rule", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("has a real pair to check, so the guard cannot pass vacuously", () => {
+    // The guard above is a loop over the pairs found under web/src. If the
+    // scan ever finds none — a selector shape it cannot read, a stylesheet
+    // moved out of the tree — the loop runs zero times and the suite reports
+    // the rule as upheld while nothing at all was examined. That is the
+    // failure mode of every "no offenders" test, and the only defence is to
+    // assert that the scan is looking at something.
+    //
+    // It is not asserted against one named component on purpose: which
+    // component nests a padded radius is a layout decision that may move, and
+    // a guard that names it would have to be edited every time it did.
+    const found: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (!file.endsWith(".css")) continue;
+      for (const { selector } of concentricPairs(readFileSync(file, "utf8"))) {
+        found.push(`${relative(repoRoot, file)}: ${selector}`);
+      }
+    }
+    expect(
+      found.length,
+      "no live outer/inner radius pair under web/src — the concentric guard is checking nothing",
+    ).toBeGreaterThan(0);
+  });
+
+  it("subtracts the padding rather than comparing the tokens to themselves", () => {
+    // The arithmetic the rule actually states, on values taken from the two
+    // ladders rather than from the stylesheet being checked: 6px of outer
+    // radius with 4px of padding inside it leaves 2px, and 10px with 4px
+    // leaves 6px. A guard that only asked "is the inner token different from
+    // the outer one" would accept any of the five steps here.
+    expect(
+      concentricPairs(`
+        .outer { border-radius: var(--r-md); padding: var(--space-1); }
+        .outer .inner { border-radius: var(--r-sm); }
+      `),
+    ).toEqual([{ selector: ".outer .inner", want: 6, got: 6 }]);
+
+    expect(
+      concentricPairs(`
+        .outer { border-radius: var(--r-md); padding: var(--space-1); }
+        .outer .inner { border-radius: var(--r-xs); }
+      `),
+    ).toEqual([{ selector: ".outer .inner", want: 6, got: 4 }]);
+  });
+
   it("bites on an inner radius that copies the outer one", () => {
     // The mistake the rule exists to stop: reaching for the same token inside
     // and out, which reads as consistency and draws as a pinched corner.

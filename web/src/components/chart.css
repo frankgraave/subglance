@@ -1,0 +1,94 @@
+/*
+ * Chart chrome (DESIGN.md §13).
+ *
+ * The rule this file is built around is what it does *not* declare: the plot
+ * has no border, no background and no outline, because a frame around a chart
+ * is ink that carries no reading. What is left is three faint gridlines, a
+ * headline row and two corner times. Chart.test.tsx asserts the absence, since
+ * a frame is exactly the kind of thing that gets added back "to tidy it up".
+ */
+
+.chart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* Headline left, breakdown right, both on one baseline: the conclusion is
+   read first and the detail is already in the same eye movement. */
+.chart-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+/* Mono: the headline is a measurement, so it takes the mono role and with it
+   tabular figures — a live number must not shuffle its own width as it
+   changes. */
+.chart-headline {
+  @apply face-mono;
+  font-size: var(--type-page);
+  line-height: var(--lead-page);
+  font-weight: var(--weight-mid);
+  color: var(--ink);
+}
+
+.chart-breakdown {
+  @apply face-mono;
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  color: var(--ink-2);
+  text-align: right;
+}
+
+.chart-plot {
+  position: relative;
+}
+
+.chart-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* A hairline, not a rule: 1px of --border is the faintest mark the palette
+   has, and the gridline only has to give a height something to be measured
+   against. Below the 4px spacing floor on purpose — this is a hairline, not a
+   spacing decision. */
+.chart-gridline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--border);
+}
+
+/* The marks sit above the gridlines, so a bar is never cut by one. */
+.chart-marks {
+  position: relative;
+}
+
+.chart-range {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+/* The x-axis, reduced to its two useful labels. Mono for the slashed zero and
+   the tabular figures; --ink-2 rather than a fainter rung because this is text
+   and owes 4.5:1, and the section size already makes it quiet. */
+.chart-time {
+  @apply face-mono;
+  font-size: var(--type-section);
+  line-height: var(--lead-section);
+  color: var(--ink-2);
+}
+
+/* The legend's home: below the plot, where it covers no data. What goes in it
+   is the caller's. */
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}

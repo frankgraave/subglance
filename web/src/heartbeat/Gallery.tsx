@@ -117,6 +117,25 @@ export function HeartbeatGallery() {
         </p>
         <HeartbeatBar beats={live} label="Live demo" />
       </section>
+      <section className="rounded-lg border border-border bg-surface p-5 shadow-flat">
+        <h3 className="text-card font-strong text-ink">Framed — the chart chrome</h3>
+        <p className="mb-4 mt-1 max-w-prose text-helper leading-prose text-ink-3">
+          The same bar inside the chrome of DESIGN.md §13: uptime above it with the check
+          breakdown right-aligned on the same line, faint gridlines and nothing else behind the
+          plot, and the window&apos;s start and end in the two bottom corners instead of an x-axis.
+          The legend below is a slot the caller fills; this page fills it with a sentence.
+        </p>
+        <HeartbeatBar
+          beats={series(120, (i) => ({ latencyMs: wobble(i, 120, 40), ok: i !== 96 }))}
+          label="Framed demo"
+          framed
+          legend={
+            <span className="text-helper text-ink-3">
+              Bar height is latency; a failed check is drawn full height.
+            </span>
+          }
+        />
+      </section>
       {CASES.map((c) => (
         <Case key={c.title} {...c} />
       ))}
