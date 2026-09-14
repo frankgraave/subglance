@@ -1,0 +1,135 @@
+/*
+ * The card and the panels inside it (DESIGN.md §2.7).
+ *
+ * This file is the nesting pattern. Everything here exists to make one
+ * relationship legible: the card is the surface, the panels sit on it.
+ *
+ * The values are measured, not chosen. Card 12px radius, 6px padding, a fill
+ * at .03; panel 8px radius, a fill at .02. Strictly concentric corners would
+ * put the card at 14px (8 inner + 6 padding), and 12px is deliberately tighter
+ * — at full width a 14px corner starts to read as a pill.
+ */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  /* The gap between panels matches the card's own padding, so a panel is the
+     same distance from its neighbour as it is from the card's edge. Unequal
+     values here are what make a card look like it was assembled rather than
+     laid out. */
+  gap: var(--space-1h);
+  padding: var(--space-1h);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+/*
+ * The header.
+ *
+ * 46px tall with asymmetric padding: eight pixels around, six at the bottom.
+ * The tighter bottom is deliberate — the first panel already sits six pixels
+ * from the card's edge, so an eight-pixel gap beneath the title would read as
+ * looser than the space beside it and the header would float.
+ */
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 46px;
+  padding: var(--space-2) var(--space-2) var(--space-1h);
+}
+
+.card-head-lead {
+  display: flex;
+  align-items: center;
+  /* 10px, not 8 or 12: the tile is a 24px square and the title is 16px text,
+     so the optical gap between them is smaller than the geometric one. */
+  gap: var(--space-2h);
+  min-width: 0;
+}
+
+.card-head-action {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1h);
+  flex: none;
+}
+
+/*
+ * The title takes the text face, at 16px/500, in sentence case.
+ *
+ * Not `caps-legend`. A card title is a heading; mono-caps is the register for
+ * labels *inside* a panel, where a short uppercase word marks a column or a
+ * measurement. Using one role for both is what made our screens read as a
+ * stack of shouted abbreviations with no hierarchy between them.
+ */
+.card-title {
+  @apply face-sans;
+  font-size: var(--type-card);
+  line-height: var(--lead-card);
+  font-weight: var(--weight-mid);
+  color: var(--ink);
+  /* A long title truncates rather than wrapping the header to two lines: the
+     46px height is what keeps a column of cards on one rhythm. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * A panel.
+ *
+ * The tighter radius and the louder fill are the entire nesting illusion: the
+ * panel is one step above the card, which is one step above the page.
+ */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+
+/* A panel whose child draws to its own edges — a list, a table, a chart that
+   owns its margins. The padding would otherwise inset the rows twice. */
+.panel--flush {
+  padding: 0;
+  gap: 0;
+}
+
+/*
+ * A label inside a panel: mono, uppercase, 12px, and — the part that is easy
+ * to miss — leading equal to its size. A one-line label needs no leading, and
+ * 16px of it makes the label sit visibly low in its own row.
+ */
+.panel-label {
+  @apply caps-legend;
+  margin: 0;
+}
+
+/* A flush panel still needs its label inset, since the panel gave up padding
+   so its rows could reach the edge. */
+.panel--flush > .panel-label {
+  padding: var(--space-3) var(--space-3) 0;
+}
+
+/*
+ * On a phone the card and its panel each spend padding on the same edge, and
+ * 6 + 16 = 22px of a 360px screen is worth reclaiming. The card keeps its 6px
+ * — that gap is the nesting and losing it collapses the pattern — so the panel
+ * gives up 4px instead.
+ */
+@media (max-width: 640px) {
+  .panel {
+    padding: var(--space-3);
+  }
+
+  .card-head {
+    padding: var(--space-1h) var(--space-1h) var(--space-1);
+  }
+}

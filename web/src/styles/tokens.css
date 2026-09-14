@@ -110,7 +110,12 @@
      engine's glyph rounding on the text, and it was the 12.5px helper — the
      most used role in the product — that carried it. */
   --type-page: 24px;
-  --type-card: 18px;
+  /* 16px, not 18. A card title sits beside a 24px icon tile and above a panel
+     of 14px text; at 18px it competes with the page title two levels up
+     instead of sitting between it and the body. Measured against the reference
+     style, its card headings are 16px/500 — the same size as body copy, doing
+     its work through weight and position rather than through size. */
+  --type-card: 16px;
   --type-row: 15px;
   --type-body: 14px;
   --type-helper: 12px;
@@ -199,6 +204,10 @@
      the ladder needs at small sizes. */
   --space-1h: 6px;
   --space-2: 8px;
+  /* The second half-step. The gap between a 24px tile and the 16px title
+     beside it: 8px reads tight because the tile's border adds optical weight,
+     12px lets them drift apart. */
+  --space-2h: 10px;
   --space-3: 12px;
   --space-4: 16px;
   --space-5: 20px;

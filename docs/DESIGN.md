@@ -237,7 +237,7 @@ control need.
 | Role | Token | Size | Leading | Weight |
 |---|---|---|---|---|
 | Page title | `--type-page` | `24px` | `--lead-page` `32px` | `--weight-strong` |
-| Card title | `--type-card` | `18px` | `--lead-card` `24px` | `--weight-strong` |
+| Card title | `--type-card` | `16px` | `--lead-card` `24px` | `--weight-mid` |
 | Row title | `--type-row` | `15px` | `--lead-row` `20px` | `--weight-mid` |
 | Body / label | `--type-body` | `14px` | `--lead-body` `20px` | `--weight-plain` |
 | Helper text | `--type-helper` | `12px` | `--lead-helper` `16px` | `--weight-plain` |

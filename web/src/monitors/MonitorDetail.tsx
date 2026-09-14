@@ -1,6 +1,13 @@
+import { Card, Panel } from "../components/Card";
+import { IconAlert, IconGauge, IconPulse } from "../components/icons";
 import { HeartbeatBar } from "../heartbeat/HeartbeatBar";
 import { describeAge } from "../live/age";
-import { describePushWindow, formatLatency, formatUptime, STATUS_LABEL } from "./format";
+import {
+  describePushWindow,
+  formatLatency,
+  formatUptime,
+  STATUS_LABEL,
+} from "./format";
 import { formatDuration, formatMoment } from "./detail";
 import type { Incident, UptimeWindow } from "./detail";
 import { Led } from "./Led";
@@ -70,12 +77,24 @@ export function MonitorDetail({
   beatWidth = DETAIL_BEAT_WIDTH,
   stale = false,
 }: MonitorDetailProps) {
-  const { name, status, target, latencyMs, beats, lastCheck, error: lastError } = monitor;
+  const {
+    name,
+    status,
+    target,
+    latencyMs,
+    beats,
+    lastCheck,
+    error: lastError,
+  } = monitor;
   const age = describeAge(lastCheck, now);
   const push = monitor.push;
 
   return (
-    <article className="mon-detail" data-status={status} data-conn={stale ? "stale" : "live"}>
+    <article
+      className="mon-detail"
+      data-status={status}
+      data-conn={stale ? "stale" : "live"}
+    >
       {/*
        * A real button, not a link styled as one, and not the browser's Back.
        * Arriving here from a pasted URL means there is nothing to go back
@@ -96,7 +115,9 @@ export function MonitorDetail({
         {/* A push monitor has no address to show. Its window is what it is
             defined by, so that goes here instead of an empty line. */}
         <p className="mon-detail-target">
-          {push === undefined ? target : describePushWindow(push.intervalS, push.graceS)}
+          {push === undefined
+            ? target
+            : describePushWindow(push.intervalS, push.graceS)}
         </p>
       </header>
 
@@ -122,9 +143,7 @@ export function MonitorDetail({
         <Led status={status} labelled={false} className="mon-detail-led" />
         <strong>{STATUS_LABEL[status]}</strong>
         {status === "down" && lastError ? <> — {lastError}</> : null}
-        {status === "waiting" ? (
-          <> — nothing has reported in yet</>
-        ) : null}
+        {status === "waiting" ? <> — nothing has reported in yet</> : null}
         {age !== null ? (
           <span className="mon-detail-age">
             {" "}
@@ -133,97 +152,109 @@ export function MonitorDetail({
         ) : null}
       </p>
 
-      <section className="mon-detail-panel" aria-labelledby="mon-detail-beats-title">
-        <h2 id="mon-detail-beats-title" className="mon-detail-panel-title">
-          {push === undefined ? "Recent checks" : "Recent reports"}
-        </h2>
-        <div className="mon-detail-beats">
-          <HeartbeatBar
-            beats={beats}
-            label={`${name} recent checks`}
-            width={beatWidth}
-            height={44}
-            barWidth={6}
-            gap={3}
-            stale={stale}
-          />
-        </div>
-        {beats.length === 0 ? (
-          // Two different facts, and only one of them is a problem. A probed
-          // monitor with no checks is a monitor the scheduler has not reached
-          // yet and will. A push monitor with no reports is waiting on a URL
-          // somebody still has to wire up, and saying "no checks recorded"
-          // sends them to look at SubGlance instead of at their crontab.
-          <p className="mon-detail-empty">
-            {push === undefined
-              ? "No checks recorded yet."
-              : "No reports yet. This monitor stays quiet until the job pings its push URL for the first time."}
-          </p>
-        ) : (
-          <p className="mon-detail-note">
-            Last {beats.length} checks, oldest first. Latest latency:{" "}
-            {latencyMs === null ? <Unknown what="latency" /> : formatLatency(latencyMs)}.
-          </p>
-        )}
-      </section>
+      <Card
+        title={push === undefined ? "Recent checks" : "Recent reports"}
+        icon={<IconPulse />}
+        headingLevel={2}
+      >
+        <Panel>
+          <div className="mon-detail-beats">
+            <HeartbeatBar
+              beats={beats}
+              label={`${name} recent checks`}
+              width={beatWidth}
+              height={44}
+              barWidth={6}
+              gap={3}
+              stale={stale}
+            />
+          </div>
+          {beats.length === 0 ? (
+            // Two different facts, and only one of them is a problem. A probed
+            // monitor with no checks is a monitor the scheduler has not reached
+            // yet and will. A push monitor with no reports is waiting on a URL
+            // somebody still has to wire up, and saying "no checks recorded"
+            // sends them to look at SubGlance instead of at their crontab.
+            <p className="mon-detail-empty">
+              {push === undefined
+                ? "No checks recorded yet."
+                : "No reports yet. This monitor stays quiet until the job pings its push URL for the first time."}
+            </p>
+          ) : (
+            <p className="mon-detail-note">
+              Last {beats.length} checks, oldest first. Latest latency:{" "}
+              {latencyMs === null ? (
+                <Unknown what="latency" />
+              ) : (
+                formatLatency(latencyMs)
+              )}
+              .
+            </p>
+          )}
+        </Panel>
+      </Card>
 
-      <section className="mon-detail-panel" aria-labelledby="mon-detail-uptime-title">
-        <h2 id="mon-detail-uptime-title" className="mon-detail-panel-title">
-          Uptime
-        </h2>
-        {error !== null ? (
-          <p role="alert" className="mon-detail-empty">
-            Could not load uptime: {error.message}
-          </p>
-        ) : loading ? (
-          <p className="mon-detail-empty">Loading uptime…</p>
-        ) : windows.length === 0 ? (
-          <p className="mon-detail-empty">No uptime data yet.</p>
-        ) : (
-          <dl className="mon-detail-windows">
-            {windows.map((w) => (
-              <div key={w.window} className="mon-detail-window">
-                <dt>{w.window}</dt>
-                <dd className="mon-detail-window-value">
-                  {/* Null is "nothing was checked in this window", which is not
+      <Card title="Uptime" icon={<IconGauge />} headingLevel={2}>
+        <Panel>
+          {error !== null ? (
+            <p role="alert" className="mon-detail-empty">
+              Could not load uptime: {error.message}
+            </p>
+          ) : loading ? (
+            <p className="mon-detail-empty">Loading uptime…</p>
+          ) : windows.length === 0 ? (
+            <p className="mon-detail-empty">No uptime data yet.</p>
+          ) : (
+            <dl className="mon-detail-windows">
+              {windows.map((w) => (
+                <div key={w.window} className="mon-detail-window">
+                  <dt>{w.window}</dt>
+                  <dd className="mon-detail-window-value">
+                    {/* Null is "nothing was checked in this window", which is not
                       0% — a monitor created an hour ago has no 30d uptime, and
                       showing 0% would read as a month-long outage. */}
-                  {w.uptime === null ? <Unknown what="uptime" /> : formatUptime(w.uptime)}
-                </dd>
-                <dd className="mon-detail-window-detail">
-                  {w.total === 0
-                    ? "no checks"
-                    : `${w.down} of ${w.total} failed`}
-                  {w.avgLatencyMs !== null ? ` · ${formatLatency(w.avgLatencyMs)} avg` : ""}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        )}
-      </section>
+                    {w.uptime === null ? (
+                      <Unknown what="uptime" />
+                    ) : (
+                      formatUptime(w.uptime)
+                    )}
+                  </dd>
+                  <dd className="mon-detail-window-detail">
+                    {w.total === 0
+                      ? "no checks"
+                      : `${w.down} of ${w.total} failed`}
+                    {w.avgLatencyMs !== null
+                      ? ` · ${formatLatency(w.avgLatencyMs)} avg`
+                      : ""}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          )}
+        </Panel>
+      </Card>
 
-      <section className="mon-detail-panel" aria-labelledby="mon-detail-incidents-title">
-        <h2 id="mon-detail-incidents-title" className="mon-detail-panel-title">
-          Incidents
-        </h2>
-        {error !== null ? (
-          <p role="alert" className="mon-detail-empty">
-            Could not load incidents: {error.message}
-          </p>
-        ) : loading ? (
-          <p className="mon-detail-empty">Loading incidents…</p>
-        ) : incidents.length === 0 ? (
-          // Said positively. "No incidents" reads as missing data; this reads
-          // as the good news it actually is.
-          <p className="mon-detail-empty">Nothing has gone wrong yet.</p>
-        ) : (
-          <ol className="mon-detail-incidents">
-            {incidents.map((incident) => (
-              <IncidentItem key={incident.id} incident={incident} />
-            ))}
-          </ol>
-        )}
-      </section>
+      <Card title="Incidents" icon={<IconAlert />} headingLevel={2}>
+        <Panel>
+          {error !== null ? (
+            <p role="alert" className="mon-detail-empty">
+              Could not load incidents: {error.message}
+            </p>
+          ) : loading ? (
+            <p className="mon-detail-empty">Loading incidents…</p>
+          ) : incidents.length === 0 ? (
+            // Said positively. "No incidents" reads as missing data; this reads
+            // as the good news it actually is.
+            <p className="mon-detail-empty">Nothing has gone wrong yet.</p>
+          ) : (
+            <ol className="mon-detail-incidents">
+              {incidents.map((incident) => (
+                <IncidentItem key={incident.id} incident={incident} />
+              ))}
+            </ol>
+          )}
+        </Panel>
+      </Card>
     </article>
   );
 }
@@ -231,7 +262,10 @@ export function MonitorDetail({
 function IncidentItem({ incident }: { incident: Incident }) {
   const started = formatMoment(incident.startedAt);
   return (
-    <li className="mon-detail-incident" data-resolved={incident.resolved ? "true" : "false"}>
+    <li
+      className="mon-detail-incident"
+      data-resolved={incident.resolved ? "true" : "false"}
+    >
       <span className="mon-detail-incident-when">
         {/* <time> only when there is a real instant behind it: a dateTime
             attribute built from an unparseable timestamp is worse than none,
@@ -239,7 +273,9 @@ function IncidentItem({ incident }: { incident: Incident }) {
         {started === null || incident.startedAt === null ? (
           "Unknown start"
         ) : (
-          <time dateTime={new Date(incident.startedAt).toISOString()}>{started}</time>
+          <time dateTime={new Date(incident.startedAt).toISOString()}>
+            {started}
+          </time>
         )}
       </span>
       <span className="mon-detail-incident-state">

@@ -66,18 +66,37 @@ describe("IconTile", () => {
     expect(tile.classList.contains("card-head-tile")).toBe(true);
   });
 
-  it("draws no border, because the fill already separates the tile", () => {
-    // The whole point of the tile: a plane needs no edge. A future "just add a
-    // hairline" edit has to fail here first.
-    expect(css).not.toMatch(/^\s*border\s*:/m);
-    expect(css).not.toMatch(/border-(top|right|bottom|left)\s*:/);
+  it("draws the border that makes the tile a miniature of the card", () => {
+    // This assertion is the inverse of the one it replaces, and the reversal
+    // is the point. The tile was borderless on the reasoning that a filled
+    // plane needs no edge. Measured against the reference style, the tile
+    // there carries a 1px border at 24px square — and it works because the
+    // tile is not a plane, it is a small version of the card it sits in: same
+    // edge, same radius family, one size down. That is what makes it read as
+    // part of the header rather than as a sticker on it.
+    expect(css).toMatch(/border:\s*1px solid var\(--border-control\)/);
+    expect(css).toMatch(/border-radius:\s*var\(--r-sm\)/);
+  });
+
+  it("keeps the glyph at half the tile, so the border never crowds it", () => {
+    // 12px in 24px. At --space-4 (16px) the glyph reaches within 4px of the
+    // border on every side and the tile reads as a cramped box rather than as
+    // a frame around a mark.
+    const glyph = /\.icon-tile\s*>\s*svg\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(glyph).toMatch(/width:\s*var\(--space-3\)/);
+    expect(glyph).toMatch(/height:\s*var\(--space-3\)/);
   });
 
   it("spells out no literal colour, radius or size", () => {
     expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
     expect(css).not.toMatch(/rgba?\(/);
-    // Every length in the file comes from a token.
-    const lengths = css.match(/:\s*[^;]*?\b\d+(px|rem|em)\b/g) ?? [];
+    // Every length in the file comes from a token, with one exception: the
+    // border's 1px. A hairline is not a step on the spacing ladder — it is the
+    // thinnest line the display can draw — so tokenising it would invent a
+    // scale with a single rung.
+    const lengths = (css.match(/:\s*[^;]*?\b\d+(px|rem|em)\b/g) ?? []).filter(
+      (l) => l.trim() !== ": 1px",
+    );
     expect(lengths).toEqual([]);
     expect(css).toMatch(/border-radius:\s*var\(--r-sm\)/);
   });

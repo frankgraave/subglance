@@ -74,6 +74,7 @@
 /* Component styles live next to their component; they are collected here so
    the app keeps a single CSS entrypoint. */
 @import "./components/chips.css";
+@import "./components/card.css";
 @import "./components/icontile.css";
 @import "./components/legend.css";
 @import "./components/menu.css";

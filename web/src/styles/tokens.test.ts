@@ -272,9 +272,7 @@ describe("tokens.css matches docs/DESIGN.md", () => {
     );
     for (const [name, value] of root) {
       if (!/^--(?:type|lead)-/.test(name)) continue;
-      expect(value, `${name} must be a whole number of px`).toMatch(
-        /^\d+px$/,
-      );
+      expect(value, `${name} must be a whole number of px`).toMatch(/^\d+px$/);
     }
   });
 
@@ -289,8 +287,10 @@ describe("tokens.css matches docs/DESIGN.md", () => {
       // a guard that depends on another guard's coverage is one edit from
       // being silently useless.
       const px = value.match(/^(\d+)px$/);
-      expect(px, `${name} is ${value}, which is not a whole-pixel length`)
-        .not.toBeNull();
+      expect(
+        px,
+        `${name} is ${value}, which is not a whole-pixel length`,
+      ).not.toBeNull();
       expect(
         Number(px![1]) % 4,
         `${name} is ${value}, which is off the 4px grid`,
@@ -575,7 +575,9 @@ describe("tokens.css is the only source of line height", () => {
     // The size-only check, including the rule nested inside the media query.
     expect(
       blocks
-        .filter((b) => /font-size:/.test(b.body) && !/line-height:/.test(b.body))
+        .filter(
+          (b) => /font-size:/.test(b.body) && !/line-height:/.test(b.body),
+        )
         .map((b) => b.selector.replace(/^.*\{\s*/, "")),
     ).toEqual([".size-only", ".nested-size-only"]);
 
@@ -628,7 +630,9 @@ describe("tokens.css matches the §2.5 weight and tracking scales", () => {
     const root = declarations(
       tokensCss.slice(tokensCss.indexOf(":root"), tokensCss.indexOf("\n}")),
     );
-    const trackTokens = [...root.keys()].filter((k) => k.startsWith("--track-"));
+    const trackTokens = [...root.keys()].filter((k) =>
+      k.startsWith("--track-"),
+    );
     expect(
       trackTokens,
       "a second tracking token is a per-face exception wearing a token's clothes",
@@ -816,7 +820,11 @@ describe("tokens.css is the only source of spacing and radius", () => {
       if (!file.endsWith(".css")) continue;
       const path = relative(repoRoot, file);
       for (const declaration of spacingDeclarations(
-        readFileSync(file, "utf8"),
+        // Comments are stripped first. Prose explaining *why* a value is six
+        // pixels is not a declaration, and reading it as one cuts both ways:
+        // it invents offenders out of sentences, and it would just as happily
+        // let a commented-out rule satisfy the allow-list check.
+        stripComments(readFileSync(file, "utf8")),
       )) {
         if (!driftsFromLadder(declaration)) continue;
         const key = `${path}: ${declaration}`;
@@ -847,7 +855,11 @@ describe("tokens.css is the only source of spacing and radius", () => {
       if (!file.endsWith(".css")) continue;
       const path = relative(repoRoot, file);
       for (const declaration of spacingDeclarations(
-        readFileSync(file, "utf8"),
+        // Comments are stripped first. Prose explaining *why* a value is six
+        // pixels is not a declaration, and reading it as one cuts both ways:
+        // it invents offenders out of sentences, and it would just as happily
+        // let a commented-out rule satisfy the allow-list check.
+        stripComments(readFileSync(file, "utf8")),
       )) {
         present.add(`${path}: ${declaration}`);
       }
@@ -909,7 +921,8 @@ const CONTROL_SELECTOR =
   /(button|btn|input|select|segment|switch|toggle|tab|submit|link|nav-item|checkbox|radio)/i;
 
 /** Names that describe a data mark: a status, a lamp, a bar, a reading. */
-const DATA_SELECTOR = /(led|heartbeat|hb-|bar|spark|chart|status|wall-card|tile)/i;
+const DATA_SELECTOR =
+  /(led|heartbeat|hb-|bar|spark|chart|status|wall-card|tile)/i;
 
 /**
  * The class, id and element names in one compound selector. Pseudo-classes,
@@ -938,7 +951,10 @@ function subjectRoles(
   return selector
     .split(",")
     .map((item) => {
-      const parts = item.trim().split(/[\s>+~]+/).filter(Boolean);
+      const parts = item
+        .trim()
+        .split(/[\s>+~]+/)
+        .filter(Boolean);
       const subject = parts[parts.length - 1] ?? "";
       const names = selectorNames(subject);
       return {
@@ -1216,25 +1232,25 @@ function site(declaration: BorderDeclaration): string {
 const statusBorders = new Set<string>([
   "web/src/live/connection.css | .conn-badge | border: 1px solid var(--warn)",
   "web/src/live/connection.css | .conn-badge-retry | border: 1px solid var(--warn)",
-  "web/src/monitors/monitors.css | .mon-row[data-status=\"down\"] | border-left: 2px solid var(--down)",
-  "web/src/monitors/monitors.css | .mon-row[data-status=\"pending\"] | border-left: 2px solid var(--warn)",
-  "web/src/monitors/monitors.css | .mon-row[data-status=\"paused\"] | border-left: 2px dotted var(--ink-3)",
-  "web/src/monitors/monitors.css | .mon-row[data-status=\"waiting\"] | border-left: 2px solid var(--idle)",
-  "web/src/monitors/monitors.css | .mon-card[data-status=\"down\"] | border-left: 2px solid var(--down)",
-  "web/src/monitors/monitors.css | .mon-card[data-status=\"pending\"] | border-left: 2px solid var(--warn)",
-  "web/src/monitors/monitors.css | .mon-card[data-status=\"paused\"] | border-left: 2px dotted var(--ink-3)",
-  "web/src/monitors/monitors.css | .mon-card[data-status=\"waiting\"] | border-left: 2px solid var(--idle)",
-  "web/src/monitors/monitors.css | .mon-line[data-status=\"down\"] | border-left: 2px solid var(--down)",
-  "web/src/monitors/monitors.css | .mon-line[data-status=\"pending\"] | border-left: 2px solid var(--warn)",
-  "web/src/monitors/monitors.css | .mon-line[data-status=\"paused\"] | border-left: 2px dotted var(--ink-3)",
-  "web/src/monitors/monitors.css | .mon-line[data-status=\"waiting\"] | border-left: 2px solid var(--idle)",
+  'web/src/monitors/monitors.css | .mon-row[data-status="down"] | border-left: 2px solid var(--down)',
+  'web/src/monitors/monitors.css | .mon-row[data-status="pending"] | border-left: 2px solid var(--warn)',
+  'web/src/monitors/monitors.css | .mon-row[data-status="paused"] | border-left: 2px dotted var(--ink-3)',
+  'web/src/monitors/monitors.css | .mon-row[data-status="waiting"] | border-left: 2px solid var(--idle)',
+  'web/src/monitors/monitors.css | .mon-card[data-status="down"] | border-left: 2px solid var(--down)',
+  'web/src/monitors/monitors.css | .mon-card[data-status="pending"] | border-left: 2px solid var(--warn)',
+  'web/src/monitors/monitors.css | .mon-card[data-status="paused"] | border-left: 2px dotted var(--ink-3)',
+  'web/src/monitors/monitors.css | .mon-card[data-status="waiting"] | border-left: 2px solid var(--idle)',
+  'web/src/monitors/monitors.css | .mon-line[data-status="down"] | border-left: 2px solid var(--down)',
+  'web/src/monitors/monitors.css | .mon-line[data-status="pending"] | border-left: 2px solid var(--warn)',
+  'web/src/monitors/monitors.css | .mon-line[data-status="paused"] | border-left: 2px dotted var(--ink-3)',
+  'web/src/monitors/monitors.css | .mon-line[data-status="waiting"] | border-left: 2px solid var(--idle)',
   "web/src/monitors/monitors.css | .push-reveal-warn | border-left: 2px solid var(--warn)",
-  "web/src/monitors/monitors.css | .add-input[aria-invalid=\"true\"] | border-color: var(--down)",
-  "web/src/monitors/monitors.css | .add-input[aria-invalid=\"true\"]:focus | border-color: var(--down)",
-  "web/src/auth/auth.css | .auth-input[aria-invalid=\"true\"] | border-color: var(--down)",
-  "web/src/auth/auth.css | .auth-input[aria-invalid=\"true\"]:focus | border-color: var(--down)",
-  "web/src/wall/wall.css | .wall-card[data-status=\"down\"] | border-color: color-mix(in srgb, var(--down) 40%, var(--border))",
-  "web/src/wall/wall.css | .wall-card[data-status=\"pending\"] | border-color: color-mix(in srgb, var(--warn) 34%, var(--border))",
+  'web/src/monitors/monitors.css | .add-input[aria-invalid="true"] | border-color: var(--down)',
+  'web/src/monitors/monitors.css | .add-input[aria-invalid="true"]:focus | border-color: var(--down)',
+  'web/src/auth/auth.css | .auth-input[aria-invalid="true"] | border-color: var(--down)',
+  'web/src/auth/auth.css | .auth-input[aria-invalid="true"]:focus | border-color: var(--down)',
+  'web/src/wall/wall.css | .wall-card[data-status="down"] | border-color: color-mix(in srgb, var(--down) 40%, var(--border))',
+  'web/src/wall/wall.css | .wall-card[data-status="pending"] | border-color: color-mix(in srgb, var(--warn) 34%, var(--border))',
 ]);
 
 describe("depth comes from the ladder in §2.10", () => {
@@ -1327,8 +1343,17 @@ describe("an interactive element does not rest on the static border", () => {
       for (const block of declarationBlocks(readFileSync(file, "utf8"))) {
         if (!paintsControl(block.selector)) continue;
         // A state rule describes the change, not the resting edge.
-        if (/:(hover|focus|active|disabled|checked)|\[aria-invalid/.test(block.selector)) continue;
-        if (/border(?:-[a-z]+)?(?:-color)?\s*:[^;]*var\(--border\)/.test(block.body)) {
+        if (
+          /:(hover|focus|active|disabled|checked)|\[aria-invalid/.test(
+            block.selector,
+          )
+        )
+          continue;
+        if (
+          /border(?:-[a-z]+)?(?:-color)?\s*:[^;]*var\(--border\)/.test(
+            block.body,
+          )
+        ) {
           offenders.push(`${relative(repoRoot, file)}: ${block.selector}`);
         }
       }
@@ -1348,7 +1373,9 @@ describe("an interactive element does not rest on the static border", () => {
           (b) =>
             paintsControl(b.selector) &&
             !/:(hover|focus|active|disabled|checked)/.test(b.selector) &&
-            /border(?:-[a-z]+)?(?:-color)?\s*:[^;]*var\(--border\)/.test(b.body),
+            /border(?:-[a-z]+)?(?:-color)?\s*:[^;]*var\(--border\)/.test(
+              b.body,
+            ),
         )
         .map((b) => b.selector),
     ).toEqual([".a-button"]);
@@ -1520,8 +1547,9 @@ describe("a face is applied as a role, not as a family name", () => {
           /(?:font-variant-numeric|font-variant-ligatures|text-rendering)\s*:\s*[^;]+|\b(?:tabular-nums|slashed-zero|normal-nums|ordinal|oldstyle-nums)\b/g,
         ),
       ].map((m) => m[0].trim());
-    expect(offenders("/* tabular-nums belongs to the face. */\n.a { color: red; }"))
-      .toEqual([]);
+    expect(
+      offenders("/* tabular-nums belongs to the face. */\n.a { color: red; }"),
+    ).toEqual([]);
     expect(offenders(".a { font-variant-numeric: tabular-nums; }")).toEqual([
       "font-variant-numeric: tabular-nums",
     ]);
@@ -1874,9 +1902,9 @@ function carriesText(body: string): boolean {
 
 /** The value of one property in a declaration block, comments stripped. */
 function valueOf(body: string, property: string): string | undefined {
-  const match = new RegExp(
-    `(?:^|[;{\\s])${property}\\s*:\\s*([^;{}]+)`,
-  ).exec(stripComments(body));
+  const match = new RegExp(`(?:^|[;{\\s])${property}\\s*:\\s*([^;{}]+)`).exec(
+    stripComments(body),
+  );
   return match?.[1].trim();
 }
 
@@ -1977,9 +2005,14 @@ describe("a dashed edge means the chip is about the data (§8.1)", () => {
     for (const { path, selector, body } of cssRules()) {
       if (!/\bchip\b|chip--|chip-avatar/.test(selector)) continue;
       const clean = stripComments(body);
-      if (!/border(?:-[a-z]+)?(?:-style)?:[^;]*\bdashed\b/.test(clean)) continue;
+      if (!/border(?:-[a-z]+)?(?:-style)?:[^;]*\bdashed\b/.test(clean))
+        continue;
       const background = valueOf(body, "background");
-      if (!background || background === "none" || background === "transparent") {
+      if (
+        !background ||
+        background === "none" ||
+        background === "transparent"
+      ) {
         continue;
       }
       offenders.push(`${path} | ${selector} | background: ${background}`);
@@ -1992,7 +2025,11 @@ describe("a dashed edge means the chip is about the data (§8.1)", () => {
     // Losing the dash is a one-character edit that no reviewer would query.
     const dashed = new Set<string>();
     for (const { selector, body } of cssRules()) {
-      if (!/border(?:-[a-z]+)?(?:-style)?:[^;]*\bdashed\b/.test(stripComments(body))) {
+      if (
+        !/border(?:-[a-z]+)?(?:-style)?:[^;]*\bdashed\b/.test(
+          stripComments(body),
+        )
+      ) {
         continue;
       }
       dashed.add(selector);
@@ -2074,7 +2111,9 @@ describe("a dashed edge means the chip is about the data (§8.1)", () => {
         );
 
         if (carriesNeutral && !carriesAccent) {
-          offenders.push(`${path} | ${selector} | ${property}: ${value.trim()}`);
+          offenders.push(
+            `${path} | ${selector} | ${property}: ${value.trim()}`,
+          );
         }
       }
     }

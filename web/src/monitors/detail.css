@@ -104,21 +104,13 @@
   line-height: var(--lead-body);
 }
 
-.mon-detail-panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  background: var(--surface);
-}
-
-/* Panel headings are labels, not headlines: small, capitalised and dim, so
-   the content inside each panel stays the loudest thing in it. */
-.mon-detail-panel-title {
-  @apply caps-legend;
-}
+/*
+ * Panels on this page come from the shared `Panel` component now, so the
+ * per-page panel rule is gone: it drew the same box a second time and would
+ * have drifted from the card pattern the moment either changed.
+ *
+ * What is left here is only what is specific to this page.
+ */
 
 .mon-detail-beats {
   /* The bar measures this box and buckets the checks to fit it, so it must be
@@ -232,10 +224,6 @@
 @media (max-width: 640px) {
   .mon-detail {
     gap: var(--space-4);
-  }
-
-  .mon-detail-panel {
-    padding: var(--space-3);
   }
 
   .mon-detail-name {
