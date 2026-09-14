@@ -324,6 +324,57 @@ describe("tokens.css matches docs/DESIGN.md", () => {
     }
   });
 
+  it("keeps the zero tone between a real reading and an absent one", () => {
+    // The ordering is the whole point of the token, and it is the kind of
+    // thing a later "simplification" collapses: someone notices --ink-zero
+    // sits close to --ink-3 and reuses the existing step. That would make a
+    // measured zero and a missing reading render identically, which is a
+    // statement the screen has to be able to make differently.
+    //
+    // Compared as luminance rather than as a hex string, because the two
+    // themes move in opposite directions: dark text gets lighter as it
+    // recedes, light text gets darker.
+    const channel = (c: number) =>
+      c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    const luminance = (hex: string) => {
+      const h = hex.replace("#", "");
+      const [r, g, b] = [0, 2, 4].map((i) =>
+        channel(Number.parseInt(h.slice(i, i + 2), 16) / 255),
+      );
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const contrast = (a: string, b: string) => {
+      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+
+    for (const [theme, tokens] of [
+      ["dark", darkTokens],
+      ["light", lightTokens],
+    ] as const) {
+      const surface = tokens.get("--surface");
+      const zero = tokens.get("--ink-zero");
+      const second = tokens.get("--ink-2");
+      const third = tokens.get("--ink-3");
+      expect(surface && zero && second && third, `${theme} is missing a tone`).
+        toBeTruthy();
+
+      const onSurface = (tone: string) => contrast(tone, surface as string);
+
+      // Quieter than a real reading…
+      expect(
+        onSurface(zero as string),
+        `${theme}: --ink-zero should sit below --ink-2`,
+      ).toBeLessThan(onSurface(second as string));
+
+      // …but still clearly louder than the tone that means "no data".
+      expect(
+        onSurface(zero as string),
+        `${theme}: --ink-zero should stay above --ink-3`,
+      ).toBeGreaterThan(onSurface(third as string));
+    }
+  });
+
   it("defines every dark token in light too, so no theme falls back silently", () => {
     for (const name of darkTokens.keys()) {
       expect(

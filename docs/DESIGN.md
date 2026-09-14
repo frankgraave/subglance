@@ -111,6 +111,23 @@ These are only for a *solid* status fill. On a `-dim` background the ink scale
 is still the right answer — the dim variants sit within 1.2:1 of `--surface`
 precisely so ordinary text keeps working on them.
 
+**A zero is data that recedes.** `--ink-zero` is its own step, not a reuse of
+`--ink-3`:
+
+| Token | Dark | Light | Measured on `--surface` |
+|---|---|---|---|
+| `--ink-2` | `#9ba1a6` | `#5c6165` | 6.82:1 dark, 6.26:1 light |
+| `--ink-zero` | `#6f767b` | `#7b8186` | 3.86:1 dark, 3.94:1 light |
+| `--ink-3` | `#61686d` | `#8b9196` | 3.14:1 dark, 3.19:1 light |
+
+A column of zeros at full strength competes with the measurements beside it for
+attention it has not earned: nothing happened, and nothing is what that should
+look like. But a zero is still a reading. `0 failures` and `no data for this
+window` are different statements, and a screen that renders both at `--ink-3`
+can no longer tell them apart — so the zero tone sits one step above the one
+that means absent, and the two land within 0.1 of each other across themes so
+the distinction survives a theme switch.
+
 **Colour never stands alone.** Roughly 8% of men can't reliably tell red from
 green — for a product built around red-versus-green that isn't an edge case. So
 status is always carried twice: colour plus position (broken sorts to the top),
