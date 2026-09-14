@@ -192,7 +192,10 @@ func run(args []string) error {
 
 	// Raw heartbeats are the fastest-growing table in the product. Rolling
 	// them up keeps history unlimited at a bounded cost.
-	go rollupHeartbeats(ctx, db, log)
+	go rollupHeartbeats(ctx, db, log, store.RetentionPolicy{
+		Raw:    cfg.RawRetention,
+		Rollup: cfg.RollupRetention,
+	})
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -257,22 +260,41 @@ func displayAddr(addr string) string {
 // instance that is restarted more often than the interval would otherwise
 // never roll up at all, and that is exactly the instance whose database grows
 // without anyone noticing.
-func rollupHeartbeats(ctx context.Context, db *store.DB, log *slog.Logger) {
+func rollupHeartbeats(ctx context.Context, db *store.DB, log *slog.Logger, policy store.RetentionPolicy) {
 	const interval = 24 * time.Hour
 
+	// Space is only actually returned to the filesystem when the database is
+	// in incremental auto-vacuum mode, and that mode can only be turned on by
+	// rewriting the file. Doing it here, once, means an existing installation
+	// with a bloated file gets the fix too — see EnsureIncrementalVacuum for
+	// why that is worth a startup pause, and what happens when the database is
+	// too large for one.
+	switch mode, err := db.EnsureIncrementalVacuum(ctx); {
+	case err != nil:
+		log.Error("enable incremental vacuum", "error", err)
+	case mode == store.VacuumRebuilt:
+		log.Info("rebuilt the database with incremental auto-vacuum enabled, so retention now returns disk space")
+	case mode == store.VacuumNeedsRebuild:
+		log.Warn("this database is too large to rebuild at startup, so deleted rows will not shrink the file; " +
+			"run VACUUM manually once, at a moment when a pause is acceptable")
+	}
+
 	run := func() {
-		res, err := db.RollupHeartbeats(ctx, store.DefaultRawRetention)
+		res, err := db.ApplyRetention(ctx, policy)
 		if err != nil {
-			// A failed rollup costs disk, not correctness: the raw rows are
-			// still there and the next pass picks them up.
+			// A failed pass costs disk, not correctness: the rows are still
+			// there and the next pass picks them up.
 			log.Error("heartbeat rollup", "error", err)
 			return
 		}
-		if res.Heartbeats > 0 {
-			log.Info("rolled up heartbeats",
-				"heartbeats", res.Heartbeats,
-				"buckets", res.Buckets,
-				"cutoff", res.Cutoff)
+		if res.Rollup.Heartbeats > 0 || res.HourlyBuckets > 0 || res.Incidents > 0 {
+			log.Info("applied retention",
+				"heartbeats", res.Rollup.Heartbeats,
+				"buckets", res.Rollup.Buckets,
+				"cutoff", res.Rollup.Cutoff,
+				"pruned_buckets", res.HourlyBuckets,
+				"pruned_incidents", res.Incidents,
+				"reclaimed_pages", res.ReclaimedPages)
 		}
 	}
 
