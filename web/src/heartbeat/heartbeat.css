@@ -1,7 +1,13 @@
 /*
  * Heartbeat bar styling. Colour lives in tokens.css; this file only maps a
  * status onto a token and owns the entry animation.
+ *
+ * The chart chrome is pulled in here rather than listed in index.css because
+ * the heartbeat bar is its first and so far only caller: the import travels
+ * with the dependency instead of being a line somebody has to remember to add
+ * in a file three directories away.
  */
+@import "../components/chart.css";
 
 .hb-track {
   position: relative;
