@@ -69,6 +69,24 @@ const (
 	pushFloodBurst = 100.0
 )
 
+// pushIPFloodRate and pushIPFloodBurst bound one source, checked first.
+//
+// The global ceiling above turned out to be the wrong shape on its own: it is
+// a single budget shared by everyone, so a host posting nonsense tokens could
+// empty it and the next report from a real job — a different host, a valid
+// token — was refused. A refused report is a push monitor going overdue, which
+// is this product raising an outage that is not happening. A dead man's switch
+// that can be made to lie by an outsider is worse than no switch.
+//
+// Five a second bursting to twenty, per source. An honest job pings on an
+// interval measured in minutes, and even a host running hundreds of cron lines
+// does not approach this; a flood does so in its first second and then spends
+// only its own allowance.
+const (
+	pushIPFloodRate  = 5.0
+	pushIPFloodBurst = 20.0
+)
+
 // handlePush records a report from a monitored job.
 //
 // This is the one route in the API that is public by necessity rather than by
@@ -101,8 +119,20 @@ func (s *Server) handlePush(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Before the lookup, deliberately: see pushFloodRate.
-	if !s.pushFlood.allow(time.Now(), pushFloodRate, pushFloodBurst) {
+	// Both limits run before the lookup, deliberately: see pushFloodRate.
+	// Per source first, so that one host exhausting its own allowance cannot
+	// spend the global budget that every other host still needs.
+	now := time.Now()
+	ip := s.clientIP(r)
+	if !s.pushFloodByIP.allow(ip, now, pushIPFloodRate, pushIPFloodBurst) {
+		s.log.Warn("push reports from one source are arriving faster than the route accepts them",
+			"ip", ip)
+		w.Header().Set("Retry-After", "1")
+		writeError(w, http.StatusTooManyRequests,
+			"too many push reports are arriving from this address; try again in a moment")
+		return
+	}
+	if !s.pushFlood.allow(now, pushFloodRate, pushFloodBurst) {
 		s.log.Warn("push reports are arriving faster than the route accepts them",
 			"remote", r.RemoteAddr)
 		w.Header().Set("Retry-After", "1")
@@ -324,4 +354,57 @@ func (b *tokenBucket) allow(now time.Time, rate, burst float64) bool {
 	}
 	b.tokens--
 	return true
+}
+
+// ipBuckets is one token bucket per source address.
+//
+// Unbounded growth is the obvious worry, so the map is swept rather than kept:
+// a bucket that has refilled to full carries no information — it is
+// indistinguishable from an address never seen — and is dropped on the next
+// sweep. That bounds the map by the number of addresses active within a sweep
+// interval rather than by everything the process has ever been sent.
+type ipBuckets struct {
+	mu        sync.Mutex
+	buckets   map[string]*tokenBucket
+	lastSweep time.Time
+}
+
+// ipBucketSweepInterval is how often idle buckets are dropped. Frequent enough
+// that a scan from many forged sources cannot accumulate, rare enough that the
+// sweep itself is not the hot path.
+const ipBucketSweepInterval = time.Minute
+
+func (m *ipBuckets) allow(ip string, now time.Time, rate, burst float64) bool {
+	m.mu.Lock()
+	if m.buckets == nil {
+		m.buckets = make(map[string]*tokenBucket)
+		m.lastSweep = now
+	}
+	if now.Sub(m.lastSweep) >= ipBucketSweepInterval {
+		for k, b := range m.buckets {
+			if full(b, now, rate, burst) {
+				delete(m.buckets, k)
+			}
+		}
+		m.lastSweep = now
+	}
+	b, ok := m.buckets[ip]
+	if !ok {
+		b = &tokenBucket{}
+		m.buckets[ip] = b
+	}
+	m.mu.Unlock()
+
+	return b.allow(now, rate, burst)
+}
+
+// full reports whether a bucket has refilled completely, and so remembers
+// nothing worth keeping.
+func full(b *tokenBucket, now time.Time, rate, burst float64) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.last.IsZero() {
+		return true
+	}
+	return b.tokens+now.Sub(b.last).Seconds()*rate >= burst
 }
