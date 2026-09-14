@@ -96,12 +96,7 @@
 }
 
 .auth-label {
-  font-size: var(--type-section);
-  line-height: var(--lead-section);
-  font-weight: var(--weight-strong);
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
-  color: var(--ink-3);
+  @apply caps-legend;
 }
 
 .auth-input {

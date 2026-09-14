@@ -1248,6 +1248,62 @@ describe("an interactive element does not rest on the static border", () => {
  * while the same numbers in the next did not. Nothing on screen names that as
  * a bug — it just looks slightly wrong and no one can say why.
  */
+/**
+ * SUB-106: the caps legend is a role, not five declarations repeated.
+ *
+ * The small uppercase label over a column, a panel, a nav group or a form
+ * field was written out by hand in nine rules across five stylesheets, and
+ * they disagreed: three tones (`--ink-2`, `--ink-3`, `--ink-4`), two weights,
+ * and sans in every one of them. Two of those tones do not clear any contrast
+ * floor at 12px — `--ink-4` measures 1.90:1 against `--surface` in dark — on
+ * text whose entire job is to say what the number under it means.
+ *
+ * Repetition is what let them drift, so the guard is on the repetition: a rule
+ * that spells out the casing has opted out of the role, and the next tone is
+ * already chosen by hand.
+ */
+describe("the caps legend is applied as a role", () => {
+  const indexCss = readFileSync(join(webSrc, "index.css"), "utf8");
+
+  it("defines the role with the whole configuration", () => {
+    const start = indexCss.indexOf("@utility caps-legend {");
+    expect(start, "missing the caps-legend utility").toBeGreaterThan(-1);
+    const body = indexCss.slice(start, indexCss.indexOf("\n}", start));
+    // The face comes first: a legend is quiet because it is mono, small and
+    // uppercase, which is exactly why it does not also have to be faded.
+    expect(body, "face").toContain("@apply face-mono;");
+    expect(body, "size").toContain("font-size: var(--type-section);");
+    expect(body, "leading").toContain("line-height: var(--lead-section);");
+    expect(body, "weight").toContain("font-weight: var(--weight-plain);");
+    expect(body, "casing").toContain("text-transform: uppercase;");
+    expect(body, "tracking").toContain("letter-spacing: var(--track-caps);");
+  });
+
+  it("gives the legend a tone that clears AA rather than a faded one", () => {
+    // `--ink-3` and `--ink-4` are the two this role was written with and the
+    // two it may not use: measured against `--surface` they reach 3.37:1 and
+    // 1.90:1 in dark, 3.19:1 and 1.94:1 in light. This is text, so it owes
+    // 4.5:1, and `--ink-2` is the first rung that pays it (7.31 / 6.26).
+    const start = indexCss.indexOf("@utility caps-legend {");
+    const body = indexCss.slice(start, indexCss.indexOf("\n}", start));
+    expect(body).toContain("color: var(--ink-2);");
+  });
+
+  it("finds no hand-rolled legend anywhere else under web/src", () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (file === join(webSrc, "index.css")) continue;
+      const contents = stripComments(readFileSync(file, "utf8"));
+      for (const match of contents.matchAll(
+        /text-transform:\s*uppercase|\buppercase\b/g,
+      )) {
+        offenders.push(`${relative(repoRoot, file)}: ${match[0].trim()}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
 describe("a face is applied as a role, not as a family name", () => {
   const indexCss = readFileSync(join(webSrc, "index.css"), "utf8");
 

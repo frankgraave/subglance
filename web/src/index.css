@@ -29,6 +29,35 @@
   font-variant-numeric: var(--numeric-mono);
   text-rendering: var(--render-mono);
 }
+/*
+ * The caps legend (DESIGN.md §2.5).
+ *
+ * The small uppercase label over a column, a panel, a nav group or a form
+ * field. It was not a role: nine rules spelled out the same five declarations
+ * by hand and then disagreed about the sixth. Two of them reached for
+ * `--ink-4`, which measures 1.90:1 against `--surface` in dark and 1.94:1 in
+ * light — below even the 3:1 floor a non-text edge has to clear, on text whose
+ * whole job is to say what the number under it means.
+ *
+ * The fix is not more grey. A legend is quiet because it is small, mono and
+ * uppercase; fading it spends contrast to buy a quietness the face and the
+ * casing already give for free. So the role takes `--ink-2` (7.31:1 dark,
+ * 6.26:1 light against `--surface`) and clears AA at 12px, which neither
+ * `--ink-3` (3.37 / 3.19) nor `--ink-4` did.
+ *
+ * Weight drops to plain for the same reason: 500 was compensating for the
+ * greying. Mono at 12px uppercase does not need it.
+ */
+@utility caps-legend {
+  @apply face-mono;
+  font-size: var(--type-section);
+  line-height: var(--lead-section);
+  font-weight: var(--weight-plain);
+  text-transform: uppercase;
+  letter-spacing: var(--track-caps);
+  color: var(--ink-2);
+}
+
 /* Component styles live next to their component; they are collected here so
    the app keeps a single CSS entrypoint. */
 @import "./heartbeat/heartbeat.css";

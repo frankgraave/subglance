@@ -78,12 +78,7 @@
 
 .shell-nav-label {
   padding: var(--space-4) var(--space-2) var(--space-1);
-  font-size: var(--type-section);
-  line-height: var(--lead-section);
-  font-weight: var(--weight-strong);
-  text-transform: uppercase;
-  letter-spacing: var(--track-caps);
-  color: var(--ink-4);
+  @apply caps-legend;
   white-space: nowrap;
 }
 

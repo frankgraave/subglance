@@ -168,12 +168,7 @@
   height: 34px;
   padding: 0 var(--space-3);
   text-align: left;
-  font-size: var(--type-section);
-  line-height: var(--lead-section);
-  font-weight: var(--weight-strong);
-  text-transform: uppercase;
-  letter-spacing: var(--track-caps);
-  color: var(--ink-4);
+  @apply caps-legend;
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
 }
@@ -183,12 +178,7 @@
 .mon-section-title {
   padding: var(--space-2) var(--space-3);
   text-align: left;
-  font-size: var(--type-section);
-  line-height: var(--lead-section);
-  font-weight: var(--weight-strong);
-  text-transform: uppercase;
-  letter-spacing: var(--track-caps);
-  color: var(--ink-3);
+  @apply caps-legend;
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
 }
@@ -346,12 +336,7 @@
 
 .mon-cards-title {
   margin-bottom: var(--space-2);
-  font-size: var(--type-section);
-  line-height: var(--lead-section);
-  font-weight: var(--weight-strong);
-  text-transform: uppercase;
-  letter-spacing: var(--track-caps);
-  color: var(--ink-3);
+  @apply caps-legend;
 }
 
 .mon-card-stack {
@@ -400,12 +385,7 @@
 /* The lamp's own label is rendered visibly, so the card's status word comes
    from it; this span is the styling hook for that text. */
 .mon-card-status {
-  font-size: var(--type-helper);
-  line-height: var(--lead-helper);
-  font-weight: var(--weight-strong);
-  text-transform: uppercase;
-  letter-spacing: var(--track-caps);
-  color: var(--ink-3);
+  @apply caps-legend;
 }
 
 .mon-card-name {
@@ -452,12 +432,7 @@
 /* Label above value, not beside it: a two-column dl at 375px either wraps
    unpredictably or leaves the numbers floating far from their nouns. */
 .mon-card-fact dt {
-  font-size: var(--type-section);
-  line-height: var(--lead-section);
-  font-weight: var(--weight-strong);
-  text-transform: uppercase;
-  letter-spacing: var(--track-caps);
-  color: var(--ink-4);
+  @apply caps-legend;
 }
 
 .mon-card-fact dd {
@@ -519,12 +494,7 @@
    different vocabularies for the same idea. */
 .mon-line-group-title {
   margin-bottom: var(--space-2);
-  font-size: var(--type-section);
-  line-height: var(--lead-section);
-  font-weight: var(--weight-strong);
-  text-transform: uppercase;
-  letter-spacing: var(--track-caps);
-  color: var(--ink-3);
+  @apply caps-legend;
 }
 
 .mon-line-stack {
@@ -647,12 +617,7 @@
 }
 
 .add-label {
-  font-size: var(--type-section);
-  line-height: var(--lead-section);
-  font-weight: var(--weight-strong);
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
-  color: var(--ink-3);
+  @apply caps-legend;
 }
 
 .add-input {
@@ -918,10 +883,6 @@
  */
 .mon-cell--led .led-label,
 .mon-line-led .led-label {
-  font-size: var(--type-section);
-  line-height: var(--lead-section);
-  text-transform: uppercase;
-  letter-spacing: var(--track-caps);
-  color: var(--ink-2);
+  @apply caps-legend;
   white-space: nowrap;
 }

@@ -11,7 +11,7 @@
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="mb-10">
-      <h2 className="mb-3 text-section font-strong uppercase tracking-caps text-ink-3">
+      <h2 className="mb-3 caps-legend">
         {title}
       </h2>
       {children}

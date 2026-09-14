@@ -117,12 +117,7 @@
 /* Panel headings are labels, not headlines: small, capitalised and dim, so
    the content inside each panel stays the loudest thing in it. */
 .mon-detail-panel-title {
-  font-size: var(--type-section);
-  line-height: var(--lead-section);
-  font-weight: var(--weight-mid);
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
-  color: var(--ink-3);
+  @apply caps-legend;
 }
 
 .mon-detail-beats {

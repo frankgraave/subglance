@@ -78,6 +78,30 @@ describe("the mono role reaches the pixels", () => {
   });
 });
 
+describe("the caps legend reaches the pixels", () => {
+  // `.mon-head` is a column header in the rows layout, which the harness
+  // already loads. It is one of the two rules that faded the label to
+  // `--ink-4`, so it is the exact element the role was meant to fix.
+  it("sets the legend in mono, not the sans it inherited", async () => {
+    const family = await computed(".mon-head", "font-family");
+    // Resolved family, not the token: this is what the engine actually chose.
+    expect(family.toLowerCase()).toContain("mono");
+  });
+
+  it("keeps it uppercase at the section size and leading", async () => {
+    expect(await computed(".mon-head", "text-transform")).toBe("uppercase");
+    expect(await computed(".mon-head", "font-size")).toBe("12px");
+    expect(await computed(".mon-head", "line-height")).toBe("12px");
+  });
+
+  it("no longer renders it at a tone below the text floor", async () => {
+    // The measured reason for the change. `--ink-4` in dark is #3d4347; if the
+    // role failed to apply, this is the colour that would come back.
+    const colour = await computed(".mon-head", "color");
+    expect(colour).not.toBe("rgb(61, 67, 71)");
+  });
+});
+
 describe("the shape and weight steps reach the pixels", () => {
   it("draws the lamp on the 2px step, not a fractional radius", async () => {
     // A half-pixel radius renders differently per device pixel ratio, so the

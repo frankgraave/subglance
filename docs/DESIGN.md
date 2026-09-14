@@ -282,6 +282,40 @@ Both faces fall back to a system font on most machines, and a feature tag that
 one face exposes and the next does not fails silently and differently per
 machine.
 
+**The caps legend is a role too.** The small uppercase label over a column, a
+panel, a nav group or a form field is one thing, and it was written out by hand
+in nine rules across five stylesheets. They drifted exactly as far as
+repetition allows: three tones, two weights, sans in every one of them.
+
+```css
+@utility caps-legend {
+  @apply face-mono;
+  font-size: var(--type-section);
+  line-height: var(--lead-section);
+  font-weight: var(--weight-plain);
+  text-transform: uppercase;
+  letter-spacing: var(--track-caps);
+  color: var(--ink-2);
+}
+```
+
+Two decisions inside it are not the ones the old rules made:
+
+- **It is mono, not sans.** A legend is quiet because it is small, monospaced
+  and uppercase. That is the whole mechanism, and it costs no contrast.
+- **The tone goes up, not down.** Two of the nine rules faded the label to
+  `--ink-4`, which measures 1.90:1 against `--surface` in dark and 1.94:1 in
+  light — below even the 3:1 floor a non-text edge owes, on text that says what
+  the number under it means. `--ink-3` is no better at 3.37 / 3.19. `--ink-2`
+  is the first rung that clears AA for text (7.31 / 6.26), and once the face
+  and the casing carry the quietness there is nothing left for the greying to
+  do. Weight drops from 500 to plain for the same reason: it was compensating.
+
+`tokens.test.ts` guards the role's contents, pins the tone to `--ink-2`, and
+fails on any rule under `web/src` outside `index.css` that sets uppercase — a
+rule that spells out the casing has opted out of the role, which is where the
+next hand-chosen tone comes from.
+
 ### 2.6 Shape, space, motion
 
 ```css
