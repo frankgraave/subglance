@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 
 	"golang.org/x/crypto/argon2"
 )
@@ -83,15 +84,52 @@ func HashPassword(password string) (string, error) {
 	), nil
 }
 
+// maxConcurrentVerifies bounds how many password verifications run at once.
+//
+// Each one allocates argonMemory — 64 MiB — and those parameters are correct:
+// memory hardness is exactly what makes a stolen hash expensive to attack.
+// What was missing is a ceiling on how many are in flight. /auth/login is
+// public, and its rate limiter is keyed per email and per address, so a caller
+// varying both never shares a bucket with itself. Two dozen simultaneous
+// attempts were enough to take a heap to 1.5 GiB; a few dozen more is an
+// out-of-memory kill on the 2 GB box this is typically self-hosted on, and a
+// monitoring tool that dies is a monitoring tool reporting silence as health.
+//
+// Four. Logins are rare and checks are the hot path, so queueing behind three
+// others costs a human a fraction of a second on a screen they visit once a
+// week, and caps this package's password-hashing footprint at 256 MiB no
+// matter what arrives.
+const maxConcurrentVerifies = 4
+
+// verifySem admits maxConcurrentVerifies hashers at a time. Callers queue
+// rather than fail: a legitimate login delayed is correct, a legitimate login
+// refused because someone else is flooding is the attacker winning.
+var verifySem = make(chan struct{}, maxConcurrentVerifies)
+
+// inFlightVerifies is what the concurrency test observes. It is maintained
+// only so the ceiling can be asserted rather than assumed.
+var inFlightVerifies atomic.Int64
+
 // VerifyPassword reports whether the password matches the encoded hash.
 //
 // The comparison is constant-time: a timing difference would let an attacker
 // learn the hash byte by byte.
+//
+// Concurrency is bounded; see maxConcurrentVerifies.
 func VerifyPassword(password, encoded string) (bool, error) {
 	params, salt, want, err := decodeHash(encoded)
 	if err != nil {
+		// Decoding allocates nothing worth queueing for, so a malformed hash
+		// is answered without occupying a slot.
 		return false, err
 	}
+
+	verifySem <- struct{}{}
+	inFlightVerifies.Add(1)
+	defer func() {
+		inFlightVerifies.Add(-1)
+		<-verifySem
+	}()
 
 	got := argon2.IDKey([]byte(password), salt, params.time, params.memory, params.threads, uint32(len(want)))
 	return subtle.ConstantTimeCompare(got, want) == 1, nil
