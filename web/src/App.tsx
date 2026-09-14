@@ -9,6 +9,8 @@ import { AddMonitor } from "./monitors/AddMonitor";
 import { LiveDashboardRoot } from "./live/LiveDashboard";
 import { LiveMonitorDetailRoot } from "./live/LiveMonitorDetail";
 import { createQueryClient } from "./live/queryClient";
+import { monitorsQueryKey } from "./live/api";
+import { ErrorBoundary } from "./shell/ErrorBoundary";
 import { useRoute } from "./shell/useRoute";
 import { AppShell } from "./shell/AppShell";
 import { Topbar } from "./shell/Topbar";
@@ -89,6 +91,15 @@ export default function App() {
    * would replace it with a chrome-less grid and no way back.
    */
   const isWall = shown === "wall" && !workbenchOpen && !onDetail;
+  /*
+   * What "a different screen" means for the inner error boundary: the route,
+   * plus the two overlays the shell owns. Changing any of them remounts the
+   * boundary and so clears a caught error — otherwise a crash on one screen
+   * would latch and every screen after it would show the panel instead.
+   */
+  const boundaryKey = `${route.name}:${route.name === "monitor" ? route.id : ""}:${
+    workbenchOpen ? "w" : addOpen ? "a" : ""
+  }`;
 
   const leaveWall = useCallback(() => setLayout("rows"), [setLayout]);
   /*
@@ -121,6 +132,24 @@ export default function App() {
    * toast would say the same thing less durably (DESIGN.md §7.6).
    */
   const closeAdd = useCallback(() => setAddOpen(false), []);
+  /*
+   * Creating a monitor closes the form *and* invalidates the list.
+   *
+   * The comment above says the new monitor appears within one heartbeat, and
+   * that was never true on its own: the stream only patches rows the list
+   * already holds, so the first frame about a brand-new id used to be
+   * dropped. The invalidation makes the promise good immediately instead of
+   * waiting for a check to complete, which matters because this is the very
+   * first thing anyone does with SubGlance and a screen that appears to do
+   * nothing reads as a broken product.
+   *
+   * Both halves are kept: `useLiveMonitors` also resyncs on an unknown id, so
+   * a monitor added in another tab shows up here too.
+   */
+  const onMonitorCreated = useCallback(() => {
+    setAddOpen(false);
+    void queryClient.invalidateQueries({ queryKey: monitorsQueryKey });
+  }, [queryClient]);
   const closeNav = useCallback(() => setNavOpen(false), []);
 
   /*
@@ -211,23 +240,40 @@ export default function App() {
         />
       }
     >
-      {workbenchOpen ? (
-        <Workbench />
-      ) : addOpen ? (
-        <AddMonitor onCreated={closeAdd} onCancel={closeAdd} />
-      ) : onDetail ? (
-        <LiveMonitorDetailRoot
-          client={queryClient}
-          id={route.id}
-          onBack={showDashboard}
-        />
-      ) : (
-        <LiveDashboardRoot
-          client={queryClient}
-          layout={shown}
-          onOpenMonitor={openMonitor}
-        />
-      )}
+      {/*
+       * A second boundary, inside the shell rather than around it.
+       *
+       * The outer one in main.tsx catches anything, but catching a dashboard
+       * crash at the root costs the sidebar, the topbar and the navigation
+       * along with it — so the recovery panel would appear on an otherwise
+       * blank page with no way to go anywhere else. Here, the chrome survives
+       * and only the failing screen is replaced. Keyed on the route so that
+       * navigating away from a screen that crashed clears the panel; without
+       * the key the boundary would stay latched and the next screen would
+       * never render.
+       */}
+      <ErrorBoundary
+        key={boundaryKey}
+        title="Something broke while drawing this screen."
+      >
+        {workbenchOpen ? (
+          <Workbench />
+        ) : addOpen ? (
+          <AddMonitor onCreated={onMonitorCreated} onCancel={closeAdd} />
+        ) : onDetail ? (
+          <LiveMonitorDetailRoot
+            client={queryClient}
+            id={route.id}
+            onBack={showDashboard}
+          />
+        ) : (
+          <LiveDashboardRoot
+            client={queryClient}
+            layout={shown}
+            onOpenMonitor={openMonitor}
+          />
+        )}
+      </ErrorBoundary>
     </AppShell>
   );
 

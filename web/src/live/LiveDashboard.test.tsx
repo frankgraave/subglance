@@ -312,4 +312,93 @@ describe("LiveDashboard", () => {
     render(<LiveDashboardRoot client={client} createEventSource={() => new FakeSource()} />);
     expect(await screen.findByRole("alert")).toBeTruthy();
   });
+
+  describe("an event about a monitor the list has never seen", () => {
+    /*
+     * SUB-99, part 1. The pure folds in apply.ts return the list untouched
+     * when no row matches, so before this a heartbeat for a monitor that was
+     * just created was dropped on the floor and the screen kept claiming it
+     * did not exist until someone reloaded. Fixture names are deliberately
+     * unlike each other so an assertion cannot pass by accident.
+     */
+    function renderTwoLoads() {
+      const first = [apiMonitor({ id: 1, name: "alpha" })];
+      const second = [
+        apiMonitor({ id: 1, name: "alpha" }),
+        apiMonitor({ id: 2, name: "bravo" }),
+      ];
+      let call = 0;
+      const fetchMock = vi.fn().mockImplementation(() => {
+        call += 1;
+        const monitors = call === 1 ? first : second;
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ monitors }) });
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      render(
+        <LiveDashboardRoot
+          client={client}
+          layout="rows"
+          beatWidth={200}
+          createEventSource={() => new FakeSource()}
+        />,
+      );
+      return { fetchMock };
+    }
+
+    it("refetches, so a monitor created elsewhere appears without a reload", async () => {
+      const { fetchMock } = renderTwoLoads();
+      await screen.findByText("alpha");
+      expect(screen.queryByText("bravo")).toBeNull();
+
+      act(() => {
+        FakeSource.last?.open();
+        FakeSource.last?.send("heartbeat", {
+          monitor_id: 2,
+          at: "2026-09-11T08:01:00Z",
+          data: { ok: true, latency_ms: 12 },
+        });
+      });
+
+      expect(await screen.findByText("bravo")).toBeTruthy();
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("costs one refetch for a burst, not one per frame", async () => {
+      const { fetchMock } = renderTwoLoads();
+      await screen.findByText("alpha");
+
+      act(() => {
+        FakeSource.last?.open();
+        for (let i = 0; i < 5; i += 1) {
+          FakeSource.last?.send("heartbeat", {
+            monitor_id: 9,
+            at: "2026-09-11T08:01:00Z",
+            data: { ok: true, latency_ms: 12 },
+          });
+        }
+      });
+
+      // A stream that resynced per frame would be a polling loop wearing a
+      // stream's clothes, and the id stays unknown until the refetch lands.
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("still patches in place for a monitor it does hold", async () => {
+      const { fetchMock } = renderTwoLoads();
+      await screen.findByText("alpha");
+      act(() => {
+        FakeSource.last?.open();
+        FakeSource.last?.send("status", {
+          monitor_id: 1,
+          at: "2026-09-11T08:01:00Z",
+          data: { event: "incident_confirmed", error: "500" },
+        });
+      });
+      await waitFor(() => expect(screen.getByText("down", { exact: true })).toBeTruthy());
+      // The whole point of the stream: no request for a row it already has.
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  });
 });

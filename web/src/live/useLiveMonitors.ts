@@ -11,7 +11,7 @@
  * takes.
  */
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LiveConnection } from "./connection";
 import type { ConnectionStatus, EventSourceFactory } from "./connection";
@@ -42,8 +42,19 @@ export type LiveOptions = {
 
 const EMPTY: Monitor[] = [];
 
+/**
+ * How long to wait before a second resync caused by an unknown monitor id.
+ *
+ * Long enough that the burst of frames following one creation costs a single
+ * refetch, short enough that a second creation moments later is still visible
+ * well inside the check interval.
+ */
+export const RESYNC_THROTTLE_MS = 2_000;
+
 export function useLiveMonitors(options: LiveOptions = {}): UseLiveMonitors {
   const queryClient = useQueryClient();
+  // Survives re-renders without causing one; nothing on screen depends on it.
+  const lastResyncRef = useRef(0);
   const { streamUrl = "/api/v1/stream", createEventSource } = options;
 
   const query = useQuery({
@@ -94,11 +105,38 @@ export function useLiveMonitors(options: LiveOptions = {}): UseLiveMonitors {
         return;
       }
 
-      queryClient.setQueryData<Monitor[]>(monitorsQueryKey, (current) => {
-        if (current === undefined) return current;
+      /*
+       * An event about a monitor the list has never heard of is news, not
+       * noise. `applyHeartbeat`/`applyStatus` return the list untouched when
+       * no row matches, which is right for them (they are pure folds over a
+       * list) but wrong as a final answer: the commonest cause of an unknown
+       * id is a monitor that was just created — in this tab or another one —
+       * and dropping the frame leaves the screen claiming it does not exist
+       * until someone reloads. So the miss triggers a refetch instead.
+       *
+       * Throttled, because "unknown id" is also what a burst of frames for a
+       * freshly added monitor looks like, and one refetch per heartbeat would
+       * turn a stream into a polling loop. One refetch per window is enough:
+       * it is the whole list that comes back, not just the one row.
+       */
+      const current = queryClient.getQueryData<Monitor[]>(monitorsQueryKey);
+      const known =
+        current === undefined ||
+        current.some((m) => m.id === event.monitorId);
+      if (!known) {
+        const now = Date.now();
+        if (now - lastResyncRef.current >= RESYNC_THROTTLE_MS) {
+          lastResyncRef.current = now;
+          void queryClient.invalidateQueries({ queryKey: monitorsQueryKey });
+        }
+        return;
+      }
+
+      queryClient.setQueryData<Monitor[]>(monitorsQueryKey, (held) => {
+        if (held === undefined) return held;
         return event.kind === "heartbeat"
-          ? applyHeartbeat(current, event)
-          : applyStatus(current, event);
+          ? applyHeartbeat(held, event)
+          : applyStatus(held, event);
       });
     });
 
