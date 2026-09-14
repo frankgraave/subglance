@@ -166,28 +166,46 @@ describe("tokens.css matches docs/DESIGN.md", () => {
   // §2.1 and §2.2 are fenced CSS blocks; §2.3 is a markdown table. Reading the
   // document rather than restating its values here is the whole point: a test
   // with the numbers copied into it drifts alongside the code it guards.
-  function designHexes(section: string): Map<string, string> {
+  //
+  // Colours are no longer all hex: dark surfaces are white at low alpha and
+  // the neutral scale is written in oklch, because both say something the hex
+  // could not — an alpha surface inherits what is under it, and `0` chroma
+  // states that a grey is deliberately neutral rather than incidentally so.
+  // The parser therefore takes any value up to the semicolon.
+  function designColours(section: string): Map<string, string> {
     const start = designMd.indexOf(section);
     expect(start, `missing section ${section}`).toBeGreaterThan(-1);
     const next = designMd.indexOf("\n### ", start + section.length);
     const body = designMd.slice(start, next === -1 ? undefined : next);
     const found = new Map<string, string>();
-    for (const match of body.matchAll(/(--[a-z0-9-]+):\s*(#[0-9a-f]{3,8})/gi)) {
-      found.set(match[1], match[2].toLowerCase());
+    for (const match of body.matchAll(
+      /(--[a-z0-9-]+):\s*(#[0-9a-f]{3,8}|oklch\([^)]*\)|rgba?\([^)]*\))/gi,
+    )) {
+      found.set(match[1], match[2].toLowerCase().replace(/\s+/g, " "));
     }
     return found;
   }
 
+  /** Normalises a declaration so `rgba(255,255,255,.03)` matches the doc. */
+  function sameColour(a: string | undefined, b: string): boolean {
+    if (a === undefined) return false;
+    const norm = (s: string) => s.toLowerCase().replace(/\s+/g, "");
+    return norm(a) === norm(b);
+  }
+
   it("uses the dark palette from §2.1", () => {
-    const expected = designHexes("### 2.1 Colour — dark");
+    const expected = designColours("### 2.1 Colour — dark");
     expect(expected.size).toBeGreaterThan(5);
-    for (const [name, hex] of expected) {
-      expect(darkTokens.get(name), `dark ${name}`).toBe(hex);
+    for (const [name, value] of expected) {
+      expect(
+        sameColour(darkTokens.get(name), value),
+        `dark ${name}: tokens.css has ${darkTokens.get(name)}, §2.1 says ${value}`,
+      ).toBe(true);
     }
   });
 
   it("uses the light palette from §2.2", () => {
-    const expected = designHexes("### 2.2 Colour — light");
+    const expected = designColours("### 2.2 Colour — light");
     expect(expected.size).toBeGreaterThan(5);
     for (const [name, hex] of expected) {
       expect(lightTokens.get(name), `light ${name}`).toBe(hex);
@@ -331,47 +349,63 @@ describe("tokens.css matches docs/DESIGN.md", () => {
     // measured zero and a missing reading render identically, which is a
     // statement the screen has to be able to make differently.
     //
-    // Compared as luminance rather than as a hex string, because the two
-    // themes move in opposite directions: dark text gets lighter as it
-    // recedes, light text gets darker.
-    const channel = (c: number) =>
-      c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-    const luminance = (hex: string) => {
-      const h = hex.replace("#", "");
-      const [r, g, b] = [0, 2, 4].map((i) =>
-        channel(Number.parseInt(h.slice(i, i + 2), 16) / 255),
-      );
-      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-    };
-    const contrast = (a: string, b: string) => {
-      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-      return (hi + 0.05) / (lo + 0.05);
+    // Compared on oklch lightness rather than on a computed contrast ratio:
+    // the scale is achromatic, so lightness *is* the ordering, and it reads
+    // the same way in both themes without a colour-space conversion that
+    // would itself need testing.
+    // Reads either notation: the dark scale is oklch (chroma 0 states that the
+    // grey is deliberately neutral), the light scale is still hex. Within one
+    // theme the three tones share a notation, so the comparison stays
+    // like-for-like; a tone that parses as neither fails loudly rather than
+    // skipping, because a guard that quietly excuses itself is worse than none.
+    const tone = (value: string, label: string): number => {
+      const ok = /oklch\(\s*(\.\d+|\d*\.?\d+%?)/.exec(value);
+      if (ok) {
+        const raw = ok[1];
+        return raw.endsWith("%")
+          ? Number.parseFloat(raw) / 100
+          : Number.parseFloat(raw);
+      }
+      const hex = /^#([0-9a-f]{6})$/i.exec(value.trim());
+      if (hex) {
+        const channel = (c: number) =>
+          c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+        const [r, g, b] = [0, 2, 4].map((i) =>
+          channel(Number.parseInt(hex[1].slice(i, i + 2), 16) / 255),
+        );
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      }
+      throw new Error(`cannot read a lightness from ${label}: ${value}`);
     };
 
     for (const [theme, tokens] of [
       ["dark", darkTokens],
       ["light", lightTokens],
     ] as const) {
-      const surface = tokens.get("--surface");
-      const zero = tokens.get("--ink-zero");
-      const second = tokens.get("--ink-2");
-      const third = tokens.get("--ink-3");
-      expect(surface && zero && second && third, `${theme} is missing a tone`).
-        toBeTruthy();
+      const get = (name: string) => {
+        const v = tokens.get(name);
+        expect(v, `${theme} is missing ${name}`).toBeTruthy();
+        return tone(v as string, `${theme} ${name}`);
+      };
+      const zero = get("--ink-zero");
+      const second = get("--ink-2");
+      const third = get("--ink-3");
 
-      const onSurface = (tone: string) => contrast(tone, surface as string);
+      // Dark text gets lighter as it recedes; light text gets darker. Compare
+      // in the direction that theme recedes, not on raw lightness.
+      const quieterThan =
+        theme === "dark"
+          ? (a: number, b: number) => a < b
+          : (a: number, b: number) => a > b;
 
-      // Quieter than a real reading…
       expect(
-        onSurface(zero as string),
-        `${theme}: --ink-zero should sit below --ink-2`,
-      ).toBeLessThan(onSurface(second as string));
-
-      // …but still clearly louder than the tone that means "no data".
+        quieterThan(zero, second),
+        `${theme}: --ink-zero should be quieter than --ink-2`,
+      ).toBe(true);
       expect(
-        onSurface(zero as string),
-        `${theme}: --ink-zero should stay above --ink-3`,
-      ).toBeGreaterThan(onSurface(third as string));
+        quieterThan(third, zero),
+        `${theme}: --ink-zero should stay louder than --ink-3`,
+      ).toBe(true);
     }
   });
 

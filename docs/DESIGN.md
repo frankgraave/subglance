@@ -54,18 +54,30 @@ Everything a user can click, hover or read still takes its radius from a token.
 ### 2.1 Colour — dark (default)
 
 ```css
---canvas:     #08090a;   /* page background */
---surface:    #0e1011;   /* card, sidebar, drawer */
---surface-2:  #141719;   /* inputs, hover */
---surface-hi: #1a1e20;   /* active segments, tracks */
---border:     #1e2224;   /* default border, divider */
---border-hi:  #2a2f32;   /* border on interactive elements */
+--canvas:     oklch(.205 0 0);            /* page background */
+--surface:    rgba(255,255,255,.03);      /* card, sidebar, drawer */
+--surface-2:  rgba(255,255,255,.05);      /* inputs, hover */
+--surface-hi: rgba(255,255,255,.08);      /* active segments, tracks */
+--border:     rgba(255,255,255,.05);      /* default border, divider */
+--border-hi:  rgba(255,255,255,.10);      /* border on interactive elements */
 
---ink:        #e8eaec;   /* primary text */
---ink-2:      #9ba1a6;   /* secondary text */
---ink-3:      #61686d;   /* labels, help text */
---ink-4:      #3d4347;   /* placeholders, disabled */
+--ink:        oklch(.97 0 0);             /* primary text */
+--ink-2:      oklch(.708 0 0);            /* secondary text */
+--ink-3:      oklch(.556 0 0);            /* labels, help text */
+--ink-4:      oklch(.439 0 0);            /* placeholders, disabled */
 ```
+
+**Surfaces are white at low alpha, not lighter greys.** This is the decision
+that makes a stack of panels read as one material rather than as separately
+painted boxes. An alpha surface inherits whatever sits beneath it, so nesting
+stays coherent at any depth: a panel inside a card inside the page is visibly
+one step up from its parent without anyone having to choose a third grey. A
+panel moved to a different background still belongs there.
+
+**The neutral scale is achromatic — chroma exactly 0.** A grey carrying a hint
+of blue reads as a colour decision, and in this product colour belongs to the
+data. Greys that are genuinely neutral are what let a single amber or red mean
+something.
 
 ### 2.2 Colour — light
 
@@ -423,14 +435,28 @@ next hand-chosen tone comes from.
 
 ```css
 --r-2xs: 2px;   /* small marks: the lamp, a dot, a tick */
---r-xs: 4px;    /* chips, segmented buttons, badges */
---r-sm: 6px;    /* buttons, inputs, small controls */
---r-md: 10px;   /* rows, list items */
---r-lg: 12px;   /* cards, dialogs, drawer */
+--r-xs: 4px;    /* legacy step, not in the ladder in use */
+--r-sm: 6px;    /* anything you click: buttons, inputs, nav items */
+--r-md: 8px;    /* panels */
+--r-lg: 12px;   /* the card that frames panels, dialogs, drawer */
 
---ease: cubic-bezier(.32, .72, 0, 1);
+--ease: cubic-bezier(.4, 0, .2, 1);
 --dur:  420ms;  /* theme transition */
 ```
+
+**The ladder in use is 2 / 6 / 8 / 12.** Four steps, each with a job: a mark, a
+control, a panel, the card that frames panels. `--r-xs` (4px) survives for
+compatibility but nothing should reach for it — at 4px a control reads as a
+mark rather than as something pressable, and the gap from 2 to 6 is what keeps
+those two jobs legible as different.
+
+**One duration for everything interactive: 150ms, on `cubic-bezier(.4, 0, .2,
+1)`.** A hover, a segment change and a menu opening are the same kind of event
+to the person watching; giving each its own timing is what makes an interface
+feel assembled from parts rather than designed. 150ms is short enough to feel
+immediate and long enough to read as movement rather than as a jump. The 420ms
+`--dur` is not an exception to that rule — it is the theme transition, which is
+a deliberate, whole-page event rather than a response to a pointer.
 
 Space moves in steps of 4px; §2.7 states the ladder and how it is enforced.
 
@@ -472,11 +498,18 @@ motion that decays feels mechanical rather than floaty.
 ### 2.8 The accent
 
 ```css
---accent:        #155dfc;   /* fill of a control */
---accent-border: #2b7fff;   /* its 1px edge, same hue one step lighter */
---accent-ink:    #ffffff;   /* the label sitting on the fill */
---accent-ring:   rgba(43,127,255,.24);
+--accent:        oklch(.546 .245 262.881);   /* fill of a control */
+--accent-border: oklch(.623 .214 259.815);   /* its 1px edge, one step lighter */
+--accent-ink:    #ffffff;                     /* the label sitting on the fill */
+--accent-ring:   rgba(43,127,255,.24);        /* focus ring, light surfaces */
+--accent-ring-dark: rgba(255,255,255,.30);    /* focus ring, dark surfaces */
 ```
+
+**Focus is a ring, not an outline.** A ring sits outside the border without
+joining it, so a focused control keeps its own shape instead of appearing to
+grow a second edge. On dark surfaces a blue ring loses contrast against the
+page, so it becomes white at low alpha there — the ring's job is to say where
+the keyboard is, and visibility outranks hue.
 
 Until now the product had no accent at all: status green did the job, so an
 active segment in the layout switcher and a healthy monitor read as the same

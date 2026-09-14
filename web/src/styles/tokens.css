@@ -70,23 +70,33 @@
   --numeric-mono: slashed-zero tabular-nums;
   --render-mono: geometricPrecision;
 
-  /* Shape. Radius grows with the element: marks, controls, rows, then cards.
-     `--r-2xs` is the step for a small mark — the lamp drew itself at 2.5px
-     only because the ladder stopped at 4px, and a fractional radius is the
-     same defect the type scale already rejected: what the engine does with
-     the half pixel depends on the device pixel ratio, so the lamp's silhouette
-     was not the same shape on every screen. */
+  /* Shape. Four steps in use, and the gaps between them are deliberate: 2px
+     for a mark, 6px for anything you click, 8px for a panel, 12px for the card
+     that frames panels.
+
+     `--r-2xs` exists because the lamp drew itself at 2.5px only while the
+     ladder stopped at 4px, and a fractional radius is the same defect the type
+     scale already rejected: what the engine does with the half pixel depends
+     on the device pixel ratio, so the lamp was not the same shape on every
+     screen.
+
+     `--r-xs` (4px) is kept for compatibility but is not part of the ladder in
+     use: a control at 4px reads as a mark rather than as something pressable,
+     and the jump from 2 to 6 is what keeps those two jobs apart. */
   --r-2xs: 2px;
   --r-xs: 4px;
   --r-sm: 6px;
-  --r-md: 10px;
+  --r-md: 8px;
   --r-lg: 12px;
 
-  /* Motion. `--ease` starts fast and settles softly, so movement decays
-     mechanically rather than floating. Duration follows role, not taste. */
-  --ease: cubic-bezier(.32, .72, 0, 1);
-  --dur-hover: 140ms;
-  --dur-panel: 240ms;
+  /* Motion. One duration for everything interactive, because a hover, a
+     segment change and a menu opening are the same kind of event to the person
+     watching; giving each its own timing makes the interface feel assembled
+     from parts. 150ms is short enough to feel immediate and long enough to
+     read as movement rather than a jump. */
+  --ease: cubic-bezier(.4, 0, .2, 1);
+  --dur-hover: 150ms;
+  --dur-panel: 150ms;
   --dur-attention: 420ms;
   --dur: var(--dur-attention);
 
@@ -198,28 +208,42 @@
      and 3.6:1 against the light one, so it clears the 3:1 that a non-text UI
      edge needs in both themes, while white on the #155dfc fill reaches 5.25:1
      and clears AA for the label sitting on it. */
-  --accent:        #155dfc;
-  --accent-border: #2b7fff;
+  --accent:        oklch(.546 .245 262.881);
+  --accent-border: oklch(.623 .214 259.815);
   /* The label on a filled control. White in both themes, because the fill is
      the same in both: 5.25:1, which clears AA at body size. */
   --accent-ink:    #ffffff;
+  /* Focus is a ring, not an outline: a ring sits outside the border without
+     joining it, so a focused control keeps its own shape. On dark surfaces the
+     accent ring loses contrast against the page, so it is white at low alpha
+     there — the ring's job is visibility, not hue. */
   --accent-ring:   rgba(43,127,255,.24);
+  --accent-ring-dark: rgba(255,255,255,.30);
 }
 
 /* Dark is the default: the product is looked at in a dim room, at a glance,
    and a healthy dashboard should recede rather than shine. */
 [data-theme="dark"] {
-  --canvas:      #08090a;
-  --surface:     #0e1011;
-  --surface-2:   #141719;
-  --surface-hi:  #1a1e20;
-  --border:      #1e2224;
-  --border-hi:   #2a2f32;
+  /* The page sits one step above true black, and every surface above it is
+     white at a very low alpha rather than a lighter grey.
+     That difference is why a stack of panels reads as glass over one
+     background instead of as separately-painted boxes: an alpha surface
+     inherits whatever is beneath it, so nesting stays coherent at every
+     depth, and a panel dropped on a different background still belongs. */
+  --canvas:      oklch(.205 0 0);
+  --surface:     rgba(255, 255, 255, .03);
+  --surface-2:   rgba(255, 255, 255, .05);
+  --surface-hi:  rgba(255, 255, 255, .08);
+  --border:      rgba(255, 255, 255, .05);
+  --border-hi:   rgba(255, 255, 255, .10);
 
-  --ink:         #e8eaec;
-  --ink-2:       #9ba1a6;
-  --ink-3:       #61686d;
-  --ink-4:       #3d4347;
+  /* The neutral scale is achromatic — chroma exactly 0. A grey with a hint of
+     blue in it reads as a colour decision, and this palette leaves colour to
+     the data. */
+  --ink:         oklch(.97 0 0);
+  --ink-2:       oklch(.708 0 0);
+  --ink-3:       oklch(.556 0 0);
+  --ink-4:       oklch(.439 0 0);
 
   /* A zero that is genuinely zero, not a missing reading.
      A column of zeros at full strength competes with the measurements beside
@@ -228,7 +252,7 @@
      down, not at the strength reserved for absent values, because "no
      failures in this window" and "no data for this window" are different
      statements and the screen has to be able to make both. */
-  --ink-zero:    #6f767b;
+  --ink-zero:    oklch(.62 0 0);
 
   --up:          #34d399;
   --up-dim:      #10241d;
@@ -277,8 +301,12 @@
      as a seam rather than as height. `flat` is a real rung, not an absence:
      it is what a card takes, so "no shadow here" is a stated decision. */
   --shadow-flat:   none;
-  --shadow-raised: 0 4px 6px -1px rgba(0,0,0,.4), 0 2px 4px -2px rgba(0,0,0,.4);
-  --shadow-float:  0 10px 15px -3px rgba(0,0,0,.5), 0 4px 6px -4px rgba(0,0,0,.5);
+  /* One step of lift, at 5% black. Heavier shadows are how a dark interface
+     starts looking like stacked cards rather than one surface — the panels are
+     separated by their own edge and the alpha of their fill, and the shadow
+     only has to stop them from floating free. */
+  --shadow-raised: 0 4px 6px -1px rgba(0,0,0,.05), 0 2px 4px -2px rgba(0,0,0,.05);
+  --shadow-float:  0 10px 15px -3px rgba(0,0,0,.12), 0 4px 6px -4px rgba(0,0,0,.1);
 
   --scrim:       rgba(0,0,0,.5);
 
