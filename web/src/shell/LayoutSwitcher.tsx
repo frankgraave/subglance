@@ -1,3 +1,4 @@
+import { SegmentedControl } from "../components/SegmentedControl";
 import { LAYOUTS, type LayoutId } from "./preferences";
 
 /**
@@ -7,11 +8,11 @@ import { LAYOUTS, type LayoutId } from "./preferences";
  * dropdown costs a click to even see which layout you are in; a route would
  * turn a personal preference into something you can link someone else into.
  *
- * `aria-pressed` rather than a radio group: these are four toggle buttons over
- * one setting, they act on press, and the browser's radio semantics would add
- * arrow-key navigation that conflicts with the toolbar around it. Each button
- * carries its `title` as the hint from §7 so the difference between Rows and
- * Compact is discoverable without trying all four.
+ * The control itself is `SegmentedControl` — this layout switcher was the
+ * first of three hand-rolled copies. It is the `view` variant by definition:
+ * it changes which view of the monitors you get, never which monitors. Each
+ * button carries its `title` as the hint from §7 so the difference between
+ * Rows and Compact is discoverable without trying all four.
  */
 export type LayoutSwitcherProps = {
   layout: LayoutId;
@@ -27,21 +28,12 @@ export type LayoutSwitcherProps = {
 };
 
 export function LayoutSwitcher({ layout, onChange, effective }: LayoutSwitcherProps) {
-  const shown = effective ?? layout;
   return (
-    <div className="shell-seg" role="group" aria-label="Dashboard layout">
-      {LAYOUTS.map((option) => (
-        <button
-          key={option.id}
-          type="button"
-          className="shell-seg-button"
-          aria-pressed={shown === option.id}
-          title={option.hint}
-          onClick={() => onChange(option.id)}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
+    <SegmentedControl
+      label="Dashboard layout"
+      options={LAYOUTS}
+      value={effective ?? layout}
+      onChange={onChange}
+    />
   );
 }

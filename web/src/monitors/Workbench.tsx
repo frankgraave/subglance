@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { SegmentedControl } from "../components/SegmentedControl";
 import { useCompactViewport } from "../layout/useMediaQuery";
 import { effectiveLayout } from "../shell/preferences";
 import { Dashboard } from "./Dashboard";
@@ -16,6 +17,17 @@ import { describeTransitions } from "./model";
  */
 
 const SCALES = [5, 200] as const;
+
+/**
+ * The scale choice changes *which fixtures* are on screen, not how they are
+ * drawn, so it is the `data` variant of the segmented control (DESIGN.md §7.8).
+ * The layout choice below it is the `view` variant. Having both variants in
+ * one harness is deliberate: the difference is only judgeable side by side.
+ */
+const SCALE_OPTIONS = SCALES.map((n) => ({
+  id: String(n) as `${(typeof SCALES)[number]}`,
+  label: `${n} monitors`,
+}));
 
 /**
  * Layout choices offered by the harness.
@@ -59,21 +71,13 @@ export function DashboardWorkbench() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2 text-helper text-ink-3">
         <span>Scale:</span>
-        {SCALES.map((n) => (
-          <button
-            key={n}
-            type="button"
-            onClick={() => setSize(n)}
-            aria-pressed={size === n}
-            className={`rounded-sm border px-2 py-1 text-helper transition-colors ${
-              size === n
-                ? "border-border-hi bg-surface-2 text-ink"
-                : "border-border text-ink-3 hover:text-ink-2"
-            }`}
-          >
-            {n} monitors
-          </button>
-        ))}
+        <SegmentedControl
+          label="Fixture scale"
+          variant="data"
+          options={SCALE_OPTIONS}
+          value={String(size) as (typeof SCALE_OPTIONS)[number]["id"]}
+          onChange={(next) => setSize(Number(next) as (typeof SCALES)[number])}
+        />
         <span className="text-ink-4">
           Deterministic fixtures — no virtualisation, all {size} rows are in the DOM.
         </span>
@@ -81,21 +85,12 @@ export function DashboardWorkbench() {
 
       <div className="flex items-center gap-2 text-helper text-ink-3">
         <span>Layout:</span>
-        {LAYOUTS.map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            onClick={() => setLayout(option.id)}
-            aria-pressed={layout === option.id}
-            className={`rounded-sm border px-2 py-1 text-helper transition-colors ${
-              layout === option.id
-                ? "border-border-hi bg-surface-2 text-ink"
-                : "border-border text-ink-3 hover:text-ink-2"
-            }`}
-          >
-            {option.label}
-          </button>
-        ))}
+        <SegmentedControl
+          label="Harness layout"
+          options={LAYOUTS}
+          value={layout}
+          onChange={setLayout}
+        />
         <span className="text-ink-4">
           {shown === layout
             ? "Forced, so the phone layout can be judged on a desktop."

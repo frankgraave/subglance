@@ -1,0 +1,70 @@
+/*
+ * The segmented control (DESIGN.md §7.8).
+ *
+ * Three or four mutually exclusive options, all of them visible: §7.2 already
+ * chose this over a dropdown, because a hidden option costs a click before it
+ * can even be read.
+ *
+ * Two things here are decisions rather than styling:
+ *
+ * - **An inactive segment is fully transparent, border included.** The border
+ *   is declared at rest so the box never changes size when the selection
+ *   moves; only its colour arrives. A control that reserves no space for the
+ *   state it is about to show shifts every label beside it by a pixel each
+ *   time you press it.
+ * - **The inner radius is not the outer one.** §2.7: an inner radius is the
+ *   outer radius minus the padding around it, so `--r-sm` (6px) with
+ *   `--space-1` (4px) of padding leaves `--r-2xs` (2px). Equal radii read as
+ *   consistency and draw as a pinched corner, because the gap between two
+ *   curves of the same radius is not constant.
+ */
+.segmented {
+  display: inline-flex;
+  gap: 1px;
+  padding: var(--space-1);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+
+.segmented .segmented-option {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--r-2xs);
+  background: none;
+  font: inherit;
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: background-color var(--dur-hover) var(--ease),
+              border-color var(--dur-hover) var(--ease),
+              color var(--dur-hover) var(--ease);
+}
+
+.segmented .segmented-option:hover:not([aria-pressed="true"]) { color: var(--ink-2); }
+
+/*
+ * The neutral variant: this control changes which view of the data you get,
+ * so the selection is chrome and stays in the neutral scale.
+ */
+.segmented .segmented-option[aria-pressed="true"] {
+  background: var(--surface-hi);
+  border-color: var(--border-hi);
+  color: var(--ink);
+}
+
+/*
+ * The accent variant: this control changes *what data* you are looking at, so
+ * the selection is part of the reading and earns the control accent (§2.8).
+ * `--accent-ink` on `--accent` measures 5.25:1, which clears AA for the label.
+ */
+.segmented[data-variant="data"] .segmented-option[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent-border);
+  color: var(--accent-ink);
+}
+
+/* Phone widths: the labels stay, the breathing room goes (§13). */
+@media (max-width: 640px) {
+  .segmented .segmented-option { padding: var(--space-1); }
+}
