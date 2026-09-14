@@ -29,7 +29,7 @@
 # --platform=$BUILDPLATFORM: this stage emits platform-independent
 # JavaScript, so building it once natively beats building it twice, one of
 # them under QEMU emulation.
-FROM --platform=$BUILDPLATFORM node:24-alpine AS web
+FROM --platform=$BUILDPLATFORM node:26-alpine AS web
 
 WORKDIR /src/web
 
