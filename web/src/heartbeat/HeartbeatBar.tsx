@@ -18,6 +18,7 @@ import {
   type Beat,
   type Slot,
 } from "./model";
+import { Tooltip, type TooltipRow } from "../components/Tooltip";
 
 export type HeartbeatBarProps = {
   /** Checks oldest first, newest last. */
@@ -71,6 +72,34 @@ const formatLatency = (ms: number | null) =>
     : ms >= 1000
       ? `${(ms / 1000).toFixed(2)} s`
       : `${ms} ms`;
+
+/**
+ * The tooltip's series rows for one column.
+ *
+ * A bucket is not one series but a fold of several checks, so the rows state
+ * what the fold hid: the slowest latency it contains, and how many of its
+ * checks failed. A bucket with no failures says so by omission — a "0 failed"
+ * row in a healthy tooltip is a number to read and dismiss on every hover.
+ */
+function tooltipRows(slot: Extract<Slot, { kind: "beat" }>): TooltipRow[] {
+  const rows: TooltipRow[] = [
+    {
+      key: "latency",
+      label: slot.count > 1 ? "Slowest" : "Latency",
+      value: formatLatency(slot.latencyMs),
+      marker: slot.ok ? (slot.latencyMs === null ? "warn" : "up") : "down",
+    },
+  ];
+  if (slot.downCount > 0) {
+    rows.push({
+      key: "failed",
+      label: "Failed",
+      value: `${slot.downCount}`,
+      marker: "down",
+    });
+  }
+  return rows;
+}
 
 /**
  * Width of the element, tracked live.
@@ -338,29 +367,26 @@ export function HeartbeatBar({
             data-testid="hb-tooltip"
             style={{ left: tooltipX }}
           >
-            <div className="text-helper text-ink-2">
-              {activeSlot.count > 1
-                ? `${formatTime(activeSlot.from)} – ${formatTime(activeSlot.to)}`
-                : formatTime(activeSlot.to)}
-            </div>
-            <div className="text-body font-strong text-ink">
-              {activeSlot.ok ? formatLatency(activeSlot.latencyMs) : "Failed"}
-              {activeSlot.count > 1 && (
-                <span className="text-ink-3">
-                  {" "}
-                  · {activeSlot.count} checks
-                  {activeSlot.downCount > 0
-                    ? `, ${activeSlot.downCount} failed`
-                    : ""}
-                </span>
-              )}
-            </div>
-            {!activeSlot.ok && (activeSlot.error || activeSlot.statusCode) && (
-              <div className="text-helper text-down">
-                {activeSlot.statusCode ? `${activeSlot.statusCode} ` : ""}
-                {activeSlot.error}
-              </div>
-            )}
+            <Tooltip
+              timestamp={
+                activeSlot.count > 1
+                  ? `${formatTime(activeSlot.from)} – ${formatTime(activeSlot.to)}`
+                  : formatTime(activeSlot.to)
+              }
+              unit={activeSlot.latencyMs === null ? undefined : "latency"}
+              rows={tooltipRows(activeSlot)}
+              total={
+                activeSlot.count > 1
+                  ? { label: "Total", value: `${activeSlot.count} checks` }
+                  : undefined
+              }
+              partial={activeSlot.partial}
+              footer={
+                !activeSlot.ok && (activeSlot.error || activeSlot.statusCode)
+                  ? `${activeSlot.statusCode ? `${activeSlot.statusCode} ` : ""}${activeSlot.error ?? ""}`
+                  : undefined
+              }
+            />
           </div>
         )}
       </div>

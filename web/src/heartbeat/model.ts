@@ -37,6 +37,17 @@ export type BeatSlot = {
   latencyMs: number | null;
   statusCode?: number;
   error?: string;
+  /**
+   * How many checks this column *should* hold, given the series' own cadence,
+   * or null when the cadence cannot be established.
+   */
+  expected: number | null;
+  /**
+   * True when the column is missing a meaningful share of the checks it should
+   * hold. A bucket that covers an hour but contains two checks is not a
+   * healthy hour; before this it was drawn identically to a complete one.
+   */
+  partial: boolean;
 };
 
 export type Slot = EmptySlot | BeatSlot;
@@ -105,7 +116,65 @@ export function tooltipLeft({
   return Math.min(Math.max(ideal, min), max);
 }
 
-function aggregate(group: Beat[], index: number): BeatSlot {
+/**
+ * Share of its expected checks a column must hold before it counts as whole.
+ *
+ * Not 1: a check scheduled every 60s does not land every 60s, so the last
+ * bucket of a series is routinely one check short of arithmetic and flagging
+ * that would make the marker meaningless. 0.9 tolerates the ordinary jitter
+ * and still catches a bucket that lost a tenth of its window.
+ */
+export const PARTIAL_COVERAGE = 0.9;
+
+/**
+ * The series' own check interval, in milliseconds, or null if it cannot be
+ * told.
+ *
+ * The **median** gap rather than the mean, because the mean is dragged up by
+ * exactly the events this is meant to detect: one four-hour outage in a day of
+ * 60s checks pulls the average interval up far enough that every gappy bucket
+ * then looks complete. The median ignores the outage and reports the schedule.
+ *
+ * Read from the data instead of from the monitor's configured interval on
+ * purpose: the stored history is what is being drawn, and a monitor whose
+ * interval was changed last week has history at the old cadence. The
+ * configured number would mark all of it partial.
+ */
+export function cadence(beats: Beat[]): number | null {
+  if (beats.length < 2) return null;
+  const gaps: number[] = [];
+  for (let i = 1; i < beats.length; i++) {
+    const gap = beats[i].ts - beats[i - 1].ts;
+    if (gap > 0) gaps.push(gap);
+  }
+  if (gaps.length === 0) return null;
+  gaps.sort((a, b) => a - b);
+  const mid = Math.floor(gaps.length / 2);
+  return gaps.length % 2 === 1
+    ? gaps[mid]
+    : Math.round((gaps[mid - 1] + gaps[mid]) / 2);
+}
+
+/**
+ * How many checks a window from `from` to `to` should contain at `cadenceMs`.
+ *
+ * Inclusive of both ends: a window holding a single check spans 0ms and still
+ * contains one check, so the count is the number of intervals plus one.
+ */
+export function expectedChecks(
+  from: number,
+  to: number,
+  cadenceMs: number | null,
+): number | null {
+  if (cadenceMs === null || cadenceMs <= 0 || to < from) return null;
+  return Math.round((to - from) / cadenceMs) + 1;
+}
+
+function aggregate(
+  group: Beat[],
+  index: number,
+  cadenceMs: number | null,
+): BeatSlot {
   const downs = group.filter((b) => !b.ok);
   const latencies = group
     .map((b) => b.latencyMs)
@@ -113,17 +182,25 @@ function aggregate(group: Beat[], index: number): BeatSlot {
   // The bucket's identity is its worst check: that is the fact a monitoring
   // tool must not average away.
   const worst = downs.length > 0 ? downs[downs.length - 1] : group[group.length - 1];
+  const from = group[0].ts;
+  const to = group[group.length - 1].ts;
+  const expected = expectedChecks(from, to, cadenceMs);
   return {
     kind: "beat",
     index,
     count: group.length,
-    from: group[0].ts,
-    to: group[group.length - 1].ts,
+    from,
+    to,
     ok: downs.length === 0,
     downCount: downs.length,
     latencyMs: latencies.length > 0 ? Math.max(...latencies) : null,
     statusCode: worst.statusCode,
     error: downs.length > 0 ? worst.error : undefined,
+    expected,
+    // A single-check column falls out of this without a special case: it
+    // spans no window, so it expects exactly the one check it has and one is
+    // never below 90% of one.
+    partial: expected !== null && group.length < expected * PARTIAL_COVERAGE,
   };
 }
 
@@ -141,6 +218,10 @@ function aggregate(group: Beat[], index: number): BeatSlot {
  */
 export function toSlots(beats: Beat[], slotCount: number): Slot[] {
   if (slotCount <= 0) return [];
+  // Measured once over the whole series, not per bucket: a bucket that lost
+  // most of its checks would otherwise derive its own, wider cadence from what
+  // little it has left and declare itself complete.
+  const step = cadence(beats);
   if (beats.length === 0) {
     return Array.from({ length: slotCount }, (_, index) => ({ kind: "empty", index }) as EmptySlot);
   }
@@ -150,7 +231,7 @@ export function toSlots(beats: Beat[], slotCount: number): Slot[] {
       { length: pad },
       (_, index) => ({ kind: "empty", index }) as EmptySlot,
     );
-    beats.forEach((beat, i) => slots.push(aggregate([beat], pad + i)));
+    beats.forEach((beat, i) => slots.push(aggregate([beat], pad + i, step)));
     return slots;
   }
 
@@ -160,7 +241,7 @@ export function toSlots(beats: Beat[], slotCount: number): Slot[] {
   let cursor = 0;
   for (let i = 0; i < slotCount; i++) {
     const size = base + (i < remainder ? 1 : 0);
-    slots.push(aggregate(beats.slice(cursor, cursor + size), i));
+    slots.push(aggregate(beats.slice(cursor, cursor + size), i, step));
     cursor += size;
   }
   return slots;

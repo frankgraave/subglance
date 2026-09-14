@@ -1,0 +1,121 @@
+/*
+ * The readout tooltip (DESIGN.md §8.3).
+ *
+ * The structure is a small table: a mono timestamp header carrying the unit
+ * for everything below it, a full-width divider, one row per series, and an
+ * optional closing total set apart by its own rule.
+ *
+ * Two things this file is careful about:
+ *
+ * 1. The divider runs the **full width** of the tooltip, padding included, so
+ *    it separates the header from the rows instead of underlining the text.
+ *    That is why it is a bordered wrapper with negative-margin rules rather
+ *    than a border on the header element.
+ * 2. Values are right-aligned in their own column, which is the whole point of
+ *    laying a tooltip out as a grid: numbers line up on their last digit and
+ *    become comparable without being read.
+ */
+
+.tooltip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.tooltip-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Mono: a timestamp is measurable, so it takes the mono role and its tabular
+   figures — the header must not change width as the seconds tick. */
+.tooltip-time {
+  @apply face-mono;
+  font-size: var(--type-section);
+  line-height: var(--lead-section);
+  color: var(--ink);
+}
+
+.tooltip-unit {
+  @apply caps-legend;
+  color: var(--ink-3);
+}
+
+.tooltip-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/*
+ * Marker, label, value. The value column is `max-content` and last, so it sits
+ * hard against the right edge while the label takes the slack.
+ */
+.tooltip-row {
+  display: grid;
+  grid-template-columns: auto 1fr max-content;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.tooltip-marker,
+.tooltip-marker-gap {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-2xs);
+}
+
+/* A row with no status keeps the column, so its label starts on the same
+   vertical line as the rows that do have one. */
+.tooltip-marker-gap {
+  background: transparent;
+}
+
+.tooltip-marker[data-status="up"] { background: var(--up); }
+.tooltip-marker[data-status="warn"] { background: var(--warn); }
+.tooltip-marker[data-status="down"] { background: var(--down); }
+.tooltip-marker[data-status="idle"] { background: var(--idle); }
+
+.tooltip-label {
+  @apply caps-legend;
+}
+
+.tooltip-value {
+  @apply face-mono;
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  color: var(--ink);
+  text-align: right;
+}
+
+/* The total closes the readout, so it gets a rule above it and the only
+   emphasis in the box. */
+.tooltip-row--total {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+.tooltip-row--total .tooltip-label {
+  color: var(--ink-2);
+}
+
+.tooltip-row--total .tooltip-value {
+  font-weight: var(--weight-strong);
+}
+
+.tooltip-footer {
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  color: var(--down);
+  white-space: normal;
+}
+
+/* The chip is a statement about the readout, so it sits below everything the
+   readout says. */
+.tooltip-partial {
+  display: flex;
+}
