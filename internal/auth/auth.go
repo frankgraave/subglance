@@ -73,7 +73,7 @@ func HashPassword(password string) (string, error) {
 		return "", fmt.Errorf("auth: generate salt: %w", err)
 	}
 
-	key := argon2.IDKey([]byte(password), salt, argonTime, argonMemory, argonThreads, argonKeyLen)
+	key := idKey([]byte(password), salt, argonTime, argonMemory, argonThreads, argonKeyLen)
 
 	// Standard PHC string format, so the parameters travel with the hash and
 	// can be raised later without invalidating existing passwords.
@@ -84,7 +84,7 @@ func HashPassword(password string) (string, error) {
 	), nil
 }
 
-// maxConcurrentVerifies bounds how many password verifications run at once.
+// maxConcurrentHashes bounds how many argon2 operations run at once.
 //
 // Each one allocates argonMemory — 64 MiB — and those parameters are correct:
 // memory hardness is exactly what makes a stolen hash expensive to attack.
@@ -95,27 +95,42 @@ func HashPassword(password string) (string, error) {
 // out-of-memory kill on the 2 GB box this is typically self-hosted on, and a
 // monitoring tool that dies is a monitoring tool reporting silence as health.
 //
+// Hashing is bounded alongside verification because /api/v1/setup is public on
+// a fresh instance and hashes a password before it knows whether an account
+// already exists. The two share one budget rather than having one each, since
+// what has to be capped is the total resident at any moment.
+//
 // Four. Logins are rare and checks are the hot path, so queueing behind three
 // others costs a human a fraction of a second on a screen they visit once a
-// week, and caps this package's password-hashing footprint at 256 MiB no
-// matter what arrives.
-const maxConcurrentVerifies = 4
+// week, and caps this package's footprint at 256 MiB no matter what arrives.
+const maxConcurrentHashes = 4
 
-// verifySem admits maxConcurrentVerifies hashers at a time. Callers queue
+// hashSem admits maxConcurrentHashes argon2 calls at a time. Callers queue
 // rather than fail: a legitimate login delayed is correct, a legitimate login
 // refused because someone else is flooding is the attacker winning.
-var verifySem = make(chan struct{}, maxConcurrentVerifies)
+var hashSem = make(chan struct{}, maxConcurrentHashes)
 
-// inFlightVerifies is what the concurrency test observes. It is maintained
-// only so the ceiling can be asserted rather than assumed.
-var inFlightVerifies atomic.Int64
+// inFlightHashes is what the concurrency test observes. It is maintained only
+// so the ceiling can be asserted rather than assumed.
+var inFlightHashes atomic.Int64
+
+// idKey runs argon2id with the concurrency ceiling applied.
+func idKey(password, salt []byte, t, memory uint32, threads uint8, keyLen uint32) []byte {
+	hashSem <- struct{}{}
+	inFlightHashes.Add(1)
+	defer func() {
+		inFlightHashes.Add(-1)
+		<-hashSem
+	}()
+	return argon2.IDKey(password, salt, t, memory, threads, keyLen)
+}
 
 // VerifyPassword reports whether the password matches the encoded hash.
 //
 // The comparison is constant-time: a timing difference would let an attacker
 // learn the hash byte by byte.
 //
-// Concurrency is bounded; see maxConcurrentVerifies.
+// Concurrency is bounded; see maxConcurrentHashes.
 func VerifyPassword(password, encoded string) (bool, error) {
 	params, salt, want, err := decodeHash(encoded)
 	if err != nil {
@@ -124,14 +139,7 @@ func VerifyPassword(password, encoded string) (bool, error) {
 		return false, err
 	}
 
-	verifySem <- struct{}{}
-	inFlightVerifies.Add(1)
-	defer func() {
-		inFlightVerifies.Add(-1)
-		<-verifySem
-	}()
-
-	got := argon2.IDKey([]byte(password), salt, params.time, params.memory, params.threads, uint32(len(want)))
+	got := idKey([]byte(password), salt, params.time, params.memory, params.threads, uint32(len(want)))
 	return subtle.ConstantTimeCompare(got, want) == 1, nil
 }
 
