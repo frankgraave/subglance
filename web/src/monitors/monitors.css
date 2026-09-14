@@ -782,11 +782,11 @@
 
 /* The fill arrives on hover, so a permanently green button on screen does not
    become wallpaper that gets clicked by accident (§7.1). */
-.add-button-primary { border-color: var(--border-hi); }
+.add-button-primary { border-color: var(--accent-border); }
 .add-button-primary:hover:not(:disabled) {
-  color: var(--canvas);
-  background: var(--up);
-  border-color: var(--up);
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-color: var(--accent-border);
 }
 
 .add-button-quiet { color: var(--ink-3); border-color: transparent; background: transparent; }
