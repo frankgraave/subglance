@@ -1939,6 +1939,43 @@ describe("a dashed edge means the chip is about the data (§8.1)", () => {
     expect([...dashed]).toContain(".chip-avatar");
   });
 
+  it("loads every stylesheet it ships", () => {
+    // A component stylesheet that nothing imports is invisible to the whole
+    // suite: jsdom applies no CSS, so every test still passes while the
+    // component renders unstyled in the browser. Four of these shipped
+    // together once — the components were built in isolation and the file
+    // that collects them was owned by someone else.
+    //
+    // Walks the import graph from the entrypoint rather than checking that
+    // index.css names each file, because a stylesheet may legitimately be
+    // pulled in by the one next to it (heartbeat.css imports chart.css).
+    const seen = new Set<string>();
+    const walk = (file: string) => {
+      if (seen.has(file)) return;
+      seen.add(file);
+      let contents: string;
+      try {
+        contents = readFileSync(file, "utf8");
+      } catch {
+        return;
+      }
+      for (const match of contents.matchAll(/@import\s+"([^"]+)"/g)) {
+        const target = match[1];
+        if (!target.startsWith(".")) continue; // a package, not one of ours
+        walk(join(file, "..", target));
+      }
+    };
+    walk(join(webSrc, "index.css"));
+
+    const orphans: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (!file.endsWith(".css")) continue;
+      if (seen.has(file)) continue;
+      orphans.push(relative(repoRoot, file));
+    }
+    expect(orphans).toEqual([]);
+  });
+
   it("keeps every focus ring on the accent", () => {
     // Focus is a control state: it says "your keyboard is here". §2.8 gives
     // that job to the accent precisely so it never reads as a fact about the

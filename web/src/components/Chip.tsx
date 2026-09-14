@@ -103,32 +103,11 @@ export function EmptyAvatar({
   );
 }
 
-/**
- * A 32x32 neutral tile holding a glyph, anchoring the left of a card header.
- *
- * The glyph is hidden from assistive technology by default: a tile beside a
- * monitor's name is a visual anchor, and announcing "globe" before the name
- * adds a word that means nothing. Pass a `label` on the rare tile that is the
- * only thing saying what the row is.
- */
-export function IconTile({
-  children,
-  label,
-  className,
-}: {
-  children: ReactNode;
-  label?: string;
-  className?: string;
-}) {
-  return (
-    <span
-      className={join("icon-tile", className)}
-      {...(label ? { role: "img", "aria-label": label } : { "aria-hidden": true })}
-    >
-      {children}
-    </span>
-  );
-}
+/* IconTile used to live here. It moved to IconTile.tsx when it gained a tone
+   variant, because a tile is not a chip: the chips in this file are all
+   labels about a value, and a tile is an anchor for a header. Re-exported
+   nowhere on purpose — one import path, so the duplicate selector that
+   briefly existed in chips.css cannot come back. */
 
 function join(base: string, extra?: string): string {
   return extra ? `${base} ${extra}` : base;
