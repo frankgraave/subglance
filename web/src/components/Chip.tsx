@@ -19,8 +19,9 @@ export type ChipStatus = "up" | "warn" | "down" | "idle";
 
 export type StatusChipProps = {
   status: ChipStatus;
-  /** The word on the badge. Written out, because colour never stands alone. */
-  children: ReactNode;
+  /** The word on the badge. Typed as a string so a status can never be drawn
+   *  as colour alone: an icon or a null child would leave nothing to read. */
+  children: string;
   className?: string;
 };
 

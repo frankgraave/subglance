@@ -22,6 +22,17 @@ describe("StatusChip", () => {
     expect(chip?.textContent).toBe("Down");
     expect(chip?.className).toContain("chip--status");
   });
+
+  it("refuses a status without a readable word", () => {
+    // The type is the guard here: an icon, an aria-hidden node or nothing at
+    // all would leave the status carried by its colour alone. If these stop
+    // erroring, `children` has widened and the guard is gone — `tsc -b` fails
+    // on the unused directive, which is the failure this test is.
+    // @ts-expect-error children must be a string, not an element
+    void (<StatusChip status="down">{<span aria-hidden />}</StatusChip>);
+    // @ts-expect-error children must be a string, not null
+    void (<StatusChip status="down">{null}</StatusChip>);
+  });
 });
 
 describe("MetaChip", () => {

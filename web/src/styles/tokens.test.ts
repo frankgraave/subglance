@@ -1658,6 +1658,39 @@ function cssRules(): { path: string; selector: string; body: string }[] {
  * a face role. A status fill that types nothing is a mark — a lamp, a dot —
  * and has no label to make readable.
  */
+type CssRule = { path: string; selector: string; body: string };
+
+/** Solid status fills that carry text but do not use their own label token. */
+function unlabelledStatusFills(rules: CssRule[]): string[] {
+  const offenders: string[] = [];
+  for (const { path, selector, body } of rules) {
+    const background = valueOf(body, "background");
+    const fill = background?.match(/^var\(--(up|warn|down|idle)\)$/);
+    if (!fill) continue;
+    if (!carriesText(body)) continue;
+    const colour = valueOf(body, "color");
+    if (colour === `var(--on-${fill[1]})`) continue;
+    offenders.push(`${path} | ${selector} | ${colour ?? "no colour"}`);
+  }
+  return offenders;
+}
+
+/** Label tokens used anywhere other than on top of their own status fill. */
+function strayLabelTokens(rules: CssRule[]): string[] {
+  const offenders: string[] = [];
+  for (const { path, selector, body } of rules) {
+    const used = STATUS_LABEL_TOKENS.filter((name) =>
+      new RegExp(`var\\(${name}\\)`).test(stripComments(body)),
+    );
+    if (used.length === 0) continue;
+    const background = valueOf(body, "background");
+    const fill = background?.match(/^var\(--(up|warn|down|idle)\)$/);
+    if (fill && used.length === 1 && used[0] === `--on-${fill[1]}`) continue;
+    offenders.push(`${path} | ${selector} | ${used.join(" ")}`);
+  }
+  return offenders;
+}
+
 function carriesText(body: string): boolean {
   const clean = stripComments(body);
   return (
@@ -1716,49 +1749,44 @@ describe("a filled status mark labels itself with the measured pair (§2.3)", ()
     // declaring a text colour for text that does not exist. So the guard asks
     // whether the rule types anything — a colour, a size, a face role — and
     // only then insists the colour be the measured one.
-    const offenders: string[] = [];
-    for (const { path, selector, body } of cssRules()) {
-      const background = valueOf(body, "background");
-      const fill = background?.match(/^var\(--(up|warn|down|idle)\)$/);
-      if (!fill) continue;
-      if (!carriesText(body)) continue;
-      const colour = valueOf(body, "color");
-      if (colour === `var(--on-${fill[1]})`) continue;
-      offenders.push(`${path} | ${selector} | ${colour ?? "no colour"}`);
-    }
-    expect(offenders).toEqual([]);
+    expect(unlabelledStatusFills(cssRules())).toEqual([]);
   });
 
   it("keeps the label tokens off anything that is not a solid status fill", () => {
     // The mirror failure: `--on-down` used as ordinary text colour because it
     // happened to look right in one theme. It is only measured against its
     // own fill, so anywhere else it is an unmeasured colour.
-    const offenders: string[] = [];
-    for (const { path, selector, body } of cssRules()) {
-      const used = STATUS_LABEL_TOKENS.filter((name) =>
-        new RegExp(`var\\(${name}\\)`).test(stripComments(body)),
-      );
-      if (used.length === 0) continue;
-      const background = valueOf(body, "background");
-      const fill = background?.match(/^var\(--(up|warn|down|idle)\)$/);
-      if (fill && used.length === 1 && used[0] === `--on-${fill[1]}`) continue;
-      offenders.push(`${path} | ${selector} | ${used.join(" ")}`);
-    }
-    expect(offenders).toEqual([]);
+    expect(strayLabelTokens(cssRules())).toEqual([]);
   });
 
   it("bites on a status fill wearing ink, and on a label token off its fill", () => {
-    const wrongLabel = declarationBlocks(`
-      .chip--bad { background: var(--down); color: var(--ink); }
-    `)[0];
-    expect(valueOf(wrongLabel.body, "color")).toBe("var(--ink)");
-    expect(valueOf(wrongLabel.body, "background")).toBe("var(--down)");
+    const rule = (css: string): CssRule => ({
+      path: "fixture.css",
+      ...declarationBlocks(css)[0],
+    });
 
-    const strayToken = declarationBlocks(`
+    const wrongLabel = rule(`
+      .chip--bad { background: var(--down); color: var(--ink); }
+    `);
+    expect(unlabelledStatusFills([wrongLabel])).toEqual([
+      "fixture.css | .chip--bad | var(--ink)",
+    ]);
+    expect(strayLabelTokens([wrongLabel])).toEqual([]);
+
+    const strayToken = rule(`
       .note { color: var(--on-down); }
-    `)[0];
-    expect(valueOf(strayToken.body, "background")).toBeUndefined();
-    expect(/var\(--on-down\)/.test(strayToken.body)).toBe(true);
+    `);
+    expect(strayLabelTokens([strayToken])).toEqual([
+      "fixture.css | .note | --on-down",
+    ]);
+    expect(unlabelledStatusFills([strayToken])).toEqual([]);
+
+    // And the legitimate pairing stays silent in both directions.
+    const correct = rule(`
+      .chip--status { background: var(--down); color: var(--on-down); }
+    `);
+    expect(unlabelledStatusFills([correct])).toEqual([]);
+    expect(strayLabelTokens([correct])).toEqual([]);
   });
 });
 
