@@ -103,7 +103,7 @@
   --type-card: 18px;
   --type-row: 15px;
   --type-body: 14px;
-  --type-helper: 13px;
+  --type-helper: 12px;
   --type-section: 12px;
 
   /* iOS Safari zooms the page in when a focused input renders below 16px and
@@ -152,7 +152,7 @@
      value is wrong for, and they are opted into explicitly.
      Spelled `--track-*` because `--tracking-*` is Tailwind v4's own theme
      namespace and a token there would have to reference itself. */
-  --track-body: -.01em;
+  --track-body: -.02em;
   --track-badge: .04em;
   --track-caps: .09em;
 

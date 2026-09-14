@@ -228,8 +228,23 @@ control need.
 | Card title | `--type-card` | `18px` | `--lead-card` `24px` | `--weight-strong` |
 | Row title | `--type-row` | `15px` | `--lead-row` `20px` | `--weight-mid` |
 | Body / label | `--type-body` | `14px` | `--lead-body` `20px` | `--weight-plain` |
-| Helper text | `--type-helper` | `13px` | `--lead-helper` `16px` | `--weight-plain` |
+| Helper text | `--type-helper` | `12px` | `--lead-helper` `16px` | `--weight-plain` |
 | Section heading | `--type-section` | `12px` | `--lead-section` `12px` | `--weight-strong`, uppercase, `--track-caps` |
+
+**Helper and section share a size, and separate by face and casing.** An earlier
+pass kept helper at 13px specifically to avoid colliding with section, on the
+reasoning that two roles at one size would be indistinguishable. Measured
+against the reference style that argument does not survive: it puts 39 of 93
+elements on 12px and tells those roles apart by casing, weight and letterspacing
+instead. Section is uppercase, `--weight-strong` and tracked at `--track-caps`;
+helper is sentence case, `--weight-plain` and tracked at `--track-body`. Those
+are further apart on the page than one pixel of size ever was, and it takes the
+scale from four roles inside 3px down to three — which is the crowding the scale
+was accused of, removed rather than argued with.
+
+The leadings stay different on purpose: helper sits on 16px because it is read
+as running text, section on 12px because it is a single line whose leading
+equals its size so vertical centring is exact.
 
 One leading is opted into rather than inherited:
 
@@ -310,7 +325,7 @@ the inherited value is wrong for the face.
 
 | Role | Token | Value | Used for |
 |---|---|---|---|
-| Body | `--track-body` | `-.01em` | inherited by everything, set once on `body` |
+| Body | `--track-body` | `-.02em` | inherited by everything, set once on `body` |
 | Badge | `--track-badge` | `.04em` | small mono badges, where the mono face is already wide |
 | Caps | `--track-caps` | `.09em` | every uppercase micro-label, without exception |
 
