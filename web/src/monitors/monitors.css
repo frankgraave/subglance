@@ -1,6 +1,16 @@
 /*
  * Dashboard table styling. Colour lives in tokens.css; this file owns layout.
  *
+ * The two component stylesheets below are pulled in here rather than from
+ * index.css because that file is the single CSS entrypoint and is owned
+ * elsewhere; the panel list and the value are what the monitor list is built
+ * out of, so this is the nearest honest home for them. They should move up to
+ * index.css beside the other component sheets when that file is next touched.
+ */
+@import "../components/panellist.css";
+@import "../components/value.css";
+
+/*
  * CRITICAL: nothing here may set `display: flex`, `grid` or `contents` on a
  * table element (table, thead, tbody, tr, th, td). Safari drops the table's
  * semantics when you do — the rows stop being rows for a screen reader — and
@@ -284,8 +294,16 @@
 
 /* The empty dashboard is the onboarding (DESIGN.md §7.6), so it gets real
    vertical space rather than a one-line apology. */
+/*
+ * The empty state is the one place the product raises its voice (§14).
+ *
+ * It works only because everything around it is quiet: there is no list
+ * competing for attention on this screen, so a larger heading and a single
+ * warm sentence read as welcome rather than as shouting. The restraint is the
+ * point — one step up the type scale, one tone warmer, one thing to press.
+ */
 .mon-empty {
-  padding: var(--space-12) var(--space-6);
+  padding: var(--space-16) var(--space-6);
   text-align: center;
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
@@ -309,12 +327,77 @@
   color: var(--ink);
 }
 
+/* The first-run heading, one step up. The no-results heading stays where it
+   was: "nothing matched" is a correction, not a welcome, and it should not
+   arrive at the same volume. */
+.mon-empty-title--first {
+  margin-bottom: var(--space-3);
+  font-size: var(--type-page);
+  line-height: var(--lead-page);
+  font-weight: var(--weight-heavy);
+}
+
 .mon-empty-body {
   max-width: 42ch;
   margin: 0 auto;
   font-size: var(--type-helper);
   line-height: var(--lead-prose);
   color: var(--ink-3);
+}
+
+/* Warmer and a step larger than the no-results body: this is the sentence a
+   new self-hoster reads first, and --ink-3 at helper size reads as fine
+   print. */
+.mon-empty-body--first {
+  max-width: 48ch;
+  font-size: var(--type-body);
+  line-height: var(--lead-body);
+  color: var(--ink-2);
+}
+
+.mon-empty-action {
+  margin-top: var(--space-6);
+}
+
+/*
+ * The single next step, filled with the control accent (§2.8).
+ *
+ * Filled rather than outlined because it is the only action on the screen;
+ * an outlined button here would be asking the reader to find it.
+ */
+.mon-empty-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--control-h);
+  padding: 0 var(--space-5);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--r-sm);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: var(--type-body);
+  line-height: var(--lead-body);
+  font-weight: var(--weight-strong);
+  cursor: pointer;
+}
+
+/* Focus is the accent ring, not a neutral outline (§2.8). */
+.mon-empty-cta:focus-visible {
+  outline: 3px solid var(--accent-ring);
+  outline-offset: 2px;
+}
+
+/* The fallback when no caller owns the add form: the step is still stated, it
+   just names the control rather than being one. */
+.mon-empty-hint {
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  color: var(--ink-2);
+}
+
+.mon-empty-control {
+  color: var(--ink);
+  font-weight: var(--weight-strong);
 }
 
 /*
@@ -497,35 +580,44 @@
   @apply caps-legend;
 }
 
+/*
+ * The compact list is a stack of panels, not a ruled table (DESIGN.md §10).
+ *
+ * The stack itself owns no border, no background and no corner any more: the
+ * container used to draw one box with hairlines inside it, which is what made
+ * a hundred monitors read as a spreadsheet. Each line now carries its own edge
+ * — see `.panel-row` in components/panellist.css — and this rule is left only
+ * to hold the columns the layout still needs.
+ */
 .mon-line-stack {
   list-style: none;
   padding: 0;
   margin: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  background: var(--surface);
-  overflow: hidden;
 }
 
 .mon-line {
-  display: grid;
-  /* Name and target share the flexible space; the two numbers are fixed so
-     they still line up in a column even without a table. */
-  /* The first column grew from 22px to hold the status word next to the lamp
-     (SUB-100). The space comes out of the target column, which is the one
-     field on the line that is still readable truncated. */
-  grid-template-columns: 78px minmax(0, 1.1fr) minmax(0, 1.2fr) 76px 62px;
-  align-items: center;
-  gap: var(--space-3);
-  padding: 0 var(--space-3);
-  height: 30px;
-  border-bottom: 1px solid var(--border);
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
 }
 
-.mon-line:last-child { border-bottom: 0; }
-.mon-line:hover { background: var(--surface-2); }
+.mon-line .panel-row-icon {
+  /* The lamp plus its status word, at the width the column used to reserve so
+     the names below still start on one vertical line. */
+  width: 78px;
+  justify-content: flex-start;
+}
+
+/* Name, target and the two numbers, kept in columns so the readings still
+   line up down the list even though each line is now its own panel. */
+.mon-line .panel-row-body {
+  display: grid;
+  /* The first column grew from 22px to hold the status word next to the lamp
+     (SUB-100). The space comes out of the target column, which is the one
+     field on the line that is still readable truncated. */
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.2fr) 76px 62px;
+  align-items: center;
+  gap: var(--space-3);
+}
 
 /* Same rule as the row and the card: trouble warms the leading edge. */
 .mon-line[data-status="down"] { border-left: 2px solid var(--down); background: var(--down-dim); }

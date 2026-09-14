@@ -105,7 +105,41 @@ describe("MonitorCompactList", () => {
 
   it("shows the empty state rather than an empty box", () => {
     render(<MonitorCompactList monitors={[]} />);
-    expect(screen.getByText("No monitors yet")).toBeTruthy();
+    expect(screen.getByText("Nothing is being watched yet")).toBeTruthy();
+  });
+
+  it("draws each monitor as its own panel, not as a row in a ruled table", () => {
+    // SUB-106 §10, the largest single layout difference: a list drawn with
+    // shared dividers reads as a spreadsheet. Asserted on the structure the
+    // panel stylesheet hangs off, because jsdom has no layout and computed
+    // borders here would be the empty string either way.
+    const { container } = render(
+      <MonitorCompactList monitors={[monitor("api", "up"), monitor("db", "up")]} />,
+    );
+    expect(container.querySelectorAll(".panel-row")).toHaveLength(2);
+    // And the container no longer wears the single box the lines used to sit
+    // inside: the edge belongs to the row now.
+    const stack = container.querySelector(".mon-line-stack");
+    expect(stack?.classList.contains("panel-list")).toBe(true);
+  });
+
+  it("dims a measured zero without dressing it as a missing reading", () => {
+    // 0 ms is an answer; an absent latency is not. The two must not render
+    // alike, which is the whole reason Value carries both attributes.
+    render(
+      <MonitorCompactList
+        monitors={[
+          monitor("api", "up", { latencyMs: 0 }),
+          monitor("db", "up", { latencyMs: null }),
+        ]}
+      />,
+    );
+    const zero = line("api").querySelector(".value");
+    expect(zero?.getAttribute("data-zero")).toBe("true");
+    expect(zero?.getAttribute("data-empty")).toBeNull();
+    // The absent one does not go through Value at all — it is the em dash
+    // plus its screen-reader words — so there is no zero marking to find.
+    expect(line("db").querySelector("[data-zero]")).toBeNull();
   });
 
   it("tells a filtered-to-nothing list apart from an empty one", () => {
