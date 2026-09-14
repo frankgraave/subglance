@@ -394,9 +394,15 @@
 .shell-skip:focus-visible { clip-path: none; }
 
 /*
- * `<main>` is a focus target, not a control: it gets focus on a route change
- * and from the skip link, and in neither case is a ring around the entire
- * viewport useful information — the screen has already changed.
+ * `<main>` is a focus target, not a control. A pointer click inside it must
+ * not draw a ring around the entire viewport, so the plain-`:focus` case is
+ * suppressed — but the keyboard case keeps a ring, because after the skip
+ * link or a route change the ring is the only thing that says where focus
+ * landed. Inset, so it reads as an edge of the screen rather than a box
+ * floating past it.
  */
-.shell-content:focus { outline: none; }
-.shell-content:focus-visible { outline: none; }
+.shell-content:focus:not(:focus-visible) { outline: none; }
+.shell-content:focus-visible {
+  outline: 2px solid var(--ink-2);
+  outline-offset: -3px;
+}

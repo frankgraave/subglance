@@ -205,7 +205,7 @@ export default function App() {
   }, [signedIn, queryClient]);
 
   const screen = isWall ? (
-    <LiveDashboardRoot client={queryClient} layout="wall" onExitWall={leaveWall} />
+    <LiveDashboardRoot client={queryClient} layout="wall" onExitWall={leaveWall} mainRef={mainRef} />
   ) : (
     <AppShell
       sidebarCollapsed={sidebarCollapsed}
