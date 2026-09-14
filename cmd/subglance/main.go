@@ -27,6 +27,7 @@ import (
 
 	"github.com/frankgraave/subglance/internal/api"
 	"github.com/frankgraave/subglance/internal/buildinfo"
+	"github.com/frankgraave/subglance/internal/checker"
 	"github.com/frankgraave/subglance/internal/config"
 	"github.com/frankgraave/subglance/internal/events"
 	"github.com/frankgraave/subglance/internal/logging"
@@ -136,11 +137,22 @@ func run(args []string) error {
 	// other's lifetime.
 	bus := events.NewBus(0)
 
+	// A channel URL is operator-supplied text that this process connects
+	// to, exactly like a monitor target, so it gets the same SSRF guard.
+	//
+	// The runner builds its own guard from the same cfg.AllowPrivateTargets
+	// value rather than being handed this one. Both derive from one config
+	// field, so they cannot disagree, and a Guard holds no state worth
+	// sharing — threading one through monitor.Options would add a second
+	// way to set the same policy, which is how the two ends quietly drift
+	// apart later.
+	guard := checker.NewGuard(cfg.AllowPrivateTargets)
+
 	// The notifier is built before the runner so the runner can hand it
 	// alerts. It only writes to the outbox on that path; the delivery
 	// itself happens in its own goroutine below, which is what keeps a
 	// slow webhook from delaying a check.
-	notify := notifier.New(notifier.Options{DB: db, Log: log})
+	notify := notifier.New(notifier.Options{DB: db, Log: log, Guard: guard})
 
 	runner := monitor.New(monitor.Options{
 		DB:                  db,
