@@ -808,6 +808,36 @@ This is the difference between finished and nearly finished.
 monitors and actions, because the user doesn't know which of the two they're
 after.
 
+
+### 7.8 Segmented control
+
+Three or four mutually exclusive options, all of them visible. §7.2 already
+chose this over a dropdown for forms; it is the same control in a toolbar.
+
+**Two variants, chosen by what the control does — not by how loud it should
+look.**
+
+| Variant | The control changes | Selected segment |
+|---|---|---|
+| `view` | which view of the data you get — layout, density | neutral fill, `--surface-hi` on `--border-hi` |
+| `data` | *what data* you are looking at — range, filter | `--accent` fill, `--accent-ink` label |
+
+The layout switcher is the first kind: it changes how the monitors are drawn,
+never which monitors. Deciding by role rather than by emphasis is what stops
+every segmented control on a screen from being the loud one.
+
+**An inactive segment is fully transparent, its border included.** The border
+is declared at rest in `transparent`, so the box already occupies the space the
+selected state will need and nothing shifts by a pixel when the selection
+moves. A control that only adds a border when pressed nudges every label beside
+it each time you press it.
+
+**The inner radius is concentric, not equal.** Per §2.7 the shell is `--r-sm`
+with `--space-1` of padding, so a segment is `6 − 4 = 2px`, which is `--r-2xs`.
+This is the first component in the product that nests a radius inside a padded
+one, and it is the case the concentric guard in `tokens.test.ts` was landed
+for.
+
 ---
 
 ## 9. Accessibility
