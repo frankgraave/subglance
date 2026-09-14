@@ -168,12 +168,7 @@
   height: 34px;
   padding: 0 var(--space-3);
   text-align: left;
-  font-size: var(--type-section);
-  line-height: var(--lead-section);
-  font-weight: var(--weight-strong);
-  text-transform: uppercase;
-  letter-spacing: var(--track-caps);
-  color: var(--ink-4);
+  @apply caps-legend;
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
 }
@@ -183,12 +178,7 @@
 .mon-section-title {
   padding: var(--space-2) var(--space-3);
   text-align: left;
-  font-size: var(--type-section);
-  line-height: var(--lead-section);
-  font-weight: var(--weight-strong);
-  text-transform: uppercase;
-  letter-spacing: var(--track-caps);
-  color: var(--ink-3);
+  @apply caps-legend;
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
 }
@@ -264,7 +254,7 @@
 .mon-target {
   display: block;
   margin-top: 3px;
-  font-family: var(--font-mono);
+  @apply face-mono;
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
   color: var(--ink-2);
@@ -275,16 +265,15 @@
 
 .mon-cell--num {
   text-align: right;
-  font-family: var(--font-mono);
+  @apply face-mono;
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
-  font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
 
 .mon-error {
   display: block;
-  font-family: var(--font-sans);
+  @apply face-sans;
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
   color: var(--down);
@@ -347,12 +336,7 @@
 
 .mon-cards-title {
   margin-bottom: var(--space-2);
-  font-size: var(--type-section);
-  line-height: var(--lead-section);
-  font-weight: var(--weight-strong);
-  text-transform: uppercase;
-  letter-spacing: var(--track-caps);
-  color: var(--ink-3);
+  @apply caps-legend;
 }
 
 .mon-card-stack {
@@ -401,12 +385,7 @@
 /* The lamp's own label is rendered visibly, so the card's status word comes
    from it; this span is the styling hook for that text. */
 .mon-card-status {
-  font-size: var(--type-helper);
-  line-height: var(--lead-helper);
-  font-weight: var(--weight-strong);
-  text-transform: uppercase;
-  letter-spacing: var(--track-caps);
-  color: var(--ink-3);
+  @apply caps-legend;
 }
 
 .mon-card-name {
@@ -423,7 +402,7 @@
 
 .mon-card-target {
   margin-top: 2px;
-  font-family: var(--font-mono);
+  @apply face-mono;
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
   color: var(--ink-3);
@@ -453,20 +432,14 @@
 /* Label above value, not beside it: a two-column dl at 375px either wraps
    unpredictably or leaves the numbers floating far from their nouns. */
 .mon-card-fact dt {
-  font-size: var(--type-section);
-  line-height: var(--lead-section);
-  font-weight: var(--weight-strong);
-  text-transform: uppercase;
-  letter-spacing: var(--track-caps);
-  color: var(--ink-4);
+  @apply caps-legend;
 }
 
 .mon-card-fact dd {
   margin-top: 2px;
-  font-family: var(--font-mono);
+  @apply face-mono;
   font-size: var(--type-body);
   line-height: var(--lead-body);
-  font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
 
@@ -521,12 +494,7 @@
    different vocabularies for the same idea. */
 .mon-line-group-title {
   margin-bottom: var(--space-2);
-  font-size: var(--type-section);
-  line-height: var(--lead-section);
-  font-weight: var(--weight-strong);
-  text-transform: uppercase;
-  letter-spacing: var(--track-caps);
-  color: var(--ink-3);
+  @apply caps-legend;
 }
 
 .mon-line-stack {
@@ -577,7 +545,7 @@
 }
 
 .mon-line-target {
-  font-family: var(--font-mono);
+  @apply face-mono;
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
   color: var(--ink-2);
@@ -588,10 +556,9 @@
 
 .mon-line-num {
   text-align: right;
-  font-family: var(--font-mono);
+  @apply face-mono;
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
-  font-variant-numeric: tabular-nums;
   color: var(--ink-2);
   /* The latency slot holds an error message when a monitor is down, and one
      long reason must not push the uptime column out of alignment. */
@@ -604,7 +571,7 @@
    meaningless for it. */
 .mon-line-error {
   display: block;
-  font-family: var(--font-sans);
+  @apply face-sans;
   /* Helper size from the type scale (SUB-67), which has since landed on
      develop and is merged in here — so the fallback this rule carried while
      the token did not exist yet is gone. */
@@ -650,12 +617,7 @@
 }
 
 .add-label {
-  font-size: var(--type-section);
-  line-height: var(--lead-section);
-  font-weight: var(--weight-strong);
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
-  color: var(--ink-3);
+  @apply caps-legend;
 }
 
 .add-input {
@@ -852,7 +814,7 @@
 .push-reveal-input {
   flex: 1 1 auto;
   min-width: 0;
-  font-family: var(--font-mono);
+  @apply face-mono;
 }
 
 /*
@@ -921,10 +883,6 @@
  */
 .mon-cell--led .led-label,
 .mon-line-led .led-label {
-  font-size: var(--type-section);
-  line-height: var(--lead-section);
-  text-transform: uppercase;
-  letter-spacing: var(--track-caps);
-  color: var(--ink-2);
+  @apply caps-legend;
   white-space: nowrap;
 }

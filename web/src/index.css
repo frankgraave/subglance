@@ -1,7 +1,66 @@
 @import "tailwindcss";
 @import "./styles/tokens.css";
+
+/*
+ * The two face roles (DESIGN.md §2.5).
+ *
+ * A face is a whole configuration — family, ligatures, numeric variant and
+ * rendering mode — not just a family name. Defined once as utilities so the
+ * next component that reaches for mono gets the slashed zero and the tabular
+ * figures with it, rather than the name alone and whatever the browser
+ * defaults to. Before this, `font-variant-numeric: tabular-nums` was repeated
+ * at seven call sites and absent from the other seven that set the mono
+ * family, so half the measurable text in the product did not line up.
+ *
+ * `@utility` rather than a plain class: it makes the role available both to
+ * `@apply` inside a component stylesheet and to `className="face-mono"`, and
+ * it participates in Tailwind's cascade layers instead of sitting above them.
+ */
+@utility face-sans {
+  font-family: var(--font-sans);
+  font-variant-ligatures: var(--ligatures-sans);
+  font-variant-numeric: var(--numeric-sans);
+  text-rendering: var(--render-sans);
+}
+
+@utility face-mono {
+  font-family: var(--font-mono);
+  font-variant-ligatures: var(--ligatures-mono);
+  font-variant-numeric: var(--numeric-mono);
+  text-rendering: var(--render-mono);
+}
+/*
+ * The caps legend (DESIGN.md §2.5).
+ *
+ * The small uppercase label over a column, a panel, a nav group or a form
+ * field. It was not a role: nine rules spelled out the same five declarations
+ * by hand and then disagreed about the sixth. Two of them reached for
+ * `--ink-4`, which measures 1.90:1 against `--surface` in dark and 1.94:1 in
+ * light — below even the 3:1 floor a non-text edge has to clear, on text whose
+ * whole job is to say what the number under it means.
+ *
+ * The fix is not more grey. A legend is quiet because it is small, mono and
+ * uppercase; fading it spends contrast to buy a quietness the face and the
+ * casing already give for free. So the role takes `--ink-2` (7.31:1 dark,
+ * 6.26:1 light against `--surface`) and clears AA at 12px, which neither
+ * `--ink-3` (3.37 / 3.19) nor `--ink-4` did.
+ *
+ * Weight drops to plain for the same reason: 500 was compensating for the
+ * greying. Mono at 12px uppercase does not need it.
+ */
+@utility caps-legend {
+  @apply face-mono;
+  font-size: var(--type-section);
+  line-height: var(--lead-section);
+  font-weight: var(--weight-plain);
+  text-transform: uppercase;
+  letter-spacing: var(--track-caps);
+  color: var(--ink-2);
+}
+
 /* Component styles live next to their component; they are collected here so
    the app keeps a single CSS entrypoint. */
+@import "./components/segmented.css";
 @import "./heartbeat/heartbeat.css";
 @import "./monitors/led.css";
 @import "./monitors/monitors.css";
@@ -24,12 +83,11 @@
   body {
     background-color: var(--canvas);
     color: var(--ink);
-    font-family: var(--font-sans);
+    @apply face-sans;
     /* The one optical correction the sans face needs, set once so every
        element inherits it (§2.5). Faces it is wrong for override it. */
     letter-spacing: var(--track-body);
     -webkit-font-smoothing: antialiased;
-    text-rendering: optimizeLegibility;
   }
 
   /* Theme switches are the one place a page-wide transition is justified:
@@ -52,7 +110,7 @@
 
   /* Anything measurable is mono so digits line up in a column. */
   code, kbd, samp, pre {
-    font-family: var(--font-mono);
+    @apply face-mono;
   }
 }
 

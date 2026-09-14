@@ -25,7 +25,7 @@
 }
 
 .crash-detail {
-  font-family: var(--font-mono);
+  @apply face-mono;
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
   color: var(--ink-2);
