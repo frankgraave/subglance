@@ -145,10 +145,10 @@ export function TokenSheet() {
           <div className="hb-tooltip" style={{ position: "static" }}>
             <Tooltip
               timestamp="14 Sep 09:00 – 09:20"
-              unit="latency"
+              unit="ms"
               rows={[
-                { key: "slowest", label: "Slowest", value: "142 ms", marker: "up" },
-                { key: "failed", label: "Failed", value: "2", marker: "down" },
+                { key: "slowest", label: "Slowest", value: "142", marker: "up", status: "Up" },
+                { key: "median", label: "Median", value: "96", marker: "up", status: "Up" },
               ]}
               total={{ label: "Total", value: "20 checks" }}
             />
@@ -156,9 +156,9 @@ export function TokenSheet() {
           <div className="hb-tooltip" style={{ position: "static" }}>
             <Tooltip
               timestamp="14 Sep 03:00 – 03:20"
-              unit="latency"
+              unit="ms"
               rows={[
-                { key: "slowest", label: "Slowest", value: "98 ms", marker: "up" },
+                { key: "slowest", label: "Slowest", value: "98", marker: "up", status: "Up" },
               ]}
               total={{ label: "Total", value: "2 checks" }}
               partial

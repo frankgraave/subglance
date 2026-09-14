@@ -10,14 +10,18 @@ describe("Tooltip", () => {
     render(
       <Tooltip
         timestamp="12:00:00"
-        unit="latency"
+        unit="ms"
         rows={[
-          { key: "a", label: "Slowest", value: "120 ms", marker: "up" },
-          { key: "b", label: "Median", value: "90 ms", marker: "up" },
+          { key: "a", label: "Slowest", value: "120", marker: "up", status: "Up" },
+          { key: "b", label: "Median", value: "90", marker: "up", status: "Up" },
         ]}
       />,
     );
-    expect(screen.getByText("latency")).toBeTruthy();
+    expect(screen.getByText("ms")).toBeTruthy();
+    // The unit is named once, so no row value may repeat it.
+    for (const value of document.querySelectorAll(".tooltip-value")) {
+      expect(value.textContent).not.toMatch(/ms|s$/);
+    }
     // The header sits above the rows and is separated from them, so the rows
     // read as entries under a caption rather than as the first entry.
     const head = document.querySelector(".tooltip-head")!;
@@ -43,8 +47,8 @@ describe("Tooltip", () => {
       <Tooltip
         timestamp="12:00:00"
         rows={[
-          { key: "a", label: "Slowest", value: "1", marker: "up" },
-          { key: "b", label: "Failed", value: "2", marker: "down" },
+          { key: "a", label: "Slowest", value: "1", marker: "up", status: "Up" },
+          { key: "b", label: "Failed", value: "2", marker: "down", status: "Down" },
         ]}
       />,
     );
@@ -58,11 +62,32 @@ describe("Tooltip", () => {
     ).toBe("true");
   });
 
+  it("states each marked row's status in words as well as in colour", () => {
+    render(
+      <Tooltip
+        timestamp="12:00:00"
+        rows={[
+          { key: "a", label: "Slowest", value: "1", marker: "up", status: "Up" },
+          { key: "b", label: "Failed", value: "2", marker: "down", status: "Down" },
+        ]}
+      />,
+    );
+    // The marker is aria-hidden and differs from its neighbour only by hue, so
+    // without these words the row states its status in colour alone — unusable
+    // in greyscale, to a screen reader, and to a red-green colour-blind reader.
+    const statuses = [...document.querySelectorAll(".tooltip-row .tooltip-status")]
+      .map((el) => el.textContent)
+      .filter(Boolean);
+    expect(statuses).toEqual(["Up", "Down"]);
+  });
+
   it("sets the total apart from the rows it closes", () => {
     render(
       <Tooltip
         timestamp="12:00:00"
-        rows={[{ key: "a", label: "Slowest", value: "120 ms", marker: "up" }]}
+        rows={[
+          { key: "a", label: "Slowest", value: "120 ms", marker: "up", status: "Up" },
+        ]}
         total={{ label: "Total", value: "40 checks" }}
       />,
     );

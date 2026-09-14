@@ -19,6 +19,7 @@ import {
   type Slot,
 } from "./model";
 import { Tooltip, type TooltipRow } from "../components/Tooltip";
+import type { ChipStatus } from "../components/Chip";
 
 export type HeartbeatBarProps = {
   /** Checks oldest first, newest last. */
@@ -55,6 +56,12 @@ export type HeartbeatBarProps = {
    * out of the tab order, and the detail view keeps the full instrument.
    */
   interactive?: boolean;
+  /**
+   * True when the live stream is down. The bar itself drains its colour from a
+   * `data-conn` ancestor, but the tooltip states a status in words and in the
+   * present tense, so it is told directly and stops making that claim.
+   */
+  stale?: boolean;
 };
 
 const formatTime = (ts: number) =>
@@ -74,31 +81,74 @@ const formatLatency = (ms: number | null) =>
       : `${ms} ms`;
 
 /**
- * The tooltip's series rows for one column.
+ * The unit a latency is best read in, or undefined when there is none to name.
+ *
+ * Paired with `latencyValue`: together they split "142 ms" into a header unit
+ * and a bare number, so a tooltip of three latencies does not spend part of
+ * its width repeating the same two letters on every row.
+ */
+const latencyUnit = (ms: number | null): string | undefined =>
+  ms === null ? undefined : ms >= 1000 ? "s" : "ms";
+
+/** The number alone, in the unit `latencyUnit` names for it. */
+const latencyValue = (ms: number | null): string =>
+  ms === null ? "no timing" : ms >= 1000 ? (ms / 1000).toFixed(2) : `${ms}`;
+
+/**
+ * The readout for one column: its rows, and the unit its numbers are in.
  *
  * A bucket is not one series but a fold of several checks, so the rows state
  * what the fold hid: the slowest latency it contains, and how many of its
  * checks failed. A bucket with no failures says so by omission — a "0 failed"
  * row in a healthy tooltip is a number to read and dismiss on every hover.
+ *
+ * The unit travels with the rows because the Tooltip names it once in its
+ * header, and that header is a claim about *every* value below it. So it is
+ * only set when the rows agree on one: a bucket that also reports a count of
+ * failed checks has no single unit, and its latency then carries its own.
+ *
+ * `stale` is the live stream being down. The marker is decorative and the
+ * status word beside it is written in the present tense, so both have to stop
+ * claiming anything while the data is frozen: a column hovered ten minutes
+ * after the connection dropped would otherwise report the last known status as
+ * the current one.
  */
-function tooltipRows(slot: Extract<Slot, { kind: "beat" }>): TooltipRow[] {
+function tooltipReadout(
+  slot: Extract<Slot, { kind: "beat" }>,
+  stale: boolean,
+): { rows: TooltipRow[]; unit?: string } {
+  const marker: ChipStatus = slot.ok
+    ? slot.latencyMs === null
+      ? "warn"
+      : "up"
+    : "down";
+  const status = slot.ok
+    ? slot.latencyMs === null
+      ? "No timing"
+      : "Up"
+    : "Down";
+  const mixed = slot.downCount > 0;
   const rows: TooltipRow[] = [
     {
       key: "latency",
       label: slot.count > 1 ? "Slowest" : "Latency",
-      value: formatLatency(slot.latencyMs),
-      marker: slot.ok ? (slot.latencyMs === null ? "warn" : "up") : "down",
+      value: mixed
+        ? formatLatency(slot.latencyMs)
+        : latencyValue(slot.latencyMs),
+      ...(stale ? { status: "Not updating" } : { marker, status }),
     },
   ];
-  if (slot.downCount > 0) {
+  if (mixed) {
     rows.push({
       key: "failed",
       label: "Failed",
       value: `${slot.downCount}`,
-      marker: "down",
+      ...(stale
+        ? { status: "Not updating" }
+        : { marker: "down" as ChipStatus, status: "Down" }),
     });
   }
-  return rows;
+  return { rows, unit: mixed ? undefined : latencyUnit(slot.latencyMs) };
 }
 
 /**
@@ -169,6 +219,7 @@ export function HeartbeatBar({
   width,
   className,
   interactive = true,
+  stale = false,
 }: HeartbeatBarProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const measured = useMeasuredWidth(trackRef, width);
@@ -373,8 +424,8 @@ export function HeartbeatBar({
                   ? `${formatTime(activeSlot.from)} – ${formatTime(activeSlot.to)}`
                   : formatTime(activeSlot.to)
               }
-              unit={activeSlot.latencyMs === null ? undefined : "latency"}
-              rows={tooltipRows(activeSlot)}
+              unit={tooltipReadout(activeSlot, stale).unit}
+              rows={tooltipReadout(activeSlot, stale).rows}
               total={
                 activeSlot.count > 1
                   ? { label: "Total", value: `${activeSlot.count} checks` }

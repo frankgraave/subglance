@@ -52,12 +52,14 @@
 }
 
 /*
- * Marker, label, value. The value column is `max-content` and last, so it sits
- * hard against the right edge while the label takes the slack.
+ * Marker, label, status, value. The value column is `max-content` and last, so
+ * it sits hard against the right edge while the label takes the slack. The
+ * status sits between them in its own `max-content` column, so the words line
+ * up down the readout instead of drifting with the label lengths.
  */
 .tooltip-row {
   display: grid;
-  grid-template-columns: auto 1fr max-content;
+  grid-template-columns: auto 1fr max-content max-content;
   align-items: center;
   gap: var(--space-2);
 }
@@ -82,6 +84,14 @@
 
 .tooltip-label {
   @apply caps-legend;
+}
+
+/* The status in words, beside the marker that says the same thing in colour.
+   Quieter than the value: the number is what the reader came for, the status
+   is the part that must still be there without colour. */
+.tooltip-status {
+  @apply caps-legend;
+  color: var(--ink-2);
 }
 
 .tooltip-value {

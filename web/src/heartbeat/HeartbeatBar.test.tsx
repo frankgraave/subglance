@@ -166,11 +166,42 @@ describe("HeartbeatBar", () => {
     track.getBoundingClientRect = () => ({ left: 0, width: WIDTH }) as DOMRect;
     fireEvent.pointerMove(track, { clientX: 40 * 9 + 2 });
     const tip = screen.getByTestId("hb-tooltip");
-    expect(tip.querySelector(".tooltip-unit")!.textContent).toBe("latency");
+    // A unit, not the metric name: "latency" is what the row is called, "ms"
+    // is what its number is in.
+    expect(tip.querySelector(".tooltip-unit")!.textContent).toBe("ms");
+    // Named once in the header, so the value must not repeat it.
+    expect(tip.querySelector(".tooltip-value")!.textContent).toBe("120");
     const total = tip.querySelector(".tooltip-row--total")!;
     expect(total.textContent).toContain("checks");
     // A healthy bucket does not spend a row saying nothing failed.
     expect(tip.textContent).not.toContain("Failed");
+  });
+
+  it("states the column's status in words, not only in the marker colour", () => {
+    render(<HeartbeatBar beats={beats(5)} label="API" width={WIDTH} />);
+    const track = document.querySelector(".hb-track") as HTMLElement;
+    track.getBoundingClientRect = () => ({ left: 0, width: WIDTH }) as DOMRect;
+    fireEvent.pointerMove(track, { clientX: 40 * 9 + 2 });
+    const tip = screen.getByTestId("hb-tooltip");
+    expect(tip.querySelector(".tooltip-status")!.textContent).toBe("Up");
+  });
+
+  /*
+   * While the stream is down the bar drains its colour, but the tooltip is
+   * positioned outside that rule's reach. A column hovered ten minutes after
+   * the connection dropped used to report the last known status in the present
+   * tense, in a colour that still said "up right now".
+   */
+  it("stops the tooltip claiming a current status while the stream is stale", () => {
+    render(<HeartbeatBar beats={beats(5)} label="API" width={WIDTH} stale />);
+    const track = document.querySelector(".hb-track") as HTMLElement;
+    track.getBoundingClientRect = () => ({ left: 0, width: WIDTH }) as DOMRect;
+    fireEvent.pointerMove(track, { clientX: 40 * 9 + 2 });
+    const tip = screen.getByTestId("hb-tooltip");
+    expect(tip.querySelector(".tooltip-status")!.textContent).toBe(
+      "Not updating",
+    );
+    expect(tip.querySelector(".tooltip-marker")).toBeNull();
   });
 
   it("lets the tooltip overhang a narrow track rather than clipping it", () => {

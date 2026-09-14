@@ -12,9 +12,12 @@ import { StateChip, type ChipStatus } from "./Chip";
  *   all end in "ms" spends its width saying the same word three times.
  * - **A full-width divider** under the header, so the header reads as a
  *   caption for the rows rather than as the first of them.
- * - **One row per series**: colour marker, mono caps label, right-aligned
- *   value. Right alignment is what makes a column of numbers comparable at a
- *   glance; the mono role carries the tabular figures (§2.5).
+ * - **One row per series**: colour marker, mono caps label, the status in
+ *   words, right-aligned value. Right alignment is what makes a column of
+ *   numbers comparable at a glance; the mono role carries the tabular figures
+ *   (§2.5). The status is spelled out because the marker is decorative and
+ *   carries its meaning in hue alone, which is no meaning at all in greyscale,
+ *   to a screen reader, or to a red-green colour-blind reader.
  * - **A closing TOTAL row**, separated by its own rule.
  * - **A dashed PARTIAL DATA chip** when the bucket is incomplete.
  *
@@ -37,6 +40,12 @@ export type TooltipRow = {
    * colourless dot beside a coloured one reads as a status of its own.
    */
   marker?: ChipStatus;
+  /**
+   * The same status in words, e.g. "Up" or "Down". Required whenever `marker`
+   * is set: the marker is `aria-hidden` and differs from its neighbours only
+   * by hue, so on its own it states the row's status in colour alone.
+   */
+  status?: string;
 };
 
 export type TooltipProps = {
@@ -87,6 +96,7 @@ export function Tooltip({
                 <span className="tooltip-marker-gap" aria-hidden="true" />
               )}
               <span className="tooltip-label">{row.label}</span>
+              <span className="tooltip-status">{row.status}</span>
               <span className="tooltip-value">{row.value}</span>
             </div>
           ))}
@@ -97,6 +107,7 @@ export function Tooltip({
         <div className="tooltip-row tooltip-row--total">
           <span className="tooltip-marker-gap" aria-hidden="true" />
           <span className="tooltip-label">{total.label}</span>
+          <span className="tooltip-status" />
           <span className="tooltip-value">{total.value}</span>
         </div>
       )}

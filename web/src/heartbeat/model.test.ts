@@ -248,6 +248,37 @@ describe("partial buckets", () => {
    * interval, call that its schedule, and declare itself complete — the
    * failure mode would be worst exactly where the data is worst.
    */
+  /*
+   * A bucket that lost the checks at its *edges* used to shrink its own
+   * yardstick: `expected` came from its first and last surviving check, so the
+   * missing checks at the ends made the window look exactly that much shorter
+   * and the gap cancelled itself out. Both columns then claimed to be
+   * complete — which is the one thing this flag exists to prevent.
+   */
+  it("measures a bucket against its real window, not its surviving checks", () => {
+    // 60 minute-checks over a 80-minute window: minutes 30-49 never arrived,
+    // and the hole sits right on the border between the two columns. Each
+    // column is internally contiguous, so each one looks whole from the
+    // inside while standing for a window it only half covers.
+    const all = beats(80);
+    const straddled = [...all.slice(0, 30), ...all.slice(50)];
+    const slots = toSlots(straddled, 2) as BeatSlot[];
+    expect(slots.map((s) => s.count)).toEqual([30, 30]);
+    // Without the fix both read 30: thirty contiguous checks span 29 intervals.
+    expect(slots.map((s) => s.expected)).toEqual([50, 50]);
+    expect(slots.map((s) => s.partial)).toEqual([true, true]);
+  });
+
+  /*
+   * The newest column is still filling up, so its window ends at its last
+   * check rather than at a border that does not exist yet. Measuring it
+   * against a full column would flag the right-hand bar on every render.
+   */
+  it("does not flag the newest column for being half-filled", () => {
+    const slots = toSlots(beats(105), 2) as BeatSlot[];
+    expect(slots[slots.length - 1].partial).toBe(false);
+  });
+
   it("measures the cadence over the series, not inside the gappy bucket", () => {
     const healthy = beats(100);
     const gappy = beats(100)

@@ -170,10 +170,22 @@ export function expectedChecks(
   return Math.round((to - from) / cadenceMs) + 1;
 }
 
+/**
+ * Aggregates one bucket of checks into a column.
+ *
+ * `bounds` is the window the column *stands for*, which is not the same as the
+ * window its surviving checks span. Deriving the expected count from
+ * `group[0]` and `group[last]` lets a bucket that lost its first and last
+ * checks shrink its own yardstick: twenty missing checks at the edges make the
+ * window look twenty checks shorter, so the gap cancels itself out and the
+ * column claims to be complete. The caller knows where the bucket really
+ * starts and ends — from its neighbours — and passes that in.
+ */
 function aggregate(
   group: Beat[],
   index: number,
   cadenceMs: number | null,
+  bounds?: { from: number; to: number },
 ): BeatSlot {
   const downs = group.filter((b) => !b.ok);
   const latencies = group
@@ -184,7 +196,11 @@ function aggregate(
   const worst = downs.length > 0 ? downs[downs.length - 1] : group[group.length - 1];
   const from = group[0].ts;
   const to = group[group.length - 1].ts;
-  const expected = expectedChecks(from, to, cadenceMs);
+  const expected = expectedChecks(
+    bounds?.from ?? from,
+    bounds?.to ?? to,
+    cadenceMs,
+  );
   return {
     kind: "beat",
     index,
@@ -237,14 +253,38 @@ export function toSlots(beats: Beat[], slotCount: number): Slot[] {
 
   const base = Math.floor(beats.length / slotCount);
   const remainder = beats.length % slotCount;
-  const slots: Slot[] = [];
+  const groups: Beat[][] = [];
   let cursor = 0;
   for (let i = 0; i < slotCount; i++) {
     const size = base + (i < remainder ? 1 : 0);
-    slots.push(aggregate(beats.slice(cursor, cursor + size), i, step));
+    groups.push(beats.slice(cursor, cursor + size));
     cursor += size;
   }
-  return slots;
+
+  return groups.map((group, i) => {
+    // The bucket's real window, taken from where its neighbours stop rather
+    // than from its own surviving checks: a bucket missing the checks at its
+    // edges must not get a shorter window to be measured against.
+    //
+    // The newest bucket is the exception, and deliberately so: it is still
+    // filling up, so its window ends at its last check rather than at a border
+    // that does not exist yet. Without that, every render would flag the
+    // right-hand column as incomplete.
+    const previous = groups[i - 1];
+    const next = groups[i + 1];
+    const from =
+      step !== null && previous !== undefined && previous.length > 0
+        ? previous[previous.length - 1].ts + step
+        : group[0].ts;
+    const to =
+      step !== null && next !== undefined && next.length > 0
+        ? next[0].ts - step
+        : group[group.length - 1].ts;
+    return aggregate(group, i, step, {
+      from: Math.min(from, group[0].ts),
+      to: Math.max(to, group[group.length - 1].ts),
+    });
+  });
 }
 
 /**
