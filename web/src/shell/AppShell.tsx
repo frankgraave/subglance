@@ -34,6 +34,13 @@ export type AppShellProps = {
   onSignOut?: () => void;
   /** The topbar, rendered sticky above the content column. */
   topbar: ReactNode;
+  /**
+   * Focus target for a client-side navigation, put on `<main>`.
+   *
+   * `App` owns it because `App` owns the route: the shell does not know that
+   * a navigation happened, only that something new is in `children`.
+   */
+  mainRef?: RefObject<HTMLElement | null>;
   children: ReactNode;
 };
 
@@ -47,12 +54,29 @@ export function AppShell({
   account,
   onSignOut,
   topbar,
+  mainRef,
   children,
 }: AppShellProps) {
   const drawerOpen = narrow && navOpen;
 
   return (
     <>
+      {/*
+       * The skip link, and the first focusable thing in the document.
+       *
+       * The rail is five links and the topbar is seven controls, so reaching
+       * the monitors with the keyboard cost a dozen Tab presses on every
+       * screen. It is visually hidden until focused — hiding it permanently
+       * would make it a trap for a sighted keyboard user, who would watch
+       * focus vanish for one stop — and it is outside the `inert` wrapper
+       * below on purpose: while the drawer is open there is nothing to skip
+       * to, and a link into an inert region does nothing.
+       */}
+      {!drawerOpen && (
+        <a className="shell-skip" href="#shell-main">
+          Skip to monitors
+        </a>
+      )}
       <div
         className="shell"
         data-collapsed={sidebarCollapsed ? "true" : "false"}
@@ -87,7 +111,20 @@ export function AppShell({
            * navigation, and including it would make "skip to main content"
            * skip to the thing you were trying to skip past.
            */}
-          <main className="shell-content">{children}</main>
+          {/*
+           * `tabIndex={-1}` so a route change can move focus here (see
+           * useRouteFocus) and so the skip link lands somewhere focus can
+           * actually rest. Negative, never 0: this must be a target, not a
+           * stop on the way to the content inside it.
+           */}
+          <main
+            id="shell-main"
+            ref={mainRef}
+            tabIndex={-1}
+            className="shell-content"
+          >
+            {children}
+          </main>
         </div>
       </div>
 

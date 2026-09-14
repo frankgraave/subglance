@@ -41,9 +41,9 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -88,9 +88,9 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -135,9 +135,9 @@ jobs:
           - goos: darwin
             goarch: arm64
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -157,9 +157,9 @@ jobs:
     name: Vulnerability scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -185,9 +185,9 @@ jobs:
     name: Frontend
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: "24"
           cache: npm
@@ -202,15 +202,29 @@ jobs:
       # design document, or if any component grows a literal colour.
       - name: Test
         working-directory: web
-        run: npm test
+        run: npm run test:coverage
 
       - name: Lint
         working-directory: web
         run: npm run lint
 
+      # govulncheck covers the Go half of the binary. The frontend is embedded
+      # in that same artefact, so an unscanned npm dependency reaches users
+      # through a binary whose other half was checked carefully.
+      - name: Audit dependencies
+        working-directory: web
+        run: npm run audit:ci
+
       - name: Typecheck and build
         working-directory: web
         run: npm run build
+
+      # The image has a 30 MB gate in docker.yml; this is the same idea for the
+      # JavaScript that ships inside it. Runs after the build, on the bundle
+      # that build just produced.
+      - name: Bundle budget
+        working-directory: web
+        run: npm run bundle-budget
 
       # Layout checks in a real browser, because jsdom has no layout engine:
       # it reports every element as zero-wide and never evaluates a media
@@ -238,7 +252,7 @@ jobs:
       # the other half, that a binary built *with* the frontend actually
       # serves it. Without this, a broken embed path would stay green until
       # someone downloaded a release and found an empty page.
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true

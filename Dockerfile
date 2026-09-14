@@ -29,7 +29,7 @@
 # --platform=$BUILDPLATFORM: this stage emits platform-independent
 # JavaScript, so building it once natively beats building it twice, one of
 # them under QEMU emulation.
-FROM --platform=$BUILDPLATFORM node:24-alpine AS web
+FROM --platform=$BUILDPLATFORM node:26-alpine AS web
 
 WORKDIR /src/web
 
@@ -51,7 +51,7 @@ RUN npm run build
 #
 # Also native, cross-compiling to the target: Go does that for free and it is
 # roughly an order of magnitude faster than emulating arm64.
-FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS go
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS go
 
 WORKDIR /src
 

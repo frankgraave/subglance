@@ -141,6 +141,25 @@ describe("the app shell", () => {
     );
   });
 
+  it("moves focus into the wall when a route change swaps the shell away", async () => {
+    // Leaving a monitor while the wall is the chosen layout unmounts the
+    // shell's <main> and mounts the wall's own one. Without a focus target on
+    // the wall the route change is silent for a keyboard user: focus stays on
+    // a control in a document that no longer exists.
+    render(<App />);
+    fireEvent.click(await screen.findByRole("link", { name: "api" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Status wall" })).toBeTruthy(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Status wall" }));
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(document.querySelector(".wall")).toBeTruthy());
+    await waitFor(() =>
+      expect(document.activeElement).toBe(document.querySelector(".wall")),
+    );
+  });
+
   it("collapses the sidebar with Ctrl+B and keeps it reachable", async () => {
     render(<App />);
     await screen.findByText("api");

@@ -187,7 +187,7 @@
   place-items: center;
   width: 30px;
   height: 30px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-control);
   border-radius: var(--r-sm);
   background: var(--surface);
   color: var(--ink-2);
@@ -346,7 +346,7 @@
 .shell-signout:hover { background: var(--surface-2); color: var(--ink); }
 
 .shell-signout:focus-visible {
-  outline: 2px solid var(--up);
+  outline: 2px solid var(--accent-border);
   outline-offset: -2px;
 }
 
@@ -363,4 +363,46 @@
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+/*
+ * The skip link (SUB-100). Off-screen until it takes focus, then a normal
+ * control pinned to the top-left corner — the position every implementation
+ * of this pattern uses, because a link that moves when it appears is a link
+ * you have to find.
+ *
+ * `clip-path` rather than `display: none`: a display-none link is not
+ * focusable at all, which is the usual way this pattern is shipped broken.
+ */
+.shell-skip {
+  position: absolute;
+  left: var(--space-3);
+  top: var(--space-3);
+  z-index: 100;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--type-body);
+  line-height: var(--lead-body);
+  text-decoration: none;
+  box-shadow: var(--shadow-float);
+  clip-path: inset(50%);
+}
+
+.shell-skip:focus-visible { clip-path: none; }
+
+/*
+ * `<main>` is a focus target, not a control. A pointer click inside it must
+ * not draw a ring around the entire viewport, so the plain-`:focus` case is
+ * suppressed — but the keyboard case keeps a ring, because after the skip
+ * link or a route change the ring is the only thing that says where focus
+ * landed. Inset, so it reads as an edge of the screen rather than a box
+ * floating past it.
+ */
+.shell-content:focus:not(:focus-visible) { outline: none; }
+.shell-content:focus-visible {
+  outline: 2px solid var(--ink-2);
+  outline-offset: -3px;
 }

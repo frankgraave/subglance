@@ -34,5 +34,35 @@ export default defineConfig({
     // them in here would make a unit-test run depend on a browser download.
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     exclude: ["src/**/*.browser.test.ts", "node_modules/**"],
+
+    /*
+     * Coverage exists for the same reason the Go side has a floor: to stop the
+     * suite thinning out unnoticed. The numbers below are set a little under
+     * what the suite measures today, so ordinary work does not trip them but
+     * deleting a test file does.
+     *
+     * Thresholds are only enforced when a run asks for coverage, so a plain
+     * `npm test` stays fast and CI runs `npm run test:coverage`.
+     */
+    coverage: {
+      provider: "v8",
+      include: ["src/**"],
+      exclude: [
+        // Bootstrap: three lines that mount the app into the real DOM. A test
+        // for it would assert that react-dom works.
+        "src/main.tsx",
+        // Fixtures for the browser layout checks, which run under
+        // vitest.browser.config.ts. This run never imports them, so counting
+        // them here would report 0% for code that is exercised elsewhere.
+        "src/layout/harness/**",
+      ],
+      reporter: ["text-summary", "lcov"],
+      thresholds: {
+        statements: 90,
+        branches: 85,
+        functions: 90,
+        lines: 92,
+      },
+    },
   },
 });

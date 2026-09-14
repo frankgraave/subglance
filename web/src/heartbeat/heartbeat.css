@@ -61,7 +61,7 @@
   border: 1px solid var(--border-hi);
   border-radius: var(--r-md);
   background: var(--surface-2);
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-float);
   pointer-events: none;
   white-space: nowrap;
 }

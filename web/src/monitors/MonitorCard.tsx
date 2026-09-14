@@ -71,7 +71,18 @@ function MonitorCardImpl({ monitor, beatWidth = CARD_BEAT_WIDTH, onOpen }: Monit
           sparkline-shaped substitute would be a second visual language for
           the same fact. */}
       <div className="mon-card-beats">
-        <HeartbeatBar beats={beats} label={name} width={beatWidth} height={30} barWidth={5} gap={3} />
+        {/* Same call as the row (SUB-100): a card list is a list, and a
+            focusable bar per card is a tab stop per card. The card states the
+            status in words, both numbers and the failure reason. */}
+        <HeartbeatBar
+          beats={beats}
+          label={name}
+          width={beatWidth}
+          height={30}
+          barWidth={5}
+          gap={3}
+          interactive={false}
+        />
       </div>
 
       {status === "down" && error ? (

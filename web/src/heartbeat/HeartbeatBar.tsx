@@ -36,6 +36,24 @@ export type HeartbeatBarProps = {
    */
   width?: number;
   className?: string;
+  /**
+   * Whether this bar is the accessible source of the check history.
+   *
+   * Default `true`, which is the detail view: the track takes focus, arrow
+   * keys walk the columns, and a `<table>` in the `figcaption` carries every
+   * slot as text.
+   *
+   * `false` is for list layouts, where the same bar is repeated once per
+   * monitor and all of it turns into cost. Measured on a 200-monitor Rows
+   * render: 402 tab stops, so reaching the last row's link took ~400 Tab
+   * presses, and 5,600 screen-reader-only `<tr>` elements — a DOM three times
+   * the ~11k budget the decision not to virtualise rests on (MonitorRow,
+   * DESIGN.md §10). None of it adds a fact: the row already states status,
+   * latency, uptime and the failure reason in text. So a non-interactive bar
+   * draws the pixels and nothing else, hidden from assistive technology and
+   * out of the tab order, and the detail view keeps the full instrument.
+   */
+  interactive?: boolean;
 };
 
 const formatTime = (ts: number) =>
@@ -121,6 +139,7 @@ export function HeartbeatBar({
   gap = 3,
   width,
   className,
+  interactive = true,
 }: HeartbeatBarProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const measured = useMeasuredWidth(trackRef, width);
@@ -239,21 +258,34 @@ export function HeartbeatBar({
   }, [active, activeSlot, place]);
   const description = describe(label, slots);
 
+  // Hover still works without interactivity: pointing at a column is not a
+  // promise to assistive technology, and it is the one affordance a list bar
+  // can keep for free.
+  const trackProps = interactive
+    ? {
+        tabIndex: 0,
+        role: "group",
+        "aria-label": description,
+        onKeyDown,
+        onFocus: () => setFocused(true),
+        onBlur: () => {
+          setFocused(false);
+          setActive(null);
+        },
+      }
+    : {};
+
   return (
-    <figure className={className} style={{ margin: 0 }}>
+    <figure
+      className={className}
+      style={{ margin: 0 }}
+      aria-hidden={interactive ? undefined : true}
+    >
       <div
         ref={trackRef}
         className="hb-track"
         style={{ height }}
-        tabIndex={0}
-        role="group"
-        aria-label={description}
-        onKeyDown={onKeyDown}
-        onFocus={() => setFocused(true)}
-        onBlur={() => {
-          setFocused(false);
-          setActive(null);
-        }}
+        {...trackProps}
         onPointerMove={(event) => setActive(indexAt(event.clientX))}
         onPointerLeave={() => {
           if (!focused) setActive(null);
@@ -333,8 +365,11 @@ export function HeartbeatBar({
         )}
       </div>
 
-      {/* The load-bearing text alternative. Bounded by the column count, so a
-          500-beat series is still a readable table. */}
+      {/* The load-bearing text alternative, and the reason the pixels may be
+          `aria-hidden`. Bounded by the column count, so a 500-beat series is
+          still a readable table. Dropped entirely in list layouts: one table
+          per monitor is 5,600 rows the row's own text already covers. */}
+      {interactive && (
       <figcaption className="hb-sr-only">
         <table>
           <caption>{description}</caption>
@@ -370,12 +405,15 @@ export function HeartbeatBar({
           </tbody>
         </table>
       </figcaption>
+      )}
 
-      <div aria-live="polite" className="hb-sr-only">
-        {focused && activeSlot && activeSlot.kind === "beat"
-          ? `${formatTime(activeSlot.to)}, ${activeSlot.ok ? "passed" : "failed"}, ${formatLatency(activeSlot.latencyMs)}`
-          : ""}
-      </div>
+      {interactive && (
+        <div aria-live="polite" className="hb-sr-only">
+          {focused && activeSlot && activeSlot.kind === "beat"
+            ? `${formatTime(activeSlot.to)}, ${activeSlot.ok ? "passed" : "failed"}, ${formatLatency(activeSlot.latencyMs)}`
+            : ""}
+        </div>
+      )}
     </figure>
   );
 }

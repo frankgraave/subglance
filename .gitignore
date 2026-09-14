@@ -30,6 +30,9 @@ build/
 bin/
 tmp/
 coverage.out
+
+# Frontend coverage report, written by `npm run test:coverage`.
+web/coverage/
 *.test
 
 # SQLite
@@ -46,3 +49,6 @@ coverage.out
 !internal/webui/dist/
 internal/webui/dist/*
 !internal/webui/dist/.gitkeep
+
+# Coverage output from `npm run test:coverage`.
+web/coverage/

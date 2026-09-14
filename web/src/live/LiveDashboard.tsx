@@ -1,3 +1,4 @@
+import type { RefObject } from "react";
 import { useState } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
@@ -29,6 +30,8 @@ export type LiveDashboardProps = LiveOptions & {
   onExitWall?: () => void;
   /** Opens one monitor's detail view. Provided by the shell, which routes. */
   onOpenMonitor?: (id: string) => void;
+  /** Route-change focus target, forwarded to the wall's own `<main>`. */
+  mainRef?: RefObject<HTMLElement | null>;
 };
 
 export function LiveDashboard({
@@ -37,6 +40,7 @@ export function LiveDashboard({
   instance,
   onExitWall,
   onOpenMonitor,
+  mainRef,
   ...live
 }: LiveDashboardProps) {
   const [query, setQuery] = useState("");
@@ -78,7 +82,7 @@ export function LiveDashboard({
         stale={status === "offline"}
         onExit={onExitWall}
         notice={notice}
-
+        mainRef={mainRef}
       />
     );
   }
