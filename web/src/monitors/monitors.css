@@ -209,6 +209,8 @@
 }
 
 .mon-row[data-status="pending"] { border-left: 2px solid var(--warn); }
+/* Grey, not amber: nothing is in flight for a monitor nobody has pinged. */
+.mon-row[data-status="waiting"] { border-left: 2px solid var(--idle); }
 /* Paused is not trouble and not a gap in the data: someone switched it off.
    A dotted neutral edge says "deliberate" where down and pending say "look at
    this", and it keeps the two apart in greyscale as well as in colour.
@@ -381,6 +383,7 @@
 }
 
 .mon-card[data-status="pending"] { border-left: 2px solid var(--warn); }
+.mon-card[data-status="waiting"] { border-left: 2px solid var(--idle); }
 .mon-card[data-status="paused"] {
   border-left: 2px dotted var(--ink-3);
 }
@@ -554,6 +557,7 @@
 /* Same rule as the row and the card: trouble warms the leading edge. */
 .mon-line[data-status="down"] { border-left: 2px solid var(--down); background: var(--down-dim); }
 .mon-line[data-status="pending"] { border-left: 2px solid var(--warn); }
+.mon-line[data-status="waiting"] { border-left: 2px solid var(--idle); }
 .mon-line[data-status="paused"] {
   border-left: 2px dotted var(--ink-3);
 }
@@ -803,6 +807,48 @@
 .add-result-bad { color: var(--down); }
 
 .add-result-kind { color: var(--ink-3); }
+
+/*
+ * The push URL, shown once.
+ *
+ * Laid out like the form it replaces so the transition does not feel like a
+ * different screen: same field stack, same max width. The one departure is the
+ * warning, which gets a filled block rather than coloured text — this is the
+ * only place in the product where clicking past something destroys data, and
+ * it has to survive being skimmed.
+ */
+.push-reveal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 34rem;
+}
+
+.push-reveal-warn {
+  padding: var(--space-3);
+  border-left: 2px solid var(--warn);
+  border-radius: var(--radius-sm);
+  background: var(--warn-dim);
+  color: var(--ink-1);
+  font-size: var(--type-body);
+  line-height: var(--lead-body);
+}
+
+.push-reveal-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: stretch;
+}
+
+/*
+ * The URL is long and must not be truncated into something that looks copyable
+ * but is not, so the input takes the width and the button keeps its own.
+ */
+.push-reveal-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-mono);
+}
 
 /*
  * The monitor name is a link into its detail view, in every layout.

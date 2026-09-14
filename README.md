@@ -453,6 +453,30 @@ flagged rather than silently dropped. Suppression hides the alert, never the
 record — incidents are written to the database throughout, so history stays
 accurate.
 
+### Repeating an alert nobody answered
+
+One alert at 02:40 that you sleep through leaves the outage unattended until
+morning, which is the scenario a monitor is run for. A confirmed incident that
+nobody has acknowledged is therefore alerted about again, on a schedule that
+grows: after 15 minutes, then an hour, then four hours, then sixteen, then once
+a day. Each reminder says how long the monitor has been down, not only that it
+still is.
+
+The interval is `repeat_after_s` per monitor. It is the delay before the *first*
+reminder; the gaps after it grow from there. Set it to `0` to switch reminders
+off for a monitor.
+
+The gaps grow rather than staying flat on purpose. A monitor that repeats at a
+fixed short interval trains its owner to mute it, and a muted monitor misses the
+next outage too.
+
+Acknowledging an incident (`POST /api/v1/incidents/{id}/ack`) stops the
+reminders without claiming the problem is solved. Resolving, pausing the
+monitor, or the monitor recovering all stop them too, and a flapping monitor
+never gets them — suppression for oscillation is the stronger rule. The schedule
+is stored with the incident, so restarting SubGlance during a long outage
+continues it instead of alerting again from the beginning.
+
 Checks cut short by a shutdown are discarded rather than recorded as failures.
 Otherwise every restart would manufacture an outage on healthy monitors.
 

@@ -82,6 +82,14 @@ web-build: ## Build the dashboard into internal/webui/dist (embedded by `make bu
 web-test: ## Run the frontend suite (token and theme guards)
 	cd web && npm test
 
+.PHONY: web-coverage
+web-coverage: ## Run the frontend suite with coverage and enforce the floor
+	cd web && npm run test:coverage
+
+.PHONY: web-budget
+web-budget: web-build ## Check the built bundle against its size budget
+	cd web && npm run bundle-budget
+
 .PHONY: web-lint
 web-lint: ## Lint the frontend
 	cd web && npm run lint

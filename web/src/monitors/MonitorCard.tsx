@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { HeartbeatBar } from "../heartbeat/HeartbeatBar";
-import { formatLatency, formatUptime } from "./format";
+import { describeTarget, formatLatency, formatUptime } from "./format";
 import { Led } from "./Led";
 import { MonitorLink } from "./MonitorLink";
 import { Unknown } from "./Unknown";
@@ -48,7 +48,7 @@ export type MonitorCardProps = {
 };
 
 function MonitorCardImpl({ monitor, beatWidth = CARD_BEAT_WIDTH, onOpen }: MonitorCardProps) {
-  const { name, status, target, latencyMs, uptime24h, beats, error } = monitor;
+  const { name, status, latencyMs, uptime24h, beats, error } = monitor;
 
   return (
     <li className="mon-card" data-status={status} data-testid={`monitor-card-${monitor.id}`}>
@@ -64,7 +64,7 @@ function MonitorCardImpl({ monitor, beatWidth = CARD_BEAT_WIDTH, onOpen }: Monit
       <h3 className="mon-card-name">
         <MonitorLink id={monitor.id} name={name} onOpen={onOpen} />
       </h3>
-      <p className="mon-card-target">{target}</p>
+      <p className="mon-card-target">{describeTarget(monitor)}</p>
 
       {/* The heartbeat survives the move to the phone unchanged. It is the
           trend half of "status and trend without tapping through", and a

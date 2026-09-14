@@ -139,3 +139,52 @@ describe("monitorsFromApi", () => {
     expect(monitorsFromApi(null)).toEqual([]);
   });
 });
+
+describe("push monitors", () => {
+  const push = (over: Partial<ApiMonitor> = {}): ApiMonitor =>
+    api({
+      type: "push",
+      target: "",
+      status: "pending",
+      last_check: null,
+      latency_ms: null,
+      push_interval_s: 3600,
+      push_grace_s: 300,
+      push_token_prefix: "sgu_abcd",
+      ...over,
+    });
+
+  it("carries the window, so the detail view need not refetch it", () => {
+    expect(fromApi(push()).push).toEqual({
+      intervalS: 3600,
+      graceS: 300,
+      tokenPrefix: "sgu_abcd",
+    });
+  });
+
+  it("leaves push unset for a probed monitor", () => {
+    expect(fromApi(api()).push).toBeUndefined();
+  });
+
+  it("renders a never-pinged push monitor as waiting, not pending", () => {
+    // The API has one word for "no result yet" and it means two things. For a
+    // probed monitor a check is coming; for a push monitor nothing is coming
+    // until somebody wires up the URL, and amber "pending" reads as a monitor
+    // that is failing to start.
+    expect(fromApi(push()).status).toBe("waiting");
+  });
+
+  it("leaves a push monitor that has reported alone", () => {
+    expect(fromApi(push({ status: "up", last_check: "2026-09-11T12:00:00Z" })).status).toBe("up");
+  });
+
+  it("does not turn a pending probed monitor into a waiting one", () => {
+    // The guard has to key on the push window, not on the missing timestamp:
+    // a brand-new HTTP monitor also has no last_check.
+    expect(fromApi(api({ status: "pending", last_check: null })).status).toBe("pending");
+  });
+
+  it("keeps paused ahead of waiting, because a person decided it", () => {
+    expect(fromApi(push({ enabled: false })).status).toBe("paused");
+  });
+});

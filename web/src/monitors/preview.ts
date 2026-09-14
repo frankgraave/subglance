@@ -102,18 +102,39 @@ export async function previewCheck(
   });
 }
 
+/**
+ * What creating a monitor gives back.
+ *
+ * `pushUrl` is present for exactly one response in the life of a push monitor
+ * and is never retrievable afterwards — only a hash is stored. Losing it means
+ * deleting the monitor and making a new one, so it is typed as part of the
+ * create result rather than fetched later, because there is no later.
+ */
+export type CreatedMonitor = {
+  id: string;
+  pushUrl?: string;
+};
+
 /** Creates a monitor. Returns the id the server assigned. */
 export async function createMonitor(
   body: Record<string, unknown>,
   signal?: AbortSignal,
-): Promise<{ id: string }> {
-  const created = await apiJSON<{ id: string | number }>("/api/v1/monitors", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    signal,
-  });
-  return { id: String(created.id) };
+): Promise<CreatedMonitor> {
+  const created = await apiJSON<{ id: string | number; push_url?: string }>(
+    "/api/v1/monitors",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal,
+    },
+  );
+  return {
+    id: String(created.id),
+    ...(typeof created.push_url === "string" && created.push_url !== ""
+      ? { pushUrl: created.push_url }
+      : {}),
+  };
 }
 
 /**

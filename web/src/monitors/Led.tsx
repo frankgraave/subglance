@@ -14,6 +14,7 @@ const LABELS: Record<MonitorStatus, string> = {
   down: "Down",
   pending: "Pending",
   paused: "Paused",
+  waiting: "Waiting",
 };
 
 /**
@@ -39,6 +40,11 @@ const STATE: Record<MonitorStatus, LedState> = {
   // paused by accident was indistinguishable from one that had just started
   // (DESIGN.md rule 4).
   paused: "off",
+  // Grey and filled: the lamp for a monitor with no reading at all. That is
+  // exactly what a push monitor with no report yet is, and it is not amber —
+  // amber means a check is in flight, and no check is running here. Nor is it
+  // hollow: nobody switched this off, it has simply never been pinged.
+  waiting: "idle",
 };
 
 export type LedProps = {

@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { HeartbeatBar } from "../heartbeat/HeartbeatBar";
-import { formatLatency, formatUptime } from "./format";
+import { describeTarget, formatLatency, formatUptime } from "./format";
 import { Led } from "./Led";
 import { MonitorLink } from "./MonitorLink";
 import { Unknown } from "./Unknown";
@@ -34,7 +34,7 @@ export type MonitorRowProps = {
 };
 
 function MonitorRowImpl({ monitor, beatWidth = ROW_BEAT_WIDTH, onOpen }: MonitorRowProps) {
-  const { name, status, target, latencyMs, uptime24h, beats, error } = monitor;
+  const { name, status, latencyMs, uptime24h, beats, error } = monitor;
 
   return (
     <tr className="mon-row" data-status={status} data-testid={`monitor-row-${monitor.id}`}>
@@ -49,7 +49,7 @@ function MonitorRowImpl({ monitor, beatWidth = ROW_BEAT_WIDTH, onOpen }: Monitor
           the row instead of reading a bare number. */}
       <th scope="row" className="mon-cell mon-cell--name">
         <MonitorLink id={monitor.id} name={name} onOpen={onOpen} className="mon-name" />
-        <span className="mon-target">{target}</span>
+        <span className="mon-target">{describeTarget(monitor)}</span>
       </th>
 
       <td className="mon-cell mon-cell--beats">

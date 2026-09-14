@@ -2308,6 +2308,21 @@ components:
           type: string
           format: date-time
           description: When the open incident started.
+        repeat_after_s:
+          type: integer
+          description: |
+            How long a confirmed, unacknowledged incident waits before it is
+            alerted about again. 0 means reminders are off for this monitor.
+            The gaps grow rather than staying flat: each is four times the
+            previous one, capped at 24 hours, so the default of 900 gives
+            15m, 1h, 4h, 16h, then daily. A monitor that repeats at a fixed
+            short interval trains its owner to mute it, and a muted monitor
+            misses the next outage too.
+          anyOf:
+            - const: 0
+            - type: integer
+              minimum: 60
+              maximum: 86400
         uptime_24h:
           type: number
           format: double
@@ -2462,6 +2477,22 @@ components:
           minimum: 1
           maximum: 365
           default: 14
+        repeat_after_s:
+          type: integer
+          description: |
+            Delay before a confirmed incident nobody has acknowledged is
+            alerted about again. Defaults to 900 (15 minutes). Send 0 to
+            disable reminders for this monitor; any other value must be at
+            least 60, because reminding faster than most monitors check would
+            repeat information the first alert already carried. Each later
+            gap is four times the previous one, capped at 24 hours.
+            Acknowledging the incident stops the reminders.
+          anyOf:
+            - const: 0
+            - type: integer
+              minimum: 60
+              maximum: 86400
+          default: 900
         enabled:
           type: boolean
           description: Defaults to true, so a new monitor starts checking immediately.
@@ -2562,6 +2593,18 @@ components:
             had disabled a warning it still gets.
           minimum: 1
           maximum: 365
+        repeat_after_s:
+          type: integer
+          description: |
+            0 disables reminders for this monitor; any other value must be at
+            least 60. Unlike `ssl_warn_days`, 0 is accepted here because it
+            has a meaning rather than being read as "unset". Each later gap is
+            four times the previous one, capped at 24 hours.
+          anyOf:
+            - const: 0
+            - type: integer
+              minimum: 60
+              maximum: 86400
         enabled:
           type: boolean
         capture_response:

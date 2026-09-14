@@ -1,6 +1,6 @@
 import { HeartbeatBar } from "../heartbeat/HeartbeatBar";
 import { describeAge } from "../live/age";
-import { formatLatency, formatUptime, STATUS_LABEL } from "./format";
+import { describePushWindow, formatLatency, formatUptime, STATUS_LABEL } from "./format";
 import { formatDuration, formatMoment } from "./detail";
 import type { Incident, UptimeWindow } from "./detail";
 import { Led } from "./Led";
@@ -72,6 +72,7 @@ export function MonitorDetail({
 }: MonitorDetailProps) {
   const { name, status, target, latencyMs, beats, lastCheck, error: lastError } = monitor;
   const age = describeAge(lastCheck, now);
+  const push = monitor.push;
 
   return (
     <article className="mon-detail" data-status={status} data-conn={stale ? "stale" : "live"}>
@@ -92,7 +93,11 @@ export function MonitorDetail({
         {/* Not a link. The target may be an internal host or a host:port that
             is not a URL at all, and a link that sometimes 404s the user into
             their own infrastructure is worse than text they can copy. */}
-        <p className="mon-detail-target">{target}</p>
+        {/* A push monitor has no address to show. Its window is what it is
+            defined by, so that goes here instead of an empty line. */}
+        <p className="mon-detail-target">
+          {push === undefined ? target : describePushWindow(push.intervalS, push.graceS)}
+        </p>
       </header>
 
       {/*
@@ -117,12 +122,20 @@ export function MonitorDetail({
         <Led status={status} labelled={false} className="mon-detail-led" />
         <strong>{STATUS_LABEL[status]}</strong>
         {status === "down" && lastError ? <> — {lastError}</> : null}
-        {age !== null ? <span className="mon-detail-age"> · checked {age}</span> : null}
+        {status === "waiting" ? (
+          <> — nothing has reported in yet</>
+        ) : null}
+        {age !== null ? (
+          <span className="mon-detail-age">
+            {" "}
+            · {push === undefined ? "checked" : "last reported"} {age}
+          </span>
+        ) : null}
       </p>
 
       <section className="mon-detail-panel" aria-labelledby="mon-detail-beats-title">
         <h2 id="mon-detail-beats-title" className="mon-detail-panel-title">
-          Recent checks
+          {push === undefined ? "Recent checks" : "Recent reports"}
         </h2>
         <div className="mon-detail-beats">
           <HeartbeatBar
@@ -135,7 +148,16 @@ export function MonitorDetail({
           />
         </div>
         {beats.length === 0 ? (
-          <p className="mon-detail-empty">No checks recorded yet.</p>
+          // Two different facts, and only one of them is a problem. A probed
+          // monitor with no checks is a monitor the scheduler has not reached
+          // yet and will. A push monitor with no reports is waiting on a URL
+          // somebody still has to wire up, and saying "no checks recorded"
+          // sends them to look at SubGlance instead of at their crontab.
+          <p className="mon-detail-empty">
+            {push === undefined
+              ? "No checks recorded yet."
+              : "No reports yet. This monitor stays quiet until the job pings its push URL for the first time."}
+          </p>
         ) : (
           <p className="mon-detail-note">
             Last {beats.length} checks, oldest first. Latest latency:{" "}

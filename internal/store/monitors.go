@@ -38,6 +38,11 @@ type Monitor struct {
 	// the checker without a second lookup per result.
 	CaptureResponse bool
 
+	// RepeatAfterS is how long an unacknowledged, confirmed incident waits
+	// before the first reminder. Zero disables reminders for this monitor.
+	// The gaps after the first one grow; see state.ReminderGap.
+	RepeatAfterS int
+
 	// PushToken is the plaintext push URL token. It is set exactly once, by
 	// CreateMonitor, and is never read back from the database — only its
 	// hash is stored. Every other code path sees it empty.
@@ -82,7 +87,7 @@ func (db *DB) ListEnabledMonitors(ctx context.Context) ([]Monitor, error) {
 const monitorColumns = `
 	id, name, type, target, interval_s, timeout_s, retries,
 	method, expected_status, keyword, keyword_mode, follow_redirects,
-	headers_json, body, ssl_warn_days, enabled, capture_response,
+	headers_json, body, ssl_warn_days, enabled, capture_response, repeat_after_s,
 	push_token_prefix, push_interval_s, push_grace_s,
 	created_at, updated_at`
 
@@ -168,7 +173,7 @@ func scanMonitor(s scanner) (Monitor, error) {
 		&m.ID, &m.Name, &m.Type, &m.Target,
 		&m.IntervalS, &m.TimeoutS, &m.Retries,
 		&m.Method, &m.ExpectedStatus, &keyword, &m.KeywordMode, &m.FollowRedirects,
-		&headersJSON, &body, &m.SSLWarnDays, &m.Enabled, &m.CaptureResponse,
+		&headersJSON, &body, &m.SSLWarnDays, &m.Enabled, &m.CaptureResponse, &m.RepeatAfterS,
 		&pushPrefix, &pushEvery, &pushGrace,
 		&created, &updated,
 	)
@@ -236,13 +241,13 @@ func (db *DB) CreateMonitor(ctx context.Context, m Monitor) (Monitor, error) {
 		INSERT INTO monitors (
 			name, type, target, interval_s, timeout_s, retries,
 			method, expected_status, keyword, keyword_mode, follow_redirects,
-			headers_json, body, ssl_warn_days, enabled, capture_response,
+			headers_json, body, ssl_warn_days, enabled, capture_response, repeat_after_s,
 			push_token_hash, push_token_prefix, push_interval_s, push_grace_s,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		m.Name, m.Type, m.Target, m.IntervalS, m.TimeoutS, m.Retries,
 		m.Method, m.ExpectedStatus, nullString(m.Keyword), m.KeywordMode, m.FollowRedirects,
-		headersJSON, nullString(m.Body), m.SSLWarnDays, m.Enabled, m.CaptureResponse,
+		headersJSON, nullString(m.Body), m.SSLWarnDays, m.Enabled, m.CaptureResponse, m.RepeatAfterS,
 		tokenHash, nullString(m.PushTokenPrefix),
 		nullInt(m.PushIntervalS), pushGraceValue(m),
 		now, now,
@@ -812,7 +817,7 @@ func (db *DB) updateMonitor(ctx context.Context, m Monitor, expected []int64) (M
 		m.Name, m.Type, m.Target, m.IntervalS, m.TimeoutS, m.Retries,
 		m.Method, m.ExpectedStatus, nullString(m.Keyword), m.KeywordMode,
 		m.FollowRedirects, headersJSON, nullString(m.Body), m.SSLWarnDays,
-		m.Enabled, m.CaptureResponse,
+		m.Enabled, m.CaptureResponse, m.RepeatAfterS,
 		nullInt(m.PushIntervalS), pushGraceValue(m),
 		next, m.ID,
 	}
@@ -888,7 +893,8 @@ const updateMonitorSetClause = `
 		name = ?, type = ?, target = ?, interval_s = ?, timeout_s = ?, retries = ?,
 		method = ?, expected_status = ?, keyword = ?, keyword_mode = ?,
 		follow_redirects = ?, headers_json = ?, body = ?, ssl_warn_days = ?,
-		enabled = ?, capture_response = ?, push_interval_s = ?, push_grace_s = ?,
+		enabled = ?, capture_response = ?, repeat_after_s = ?,
+		push_interval_s = ?, push_grace_s = ?,
 		updated_at = MAX(?, updated_at + 1)
 	WHERE id = ?`
 
