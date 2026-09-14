@@ -4,12 +4,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/frankgraave/subglance/internal/checker"
 )
 
 // httpSend performs one outbound delivery and classifies the outcome.
@@ -20,6 +24,14 @@ import (
 func httpSend(ctx context.Context, client *http.Client, req *http.Request) error {
 	resp, err := client.Do(req)
 	if err != nil {
+		if errors.Is(err, checker.ErrPrivateTarget) {
+			// The guard refused the address. Nothing about that
+			// improves on the sixth attempt, and retrying would
+			// turn a blocked probe into a slow one instead of a
+			// failed one. Report it permanently so the operator
+			// sees the real reason in the outbox.
+			return fmt.Errorf("delivery blocked: %w", err)
+		}
 		// A transport error is a network that is not working right now:
 		// DNS, connection refused, timeout. All worth another try.
 		return retryable("%w", err)
@@ -132,9 +144,33 @@ const defaultTimeout = 10 * time.Second
 // Redirects are not followed. A webhook endpoint that answers with a redirect
 // is either misconfigured or trying to send the alert somewhere the operator
 // did not name, and quietly following it would hide both.
-func newHTTPClient() *http.Client {
+//
+// The guard is the same one the checkers use, for the same reason: a channel
+// URL is operator-supplied text that this process then connects to, which is
+// the identical exposure a monitor target has. Without it, write access to
+// channels is write access to the host network — a webhook pointed at
+// 169.254.169.254 would read cloud credentials and post them to the outbox's
+// error column. A nil guard means no restriction; that is what tests and a
+// deployment without the checker pipeline get.
+func newHTTPClient(guard *checker.Guard) *http.Client {
+	dialer := &net.Dialer{Timeout: defaultTimeout}
+	if guard != nil {
+		// Control runs after DNS resolution and before connect(2), so
+		// it judges the address the kernel is about to reach. Checking
+		// the hostname instead would leave a DNS-rebinding window.
+		dialer.Control = guard.ControlFunc()
+	}
+
 	return &http.Client{
 		Timeout: defaultTimeout,
+		Transport: &http.Transport{
+			DialContext:           dialer.DialContext,
+			MaxIdleConns:          10,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			ForceAttemptHTTP2:     true,
+		},
 		CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse
 		},

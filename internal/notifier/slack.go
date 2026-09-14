@@ -3,6 +3,8 @@ package notifier
 import (
 	"context"
 	"net/http"
+
+	"github.com/frankgraave/subglance/internal/checker"
 )
 
 // SlackSender posts a Block Kit message to a Slack incoming webhook.
@@ -13,9 +15,9 @@ import (
 // the moment the content mattered most.
 type SlackSender struct{ client *http.Client }
 
-// NewSlackSender builds a Slack channel.
-func NewSlackSender() *SlackSender {
-	return &SlackSender{client: newHTTPClient()}
+// NewSlackSender builds a Slack channel. The guard may be nil.
+func NewSlackSender(guard *checker.Guard) *SlackSender {
+	return &SlackSender{client: newHTTPClient(guard)}
 }
 
 // Validate checks the webhook URL.

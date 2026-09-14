@@ -533,7 +533,7 @@ func TestWebhookPostsTheAlert(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	s := NewWebhookSender()
+	s := NewWebhookSender(nil)
 	err := s.Send(context.Background(), map[string]string{
 		"url":     srv.URL,
 		"headers": "X-Token: secret",
@@ -548,7 +548,7 @@ func TestWebhookPostsTheAlert(t *testing.T) {
 }
 
 func TestWebhookValidateRejectsBadConfig(t *testing.T) {
-	s := NewWebhookSender()
+	s := NewWebhookSender(nil)
 
 	if err := s.Validate(map[string]string{}); err == nil {
 		t.Error("missing url accepted")
@@ -570,7 +570,7 @@ func TestTelegramKeepsTheTokenOutOfErrors(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	s := NewTelegramSender()
+	s := NewTelegramSender(nil)
 	s.apiBase = srv.URL
 
 	const token = "123456:SUPER-SECRET-VALUE"
