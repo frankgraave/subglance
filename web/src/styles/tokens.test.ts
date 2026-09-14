@@ -1448,13 +1448,49 @@ function radiusOf(body: string): string | undefined {
 }
 
 /**
+ * The gap a `padding` shorthand leaves on all four sides, or undefined if it
+ * does not leave the same one on each.
+ *
+ * The shorthand has four forms and every one of them can be uniform:
+ * `var(--space-1)`, `var(--space-1) var(--space-1)`, and the three- and
+ * four-value spellings. Matching only the single-value form let the other
+ * three through unchecked, which is a silent hole in a guard — the rule was
+ * still broken, the parser just stopped looking.
+ *
+ * Asymmetric padding still yields nothing, deliberately: with no single gap
+ * there is no single inner radius, and picking one of the four values would
+ * enforce a rule §2.7 does not state.
+ */
+function uniformGap(body: string): number | undefined {
+  const declared = body.match(/(?:^|[;{\s])padding:\s*([^;}]+)/)?.[1];
+  if (!declared) return undefined;
+
+  const values = declared.trim().split(/\s+/);
+  // CSS shorthand expansion: 1 → all four, 2 → block/inline, 3 → the middle
+  // value repeats for both inline sides, 4 → top right bottom left.
+  const sides =
+    values.length === 1
+      ? [values[0], values[0], values[0], values[0]]
+      : values.length === 2
+        ? [values[0], values[1], values[0], values[1]]
+        : values.length === 3
+          ? [values[0], values[1], values[2], values[1]]
+          : values.length === 4
+            ? values
+            : undefined;
+  if (!sides) return undefined;
+  if (!sides.every((side) => side === sides[0])) return undefined;
+
+  const token = sides[0].match(/^var\((--space-\d+)\)$/)?.[1];
+  return token === undefined ? undefined : SPACE_LADDER.get(token);
+}
+
+/**
  * Outer/inner radius pairs in one stylesheet, as the rule requires them to be.
  *
  * A pair is an element whose selector is a descendant of a padded, rounded
  * one — `.panel .segment` inside `.panel` — where both state a radius. Only a
- * uniform `padding` counts: with asymmetric padding there is no single gap, so
- * there is no single inner radius, and checking one of the four values would
- * be inventing a rule the document does not state.
+ * uniform `padding` counts; see `uniformGap`.
  */
 function concentricPairs(css: string): {
   selector: string;
@@ -1464,10 +1500,9 @@ function concentricPairs(css: string): {
   const blocks = declarationBlocks(css);
   const outers = blocks.flatMap(({ selector, body }) => {
     const radius = radiusOf(body);
-    const padding = body.match(/padding:\s*var\((--space-\d+)\)\s*;/)?.[1];
-    if (!radius || !padding) return [];
+    if (!radius) return [];
     const outer = RADIUS_LADDER.get(radius);
-    const gap = SPACE_LADDER.get(padding);
+    const gap = uniformGap(body);
     if (outer === undefined || gap === undefined) return [];
     return [{ selector, want: outer - gap }];
   });
@@ -1528,14 +1563,41 @@ describe("the concentric radius rule", () => {
     ]);
   });
 
+  it("reads every uniform spelling of the padding shorthand", () => {
+    // All four forms state the same 4px gap, so all four have to produce the
+    // same pair. Only the first was being read before, which meant the other
+    // three could hide a broken inner radius from the guard entirely.
+    const forms = [
+      "var(--space-1)",
+      "var(--space-1) var(--space-1)",
+      "var(--space-1) var(--space-1) var(--space-1)",
+      "var(--space-1) var(--space-1) var(--space-1) var(--space-1)",
+    ];
+    for (const padding of forms) {
+      expect(
+        concentricPairs(`
+          .panel { border-radius: var(--r-sm); padding: ${padding}; }
+          .panel .segment { border-radius: var(--r-sm); }
+        `),
+      ).toEqual([{ selector: ".panel .segment", want: 2, got: 6 }]);
+    }
+  });
+
   it("ignores a container whose padding is not uniform", () => {
     // Four gaps, so no single inner radius. Checking it against one of them
     // would enforce a rule §2.7 does not state.
-    expect(
-      concentricPairs(`
-        .panel { border-radius: var(--r-sm); padding: var(--space-1) var(--space-2); }
-        .panel .segment { border-radius: var(--r-sm); }
-      `),
-    ).toEqual([]);
+    const asymmetric = [
+      "var(--space-1) var(--space-2)",
+      "var(--space-1) var(--space-1) var(--space-2)",
+      "var(--space-1) var(--space-1) var(--space-1) var(--space-2)",
+    ];
+    for (const padding of asymmetric) {
+      expect(
+        concentricPairs(`
+          .panel { border-radius: var(--r-sm); padding: ${padding}; }
+          .panel .segment { border-radius: var(--r-sm); }
+        `),
+      ).toEqual([]);
+    }
   });
 });

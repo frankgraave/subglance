@@ -53,6 +53,26 @@ function computed(selector: string, property: string): Promise<string> {
   );
 }
 
+/**
+ * The rgb() a token resolves to in the theme the page is actually in.
+ *
+ * Comparing against a literal would pin one theme: the headless browser runs
+ * in light, where `--ink-2` is #5c6165, while the dark value is #9ba1a6. The
+ * decision under test is the token, not either of its two values, so the token
+ * is what gets resolved — through a probe element, because a custom property
+ * reads back as its declared text rather than as a computed colour.
+ */
+function resolved(token: string): Promise<string> {
+  return page.evaluate((name: string) => {
+    const probe = document.createElement("span");
+    probe.style.color = `var(${name})`;
+    document.body.append(probe);
+    const value = getComputedStyle(probe).color;
+    probe.remove();
+    return value;
+  }, token);
+}
+
 describe("the mono role reaches the pixels", () => {
   it("gives a latency cell lined-up figures and a slashed zero", async () => {
     // The whole point of the role: this cell asked for the mono family and got
@@ -94,11 +114,15 @@ describe("the caps legend reaches the pixels", () => {
     expect(await computed(".mon-head", "line-height")).toBe("12px");
   });
 
-  it("no longer renders it at a tone below the text floor", async () => {
-    // The measured reason for the change. `--ink-4` in dark is #3d4347; if the
-    // role failed to apply, this is the colour that would come back.
+  it("renders it at the one tone that clears the text floor", async () => {
+    // Asserted positively, because the decision was a specific tone and not
+    // merely "not the old one": `--ink-4` (1.90:1) is what comes back if the
+    // role fails to apply, but `--ink-3` measures 3.37:1 and is also below the
+    // 4.5:1 that 12px text owes. `--ink-2` (7.31:1 dark, 6.26:1 light) is the
+    // first rung that clears it, so that is what this pins.
     const colour = await computed(".mon-head", "color");
-    expect(colour).not.toBe("rgb(61, 67, 71)");
+    expect(colour).toBe(await resolved("--ink-2"));
+    expect(colour).not.toBe(await resolved("--ink-3"));
   });
 });
 

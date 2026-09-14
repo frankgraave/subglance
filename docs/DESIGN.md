@@ -352,7 +352,7 @@ or written into the allow-list in `tokens.test.ts` with a reason.
 rounded thing, the inner radius is the outer radius minus the padding between
 them. Concentric corners stay parallel; equal ones do not, and the gap between a
 control and the panel around it visibly pinches at the corners. A segmented
-control with `--r-xs` padding inside an `--r-sm` shell therefore has an inner
+control with `--space-1` padding inside an `--r-sm` shell therefore has an inner
 radius of `6 − 4 = 2px`, which is `--r-2xs`. `tokens.test.ts` asserts it wherever
 a rule states both an outer radius and its padding, because this is the kind of
 rule that is obeyed once and then quietly broken by the next component.
