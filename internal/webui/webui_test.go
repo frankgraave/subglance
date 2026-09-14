@@ -25,11 +25,12 @@ const indexHTML = `<!doctype html>
 // builtFS is what an embedded frontend looks like after a real build.
 func builtFS() fs.FS {
 	return fstest.MapFS{
-		"index.html":              {Data: []byte(indexHTML)},
-		"assets/index-abc123.js":  {Data: []byte("console.log(1)")},
-		"assets/index-abc123.css": {Data: []byte(":root{}")},
-		"favicon.svg":             {Data: []byte("<svg/>")},
-		"nested/page/index.html":  {Data: []byte("nested")},
+		"index.html":                  {Data: []byte(indexHTML)},
+		"assets/index-abc123.js":      {Data: []byte("console.log(1)")},
+		"assets/index-abc123.css":     {Data: []byte(":root{}")},
+		"fonts/Face-1.0-subset.woff2": {Data: []byte("wOF2")},
+		"favicon.svg":                 {Data: []byte("<svg/>")},
+		"nested/page/index.html":      {Data: []byte("nested")},
 	}
 }
 
@@ -140,6 +141,39 @@ func TestMissingAssetDoesNotServeHTML(t *testing.T) {
 	rec := get(t, h, http.MethodGet, "/assets/index-gone.js")
 	if rec.Code == http.StatusOK && strings.Contains(rec.Body.String(), `id="root"`) {
 		t.Error("a missing hashed asset was answered with the SPA shell")
+	}
+}
+
+// TestMissingFontDoesNotServeHTML is the same trap wearing quieter clothes.
+//
+// A browser handed an HTML document where it asked for a typeface rejects it
+// and falls back to a system face, so the product renders in the wrong type on
+// every machine and nothing anywhere says so — which is precisely the failure
+// the self-hosted faces were added to end. A 404 names the file instead.
+func TestMissingFontDoesNotServeHTML(t *testing.T) {
+	h := handlerFor(builtFS(), apiNotFound())
+
+	rec := get(t, h, http.MethodGet, "/fonts/Face-9.9-subset.woff2")
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("missing font answered %d, want 404", rec.Code)
+	}
+	if strings.Contains(rec.Body.String(), `id="root"`) {
+		t.Error("a missing font was answered with the SPA shell")
+	}
+}
+
+// TestFontsAreServedAndRevalidated pins the caching side of that. A font file
+// names its upstream release, not its content, so a future subset under the
+// same name must not be masked by a year-long cache the way a hashed asset is.
+func TestFontsAreServedAndRevalidated(t *testing.T) {
+	h := handlerFor(builtFS(), apiNotFound())
+
+	rec := get(t, h, http.MethodGet, "/fonts/Face-1.0-subset.woff2")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("font answered %d, want 200", rec.Code)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-cache" {
+		t.Errorf("font Cache-Control = %q, want no-cache", got)
 	}
 }
 

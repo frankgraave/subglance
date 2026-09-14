@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./styles/tokens.css";
+@import "./styles/fonts.css";
 
 /*
  * The two face roles (DESIGN.md §2.5).
@@ -21,6 +22,10 @@
   font-variant-ligatures: var(--ligatures-sans);
   font-variant-numeric: var(--numeric-sans);
   text-rendering: var(--render-sans);
+  /* Pinned rather than left to the browser (§2.5). Which features an engine
+     turns on by default differs between engines, so a page that looks right
+     in one renders with different figures in another. */
+  font-feature-settings: var(--feat-sans);
 }
 
 @utility face-mono {
@@ -28,6 +33,10 @@
   font-variant-ligatures: var(--ligatures-mono);
   font-variant-numeric: var(--numeric-mono);
   text-rendering: var(--render-mono);
+  /* Pinned rather than left to the browser (§2.5). Which features an engine
+     turns on by default differs between engines, so a page that looks right
+     in one renders with different figures in another. */
+  font-feature-settings: var(--feat-mono);
 }
 /*
  * The caps legend (DESIGN.md §2.5).
@@ -108,7 +117,10 @@
     outline-offset: 2px;
   }
 
-  /* Anything measurable is mono so digits line up in a column. */
+  /* Anything measurable is mono so digits line up in a column. The face is
+     monospaced, so that alignment is a property of the file rather than a
+     feature that has to be asked for; the features it does carry are the
+     character sets that keep similar glyphs apart (§2.5). */
   code, kbd, samp, pre {
     @apply face-mono;
   }

@@ -43,6 +43,12 @@ const indexPath = "index.html"
 // forever; anything outside it cannot.
 const assetPrefix = "assets/"
 
+// fontPrefix is the directory the self-hosted webfonts live in. Their names
+// carry the upstream release they were built from rather than a content hash,
+// so they get the same "this is a file, not a page" treatment as assets but
+// not the same forever-cache.
+const fontPrefix = "fonts/"
+
 // immutableCacheControl is the standard "this URL can never mean anything
 // else" answer: one year, and no revalidation even on a forced reload.
 const immutableCacheControl = "public, max-age=31536000, immutable"
@@ -196,12 +202,18 @@ func handlerFor(files fs.FS, apiNotFound http.Handler) http.Handler {
 
 		f, err := files.Open(name)
 		if err != nil {
-			if strings.HasPrefix(name, assetPrefix) {
+			if strings.HasPrefix(name, assetPrefix) || strings.HasPrefix(name, fontPrefix) {
 				// A hashed asset that is not here is a stale document asking
 				// for a bundle from an older build, not a page. Answering it
 				// with the shell would make the browser try to execute HTML
 				// as a module, and the console error would point at the
 				// bundle instead of at the document that asked for it.
+				//
+				// A missing font is the same mistake in a quieter form: the
+				// browser would reject a document served as a typeface and
+				// fall back to a system face, so the product would silently
+				// render in the wrong type — exactly the failure the
+				// self-hosted faces exist to end. A 404 says which file.
 				http.NotFound(w, r)
 				return
 			}

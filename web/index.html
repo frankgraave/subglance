@@ -5,6 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SubGlance</title>
     <!--
+      The two faces the interface is set in, preloaded.
+
+      They are declared with `font-display: block`, so the browser holds text
+      back until they land rather than painting it twice. Discovering them only
+      after the stylesheet has parsed would make that wait visible; preloading
+      puts them in the first round trip, alongside the JavaScript. Same origin,
+      so no `crossorigin` value other than anonymous would work for a font.
+      Keep in step with src/styles/fonts.css — a renamed file here is a silent
+      wasted download, not an error.
+    -->
+    <link
+      rel="preload"
+      href="/fonts/InterVariable-4.1-subset.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/CommitMono-1.143-400-subset.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <!--
       Theme before first paint.
 
       React cannot do this: by the time it mounts, the browser has already

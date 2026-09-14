@@ -16,8 +16,35 @@
  */
 
 :root {
-  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  /* The product ships both faces itself; see styles/fonts.css. The stacks
+     behind them are the fallback for the seconds before the file lands and for
+     an install where it genuinely fails to. */
+  --font-sans: "InterVariable", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "CommitMono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Layout features, pinned per role rather than left to the browser's
+     defaults, which differ per engine and per face. Verified against the
+     shipped files, not copied from a specimen page.
+
+     The sans keeps only what is structurally necessary — contextual
+     alternates, glyph composition, localised forms, kerning — plus `cv01`,
+     the face's alternate figure one, which carries a foot serif so a bare `1`
+     cannot be read as a lowercase `l` in a monitor name. Everything
+     discretionary is therefore off, including `tnum` and `zero`: the sans sets
+     words and proportional figures read better in them, because anything
+     measurable is set in the mono instead (§2.5).
+
+     The mono takes the opposite position. `ss01`-`ss05` are the face's
+     contextual sets for code-like text — arrow, comparison and equality
+     sequences are drawn as one mark rather than two colliding ones, which is
+     what makes a status line or a header value scan. `cv01` is its
+     single-storey `a`, `cv05` a narrower `@`, `cv06` straightened `6`/`9`, and
+     `cv11` the alternate `1`, all chosen so characters that differ by a stroke
+     are told apart at 13px. Figures need no `tnum`: the face is monospaced, so
+     every figure is already one column wide. */
+  --feat-sans: "calt" 1, "ccmp" 1, "locl" 1, "kern" 1, "cv01" 1;
+  --feat-mono: "ss01" 1, "ss02" 1, "ss03" 1, "ss04" 1, "ss05" 1,
+               "cv01" 1, "cv05" 1, "cv06" 1, "cv11" 1;
 
   /* A face is a configuration, not a family name. Both faces fall back to a
      system font on most machines, so anything spelled as an OpenType feature
@@ -108,9 +135,11 @@
      "prose" ratio. Whole-pixel and on the grid like the rest. */
   --lead-prose: 20px;
 
-  /* Weight. Three steps, §2.5. The middle step is not a rounding artefact:
-     Geist ships a real 450, which is what lets a monitor's name separate from
-     the metadata beside it without being promoted to a heading. */
+  /* Weight. Three steps, §2.5. The middle step is not a rounding artefact: the
+     sans is a variable face with a continuous weight axis and 450 is a real
+     instance on it (verified against the shipped file: the axis runs 400-600),
+     which is what lets a monitor's name separate from the metadata beside it
+     without being promoted to a heading. */
   --weight-plain: 400;
   --weight-mid: 450;
   --weight-strong: 500;
