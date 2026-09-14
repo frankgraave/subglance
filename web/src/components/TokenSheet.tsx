@@ -8,6 +8,15 @@
  * is visible rather than theoretical.
  */
 
+import {
+  CountChip,
+  EmptyAvatar,
+  IconTile,
+  MetaChip,
+  StateChip,
+  StatusChip,
+} from "./Chip";
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="mb-10">
@@ -105,6 +114,24 @@ export function TokenSheet() {
               {r.replace("rounded-", "")}
             </div>
           ))}
+        </div>
+      </Section>
+
+      {/* The five chip kinds together, because the rule that holds them apart
+          (DESIGN.md §8.1 — dashed means "about the data", solid means "is the
+          data") is only judgeable side by side. Rendering them here is also
+          what lets the browser test measure a real fill against its label. */}
+      <Section title="Chips">
+        <div className="flex flex-wrap items-center gap-3">
+          <StatusChip status="up">Up</StatusChip>
+          <StatusChip status="warn">Slow</StatusChip>
+          <StatusChip status="down">Down</StatusChip>
+          <StatusChip status="idle">Paused</StatusChip>
+          <CountChip>12</CountChip>
+          <MetaChip label="Region" value="eu-west" />
+          <StateChip>Partial data</StateChip>
+          <EmptyAvatar />
+          <IconTile>@</IconTile>
         </div>
       </Section>
 

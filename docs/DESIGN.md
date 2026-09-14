@@ -94,6 +94,23 @@ mode, because the dark originals are unreadable on white.
 Every status colour has a `-dim` variant for badge and row backgrounds
 (`--up-dim`, `--warn-dim`, `--down-dim`).
 
+**The label on a filled status mark.** A status badge fills itself with its own
+status colour, and the ink scale is wrong on that fill: `--ink` measures 1.59:1
+on `--up` in dark, so the word naming the status would be the least readable
+thing in the row it explains. Each status gets an `--on-*` pair instead,
+measured per theme.
+
+| Token | Dark | Light | Measured on its fill |
+|---|---|---|---|
+| `--on-up` | `#08090a` | `#08090a` | 10.37:1 dark, 5.29:1 light |
+| `--on-warn` | `#08090a` | `#ffffff` | 11.94:1 dark, 5.02:1 light |
+| `--on-down` | `#08090a` | `#ffffff` | 5.43:1 dark, 4.70:1 light |
+| `--on-idle` | `#e8eaec` | `#16181a` | 6.59:1 dark, 10.45:1 light |
+
+These are only for a *solid* status fill. On a `-dim` background the ink scale
+is still the right answer — the dim variants sit within 1.2:1 of `--surface`
+precisely so ordinary text keeps working on them.
+
 **Colour never stands alone.** Roughly 8% of men can't reliably tell red from
 green — for a product built around red-versus-green that isn't an edge case. So
 status is always carried twice: colour plus position (broken sorts to the top),
@@ -837,6 +854,38 @@ with `--space-1` of padding, so a segment is `6 − 4 = 2px`, which is `--r-2xs`
 This is the first component in the product that nests a radius inside a padded
 one, and it is the case the concentric guard in `tokens.test.ts` was landed
 for.
+
+### 8.1 The chip family
+
+Five kinds, and one rule holds them apart:
+
+**A dashed edge means the chip is *about* the data; a solid one means the chip
+*is* data.** Incomplete, absent, or not yet assigned. The product already had
+this signal available and used it nowhere, which is why a bucket with two
+readings in it and a bucket with forty looked identical.
+
+| Kind | Drawn | Says |
+|---|---|---|
+| status | filled with its own status colour, label from `--on-*` | this is up / down / slow |
+| count | neutral fill, mono, tabular | how many of the thing beside it |
+| meta | label and value split by an internal divider | one named fact |
+| state | **dashed** border, no fill | something about the data: partial, missing |
+| empty avatar | **dashed** circle | nobody is assigned |
+
+The status badge does not take its label colour from the ink scale — see §2.3.
+The metadata chip splits label from value with a 1px divider rather than a
+colon, because a row of them is then scanned by finding the same vertical line
+in each instead of parsing punctuation.
+
+### 8.2 The icon tile
+
+32x32, radius `--r-sm`, filled neutral, **no border**. It anchors the left of a
+card header. The border is omitted deliberately: the tile is a background for a
+glyph, and an edge around it competes with the card's own edge two pixels away.
+
+The glyph inside is hidden from assistive technology unless it is the only
+thing saying what the row is. A tile beside a monitor's name that announces
+"globe" adds a word carrying no information.
 
 ---
 

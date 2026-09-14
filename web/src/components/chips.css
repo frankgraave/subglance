@@ -1,0 +1,147 @@
+/*
+ * The five chip kinds and the icon tile (DESIGN.md §8.1, §8.2).
+ *
+ * One pattern holds these five apart, and it is worth stating before the
+ * rules: **a dashed edge means the chip is about the data rather than being
+ * the data.** Incomplete, absent, or not yet assigned. Solid means a fact.
+ * That is a signal the product already had available and used nowhere, so
+ * "no data yet" and "0 ms" were drawn identically and only the text told them
+ * apart.
+ *
+ * The five, and what decides which one you reach for:
+ *
+ *   status   a status, filled with its own status colour
+ *   count    a number qualifying the control it sits in
+ *   meta     a label and its value, split by an internal divider
+ *   state    a fact ABOUT the data — dashed, never filled
+ *   avatar   a person-shaped hole — dashed circle, nobody assigned
+ */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  white-space: nowrap;
+}
+
+/*
+ * The status badge.
+ *
+ * Filled with its own status colour, and the label on it comes from the
+ * `--on-*` pair rather than the ink scale (§2.3): `--ink` measures 1.59:1 on
+ * `--up`, so the word naming the status would have been the least readable
+ * thing in the row it explains.
+ *
+ * Mono caps at the smallest step, like every other label in the product, so a
+ * badge does not out-shout the monitor name beside it. The border is the fill
+ * one step lighter only where a role token exists for it; otherwise the fill
+ * carries the whole shape.
+ */
+.chip--status {
+  @apply caps-legend;
+  border-color: transparent;
+}
+
+.chip--status[data-status="up"] { background: var(--up); color: var(--on-up); }
+.chip--status[data-status="warn"] { background: var(--warn); color: var(--on-warn); }
+.chip--status[data-status="down"] { background: var(--down); color: var(--on-down); }
+.chip--status[data-status="idle"] { background: var(--idle); color: var(--on-idle); }
+
+/*
+ * The count chip.
+ *
+ * A number qualifying the thing it sits inside — "Rows 12" — so it takes a
+ * neutral fill and stays in the ink scale. Mono because it is measurable, and
+ * tabular through the face role, so a count that ticks 9 -> 10 does not shove
+ * the label beside it.
+ */
+.chip--count {
+  @apply face-mono;
+  font-size: var(--type-section);
+  line-height: var(--lead-section);
+  padding: 0 var(--space-1);
+  background: var(--surface-hi);
+  color: var(--ink-2);
+}
+
+/*
+ * The metadata chip: a label and its value in one object, split by an
+ * internal divider rather than by a colon and a space. The divider is what
+ * makes a row of them readable at a glance — the eye finds the same vertical
+ * line in every chip instead of parsing punctuation.
+ */
+.chip--meta {
+  gap: 0;
+  padding: 0;
+  border-color: var(--border);
+  color: var(--ink-2);
+}
+
+.chip--meta .chip-label {
+  @apply caps-legend;
+  padding: var(--space-1) var(--space-2);
+}
+
+.chip--meta .chip-value {
+  @apply face-mono;
+  font-size: var(--type-section);
+  line-height: var(--lead-section);
+  padding: var(--space-1) var(--space-2);
+  border-left: 1px solid var(--border);
+  color: var(--ink);
+}
+
+/*
+ * The meta-state chip: dashed, never filled.
+ *
+ * This is the one that earns the dashed rule. PARTIAL DATA on a heartbeat
+ * bucket, NOT CHECKED YET on a fresh monitor: statements about the data, not
+ * readings of it. Filling it would make it look like a status, which is the
+ * confusion the whole convention exists to prevent.
+ */
+.chip--state {
+  @apply caps-legend;
+  border-style: dashed;
+  border-color: var(--border-hi);
+  background: none;
+}
+
+/*
+ * The empty avatar: a dashed circle where a person would be.
+ *
+ * Same sentence as the meta-state chip in a different shape — nobody is
+ * assigned. A filled grey circle reads as a user whose picture failed to load,
+ * which is a different and wrong statement.
+ *
+ * `50%` rather than a radius step: this is a circle, not a rounded box, and a
+ * ladder value would have to be recomputed every time the size changed.
+ */
+.chip-avatar {
+  display: inline-block;
+  width: var(--space-6);
+  height: var(--space-6);
+  border: 1px dashed var(--border-hi);
+  border-radius: 50%;
+}
+
+/*
+ * The icon tile.
+ *
+ * 32x32, filled neutral, no border, and it anchors the left of a card header.
+ * No border on purpose: the tile is a background for the glyph, and an edge
+ * around it would compete with the card's own edge two pixels away.
+ */
+.icon-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--space-8);
+  height: var(--space-8);
+  border-radius: var(--r-sm);
+  background: var(--surface-hi);
+  color: var(--ink-2);
+}

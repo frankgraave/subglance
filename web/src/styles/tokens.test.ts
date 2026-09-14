@@ -1618,3 +1618,186 @@ describe("the concentric radius rule", () => {
     }
   });
 });
+
+/**
+ * SUB-106: the chip family (§8.1).
+ *
+ * Two things here fail silently and so are asserted rather than written down.
+ *
+ * The first is the label on a filled status badge. `--ink` measures 1.59:1 on
+ * `--up` in dark; a badge painted that way is legible to whoever wrote it on
+ * whatever monitor they wrote it on, and the CI has no opinion. The `--on-*`
+ * pair is the measured answer, and the guard is that a solid status fill uses
+ * it and nothing else does.
+ *
+ * The second is the dashed convention. A dashed edge means the chip is *about*
+ * the data — partial, absent, unassigned — and a solid one means it *is* data.
+ * That distinction lives entirely in one character of one declaration, so the
+ * next person to add a chip has nothing stopping them from filling the dashed
+ * one and collapsing the two meanings back together.
+ */
+
+/** The `--on-*` label tokens, by the status they sit on. */
+const STATUS_LABEL_TOKENS = ["--on-up", "--on-warn", "--on-down", "--on-idle"];
+
+/** Every rule under web/src, with its file, keyed for reporting. */
+function cssRules(): { path: string; selector: string; body: string }[] {
+  const found: { path: string; selector: string; body: string }[] = [];
+  for (const file of sourceFiles(webSrc)) {
+    if (!file.endsWith(".css")) continue;
+    const path = relative(repoRoot, file);
+    for (const block of declarationBlocks(readFileSync(file, "utf8"))) {
+      found.push({ path, selector: block.selector, body: block.body });
+    }
+  }
+  return found;
+}
+
+/**
+ * True when a rule types something: it sets a text colour, a size, or applies
+ * a face role. A status fill that types nothing is a mark — a lamp, a dot —
+ * and has no label to make readable.
+ */
+function carriesText(body: string): boolean {
+  const clean = stripComments(body);
+  return (
+    /(?:^|[;{\s])color\s*:/.test(clean) ||
+    /(?:^|[;{\s])font-size\s*:/.test(clean) ||
+    /@apply[^;]*(?:face-(?:sans|mono)|caps-legend)/.test(clean)
+  );
+}
+
+/** The value of one property in a declaration block, comments stripped. */
+function valueOf(body: string, property: string): string | undefined {
+  const match = new RegExp(
+    `(?:^|[;{\\s])${property}\\s*:\\s*([^;{}]+)`,
+  ).exec(stripComments(body));
+  return match?.[1].trim();
+}
+
+describe("a filled status mark labels itself with the measured pair (§2.3)", () => {
+  it("defines all four label tokens in both themes", () => {
+    for (const theme of ["dark", "light"] as const) {
+      const block = declarations(themeBlock(theme));
+      for (const name of STATUS_LABEL_TOKENS) {
+        expect(block.get(name), `${theme} ${name}`).toMatch(/^#[0-9a-f]{6}$/i);
+      }
+    }
+  });
+
+  it("uses the values documented in the §2.3 table", () => {
+    const start = designMd.indexOf("**The label on a filled status mark.**");
+    expect(start, "missing the §2.3 label table").toBeGreaterThan(-1);
+    const body = designMd.slice(start, designMd.indexOf("\n### ", start));
+    const rows = [
+      ...body.matchAll(
+        /\|\s*`(--on-[a-z]+)`\s*\|\s*`(#[0-9a-f]+)`\s*\|\s*`(#[0-9a-f]+)`\s*\|/gi,
+      ),
+    ];
+    expect(rows.length, "expected four label rows").toBe(4);
+    for (const [, name, dark, light] of rows) {
+      expect(declarations(themeBlock("dark")).get(name), `dark ${name}`).toBe(
+        dark.toLowerCase(),
+      );
+      expect(declarations(themeBlock("light")).get(name), `light ${name}`).toBe(
+        light.toLowerCase(),
+      );
+    }
+  });
+
+  it("pairs every solid status fill that carries text with its own label token", () => {
+    // The failure this catches: a chip filled `--down` whose text stays on the
+    // ink scale. It reads as a design choice in the diff and as unreadable
+    // text on screen.
+    //
+    // A fill with no text on it is not a label and is excluded: `.led` and
+    // `.conn-badge-dot` are the status colour drawn as a *mark*, a 7px lamp
+    // with no glyph in it, and demanding a label colour there would mean
+    // declaring a text colour for text that does not exist. So the guard asks
+    // whether the rule types anything — a colour, a size, a face role — and
+    // only then insists the colour be the measured one.
+    const offenders: string[] = [];
+    for (const { path, selector, body } of cssRules()) {
+      const background = valueOf(body, "background");
+      const fill = background?.match(/^var\(--(up|warn|down|idle)\)$/);
+      if (!fill) continue;
+      if (!carriesText(body)) continue;
+      const colour = valueOf(body, "color");
+      if (colour === `var(--on-${fill[1]})`) continue;
+      offenders.push(`${path} | ${selector} | ${colour ?? "no colour"}`);
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps the label tokens off anything that is not a solid status fill", () => {
+    // The mirror failure: `--on-down` used as ordinary text colour because it
+    // happened to look right in one theme. It is only measured against its
+    // own fill, so anywhere else it is an unmeasured colour.
+    const offenders: string[] = [];
+    for (const { path, selector, body } of cssRules()) {
+      const used = STATUS_LABEL_TOKENS.filter((name) =>
+        new RegExp(`var\\(${name}\\)`).test(stripComments(body)),
+      );
+      if (used.length === 0) continue;
+      const background = valueOf(body, "background");
+      const fill = background?.match(/^var\(--(up|warn|down|idle)\)$/);
+      if (fill && used.length === 1 && used[0] === `--on-${fill[1]}`) continue;
+      offenders.push(`${path} | ${selector} | ${used.join(" ")}`);
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("bites on a status fill wearing ink, and on a label token off its fill", () => {
+    const wrongLabel = declarationBlocks(`
+      .chip--bad { background: var(--down); color: var(--ink); }
+    `)[0];
+    expect(valueOf(wrongLabel.body, "color")).toBe("var(--ink)");
+    expect(valueOf(wrongLabel.body, "background")).toBe("var(--down)");
+
+    const strayToken = declarationBlocks(`
+      .note { color: var(--on-down); }
+    `)[0];
+    expect(valueOf(strayToken.body, "background")).toBeUndefined();
+    expect(/var\(--on-down\)/.test(strayToken.body)).toBe(true);
+  });
+});
+
+describe("a dashed edge means the chip is about the data (§8.1)", () => {
+  it("states the convention in docs/DESIGN.md", () => {
+    expect(designMd).toContain("### 8.1 The chip family");
+    expect(designMd).toContain("### 8.2 The icon tile");
+  });
+
+  it("never fills a rule that draws a dashed edge", () => {
+    // A dashed border plus a fill is the two meanings collapsed back into one:
+    // it draws as a status badge and claims to be a statement about the data.
+    // The row stripes are excluded by subject — they are an edge on a row, not
+    // a chip, and `.mon-row` carries a fill for a different reason entirely.
+    const offenders: string[] = [];
+    for (const { path, selector, body } of cssRules()) {
+      if (!/\bchip\b|chip--|chip-avatar/.test(selector)) continue;
+      const clean = stripComments(body);
+      if (!/border(?:-[a-z]+)?(?:-style)?:[^;]*\bdashed\b/.test(clean)) continue;
+      const background = valueOf(body, "background");
+      if (!background || background === "none" || background === "transparent") {
+        continue;
+      }
+      offenders.push(`${path} | ${selector} | background: ${background}`);
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps the two dashed kinds dashed", () => {
+    // The convention only works if the kinds that carry it actually carry it.
+    // Losing the dash is a one-character edit that no reviewer would query.
+    const dashed = new Set<string>();
+    for (const { selector, body } of cssRules()) {
+      if (!/border(?:-[a-z]+)?(?:-style)?:[^;]*\bdashed\b/.test(stripComments(body))) {
+        continue;
+      }
+      dashed.add(selector);
+    }
+    expect([...dashed]).toContain(".chip--state");
+    expect([...dashed]).toContain(".chip-avatar");
+  });
+});
