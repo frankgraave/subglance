@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/frankgraave/subglance/internal/trustedproxy"
 	"github.com/frankgraave/subglance/internal/watchdog"
 )
 
@@ -54,6 +55,18 @@ type Config struct {
 	// addresses. Off by default: without it, a user-supplied URL turns
 	// SubGlance into an SSRF proxy into the host network (see SUB-18).
 	AllowPrivateTargets bool
+
+	// TrustedProxies lists the peers whose X-Forwarded-For and X-Real-Ip
+	// headers may be believed, as a comma-separated list of addresses and
+	// CIDR blocks. Empty means believe nobody.
+	//
+	// Empty by default because those headers are set by whoever sends them.
+	// Trusting one unconditionally means a caller can name its own address,
+	// and the login rate limiter keys on that address — so rotating the
+	// header per request is credential spraying with the limiter off. An
+	// operator running behind a reverse proxy names it here and gets real
+	// client addresses back in the limiter and the session log.
+	TrustedProxies string
 }
 
 // DBPath returns the full path to the SQLite database file.
@@ -72,6 +85,7 @@ func defaults() Config {
 		WatchdogURL:         "",
 		WatchdogInterval:    watchdog.DefaultInterval,
 		AllowPrivateTargets: false,
+		TrustedProxies:      "",
 	}
 }
 
@@ -91,6 +105,7 @@ func Load(args []string) (Config, error) {
 	c.WatchdogURL = envStr("SUBGLANCE_WATCHDOG_URL", c.WatchdogURL)
 	c.WatchdogInterval = envDur("SUBGLANCE_WATCHDOG_INTERVAL", c.WatchdogInterval)
 	c.AllowPrivateTargets = envBool("SUBGLANCE_ALLOW_PRIVATE_TARGETS", c.AllowPrivateTargets)
+	c.TrustedProxies = envStr("SUBGLANCE_TRUSTED_PROXIES", c.TrustedProxies)
 
 	fs := flag.NewFlagSet("subglance", flag.ContinueOnError)
 	fs.StringVar(&c.Addr, "addr", c.Addr, "HTTP listen address")
@@ -105,6 +120,8 @@ func Load(args []string) (Config, error) {
 		"how often to ping the watchdog URL")
 	fs.BoolVar(&c.AllowPrivateTargets, "allow-private-targets", c.AllowPrivateTargets,
 		"allow monitoring private/loopback addresses (SSRF risk, off by default)")
+	fs.StringVar(&c.TrustedProxies, "trusted-proxies", c.TrustedProxies,
+		"comma-separated addresses or CIDR blocks whose X-Forwarded-For may be believed (empty = none)")
 
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
@@ -137,6 +154,11 @@ func (c Config) validate() error {
 	}
 	if c.CheckWorkers < 0 {
 		return fmt.Errorf("check-workers must not be negative, got %d", c.CheckWorkers)
+	}
+	if c.TrustedProxies != "" {
+		if err := trustedproxy.Validate(c.TrustedProxies); err != nil {
+			return err
+		}
 	}
 	if c.WatchdogURL != "" {
 		if err := watchdog.ValidateURL(c.WatchdogURL); err != nil {

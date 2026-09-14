@@ -90,6 +90,60 @@ func (db *DB) CreateUser(ctx context.Context, email, password string, role Role)
 	}, nil
 }
 
+// ErrSetupComplete is returned when the first account already exists.
+var ErrSetupComplete = errors.New("store: setup has already been completed")
+
+// CreateFirstUser adds the very first account, or reports that one exists.
+//
+// Separate from CreateUser because "count, then insert" is two statements and
+// the gap between them is reachable: the setup endpoint is public on a fresh
+// instance, so two requests arriving together would both read zero and both
+// insert an administrator. The owner would then be sharing the instance with
+// whoever else was polling it, and nothing in the UI would say so.
+//
+// The guard is in the INSERT itself rather than in a transaction wrapped
+// around a SELECT: SQLite gives this DB a single writer connection, so an
+// INSERT ... WHERE NOT EXISTS is evaluated with the write lock already held
+// and cannot interleave. Zero rows affected means someone else was first.
+func (db *DB) CreateFirstUser(ctx context.Context, email, password string, role Role) (User, error) {
+	if !role.Valid() {
+		return User{}, fmt.Errorf("store: invalid role %q", role)
+	}
+
+	hash, err := auth.HashPassword(password)
+	if err != nil {
+		return User{}, err
+	}
+
+	now := time.Now().Unix()
+	res, err := db.Writer.ExecContext(ctx, `
+		INSERT INTO users (email, password_hash, role, created_at, updated_at)
+		SELECT ?, ?, ?, ?, ?
+		WHERE NOT EXISTS (SELECT 1 FROM users)`,
+		email, hash, string(role), now, now)
+	if err != nil {
+		return User{}, fmt.Errorf("insert first user: %w", err)
+	}
+
+	n, err := res.RowsAffected()
+	if err != nil {
+		return User{}, fmt.Errorf("rows affected: %w", err)
+	}
+	if n == 0 {
+		return User{}, ErrSetupComplete
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return User{}, fmt.Errorf("last insert id: %w", err)
+	}
+
+	return User{
+		ID: id, Email: email, PasswordHash: hash, Role: role,
+		CreatedAt: time.Unix(now, 0).UTC(), UpdatedAt: time.Unix(now, 0).UTC(),
+	}, nil
+}
+
 // GetUserByEmail looks up an account. Email matching is case-insensitive,
 // enforced by the column's COLLATE NOCASE.
 func (db *DB) GetUserByEmail(ctx context.Context, email string) (User, error) {

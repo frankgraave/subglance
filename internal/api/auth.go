@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"strings"
@@ -31,6 +32,22 @@ const insecureSessionCookieName = "subglance_session"
 const (
 	loginAttemptWindow = 15 * time.Minute
 	maxLoginAttempts   = 10
+)
+
+// loginFloodRate and loginFloodBurst bound the public login route as a whole,
+// before any password is hashed.
+//
+// The per-email and per-address limits below cannot do this: both are keyed,
+// and a caller that varies the email and the address never fills either bucket.
+// Every attempt that gets past them pays for an argon2 verification, so the
+// keyed limits bound guessing while this one bounds the work.
+//
+// Ten a second bursting to thirty. A person logging in does so once; thirty in
+// a burst covers a browser retrying and an operator fumbling a password, and
+// is still far below what it takes to keep the hashing semaphore saturated.
+const (
+	loginFloodRate  = 10.0
+	loginFloodBurst = 30.0
 )
 
 type contextKey string
@@ -193,6 +210,11 @@ func (s *Server) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 // There is no default password to change and no seeded account: an instance
 // exposed before setup has no credentials to guess. Once a user exists this
 // endpoint is permanently closed.
+//
+// The early count below is a courtesy, not the guard: it turns a late caller
+// into a 409 without making it pay for an argon2 hash first. The guard that
+// actually holds is inside CreateFirstUser, because only the insert can see
+// whether another request beat this one to it.
 func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -221,8 +243,13 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := s.db.CreateUser(ctx, req.Email, req.Password, store.RoleAdmin)
-	if err != nil {
+	user, err := s.db.CreateFirstUser(ctx, req.Email, req.Password, store.RoleAdmin)
+	switch {
+	case err == nil:
+	case errors.Is(err, store.ErrSetupComplete):
+		writeError(w, http.StatusConflict, "setup has already been completed")
+		return
+	default:
 		s.log.Error("create first user", "error", err)
 		writeError(w, http.StatusInternalServerError, "could not create the account")
 		return
@@ -242,6 +269,19 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	// Ahead of the body read, deliberately: see loginFloodRate. Every attempt
+	// past this point costs an argon2 verification whether the account exists
+	// or not, which is the whole reason a global ceiling is needed on top of
+	// the keyed limits further down.
+	if !s.loginFlood.allow(time.Now(), loginFloodRate, loginFloodBurst) {
+		s.log.Warn("login attempts are arriving faster than the route accepts them",
+			"ip", s.clientIP(r))
+		w.Header().Set("Retry-After", "1")
+		writeError(w, http.StatusTooManyRequests,
+			"too many sign-in attempts are arriving at once; try again in a moment")
+		return
+	}
+
 	var req loginRequest
 	if err := decodeJSON(w, r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
@@ -251,7 +291,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	// Rate limit on both the email and the client IP. Email alone lets an
 	// attacker spray many addresses from one host; IP alone lets a botnet
 	// grind a single account.
-	ip := clientIP(r)
+	ip := s.clientIP(r)
 	for _, key := range []string{"email:" + strings.ToLower(req.Email), "ip:" + ip} {
 		n, err := s.db.CountRecentLoginAttempts(ctx, key, loginAttemptWindow)
 		if err != nil {
@@ -391,7 +431,7 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 
 // issueSession creates a session and sets the cookie.
 func (s *Server) issueSession(w http.ResponseWriter, r *http.Request, user store.User) error {
-	token, err := s.db.CreateSession(r.Context(), user.ID, r.UserAgent(), clientIP(r))
+	token, err := s.db.CreateSession(r.Context(), user.ID, r.UserAgent(), s.clientIP(r))
 	if err != nil {
 		return err
 	}
@@ -444,7 +484,19 @@ func isHTTPS(r *http.Request) bool {
 }
 
 // clientIP extracts the caller's address for rate limiting and audit logs.
-func clientIP(r *http.Request) string {
+//
+// Forwarding headers are honoured only when the peer that sent them is a
+// configured trusted proxy. They are set by the client otherwise, and a header
+// the client controls is not an identity: rotating X-Forwarded-For per request
+// gave one host a fresh rate-limit bucket every time, which is credential
+// spraying with the limiter switched off. Falling back to the peer address
+// costs a shared bucket for everyone behind an unconfigured proxy — the safe
+// direction to be wrong in, and fixed by naming the proxy in --trusted-proxies.
+func (s *Server) clientIP(r *http.Request) string {
+	peer := peerIP(r)
+	if !s.trustedProxies.Contains(peer) {
+		return peer
+	}
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		if first, _, found := strings.Cut(xff, ","); found {
 			return strings.TrimSpace(first)
@@ -454,6 +506,11 @@ func clientIP(r *http.Request) string {
 	if ip := r.Header.Get("X-Real-Ip"); ip != "" {
 		return strings.TrimSpace(ip)
 	}
+	return peer
+}
+
+// peerIP is the address of the machine that actually opened the connection.
+func peerIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr

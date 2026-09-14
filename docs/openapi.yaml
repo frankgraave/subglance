@@ -281,11 +281,13 @@ paths:
       operationId: logout
       summary: End the current session
       description: |
-        Deletes the server-side session, if a session cookie was presented, and
-        clears the cookie. Public rather than authenticated on purpose: logging
-        out must succeed even when the session has already expired, so it is
-        never possible to be stuck holding a stale cookie.
-      security: []
+        Deletes the server-side session and clears the cookie.
+
+        Authenticated rather than public, which reads oddly for an endpoint
+        whose job is to discard a credential. The reason is CSRF: that check
+        runs as part of authentication, so a public logout route skips it and
+        any site on the internet can end a visitor's session. A caller holding
+        an expired cookie gets a 401 and is already signed out.
       responses:
         '204':
           description: Signed out; the session cookie was cleared.
@@ -294,7 +296,9 @@ paths:
               description: The expired session cookie.
               schema:
                 type: string
-      x-subglance-access: public
+        '401':
+          description: No valid session, or a cross-site request.
+      x-subglance-access: read
   /api/v1/push/{token}:
     parameters:
       - name: token

@@ -144,14 +144,22 @@ func run(args []string) error {
 		},
 	})
 
+	// The API is constructed before the server so a bad --trusted-proxies is
+	// a startup error rather than a limiter that quietly trusts nobody.
+	apiSrv, err := api.New(log, db).WithBus(bus).
+		WithProber(runner).WithPushRecorder(runner).
+		WithChannelTester(notify).
+		WithTrustedProxies(cfg.TrustedProxies)
+	if err != nil {
+		return err
+	}
+
 	srv := &http.Server{
 		Addr: cfg.Addr,
 		// The runner doubles as the API's prober, so a manual check uses
 		// the same checkers, the same SSRF guard and the same recording
 		// path as a scheduled one.
-		Handler: api.New(log, db).WithBus(bus).
-			WithProber(runner).WithPushRecorder(runner).
-			WithChannelTester(notify).Handler(),
+		Handler: apiSrv.Handler(),
 
 		// Bounded timeouts: an unbounded server is a resource leak waiting
 		// for one slow client. ReadHeaderTimeout in particular defends
