@@ -220,6 +220,19 @@
   --idle:        #4b5257;
   --idle-dim:    #16191b;
 
+  /* The label on a *filled* status mark (§2.3).
+     A status badge fills itself with its own status colour, and the text on
+     that fill cannot come from the ink scale: --ink measures 1.59:1 on --up in
+     dark and --ink-2 is worse, so the word naming the status would be the
+     least readable thing in the row it explains. These are the near-black or
+     near-white the fill actually needs, measured per theme and per status —
+     lowest of the eight is 4.70:1, which clears AA. Only a solid status fill
+     may use them; on a -dim background the ink scale is still correct. */
+  --on-up:       #08090a;
+  --on-warn:     #08090a;
+  --on-down:     #08090a;
+  --on-idle:     #e8eaec;
+
   /* Tight halo, not a haze. A wide soft glow at this size reads as an
      out-of-focus smudge; a 1px ring plus a short bloom keeps the lamp's
      edge legible while still looking lit. */
@@ -279,6 +292,13 @@
   --idle:        #c2c7cb;
   --idle-dim:    #f0f0ef;
 
+  /* Same role as in dark (§2.3), re-measured: the light fills are darker, so
+     up keeps a near-black label while warn and down take white. */
+  --on-up:       #08090a;
+  --on-warn:     #ffffff;
+  --on-down:     #ffffff;
+  --on-idle:     #16181a;
+
   /* In light the glow reads as a soft halo, not a light bulb. */
   --glow-up:     0 0 0 1px rgba(5,150,105,.28),  0 0 5px -1px rgba(5,150,105,.4);
   --glow-warn:   0 0 0 1px rgba(180,83,9,.28),   0 0 5px -1px rgba(180,83,9,.4);
@@ -337,6 +357,10 @@
   --color-down-dim: var(--down-dim);
   --color-idle: var(--idle);
   --color-idle-dim: var(--idle-dim);
+  --color-on-up: var(--on-up);
+  --color-on-warn: var(--on-warn);
+  --color-on-down: var(--on-down);
+  --color-on-idle: var(--on-idle);
 
   --color-ring-down: var(--ring-down);
 
