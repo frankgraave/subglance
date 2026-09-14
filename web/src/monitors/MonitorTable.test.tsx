@@ -371,4 +371,35 @@ describe("the panel look does not cost the table its semantics", () => {
     expect(table?.[1]).toMatch(/border-collapse:\s*separate/);
     expect(table?.[1]).toMatch(/border-spacing:/);
   });
+
+  it("frames the panels in a card that is padding, not a second panel", () => {
+    // The nesting is what makes a list read as one object: an outer card with
+    // a wider radius, its own quieter fill, and — the part that does the work —
+    // padding, so the panels sit inset from its border rather than flush
+    // against it. A frame without padding is two edges at the same level, and
+    // that is the double-framing an earlier pass rightly removed.
+    const board = /\.mon-board\s*\{([^}]*)\}/.exec(monitorsCss);
+    expect(board, "missing the .mon-board rule").not.toBeNull();
+    const body = board?.[1] ?? "";
+
+    expect(body, "the card needs its own edge").toMatch(/border:\s*1px/);
+    expect(body, "the card needs the wider radius").toMatch(
+      /border-radius:\s*var\(--r-lg\)/,
+    );
+    expect(
+      body,
+      "without padding the frame sits flush on the panels and reads as a second edge",
+    ).toMatch(/padding:\s*var\(--space-1h\)/);
+    expect(
+      body,
+      "a transparent card cannot be the surface the panels rest on",
+    ).toMatch(/background:\s*var\(--surface\)/);
+
+    // And the panels inside must keep the tighter radius, or the nesting
+    // inverts and the card stops reading as the thing underneath.
+    const firstCell = /\.mon-row\s*>\s*:first-child\s*\{([^}]*)\}/.exec(
+      monitorsCss,
+    );
+    expect(firstCell?.[1]).toMatch(/border-start-start-radius:\s*var\(--r-md\)/);
+  });
 });

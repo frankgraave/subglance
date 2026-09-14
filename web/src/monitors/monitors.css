@@ -152,16 +152,33 @@
 }
 
 /*
- * The list has no frame of its own.
+ * The frame around the panels.
  *
- * Every row now draws its own edge, so a border here would be a box around a
- * stack of boxes — the double framing that makes a panel list read as a table
- * again. `overflow: hidden` goes with it: it existed to clip rows against the
- * container's corners, and there are no longer corners to clip against. It
- * would also crop the focus ring on the first and last row.
+ * An earlier pass removed this entirely, on the reasoning that panels inside a
+ * box is one frame too many. That was right about the frame it removed and
+ * wrong about frames: what made that one too many was that it was drawn in the
+ * same weight as the panels inside it, so the eye read two competing edges at
+ * the same level.
+ *
+ * Measured against the reference style, the outer card is not a second panel —
+ * it is a 6px margin with an edge on it. The padding does the work: the panels
+ * sit inset from the card's border, so the card reads as the surface they rest
+ * on rather than as another object beside them. Its fill is one step below
+ * theirs for the same reason.
+ *
+ * The radius pair is 12 outside, 8 inside, across 6px of padding. Strictly
+ * concentric would be 8 + 6 = 14, but 12 is the better call: a 14px outer
+ * corner starts to read as a pill on a wide card, while 12 still reads as a
+ * card that happens to have rounded corners.
+ *
+ * `overflow` stays unset: it existed to clip rows against the old container's
+ * corners, and it would crop the focus ring on the first and last row.
  */
 .mon-board {
-  background: transparent;
+  padding: var(--space-1h);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
 }
 
 .mon-table {

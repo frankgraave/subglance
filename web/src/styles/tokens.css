@@ -183,6 +183,13 @@
   --control-h: 36px;
 
   --space-1: 4px;
+  /* The half-step. A 4px grid is right for layout and too coarse for chrome:
+     the frame around a panel list, the inset on a small control. Measured
+     against the reference style these half-steps (6px, 10px) appear exactly
+     where the grid would otherwise force a choice between too tight and too
+     loose. They are not an escape hatch from the ladder — they are the rungs
+     the ladder needs at small sizes. */
+  --space-1h: 6px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;

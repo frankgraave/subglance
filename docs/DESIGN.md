@@ -486,13 +486,33 @@ radius of `6 − 4 = 2px`, which is `--r-2xs`. `tokens.test.ts` asserts it where
 a rule states both an outer radius and its padding, because this is the kind of
 rule that is obeyed once and then quietly broken by the next component.
 
+**The exception is a card framing panels, where the outer radius rounds down.**
+The monitor list is a 12px card with 6px of padding around 8px panels; strictly
+concentric would put the outer corner at 14px. 12px is the better call, because
+a 14px corner on a full-width card starts to read as a pill, and a list of
+monitors is not a pill. The rule earns its exception here and nowhere else so
+far: the pinch the concentric rule prevents is only visible when the gap is
+small and the two radii are close, which is the case for a control in a shell
+and not for a wide card.
+
+**A frame around panels is padding with an edge on it, not a second panel.**
+This is the whole nesting pattern: the card carries the wider radius, a fill one
+step quieter than the panels it holds, and — the load-bearing part — padding, so
+the panels sit inset from its border instead of flush against it. A frame
+without padding puts two edges at the same level and the eye reads them as
+competing; that is the double-framing that got this frame removed once already.
+`MonitorTable.test.tsx` asserts the padding specifically, because it is the
+declaration that looks most droppable and is the one that matters.
+
 A height is the intent more often than a padding is. `--control-h: 36px` is the
 height a row of interactive chrome settles on; the nav item now states that and
 centres its label, instead of encoding it as a padding the next edit would
 round to 8px and silently shrink.
 
-Duration follows role: 140ms for hover, 200–280ms for panels, 320–520ms for
-anything asking for your attention. `--ease` starts fast and settles softly —
+One duration for everything interactive: 150ms. A hover, a segment change and a
+menu opening are the same kind of event to the person watching, and giving each
+its own timing is what makes an interface feel assembled from parts rather than
+designed. `--ease` is `cubic-bezier(.4, 0, .2, 1)` —
 motion that decays feels mechanical rather than floaty.
 
 ### 2.8 The accent
