@@ -16,6 +16,7 @@ import (
 	"github.com/frankgraave/subglance/internal/buildinfo"
 	"github.com/frankgraave/subglance/internal/events"
 	"github.com/frankgraave/subglance/internal/store"
+	"github.com/frankgraave/subglance/internal/trustedproxy"
 )
 
 // Server wires the HTTP routes together.
@@ -51,6 +52,23 @@ type Server struct {
 	// resolved. pushReports cannot: it is keyed on a monitor id that only
 	// exists after the database has already been asked.
 	pushFlood tokenBucket
+
+	// pushFloodByIP bounds each source separately, in front of pushFlood.
+	// Without it the two share one budget, so a flood of made-up tokens from
+	// one host spends the allowance that real jobs need — and a push monitor
+	// whose report was refused goes overdue and alerts. That inverts a dead
+	// man's switch into a generator of outages that are not happening.
+	pushFloodByIP ipBuckets
+
+	// trustedProxies lists the peers whose forwarding headers may be
+	// believed. Empty by default: see clientIP.
+	trustedProxies trustedproxy.Set
+
+	// loginFlood bounds the public login route before any password is
+	// hashed. The keyed limits in handleLogin cannot: an attacker who varies
+	// the email and the address fills neither bucket, and every attempt past
+	// them allocates 64 MiB inside argon2.
+	loginFlood tokenBucket
 
 	// previewChecks rate-limits POST /monitors/preview per user. A preview
 	// has no monitor id to key on, so it cannot share the map above.
@@ -103,6 +121,21 @@ func (s *Server) WithProber(p Prober) *Server {
 func (s *Server) WithPushRecorder(p PushRecorder) *Server {
 	s.pusher = p
 	return s
+}
+
+// WithTrustedProxies names the peers whose X-Forwarded-For and X-Real-Ip may
+// be believed, as a comma-separated list of addresses and CIDR blocks.
+//
+// A malformed entry is an error rather than a silent skip: an operator who
+// mistypes their proxy's subnet should be told at startup, not discover months
+// later that every client behind it shared one rate-limit bucket.
+func (s *Server) WithTrustedProxies(spec string) (*Server, error) {
+	tp, err := trustedproxy.Parse(spec)
+	if err != nil {
+		return nil, err
+	}
+	s.trustedProxies = tp
+	return s, nil
 }
 
 // access says what a route requires from its caller.
@@ -198,7 +231,6 @@ func (s *Server) routes() []route {
 		{http.MethodGet, "/api/v1/setup", accessPublic},
 		{http.MethodPost, "/api/v1/setup", accessPublic},
 		{http.MethodPost, "/api/v1/auth/login", accessPublic},
-		{http.MethodPost, "/api/v1/auth/logout", accessPublic},
 
 		// The push URL. Public by necessity, not by choice: a cron line
 		// cannot hold a session, and handing a backup script an API token
@@ -215,6 +247,18 @@ func (s *Server) routes() []route {
 		// Authenticated: any role.
 		{http.MethodGet, "/api/v1/auth/me", accessRead},
 		{http.MethodPost, "/api/v1/auth/password", accessRead},
+
+		// Logout is authenticated rather than public, which reads oddly for
+		// an endpoint whose whole job is to discard a credential. It is the
+		// CSRF check that makes the difference: that check lives inside
+		// authenticate(), and a public route never calls it. Left public, any
+		// page on the internet could end a visitor's session — an operator
+		// thrown out of the dashboard mid-incident by a link they clicked.
+		//
+		// A logout with no session still answers 401 rather than 204. That is
+		// a worse answer to a harmless request than the alternative is to a
+		// hostile one.
+		{http.MethodPost, "/api/v1/auth/logout", accessRead},
 
 		{http.MethodGet, "/api/v1/monitors", accessRead},
 		{http.MethodGet, "/api/v1/monitors/{id}", accessRead},

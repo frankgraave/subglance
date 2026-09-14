@@ -187,26 +187,45 @@ func TestRevokeUnknownTokenIs404(t *testing.T) {
 	}
 }
 
+// TestClientIPExtraction: a forwarding header is an identity claim, and only a
+// configured proxy may make one. The untrusted cases are the security
+// property; the trusted ones are the reason the feature exists at all.
 func TestClientIPExtraction(t *testing.T) {
 	tests := []struct {
 		name    string
+		trusted string
 		headers map[string]string
 		remote  string
 		want    string
 	}{
-		{"remote addr", nil, "192.0.2.1:1234", "192.0.2.1"},
-		{"x-forwarded-for", map[string]string{"X-Forwarded-For": "203.0.113.5"}, "10.0.0.1:1234", "203.0.113.5"},
-		{"x-forwarded-for chain", map[string]string{"X-Forwarded-For": "203.0.113.5, 10.0.0.1"}, "10.0.0.1:1234", "203.0.113.5"},
-		{"x-real-ip", map[string]string{"X-Real-Ip": "198.51.100.7"}, "10.0.0.1:1234", "198.51.100.7"},
+		{"remote addr", "", nil, "192.0.2.1:1234", "192.0.2.1"},
+		{"x-forwarded-for from an untrusted peer is ignored",
+			"", map[string]string{"X-Forwarded-For": "203.0.113.5"}, "10.0.0.1:1234", "10.0.0.1"},
+		{"x-real-ip from an untrusted peer is ignored",
+			"", map[string]string{"X-Real-Ip": "198.51.100.7"}, "10.0.0.1:1234", "10.0.0.1"},
+		{"x-forwarded-for from a trusted proxy",
+			"10.0.0.0/8", map[string]string{"X-Forwarded-For": "203.0.113.5"}, "10.0.0.1:1234", "203.0.113.5"},
+		{"x-forwarded-for chain from a trusted proxy",
+			"10.0.0.0/8", map[string]string{"X-Forwarded-For": "203.0.113.5, 10.0.0.1"}, "10.0.0.1:1234", "203.0.113.5"},
+		{"x-real-ip from a trusted proxy",
+			"10.0.0.1", map[string]string{"X-Real-Ip": "198.51.100.7"}, "10.0.0.1:1234", "198.51.100.7"},
+		{"a trusted proxy that sends no header",
+			"10.0.0.0/8", nil, "10.0.0.1:1234", "10.0.0.1"},
+		{"a peer outside the trusted range",
+			"10.0.0.0/8", map[string]string{"X-Forwarded-For": "203.0.113.5"}, "192.0.2.9:1234", "192.0.2.9"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			srv, err := New(testLogger(), nil).WithTrustedProxies(tt.trusted)
+			if err != nil {
+				t.Fatalf("trusted proxies %q: %v", tt.trusted, err)
+			}
 			r := httptest.NewRequest(http.MethodGet, "/", nil)
 			r.RemoteAddr = tt.remote
 			for k, v := range tt.headers {
 				r.Header.Set(k, v)
 			}
-			if got := clientIP(r); got != tt.want {
+			if got := srv.clientIP(r); got != tt.want {
 				t.Errorf("clientIP() = %q, want %q", got, tt.want)
 			}
 		})
@@ -332,13 +351,17 @@ func TestChangePasswordValidation(t *testing.T) {
 	}
 }
 
-func TestLogoutWithoutSessionIsHarmless(t *testing.T) {
+// A logout without a session is now a 401 rather than a 204. Answering 204 to
+// anyone meant the route could not run the CSRF check, and a cross-site page
+// could end a real session; a stale cookie is already signed out, so the
+// awkward status is the cheaper half of the trade.
+func TestLogoutWithoutSessionIsRejected(t *testing.T) {
 	srv, _ := testServerWithDB(t)
 
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil))
 
-	if rec.Code != http.StatusNoContent {
-		t.Errorf("status = %d, want 204", rec.Code)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", rec.Code)
 	}
 }
