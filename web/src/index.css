@@ -37,6 +37,7 @@
 @import "./monitors/detail.css";
 @import "./live/connection.css";
 @import "./shell/shell.css";
+@import "./shell/crash.css";
 @import "./auth/auth.css";
 @import "./wall/wall.css";
 

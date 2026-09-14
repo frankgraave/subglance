@@ -1,0 +1,52 @@
+/*
+ * The crash panel (ErrorBoundary). Deliberately plain: it has to render when
+ * something else in the tree could not, so it leans on nothing but tokens.
+ */
+
+.crash {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+  margin: var(--space-6) auto;
+  max-width: 42rem;
+  padding: var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background-color: var(--surface);
+  box-shadow: var(--shadow-raised);
+}
+
+.crash-title {
+  font-size: var(--type-section);
+  line-height: var(--lead-section);
+  font-weight: var(--weight-strong);
+  color: var(--ink);
+}
+
+.crash-detail {
+  font-family: var(--font-mono);
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.crash-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.crash-button {
+  min-height: var(--control-h);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-md);
+  background-color: var(--surface-2);
+  color: var(--ink);
+  font-size: var(--type-body);
+  line-height: var(--lead-body);
+  transition: background-color var(--dur-hover) var(--ease);
+}
+
+.crash-button:hover { background-color: var(--surface-hi); }
