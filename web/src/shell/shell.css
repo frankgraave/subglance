@@ -187,7 +187,7 @@
   place-items: center;
   width: 30px;
   height: 30px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-control);
   border-radius: var(--r-sm);
   background: var(--surface);
   color: var(--ink-2);
@@ -346,7 +346,7 @@
 .shell-signout:hover { background: var(--surface-2); color: var(--ink); }
 
 .shell-signout:focus-visible {
-  outline: 2px solid var(--up);
+  outline: 2px solid var(--accent-border);
   outline-offset: -2px;
 }
 

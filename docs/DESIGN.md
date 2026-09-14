@@ -277,6 +277,86 @@ Duration follows role: 140ms for hover, 200–280ms for panels, 320–520ms for
 anything asking for your attention. `--ease` starts fast and settles softly —
 motion that decays feels mechanical rather than floaty.
 
+### 2.8 The accent
+
+```css
+--accent:        #155dfc;   /* fill of a control */
+--accent-border: #2b7fff;   /* its 1px edge, same hue one step lighter */
+--accent-ink:    #ffffff;   /* the label sitting on the fill */
+--accent-ring:   rgba(43,127,255,.24);
+```
+
+Until now the product had no accent at all: status green did the job, so an
+active segment in the layout switcher and a healthy monitor read as the same
+kind of thing. They are not — one is a control you chose, the other is a fact
+about the world.
+
+**The rule is a split, and it is enforced.** The accent fills *controls*: a
+segment you can pick, the primary button, the focus ring. Status colour marks
+*data*: a monitor's state, a heartbeat bar, a badge. Neither crosses over.
+`tokens.test.ts` checks both directions, because the split collapses back into
+one accent the first time someone reaches for `--up` to make a button look
+lively.
+
+The accent is **identical in dark and light.** Everything else in this file is
+designed per theme; this one value is not, because an accent that shifts is a
+second thing to remember and a second thing to get wrong.
+
+Contrast, measured rather than assumed: white on the `--accent` fill is 5.25:1,
+which clears AA for the label on a filled button. `--accent-border` reaches
+5.30:1 on the dark canvas and 3.63:1 on the light one, so the edge and the
+focus ring clear the 3:1 that WCAG 1.4.11 asks of a non-text UI component in
+both themes. The fill alone does not clear 3:1 against the light canvas
+(5.07:1 against `--canvas`, but it is the border that has to carry the shape),
+which is exactly why the pair exists: the fill is the colour, the border is the
+contrast.
+
+Focus uses the accent ring rather than the ink scale. The old
+`outline: 2px solid var(--ink-2)` was legible but said nothing — a grey ring
+reads as a border that appeared, an accent ring reads as *this is the thing
+you are driving*.
+
+### 2.9 Border roles
+
+```css
+--border:         /* static: cards, dividers, panels */
+--border-control: /* the resting edge of anything clickable */
+--border-hi:      /* strongest: hover, active, badges */
+```
+
+Three strengths that encode **what a thing is**, not only what state it is in.
+The defect this closes: `--border-hi` was used exclusively on `:hover` and
+`:active`, so at rest a button carried exactly the same edge as a static card
+and only looked clickable once the pointer arrived. An interactive element now
+starts one step up and brightens from there.
+
+Border width is **1px everywhere.** The one exception is the 2px status stripe
+down the left of a row, which is a signal rather than an edge, and it should
+stay the only one.
+
+### 2.10 Depth is a ladder of three
+
+```css
+--shadow-flat:   none;   /* cards, rows */
+--shadow-raised: /* panels, charts inside a card */
+--shadow-float:  /* tooltips, menus, drawers */
+```
+
+Each rung is **two layers** — a tight contact shadow plus a wider ambient one,
+both with negative spread. A single hard layer at this darkness reads as a seam
+rather than as height, which is what the old single `--shadow-card` did: on a
+near-black canvas, black at 40% is very nearly invisible, so the product paid
+for a shadow token and got no depth from it.
+
+`flat` being `none` is the part worth stating. It is a real rung, not an
+absence: a card is the ground that panels sit on, so a card claiming its own
+depth flattens the distinction it exists to create. Writing it as a token makes
+"no shadow here" a decision on the record instead of a line nobody wrote.
+
+Light gets weaker alphas than dark. The same values over white read as dirt
+rather than as depth, and on a light ground the border is already doing most of
+the separating.
+
 ---
 
 ## 3. The LED
@@ -719,11 +799,11 @@ to discover late.
   wants a slight negative tracking as a single decision on the body, with the
   caps token as the one exception on top. Four tokens that rarely apply are not a
   system; they are the appearance of one.
-- **Depth is a single value.** There is one `--shadow-card` for every raised
-  surface, and it is currently used in exactly one place. A popover, a drawer and
-  a card should not read at the same distance from the page. Deliberately not
-  fixed yet: there is no second raised surface to differentiate from, so a ladder
-  now would be inventing distinctions for components that do not exist.
+- ~~**Depth is a single value.**~~ Answered in §2.10: `--shadow-flat`,
+  `--shadow-raised` and `--shadow-float` are three rungs by role, and
+  `tokens.test.ts` rejects any `box-shadow` that is not one of them or a glow.
+  The remaining gap is that only two of the three rungs have a component today
+  — nothing is on `raised` until panels exist.
 
 - ~~**Mobile.**~~ Answered in §13: below 640px the dashboard renders a card per
   monitor instead of a row, keeping every fact the row shows. The remaining

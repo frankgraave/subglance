@@ -116,7 +116,7 @@
   line-height: var(--lead-nozoom);
   color: var(--ink);
   background: var(--canvas);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-control);
   border-radius: var(--r-sm);
   transition: border-color var(--dur-hover) var(--ease), box-shadow var(--dur-hover) var(--ease);
 }
@@ -128,11 +128,12 @@
   }
 }
 
-/* Green border plus a soft ring, not the blue browser glow (§7.2). */
+/* The control accent, not the blue browser glow and not status green (§2.8):
+   a focused field is a control you are driving, not a healthy monitor. */
 .auth-input:focus-visible {
   outline: none;
-  border-color: var(--up);
-  box-shadow: 0 0 0 3px var(--ring-up);
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
 .auth-input[aria-invalid="true"] {
@@ -179,27 +180,23 @@
   font-size: var(--type-body);
   line-height: var(--lead-body);
   font-weight: var(--weight-strong);
-  color: var(--canvas);
-  background: var(--up);
-  /* See the light-theme override below: this pairing is only legible on the
-     dark palette. */
-  border: 1px solid var(--up);
+  /* White on the accent, not the theme's canvas on status green. That swap
+     is what §2.8 is for: a filled primary button is a control, and painting
+     it --up made "the button" and "the monitor is healthy" the same colour.
+     It also fixes a contrast problem rather than trading one for another.
+     Green forced a per-theme text flip because light canvas on light --up
+     measured 3.64:1, under the 4.5:1 this label needs at body size. White on
+     --accent is 5.25:1 and identical in both themes, so the override below
+     could go. */
+  color: var(--accent-ink);
+  background: var(--accent);
+  /* The same hue one step lighter, which is what keeps a filled control
+     looking crisp rather than printed on. */
+  border: 1px solid var(--accent-border);
   border-radius: var(--r-sm);
   cursor: pointer;
   transition: opacity var(--dur-hover) var(--ease);
 }
-
-/*
- * Light theme puts dark text on the same green.
- *
- * Measured, not guessed: light `--canvas` on light `--up` is 3.64:1, and this
- * label is body size at weight 500 — normal text by WCAG's definition, which
- * needs 4.5:1. Light `--ink` on the same green is 4.72:1 and passes. Dark
- * theme is 10.37:1 either way and keeps the light-on-green it already had.
- * Flipping the *text* rather than darkening the green keeps the one loud
- * button the same colour as the "up" state it borrows its meaning from.
- */
-[data-theme="light"] .auth-submit { color: var(--ink); }
 
 .auth-submit:hover:not(:disabled) { opacity: .9; }
 
@@ -211,7 +208,7 @@
 }
 
 .auth-submit:focus-visible {
-  outline: 2px solid var(--up);
+  outline: 2px solid var(--accent-border);
   outline-offset: 2px;
 }
 

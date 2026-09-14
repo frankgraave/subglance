@@ -49,3 +49,6 @@ web/coverage/
 !internal/webui/dist/
 internal/webui/dist/*
 !internal/webui/dist/.gitkeep
+
+# Coverage output from `npm run test:coverage`.
+web/coverage/
