@@ -33,13 +33,8 @@
   font-variant-ligatures: var(--ligatures-mono);
   font-variant-numeric: var(--numeric-mono);
   text-rendering: var(--render-mono);
-  /* The face carries its own spacing. Without this the body tracking cascades
-     in, and the one role that must not be squeezed is the one showing strings
-     a reader compares character by character. */
-  letter-spacing: var(--track-mono);
-  /* Pinned rather than left to the browser (§2.5). Which features an engine
-     turns on by default differs between engines, so a page that looks right
-     in one renders with different figures in another. */
+  /* No letter-spacing here on purpose: mono inherits the body tracking like
+     every other role. See the note beside --track-caps in tokens.css. */
   font-feature-settings: var(--feat-mono);
 }
 /*
@@ -67,7 +62,12 @@
   line-height: var(--lead-section);
   font-weight: var(--weight-plain);
   text-transform: uppercase;
-  letter-spacing: var(--track-caps);
+  /* No positive tracking. Letterspacing uppercase is the conventional advice,
+     and measured against the reference it is not what this style does: its
+     caps labels carry the same inherited body tracking as everything else. At
+     12px mono the fixed advance already separates the letters, and adding
+     .09em on top is what made our labels read as spaced-out small caps rather
+     than as a quiet header. */
   color: var(--ink-2);
 }
 

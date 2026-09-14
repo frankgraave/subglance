@@ -576,8 +576,8 @@ describe("tokens.css matches the §2.5 weight and tracking scales", () => {
         /\|\s*`(--(?:weight|track)-[a-z]+)`\s*\|\s*`([^`]+)`\s*\|/g,
       ),
     ];
-    expect(rows.length, "expected four weights and four tracking roles").toBe(
-      8,
+    expect(rows.length, "expected four weights and two tracking roles").toBe(
+      6,
     );
     for (const [, name, value] of rows) {
       expect(root.get(name), name).toBe(value);
@@ -593,7 +593,7 @@ describe("tokens.css matches the §2.5 weight and tracking scales", () => {
         `--font-weight-${step}: var(--weight-${step});`,
       );
     }
-    for (const role of ["body", "badge", "caps"]) {
+    for (const role of ["body", "badge"]) {
       expect(inline, `--tracking-${role}`).toContain(
         `--tracking-${role}: var(--track-${role});`,
       );
@@ -615,22 +615,18 @@ describe("tracking is decided once, on the body", () => {
   });
 
   it("keeps only the exceptions the body value is wrong for", () => {
-    // Three faces the inherited value does not suit: the mono badge, which is
-    // already wide; uppercase, which needs the opposite sign; and mono itself,
-    // which needs no correction at all because its advance is fixed. Any
-    // fourth token is a per-component tweak wearing a token's name.
+    // One exception survives: the mono badge, which is already wide. Caps and
+    // mono were exceptions too until the reference was measured — it applies a
+    // single body tracking to every face and casing, so opting either out was
+    // a correction to a correction. Any third token here is a per-component
+    // tweak wearing a token's name.
     const root = declarations(
       tokensCss.slice(0, tokensCss.indexOf("[data-theme=")),
     );
     const tracks = [...root.keys()].filter((name) =>
       name.startsWith("--track-"),
     );
-    expect(tracks.sort()).toEqual([
-      "--track-badge",
-      "--track-body",
-      "--track-caps",
-      "--track-mono",
-    ]);
+    expect(tracks.sort()).toEqual(["--track-badge", "--track-body"]);
   });
 });
 
@@ -1337,7 +1333,11 @@ describe("the caps legend is applied as a role", () => {
     expect(body, "leading").toContain("line-height: var(--lead-section);");
     expect(body, "weight").toContain("font-weight: var(--weight-plain);");
     expect(body, "casing").toContain("text-transform: uppercase;");
-    expect(body, "tracking").toContain("letter-spacing: var(--track-caps);");
+    // Tracking is deliberately absent: the role inherits the body value like
+    // every other face. Asserting its absence rather than saying nothing,
+    // because re-adding a positive caps tracking is the exact edit that made
+    // these labels read as spaced-out small caps.
+    expect(body, "tracking").not.toContain("letter-spacing:");
   });
 
   it("gives the legend a tone that clears AA rather than a faded one", () => {

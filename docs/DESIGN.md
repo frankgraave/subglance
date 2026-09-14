@@ -229,18 +229,18 @@ control need.
 | Row title | `--type-row` | `15px` | `--lead-row` `20px` | `--weight-mid` |
 | Body / label | `--type-body` | `14px` | `--lead-body` `20px` | `--weight-plain` |
 | Helper text | `--type-helper` | `12px` | `--lead-helper` `16px` | `--weight-plain` |
-| Section heading | `--type-section` | `12px` | `--lead-section` `12px` | `--weight-strong`, uppercase, `--track-caps` |
+| Section heading | `--type-section` | `12px` | `--lead-section` `12px` | `--weight-strong`, uppercase, mono |
 
 **Helper and section share a size, and separate by face and casing.** An earlier
 pass kept helper at 13px specifically to avoid colliding with section, on the
 reasoning that two roles at one size would be indistinguishable. Measured
 against the reference style that argument does not survive: it puts 39 of 93
-elements on 12px and tells those roles apart by casing, weight and letterspacing
-instead. Section is uppercase, `--weight-strong` and tracked at `--track-caps`;
-helper is sentence case, `--weight-plain` and tracked at `--track-body`. Those
-are further apart on the page than one pixel of size ever was, and it takes the
-scale from four roles inside 3px down to three — which is the crowding the scale
-was accused of, removed rather than argued with.
+elements on 12px and tells those roles apart by face, casing and weight
+instead. Section is uppercase, mono and `--weight-strong`; helper is sentence
+case, sans and `--weight-plain`. Those are further apart on the page than one
+pixel of size ever was, and it takes the scale from four roles inside 3px down
+to three — which is the crowding the scale was accused of, removed rather than
+argued with.
 
 The leadings stay different on purpose: helper sits on 16px because it is read
 as running text, section on 12px because it is a single line whose leading
@@ -327,8 +327,6 @@ the inherited value is wrong for the face.
 |---|---|---|---|
 | Body | `--track-body` | `-.02em` | inherited by everything, set once on `body` |
 | Badge | `--track-badge` | `.04em` | small mono badges, where the mono face is already wide |
-| Mono | `--track-mono` | `0` | carried by the `face-mono` role, so mono keeps its own advance |
-| Caps | `--track-caps` | `.09em` | every uppercase micro-label, without exception |
 
 This replaces four tokens — `--track-title`, `--track-name`, `--track-badge`
 and `--track-caps` — of which the first two had to be spelled out per

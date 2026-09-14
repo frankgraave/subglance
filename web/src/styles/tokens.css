@@ -154,16 +154,17 @@
      namespace and a token there would have to reference itself. */
   --track-body: -.02em;
   --track-badge: .04em;
-  --track-caps: .09em;
 
-  /* Mono keeps its own width.
-     The body tracking is a correction for the sans, whose glyphs are drawn to
-     sit closer than a browser's default. A monospace face is already spaced
-     on a fixed advance, so inheriting a negative value squeezes letters into
-     their own cells — worst exactly where mono is used, on URLs, IDs and
-     latencies, which are the strings a reader has to compare character by
-     character. Zero is not "no decision": it is the face's own metrics. */
-  --track-mono: 0;
+  /* There is deliberately no `--track-caps` and no `--track-mono`.
+     Both existed on the reasoning that uppercase needs opening up and that a
+     monospace face needs no correction at all. Measured against the reference
+     style, neither holds: it sets one absolute -0.32px on the body and never
+     overrides it — sans and mono, sentence case and uppercase, all inherit
+     the same value. The tightening is a house style applied to the page, not
+     a per-face or per-casing fix. Our caps labels opting out of it with
+     +.09em is what made them read as spaced-out small caps instead of a quiet
+     header, and mono opting out is what made panel headers and IDs read wider
+     than theirs. Both now inherit like everything else. */
 
   /* Space moves in steps of 4px. Named so a row's rhythm is a decision
      that can be changed in one place, not 40 ad-hoc paddings. */
@@ -413,7 +414,6 @@
 
   --tracking-body: var(--track-body);
   --tracking-badge: var(--track-badge);
-  --tracking-caps: var(--track-caps);
 
   --radius-2xs: var(--r-2xs);
   --radius-xs: var(--r-xs);
