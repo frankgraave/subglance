@@ -385,6 +385,58 @@ describe("LiveDashboard", () => {
       expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
+    it("resyncs for a frame that beats the first load home", async () => {
+      /*
+       * The unknown-id path has to fire while the cache is still empty too.
+       * Treating an absent cache as "knows everything" made the very first
+       * request the only one that would ever run, so a monitor created in the
+       * second between page load and first response stayed invisible until a
+       * reload. The first request here never resolves: the only way "bravo"
+       * can appear is a second request the frame asked for.
+       */
+      const second = [
+        apiMonitor({ id: 1, name: "alpha" }),
+        apiMonitor({ id: 2, name: "bravo" }),
+      ];
+      let call = 0;
+      const fetchMock = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+        call += 1;
+        if (call === 1) {
+          // Never resolves on its own; it only ends when the hook aborts it.
+          return new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ monitors: second }),
+        });
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      render(
+        <LiveDashboardRoot
+          client={client}
+          layout="rows"
+          beatWidth={200}
+          createEventSource={() => new FakeSource()}
+        />,
+      );
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      act(() => {
+        FakeSource.last?.open();
+        FakeSource.last?.send("heartbeat", {
+          monitor_id: 2,
+          at: "2026-09-11T08:01:00Z",
+          data: { ok: true, latency_ms: 12 },
+        });
+      });
+
+      expect(await screen.findByText("bravo")).toBeTruthy();
+    });
+
     it("still patches in place for a monitor it does hold", async () => {
       const { fetchMock } = renderTwoLoads();
       await screen.findByText("alpha");

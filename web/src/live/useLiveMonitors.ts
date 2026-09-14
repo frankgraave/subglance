@@ -120,14 +120,21 @@ export function useLiveMonitors(options: LiveOptions = {}): UseLiveMonitors {
        * it is the whole list that comes back, not just the one row.
        */
       const current = queryClient.getQueryData<Monitor[]>(monitorsQueryKey);
-      const known =
-        current === undefined ||
-        current.some((m) => m.id === event.monitorId);
+      const known = current?.some((m) => m.id === event.monitorId) ?? false;
       if (!known) {
         const now = Date.now();
         if (now - lastResyncRef.current >= RESYNC_THROTTLE_MS) {
           lastResyncRef.current = now;
-          void queryClient.invalidateQueries({ queryKey: monitorsQueryKey });
+          /*
+           * Cancel before invalidating. An invalidation on its own does not
+           * restart a fetch that has never produced data, so a frame that
+           * arrives while the very first list request is still in flight
+           * would invalidate nothing and the new monitor would stay missing
+           * until the stale in-flight response landed without it.
+           */
+          void queryClient
+            .cancelQueries({ queryKey: monitorsQueryKey }, { silent: true })
+            .then(() => queryClient.invalidateQueries({ queryKey: monitorsQueryKey }));
         }
         return;
       }
