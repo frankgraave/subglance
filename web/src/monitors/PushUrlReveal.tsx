@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { curlLine, curlStatusLine } from "./push";
 
 /**
@@ -45,6 +45,18 @@ export function PushUrlReveal({
 }: PushUrlRevealProps) {
   const [copied, setCopied] = useState<string | null>(null);
 
+  /*
+   * The control that was pressed to get here — the form's submit button —
+   * unmounts as this panel replaces it, so focus falls back to <body> and the
+   * next Tab starts at the top of the document. Moving focus to the panel
+   * keeps the keyboard path continuous and makes a screen reader announce the
+   * new step, including the warning that this URL is not recoverable.
+   */
+  const panel = useRef<HTMLElement>(null);
+  useEffect(() => {
+    panel.current?.focus();
+  }, []);
+
   const copy = (what: string, text: string) => {
     const write =
       writeClipboard ??
@@ -64,7 +76,12 @@ export function PushUrlReveal({
   };
 
   return (
-    <section className="push-reveal" aria-labelledby="push-reveal-title">
+    <section
+      ref={panel}
+      tabIndex={-1}
+      className="push-reveal"
+      aria-labelledby="push-reveal-title"
+    >
       <h2 id="push-reveal-title" className="add-title">
         {name} is waiting for its first report
       </h2>

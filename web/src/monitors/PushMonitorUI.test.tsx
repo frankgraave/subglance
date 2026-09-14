@@ -159,6 +159,16 @@ describe("the one-time push URL", () => {
     expect(screen.getByRole("alert").textContent ?? "").toMatch(/shown once/i);
   });
 
+  it("takes focus, because the button that opened it has unmounted", () => {
+    // The submit button is gone by the time this renders, so without an
+    // explicit move focus sits on <body> and the next Tab restarts at the top
+    // of the page — past every Copy button holding the only copy of the URL.
+    render(<PushUrlReveal url={URL_} name="Nightly backup" />);
+    expect(document.activeElement).toBe(
+      screen.getByRole("region", { name: /nightly backup/i }),
+    );
+  });
+
   it("hands over a curl line that fails loudly and one that reports status", () => {
     render(<PushUrlReveal url={URL_} name="Nightly backup" />);
     const cron = (screen.getByLabelText(/for a cron line/i) as HTMLInputElement)
