@@ -38,10 +38,16 @@ function MonitorRowImpl({ monitor, beatWidth = ROW_BEAT_WIDTH, onOpen }: Monitor
 
   return (
     <tr className="mon-row" data-status={status} data-testid={`monitor-row-${monitor.id}`}>
-      {/* The lamp's label is hidden here: the row's accessible name already
-          carries the status, so a visible repeat would be noise. */}
+      {/* The word is shown for everything except `up` (SUB-100).
+          Hidden for all four statuses, the only difference between down,
+          pending and paused in this layout was hue — red, amber and grey at
+          the same 2px edge and the same filled 20x7 pill — which is rule
+          "never colour alone" broken for exactly the readers it exists for.
+          Showing it for `up` as well would print the same word down 190 rows
+          and drown the three that matter, so the quiet default stays quiet:
+          no word *is* the up signal, and it is not a colour. */}
       <td className="mon-cell mon-cell--led">
-        <Led status={status} />
+        <Led status={status} hideLabel={status === "up"} />
       </td>
 
       {/* scope="row" makes the name the row's header, so a screen reader
@@ -53,7 +59,21 @@ function MonitorRowImpl({ monitor, beatWidth = ROW_BEAT_WIDTH, onOpen }: Monitor
       </th>
 
       <td className="mon-cell mon-cell--beats">
-        <HeartbeatBar beats={beats} label={name} width={beatWidth} height={26} barWidth={4} gap={2} />
+        {/* Not interactive here (SUB-100). One focusable bar per row put 402
+            tab stops in front of the last row's link at 200 monitors, and one
+            sr-only table per row put the DOM at ~33k nodes against the ~11k
+            budget above. The row already says status, latency, uptime and the
+            failure reason in text; the bar is the trend, and the detail view
+            keeps the readable version. */}
+        <HeartbeatBar
+          beats={beats}
+          label={name}
+          width={beatWidth}
+          height={26}
+          barWidth={4}
+          gap={2}
+          interactive={false}
+        />
       </td>
 
       <td className="mon-cell mon-cell--num">

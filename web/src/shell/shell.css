@@ -364,3 +364,39 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/*
+ * The skip link (SUB-100). Off-screen until it takes focus, then a normal
+ * control pinned to the top-left corner — the position every implementation
+ * of this pattern uses, because a link that moves when it appears is a link
+ * you have to find.
+ *
+ * `clip-path` rather than `display: none`: a display-none link is not
+ * focusable at all, which is the usual way this pattern is shipped broken.
+ */
+.shell-skip {
+  position: absolute;
+  left: var(--space-3);
+  top: var(--space-3);
+  z-index: 100;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--type-body);
+  line-height: var(--lead-body);
+  text-decoration: none;
+  box-shadow: var(--shadow-card);
+  clip-path: inset(50%);
+}
+
+.shell-skip:focus-visible { clip-path: none; }
+
+/*
+ * `<main>` is a focus target, not a control: it gets focus on a route change
+ * and from the skip link, and in neither case is a ring around the entire
+ * viewport useful information — the screen has already changed.
+ */
+.shell-content:focus { outline: none; }
+.shell-content:focus-visible { outline: none; }

@@ -157,7 +157,9 @@
   border-collapse: collapse;
 }
 
-.mon-col--led { width: 46px; }
+/* Wide enough for the lamp plus the longest status word ("Pending"), because
+   since SUB-100 the column carries both. 46px held the lamp alone. */
+.mon-col--led { width: 104px; }
 .mon-col--name { width: auto; }
 .mon-col--beats { width: 184px; }
 .mon-col--num { width: 92px; }
@@ -263,7 +265,7 @@
   font-family: var(--font-mono);
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
-  color: var(--ink-3);
+  color: var(--ink-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -538,7 +540,10 @@
   display: grid;
   /* Name and target share the flexible space; the two numbers are fixed so
      they still line up in a column even without a table. */
-  grid-template-columns: 22px minmax(0, 1.1fr) minmax(0, 1.4fr) 76px 62px;
+  /* The first column grew from 22px to hold the status word next to the lamp
+     (SUB-100). The space comes out of the target column, which is the one
+     field on the line that is still readable truncated. */
+  grid-template-columns: 78px minmax(0, 1.1fr) minmax(0, 1.2fr) 76px 62px;
   align-items: center;
   gap: var(--space-3);
   padding: 0 var(--space-3);
@@ -571,7 +576,7 @@
   font-family: var(--font-mono);
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
-  color: var(--ink-3);
+  color: var(--ink-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -849,4 +854,30 @@
 .mon-card-name > a:hover,
 .mon-card-name > a:focus-visible {
   text-decoration: underline;
+}
+
+/*
+ * The status word beside the lamp in the two list layouts (SUB-100).
+ *
+ * Caps at the smallest step: it is a label, not a reading, and it has to sit
+ * beside a 7px lamp without out-shouting the monitor's name. It is absent on
+ * an `up` monitor by design — see MonitorRow — so what the eye learns is "a
+ * word here means something other than fine", which works with the hue rather
+ * than repeating it.
+ *
+ * --ink-2, not --ink-3. DESIGN.md §9 reserves ink-3 for labels and helper
+ * text, and at first glance this is a label — but it was measured at 2.65:1
+ * against the row's surface in the browser, under the 4.5:1 AA floor. This
+ * word is not decoration beside a value: for a reader who cannot separate red
+ * from amber it *is* the status, and unreadable text is a worse signal than
+ * the colour it was added to replace.
+ */
+.mon-cell--led .led-label,
+.mon-line-led .led-label {
+  font-size: var(--type-section);
+  line-height: var(--lead-section);
+  text-transform: uppercase;
+  letter-spacing: var(--track-caps);
+  color: var(--ink-2);
+  white-space: nowrap;
 }

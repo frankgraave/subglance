@@ -655,6 +655,52 @@ Not an afterthought — several of the decisions above exist precisely for it.
 - Keyboard: `Esc` closes the drawer, the dialog and the palette, and exits Status
   wall. Anything clickable has to be reachable with Tab.
 
+### 9.1 The status word in list layouts
+
+`up` shows a lamp and nothing else. Every other status shows its name beside the
+lamp, in caps at `--type-section` and `--ink-2`.
+
+The card layout always said the word; rows and compact lines did not, so `down`,
+`pending` and `paused` were red, amber and grey at the same 2px leading edge and
+the same filled 20x7 pill. A screen reader was fine — the status is in the row's
+accessible name — and the reader this rule exists for, the sighted person who
+cannot separate those hues, had nothing at all.
+
+`up` stays wordless on purpose: printing "Up" down 190 rows would bury the three
+that matter, and *absence* of a word is a non-colour signal too. `--ink-2` rather
+than the `--ink-3` §9 reserves for labels, because this word is measured at
+2.6:1 in `--ink-3` against the row surface — under the 4.5:1 AA floor. It is not
+a caption next to a value; for the reader it was added for, it **is** the status.
+
+### 9.2 The heartbeat bar is an instrument only once per page
+
+In the detail view the bar takes focus, walks its columns with the arrow keys and
+carries a `<table>` of every slot for assistive technology. In the list layouts it
+is `aria-hidden`, has no `tabindex` and emits no table — the pixels only.
+
+Repeating the interactive version per row put **402 tab stops** in front of the
+last row's link at 200 monitors and **32,831 DOM nodes** on the page against the
+~11k the decision not to virtualise (§10) is based on. None of that added a fact
+the row does not already state in text. Hover still works in lists: pointing at a
+column promises nothing to assistive technology.
+
+### 9.3 Navigation says so
+
+A route change sets `document.title` (page first, product name last — a tab is
+truncated from the right), and moves focus to `<main>`, which carries
+`tabIndex={-1}` for the purpose. Not on first render: on arrival focus belongs
+where the browser put it. A visually-hidden skip link is the first focusable
+element on every screen, clipped rather than `display: none` so it can still take
+focus, and withdrawn while the drawer is open because there is nothing to skip
+to.
+
+`jsx-a11y` runs in CI as part of `npm run lint`, which fails on a warning.
+`prefer-tag-over-role` is off: it asks for `<output>` where the code has
+`role="status"` on a `<div>`, and for `<fieldset>` in place of `role="group"` on
+a segmented control, neither of which is an accessibility improvement here.
+`no-autofocus` is waived at exactly one call site, the setup screen, which is a
+page with one field on it.
+
 ---
 
 ## 10. What this design does not do

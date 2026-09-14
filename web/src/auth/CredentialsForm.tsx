@@ -90,6 +90,14 @@ export function CredentialsForm({
           // starting point; autofocus there costs nothing and saves a click.
           // On the login form it would steal focus from a password manager
           // that had already filled both fields.
+          //
+          // jsx-a11y/no-autofocus is waived here rather than globally,
+          // because the objection it raises is real everywhere else: moving
+          // focus without being asked disorients a screen-reader user who has
+          // not finished hearing the page. It does not apply to a page whose
+          // entire content is this one field, and the expression is `setup`,
+          // not `true`, so the login form is still left alone.
+          // oxlint-disable-next-line jsx-a11y/no-autofocus
           autoFocus={setup}
           required
           aria-invalid={badField === "email" ? true : undefined}
