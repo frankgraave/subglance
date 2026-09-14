@@ -324,6 +324,57 @@ describe("tokens.css matches docs/DESIGN.md", () => {
     }
   });
 
+  it("keeps the zero tone between a real reading and an absent one", () => {
+    // The ordering is the whole point of the token, and it is the kind of
+    // thing a later "simplification" collapses: someone notices --ink-zero
+    // sits close to --ink-3 and reuses the existing step. That would make a
+    // measured zero and a missing reading render identically, which is a
+    // statement the screen has to be able to make differently.
+    //
+    // Compared as luminance rather than as a hex string, because the two
+    // themes move in opposite directions: dark text gets lighter as it
+    // recedes, light text gets darker.
+    const channel = (c: number) =>
+      c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    const luminance = (hex: string) => {
+      const h = hex.replace("#", "");
+      const [r, g, b] = [0, 2, 4].map((i) =>
+        channel(Number.parseInt(h.slice(i, i + 2), 16) / 255),
+      );
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const contrast = (a: string, b: string) => {
+      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+
+    for (const [theme, tokens] of [
+      ["dark", darkTokens],
+      ["light", lightTokens],
+    ] as const) {
+      const surface = tokens.get("--surface");
+      const zero = tokens.get("--ink-zero");
+      const second = tokens.get("--ink-2");
+      const third = tokens.get("--ink-3");
+      expect(surface && zero && second && third, `${theme} is missing a tone`).
+        toBeTruthy();
+
+      const onSurface = (tone: string) => contrast(tone, surface as string);
+
+      // Quieter than a real reading…
+      expect(
+        onSurface(zero as string),
+        `${theme}: --ink-zero should sit below --ink-2`,
+      ).toBeLessThan(onSurface(second as string));
+
+      // …but still clearly louder than the tone that means "no data".
+      expect(
+        onSurface(zero as string),
+        `${theme}: --ink-zero should stay above --ink-3`,
+      ).toBeGreaterThan(onSurface(third as string));
+    }
+  });
+
   it("defines every dark token in light too, so no theme falls back silently", () => {
     for (const name of darkTokens.keys()) {
       expect(
@@ -1563,6 +1614,51 @@ describe("the concentric radius rule", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("has a real pair to check, so the guard cannot pass vacuously", () => {
+    // The guard above is a loop over the pairs found under web/src. If the
+    // scan ever finds none — a selector shape it cannot read, a stylesheet
+    // moved out of the tree — the loop runs zero times and the suite reports
+    // the rule as upheld while nothing at all was examined. That is the
+    // failure mode of every "no offenders" test, and the only defence is to
+    // assert that the scan is looking at something.
+    //
+    // It is not asserted against one named component on purpose: which
+    // component nests a padded radius is a layout decision that may move, and
+    // a guard that names it would have to be edited every time it did.
+    const found: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (!file.endsWith(".css")) continue;
+      for (const { selector } of concentricPairs(readFileSync(file, "utf8"))) {
+        found.push(`${relative(repoRoot, file)}: ${selector}`);
+      }
+    }
+    expect(
+      found.length,
+      "no live outer/inner radius pair under web/src — the concentric guard is checking nothing",
+    ).toBeGreaterThan(0);
+  });
+
+  it("subtracts the padding rather than comparing the tokens to themselves", () => {
+    // The arithmetic the rule actually states, on values taken from the two
+    // ladders rather than from the stylesheet being checked: 6px of outer
+    // radius with 4px of padding inside it leaves 2px, and 10px with 4px
+    // leaves 6px. A guard that only asked "is the inner token different from
+    // the outer one" would accept any of the five steps here.
+    expect(
+      concentricPairs(`
+        .outer { border-radius: var(--r-md); padding: var(--space-1); }
+        .outer .inner { border-radius: var(--r-sm); }
+      `),
+    ).toEqual([{ selector: ".outer .inner", want: 6, got: 6 }]);
+
+    expect(
+      concentricPairs(`
+        .outer { border-radius: var(--r-md); padding: var(--space-1); }
+        .outer .inner { border-radius: var(--r-xs); }
+      `),
+    ).toEqual([{ selector: ".outer .inner", want: 6, got: 4 }]);
+  });
+
   it("bites on an inner radius that copies the outer one", () => {
     // The mistake the rule exists to stop: reaching for the same token inside
     // and out, which reads as consistency and draws as a pinched corner.
@@ -1841,5 +1937,85 @@ describe("a dashed edge means the chip is about the data (§8.1)", () => {
     }
     expect([...dashed]).toContain(".chip--state");
     expect([...dashed]).toContain(".chip-avatar");
+  });
+
+  it("loads every stylesheet it ships", () => {
+    // A component stylesheet that nothing imports is invisible to the whole
+    // suite: jsdom applies no CSS, so every test still passes while the
+    // component renders unstyled in the browser. Four of these shipped
+    // together once — the components were built in isolation and the file
+    // that collects them was owned by someone else.
+    //
+    // Walks the import graph from the entrypoint rather than checking that
+    // index.css names each file, because a stylesheet may legitimately be
+    // pulled in by the one next to it (heartbeat.css imports chart.css).
+    const seen = new Set<string>();
+    const walk = (file: string) => {
+      if (seen.has(file)) return;
+      seen.add(file);
+      let contents: string;
+      try {
+        contents = readFileSync(file, "utf8");
+      } catch {
+        return;
+      }
+      for (const match of contents.matchAll(/@import\s+"([^"]+)"/g)) {
+        const target = match[1];
+        if (!target.startsWith(".")) continue; // a package, not one of ours
+        walk(join(file, "..", target));
+      }
+    };
+    walk(join(webSrc, "index.css"));
+
+    const orphans: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (!file.endsWith(".css")) continue;
+      if (seen.has(file)) continue;
+      orphans.push(relative(repoRoot, file));
+    }
+    expect(orphans).toEqual([]);
+  });
+
+  it("keeps every focus ring on the accent", () => {
+    // Focus is a control state: it says "your keyboard is here". §2.8 gives
+    // that job to the accent precisely so it never reads as a fact about the
+    // data — a neutral ring is the same grey the product uses for text it is
+    // de-emphasising, which is the opposite of what focus means.
+    //
+    // This regressed once already: every ring moved to the accent except one
+    // in shell.css, which kept --ink-2 and went unnoticed because nothing
+    // looked at it. Scanning the rules is what makes "every" true.
+    const offenders: string[] = [];
+    for (const { path, selector, body } of cssRules()) {
+      if (!/:focus(?:-visible|-within)?\b/.test(selector)) continue;
+
+      const clean = stripComments(body);
+      const outline = /(?:^|[;{\s])outline(?:-color)?:\s*([^;]+)/.exec(clean);
+      const ring = /box-shadow:\s*([^;]+)/.exec(clean);
+
+      for (const [property, value] of [
+        ["outline", outline?.[1]],
+        ["box-shadow", ring?.[1]],
+      ] as const) {
+        if (!value) continue;
+        // `outline: none` and a shadow that only lifts the surface are not
+        // rings and carry no colour claim.
+        if (/^\s*(?:none|0)\s*$/.test(value)) continue;
+        if (!/var\(--/.test(value)) continue;
+
+        const tokens = [...value.matchAll(/var\((--[\w-]+)/g)].map((m) => m[1]);
+        const carriesAccent = tokens.some((t) => t.startsWith("--accent"));
+        // A ring may legitimately reference an error tone; what it may not do
+        // is sit on a neutral from the ink or border scale.
+        const carriesNeutral = tokens.some(
+          (t) => /^--ink(?:-|$)/.test(t) || /^--border(?:-|$)/.test(t),
+        );
+
+        if (carriesNeutral && !carriesAccent) {
+          offenders.push(`${path} | ${selector} | ${property}: ${value.trim()}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });

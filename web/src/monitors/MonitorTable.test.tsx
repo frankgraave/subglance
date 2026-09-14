@@ -186,7 +186,7 @@ describe("MonitorTable", () => {
 
   it("offers onboarding copy, not a shrug, when there are no monitors at all", () => {
     render(<MonitorTable monitors={[]} beatWidth={WIDTH} />);
-    expect(screen.getByText("No monitors yet")).toBeTruthy();
+    expect(screen.getByText("Nothing is being watched yet")).toBeTruthy();
     expect(screen.queryByRole("table")).toBeNull();
   });
 
@@ -203,7 +203,7 @@ describe("MonitorTable", () => {
     expect(
       screen.getByText(/clear the search to see all 12 monitors/),
     ).toBeTruthy();
-    expect(screen.queryByText("No monitors yet")).toBeNull();
+    expect(screen.queryByText("Nothing is being watched yet")).toBeNull();
   });
 
   it("tells the user to clear the filters too when one is also active", () => {

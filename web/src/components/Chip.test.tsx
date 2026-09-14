@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   CountChip,
   EmptyAvatar,
-  IconTile,
   MetaChip,
   StateChip,
   StatusChip,
@@ -78,19 +77,5 @@ describe("EmptyAvatar", () => {
   });
 });
 
-describe("IconTile", () => {
-  it("hides a decorative glyph from assistive technology", () => {
-    // A tile beside a monitor's name that announces "globe" adds a word
-    // carrying no information.
-    const { container } = render(<IconTile>*</IconTile>);
-    const tile = container.firstElementChild;
-    expect(tile?.getAttribute("aria-hidden")).toBe("true");
-    expect(tile?.getAttribute("role")).toBeNull();
-  });
-
-  it("announces a glyph that is the only thing naming the row", () => {
-    render(<IconTile label="HTTP monitor">*</IconTile>);
-    const tile = screen.getByRole("img", { name: "HTTP monitor" });
-    expect(tile.getAttribute("aria-hidden")).toBeNull();
-  });
-});
+/* IconTile's tests moved to IconTile.test.tsx along with the component; both
+   behaviours asserted here are covered there, with the tone variant besides. */

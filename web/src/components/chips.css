@@ -127,21 +127,7 @@
   border-radius: 50%;
 }
 
-/*
- * The icon tile.
- *
- * 32x32, filled neutral, no border, and it anchors the left of a card header.
- * No border on purpose: the tile is a background for the glyph, and an edge
- * around it would compete with the card's own edge two pixels away.
- */
-.icon-tile {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: var(--space-8);
-  height: var(--space-8);
-  border-radius: var(--r-sm);
-  background: var(--surface-hi);
-  color: var(--ink-2);
-}
+/* The icon tile's rules live in icontile.css, next to the component. They were
+   duplicated here for one commit; two stylesheets writing the same selector is
+   a cascade race waiting to be debugged, and whichever loaded last would have
+   won silently. */

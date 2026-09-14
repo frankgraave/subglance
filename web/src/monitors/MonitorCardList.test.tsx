@@ -120,7 +120,9 @@ describe("MonitorCardList", () => {
 
   it("tells 'nothing matched' apart from 'nothing exists'", () => {
     const { rerender } = render(<MonitorCardList monitors={[]} beatWidth={WIDTH} />);
-    expect(screen.getByRole("heading", { name: "No monitors yet" })).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: "Nothing is being watched yet" }),
+    ).toBeTruthy();
 
     rerender(<MonitorCardList monitors={[]} query="xyz" totalCount={4} beatWidth={WIDTH} />);
     expect(screen.getByRole("heading", { name: /No monitors match/ })).toBeTruthy();

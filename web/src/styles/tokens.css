@@ -103,7 +103,7 @@
   --type-card: 18px;
   --type-row: 15px;
   --type-body: 14px;
-  --type-helper: 13px;
+  --type-helper: 12px;
   --type-section: 12px;
 
   /* iOS Safari zooms the page in when a focused input renders below 16px and
@@ -152,7 +152,7 @@
      value is wrong for, and they are opted into explicitly.
      Spelled `--track-*` because `--tracking-*` is Tailwind v4's own theme
      namespace and a token there would have to reference itself. */
-  --track-body: -.01em;
+  --track-body: -.02em;
   --track-badge: .04em;
   --track-caps: .09em;
 
@@ -210,6 +210,15 @@
   --ink-2:       #9ba1a6;
   --ink-3:       #61686d;
   --ink-4:       #3d4347;
+
+  /* A zero that is genuinely zero, not a missing reading.
+     A column of zeros at full strength competes with the measurements beside
+     it for attention it has not earned — nothing happened, and nothing is
+     what it should look like. But a zero is still data: it sits one step
+     down, not at the strength reserved for absent values, because "no
+     failures in this window" and "no data for this window" are different
+     statements and the screen has to be able to make both. */
+  --ink-zero:    #6f767b;
 
   --up:          #34d399;
   --up-dim:      #10241d;
@@ -282,6 +291,10 @@
   --ink-2:       #5c6165;
   --ink-3:       #8b9196;
   --ink-4:       #b6bbbf;
+
+  /* Same role as in dark: one step down from a real reading, still clearly
+     above the tone that means "no data". */
+  --ink-zero:    #7b8186;
 
   --up:          #059669;
   --up-dim:      #d9f5e9;

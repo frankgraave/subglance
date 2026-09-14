@@ -19,7 +19,9 @@ import {
   type Slot,
 } from "./model";
 import { Tooltip, type TooltipRow } from "../components/Tooltip";
+import { Chart } from "../components/Chart";
 import type { ChipStatus } from "../components/Chip";
+import type { ReactNode } from "react";
 
 export type HeartbeatBarProps = {
   /** Checks oldest first, newest last. */
@@ -62,6 +64,25 @@ export type HeartbeatBarProps = {
    * present tense, so it is told directly and stops making that claim.
    */
   stale?: boolean;
+  /**
+   * Wraps the track in the chart chrome (§13): uptime above it, the check
+   * breakdown right-aligned beside that, and the window's start and end in the
+   * two bottom corners.
+   *
+   * Off by default, and that is the point. The bar is repeated once per
+   * monitor in list layouts, where the row already states uptime in text and a
+   * second copy of it above every track would be the same fact forty times.
+   * The detail view, where the bar is the subject rather than a column, is
+   * where the chrome pays for itself: without it a reader sees that something
+   * failed and has no way to tell when.
+   */
+  framed?: boolean;
+  /**
+   * The legend below the plot, when framed. A slot rather than content: what
+   * needs naming depends on the series, and the legend component itself is not
+   * this component's to build.
+   */
+  legend?: ReactNode;
 };
 
 const formatTime = (ts: number) =>
@@ -71,6 +92,23 @@ const formatTime = (ts: number) =>
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
+  });
+
+/**
+ * The corner times under a framed track.
+ *
+ * Shorter than the tooltip's format on purpose: a corner label states where
+ * the window begins and ends, and a reader who wants the second a check landed
+ * hovers the column that holds it. The date is kept because a heartbeat window
+ * routinely spans midnight, and "23:58 → 00:04" with no date is a range that
+ * could be six minutes or thirty hours.
+ */
+const formatCorner = (ts: number) =>
+  new Date(ts).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 
 const formatLatency = (ms: number | null) =>
@@ -220,6 +258,8 @@ export function HeartbeatBar({
   className,
   interactive = true,
   stale = false,
+  framed = false,
+  legend,
 }: HeartbeatBarProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const measured = useMeasuredWidth(trackRef, width);
@@ -355,92 +395,123 @@ export function HeartbeatBar({
       }
     : {};
 
+  const track = (
+    <div
+      ref={trackRef}
+      className="hb-track"
+      style={{ height }}
+      {...trackProps}
+      onPointerMove={(event) => setActive(indexAt(event.clientX))}
+      onPointerLeave={() => {
+        if (!focused) setActive(null);
+      }}
+    >
+      <svg
+        aria-hidden="true"
+        width={trackWidth}
+        height={height}
+        viewBox={`0 0 ${Math.max(trackWidth, 1)} ${height}`}
+        style={{ display: "block", overflow: "visible" }}
+      >
+        {slots.map((slot, index) => {
+          const status = slotStatus(slot);
+          // An empty slot still draws: a 2px stub reads as "no data here",
+          // whereas a gap reads as a rendering bug.
+          const h =
+            slot.kind === "empty"
+              ? 2
+              : Math.max(barHeight(slot, ceiling) * height, 2);
+          const isNew = arriving !== null && index === slots.length - 1;
+          const classes = [
+            "hb-bar",
+            `hb-bar--${status}`,
+            index === active ? "hb-bar--active" : "",
+            isNew ? "hb-bar--new" : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
+          return (
+            <rect
+              key={index}
+              data-testid={`hb-slot-${index}`}
+              data-status={status}
+              className={classes}
+              x={index * step}
+              y={height - h}
+              width={barWidth}
+              height={h}
+              rx={Math.min(2, barWidth / 2)}
+            />
+          );
+        })}
+      </svg>
+
+      {activeSlot && activeSlot.kind === "beat" && (
+        <div
+          ref={tooltipRef}
+          className="hb-tooltip"
+          data-testid="hb-tooltip"
+          style={{ left: tooltipX }}
+        >
+          <Tooltip
+            timestamp={
+              activeSlot.count > 1
+                ? `${formatTime(activeSlot.from)} – ${formatTime(activeSlot.to)}`
+                : formatTime(activeSlot.to)
+            }
+            unit={tooltipReadout(activeSlot, stale).unit}
+            rows={tooltipReadout(activeSlot, stale).rows}
+            total={
+              activeSlot.count > 1
+                ? { label: "Total", value: `${activeSlot.count} checks` }
+                : undefined
+            }
+            partial={activeSlot.partial}
+            footer={
+              !activeSlot.ok && (activeSlot.error || activeSlot.statusCode)
+                ? `${activeSlot.statusCode ? `${activeSlot.statusCode} ` : ""}${activeSlot.error ?? ""}`
+                : undefined
+            }
+          />
+        </div>
+      )}
+    </div>
+  );
+
+  const uptime = summarise(slots);
+  const pct =
+    uptime.checks === 0
+      ? "—"
+      : `${(((uptime.checks - uptime.failed) / uptime.checks) * 100).toFixed(2)}%`;
+
+  // The chrome states the window it is drawing, not the clock: a bar showing
+  // yesterday's history must not label itself with now.
+  const plot = framed ? (
+    <Chart
+      headline={pct}
+      breakdown={
+        uptime.checks === 0
+          ? "no checks yet"
+          : `${uptime.checks} checks · ${uptime.failed} failed`
+      }
+      start={uptime.span ? formatCorner(uptime.span[0]) : undefined}
+      end={uptime.span ? formatCorner(uptime.span[1]) : undefined}
+      legend={legend}
+    >
+      {track}
+    </Chart>
+  ) : (
+    track
+  );
+
   return (
     <figure
       className={className}
       style={{ margin: 0 }}
       aria-hidden={interactive ? undefined : true}
     >
-      <div
-        ref={trackRef}
-        className="hb-track"
-        style={{ height }}
-        {...trackProps}
-        onPointerMove={(event) => setActive(indexAt(event.clientX))}
-        onPointerLeave={() => {
-          if (!focused) setActive(null);
-        }}
-      >
-        <svg
-          aria-hidden="true"
-          width={trackWidth}
-          height={height}
-          viewBox={`0 0 ${Math.max(trackWidth, 1)} ${height}`}
-          style={{ display: "block", overflow: "visible" }}
-        >
-          {slots.map((slot, index) => {
-            const status = slotStatus(slot);
-            // An empty slot still draws: a 2px stub reads as "no data here",
-            // whereas a gap reads as a rendering bug.
-            const h =
-              slot.kind === "empty"
-                ? 2
-                : Math.max(barHeight(slot, ceiling) * height, 2);
-            const isNew = arriving !== null && index === slots.length - 1;
-            const classes = [
-              "hb-bar",
-              `hb-bar--${status}`,
-              index === active ? "hb-bar--active" : "",
-              isNew ? "hb-bar--new" : "",
-            ]
-              .filter(Boolean)
-              .join(" ");
-            return (
-              <rect
-                key={index}
-                data-testid={`hb-slot-${index}`}
-                data-status={status}
-                className={classes}
-                x={index * step}
-                y={height - h}
-                width={barWidth}
-                height={h}
-                rx={Math.min(2, barWidth / 2)}
-              />
-            );
-          })}
-        </svg>
+      {plot}
 
-        {activeSlot && activeSlot.kind === "beat" && (
-          <div
-            ref={tooltipRef}
-            className="hb-tooltip"
-            data-testid="hb-tooltip"
-            style={{ left: tooltipX }}
-          >
-            <Tooltip
-              timestamp={
-                activeSlot.count > 1
-                  ? `${formatTime(activeSlot.from)} – ${formatTime(activeSlot.to)}`
-                  : formatTime(activeSlot.to)
-              }
-              unit={tooltipReadout(activeSlot, stale).unit}
-              rows={tooltipReadout(activeSlot, stale).rows}
-              total={
-                activeSlot.count > 1
-                  ? { label: "Total", value: `${activeSlot.count} checks` }
-                  : undefined
-              }
-              partial={activeSlot.partial}
-              footer={
-                !activeSlot.ok && (activeSlot.error || activeSlot.statusCode)
-                  ? `${activeSlot.statusCode ? `${activeSlot.statusCode} ` : ""}${activeSlot.error ?? ""}`
-                  : undefined
-              }
-            />
-          </div>
-        )}
-      </div>
 
       {/* The load-bearing text alternative, and the reason the pixels may be
           `aria-hidden`. Bounded by the column count, so a 500-beat series is

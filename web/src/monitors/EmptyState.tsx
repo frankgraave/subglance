@@ -13,11 +13,23 @@ export function EmptyState({
   query,
   totalCount,
   filtered = false,
+  onAddMonitor,
 }: {
   query: string;
   totalCount: number;
   /** True when a status or tag filter is on, even with an empty query. */
   filtered?: boolean;
+  /**
+   * Opens the add-monitor form, when the screen around this one owns it.
+   *
+   * Optional, and absent today: the form is shell state, and no caller plumbs
+   * it this far down yet. Without it the next step is still stated, it just
+   * names the control instead of being one — which is the honest fallback. A
+   * hardcoded link would be worse than no button: `/monitors/new` is not a
+   * route this product has, so the one thing this screen exists to offer
+   * would be a dead end.
+   */
+  onAddMonitor?: () => void;
 }) {
   const needle = query.trim();
   // A filter that hides every monitor used to render "No monitors yet", which
@@ -52,11 +64,38 @@ export function EmptyState({
         </>
       ) : (
         <>
-          <h3 className="mon-empty-title">No monitors yet</h3>
-          <p className="mon-empty-body">
-            Add the first thing you want watched — a URL, a host and port, or a
-            cron job that should check in. SubGlance starts probing it straight
-            away and this page fills in as the first results land.
+          <h3 className="mon-empty-title mon-empty-title--first">
+            Nothing is being watched yet
+          </h3>
+          <p className="mon-empty-body mon-empty-body--first">
+            Point SubGlance at the first thing you care about — a URL, a host
+            and port, or a cron job that should check in. Probing starts
+            immediately, and this page fills in as the first results land.
+          </p>
+          {/*
+           * The one next step, stated as one thing to press.
+           *
+           * §14 allows this screen to raise its voice, and it works only
+           * because everything around it is quiet: there is no list competing
+           * for attention here, so a single warm heading and a single obvious
+           * action are legible rather than loud. A second button would undo
+           * that — "clear next step" means one step.
+           */}
+          <p className="mon-empty-action">
+            {onAddMonitor === undefined ? (
+              <span className="mon-empty-hint">
+                Press <b className="mon-empty-control">Add monitor</b> at the top
+                of the page to start.
+              </span>
+            ) : (
+              <button
+                type="button"
+                className="mon-empty-cta"
+                onClick={onAddMonitor}
+              >
+                Add the first monitor
+              </button>
+            )}
           </p>
         </>
       )}

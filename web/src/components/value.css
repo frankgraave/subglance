@@ -1,0 +1,56 @@
+/*
+ * The value (DESIGN.md §10).
+ *
+ * A reading, not a piece of text. Mono, tabular and right-aligned so a column
+ * of them can be compared without reading any of them individually.
+ */
+
+.value {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: var(--space-1);
+  /* The whole point of the alignment: units under units, digits growing
+     leftwards, so magnitude is visible before the number is read. */
+  text-align: right;
+  @apply face-mono;
+  font-size: var(--type-body);
+  line-height: var(--lead-body);
+  color: var(--ink);
+}
+
+/*
+ * A zero steps back. It is still data — the check ran and the answer was
+ * zero — so it is one tone below a live reading and clearly above the tone
+ * that means there is nothing to report.
+ */
+.value[data-zero="true"] {
+  color: var(--ink-zero);
+}
+
+/*
+ * No measurement at all. Fainter than a zero on purpose: these two must never
+ * look alike, because "0" and "we never checked" are opposite claims.
+ */
+.value[data-empty="true"] {
+  color: var(--ink-4);
+}
+
+/*
+ * A caveat, expressed twice before it is expressed in colour.
+ *
+ * The dotted underline is the mark that survives a black-and-white screen and
+ * a colour-blind reader; the glyph beside it is the second. Only then does the
+ * amber tint arrive, as confirmation rather than as the signal.
+ */
+.value[data-warn="true"] .value-text {
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--warn);
+}
+
+.value-warn {
+  flex: none;
+  color: var(--warn);
+}

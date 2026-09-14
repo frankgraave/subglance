@@ -11,11 +11,11 @@
 import {
   CountChip,
   EmptyAvatar,
-  IconTile,
   MetaChip,
   StateChip,
   StatusChip,
 } from "./Chip";
+import { IconTile } from "./IconTile";
 import { Tooltip } from "./Tooltip";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

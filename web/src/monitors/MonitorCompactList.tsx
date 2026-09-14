@@ -1,4 +1,6 @@
 import { memo } from "react";
+import { PanelList, PanelRow } from "../components/PanelList";
+import { Value } from "../components/Value";
 import { EmptyState } from "./EmptyState";
 import { describeTarget, formatLatency, formatUptime } from "./format";
 import { Led } from "./Led";
@@ -63,12 +65,12 @@ type CompactLineProps = { monitor: Monitor; onOpen?: (id: string) => void };
 function CompactLineImpl({ monitor, onOpen }: CompactLineProps) {
   const { name, status, latencyMs, uptime24h, error } = monitor;
   return (
-    <li
+    <PanelRow
       className="mon-line"
-      data-status={status}
+      status={status}
       data-testid={`monitor-line-${monitor.id}`}
+      icon={<Led status={status} hideLabel={status === "up"} className="mon-line-led" />}
     >
-      <Led status={status} hideLabel={status === "up"} className="mon-line-led" />
       <MonitorLink
         id={monitor.id}
         name={name}
@@ -84,17 +86,19 @@ function CompactLineImpl({ monitor, onOpen }: CompactLineProps) {
         ) : latencyMs === null ? (
           <Unknown what="latency" />
         ) : (
-          formatLatency(latencyMs)
+          // The raw number goes in beside the formatted text so a measured
+          // zero dims as data rather than being mistaken for a missing one.
+          <Value value={latencyMs}>{formatLatency(latencyMs)}</Value>
         )}
       </span>
       <span className="mon-line-num">
         {uptime24h === null ? (
           <Unknown what="uptime" />
         ) : (
-          formatUptime(uptime24h)
+          <Value value={uptime24h}>{formatUptime(uptime24h)}</Value>
         )}
       </span>
-    </li>
+    </PanelRow>
   );
 }
 
@@ -154,7 +158,9 @@ export function MonitorCompactList({
             <h3 id={`mon-line-${section.id}`} className="mon-line-group-title">
               {section.label} ({section.monitors.length})
             </h3>
-            <ul className="mon-line-stack">{lines(section.monitors)}</ul>
+            <PanelList className="mon-line-stack">
+              {lines(section.monitors)}
+            </PanelList>
           </section>
         ))}
       </div>
@@ -168,12 +174,12 @@ export function MonitorCompactList({
 
   return (
     <div className="mon-lines">
-      <ul
+      <PanelList
         className="mon-line-stack"
-        aria-label={`Monitors (${ordered.length})`}
+        label={`Monitors (${ordered.length})`}
       >
         {lines(ordered)}
-      </ul>
+      </PanelList>
     </div>
   );
 }

@@ -1,0 +1,128 @@
+/*
+ * The panel list (DESIGN.md §10).
+ *
+ * One rule decides everything below: a row is an object, not a table cell.
+ * Objects have edges of their own, so the shared divider is gone and each row
+ * carries a full 1px border, a corner and a gap to the next one.
+ *
+ * `--r-md` is the row's corner. §2.6 states the ladder as "marks, controls,
+ * rows, then cards": 2px for a mark, 4-6px for a control, 10px for a row,
+ * 12px for a card. A row panel is therefore `--r-md` by the ladder's own
+ * definition, and it is also the nearer of the two candidates to the 8px the
+ * design note asks for once `--r-sm` (6px) is ruled out for being the control
+ * step.
+ */
+
+.panel-list {
+  display: flex;
+  flex-direction: column;
+  /* Small, not generous: the rows are still one list, and a wide gap turns a
+     stack into a set of unrelated cards. */
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.panel-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  /* Asymmetric on purpose: a row is wider than it is tall, and equal padding
+     makes a one-line row look like a box with text lost in it. */
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-flat);
+  /* Only colour transitions. Nothing here animates a position or a size,
+     because a list whose rows shift under the pointer is unreadable on a
+     screen people stare at. */
+  transition:
+    background var(--dur-hover) var(--ease),
+    border-color var(--dur-hover) var(--ease);
+}
+
+.panel-row:hover {
+  background: var(--surface-2);
+  border-color: var(--border-hi);
+}
+
+/*
+ * Hover lives on the icon, not on the surface.
+ *
+ * The icon lights up one rung of the ink scale and the label follows it; the
+ * box itself stays exactly where it was. That is the whole trick: the row
+ * still answers the pointer, but the column of rows never moves.
+ */
+.panel-row-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  color: var(--ink-3);
+  transition: color var(--dur-hover) var(--ease);
+}
+
+.panel-row:hover .panel-row-icon,
+.panel-row:focus-within .panel-row-icon {
+  color: var(--ink);
+}
+
+.panel-row-body {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+/*
+ * The row's actions.
+ *
+ * Faded rather than hidden, and always in the layout: `display: none` would
+ * resize the row the instant the pointer arrived, which is the same
+ * restlessness the no-transform rule exists to prevent. `:focus-within` is not
+ * a nicety — without it the buttons are invisible to anyone tabbing through,
+ * which is the point at which a hover affordance becomes an accessibility bug.
+ */
+.panel-row-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: none;
+  opacity: 0;
+  transition: opacity var(--dur-hover) var(--ease);
+}
+
+.panel-row:hover .panel-row-actions,
+.panel-row:focus-within .panel-row-actions {
+  opacity: 1;
+}
+
+/* Coarse pointers never hover, so there is nothing to reveal: on a touch
+   screen the actions are simply part of the row. */
+@media (hover: none) {
+  .panel-row-actions { opacity: 1; }
+}
+
+/* Someone who asked for less motion gets the states without the fades. */
+@media (prefers-reduced-motion: reduce) {
+  .panel-row,
+  .panel-row-icon,
+  .panel-row-actions { transition: none; }
+}
+
+/*
+ * Focus is the accent ring (§2.8), not a neutral outline.
+ *
+ * A neutral `--ink-2` outline is the same tone as ordinary text on this
+ * canvas, so the focused element and the paragraph beside it were saying the
+ * same thing in the same voice. The accent is reserved for controls, which is
+ * exactly what a focused thing is.
+ */
+.panel-row :is(a, button):focus-visible {
+  outline: 3px solid var(--accent-ring);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
