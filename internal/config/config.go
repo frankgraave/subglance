@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/frankgraave/subglance/internal/store"
 	"github.com/frankgraave/subglance/internal/trustedproxy"
 	"github.com/frankgraave/subglance/internal/watchdog"
 )
@@ -56,6 +57,16 @@ type Config struct {
 	// SubGlance into an SSRF proxy into the host network (see SUB-18).
 	AllowPrivateTargets bool
 
+	// RawRetention is how long individual heartbeats are kept before being
+	// folded into hourly buckets. Short windows suit a small VPS; long ones
+	// keep full resolution at the cost of disk.
+	RawRetention time.Duration
+
+	// RollupRetention is how long hourly buckets and resolved incidents are
+	// kept. Zero means keep them forever, which is what SubGlance did before
+	// this option existed.
+	RollupRetention time.Duration
+
 	// TrustedProxies lists the peers whose X-Forwarded-For and X-Real-Ip
 	// headers may be believed, as a comma-separated list of addresses and
 	// CIDR blocks. Empty means believe nobody.
@@ -85,6 +96,8 @@ func defaults() Config {
 		WatchdogURL:         "",
 		WatchdogInterval:    watchdog.DefaultInterval,
 		AllowPrivateTargets: false,
+		RawRetention:        store.DefaultRawRetention,
+		RollupRetention:     store.DefaultRollupRetention,
 		TrustedProxies:      "",
 	}
 }
@@ -105,6 +118,8 @@ func Load(args []string) (Config, error) {
 	c.WatchdogURL = envStr("SUBGLANCE_WATCHDOG_URL", c.WatchdogURL)
 	c.WatchdogInterval = envDur("SUBGLANCE_WATCHDOG_INTERVAL", c.WatchdogInterval)
 	c.AllowPrivateTargets = envBool("SUBGLANCE_ALLOW_PRIVATE_TARGETS", c.AllowPrivateTargets)
+	c.RawRetention = envDur("SUBGLANCE_RAW_RETENTION", c.RawRetention)
+	c.RollupRetention = envDur("SUBGLANCE_ROLLUP_RETENTION", c.RollupRetention)
 	c.TrustedProxies = envStr("SUBGLANCE_TRUSTED_PROXIES", c.TrustedProxies)
 
 	fs := flag.NewFlagSet("subglance", flag.ContinueOnError)
@@ -120,6 +135,10 @@ func Load(args []string) (Config, error) {
 		"how often to ping the watchdog URL")
 	fs.BoolVar(&c.AllowPrivateTargets, "allow-private-targets", c.AllowPrivateTargets,
 		"allow monitoring private/loopback addresses (SSRF risk, off by default)")
+	fs.DurationVar(&c.RawRetention, "raw-retention", c.RawRetention,
+		"how long raw heartbeats are kept before being rolled up into hourly buckets")
+	fs.DurationVar(&c.RollupRetention, "rollup-retention", c.RollupRetention,
+		"how long hourly buckets and resolved incidents are kept (0 = forever)")
 	fs.StringVar(&c.TrustedProxies, "trusted-proxies", c.TrustedProxies,
 		"comma-separated addresses or CIDR blocks whose X-Forwarded-For may be believed (empty = none)")
 
@@ -154,6 +173,21 @@ func (c Config) validate() error {
 	}
 	if c.CheckWorkers < 0 {
 		return fmt.Errorf("check-workers must not be negative, got %d", c.CheckWorkers)
+	}
+	if c.RawRetention <= 0 {
+		return fmt.Errorf("raw-retention must be positive, got %s", c.RawRetention)
+	}
+	if c.RollupRetention < 0 {
+		return fmt.Errorf("rollup-retention must not be negative, got %s", c.RollupRetention)
+	}
+	// Hourly buckets are only worth anything once the raw beats behind them
+	// are gone. A rollup window inside the raw one would delete a bucket that
+	// still has its own heartbeats sitting next to it, so the history would
+	// jump back into existence on the next read and vanish again on the next
+	// rollup.
+	if c.RollupRetention > 0 && c.RollupRetention < c.RawRetention {
+		return fmt.Errorf("rollup-retention (%s) must be at least raw-retention (%s)",
+			c.RollupRetention, c.RawRetention)
 	}
 	if c.TrustedProxies != "" {
 		if err := trustedproxy.Validate(c.TrustedProxies); err != nil {
