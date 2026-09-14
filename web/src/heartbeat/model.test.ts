@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   barHeight,
+  cadence,
   DOWN_HEIGHT,
+  expectedChecks,
   latencyCeiling,
   MAX_OK_HEIGHT,
   MIN_OK_HEIGHT,
+  PARTIAL_COVERAGE,
   slotCountFor,
   summarise,
   toSlots,
@@ -12,6 +15,7 @@ import {
   UNKNOWN_LATENCY_HEIGHT,
   type Beat,
   type BeatSlot,
+  type Slot,
 } from "./model";
 
 const beat = (i: number, over: Partial<Beat> = {}): Beat => ({
@@ -142,5 +146,145 @@ describe("tooltipLeft", () => {
 
   it("aligns to the left margin when the tooltip cannot fit at all", () => {
     expect(tooltipLeft({ ...base, columnCentre: 40, viewportWidth: 100 })).toBe(8);
+  });
+});
+
+describe("cadence", () => {
+  it("reads the schedule from the series", () => {
+    expect(cadence(beats(10))).toBe(60_000);
+  });
+
+  it("cannot tell a cadence from fewer than two checks", () => {
+    expect(cadence([])).toBeNull();
+    expect(cadence(beats(1))).toBeNull();
+  });
+
+  /*
+   * The reason this is a median and not a mean.
+   *
+   * One long outage in an otherwise regular series drags the average interval
+   * far above the schedule. Every gappy bucket would then clear its expected
+   * count and the partial marker would go quiet exactly during the incident
+   * it exists to flag.
+   */
+  it("ignores an outage-sized gap instead of averaging it in", () => {
+    const regular = beats(20);
+    const afterOutage = beats(20).map((b) => ({
+      ...b,
+      ts: b.ts + 20 * 60_000 + 4 * 60 * 60_000,
+    }));
+    const series = [...regular, ...afterOutage];
+    expect(cadence(series)).toBe(60_000);
+    // The mean over the same series is several times the real schedule, which
+    // is what would have been used as the expected interval.
+    const gaps = series.slice(1).map((b, i) => b.ts - series[i].ts);
+    const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+    expect(mean).toBeGreaterThan(5 * 60_000);
+  });
+});
+
+describe("expectedChecks", () => {
+  it("counts both ends of the window", () => {
+    // A window holding one check spans nothing and still holds one check.
+    expect(expectedChecks(0, 0, 60_000)).toBe(1);
+    expect(expectedChecks(0, 600_000, 60_000)).toBe(11);
+  });
+
+  it("gives up rather than guessing without a cadence", () => {
+    expect(expectedChecks(0, 600_000, null)).toBeNull();
+    expect(expectedChecks(0, 600_000, 0)).toBeNull();
+  });
+});
+
+describe("partial buckets", () => {
+  it("flags a bucket that lost most of its checks", () => {
+    // 60 minutes of 60s checks, but the middle 40 never arrived.
+    const kept = beats(60).filter((_, i) => i < 10 || i >= 50);
+    const [slot] = toSlots(kept, 1) as BeatSlot[];
+    expect(slot.count).toBe(20);
+    expect(slot.expected).toBe(60);
+    expect(slot.partial).toBe(true);
+  });
+
+  it("leaves a complete bucket alone", () => {
+    const [slot] = toSlots(beats(60), 1) as BeatSlot[];
+    expect(slot.expected).toBe(60);
+    expect(slot.partial).toBe(false);
+  });
+
+  /*
+   * Checks do not land on the second they are scheduled, so the newest bucket
+   * of a live series is routinely one check short of the arithmetic. Flagging
+   * that would make the marker mean nothing.
+   */
+  it("tolerates ordinary jitter", () => {
+    const jittery = beats(40).map((b, i) => ({ ...b, ts: b.ts + i * 900 }));
+    const [slot] = toSlots(jittery, 1) as BeatSlot[];
+    expect(slot.partial).toBe(false);
+    expect(slot.count / (slot.expected as number)).toBeGreaterThan(
+      PARTIAL_COVERAGE,
+    );
+  });
+
+  it("never calls a single-check column partial", () => {
+    // It spans no window, so there is nothing it could be missing.
+    const slots = toSlots(beats(5), 20) as Slot[];
+    const single = slots.filter(
+      (s): s is BeatSlot => s.kind === "beat",
+    );
+    expect(single).toHaveLength(5);
+    expect(single.every((s) => s.count === 1 && !s.partial)).toBe(true);
+  });
+
+  it("has no opinion when the series is too short to have a cadence", () => {
+    const [slot] = toSlots(beats(1), 1) as BeatSlot[];
+    expect(slot.expected).toBeNull();
+    expect(slot.partial).toBe(false);
+  });
+
+  /*
+   * The cadence is measured over the whole series on purpose. Derived per
+   * bucket, a bucket that lost nine of every ten checks would see a tenfold
+   * interval, call that its schedule, and declare itself complete — the
+   * failure mode would be worst exactly where the data is worst.
+   */
+  /*
+   * A bucket that lost the checks at its *edges* used to shrink its own
+   * yardstick: `expected` came from its first and last surviving check, so the
+   * missing checks at the ends made the window look exactly that much shorter
+   * and the gap cancelled itself out. Both columns then claimed to be
+   * complete — which is the one thing this flag exists to prevent.
+   */
+  it("measures a bucket against its real window, not its surviving checks", () => {
+    // 60 minute-checks over a 80-minute window: minutes 30-49 never arrived,
+    // and the hole sits right on the border between the two columns. Each
+    // column is internally contiguous, so each one looks whole from the
+    // inside while standing for a window it only half covers.
+    const all = beats(80);
+    const straddled = [...all.slice(0, 30), ...all.slice(50)];
+    const slots = toSlots(straddled, 2) as BeatSlot[];
+    expect(slots.map((s) => s.count)).toEqual([30, 30]);
+    // Without the fix both read 30: thirty contiguous checks span 29 intervals.
+    expect(slots.map((s) => s.expected)).toEqual([50, 50]);
+    expect(slots.map((s) => s.partial)).toEqual([true, true]);
+  });
+
+  /*
+   * The newest column is still filling up, so its window ends at its last
+   * check rather than at a border that does not exist yet. Measuring it
+   * against a full column would flag the right-hand bar on every render.
+   */
+  it("does not flag the newest column for being half-filled", () => {
+    const slots = toSlots(beats(105), 2) as BeatSlot[];
+    expect(slots[slots.length - 1].partial).toBe(false);
+  });
+
+  it("measures the cadence over the series, not inside the gappy bucket", () => {
+    const healthy = beats(100);
+    const gappy = beats(100)
+      .filter((_, i) => i % 10 === 0)
+      .map((b) => ({ ...b, ts: b.ts + 100 * 60_000 }));
+    const slots = toSlots([...healthy, ...gappy], 2) as BeatSlot[];
+    expect(slots[1].partial).toBe(true);
   });
 });

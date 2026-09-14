@@ -28,6 +28,7 @@ import (
 	"github.com/frankgraave/subglance/internal/events"
 	"github.com/frankgraave/subglance/internal/logging"
 	"github.com/frankgraave/subglance/internal/monitor"
+	"github.com/frankgraave/subglance/internal/notifier"
 	"github.com/frankgraave/subglance/internal/store"
 	"github.com/frankgraave/subglance/internal/watchdog"
 	"github.com/frankgraave/subglance/internal/webui"
@@ -118,18 +119,36 @@ func run(args []string) error {
 	// other's lifetime.
 	bus := events.NewBus(0)
 
+	// The notifier is built before the runner so the runner can hand it
+	// alerts. It only writes to the outbox on that path; the delivery
+	// itself happens in its own goroutine below, which is what keeps a
+	// slow webhook from delaying a check.
+	notify := notifier.New(notifier.Options{DB: db, Log: log})
+
 	runner := monitor.New(monitor.Options{
 		DB:                  db,
 		Log:                 log,
 		AllowPrivateTargets: cfg.AllowPrivateTargets,
 		Workers:             cfg.CheckWorkers,
 		Bus:                 bus,
+		Notify: func(a monitor.Alert) {
+			// Enqueue takes a context, but this callback runs on
+			// the check path and must not be cancelled by it: an
+			// alert that is dropped because its check timed out is
+			// the alert that mattered most.
+			if err := notify.Enqueue(context.Background(),
+				a.Monitor, a.Incident, a.Event, a.At); err != nil {
+				log.Error("could not queue alert",
+					"monitor", a.Monitor.Name, "error", err)
+			}
+		},
 	})
 
 	// The API is constructed before the server so a bad --trusted-proxies is
 	// a startup error rather than a limiter that quietly trusts nobody.
 	apiSrv, err := api.New(log, db).WithBus(bus).
 		WithProber(runner).WithPushRecorder(runner).
+		WithChannelTester(notify).
 		WithTrustedProxies(cfg.TrustedProxies)
 	if err != nil {
 		return err
@@ -169,6 +188,16 @@ func run(args []string) error {
 		if err := runner.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 			log.Error("scheduler stopped unexpectedly", "error", err)
 		}
+	}()
+
+	// The notifier drains the outbox in its own goroutine. This is the
+	// half of notification that is allowed to be slow: it talks to
+	// webhooks and mail servers, retries what failed, and none of that can
+	// reach back into the check path.
+	notifierDone := make(chan struct{})
+	go func() {
+		defer close(notifierDone)
+		notify.Run(ctx)
 	}()
 
 	// The watchdog is the only part of SubGlance that talks outbound to
@@ -239,6 +268,16 @@ func run(args []string) error {
 	case <-watchdogDone:
 	case <-shutdownCtx.Done():
 		log.Warn("watchdog did not stop within the shutdown timeout")
+	}
+
+	// The notifier last: an alert that fired during shutdown is already in
+	// the outbox, so nothing is lost if this times out — the next start
+	// picks the delivery up. Waiting anyway means the common case of a
+	// clean restart sends what it had rather than deferring it.
+	select {
+	case <-notifierDone:
+	case <-shutdownCtx.Done():
+		log.Warn("notifier did not stop within the shutdown timeout; queued alerts will be sent after restart")
 	}
 
 	log.Info("shutdown complete")

@@ -42,6 +42,10 @@ type Server struct {
 	// endpoint, matching how bus and prober are treated.
 	pusher PushRecorder
 
+	// tester sends a real message through a channel, for the test button.
+	// Nil disables that endpoint, on the same principle as the others.
+	tester ChannelTester
+
 	// pushReports rate-limits the public push endpoint per monitor. It is
 	// separate from manualChecks because the two protect against different
 	// things: one bounds what an authenticated human can ask the server to
@@ -309,6 +313,12 @@ func (s *Server) routes() []route {
 		{http.MethodPut, "/api/v1/channels/{id}", accessWrite},
 		{http.MethodDelete, "/api/v1/channels/{id}", accessWrite},
 
+		// Testing a channel sends a real message to a configured
+		// destination, so it needs write access even though it changes
+		// nothing here: a viewer who could trigger it could use the
+		// instance to post into someone else's chat room.
+		{http.MethodPost, "/api/v1/channels/{id}/test", accessWrite},
+
 		// Authenticated: admin only.
 		{http.MethodGet, "/api/v1/users", accessAdmin},
 		{http.MethodPost, "/api/v1/users", accessAdmin},
@@ -405,6 +415,8 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 		return s.handleCreateChannel
 	case "PUT /api/v1/channels/{id}":
 		return s.handleUpdateChannel
+	case "POST /api/v1/channels/{id}/test":
+		return s.handleTestChannel
 	case "DELETE /api/v1/channels/{id}":
 		return s.handleDeleteChannel
 
@@ -583,12 +595,30 @@ func (s *Server) withLogging(next http.Handler) http.Handler {
 		}
 		s.log.Debug("request",
 			"method", r.Method,
-			"path", r.URL.Path,
+			"path", redactPath(r.URL.Path),
 			"status", rec.status,
 			"bytes", rec.bytes,
 			"duration", time.Since(start),
 		)
 	})
+}
+
+// redactPath removes credentials that travel in the URL path.
+//
+// One route has that shape: a push URL, where the token IS the path. The rest
+// of the code is careful never to store that token in the clear — only its
+// hash — which made writing it to the log the single hole in otherwise
+// deliberate handling. Debug logging is a documented, supported setting, so
+// every push credential would land in stdout, journald and any log shipper.
+//
+// A monitor's target URL is not redacted and should not be: a target is
+// something being watched, not something that proves the right to report.
+func redactPath(path string) string {
+	const pushPrefix = "/api/v1/push/"
+	if strings.HasPrefix(path, pushPrefix) && len(path) > len(pushPrefix) {
+		return pushPrefix + "{token}"
+	}
+	return path
 }
 
 // withRecovery keeps one panicking handler from taking down the whole process.
@@ -600,7 +630,7 @@ func (s *Server) withRecovery(next http.Handler) http.Handler {
 				s.log.Error("panic in handler",
 					"panic", v,
 					"method", r.Method,
-					"path", r.URL.Path,
+					"path", redactPath(r.URL.Path),
 				)
 				writeJSON(w, http.StatusInternalServerError, map[string]string{
 					"error": "internal server error",

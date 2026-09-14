@@ -16,6 +16,7 @@ import {
   StateChip,
   StatusChip,
 } from "./Chip";
+import { Tooltip } from "./Tooltip";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -132,6 +133,37 @@ export function TokenSheet() {
           <StateChip>Partial data</StateChip>
           <EmptyAvatar />
           <IconTile>@</IconTile>
+        </div>
+      </Section>
+
+      {/* The tooltip out of its hover, so its structure can be judged and
+          measured: the divider running the full width, the value column
+          aligned right, and the dashed chip that says the window is
+          incomplete (DESIGN.md §8.3). */}
+      <Section title="Tooltip">
+        <div className="flex flex-wrap gap-4">
+          <div className="hb-tooltip" style={{ position: "static" }}>
+            <Tooltip
+              timestamp="14 Sep 09:00 – 09:20"
+              unit="ms"
+              rows={[
+                { key: "slowest", label: "Slowest", value: "142", marker: "up", status: "Up" },
+                { key: "median", label: "Median", value: "96", marker: "up", status: "Up" },
+              ]}
+              total={{ label: "Total", value: "20 checks" }}
+            />
+          </div>
+          <div className="hb-tooltip" style={{ position: "static" }}>
+            <Tooltip
+              timestamp="14 Sep 03:00 – 03:20"
+              unit="ms"
+              rows={[
+                { key: "slowest", label: "Slowest", value: "98", marker: "up", status: "Up" },
+              ]}
+              total={{ label: "Total", value: "2 checks" }}
+              partial
+            />
+          </div>
         </div>
       </Section>
 
