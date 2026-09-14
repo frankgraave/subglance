@@ -132,6 +132,78 @@ describe("HeartbeatBar", () => {
     expect(tip.textContent).toContain("502");
   });
 
+  /*
+   * The problem the tooltip's partial marker exists for: a bucket holding a
+   * handful of the checks its window should contain used to be drawn exactly
+   * like a full one, so a gap in the history read as a healthy stretch.
+   */
+  it("says a bucket is incomplete, and stays quiet when it is not", () => {
+    // 41 columns over 820 minute-checks: ~20 per bucket. The oldest stretch
+    // loses nine of every ten checks, the newest keeps all of them.
+    const all = beats(820);
+    const gappy = [
+      ...all.slice(0, 400).filter((_, i) => i % 10 === 0),
+      ...all.slice(400),
+    ];
+    render(<HeartbeatBar beats={gappy} label="API" width={WIDTH} />);
+    const track = document.querySelector(".hb-track") as HTMLElement;
+    track.getBoundingClientRect = () => ({ left: 0, width: WIDTH }) as DOMRect;
+
+    fireEvent.pointerMove(track, { clientX: 2 });
+    expect(screen.getByTestId("hb-tooltip").textContent).toContain(
+      "Partial data",
+    );
+
+    fireEvent.pointerMove(track, { clientX: 40 * 9 + 2 });
+    expect(screen.getByTestId("hb-tooltip").textContent).not.toContain(
+      "Partial data",
+    );
+  });
+
+  it("names the unit once and closes a bucketed readout with a total", () => {
+    render(<HeartbeatBar beats={beats(200)} label="API" width={WIDTH} />);
+    const track = document.querySelector(".hb-track") as HTMLElement;
+    track.getBoundingClientRect = () => ({ left: 0, width: WIDTH }) as DOMRect;
+    fireEvent.pointerMove(track, { clientX: 40 * 9 + 2 });
+    const tip = screen.getByTestId("hb-tooltip");
+    // A unit, not the metric name: "latency" is what the row is called, "ms"
+    // is what its number is in.
+    expect(tip.querySelector(".tooltip-unit")!.textContent).toBe("ms");
+    // Named once in the header, so the value must not repeat it.
+    expect(tip.querySelector(".tooltip-value")!.textContent).toBe("120");
+    const total = tip.querySelector(".tooltip-row--total")!;
+    expect(total.textContent).toContain("checks");
+    // A healthy bucket does not spend a row saying nothing failed.
+    expect(tip.textContent).not.toContain("Failed");
+  });
+
+  it("states the column's status in words, not only in the marker colour", () => {
+    render(<HeartbeatBar beats={beats(5)} label="API" width={WIDTH} />);
+    const track = document.querySelector(".hb-track") as HTMLElement;
+    track.getBoundingClientRect = () => ({ left: 0, width: WIDTH }) as DOMRect;
+    fireEvent.pointerMove(track, { clientX: 40 * 9 + 2 });
+    const tip = screen.getByTestId("hb-tooltip");
+    expect(tip.querySelector(".tooltip-status")!.textContent).toBe("Up");
+  });
+
+  /*
+   * While the stream is down the bar drains its colour, but the tooltip is
+   * positioned outside that rule's reach. A column hovered ten minutes after
+   * the connection dropped used to report the last known status in the present
+   * tense, in a colour that still said "up right now".
+   */
+  it("stops the tooltip claiming a current status while the stream is stale", () => {
+    render(<HeartbeatBar beats={beats(5)} label="API" width={WIDTH} stale />);
+    const track = document.querySelector(".hb-track") as HTMLElement;
+    track.getBoundingClientRect = () => ({ left: 0, width: WIDTH }) as DOMRect;
+    fireEvent.pointerMove(track, { clientX: 40 * 9 + 2 });
+    const tip = screen.getByTestId("hb-tooltip");
+    expect(tip.querySelector(".tooltip-status")!.textContent).toBe(
+      "Not updating",
+    );
+    expect(tip.querySelector(".tooltip-marker")).toBeNull();
+  });
+
   it("lets the tooltip overhang a narrow track rather than clipping it", () => {
     // A 60px track hard against the right edge of a 1024px jsdom window: the
     // tooltip is wider than the track, so it has to escape it to stay whole.

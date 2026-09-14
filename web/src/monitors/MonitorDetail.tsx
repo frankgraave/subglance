@@ -145,6 +145,7 @@ export function MonitorDetail({
             height={44}
             barWidth={6}
             gap={3}
+            stale={stale}
           />
         </div>
         {beats.length === 0 ? (

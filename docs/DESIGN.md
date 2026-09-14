@@ -944,6 +944,54 @@ thing saying what the row is. A tile beside a monitor's name that announces
 
 ---
 
+### 8.3 The readout tooltip
+
+A tooltip here is a small table, not a sentence. The parts, in order:
+
+| Part | Drawn |
+|---|---|
+| header | mono timestamp or range, with the unit named once beside it |
+| divider | full width, padding included — it separates, it does not underline |
+| row | status marker, mono caps label, right-aligned mono value |
+| total | closing summary, set apart by its own rule |
+| partial | dashed `Partial data` chip (§8.1) when the window is incomplete |
+
+**The unit is named once in the header, not on every row.** A tooltip whose
+rows all end in `ms` spends a third of its width repeating one word.
+
+**Values are right-aligned in their own grid column.** That is the whole reason
+the readout is a grid: numbers line up on their last digit and become
+comparable without being read.
+
+**A row with no status keeps the marker column as an empty spacer.** A neutral
+dot beside a coloured one reads as a status of its own, so the spacer is
+transparent and only the alignment survives.
+
+#### A partial bucket must not look healthy
+
+The heartbeat bar folds many checks into one column. A column holding two of
+the forty checks its window should contain was drawn exactly like a full one,
+so a gap in the history read as a healthy stretch — the one thing a monitoring
+tool must not do. The dashed chip says so, and dashed already means *about the
+data* (§8.1), so it needs no legend.
+
+Whether a column is partial is arithmetic, not a flag from the server:
+
+* The cadence is the **median** gap across the whole series. The mean is
+  dragged up by exactly the outages this is meant to catch, and a per-bucket
+  cadence lets a bucket that lost nine of every ten checks derive a tenfold
+  interval and call itself complete.
+* It is read from the stored history rather than the monitor's configured
+  interval, because a monitor whose interval changed last week still has
+  history at the old cadence, and the configured number would mark all of it
+  partial.
+* A column is partial below **90%** of its expected count. Not 100%: checks do
+  not land on the second they are scheduled, so the newest bucket of a live
+  series is routinely one check short of the arithmetic, and flagging that
+  would make the marker mean nothing.
+
+---
+
 ## 9. Accessibility
 
 Not an afterthought — several of the decisions above exist precisely for it.
