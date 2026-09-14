@@ -576,8 +576,8 @@ describe("tokens.css matches the §2.5 weight and tracking scales", () => {
         /\|\s*`(--(?:weight|track)-[a-z]+)`\s*\|\s*`([^`]+)`\s*\|/g,
       ),
     ];
-    expect(rows.length, "expected four weights and three tracking roles").toBe(
-      7,
+    expect(rows.length, "expected four weights and four tracking roles").toBe(
+      8,
     );
     for (const [, name, value] of rows) {
       expect(root.get(name), name).toBe(value);
@@ -615,9 +615,10 @@ describe("tracking is decided once, on the body", () => {
   });
 
   it("keeps only the exceptions the body value is wrong for", () => {
-    // Two faces the inherited value does not suit: the mono badge, which is
-    // already wide, and uppercase, which needs the opposite sign. Any third
-    // token is a per-component tweak wearing a token's name.
+    // Three faces the inherited value does not suit: the mono badge, which is
+    // already wide; uppercase, which needs the opposite sign; and mono itself,
+    // which needs no correction at all because its advance is fixed. Any
+    // fourth token is a per-component tweak wearing a token's name.
     const root = declarations(
       tokensCss.slice(0, tokensCss.indexOf("[data-theme=")),
     );
@@ -628,6 +629,7 @@ describe("tracking is decided once, on the body", () => {
       "--track-badge",
       "--track-body",
       "--track-caps",
+      "--track-mono",
     ]);
   });
 });

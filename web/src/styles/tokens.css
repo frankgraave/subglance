@@ -156,6 +156,15 @@
   --track-badge: .04em;
   --track-caps: .09em;
 
+  /* Mono keeps its own width.
+     The body tracking is a correction for the sans, whose glyphs are drawn to
+     sit closer than a browser's default. A monospace face is already spaced
+     on a fixed advance, so inheriting a negative value squeezes letters into
+     their own cells — worst exactly where mono is used, on URLs, IDs and
+     latencies, which are the strings a reader has to compare character by
+     character. Zero is not "no decision": it is the face's own metrics. */
+  --track-mono: 0;
+
   /* Space moves in steps of 4px. Named so a row's rhythm is a decision
      that can be changed in one place, not 40 ad-hoc paddings. */
   /* Control height. Not a spacing step: it is the height a row of interactive

@@ -327,6 +327,7 @@ the inherited value is wrong for the face.
 |---|---|---|---|
 | Body | `--track-body` | `-.02em` | inherited by everything, set once on `body` |
 | Badge | `--track-badge` | `.04em` | small mono badges, where the mono face is already wide |
+| Mono | `--track-mono` | `0` | carried by the `face-mono` role, so mono keeps its own advance |
 | Caps | `--track-caps` | `.09em` | every uppercase micro-label, without exception |
 
 This replaces four tokens — `--track-title`, `--track-name`, `--track-badge`

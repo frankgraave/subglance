@@ -151,11 +151,17 @@
   color: var(--ink-3);
 }
 
+/*
+ * The list has no frame of its own.
+ *
+ * Every row now draws its own edge, so a border here would be a box around a
+ * stack of boxes — the double framing that makes a panel list read as a table
+ * again. `overflow: hidden` goes with it: it existed to clip rows against the
+ * container's corners, and there are no longer corners to clip against. It
+ * would also crop the focus ring on the first and last row.
+ */
 .mon-board {
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  background: var(--surface);
-  overflow: hidden;
+  background: transparent;
 }
 
 .mon-table {
@@ -164,7 +170,11 @@
      browser measuring every cell, and stops a long target from shoving the
      numeric columns around. */
   table-layout: fixed;
-  border-collapse: collapse;
+  /* Separate, not collapse: collapsed borders merge into shared hairlines,
+     which is exactly the ruled-grid look §10 removes. Separate lets each row
+     own its edge and takes the gap between panels. */
+  border-collapse: separate;
+  border-spacing: 0 var(--space-1);
 }
 
 /* Wide enough for the lamp plus the longest status word ("Pending"), because
@@ -179,8 +189,10 @@
   padding: 0 var(--space-3);
   text-align: left;
   @apply caps-legend;
-  background: var(--surface-2);
-  border-bottom: 1px solid var(--border);
+  /* No rule under the header: the panels below carry their own edges, and a
+     line here would be the last surviving piece of the grid. The label reads
+     as a heading on its own — that is what the mono caps role is for. */
+  background: transparent;
 }
 
 .mon-head--num { text-align: right; }
@@ -189,17 +201,50 @@
   padding: var(--space-2) var(--space-3);
   text-align: left;
   @apply caps-legend;
-  background: var(--surface-2);
-  border-bottom: 1px solid var(--border);
+  background: transparent;
 }
 
-.mon-row {
-  border-bottom: 1px solid var(--border);
+/*
+ * The rows are panels, drawn on a table.
+ *
+ * §10 asks for a stack of panels rather than a ruled grid: each row its own
+ * 1px edge, its own corner, a little air between. The obvious way to get that
+ * is to stop using a table — and that would be the wrong trade. This data is a
+ * grid of facts about a set of things, the markup is a real `<table>` with
+ * `<th scope="row">`, and that is what gives a screen-reader user row and
+ * column announcements for free. Trading a working accessibility tree for a
+ * visual convention is a bad exchange when both are available.
+ *
+ * So: `border-separate` with a vertical spacing, and the edge drawn on the
+ * cells rather than the row — `<tr>` cannot carry a border under
+ * `border-collapse: separate`. The first and last cell in a row round the
+ * outer corners, which is what makes the row read as one object rather than
+ * three boxes.
+ *
+ * Do NOT put display:flex/grid/contents on any of these elements to make this
+ * easier. Safari drops table semantics when you do, silently undoing every
+ * reason the table is here.
+ */
+.mon-row > * {
+  border-block: 1px solid var(--border-control);
   transition: background var(--dur-hover) var(--ease);
 }
 
-.mon-row:last-child { border-bottom: 0; }
-.mon-row:hover { background: var(--surface-2); }
+.mon-row > :first-child {
+  border-left: 1px solid var(--border-control);
+  border-start-start-radius: var(--r-md);
+  border-end-start-radius: var(--r-md);
+}
+
+.mon-row > :last-child {
+  border-right: 1px solid var(--border-control);
+  border-start-end-radius: var(--r-md);
+  border-end-end-radius: var(--r-md);
+}
+
+/* The surface does not move on hover — no transform. A list people stare at
+   all day must not shift under the pointer; the row lights instead. */
+.mon-row:hover > * { background: var(--surface-2); }
 
 /* Trouble warms the row's leading edge instead of filling it. A coloured fill
    across a list of 200 is noise; two warm edges in a quiet list is

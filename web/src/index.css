@@ -33,6 +33,10 @@
   font-variant-ligatures: var(--ligatures-mono);
   font-variant-numeric: var(--numeric-mono);
   text-rendering: var(--render-mono);
+  /* The face carries its own spacing. Without this the body tracking cascades
+     in, and the one role that must not be squeezed is the one showing strings
+     a reader compares character by character. */
+  letter-spacing: var(--track-mono);
   /* Pinned rather than left to the browser (§2.5). Which features an engine
      turns on by default differs between engines, so a page that looks right
      in one renders with different figures in another. */
