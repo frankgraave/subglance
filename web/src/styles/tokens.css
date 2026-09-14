@@ -19,11 +19,41 @@
   --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
-  /* Shape. Radius grows with the element: controls, then rows, then cards. */
+  /* A face is a configuration, not a family name. Both faces fall back to a
+     system font on most machines, so anything spelled as an OpenType feature
+     tag would apply to one font and silently do nothing on the next; these are
+     the standard properties, which every face answers.
+
+     Sans neutralises what is discretionary: it keeps the two ligature kinds
+     that exist to fix letter collisions (common and contextual) and turns off
+     the historical and discretionary sets, so a font update cannot change how
+     the product's text renders without an edit here. */
+  --ligatures-sans: common-ligatures contextual;
+  --numeric-sans: normal;
+  --render-sans: optimizeLegibility;
+
+  /* Mono switches on what makes it legible and off what fuses characters.
+     `slashed-zero` is the one that matters: IDs, latencies and timestamps are
+     set in mono precisely so 0 cannot be read as O. Ligatures are off outright
+     — a mono ligature turns `->` or `!=` inside a URL or an error string into
+     a glyph that is no longer the characters it stands for. `tabular-nums`
+     belongs to the face and not to seven call sites: if the rule is "anything
+     measurable is mono", every mono digit is already meant to line up. */
+  --ligatures-mono: none;
+  --numeric-mono: slashed-zero tabular-nums;
+  --render-mono: geometricPrecision;
+
+  /* Shape. Radius grows with the element: marks, controls, rows, then cards.
+     `--r-2xs` is the step for a small mark — the lamp drew itself at 2.5px
+     only because the ladder stopped at 4px, and a fractional radius is the
+     same defect the type scale already rejected: what the engine does with
+     the half pixel depends on the device pixel ratio, so the lamp's silhouette
+     was not the same shape on every screen. */
+  --r-2xs: 2px;
   --r-xs: 4px;
   --r-sm: 6px;
   --r-md: 10px;
-  --r-lg: 14px;
+  --r-lg: 12px;
 
   /* Motion. `--ease` starts fast and settles softly, so movement decays
      mechanically rather than floating. Duration follows role, not taste. */
@@ -84,6 +114,7 @@
   --weight-plain: 400;
   --weight-mid: 450;
   --weight-strong: 500;
+  --weight-heavy: 600;
 
   /* Tracking is an optical correction, never emphasis: sans set at its default
      looks loose, uppercase set at its default looks glued together. One value
@@ -303,11 +334,14 @@
   --font-weight-plain: var(--weight-plain);
   --font-weight-mid: var(--weight-mid);
   --font-weight-strong: var(--weight-strong);
+  --font-weight-heavy: var(--weight-heavy);
 
   --tracking-body: var(--track-body);
   --tracking-badge: var(--track-badge);
   --tracking-caps: var(--track-caps);
 
+  --radius-2xs: var(--r-2xs);
+  --radius-xs: var(--r-xs);
   --radius-sm: var(--r-sm);
   --radius-md: var(--r-md);
   --radius-lg: var(--r-lg);

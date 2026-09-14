@@ -1,5 +1,34 @@
 @import "tailwindcss";
 @import "./styles/tokens.css";
+
+/*
+ * The two face roles (DESIGN.md §2.5).
+ *
+ * A face is a whole configuration — family, ligatures, numeric variant and
+ * rendering mode — not just a family name. Defined once as utilities so the
+ * next component that reaches for mono gets the slashed zero and the tabular
+ * figures with it, rather than the name alone and whatever the browser
+ * defaults to. Before this, `font-variant-numeric: tabular-nums` was repeated
+ * at seven call sites and absent from the other seven that set the mono
+ * family, so half the measurable text in the product did not line up.
+ *
+ * `@utility` rather than a plain class: it makes the role available both to
+ * `@apply` inside a component stylesheet and to `className="face-mono"`, and
+ * it participates in Tailwind's cascade layers instead of sitting above them.
+ */
+@utility face-sans {
+  font-family: var(--font-sans);
+  font-variant-ligatures: var(--ligatures-sans);
+  font-variant-numeric: var(--numeric-sans);
+  text-rendering: var(--render-sans);
+}
+
+@utility face-mono {
+  font-family: var(--font-mono);
+  font-variant-ligatures: var(--ligatures-mono);
+  font-variant-numeric: var(--numeric-mono);
+  text-rendering: var(--render-mono);
+}
 /* Component styles live next to their component; they are collected here so
    the app keeps a single CSS entrypoint. */
 @import "./heartbeat/heartbeat.css";
@@ -23,12 +52,11 @@
   body {
     background-color: var(--canvas);
     color: var(--ink);
-    font-family: var(--font-sans);
+    @apply face-sans;
     /* The one optical correction the sans face needs, set once so every
        element inherits it (§2.5). Faces it is wrong for override it. */
     letter-spacing: var(--track-body);
     -webkit-font-smoothing: antialiased;
-    text-rendering: optimizeLegibility;
   }
 
   /* Theme switches are the one place a page-wide transition is justified:
@@ -51,7 +79,7 @@
 
   /* Anything measurable is mono so digits line up in a column. */
   code, kbd, samp, pre {
-    font-family: var(--font-mono);
+    @apply face-mono;
   }
 }
 

@@ -2,17 +2,19 @@
  * The LED (DESIGN.md §3). Colour comes from tokens.css; this file owns the
  * shape, the lens highlight and the one-shot transition.
  *
- * 20x7 with a 2.5px radius: a horizontal pill reads as an indicator lamp on
+ * 20x7 with `--r-2xs`: a horizontal pill reads as an indicator lamp on
  * equipment, where a circle reads as a bullet in a list. At 999px the eye
  * gets no straight edge to lock onto and the shape goes soft, so the radius
- * stops short of fully round.
+ * stops short of fully round. It was hand-rolled at 2.5px because the ladder
+ * started at 4px; the 2px step now exists, and a whole pixel draws the same
+ * silhouette on every device pixel ratio rather than one the engine rounds.
  */
 
 .led {
   display: inline-block;
   width: 20px;
   height: 7px;
-  border-radius: 2.5px;
+  border-radius: var(--r-2xs);
   background: var(--idle);
   box-shadow: var(--glow-idle);
   position: relative;

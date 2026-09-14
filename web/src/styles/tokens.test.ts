@@ -35,14 +35,45 @@ const repoRoot = join(webSrc, "..", "..");
 const tokensCss = readFileSync(join(here, "tokens.css"), "utf8");
 const designMd = readFileSync(join(repoRoot, "docs", "DESIGN.md"), "utf8");
 
-/** Extracts `--name: value;` declarations from a block of CSS. */
+/**
+ * A stylesheet with its comments blanked to spaces, so a guard that scans for
+ * a declaration cannot be tripped by prose that names one. Line structure is
+ * preserved so offsets still line up with the file.
+ */
+function stripComments(css: string): string {
+  return css.replace(/\/\*[\s\S]*?\*\//g, (c) => c.replace(/[^\n]/g, " "));
+}
+
+/**
+ * Extracts `--name: value;` declarations from a block of CSS.
+ *
+ * Comments first: this file documents its tokens in prose beside them, and a
+ * comment that writes `--token: value` reads to a plain scan as a declaration.
+ * Worse, it wins — it sits above the real one and the last match is kept — so
+ * a token could be asserted against a sentence about it rather than against
+ * its value.
+ */
 function declarations(css: string): Map<string, string> {
   const found = new Map<string, string>();
-  for (const match of css.matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/g)) {
+  for (const match of stripComments(css).matchAll(
+    /(--[a-z0-9-]+)\s*:\s*([^;]+);/g,
+  )) {
     found.set(match[1], match[2].trim());
   }
   return found;
 }
+
+describe("the token parser reads declarations, not prose about them", () => {
+  it("ignores a token named inside a comment", () => {
+    const parsed = declarations(`
+      :root {
+        /* --r-lg: 14px was the old value. */
+        --r-lg: 12px;
+      }
+    `);
+    expect(parsed.get("--r-lg")).toBe("12px");
+  });
+});
 
 /** Isolates one `[data-theme="…"]` rule from tokens.css. */
 function themeBlock(theme: "dark" | "light"): string {
@@ -187,7 +218,11 @@ describe("tokens.css matches docs/DESIGN.md", () => {
     const root = declarations(
       tokensCss.slice(tokensCss.indexOf(":root"), tokensCss.indexOf("\n}")),
     );
-    for (const match of designMd.matchAll(/(--r-(?:sm|md|lg)):\s*([^;]+);/g)) {
+    const radii = [
+      ...designMd.matchAll(/(--r-(?:2xs|xs|sm|md|lg)):\s*(\S+);/g),
+    ];
+    expect(radii.length, "expected five radius steps in §2.6").toBe(5);
+    for (const match of radii) {
       expect(root.get(match[1]), match[1]).toBe(match[2].trim());
     }
     const ease = designMd.match(/--ease:\s*([^;]+);/);
@@ -482,7 +517,7 @@ describe("tokens.css matches the §2.5 weight and tracking scales", () => {
     );
     // Anchored at the prose that introduces the two tables so the Weight
     // column of the type-role table above cannot be mistaken for a row here.
-    const start = designMd.indexOf("**Weight is a scale of three");
+    const start = designMd.indexOf("**Weight is a scale of four");
     expect(start, "missing the §2.5 weight prose").toBeGreaterThan(-1);
     const body = designMd.slice(start, designMd.indexOf("\n### ", start));
     const rows = [
@@ -490,8 +525,8 @@ describe("tokens.css matches the §2.5 weight and tracking scales", () => {
         /\|\s*`(--(?:weight|track)-[a-z]+)`\s*\|\s*`([^`]+)`\s*\|/g,
       ),
     ];
-    expect(rows.length, "expected three weights and three tracking roles").toBe(
-      6,
+    expect(rows.length, "expected four weights and three tracking roles").toBe(
+      7,
     );
     for (const [, name, value] of rows) {
       expect(root.get(name), name).toBe(value);
@@ -502,7 +537,7 @@ describe("tokens.css matches the §2.5 weight and tracking scales", () => {
     // Without a binding the token is reachable from CSS but not from a
     // className, and the next component quietly reaches for `font-medium`.
     const inline = tokensCss.slice(tokensCss.lastIndexOf("@theme inline {"));
-    for (const step of ["plain", "mid", "strong"]) {
+    for (const step of ["plain", "mid", "strong", "heavy"]) {
       expect(inline, `--font-weight-${step}`).toContain(
         `--font-weight-${step}: var(--weight-${step});`,
       );
@@ -1200,5 +1235,251 @@ describe("an interactive element does not rest on the static border", () => {
         )
         .map((b) => b.selector),
     ).toEqual([".a-button"]);
+  });
+});
+
+/**
+ * SUB-106: a face is a whole configuration, not a family name.
+ *
+ * The defect these close is the quiet kind. `font-family: var(--font-mono)`
+ * got the shapes and nothing else, so which mono elements had tabular figures
+ * depended on whether whoever wrote the rule remembered to ask: seven call
+ * sites did, seven did not, and a column of latencies in one layout lined up
+ * while the same numbers in the next did not. Nothing on screen names that as
+ * a bug — it just looks slightly wrong and no one can say why.
+ */
+describe("a face is applied as a role, not as a family name", () => {
+  const indexCss = readFileSync(join(webSrc, "index.css"), "utf8");
+
+  it("defines both roles with all four properties", () => {
+    for (const face of ["sans", "mono"]) {
+      const start = indexCss.indexOf(`@utility face-${face} {`);
+      expect(start, `missing the face-${face} utility`).toBeGreaterThan(-1);
+      const body = indexCss.slice(start, indexCss.indexOf("\n}", start));
+      expect(body, `face-${face} family`).toContain(
+        `font-family: var(--font-${face});`,
+      );
+      expect(body, `face-${face} ligatures`).toContain(
+        `font-variant-ligatures: var(--ligatures-${face});`,
+      );
+      expect(body, `face-${face} numeric`).toContain(
+        `font-variant-numeric: var(--numeric-${face});`,
+      );
+      expect(body, `face-${face} rendering`).toContain(
+        `text-rendering: var(--render-${face});`,
+      );
+    }
+  });
+
+  it("takes every face value from the §2.5 table", () => {
+    const root = declarations(
+      tokensCss.slice(tokensCss.indexOf(":root"), tokensCss.indexOf("\n}")),
+    );
+    const start = designMd.indexOf("**A face is a configuration");
+    expect(start, "missing the §2.5 face prose").toBeGreaterThan(-1);
+    const body = designMd.slice(start, designMd.indexOf("\n###", start));
+    const rows = [
+      ...body.matchAll(
+        /\|\s*(?:Sans|Mono)\s*\|\s*`(--ligatures-[a-z]+)`\s*`([^`]+)`\s*\|\s*`(--numeric-[a-z]+)`\s*`([^`]+)`\s*\|\s*`(--render-[a-z]+)`\s*`([^`]+)`\s*\|/g,
+      ),
+    ];
+    expect(rows.length, "expected a sans row and a mono row").toBe(2);
+    for (const row of rows) {
+      for (let i = 1; i < row.length; i += 2) {
+        expect(root.get(row[i]), row[i]).toBe(row[i + 1]);
+      }
+    }
+  });
+
+  it("names no font family outside the two roles", () => {
+    // A rule that reaches for the family directly is a rule that opted out of
+    // the face without saying so, and it is exactly how the tabular-figure
+    // drift started.
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      // index.css is where the two roles are defined, so it is the one file
+      // that names a family on purpose.
+      if (file === join(webSrc, "index.css")) continue;
+      const contents = stripComments(readFileSync(file, "utf8"));
+      for (const match of contents.matchAll(
+        /font-family:\s*[^;]+|\bfont-(?:sans|mono|serif)\b/g,
+      )) {
+        offenders.push(`${relative(repoRoot, file)}: ${match[0].trim()}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("sets no font-variant-numeric or text-rendering outside the roles", () => {
+    // Both belong to a face. Set per component they are either a duplicate of
+    // what the role already says, or a silent disagreement with it — and the
+    // second is invisible: a rule that re-states `tabular-nums` next to a face
+    // that already carries it looks identical to one that overrides it.
+    // Matched as declarations, not as bare words, so that prose explaining the
+    // rule does not read as a violation of it.
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (file === join(webSrc, "index.css")) continue;
+      const contents = stripComments(readFileSync(file, "utf8"));
+      for (const match of contents.matchAll(
+        /(?:font-variant-numeric|font-variant-ligatures|text-rendering)\s*:\s*[^;]+|\b(?:tabular-nums|slashed-zero|normal-nums|ordinal|oldstyle-nums)\b/g,
+      )) {
+        offenders.push(`${relative(repoRoot, file)}: ${match[0].trim()}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("catches a re-stated variant and spares the prose that explains it", () => {
+    const offenders = (css: string) =>
+      [
+        ...stripComments(css).matchAll(
+          /(?:font-variant-numeric|font-variant-ligatures|text-rendering)\s*:\s*[^;]+|\b(?:tabular-nums|slashed-zero|normal-nums|ordinal|oldstyle-nums)\b/g,
+        ),
+      ].map((m) => m[0].trim());
+    expect(offenders("/* tabular-nums belongs to the face. */\n.a { color: red; }"))
+      .toEqual([]);
+    expect(offenders(".a { font-variant-numeric: tabular-nums; }")).toEqual([
+      "font-variant-numeric: tabular-nums",
+    ]);
+  });
+
+  it("keeps the mono face's zero slashed and its ligatures off", () => {
+    // The two decisions the mono face exists for. Stated as their own test so
+    // that reversing either one fails with the reason attached rather than as
+    // a token mismatch.
+    const root = declarations(
+      tokensCss.slice(tokensCss.indexOf(":root"), tokensCss.indexOf("\n}")),
+    );
+    expect(root.get("--numeric-mono")).toContain("slashed-zero");
+    expect(root.get("--numeric-mono")).toContain("tabular-nums");
+    expect(root.get("--ligatures-mono")).toBe("none");
+  });
+});
+
+/**
+ * The concentric rule (§2.7): an inner radius is the outer radius minus the
+ * padding between them. Equal radii look right in a mockup and pinch at the
+ * corners on screen, because the gap between two curves of the same radius is
+ * not constant — the corner of the inner element crowds the corner of the
+ * outer one while the straight edges stay parallel.
+ *
+ * It is the kind of rule that is obeyed once and then broken by the next
+ * component, which is why it is asserted rather than written down. Today no
+ * component nests a radius inside a padded radius — the segmented control that
+ * will is still open on SUB-106 — so the guard has nothing live to catch and
+ * is proved against fixtures instead. That is the point of landing it now: it
+ * is in place before the components that have to obey it are written, rather
+ * than after the first one has already chosen a number by eye.
+ */
+const RADIUS_LADDER = new Map([
+  ["--r-2xs", 2],
+  ["--r-xs", 4],
+  ["--r-sm", 6],
+  ["--r-md", 10],
+  ["--r-lg", 12],
+]);
+
+const SPACE_LADDER = new Map(
+  [1, 2, 3, 4, 5, 6, 8, 10, 12, 16].map((step) => [
+    `--space-${step}`,
+    step * 4,
+  ]),
+);
+
+function radiusOf(body: string): string | undefined {
+  return body.match(/border-radius:\s*var\((--r-[a-z0-9]+)\)\s*;/)?.[1];
+}
+
+/**
+ * Outer/inner radius pairs in one stylesheet, as the rule requires them to be.
+ *
+ * A pair is an element whose selector is a descendant of a padded, rounded
+ * one — `.panel .segment` inside `.panel` — where both state a radius. Only a
+ * uniform `padding` counts: with asymmetric padding there is no single gap, so
+ * there is no single inner radius, and checking one of the four values would
+ * be inventing a rule the document does not state.
+ */
+function concentricPairs(css: string): {
+  selector: string;
+  want: number;
+  got: number;
+}[] {
+  const blocks = declarationBlocks(css);
+  const outers = blocks.flatMap(({ selector, body }) => {
+    const radius = radiusOf(body);
+    const padding = body.match(/padding:\s*var\((--space-\d+)\)\s*;/)?.[1];
+    if (!radius || !padding) return [];
+    const outer = RADIUS_LADDER.get(radius);
+    const gap = SPACE_LADDER.get(padding);
+    if (outer === undefined || gap === undefined) return [];
+    return [{ selector, want: outer - gap }];
+  });
+
+  const pairs = [];
+  for (const { selector, body } of blocks) {
+    const radius = radiusOf(body);
+    if (!radius) continue;
+    const got = RADIUS_LADDER.get(radius);
+    if (got === undefined) continue;
+    for (const outer of outers) {
+      if (selector === outer.selector) continue;
+      if (!selector.startsWith(`${outer.selector} `)) continue;
+      pairs.push({ selector, want: outer.want, got });
+    }
+  }
+  return pairs;
+}
+
+describe("the concentric radius rule", () => {
+  it("is stated in docs/DESIGN.md", () => {
+    expect(designMd).toContain("**The concentric rule.**");
+  });
+
+  it("keeps every nested radius concentric with the one around it", () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (!file.endsWith(".css")) continue;
+      for (const { selector, want, got } of concentricPairs(
+        readFileSync(file, "utf8"),
+      )) {
+        if (got === want) continue;
+        offenders.push(
+          `${relative(repoRoot, file)}: ${selector} is ${got}px inside a corner that leaves ${want}px`,
+        );
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("bites on an inner radius that copies the outer one", () => {
+    // The mistake the rule exists to stop: reaching for the same token inside
+    // and out, which reads as consistency and draws as a pinched corner.
+    const copied = `
+      .panel { border-radius: var(--r-sm); padding: var(--space-1); }
+      .panel .segment { border-radius: var(--r-sm); }
+    `;
+    expect(concentricPairs(copied)).toEqual([
+      { selector: ".panel .segment", want: 2, got: 6 },
+    ]);
+
+    const concentric = `
+      .panel { border-radius: var(--r-sm); padding: var(--space-1); }
+      .panel .segment { border-radius: var(--r-2xs); }
+    `;
+    expect(concentricPairs(concentric)).toEqual([
+      { selector: ".panel .segment", want: 2, got: 2 },
+    ]);
+  });
+
+  it("ignores a container whose padding is not uniform", () => {
+    // Four gaps, so no single inner radius. Checking it against one of them
+    // would enforce a rule §2.7 does not state.
+    expect(
+      concentricPairs(`
+        .panel { border-radius: var(--r-sm); padding: var(--space-1) var(--space-2); }
+        .panel .segment { border-radius: var(--r-sm); }
+      `),
+    ).toEqual([]);
   });
 });

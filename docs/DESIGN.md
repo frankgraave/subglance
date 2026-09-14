@@ -190,16 +190,24 @@ row at 34px, so a laptop still shows the same number of monitors without
 scrolling (product principle 1). Larger type inside an unchanged row is paid for
 out of the slack that was already there, not out of the viewport.
 
-**Weight is a scale of three, not a dial.** The sans ships a real 450, which is
+**Weight is a scale of four, not a dial.** The sans ships a real 450, which is
 why the middle step exists at all: a monitor's name has to separate from the
 metadata beside it without becoming a heading, and 500 at 15px is already a
-heading. Anything outside these three is drift.
+heading. Anything outside these four is drift.
+
+The scale topped out at 500, which is why the page title read flat: at 24px the
+same weight that marks a 12px uppercase label carries no more authority than the
+row titles under it, and the only thing separating the page title from the rest
+of the screen was its size. `--weight-heavy` exists for that one role. It is
+deliberately not available to the roles below it — a scale whose top step is
+reachable from anywhere is a dial again.
 
 | Role | Token | Value | Used for |
 |---|---|---|---|
 | Plain | `--weight-plain` | `400` | running text, helper text, table cells |
 | Mid | `--weight-mid` | `450` | the name of a thing, set against its own metadata |
-| Strong | `--weight-strong` | `500` | headings, uppercase micro-labels, an emphasised count |
+| Strong | `--weight-strong` | `500` | section headings, uppercase micro-labels, an emphasised count |
+| Heavy | `--weight-heavy` | `600` | the page title, and nothing below it |
 
 **Tracking is an optical correction, never emphasis.** Sans set at its default
 spacing looks loose, and uppercase text set at its default looks glued together;
@@ -240,13 +248,48 @@ the utility binding therefore carry different names, exactly as `--canvas` and
 status codes. Numbers stacked in a column have to line up — otherwise you're not
 comparing them, you're reading them.
 
+**A face is a configuration, not a family name.** Naming the family got the
+shapes and nothing else, so every property that decides how those shapes render
+was left to the browser or repeated per component. Each face is now defined once
+as a utility in `index.css` — `face-sans` and `face-mono` — and a component
+applies the role rather than the family.
+
+| Role | Ligatures | Numeric | Rendering |
+|---|---|---|---|
+| Sans | `--ligatures-sans` `common-ligatures contextual` | `--numeric-sans` `normal` | `--render-sans` `optimizeLegibility` |
+| Mono | `--ligatures-mono` `none` | `--numeric-mono` `slashed-zero tabular-nums` | `--render-mono` `geometricPrecision` |
+
+Three decisions are worth stating:
+
+- **The mono zero is slashed.** IDs, latencies, timestamps and status codes are
+  set in mono precisely so `0` cannot be read as `O`; a mono face that does not
+  distinguish them is doing half its job. If the resolved face exposes no
+  slashed zero the declaration is inert, which is the correct failure — the text
+  renders exactly as it did before.
+- **Mono ligatures are off.** `text-rendering: optimizeLegibility` was set on
+  `body` and inherited by every mono element, and it enables ligatures. On a
+  monospace that fuses `->` or `!=` inside a URL or an error string into a glyph
+  that is no longer the characters it stands for, in the one place on screen
+  where a character has to be exactly itself.
+- **Tabular figures belong to the face, not the call site.** They were spelled
+  out at seven places and absent from the other seven that set the mono family,
+  so half the measurable text in the product did not line up. If the rule is
+  "anything measurable is mono", every mono digit is already meant to be
+  tabular.
+
+These are the standard CSS properties rather than raw OpenType feature tags.
+Both faces fall back to a system font on most machines, and a feature tag that
+one face exposes and the next does not fails silently and differently per
+machine.
+
 ### 2.6 Shape, space, motion
 
 ```css
+--r-2xs: 2px;   /* small marks: the lamp, a dot, a tick */
 --r-xs: 4px;    /* chips, segmented buttons, badges */
 --r-sm: 6px;    /* buttons, inputs, small controls */
 --r-md: 10px;   /* rows, list items */
---r-lg: 14px;   /* cards, dialogs, drawer */
+--r-lg: 12px;   /* cards, dialogs, drawer */
 
 --ease: cubic-bezier(.32, .72, 0, 1);
 --dur:  420ms;  /* theme transition */
@@ -257,16 +300,28 @@ Space moves in steps of 4px; §2.7 states the ladder and how it is enforced.
 ### 2.7 Spacing and radius
 
 The ladder is `--space-1..16` = 4/8/12/16/20/24/32/40/48/64 and the radius
-ladder is `--r-xs/sm/md/lg` = 4/6/10/14. Both are guarded by `tokens.test.ts`
+ladder is `--r-2xs/xs/sm/md/lg` = 2/4/6/10/12. Both are guarded by `tokens.test.ts`
 the way colour and type already were, because both had drifted: a `7px` and a
 `9px` padding, each chosen by hand to reach a rendered height that nothing
 stated.
 
 The guard has a **4px floor**. Below it a literal is a hairline, not a spacing
-decision — a 1px optical nudge, the 2.5px radius of the lamp, the `-1px` of a
-screen-reader clip. There is no token that could say those better. At 4px and
+decision — a 1px optical nudge, the `1.5px` inset ring of an unlit lamp, the
+`-1px` of a screen-reader clip. There is no token that could say those better.
+The lamp's own corner used to be listed here at `2.5px`; it is now `--r-2xs`,
+because a radius that shapes the product's brand mark is a decision, and a
+fractional one renders differently depending on the device pixel ratio. At 4px and
 above the ladder can express the value, so a literal there is either replaced
 or written into the allow-list in `tokens.test.ts` with a reason.
+
+**The concentric rule.** Where a component draws a rounded thing inside another
+rounded thing, the inner radius is the outer radius minus the padding between
+them. Concentric corners stay parallel; equal ones do not, and the gap between a
+control and the panel around it visibly pinches at the corners. A segmented
+control with `--r-xs` padding inside an `--r-sm` shell therefore has an inner
+radius of `6 − 4 = 2px`, which is `--r-2xs`. `tokens.test.ts` asserts it wherever
+a rule states both an outer radius and its padding, because this is the kind of
+rule that is obeyed once and then quietly broken by the next component.
 
 A height is the intent more often than a padding is. `--control-h: 36px` is the
 height a row of interactive chrome settles on; the nav item now states that and
@@ -364,16 +419,17 @@ the separating.
 The product's brand mark. If one component has to be right, it's this one.
 
 ```
-20 × 7 px   ·   border-radius: 2.5px   ·   one size for the scanned signal
+20 × 7 px   ·   border-radius: --r-2xs (2px)   ·   one size for the scanned signal
 ```
 
 **Why a pill and not a dot.** A horizontal shape reads as an indicator lamp on
 equipment; a circle reads as a bullet in a list. It's a small difference, and it
 decides whether the dashboard feels like instrumentation or like a web page.
 
-**Why 2.5px and not fully round.** At `999px` the eye has no straight line to
-focus on and the shape goes soft. 2.5px keeps the pill silhouette but gives the
-sides a readable edge.
+**Why `--r-2xs` and not fully round.** At `999px` the eye has no straight line
+to focus on and the shape goes soft. 2px keeps the pill silhouette but gives the
+sides a readable edge. It was drawn at 2.5px until the ladder had a step this
+small; the half pixel was an artefact of the missing token, not a decision.
 
 **The highlight.** A gradient from the top, `inset: 1px 1px 3px`, opacity `.5`.
 It suggests a curved lens catching light. Without the highlight it's a coloured
@@ -430,7 +486,7 @@ decision rather than an improvisation later; not implemented yet.
 
 | Size | Where | Why |
 |---|---|---|
-| **20 × 7 px**, radius 2.5px | the status lamp in a list, card, wall tile or group header | it is the signal being scanned, and scanning is what sets the size |
+| **20 × 7 px**, radius `--r-2xs` | the status lamp in a list, card, wall tile or group header | it is the signal being scanned, and scanning is what sets the size |
 | **12 × 5 px**, radius 1.5px | a lamp sitting *inside* a text badge | it is punctuation on a line of 11px text, not a signal in its own right |
 
 These are not two versions of one lamp; they are two different jobs. The 20x7
@@ -837,7 +893,7 @@ to discover late.
   the radius ladder (4/6/10/14) either. These are not cosmetic slips — each was
   chosen to reach a specific rendered height, which is reasoning that belongs in
   a token rather than buried in a padding value somebody will later "tidy up".
-  The 20x7 LED with its 2.5px radius (§2.4) is the counter-example: outside the
+  The 20x7 LED with its `--r-2xs` radius (§2.4) is the counter-example: outside the
   ladder, argued for in writing, and therefore an exception rather than a leak. A
   guard is what keeps those two apart.
 - **Optical correction barely lands.** Four tracking tokens exist but 67 of the

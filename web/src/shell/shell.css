@@ -120,7 +120,7 @@
   padding: 1px 6px;
   border-radius: var(--r-xs);
   background: var(--surface-2);
-  font-family: var(--font-mono);
+  @apply face-mono;
   font-size: var(--type-section);
   line-height: var(--lead-section);
   letter-spacing: var(--track-badge);

@@ -66,7 +66,7 @@
 .mon-detail-name {
   font-size: var(--type-page);
   line-height: var(--lead-page);
-  font-weight: var(--weight-strong);
+  font-weight: var(--weight-heavy);
   color: var(--ink);
   /* Wrap, never truncate. This is the page's title: a hostname cut off with
      an ellipsis leaves the reader unsure which monitor they opened. */
@@ -74,7 +74,7 @@
 }
 
 .mon-detail-target {
-  font-family: var(--font-mono);
+  @apply face-mono;
   font-size: var(--type-body);
   line-height: var(--lead-body);
   color: var(--ink-3);
@@ -159,15 +159,14 @@
   color: var(--ink-3);
 }
 
-/* Mono and tabular, so 99.9% and 100% line up their decimal points when the
-   windows sit in a row. */
+/* The mono role, so 99.9% and 100% line up their decimal points when the
+   windows sit in a row: lined-up figures come with the face. */
 .mon-detail-window-value {
-  font-family: var(--font-mono);
+  @apply face-mono;
   font-size: var(--type-card);
   line-height: var(--lead-card);
   font-weight: var(--weight-mid);
   color: var(--ink);
-  font-variant-numeric: tabular-nums;
 }
 
 .mon-detail-window-detail {
@@ -205,11 +204,14 @@
   font-weight: var(--weight-mid);
 }
 
+/* A timestamp is measurable, so it takes the mono role — which is also where
+   its lined-up figures now come from. It asked the sans face for them before,
+   which is a face whose figures are proportional. */
 .mon-detail-incident-when {
+  @apply face-mono;
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
   color: var(--ink-3);
-  font-variant-numeric: tabular-nums;
 }
 
 .mon-detail-incident-state {
@@ -219,7 +221,7 @@
 }
 
 .mon-detail-incident-error {
-  font-family: var(--font-mono);
+  @apply face-mono;
   font-size: var(--type-helper);
   line-height: var(--lead-prose);
   color: var(--ink-3);

@@ -110,7 +110,7 @@ export function TokenSheet() {
 
       <Section title="Type">
         <p className="text-row text-ink">Row title — --type-row, weight 450</p>
-        <p className="font-mono text-body text-ink-2">
+        <p className="face-mono text-body text-ink-2">
           200 OK · 142 ms · 99.98% — mono, so columns line up
         </p>
       </Section>

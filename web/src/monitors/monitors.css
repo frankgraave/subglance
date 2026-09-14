@@ -264,7 +264,7 @@
 .mon-target {
   display: block;
   margin-top: 3px;
-  font-family: var(--font-mono);
+  @apply face-mono;
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
   color: var(--ink-2);
@@ -275,16 +275,15 @@
 
 .mon-cell--num {
   text-align: right;
-  font-family: var(--font-mono);
+  @apply face-mono;
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
-  font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
 
 .mon-error {
   display: block;
-  font-family: var(--font-sans);
+  @apply face-sans;
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
   color: var(--down);
@@ -423,7 +422,7 @@
 
 .mon-card-target {
   margin-top: 2px;
-  font-family: var(--font-mono);
+  @apply face-mono;
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
   color: var(--ink-3);
@@ -463,10 +462,9 @@
 
 .mon-card-fact dd {
   margin-top: 2px;
-  font-family: var(--font-mono);
+  @apply face-mono;
   font-size: var(--type-body);
   line-height: var(--lead-body);
-  font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
 
@@ -577,7 +575,7 @@
 }
 
 .mon-line-target {
-  font-family: var(--font-mono);
+  @apply face-mono;
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
   color: var(--ink-2);
@@ -588,10 +586,9 @@
 
 .mon-line-num {
   text-align: right;
-  font-family: var(--font-mono);
+  @apply face-mono;
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
-  font-variant-numeric: tabular-nums;
   color: var(--ink-2);
   /* The latency slot holds an error message when a monitor is down, and one
      long reason must not push the uptime column out of alignment. */
@@ -604,7 +601,7 @@
    meaningless for it. */
 .mon-line-error {
   display: block;
-  font-family: var(--font-sans);
+  @apply face-sans;
   /* Helper size from the type scale (SUB-67), which has since landed on
      develop and is merged in here — so the fallback this rule carried while
      the token did not exist yet is gone. */
@@ -852,7 +849,7 @@
 .push-reveal-input {
   flex: 1 1 auto;
   min-width: 0;
-  font-family: var(--font-mono);
+  @apply face-mono;
 }
 
 /*

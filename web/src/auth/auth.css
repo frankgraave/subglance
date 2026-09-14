@@ -60,7 +60,7 @@
 .auth-title {
   font-size: var(--type-page);
   line-height: var(--lead-page);
-  font-weight: var(--weight-strong);
+  font-weight: var(--weight-heavy);
 }
 
 .auth-intro {
