@@ -49,7 +49,24 @@ type Alert struct {
 	// opening line, which is the difference between a useful nudge and the
 	// nagging that teaches people to mute a monitor.
 	ReminderCount int `json:"reminder_count,omitempty"`
+
+	// GroupedNames lists every monitor in a batched alert, oldest failure
+	// first. Empty for an ordinary single alert.
+	//
+	// When an uplink drops, twenty monitors are one problem seen twenty
+	// times. Sending twenty messages is how a monitor teaches its owner to
+	// mute it, so the notifier collects them and this field carries the
+	// members.
+	GroupedNames []string `json:"grouped_names,omitempty"`
+
+	// GroupedCause is the failure cause when every member of a batch
+	// reports the same one. Empty when they disagree: an invented common
+	// cause would be worse than none.
+	GroupedCause string `json:"grouped_cause,omitempty"`
 }
+
+// Grouped reports whether this alert covers more than one monitor.
+func (a Alert) Grouped() bool { return len(a.GroupedNames) > 1 }
 
 // Down reports whether this alert is bad news.
 //
@@ -63,6 +80,13 @@ func (a Alert) Down() bool {
 // Title is the one-line summary, the part that becomes a push notification on
 // a phone before anyone opens anything.
 func (a Alert) Title() string {
+	// A batch announces its size instead of naming one monitor, and every
+	// channel inherits that by calling Title() — one place to change, five
+	// senders that stay honest.
+	if a.Grouped() {
+		return GroupedTitle(a)
+	}
+
 	switch state.Event(a.Event) {
 	case state.EventIncidentResolved:
 		return fmt.Sprintf("%s is back up", a.MonitorName)
@@ -79,6 +103,10 @@ func (a Alert) Title() string {
 
 // Body is the human-readable detail under the title.
 func (a Alert) Body() string {
+	if a.Grouped() {
+		return GroupedBody(a)
+	}
+
 	out := a.Target
 	if a.Cause != "" {
 		out += "\n" + a.Cause
