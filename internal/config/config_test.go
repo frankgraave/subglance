@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/frankgraave/subglance/internal/store"
 	"github.com/frankgraave/subglance/internal/watchdog"
 )
 
@@ -174,5 +175,66 @@ func TestWatchdogURLIsValidated(t *testing.T) {
 	// block startup.
 	if _, err := Load([]string{"--watchdog-interval", "0"}); err != nil {
 		t.Fatalf("interval should not be validated while the watchdog is off: %v", err)
+	}
+}
+
+func TestRetentionDefaultsAndFlags(t *testing.T) {
+	c, err := Load(nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if c.RawRetention != store.DefaultRawRetention {
+		t.Errorf("RawRetention = %s, want %s", c.RawRetention, store.DefaultRawRetention)
+	}
+	if c.RollupRetention != store.DefaultRollupRetention {
+		t.Errorf("RollupRetention = %s, want %s", c.RollupRetention, store.DefaultRollupRetention)
+	}
+
+	c, err = Load([]string{"--raw-retention=48h", "--rollup-retention=720h"})
+	if err != nil {
+		t.Fatalf("Load with retention flags: %v", err)
+	}
+	if c.RawRetention != 48*time.Hour {
+		t.Errorf("RawRetention = %s, want 48h", c.RawRetention)
+	}
+	if c.RollupRetention != 720*time.Hour {
+		t.Errorf("RollupRetention = %s, want 720h", c.RollupRetention)
+	}
+}
+
+func TestRetentionFromEnvironment(t *testing.T) {
+	t.Setenv("SUBGLANCE_RAW_RETENTION", "24h")
+	t.Setenv("SUBGLANCE_ROLLUP_RETENTION", "0s")
+
+	c, err := Load(nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if c.RawRetention != 24*time.Hour {
+		t.Errorf("RawRetention = %s, want 24h", c.RawRetention)
+	}
+	if c.RollupRetention != 0 {
+		t.Errorf("RollupRetention = %s, want 0 (keep forever)", c.RollupRetention)
+	}
+}
+
+func TestRetentionValidation(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{"raw retention zero", []string{"--raw-retention=0"}},
+		{"raw retention negative", []string{"--raw-retention=-1h"}},
+		{"rollup retention negative", []string{"--rollup-retention=-1h"}},
+		// A rollup window inside the raw one would delete buckets whose own
+		// heartbeats are still present, so history would flicker.
+		{"rollup inside raw", []string{"--raw-retention=168h", "--rollup-retention=24h"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := Load(tt.args); err == nil {
+				t.Errorf("Load(%v) accepted an invalid retention window", tt.args)
+			}
+		})
 	}
 }

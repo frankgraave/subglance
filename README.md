@@ -223,6 +223,15 @@ defaults.
 | `--allow-private-targets` | `SUBGLANCE_ALLOW_PRIVATE_TARGETS` | `false` | Permit monitoring private/loopback addresses |
 | `--watchdog-url` | `SUBGLANCE_WATCHDOG_URL` | empty (off) | External dead man's switch to ping while checks are running |
 | `--watchdog-interval` | `SUBGLANCE_WATCHDOG_INTERVAL` | `5m` | How often to ping that URL |
+| `--raw-retention` | `SUBGLANCE_RAW_RETENTION` | `168h` (7d) | How long raw heartbeats are kept before being rolled up into hourly buckets |
+| `--rollup-retention` | `SUBGLANCE_ROLLUP_RETENTION` | `8760h` (1y) | How long hourly buckets and resolved incidents are kept (`0` = forever) |
+
+Retention runs once a day. It folds raw heartbeats older than `--raw-retention`
+into hourly buckets, then drops hourly buckets and resolved incidents older than
+`--rollup-retention`. To make those deletes visible on disk, SubGlance puts the
+database into SQLite's incremental auto-vacuum mode at startup; on an existing
+database that requires one rebuild, which is logged when it happens and skipped
+with a warning if the file is large enough that the pause would hurt.
 
 `--allow-private-targets` is off by default on purpose. Users supply the URLs to
 monitor, and without that guard SubGlance would happily act as an SSRF proxy into
