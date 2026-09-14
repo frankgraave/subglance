@@ -735,3 +735,470 @@ describe("tokens.css is the only source of spacing and radius", () => {
     expect(designMd).toContain("4px floor");
   });
 });
+
+/**
+ * SUB-103 adds the three scales that were still unguarded: the accent and the
+ * control/status split it depends on, the border roles, and the depth ladder.
+ *
+ * The accent guard is the one that matters most. An accent and a status colour
+ * are the same kind of object to CSS and completely different objects to a
+ * person reading a dashboard, so nothing mechanical stopped a button from
+ * being painted `--up` to look lively, or a chart bar from being painted
+ * `--accent` because it looked tidy. Either one, done once, collapses the
+ * split back into a single colour that means two things.
+ */
+
+/** Properties that paint a control's own surface, as opposed to a data mark. */
+const CONTROL_SURFACE =
+  /(?:^|[\s;{])(background|background-color|border(?:-[a-z]+)?-color|border(?:-[a-z]+)?|fill|color)\s*:\s*([^;{}]+)/g;
+
+/** Names that describe a control rather than a piece of data. */
+const CONTROL_SELECTOR =
+  /(button|btn|input|select|segment|switch|toggle|tab|submit|link|nav-item|checkbox|radio)/i;
+
+/** Names that describe a data mark: a status, a lamp, a bar, a reading. */
+const DATA_SELECTOR = /(led|heartbeat|hb-|bar|spark|chart|status|wall-card|tile)/i;
+
+/**
+ * The class, id and element names in one compound selector. Pseudo-classes,
+ * pseudo-elements and attribute selectors are dropped first, because they are
+ * state rather than identity and they collide with the role words: `:disabled`
+ * contains `led`, and classifying on raw selector text made every disabled
+ * control read as a lamp.
+ */
+function selectorNames(compound: string): string {
+  return compound
+    .replace(/\[[^\]]*\]/g, " ")
+    .replace(/::?[a-z-]+(?:\([^)]*\))?/gi, " ")
+    .replace(/[.#]/g, " ");
+}
+
+/**
+ * Classifies each item of a selector list by its right-most compound, which is
+ * the element the rule actually paints. `.wall-card .add-button` is a control
+ * and `.add-button .wall-card` is a data mark; matching anywhere in the
+ * selector made both of them neither, and a rule that matches both classifiers
+ * was skipped by both guards.
+ */
+function subjectRoles(
+  selector: string,
+): { subject: string; control: boolean; data: boolean }[] {
+  return selector
+    .split(",")
+    .map((item) => {
+      const parts = item.trim().split(/[\s>+~]+/).filter(Boolean);
+      const subject = parts[parts.length - 1] ?? "";
+      const names = selectorNames(subject);
+      return {
+        subject,
+        control: CONTROL_SELECTOR.test(names),
+        data: DATA_SELECTOR.test(names),
+      };
+    })
+    .filter((role) => role.subject !== "");
+}
+
+/** True when some subject of the rule is a data mark and not a control. */
+function paintsData(selector: string): boolean {
+  return subjectRoles(selector).some((role) => role.data && !role.control);
+}
+
+/** True when some subject of the rule is a control and not a data mark. */
+function paintsControl(selector: string): boolean {
+  return subjectRoles(selector).some((role) => role.control && !role.data);
+}
+
+describe("the accent fills controls and status colour marks data", () => {
+  it("declares the accent once, outside both theme blocks", () => {
+    // Identical in dark and light is the stated decision (§2.8). Declaring it
+    // inside a theme block is how that decision gets quietly reversed.
+    const root = declarations(
+      tokensCss.slice(0, tokensCss.indexOf("[data-theme=")),
+    );
+    expect(root.get("--accent")).toBeDefined();
+    expect(root.get("--accent-border")).toBeDefined();
+    for (const theme of ["dark", "light"] as const) {
+      const block = declarations(themeBlock(theme));
+      expect(
+        [...block.keys()].filter((name) => name.startsWith("--accent")),
+        `${theme} redefines the accent`,
+      ).toEqual([]);
+    }
+  });
+
+  it("uses the accent values from §2.8", () => {
+    const start = designMd.indexOf("### 2.8 The accent");
+    expect(start, "missing §2.8").toBeGreaterThan(-1);
+    const body = designMd.slice(start, designMd.indexOf("\n### ", start + 10));
+    const root = declarations(
+      tokensCss.slice(0, tokensCss.indexOf("[data-theme=")),
+    );
+    const rows = [...body.matchAll(/(--accent(?:-[a-z]+)?):\s*([^;]+);/g)];
+    expect(rows.length, "expected four accent tokens in §2.8").toBe(4);
+    for (const [, name, value] of rows) {
+      expect(root.get(name), name).toBe(value.trim());
+    }
+  });
+
+  it("never paints a data mark with the control accent", () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (!file.endsWith(".css")) continue;
+      for (const block of declarationBlocks(readFileSync(file, "utf8"))) {
+        if (!paintsData(block.selector)) continue;
+        if (/var\(--accent/.test(block.body)) {
+          offenders.push(`${relative(repoRoot, file)}: ${block.selector}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("never fills a control surface with a status colour", () => {
+    // A status colour on a control's *text* is allowed — a destructive button
+    // labels itself — so this looks at the surface properties only.
+    //
+    // Validation is the one place a control legitimately wears a status
+    // colour: an invalid field is reporting a fact about its contents, which
+    // is exactly what the status scale is for. It stays an edge, never a fill,
+    // and aria-invalid carries the same fact a second time for anyone who
+    // cannot see the difference.
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (!file.endsWith(".css")) continue;
+      for (const block of declarationBlocks(readFileSync(file, "utf8"))) {
+        if (!paintsControl(block.selector)) continue;
+        if (/\[aria-invalid/.test(block.selector)) {
+          // Allowed as a border, still banned as a fill.
+          const filled = [...block.body.matchAll(CONTROL_SURFACE)].filter(
+            ([, property, value]) =>
+              /^background/.test(property) &&
+              /var\(--(?:up|down|warn|idle)\b/.test(value),
+          );
+          for (const [, property] of filled) {
+            offenders.push(
+              `${relative(repoRoot, file)}: ${block.selector} { ${property} }`,
+            );
+          }
+          continue;
+        }
+        for (const [, property, value] of block.body.matchAll(
+          CONTROL_SURFACE,
+        )) {
+          if (property === "color") continue;
+          if (!/var\(--(?:up|down|warn|idle)\b/.test(value)) continue;
+          offenders.push(
+            `${relative(repoRoot, file)}: ${block.selector} { ${property} }`,
+          );
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("catches both directions of the split in a fixture", () => {
+    // Proves the two guards above bite, without waiting for a real violation.
+    const bad = `
+      .led[data-state="up"] { background: var(--accent); }
+      .mon-button { background: var(--up); }
+    `;
+    const blocks = declarationBlocks(bad);
+    expect(
+      blocks
+        .filter((b) => paintsData(b.selector) && /var\(--accent/.test(b.body))
+        .map((b) => b.selector),
+    ).toEqual(['.led[data-state="up"]']);
+    expect(
+      blocks
+        .filter(
+          (b) =>
+            paintsControl(b.selector) &&
+            [...b.body.matchAll(CONTROL_SURFACE)].some(
+              ([, property, value]) =>
+                property !== "color" && /var\(--up\b/.test(value),
+            ),
+        )
+        .map((b) => b.selector),
+    ).toEqual([".mon-button"]);
+  });
+
+  it("classifies a descendant rule by the element it paints", () => {
+    // The hole this closes: a selector containing both a control word and a
+    // data word used to match both classifiers and be skipped by both guards,
+    // so `.wall-card .add-button { background: var(--up) }` passed.
+    expect(paintsControl(".wall-card .add-button")).toBe(true);
+    expect(paintsData(".wall-card .add-button")).toBe(false);
+    expect(paintsData(".add-button .wall-card")).toBe(true);
+    expect(paintsControl(".add-button .wall-card")).toBe(false);
+    // State, not identity: `:disabled` ends in the letters of `led`.
+    expect(paintsData(".mon-button:disabled")).toBe(false);
+    expect(paintsControl(".mon-button:disabled")).toBe(true);
+    // A selector list is classified item by item.
+    expect(paintsControl(".led, .mon-button")).toBe(true);
+    expect(paintsData(".led, .mon-button")).toBe(true);
+  });
+});
+
+describe("borders come from the three roles in §2.9", () => {
+  it("defines the control role in both themes", () => {
+    for (const theme of ["dark", "light"] as const) {
+      expect(
+        declarations(themeBlock(theme)).get("--border-control"),
+        `${theme} --border-control`,
+      ).toMatch(/^#[0-9a-f]{6}$/i);
+    }
+  });
+
+  it("resolves every border colour to a role token", () => {
+    // A literal border colour is the same failure as a literal hex fill: it
+    // looks right in dark and is wrong in light, and nothing says so. A
+    // *token* colour is not automatically right either: `1px solid var(--up)`
+    // paints an edge with the status scale and used to pass, because the check
+    // skipped any value containing `var(--`.
+    const offenders: string[] = [];
+    for (const declaration of borderDeclarations()) {
+      const value = declaration.value;
+      if (BORDER_NEUTRAL.test(value)) continue;
+      if (BORDER_ROLE.test(value)) continue;
+      if (statusBorders.has(site(declaration))) continue;
+      offenders.push(site(declaration));
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("bites on a status colour used as an ordinary edge", () => {
+    // The hole this closes. Neither value is in the allow-list, and neither
+    // site is a documented status border.
+    expect(BORDER_ROLE.test("1px solid var(--accent)")).toBe(false);
+    expect(BORDER_ROLE.test("1px solid var(--up)")).toBe(false);
+    expect(BORDER_ROLE.test("1px solid var(--border-control)")).toBe(true);
+    expect(BORDER_ROLE.test("var(--border-hi)")).toBe(true);
+  });
+
+  it("keeps border width at 1px, bar the documented status stripe", () => {
+    const offenders: string[] = [];
+    for (const declaration of borderDeclarations()) {
+      const width = /(\d+(?:\.\d+)?)px/.exec(declaration.value);
+      if (!width || width[1] === "1") continue;
+      if (statusBorders.has(site(declaration))) continue;
+      offenders.push(site(declaration));
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("ties each exception to one file and one selector", () => {
+    // Every allow-listed site must still exist, or the list is quietly
+    // granting permission to something that moved.
+    const sites = new Set(borderDeclarations().map(site));
+    expect([...statusBorders].filter((entry) => !sites.has(entry))).toEqual([]);
+    // And the same declaration elsewhere is not covered.
+    expect(
+      statusBorders.has(
+        "web/src/monitors/other.css | .other-row | border-left: 2px solid var(--down)",
+      ),
+    ).toBe(false);
+  });
+
+  it("states the border roles in docs/DESIGN.md", () => {
+    expect(designMd).toContain("### 2.9 Border roles");
+    expect(designMd).toContain("--border-control");
+  });
+});
+
+/** Colours that encode "what a thing is", per §2.9, plus the accent edge. */
+const BORDER_ROLE =
+  /^(?:\d+(?:\.\d+)?px\s+(?:solid|dashed|dotted)\s+)?var\(--(?:border|border-hi|border-control|accent-border)\)$/;
+
+/**
+ * Border values that carry no colour at all: removed, inherited, or reserving
+ * the space a border will occupy so nothing shifts by a pixel when the state
+ * arrives. That last one is the pattern, not a missing token.
+ */
+const BORDER_NEUTRAL =
+  /^(?:none|0|inherit|unset|(?:\d+(?:\.\d+)?px\s+(?:solid|dashed|dotted)\s+)?transparent|\d+(?:\.\d+)?px\s+(?:solid|dashed|dotted))$/;
+
+type BorderDeclaration = {
+  path: string;
+  selector: string;
+  property: string;
+  value: string;
+};
+
+/** Every border declaration under web/src, with the rule it belongs to. */
+function borderDeclarations(): BorderDeclaration[] {
+  const found: BorderDeclaration[] = [];
+  for (const file of sourceFiles(webSrc)) {
+    if (!file.endsWith(".css")) continue;
+    const path = relative(repoRoot, file);
+    for (const block of declarationBlocks(readFileSync(file, "utf8"))) {
+      for (const [, property, value] of block.body.matchAll(
+        /(?:^|[\s;{])(border(?:-(?:top|bottom|left|right|block|inline))?(?:-color|-width)?)\s*:\s*([^;{}]+)/g,
+      )) {
+        found.push({
+          path,
+          selector: block.selector,
+          property,
+          value: value.replace(/\s+/g, " ").trim(),
+        });
+      }
+    }
+  }
+  return found;
+}
+
+/** One allow-list key: the file, the selector and the declaration together. */
+function site(declaration: BorderDeclaration): string {
+  return `${declaration.path} | ${declaration.selector} | ${declaration.property}: ${declaration.value}`;
+}
+
+/**
+ * The borders that intentionally carry a status colour or a second width.
+ * §2.9 allows one width exception — the stripe down the left of a row, which
+ * is a signal carried by position and thickness rather than an edge around a
+ * box — and validation legitimately edges a control in `--down`.
+ *
+ * Keyed by file, selector and declaration together, so the same declaration
+ * copied to a second rule still fails. That is the point: an exception is a
+ * permission for one place, not for a string.
+ */
+const statusBorders = new Set<string>([
+  "web/src/live/connection.css | .conn-badge | border: 1px solid var(--warn)",
+  "web/src/live/connection.css | .conn-badge-retry | border: 1px solid var(--warn)",
+  "web/src/monitors/monitors.css | .mon-row[data-status=\"down\"] | border-left: 2px solid var(--down)",
+  "web/src/monitors/monitors.css | .mon-row[data-status=\"pending\"] | border-left: 2px solid var(--warn)",
+  "web/src/monitors/monitors.css | .mon-row[data-status=\"paused\"] | border-left: 2px dotted var(--ink-3)",
+  "web/src/monitors/monitors.css | .mon-row[data-status=\"waiting\"] | border-left: 2px solid var(--idle)",
+  "web/src/monitors/monitors.css | .mon-card[data-status=\"down\"] | border-left: 2px solid var(--down)",
+  "web/src/monitors/monitors.css | .mon-card[data-status=\"pending\"] | border-left: 2px solid var(--warn)",
+  "web/src/monitors/monitors.css | .mon-card[data-status=\"paused\"] | border-left: 2px dotted var(--ink-3)",
+  "web/src/monitors/monitors.css | .mon-card[data-status=\"waiting\"] | border-left: 2px solid var(--idle)",
+  "web/src/monitors/monitors.css | .mon-line[data-status=\"down\"] | border-left: 2px solid var(--down)",
+  "web/src/monitors/monitors.css | .mon-line[data-status=\"pending\"] | border-left: 2px solid var(--warn)",
+  "web/src/monitors/monitors.css | .mon-line[data-status=\"paused\"] | border-left: 2px dotted var(--ink-3)",
+  "web/src/monitors/monitors.css | .mon-line[data-status=\"waiting\"] | border-left: 2px solid var(--idle)",
+  "web/src/monitors/monitors.css | .push-reveal-warn | border-left: 2px solid var(--warn)",
+  "web/src/monitors/monitors.css | .add-input[aria-invalid=\"true\"] | border-color: var(--down)",
+  "web/src/monitors/monitors.css | .add-input[aria-invalid=\"true\"]:focus | border-color: var(--down)",
+  "web/src/auth/auth.css | .auth-input[aria-invalid=\"true\"] | border-color: var(--down)",
+  "web/src/auth/auth.css | .auth-input[aria-invalid=\"true\"]:focus | border-color: var(--down)",
+  "web/src/wall/wall.css | .wall-card[data-status=\"down\"] | border-color: color-mix(in srgb, var(--down) 40%, var(--border))",
+  "web/src/wall/wall.css | .wall-card[data-status=\"pending\"] | border-color: color-mix(in srgb, var(--warn) 34%, var(--border))",
+]);
+
+describe("depth comes from the ladder in §2.10", () => {
+  it("defines all three rungs in both themes", () => {
+    for (const theme of ["dark", "light"] as const) {
+      const block = declarations(themeBlock(theme));
+      for (const rung of ["flat", "raised", "float"]) {
+        expect(
+          block.get(`--shadow-${rung}`),
+          `${theme} --shadow-${rung}`,
+        ).toBeDefined();
+      }
+    }
+  });
+
+  it("keeps the raised and floating rungs two-layered", () => {
+    // One hard layer is what the old single token did, and on a near-black
+    // canvas it read as a seam rather than as height. Two layers, a contact
+    // shadow and an ambient one, is the thing that makes it depth.
+    for (const theme of ["dark", "light"] as const) {
+      const block = declarations(themeBlock(theme));
+      for (const rung of ["raised", "float"]) {
+        expect(
+          block.get(`--shadow-${rung}`)?.split("),").length,
+          `${theme} --shadow-${rung} layer count`,
+        ).toBe(2);
+      }
+      expect(block.get("--shadow-flat")).toBe("none");
+    }
+  });
+
+  it("takes every box-shadow from the ladder or the glow scale", () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (!file.endsWith(".css")) continue;
+      for (const [, value] of readFileSync(file, "utf8").matchAll(
+        /(?:^|[\s;{])box-shadow\s*:\s*([^;{}]+)/g,
+      )) {
+        const shadow = value.trim();
+        if (/^(none|inherit|unset)$/.test(shadow)) continue;
+        if (SHADOW_RUNG.test(shadow)) continue;
+        if (shadowExceptions.has(shadow)) continue;
+        offenders.push(`${relative(repoRoot, file)}: box-shadow: ${shadow}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("rejects a rung with anything appended to it", () => {
+    expect(SHADOW_RUNG.test("var(--shadow-raised)")).toBe(true);
+    expect(SHADOW_RUNG.test("var(--shadow-raised), 0 0 4px red")).toBe(false);
+    expect(SHADOW_RUNG.test("var(--shadow-raised-custom)")).toBe(false);
+    expect(SHADOW_RUNG.test("0 0 2px var(--glow-up)")).toBe(false);
+  });
+
+  it("states the ladder in docs/DESIGN.md", () => {
+    expect(designMd).toContain("### 2.10 Depth is a ladder of three");
+    expect(designMd).toContain("--shadow-raised");
+  });
+});
+
+/**
+ * One complete rung of the ladder, or one complete glow. Anchored on purpose:
+ * an unanchored match accepted `var(--shadow-raised), 0 0 4px red` and names
+ * such as `var(--shadow-raised-custom)`, both of which leave the ladder.
+ */
+const SHADOW_RUNG =
+  /^var\(--(?:shadow-(?:flat|raised|float)|glow-(?:up|warn|down|idle))\)$/;
+
+/**
+ * Shadows that are not depth. An `inset` ring draws an edge without changing
+ * the box's size and a focus ring is a state, not a height; neither is a rung
+ * on a ladder about how far a surface sits from the page.
+ */
+const shadowExceptions = new Set<string>([
+  "inset 0 0 0 2px var(--warn)",
+  "inset 0 0 0 1.5px var(--ink-2)",
+  "0 0 0 3px var(--accent-ring)",
+  "0 0 0 3px var(--ring-down)",
+]);
+
+describe("an interactive element does not rest on the static border", () => {
+  it("gives every control the control role at rest", () => {
+    // The defect §2.9 closes: --border-hi was used only on :hover and :active,
+    // so at rest a button carried exactly the same edge as a static card and
+    // looked clickable only once the pointer arrived.
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (!file.endsWith(".css")) continue;
+      for (const block of declarationBlocks(readFileSync(file, "utf8"))) {
+        if (!paintsControl(block.selector)) continue;
+        // A state rule describes the change, not the resting edge.
+        if (/:(hover|focus|active|disabled|checked)|\[aria-invalid/.test(block.selector)) continue;
+        if (/border(?:-[a-z]+)?(?:-color)?\s*:[^;]*var\(--border\)/.test(block.body)) {
+          offenders.push(`${relative(repoRoot, file)}: ${block.selector}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("bites on a control that rests on the static token", () => {
+    const blocks = declarationBlocks(`
+      .a-button { border: 1px solid var(--border); }
+      .a-button:hover { border-color: var(--border-hi); }
+      .a-card { border: 1px solid var(--border); }
+    `);
+    expect(
+      blocks
+        .filter(
+          (b) =>
+            paintsControl(b.selector) &&
+            !/:(hover|focus|active|disabled|checked)/.test(b.selector) &&
+            /border(?:-[a-z]+)?(?:-color)?\s*:[^;]*var\(--border\)/.test(b.body),
+        )
+        .map((b) => b.selector),
+    ).toEqual([".a-button"]);
+  });
+});

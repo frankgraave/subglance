@@ -76,7 +76,7 @@ export function TokenSheet() {
         {/* Colour never stands alone (DESIGN.md §2.3): each row carries the
             meaning as text as well, which is also how the real dashboard
             will do it. */}
-        <ul className="rounded-lg border border-border bg-surface shadow-card">
+        <ul className="rounded-lg border border-border bg-surface shadow-flat">
           {STATUS.map((s, index) => (
             <li
               key={s.name}

@@ -1,0 +1,64 @@
+# Dependency updates.
+#
+# govulncheck and `npm audit` tell me a dependency has a known problem; they do
+# not fix it. This opens the pull request that does, so a vulnerable package
+# does not sit in the tree until the next time someone looks.
+#
+# Weekly rather than daily, and grouped rather than one PR per package: every
+# pull request in this repository is reviewed before it merges, and a flood of
+# single-bump PRs would crowd out the work that moves the product.
+
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      # Patch and minor bumps are almost always routine, so they travel
+      # together. Majors stay separate: those need reading.
+      frontend-minor:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: "chore"
+      include: scope
+
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      go-minor:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: "chore"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 2
+    groups:
+      actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "chore"
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: "chore"

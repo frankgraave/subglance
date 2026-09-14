@@ -112,6 +112,28 @@
   --space-10: 40px;
   --space-12: 48px;
   --space-16: 64px;
+
+  /* The control accent (§2.8). It sits in :root rather than in the two theme
+     blocks because it is deliberately the same colour in both: an accent that
+     shifts with the theme is a second thing to remember and a second thing to
+     get wrong.
+     It fills controls and nothing else -- a segment you can pick, a primary
+     button, a focus ring. It never touches a data mark, because status colour
+     already owns that job and a dashboard that says "blue" in two different
+     senses says nothing. `tokens.test.ts` enforces the split in both
+     directions.
+     `--accent-border` is the same hue one step lighter, which is what makes a
+     filled control look crisp instead of printed on. It is also the readable
+     half of the pair: measured, #2b7fff reaches 5.3:1 against the dark canvas
+     and 3.6:1 against the light one, so it clears the 3:1 that a non-text UI
+     edge needs in both themes, while white on the #155dfc fill reaches 5.25:1
+     and clears AA for the label sitting on it. */
+  --accent:        #155dfc;
+  --accent-border: #2b7fff;
+  /* The label on a filled control. White in both themes, because the fill is
+     the same in both: 5.25:1, which clears AA at body size. */
+  --accent-ink:    #ffffff;
+  --accent-ring:   rgba(43,127,255,.24);
 }
 
 /* Dark is the default: the product is looked at in a dim room, at a glance,
@@ -146,13 +168,26 @@
   --glow-down:   0 0 0 1px rgba(244,63,94,.4),   0 0 8px -1px rgba(244,63,94,.72);
   --glow-idle:   none;
 
-  /* The focus ring around a field, as a token rather than a `color-mix` at
-     the call site: the ring is one decision that applies to every input, and
-     a raw `transparent` in the mix is still a colour literal in `web/src`. */
-  --ring-up:     rgba(52,211,153,.14);
+  /* The ring around an *invalid* field. Focus uses --accent-ring (§2.8); this
+     is the validation signal, which stays red because that is the convention
+     and because aria-invalid carries it a second time for anyone who cannot
+     see the difference. */
   --ring-down:   rgba(244,63,94,.14);
 
-  --shadow-card: 0 1px 2px rgba(0,0,0,.4);
+  /* Border roles encode what a thing IS, not what state it is in (§2.9).
+     `--border-control` is the resting edge of anything clickable: before this
+     existed a button at rest carried the same edge as a static card, so
+     nothing looked clickable until the pointer arrived. */
+  --border-control: #26292c;
+
+  /* Depth ladder (§2.10). Two layers each -- a tight contact shadow plus a
+     wider ambient one -- because a single hard layer at this darkness reads
+     as a seam rather than as height. `flat` is a real rung, not an absence:
+     it is what a card takes, so "no shadow here" is a stated decision. */
+  --shadow-flat:   none;
+  --shadow-raised: 0 4px 6px -1px rgba(0,0,0,.4), 0 2px 4px -2px rgba(0,0,0,.4);
+  --shadow-float:  0 10px 15px -3px rgba(0,0,0,.5), 0 4px 6px -4px rgba(0,0,0,.5);
+
   --scrim:       rgba(0,0,0,.5);
 
   color-scheme: dark;
@@ -192,10 +227,17 @@
 
   /* Slightly stronger than in dark: the same alpha over white all but
      disappears. */
-  --ring-up:     rgba(5,150,105,.18);
   --ring-down:   rgba(225,29,72,.18);
 
-  --shadow-card: 0 1px 2px rgba(16,24,40,.05), 0 0 0 1px rgba(16,24,40,.02);
+  --border-control: #cdcdca;
+
+  /* Weaker than in dark: the same alphas over white read as dirt rather than
+     as depth, and on a light ground the border already does most of the
+     separating. */
+  --shadow-flat:   none;
+  --shadow-raised: 0 4px 6px -1px rgba(16,24,40,.08), 0 2px 4px -2px rgba(16,24,40,.06);
+  --shadow-float:  0 10px 15px -3px rgba(16,24,40,.12), 0 4px 6px -4px rgba(16,24,40,.1);
+
   --scrim:       rgba(16,24,40,.2);
 
   color-scheme: light;
@@ -214,7 +256,13 @@
   --color-surface-2: var(--surface-2);
   --color-surface-hi: var(--surface-hi);
   --color-border: var(--border);
+  --color-border-control: var(--border-control);
   --color-border-hi: var(--border-hi);
+
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-border: var(--accent-border);
+  --color-accent-ring: var(--accent-ring);
 
   --color-ink: var(--ink);
   --color-ink-2: var(--ink-2);
@@ -230,7 +278,6 @@
   --color-idle: var(--idle);
   --color-idle-dim: var(--idle-dim);
 
-  --color-ring-up: var(--ring-up);
   --color-ring-down: var(--ring-down);
 
   --font-sans: var(--font-sans);
@@ -265,7 +312,9 @@
   --radius-md: var(--r-md);
   --radius-lg: var(--r-lg);
 
-  --shadow-card: var(--shadow-card);
+  --shadow-flat: var(--shadow-flat);
+  --shadow-raised: var(--shadow-raised);
+  --shadow-float: var(--shadow-float);
   --shadow-glow-up: var(--glow-up);
   --shadow-glow-warn: var(--glow-warn);
   --shadow-glow-down: var(--glow-down);
