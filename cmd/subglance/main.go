@@ -150,7 +150,8 @@ func run(args []string) error {
 		// the same checkers, the same SSRF guard and the same recording
 		// path as a scheduled one.
 		Handler: api.New(log, db).WithBus(bus).
-			WithProber(runner).WithPushRecorder(runner).Handler(),
+			WithProber(runner).WithPushRecorder(runner).
+			WithChannelTester(notify).Handler(),
 
 		// Bounded timeouts: an unbounded server is a resource leak waiting
 		// for one slow client. ReadHeaderTimeout in particular defends

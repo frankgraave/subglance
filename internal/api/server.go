@@ -41,6 +41,10 @@ type Server struct {
 	// endpoint, matching how bus and prober are treated.
 	pusher PushRecorder
 
+	// tester sends a real message through a channel, for the test button.
+	// Nil disables that endpoint, on the same principle as the others.
+	tester ChannelTester
+
 	// pushReports rate-limits the public push endpoint per monitor. It is
 	// separate from manualChecks because the two protect against different
 	// things: one bounds what an authenticated human can ask the server to
@@ -265,6 +269,12 @@ func (s *Server) routes() []route {
 		{http.MethodPut, "/api/v1/channels/{id}", accessWrite},
 		{http.MethodDelete, "/api/v1/channels/{id}", accessWrite},
 
+		// Testing a channel sends a real message to a configured
+		// destination, so it needs write access even though it changes
+		// nothing here: a viewer who could trigger it could use the
+		// instance to post into someone else's chat room.
+		{http.MethodPost, "/api/v1/channels/{id}/test", accessWrite},
+
 		// Authenticated: admin only.
 		{http.MethodGet, "/api/v1/users", accessAdmin},
 		{http.MethodPost, "/api/v1/users", accessAdmin},
@@ -361,6 +371,8 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 		return s.handleCreateChannel
 	case "PUT /api/v1/channels/{id}":
 		return s.handleUpdateChannel
+	case "POST /api/v1/channels/{id}/test":
+		return s.handleTestChannel
 	case "DELETE /api/v1/channels/{id}":
 		return s.handleDeleteChannel
 

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -448,21 +447,22 @@ func TestDisabledChannelIsSkipped(t *testing.T) {
 // TestBackoffGrowsAndIsJittered checks the schedule shape without asserting
 // exact values, which would make the test a copy of the implementation.
 func TestBackoffGrowsAndIsJittered(t *testing.T) {
-	rnd := rand.New(rand.NewSource(1))
-
 	var last time.Duration
 	for attempt := 1; attempt <= 5; attempt++ {
-		d := backoff(attempt, rnd)
+		d := backoff(attempt)
 		if d <= last {
 			t.Errorf("attempt %d delay %v is not longer than the previous %v", attempt, d, last)
 		}
 		last = d
 	}
 
-	// Jitter: two calls at the same attempt should differ.
-	a := backoff(3, rnd)
-	b := backoff(3, rnd)
-	if a == b {
+	// Jitter: repeated calls at the same attempt must not all agree, or
+	// every monitor would retry in lockstep after a shared outage.
+	seen := map[time.Duration]bool{}
+	for i := 0; i < 20; i++ {
+		seen[backoff(3)] = true
+	}
+	if len(seen) == 1 {
 		t.Error("backoff is not jittered; every monitor would retry in lockstep")
 	}
 }

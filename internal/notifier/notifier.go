@@ -2,12 +2,12 @@ package notifier
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"log/slog"
 	"math"
-	"math/rand"
-	"sync"
+	"math/big"
 	"time"
 
 	"github.com/frankgraave/subglance/internal/state"
@@ -29,19 +29,37 @@ const maxAttempts = 6
 // than it looks: an outage produces alerts for every affected monitor at the
 // same instant, so a fixed schedule would have them all retry in lockstep and
 // hammer a recovering endpoint in waves.
-func backoff(attempt int, rnd *rand.Rand) time.Duration {
+//
+// The randomness comes from crypto/rand. Nothing here is a secret, but a
+// retry schedule is not worth a lint exception, and a failure to read random
+// bytes falls back to the undithered delay rather than to a predictable
+// sequence.
+func backoff(attempt int) time.Duration {
 	const (
-		base = 10 * time.Second
-		max  = 10 * time.Minute
+		base    = 10 * time.Second
+		ceiling = 10 * time.Minute
 	)
 
 	d := time.Duration(float64(base) * math.Pow(3, float64(attempt-1)))
-	if d > max || d <= 0 {
-		d = max
+	if d > ceiling || d <= 0 {
+		d = ceiling
 	}
 
-	jitter := time.Duration(rnd.Int63n(int64(d / 4)))
-	return d + jitter
+	return d + jitter(d/4)
+}
+
+// jitter returns a random duration in [0, span).
+func jitter(span time.Duration) time.Duration {
+	if span <= 0 {
+		return 0
+	}
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(span)))
+	if err != nil {
+		// Out of entropy is not a reason to stop retrying; it only
+		// means this delay is undithered.
+		return 0
+	}
+	return time.Duration(n.Int64())
 }
 
 // Notifier drains the outbox.
@@ -60,9 +78,6 @@ type Notifier struct {
 	batch int
 
 	now func() time.Time
-
-	mu  sync.Mutex
-	rnd *rand.Rand
 }
 
 // Options configures New.
@@ -124,7 +139,6 @@ func New(opts Options) *Notifier {
 		interval: interval,
 		batch:    batch,
 		now:      now,
-		rnd:      rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
@@ -281,9 +295,7 @@ func (n *Notifier) attempt(ctx context.Context, d store.Delivery) {
 		return
 	}
 
-	n.mu.Lock()
-	delay := backoff(next, n.rnd)
-	n.mu.Unlock()
+	delay := backoff(next)
 
 	n.log.Warn("alert delivery failed, will retry",
 		"monitor", alert.MonitorName, "channel", ch.Name,
