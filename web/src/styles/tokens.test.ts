@@ -610,12 +610,47 @@ describe("tokens.css matches the §2.5 weight and tracking scales", () => {
         /\|\s*`(--(?:weight|track)-[a-z]+)`\s*\|\s*`([^`]+)`\s*\|/g,
       ),
     ];
-    expect(rows.length, "expected four weights and two tracking roles").toBe(
-      6,
-    );
+    expect(rows.length, "expected four weights and one tracking role").toBe(5);
     for (const [, name, value] of rows) {
       expect(root.get(name), name).toBe(value);
     }
+  });
+
+  it("keeps tracking to a single inherited value, with no per-face exception", () => {
+    // This is the rule that keeps re-breaking itself, because every exception
+    // has a plausible argument behind it: uppercase wants opening up, mono is
+    // already on a fixed advance, a badge is small. Measured, none of them
+    // hold — and the caps one cost +1.08px per letter pair against a body of
+    // -0.32px, which is what made section labels read as spaced-out small caps.
+    //
+    // So: no `--track-*` token other than the body value may exist, and no
+    // stylesheet may set letter-spacing to anything else.
+    const root = declarations(
+      tokensCss.slice(tokensCss.indexOf(":root"), tokensCss.indexOf("\n}")),
+    );
+    const trackTokens = [...root.keys()].filter((k) => k.startsWith("--track-"));
+    expect(
+      trackTokens,
+      "a second tracking token is a per-face exception wearing a token's clothes",
+    ).toEqual(["--track-body"]);
+
+    // And nothing may hand-roll one. Every stylesheet the app ships is walked,
+    // not just tokens.css, because the exceptions historically lived in
+    // component sheets where nobody was looking.
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (!file.endsWith(".css")) continue;
+      const css = stripComments(readFileSync(file, "utf8"));
+      for (const match of css.matchAll(/letter-spacing:\s*([^;}]+)/g)) {
+        const value = match[1].trim();
+        if (value === "var(--track-body)" || value === "inherit") continue;
+        offenders.push(`${relative(repoRoot, file)}: letter-spacing: ${value}`);
+      }
+    }
+    expect(
+      offenders,
+      "tracking is set once on body and inherited; see §2.5",
+    ).toEqual([]);
   });
 
   it("binds every weight and tracking token to a Tailwind utility", () => {
@@ -627,7 +662,7 @@ describe("tokens.css matches the §2.5 weight and tracking scales", () => {
         `--font-weight-${step}: var(--weight-${step});`,
       );
     }
-    for (const role of ["body", "badge"]) {
+    for (const role of ["body"]) {
       expect(inline, `--tracking-${role}`).toContain(
         `--tracking-${role}: var(--track-${role});`,
       );
@@ -641,26 +676,17 @@ describe("tracking is decided once, on the body", () => {
   it("sets the body tracking in the base layer", () => {
     // The point of SUB-76: a component that forgets to ask for tracking still
     // gets it. If this declaration goes, 67 of 79 text elements silently fall
-    // back to `normal` again and nothing on screen says so.
+    // back to `normal` and nothing on screen says so.
+    //
+    // Worth recording because it is easy to get wrong in the other direction:
+    // an em letter-spacing does NOT re-resolve against each child's font-size.
+    // It is computed once on body (16px x -.02em = -0.32px) and that absolute
+    // value is what descendants inherit, so a 12px label carries -0.32px and
+    // not -0.24px. Measured in a browser; jsdom cannot answer this.
     const body = indexCss.slice(indexCss.indexOf("  body {"));
     expect(body.slice(0, body.indexOf("\n  }"))).toContain(
       "letter-spacing: var(--track-body);",
     );
-  });
-
-  it("keeps only the exceptions the body value is wrong for", () => {
-    // One exception survives: the mono badge, which is already wide. Caps and
-    // mono were exceptions too until the reference was measured — it applies a
-    // single body tracking to every face and casing, so opting either out was
-    // a correction to a correction. Any third token here is a per-component
-    // tweak wearing a token's name.
-    const root = declarations(
-      tokensCss.slice(0, tokensCss.indexOf("[data-theme=")),
-    );
-    const tracks = [...root.keys()].filter((name) =>
-      name.startsWith("--track-"),
-    );
-    expect(tracks.sort()).toEqual(["--track-badge", "--track-body"]);
   });
 });
 

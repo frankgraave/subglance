@@ -118,7 +118,6 @@
   @apply face-mono;
   font-size: var(--type-section);
   line-height: var(--lead-section);
-  letter-spacing: var(--track-badge);
   color: var(--ink-4);
 }
 

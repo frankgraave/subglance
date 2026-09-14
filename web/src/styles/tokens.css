@@ -163,18 +163,26 @@
      Spelled `--track-*` because `--tracking-*` is Tailwind v4's own theme
      namespace and a token there would have to reference itself. */
   --track-body: -.02em;
-  --track-badge: .04em;
 
-  /* There is deliberately no `--track-caps` and no `--track-mono`.
-     Both existed on the reasoning that uppercase needs opening up and that a
-     monospace face needs no correction at all. Measured against the reference
-     style, neither holds: it sets one absolute -0.32px on the body and never
-     overrides it — sans and mono, sentence case and uppercase, all inherit
-     the same value. The tightening is a house style applied to the page, not
-     a per-face or per-casing fix. Our caps labels opting out of it with
-     +.09em is what made them read as spaced-out small caps instead of a quiet
-     header, and mono opting out is what made panel headers and IDs read wider
-     than theirs. Both now inherit like everything else. */
+  /* There is deliberately no `--track-caps`, `--track-badge` or `--track-mono`.
+     All three existed on reasoning that sounds right and measures wrong:
+     uppercase needs opening up, a mono badge is already wide, a monospace face
+     sits on a fixed advance so the body correction does not apply.
+
+     Measured against the reference style, none of it holds: it sets one
+     absolute -0.32px on the body and overrides it nowhere — sans and mono,
+     sentence case and uppercase, badges and headers all inherit the same
+     value. The tightening is a house style applied to the page, not a per-face
+     or per-casing fix.
+
+     Every exception we had pushed letters apart while the style we were aiming
+     at pulled them together. The caps one was the worst: +.09em at 12px is
+     +1.08px per pair against the body's -0.32px, so section labels sat 1.4px
+     per pair wider and read as spaced-out small caps rather than as a quiet
+     header. Mono opting out is what made panel headers and IDs read wide.
+
+     If a future face genuinely needs its own value, add it with a measurement
+     attached, not with an argument. */
 
   /* Space moves in steps of 4px. Named so a row's rhythm is a decision
      that can be changed in one place, not 40 ad-hoc paddings. */
@@ -448,7 +456,6 @@
   --font-weight-heavy: var(--weight-heavy);
 
   --tracking-body: var(--track-body);
-  --tracking-badge: var(--track-badge);
 
   --radius-2xs: var(--r-2xs);
   --radius-xs: var(--r-xs);

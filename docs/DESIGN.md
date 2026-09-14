@@ -338,20 +338,35 @@ the inherited value is wrong for the face.
 | Role | Token | Value | Used for |
 |---|---|---|---|
 | Body | `--track-body` | `-.02em` | inherited by everything, set once on `body` |
-| Badge | `--track-badge` | `.04em` | small mono badges, where the mono face is already wide |
 
-This replaces four tokens — `--track-title`, `--track-name`, `--track-badge`
-and `--track-caps` — of which the first two had to be spelled out per
-component and therefore reached 12 of 79 visible text elements; the other 67 sat
-at `normal`, uncorrected. A correction that has to be remembered is a
-correction that is mostly absent. `--track-title` and `--track-name` are gone
-rather than kept as decoration: two values a hundredth of an em apart were one
-decision written twice.
+**One value, no exceptions.** Not for uppercase, not for mono, not for badges.
+This replaces five tokens — `--track-title`, `--track-name`, `--track-badge`,
+`--track-caps` and a short-lived `--track-mono` — each of which was added on
+reasoning that sounds right and measures wrong: titles need tightening, mono
+sits on a fixed advance, uppercase needs opening up, a mono badge is already
+wide.
 
-One caps value, not four. The uppercase labels in this product previously ran
-at `.02em`, `.07em`, `.08em`, `.09em` and `.1em` — five spellings of one
-decision, none of which was deliberate. They are the same role and now read the
-same, which is the entire reason the token exists.
+The first two had to be spelled out per component and therefore reached 12 of
+79 visible text elements; the other 67 sat at `normal`, uncorrected. A
+correction that has to be remembered is a correction that is mostly absent.
+
+The caps exception was the expensive one. `+.09em` at 12px is `+1.08px` per
+letter pair, against the body's `-0.32px` — so every section label sat 1.4px
+per pair wider than the rest of the interface and read as spaced-out small caps
+instead of as a quiet header. Uppercase mono at 12px is already separated by
+its own fixed advance; the conventional advice to letterspace caps is for
+proportional faces at display sizes, and applying it here was working against
+the tightening the page had already chosen.
+
+If a future face genuinely needs its own value, it arrives with a measurement
+attached, not with an argument.
+
+The five spellings that preceded this are worth recording, because they are how
+a scale gets away from you: uppercase labels in this product ran at `.02em`,
+`.07em`, `.08em`, `.09em` and `.1em` — five versions of one decision, none of
+them deliberate. Collapsing them to a single caps token was the right first
+move; removing that token in favour of the inherited body value was the second,
+and only measuring the difference made it visible.
 
 The raw custom properties are spelled `--track-*` rather than `--tracking-*`
 because `--tracking-*` is Tailwind v4's own theme namespace: a token of that
@@ -409,7 +424,6 @@ repetition allows: three tones, two weights, sans in every one of them.
   line-height: var(--lead-section);
   font-weight: var(--weight-plain);
   text-transform: uppercase;
-  letter-spacing: var(--track-caps);
   color: var(--ink-2);
 }
 ```
