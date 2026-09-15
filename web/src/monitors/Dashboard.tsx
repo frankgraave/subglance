@@ -7,7 +7,7 @@ import {
   type CardColumns,
   type LayoutId,
 } from "../shell/preferences";
-import { Led } from "./Led";
+import { LED_STATE } from "./ledState";
 import { CardColumnsSwitcher } from "../shell/CardColumnsSwitcher";
 import { SearchIcon } from "../shell/icons";
 import { MonitorCardList } from "./MonitorCardList";
@@ -201,60 +201,20 @@ export function Dashboard({
        * the bar above it.
        */}
       <header className="mon-topbar">
-        <div className="mon-topbar-lead">
-          {/*
-           * `h1`, not `h2` (SUB-100): the detail view uses `h1` for the
-           * monitor's name, and the two screens disagreeing about where the
-           * outline starts leaves heading navigation with no level-1 landmark
-           * on the busier of the two.
-           *
-           * Visually hidden, because the card below already carries the
-           * visible title — "Monitors (2)" — and printing the word twice on
-           * one screen is what this row was rearranged to stop. The outline
-           * keeps its landmark; the eye does not get the same noun twice.
-           */}
-          <h1 id={`${searchId}-title`} className="sr-only">
-            Monitors
-          </h1>
-          <p className="mon-counts">
-            {summary.total === 0 ? (
-              "Nothing being watched yet"
-            ) : (
-              <>
-                {COUNTED
-                  // A chip whose count drops to zero while it is the active
-                  // filter has to stay: it is the only control that turns the
-                  // now-empty list back into the full one.
-                  .filter(
-                    (counted) =>
-                      summary[counted.status] > 0 || counted.status === status,
-                  )
-                  .map((counted) => (
-                    <button
-                      key={counted.status}
-                      type="button"
-                      className="mon-count"
-                      // A toggle, not a radio group: pressing the chip that is
-                      // already on is the obvious way back to the full list, and
-                      // it is the same target the user just hit.
-                      aria-pressed={status === counted.status}
-                      onClick={() =>
-                        setStatus((current) =>
-                          current === counted.status ? null : counted.status,
-                        )
-                      }
-                    >
-                      <Led status={counted.status} labelled={false} />
-                      <b className="mon-count-value">
-                        {summary[counted.status]}
-                      </b>{" "}
-                      {counted.label}
-                    </button>
-                  ))}
-              </>
-            )}
-          </p>
-        </div>
+        {/*
+         * `h1`, not `h2` (SUB-100): the detail view uses `h1` for the
+         * monitor's name, and the two screens disagreeing about where the
+         * outline starts leaves heading navigation with no level-1 landmark
+         * on the busier of the two.
+         *
+         * Visually hidden, because the card below already carries the visible
+         * title — "Monitors (2)" — and printing the word twice on one screen
+         * is what this bar was rearranged to stop. The outline keeps its
+         * landmark; the eye does not get the same noun twice.
+         */}
+        <h1 id={`${searchId}-title`} className="sr-only">
+          Monitors
+        </h1>
 
         <div className="mon-search">
           {/* A real <label>, hidden. Placeholder-as-label disappears the
@@ -289,23 +249,82 @@ export function Dashboard({
         </div>
 
         {/*
-         * View tools: the right-hand end of the row, and empty for three of
-         * the four layouts.
-         *
-         * Keyed off the layout actually on screen rather than the stored
-         * preference — on a narrow viewport the preference may be Rows while
-         * Cards is what renders, and the control has to follow what the user
-         * can see. Nothing above this row can move when it appears, which is
-         * the whole reason it is here and not in the shell's topbar.
+         * Everything that narrows or reshapes the list sits at the far right,
+         * in two framed clusters: filter, then view.
          */}
-        {shown === "cards" && onCardColumnsChange !== undefined && (
-          <div className="mon-view-tools">
+        <div className="mon-view-tools">
+          {/*
+           * The status filter.
+           *
+           * Framed like the segmented control beside it so the two read as
+           * siblings rather than as loose toggles next to a framed thing — but
+           * `role="group"` and `aria-pressed`, never a radio group: these are
+           * independent toggles and "none selected" is a real state. The
+           * frame is a visual family, not a promise of one-of-N; pressing the
+           * active chip is the way back to the full list.
+           */}
+          {summary.total > 0 && (
+            <div className="mon-filter" role="group" aria-label="Filter by status">
+              {COUNTED
+                // A chip whose count drops to zero while it is the active
+                // filter has to stay: it is the only control that turns the
+                // now-empty list back into the full one.
+                .filter(
+                  (counted) =>
+                    summary[counted.status] > 0 || counted.status === status,
+                )
+                .map((counted) => (
+                  <button
+                    key={counted.status}
+                    type="button"
+                    className="mon-count"
+                    aria-pressed={status === counted.status}
+                    onClick={() =>
+                      setStatus((current) =>
+                        current === counted.status ? null : counted.status,
+                      )
+                    }
+                  >
+                    {/*
+                     * A round lamp, not the 20x7 bar.
+                     *
+                     * §3 fixes the bar's size so a wall of them stays
+                     * scannable, and that argument is about lamps reporting a
+                     * monitor's state. This is a filter chip: the dot is a key
+                     * to the colour, at the scale of the text beside it, and
+                     * the word next to it is what carries the meaning
+                     * (§2.3) — which is why it is safe for it to be small.
+                     */}
+                    <span
+                      className="mon-count-dot"
+                      data-state={LED_STATE[counted.status]}
+                      aria-hidden="true"
+                    />
+                    <b className="mon-count-value">
+                      {summary[counted.status]}
+                    </b>{" "}
+                    {counted.label}
+                  </button>
+                ))}
+            </div>
+          )}
+
+          {/*
+           * View tools, empty for three of the four layouts.
+           *
+           * Keyed off the layout actually on screen rather than the stored
+           * preference — on a narrow viewport the preference may be Rows while
+           * Cards is what renders, and the control has to follow what the user
+           * can see. Nothing above this bar can move when it appears, which is
+           * the whole reason it is here and not in the shell's topbar.
+           */}
+          {shown === "cards" && onCardColumnsChange !== undefined && (
             <CardColumnsSwitcher
               value={cardColumns}
               onChange={onCardColumnsChange}
             />
-          </div>
-        )}
+          )}
+        </div>
       </header>
 
       {/*

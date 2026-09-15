@@ -884,15 +884,48 @@ layout rather than the stored one: a setting visible while it governs nothing
 teaches people it does nothing. The count is stored under its own key so it
 survives a trip through Rows and back.
 
-**It lives in the dashboard's tools row, not in the shell's topbar.** The
-topbar holds what is true on every screen — add, layout, workbench, theme — and
-a second row under it holds what belongs to *this* screen: search, the status
+**It lives in the dashboard's toolbar, not in the shell's topbar.** The topbar
+holds what is true on every screen — add, layout, workbench, theme — and a
+second bar under it holds what belongs to *this* screen: search, the status
 filter, and whatever the current view brings with it. The split is not
 tidiness. A view-specific control in the topbar appears and disappears inside a
 right-aligned group, which slides everything before it sideways — measured at
 121px, including the layout switcher the user had just clicked. Chrome that
 moves out from under the cursor is what §10's no-transform rule exists to
 prevent, and it applies to the toolbar too.
+
+**The toolbar is a band of chrome, not a row of controls on the page.** It
+carries the topbar's own fill — an 86% canvas mix behind a 12px blur — its own
+bottom border, and no gap between the two. It shipped once as a bare flex row
+on the page background, and without a surface it read as three controls
+floating in the content rather than as a bar; the fix is the fill and the edge,
+not more spacing. Negative margins pull it out of the content padding so it
+spans the full width like the topbar does. A flat `--surface` fill is wrong
+here for the same reason: against a translucent bar it reads as a lighter strip
+stuck to the frame rather than as more of the frame.
+
+The order is fixed: **search hard left, the status filter and the view tools
+together hard right.** An `auto` margin, not a gap value, is what holds them
+apart, so the space between is whatever is left rather than a number to
+maintain.
+
+**The status filter is framed like the segmented control beside it** — the same
+2px of padding inside `--r-md`, leaving `--r-sm` on the chips, concentric by
+§2.7 — so the two clusters read as siblings rather than as loose toggles next
+to a framed thing. That frame is the one risk in this design and it is worth
+naming: a segmented control means one-of-N, and the filter is not. None
+selected is a real state, and pressing the active chip is how you get back to
+the full list. So the chips stay `<button aria-pressed>` inside a
+`role="group"`, never radios, and a test holds that line.
+
+The chips' lamps are **round dots, not the 20×7 bar**. §3 fixes the bar's size
+so a wall of them stays scannable, and that rule is about lamps reporting a
+monitor's state. A filter chip's lamp is a legend — it says "the red ones", not
+"this monitor is down" — and at the scale of the text beside it a full pill
+reads as a status badge that has wandered into a toolbar. The word next to it
+carries the meaning (§2.3), which is exactly what makes a small dot safe here
+and nowhere else. The status-to-colour mapping lives in one module for both, so
+"paused" cannot end up hollow in one place and grey in the other.
 
 The page title is visually hidden rather than deleted: the card below already
 says "Monitors (2)", so printing the word twice was the duplication this row

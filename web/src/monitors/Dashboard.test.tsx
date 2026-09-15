@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { Dashboard } from "./Dashboard";
 import type { Monitor, MonitorStatus } from "./types";
-import type { LayoutId } from "../shell/preferences";
+import type { CardColumns, LayoutId } from "../shell/preferences";
 
 afterEach(cleanup);
 
@@ -36,12 +36,17 @@ function Harness({
   monitors,
   announcement = null,
   layout,
+  cardColumns,
 }: {
   monitors: Monitor[];
   announcement?: string | null;
   layout?: LayoutId;
+  /* Passing this is what makes the column switcher render: the control is
+     hidden unless the dashboard is given a way to change the value. */
+  cardColumns?: CardColumns;
 }) {
   const [query, setQuery] = useState("");
+  const [columns, setColumns] = useState<CardColumns>(cardColumns ?? "1");
   return (
     <Dashboard
       monitors={monitors}
@@ -50,6 +55,8 @@ function Harness({
       onQueryChange={setQuery}
       announcement={announcement}
       beatWidth={WIDTH}
+      cardColumns={columns}
+      onCardColumnsChange={cardColumns === undefined ? undefined : setColumns}
     />
   );
 }
@@ -219,7 +226,7 @@ describe("Dashboard", () => {
     expect(screen.getByRole("status").textContent).toBe("");
   });
 
-  it("summarises the counts in the heading", () => {
+  it("summarises the counts in the toolbar's status filter", () => {
     render(
       <Harness
         monitors={[
@@ -230,12 +237,68 @@ describe("Dashboard", () => {
         ]}
       />,
     );
-    const counts = document.querySelector(".mon-counts")!.textContent ?? "";
+    // `.mon-filter` since the counts moved out of a page heading and into the
+    // toolbar, where they are the status filter rather than a summary line.
+    const counts = document.querySelector(".mon-filter")!.textContent ?? "";
     expect(counts).toContain("1 down");
     expect(counts).toContain("2 up");
     expect(counts).toContain("1 paused");
     // No pending monitors, so no "0 pending" noise.
     expect(counts).not.toContain("pending");
+  });
+
+  it("keeps the filter a set of toggles, not a radio group", () => {
+    /*
+     * The filter is framed like the segmented control beside it so the two
+     * read as siblings. That frame is the one thing about this design that
+     * could mislead: a segmented control means one-of-N, and this is not.
+     * "None selected" is a real state and pressing the active chip is how you
+     * get back to the full list, so the chips must stay buttons carrying
+     * aria-pressed — never role="radio", never a required selection.
+     */
+    render(
+      <Harness monitors={[monitor("a", "up"), monitor("c", "down")]} />,
+    );
+    const filter = document.querySelector(".mon-filter")!;
+    expect(filter.getAttribute("role")).toBe("group");
+    expect(filter.querySelectorAll('[role="radio"]')).toHaveLength(0);
+
+    const chips = [...filter.querySelectorAll("button")];
+    expect(chips.length).toBeGreaterThan(1);
+    // Nothing is pressed until the user presses something.
+    expect(chips.every((c) => c.getAttribute("aria-pressed") === "false")).toBe(
+      true,
+    );
+
+    fireEvent.click(chips[0]);
+    expect(chips[0].getAttribute("aria-pressed")).toBe("true");
+    // ...and pressing it again clears the filter rather than leaving one
+    // option stuck on, which is what a radio group would do.
+    fireEvent.click(chips[0]);
+    expect(chips[0].getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("puts search at one end of the toolbar and the tools at the other", () => {
+    /*
+     * The order the toolbar exists for: search hard left, then the filter and
+     * the view tools together at the right. Asserted as document order rather
+     * than geometry, because jsdom has no layout — but document order is what
+     * `margin-left: auto` and the flex row turn into position, and it is also
+     * the order a keyboard walks them in.
+     */
+    render(
+      <Harness monitors={[monitor("a", "up")]} layout="cards" cardColumns="2" />,
+    );
+    const bar = document.querySelector(".mon-topbar")!;
+    const parts = [...bar.children].map((el) => el.className);
+    expect(parts).toEqual(["sr-only", "mon-search", "mon-view-tools"]);
+
+    // Both clusters live in the right-hand group, in that order.
+    const tools = bar.querySelector(".mon-view-tools")!;
+    expect([...tools.children].map((el) => el.className.split(" ")[0])).toEqual([
+      "mon-filter",
+      "segmented",
+    ]);
   });
 
   it("has a real label on the search field, not just a placeholder", () => {

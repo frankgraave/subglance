@@ -25,98 +25,147 @@
 }
 
 /*
- * The tools row: search, the status filter, and whatever the current view
- * brings with it.
+ * The dashboard toolbar.
  *
- * `align-items: center` rather than `flex-start`, and a single row rather than
- * a title block beside a field: the page title moved into `.sr-only` because
- * the card below already says "Monitors (2)", and once the title is gone the
- * row is three controls that belong on one baseline.
+ * A second band of chrome attached to the shell's topbar: same fill, same
+ * bottom border, no gap between them. It was a bare flex row on the page
+ * background for one commit, and without a surface it read as three controls
+ * floating in the content rather than as a bar.
  *
- * The shell's topbar above holds what is true on every screen. This holds what
- * is true on *this* one, which is what lets a view-specific control appear and
- * disappear without moving anything above it.
+ * Negative margins pull it out of `.shell-content`'s padding so it spans the
+ * full width like the topbar does, then put the padding back on its own
+ * terms. The alternative — moving the toolbar into the shell — would put a
+ * dashboard-specific control in a component every screen shares.
+ *
+ * The shell's topbar holds what is true everywhere: add, layout, workbench,
+ * theme. This holds what is true on *this* screen: search, the status filter,
+ * and whatever the current view brings with it.
+ *
+ * The fill is the topbar's, not `--surface`: that bar is a 86% canvas mix
+ * behind a blur, and a flat panel fill under it reads as a lighter strip
+ * stuck to the frame rather than as more of the same frame. It does not need
+ * to be sticky to need the blur — the two bands are adjacent, and at rest the
+ * eye compares them directly.
  */
 .mon-topbar {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   flex-wrap: wrap;
-}
-
-/* Search and the counts travel together and wrap together: they are both
-   about narrowing the list, and splitting them across a wrap boundary reads
-   as two unrelated rows. */
-.mon-topbar-lead {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  min-width: 0;
+  margin: calc(var(--space-6) * -1) calc(var(--space-6) * -1) 0;
+  padding: var(--space-2) var(--space-6);
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--canvas) 86%, transparent);
+  backdrop-filter: blur(12px);
 }
 
 /*
- * View tools sit at the far end, and the margin is what keeps the row honest:
- * `auto` pushes them right, so the gap between them and the search field is
- * whatever is left rather than a value that has to be maintained.
+ * The right-hand end: everything that narrows or reshapes the list.
+ *
+ * `auto` rather than a fixed gap after the search field, so the space between
+ * them is whatever is left rather than a number to maintain.
  */
 .mon-view-tools {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
   margin-left: auto;
 }
 
-.mon-title {
-  font-size: var(--type-card);
-  line-height: var(--lead-card);
-  font-weight: var(--weight-strong);
+/*
+ * The status filter, framed like the segmented control beside it.
+ *
+ * The shell is what makes the two clusters read as siblings rather than as
+ * loose toggles next to a framed thing. It is deliberately the *same* frame:
+ * 2px of padding inside `--r-md`, leaving `--r-sm` on the chips, which is the
+ * concentric rule (§2.7) and the geometry §7.8 measured.
+ *
+ * It is not a segmented control and must not become one. These are
+ * independent toggles — none selected is a real state, and pressing the
+ * active chip is how you get back to the full list — where a segmented
+ * control is one-of-N. The frame is a visual family, not a promise.
+ */
+.mon-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding: var(--space-0h);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
 }
 
-.mon-counts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  font-size: var(--type-helper);
-  line-height: var(--lead-helper);
-  color: var(--ink-3);
-}
-
-/* A button that does not look like one until you reach for it. The counts are
-   read far more often than they are clicked, so the resting state stays the
-   plain sentence it has always been; hover and the pressed state are what
-   announce that it is a control. The border is transparent rather than absent
-   so nothing shifts by a pixel when it appears. */
+/*
+ * A filter chip, shaped like a segment of the control beside it.
+ *
+ * `--r-sm` inside the frame's `--r-md` and its 2px of padding: 8 − 2 = 6,
+ * concentric by §2.7. The transparent border is declared at rest so the box
+ * never changes size when a chip is pressed or hovered — the same reason
+ * `.segmented-option` carries one.
+ */
 .mon-count {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-1) var(--space-2);
-  margin: calc(var(--space-1) * -1) calc(var(--space-2) * -1);
+  height: 26px;
+  padding: 0 var(--space-2h);
   font: inherit;
-  color: inherit;
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  color: var(--ink-3);
   background: none;
   border: 1px solid transparent;
   border-radius: var(--r-sm);
   cursor: pointer;
+  white-space: nowrap;
   transition: background-color var(--dur-hover) var(--ease),
-              border-color var(--dur-hover) var(--ease);
+              border-color var(--dur-hover) var(--ease),
+              color var(--dur-hover) var(--ease);
 }
 
-.mon-count:hover { border-color: var(--border-hi); }
-
-/* Pressed is carried by the filled surface AND the sentence under the search
-   box, never by colour alone (DESIGN.md §9): aria-pressed is what a screen
-   reader gets, the fill is what a sighted user gets, and the sentence is what
-   anyone gets who looked away while it was toggled. */
-.mon-count[aria-pressed="true"] {
-  background: var(--surface-2);
+.mon-count:hover {
+  color: var(--ink-2);
   border-color: var(--border-hi);
 }
 
+/* Pressed is carried by the filled surface AND by aria-pressed, never by
+   colour alone (DESIGN.md §9). */
+.mon-count[aria-pressed="true"] {
+  background: var(--surface-hi);
+  border-color: var(--border-hi);
+  color: var(--ink);
+}
+
 .mon-count-value {
+  @apply face-mono;
   font-weight: var(--weight-strong);
   color: var(--ink);
 }
+
+/*
+ * The chip's lamp: a round key, not the product's 20x7 bar.
+ *
+ * §3 fixes the bar's size so a wall of lamps stays scannable, and that rule is
+ * about lamps reporting a monitor's state. This is a legend for a filter — it
+ * says "the red ones", not "this monitor is down" — and at the scale of the
+ * text beside it a 20x7 pill reads as a status badge that has wandered into a
+ * toolbar. The word next to it is what carries the meaning (§2.3), which is
+ * what makes a small dot safe here and nowhere else.
+ */
+.mon-count-dot {
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: 50%;
+  flex: none;
+}
+
+.mon-count-dot[data-state="up"]   { background: var(--up);   box-shadow: var(--glow-up); }
+.mon-count-dot[data-state="warn"] { background: var(--warn); box-shadow: var(--glow-warn); }
+.mon-count-dot[data-state="down"] { background: var(--down); box-shadow: var(--glow-down); }
+/* Idle is filled grey — a reading we do not have. Off is the same silhouette
+   with nothing in it — nobody is taking a reading, on purpose (§3.1). */
+.mon-count-dot[data-state="idle"] { background: var(--idle); }
+.mon-count-dot[data-state="off"]  { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-2); }
 
 /*
  * The search field, as one box holding three things.
@@ -829,11 +878,25 @@
  */
 @media (max-width: 640px) {
   .mon-topbar {
-    /* Stacked, and the search goes full width: a 240px input beside a heading
-       on a 375px screen leaves neither of them usable. */
+    /* Stacked, and the search goes full width: a 280px field beside three
+       filter chips on a 375px screen leaves neither of them usable. The bar
+       keeps its surface and its edge — it is still a toolbar, just a taller
+       one. */
     flex-direction: column;
     align-items: stretch;
-    gap: var(--space-3);
+    gap: var(--space-2);
+    margin: calc(var(--space-4) * -1) calc(var(--space-4) * -1) 0;
+    padding: var(--space-3) var(--space-4);
+  }
+
+  /* The two clusters share the row they now have to themselves, and scroll
+     rather than wrap: a filter that reflows to two lines pushes the list down
+     every time a status appears or disappears. */
+  .mon-view-tools {
+    margin-left: 0;
+    overflow-x: auto;
+    /* Room for the frame's own edge and shadow inside the scroller. */
+    padding-bottom: 2px;
   }
 
   .mon-facet-select,
@@ -872,12 +935,6 @@
     display: none;
   }
 
-  /* The view tools stop being right-aligned once the row is a column — an
-     `auto` margin in a stretched column pushes them to the far edge alone,
-     which reads as a stray control rather than as part of the row. */
-  .mon-view-tools {
-    margin-left: 0;
-  }
 }
 
 /*
