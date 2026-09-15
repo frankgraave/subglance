@@ -1,6 +1,8 @@
 import { Card, Panel } from "../components/Card";
+import { Legend, type LegendItem } from "../components/Legend";
 import { IconAlert, IconGauge, IconPulse } from "../components/icons";
 import { HeartbeatBar } from "../heartbeat/HeartbeatBar";
+import type { Beat } from "../heartbeat/model";
 import { describeAge } from "../live/age";
 import {
   describePushWindow,
@@ -167,6 +169,23 @@ export function MonitorDetail({
               barWidth={6}
               gap={3}
               stale={stale}
+              framed={beats.length > 0}
+              legend={
+                beats.length > 0 ? (
+                  // Only when there are bars to explain. A legend above an
+                  // empty plot names colours that are not on screen, which
+                  // reads as a rendering fault rather than as help.
+                  //
+                  // Counted rather than listed: "what do these colours mean"
+                  // and "how many of each" are the same question at a glance,
+                  // and the bar cannot answer the second — 90 bars at 6px do
+                  // not let anyone tally the red ones.
+                  <Legend
+                    label="What the bars mean"
+                    items={legendItems(beats)}
+                  />
+                ) : undefined
+              }
             />
           </div>
           {beats.length === 0 ? (
@@ -267,6 +286,30 @@ export function MonitorDetail({
       </Card>
     </article>
   );
+}
+
+/**
+ * What the bars mean, with a count for each.
+ *
+ * Counted rather than merely named, because "what is this colour" and "how
+ * many of those are there" are the same question at a glance and the bar
+ * cannot answer the second: ninety columns at 6px do not let anyone tally the
+ * red ones. The count is the reason this legend earns its space.
+ *
+ * Two entries, never more. A `Beat` carries `ok` and nothing else, so a third
+ * status here would be a colour the plot never draws — a legend that names
+ * marks which are not on screen is worse than none.
+ *
+ * A status with no occurrences is still listed. "0 failed" is a reading; an
+ * absent row is silence, and the difference matters on the one panel someone
+ * opens to find out whether anything went wrong.
+ */
+function legendItems(beats: Beat[]): LegendItem[] {
+  const failed = beats.reduce((n, beat) => (beat.ok ? n : n + 1), 0);
+  return [
+    { key: "up", label: "Passed", marker: "up", value: beats.length - failed },
+    { key: "down", label: "Failed", marker: "down", value: failed },
+  ];
 }
 
 function IncidentItem({ incident }: { incident: Incident }) {
