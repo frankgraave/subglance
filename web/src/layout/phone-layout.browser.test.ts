@@ -192,26 +192,43 @@ describe.each(WIDTHS)("at %ipx", (width) => {
             if (style.visibility === "hidden" || style.display === "none") continue;
 
             /*
-             * Visually-hidden inputs are exempt, and deliberately so. The
-             * theme control is a fieldset of `sr-only` radios whose visible
-             * target is the <label> wrapping each one — the pattern that keeps
-             * a native radio's keyboard and screen-reader behaviour instead of
-             * reimplementing it on a <div>. The 1x1 box is the input's
-             * clipping rectangle, not the thing a finger lands on.
+             * A bare input is measured by the shell it sits in.
              *
-             * All three conditions are required: label ancestry on its own
-             * would also wave through a *visible* checkbox or radio that is
-             * genuinely too small to hit.
+             * WCAG 2.5.8 is about the area a finger can land on, and for a
+             * borderless input inside a padded field wrapper that area is the
+             * wrapper: the dashboard's search input is 20px of text box inside
+             * a 38px shell carrying the border, the fill and the magnifier,
+             * and a tap anywhere in it focuses the field. Measuring the input
+             * alone reports a failure the thumb cannot experience.
+             *
+             * The exemption is narrow on purpose. It applies only when the
+             * control draws no edge of its own — a control with its own border
+             * or background is claiming to *be* the target, and then its own
+             * box is what has to be 24px. The shell must also genuinely clear
+             * 24px; this promotes the measurement, it does not skip it.
+             *
+             * This replaces an exemption for `sr-only` radios wrapped in a
+             * label, which was written for a theme control that no longer
+             * exists — the product has no radio inputs left at all. A dead
+             * exemption is worse than none: it reads as a rule still in force.
              */
-            if (
-              el instanceof HTMLInputElement &&
-              el.classList.contains("sr-only") &&
-              el.closest("label") !== null
-            ) {
-              continue;
-            }
+            const shellOf = (control: HTMLElement): HTMLElement => {
+              const own = window.getComputedStyle(control);
+              const draws =
+                own.borderTopWidth !== "0px" ||
+                (own.backgroundColor !== "rgba(0, 0, 0, 0)" &&
+                  own.backgroundColor !== "transparent");
+              if (draws) return control;
+              const parent = control.parentElement;
+              return parent === null ? control : parent;
+            };
 
-            const r = el.getBoundingClientRect();
+            const target =
+              el instanceof HTMLInputElement && el.type !== "checkbox" && el.type !== "radio"
+                ? shellOf(el)
+                : el;
+
+            const r = target.getBoundingClientRect();
             if (r.width === 0 && r.height === 0) continue;
             if (r.width < 24 || r.height < 24) {
               out.push({

@@ -894,6 +894,18 @@
      every time a status appears or disappears. */
   .mon-view-tools {
     margin-left: 0;
+    /*
+     * The scroller needs a width to scroll *within*, and `stretch` does not
+     * give it one: as a flex item whose content cannot shrink, its automatic
+     * minimum size wins and the box grows to its 376px of chips instead of
+     * taking the 343px line. `overflow-x` then has nothing to clip — the row
+     * simply hung 17px off the right edge of a 375px screen and took the
+     * whole page's scrollWidth with it.
+     *
+     * `100%` is the same instrument `.mon-search` below already uses, and the
+     * one the phone-layout guard measures.
+     */
+    width: 100%;
     overflow-x: auto;
     /* Room for the frame's own edge and shadow inside the scroller. */
     padding-bottom: 2px;

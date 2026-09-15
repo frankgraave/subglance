@@ -1299,18 +1299,20 @@ to discover late.
 
 ### Blocking — the design does not survive without these
 
-- **Spacing and radius are not enforced.** `tokens.test.ts` mechanically
-  guarantees that `tokens.css` is the only source of colour, font size, line
-  height, weight and letter spacing. Spacing and radius have no such guard, and
-  three values have already been written by hand to hit a target height:
-  `shell.css:93` `padding: 7px`, `:207` `4px 9px`, `:290` `4px 7px`. The ladder
-  is 4/8/12/16/20/24; 7 and 9 are not on it, and a measured 8px radius is not on
-  the radius ladder (4/6/10/14) either. These are not cosmetic slips — each was
-  chosen to reach a specific rendered height, which is reasoning that belongs in
-  a token rather than buried in a padding value somebody will later "tidy up".
-  The 20x7 LED with its `--r-2xs` radius (§2.4) is the counter-example: outside the
-  ladder, argued for in writing, and therefore an exception rather than a leak. A
-  guard is what keeps those two apart.
+- ~~**Spacing and radius are not enforced.**~~ **Closed.** `tokens.test.ts`
+  mechanically guarantees that `tokens.css` is the only source of colour, font
+  size, line height, weight and letter spacing — and now of spacing and radius
+  too: "tokens.css is the only source of spacing and radius" rejects any literal
+  at or above the ladder floor under `web/src`, in the corner and logical
+  properties as well as the short forms, and catches arbitrary Tailwind
+  utilities with it. The three values this gap was opened for
+  (`shell.css` `padding: 7px`, `4px 9px`, `4px 7px`) are gone.
+  The spacing ladder is 4/8/12/16/20/24 with a documented 2px quarter-step for
+  the segmented frame; the radius ladder is 2/4/6/8/12, so the 8px on that
+  control is `--r-md` — a rung, not the off-ladder value this entry once called
+  it. The 20x7 LED with its `--r-2xs` radius (§2.4) remains the counter-example
+  for a real exception: outside the ladder, argued for in writing, and therefore
+  an exception rather than a leak. A guard is what keeps those two apart.
 - **Optical correction barely lands.** Four tracking tokens exist but 67 of the
   79 measured elements sit at `normal`. Dense interface type at 12–15px usually
   wants a slight negative tracking as a single decision on the body, with the
