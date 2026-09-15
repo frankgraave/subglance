@@ -2243,3 +2243,133 @@ describe("hover does not overwrite a status tint with a neutral one", () => {
     ).toBeLessThan(lum(dimLight as string));
   });
 });
+
+describe("the card pattern is the only way to frame a group of panels", () => {
+  // The gap this closes is the one the coverage audit named: tokens were
+  // thoroughly guarded and *patterns* were not, so a new screen inherited the
+  // colour scale automatically and the nesting not at all. Every rule below is
+  // about shape rather than value.
+
+  /** Rules that frame something: a border plus the outer radius. */
+  const framingRules = () =>
+    cssRules().filter(({ body }) => {
+      const clean = stripComments(body);
+      return (
+        /border(?:-[a-z]+)?:\s*1px/.test(clean) &&
+        /border-radius:\s*var\(--r-lg\)/.test(clean)
+      );
+    });
+
+  it("gives every --r-lg frame the padding that makes it a surface", () => {
+    // A frame at the outer radius with no padding sits flush against whatever
+    // it contains, and two borders at the same offset read as one thick seam
+    // rather than as nesting. This is the declaration that looks most
+    // droppable and is the one carrying the pattern.
+    const offenders: string[] = [];
+    for (const { path, selector, body } of framingRules()) {
+      const clean = stripComments(body);
+      if (!/padding:/.test(clean)) {
+        offenders.push(`${path} | ${selector} | frames without padding`);
+      }
+    }
+    expect(
+      offenders,
+      "a card is padding with an edge; see DESIGN.md §2.7",
+    ).toEqual([]);
+  });
+
+  it("never nests a radius inside an equal or larger one", () => {
+    // Two boxes at one radius, one inside the other, read as a mistake: the
+    // corners run parallel at the wrong offset and the inner box looks like it
+    // has escaped. One step down per level is the whole grammar, and this
+    // caught a real inversion — .mon-card sat at --r-lg inside the --r-lg card
+    // that now frames it.
+    const LADDER: Record<string, number> = {
+      "--r-2xs": 2,
+      "--r-xs": 4,
+      "--r-sm": 6,
+      "--r-md": 8,
+      "--r-lg": 12,
+    };
+    // Selectors known to sit inside a card, with the radius they may not meet
+    // or exceed. Listed rather than inferred: a stylesheet does not say what
+    // contains what, and guessing from selector names would be a test that
+    // passes for the wrong reason.
+    const NESTED: [string, string][] = [
+      ["web/src/monitors/monitors.css", ".mon-card"],
+      ["web/src/components/panellist.css", ".panel-row"],
+    ];
+    const cardRadius = LADDER["--r-lg"];
+
+    for (const [path, selector] of NESTED) {
+      const rule = cssRules().find(
+        (r) => r.path === path && r.selector.trim() === selector,
+      );
+      expect(rule, `${selector} not found in ${path}`).toBeTruthy();
+      const token = /border-radius:\s*var\((--r-[a-z0-9]+)\)/.exec(
+        stripComments(rule?.body ?? ""),
+      )?.[1];
+      if (!token) continue;
+      expect(
+        LADDER[token],
+        `${selector} is ${token}; it sits inside a --r-lg card and must be tighter`,
+      ).toBeLessThan(cardRadius);
+    }
+  });
+
+  it("keeps one heading treatment for card titles across every screen", () => {
+    // Before the Card component there were three: .mon-cards-title,
+    // .mon-line-group-title and .mon-detail-panel-title, each applying
+    // caps-legend by hand. They agreed by luck. Any new per-screen title rule
+    // is the same divergence starting again.
+    //
+    // "Card title" means the heading on a card, not every element with
+    // "title" in its name. A label *inside* a panel — a column header, a
+    // legend, a row of units — is the mono-caps role doing exactly its job,
+    // and sweeping those up here would be a guard that punishes correct code
+    // until someone silences it.
+    const offenders: string[] = [];
+    for (const { path, selector, body } of cssRules()) {
+      if (path.includes("components/card.css")) continue;
+      if (!/-(?:title|heading)\b/.test(selector)) continue;
+      const clean = stripComments(body);
+      if (!/@apply[^;]*(?:caps-legend|face-sans|face-mono)/.test(clean)) {
+        continue;
+      }
+      offenders.push(`${path} | ${selector}`);
+    }
+
+    // Two genuine exceptions, listed rather than pattern-matched so each one
+    // has to be argued for in writing:
+    //
+    // `.mon-section-title` is a `<th scope="colgroup">` inside the monitor
+    // table — a column-group header, which is a label within a panel and not
+    // the panel's own title. It is the caps role used correctly.
+    //
+    // `.wall-title` is a full-screen display read from across a room. It has
+    // no card to inherit from and is not a document heading.
+    const allowed = new Set([
+      "web/src/monitors/monitors.css | .mon-section-title",
+      "web/src/wall/wall.css | .wall-title",
+    ]);
+    expect(
+      offenders.filter((o) => !allowed.has(o)),
+      "card titles come from the Card component; see DESIGN.md §2.7",
+    ).toEqual([]);
+  });
+
+  it("keeps every exception on that list real", () => {
+    // An allow-list entry whose selector no longer exists reads as a justified
+    // decision about live code and is not one — the same rot the spacing
+    // allow-list guards against.
+    const live = new Set(
+      cssRules().map(({ path, selector }) => `${path} | ${selector.trim()}`),
+    );
+    for (const entry of [
+      "web/src/monitors/monitors.css | .mon-section-title",
+      "web/src/wall/wall.css | .wall-title",
+    ]) {
+      expect(live.has(entry), `${entry} is allow-listed but gone`).toBe(true);
+    }
+  });
+});

@@ -411,10 +411,24 @@
 
 .mon-empty-leds .led { opacity: .28; }
 
+/*
+ * An empty state states a fact, at the size of a fact.
+ *
+ * This was --type-card (16px), a step below the first-run variant, on the
+ * reasoning that an ordinary empty list is a smaller event than an empty
+ * product. Measured against the reference style, that interface puts its empty
+ * states at 24px/600 — page-title size — and it is right: "no incidents in the
+ * last hour" is the answer to the question the screen was opened to ask, not
+ * an apology for having nothing to show. Shrinking it makes the absence read
+ * as a failure to load.
+ *
+ * The first-run variant keeps --weight-heavy; it is the one moment the product
+ * is introducing itself rather than reporting.
+ */
 .mon-empty-title {
   margin-bottom: var(--space-2);
-  font-size: var(--type-card);
-  line-height: var(--lead-card);
+  font-size: var(--type-page);
+  line-height: var(--lead-page);
   font-weight: var(--weight-strong);
   color: var(--ink);
 }
@@ -424,8 +438,8 @@
    arrive at the same volume. */
 .mon-empty-title--first {
   margin-bottom: var(--space-3);
-  font-size: var(--type-page);
-  line-height: var(--lead-page);
+  /* Size and leading are inherited from the base rule now that both sit at
+     page-title scale; only the weight still separates them. */
   font-weight: var(--weight-heavy);
 }
 

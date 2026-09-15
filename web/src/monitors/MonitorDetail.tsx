@@ -197,11 +197,16 @@ export function MonitorDetail({
       <Card title="Uptime" icon={<IconGauge />} headingLevel={2}>
         <Panel>
           {error !== null ? (
-            <p role="alert" className="mon-detail-empty">
+            <p
+              role="alert"
+              className="mon-detail-empty mon-detail-empty--quiet"
+            >
               Could not load uptime: {error.message}
             </p>
           ) : loading ? (
-            <p className="mon-detail-empty">Loading uptime…</p>
+            <p className="mon-detail-empty mon-detail-empty--quiet">
+              Loading uptime…
+            </p>
           ) : windows.length === 0 ? (
             <p className="mon-detail-empty">No uptime data yet.</p>
           ) : (
@@ -237,11 +242,16 @@ export function MonitorDetail({
       <Card title="Incidents" icon={<IconAlert />} headingLevel={2}>
         <Panel>
           {error !== null ? (
-            <p role="alert" className="mon-detail-empty">
+            <p
+              role="alert"
+              className="mon-detail-empty mon-detail-empty--quiet"
+            >
               Could not load incidents: {error.message}
             </p>
           ) : loading ? (
-            <p className="mon-detail-empty">Loading incidents…</p>
+            <p className="mon-detail-empty mon-detail-empty--quiet">
+              Loading incidents…
+            </p>
           ) : incidents.length === 0 ? (
             // Said positively. "No incidents" reads as missing data; this reads
             // as the good news it actually is.

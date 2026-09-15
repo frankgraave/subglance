@@ -529,8 +529,19 @@ step quieter than the panels it holds, and — the load-bearing part — padding
 the panels sit inset from its border instead of flush against it. A frame
 without padding puts two edges at the same level and the eye reads them as
 competing; that is the double-framing that got this frame removed once already.
-`MonitorTable.test.tsx` asserts the padding specifically, because it is the
-declaration that looks most droppable and is the one that matters.
+
+**The pattern is a component, not a convention.** `Card` and `Panel` in
+`components/Card.tsx` are how a screen gets it, and `tokens.test.ts` asserts the
+shape rather than trusting people to remember: every `--r-lg` frame must carry
+padding, no box may nest at its container's radius, and no screen may define its
+own card-title treatment. The last two each caught a real fault — `.mon-card`
+sat at `--r-lg` inside the `--r-lg` card that came to frame it, and three
+separate screens had grown their own heading rules that agreed only by luck.
+
+**One step down per level.** Card 12px, panel 8px, anything inside a panel 6px.
+Two boxes at the same radius with one inside the other read as a mistake: the
+corners run parallel at the wrong offset and the inner box looks like it has
+escaped its container.
 
 A height is the intent more often than a padding is. `--control-h: 36px` is the
 height a row of interactive chrome settles on; the nav item now states that and
