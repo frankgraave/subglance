@@ -25,9 +25,28 @@
  * The `role="group"` plus its label is what ties them together for a screen
  * reader.
  */
+import type { ReactNode } from "react";
+
 export type SegmentedOption<Id extends string> = {
   id: Id;
+  /**
+   * The button's accessible name, always.
+   *
+   * When `icon` is set this is not rendered as text — it becomes the
+   * `aria-label` instead. A segment drawn as a glyph with no name is a button
+   * a screen reader announces as "button", which is the accessibility bug
+   * every icon-only control ships with unless someone insists otherwise.
+   */
   label: string;
+  /**
+   * Draw this glyph instead of the label.
+   *
+   * For a control whose options *are* shapes — how many columns, which
+   * density — where the icon says it faster than the word. A `hint` is
+   * effectively required alongside it: the shape is only obvious to someone
+   * who already knows what the control does.
+   */
+  icon?: ReactNode;
   /** Optional `title`, for a difference that is not obvious from the label. */
   hint?: string;
 };
@@ -59,12 +78,19 @@ export function SegmentedControl<Id extends string>({
         <button
           key={option.id}
           type="button"
-          className="segmented-option"
+          className={
+            option.icon === undefined
+              ? "segmented-option"
+              : "segmented-option segmented-option--icon"
+          }
           aria-pressed={value === option.id}
+          // An icon segment keeps its name in `aria-label`, since the glyph
+          // carries no text for the accessibility tree to read.
+          {...(option.icon === undefined ? {} : { "aria-label": option.label })}
           title={option.hint}
           onClick={() => onChange(option.id)}
         >
-          {option.label}
+          {option.icon ?? option.label}
         </button>
       ))}
     </div>

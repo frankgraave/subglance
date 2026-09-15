@@ -871,6 +871,26 @@ In Status wall, broken cards get a **warm border**, not a coloured fill. A wall
 full of coloured cards is noise; a wall of quiet cards with two warm borders is
 information.
 
+**Cards chooses its own column count.** At one card per row the layout spent
+most of a wide screen on nothing: the heartbeat was pushed against the right
+edge with a dashed rule crossing the empty middle. The toolbar offers 1, 2, 3
+and *fill the width*, as a segmented control drawn in icons — the options are
+shapes, so the button shows the layout it selects rather than naming it. Each
+one still carries an accessible name and a tooltip, because a bar chart is only
+obvious to someone who already knows what the control does.
+
+The control appears only while Cards is on screen, keyed off the *effective*
+layout rather than the stored one: a setting visible while it governs nothing
+teaches people it does nothing. The count is stored under its own key so it
+survives a trip through Rows and back.
+
+There is no breakpoint behind it. The grid asks for "at most N columns, never
+narrower than 380px", so a narrow window drops to as many as genuinely fit —
+one column on a phone because one is what fits, not because a media query
+overrode the setting. 380px is measured: below it the card's facts row starts
+wrapping, and a grid whose cells wrap internally is worse than one column
+fewer.
+
 **Sidebar.** Collapsible in every layout, via the button on the left of the
 topbar or `Cmd/Ctrl + B`. Collapsed it becomes a 56px rail with icons only — not
 gone, because then your navigation is unreachable. Status wall hides it

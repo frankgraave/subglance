@@ -8,7 +8,7 @@ import { ConnectionBadge } from "./ConnectionBadge";
 import { useLiveMonitors } from "./useLiveMonitors";
 import { useNow } from "./useNow";
 import { StatusWall } from "../wall/StatusWall";
-import type { LayoutId } from "../shell/preferences";
+import type { CardColumns, LayoutId } from "../shell/preferences";
 import type { LiveOptions } from "./useLiveMonitors";
 
 /**
@@ -24,6 +24,8 @@ export type LiveDashboardProps = LiveOptions & {
   beatWidth?: number;
   /** The user's layout setting, already vetoed by the viewport if need be. */
   layout?: LayoutId;
+  /** How many cards per row, in the Cards layout. */
+  cardColumns?: CardColumns;
   /** Shown on the status wall's header line. */
   instance?: string;
   /** Leaves the status wall. Provided by the shell, which owns the setting. */
@@ -37,6 +39,7 @@ export type LiveDashboardProps = LiveOptions & {
 export function LiveDashboard({
   beatWidth,
   layout,
+  cardColumns,
   instance,
   onExitWall,
   onOpenMonitor,
@@ -112,6 +115,7 @@ export function LiveDashboard({
       announcement={announcement}
       beatWidth={beatWidth}
       layout={layout}
+      cardColumns={cardColumns}
       stale={status === "offline"}
       onOpenMonitor={onOpenMonitor}
       banner={

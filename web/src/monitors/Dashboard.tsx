@@ -4,6 +4,7 @@ import { useCompactViewport } from "../layout/useMediaQuery";
 import {
   DEFAULT_LAYOUT,
   effectiveLayout,
+  type CardColumns,
   type LayoutId,
 } from "../shell/preferences";
 import { Led } from "./Led";
@@ -56,6 +57,8 @@ export type DashboardProps = {
    * here; the shell swaps this whole component out for the wall.
    */
   layout?: LayoutId;
+  /** How many cards per row, in the Cards layout. See CardColumnsSwitcher. */
+  cardColumns?: CardColumns;
   /**
    * Chrome about the data itself, e.g. the connection badge.
    *
@@ -104,6 +107,7 @@ export function Dashboard({
   announcement = null,
   beatWidth,
   layout = DEFAULT_LAYOUT,
+  cardColumns = "1",
   banner = null,
   stale = false,
   onOpenMonitor,
@@ -352,6 +356,7 @@ export function Dashboard({
           filtered={narrowed}
           groupKey={liveGroupKey}
           beatWidth={beatWidth}
+          columns={cardColumns}
           onOpen={onOpenMonitor}
         />
       ) : shown === "compact" ? (

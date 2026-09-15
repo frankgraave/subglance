@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 import { ThemeToggle } from "../components/ThemeToggle";
 import type { ThemePreference } from "../theme/theme";
+import { CardColumnsSwitcher } from "./CardColumnsSwitcher";
 import { LayoutSwitcher } from "./LayoutSwitcher";
 import { BeakerIcon, PlusIcon, SidebarIcon } from "./icons";
-import type { LayoutId } from "./preferences";
+import type { CardColumns, LayoutId } from "./preferences";
 
 /**
  * The toolbar: collapse the sidebar, choose a layout, switch theme.
@@ -26,6 +27,9 @@ export type TopbarProps = {
   layout: LayoutId;
   effectiveLayout?: LayoutId;
   onLayoutChange: (next: LayoutId) => void;
+  /** How many cards per row. Only meaningful while Cards is on screen. */
+  cardColumns?: CardColumns;
+  onCardColumnsChange?: (next: CardColumns) => void;
   themePreference: ThemePreference;
   onThemeChange: (next: ThemePreference) => void;
   workbenchOpen: boolean;
@@ -44,6 +48,8 @@ export function Topbar({
   layout,
   effectiveLayout,
   onLayoutChange,
+  cardColumns,
+  onCardColumnsChange,
   themePreference,
   onThemeChange,
   workbenchOpen,
@@ -117,6 +123,22 @@ export function Topbar({
           effective={effectiveLayout}
           onChange={onLayoutChange}
         />
+
+        {/*
+         * Cards-only, and keyed off what is *on screen* rather than what is
+         * stored: on a narrow viewport `effectiveLayout` forces cards, and the
+         * control has to follow the layout the user can actually see. A
+         * setting visible while it governs nothing teaches people it does
+         * nothing.
+         */}
+        {(effectiveLayout ?? layout) === "cards" &&
+          cardColumns !== undefined &&
+          onCardColumnsChange !== undefined && (
+            <CardColumnsSwitcher
+              value={cardColumns}
+              onChange={onCardColumnsChange}
+            />
+          )}
 
         {/*
          * The workbench survives, as a side track rather than a tab beside the

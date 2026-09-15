@@ -80,6 +80,25 @@
   color: var(--accent-ink);
 }
 
+/*
+ * An icon segment.
+ *
+ * Square rather than text-width, so a row of glyphs reads as a row of equal
+ * buttons instead of one per label length. 16px inside a 26px button leaves
+ * the same optical padding a word gets.
+ */
+.segmented .segmented-option--icon {
+  padding: 0;
+  width: 26px;
+  justify-content: center;
+}
+
+.segmented .segmented-option--icon > svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
 /* Phone widths: the labels stay, the breathing room goes (§13). */
 @media (max-width: 640px) {
   .segmented .segmented-option { padding: 0 var(--space-2); }

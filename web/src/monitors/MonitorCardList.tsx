@@ -1,5 +1,7 @@
+import type { CSSProperties } from "react";
 import { Card } from "../components/Card";
 import { IconAlert, IconList } from "../components/icons";
+import type { CardColumns } from "../shell/preferences";
 import { CARD_BEAT_WIDTH, MonitorCard } from "./MonitorCard";
 import { EmptyState } from "./EmptyState";
 import { partition, sectionsByTag } from "./model";
@@ -33,6 +35,11 @@ export type MonitorCardListProps = {
   groupKey?: string | null;
   /** Explicit heartbeat width; required in jsdom, which has no layout. */
   beatWidth?: number;
+  /**
+   * How many cards on a row. Defaults to one, so a caller that has no opinion
+   * gets the single column this layout has always been.
+   */
+  columns?: CardColumns;
   /** Opens a monitor's detail view client-side. See MonitorLink. */
   onOpen?: (id: string) => void;
 };
@@ -44,9 +51,27 @@ export function MonitorCardList({
   beatWidth = CARD_BEAT_WIDTH,
   filtered = false,
   groupKey = null,
+  columns = "1",
   onOpen,
 }: MonitorCardListProps) {
   const total = totalCount ?? monitors.length;
+
+  /*
+   * The column count reaches CSS as a variable, and "auto" reaches it as an
+   * attribute instead.
+   *
+   * Two channels because they are two different rules: a fixed count is
+   * arithmetic the grid can do with `repeat()`, while auto-fill is a different
+   * `grid-template-columns` altogether. Encoding auto as a number would mean
+   * inventing one, and any number is the wrong answer on some window.
+   */
+  const stackProps = {
+    "data-cols": columns,
+    style:
+      columns === "auto"
+        ? undefined
+        : ({ "--mon-card-cols": columns } as CSSProperties),
+  };
 
   if (monitors.length === 0) {
     return <EmptyState query={query} totalCount={total} filtered={filtered} />;
@@ -73,7 +98,9 @@ export function MonitorCardList({
             icon={<IconList />}
             headingLevel={3}
           >
-            <ul className="mon-card-stack">{cards(section.monitors)}</ul>
+            <ul className="mon-card-stack" {...stackProps}>
+              {cards(section.monitors)}
+            </ul>
           </Card>
         ))}
       </div>
@@ -91,7 +118,9 @@ export function MonitorCardList({
           icon={<IconAlert />}
           headingLevel={3}
         >
-          <ul className="mon-card-stack">{cards(attention)}</ul>
+          <ul className="mon-card-stack" {...stackProps}>
+            {cards(attention)}
+          </ul>
         </Card>
       )}
 
@@ -105,7 +134,9 @@ export function MonitorCardList({
         icon={<IconList />}
         headingLevel={3}
       >
-        <ul className="mon-card-stack">{cards(rest)}</ul>
+        <ul className="mon-card-stack" {...stackProps}>
+          {cards(rest)}
+        </ul>
       </Card>
     </div>
   );

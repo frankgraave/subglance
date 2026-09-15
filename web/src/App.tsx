@@ -40,8 +40,14 @@ import { useCompactViewport } from "./layout/useMediaQuery";
 export default function App() {
   const { preference, setPreference } = useTheme();
   const { session, onSignedIn, signOut, refresh } = useSession();
-  const { layout, setLayout, sidebarCollapsed, toggleSidebar } =
-    useShellPreferences(window.localStorage);
+  const {
+    layout,
+    setLayout,
+    cardColumns,
+    setCardColumns,
+    sidebarCollapsed,
+    toggleSidebar,
+  } = useShellPreferences(window.localStorage);
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const { route, navigate } = useRoute();
@@ -263,6 +269,8 @@ export default function App() {
           layout={layout}
           effectiveLayout={shown}
           onLayoutChange={setLayout}
+          cardColumns={cardColumns}
+          onCardColumnsChange={setCardColumns}
           themePreference={preference}
           onThemeChange={setPreference}
           workbenchOpen={workbenchOpen}
@@ -302,6 +310,7 @@ export default function App() {
           <LiveDashboardRoot
             client={queryClient}
             layout={shown}
+            cardColumns={cardColumns}
             onOpenMonitor={openMonitor}
           />
         )}

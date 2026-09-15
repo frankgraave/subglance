@@ -534,10 +534,55 @@
    second, different treatment for the same idea. */
 
 .mon-card-stack {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  /*
+   * How many cards on a row, from the toolbar (`--mon-card-cols`).
+   *
+   * Read this as "at most N columns, and never narrower than 380px". The
+   * `max()` is what makes it one rule instead of a rule plus a breakpoint:
+   * when the container is wide, an equal share of it exceeds the floor and
+   * `auto-fill` lands on exactly N columns; when it is narrow, the floor wins
+   * and the grid drops to as many as genuinely fit. A phone gets one column
+   * because one is all that fits, not because a media query overrode the
+   * user's setting.
+   *
+   * That matters beyond tidiness: a fixed `repeat(N, 1fr)` plus a
+   * `max-width` query would have introduced a second breakpoint into
+   * monitors.css, and this product deliberately has exactly one
+   * (`COMPACT_MAX_WIDTH`, asserted by layout/breakpoint.test.ts).
+   *
+   * The share subtracts the gutters — N columns have N−1 of them — or the
+   * rounding costs a column at the exact widths where it should just fit.
+   *
+   * 380px is measured, not guessed: below it the card's facts row (two
+   * labelled numbers side by side) starts wrapping, and a grid whose cells
+   * wrap internally is worse than one column fewer.
+   */
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(
+      /*
+       * `min(100%, …)` is not decoration: a bare 380px floor does not shrink,
+       * so on a 336px container the card stayed 380px and hung over the card's
+       * right edge. Measured — card 380px in a 336px stack. The floor has to
+       * yield to the container before it yields to anything else.
+       */
+      min(
+        100%,
+        max(
+          380px,
+          calc(
+            (100% - (var(--mon-card-cols, 1) - 1) * var(--space-1h)) /
+              var(--mon-card-cols, 1)
+          )
+        )
+      ),
+      1fr
+    )
+  );
   /* Six, matching the card's own padding: a monitor is the same distance from
-     its neighbour as from the card's edge. */
+     its neighbour as from the card's edge. The gutter between columns is the
+     same number, so a two-up grid sits on the rhythm a single column sets. */
   gap: var(--space-1h);
   list-style: none;
   /* No padding. The stack sits directly on the card now that the flush
@@ -545,6 +590,18 @@
      once — it used to be spent twice, by the wrapper and by this rule. */
   padding: 0;
   margin: 0;
+}
+
+/*
+ * "As many as fit", which is not a fifth column count.
+ *
+ * The same floor with no ceiling: whatever the window holds. This is the one
+ * setting that gives a 27-inch screen five columns without anybody having to
+ * pick the number five.
+ */
+.mon-card-stack[data-cols="auto"] {
+  /* Same `min(100%, …)` guard as above, for the same overflow. */
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
 }
 
 /*
