@@ -116,10 +116,42 @@ describe("the nesting pattern", () => {
     expect(panel, "the panel takes the tighter radius").toMatch(
       /border-radius:\s*var\(--r-md\)/,
     );
-    // The fill is what carries the nesting: a panel on the same surface as its
-    // card is invisible, and one that is quieter inverts the hierarchy.
+    /*
+     * The fill is what carries the nesting: a panel on the same surface as its
+     * card is invisible, and one that is quieter inverts the hierarchy.
+     *
+     * This asserts `--surface-panel` rather than `--surface-2`, and the
+     * distinction is the whole point. These fills are alphas that composite
+     * against their *parent*, so "louder" is about what renders, not about
+     * which alpha is larger: `--surface-2` (.05) on a card rendered at 41
+     * where the reference's panel measures 35, while `--surface-panel` (.02)
+     * renders at 34 — still lighter than the card's own 30, because it stacks
+     * on top of it. A larger alpha here does not mean a better-nested panel.
+     */
     expect(panel, "the panel sits above the card").toMatch(
-      /background:\s*var\(--surface-2\)/,
+      /background:\s*var\(--surface-panel\)/,
+    );
+    // And it rests on the card rather than being painted onto it (§2.10). A
+    // flat panel was the thing that made our cards read as one printed sheet.
+    expect(panel, "the panel takes the raised rung").toMatch(
+      /box-shadow:\s*var\(--shadow-raised\)/,
+    );
+  });
+
+  it("gives a panel the static edge, not the control edge", () => {
+    /*
+     * §2.9 reserves `--border-control` for the resting edge of things that are
+     * clickable; a panel is a static surface.
+     *
+     * Not pedantry about roles: `--border-control` is the one opaque, slightly
+     * blue value in the set, and on a dark card it measured 38,40,43 against a
+     * 41 fill — an edge with no contrast against the thing it encloses, so the
+     * panel simply lost its outline. The reference draws a panel's edge
+     * *lighter* than the panel's own fill, by 11 greyscale values, which is
+     * what `--border` reproduces here.
+     */
+    expect(rule(".panel"), "a panel is not a control").toMatch(
+      /border:\s*1px solid var\(--border\)/,
     );
   });
 

@@ -256,6 +256,16 @@
      depth, and a panel dropped on a different background still belongs. */
   --canvas:      oklch(.205 0 0);
   --surface:     rgba(255, 255, 255, .03);
+  /*
+   * The fill of a panel sitting on a card.
+   *
+   * Quieter than `--surface-2` because it composites against the card rather
+   * than against the page: measured in the built stylesheet, `--surface-2` on
+   * a card lands at 41 where the reference's panel measures 35, and this rung
+   * lands at 34. `--surface-2` keeps its meaning — one step up from a surface
+   * on the *page* — and stays correct for menus, inputs and the shell.
+   */
+  --surface-panel: rgba(255, 255, 255, .02);
   --surface-2:   rgba(255, 255, 255, .05);
   --surface-hi:  rgba(255, 255, 255, .08);
   --border:      rgba(255, 255, 255, .05);
@@ -372,6 +382,10 @@
 [data-theme="light"] {
   --canvas:      #fbfbfa;
   --surface:     #ffffff;
+  /* On white, a panel sits *below* its card rather than above it: the card is
+     pure white and the panel is the tinted one. The dark theme's ordering does
+     not transfer, which is why this is a stated value and not a formula. */
+  --surface-panel: #fafaf9;
   --surface-2:   #f6f6f5;
   --surface-hi:  #f0f0ef;
   --border:      #e6e6e4;
@@ -441,6 +455,7 @@
 @theme inline {
   --color-canvas: var(--canvas);
   --color-surface: var(--surface);
+  --color-surface-panel: var(--surface-panel);
   --color-surface-2: var(--surface-2);
   --color-surface-hi: var(--surface-hi);
   --color-border: var(--border);

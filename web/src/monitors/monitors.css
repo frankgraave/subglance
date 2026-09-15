@@ -242,19 +242,26 @@
  * easier. Safari drops table semantics when you do, silently undoing every
  * reason the table is here.
  */
+/* `--border` throughout, matching `.panel-row`: a row is a static surface, and
+   §2.9 reserves the control edge for things that are themselves clickable. */
 .mon-row > * {
-  border-block: 1px solid var(--border-control);
+  border-block: 1px solid var(--border);
+  /* The lift a panel takes (§2.10). Drawn per cell for the same reason the
+     border is: `<tr>` cannot carry one under `border-collapse: separate`.
+     Without it these rows were the only panels in the product still painted
+     flat onto their card. */
+  box-shadow: var(--shadow-raised);
   transition: border-color var(--dur-hover) var(--ease);
 }
 
 .mon-row > :first-child {
-  border-left: 1px solid var(--border-control);
+  border-left: 1px solid var(--border);
   border-start-start-radius: var(--r-md);
   border-end-start-radius: var(--r-md);
 }
 
 .mon-row > :last-child {
-  border-right: 1px solid var(--border-control);
+  border-right: 1px solid var(--border);
   border-start-end-radius: var(--r-md);
   border-end-end-radius: var(--r-md);
 }
@@ -550,7 +557,8 @@
  */
 .mon-card {
   padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--border-control);
+  /* The static edge, for the reason `.panel-row` takes it (§2.9). */
+  border: 1px solid var(--border);
   border-radius: var(--r-md);
   /*
    * `--surface`, the same fill `.panel-row` takes, not `--surface-2`.
