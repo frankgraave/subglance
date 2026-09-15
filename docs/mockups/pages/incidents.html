@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Incidents — SubGlance page proposal</title>
+<link rel="stylesheet" href="shared.css">
+<!-- Theme script copied verbatim from _shell.html. Inline on purpose: the file
+     must open from disk with no build step and no network fetch. -->
+<script>
+(function () {
+  var KEY = "subglance:mockup-theme";
+  var saved = null;
+  try { saved = localStorage.getItem(KEY); } catch (e) {}
+  var t = saved || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+  document.documentElement.setAttribute("data-theme", t);
+  window.__toggleTheme = function () {
+    var next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem(KEY, next); } catch (e) {}
+  };
+})();
+</script>
+<style>
+/* Page-specific rules only. Everything structural comes from shared.css, and
+   every value below is a token — no raw hex, no raw px for spacing.
+
+   The incident row is a .row that is allowed to wrap: the collapsed state is
+   the normal single-line row, and the detail is a full-width child that only
+   appears when the row is opened. That keeps the nesting at page -> card -> row
+   (two visible surfaces) instead of page -> card -> panel -> row. */
+/* [hidden] must beat the display:flex on .row/.stack, or filtering does nothing. */
+[hidden] { display: none !important; }
+
+.inc { flex-wrap: wrap; row-gap: var(--space-3); cursor: pointer; }
+.inc-detail { flex-basis: 100%; display: none; border-top: 1px solid var(--border); padding-top: var(--space-3); }
+.inc[data-open="true"] .inc-detail { display: flex; flex-direction: column; gap: var(--space-3); }
+
+/* Fixed column widths so the numbers line up down the stack. Mono + tabular
+   comes from .value; the width is what actually makes a column scannable. */
+.col-kind { width: 116px; flex: none; }
+.col-time { width: 88px; flex: none; text-align: right; color: var(--ink-2); }
+.col-dur  { width: 72px; flex: none; text-align: right; }
+.col-ack  { width: 104px; flex: none; display: flex; justify-content: flex-end; }
+.col-act  { width: 132px; flex: none; display: flex; justify-content: flex-end; }
+
+/* The captured response body. An inner element, so one radius step below the
+   row: --r-sm. It is not a third surface, it is a code block. */
+.snap {
+  font-family: var(--font-mono); font-size: var(--type-helper); line-height: var(--lead-helper);
+  background: var(--surface-2); border-radius: var(--r-sm); color: var(--ink-2);
+  padding: var(--space-2h) var(--space-3); white-space: pre-wrap; overflow-x: auto; max-height: 180px;
+}
+.err { color: var(--down); }
+
+/* Timeline: a left rule with mono timestamps. Deliberately not a component —
+   it exists once, on this page. */
+.tl { display: flex; flex-direction: column; gap: var(--space-2); }
+.tl-step { display: flex; gap: var(--space-3); align-items: baseline; }
+.tl-step > .value { width: 88px; flex: none; color: var(--ink-3); }
+
+/* History rows are quieter than open rows: no status tint at all, dimmer name. */
+.inc--past .row-name { color: var(--ink-2); }
+.day-head { display: flex; align-items: baseline; gap: var(--space-2h); padding-top: var(--space-1); }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <aside class="shell-side">
+    <div class="shell-brand">
+      <span class="led" data-state="up" aria-hidden="true"></span>
+      <span class="shell-brand-name">SubGlance</span>
+    </div>
+
+    <ul class="shell-nav">
+      <li><a class="shell-nav-item" href="#">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        Dashboard</a></li>
+      <li><a class="shell-nav-item" href="#" aria-current="page">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 2.4 17.2A1.8 1.8 0 0 0 4 20h16a1.8 1.8 0 0 0 1.6-2.8L13.7 3.9a1.8 1.8 0 0 0-3.4 0Z"/></svg>
+        Incidents <span class="shell-nav-badge" id="navBadge">3</span></a></li>
+      <li><a class="shell-nav-item" href="monitors.html">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3 7 4-14 3 7h4"/></svg>
+        Monitors</a></li>
+      <li class="shell-nav-section">Configure</li>
+      <li><a class="shell-nav-item" href="notifications.html">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        Notifications</a></li>
+      <li><a class="shell-nav-item" href="settings.html">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/></svg>
+        Settings</a></li>
+    </ul>
+
+    <div class="shell-foot">operator@example.com</div>
+
+    <div class="shell-foot" style="margin-top:var(--space-3);padding-top:var(--space-3);border-top:1px solid var(--border)">
+      <a href="index.html" style="color:var(--ink-3);text-decoration:none">&larr; All proposals</a>
+    </div>
+  </aside>
+
+  <div class="shell-main">
+
+    <header class="shell-topbar">
+      <span class="shell-title">Incidents</span>
+
+      <!-- Filters live in the topbar, not in the card head. They apply to the
+           whole page (both sections), so they belong to the page, not to a card. -->
+      <div class="segmented" id="scopeFilter">
+        <button type="button" data-scope="open" aria-pressed="false">Open</button>
+        <button type="button" data-scope="resolved" aria-pressed="false">Resolved</button>
+        <button type="button" data-scope="all" aria-pressed="true">All</button>
+      </div>
+
+      <select class="input" id="monFilter" style="width:auto">
+        <option value="">All monitors</option>
+        <option value="checkout">checkout-api-eu-west-1.internal…</option>
+        <option value="auth">auth.example.com</option>
+        <option value="cdn">cdn.example.com</option>
+        <option value="backup">nightly-database-backup-verification</option>
+        <option value="status">status.acme.studio</option>
+        <option value="harbor">harbor-goods.app</option>
+      </select>
+
+      <div class="shell-topbar-right">
+        <!-- Review affordance, not product UI: state transitions cannot be
+             judged from a still frame. -->
+        <button class="btn btn--sm" type="button" id="simulate">Simulate new incident</button>
+        <button class="btn btn--sm" type="button" onclick="__toggleTheme()">Theme</button>
+      </div>
+    </header>
+
+    <main class="page">
+
+      <div class="note">
+        <b>What this page is.</b> An incident is a confirmed outage with a lifecycle
+        (<code>open → confirmed → resolved</code>), a cause and a last error. Everything here is
+        backed by endpoints that already exist: <code>GET /api/v1/incidents</code>,
+        <code>GET /api/v1/monitors/{id}/incidents</code>, <code>POST /api/v1/incidents/{id}/ack</code>.
+        The blue and amber blocks on this page are review annotations, not product UI.
+      </div>
+
+      <!-- ============ OPEN INCIDENTS — the 3am screen ============ -->
+      <section class="card">
+        <div class="card-head">
+          <div class="icontile">
+            <svg viewBox="0 0 24 24"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+          </div>
+          <div>
+            <div class="card-title">Open incidents</div>
+            <div class="helper" id="openSub">3 open · 1 acknowledged</div>
+          </div>
+        </div>
+
+        <!-- A list is a stack of rows, not a panel wrapped around rows.
+             Column order is the order you need it at 3am: is it bad (lamp) →
+             what is it (name) → why (kind) → since when → for how long →
+             is someone on it → can I take it. -->
+        <div class="stack" id="openStack">
+
+          <article class="row inc" data-status="down" data-scope="open" data-mon="checkout" data-open="false" tabindex="0">
+            <span class="led" data-state="down"></span>
+            <div class="row-main">
+              <div class="row-name">checkout-api-eu-west-1.internal.acme-corporation.example</div>
+              <div class="row-sub">dial tcp 10.0.4.12:443: connect: connection refused</div>
+            </div>
+            <!-- Status is colour PLUS a word: the chip names the failure kind, so
+                 the row still reads correctly in greyscale. -->
+            <span class="col-kind"><span class="chip chip--down">connection</span></span>
+            <span class="value col-time">14:02</span>
+            <span class="value col-dur">41m</span>
+            <span class="col-ack"><span class="chip chip--meta">unacked</span></span>
+            <span class="col-act"><button class="btn btn--sm" type="button" data-ack>Acknowledge</button></span>
+
+            <div class="inc-detail">
+              <div class="grid2">
+                <div>
+                  <div class="label">Timeline</div>
+                  <div class="tl" style="margin-top:var(--space-2)">
+                    <div class="tl-step"><span class="value">14:02:11</span><span>First failure observed</span></div>
+                    <div class="tl-step"><span class="value">14:03:41</span><span>Confirmed after 3 consecutive failures</span></div>
+                    <div class="tl-step"><span class="value">14:03:42</span><span>Alert sent — <span class="chip chip--meta">slack #ops</span> <span class="chip chip--meta">pagerduty</span></span></div>
+                    <div class="tl-step"><span class="value">—</span><span class="helper">Not recovered</span></div>
+                  </div>
+                </div>
+                <div>
+                  <div class="label">Last error</div>
+                  <div class="snap err" style="margin-top:var(--space-2)">dial tcp 10.0.4.12:443: connect: connection refused</div>
+                  <div class="label" style="margin-top:var(--space-3)">Response snapshot</div>
+                  <div class="helper">No response — the connection never opened.</div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="row inc" data-status="down" data-scope="open" data-mon="harbor" data-open="false" tabindex="0">
+            <span class="led" data-state="down"></span>
+            <div class="row-main">
+              <div class="row-name">harbor-goods.app</div>
+              <div class="row-sub">status 503, expected 200-299</div>
+            </div>
+            <span class="col-kind"><span class="chip chip--down">status</span></span>
+            <span class="value col-time">13:48</span>
+            <span class="value col-dur">55m</span>
+            <span class="col-ack"><span class="chip chip--meta">unacked</span></span>
+            <span class="col-act"><button class="btn btn--sm" type="button" data-ack>Acknowledge</button></span>
+
+            <div class="inc-detail">
+              <div class="grid2">
+                <div>
+                  <div class="label">Timeline</div>
+                  <div class="tl" style="margin-top:var(--space-2)">
+                    <div class="tl-step"><span class="value">13:48:03</span><span>First failure observed</span></div>
+                    <div class="tl-step"><span class="value">13:49:03</span><span>Confirmed after 3 consecutive failures</span></div>
+                    <div class="tl-step"><span class="value">13:49:04</span><span>Alert sent — <span class="chip chip--meta">slack #ops</span></span></div>
+                    <div class="tl-step"><span class="value">13:52:10</span><span>Flap suppressed — 2 brief recoveries ignored</span></div>
+                    <div class="tl-step"><span class="value">—</span><span class="helper">Not recovered</span></div>
+                  </div>
+                </div>
+                <div>
+                  <div class="label">Last error</div>
+                  <div class="snap err" style="margin-top:var(--space-2)">status 503, expected 200-299</div>
+                  <!-- The differentiator: SubGlance keeps the body of the failing
+                       response, so you can tell a load-balancer 503 from an app 503
+                       without opening a terminal. -->
+                  <div class="label" style="margin-top:var(--space-3)">Response snapshot <span class="chip chip--meta">2.1 KB · truncated</span></div>
+                  <div class="snap" style="margin-top:var(--space-2)">HTTP/1.1 503 Service Unavailable
+server: envoy
+content-type: application/json
+x-envoy-upstream-service-time: 30001
+
+{"error":"upstream_connect_error","detail":"delayed connect error: 111","request_id":"3f0a9c1e-77b2-4c10-9a5f-2b8e1d40cc11"}</div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="row inc" data-status="warn" data-scope="open" data-mon="cdn" data-open="false" tabindex="0">
+            <span class="led" data-state="warn"></span>
+            <div class="row-main">
+              <div class="row-name">cdn.example.com</div>
+              <div class="row-sub">x509: certificate expires in 6 days</div>
+            </div>
+            <span class="col-kind"><span class="chip chip--warn">cert_expiry</span></span>
+            <span class="value col-time">09:00</span>
+            <span class="value col-dur">5h 43m</span>
+            <span class="col-ack"><span class="chip chip--up">acked · frank</span></span>
+            <span class="col-act"><button class="btn btn--sm" type="button" data-ack disabled>Acknowledged</button></span>
+
+            <div class="inc-detail">
+              <div class="grid2">
+                <div>
+                  <div class="label">Timeline</div>
+                  <div class="tl" style="margin-top:var(--space-2)">
+                    <div class="tl-step"><span class="value">09:00:00</span><span>Certificate check crossed the 7-day threshold</span></div>
+                    <div class="tl-step"><span class="value">09:00:01</span><span>Alert sent — <span class="chip chip--meta">email</span></span></div>
+                    <div class="tl-step"><span class="value">09:14:22</span><span>Acknowledged by frank@example.com</span></div>
+                    <div class="tl-step"><span class="value">—</span><span class="helper">Open until the certificate is renewed</span></div>
+                  </div>
+                </div>
+                <div>
+                  <div class="label">Last error</div>
+                  <div class="snap err" style="margin-top:var(--space-2)">x509: certificate for cdn.example.com expires 2026-09-21T23:59:59Z (6d 9h)</div>
+                  <div class="label" style="margin-top:var(--space-3)">Response snapshot</div>
+                  <div class="helper">Not captured — the request itself succeeded (200).</div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+        </div>
+
+        <!-- Shown when the filters match nothing in this section. -->
+        <div class="empty" id="openEmpty" hidden>
+          <div class="empty-head">Everything is up</div>
+          <div class="helper">No open incidents across 6 monitors.</div>
+        </div>
+      </section>
+
+      <div class="note">
+        <b>Why the detail expands inline instead of filling a right-hand panel.</b>
+        A <code>.split</code> side panel is 320px, which is too narrow for an error string, a
+        timeline and a captured response body without wrapping all three into mush — and it
+        makes the whole page reflow the moment you click a row at 3am. Expanding in place keeps
+        the incident where your eye already is, keeps the rows above and below in context, and
+        lets the snapshot use the full content width. Multiple rows can be open at once, which
+        is how you compare two failures that started a minute apart.
+      </div>
+
+      <div class="note q">
+        <b>Question 1 — chronological or grouped by monitor?</b> This list is strictly newest
+        first. When one monitor flaps, that is right (one incident, flaps suppressed), but when
+        a shared dependency takes out four monitors at once you get four rows that are really
+        one event. Do we want an optional "group by monitor", or even a heuristic "4 monitors
+        failed within 60s" cluster row — or is grouping a lie we should not tell?
+      </div>
+
+      <div class="note q">
+        <b>Question 2 — does Acknowledge silence notifications?</b> Right now it is drawn as a
+        pure human marker: "someone is on this", visible to the team, notifications keep firing.
+        The alternative is that ack also stops re-alerts and escalation for this incident until
+        it resolves. That is a much bigger promise and needs to be obvious in the button label
+        ("Acknowledge" vs "Acknowledge &amp; mute"). Which one is SubGlance?
+      </div>
+
+      <!-- ============ RESOLVED / HISTORY ============ -->
+      <section class="card">
+        <div class="card-head">
+          <div class="icontile">
+            <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+          </div>
+          <div>
+            <div class="card-title">Resolved</div>
+            <div class="helper">Last 30 days · grouped by day</div>
+          </div>
+          <div class="card-actions">
+            <button class="btn btn--sm" type="button">Export CSV</button>
+          </div>
+        </div>
+
+        <!-- Quieter on purpose: no status tint, dimmer names, and the duration is
+             the number that matters here (not "how long has it been"). The day
+             heading is a .label because it sits inside the card as a divider. -->
+        <div class="stack" id="pastStack">
+
+          <div class="day-head" data-day><span class="label">Today · 15 Sep</span><span class="helper">2 incidents · 24m total</span></div>
+
+          <article class="row inc inc--past" data-scope="resolved" data-mon="auth" data-open="false" tabindex="0">
+            <span class="led led--sm" data-state="up"></span>
+            <div class="row-main">
+              <div class="row-name">auth.example.com</div>
+              <div class="row-sub">timeout after 10s (3 consecutive)</div>
+            </div>
+            <span class="col-kind"><span class="chip">timeout</span></span>
+            <span class="value col-time">11:26</span>
+            <span class="value col-dur">18m</span>
+            <span class="col-ack"><span class="chip chip--up">resolved</span></span>
+            <span class="col-act"></span>
+
+            <div class="inc-detail">
+              <div class="grid2">
+                <div>
+                  <div class="label">Timeline</div>
+                  <div class="tl" style="margin-top:var(--space-2)">
+                    <div class="tl-step"><span class="value">11:26:40</span><span>First failure observed</span></div>
+                    <div class="tl-step"><span class="value">11:28:10</span><span>Confirmed after 3 consecutive failures</span></div>
+                    <div class="tl-step"><span class="value">11:28:11</span><span>Alert sent — <span class="chip chip--meta">slack #ops</span></span></div>
+                    <div class="tl-step"><span class="value">11:44:52</span><span>Recovered — 2 consecutive successes</span></div>
+                  </div>
+                </div>
+                <div>
+                  <div class="label">Last error</div>
+                  <div class="snap err" style="margin-top:var(--space-2)">Get "https://auth.example.com/healthz": context deadline exceeded (Client.Timeout exceeded while awaiting headers)</div>
+                  <div class="label" style="margin-top:var(--space-3)">Response snapshot</div>
+                  <div class="helper">No response — the request never completed.</div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="row inc inc--past" data-scope="resolved" data-mon="status" data-open="false" tabindex="0">
+            <span class="led led--sm" data-state="up"></span>
+            <div class="row-main">
+              <div class="row-name">status.acme.studio</div>
+              <div class="row-sub">keyword "All systems operational" not found</div>
+            </div>
+            <span class="col-kind"><span class="chip">keyword</span></span>
+            <span class="value col-time">08:12</span>
+            <span class="value col-dur">6m</span>
+            <span class="col-ack"><span class="chip chip--up">resolved</span></span>
+            <span class="col-act"></span>
+
+            <div class="inc-detail">
+              <div class="grid2">
+                <div>
+                  <div class="label">Timeline</div>
+                  <div class="tl" style="margin-top:var(--space-2)">
+                    <div class="tl-step"><span class="value">08:12:05</span><span>First failure observed</span></div>
+                    <div class="tl-step"><span class="value">08:13:35</span><span>Confirmed after 3 consecutive failures</span></div>
+                    <div class="tl-step"><span class="value">08:13:36</span><span>Alert sent — <span class="chip chip--meta">email</span></span></div>
+                    <div class="tl-step"><span class="value">08:18:41</span><span>Recovered — 2 consecutive successes</span></div>
+                  </div>
+                </div>
+                <div>
+                  <div class="label">Last error</div>
+                  <div class="snap err" style="margin-top:var(--space-2)">keyword "All systems operational" not found in body (18.4 KB scanned)</div>
+                  <div class="label" style="margin-top:var(--space-3)">Response snapshot <span class="chip chip--meta">18.4 KB · truncated</span></div>
+                  <div class="snap" style="margin-top:var(--space-2)">HTTP/1.1 200 OK
+content-type: text/html; charset=utf-8
+
+&lt;h1&gt;Scheduled maintenance in progress&lt;/h1&gt;
+&lt;p&gt;We are migrating the primary database. Back at 08:30 UTC.&lt;/p&gt;</div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <div class="day-head" data-day><span class="label">Yesterday · 14 Sep</span><span class="helper">2 incidents · 1h 07m total</span></div>
+
+          <article class="row inc inc--past" data-scope="resolved" data-mon="backup" data-open="false" tabindex="0">
+            <span class="led led--sm" data-state="up"></span>
+            <div class="row-main">
+              <div class="row-name">nightly-database-backup-verification</div>
+              <div class="row-sub">push monitor missed its window (expected by 03:15)</div>
+            </div>
+            <span class="col-kind"><span class="chip">timeout</span></span>
+            <span class="value col-time">03:15</span>
+            <span class="value col-dur">52m</span>
+            <span class="col-ack"><span class="chip chip--up">resolved</span></span>
+            <span class="col-act"></span>
+
+            <div class="inc-detail">
+              <div class="grid2">
+                <div>
+                  <div class="label">Timeline</div>
+                  <div class="tl" style="margin-top:var(--space-2)">
+                    <div class="tl-step"><span class="value">03:15:00</span><span>Push window elapsed with no heartbeat</span></div>
+                    <div class="tl-step"><span class="value">03:15:00</span><span>Confirmed immediately — push monitors do not retry</span></div>
+                    <div class="tl-step"><span class="value">03:15:01</span><span>Alert sent — <span class="chip chip--meta">slack #ops</span> <span class="chip chip--meta">email</span></span></div>
+                    <div class="tl-step"><span class="value">04:07:33</span><span>Recovered — heartbeat received</span></div>
+                  </div>
+                </div>
+                <div>
+                  <div class="label">Last error</div>
+                  <div class="snap err" style="margin-top:var(--space-2)">no heartbeat received within grace period (expected every 24h ±15m)</div>
+                  <div class="label" style="margin-top:var(--space-3)">Response snapshot</div>
+                  <div class="helper">Not applicable — push monitors have no response to capture.</div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="row inc inc--past" data-scope="resolved" data-mon="cdn" data-open="false" tabindex="0">
+            <span class="led led--sm" data-state="up"></span>
+            <div class="row-main">
+              <div class="row-name">cdn.example.com</div>
+              <div class="row-sub">x509: certificate has expired</div>
+            </div>
+            <span class="col-kind"><span class="chip">tls</span></span>
+            <span class="value col-time">21:44</span>
+            <span class="value col-dur">15m</span>
+            <span class="col-ack"><span class="chip chip--up">resolved</span></span>
+            <span class="col-act"></span>
+
+            <div class="inc-detail">
+              <div class="grid2">
+                <div>
+                  <div class="label">Timeline</div>
+                  <div class="tl" style="margin-top:var(--space-2)">
+                    <div class="tl-step"><span class="value">21:44:12</span><span>First failure observed</span></div>
+                    <div class="tl-step"><span class="value">21:45:42</span><span>Confirmed after 3 consecutive failures</span></div>
+                    <div class="tl-step"><span class="value">21:45:43</span><span>Alert sent — <span class="chip chip--meta">slack #ops</span></span></div>
+                    <div class="tl-step"><span class="value">21:59:08</span><span>Recovered — certificate reissued</span></div>
+                  </div>
+                </div>
+                <div>
+                  <div class="label">Last error</div>
+                  <div class="snap err" style="margin-top:var(--space-2)">x509: certificate has expired or is not yet valid: current time 2026-09-14T21:44:12Z is after 2026-09-14T21:00:00Z</div>
+                  <div class="label" style="margin-top:var(--space-3)">Response snapshot</div>
+                  <div class="helper">No response — the TLS handshake failed.</div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <div class="day-head" data-day><span class="label">12 Sep</span><span class="helper">1 incident · 3m total</span></div>
+
+          <article class="row inc inc--past" data-scope="resolved" data-mon="harbor" data-open="false" tabindex="0">
+            <span class="led led--sm" data-state="up"></span>
+            <div class="row-main">
+              <div class="row-name">harbor-goods.app</div>
+              <div class="row-sub">no such host</div>
+            </div>
+            <span class="col-kind"><span class="chip">dns</span></span>
+            <span class="value col-time">16:02</span>
+            <span class="value col-dur">3m</span>
+            <span class="col-ack"><span class="chip chip--up">resolved</span></span>
+            <span class="col-act"></span>
+
+            <div class="inc-detail">
+              <div class="grid2">
+                <div>
+                  <div class="label">Timeline</div>
+                  <div class="tl" style="margin-top:var(--space-2)">
+                    <div class="tl-step"><span class="value">16:02:30</span><span>First failure observed</span></div>
+                    <div class="tl-step"><span class="value">16:04:00</span><span>Confirmed after 3 consecutive failures</span></div>
+                    <div class="tl-step"><span class="value">16:04:01</span><span>Alert sent — <span class="chip chip--meta">slack #ops</span></span></div>
+                    <div class="tl-step"><span class="value">16:05:31</span><span>Recovered — 2 consecutive successes</span></div>
+                  </div>
+                </div>
+                <div>
+                  <div class="label">Last error</div>
+                  <div class="snap err" style="margin-top:var(--space-2)">lookup harbor-goods.app on 10.0.0.2:53: no such host</div>
+                  <div class="label" style="margin-top:var(--space-3)">Response snapshot</div>
+                  <div class="helper">No response — the name never resolved.</div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+        </div>
+
+        <div class="empty" id="pastEmpty" hidden>
+          <div class="empty-head">Nothing broke</div>
+          <div class="helper">No resolved incidents match this filter in the last 30 days.</div>
+        </div>
+      </section>
+
+      <div class="note q">
+        <b>Question 3 — how long do we keep history, and is 30 days the right window?</b>
+        The history section is capped at 30 days here because that is what fits a
+        "grouped by day" list before it needs pagination. But incidents are cheap rows and the
+        SLA question people actually ask is "how did this look last quarter". Do we keep
+        forever and add a date range picker, prune on a retention setting, or keep the page at
+        30 days and push longer windows into an export?
+      </div>
+
+      <!-- ============ EMPTY STATE, standalone ============ -->
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title">Empty state</div>
+          <div class="helper" style="margin-left:auto">Shown when both sections are empty</div>
+        </div>
+        <!-- Good news at headline weight. No illustration, no "Oops, nothing here!",
+             no grey apology — the fact IS the reward. -->
+        <div class="empty">
+          <div class="empty-head">No incidents in the last 30 days</div>
+          <div class="helper">6 monitors, 51,840 checks, zero confirmed outages.</div>
+        </div>
+      </section>
+
+      <div class="note">
+        <b>On the empty state.</b> A monitoring tool with nothing to report is the tool working,
+        so the headline states the fact and the helper line quantifies it — the check count is
+        the proof that the silence is real and not a broken poller. There is no call to action
+        because there is nothing for the operator to do.
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<script>
+/* Vanilla JS, no framework. Enough behaviour that a reviewer can judge the
+   transitions: filtering, opening a detail, acknowledging, and a new incident
+   arriving while you are looking at the page. */
+(function () {
+  var scopeFilter = document.getElementById("scopeFilter");
+  var monFilter   = document.getElementById("monFilter");
+  var openStack   = document.getElementById("openStack");
+  var pastStack   = document.getElementById("pastStack");
+  var openEmpty   = document.getElementById("openEmpty");
+  var pastEmpty   = document.getElementById("pastEmpty");
+  var openSub     = document.getElementById("openSub");
+  var navBadge    = document.getElementById("navBadge");
+  var scope = "all"; /* review default: show both sections at once */
+
+  function rows(root) {
+    return Array.prototype.slice.call(root.querySelectorAll(".inc"));
+  }
+
+  function apply() {
+    var mon = monFilter.value;
+    var shownOpen = 0, shownPast = 0;
+
+    rows(openStack).forEach(function (r) {
+      var ok = (scope === "open" || scope === "all") && (!mon || r.dataset.mon === mon);
+      r.hidden = !ok;
+      if (ok) shownOpen++;
+    });
+
+    rows(pastStack).forEach(function (r) {
+      var ok = (scope === "resolved" || scope === "all") && (!mon || r.dataset.mon === mon);
+      r.hidden = !ok;
+      if (ok) shownPast++;
+    });
+
+    /* A day heading with no rows under it is noise — hide it. */
+    var heads = Array.prototype.slice.call(pastStack.querySelectorAll("[data-day]"));
+    heads.forEach(function (h) {
+      var n = h.nextElementSibling, any = false;
+      while (n && !n.hasAttribute("data-day")) {
+        if (n.classList.contains("inc") && !n.hidden) { any = true; break; }
+        n = n.nextElementSibling;
+      }
+      h.hidden = !any;
+    });
+
+    openEmpty.hidden = shownOpen > 0;
+    openStack.hidden = shownOpen === 0;
+    pastEmpty.hidden = shownPast > 0;
+    pastStack.hidden = shownPast === 0;
+
+    var total = rows(openStack).length;
+    var acked = rows(openStack).filter(function (r) { return r.dataset.acked === "true"; }).length;
+    openSub.textContent = total + " open · " + acked + " acknowledged";
+    navBadge.textContent = String(total);
+  }
+
+  scopeFilter.addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-scope]");
+    if (!b) return;
+    scope = b.dataset.scope;
+    Array.prototype.forEach.call(scopeFilter.children, function (c) {
+      c.setAttribute("aria-pressed", String(c === b));
+    });
+    apply();
+  });
+
+  monFilter.addEventListener("change", apply);
+
+  /* Click anywhere on a row to open its detail; buttons inside do not bubble. */
+  document.addEventListener("click", function (e) {
+    var ackBtn = e.target.closest("[data-ack]");
+    if (ackBtn) {
+      e.stopPropagation();
+      var row = ackBtn.closest(".inc");
+      row.dataset.acked = "true";
+      row.querySelector(".col-ack").innerHTML =
+        '<span class="chip chip--up">acked · you</span>';
+      ackBtn.disabled = true;
+            ackBtn.textContent = "Acknowledged";
+      apply();
+      return;
+    }
+    var r = e.target.closest(".inc");
+    if (!r) return;
+    r.dataset.open = r.dataset.open === "true" ? "false" : "true";
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    var r = e.target.closest && e.target.closest(".inc");
+    if (!r || e.target.tagName === "BUTTON") return;
+    e.preventDefault();
+    r.dataset.open = r.dataset.open === "true" ? "false" : "true";
+  });
+
+  /* Review-only: a new incident arriving. Prepended, unacked, tinted down. */
+  var pool = [
+    { mon: "auth",   name: "auth.example.com", kind: "tls",
+      err: "x509: certificate has expired or is not yet valid" },
+    { mon: "status", name: "status.acme.studio", kind: "dns",
+      err: "lookup status.acme.studio on 10.0.0.2:53: no such host" },
+    { mon: "checkout", name: "checkout-api-eu-west-1.internal.acme-corporation.example",
+      kind: "timeout", err: "context deadline exceeded (Client.Timeout exceeded while awaiting headers)" }
+  ];
+  var n = 0;
+  document.getElementById("simulate").addEventListener("click", function () {
+    var f = pool[n++ % pool.length];
+    var now = new Date();
+    var hh = String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0");
+    var el = document.createElement("article");
+    el.className = "row inc";
+    el.dataset.status = "down";
+    el.dataset.scope = "open";
+    el.dataset.mon = f.mon;
+    el.dataset.open = "false";
+    el.tabIndex = 0;
+    el.innerHTML =
+      '<span class="led" data-state="down"></span>' +
+      '<div class="row-main"><div class="row-name">' + f.name + '</div>' +
+      '<div class="row-sub">' + f.err + '</div></div>' +
+      '<span class="col-kind"><span class="chip chip--down">' + f.kind + '</span></span>' +
+      '<span class="value col-time">' + hh + '</span>' +
+      '<span class="value col-dur" data-zero="true">0m</span>' +
+      '<span class="col-ack"><span class="chip chip--meta">unacked</span></span>' +
+      '<span class="col-act"><button class="btn btn--sm" type="button" data-ack>Acknowledge</button></span>' +
+      '<div class="inc-detail"><div class="grid2">' +
+        '<div><div class="label">Timeline</div><div class="tl" style="margin-top:var(--space-2)">' +
+          '<div class="tl-step"><span class="value">' + hh + '</span><span>First failure observed</span></div>' +
+          '<div class="tl-step"><span class="value">' + hh + '</span><span>Confirmed after 3 consecutive failures</span></div>' +
+          '<div class="tl-step"><span class="value">' + hh + '</span><span>Alert sent — <span class="chip chip--meta">slack #ops</span></span></div>' +
+          '<div class="tl-step"><span class="value">—</span><span class="helper">Not recovered</span></div>' +
+        '</div></div>' +
+        '<div><div class="label">Last error</div>' +
+          '<div class="snap err" style="margin-top:var(--space-2)">' + f.err + '</div>' +
+          '<div class="label" style="margin-top:var(--space-3)">Response snapshot</div>' +
+          '<div class="helper">No response captured for this failure kind.</div></div>' +
+      '</div></div>';
+    openStack.insertBefore(el, openStack.firstChild);
+    if (scope === "resolved") { scope = "open"; Array.prototype.forEach.call(scopeFilter.children, function (c) {
+      c.setAttribute("aria-pressed", String(c.dataset.scope === "open")); }); }
+    apply();
+  });
+
+  /* Seed the acked flag for the fixture that starts acknowledged. */
+  rows(openStack).forEach(function (r) {
+    if (r.querySelector(".col-ack .chip--up")) r.dataset.acked = "true";
+  });
+  apply();
+})();
+</script>
+</body>
+</html>
