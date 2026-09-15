@@ -1,17 +1,29 @@
+import { SegmentedControl } from "../components/SegmentedControl";
 import type { ThemePreference } from "../theme/theme";
 
-const OPTIONS: readonly { value: ThemePreference; label: string }[] = [
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
-  { value: "system", label: "Auto" },
+const OPTIONS: readonly { id: ThemePreference; label: string }[] = [
+  { id: "light", label: "Light" },
+  { id: "dark", label: "Dark" },
+  { id: "system", label: "Auto" },
 ];
 
 /**
- * Three-way segmented control.
+ * Three-way theme choice.
  *
  * A two-state toggle cannot express "follow the system", and a dropdown costs
- * a click to even see the current value. Rendered as radios so arrow keys and
- * screen readers work without any custom key handling.
+ * a click to even see the current value.
+ *
+ * This was a hand-rolled fourth copy of the segmented control, written in
+ * Tailwind utilities against `bg-surface-2` and `rounded-sm` while the shared
+ * component had moved on. Side by side in the topbar the two bars disagreed on
+ * radius, padding, border and what "selected" looks like — the reason this now
+ * uses `SegmentedControl` like everything else.
+ *
+ * The cost of the change is real and worth stating: the old markup was a
+ * `<fieldset>` of radios, which gave arrow-key navigation for free. The shared
+ * control is a group of toggle buttons (see its own note on why), so the keys
+ * behave like the rest of the toolbar instead. Consistency of one control
+ * across the product beats one control having better keys than its neighbours.
  */
 export function ThemeToggle({
   preference,
@@ -21,30 +33,11 @@ export function ThemeToggle({
   onChange: (next: ThemePreference) => void;
 }) {
   return (
-    <fieldset className="flex items-center gap-1 rounded-sm border border-border bg-surface-2 p-0.5">
-      <legend className="sr-only">Colour theme</legend>
-      {OPTIONS.map((option) => {
-        const active = option.value === preference;
-        return (
-          <label
-            key={option.value}
-            className={[
-              "cursor-pointer rounded-sm px-2.5 py-1 text-helper transition-colors",
-              active ? "bg-surface-hi text-ink" : "text-ink-3 hover:text-ink-2",
-            ].join(" ")}
-          >
-            <input
-              type="radio"
-              name="theme"
-              value={option.value}
-              checked={active}
-              onChange={() => onChange(option.value)}
-              className="sr-only"
-            />
-            {option.label}
-          </label>
-        );
-      })}
-    </fieldset>
+    <SegmentedControl
+      label="Colour theme"
+      options={OPTIONS}
+      value={preference}
+      onChange={onChange}
+    />
   );
 }

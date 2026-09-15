@@ -1230,6 +1230,15 @@ function site(declaration: BorderDeclaration): string {
  * permission for one place, not for a string.
  */
 const statusBorders = new Set<string>([
+  /*
+   * The detail page's status pill: trouble warms its edge, the same statement
+   * the rows and cards make with their left stripe. The fill stays neutral on
+   * purpose — the pill already says "Down" in words, and a red block behind
+   * that word would state it twice in a louder voice.
+   */
+  'web/src/monitors/detail.css | .mon-detail-status[data-status="down"] | border-color: var(--down)',
+  'web/src/monitors/detail.css | .mon-detail-status[data-status="pending"] | border-color: var(--warn)',
+  'web/src/monitors/detail.css | .mon-detail-status[data-status="waiting"] | border-color: var(--idle)',
   "web/src/live/connection.css | .conn-badge | border: 1px solid var(--warn)",
   "web/src/live/connection.css | .conn-badge-retry | border: 1px solid var(--warn)",
   'web/src/monitors/monitors.css | .mon-row[data-status="down"] | border-left: 2px solid var(--down)',
@@ -1583,20 +1592,27 @@ describe("a face is applied as a role, not as a family name", () => {
  * is in place before the components that have to obey it are written, rather
  * than after the first one has already chosen a number by eye.
  */
-const RADIUS_LADDER = new Map([
-  ["--r-2xs", 2],
-  ["--r-xs", 4],
-  ["--r-sm", 6],
-  ["--r-md", 10],
-  ["--r-lg", 12],
-]);
+/**
+ * Both ladders, read from tokens.css rather than restated here.
+ *
+ * They used to be literals, and they drifted: `--r-md` was listed as 10px
+ * while the stylesheet had moved to 8px, and the half-steps `--space-1h` (6)
+ * and `--space-2h` (10) were missing entirely. A guard doing arithmetic on
+ * stale copies of the values it is checking reports failures that are its own
+ * and, worse, passes things it should catch. Parsing the file removes the copy.
+ */
+function pxLadder(prefix: string): Map<string, number> {
+  const ladder = new Map<string, number>();
+  for (const [, name, px] of tokensCss.matchAll(
+    new RegExp(`(--${prefix}-[a-z0-9]+):\\s*(\\d+)px`, "g"),
+  )) {
+    if (!ladder.has(name)) ladder.set(name, Number(px));
+  }
+  return ladder;
+}
 
-const SPACE_LADDER = new Map(
-  [1, 2, 3, 4, 5, 6, 8, 10, 12, 16].map((step) => [
-    `--space-${step}`,
-    step * 4,
-  ]),
-);
+const RADIUS_LADDER = pxLadder("r");
+const SPACE_LADDER = pxLadder("space");
 
 function radiusOf(body: string): string | undefined {
   return body.match(/border-radius:\s*var\((--r-[a-z0-9]+)\)\s*;/)?.[1];
@@ -1642,7 +1658,11 @@ function uniformGap(body: string): number | undefined {
   if (!sides) return undefined;
   if (!sides.every((side) => side === sides[0])) return undefined;
 
-  const token = sides[0].match(/^var\((--space-\d+)\)$/)?.[1];
+  // `--space-\d+` missed every half-step — `--space-1h`, `--space-2h` and the
+  // quarter-step `--space-0h` — so any rule whose inset was one of them fell
+  // out of the scan without a word. That is how the product's only concentric
+  // pair became invisible to the guard that exists to check it.
+  const token = sides[0].match(/^var\((--space-[0-9]+h?)\)$/)?.[1];
   return token === undefined ? undefined : SPACE_LADDER.get(token);
 }
 
@@ -1730,23 +1750,33 @@ describe("the concentric radius rule", () => {
 
   it("subtracts the padding rather than comparing the tokens to themselves", () => {
     // The arithmetic the rule actually states, on values taken from the two
-    // ladders rather than from the stylesheet being checked: 6px of outer
-    // radius with 4px of padding inside it leaves 2px, and 10px with 4px
-    // leaves 6px. A guard that only asked "is the inner token different from
+    // ladders rather than from the stylesheet being checked: --r-md (8px) of
+    // outer radius with --space-1 (4px) of padding inside it leaves 4px, which
+    // is --r-xs. A guard that only asked "is the inner token different from
     // the outer one" would accept any of the five steps here.
-    expect(
-      concentricPairs(`
-        .outer { border-radius: var(--r-md); padding: var(--space-1); }
-        .outer .inner { border-radius: var(--r-sm); }
-      `),
-    ).toEqual([{ selector: ".outer .inner", want: 6, got: 6 }]);
+    //
+    // The expectations are written as the arithmetic rather than as literals,
+    // so this fixture cannot go stale the way the hardcoded ladders did: when
+    // a radius token moves in tokens.css, the sum moves with it.
+    const md = RADIUS_LADDER.get("--r-md") ?? 0;
+    const s1 = SPACE_LADDER.get("--space-1") ?? 0;
+    const xs = RADIUS_LADDER.get("--r-xs") ?? 0;
+    const sm = RADIUS_LADDER.get("--r-sm") ?? 0;
+    expect(md - s1, "--r-md minus --space-1 should land on --r-xs").toBe(xs);
 
     expect(
       concentricPairs(`
         .outer { border-radius: var(--r-md); padding: var(--space-1); }
         .outer .inner { border-radius: var(--r-xs); }
       `),
-    ).toEqual([{ selector: ".outer .inner", want: 6, got: 4 }]);
+    ).toEqual([{ selector: ".outer .inner", want: md - s1, got: xs }]);
+
+    expect(
+      concentricPairs(`
+        .outer { border-radius: var(--r-md); padding: var(--space-1); }
+        .outer .inner { border-radius: var(--r-sm); }
+      `),
+    ).toEqual([{ selector: ".outer .inner", want: md - s1, got: sm }]);
   });
 
   it("bites on an inner radius that copies the outer one", () => {

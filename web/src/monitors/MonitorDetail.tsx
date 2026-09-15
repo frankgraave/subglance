@@ -109,8 +109,40 @@ export function MonitorDetail({
         </button>
       </nav>
 
+      {/*
+       * Identity and state, in one block.
+       *
+       * The name, the target and the state used to be three children of a
+       * 20px flex column, so the three facts about one monitor read as three
+       * unrelated rows with the right half of the screen empty beside them.
+       * They are one thing, and they are grouped now.
+       *
+       * The state rides on the title line as a pill: it is the second thing
+       * asked for after "which monitor is this", and putting it there answers
+       * both in one glance instead of two.
+       */}
       <header className="mon-detail-head">
-        <h1 className="mon-detail-name">{name}</h1>
+        <div className="mon-detail-titlerow">
+          <h1 className="mon-detail-name">{name}</h1>
+          {/*
+           * Lamp, word and age — never the reason.
+           *
+           * The lamp gives up its label because the pill states the word
+           * anyway; printing both would have a screen reader say "Up Up", the
+           * duplication `MonitorCard` avoids the same way. DESIGN.md §2.3 is
+           * satisfied by the word, not by the lamp.
+           */}
+          <p className="mon-detail-status" data-status={status}>
+            <Led status={status} labelled={false} className="mon-detail-led" />
+            <strong>{STATUS_LABEL[status]}</strong>
+            {age !== null ? (
+              <span className="mon-detail-age">
+                {" "}
+                · {push === undefined ? "checked" : "last reported"} {age}
+              </span>
+            ) : null}
+          </p>
+        </div>
         {/* Not a link. The target may be an internal host or a host:port that
             is not a URL at all, and a link that sometimes 404s the user into
             their own infrastructure is worse than text they can copy. */}
@@ -121,38 +153,24 @@ export function MonitorDetail({
             ? target
             : describePushWindow(push.intervalS, push.graceS)}
         </p>
-      </header>
-
-      {/*
-       * The status sentence, which is the one thing that has to survive being
-       * read on a phone at arm's length. It says the state, the reason when
-       * there is one, and when it was last confirmed — the three halves of
-       * "what is wrong and how long has it been like that".
-       */}
-      {/*
-       * Lamp and word, in one sentence rather than two places.
-       *
-       * The lamp was originally a second, labelled copy up in the header. That
-       * made the page say the status twice — "Down. Down — connection
-       * refused" to a screen reader — which is the same duplication
-       * `MonitorCard` avoids by letting the lamp carry the word alone. Here
-       * the sentence needs the word anyway, because it continues into the
-       * reason, so the lamp gives up its label and becomes what it looks
-       * like: the colour beside the sentence (DESIGN.md §2.3 is satisfied by
-       * the word, not by the lamp).
-       */}
-      <p className="mon-detail-status">
-        <Led status={status} labelled={false} className="mon-detail-led" />
-        <strong>{STATUS_LABEL[status]}</strong>
-        {status === "down" && lastError ? <> — {lastError}</> : null}
-        {status === "waiting" ? <> — nothing has reported in yet</> : null}
-        {age !== null ? (
-          <span className="mon-detail-age">
-            {" "}
-            · {push === undefined ? "checked" : "last reported"} {age}
-          </span>
+        {/*
+         * The reason, on its own line and only when there is one.
+         *
+         * It cannot go in the pill: an error is free text — "DNS lookup
+         * failed: host axonlawyers.com not found" — and a pill that grows to
+         * fit one would push the title around and wrap the line it sits on.
+         * Below the target it gets the column's full reading width, which is
+         * what a sentence someone has to act on needs.
+         */}
+        {status === "down" && lastError ? (
+          <p className="mon-detail-reason">{lastError}</p>
         ) : null}
-      </p>
+        {status === "waiting" ? (
+          <p className="mon-detail-reason mon-detail-reason--quiet">
+            Nothing has reported in yet.
+          </p>
+        ) : null}
+      </header>
 
       <Card
         title={push === undefined ? "Recent checks" : "Recent reports"}

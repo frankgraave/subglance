@@ -88,6 +88,15 @@
   --r-sm: 6px;
   --r-md: 8px;
   --r-lg: 12px;
+  /*
+   * Fully round, for a pill.
+   *
+   * Not a rung on the ladder and deliberately outside it: the ladder states
+   * how tight a *corner* is, and this states a shape — whatever the box's
+   * height, the ends are semicircles. Hence a number far past any real height
+   * rather than `50%`, which on a box wider than it is tall draws an ellipse.
+   */
+  --r-pill: 999px;
 
   /* Motion. One duration for everything interactive, because a hover, a
      segment change and a menu opening are the same kind of event to the person
@@ -196,6 +205,13 @@
   --control-h: 36px;
 
   --space-1: 4px;
+  /* The quarter-step, and the smallest gap the system has.
+     It exists for one job: the frame of a segmented control, where the
+     reference measures 2px of padding between an 8px shell and its 6px
+     segments. Concentric arithmetic (§2.7) needs the inset to be a token or
+     the rule cannot be checked — a literal here is what silently removed the
+     product's only live outer/inner radius pair from the guard. */
+  --space-0h: 2px;
   /* The half-step. A 4px grid is right for layout and too coarse for chrome:
      the frame around a panel list, the inset on a small control. Measured
      against the reference style these half-steps (6px, 10px) appear exactly

@@ -19,10 +19,10 @@ import { describeTransitions } from "./model";
 const SCALES = [5, 200] as const;
 
 /**
- * The scale choice changes *which fixtures* are on screen, not how they are
- * drawn, so it is the `data` variant of the segmented control (DESIGN.md §7.8).
- * The layout choice below it is the `view` variant. Having both variants in
- * one harness is deliberate: the difference is only judgeable side by side.
+ * The scale choice changes which fixtures are on screen; the layout choice
+ * below it changes how they are drawn. Both are the same control now — §7.8
+ * dropped its two variants once the reference showed one selected state, the
+ * accent, regardless of what the control governs.
  */
 const SCALE_OPTIONS = SCALES.map((n) => ({
   id: String(n) as `${(typeof SCALES)[number]}`,
@@ -77,7 +77,6 @@ export function DashboardWorkbench() {
         <span>Scale:</span>
         <SegmentedControl
           label="Fixture scale"
-          variant="data"
           options={SCALE_OPTIONS}
           value={String(size) as (typeof SCALE_OPTIONS)[number]["id"]}
           onChange={(next) => setSize(Number(next) as (typeof SCALES)[number])}

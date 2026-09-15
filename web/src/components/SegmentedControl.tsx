@@ -6,18 +6,16 @@
  * already drifted apart in radius, tone and padding. DESIGN.md §7.2 states the
  * pattern, §7.8 now states the component.
  *
- * ## Which variant
+ * ## One selected state
  *
- * `variant="view"` (default) is the one that changes *which view* of the data
- * you get: the layout switcher, a density choice. The selection is chrome, so
- * it stays in the neutral scale.
- *
- * `variant="data"` is the one that changes *what data* you are looking at: a
- * time range, a filter over the list. The selection is part of the reading, so
- * it wears the control accent.
- *
- * Picking by what the control does, rather than by how loud it should look, is
- * what stops every segmented control on a screen from shouting at once.
+ * There used to be a `variant` prop here: neutral for a control that changes
+ * the *view*, accent for one that changes *what data* you see. It is gone.
+ * Measured against the reference, the distinction does not exist — its range
+ * selector is a view control by our own definition and it fills the active
+ * segment with the accent. The split produced a selected segment drawn as a
+ * grey box, which reads as disabled rather than as chosen, and it made two
+ * controls side by side in the same toolbar disagree about what "selected"
+ * looks like.
  *
  * ## Why `aria-pressed` and not a radio group
  *
@@ -41,7 +39,6 @@ export type SegmentedControlProps<Id extends string> = {
   /** The option drawn as selected. */
   value: Id;
   onChange: (next: Id) => void;
-  variant?: "view" | "data";
   className?: string;
 };
 
@@ -50,7 +47,6 @@ export function SegmentedControl<Id extends string>({
   options,
   value,
   onChange,
-  variant = "view",
   className,
 }: SegmentedControlProps<Id>) {
   return (
@@ -58,7 +54,6 @@ export function SegmentedControl<Id extends string>({
       className={className ? `segmented ${className}` : "segmented"}
       role="group"
       aria-label={label}
-      data-variant={variant}
     >
       {options.map((option) => (
         <button

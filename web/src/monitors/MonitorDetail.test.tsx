@@ -83,6 +83,53 @@ describe("the status sentence", () => {
     view({ monitor: monitor("up", { lastCheck: NOW - 120_000 }) });
     expect(document.body.textContent).toContain("checked 2 min ago");
   });
+
+  it("keeps the state on the title line, grouped with the name", () => {
+    /*
+     * The header used to be three children of the page's 20px flex column —
+     * name, target, status — so a monitor's own status sat as far from its
+     * hostname as the whole block sat from the first card, and the three facts
+     * read as three unrelated rows.
+     *
+     * Asserted structurally rather than by looking at pixels: the pill has to
+     * be *inside* the title row for the grouping to survive a refactor that
+     * only moves CSS around.
+     */
+    const { container } = view({ monitor: monitor("up") });
+    const row = container.querySelector(".mon-detail-titlerow");
+    expect(row, "the header needs a title row").not.toBeNull();
+    expect(
+      row?.querySelector(".mon-detail-name"),
+      "the name belongs on that row",
+    ).not.toBeNull();
+    expect(
+      row?.querySelector(".mon-detail-status"),
+      "so does the state — that is the whole point of the row",
+    ).not.toBeNull();
+  });
+
+  it("keeps the reason out of the pill and gives it its own line", () => {
+    /*
+     * A pill holds a lamp, a word and an age: all short by construction. An
+     * error is free text — "DNS lookup failed: host axonlawyers.com not
+     * found" — and letting one into the pill would push the title around and
+     * wrap the line it sits on.
+     *
+     * This is the assertion that stops the next person from folding the reason
+     * back into the status element because it reads better in one sentence.
+     */
+    const reason = "DNS lookup failed: host api.example.com not found";
+    const { container } = view({ monitor: monitor("down", { error: reason }) });
+
+    const pill = container.querySelector(".mon-detail-status");
+    expect(pill?.textContent, "the pill states the status, not the reason").not.toContain(
+      "DNS lookup failed",
+    );
+    expect(
+      container.querySelector(".mon-detail-reason")?.textContent,
+      "the reason gets a line of its own",
+    ).toContain(reason);
+  });
 });
 
 describe("uptime windows", () => {
