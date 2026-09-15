@@ -938,6 +938,17 @@
        the wrapper gives up its fixed height rather than clipping the text. */
     font-size: var(--type-nozoom);
     line-height: var(--lead-nozoom);
+    /*
+     * And the box itself clears 24px, because the tap lands on the *input*.
+     *
+     * The wrapper looks like the target — it carries the border, the fill and
+     * the magnifier — but it is a <div>, not a <label>, so tapping its padding
+     * focuses nothing; verified in a real browser. At a 20px line box that left
+     * the one control someone uses one-handed after an alert below WCAG 2.5.8,
+     * while the thing around it merely looked big enough. Two quarter-steps
+     * take the input to 24 and the shell to 42; nothing else on the row moves.
+     */
+    padding-block: var(--space-0h);
   }
 
   /* The shortcut hint goes: there is no keyboard to press it with, and on the

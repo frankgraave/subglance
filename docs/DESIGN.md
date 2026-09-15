@@ -491,7 +491,8 @@ Space moves in steps of 4px; §2.7 states the ladder and how it is enforced.
 ### 2.7 Spacing and radius
 
 The ladder is `--space-1..16` = 4/8/12/16/20/24/32/40/48/64 and the radius
-ladder is `--r-2xs/xs/sm/md/lg` = 2/4/6/10/12. Both are guarded by `tokens.test.ts`
+ladder is `--r-2xs/xs/sm/md/lg` = 2/4/6/8/12, with `--r-xs` (4px) kept for
+compatibility rather than reached for. Both are guarded by `tokens.test.ts`
 the way colour and type already were, because both had drifted: a `7px` and a
 `9px` padding, each chosen by hand to reach a rendered height that nothing
 stated.

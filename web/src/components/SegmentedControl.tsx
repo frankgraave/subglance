@@ -25,7 +25,7 @@
  * The `role="group"` plus its label is what ties them together for a screen
  * reader.
  */
-import type { ReactNode } from "react";
+import type { ReactElement } from "react";
 
 export type SegmentedOption<Id extends string> = {
   id: Id;
@@ -45,8 +45,15 @@ export type SegmentedOption<Id extends string> = {
    * density — where the icon says it faster than the word. A `hint` is
    * effectively required alongside it: the shape is only obvious to someone
    * who already knows what the control does.
+   *
+   * `ReactElement`, not `ReactNode`, and the difference is load-bearing:
+   * `ReactNode` admits `false` and `null`, which are *present* as far as the
+   * `icon === undefined` test below is concerned but render nothing. A segment
+   * would then take the icon class, drop its label into `aria-label`, and draw
+   * an empty 26px square — the one failure mode a control of glyphs cannot
+   * recover from, since there is no text to fall back to.
    */
-  icon?: ReactNode;
+  icon?: ReactElement;
   /** Optional `title`, for a difference that is not obvious from the label. */
   hint?: string;
 };

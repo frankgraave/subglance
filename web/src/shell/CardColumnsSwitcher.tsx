@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactElement } from "react";
 import {
   IconColumnsAuto,
   IconColumnsOne,
@@ -30,7 +30,7 @@ import { CARD_COLUMNS, type CardColumns } from "./preferences";
  * their own shapes; this belongs to one layout and appears with it.
  */
 
-const ICONS: Record<CardColumns, ReactNode> = {
+const ICONS: Record<CardColumns, ReactElement> = {
   "1": <IconColumnsOne />,
   "2": <IconColumnsTwo />,
   "3": <IconColumnsThree />,

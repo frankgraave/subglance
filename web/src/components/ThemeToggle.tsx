@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactElement } from "react";
 import { IconMoon, IconSun, IconThemeAuto } from "./icons";
 import { SegmentedControl } from "./SegmentedControl";
 import type { ThemePreference } from "../theme/theme";
@@ -6,7 +6,7 @@ import type { ThemePreference } from "../theme/theme";
 const OPTIONS: readonly {
   id: ThemePreference;
   label: string;
-  icon: ReactNode;
+  icon: ReactElement;
   hint: string;
 }[] = [
   { id: "light", label: "Light", icon: <IconSun />, hint: "Light theme" },

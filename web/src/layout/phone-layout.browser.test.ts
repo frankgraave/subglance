@@ -192,43 +192,26 @@ describe.each(WIDTHS)("at %ipx", (width) => {
             if (style.visibility === "hidden" || style.display === "none") continue;
 
             /*
-             * A bare input is measured by the shell it sits in.
+             * Every control is measured by its own box. No exemptions.
              *
-             * WCAG 2.5.8 is about the area a finger can land on, and for a
-             * borderless input inside a padded field wrapper that area is the
-             * wrapper: the dashboard's search input is 20px of text box inside
-             * a 38px shell carrying the border, the fill and the magnifier,
-             * and a tap anywhere in it focuses the field. Measuring the input
-             * alone reports a failure the thumb cannot experience.
+             * There were two, and both were wrong. The first waved through
+             * `sr-only` radios inside a label, for a theme control that has
+             * since become buttons — the product has no radio inputs left, so
+             * the rule protected nothing while reading as one still in force.
              *
-             * The exemption is narrow on purpose. It applies only when the
-             * control draws no edge of its own — a control with its own border
-             * or background is claiming to *be* the target, and then its own
-             * box is what has to be 24px. The shell must also genuinely clear
-             * 24px; this promotes the measurement, it does not skip it.
+             * The second, briefly, measured a borderless input by its parent:
+             * the search field is a 20px line box inside a 38px shell that
+             * carries the border, the fill and the magnifier, so the shell
+             * *looks* like the target. It is a <div>, not a <label>. Tapping
+             * its padding was verified in a real browser to focus nothing at
+             * all, which means the promotion excused a control that genuinely
+             * failed WCAG 2.5.8 and would have kept a passing suite over it.
+             * The field now clears 24px on its own (`monitors.css`).
              *
-             * This replaces an exemption for `sr-only` radios wrapped in a
-             * label, which was written for a theme control that no longer
-             * exists — the product has no radio inputs left at all. A dead
-             * exemption is worse than none: it reads as a rule still in force.
+             * If a label-provided target is ever needed here, it has to be a
+             * real <label> and the exemption has to name it.
              */
-            const shellOf = (control: HTMLElement): HTMLElement => {
-              const own = window.getComputedStyle(control);
-              const draws =
-                own.borderTopWidth !== "0px" ||
-                (own.backgroundColor !== "rgba(0, 0, 0, 0)" &&
-                  own.backgroundColor !== "transparent");
-              if (draws) return control;
-              const parent = control.parentElement;
-              return parent === null ? control : parent;
-            };
-
-            const target =
-              el instanceof HTMLInputElement && el.type !== "checkbox" && el.type !== "radio"
-                ? shellOf(el)
-                : el;
-
-            const r = target.getBoundingClientRect();
+            const r = el.getBoundingClientRect();
             if (r.width === 0 && r.height === 0) continue;
             if (r.width < 24 || r.height < 24) {
               out.push({
