@@ -312,7 +312,21 @@ func (r *Runner) restore(ctx context.Context) error {
 		if inc.Confirmed() {
 			status = state.StatusDown
 		}
-		r.engine.Restore(inc.MonitorID, status, true, inc.Confirmed())
+		// The snapshot budget lives on the failure streak, so it has to be
+		// rebuilt from what this outage already wrote. Without it a restart
+		// mid-outage spends the budget again; see snapshotToStore.
+		spent, err := r.db.CountSnapshotsSince(ctx, inc.MonitorID, inc.StartedAt, maxSnapshotsPerIncident)
+		if err != nil {
+			// A failed count must not stop the runner from starting: a
+			// monitoring system that refuses to boot is worse than one that
+			// stores a few duplicate snapshots. Assume the budget is spent,
+			// which is the conservative side of the trade.
+			r.log.Warn("could not count stored snapshots; assuming this outage's budget is spent",
+				"monitor_id", inc.MonitorID, "error", err)
+			spent = maxSnapshotsPerIncident
+		}
+
+		r.engine.Restore(inc.MonitorID, status, true, inc.Confirmed(), spent)
 	}
 
 	if len(incidents) > 0 {
@@ -498,7 +512,7 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 		FailureThreshold: o.Monitor.Retries,
 	})
 
-	if snap := snapshotToStore(o.Result, tr.ConsecutiveFails); snap != nil {
+	if snap := snapshotToStore(o.Result, tr.ConsecutiveFails, tr.Flapping); snap != nil {
 		hb.Response = snap
 	}
 
@@ -532,12 +546,30 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 // snapshotToStore decides whether this result's captured response is worth a
 // row, and converts it to the storage shape.
 //
-// The rule is the first maxSnapshotsPerIncident failures of a streak. A
+// Two rules, because one streak-shaped budget only covers one of the two ways
+// the same error page gets written over and over.
+//
+// The first is the streak: the first maxSnapshotsPerIncident failures of it. A
 // monitor that has been returning the same 503 for six hours has already said
 // everything it has to say, and every repeat after that is storage spent on a
 // copy of something already on disk.
-func snapshotToStore(res checker.Result, consecutiveFails int) *store.ResponseSnapshot {
+//
+// The second is flapping, which the streak cannot see. A monitor that fails,
+// recovers and fails again every minute resolves its incident on each recovery
+// and so starts every failure with a streak of one — permanently inside the
+// budget, writing a snapshot per check, for as long as it oscillates. The
+// engine already knows that monitor is flapping, and a flapping monitor is
+// precisely the case where snapshots are worthless: there are already twenty
+// copies of the same failure on disk. So while it flaps, none are stored.
+//
+// Flapping is used rather than any new counter because it is state the engine
+// maintains and clears on its own: when the monitor settles, snapshots resume
+// with no timer to expire and nothing to reset.
+func snapshotToStore(res checker.Result, consecutiveFails int, flapping bool) *store.ResponseSnapshot {
 	if res.Response == nil || res.OK {
+		return nil
+	}
+	if flapping {
 		return nil
 	}
 	if consecutiveFails > maxSnapshotsPerIncident {

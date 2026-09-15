@@ -552,6 +552,36 @@ func (db *DB) attachResponses(ctx context.Context, hbs []Heartbeat) error {
 	return nil
 }
 
+// CountSnapshotsSince reports how many failure-response snapshots a monitor has
+// stored since a given moment.
+//
+// The runner needs this at startup. Its per-outage snapshot budget lives in
+// memory on the failure streak, so a restart during a long outage would hand
+// the monitor a fresh budget and write the same error page again — every
+// restart, for as long as the outage lasts. Counting what is already on disk
+// for the open incident lets the budget survive the process that spent it.
+//
+// The count is capped by the caller's limit so an outage that predates the
+// budget cannot make startup read an unbounded number of rows.
+func (db *DB) CountSnapshotsSince(ctx context.Context, monitorID int64, since time.Time, limit int) (int, error) {
+	if limit <= 0 {
+		return 0, nil
+	}
+	var n int
+	err := db.Reader.QueryRowContext(ctx, `
+		SELECT count(*) FROM (
+			SELECT 1
+			FROM heartbeat_responses r
+			JOIN heartbeats h ON h.id = r.heartbeat_id
+			WHERE h.monitor_id = ? AND h.ts >= ?
+			LIMIT ?
+		)`, monitorID, since.Unix(), limit).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("count snapshots for monitor %d: %w", monitorID, err)
+	}
+	return n, nil
+}
+
 // RecentHeartbeatsForAll returns the most recent perMonitor heartbeats for
 // every monitor that has any, keyed by monitor id and newest first — the same
 // order as ListHeartbeats.

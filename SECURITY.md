@@ -84,4 +84,8 @@ What that means for an operator:
   deleted with them by a foreign key, so there is no second retention policy
   that can be forgotten.
 - Only the first few failures of a streak are stored, and each is capped at
-  2 KiB, so an outage cannot grow the database without bound.
+  2 KiB, so an outage cannot grow the database without bound. That allowance is
+  counted against the open incident rather than against the running process, so
+  restarting SubGlance during an outage does not start it over. A monitor that
+  is flapping stores none at all: it has already written several copies of the
+  same failure, and each recovery would otherwise reset its allowance.

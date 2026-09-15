@@ -440,13 +440,24 @@ func (e *Engine) Len() int {
 // Without this, a restart would re-open an incident that is already open and
 // re-alert for an outage the user was told about ten minutes ago — which is
 // exactly the kind of noise this package exists to prevent.
-func (e *Engine) Restore(monitorID int64, status Status, incidentOpen, incidentConfirmed bool) {
+//
+// consecutiveFails seeds the failure streak. The streak is not only an alert
+// input: it is also the budget that bounds how many failure-response
+// snapshots one outage may store. Restoring it as zero handed every restart
+// during a long outage a fresh budget, so the same error page was written
+// again on each one. The caller passes what the database already holds.
+func (e *Engine) Restore(monitorID int64, status Status, incidentOpen, incidentConfirmed bool, consecutiveFails int) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
+	if consecutiveFails < 0 {
+		consecutiveFails = 0
+	}
 
 	e.state[monitorID] = &monitorState{
 		status:            status,
 		incidentOpen:      incidentOpen,
 		incidentConfirmed: incidentConfirmed,
+		consecutiveFails:  consecutiveFails,
 	}
 }
