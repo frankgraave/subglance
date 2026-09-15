@@ -151,11 +151,34 @@
   color: var(--ink-3);
 }
 
+/*
+ * The frame around the panels.
+ *
+ * An earlier pass removed this entirely, on the reasoning that panels inside a
+ * box is one frame too many. That was right about the frame it removed and
+ * wrong about frames: what made that one too many was that it was drawn in the
+ * same weight as the panels inside it, so the eye read two competing edges at
+ * the same level.
+ *
+ * Measured against the reference style, the outer card is not a second panel —
+ * it is a 6px margin with an edge on it. The padding does the work: the panels
+ * sit inset from the card's border, so the card reads as the surface they rest
+ * on rather than as another object beside them. Its fill is one step below
+ * theirs for the same reason.
+ *
+ * The radius pair is 12 outside, 8 inside, across 6px of padding. Strictly
+ * concentric would be 8 + 6 = 14, but 12 is the better call: a 14px outer
+ * corner starts to read as a pill on a wide card, while 12 still reads as a
+ * card that happens to have rounded corners.
+ *
+ * `overflow` stays unset: it existed to clip rows against the old container's
+ * corners, and it would crop the focus ring on the first and last row.
+ */
 .mon-board {
+  padding: var(--space-1h);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   background: var(--surface);
-  overflow: hidden;
 }
 
 .mon-table {
@@ -164,7 +187,11 @@
      browser measuring every cell, and stops a long target from shoving the
      numeric columns around. */
   table-layout: fixed;
-  border-collapse: collapse;
+  /* Separate, not collapse: collapsed borders merge into shared hairlines,
+     which is exactly the ruled-grid look §10 removes. Separate lets each row
+     own its edge and takes the gap between panels. */
+  border-collapse: separate;
+  border-spacing: 0 var(--space-1);
 }
 
 /* Wide enough for the lamp plus the longest status word ("Pending"), because
@@ -179,8 +206,10 @@
   padding: 0 var(--space-3);
   text-align: left;
   @apply caps-legend;
-  background: var(--surface-2);
-  border-bottom: 1px solid var(--border);
+  /* No rule under the header: the panels below carry their own edges, and a
+     line here would be the last surviving piece of the grid. The label reads
+     as a heading on its own — that is what the mono caps role is for. */
+  background: transparent;
 }
 
 .mon-head--num { text-align: right; }
@@ -189,17 +218,63 @@
   padding: var(--space-2) var(--space-3);
   text-align: left;
   @apply caps-legend;
-  background: var(--surface-2);
-  border-bottom: 1px solid var(--border);
+  background: transparent;
 }
 
-.mon-row {
-  border-bottom: 1px solid var(--border);
-  transition: background var(--dur-hover) var(--ease);
+/*
+ * The rows are panels, drawn on a table.
+ *
+ * §10 asks for a stack of panels rather than a ruled grid: each row its own
+ * 1px edge, its own corner, a little air between. The obvious way to get that
+ * is to stop using a table — and that would be the wrong trade. This data is a
+ * grid of facts about a set of things, the markup is a real `<table>` with
+ * `<th scope="row">`, and that is what gives a screen-reader user row and
+ * column announcements for free. Trading a working accessibility tree for a
+ * visual convention is a bad exchange when both are available.
+ *
+ * So: `border-separate` with a vertical spacing, and the edge drawn on the
+ * cells rather than the row — `<tr>` cannot carry a border under
+ * `border-collapse: separate`. The first and last cell in a row round the
+ * outer corners, which is what makes the row read as one object rather than
+ * three boxes.
+ *
+ * Do NOT put display:flex/grid/contents on any of these elements to make this
+ * easier. Safari drops table semantics when you do, silently undoing every
+ * reason the table is here.
+ */
+.mon-row > * {
+  border-block: 1px solid var(--border-control);
+  transition: border-color var(--dur-hover) var(--ease);
 }
 
-.mon-row:last-child { border-bottom: 0; }
-.mon-row:hover { background: var(--surface-2); }
+.mon-row > :first-child {
+  border-left: 1px solid var(--border-control);
+  border-start-start-radius: var(--r-md);
+  border-end-start-radius: var(--r-md);
+}
+
+.mon-row > :last-child {
+  border-right: 1px solid var(--border-control);
+  border-start-end-radius: var(--r-md);
+  border-end-end-radius: var(--r-md);
+}
+
+/* The surface does not move on hover — no transform. A list people stare at
+   all day must not shift under the pointer.
+ *
+ * What changes is the edge, and for a row in trouble, the tint it already
+ * carries. An earlier pass here removed the hover fill outright on the rule
+ * that hover "never touches the fill". That was measured wrong: the reference
+ * style tints hovered rows at 20% of their own status colour, and only avoids
+ * a *neutral* fill. The distinction matters — a neutral highlight competes
+ * with status because it is the same kind of signal in a different hue, while
+ * a row deepening its own red is the same signal getting louder.
+ *
+ * So: neutral rows light their edge only, and a row that is already tinted
+ * deepens. */
+.mon-row:hover > * { border-block-color: var(--border-hi); }
+.mon-row:hover > :first-child { border-left-color: var(--border-hi); }
+.mon-row:hover > :last-child { border-right-color: var(--border-hi); }
 
 /* Trouble warms the row's leading edge instead of filling it. A coloured fill
    across a list of 200 is noise; two warm edges in a quiet list is
@@ -230,6 +305,23 @@
    one signal this rule exists to add below the WCAG 1.4.11 floor of 3:1. The
    content still recedes; the edge stays at full strength. */
 .mon-row[data-status="paused"] > * { opacity: .62; }
+
+/*
+ * A row that already carries a tint deepens under the pointer instead of
+ * taking the neutral edge highlight above.
+ *
+ * Only `down` qualifies, and that is the rule rather than an oversight: it is
+ * the one status with a resting fill. `pending` and `waiting` mark themselves
+ * with a coloured left edge and nothing else, so tinting them on hover would
+ * *introduce* a colour rather than deepen one — which is the neutral-fill
+ * problem in fancy dress. They take the edge highlight like every other row.
+ *
+ * The background sits on the cells rather than on the row, because under
+ * `border-collapse: separate` a <tr> cannot paint one: the cells are what the
+ * reader sees, so the cells are what change. Row as target, cells responding,
+ * is the same group-hover shape the reference style uses throughout.
+ */
+.mon-row[data-status="down"]:hover > * { background: var(--down-deep); }
 
 .mon-cell {
   height: 58px;
@@ -319,10 +411,24 @@
 
 .mon-empty-leds .led { opacity: .28; }
 
+/*
+ * An empty state states a fact, at the size of a fact.
+ *
+ * This was --type-card (16px), a step below the first-run variant, on the
+ * reasoning that an ordinary empty list is a smaller event than an empty
+ * product. Measured against the reference style, that interface puts its empty
+ * states at 24px/600 — page-title size — and it is right: "no incidents in the
+ * last hour" is the answer to the question the screen was opened to ask, not
+ * an apology for having nothing to show. Shrinking it makes the absence read
+ * as a failure to load.
+ *
+ * The first-run variant keeps --weight-heavy; it is the one moment the product
+ * is introducing itself rather than reporting.
+ */
 .mon-empty-title {
   margin-bottom: var(--space-2);
-  font-size: var(--type-card);
-  line-height: var(--lead-card);
+  font-size: var(--type-page);
+  line-height: var(--lead-page);
   font-weight: var(--weight-strong);
   color: var(--ink);
 }
@@ -332,8 +438,8 @@
    arrive at the same volume. */
 .mon-empty-title--first {
   margin-bottom: var(--space-3);
-  font-size: var(--type-page);
-  line-height: var(--lead-page);
+  /* Size and leading are inherited from the base rule now that both sit at
+     page-title scale; only the weight still separates them. */
   font-weight: var(--weight-heavy);
 }
 
@@ -417,24 +523,39 @@
   gap: var(--space-5);
 }
 
-.mon-cards-title {
-  margin-bottom: var(--space-2);
-  @apply caps-legend;
-}
+/* Section headings come from the shared Card component now; this rule drew a
+   second, different treatment for the same idea. */
 
 .mon-card-stack {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  /* Six, matching the card's own padding: a monitor is the same distance from
+     its neighbour as from the panel edge. It was 8px, which put more air
+     between the cards than around them and made the group read as looser than
+     it is. */
+  gap: var(--space-1h);
   list-style: none;
-  padding: 0;
+  /* The panel this sits in is flush so the stack can own its own inset. Six
+     again, for the same reason — this is the third level of the same nesting
+     and it repeats the same number deliberately. */
+  padding: var(--space-1h);
   margin: 0;
 }
 
+/*
+ * A monitor card sits inside a panel, inside a card — three levels deep — so
+ * it takes the innermost radius on the ladder, not the outermost.
+ *
+ * It was --r-lg (12px), which is the radius of the *outer* card now framing
+ * it. Two boxes at the same radius with one inside the other read as a
+ * mistake rather than as nesting: the corners run parallel at the wrong
+ * offset and the inner box looks like it has escaped its container. One step
+ * down per level is the whole grammar.
+ */
 .mon-card {
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--border);
-  border-radius: var(--r-lg);
+  border-radius: var(--r-sm);
   background: var(--surface);
   /* min-width:0 lets the flex/grid children below actually ellipsis instead
      of pushing the card past the viewport — the 416px-on-a-390px-screen bug
@@ -572,13 +693,9 @@
 
 .mon-lines { display: flex; flex-direction: column; gap: var(--space-5); }
 
-/* A grouped compact list: one heading per tag value, sharing the section
-   heading style of the card layout so the two layouts do not invent two
-   different vocabularies for the same idea. */
-.mon-line-group-title {
-  margin-bottom: var(--space-2);
-  @apply caps-legend;
-}
+/* The grouped compact list heads each section with a Card, same as every
+   other list in the product — which is what the comment here used to promise
+   and a duplicated rule could not keep. */
 
 /*
  * The compact list is a stack of panels, not a ruled table (DESIGN.md §10).
@@ -591,7 +708,10 @@
  */
 .mon-line-stack {
   list-style: none;
-  padding: 0;
+  /* Matches the card's padding, for the same reason the monitor card stack
+     does: the panel above is flush so its rows can own their inset, and six
+     keeps a line the same distance from its neighbour as from the edge. */
+  padding: var(--space-1h);
   margin: 0;
 }
 
@@ -621,6 +741,12 @@
 
 /* Same rule as the row and the card: trouble warms the leading edge. */
 .mon-line[data-status="down"] { border-left: 2px solid var(--down); background: var(--down-dim); }
+
+/* A tinted line deepens rather than taking `.panel-row`'s neutral hover fill.
+   Without this the shared row rule paints --surface-2 straight over the red,
+   so passing the pointer across a broken monitor made it look healthy for as
+   long as the cursor sat on it. */
+.mon-line[data-status="down"]:hover { background: var(--down-deep); }
 .mon-line[data-status="pending"] { border-left: 2px solid var(--warn); }
 .mon-line[data-status="waiting"] { border-left: 2px solid var(--idle); }
 .mon-line[data-status="paused"] {

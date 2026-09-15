@@ -9,7 +9,11 @@ afterEach(cleanup);
 /** jsdom has no layout, so the heartbeat bar needs an explicit width. */
 const WIDTH = 295;
 
-const monitor = (id: string, status: MonitorStatus, over: Partial<Monitor> = {}): Monitor => ({
+const monitor = (
+  id: string,
+  status: MonitorStatus,
+  over: Partial<Monitor> = {},
+): Monitor => ({
   id,
   name: id,
   status,
@@ -59,7 +63,9 @@ describe("MonitorCardList", () => {
   });
 
   it("labels each number, because a card has no column header", () => {
-    render(<MonitorCardList monitors={[monitor("api", "up")]} beatWidth={WIDTH} />);
+    render(
+      <MonitorCardList monitors={[monitor("api", "up")]} beatWidth={WIDTH} />,
+    );
     // Scoped to the <dt>s: the heartbeat bar's sr-only table also has a
     // "Latency" column header, and matching that would prove nothing.
     const labels = [...cards()[0].querySelectorAll(".mon-card-fact dt")].map(
@@ -84,7 +90,9 @@ describe("MonitorCardList", () => {
   it("renders an em dash, never a zero, for a value it does not have", () => {
     render(
       <MonitorCardList
-        monitors={[monitor("new", "pending", { latencyMs: null, uptime24h: null })]}
+        monitors={[
+          monitor("new", "pending", { latencyMs: null, uptime24h: null }),
+        ]}
         beatWidth={WIDTH}
       />,
     );
@@ -96,13 +104,21 @@ describe("MonitorCardList", () => {
   it("puts down monitors first, under their own heading", () => {
     render(
       <MonitorCardList
-        monitors={[monitor("alpha", "up"), monitor("zulu", "down"), monitor("beta", "up")]}
+        monitors={[
+          monitor("alpha", "up"),
+          monitor("zulu", "down"),
+          monitor("beta", "up"),
+        ]}
         beatWidth={WIDTH}
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "Needs attention (1)" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "All monitors (2)" })).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: "Needs attention (1)" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: "All monitors (2)" }),
+    ).toBeTruthy();
     // The order across the whole stack, not just within a section: the phone
     // user opened this after an alert and the broken thing must be on top.
     expect(cards().map((card) => card.getAttribute("data-testid"))).toEqual([
@@ -113,19 +129,34 @@ describe("MonitorCardList", () => {
   });
 
   it("drops the attention heading when nothing is down", () => {
-    render(<MonitorCardList monitors={[monitor("alpha", "up")]} beatWidth={WIDTH} />);
-    expect(screen.queryByRole("heading", { name: /Needs attention/ })).toBeNull();
+    render(
+      <MonitorCardList monitors={[monitor("alpha", "up")]} beatWidth={WIDTH} />,
+    );
+    expect(
+      screen.queryByRole("heading", { name: /Needs attention/ }),
+    ).toBeNull();
     expect(screen.getByRole("heading", { name: "Monitors (1)" })).toBeTruthy();
   });
 
   it("tells 'nothing matched' apart from 'nothing exists'", () => {
-    const { rerender } = render(<MonitorCardList monitors={[]} beatWidth={WIDTH} />);
+    const { rerender } = render(
+      <MonitorCardList monitors={[]} beatWidth={WIDTH} />,
+    );
     expect(
       screen.getByRole("heading", { name: "Nothing is being watched yet" }),
     ).toBeTruthy();
 
-    rerender(<MonitorCardList monitors={[]} query="xyz" totalCount={4} beatWidth={WIDTH} />);
-    expect(screen.getByRole("heading", { name: /No monitors match/ })).toBeTruthy();
+    rerender(
+      <MonitorCardList
+        monitors={[]}
+        query="xyz"
+        totalCount={4}
+        beatWidth={WIDTH}
+      />,
+    );
+    expect(
+      screen.getByRole("heading", { name: /No monitors match/ }),
+    ).toBeTruthy();
   });
 
   it("uses a real list, not a reflowed table", () => {
@@ -133,7 +164,9 @@ describe("MonitorCardList", () => {
     // which is why the mobile layout is a separate component rather than the
     // usual CSS-only reflow. The sr-only heartbeat tables are allowed; a
     // monitor list table is not.
-    render(<MonitorCardList monitors={[monitor("api", "up")]} beatWidth={WIDTH} />);
+    render(
+      <MonitorCardList monitors={[monitor("api", "up")]} beatWidth={WIDTH} />,
+    );
     expect(screen.getAllByRole("list").length).toBeGreaterThan(0);
     expect(screen.queryByRole("table", { name: /monitors/ })).toBeNull();
   });
@@ -147,11 +180,16 @@ describe("MonitorCardList grouped by a tag", () => {
     monitor("legacy", "up", {}),
   ];
 
+  // Section headings come from the shared Card component now, so they carry
+  // its class rather than a per-layout one — which is the point of moving the
+  // pattern into a component: one selector, one treatment, every screen.
   const headings = () =>
-    [...document.querySelectorAll(".mon-cards-title")].map((h) => h.textContent);
+    [...document.querySelectorAll(".card-title")].map((h) => h.textContent);
 
   it("heads one section per tag value, untagged last", () => {
-    render(<MonitorCardList monitors={tagged()} groupKey="env" beatWidth={WIDTH} />);
+    render(
+      <MonitorCardList monitors={tagged()} groupKey="env" beatWidth={WIDTH} />,
+    );
     expect(headings()).toEqual([
       "Needs attention (1)",
       "Prod (1)",
@@ -161,17 +199,23 @@ describe("MonitorCardList grouped by a tag", () => {
   });
 
   it("gives each section a unique heading id even for values differing in case", () => {
-    render(<MonitorCardList monitors={tagged()} groupKey="env" beatWidth={WIDTH} />);
-    const ids = [...document.querySelectorAll(".mon-cards-title")].map((h) => h.id);
+    render(
+      <MonitorCardList monitors={tagged()} groupKey="env" beatWidth={WIDTH} />,
+    );
+    const ids = [...document.querySelectorAll(".card-title")].map((h) => h.id);
     expect(new Set(ids).size).toBe(ids.length);
-    for (const section of document.querySelectorAll("section.mon-cards-section")) {
+    for (const section of document.querySelectorAll(
+      "section.mon-cards-section",
+    )) {
       const labelledBy = section.getAttribute("aria-labelledby")!;
       expect(document.getElementById(labelledBy)).not.toBeNull();
     }
   });
 
   it("renders every monitor exactly once", () => {
-    render(<MonitorCardList monitors={tagged()} groupKey="env" beatWidth={WIDTH} />);
+    render(
+      <MonitorCardList monitors={tagged()} groupKey="env" beatWidth={WIDTH} />,
+    );
     expect(cards()).toHaveLength(4);
   });
 

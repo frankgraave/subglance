@@ -70,23 +70,33 @@
   --numeric-mono: slashed-zero tabular-nums;
   --render-mono: geometricPrecision;
 
-  /* Shape. Radius grows with the element: marks, controls, rows, then cards.
-     `--r-2xs` is the step for a small mark — the lamp drew itself at 2.5px
-     only because the ladder stopped at 4px, and a fractional radius is the
-     same defect the type scale already rejected: what the engine does with
-     the half pixel depends on the device pixel ratio, so the lamp's silhouette
-     was not the same shape on every screen. */
+  /* Shape. Four steps in use, and the gaps between them are deliberate: 2px
+     for a mark, 6px for anything you click, 8px for a panel, 12px for the card
+     that frames panels.
+
+     `--r-2xs` exists because the lamp drew itself at 2.5px only while the
+     ladder stopped at 4px, and a fractional radius is the same defect the type
+     scale already rejected: what the engine does with the half pixel depends
+     on the device pixel ratio, so the lamp was not the same shape on every
+     screen.
+
+     `--r-xs` (4px) is kept for compatibility but is not part of the ladder in
+     use: a control at 4px reads as a mark rather than as something pressable,
+     and the jump from 2 to 6 is what keeps those two jobs apart. */
   --r-2xs: 2px;
   --r-xs: 4px;
   --r-sm: 6px;
-  --r-md: 10px;
+  --r-md: 8px;
   --r-lg: 12px;
 
-  /* Motion. `--ease` starts fast and settles softly, so movement decays
-     mechanically rather than floating. Duration follows role, not taste. */
-  --ease: cubic-bezier(.32, .72, 0, 1);
-  --dur-hover: 140ms;
-  --dur-panel: 240ms;
+  /* Motion. One duration for everything interactive, because a hover, a
+     segment change and a menu opening are the same kind of event to the person
+     watching; giving each its own timing makes the interface feel assembled
+     from parts. 150ms is short enough to feel immediate and long enough to
+     read as movement rather than a jump. */
+  --ease: cubic-bezier(.4, 0, .2, 1);
+  --dur-hover: 150ms;
+  --dur-panel: 150ms;
   --dur-attention: 420ms;
   --dur: var(--dur-attention);
 
@@ -100,7 +110,12 @@
      engine's glyph rounding on the text, and it was the 12.5px helper — the
      most used role in the product — that carried it. */
   --type-page: 24px;
-  --type-card: 18px;
+  /* 16px, not 18. A card title sits beside a 24px icon tile and above a panel
+     of 14px text; at 18px it competes with the page title two levels up
+     instead of sitting between it and the body. Measured against the reference
+     style, its card headings are 16px/500 — the same size as body copy, doing
+     its work through weight and position rather than through size. */
+  --type-card: 16px;
   --type-row: 15px;
   --type-body: 14px;
   --type-helper: 12px;
@@ -153,8 +168,26 @@
      Spelled `--track-*` because `--tracking-*` is Tailwind v4's own theme
      namespace and a token there would have to reference itself. */
   --track-body: -.02em;
-  --track-badge: .04em;
-  --track-caps: .09em;
+
+  /* There is deliberately no `--track-caps`, `--track-badge` or `--track-mono`.
+     All three existed on reasoning that sounds right and measures wrong:
+     uppercase needs opening up, a mono badge is already wide, a monospace face
+     sits on a fixed advance so the body correction does not apply.
+
+     Measured against the reference style, none of it holds: it sets one
+     absolute -0.32px on the body and overrides it nowhere — sans and mono,
+     sentence case and uppercase, badges and headers all inherit the same
+     value. The tightening is a house style applied to the page, not a per-face
+     or per-casing fix.
+
+     Every exception we had pushed letters apart while the style we were aiming
+     at pulled them together. The caps one was the worst: +.09em at 12px is
+     +1.08px per pair against the body's -0.32px, so section labels sat 1.4px
+     per pair wider and read as spaced-out small caps rather than as a quiet
+     header. Mono opting out is what made panel headers and IDs read wide.
+
+     If a future face genuinely needs its own value, add it with a measurement
+     attached, not with an argument. */
 
   /* Space moves in steps of 4px. Named so a row's rhythm is a decision
      that can be changed in one place, not 40 ad-hoc paddings. */
@@ -163,7 +196,18 @@
   --control-h: 36px;
 
   --space-1: 4px;
+  /* The half-step. A 4px grid is right for layout and too coarse for chrome:
+     the frame around a panel list, the inset on a small control. Measured
+     against the reference style these half-steps (6px, 10px) appear exactly
+     where the grid would otherwise force a choice between too tight and too
+     loose. They are not an escape hatch from the ladder — they are the rungs
+     the ladder needs at small sizes. */
+  --space-1h: 6px;
   --space-2: 8px;
+  /* The second half-step. The gap between a 24px tile and the 16px title
+     beside it: 8px reads tight because the tile's border adds optical weight,
+     12px lets them drift apart. */
+  --space-2h: 10px;
   --space-3: 12px;
   --space-4: 16px;
   --space-5: 20px;
@@ -188,28 +232,42 @@
      and 3.6:1 against the light one, so it clears the 3:1 that a non-text UI
      edge needs in both themes, while white on the #155dfc fill reaches 5.25:1
      and clears AA for the label sitting on it. */
-  --accent:        #155dfc;
-  --accent-border: #2b7fff;
+  --accent:        oklch(.546 .245 262.881);
+  --accent-border: oklch(.623 .214 259.815);
   /* The label on a filled control. White in both themes, because the fill is
      the same in both: 5.25:1, which clears AA at body size. */
   --accent-ink:    #ffffff;
+  /* Focus is a ring, not an outline: a ring sits outside the border without
+     joining it, so a focused control keeps its own shape. On dark surfaces the
+     accent ring loses contrast against the page, so it is white at low alpha
+     there — the ring's job is visibility, not hue. */
   --accent-ring:   rgba(43,127,255,.24);
+  --accent-ring-dark: rgba(255,255,255,.30);
 }
 
 /* Dark is the default: the product is looked at in a dim room, at a glance,
    and a healthy dashboard should recede rather than shine. */
 [data-theme="dark"] {
-  --canvas:      #08090a;
-  --surface:     #0e1011;
-  --surface-2:   #141719;
-  --surface-hi:  #1a1e20;
-  --border:      #1e2224;
-  --border-hi:   #2a2f32;
+  /* The page sits one step above true black, and every surface above it is
+     white at a very low alpha rather than a lighter grey.
+     That difference is why a stack of panels reads as glass over one
+     background instead of as separately-painted boxes: an alpha surface
+     inherits whatever is beneath it, so nesting stays coherent at every
+     depth, and a panel dropped on a different background still belongs. */
+  --canvas:      oklch(.205 0 0);
+  --surface:     rgba(255, 255, 255, .03);
+  --surface-2:   rgba(255, 255, 255, .05);
+  --surface-hi:  rgba(255, 255, 255, .08);
+  --border:      rgba(255, 255, 255, .05);
+  --border-hi:   rgba(255, 255, 255, .10);
 
-  --ink:         #e8eaec;
-  --ink-2:       #9ba1a6;
-  --ink-3:       #61686d;
-  --ink-4:       #3d4347;
+  /* The neutral scale is achromatic — chroma exactly 0. A grey with a hint of
+     blue in it reads as a colour decision, and this palette leaves colour to
+     the data. */
+  --ink:         oklch(.97 0 0);
+  --ink-2:       oklch(.708 0 0);
+  --ink-3:       oklch(.556 0 0);
+  --ink-4:       oklch(.439 0 0);
 
   /* A zero that is genuinely zero, not a missing reading.
      A column of zeros at full strength competes with the measurements beside
@@ -218,14 +276,31 @@
      down, not at the strength reserved for absent values, because "no
      failures in this window" and "no data for this window" are different
      statements and the screen has to be able to make both. */
-  --ink-zero:    #6f767b;
+  --ink-zero:    oklch(.62 0 0);
 
+  /* `--down-deep` is one step past `--down-dim`, for a tinted row under the
+     pointer.
+
+     Hover on a row that already means something must not switch signals. A
+     neutral highlight arrives as a second kind of colour on top of the first
+     and the eye has to work out which one it is being told about; the same red
+     getting louder is the same statement said closer. Measured against the
+     reference style, that is what it does — hovered status rows deepen to 20%
+     of their own colour rather than picking up a grey.
+
+     There is deliberately no `--up-deep`, `--warn-deep` or `--idle-deep`. Down
+     is the only status with a resting fill to deepen: the others mark
+     themselves with a coloured edge alone, so a hover tint would introduce a
+     colour rather than intensify one, which is the neutral-fill problem again
+     wearing the status palette. A token with no caller is a decision nobody
+     made. */
   --up:          #34d399;
   --up-dim:      #10241d;
   --warn:        #fbbf24;
   --warn-dim:    #2a2110;
   --down:        #f43f5e;
   --down-dim:    #2c1017;
+  --down-deep:   #3d1620;
   --idle:        #4b5257;
   --idle-dim:    #16191b;
 
@@ -267,8 +342,12 @@
      as a seam rather than as height. `flat` is a real rung, not an absence:
      it is what a card takes, so "no shadow here" is a stated decision. */
   --shadow-flat:   none;
-  --shadow-raised: 0 4px 6px -1px rgba(0,0,0,.4), 0 2px 4px -2px rgba(0,0,0,.4);
-  --shadow-float:  0 10px 15px -3px rgba(0,0,0,.5), 0 4px 6px -4px rgba(0,0,0,.5);
+  /* One step of lift, at 5% black. Heavier shadows are how a dark interface
+     starts looking like stacked cards rather than one surface — the panels are
+     separated by their own edge and the alpha of their fill, and the shadow
+     only has to stop them from floating free. */
+  --shadow-raised: 0 4px 6px -1px rgba(0,0,0,.05), 0 2px 4px -2px rgba(0,0,0,.05);
+  --shadow-float:  0 10px 15px -3px rgba(0,0,0,.12), 0 4px 6px -4px rgba(0,0,0,.1);
 
   --scrim:       rgba(0,0,0,.5);
 
@@ -296,12 +375,17 @@
      above the tone that means "no data". */
   --ink-zero:    #7b8186;
 
+  /* `--down-deep` moves away from the page, not toward a fixed lightness: on
+     dark it lightens, here it darkens. Same rule, opposite direction — a tint
+     that "deepens" has to read as more of itself in both themes, and copying
+     the dark value across would have made a hovered row fade instead. */
   --up:          #059669;
   --up-dim:      #d9f5e9;
   --warn:        #b45309;
   --warn-dim:    #fdf0d5;
   --down:        #e11d48;
   --down-dim:    #fde4e9;
+  --down-deep:   #fbccd7;
   --idle:        #c2c7cb;
   --idle-dim:    #f0f0ef;
 
@@ -403,8 +487,6 @@
   --font-weight-heavy: var(--weight-heavy);
 
   --tracking-body: var(--track-body);
-  --tracking-badge: var(--track-badge);
-  --tracking-caps: var(--track-caps);
 
   --radius-2xs: var(--r-2xs);
   --radius-xs: var(--r-xs);

@@ -102,8 +102,14 @@ describe("uptime windows", () => {
         window_({ window: "30d", total: 0, up: 0, down: 0, uptime: null }),
       ],
     });
+    const windows = document.querySelector(".mon-detail-windows");
+    expect(windows, "the uptime windows list").toBeTruthy();
     expect(document.body.textContent).toContain("No uptime data");
-    expect(document.body.textContent).not.toContain("0%");
+    // Scoped to the windows list rather than the whole page. This assertion
+    // used to scan document.body, which meant it also read the heartbeat
+    // panel — and the moment that panel gained a chrome reading of "100.00%",
+    // an unrelated correct number tripped a test about a different panel.
+    expect(windows?.textContent).not.toContain("0%");
     expect(document.body.textContent).toContain("no checks");
   });
 

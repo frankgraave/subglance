@@ -64,7 +64,10 @@ describe("Led state mapping", () => {
 
 // Resolved from the vitest root (web/) rather than `import.meta.url`: under
 // the jsdom environment that URL is not a file: URL and cannot be converted.
-const ledCss = readFileSync(join(process.cwd(), "src/monitors/led.css"), "utf8");
+const ledCss = readFileSync(
+  join(process.cwd(), "src/monitors/led.css"),
+  "utf8",
+);
 
 /** The body of one `.led[data-state="…"]` rule. */
 function rule(state: string, pseudo = ""): string {

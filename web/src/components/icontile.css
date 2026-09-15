@@ -1,14 +1,20 @@
 /*
  * The icon tile (DESIGN.md §8).
  *
- * A 32x32 filled square holding one glyph, anchoring the left of a card
- * header. It carries no border on purpose: the tile is already a plane, and an
- * edge drawn around a plane adds a second line that separates nothing — the
- * fill has done the separating. The card's own edge sits a few pixels away,
- * and two parallel rules that close to each other read as a seam.
+ * A 24x24 square holding one glyph, anchoring the left of a card header.
  *
- * Size comes from the space scale rather than a literal 32px: the tile is one
- * step of the rhythm the header is built on, not an independent measurement.
+ * It was 32x32 and borderless, on the reasoning that the tile is already a
+ * plane and an edge around a plane separates nothing. Measured against the
+ * reference style, both halves of that are wrong in the same way: the tile
+ * there is 24px with a 1px border and a fill lighter than its surroundings,
+ * and it works because the tile is not a plane at all — it is a miniature of
+ * the card it sits in. Same border, same radius family, one size down. That is
+ * why it reads as part of the header rather than as a decoration dropped into
+ * it, and why 32px felt heavy: at that size it competes with the title instead
+ * of anchoring it.
+ *
+ * The glyph is half the tile (12px in 24px), which is what keeps the border
+ * from crowding it.
  */
 
 .icon-tile {
@@ -18,10 +24,11 @@
   /* Never squeezed by a long title beside it: the tile is the anchor, so it
      keeps its square while the text takes the slack. */
   flex: none;
-  width: var(--space-8);
-  height: var(--space-8);
+  width: var(--space-6);
+  height: var(--space-6);
+  border: 1px solid var(--border-control);
   border-radius: var(--r-sm);
-  background: var(--surface-hi);
+  background: var(--surface-2);
   color: var(--ink-2);
 }
 
@@ -48,9 +55,9 @@
   color: var(--down);
 }
 
-/* The glyph sizes itself to the tile rather than to whatever the icon file
-   declares, so a mixed set of icons still lands on one optical size. */
+/* The glyph is half the tile, so a mixed set of icons still lands on one
+   optical size and the border never crowds it. */
 .icon-tile > svg {
-  width: var(--space-4);
-  height: var(--space-4);
+  width: var(--space-3);
+  height: var(--space-3);
 }

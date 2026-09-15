@@ -51,7 +51,12 @@ function fakeServer() {
       if (url.endsWith("/api/v1/auth/me")) {
         return Promise.resolve(
           signedIn
-            ? json({ id: 1, email: "you@example.com", role: "admin", created_at: "" })
+            ? json({
+                id: 1,
+                email: "you@example.com",
+                role: "admin",
+                created_at: "",
+              })
             : json({ error: "authentication required" }, 401),
         );
       }
@@ -59,19 +64,33 @@ function fakeServer() {
         return Promise.resolve(json({ setup_required: !setUp }));
       }
       if (url.endsWith("/api/v1/setup") && method === "POST") {
-        if (setUp) return Promise.resolve(json({ error: "setup has already been completed" }, 409));
+        if (setUp)
+          return Promise.resolve(
+            json({ error: "setup has already been completed" }, 409),
+          );
         setUp = true;
         signedIn = true;
-        return Promise.resolve(json({ id: 1, email: "you@example.com", role: "admin", created_at: "" }, 201));
+        return Promise.resolve(
+          json(
+            { id: 1, email: "you@example.com", role: "admin", created_at: "" },
+            201,
+          ),
+        );
       }
       if (url.includes("/api/v1/monitors") && method === "POST") {
-        if (!signedIn) return Promise.resolve(json({ error: "authentication required" }, 401));
+        if (!signedIn)
+          return Promise.resolve(
+            json({ error: "authentication required" }, 401),
+          );
         const body = JSON.parse(String(init?.body)) as { name: string };
         monitors.push({ id: monitors.length + 1, name: body.name });
         return Promise.resolve(json({ id: monitors.length }, 201));
       }
       if (url.includes("/api/v1/monitors")) {
-        if (!signedIn) return Promise.resolve(json({ error: "authentication required" }, 401));
+        if (!signedIn)
+          return Promise.resolve(
+            json({ error: "authentication required" }, 401),
+          );
         return Promise.resolve(json({ monitors }));
       }
       throw new Error(`unexpected request: ${method} ${url}`);
@@ -84,7 +103,9 @@ function FirstRun() {
   const { session, onSignedIn, refresh } = useSession();
   return (
     <SessionGate session={session} onSignedIn={onSignedIn} onRetry={refresh}>
-      <p>Dashboard for {session.state === "signedIn" ? session.user.email : ""}</p>
+      <p>
+        Dashboard for {session.state === "signedIn" ? session.user.email : ""}
+      </p>
     </SessionGate>
   );
 }
@@ -109,7 +130,9 @@ describe("the first minute after docker compose up", () => {
     fireEvent.click(screen.getByRole("button", { name: /Create account/ }));
 
     // 3. That account is signed in already — no second login step.
-    expect(await screen.findByText(/Dashboard for you@example.com/)).toBeTruthy();
+    expect(
+      await screen.findByText(/Dashboard for you@example.com/),
+    ).toBeTruthy();
 
     // 4. And the session it left behind authenticates a real API call, which
     //    is the part that was broken: the dashboard's own first request.
@@ -117,7 +140,9 @@ describe("the first minute after docker compose up", () => {
     expect(res.status).toBe(200);
 
     // 5. The setup endpoint is closed for good.
-    await expect(createFirstUser("someone@example.com", "another-passphrase")).rejects.toThrow();
+    await expect(
+      createFirstUser("someone@example.com", "another-passphrase"),
+    ).rejects.toThrow();
     expect(await fetchCurrentUser()).not.toBeNull();
   });
 });

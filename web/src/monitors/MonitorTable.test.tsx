@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { MonitorTable } from "./MonitorTable";
@@ -29,6 +32,12 @@ const monitor = (
   lastCheck: 1_700_000_000_000,
   ...over,
 });
+
+/** monitors.css on disk. Some of this component's contract lives in CSS. */
+const monitorsCss = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "monitors.css"),
+  "utf8",
+);
 
 /**
  * The monitor table, found by the accessible name its <caption> gives it.
@@ -307,5 +316,92 @@ describe("MonitorTable grouped by a tag", () => {
   it("falls back to the flat attention/all split without a key", () => {
     render(<MonitorTable monitors={tagged()} beatWidth={WIDTH} />);
     expect(headings()).toEqual(["Needs attention (1)", "All monitors (3)"]);
+  });
+});
+
+describe("the panel look does not cost the table its semantics", () => {
+  // §10 draws each row as its own panel. The tempting way to get that look is
+  // to stop using a table, or to put display:flex on its parts — both throw
+  // away row and column announcements, and Safari drops table semantics
+  // entirely on the second. The point of these assertions is that the visual
+  // convention and the accessibility tree are not in competition: the panels
+  // are drawn with border-spacing and per-cell corners, on a real table.
+  it("keeps a caption, column headers and a row header per monitor", () => {
+    render(
+      <MonitorTable
+        monitors={[monitor("api", "up"), monitor("db", "down")]}
+        beatWidth={WIDTH}
+      />,
+    );
+
+    const table = monTable();
+    expect(table.querySelector("caption")).not.toBeNull();
+    expect(table.querySelectorAll("th[scope='col']").length).toBeGreaterThan(0);
+    expect(
+      within(table).getAllByRole("rowheader").length,
+      "every monitor row needs its own row header",
+    ).toBe(2);
+  });
+
+  it("leaves the table parts as table elements", () => {
+    // A layout display value on a table part is the specific edit that breaks
+    // Safari. Read from the stylesheet rather than from computed style:
+    // jsdom applies no CSS, so a computed check here would pass no matter what
+    // monitors.css says — it would be a test that cannot fail.
+    const css = monitorsCss;
+    const offenders: string[] = [];
+    for (const match of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+      const selector = match[1].trim();
+      if (!/\.mon-(row|table)\b/.test(selector)) continue;
+      const display = /(?:^|[;{\s])display:\s*([a-z-]+)/.exec(match[2]);
+      if (!display) continue;
+      if (/^(flex|grid|contents|block|inline)/.test(display[1])) {
+        offenders.push(`${selector} sets display:${display[1]}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("draws the rows as separated panels, not a collapsed grid", () => {
+    // border-collapse:collapse merges the edges into shared hairlines, which
+    // is the ruled-table look §10 removes. This is the one declaration that
+    // silently undoes the whole panel treatment.
+    const table = /\.mon-table\s*\{([^}]*)\}/.exec(monitorsCss);
+    expect(table, "missing the .mon-table rule").not.toBeNull();
+    expect(table?.[1]).toMatch(/border-collapse:\s*separate/);
+    expect(table?.[1]).toMatch(/border-spacing:/);
+  });
+
+  it("frames the panels in a card that is padding, not a second panel", () => {
+    // The nesting is what makes a list read as one object: an outer card with
+    // a wider radius, its own quieter fill, and — the part that does the work —
+    // padding, so the panels sit inset from its border rather than flush
+    // against it. A frame without padding is two edges at the same level, and
+    // that is the double-framing an earlier pass rightly removed.
+    const board = /\.mon-board\s*\{([^}]*)\}/.exec(monitorsCss);
+    expect(board, "missing the .mon-board rule").not.toBeNull();
+    const body = board?.[1] ?? "";
+
+    expect(body, "the card needs its own edge").toMatch(/border:\s*1px/);
+    expect(body, "the card needs the wider radius").toMatch(
+      /border-radius:\s*var\(--r-lg\)/,
+    );
+    expect(
+      body,
+      "without padding the frame sits flush on the panels and reads as a second edge",
+    ).toMatch(/padding:\s*var\(--space-1h\)/);
+    expect(
+      body,
+      "a transparent card cannot be the surface the panels rest on",
+    ).toMatch(/background:\s*var\(--surface\)/);
+
+    // And the panels inside must keep the tighter radius, or the nesting
+    // inverts and the card stops reading as the thing underneath.
+    const firstCell = /\.mon-row\s*>\s*:first-child\s*\{([^}]*)\}/.exec(
+      monitorsCss,
+    );
+    expect(firstCell?.[1]).toMatch(
+      /border-start-start-radius:\s*var\(--r-md\)/,
+    );
   });
 });

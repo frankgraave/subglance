@@ -46,7 +46,11 @@
   color: var(--ink);
   font-size: var(--type-body);
   line-height: var(--lead-body);
-  transition: background-color var(--dur-hover) var(--ease);
+  transition: background-color var(--dur-hover) var(--ease),
+    border-color var(--dur-hover) var(--ease);
 }
 
-.crash-button:hover { background-color: var(--surface-hi); }
+.crash-button:hover {
+  background-color: var(--surface-hi);
+  border-color: var(--border-hi);
+}

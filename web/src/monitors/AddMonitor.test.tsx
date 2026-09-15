@@ -201,15 +201,13 @@ describe("AddMonitor", () => {
   it("previews without saving, then saves what the preview resolved", async () => {
     // A TCP target on purpose: `http` is also the fallback when no preview
     // has run, so an http fixture would pass even if the echo were ignored.
-    const preview = vi
-      .fn()
-      .mockResolvedValue(
-        result({
-          type: "tcp",
-          target: "db.example.com:5432",
-          status_code: undefined,
-        }),
-      );
+    const preview = vi.fn().mockResolvedValue(
+      result({
+        type: "tcp",
+        target: "db.example.com:5432",
+        status_code: undefined,
+      }),
+    );
     const create = vi.fn().mockResolvedValue({ id: "7" });
     const onCreated = vi.fn();
 

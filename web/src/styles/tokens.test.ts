@@ -166,28 +166,46 @@ describe("tokens.css matches docs/DESIGN.md", () => {
   // §2.1 and §2.2 are fenced CSS blocks; §2.3 is a markdown table. Reading the
   // document rather than restating its values here is the whole point: a test
   // with the numbers copied into it drifts alongside the code it guards.
-  function designHexes(section: string): Map<string, string> {
+  //
+  // Colours are no longer all hex: dark surfaces are white at low alpha and
+  // the neutral scale is written in oklch, because both say something the hex
+  // could not — an alpha surface inherits what is under it, and `0` chroma
+  // states that a grey is deliberately neutral rather than incidentally so.
+  // The parser therefore takes any value up to the semicolon.
+  function designColours(section: string): Map<string, string> {
     const start = designMd.indexOf(section);
     expect(start, `missing section ${section}`).toBeGreaterThan(-1);
     const next = designMd.indexOf("\n### ", start + section.length);
     const body = designMd.slice(start, next === -1 ? undefined : next);
     const found = new Map<string, string>();
-    for (const match of body.matchAll(/(--[a-z0-9-]+):\s*(#[0-9a-f]{3,8})/gi)) {
-      found.set(match[1], match[2].toLowerCase());
+    for (const match of body.matchAll(
+      /(--[a-z0-9-]+):\s*(#[0-9a-f]{3,8}|oklch\([^)]*\)|rgba?\([^)]*\))/gi,
+    )) {
+      found.set(match[1], match[2].toLowerCase().replace(/\s+/g, " "));
     }
     return found;
   }
 
+  /** Normalises a declaration so `rgba(255,255,255,.03)` matches the doc. */
+  function sameColour(a: string | undefined, b: string): boolean {
+    if (a === undefined) return false;
+    const norm = (s: string) => s.toLowerCase().replace(/\s+/g, "");
+    return norm(a) === norm(b);
+  }
+
   it("uses the dark palette from §2.1", () => {
-    const expected = designHexes("### 2.1 Colour — dark");
+    const expected = designColours("### 2.1 Colour — dark");
     expect(expected.size).toBeGreaterThan(5);
-    for (const [name, hex] of expected) {
-      expect(darkTokens.get(name), `dark ${name}`).toBe(hex);
+    for (const [name, value] of expected) {
+      expect(
+        sameColour(darkTokens.get(name), value),
+        `dark ${name}: tokens.css has ${darkTokens.get(name)}, §2.1 says ${value}`,
+      ).toBe(true);
     }
   });
 
   it("uses the light palette from §2.2", () => {
-    const expected = designHexes("### 2.2 Colour — light");
+    const expected = designColours("### 2.2 Colour — light");
     expect(expected.size).toBeGreaterThan(5);
     for (const [name, hex] of expected) {
       expect(lightTokens.get(name), `light ${name}`).toBe(hex);
@@ -254,9 +272,7 @@ describe("tokens.css matches docs/DESIGN.md", () => {
     );
     for (const [name, value] of root) {
       if (!/^--(?:type|lead)-/.test(name)) continue;
-      expect(value, `${name} must be a whole number of px`).toMatch(
-        /^\d+px$/,
-      );
+      expect(value, `${name} must be a whole number of px`).toMatch(/^\d+px$/);
     }
   });
 
@@ -271,8 +287,10 @@ describe("tokens.css matches docs/DESIGN.md", () => {
       // a guard that depends on another guard's coverage is one edit from
       // being silently useless.
       const px = value.match(/^(\d+)px$/);
-      expect(px, `${name} is ${value}, which is not a whole-pixel length`)
-        .not.toBeNull();
+      expect(
+        px,
+        `${name} is ${value}, which is not a whole-pixel length`,
+      ).not.toBeNull();
       expect(
         Number(px![1]) % 4,
         `${name} is ${value}, which is off the 4px grid`,
@@ -331,47 +349,63 @@ describe("tokens.css matches docs/DESIGN.md", () => {
     // measured zero and a missing reading render identically, which is a
     // statement the screen has to be able to make differently.
     //
-    // Compared as luminance rather than as a hex string, because the two
-    // themes move in opposite directions: dark text gets lighter as it
-    // recedes, light text gets darker.
-    const channel = (c: number) =>
-      c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-    const luminance = (hex: string) => {
-      const h = hex.replace("#", "");
-      const [r, g, b] = [0, 2, 4].map((i) =>
-        channel(Number.parseInt(h.slice(i, i + 2), 16) / 255),
-      );
-      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-    };
-    const contrast = (a: string, b: string) => {
-      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-      return (hi + 0.05) / (lo + 0.05);
+    // Compared on oklch lightness rather than on a computed contrast ratio:
+    // the scale is achromatic, so lightness *is* the ordering, and it reads
+    // the same way in both themes without a colour-space conversion that
+    // would itself need testing.
+    // Reads either notation: the dark scale is oklch (chroma 0 states that the
+    // grey is deliberately neutral), the light scale is still hex. Within one
+    // theme the three tones share a notation, so the comparison stays
+    // like-for-like; a tone that parses as neither fails loudly rather than
+    // skipping, because a guard that quietly excuses itself is worse than none.
+    const tone = (value: string, label: string): number => {
+      const ok = /oklch\(\s*(\.\d+|\d*\.?\d+%?)/.exec(value);
+      if (ok) {
+        const raw = ok[1];
+        return raw.endsWith("%")
+          ? Number.parseFloat(raw) / 100
+          : Number.parseFloat(raw);
+      }
+      const hex = /^#([0-9a-f]{6})$/i.exec(value.trim());
+      if (hex) {
+        const channel = (c: number) =>
+          c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+        const [r, g, b] = [0, 2, 4].map((i) =>
+          channel(Number.parseInt(hex[1].slice(i, i + 2), 16) / 255),
+        );
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      }
+      throw new Error(`cannot read a lightness from ${label}: ${value}`);
     };
 
     for (const [theme, tokens] of [
       ["dark", darkTokens],
       ["light", lightTokens],
     ] as const) {
-      const surface = tokens.get("--surface");
-      const zero = tokens.get("--ink-zero");
-      const second = tokens.get("--ink-2");
-      const third = tokens.get("--ink-3");
-      expect(surface && zero && second && third, `${theme} is missing a tone`).
-        toBeTruthy();
+      const get = (name: string) => {
+        const v = tokens.get(name);
+        expect(v, `${theme} is missing ${name}`).toBeTruthy();
+        return tone(v as string, `${theme} ${name}`);
+      };
+      const zero = get("--ink-zero");
+      const second = get("--ink-2");
+      const third = get("--ink-3");
 
-      const onSurface = (tone: string) => contrast(tone, surface as string);
+      // Dark text gets lighter as it recedes; light text gets darker. Compare
+      // in the direction that theme recedes, not on raw lightness.
+      const quieterThan =
+        theme === "dark"
+          ? (a: number, b: number) => a < b
+          : (a: number, b: number) => a > b;
 
-      // Quieter than a real reading…
       expect(
-        onSurface(zero as string),
-        `${theme}: --ink-zero should sit below --ink-2`,
-      ).toBeLessThan(onSurface(second as string));
-
-      // …but still clearly louder than the tone that means "no data".
+        quieterThan(zero, second),
+        `${theme}: --ink-zero should be quieter than --ink-2`,
+      ).toBe(true);
       expect(
-        onSurface(zero as string),
-        `${theme}: --ink-zero should stay above --ink-3`,
-      ).toBeGreaterThan(onSurface(third as string));
+        quieterThan(third, zero),
+        `${theme}: --ink-zero should stay louder than --ink-3`,
+      ).toBe(true);
     }
   });
 
@@ -541,7 +575,9 @@ describe("tokens.css is the only source of line height", () => {
     // The size-only check, including the rule nested inside the media query.
     expect(
       blocks
-        .filter((b) => /font-size:/.test(b.body) && !/line-height:/.test(b.body))
+        .filter(
+          (b) => /font-size:/.test(b.body) && !/line-height:/.test(b.body),
+        )
         .map((b) => b.selector.replace(/^.*\{\s*/, "")),
     ).toEqual([".size-only", ".nested-size-only"]);
 
@@ -576,12 +612,49 @@ describe("tokens.css matches the §2.5 weight and tracking scales", () => {
         /\|\s*`(--(?:weight|track)-[a-z]+)`\s*\|\s*`([^`]+)`\s*\|/g,
       ),
     ];
-    expect(rows.length, "expected four weights and three tracking roles").toBe(
-      7,
-    );
+    expect(rows.length, "expected four weights and one tracking role").toBe(5);
     for (const [, name, value] of rows) {
       expect(root.get(name), name).toBe(value);
     }
+  });
+
+  it("keeps tracking to a single inherited value, with no per-face exception", () => {
+    // This is the rule that keeps re-breaking itself, because every exception
+    // has a plausible argument behind it: uppercase wants opening up, mono is
+    // already on a fixed advance, a badge is small. Measured, none of them
+    // hold — and the caps one cost +1.08px per letter pair against a body of
+    // -0.32px, which is what made section labels read as spaced-out small caps.
+    //
+    // So: no `--track-*` token other than the body value may exist, and no
+    // stylesheet may set letter-spacing to anything else.
+    const root = declarations(
+      tokensCss.slice(tokensCss.indexOf(":root"), tokensCss.indexOf("\n}")),
+    );
+    const trackTokens = [...root.keys()].filter((k) =>
+      k.startsWith("--track-"),
+    );
+    expect(
+      trackTokens,
+      "a second tracking token is a per-face exception wearing a token's clothes",
+    ).toEqual(["--track-body"]);
+
+    // And nothing may hand-roll one. Every stylesheet the app ships is walked,
+    // not just tokens.css, because the exceptions historically lived in
+    // component sheets where nobody was looking.
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (!file.endsWith(".css")) continue;
+      const css = stripComments(readFileSync(file, "utf8"));
+      for (const match of css.matchAll(/letter-spacing:\s*([^;}]+)/g)) {
+        const value = match[1].trim();
+        if (value === "var(--track-body)" || value === "inherit") continue;
+        offenders.push(`${relative(repoRoot, file)}: letter-spacing: ${value}`);
+      }
+    }
+    expect(
+      offenders,
+      "tracking is set once on body and inherited; see §2.5",
+    ).toEqual([]);
   });
 
   it("binds every weight and tracking token to a Tailwind utility", () => {
@@ -593,7 +666,7 @@ describe("tokens.css matches the §2.5 weight and tracking scales", () => {
         `--font-weight-${step}: var(--weight-${step});`,
       );
     }
-    for (const role of ["body", "badge", "caps"]) {
+    for (const role of ["body"]) {
       expect(inline, `--tracking-${role}`).toContain(
         `--tracking-${role}: var(--track-${role});`,
       );
@@ -607,28 +680,17 @@ describe("tracking is decided once, on the body", () => {
   it("sets the body tracking in the base layer", () => {
     // The point of SUB-76: a component that forgets to ask for tracking still
     // gets it. If this declaration goes, 67 of 79 text elements silently fall
-    // back to `normal` again and nothing on screen says so.
+    // back to `normal` and nothing on screen says so.
+    //
+    // Worth recording because it is easy to get wrong in the other direction:
+    // an em letter-spacing does NOT re-resolve against each child's font-size.
+    // It is computed once on body (16px x -.02em = -0.32px) and that absolute
+    // value is what descendants inherit, so a 12px label carries -0.32px and
+    // not -0.24px. Measured in a browser; jsdom cannot answer this.
     const body = indexCss.slice(indexCss.indexOf("  body {"));
     expect(body.slice(0, body.indexOf("\n  }"))).toContain(
       "letter-spacing: var(--track-body);",
     );
-  });
-
-  it("keeps only the exceptions the body value is wrong for", () => {
-    // Two faces the inherited value does not suit: the mono badge, which is
-    // already wide, and uppercase, which needs the opposite sign. Any third
-    // token is a per-component tweak wearing a token's name.
-    const root = declarations(
-      tokensCss.slice(0, tokensCss.indexOf("[data-theme=")),
-    );
-    const tracks = [...root.keys()].filter((name) =>
-      name.startsWith("--track-"),
-    );
-    expect(tracks.sort()).toEqual([
-      "--track-badge",
-      "--track-body",
-      "--track-caps",
-    ]);
   });
 });
 
@@ -758,7 +820,11 @@ describe("tokens.css is the only source of spacing and radius", () => {
       if (!file.endsWith(".css")) continue;
       const path = relative(repoRoot, file);
       for (const declaration of spacingDeclarations(
-        readFileSync(file, "utf8"),
+        // Comments are stripped first. Prose explaining *why* a value is six
+        // pixels is not a declaration, and reading it as one cuts both ways:
+        // it invents offenders out of sentences, and it would just as happily
+        // let a commented-out rule satisfy the allow-list check.
+        stripComments(readFileSync(file, "utf8")),
       )) {
         if (!driftsFromLadder(declaration)) continue;
         const key = `${path}: ${declaration}`;
@@ -789,7 +855,11 @@ describe("tokens.css is the only source of spacing and radius", () => {
       if (!file.endsWith(".css")) continue;
       const path = relative(repoRoot, file);
       for (const declaration of spacingDeclarations(
-        readFileSync(file, "utf8"),
+        // Comments are stripped first. Prose explaining *why* a value is six
+        // pixels is not a declaration, and reading it as one cuts both ways:
+        // it invents offenders out of sentences, and it would just as happily
+        // let a commented-out rule satisfy the allow-list check.
+        stripComments(readFileSync(file, "utf8")),
       )) {
         present.add(`${path}: ${declaration}`);
       }
@@ -851,7 +921,8 @@ const CONTROL_SELECTOR =
   /(button|btn|input|select|segment|switch|toggle|tab|submit|link|nav-item|checkbox|radio)/i;
 
 /** Names that describe a data mark: a status, a lamp, a bar, a reading. */
-const DATA_SELECTOR = /(led|heartbeat|hb-|bar|spark|chart|status|wall-card|tile)/i;
+const DATA_SELECTOR =
+  /(led|heartbeat|hb-|bar|spark|chart|status|wall-card|tile)/i;
 
 /**
  * The class, id and element names in one compound selector. Pseudo-classes,
@@ -880,7 +951,10 @@ function subjectRoles(
   return selector
     .split(",")
     .map((item) => {
-      const parts = item.trim().split(/[\s>+~]+/).filter(Boolean);
+      const parts = item
+        .trim()
+        .split(/[\s>+~]+/)
+        .filter(Boolean);
       const subject = parts[parts.length - 1] ?? "";
       const names = selectorNames(subject);
       return {
@@ -1158,25 +1232,25 @@ function site(declaration: BorderDeclaration): string {
 const statusBorders = new Set<string>([
   "web/src/live/connection.css | .conn-badge | border: 1px solid var(--warn)",
   "web/src/live/connection.css | .conn-badge-retry | border: 1px solid var(--warn)",
-  "web/src/monitors/monitors.css | .mon-row[data-status=\"down\"] | border-left: 2px solid var(--down)",
-  "web/src/monitors/monitors.css | .mon-row[data-status=\"pending\"] | border-left: 2px solid var(--warn)",
-  "web/src/monitors/monitors.css | .mon-row[data-status=\"paused\"] | border-left: 2px dotted var(--ink-3)",
-  "web/src/monitors/monitors.css | .mon-row[data-status=\"waiting\"] | border-left: 2px solid var(--idle)",
-  "web/src/monitors/monitors.css | .mon-card[data-status=\"down\"] | border-left: 2px solid var(--down)",
-  "web/src/monitors/monitors.css | .mon-card[data-status=\"pending\"] | border-left: 2px solid var(--warn)",
-  "web/src/monitors/monitors.css | .mon-card[data-status=\"paused\"] | border-left: 2px dotted var(--ink-3)",
-  "web/src/monitors/monitors.css | .mon-card[data-status=\"waiting\"] | border-left: 2px solid var(--idle)",
-  "web/src/monitors/monitors.css | .mon-line[data-status=\"down\"] | border-left: 2px solid var(--down)",
-  "web/src/monitors/monitors.css | .mon-line[data-status=\"pending\"] | border-left: 2px solid var(--warn)",
-  "web/src/monitors/monitors.css | .mon-line[data-status=\"paused\"] | border-left: 2px dotted var(--ink-3)",
-  "web/src/monitors/monitors.css | .mon-line[data-status=\"waiting\"] | border-left: 2px solid var(--idle)",
+  'web/src/monitors/monitors.css | .mon-row[data-status="down"] | border-left: 2px solid var(--down)',
+  'web/src/monitors/monitors.css | .mon-row[data-status="pending"] | border-left: 2px solid var(--warn)',
+  'web/src/monitors/monitors.css | .mon-row[data-status="paused"] | border-left: 2px dotted var(--ink-3)',
+  'web/src/monitors/monitors.css | .mon-row[data-status="waiting"] | border-left: 2px solid var(--idle)',
+  'web/src/monitors/monitors.css | .mon-card[data-status="down"] | border-left: 2px solid var(--down)',
+  'web/src/monitors/monitors.css | .mon-card[data-status="pending"] | border-left: 2px solid var(--warn)',
+  'web/src/monitors/monitors.css | .mon-card[data-status="paused"] | border-left: 2px dotted var(--ink-3)',
+  'web/src/monitors/monitors.css | .mon-card[data-status="waiting"] | border-left: 2px solid var(--idle)',
+  'web/src/monitors/monitors.css | .mon-line[data-status="down"] | border-left: 2px solid var(--down)',
+  'web/src/monitors/monitors.css | .mon-line[data-status="pending"] | border-left: 2px solid var(--warn)',
+  'web/src/monitors/monitors.css | .mon-line[data-status="paused"] | border-left: 2px dotted var(--ink-3)',
+  'web/src/monitors/monitors.css | .mon-line[data-status="waiting"] | border-left: 2px solid var(--idle)',
   "web/src/monitors/monitors.css | .push-reveal-warn | border-left: 2px solid var(--warn)",
-  "web/src/monitors/monitors.css | .add-input[aria-invalid=\"true\"] | border-color: var(--down)",
-  "web/src/monitors/monitors.css | .add-input[aria-invalid=\"true\"]:focus | border-color: var(--down)",
-  "web/src/auth/auth.css | .auth-input[aria-invalid=\"true\"] | border-color: var(--down)",
-  "web/src/auth/auth.css | .auth-input[aria-invalid=\"true\"]:focus | border-color: var(--down)",
-  "web/src/wall/wall.css | .wall-card[data-status=\"down\"] | border-color: color-mix(in srgb, var(--down) 40%, var(--border))",
-  "web/src/wall/wall.css | .wall-card[data-status=\"pending\"] | border-color: color-mix(in srgb, var(--warn) 34%, var(--border))",
+  'web/src/monitors/monitors.css | .add-input[aria-invalid="true"] | border-color: var(--down)',
+  'web/src/monitors/monitors.css | .add-input[aria-invalid="true"]:focus | border-color: var(--down)',
+  'web/src/auth/auth.css | .auth-input[aria-invalid="true"] | border-color: var(--down)',
+  'web/src/auth/auth.css | .auth-input[aria-invalid="true"]:focus | border-color: var(--down)',
+  'web/src/wall/wall.css | .wall-card[data-status="down"] | border-color: color-mix(in srgb, var(--down) 40%, var(--border))',
+  'web/src/wall/wall.css | .wall-card[data-status="pending"] | border-color: color-mix(in srgb, var(--warn) 34%, var(--border))',
 ]);
 
 describe("depth comes from the ladder in §2.10", () => {
@@ -1269,8 +1343,17 @@ describe("an interactive element does not rest on the static border", () => {
       for (const block of declarationBlocks(readFileSync(file, "utf8"))) {
         if (!paintsControl(block.selector)) continue;
         // A state rule describes the change, not the resting edge.
-        if (/:(hover|focus|active|disabled|checked)|\[aria-invalid/.test(block.selector)) continue;
-        if (/border(?:-[a-z]+)?(?:-color)?\s*:[^;]*var\(--border\)/.test(block.body)) {
+        if (
+          /:(hover|focus|active|disabled|checked)|\[aria-invalid/.test(
+            block.selector,
+          )
+        )
+          continue;
+        if (
+          /border(?:-[a-z]+)?(?:-color)?\s*:[^;]*var\(--border\)/.test(
+            block.body,
+          )
+        ) {
           offenders.push(`${relative(repoRoot, file)}: ${block.selector}`);
         }
       }
@@ -1290,7 +1373,9 @@ describe("an interactive element does not rest on the static border", () => {
           (b) =>
             paintsControl(b.selector) &&
             !/:(hover|focus|active|disabled|checked)/.test(b.selector) &&
-            /border(?:-[a-z]+)?(?:-color)?\s*:[^;]*var\(--border\)/.test(b.body),
+            /border(?:-[a-z]+)?(?:-color)?\s*:[^;]*var\(--border\)/.test(
+              b.body,
+            ),
         )
         .map((b) => b.selector),
     ).toEqual([".a-button"]);
@@ -1335,7 +1420,11 @@ describe("the caps legend is applied as a role", () => {
     expect(body, "leading").toContain("line-height: var(--lead-section);");
     expect(body, "weight").toContain("font-weight: var(--weight-plain);");
     expect(body, "casing").toContain("text-transform: uppercase;");
-    expect(body, "tracking").toContain("letter-spacing: var(--track-caps);");
+    // Tracking is deliberately absent: the role inherits the body value like
+    // every other face. Asserting its absence rather than saying nothing,
+    // because re-adding a positive caps tracking is the exact edit that made
+    // these labels read as spaced-out small caps.
+    expect(body, "tracking").not.toContain("letter-spacing:");
   });
 
   it("gives the legend a tone that clears AA rather than a faded one", () => {
@@ -1458,8 +1547,9 @@ describe("a face is applied as a role, not as a family name", () => {
           /(?:font-variant-numeric|font-variant-ligatures|text-rendering)\s*:\s*[^;]+|\b(?:tabular-nums|slashed-zero|normal-nums|ordinal|oldstyle-nums)\b/g,
         ),
       ].map((m) => m[0].trim());
-    expect(offenders("/* tabular-nums belongs to the face. */\n.a { color: red; }"))
-      .toEqual([]);
+    expect(
+      offenders("/* tabular-nums belongs to the face. */\n.a { color: red; }"),
+    ).toEqual([]);
     expect(offenders(".a { font-variant-numeric: tabular-nums; }")).toEqual([
       "font-variant-numeric: tabular-nums",
     ]);
@@ -1812,9 +1902,9 @@ function carriesText(body: string): boolean {
 
 /** The value of one property in a declaration block, comments stripped. */
 function valueOf(body: string, property: string): string | undefined {
-  const match = new RegExp(
-    `(?:^|[;{\\s])${property}\\s*:\\s*([^;{}]+)`,
-  ).exec(stripComments(body));
+  const match = new RegExp(`(?:^|[;{\\s])${property}\\s*:\\s*([^;{}]+)`).exec(
+    stripComments(body),
+  );
   return match?.[1].trim();
 }
 
@@ -1915,9 +2005,14 @@ describe("a dashed edge means the chip is about the data (§8.1)", () => {
     for (const { path, selector, body } of cssRules()) {
       if (!/\bchip\b|chip--|chip-avatar/.test(selector)) continue;
       const clean = stripComments(body);
-      if (!/border(?:-[a-z]+)?(?:-style)?:[^;]*\bdashed\b/.test(clean)) continue;
+      if (!/border(?:-[a-z]+)?(?:-style)?:[^;]*\bdashed\b/.test(clean))
+        continue;
       const background = valueOf(body, "background");
-      if (!background || background === "none" || background === "transparent") {
+      if (
+        !background ||
+        background === "none" ||
+        background === "transparent"
+      ) {
         continue;
       }
       offenders.push(`${path} | ${selector} | background: ${background}`);
@@ -1930,7 +2025,11 @@ describe("a dashed edge means the chip is about the data (§8.1)", () => {
     // Losing the dash is a one-character edit that no reviewer would query.
     const dashed = new Set<string>();
     for (const { selector, body } of cssRules()) {
-      if (!/border(?:-[a-z]+)?(?:-style)?:[^;]*\bdashed\b/.test(stripComments(body))) {
+      if (
+        !/border(?:-[a-z]+)?(?:-style)?:[^;]*\bdashed\b/.test(
+          stripComments(body),
+        )
+      ) {
         continue;
       }
       dashed.add(selector);
@@ -2012,10 +2111,265 @@ describe("a dashed edge means the chip is about the data (§8.1)", () => {
         );
 
         if (carriesNeutral && !carriesAccent) {
-          offenders.push(`${path} | ${selector} | ${property}: ${value.trim()}`);
+          offenders.push(
+            `${path} | ${selector} | ${property}: ${value.trim()}`,
+          );
         }
       }
     }
     expect(offenders).toEqual([]);
+  });
+});
+
+describe("hover does not overwrite a status tint with a neutral one", () => {
+  // The failure this exists to stop is quiet and specific: a row is red
+  // because the monitor is down, the shared hover rule paints --surface-2 over
+  // it, and for as long as the pointer rests there the broken monitor looks
+  // ordinary. It is invisible in a screenshot and invisible in jsdom, because
+  // it only exists while something is hovered.
+  //
+  // The rule: any selector that sets a resting status fill must either leave
+  // hover alone or answer it with a status tone. What it may not do is let a
+  // neutral surface win by specificity.
+
+  /** Selectors with a resting fill from the status palette. */
+  const tinted = (): { path: string; selector: string; token: string }[] => {
+    const found: { path: string; selector: string; token: string }[] = [];
+    for (const { path, selector, body } of cssRules()) {
+      if (/:hover|:focus/.test(selector)) continue;
+      const clean = stripComments(body);
+      const fill =
+        /(?:^|[;{\s])background(?:-color)?:\s*var\((--(?:up|warn|down|idle)-dim)\)/.exec(
+          clean,
+        );
+      if (fill) found.push({ path, selector, token: fill[1] });
+    }
+    return found;
+  };
+
+  it("answers a tinted row's hover with a status tone, or not at all", () => {
+    const rules = cssRules();
+    const offenders: string[] = [];
+
+    for (const { path, selector, token } of tinted()) {
+      // What does this element look like under the pointer? Either its own
+      // :hover rule, or an inherited one from a base class it also carries.
+      const hoverRules = rules.filter(
+        (r) =>
+          /:hover/.test(r.selector) &&
+          // The tinted selector's own hover, e.g. `.mon-line[data-status=down]`
+          // -> `.mon-line[data-status=down]:hover`
+          r.selector.includes(selector.replace(/\s+/g, " ").trim()),
+      );
+
+      for (const hover of hoverRules) {
+        const clean = stripComments(hover.body);
+        const fill =
+          /(?:^|[;{\s])background(?:-color)?:\s*var\((--[a-z0-9-]+)\)/.exec(
+            clean,
+          );
+        if (!fill) continue;
+        const isStatus = /^--(?:up|warn|down|idle)-(?:dim|deep)$/.test(fill[1]);
+        if (!isStatus) {
+          offenders.push(
+            `${path} | ${hover.selector} paints ${fill[1]} over ${token}`,
+          );
+        }
+      }
+    }
+
+    expect(
+      offenders,
+      "a hovered status row must deepen its own tint, not take a neutral fill",
+    ).toEqual([]);
+  });
+
+  it("keeps a -deep tone for every status that has a resting fill", () => {
+    // The inverse: a status that grew a hover tint but no token to hold it
+    // would be spelling the colour inline. Down is currently the only status
+    // with a resting fill; if another gains one, this fails and asks for the
+    // matching token rather than letting the fill be hand-written.
+    const root = declarations(
+      tokensCss.slice(tokensCss.indexOf(":root"), tokensCss.indexOf("\n}")),
+    );
+    const restingFills = new Set(
+      tinted().map(({ token }) => token.replace(/-dim$/, "")),
+    );
+    for (const base of restingFills) {
+      // Only rows and cards deepen; a badge or a chip fills itself at rest and
+      // has no hover state, so the token is only required where a :hover rule
+      // actually reaches for it.
+      const used = cssRules().some(
+        (r) =>
+          /:hover/.test(r.selector) &&
+          stripComments(r.body).includes(`var(${base}-deep)`),
+      );
+      if (!used) continue;
+      expect(
+        root.has(`${base}-deep`) ||
+          declarations(themeBlock("dark")).has(`${base}-deep`),
+        `${base}-deep is used on hover but not defined`,
+      ).toBe(true);
+    }
+  });
+
+  it("defines --down-deep in both themes, moving away from the page", () => {
+    // Direction, not value: on dark a deepening tint gets lighter, on light it
+    // gets darker. A value copied from one theme to the other would make a
+    // hovered row fade in exactly one of them, which is the kind of thing that
+    // ships because nobody switches themes while hovering.
+    const dark = declarations(themeBlock("dark"));
+    const light = declarations(themeBlock("light"));
+    const deepDark = dark.get("--down-deep");
+    const dimDark = dark.get("--down-dim");
+    const deepLight = light.get("--down-deep");
+    const dimLight = light.get("--down-dim");
+    expect(deepDark, "dark --down-deep").toBeTruthy();
+    expect(deepLight, "light --down-deep").toBeTruthy();
+
+    const lum = (hex: string) => {
+      const h = hex.replace("#", "");
+      return [0, 2, 4]
+        .map((i) => Number.parseInt(h.slice(i, i + 2), 16))
+        .reduce((a, b) => a + b, 0);
+    };
+    expect(
+      lum(deepDark as string),
+      "on dark, deep must be lighter than dim",
+    ).toBeGreaterThan(lum(dimDark as string));
+    expect(
+      lum(deepLight as string),
+      "on light, deep must be darker than dim",
+    ).toBeLessThan(lum(dimLight as string));
+  });
+});
+
+describe("the card pattern is the only way to frame a group of panels", () => {
+  // The gap this closes is the one the coverage audit named: tokens were
+  // thoroughly guarded and *patterns* were not, so a new screen inherited the
+  // colour scale automatically and the nesting not at all. Every rule below is
+  // about shape rather than value.
+
+  /** Rules that frame something: a border plus the outer radius. */
+  const framingRules = () =>
+    cssRules().filter(({ body }) => {
+      const clean = stripComments(body);
+      return (
+        /border(?:-[a-z]+)?:\s*1px/.test(clean) &&
+        /border-radius:\s*var\(--r-lg\)/.test(clean)
+      );
+    });
+
+  it("gives every --r-lg frame the padding that makes it a surface", () => {
+    // A frame at the outer radius with no padding sits flush against whatever
+    // it contains, and two borders at the same offset read as one thick seam
+    // rather than as nesting. This is the declaration that looks most
+    // droppable and is the one carrying the pattern.
+    const offenders: string[] = [];
+    for (const { path, selector, body } of framingRules()) {
+      const clean = stripComments(body);
+      if (!/padding:/.test(clean)) {
+        offenders.push(`${path} | ${selector} | frames without padding`);
+      }
+    }
+    expect(
+      offenders,
+      "a card is padding with an edge; see DESIGN.md §2.7",
+    ).toEqual([]);
+  });
+
+  it("never nests a radius inside an equal or larger one", () => {
+    // Two boxes at one radius, one inside the other, read as a mistake: the
+    // corners run parallel at the wrong offset and the inner box looks like it
+    // has escaped. One step down per level is the whole grammar, and this
+    // caught a real inversion — .mon-card sat at --r-lg inside the --r-lg card
+    // that now frames it.
+    const LADDER: Record<string, number> = {
+      "--r-2xs": 2,
+      "--r-xs": 4,
+      "--r-sm": 6,
+      "--r-md": 8,
+      "--r-lg": 12,
+    };
+    // Selectors known to sit inside a card, with the radius they may not meet
+    // or exceed. Listed rather than inferred: a stylesheet does not say what
+    // contains what, and guessing from selector names would be a test that
+    // passes for the wrong reason.
+    const NESTED: [string, string][] = [
+      ["web/src/monitors/monitors.css", ".mon-card"],
+      ["web/src/components/panellist.css", ".panel-row"],
+    ];
+    const cardRadius = LADDER["--r-lg"];
+
+    for (const [path, selector] of NESTED) {
+      const rule = cssRules().find(
+        (r) => r.path === path && r.selector.trim() === selector,
+      );
+      expect(rule, `${selector} not found in ${path}`).toBeTruthy();
+      const token = /border-radius:\s*var\((--r-[a-z0-9]+)\)/.exec(
+        stripComments(rule?.body ?? ""),
+      )?.[1];
+      if (!token) continue;
+      expect(
+        LADDER[token],
+        `${selector} is ${token}; it sits inside a --r-lg card and must be tighter`,
+      ).toBeLessThan(cardRadius);
+    }
+  });
+
+  it("keeps one heading treatment for card titles across every screen", () => {
+    // Before the Card component there were three: .mon-cards-title,
+    // .mon-line-group-title and .mon-detail-panel-title, each applying
+    // caps-legend by hand. They agreed by luck. Any new per-screen title rule
+    // is the same divergence starting again.
+    //
+    // "Card title" means the heading on a card, not every element with
+    // "title" in its name. A label *inside* a panel — a column header, a
+    // legend, a row of units — is the mono-caps role doing exactly its job,
+    // and sweeping those up here would be a guard that punishes correct code
+    // until someone silences it.
+    const offenders: string[] = [];
+    for (const { path, selector, body } of cssRules()) {
+      if (path.includes("components/card.css")) continue;
+      if (!/-(?:title|heading)\b/.test(selector)) continue;
+      const clean = stripComments(body);
+      if (!/@apply[^;]*(?:caps-legend|face-sans|face-mono)/.test(clean)) {
+        continue;
+      }
+      offenders.push(`${path} | ${selector}`);
+    }
+
+    // Two genuine exceptions, listed rather than pattern-matched so each one
+    // has to be argued for in writing:
+    //
+    // `.mon-section-title` is a `<th scope="colgroup">` inside the monitor
+    // table — a column-group header, which is a label within a panel and not
+    // the panel's own title. It is the caps role used correctly.
+    //
+    // `.wall-title` is a full-screen display read from across a room. It has
+    // no card to inherit from and is not a document heading.
+    const allowed = new Set([
+      "web/src/monitors/monitors.css | .mon-section-title",
+      "web/src/wall/wall.css | .wall-title",
+    ]);
+    expect(
+      offenders.filter((o) => !allowed.has(o)),
+      "card titles come from the Card component; see DESIGN.md §2.7",
+    ).toEqual([]);
+  });
+
+  it("keeps every exception on that list real", () => {
+    // An allow-list entry whose selector no longer exists reads as a justified
+    // decision about live code and is not one — the same rot the spacing
+    // allow-list guards against.
+    const live = new Set(
+      cssRules().map(({ path, selector }) => `${path} | ${selector.trim()}`),
+    );
+    for (const entry of [
+      "web/src/monitors/monitors.css | .mon-section-title",
+      "web/src/wall/wall.css | .wall-title",
+    ]) {
+      expect(live.has(entry), `${entry} is allow-listed but gone`).toBe(true);
+    }
   });
 });

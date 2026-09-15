@@ -47,11 +47,19 @@ export type MonitorCardProps = {
   onOpen?: (id: string) => void;
 };
 
-function MonitorCardImpl({ monitor, beatWidth = CARD_BEAT_WIDTH, onOpen }: MonitorCardProps) {
+function MonitorCardImpl({
+  monitor,
+  beatWidth = CARD_BEAT_WIDTH,
+  onOpen,
+}: MonitorCardProps) {
   const { name, status, latencyMs, uptime24h, beats, error } = monitor;
 
   return (
-    <li className="mon-card" data-status={status} data-testid={`monitor-card-${monitor.id}`}>
+    <li
+      className="mon-card"
+      data-status={status}
+      data-testid={`monitor-card-${monitor.id}`}
+    >
       <div className="mon-card-head">
         {/* Labelled, and visibly so: the card has no column header to lend the
             lamp its meaning, and the status is the first thing being asked
@@ -92,11 +100,23 @@ function MonitorCardImpl({ monitor, beatWidth = CARD_BEAT_WIDTH, onOpen }: Monit
       <dl className="mon-card-facts">
         <div className="mon-card-fact">
           <dt>Latency</dt>
-          <dd>{latencyMs === null ? <Unknown what="latency" /> : formatLatency(latencyMs)}</dd>
+          <dd>
+            {latencyMs === null ? (
+              <Unknown what="latency" />
+            ) : (
+              formatLatency(latencyMs)
+            )}
+          </dd>
         </div>
         <div className="mon-card-fact">
           <dt>24h uptime</dt>
-          <dd>{uptime24h === null ? <Unknown what="uptime" /> : formatUptime(uptime24h)}</dd>
+          <dd>
+            {uptime24h === null ? (
+              <Unknown what="uptime" />
+            ) : (
+              formatUptime(uptime24h)
+            )}
+          </dd>
         </div>
       </dl>
     </li>

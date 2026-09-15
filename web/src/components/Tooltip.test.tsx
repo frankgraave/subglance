@@ -12,8 +12,20 @@ describe("Tooltip", () => {
         timestamp="12:00:00"
         unit="ms"
         rows={[
-          { key: "a", label: "Slowest", value: "120", marker: "up", status: "Up" },
-          { key: "b", label: "Median", value: "90", marker: "up", status: "Up" },
+          {
+            key: "a",
+            label: "Slowest",
+            value: "120",
+            marker: "up",
+            status: "Up",
+          },
+          {
+            key: "b",
+            label: "Median",
+            value: "90",
+            marker: "up",
+            status: "Up",
+          },
         ]}
       />,
     );
@@ -47,8 +59,20 @@ describe("Tooltip", () => {
       <Tooltip
         timestamp="12:00:00"
         rows={[
-          { key: "a", label: "Slowest", value: "1", marker: "up", status: "Up" },
-          { key: "b", label: "Failed", value: "2", marker: "down", status: "Down" },
+          {
+            key: "a",
+            label: "Slowest",
+            value: "1",
+            marker: "up",
+            status: "Up",
+          },
+          {
+            key: "b",
+            label: "Failed",
+            value: "2",
+            marker: "down",
+            status: "Down",
+          },
         ]}
       />,
     );
@@ -67,15 +91,29 @@ describe("Tooltip", () => {
       <Tooltip
         timestamp="12:00:00"
         rows={[
-          { key: "a", label: "Slowest", value: "1", marker: "up", status: "Up" },
-          { key: "b", label: "Failed", value: "2", marker: "down", status: "Down" },
+          {
+            key: "a",
+            label: "Slowest",
+            value: "1",
+            marker: "up",
+            status: "Up",
+          },
+          {
+            key: "b",
+            label: "Failed",
+            value: "2",
+            marker: "down",
+            status: "Down",
+          },
         ]}
       />,
     );
     // The marker is aria-hidden and differs from its neighbour only by hue, so
     // without these words the row states its status in colour alone — unusable
     // in greyscale, to a screen reader, and to a red-green colour-blind reader.
-    const statuses = [...document.querySelectorAll(".tooltip-row .tooltip-status")]
+    const statuses = [
+      ...document.querySelectorAll(".tooltip-row .tooltip-status"),
+    ]
       .map((el) => el.textContent)
       .filter(Boolean);
     expect(statuses).toEqual(["Up", "Down"]);
@@ -86,7 +124,13 @@ describe("Tooltip", () => {
       <Tooltip
         timestamp="12:00:00"
         rows={[
-          { key: "a", label: "Slowest", value: "120 ms", marker: "up", status: "Up" },
+          {
+            key: "a",
+            label: "Slowest",
+            value: "120 ms",
+            marker: "up",
+            status: "Up",
+          },
         ]}
         total={{ label: "Total", value: "40 checks" }}
       />,

@@ -39,7 +39,11 @@ describe("StatusWall", () => {
   it("puts down monitors first, then alphabetical — the shared ordering", () => {
     render(
       <StatusWall
-        monitors={[monitor("c", "up"), monitor("a", "up"), monitor("z", "down")]}
+        monitors={[
+          monitor("c", "up"),
+          monitor("a", "up"),
+          monitor("z", "down"),
+        ]}
         now={NOON}
       />,
     );
@@ -50,7 +54,9 @@ describe("StatusWall", () => {
     render(<StatusWall monitors={[monitor("api", "down")]} now={NOON} />);
     // The rule is enforced in CSS via [data-status]; the component's job is to
     // expose the status as an attribute rather than baking a colour in.
-    expect(document.querySelector('.wall-card[data-status="down"]')).toBeTruthy();
+    expect(
+      document.querySelector('.wall-card[data-status="down"]'),
+    ).toBeTruthy();
   });
 
   it("ticks a clock, because a frozen tab looks exactly like a calm wall", () => {
@@ -88,12 +94,21 @@ describe("StatusWall", () => {
 
   it("renders its own frame around a first-load notice, not a bare sentence", () => {
     const exit = vi.fn();
-    render(<StatusWall monitors={[]} onExit={exit} now={NOON} notice="Loading monitors…" />);
+    render(
+      <StatusWall
+        monitors={[]}
+        onExit={exit}
+        now={NOON}
+        notice="Loading monitors…"
+      />,
+    );
     // A wall display is usually unattended: leaving it on a bare sentence with
     // no header, no clock and no way out is the worst it can become.
     expect(screen.getByText("12:34:56")).toBeTruthy();
     expect(screen.getAllByText(/Loading monitors…/).length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: /leave the status wall/i })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: /leave the status wall/i }),
+    ).toBeTruthy();
     // The notice replaces the count rather than sitting next to it: there is
     // no list to count yet.
     expect(screen.queryByText(/0 monitors/)).toBeNull();
@@ -101,16 +116,23 @@ describe("StatusWall", () => {
 
   it("offers a visible way out, not only Esc", () => {
     const exit = vi.fn();
-    render(<StatusWall monitors={[monitor("api", "up")]} onExit={exit} now={NOON} />);
+    render(
+      <StatusWall monitors={[monitor("api", "up")]} onExit={exit} now={NOON} />,
+    );
     // A wall display is usually a machine nobody is sitting at; a keyboard-only
     // exit strands whoever walks up to it.
-    fireEvent.click(screen.getByRole("button", { name: /leave the status wall/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /leave the status wall/i }),
+    );
     expect(exit).toHaveBeenCalledTimes(1);
   });
 
   it("counts what is down in the whispered header", () => {
     render(
-      <StatusWall monitors={[monitor("api", "down"), monitor("db", "up")]} now={NOON} />,
+      <StatusWall
+        monitors={[monitor("api", "down"), monitor("db", "up")]}
+        now={NOON}
+      />,
     );
     expect(screen.getByText(/2 monitors/)).toBeTruthy();
     expect(screen.getByText("1 down")).toBeTruthy();

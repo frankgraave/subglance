@@ -44,7 +44,12 @@ export type ConnectionBadgeProps = {
   onReconnect?: () => void;
 };
 
-export function ConnectionBadge({ status, since = null, now, onReconnect }: ConnectionBadgeProps) {
+export function ConnectionBadge({
+  status,
+  since = null,
+  now,
+  onReconnect,
+}: ConnectionBadgeProps) {
   // Nothing to say: a working connection is the assumption, so it is silent.
   if (status !== "offline") {
     return <div role="status" aria-live="polite" className="sr-only" />;
@@ -53,14 +58,25 @@ export function ConnectionBadge({ status, since = null, now, onReconnect }: Conn
   const age = describeAge(since, now);
 
   return (
-    <div role="status" aria-live="polite" className="conn-badge" data-state="offline">
+    <div
+      role="status"
+      aria-live="polite"
+      className="conn-badge"
+      data-state="offline"
+    >
       <span className="conn-badge-dot" aria-hidden="true" />
       <span>
         Connection lost — reconnecting
-        {age !== null && <span className="conn-badge-age"> · updated {age}</span>}
+        {age !== null && (
+          <span className="conn-badge-age"> · updated {age}</span>
+        )}
       </span>
       {onReconnect !== undefined && (
-        <button type="button" className="conn-badge-retry" onClick={onReconnect}>
+        <button
+          type="button"
+          className="conn-badge-retry"
+          onClick={onReconnect}
+        >
           Reconnect now
         </button>
       )}

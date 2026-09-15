@@ -84,8 +84,8 @@ export function EmptyState({
           <p className="mon-empty-action">
             {onAddMonitor === undefined ? (
               <span className="mon-empty-hint">
-                Press <b className="mon-empty-control">Add monitor</b> at the top
-                of the page to start.
+                Press <b className="mon-empty-control">Add monitor</b> at the
+                top of the page to start.
               </span>
             ) : (
               <button

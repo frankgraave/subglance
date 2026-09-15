@@ -52,7 +52,8 @@ export function CredentialsForm({
    * instance with a message about a rule they never agreed to.
    */
   const tooShort = setup && passwordStrength(password) === "short";
-  const disabled = submitting || email.trim() === "" || password === "" || tooShort;
+  const disabled =
+    submitting || email.trim() === "" || password === "" || tooShort;
 
   // `aria-invalid` alone says "something here is wrong" without saying what,
   // so the message is tied to the input it blames with `aria-describedby`.
@@ -132,24 +133,30 @@ export function CredentialsForm({
         {setup && (
           <>
             {/*
-              * A sentence, not a coloured bar.
-              *
-              * The bar is the part people read as a score to beat, and it
-              * carries its meaning in hue alone — which is the one channel
-              * some of the audience does not have. The words say the same
-              * thing to everyone, and the data attribute carries the band for
-              * the stylesheet without the text depending on it.
-              */}
-            <p className="auth-strength" id={`${ids}-strength`} data-band={passwordStrength(password)}>
+             * A sentence, not a coloured bar.
+             *
+             * The bar is the part people read as a score to beat, and it
+             * carries its meaning in hue alone — which is the one channel
+             * some of the audience does not have. The words say the same
+             * thing to everyone, and the data attribute carries the band for
+             * the stylesheet without the text depending on it.
+             */}
+            <p
+              className="auth-strength"
+              id={`${ids}-strength`}
+              data-band={passwordStrength(password)}
+            >
               {describeStrength(password)}
             </p>
             {/*
-              * Announced separately and politely: the paragraph above changes
-              * on every keystroke, and a live region on it would make a
-              * screen reader read the whole sentence letter by letter.
-              */}
+             * Announced separately and politely: the paragraph above changes
+             * on every keystroke, and a live region on it would make a
+             * screen reader read the whole sentence letter by letter.
+             */}
             <p className="auth-sr-only" role="status">
-              {passwordStrength(password) === "short" ? "" : describeStrength(password)}
+              {passwordStrength(password) === "short"
+                ? ""
+                : describeStrength(password)}
             </p>
           </>
         )}

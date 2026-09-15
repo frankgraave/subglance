@@ -104,21 +104,13 @@
   line-height: var(--lead-body);
 }
 
-.mon-detail-panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  background: var(--surface);
-}
-
-/* Panel headings are labels, not headlines: small, capitalised and dim, so
-   the content inside each panel stays the loudest thing in it. */
-.mon-detail-panel-title {
-  @apply caps-legend;
-}
+/*
+ * Panels on this page come from the shared `Panel` component now, so the
+ * per-page panel rule is gone: it drew the same box a second time and would
+ * have drifted from the card pattern the moment either changed.
+ *
+ * What is left here is only what is specific to this page.
+ */
 
 .mon-detail-beats {
   /* The bar measures this box and buckets the checks to fit it, so it must be
@@ -126,10 +118,38 @@
   width: 100%;
 }
 
-.mon-detail-note,
-.mon-detail-empty {
+/*
+ * Three states shared one class, and they are not the same kind of statement.
+ *
+ * `.mon-detail-note` is a caption under a chart — "last 38 checks, oldest
+ * first". It explains what is already on screen and stays quiet.
+ *
+ * `.mon-detail-empty` is the answer to the question the panel was opened to
+ * ask: nothing has gone wrong. Measured against the reference style, empty
+ * states there sit at page-title size, and that is right — an absence is a
+ * finding, not an apology. At helper size it read as a failure to load.
+ *
+ * Loading and error keep the quiet size deliberately. A spinner's caption is
+ * transient and an error is already carrying `role="alert"`; neither is a
+ * finding about the monitor, so neither takes the finding's weight.
+ */
+.mon-detail-note {
   font-size: var(--type-helper);
   line-height: var(--lead-prose);
+  color: var(--ink-3);
+}
+
+.mon-detail-empty {
+  font-size: var(--type-page);
+  line-height: var(--lead-page);
+  font-weight: var(--weight-strong);
+  color: var(--ink);
+}
+
+.mon-detail-empty--quiet {
+  font-size: var(--type-helper);
+  line-height: var(--lead-prose);
+  font-weight: var(--weight-plain);
   color: var(--ink-3);
 }
 
@@ -232,10 +252,6 @@
 @media (max-width: 640px) {
   .mon-detail {
     gap: var(--space-4);
-  }
-
-  .mon-detail-panel {
-    padding: var(--space-3);
   }
 
   .mon-detail-name {

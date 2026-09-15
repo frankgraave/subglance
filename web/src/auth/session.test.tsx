@@ -1,5 +1,12 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { apiFetch, reportUnauthorized } from "../api/http";
 import { SessionGate } from "./SessionGate";
@@ -61,7 +68,8 @@ afterEach(() => {
 describe("resolving the session", () => {
   it("shows the setup screen on a first run", async () => {
     globalThis.fetch = stubFetch({
-      "GET /api/v1/auth/me": () => json({ error: "authentication required" }, 401),
+      "GET /api/v1/auth/me": () =>
+        json({ error: "authentication required" }, 401),
       "GET /api/v1/setup": () => json({ setup_required: true }),
     });
 
@@ -75,7 +83,8 @@ describe("resolving the session", () => {
 
   it("shows the login screen when an account already exists", async () => {
     globalThis.fetch = stubFetch({
-      "GET /api/v1/auth/me": () => json({ error: "authentication required" }, 401),
+      "GET /api/v1/auth/me": () =>
+        json({ error: "authentication required" }, 401),
       "GET /api/v1/setup": () => json({ setup_required: false }),
     });
 
@@ -87,7 +96,8 @@ describe("resolving the session", () => {
 
   it("goes straight to the app for a browser that already has a session", async () => {
     const fetcher = stubFetch({
-      "GET /api/v1/auth/me": () => json({ id: 1, email: "me@example.com", role: "admin", created_at: "" }),
+      "GET /api/v1/auth/me": () =>
+        json({ id: 1, email: "me@example.com", role: "admin", created_at: "" }),
     });
     globalThis.fetch = fetcher;
 
@@ -100,7 +110,9 @@ describe("resolving the session", () => {
   });
 
   it("does not offer a login form when the server cannot be reached", async () => {
-    globalThis.fetch = vi.fn(() => Promise.reject(new TypeError("Failed to fetch"))) as unknown as Fetch;
+    globalThis.fetch = vi.fn(() =>
+      Promise.reject(new TypeError("Failed to fetch")),
+    ) as unknown as Fetch;
 
     render(<Harness />);
 
@@ -115,9 +127,17 @@ describe("resolving the session", () => {
     globalThis.fetch = vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
       attempt += 1;
-      if (attempt === 1) return Promise.reject(new TypeError("Failed to fetch"));
+      if (attempt === 1)
+        return Promise.reject(new TypeError("Failed to fetch"));
       if (url.includes("/auth/me")) {
-        return Promise.resolve(json({ id: 1, email: "me@example.com", role: "admin", created_at: "" }));
+        return Promise.resolve(
+          json({
+            id: 1,
+            email: "me@example.com",
+            role: "admin",
+            created_at: "",
+          }),
+        );
       }
       return Promise.resolve(json({ setup_required: false }));
     }) as unknown as Fetch;
@@ -132,7 +152,8 @@ describe("resolving the session", () => {
 describe("losing and ending a session", () => {
   it("sends a signed-in user to the login screen when any request gets a 401", async () => {
     globalThis.fetch = stubFetch({
-      "GET /api/v1/auth/me": () => json({ id: 1, email: "me@example.com", role: "admin", created_at: "" }),
+      "GET /api/v1/auth/me": () =>
+        json({ id: 1, email: "me@example.com", role: "admin", created_at: "" }),
     });
 
     render(<Harness />);
@@ -157,7 +178,14 @@ describe("losing and ending a session", () => {
     globalThis.fetch = vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes("/auth/me")) {
-        return Promise.resolve(json({ id: 1, email: "me@example.com", role: "admin", created_at: "" }));
+        return Promise.resolve(
+          json({
+            id: 1,
+            email: "me@example.com",
+            role: "admin",
+            created_at: "",
+          }),
+        );
       }
       return Promise.resolve(json({ error: "authentication required" }, 401));
     }) as unknown as Fetch;
@@ -178,7 +206,14 @@ describe("losing and ending a session", () => {
       const url = String(input);
       if (url.includes("/auth/logout")) return logout();
       if (url.includes("/auth/me")) {
-        return Promise.resolve(json({ id: 1, email: "me@example.com", role: "admin", created_at: "" }));
+        return Promise.resolve(
+          json({
+            id: 1,
+            email: "me@example.com",
+            role: "admin",
+            created_at: "",
+          }),
+        );
       }
       return Promise.resolve(json({ setup_required: false }));
     }) as unknown as Fetch;
@@ -199,10 +234,12 @@ describe("losing and ending a session", () => {
      * through `/auth/me` and signs the browser back in — after the user has
      * been shown the login screen.
      */
-    const me = () => json({ id: 1, email: "me@example.com", role: "admin", created_at: "" });
+    const me = () =>
+      json({ id: 1, email: "me@example.com", role: "admin", created_at: "" });
     globalThis.fetch = vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.includes("/auth/logout")) return Promise.reject(new TypeError("Failed to fetch"));
+      if (url.includes("/auth/logout"))
+        return Promise.reject(new TypeError("Failed to fetch"));
       if (url.includes("/auth/me")) return Promise.resolve(me());
       return Promise.resolve(json({ setup_required: false }));
     }) as unknown as Fetch;
@@ -225,15 +262,26 @@ describe("losing and ending a session", () => {
       const url = String(input);
       if (url.includes("/auth/logout")) {
         logouts += 1;
-        if (logouts === 1) return Promise.reject(new TypeError("Failed to fetch"));
+        if (logouts === 1)
+          return Promise.reject(new TypeError("Failed to fetch"));
         return Promise.resolve(new Response(null, { status: 204 }));
       }
       // The cookie stays valid until a logout actually reaches the server,
       // which is the whole reason the retry has to run before this question
       // is asked.
       if (url.includes("/auth/me")) {
-        if (logouts >= 2) return Promise.resolve(json({ error: "authentication required" }, 401));
-        return Promise.resolve(json({ id: 1, email: "me@example.com", role: "admin", created_at: "" }));
+        if (logouts >= 2)
+          return Promise.resolve(
+            json({ error: "authentication required" }, 401),
+          );
+        return Promise.resolve(
+          json({
+            id: 1,
+            email: "me@example.com",
+            role: "admin",
+            created_at: "",
+          }),
+        );
       }
       return Promise.resolve(json({ setup_required: false }));
     }) as unknown as Fetch;
@@ -258,7 +306,8 @@ describe("losing and ending a session", () => {
 
   it("keeps a signed-out browser on the form when a public request gets a 401", async () => {
     globalThis.fetch = stubFetch({
-      "GET /api/v1/auth/me": () => json({ error: "authentication required" }, 401),
+      "GET /api/v1/auth/me": () =>
+        json({ error: "authentication required" }, 401),
       "GET /api/v1/setup": () => json({ setup_required: true }),
     });
 

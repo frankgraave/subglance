@@ -48,7 +48,9 @@ export function Legend({ items, label, className }: LegendProps) {
         <div
           key={item.key}
           className={
-            item.value === undefined ? "legend-item legend-item--flow" : "legend-item"
+            item.value === undefined
+              ? "legend-item legend-item--flow"
+              : "legend-item"
           }
         >
           {/* The mark repeats the colour of the series it names, so it is

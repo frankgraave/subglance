@@ -19,9 +19,12 @@ function stubMatchMedia() {
   vi.stubGlobal("matchMedia", (query: string) => ({
     matches: true,
     media: query,
-    addEventListener: (_: string, fn: (event: MediaQueryListEvent) => void) => void listeners.add(fn),
-    removeEventListener: (_: string, fn: (event: MediaQueryListEvent) => void) =>
-      void listeners.delete(fn),
+    addEventListener: (_: string, fn: (event: MediaQueryListEvent) => void) =>
+      void listeners.add(fn),
+    removeEventListener: (
+      _: string,
+      fn: (event: MediaQueryListEvent) => void,
+    ) => void listeners.delete(fn),
   }));
   return {
     /** Simulate the viewport crossing the breakpoint. */
@@ -66,8 +69,12 @@ describe("NavDrawer", () => {
     opener.blur();
     expect(document.activeElement).toBe(document.body);
 
-    const { unmount } = render(<NavDrawer open onClose={() => {}} returnFocusRef={returnFocusRef} />);
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Close navigation" }));
+    const { unmount } = render(
+      <NavDrawer open onClose={() => {}} returnFocusRef={returnFocusRef} />,
+    );
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Close navigation" }),
+    );
 
     unmount();
     expect(document.activeElement).toBe(opener);
@@ -91,7 +98,9 @@ describe("NavDrawer", () => {
     const { rerender } = render(<NavDrawer open onClose={() => {}} />);
     // The close button, not the first link: a screen reader should hear a way
     // out before it hears five destinations.
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Close navigation" }));
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Close navigation" }),
+    );
 
     rerender(<NavDrawer open={false} onClose={() => {}} />);
     expect(document.activeElement).toBe(opener);
@@ -110,7 +119,9 @@ describe("NavDrawer", () => {
     const { container } = render(<NavDrawer open onClose={() => {}} />);
     // It duplicates the close button, so announcing it would offer a second,
     // unlabelled way to do the same thing.
-    expect(container.querySelector(".shell-scrim")!.getAttribute("aria-hidden")).toBe("true");
+    expect(
+      container.querySelector(".shell-scrim")!.getAttribute("aria-hidden"),
+    ).toBe("true");
   });
 
   it("holds the page still underneath, and releases it on close", () => {
@@ -162,11 +173,15 @@ describe("AppShell on a phone", () => {
 
   it("leaves the page interactive when the drawer is shut", () => {
     const { container } = render(shell({ narrow: true, navOpen: false }));
-    expect(container.querySelector(".shell")!.hasAttribute("inert")).toBe(false);
+    expect(container.querySelector(".shell")!.hasAttribute("inert")).toBe(
+      false,
+    );
   });
 
   it("never makes a laptop inert, whatever the drawer flag says", () => {
     const { container } = render(shell({ narrow: false, navOpen: true }));
-    expect(container.querySelector(".shell")!.hasAttribute("inert")).toBe(false);
+    expect(container.querySelector(".shell")!.hasAttribute("inert")).toBe(
+      false,
+    );
   });
 });

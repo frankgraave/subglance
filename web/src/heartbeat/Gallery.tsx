@@ -44,7 +44,9 @@ const CASES: { title: string; note: string; beats: Beat[] }[] = [
   {
     title: "One outlier among 40",
     note: "A single 9-second probe. The scale is the 95th percentile, so the outlier clamps instead of squashing every other bar into a stub.",
-    beats: series(40, (i) => ({ latencyMs: i === 30 ? 9000 : wobble(i, 110, 30) })),
+    beats: series(40, (i) => ({
+      latencyMs: i === 30 ? 9000 : wobble(i, 110, 30),
+    })),
   },
   {
     title: "500 checks in the same width",
@@ -74,7 +76,9 @@ const CASES: { title: string; note: string; beats: Beat[] }[] = [
 
 /** Appends a check every 3 seconds so the entry animation can be judged live. */
 function useLiveSeries(): Beat[] {
-  const [beats, setBeats] = useState(() => series(28, (i) => ({ latencyMs: wobble(i, 100, 30) })));
+  const [beats, setBeats] = useState(() =>
+    series(28, (i) => ({ latencyMs: wobble(i, 100, 30) })),
+  );
   useEffect(() => {
     const timer = setInterval(() => {
       setBeats((current) => {
@@ -95,11 +99,21 @@ function useLiveSeries(): Beat[] {
   return beats;
 }
 
-function Case({ title, note, beats }: { title: string; note: string; beats: Beat[] }) {
+function Case({
+  title,
+  note,
+  beats,
+}: {
+  title: string;
+  note: string;
+  beats: Beat[];
+}) {
   return (
     <section className="rounded-lg border border-border bg-surface p-5 shadow-flat">
       <h3 className="text-card font-strong text-ink">{title}</h3>
-      <p className="mb-4 mt-1 max-w-prose text-helper leading-prose text-ink-3">{note}</p>
+      <p className="mb-4 mt-1 max-w-prose text-helper leading-prose text-ink-3">
+        {note}
+      </p>
       <HeartbeatBar beats={beats} label={title} />
     </section>
   );
@@ -110,23 +124,32 @@ export function HeartbeatGallery() {
   return (
     <div className="grid gap-5">
       <section className="rounded-lg border border-border bg-surface p-5 shadow-flat">
-        <h3 className="text-card font-strong text-ink">Live — a check every 3 seconds</h3>
+        <h3 className="text-card font-strong text-ink">
+          Live — a check every 3 seconds
+        </h3>
         <p className="mb-4 mt-1 max-w-prose text-helper leading-prose text-ink-3">
-          The newest bar enters at 35% height, overshoots and settles (DESIGN.md §5). The row itself
-          stays still; nothing flashes. Hover or focus the track and use the arrow keys.
+          The newest bar enters at 35% height, overshoots and settles (DESIGN.md
+          §5). The row itself stays still; nothing flashes. Hover or focus the
+          track and use the arrow keys.
         </p>
         <HeartbeatBar beats={live} label="Live demo" />
       </section>
       <section className="rounded-lg border border-border bg-surface p-5 shadow-flat">
-        <h3 className="text-card font-strong text-ink">Framed — the chart chrome</h3>
+        <h3 className="text-card font-strong text-ink">
+          Framed — the chart chrome
+        </h3>
         <p className="mb-4 mt-1 max-w-prose text-helper leading-prose text-ink-3">
-          The same bar inside the chrome of DESIGN.md §13: uptime above it with the check
-          breakdown right-aligned on the same line, faint gridlines and nothing else behind the
-          plot, and the window&apos;s start and end in the two bottom corners instead of an x-axis.
-          The legend below is a slot the caller fills; this page fills it with a sentence.
+          The same bar inside the chrome of DESIGN.md §13: uptime above it with
+          the check breakdown right-aligned on the same line, faint gridlines
+          and nothing else behind the plot, and the window&apos;s start and end
+          in the two bottom corners instead of an x-axis. The legend below is a
+          slot the caller fills; this page fills it with a sentence.
         </p>
         <HeartbeatBar
-          beats={series(120, (i) => ({ latencyMs: wobble(i, 120, 40), ok: i !== 96 }))}
+          beats={series(120, (i) => ({
+            latencyMs: wobble(i, 120, 40),
+            ok: i !== 96,
+          }))}
           label="Framed demo"
           framed
           legend={
@@ -142,8 +165,9 @@ export function HeartbeatGallery() {
       <section className="rounded-lg border border-border bg-surface p-5 shadow-flat">
         <h3 className="text-card font-strong text-ink">Sizes</h3>
         <p className="mb-4 mt-1 max-w-prose text-helper leading-prose text-ink-3">
-          The same series at row height, card height and hero height. The column count follows the
-          available width, so the component never needs to be told how much data to show.
+          The same series at row height, card height and hero height. The column
+          count follows the available width, so the component never needs to be
+          told how much data to show.
         </p>
         <div className="grid gap-4">
           {[
@@ -153,7 +177,10 @@ export function HeartbeatGallery() {
           ].map((size) => (
             <HeartbeatBar
               key={size.height}
-              beats={series(120, (i) => ({ latencyMs: wobble(i, 120, 40), ok: i !== 96 }))}
+              beats={series(120, (i) => ({
+                latencyMs: wobble(i, 120, 40),
+                ok: i !== 96,
+              }))}
               label={`Sizes, ${size.height}px`}
               {...size}
             />

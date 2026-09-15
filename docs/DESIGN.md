@@ -54,18 +54,30 @@ Everything a user can click, hover or read still takes its radius from a token.
 ### 2.1 Colour — dark (default)
 
 ```css
---canvas:     #08090a;   /* page background */
---surface:    #0e1011;   /* card, sidebar, drawer */
---surface-2:  #141719;   /* inputs, hover */
---surface-hi: #1a1e20;   /* active segments, tracks */
---border:     #1e2224;   /* default border, divider */
---border-hi:  #2a2f32;   /* border on interactive elements */
+--canvas:     oklch(.205 0 0);            /* page background */
+--surface:    rgba(255,255,255,.03);      /* card, sidebar, drawer */
+--surface-2:  rgba(255,255,255,.05);      /* inputs, hover */
+--surface-hi: rgba(255,255,255,.08);      /* active segments, tracks */
+--border:     rgba(255,255,255,.05);      /* default border, divider */
+--border-hi:  rgba(255,255,255,.10);      /* border on interactive elements */
 
---ink:        #e8eaec;   /* primary text */
---ink-2:      #9ba1a6;   /* secondary text */
---ink-3:      #61686d;   /* labels, help text */
---ink-4:      #3d4347;   /* placeholders, disabled */
+--ink:        oklch(.97 0 0);             /* primary text */
+--ink-2:      oklch(.708 0 0);            /* secondary text */
+--ink-3:      oklch(.556 0 0);            /* labels, help text */
+--ink-4:      oklch(.439 0 0);            /* placeholders, disabled */
 ```
+
+**Surfaces are white at low alpha, not lighter greys.** This is the decision
+that makes a stack of panels read as one material rather than as separately
+painted boxes. An alpha surface inherits whatever sits beneath it, so nesting
+stays coherent at any depth: a panel inside a card inside the page is visibly
+one step up from its parent without anyone having to choose a third grey. A
+panel moved to a different background still belongs there.
+
+**The neutral scale is achromatic — chroma exactly 0.** A grey carrying a hint
+of blue reads as a colour decision, and in this product colour belongs to the
+data. Greys that are genuinely neutral are what let a single amber or red mean
+something.
 
 ### 2.2 Colour — light
 
@@ -93,6 +105,20 @@ mode, because the dark originals are unreadable on white.
 
 Every status colour has a `-dim` variant for badge and row backgrounds
 (`--up-dim`, `--warn-dim`, `--down-dim`).
+
+`--down` additionally has `--down-deep`, one step past `--down-dim`, for a
+tinted row under the pointer. **Hover on a row that already means something
+must not switch signals.** A neutral highlight arrives as a second kind of
+colour on top of the first, and the reader has to work out which of the two
+they are being told about; the same red getting louder is the same statement
+said closer. A hovered down row therefore deepens its own tint rather than
+picking up `--surface-2` like a neutral row does.
+
+There is deliberately no `-deep` for the other three. Down is the only status
+with a resting fill to deepen — the others mark themselves with a coloured left
+edge and nothing else, so a hover tint would *introduce* a colour rather than
+intensify one, which is the same problem in the status palette's clothes. A
+token with no caller is a decision nobody made.
 
 **The label on a filled status mark.** A status badge fills itself with its own
 status colour, and the ink scale is wrong on that fill: `--ink` measures 1.59:1
@@ -225,22 +251,22 @@ control need.
 | Role | Token | Size | Leading | Weight |
 |---|---|---|---|---|
 | Page title | `--type-page` | `24px` | `--lead-page` `32px` | `--weight-strong` |
-| Card title | `--type-card` | `18px` | `--lead-card` `24px` | `--weight-strong` |
+| Card title | `--type-card` | `16px` | `--lead-card` `24px` | `--weight-mid` |
 | Row title | `--type-row` | `15px` | `--lead-row` `20px` | `--weight-mid` |
 | Body / label | `--type-body` | `14px` | `--lead-body` `20px` | `--weight-plain` |
 | Helper text | `--type-helper` | `12px` | `--lead-helper` `16px` | `--weight-plain` |
-| Section heading | `--type-section` | `12px` | `--lead-section` `12px` | `--weight-strong`, uppercase, `--track-caps` |
+| Section heading | `--type-section` | `12px` | `--lead-section` `12px` | `--weight-strong`, uppercase, mono |
 
 **Helper and section share a size, and separate by face and casing.** An earlier
 pass kept helper at 13px specifically to avoid colliding with section, on the
 reasoning that two roles at one size would be indistinguishable. Measured
 against the reference style that argument does not survive: it puts 39 of 93
-elements on 12px and tells those roles apart by casing, weight and letterspacing
-instead. Section is uppercase, `--weight-strong` and tracked at `--track-caps`;
-helper is sentence case, `--weight-plain` and tracked at `--track-body`. Those
-are further apart on the page than one pixel of size ever was, and it takes the
-scale from four roles inside 3px down to three — which is the crowding the scale
-was accused of, removed rather than argued with.
+elements on 12px and tells those roles apart by face, casing and weight
+instead. Section is uppercase, mono and `--weight-strong`; helper is sentence
+case, sans and `--weight-plain`. Those are further apart on the page than one
+pixel of size ever was, and it takes the scale from four roles inside 3px down
+to three — which is the crowding the scale was accused of, removed rather than
+argued with.
 
 The leadings stay different on purpose: helper sits on 16px because it is read
 as running text, section on 12px because it is a single line whose leading
@@ -326,21 +352,35 @@ the inherited value is wrong for the face.
 | Role | Token | Value | Used for |
 |---|---|---|---|
 | Body | `--track-body` | `-.02em` | inherited by everything, set once on `body` |
-| Badge | `--track-badge` | `.04em` | small mono badges, where the mono face is already wide |
-| Caps | `--track-caps` | `.09em` | every uppercase micro-label, without exception |
 
-This replaces four tokens — `--track-title`, `--track-name`, `--track-badge`
-and `--track-caps` — of which the first two had to be spelled out per
-component and therefore reached 12 of 79 visible text elements; the other 67 sat
-at `normal`, uncorrected. A correction that has to be remembered is a
-correction that is mostly absent. `--track-title` and `--track-name` are gone
-rather than kept as decoration: two values a hundredth of an em apart were one
-decision written twice.
+**One value, no exceptions.** Not for uppercase, not for mono, not for badges.
+This replaces five tokens — `--track-title`, `--track-name`, `--track-badge`,
+`--track-caps` and a short-lived `--track-mono` — each of which was added on
+reasoning that sounds right and measures wrong: titles need tightening, mono
+sits on a fixed advance, uppercase needs opening up, a mono badge is already
+wide.
 
-One caps value, not four. The uppercase labels in this product previously ran
-at `.02em`, `.07em`, `.08em`, `.09em` and `.1em` — five spellings of one
-decision, none of which was deliberate. They are the same role and now read the
-same, which is the entire reason the token exists.
+The first two had to be spelled out per component and therefore reached 12 of
+79 visible text elements; the other 67 sat at `normal`, uncorrected. A
+correction that has to be remembered is a correction that is mostly absent.
+
+The caps exception was the expensive one. `+.09em` at 12px is `+1.08px` per
+letter pair, against the body's `-0.32px` — so every section label sat 1.4px
+per pair wider than the rest of the interface and read as spaced-out small caps
+instead of as a quiet header. Uppercase mono at 12px is already separated by
+its own fixed advance; the conventional advice to letterspace caps is for
+proportional faces at display sizes, and applying it here was working against
+the tightening the page had already chosen.
+
+If a future face genuinely needs its own value, it arrives with a measurement
+attached, not with an argument.
+
+The five spellings that preceded this are worth recording, because they are how
+a scale gets away from you: uppercase labels in this product ran at `.02em`,
+`.07em`, `.08em`, `.09em` and `.1em` — five versions of one decision, none of
+them deliberate. Collapsing them to a single caps token was the right first
+move; removing that token in favour of the inherited body value was the second,
+and only measuring the difference made it visible.
 
 The raw custom properties are spelled `--track-*` rather than `--tracking-*`
 because `--tracking-*` is Tailwind v4's own theme namespace: a token of that
@@ -398,7 +438,6 @@ repetition allows: three tones, two weights, sans in every one of them.
   line-height: var(--lead-section);
   font-weight: var(--weight-plain);
   text-transform: uppercase;
-  letter-spacing: var(--track-caps);
   color: var(--ink-2);
 }
 ```
@@ -424,14 +463,28 @@ next hand-chosen tone comes from.
 
 ```css
 --r-2xs: 2px;   /* small marks: the lamp, a dot, a tick */
---r-xs: 4px;    /* chips, segmented buttons, badges */
---r-sm: 6px;    /* buttons, inputs, small controls */
---r-md: 10px;   /* rows, list items */
---r-lg: 12px;   /* cards, dialogs, drawer */
+--r-xs: 4px;    /* legacy step, not in the ladder in use */
+--r-sm: 6px;    /* anything you click: buttons, inputs, nav items */
+--r-md: 8px;    /* panels */
+--r-lg: 12px;   /* the card that frames panels, dialogs, drawer */
 
---ease: cubic-bezier(.32, .72, 0, 1);
+--ease: cubic-bezier(.4, 0, .2, 1);
 --dur:  420ms;  /* theme transition */
 ```
+
+**The ladder in use is 2 / 6 / 8 / 12.** Four steps, each with a job: a mark, a
+control, a panel, the card that frames panels. `--r-xs` (4px) survives for
+compatibility but nothing should reach for it — at 4px a control reads as a
+mark rather than as something pressable, and the gap from 2 to 6 is what keeps
+those two jobs legible as different.
+
+**One duration for everything interactive: 150ms, on `cubic-bezier(.4, 0, .2,
+1)`.** A hover, a segment change and a menu opening are the same kind of event
+to the person watching; giving each its own timing is what makes an interface
+feel assembled from parts rather than designed. 150ms is short enough to feel
+immediate and long enough to read as movement rather than as a jump. The 420ms
+`--dur` is not an exception to that rule — it is the theme transition, which is
+a deliberate, whole-page event rather than a response to a pointer.
 
 Space moves in steps of 4px; §2.7 states the ladder and how it is enforced.
 
@@ -461,23 +514,61 @@ radius of `6 − 4 = 2px`, which is `--r-2xs`. `tokens.test.ts` asserts it where
 a rule states both an outer radius and its padding, because this is the kind of
 rule that is obeyed once and then quietly broken by the next component.
 
+**The exception is a card framing panels, where the outer radius rounds down.**
+The monitor list is a 12px card with 6px of padding around 8px panels; strictly
+concentric would put the outer corner at 14px. 12px is the better call, because
+a 14px corner on a full-width card starts to read as a pill, and a list of
+monitors is not a pill. The rule earns its exception here and nowhere else so
+far: the pinch the concentric rule prevents is only visible when the gap is
+small and the two radii are close, which is the case for a control in a shell
+and not for a wide card.
+
+**A frame around panels is padding with an edge on it, not a second panel.**
+This is the whole nesting pattern: the card carries the wider radius, a fill one
+step quieter than the panels it holds, and — the load-bearing part — padding, so
+the panels sit inset from its border instead of flush against it. A frame
+without padding puts two edges at the same level and the eye reads them as
+competing; that is the double-framing that got this frame removed once already.
+
+**The pattern is a component, not a convention.** `Card` and `Panel` in
+`components/Card.tsx` are how a screen gets it, and `tokens.test.ts` asserts the
+shape rather than trusting people to remember: every `--r-lg` frame must carry
+padding, no box may nest at its container's radius, and no screen may define its
+own card-title treatment. The last two each caught a real fault — `.mon-card`
+sat at `--r-lg` inside the `--r-lg` card that came to frame it, and three
+separate screens had grown their own heading rules that agreed only by luck.
+
+**One step down per level.** Card 12px, panel 8px, anything inside a panel 6px.
+Two boxes at the same radius with one inside the other read as a mistake: the
+corners run parallel at the wrong offset and the inner box looks like it has
+escaped its container.
+
 A height is the intent more often than a padding is. `--control-h: 36px` is the
 height a row of interactive chrome settles on; the nav item now states that and
 centres its label, instead of encoding it as a padding the next edit would
 round to 8px and silently shrink.
 
-Duration follows role: 140ms for hover, 200–280ms for panels, 320–520ms for
-anything asking for your attention. `--ease` starts fast and settles softly —
+One duration for everything interactive: 150ms. A hover, a segment change and a
+menu opening are the same kind of event to the person watching, and giving each
+its own timing is what makes an interface feel assembled from parts rather than
+designed. `--ease` is `cubic-bezier(.4, 0, .2, 1)` —
 motion that decays feels mechanical rather than floaty.
 
 ### 2.8 The accent
 
 ```css
---accent:        #155dfc;   /* fill of a control */
---accent-border: #2b7fff;   /* its 1px edge, same hue one step lighter */
---accent-ink:    #ffffff;   /* the label sitting on the fill */
---accent-ring:   rgba(43,127,255,.24);
+--accent:        oklch(.546 .245 262.881);   /* fill of a control */
+--accent-border: oklch(.623 .214 259.815);   /* its 1px edge, one step lighter */
+--accent-ink:    #ffffff;                     /* the label sitting on the fill */
+--accent-ring:   rgba(43,127,255,.24);        /* focus ring, light surfaces */
+--accent-ring-dark: rgba(255,255,255,.30);    /* focus ring, dark surfaces */
 ```
+
+**Focus is a ring, not an outline.** A ring sits outside the border without
+joining it, so a focused control keeps its own shape instead of appearing to
+grow a second edge. On dark surfaces a blue ring loses contrast against the
+page, so it becomes white at low alpha there — the ring's job is to say where
+the keyboard is, and visibility outranks hue.
 
 Until now the product had no accent at all: status green did the job, so an
 active segment in the layout switcher and a healthy monitor read as the same

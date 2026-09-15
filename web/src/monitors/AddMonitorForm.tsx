@@ -43,7 +43,6 @@ export type AddMonitorValues = {
   pushGraceS: number;
 };
 
-
 /**
  * A rejection the form has to show, and where it belongs.
  *

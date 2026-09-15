@@ -1,3 +1,5 @@
+import { Card, Panel } from "../components/Card";
+import { IconAlert, IconList } from "../components/icons";
 import { CARD_BEAT_WIDTH, MonitorCard } from "./MonitorCard";
 import { EmptyState } from "./EmptyState";
 import { partition, sectionsByTag } from "./model";
@@ -64,19 +66,17 @@ export function MonitorCardList({
     return (
       <div className="mon-cards">
         {sectionsByTag(monitors, groupKey).map((section) => (
-          <section
+          <Card
             key={section.id}
             className="mon-cards-section"
-            aria-labelledby={`mon-cards-${section.id}`}
+            title={`${section.label} (${section.monitors.length})`}
+            icon={<IconList />}
+            headingLevel={3}
           >
-            {/* The id is derived from the section key rather than from the
-                label, so two tag values that differ only in case cannot
-                collide into one duplicate id and break the label association. */}
-            <h3 id={`mon-cards-${section.id}`} className="mon-cards-title">
-              {section.label} ({section.monitors.length})
-            </h3>
-            <ul className="mon-card-stack">{cards(section.monitors)}</ul>
-          </section>
+            <Panel padded={false}>
+              <ul className="mon-card-stack">{cards(section.monitors)}</ul>
+            </Panel>
+          </Card>
         ))}
       </div>
     );
@@ -87,25 +87,32 @@ export function MonitorCardList({
   return (
     <div className="mon-cards">
       {attention.length > 0 && (
-        <section
+        <Card
           className="mon-cards-section"
-          aria-labelledby="mon-cards-attention"
+          title={`Needs attention (${attention.length})`}
+          icon={<IconAlert />}
+          headingLevel={3}
         >
-          <h3 id="mon-cards-attention" className="mon-cards-title">
-            Needs attention ({attention.length})
-          </h3>
-          <ul className="mon-card-stack">{cards(attention)}</ul>
-        </section>
+          <Panel padded={false}>
+            <ul className="mon-card-stack">{cards(attention)}</ul>
+          </Panel>
+        </Card>
       )}
 
-      <section className="mon-cards-section" aria-labelledby="mon-cards-all">
-        <h3 id="mon-cards-all" className="mon-cards-title">
-          {attention.length > 0
+      <Card
+        className="mon-cards-section"
+        title={
+          attention.length > 0
             ? `All monitors (${rest.length})`
-            : `Monitors (${rest.length})`}
-        </h3>
-        <ul className="mon-card-stack">{cards(rest)}</ul>
-      </section>
+            : `Monitors (${rest.length})`
+        }
+        icon={<IconList />}
+        headingLevel={3}
+      >
+        <Panel padded={false}>
+          <ul className="mon-card-stack">{cards(rest)}</ul>
+        </Panel>
+      </Card>
     </div>
   );
 }

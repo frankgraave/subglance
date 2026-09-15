@@ -71,7 +71,10 @@ export default function App() {
     },
     [navigate],
   );
-  const showDashboard = useCallback(() => navigate({ name: "dashboard" }), [navigate]);
+  const showDashboard = useCallback(
+    () => navigate({ name: "dashboard" }),
+    [navigate],
+  );
 
   const [navOpen, setNavOpen] = useState(false);
   /*
@@ -186,7 +189,9 @@ export default function App() {
       // updater pure — React may call it twice.
       if (!navOpen) {
         navOpenerRef.current =
-          document.activeElement instanceof HTMLElement ? document.activeElement : null;
+          document.activeElement instanceof HTMLElement
+            ? document.activeElement
+            : null;
       }
       setNavOpen((open) => !open);
       return;
@@ -234,7 +239,12 @@ export default function App() {
   }, [signedIn, queryClient]);
 
   const screen = isWall ? (
-    <LiveDashboardRoot client={queryClient} layout="wall" onExitWall={leaveWall} mainRef={mainRef} />
+    <LiveDashboardRoot
+      client={queryClient}
+      layout="wall"
+      onExitWall={leaveWall}
+      mainRef={mainRef}
+    />
   ) : (
     <AppShell
       sidebarCollapsed={sidebarCollapsed}
@@ -311,7 +321,8 @@ function Workbench() {
   return (
     <div className="flex flex-col gap-10">
       <p className="text-helper text-ink-3">
-        Component workbench — fixtures, not live data. Press Esc to go back to the dashboard.
+        Component workbench — fixtures, not live data. Press Esc to go back to
+        the dashboard.
       </p>
       <DashboardWorkbench />
       <HeartbeatGallery />

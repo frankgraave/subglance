@@ -39,7 +39,9 @@ export function IconTile({
     <span
       className={className ? `icon-tile ${className}` : "icon-tile"}
       data-tone={tone}
-      {...(label ? { role: "img", "aria-label": label } : { "aria-hidden": true })}
+      {...(label
+        ? { role: "img", "aria-label": label }
+        : { "aria-hidden": true })}
     >
       {children}
     </span>
