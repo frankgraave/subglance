@@ -5,31 +5,52 @@
  * chose this over a dropdown, because a hidden option costs a click before it
  * can even be read.
  *
- * Two things here are decisions rather than styling:
+ * Three things here are decisions rather than styling:
  *
+ * - **One selected state, and it is the accent.** This used to be two
+ *   variants: neutral for a control that changes the *view*, accent for one
+ *   that changes *what data* you see. Measured against the reference, that
+ *   distinction does not exist — its own range selector is a view control and
+ *   it fills the active segment `oklch(.546 .245 262.881)`, which is exactly
+ *   our `--accent`. The rule sounded principled and produced a control whose
+ *   selection was a grey box that read as disabled.
  * - **An inactive segment is fully transparent, border included.** The border
  *   is declared at rest so the box never changes size when the selection
  *   moves; only its colour arrives. A control that reserves no space for the
  *   state it is about to show shifts every label beside it by a pixel each
  *   time you press it.
  * - **The inner radius is not the outer one.** §2.7: an inner radius is the
- *   outer radius minus the padding around it, so `--r-sm` (6px) with
- *   `--space-1` (4px) of padding leaves `--r-2xs` (2px). Equal radii read as
- *   consistency and draw as a pinched corner, because the gap between two
- *   curves of the same radius is not constant.
+ *   outer radius minus the padding around it. The reference measures 8px
+ *   outside with 2px of padding and 6px inside, which satisfies that exactly:
+ *   `--r-md` − `--space-0h` = `--r-sm`. That is the geometry adopted here, and
+ *   it is the product's only live concentric pair — the case the guard in
+ *   tokens.test.ts exists for.
  */
 .segmented {
   display: inline-flex;
   gap: 1px;
-  padding: var(--space-1);
-  border-radius: var(--r-sm);
+  /* The quarter-step, not 4px: the reference's shell is a thin frame around
+     its segments rather than a tray they float in. A token rather than a
+     literal, because §2.7's concentric rule is checked arithmetically and
+     cannot read a raw 2px. */
+  padding: var(--space-0h);
+  /* The bar carries its own edge, and it is the *control* edge (§2.9): the
+     whole group is one piece of interactive chrome. Without any border the
+     segments read as loose buttons dropped in the topbar rather than as one
+     control with a selection inside it. */
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-md);
   background: var(--surface-2);
 }
 
 .segmented .segmented-option {
-  padding: var(--space-1) var(--space-2);
+  /* 0 10px with the height coming from the row, matching the reference. */
+  padding: 0 var(--space-2h);
+  min-height: 26px;
+  display: inline-flex;
+  align-items: center;
   border: 1px solid transparent;
-  border-radius: var(--r-2xs);
+  border-radius: var(--r-sm);
   background: none;
   font: inherit;
   font-size: var(--type-helper);
@@ -41,30 +62,44 @@
               color var(--dur-hover) var(--ease);
 }
 
-.segmented .segmented-option:hover:not([aria-pressed="true"]) { color: var(--ink-2); }
-
-/*
- * The neutral variant: this control changes which view of the data you get,
- * so the selection is chrome and stays in the neutral scale.
- */
-.segmented .segmented-option[aria-pressed="true"] {
-  background: var(--surface-hi);
+.segmented .segmented-option:hover:not([aria-pressed="true"]) {
+  color: var(--ink-2);
+  /* The edge arrives on hover into the space the transparent border already
+     reserved, so nothing shifts. */
   border-color: var(--border-hi);
-  color: var(--ink);
 }
 
 /*
- * The accent variant: this control changes *what data* you are looking at, so
- * the selection is part of the reading and earns the control accent (§2.8).
+ * The selected segment.
+ *
  * `--accent-ink` on `--accent` measures 5.25:1, which clears AA for the label.
  */
-.segmented[data-variant="data"] .segmented-option[aria-pressed="true"] {
+.segmented .segmented-option[aria-pressed="true"] {
   background: var(--accent);
   border-color: var(--accent-border);
   color: var(--accent-ink);
 }
 
+/*
+ * An icon segment.
+ *
+ * Square rather than text-width, so a row of glyphs reads as a row of equal
+ * buttons instead of one per label length. 16px inside a 26px button leaves
+ * the same optical padding a word gets.
+ */
+.segmented .segmented-option--icon {
+  padding: 0;
+  width: 26px;
+  justify-content: center;
+}
+
+.segmented .segmented-option--icon > svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
 /* Phone widths: the labels stay, the breathing room goes (§13). */
 @media (max-width: 640px) {
-  .segmented .segmented-option { padding: var(--space-1); }
+  .segmented .segmented-option { padding: 0 var(--space-2); }
 }

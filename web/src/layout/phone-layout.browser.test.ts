@@ -192,25 +192,25 @@ describe.each(WIDTHS)("at %ipx", (width) => {
             if (style.visibility === "hidden" || style.display === "none") continue;
 
             /*
-             * Visually-hidden inputs are exempt, and deliberately so. The
-             * theme control is a fieldset of `sr-only` radios whose visible
-             * target is the <label> wrapping each one — the pattern that keeps
-             * a native radio's keyboard and screen-reader behaviour instead of
-             * reimplementing it on a <div>. The 1x1 box is the input's
-             * clipping rectangle, not the thing a finger lands on.
+             * Every control is measured by its own box. No exemptions.
              *
-             * All three conditions are required: label ancestry on its own
-             * would also wave through a *visible* checkbox or radio that is
-             * genuinely too small to hit.
+             * There were two, and both were wrong. The first waved through
+             * `sr-only` radios inside a label, for a theme control that has
+             * since become buttons — the product has no radio inputs left, so
+             * the rule protected nothing while reading as one still in force.
+             *
+             * The second, briefly, measured a borderless input by its parent:
+             * the search field is a 20px line box inside a 38px shell that
+             * carries the border, the fill and the magnifier, so the shell
+             * *looks* like the target. It is a <div>, not a <label>. Tapping
+             * its padding was verified in a real browser to focus nothing at
+             * all, which means the promotion excused a control that genuinely
+             * failed WCAG 2.5.8 and would have kept a passing suite over it.
+             * The field now clears 24px on its own (`monitors.css`).
+             *
+             * If a label-provided target is ever needed here, it has to be a
+             * real <label> and the exemption has to name it.
              */
-            if (
-              el instanceof HTMLInputElement &&
-              el.classList.contains("sr-only") &&
-              el.closest("label") !== null
-            ) {
-              continue;
-            }
-
             const r = el.getBoundingClientRect();
             if (r.width === 0 && r.height === 0) continue;
             if (r.width < 24 || r.height < 24) {

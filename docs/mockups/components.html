@@ -26,6 +26,12 @@
   --glow-up:0 0 0 1px rgba(52,211,153,.35), 0 0 7px -1px rgba(52,211,153,.6);
   --glow-warn:0 0 0 1px rgba(251,191,36,.38), 0 0 7px -1px rgba(251,191,36,.62);
   --glow-down:0 0 0 1px rgba(244,63,94,.4), 0 0 8px -1px rgba(244,63,94,.72);
+  /* Depth ladder (§2.10), mirroring styles/tokens.css. `raised` was 5% black,
+     which measured almost identically to no shadow on a dark ground; these
+     values were fitted against the reference's own shadow profile. */
+  --shadow-flat: none;
+  --shadow-raised: 0 3px 6px -2px rgba(0,0,0,.30), 0 2px 4px -2px rgba(0,0,0,.24);
+  --shadow-float: 0 10px 15px -3px rgba(0,0,0,.12), 0 4px 6px -4px rgba(0,0,0,.1);
   color-scheme: dark;
 }
 [data-theme="light"] {
@@ -37,6 +43,9 @@
   --glow-up:0 0 0 1px rgba(5,150,105,.28), 0 0 5px -1px rgba(5,150,105,.4);
   --glow-warn:0 0 0 1px rgba(180,83,9,.28), 0 0 5px -1px rgba(180,83,9,.4);
   --glow-down:0 0 0 1px rgba(225,29,72,.3), 0 0 6px -1px rgba(225,29,72,.45);
+  --shadow-flat: none;
+  --shadow-raised: 0 4px 6px -1px rgba(16,24,40,.08), 0 2px 4px -2px rgba(16,24,40,.06);
+  --shadow-float: 0 10px 15px -3px rgba(16,24,40,.12), 0 4px 6px -4px rgba(16,24,40,.1);
   color-scheme: light;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -70,6 +79,29 @@ h2 { font-size:12px; font-weight:500; text-transform:uppercase; letter-spacing:.
 .sec-note { font-size:11.5px; color:var(--ink-4); }
 
 .card { border:1px solid var(--border); border-radius:var(--r-lg); background:var(--surface); padding:22px; }
+
+/* ── NESTING: card → panel, and nothing between ──────────────
+   The pattern measured against the reference. A card is padding with an edge;
+   a panel is the surface that rests on it. There is no third box: a wrapper
+   around a list of panels is what made a monitor list step four fills deep
+   (#08090a → #0e1011 → #141719 → #1a1e20) where the reference steps two.
+   The frame below is the real thing at the real values. */
+.frame { border:1px solid var(--border); border-radius:var(--r-lg); background:var(--surface);
+  display:flex; flex-direction:column; gap:6px; padding:6px; }
+.frame-head { display:flex; align-items:center; gap:10px; min-height:46px; padding:8px 8px 6px; }
+.frame-title { font-size:16px; font-weight:500; }
+.frame-tile { width:24px; height:24px; flex:none; display:grid; place-items:center;
+  border:1px solid var(--border-hi); border-radius:var(--r-sm); background:var(--surface-2); color:var(--ink-2); }
+.frame-tile svg { width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:1.8; }
+/* The panel: one radius step inside the card, its own edge, and the lift.
+   The shadow is not decoration — border and fill alone leave it flat against
+   the card, and flat is what the reference is not. */
+.frame-panel { border:1px solid var(--border-hi); border-radius:var(--r-md);
+  background:var(--surface-2); box-shadow:var(--shadow-raised); padding:12px 16px; }
+.frame-panel + .frame-panel { margin:0; }
+.frame-row { display:flex; align-items:center; gap:12px; }
+.frame-row-name { font-size:14px; }
+.frame-row-num { margin-left:auto; font-family:var(--font-mono); font-size:12px; color:var(--ink-2); }
 .row-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
 @media (max-width: 820px) { .row-2 { grid-template-columns:1fr; } }
 
@@ -375,6 +407,74 @@ code { font-family:var(--font-mono); font-size:11.5px; color:var(--ink-2); backg
         <button class="btn btn-ghost">Cancel</button>
         <button class="btn btn-secondary" id="testBtn">Test now</button>
         <button class="btn btn-primary">Create monitor</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── NESTING ─────────────────────────────────────────────── -->
+<section>
+  <div class="sec-head">
+    <h2>Nesting</h2>
+    <span class="sec-note">Two surfaces, never three. §2.7</span>
+  </div>
+  <div class="row-2">
+    <div>
+      <div class="frame">
+        <div class="frame-head">
+          <span class="frame-tile"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></span>
+          <span class="frame-title">Monitors (3)</span>
+        </div>
+        <div class="frame-panel">
+          <div class="frame-row">
+            <span class="led" data-state="up"></span>
+            <span class="frame-row-name">axonlawyers.com</span>
+            <span class="frame-row-num">115 ms</span>
+          </div>
+        </div>
+        <div class="frame-panel">
+          <div class="frame-row">
+            <span class="led" data-state="up"></span>
+            <span class="frame-row-name">gravast.nl</span>
+            <span class="frame-row-num">22 ms</span>
+          </div>
+        </div>
+        <div class="frame-panel">
+          <div class="frame-row">
+            <span class="led" data-state="down"></span>
+            <span class="frame-row-name">api.internal</span>
+            <span class="frame-row-num">refused</span>
+          </div>
+        </div>
+      </div>
+      <div class="help mt">
+        Card 12px radius and a 6px inset; panel 8px, its own edge, and the raised
+        rung. The gap between panels equals the card's padding, so a panel is as
+        far from its neighbour as from the edge.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="label" style="margin-bottom:12px">Why there is no wrapper</div>
+      <div class="help">
+        The tempting shape is a container holding the list, with the panels
+        inside it. It costs a third surface and a second 6px inset, and both are
+        visible: measured against the reference, that structure put the first row
+        <strong style="color:var(--ink)">67px</strong> below the card's edge where
+        the reference puts it at <strong style="color:var(--ink)">61px</strong>,
+        and stepped the fill one rung too light.
+      </div>
+      <div class="help mt">
+        The rule that falls out of it: <strong style="color:var(--ink)">if a thing
+        already has an edge, it does not need a box around it.</strong> A list of
+        panels is a list; the card is already the container.
+      </div>
+      <div class="label mt" style="margin-bottom:10px">Depth ladder</div>
+      <div class="help">
+        <code>flat</code> is a stated decision, not an absence — it is what a card
+        takes. <code>raised</code> is what a panel takes. It used to be 5% black,
+        which on this canvas is indistinguishable from <code>none</code>; it is
+        now fitted to the reference's own shadow.
       </div>
     </div>
   </div>

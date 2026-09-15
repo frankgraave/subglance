@@ -1,10 +1,13 @@
 import { useCallback, useState } from "react";
 import {
+  CARD_COLUMNS_STORAGE_KEY,
   LAYOUT_STORAGE_KEY,
   SIDEBAR_STORAGE_KEY,
+  readStoredCardColumns,
   readStoredLayout,
   readStoredSidebarCollapsed,
   writePreference,
+  type CardColumns,
   type LayoutId,
 } from "./preferences";
 
@@ -23,6 +26,15 @@ import {
 export type ShellPreferences = {
   layout: LayoutId;
   setLayout: (next: LayoutId) => void;
+  /**
+   * How many cards per row, in the Cards layout only.
+   *
+   * Stored under its own key rather than folded into the layout id: it has to
+   * survive a trip through Rows and back, or switching layouts twice would
+   * quietly reset a setting the user chose once.
+   */
+  cardColumns: CardColumns;
+  setCardColumns: (next: CardColumns) => void;
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
 };
@@ -36,10 +48,22 @@ export function useShellPreferences(storage: PreferenceStorage): ShellPreference
     readStoredSidebarCollapsed(storage),
   );
 
+  const [cardColumns, setCardColumnsState] = useState<CardColumns>(() =>
+    readStoredCardColumns(storage),
+  );
+
   const setLayout = useCallback(
     (next: LayoutId) => {
       setLayoutState(next);
       writePreference(storage, LAYOUT_STORAGE_KEY, next);
+    },
+    [storage],
+  );
+
+  const setCardColumns = useCallback(
+    (next: CardColumns) => {
+      setCardColumnsState(next);
+      writePreference(storage, CARD_COLUMNS_STORAGE_KEY, next);
     },
     [storage],
   );
@@ -54,5 +78,12 @@ export function useShellPreferences(storage: PreferenceStorage): ShellPreference
     });
   }, [storage]);
 
-  return { layout, setLayout, sidebarCollapsed, toggleSidebar };
+  return {
+    layout,
+    setLayout,
+    cardColumns,
+    setCardColumns,
+    sidebarCollapsed,
+    toggleSidebar,
+  };
 }

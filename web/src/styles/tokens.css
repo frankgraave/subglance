@@ -88,6 +88,15 @@
   --r-sm: 6px;
   --r-md: 8px;
   --r-lg: 12px;
+  /*
+   * Fully round, for a pill.
+   *
+   * Not a rung on the ladder and deliberately outside it: the ladder states
+   * how tight a *corner* is, and this states a shape — whatever the box's
+   * height, the ends are semicircles. Hence a number far past any real height
+   * rather than `50%`, which on a box wider than it is tall draws an ellipse.
+   */
+  --r-pill: 999px;
 
   /* Motion. One duration for everything interactive, because a hover, a
      segment change and a menu opening are the same kind of event to the person
@@ -196,6 +205,13 @@
   --control-h: 36px;
 
   --space-1: 4px;
+  /* The quarter-step, and the smallest gap the system has.
+     It exists for one job: the frame of a segmented control, where the
+     reference measures 2px of padding between an 8px shell and its 6px
+     segments. Concentric arithmetic (§2.7) needs the inset to be a token or
+     the rule cannot be checked — a literal here is what silently removed the
+     product's only live outer/inner radius pair from the guard. */
+  --space-0h: 2px;
   /* The half-step. A 4px grid is right for layout and too coarse for chrome:
      the frame around a panel list, the inset on a small control. Measured
      against the reference style these half-steps (6px, 10px) appear exactly
@@ -256,6 +272,16 @@
      depth, and a panel dropped on a different background still belongs. */
   --canvas:      oklch(.205 0 0);
   --surface:     rgba(255, 255, 255, .03);
+  /*
+   * The fill of a panel sitting on a card.
+   *
+   * Quieter than `--surface-2` because it composites against the card rather
+   * than against the page: measured in the built stylesheet, `--surface-2` on
+   * a card lands at 41 where the reference's panel measures 35, and this rung
+   * lands at 34. `--surface-2` keeps its meaning — one step up from a surface
+   * on the *page* — and stays correct for menus, inputs and the shell.
+   */
+  --surface-panel: rgba(255, 255, 255, .02);
   --surface-2:   rgba(255, 255, 255, .05);
   --surface-hi:  rgba(255, 255, 255, .08);
   --border:      rgba(255, 255, 255, .05);
@@ -342,11 +368,22 @@
      as a seam rather than as height. `flat` is a real rung, not an absence:
      it is what a card takes, so "no shadow here" is a stated decision. */
   --shadow-flat:   none;
-  /* One step of lift, at 5% black. Heavier shadows are how a dark interface
-     starts looking like stacked cards rather than one surface — the panels are
-     separated by their own edge and the alpha of their fill, and the shadow
-     only has to stop them from floating free. */
-  --shadow-raised: 0 4px 6px -1px rgba(0,0,0,.05), 0 2px 4px -2px rgba(0,0,0,.05);
+  /*
+   * One step of lift, fitted against the reference rather than chosen.
+   *
+   * It was 5% black on both layers, and that is very close to no shadow at
+   * all: measured under a panel, 5% produced the grey ramp 28,28,29,29,29,30
+   * where no shadow produces a flat 30 and the reference produces
+   * 23,25,26,27,29,29. Against the reference profile that scored 48 by sum of
+   * squares and plain `none` scored 101 — the two were barely distinguishable,
+   * which is why every raised surface in the product read as flat.
+   *
+   * These values score 5. The instinct in the old comment was right — a heavy
+   * shadow does turn a dark interface into stacked cards — but 5% overshot the
+   * caution to the point of being invisible. The lift now does what the border
+   * and the fill cannot do alone: it says the panel is *above* the card.
+   */
+  --shadow-raised: 0 3px 6px -2px rgba(0,0,0,.30), 0 2px 4px -2px rgba(0,0,0,.24);
   --shadow-float:  0 10px 15px -3px rgba(0,0,0,.12), 0 4px 6px -4px rgba(0,0,0,.1);
 
   --scrim:       rgba(0,0,0,.5);
@@ -361,6 +398,10 @@
 [data-theme="light"] {
   --canvas:      #fbfbfa;
   --surface:     #ffffff;
+  /* On white, a panel sits *below* its card rather than above it: the card is
+     pure white and the panel is the tinted one. The dark theme's ordering does
+     not transfer, which is why this is a stated value and not a formula. */
+  --surface-panel: #fafaf9;
   --surface-2:   #f6f6f5;
   --surface-hi:  #f0f0ef;
   --border:      #e6e6e4;
@@ -430,6 +471,7 @@
 @theme inline {
   --color-canvas: var(--canvas);
   --color-surface: var(--surface);
+  --color-surface-panel: var(--surface-panel);
   --color-surface-2: var(--surface-2);
   --color-surface-hi: var(--surface-hi);
   --color-border: var(--border);

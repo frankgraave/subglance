@@ -119,6 +119,21 @@ export function Topbar({
         />
 
         {/*
+         * The column control is deliberately NOT here.
+         *
+         * It lived in this bar for one commit and the cost showed up
+         * immediately: it exists only for Cards, so switching to Rows removed
+         * four buttons from a right-aligned group and slid everything before
+         * them — including the layout switcher the user had just clicked —
+         * 121px sideways. Chrome that moves under the cursor is the thing
+         * `.panel-row-actions` goes out of its way to avoid.
+         *
+         * This bar now holds only what is true on every screen. Tools that
+         * belong to one view live in the dashboard's own tools row, where
+         * appearing and disappearing costs nothing above them.
+         */}
+
+        {/*
          * The workbench survives, as a side track rather than a tab beside the
          * product. Judging a component in isolation and in both themes is
          * something the live screen cannot do — it only ever shows the states

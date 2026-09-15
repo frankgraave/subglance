@@ -57,10 +57,30 @@
   text-decoration: underline;
 }
 
+/*
+ * Identity and state: name, status pill, target, and the reason when there is
+ * one.
+ *
+ * These were three children of the page's own 20px flex column, which spaced
+ * the hostname from its own status exactly as far as it spaced the whole block
+ * from the first card — so three facts about one monitor read as three
+ * unrelated rows. The block is grouped now and closes to the half-step
+ * internally; the 20px belongs between sections, not inside one.
+ */
 .mon-detail-head {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-1h);
+}
+
+/* Wraps rather than truncates: on a narrow viewport the pill drops under the
+   name, which is the one place it can go without either shrinking the title or
+   cutting the state off. */
+.mon-detail-titlerow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
 }
 
 .mon-detail-name {
@@ -82,26 +102,80 @@
   overflow-wrap: anywhere;
 }
 
-/* The one sentence the page exists for, so it is the largest body text on it
-   and sits directly under the name with nothing competing. */
+/*
+ * The status pill.
+ *
+ * It sits on the title line, so it takes the helper size rather than the card
+ * size the sentence used to have: beside a 24px title, body-sized text in a
+ * bordered box competes with the name instead of annotating it.
+ *
+ * `flex: none` and `white-space: nowrap` because the pill is a label, not a
+ * paragraph — it holds the lamp, one word and an age, all of them short by
+ * construction. The reason a monitor is down goes to `.mon-detail-reason`,
+ * which has a whole line for it.
+ */
 .mon-detail-status {
-  font-size: var(--type-card);
-  line-height: var(--lead-card);
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2h);
+  border: 1px solid var(--border);
+  /* A pill, not a panel: this is a state on a line of text, and the full round
+     keeps it from reading as a fourth nested box on a page that already has
+     cards and panels. `--r-pill`, not `50%`: a percentage radius on a box that
+     is wider than it is tall draws an ellipse, not a pill. */
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+/* The word itself keeps the full ink; the age beside it stays quiet. */
+.mon-detail-status > strong {
+  font-weight: var(--weight-mid);
   color: var(--ink);
 }
 
-/* The lamp sits on the sentence's baseline rather than on its box top, so it
-   reads as part of the line instead of a bullet beside it. */
+/* Trouble warms the pill's edge, the same rule the rows and cards follow. The
+   fill stays neutral: the word already says "Down", and a red block behind it
+   would state the same thing twice in a louder voice. */
+.mon-detail-status[data-status="down"] { border-color: var(--down); }
+.mon-detail-status[data-status="pending"] { border-color: var(--warn); }
+.mon-detail-status[data-status="waiting"] { border-color: var(--idle); }
+
+/* The lamp sits inside the pill now, so the old baseline nudge is gone: the
+   flex row centres it against the word. */
 .mon-detail-led {
-  display: inline-block;
-  margin-right: var(--space-2);
-  vertical-align: middle;
+  flex: none;
 }
 
 .mon-detail-age {
   color: var(--ink-3);
+}
+
+/*
+ * Why a monitor is down, in full.
+ *
+ * Its own line rather than a clause in the pill, because this is the one piece
+ * of free text on the page: a DNS failure or a TLS error runs to a sentence,
+ * and inside a pill it would push the title around and wrap the line. At body
+ * size and in the status colour it is the thing the eye lands on after the
+ * name, which is the order the page is read in.
+ */
+.mon-detail-reason {
   font-size: var(--type-body);
   line-height: var(--lead-body);
+  color: var(--down);
+  overflow-wrap: anywhere;
+}
+
+/* Waiting is not a failure: nothing has reported in yet, which is a state of
+   the setup rather than of the service. */
+.mon-detail-reason--quiet {
+  color: var(--ink-3);
 }
 
 /*

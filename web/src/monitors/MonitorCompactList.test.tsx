@@ -1,8 +1,17 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { MonitorCompactList } from "./MonitorCompactList";
 import type { Monitor, MonitorStatus } from "./types";
+
+/** monitors.css on disk: part of this layout's contract lives in CSS. */
+const monitorsCss = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "monitors.css"),
+  "utf8",
+);
 
 afterEach(cleanup);
 
@@ -193,6 +202,48 @@ describe("MonitorCompactList grouped by a tag", () => {
   it("keeps the lines list items, so the item count still matches the monitors", () => {
     render(<MonitorCompactList monitors={tagged()} groupKey="env" />);
     expect(lines()).toHaveLength(4);
+  });
+
+  it("puts the lines straight on the card, with no panel between", () => {
+    /*
+     * The nesting rule, as a test, because it was found by eye.
+     *
+     * A line already carries its own border, radius and fill, so a `.panel`
+     * wrapped around the list is a third surface framing a second one. That
+     * structure shipped: measured against the reference it stepped the fill
+     * one rung too light and pushed the first line 67px below the card's edge
+     * where the reference puts it at 61px — the 6px inset spent twice, once by
+     * the card and once by the wrapper.
+     *
+     * Checked in the DOM rather than in CSS: the wrapper's cost is structural,
+     * and a rule about which elements exist has to read the elements.
+     */
+    const { container } = render(<MonitorCompactList monitors={tagged()} />);
+
+    const card = container.querySelector(".card");
+    expect(card, "the list still lives in a card").not.toBeNull();
+    expect(
+      card?.querySelector(".panel"),
+      "a line is the panel; a panel around the list is one surface too many",
+    ).toBeNull();
+
+    const list = container.querySelector(".mon-line-stack");
+    expect(
+      list?.parentElement,
+      "the list hangs off the card itself, not off a wrapper",
+    ).toBe(card);
+  });
+
+  it("spends the six-pixel inset once, on the card", () => {
+    // The stack gave up its own padding when the wrapper went. Leaving it
+    // would reinstate half the bug — the inset doubled — without the extra
+    // border to make it obvious.
+    const stack = /\.mon-line-stack\s*\{([^}]*)\}/.exec(monitorsCss);
+    expect(stack, "missing the .mon-line-stack rule").not.toBeNull();
+    expect(
+      stack?.[1],
+      "the card already holds the lines 6px clear of its border",
+    ).toMatch(/padding:\s*0/);
   });
 
   it("stays one flat list without a grouping key", () => {

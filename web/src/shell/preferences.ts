@@ -24,14 +24,46 @@ export const LAYOUTS: readonly { id: LayoutId; label: string; hint: string }[] =
 
 export const DEFAULT_LAYOUT: LayoutId = "rows";
 
+/**
+ * How many cards the Cards layout puts on a row.
+ *
+ * `"auto"` is not a fifth number: it fills the width with a floor, so a wide
+ * screen decides for itself and a narrow one still gets a single column. The
+ * numbers exist beside it because "decide for me" and "give me exactly two"
+ * are different requests, and a monitor wall is usually the second.
+ */
+export type CardColumns = "1" | "2" | "3" | "auto";
+
+/**
+ * The options, in the order the toolbar offers them.
+ *
+ * Every entry carries a `hint`: the control is drawn as bars rather than
+ * words (§7.8), so the `title` is the only thing that names what a button
+ * does for anyone who does not read the icon the way we drew it.
+ */
+export const CARD_COLUMNS: readonly { id: CardColumns; hint: string }[] = [
+  { id: "1", hint: "One card per row." },
+  { id: "2", hint: "Two cards per row." },
+  { id: "3", hint: "Three cards per row." },
+  { id: "auto", hint: "As many as fit the window." },
+];
+
+export const DEFAULT_CARD_COLUMNS: CardColumns = "2";
+
 /** Where each preference is persisted. Namespaced like the theme key. */
 export const LAYOUT_STORAGE_KEY = "subglance:layout";
 export const SIDEBAR_STORAGE_KEY = "subglance:sidebar";
+export const CARD_COLUMNS_STORAGE_KEY = "subglance:card-columns";
 
 const IDS: readonly string[] = LAYOUTS.map((l) => l.id);
+const COLUMN_IDS: readonly string[] = CARD_COLUMNS.map((c) => c.id);
 
 export function isLayoutId(value: unknown): value is LayoutId {
   return typeof value === "string" && IDS.includes(value);
+}
+
+export function isCardColumns(value: unknown): value is CardColumns {
+  return typeof value === "string" && COLUMN_IDS.includes(value);
 }
 
 /**
@@ -76,6 +108,14 @@ export function readStoredLayout(storage: Pick<Storage, "getItem">): LayoutId {
  */
 export function readStoredSidebarCollapsed(storage: Pick<Storage, "getItem">): boolean {
   return read(storage, SIDEBAR_STORAGE_KEY) === "collapsed";
+}
+
+/** The stored column count, falling back to two for absent or corrupt values. */
+export function readStoredCardColumns(
+  storage: Pick<Storage, "getItem">,
+): CardColumns {
+  const raw = read(storage, CARD_COLUMNS_STORAGE_KEY);
+  return isCardColumns(raw) ? raw : DEFAULT_CARD_COLUMNS;
 }
 
 /**

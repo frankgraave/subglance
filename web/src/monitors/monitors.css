@@ -24,83 +24,232 @@
   gap: var(--space-4);
 }
 
+/*
+ * The dashboard toolbar.
+ *
+ * A second band of chrome attached to the shell's topbar: same fill, same
+ * bottom border, no gap between them. It was a bare flex row on the page
+ * background for one commit, and without a surface it read as three controls
+ * floating in the content rather than as a bar.
+ *
+ * Negative margins pull it out of `.shell-content`'s padding so it spans the
+ * full width like the topbar does, then put the padding back on its own
+ * terms. The alternative — moving the toolbar into the shell — would put a
+ * dashboard-specific control in a component every screen shares.
+ *
+ * The shell's topbar holds what is true everywhere: add, layout, workbench,
+ * theme. This holds what is true on *this* screen: search, the status filter,
+ * and whatever the current view brings with it.
+ *
+ * The fill is the topbar's, not `--surface`: that bar is a 86% canvas mix
+ * behind a blur, and a flat panel fill under it reads as a lighter strip
+ * stuck to the frame rather than as more of the same frame. It does not need
+ * to be sticky to need the blur — the two bands are adjacent, and at rest the
+ * eye compares them directly.
+ */
 .mon-topbar {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-4);
-  flex-wrap: wrap;
-}
-
-.mon-title {
-  font-size: var(--type-card);
-  line-height: var(--lead-card);
-  font-weight: var(--weight-strong);
-}
-
-.mon-counts {
-  display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-3);
-  margin-top: var(--space-2);
-  font-size: var(--type-helper);
-  line-height: var(--lead-helper);
-  color: var(--ink-3);
+  flex-wrap: wrap;
+  margin: calc(var(--space-6) * -1) calc(var(--space-6) * -1) 0;
+  padding: var(--space-2) var(--space-6);
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--canvas) 86%, transparent);
+  backdrop-filter: blur(12px);
 }
 
-/* A button that does not look like one until you reach for it. The counts are
-   read far more often than they are clicked, so the resting state stays the
-   plain sentence it has always been; hover and the pressed state are what
-   announce that it is a control. The border is transparent rather than absent
-   so nothing shifts by a pixel when it appears. */
+/*
+ * The right-hand end: everything that narrows or reshapes the list.
+ *
+ * `auto` rather than a fixed gap after the search field, so the space between
+ * them is whatever is left rather than a number to maintain.
+ */
+.mon-view-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-left: auto;
+}
+
+/*
+ * The status filter, framed like the segmented control beside it.
+ *
+ * The shell is what makes the two clusters read as siblings rather than as
+ * loose toggles next to a framed thing. It is deliberately the *same* frame:
+ * 2px of padding inside `--r-md`, leaving `--r-sm` on the chips, which is the
+ * concentric rule (§2.7) and the geometry §7.8 measured.
+ *
+ * It is not a segmented control and must not become one. These are
+ * independent toggles — none selected is a real state, and pressing the
+ * active chip is how you get back to the full list — where a segmented
+ * control is one-of-N. The frame is a visual family, not a promise.
+ */
+.mon-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding: var(--space-0h);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+
+/*
+ * A filter chip, shaped like a segment of the control beside it.
+ *
+ * `--r-sm` inside the frame's `--r-md` and its 2px of padding: 8 − 2 = 6,
+ * concentric by §2.7. The transparent border is declared at rest so the box
+ * never changes size when a chip is pressed or hovered — the same reason
+ * `.segmented-option` carries one.
+ */
 .mon-count {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-1) var(--space-2);
-  margin: calc(var(--space-1) * -1) calc(var(--space-2) * -1);
+  height: 26px;
+  padding: 0 var(--space-2h);
   font: inherit;
-  color: inherit;
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  color: var(--ink-3);
   background: none;
   border: 1px solid transparent;
   border-radius: var(--r-sm);
   cursor: pointer;
+  white-space: nowrap;
   transition: background-color var(--dur-hover) var(--ease),
-              border-color var(--dur-hover) var(--ease);
+              border-color var(--dur-hover) var(--ease),
+              color var(--dur-hover) var(--ease);
 }
 
-.mon-count:hover { border-color: var(--border-hi); }
-
-/* Pressed is carried by the filled surface AND the sentence under the search
-   box, never by colour alone (DESIGN.md §9): aria-pressed is what a screen
-   reader gets, the fill is what a sighted user gets, and the sentence is what
-   anyone gets who looked away while it was toggled. */
-.mon-count[aria-pressed="true"] {
-  background: var(--surface-2);
+.mon-count:hover {
+  color: var(--ink-2);
   border-color: var(--border-hi);
 }
 
+/* Pressed is carried by the filled surface AND by aria-pressed, never by
+   colour alone (DESIGN.md §9). */
+.mon-count[aria-pressed="true"] {
+  background: var(--surface-hi);
+  border-color: var(--border-hi);
+  color: var(--ink);
+}
+
 .mon-count-value {
+  @apply face-mono;
   font-weight: var(--weight-strong);
   color: var(--ink);
 }
 
-.mon-search-input {
-  width: 240px;
+/*
+ * The chip's lamp: a round key, not the product's 20x7 bar.
+ *
+ * §3 fixes the bar's size so a wall of lamps stays scannable, and that rule is
+ * about lamps reporting a monitor's state. This is a legend for a filter — it
+ * says "the red ones", not "this monitor is down" — and at the scale of the
+ * text beside it a 20x7 pill reads as a status badge that has wandered into a
+ * toolbar. The word next to it is what carries the meaning (§2.3), which is
+ * what makes a small dot safe here and nowhere else.
+ */
+.mon-count-dot {
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: 50%;
+  flex: none;
+}
+
+.mon-count-dot[data-state="up"]   { background: var(--up);   box-shadow: var(--glow-up); }
+.mon-count-dot[data-state="warn"] { background: var(--warn); box-shadow: var(--glow-warn); }
+.mon-count-dot[data-state="down"] { background: var(--down); box-shadow: var(--glow-down); }
+/* Idle is filled grey — a reading we do not have. Off is the same silhouette
+   with nothing in it — nobody is taking a reading, on purpose (§3.1). */
+.mon-count-dot[data-state="idle"] { background: var(--idle); }
+.mon-count-dot[data-state="off"]  { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-2); }
+
+/*
+ * The search field, as one box holding three things.
+ *
+ * The icon and the shortcut hint sit *inside* the border rather than beside
+ * it, so the whole affordance is one target: a magnifier floating next to an
+ * input reads as decoration, and a keycap floating next to one reads as a
+ * legend for something else on the page.
+ *
+ * `focus-within` on the wrapper is what makes that work — the real focus is on
+ * the `<input>`, and without this the box the user sees would never respond to
+ * the keyboard.
+ */
+.mon-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2h);
+  width: 280px;
   max-width: 100%;
-  padding: var(--space-2) var(--space-3);
-  font: inherit;
-  font-size: var(--type-body);
-  line-height: var(--lead-body);
-  color: var(--ink);
+  height: 32px;
   background: var(--surface);
   border: 1px solid var(--border-control);
   border-radius: var(--r-sm);
+  color: var(--ink-4);
   transition: border-color var(--dur-hover) var(--ease);
 }
 
+.mon-search:hover { border-color: var(--border-hi); }
+
+/* The accent ring the rest of the product uses for focus (§2.8), moved to the
+   wrapper because that is the box with the edge. */
+.mon-search:focus-within {
+  border-color: var(--accent-border);
+  outline: 3px solid var(--accent-ring);
+  outline-offset: 1px;
+}
+
+.mon-search > .shell-icon {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+/* The input gives up its own chrome entirely: the wrapper is the field now. */
+.mon-search-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  font: inherit;
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  color: var(--ink);
+  background: none;
+  border: 0;
+}
+
+.mon-search-input:focus { outline: none; }
 .mon-search-input::placeholder { color: var(--ink-4); }
-.mon-search-input:hover { border-color: var(--border-hi); }
+
+/*
+ * The shortcut hint. It does nothing yet, and that is a decision rather than
+ * an oversight: the palette is later work, and this is `aria-hidden` so no
+ * screen reader announces a shortcut the product does not honour.
+ */
+.mon-search-kbd {
+  @apply face-mono;
+  flex: none;
+  /* Helper size, not a smaller one: there is no rung below 12px in the type
+     scale and inventing a 10px literal here would be the exact drift the
+     spacing guard exists to catch. The keycap reads as small because of its
+     border and its ink, not because the text shrank. */
+  font-size: var(--type-helper);
+  /* The role's own leading (§2.5), not a tighter one. A one-line label does
+     not need 16px of leading, but the pairing rule is worth more than the two
+     pixels: `--type-helper` renders at one leading everywhere, or it renders
+     at three on one screen and nobody can name why. The keycap gets its height
+     from its padding instead. */
+  line-height: var(--lead-helper);
+  padding: 0 var(--space-1h);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  color: var(--ink-4);
+}
 
 /* One labelled native select per tag key. Native because these lists are
    short and a custom listbox would have to re-earn keyboard support, the
@@ -242,19 +391,26 @@
  * easier. Safari drops table semantics when you do, silently undoing every
  * reason the table is here.
  */
+/* `--border` throughout, matching `.panel-row`: a row is a static surface, and
+   §2.9 reserves the control edge for things that are themselves clickable. */
 .mon-row > * {
-  border-block: 1px solid var(--border-control);
+  border-block: 1px solid var(--border);
+  /* The lift a panel takes (§2.10). Drawn per cell for the same reason the
+     border is: `<tr>` cannot carry one under `border-collapse: separate`.
+     Without it these rows were the only panels in the product still painted
+     flat onto their card. */
+  box-shadow: var(--shadow-raised);
   transition: border-color var(--dur-hover) var(--ease);
 }
 
 .mon-row > :first-child {
-  border-left: 1px solid var(--border-control);
+  border-left: 1px solid var(--border);
   border-start-start-radius: var(--r-md);
   border-end-start-radius: var(--r-md);
 }
 
 .mon-row > :last-child {
-  border-right: 1px solid var(--border-control);
+  border-right: 1px solid var(--border);
   border-start-end-radius: var(--r-md);
   border-end-end-radius: var(--r-md);
 }
@@ -527,36 +683,105 @@
    second, different treatment for the same idea. */
 
 .mon-card-stack {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  /*
+   * How many cards on a row, from the toolbar (`--mon-card-cols`).
+   *
+   * Read this as "at most N columns, and never narrower than 380px". The
+   * `max()` is what makes it one rule instead of a rule plus a breakpoint:
+   * when the container is wide, an equal share of it exceeds the floor and
+   * `auto-fill` lands on exactly N columns; when it is narrow, the floor wins
+   * and the grid drops to as many as genuinely fit. A phone gets one column
+   * because one is all that fits, not because a media query overrode the
+   * user's setting.
+   *
+   * That matters beyond tidiness: a fixed `repeat(N, 1fr)` plus a
+   * `max-width` query would have introduced a second breakpoint into
+   * monitors.css, and this product deliberately has exactly one
+   * (`COMPACT_MAX_WIDTH`, asserted by layout/breakpoint.test.ts).
+   *
+   * The share subtracts the gutters — N columns have N−1 of them — or the
+   * rounding costs a column at the exact widths where it should just fit.
+   *
+   * 380px is measured, not guessed: below it the card's facts row (two
+   * labelled numbers side by side) starts wrapping, and a grid whose cells
+   * wrap internally is worse than one column fewer.
+   */
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(
+      /*
+       * `min(100%, …)` is not decoration: a bare 380px floor does not shrink,
+       * so on a 336px container the card stayed 380px and hung over the card's
+       * right edge. Measured — card 380px in a 336px stack. The floor has to
+       * yield to the container before it yields to anything else.
+       */
+      min(
+        100%,
+        max(
+          380px,
+          calc(
+            (100% - (var(--mon-card-cols, 1) - 1) * var(--space-1h)) /
+              var(--mon-card-cols, 1)
+          )
+        )
+      ),
+      1fr
+    )
+  );
   /* Six, matching the card's own padding: a monitor is the same distance from
-     its neighbour as from the panel edge. It was 8px, which put more air
-     between the cards than around them and made the group read as looser than
-     it is. */
+     its neighbour as from the card's edge. The gutter between columns is the
+     same number, so a two-up grid sits on the rhythm a single column sets. */
   gap: var(--space-1h);
   list-style: none;
-  /* The panel this sits in is flush so the stack can own its own inset. Six
-     again, for the same reason — this is the third level of the same nesting
-     and it repeats the same number deliberately. */
-  padding: var(--space-1h);
+  /* No padding. The stack sits directly on the card now that the flush
+     `<Panel>` wrapper is gone, so the 6px inset is the card's and is spent
+     once — it used to be spent twice, by the wrapper and by this rule. */
+  padding: 0;
   margin: 0;
 }
 
 /*
- * A monitor card sits inside a panel, inside a card — three levels deep — so
- * it takes the innermost radius on the ladder, not the outermost.
+ * "As many as fit", which is not a fifth column count.
  *
- * It was --r-lg (12px), which is the radius of the *outer* card now framing
- * it. Two boxes at the same radius with one inside the other read as a
- * mistake rather than as nesting: the corners run parallel at the wrong
- * offset and the inner box looks like it has escaped its container. One step
- * down per level is the whole grammar.
+ * The same floor with no ceiling: whatever the window holds. This is the one
+ * setting that gives a 27-inch screen five columns without anybody having to
+ * pick the number five.
+ */
+.mon-card-stack[data-cols="auto"] {
+  /* Same `min(100%, …)` guard as above, for the same overflow. */
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
+}
+
+/*
+ * A monitor card sits inside a card — two levels, not three — so it takes the
+ * radius one step inside the card's own.
+ *
+ * It was --r-sm (6px), correct while this sat inside a flush panel three
+ * levels deep. With the wrapper gone the ladder is card 12 → panel 8, which is
+ * what §2.6 calls the row step and what the reference measures.
  */
 .mon-card {
   padding: var(--space-3) var(--space-4);
+  /* The static edge, for the reason `.panel-row` takes it (§2.9). */
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-md);
+  /*
+   * `--surface`, the same fill `.panel-row` takes, not `--surface-2`.
+   *
+   * These alphas composite against whatever is under them, and what is under
+   * this changed. Measured in the built stylesheet, `--surface` on the card
+   * lands on a fill two greyscale values above the reference's panel and
+   * `--surface-2` lands seven above it, so this is the nearer rung by a wide
+   * margin. Closing the last two would mean stating the alpha against the
+   * canvas instead of the parent, which breaks the property the dark palette
+   * is built on — a surface inheriting whatever is beneath it, so a panel
+   * dropped on a different background still belongs.
+   */
   background: var(--surface);
+  /* The lift the reference gives a panel. Border and fill alone leave the card
+     flat against its parent; this is what puts it above the surface. */
+  box-shadow: var(--shadow-raised);
   /* min-width:0 lets the flex/grid children below actually ellipsis instead
      of pushing the card past the viewport — the 416px-on-a-390px-screen bug
      this issue opened with. */
@@ -653,11 +878,37 @@
  */
 @media (max-width: 640px) {
   .mon-topbar {
-    /* Stacked, and the search goes full width: a 240px input beside a heading
-       on a 375px screen leaves neither of them usable. */
+    /* Stacked, and the search goes full width: a 280px field beside three
+       filter chips on a 375px screen leaves neither of them usable. The bar
+       keeps its surface and its edge — it is still a toolbar, just a taller
+       one. */
     flex-direction: column;
     align-items: stretch;
-    gap: var(--space-3);
+    gap: var(--space-2);
+    margin: calc(var(--space-4) * -1) calc(var(--space-4) * -1) 0;
+    padding: var(--space-3) var(--space-4);
+  }
+
+  /* The two clusters share the row they now have to themselves, and scroll
+     rather than wrap: a filter that reflows to two lines pushes the list down
+     every time a status appears or disappears. */
+  .mon-view-tools {
+    margin-left: 0;
+    /*
+     * The scroller needs a width to scroll *within*, and `stretch` does not
+     * give it one: as a flex item whose content cannot shrink, its automatic
+     * minimum size wins and the box grows to its 376px of chips instead of
+     * taking the 343px line. `overflow-x` then has nothing to clip — the row
+     * simply hung 17px off the right edge of a 375px screen and took the
+     * whole page's scrollWidth with it.
+     *
+     * `100%` is the same instrument `.mon-search` below already uses, and the
+     * one the phone-layout guard measures.
+     */
+    width: 100%;
+    overflow-x: auto;
+    /* Room for the frame's own edge and shadow inside the scroller. */
+    padding-bottom: 2px;
   }
 
   .mon-facet-select,
@@ -670,14 +921,43 @@
     padding: var(--space-2) var(--space-3);
   }
 
+  .mon-search {
+    /* Full width: a 280px field beside anything on a 375px screen leaves
+       neither usable. */
+    width: 100%;
+    /* Taller, because the input inside it grows to the 16px no-zoom floor. */
+    height: auto;
+    padding: var(--space-2) var(--space-2h);
+  }
+
   .mon-search-input {
     width: 100%;
     /* 16px is not a style choice: iOS Safari zooms the page when a focused
-       input is smaller, and the zoom does not undo itself on blur. */
+       input is smaller, and the zoom does not undo itself on blur. The desktop
+       field is helper-sized, so this floor only applies here — and it is why
+       the wrapper gives up its fixed height rather than clipping the text. */
     font-size: var(--type-nozoom);
     line-height: var(--lead-nozoom);
-    padding: var(--space-3);
+    /*
+     * And the box itself clears 24px, because the tap lands on the *input*.
+     *
+     * The wrapper looks like the target — it carries the border, the fill and
+     * the magnifier — but it is a <div>, not a <label>, so tapping its padding
+     * focuses nothing; verified in a real browser. At a 20px line box that left
+     * the one control someone uses one-handed after an alert below WCAG 2.5.8,
+     * while the thing around it merely looked big enough. Two quarter-steps
+     * take the input to 24 and the shell to 42; nothing else on the row moves.
+     */
+    padding-block: var(--space-0h);
   }
+
+  /* The shortcut hint goes: there is no keyboard to press it with, and on the
+     one screen where width is scarce it is the first thing that should give
+     its space back to the field. */
+  .mon-search-kbd {
+    display: none;
+  }
+
 }
 
 /*
@@ -700,19 +980,26 @@
 /*
  * The compact list is a stack of panels, not a ruled table (DESIGN.md §10).
  *
- * The stack itself owns no border, no background and no corner any more: the
- * container used to draw one box with hairlines inside it, which is what made
- * a hundred monitors read as a spreadsheet. Each line now carries its own edge
- * — see `.panel-row` in components/panellist.css — and this rule is left only
- * to hold the columns the layout still needs.
+ * The stack owns no border, no background, no corner and — since the flush
+ * `<Panel>` wrapper was removed — no padding either. Each line carries its own
+ * edge (`.panel-row` in components/panellist.css) and sits directly on the
+ * card, at the card's own 6px.
+ *
+ * Why the wrapper went. Measured against the reference, a card held three
+ * nested surfaces where the reference holds two — canvas, card, panel, and
+ * then a fourth fill on top of that. The wrapper was the extra step, and it
+ * also spent the 6px inset twice, which put the first row 67px below the
+ * card's edge where the reference puts it at 61px.
  */
 .mon-line-stack {
   list-style: none;
-  /* Matches the card's padding, for the same reason the monitor card stack
-     does: the panel above is flush so its rows can own their inset, and six
-     keeps a line the same distance from its neighbour as from the edge. */
-  padding: var(--space-1h);
+  padding: 0;
   margin: 0;
+  /* Six, not `.panel-list`'s eight: the stack now sits directly on the card,
+     and the card holds it 6px from its own border. A line must be the same
+     distance from its neighbour as it is from the edge, or the group reads as
+     looser than it is. */
+  gap: var(--space-1h);
 }
 
 .mon-line {

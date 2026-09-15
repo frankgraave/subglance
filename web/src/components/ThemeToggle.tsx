@@ -1,17 +1,59 @@
+import type { ReactElement } from "react";
+import { IconMoon, IconSun, IconThemeAuto } from "./icons";
+import { SegmentedControl } from "./SegmentedControl";
 import type { ThemePreference } from "../theme/theme";
 
-const OPTIONS: readonly { value: ThemePreference; label: string }[] = [
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
-  { value: "system", label: "Auto" },
+const OPTIONS: readonly {
+  id: ThemePreference;
+  label: string;
+  icon: ReactElement;
+  hint: string;
+}[] = [
+  { id: "light", label: "Light", icon: <IconSun />, hint: "Light theme" },
+  { id: "dark", label: "Dark", icon: <IconMoon />, hint: "Dark theme" },
+  {
+    id: "system",
+    label: "Auto",
+    icon: <IconThemeAuto />,
+    // Names the mechanism, because "Auto" alone leaves open what it follows —
+    // the time of day is the other thing people expect it to mean.
+    hint: "Follow the operating system",
+  },
 ];
 
 /**
- * Three-way segmented control.
+ * Three-way theme choice.
  *
  * A two-state toggle cannot express "follow the system", and a dropdown costs
- * a click to even see the current value. Rendered as radios so arrow keys and
- * screen readers work without any custom key handling.
+ * a click to even see the current value.
+ *
+ * This was a hand-rolled fourth copy of the segmented control, written in
+ * Tailwind utilities against `bg-surface-2` and `rounded-sm` while the shared
+ * component had moved on. Side by side in the topbar the two bars disagreed on
+ * radius, padding, border and what "selected" looks like — the reason this now
+ * uses `SegmentedControl` like everything else.
+ *
+ * The cost of the change is real and worth stating: the old markup was a
+ * `<fieldset>` of radios, which gave arrow-key navigation for free. The shared
+ * control is a group of toggle buttons (see its own note on why), so the keys
+ * behave like the rest of the toolbar instead. Consistency of one control
+ * across the product beats one control having better keys than its neighbours.
+ *
+ * ## Why glyphs and not the words
+ *
+ * The same argument `CardColumnsSwitcher` makes, plus one this control has and
+ * that one does not: theme is the single most universally iconified control on
+ * the web. A sun and a crescent are read without being learned, which is the
+ * bar an icon has to clear before it is allowed to replace a word.
+ *
+ * It also buys back the room this bar is short of. "Light Dark Auto" is three
+ * words of chrome permanently parked in the corner of every screen, competing
+ * with the page for the attention rule 1 wants pointed at the monitors — and
+ * on a phone it was the widest thing in a right-aligned group that had already
+ * given up its padding. Three 26px squares, at the toolbar's own size.
+ *
+ * Every option still carries its `label` as the accessible name and a `hint`
+ * as the tooltip; the glyph is what is drawn, not what is announced.
  */
 export function ThemeToggle({
   preference,
@@ -21,30 +63,11 @@ export function ThemeToggle({
   onChange: (next: ThemePreference) => void;
 }) {
   return (
-    <fieldset className="flex items-center gap-1 rounded-sm border border-border bg-surface-2 p-0.5">
-      <legend className="sr-only">Colour theme</legend>
-      {OPTIONS.map((option) => {
-        const active = option.value === preference;
-        return (
-          <label
-            key={option.value}
-            className={[
-              "cursor-pointer rounded-sm px-2.5 py-1 text-helper transition-colors",
-              active ? "bg-surface-hi text-ink" : "text-ink-3 hover:text-ink-2",
-            ].join(" ")}
-          >
-            <input
-              type="radio"
-              name="theme"
-              value={option.value}
-              checked={active}
-              onChange={() => onChange(option.value)}
-              className="sr-only"
-            />
-            {option.label}
-          </label>
-        );
-      })}
-    </fieldset>
+    <SegmentedControl
+      label="Colour theme"
+      options={OPTIONS}
+      value={preference}
+      onChange={onChange}
+    />
   );
 }

@@ -90,9 +90,29 @@
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-4);
-  border: 1px solid var(--border-control);
+  /*
+   * `--border`, not `--border-control`.
+   *
+   * §2.9 assigns `--border-control` to the resting edge of anything
+   * *clickable*; a panel is a static surface and takes the static edge. The
+   * control border is also the one opaque, slightly blue value in the set,
+   * and on a dark card it measured 38,40,43 against a 41 fill — no contrast
+   * at all, so the panel lost its contour. The reference draws
+   * its panel edge *lighter* than the panel's own fill, by 11 greyscale
+   * values; `--border` reproduces that exactly.
+   */
+  border: 1px solid var(--border);
   border-radius: var(--r-md);
-  background: var(--surface-2);
+  /*
+   * `--surface-panel`, quieter than `--surface-2`.
+   *
+   * These alphas composite against the parent, so a .05 fill on a card came
+   * out at 41 where the reference measures 35. See tokens.css for why this
+   * rung exists.
+   */
+  background: var(--surface-panel);
+  /* A panel rests on the card rather than being painted onto it (§2.10). */
+  box-shadow: var(--shadow-raised);
 }
 
 /* A panel whose child draws to its own edges — a list, a table, a chart that

@@ -224,3 +224,71 @@ describe("MonitorCardList grouped by a tag", () => {
     expect(headings()).toEqual(["Needs attention (1)", "All monitors (3)"]);
   });
 });
+
+describe("cards per row", () => {
+  /*
+   * The column count reaches CSS through two channels, and the split is the
+   * thing worth guarding: a fixed count is arithmetic `repeat()` can do from a
+   * custom property, while "auto" is a different `grid-template-columns`
+   * altogether, selected by the attribute. Encoding auto as a number would
+   * mean inventing one, and any number is the wrong answer on some window.
+   */
+  const stack = (container: HTMLElement) =>
+    container.querySelector(".mon-card-stack") as HTMLElement;
+
+  it("passes a fixed count to CSS as a custom property", () => {
+    const { container } = render(
+      <MonitorCardList
+        monitors={[monitor("api", "up")]}
+        columns="3"
+        beatWidth={WIDTH}
+      />,
+    );
+    expect(stack(container).style.getPropertyValue("--mon-card-cols")).toBe("3");
+    expect(stack(container).dataset.cols).toBe("3");
+  });
+
+  it("passes auto as an attribute and no number at all", () => {
+    const { container } = render(
+      <MonitorCardList
+        monitors={[monitor("api", "up")]}
+        columns="auto"
+        beatWidth={WIDTH}
+      />,
+    );
+    expect(stack(container).dataset.cols).toBe("auto");
+    expect(
+      stack(container).style.getPropertyValue("--mon-card-cols"),
+      "auto must not be smuggled in as a made-up column count",
+    ).toBe("");
+  });
+
+  it("defaults to one column, which is what this layout always was", () => {
+    const { container } = render(
+      <MonitorCardList monitors={[monitor("api", "up")]} beatWidth={WIDTH} />,
+    );
+    expect(stack(container).style.getPropertyValue("--mon-card-cols")).toBe("1");
+  });
+
+  it("applies the count to every stack when the list is grouped", () => {
+    // Two sections, two stacks. A count applied to the first only would put
+    // one group in a grid and leave the next as a column.
+    const grouped = [
+      monitor("api", "up", { tags: { env: "prod" } }),
+      monitor("db", "up", { tags: { env: "staging" } }),
+    ];
+    const { container } = render(
+      <MonitorCardList
+        monitors={grouped}
+        groupKey="env"
+        columns="2"
+        beatWidth={WIDTH}
+      />,
+    );
+    const stacks = [...container.querySelectorAll(".mon-card-stack")];
+    expect(stacks.length).toBeGreaterThan(1);
+    for (const s of stacks) {
+      expect((s as HTMLElement).style.getPropertyValue("--mon-card-cols")).toBe("2");
+    }
+  });
+});

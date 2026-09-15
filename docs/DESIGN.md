@@ -491,7 +491,7 @@ Space moves in steps of 4px; §2.7 states the ladder and how it is enforced.
 ### 2.7 Spacing and radius
 
 The ladder is `--space-1..16` = 4/8/12/16/20/24/32/40/48/64 and the radius
-ladder is `--r-2xs/xs/sm/md/lg` = 2/4/6/10/12. Both are guarded by `tokens.test.ts`
+ladder is `--r-2xs/xs/sm/md/lg` = 2/4/6/8/12. Both are guarded by `tokens.test.ts`
 the way colour and type already were, because both had drifted: a `7px` and a
 `9px` padding, each chosen by hand to reach a rendered height that nothing
 stated.
@@ -871,6 +871,75 @@ In Status wall, broken cards get a **warm border**, not a coloured fill. A wall
 full of coloured cards is noise; a wall of quiet cards with two warm borders is
 information.
 
+**Cards chooses its own column count.** At one card per row the layout spent
+most of a wide screen on nothing: the heartbeat was pushed against the right
+edge with a dashed rule crossing the empty middle. The toolbar offers 1, 2, 3
+and *fill the width*, as a segmented control drawn in icons — the options are
+shapes, so the button shows the layout it selects rather than naming it. Each
+one still carries an accessible name and a tooltip, because a bar chart is only
+obvious to someone who already knows what the control does.
+
+The control appears only while Cards is on screen, keyed off the *effective*
+layout rather than the stored one: a setting visible while it governs nothing
+teaches people it does nothing. The count is stored under its own key so it
+survives a trip through Rows and back.
+
+**It lives in the dashboard's toolbar, not in the shell's topbar.** The topbar
+holds what is true on every screen — add, layout, workbench, theme — and a
+second bar under it holds what belongs to *this* screen: search, the status
+filter, and whatever the current view brings with it. The split is not
+tidiness. A view-specific control in the topbar appears and disappears inside a
+right-aligned group, which slides everything before it sideways — measured at
+121px, including the layout switcher the user had just clicked. Chrome that
+moves out from under the cursor is what §10's no-transform rule exists to
+prevent, and it applies to the toolbar too.
+
+**The toolbar is a band of chrome, not a row of controls on the page.** It
+carries the topbar's own fill — an 86% canvas mix behind a 12px blur — its own
+bottom border, and no gap between the two. It shipped once as a bare flex row
+on the page background, and without a surface it read as three controls
+floating in the content rather than as a bar; the fix is the fill and the edge,
+not more spacing. Negative margins pull it out of the content padding so it
+spans the full width like the topbar does. A flat `--surface` fill is wrong
+here for the same reason: against a translucent bar it reads as a lighter strip
+stuck to the frame rather than as more of the frame.
+
+The order is fixed: **search hard left, the status filter and the view tools
+together hard right.** An `auto` margin, not a gap value, is what holds them
+apart, so the space between is whatever is left rather than a number to
+maintain.
+
+**The status filter is framed like the segmented control beside it** — the same
+2px of padding inside `--r-md`, leaving `--r-sm` on the chips, concentric by
+§2.7 — so the two clusters read as siblings rather than as loose toggles next
+to a framed thing. That frame is the one risk in this design and it is worth
+naming: a segmented control means one-of-N, and the filter is not. None
+selected is a real state, and pressing the active chip is how you get back to
+the full list. So the chips stay `<button aria-pressed>` inside a
+`role="group"`, never radios, and a test holds that line.
+
+The chips' lamps are **round dots, not the 20×7 bar**. §3 fixes the bar's size
+so a wall of them stays scannable, and that rule is about lamps reporting a
+monitor's state. A filter chip's lamp is a legend — it says "the red ones", not
+"this monitor is down" — and at the scale of the text beside it a full pill
+reads as a status badge that has wandered into a toolbar. The word next to it
+carries the meaning (§2.3), which is exactly what makes a small dot safe here
+and nowhere else. The status-to-colour mapping lives in one module for both, so
+"paused" cannot end up hollow in one place and grey in the other.
+
+The page title is visually hidden rather than deleted: the card below already
+says "Monitors (2)", so printing the word twice was the duplication this row
+was rearranged to remove — but the `h1` stays in the outline, because the
+detail view uses `h1` for a monitor's name and a screen reader needs a level-1
+landmark on the busier of the two screens.
+
+There is no breakpoint behind it. The grid asks for "at most N columns, never
+narrower than 380px", so a narrow window drops to as many as genuinely fit —
+one column on a phone because one is what fits, not because a media query
+overrode the setting. 380px is measured: below it the card's facts row starts
+wrapping, and a grid whose cells wrap internally is worse than one column
+fewer.
+
 **Sidebar.** Collapsible in every layout, via the button on the left of the
 topbar or `Cmd/Ctrl + B`. Collapsed it becomes a 56px rail with icons only — not
 gone, because then your navigation is unreachable. Status wall hides it
@@ -1009,17 +1078,21 @@ after.
 Three or four mutually exclusive options, all of them visible. §7.2 already
 chose this over a dropdown for forms; it is the same control in a toolbar.
 
-**Two variants, chosen by what the control does — not by how loud it should
-look.**
+**One selected state: `--accent` fill, `--accent-border` edge, `--accent-ink`
+label.** Every segmented control in the product, regardless of what it governs.
 
-| Variant | The control changes | Selected segment |
-|---|---|---|
-| `view` | which view of the data you get — layout, density | neutral fill, `--surface-hi` on `--border-hi` |
-| `data` | *what data* you are looking at — range, filter | `--accent` fill, `--accent-ink` label |
+This section used to specify two variants — a neutral `--surface-hi` selection
+for controls that change the *view* (layout, density) and the accent for ones
+that change *what data* you see (range, filter). That rule is withdrawn. It was
+reasoned from first principles rather than measured, and the reference
+contradicts it: its own range selector is a view control by exactly that
+definition and still fills the active segment with the accent.
 
-The layout switcher is the first kind: it changes how the monitors are drawn,
-never which monitors. Deciding by role rather than by emphasis is what stops
-every segmented control on a screen from being the loud one.
+What the rule produced was worse than inconsistent. A selected segment drawn as
+a grey box reads as *disabled*, not as chosen, and with both variants on one
+toolbar the layout switcher and the theme toggle disagreed about what selection
+even looks like. A rule that has to be explained before the control can be read
+is not a rule worth keeping.
 
 **An inactive segment is fully transparent, its border included.** The border
 is declared at rest in `transparent`, so the box already occupies the space the
@@ -1027,11 +1100,14 @@ selected state will need and nothing shifts by a pixel when the selection
 moves. A control that only adds a border when pressed nudges every label beside
 it each time you press it.
 
-**The inner radius is concentric, not equal.** Per §2.7 the shell is `--r-sm`
-with `--space-1` of padding, so a segment is `6 − 4 = 2px`, which is `--r-2xs`.
-This is the first component in the product that nests a radius inside a padded
-one, and it is the case the concentric guard in `tokens.test.ts` was landed
-for.
+**The bar carries its own 1px edge.** Without it the segments read as loose
+buttons sitting in the toolbar rather than as one control with a selection in
+it — which is what ours did.
+
+**The inner radius is concentric, not equal.** Per §2.7 an inner radius is the
+outer minus the padding. Measured on the reference: `--r-md` (8px) outside, 2px
+of padding, `--r-sm` (6px) on the segment — `8 − 2 = 6`, exactly concentric.
+This is the case the concentric guard in `tokens.test.ts` was landed for.
 
 ### 8.1 The chip family
 
@@ -1223,18 +1299,20 @@ to discover late.
 
 ### Blocking — the design does not survive without these
 
-- **Spacing and radius are not enforced.** `tokens.test.ts` mechanically
-  guarantees that `tokens.css` is the only source of colour, font size, line
-  height, weight and letter spacing. Spacing and radius have no such guard, and
-  three values have already been written by hand to hit a target height:
-  `shell.css:93` `padding: 7px`, `:207` `4px 9px`, `:290` `4px 7px`. The ladder
-  is 4/8/12/16/20/24; 7 and 9 are not on it, and a measured 8px radius is not on
-  the radius ladder (4/6/10/14) either. These are not cosmetic slips — each was
-  chosen to reach a specific rendered height, which is reasoning that belongs in
-  a token rather than buried in a padding value somebody will later "tidy up".
-  The 20x7 LED with its `--r-2xs` radius (§2.4) is the counter-example: outside the
-  ladder, argued for in writing, and therefore an exception rather than a leak. A
-  guard is what keeps those two apart.
+- ~~**Spacing and radius are not enforced.**~~ **Closed.** `tokens.test.ts`
+  mechanically guarantees that `tokens.css` is the only source of colour, font
+  size, line height, weight and letter spacing — and now of spacing and radius
+  too: "tokens.css is the only source of spacing and radius" rejects any literal
+  at or above the ladder floor under `web/src`, in the corner and logical
+  properties as well as the short forms, and catches arbitrary Tailwind
+  utilities with it. The three values this gap was opened for
+  (`shell.css` `padding: 7px`, `4px 9px`, `4px 7px`) are gone.
+  The spacing ladder is 4/8/12/16/20/24 with a documented 2px quarter-step for
+  the segmented frame; the radius ladder is 2/4/6/8/12, so the 8px on that
+  control is `--r-md` — a rung, not the off-ladder value this entry once called
+  it. The 20x7 LED with its `--r-2xs` radius (§2.4) remains the counter-example
+  for a real exception: outside the ladder, argued for in writing, and therefore
+  an exception rather than a leak. A guard is what keeps those two apart.
 - **Optical correction barely lands.** Four tracking tokens exist but 67 of the
   79 measured elements sit at `normal`. Dense interface type at 12–15px usually
   wants a slight negative tracking as a single decision on the body, with the
