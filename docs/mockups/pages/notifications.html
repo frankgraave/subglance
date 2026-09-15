@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notifications — SubGlance page proposal</title>
+<link rel="stylesheet" href="shared.css">
+<!-- Shared shell markup + theme script for the page proposals.
+     Copied into each page rather than injected, so every file opens standalone
+     from disk with no fetch(). Keep the four copies in sync by hand. -->
+<script>
+(function () {
+  var KEY = "subglance:mockup-theme";
+  var saved = null;
+  try { saved = localStorage.getItem(KEY); } catch (e) {}
+  var t = saved || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+  document.documentElement.setAttribute("data-theme", t);
+  window.__toggleTheme = function () {
+    var next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem(KEY, next); } catch (e) {}
+  };
+})();
+</script>
+<style>
+/* Page-specific rules only. Everything is built from the shared tokens —
+   no raw hex, no raw px for spacing. Six rules is the whole budget. */
+
+/* A two-column key/value block inside a panel. Gap equals the panel's padding
+   step down, per the nesting rule. */
+.kv { display: grid; grid-template-columns: 140px 1fr; gap: var(--space-2) var(--space-3); align-items: center; }
+
+/* Inner surface inside a panel: one radius step down (--r-sm), no extra shadow.
+   This is the third and last surface we allow, and only for form groups. */
+.inner { border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface-2);
+         padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-3); }
+
+/* The test-result slot. Reserved inline, so a result appearing does not reflow
+   the row — the page must stay still while you read it. */
+.testout { min-width: 168px; text-align: right; }
+
+/* Coverage matrix: monitor name, then the channels that would receive it. */
+.cov { display: grid; grid-template-columns: 1fr auto; gap: var(--space-2) var(--space-3); align-items: center; }
+
+/* A horizontal wrap of chips, used for tags and for coverage channels. */
+.chips { display: flex; flex-wrap: wrap; gap: var(--space-1h); justify-content: flex-end; }
+
+/* Toggle switch built out of the button token set, so it inherits focus ring.
+   On/off is never colour alone: the knob physically moves and the label changes. */
+.sw { display: inline-flex; align-items: center; gap: var(--space-2); background: none; border: 0; padding: 0;
+      font: inherit; color: var(--ink-2); cursor: pointer; }
+.sw i { width: 34px; height: 20px; border-radius: var(--r-pill); background: var(--surface-hi);
+        border: 1px solid var(--border-control); position: relative; flex: none; }
+.sw i::after { content: ""; position: absolute; top: 1px; left: 1px; width: 16px; height: 16px;
+               border-radius: var(--r-pill); background: var(--ink-3); transition: transform var(--dur-hover) var(--ease), background var(--dur-hover) var(--ease); }
+.sw[aria-pressed="true"] i { background: color-mix(in srgb, var(--accent) 35%, transparent); border-color: var(--accent-border); }
+.sw[aria-pressed="true"] i::after { transform: translateX(14px); background: var(--accent-ink); }
+.sw:focus-visible { outline: 2px solid var(--accent-border); outline-offset: 2px; border-radius: var(--r-sm); }
+
+/* ---------- phone ----------
+   Channel rows carry a destination string that cannot wrap (a webhook URL);
+   let it truncate instead of widening the document. */
+@media (max-width: 720px) {
+  .row-sub, .row-name { max-width: 100%; }
+  .panel { overflow-x: hidden; }
+  .chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <aside class="shell-side">
+    <div class="shell-brand">
+      <span class="led" data-state="up" aria-hidden="true"></span>
+      <span class="shell-brand-name">SubGlance</span>
+    </div>
+
+    <ul class="shell-nav">
+      <li><a class="shell-nav-item" href="#">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        Dashboard</a></li>
+      <li><a class="shell-nav-item" href="incidents.html">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 2.4 17.2A1.8 1.8 0 0 0 4 20h16a1.8 1.8 0 0 0 1.6-2.8L13.7 3.9a1.8 1.8 0 0 0-3.4 0Z"/></svg>
+        Incidents <span class="shell-nav-badge">3</span></a></li>
+      <li><a class="shell-nav-item" href="monitors.html">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3 7 4-14 3 7h4"/></svg>
+        Monitors</a></li>
+      <li class="shell-nav-section">Configure</li>
+      <li><a class="shell-nav-item" href="#" aria-current="page">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        Notifications</a></li>
+      <li><a class="shell-nav-item" href="settings.html">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/></svg>
+        Settings</a></li>
+    </ul>
+
+    <div class="shell-foot">operator@example.com</div>
+
+    <div class="shell-foot" style="margin-top:var(--space-3);padding-top:var(--space-3);border-top:1px solid var(--border)">
+      <a href="index.html" style="color:var(--ink-3);text-decoration:none">&larr; All proposals</a>
+    </div>
+  </aside>
+
+  <div class="shell-main">
+    <header class="shell-topbar">
+      <span class="shell-title">Notifications</span>
+
+      <!-- Page control: this is a mockup-only switch so a reviewer can see the
+           fresh-install state without deleting fixtures. It is NOT proposed UI. -->
+      <div class="segmented" role="group" aria-label="Mockup view">
+        <button type="button" aria-pressed="true" data-view="configured">Configured</button>
+        <button type="button" aria-pressed="false" data-view="empty">Fresh install</button>
+      </div>
+
+      <div class="shell-topbar-right">
+        <button class="btn btn--sm" type="button" id="add-channel-btn">Add channel</button>
+        <button class="btn btn--sm" type="button" onclick="__toggleTheme()">Theme</button>
+      </div>
+    </header>
+
+    <main class="page">
+
+      <div class="note">
+        <b>What this page is.</b> Two questions, in this order: <b>can we reach you</b>, and
+        <b>when should we</b>. Everything above the fold answers the first — channels, their
+        delivery health, and a test button. Routing and timing answer the second. The state
+        engine (<code>internal/state</code>) already decides <em>whether something is real</em>
+        via confirmation and flapping suppression; nothing on this page is allowed to re-litigate
+        that. This page only decides <em>who hears about it</em>.
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           1 + 2. CHANNELS, with delivery health and the test button.
+
+           A list is a stack of .row panels, not a table. Each row answers,
+           left to right: what kind, where to, how much depends on it, did the
+           last delivery work, and can I prove it works right now.
+
+           Delivery failure gets the loudest treatment on the page — a row
+           tinted with --down-dim plus a red chip plus the literal error text.
+           Colour alone is never the signal: the chip carries a word ("Failed")
+           and the row carries the reason.
+           ═══════════════════════════════════════════════════════════════ -->
+      <section class="card" id="view-configured">
+        <div class="card-head">
+          <div class="card-title">Channels</div>
+          <div class="card-actions">
+            <button class="btn btn--sm" type="button" id="test-all-btn">Test all</button>
+            <button class="btn btn--sm btn--primary" type="button" id="add-channel-btn-2">Add channel</button>
+          </div>
+        </div>
+
+        <div class="stack" id="channel-list">
+
+          <!-- Email: the only notifier that exists today (internal/notifier/email.go). -->
+          <div class="row" data-channel="email-ops">
+            <div class="row-main">
+              <div class="row-name">
+                Email
+                <span class="chip">ops@acme.example</span>
+              </div>
+              <div class="row-sub">5 monitors · last fired 2h ago · delivered in 410ms</div>
+            </div>
+            <span class="chip chip--up">✓ Delivered</span>
+            <span class="testout helper" data-testout></span>
+            <button class="btn btn--sm" type="button" data-test="email-ops">Send test</button>
+            <button class="btn btn--sm" type="button" data-edit="email-ops">Edit</button>
+          </div>
+
+          <!-- Slack: destination is a secret URL, so the row shows the human
+               destination (#alerts) and a masked fingerprint, never the URL. -->
+          <div class="row" data-channel="slack-alerts">
+            <div class="row-main">
+              <div class="row-name">
+                Slack
+                <span class="chip">#alerts</span>
+              </div>
+              <div class="row-sub">3 monitors · last fired 2h ago · webhook ••••/B07F4 · delivered in 180ms</div>
+            </div>
+            <span class="chip chip--up">✓ Delivered</span>
+            <span class="testout helper" data-testout></span>
+            <button class="btn btn--sm" type="button" data-test="slack-alerts">Send test</button>
+            <button class="btn btn--sm" type="button" data-edit="slack-alerts">Edit</button>
+          </div>
+
+          <!-- THE IMPORTANT ROW. A channel whose token was revoked three days
+               ago and which has been failing silently ever since. This is the
+               worst failure mode a monitoring tool has, so it is styled like an
+               incident: tinted row, red chip with a word, the upstream error
+               verbatim, and a repair action sitting right next to it. -->
+          <div class="row" data-status="down" data-channel="telegram-oncall">
+            <div class="row-main">
+              <div class="row-name">
+                Telegram
+                <span class="chip">@acme_subglance_bot → chat -100••••4471</span>
+              </div>
+              <div class="row-sub">2 monitors · failing since 3d ago · 11 failed deliveries · 401 unauthorized: bot token revoked</div>
+            </div>
+            <span class="chip chip--down">✗ Failed ×11</span>
+            <span class="testout helper" data-testout></span>
+            <button class="btn btn--sm" type="button" data-test="telegram-oncall">Send test</button>
+            <button class="btn btn--sm" type="button" data-edit="telegram-oncall">Fix token</button>
+          </div>
+
+          <!-- The quiet danger: configured, attached, never actually exercised.
+               "Never fired" is a dashed --meta chip because it is a fact about
+               the data, not a state of the data. It is not red — nothing is
+               broken — but it is also not green, because nothing is proven. -->
+          <div class="row" data-channel="webhook-gateway">
+            <div class="row-main">
+              <div class="row-name">
+                Webhook
+                <span class="chip">ops-gateway.internal.acme-corporation.example/hooks/subglance</span>
+              </div>
+              <div class="row-sub">1 monitor · created 12d ago · POST · signed with secret ••••a91f</div>
+            </div>
+            <span class="chip chip--meta">Never fired · untested</span>
+            <span class="testout helper" data-testout></span>
+            <button class="btn btn--sm" type="button" data-test="webhook-gateway">Send test</button>
+            <button class="btn btn--sm" type="button" data-edit="webhook-gateway">Edit</button>
+          </div>
+
+        </div>
+
+        <div class="note">
+          <b>Proposed kind set:</b> <code>email</code>, <code>slack</code>, <code>webhook</code>,
+          <code>telegram</code>, <code>discord</code>. Email ships today; Slack and Discord are
+          both "post JSON to an incoming-webhook URL" and cost almost nothing on top of the generic
+          webhook, but they deserve their own kind because the <em>field</em> is different (one
+          URL, no method, no signing) and because a user picking "Slack" should not have to know
+          they are configuring a webhook. PagerDuty/Opsgenie are deliberately out: they want
+          dedup keys and incident lifecycle callbacks, which is a separate piece of work.
+        </div>
+
+        <div class="note">
+          <b>Why delivery health is on the row and not behind a click.</b> A notification channel
+          that stopped working is indistinguishable from "everything is fine" — the silence is
+          identical. So the last delivery result is part of the row's identity, at the same
+          visual level as the destination. Two derived states matter and they must not share a
+          colour: <b>Failed</b> (red, has fired, did not arrive) and <b>Never fired</b> (dashed
+          meta, no evidence either way). A third, healthy, is green. One meaning per signal.
+        </div>
+
+        <div class="note">
+          <b>Send test is the most valuable control here</b> and already exists as
+          <code>POST /api/v1/channels/{id}/test</code>. It is per-row rather than a single page
+          button because you almost always want to verify the one channel you just touched.
+          The result renders in place, stays until the next test, and reports latency on success
+          and the upstream error verbatim on failure — a test that just says "failed" makes you
+          go read the server log, which is exactly the trip this button exists to avoid.
+          <em>Try it: the Telegram channel fails.</em>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           3. ADD / EDIT CHANNEL
+
+           Hidden until you ask for it. Kind is a segmented control rather than
+           a select, because the field set changes underneath it and a segmented
+           control makes that cause-and-effect visible.
+           ═══════════════════════════════════════════════════════════════ -->
+      <section class="card" id="channel-form" hidden>
+        <div class="card-head">
+          <div class="card-title" id="form-title">Add channel</div>
+          <div class="card-actions">
+            <button class="btn btn--sm" type="button" id="form-cancel">Cancel</button>
+            <button class="btn btn--sm btn--primary" type="button" id="form-save">Save channel</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="kv">
+            <span class="label">Kind</span>
+            <div class="segmented" role="group" aria-label="Channel kind" id="kind-picker">
+              <button type="button" aria-pressed="true" data-kind="email">Email</button>
+              <button type="button" aria-pressed="false" data-kind="slack">Slack</button>
+              <button type="button" aria-pressed="false" data-kind="discord">Discord</button>
+              <button type="button" aria-pressed="false" data-kind="telegram">Telegram</button>
+              <button type="button" aria-pressed="false" data-kind="webhook">Webhook</button>
+            </div>
+
+            <span class="label">Name</span>
+            <input class="input" type="text" value="On-call email" aria-label="Channel name">
+          </div>
+        </div>
+
+        <!-- Per-kind field groups. Only one is visible at a time. -->
+        <div class="panel">
+          <div class="inner" data-kindfields="email">
+            <div class="field">
+              <label for="f-email">Recipient address</label>
+              <input class="input mono" id="f-email" type="text" value="ops@acme.example">
+              <span class="helper">Multiple addresses, comma separated. Delivery uses the SMTP settings from Settings → Mail.</span>
+            </div>
+          </div>
+
+          <div class="inner" data-kindfields="slack" hidden>
+            <div class="field">
+              <label for="f-slack">Incoming webhook URL</label>
+              <div style="display:flex; gap:var(--space-2)">
+                <input class="input mono" id="f-slack" type="text" value="••••••••••••••••••••••••  ends ••••/B07F4" readonly data-secret>
+                <button class="btn" type="button" data-replace="f-slack">Replace</button>
+              </div>
+              <span class="helper">Stored write-only. SubGlance shows the last 5 characters so you can tell two webhooks apart, and nothing else.</span>
+            </div>
+            <div class="field">
+              <label for="f-slack-ch">Channel label (display only)</label>
+              <input class="input mono" id="f-slack-ch" type="text" value="#alerts">
+            </div>
+          </div>
+
+          <div class="inner" data-kindfields="discord" hidden>
+            <div class="field">
+              <label for="f-discord">Incoming webhook URL</label>
+              <div style="display:flex; gap:var(--space-2)">
+                <input class="input mono" id="f-discord" type="text" placeholder="discord.com/api/webhooks/…" data-secret>
+                <button class="btn" type="button" data-replace="f-discord">Replace</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="inner" data-kindfields="telegram" hidden>
+            <div class="field">
+              <label for="f-tg-token">Bot token</label>
+              <div style="display:flex; gap:var(--space-2)">
+                <input class="input mono" id="f-tg-token" type="text" value="•••••••••••••••••••••••••••••••••••" readonly data-secret>
+                <button class="btn" type="button" data-replace="f-tg-token">Replace</button>
+              </div>
+              <span class="helper">Write-only. The stored value is never returned by the API and never written to the log — see SUB-95.</span>
+            </div>
+            <div class="field">
+              <label for="f-tg-chat">Chat ID</label>
+              <input class="input mono" id="f-tg-chat" type="text" value="-1001987654471">
+              <span class="helper">Not a secret: it identifies a destination but grants nothing. Shown in full on purpose.</span>
+            </div>
+          </div>
+
+          <div class="inner" data-kindfields="webhook" hidden>
+            <div class="field">
+              <label for="f-wh-url">Endpoint</label>
+              <input class="input mono" id="f-wh-url" type="text" value="ops-gateway.internal.acme-corporation.example/hooks/subglance">
+              <span class="helper">TLS required. Plain-text endpoints are rejected at save time.</span>
+            </div>
+            <div class="field">
+              <label>Method</label>
+              <div class="segmented" role="group" aria-label="HTTP method">
+                <button type="button" aria-pressed="true">POST</button>
+                <button type="button" aria-pressed="false">PUT</button>
+              </div>
+            </div>
+            <div class="field">
+              <label for="f-wh-secret">Signing secret (optional)</label>
+              <div style="display:flex; gap:var(--space-2)">
+                <input class="input mono" id="f-wh-secret" type="text" value="•••••••••••••••••  ends a91f" readonly data-secret>
+                <button class="btn" type="button" data-replace="f-wh-secret">Replace</button>
+              </div>
+              <span class="helper">If set, each request carries an HMAC-SHA256 of the body in <code>X-SubGlance-Signature</code>.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="note">
+          <b>Secrets are write-only in the UI — this is SUB-95 modelled correctly.</b> The stored
+          value is never rendered, not even to an admin, not even behind a reveal button, because
+          a reveal button is just a leak with an extra click. The field shows a fixed-width mask
+          plus a <em>non-secret fingerprint</em> (the last few characters) so a human can tell two
+          Slack webhooks apart, and the only write path is <b>Replace</b>, which clears the field
+          and takes a fresh value. The API contract that goes with it: <code>GET /channels</code>
+          returns <code>secret_set: true</code> and a fingerprint, never the value; <code>PUT</code>
+          treats an absent secret field as "leave unchanged" rather than "clear"; and the notifier
+          never logs the token, the URL of a Slack/Discord webhook, or the request body.
+          <em>Click Replace to see the interaction.</em>
+        </div>
+
+        <div class="note q">
+          <b>Q for Frank:</b> is the fingerprint (last 4–5 chars of a token) acceptable, or is it
+          already too much? It is genuinely useful when you have three Slack webhooks and one of
+          them is dead — but it is also entropy we did not have to hand out. The conservative
+          alternative is to show only the creation date and the channel name and force people to
+          name their channels well.
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           4. ROUTING
+
+           The part worth arguing about. The concrete design shown is:
+           tag rules, evaluated in order, plus a catch-all default channel,
+           plus a live coverage read-out that names monitors nobody hears about.
+           ═══════════════════════════════════════════════════════════════ -->
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title">Routing</div>
+          <div class="card-actions">
+            <button class="btn btn--sm" type="button">Add rule</button>
+          </div>
+        </div>
+
+        <div class="split">
+          <div class="stack" id="rule-list">
+
+            <div class="row">
+              <div class="row-main">
+                <div class="row-name">Monitors tagged <span class="chip">production</span> → Slack #alerts</div>
+                <div class="row-sub">rule 1 · matches 3 monitors</div>
+              </div>
+              <button class="sw" type="button" aria-pressed="true" data-rule="r1" data-tag="production" data-ch="Slack #alerts">
+                <i aria-hidden="true"></i><span data-swlabel>Enabled</span>
+              </button>
+            </div>
+
+            <div class="row">
+              <div class="row-main">
+                <div class="row-name">Monitors tagged <span class="chip">critical</span> → Email ops@acme.example</div>
+                <div class="row-sub">rule 2 · matches 2 monitors</div>
+              </div>
+              <button class="sw" type="button" aria-pressed="true" data-rule="r2" data-tag="critical" data-ch="Email ops@acme.example">
+                <i aria-hidden="true"></i><span data-swlabel>Enabled</span>
+              </button>
+            </div>
+
+            <div class="row">
+              <div class="row-main">
+                <div class="row-name">Monitors tagged <span class="chip">batch</span> → Webhook ops-gateway</div>
+                <div class="row-sub">rule 3 · matches 1 monitor</div>
+              </div>
+              <button class="sw" type="button" aria-pressed="false" data-rule="r3" data-tag="batch" data-ch="Webhook ops-gateway">
+                <i aria-hidden="true"></i><span data-swlabel>Disabled</span>
+              </button>
+            </div>
+
+            <div class="row">
+              <div class="row-main">
+                <div class="row-name">Everything else → Email ops@acme.example</div>
+                <div class="row-sub">default channel · catch-all, evaluated last</div>
+              </div>
+              <button class="sw" type="button" aria-pressed="true" data-rule="default" data-tag="*" data-ch="Email ops@acme.example">
+                <i aria-hidden="true"></i><span data-swlabel>Enabled</span>
+              </button>
+            </div>
+
+          </div>
+
+          <!-- The coverage read-out. A routing UI without this is a guessing
+               game: you write rules and hope. This answers the only question
+               that matters — for each monitor, who actually gets paged. -->
+          <div class="panel">
+            <div class="label">Coverage preview</div>
+            <div class="cov" id="coverage" style="margin-top:var(--space-3)"></div>
+            <div class="helper" id="coverage-warn" style="margin-top:var(--space-3)"></div>
+          </div>
+        </div>
+
+        <div class="note">
+          <b>Three models, and the one I would ship.</b>
+          <br><b>(a) Attach per monitor</b> — <code>PUT /monitors/{id}/channels</code>, which the API
+          already has. Dead simple, perfectly explicit, and the state lives where you look for it.
+          It also degrades badly: at 40 monitors, adding a new on-call channel is 40 edits, and the
+          first time someone forgets one you get a monitor nobody hears about.
+          <br><b>(b) Tag rules</b> — "everything tagged <code>production</code> goes to #alerts".
+          Scales, and expresses intent rather than plumbing. The cost is indirection: to answer
+          "who gets paged for checkout-api" you have to evaluate rules in your head.
+          <br><b>(c) Default channel plus exceptions</b> — safe by construction, because the fresh
+          install has coverage from the first monitor. But "exceptions" quietly becomes (a) again.
+          <br><b>Recommendation: (b) + (c) together, exactly as drawn — ordered tag rules with a
+          catch-all default — and keep (a) as the escape hatch on the monitor page.</b> The default
+          is what makes this safe: no monitor can ever be silently unrouted, which is the failure
+          this whole page exists to prevent. The tag rules are what make it survive growth. And the
+          coverage panel is non-negotiable: rules you cannot see the effect of are worse than
+          tedium. Note that the union semantics matter — a monitor tagged both
+          <code>production</code> and <code>critical</code> notifies <em>both</em> channels rather
+          than stopping at the first match; first-match-wins is a trap when the rule that wins is
+          the quieter one.
+        </div>
+
+        <div class="note q">
+          <b>Q for Frank:</b> rules union or first-match-wins? Union is safer and matches how
+          people describe it out loud ("prod goes to Slack, and critical also wakes me up"), but it
+          makes "route this one monitor somewhere quieter" impossible without a mute/exclude
+          concept. First-match-wins makes overrides trivial and silence easy to cause by accident.
+          I lean union plus an explicit per-monitor <em>exclude</em>, but that is a real API
+          decision and I do not want to invent it alone.
+        </div>
+
+        <div class="note q">
+          <b>Q for Frank:</b> do tags exist as a first-class monitor field yet? This whole design
+          assumes they do, and if they do not, tag routing is a bigger ticket than it looks —
+          tags need to be editable on the monitor page, shown on the dashboard, and probably
+          filterable there too. If tags are out of scope for v1, model (c) alone (default channel
+          plus explicit per-monitor attach) is the honest fallback.
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           5. WHEN TO NOTIFY
+
+           Deliberately small. The state engine already owns "is this real".
+           Everything offered here is about *reaching a human*, not about
+           deciding whether the incident counts.
+           ═══════════════════════════════════════════════════════════════ -->
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title">When to notify</div>
+          <div class="helper" style="margin-left:auto">Per channel · shown for Slack #alerts</div>
+        </div>
+
+        <div class="grid2">
+          <div class="panel">
+            <div class="label">Events</div>
+            <div class="stack" style="margin-top:var(--space-3)">
+              <div class="row">
+                <div class="row-main">
+                  <div class="row-name">Notify on failure</div>
+                  <div class="row-sub">after the state engine confirms · 2 consecutive failures</div>
+                </div>
+                <span class="chip chip--meta">Always on</span>
+              </div>
+              <div class="row">
+                <div class="row-main">
+                  <div class="row-name">Notify on recovery</div>
+                  <div class="row-sub">one message when the incident closes</div>
+                </div>
+                <button class="sw" type="button" aria-pressed="true"><i aria-hidden="true"></i><span data-swlabel>Enabled</span></button>
+              </div>
+              <div class="row">
+                <div class="row-main">
+                  <div class="row-name">Re-notify while open</div>
+                  <div class="row-sub" id="renotify-sub">every 30 minutes, up to 4 times</div>
+                </div>
+                <button class="sw" type="button" aria-pressed="false" id="renotify-sw"><i aria-hidden="true"></i><span data-swlabel>Disabled</span></button>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="label">Reach</div>
+            <div class="kv" style="margin-top:var(--space-3)">
+              <span class="helper">Severity floor</span>
+              <div class="segmented" role="group" aria-label="Severity floor">
+                <button type="button" aria-pressed="false">All</button>
+                <button type="button" aria-pressed="true">Confirmed down</button>
+                <button type="button" aria-pressed="false">Down ≥ 5 min</button>
+              </div>
+
+              <span class="helper">Quiet hours</span>
+              <div style="display:flex; gap:var(--space-2); align-items:center">
+                <input class="input mono" type="text" value="23:00" aria-label="Quiet hours start" style="width:88px">
+                <span class="helper">to</span>
+                <input class="input mono" type="text" value="07:00" aria-label="Quiet hours end" style="width:88px">
+                <span class="chip chip--meta">Europe/Amsterdam</span>
+              </div>
+
+              <span class="helper">During quiet hours</span>
+              <div class="segmented" role="group" aria-label="Quiet hours behaviour">
+                <button type="button" aria-pressed="true">Hold and send a digest at 07:00</button>
+                <button type="button" aria-pressed="false">Drop</button>
+              </div>
+            </div>
+            <div class="helper" style="margin-top:var(--space-3)">Quiet hours never apply to a monitor
+              routed by a rule marked <span class="chip chip--meta">wakes you up</span>.</div>
+          </div>
+        </div>
+
+        <div class="note">
+          <b>What is deliberately absent.</b> No "notify after N failures", no "minimum duration
+          before alerting", no flap threshold. Those all already exist in
+          <code>internal/state</code> — confirmation (default 2), incident lifecycle, flapping
+          suppression — and duplicating them here would give a user two places to configure the
+          same idea, which is how you end up with a monitor that alerts at 2 failures and a channel
+          that suppresses until 5 and nobody able to explain the silence. The knobs offered here
+          are strictly about <em>reaching a person</em>: which events, how loud, and when the human
+          is asleep. The severity floor is the one borderline case, and it is framed as a floor on
+          an already-confirmed state rather than as a second confirmation step.
+        </div>
+
+        <div class="note">
+          <b>Quiet hours must fail safe.</b> "Drop" is offered but is not the default, because
+          dropping an alert is an irreversible decision made by a config field at 03:00. The default
+          is hold-and-digest: you still sleep, and at 07:00 you get one message listing what
+          happened. Recovery notifications during quiet hours collapse into the same digest — a
+          thing that broke and fixed itself overnight is a paragraph, not a phone call.
+        </div>
+
+        <div class="note q">
+          <b>Q for Frank — the one I feel least sure about:</b> is re-notification while an incident
+          stays open a feature, or is it a machine for training people to ignore SubGlance? The
+          argument for it is real: the first message can be missed, and a 40-minute outage where
+          everyone assumed someone else saw it is a genuine failure mode. The argument against is
+          that a repeating alert for a condition you already know about is exactly the signal people
+          learn to filter, and once they filter this one they filter the first one too. Shown here
+          defaulted <b>off</b>, capped (4 repeats, then it stops by itself), and per channel — a
+          Slack room can tolerate a nudge where email cannot. I would rather ship it off-by-default
+          and capped than not ship it, but I would also accept "acknowledge silences it" as the
+          better answer, which implies an ack concept on incidents that does not exist yet.
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           6. NOTIFICATION LOG
+           ═══════════════════════════════════════════════════════════════ -->
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title">Notification log</div>
+          <div class="card-actions">
+            <div class="segmented" role="group" aria-label="Log filter">
+              <button type="button" aria-pressed="true">All</button>
+              <button type="button" aria-pressed="false">Failures only</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="stack">
+          <div class="row">
+            <div class="row-main">
+              <div class="row-name">Failure · checkout-api-eu-west-1.internal.acme-corporation.example</div>
+              <div class="row-sub">today 14:02 · Slack #alerts · incident #418 · 180ms</div>
+            </div>
+            <span class="chip chip--up">✓ Delivered</span>
+          </div>
+          <div class="row">
+            <div class="row-main">
+              <div class="row-name">Failure · checkout-api-eu-west-1.internal.acme-corporation.example</div>
+              <div class="row-sub">today 14:02 · Email ops@acme.example · incident #418 · 410ms</div>
+            </div>
+            <span class="chip chip--up">✓ Delivered</span>
+          </div>
+          <div class="row" data-status="down">
+            <div class="row-main">
+              <div class="row-name">Failure · checkout-api-eu-west-1.internal.acme-corporation.example</div>
+              <div class="row-sub">today 14:02 · Telegram @acme_subglance_bot · incident #418 · 401 unauthorized: bot token revoked · 3 retries</div>
+            </div>
+            <span class="chip chip--down">✗ Failed</span>
+          </div>
+          <div class="row">
+            <div class="row-main">
+              <div class="row-name">Recovery · auth.example.com</div>
+              <div class="row-sub">today 09:47 · Slack #alerts · incident #417 · 210ms</div>
+            </div>
+            <span class="chip chip--up">✓ Delivered</span>
+          </div>
+          <div class="row" data-status="down">
+            <div class="row-main">
+              <div class="row-name">Failure · auth.example.com</div>
+              <div class="row-sub">today 09:31 · Telegram @acme_subglance_bot · incident #417 · 401 unauthorized: bot token revoked · 3 retries</div>
+            </div>
+            <span class="chip chip--down">✗ Failed</span>
+          </div>
+          <div class="row">
+            <div class="row-main">
+              <div class="row-name">Failure · nightly-database-backup-verification</div>
+              <div class="row-sub">yesterday 03:14 · Email ops@acme.example · incident #416 · 380ms</div>
+            </div>
+            <span class="chip chip--up">✓ Delivered</span>
+          </div>
+        </div>
+
+        <div class="note">
+          <b>Does the log belong here or on Incidents?</b> Both, and they are not the same view.
+          On an incident, "who was told, and did it arrive" is one line of the incident timeline —
+          it belongs there because that is where you reconstruct what happened. The version here is
+          the transpose: grouped by <em>channel health over time</em>, which is how you notice that
+          Telegram has failed every single delivery for three days. The incident timeline would
+          never surface that, because each incident only sees its own one failed send. So: keep a
+          per-incident delivery line on the Incidents page, and keep this channel-centric log here.
+          If only one can ship, ship this one — it is the view that catches a dead channel.
+          <br>The log is also the strongest argument for retention being explicit: this should be
+          bounded (say 30 days or 5000 entries, whichever first) and say so, rather than growing
+          until someone notices the database.
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           7. THE FRESH-INSTALL EMPTY STATE
+
+           Toggle "Fresh install" in the topbar to see it in place of the page.
+           This is not a polite grey murmur. No channels means every alert this
+           product produces goes into a void, which is worse than not running
+           the product at all — because you believe you are covered.
+           ═══════════════════════════════════════════════════════════════ -->
+      <section class="card" id="view-empty" hidden>
+        <div class="empty">
+          <div class="empty-head">Alerts are going nowhere.</div>
+          <div class="prose">SubGlance is checking 5 monitors and has no way to tell you when one
+            of them breaks. Every failure it detects will be recorded and shown on this dashboard —
+            and nobody will be told.</div>
+          <div style="display:flex; gap:var(--space-2); margin-top:var(--space-4)">
+            <button class="btn btn--primary" type="button" id="empty-add">Add a channel</button>
+            <button class="btn" type="button">Read the setup guide</button>
+          </div>
+          <div class="helper" style="margin-top:var(--space-2)">Email is the fastest: one address,
+            one test message, done in under a minute.</div>
+        </div>
+      </section>
+
+      <div class="note" id="empty-note" hidden>
+        <b>Why this is the loudest text in the product.</b> The house rule is that an empty state is
+        a fact at headline weight, not an apology — and this particular emptiness is not a neutral
+        "nothing here yet", it is a silent misconfiguration that looks exactly like a working
+        install. So it states the consequence in the headline ("Alerts are going nowhere"), gives
+        the specific number of monitors currently unwatched, and offers the one-minute path first.
+        It is not red: red means something is failing right now, and nothing is failing — this is a
+        gap, not an incident, and reusing the incident colour for it would break one-meaning-per-signal.
+        The weight and the wording carry it instead.
+        <br><b>Follow-through:</b> the same fact should appear as a single dismissible line on the
+        dashboard until at least one channel exists and has passed a test. Not a modal; a fact that
+        does not go away on its own.
+      </div>
+
+      <div class="note">
+        <b>What this page does not do yet.</b> No per-user notification preferences (this is
+        instance-level, matching the product's single-operator shape today), no escalation chains,
+        no on-call schedule. All three are real features; none of them are the thing standing
+        between a fresh install and a delivered alert, which is what this page is for.
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- fixtures ---------------------------------------------------
+     Test outcomes are deterministic so a reviewer sees the same thing twice.
+     Telegram fails with the same error its row already reports. */
+  var TESTS = {
+    "email-ops":       { ok: true,  msg: "Delivered · 410ms" },
+    "slack-alerts":    { ok: true,  msg: "Delivered · 180ms" },
+    "webhook-gateway": { ok: true,  msg: "202 Accepted · 96ms" },
+    "telegram-oncall": { ok: false, msg: "401 unauthorized: bot token revoked" }
+  };
+
+  var MONITORS = [
+    { name: "checkout-api-eu-west-1.internal.acme-corporation.example", tags: ["production", "critical"] },
+    { name: "auth.example.com",                                        tags: ["production", "critical"] },
+    { name: "cdn.example.com",                                         tags: ["production"] },
+    { name: "nightly-database-backup-verification",                    tags: ["batch"] },
+    { name: "status.acme.studio",                                      tags: ["public"] }
+  ];
+
+  function $(s, r) { return (r || document).querySelector(s); }
+  function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+
+  /* ---------- 2. Send test ----------------------------------------------
+     Pending -> result. The slot has a reserved width so nothing shifts. */
+  function runTest(btn) {
+    var id = btn.getAttribute("data-test");
+    var row = btn.closest(".row");
+    var out = $("[data-testout]", row);
+    var res = TESTS[id] || { ok: true, msg: "Delivered" };
+    out.textContent = "Sending test…";
+    out.style.color = "var(--ink-3)";
+    btn.disabled = true;
+    setTimeout(function () {
+      out.textContent = (res.ok ? "✓ " : "✗ ") + res.msg;
+      out.style.color = res.ok ? "var(--up)" : "var(--down)";
+      btn.disabled = false;
+    }, 850);
+  }
+  $$("[data-test]").forEach(function (b) { b.addEventListener("click", function () { runTest(b); }); });
+  $("#test-all-btn").addEventListener("click", function () {
+    $$("[data-test]").forEach(function (b, i) { setTimeout(function () { runTest(b); }, i * 220); });
+  });
+
+  /* ---------- 3. Add / edit form ---------------------------------------- */
+  var form = $("#channel-form");
+  function openForm(title) {
+    form.hidden = false;
+    $("#form-title").textContent = title;
+    form.scrollIntoView({ block: "nearest" });
+  }
+  $("#add-channel-btn").addEventListener("click", function () { openForm("Add channel"); });
+  $("#add-channel-btn-2").addEventListener("click", function () { openForm("Add channel"); });
+  $("#empty-add").addEventListener("click", function () {
+    setView("configured");
+    openForm("Add channel");
+  });
+  $("#form-cancel").addEventListener("click", function () { form.hidden = true; });
+  $("#form-save").addEventListener("click", function () { form.hidden = true; });
+
+  $$("[data-edit]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var kindByChannel = {
+        "email-ops": "email", "slack-alerts": "slack",
+        "telegram-oncall": "telegram", "webhook-gateway": "webhook"
+      };
+      var kind = kindByChannel[b.getAttribute("data-edit")];
+      selectKind(kind);
+      openForm("Edit channel");
+    });
+  });
+
+  /* Switching kind visibly swaps the field set. */
+  function selectKind(kind) {
+    $$("#kind-picker button").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-kind") === kind));
+    });
+    $$("[data-kindfields]").forEach(function (g) {
+      g.hidden = g.getAttribute("data-kindfields") !== kind;
+    });
+  }
+  $$("#kind-picker button").forEach(function (b) {
+    b.addEventListener("click", function () { selectKind(b.getAttribute("data-kind")); });
+  });
+
+  /* Write-only secrets: Replace clears the field and lets you type a new one.
+     There is no reveal path anywhere — the stored value never reaches the DOM. */
+  $$("[data-replace]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var input = document.getElementById(b.getAttribute("data-replace"));
+      if (b.textContent === "Replace") {
+        input.value = "";
+        input.readOnly = false;
+        input.placeholder = "Paste the new value — it is stored write-only";
+        input.focus();
+        b.textContent = "Keep current";
+      } else {
+        input.value = "••••••••••••••••••  unchanged";
+        input.readOnly = true;
+        b.textContent = "Replace";
+      }
+    });
+  });
+
+  /* ---------- 4. Routing + live coverage -------------------------------- */
+  function activeRules() {
+    return $$("[data-rule]").filter(function (b) { return b.getAttribute("aria-pressed") === "true"; })
+      .map(function (b) { return { tag: b.getAttribute("data-tag"), ch: b.getAttribute("data-ch") }; });
+  }
+
+  function renderCoverage() {
+    var rules = activeRules();
+    var host = $("#coverage");
+    host.innerHTML = "";
+    var uncovered = 0;
+
+    MONITORS.forEach(function (m) {
+      var hit = rules.filter(function (r) { return r.tag !== "*" && m.tags.indexOf(r.tag) !== -1; })
+                     .map(function (r) { return r.ch; });
+      var fallback = rules.filter(function (r) { return r.tag === "*"; }).map(function (r) { return r.ch; });
+      var chans = hit.length ? hit : fallback;
+
+      var name = document.createElement("div");
+      name.className = "row-sub";
+      name.textContent = m.name;
+      name.title = m.name;
+
+      var chips = document.createElement("div");
+      chips.className = "chips";
+      if (chans.length) {
+        chans.forEach(function (c) {
+          var el = document.createElement("span");
+          el.className = "chip chip--up";
+          el.textContent = "✓ " + c;
+          chips.appendChild(el);
+        });
+      } else {
+        uncovered++;
+        var el2 = document.createElement("span");
+        el2.className = "chip chip--down";
+        el2.textContent = "✗ No channel";
+        chips.appendChild(el2);
+      }
+      host.appendChild(name);
+      host.appendChild(chips);
+    });
+
+    var warn = $("#coverage-warn");
+    if (uncovered) {
+      warn.textContent = uncovered + " monitor" + (uncovered > 1 ? "s" : "") +
+        " would alert nobody. Turning the catch-all default back on fixes all of them.";
+      warn.style.color = "var(--down)";
+    } else {
+      warn.textContent = "Every monitor reaches at least one channel.";
+      warn.style.color = "var(--ink-3)";
+    }
+  }
+
+  /* Generic switch behaviour: the label changes with the knob, so the state is
+     never carried by position or colour alone. */
+  $$(".sw").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var on = b.getAttribute("aria-pressed") !== "true";
+      b.setAttribute("aria-pressed", String(on));
+      var lab = $("[data-swlabel]", b);
+      if (lab) { lab.textContent = on ? "Enabled" : "Disabled"; }
+      if (b.hasAttribute("data-rule")) { renderCoverage(); }
+    });
+  });
+
+  var reSw = $("#renotify-sw");
+  reSw.addEventListener("click", function () {
+    var on = reSw.getAttribute("aria-pressed") === "true";
+    $("#renotify-sub").textContent = on
+      ? "every 30 minutes, up to 4 times, then it stops by itself"
+      : "off — the first message is the only message until recovery";
+  });
+
+  renderCoverage();
+
+  /* ---------- 7. Mockup-only view switch -------------------------------- */
+  function setView(view) {
+    $$("[data-view]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-view") === view));
+    });
+    var empty = view === "empty";
+    /* A fresh install has no channels, so routing, timing and the log have
+       nothing to describe — hide the whole configured page, not just the list. */
+    $$(".page > section, .page > .note").forEach(function (el) {
+      if (el.id === "view-empty" || el.id === "empty-note") { el.hidden = !empty; }
+      else { el.hidden = empty; }
+    });
+    if (empty) { form.hidden = true; } else { form.hidden = true; }
+  }
+  $$("[data-view]").forEach(function (b) {
+    b.addEventListener("click", function () { setView(b.getAttribute("data-view")); });
+  });
+})();
+</script>
+</body>
+</html>
