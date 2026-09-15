@@ -34,7 +34,16 @@
   border: 1px solid var(--border-control);
   border-radius: var(--r-md);
   background: var(--surface);
-  box-shadow: var(--shadow-flat);
+  /*
+   * The lift the reference gives a panel.
+   *
+   * This was `--shadow-flat`, i.e. `none`, on the reasoning that a row's own
+   * edge separates it. Measured against the reference that is not what it
+   * does: their panel casts a shadow reaching ~6px, ours cast nothing, and the
+   * rows read as painted on rather than resting on. The rung itself was also
+   * refitted — see `--shadow-raised` in styles/tokens.css.
+   */
+  box-shadow: var(--shadow-raised);
   /* Only colour transitions. Nothing here animates a position or a size,
      because a list whose rows shift under the pointer is unreadable on a
      screen people stare at. */

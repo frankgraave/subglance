@@ -1,4 +1,4 @@
-import { Card, Panel } from "../components/Card";
+import { Card } from "../components/Card";
 import { IconAlert, IconList } from "../components/icons";
 import { CARD_BEAT_WIDTH, MonitorCard } from "./MonitorCard";
 import { EmptyState } from "./EmptyState";
@@ -73,9 +73,7 @@ export function MonitorCardList({
             icon={<IconList />}
             headingLevel={3}
           >
-            <Panel padded={false}>
-              <ul className="mon-card-stack">{cards(section.monitors)}</ul>
-            </Panel>
+            <ul className="mon-card-stack">{cards(section.monitors)}</ul>
           </Card>
         ))}
       </div>
@@ -93,9 +91,7 @@ export function MonitorCardList({
           icon={<IconAlert />}
           headingLevel={3}
         >
-          <Panel padded={false}>
-            <ul className="mon-card-stack">{cards(attention)}</ul>
-          </Panel>
+          <ul className="mon-card-stack">{cards(attention)}</ul>
         </Card>
       )}
 
@@ -109,9 +105,7 @@ export function MonitorCardList({
         icon={<IconList />}
         headingLevel={3}
       >
-        <Panel padded={false}>
-          <ul className="mon-card-stack">{cards(rest)}</ul>
-        </Panel>
+        <ul className="mon-card-stack">{cards(rest)}</ul>
       </Card>
     </div>
   );

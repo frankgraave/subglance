@@ -530,33 +530,44 @@
   display: flex;
   flex-direction: column;
   /* Six, matching the card's own padding: a monitor is the same distance from
-     its neighbour as from the panel edge. It was 8px, which put more air
-     between the cards than around them and made the group read as looser than
-     it is. */
+     its neighbour as from the card's edge. */
   gap: var(--space-1h);
   list-style: none;
-  /* The panel this sits in is flush so the stack can own its own inset. Six
-     again, for the same reason — this is the third level of the same nesting
-     and it repeats the same number deliberately. */
-  padding: var(--space-1h);
+  /* No padding. The stack sits directly on the card now that the flush
+     `<Panel>` wrapper is gone, so the 6px inset is the card's and is spent
+     once — it used to be spent twice, by the wrapper and by this rule. */
+  padding: 0;
   margin: 0;
 }
 
 /*
- * A monitor card sits inside a panel, inside a card — three levels deep — so
- * it takes the innermost radius on the ladder, not the outermost.
+ * A monitor card sits inside a card — two levels, not three — so it takes the
+ * radius one step inside the card's own.
  *
- * It was --r-lg (12px), which is the radius of the *outer* card now framing
- * it. Two boxes at the same radius with one inside the other read as a
- * mistake rather than as nesting: the corners run parallel at the wrong
- * offset and the inner box looks like it has escaped its container. One step
- * down per level is the whole grammar.
+ * It was --r-sm (6px), correct while this sat inside a flush panel three
+ * levels deep. With the wrapper gone the ladder is card 12 → panel 8, which is
+ * what §2.6 calls the row step and what the reference measures.
  */
 .mon-card {
   padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-md);
+  /*
+   * `--surface`, the same fill `.panel-row` takes, not `--surface-2`.
+   *
+   * These alphas composite against whatever is under them, and what is under
+   * this changed. Measured in the built stylesheet, `--surface` on the card
+   * lands on a fill two greyscale values above the reference's panel and
+   * `--surface-2` lands seven above it, so this is the nearer rung by a wide
+   * margin. Closing the last two would mean stating the alpha against the
+   * canvas instead of the parent, which breaks the property the dark palette
+   * is built on — a surface inheriting whatever is beneath it, so a panel
+   * dropped on a different background still belongs.
+   */
   background: var(--surface);
+  /* The lift the reference gives a panel. Border and fill alone leave the card
+     flat against its parent; this is what puts it above the surface. */
+  box-shadow: var(--shadow-raised);
   /* min-width:0 lets the flex/grid children below actually ellipsis instead
      of pushing the card past the viewport — the 416px-on-a-390px-screen bug
      this issue opened with. */
@@ -700,19 +711,26 @@
 /*
  * The compact list is a stack of panels, not a ruled table (DESIGN.md §10).
  *
- * The stack itself owns no border, no background and no corner any more: the
- * container used to draw one box with hairlines inside it, which is what made
- * a hundred monitors read as a spreadsheet. Each line now carries its own edge
- * — see `.panel-row` in components/panellist.css — and this rule is left only
- * to hold the columns the layout still needs.
+ * The stack owns no border, no background, no corner and — since the flush
+ * `<Panel>` wrapper was removed — no padding either. Each line carries its own
+ * edge (`.panel-row` in components/panellist.css) and sits directly on the
+ * card, at the card's own 6px.
+ *
+ * Why the wrapper went. Measured against the reference, a card held three
+ * nested surfaces where the reference holds two — canvas, card, panel, and
+ * then a fourth fill on top of that. The wrapper was the extra step, and it
+ * also spent the 6px inset twice, which put the first row 67px below the
+ * card's edge where the reference puts it at 61px.
  */
 .mon-line-stack {
   list-style: none;
-  /* Matches the card's padding, for the same reason the monitor card stack
-     does: the panel above is flush so its rows can own their inset, and six
-     keeps a line the same distance from its neighbour as from the edge. */
-  padding: var(--space-1h);
+  padding: 0;
   margin: 0;
+  /* Six, not `.panel-list`'s eight: the stack now sits directly on the card,
+     and the card holds it 6px from its own border. A line must be the same
+     distance from its neighbour as it is from the edge, or the group reads as
+     looser than it is. */
+  gap: var(--space-1h);
 }
 
 .mon-line {

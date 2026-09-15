@@ -342,11 +342,22 @@
      as a seam rather than as height. `flat` is a real rung, not an absence:
      it is what a card takes, so "no shadow here" is a stated decision. */
   --shadow-flat:   none;
-  /* One step of lift, at 5% black. Heavier shadows are how a dark interface
-     starts looking like stacked cards rather than one surface — the panels are
-     separated by their own edge and the alpha of their fill, and the shadow
-     only has to stop them from floating free. */
-  --shadow-raised: 0 4px 6px -1px rgba(0,0,0,.05), 0 2px 4px -2px rgba(0,0,0,.05);
+  /*
+   * One step of lift, fitted against the reference rather than chosen.
+   *
+   * It was 5% black on both layers, and that is very close to no shadow at
+   * all: measured under a panel, 5% produced the grey ramp 28,28,29,29,29,30
+   * where no shadow produces a flat 30 and the reference produces
+   * 23,25,26,27,29,29. Against the reference profile that scored 48 by sum of
+   * squares and plain `none` scored 101 — the two were barely distinguishable,
+   * which is why every raised surface in the product read as flat.
+   *
+   * These values score 5. The instinct in the old comment was right — a heavy
+   * shadow does turn a dark interface into stacked cards — but 5% overshot the
+   * caution to the point of being invisible. The lift now does what the border
+   * and the fill cannot do alone: it says the panel is *above* the card.
+   */
+  --shadow-raised: 0 3px 6px -2px rgba(0,0,0,.30), 0 2px 4px -2px rgba(0,0,0,.24);
   --shadow-float:  0 10px 15px -3px rgba(0,0,0,.12), 0 4px 6px -4px rgba(0,0,0,.1);
 
   --scrim:       rgba(0,0,0,.5);

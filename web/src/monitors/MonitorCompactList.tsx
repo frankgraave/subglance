@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Card, Panel } from "../components/Card";
+import { Card } from "../components/Card";
 import { IconList } from "../components/icons";
 import { PanelList, PanelRow } from "../components/PanelList";
 import { Value } from "../components/Value";
@@ -162,14 +162,12 @@ export function MonitorCompactList({
             icon={<IconList />}
             headingLevel={3}
           >
-            {/* The list stays a real list inside the panel, so a screen
-                reader's item count keeps matching what is on screen. The
-                panel is flush: its rows draw to their own edges. */}
-            <Panel padded={false}>
-              <PanelList className="mon-line-stack">
-                {lines(section.monitors)}
-              </PanelList>
-            </Panel>
+            {/* The rows sit straight on the card: a line IS the panel, so a
+                wrapper around them would be a third surface framing a second
+                one. See `.mon-line-stack` for the measurement. */}
+            <PanelList className="mon-line-stack">
+              {lines(section.monitors)}
+            </PanelList>
           </Card>
         ))}
       </div>
@@ -188,9 +186,7 @@ export function MonitorCompactList({
         icon={<IconList />}
         headingLevel={2}
       >
-        <Panel padded={false}>
-          <PanelList className="mon-line-stack">{lines(ordered)}</PanelList>
-        </Panel>
+        <PanelList className="mon-line-stack">{lines(ordered)}</PanelList>
       </Card>
     </div>
   );
