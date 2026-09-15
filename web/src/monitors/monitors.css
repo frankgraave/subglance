@@ -262,12 +262,16 @@
 /* The surface does not move on hover — no transform. A list people stare at
    all day must not shift under the pointer.
  *
- * The row lights its edge rather than filling in. Measured against the
- * reference style, hover lands on the border everywhere in that interface and
- * never on the fill, and the reason holds here: a filled row competes with the
- * status tints that mean something, and in a list of 200 a passing pointer
- * would keep flashing a block of colour the same weight as trouble. An edge
- * that brightens says "this one" without claiming anything about its health. */
+ * What changes is the edge, and for a row in trouble, the tint it already
+ * carries. An earlier pass here removed the hover fill outright on the rule
+ * that hover "never touches the fill". That was measured wrong: the reference
+ * style tints hovered rows at 20% of their own status colour, and only avoids
+ * a *neutral* fill. The distinction matters — a neutral highlight competes
+ * with status because it is the same kind of signal in a different hue, while
+ * a row deepening its own red is the same signal getting louder.
+ *
+ * So: neutral rows light their edge only, and a row that is already tinted
+ * deepens. */
 .mon-row:hover > * { border-block-color: var(--border-hi); }
 .mon-row:hover > :first-child { border-left-color: var(--border-hi); }
 .mon-row:hover > :last-child { border-right-color: var(--border-hi); }
@@ -301,6 +305,23 @@
    one signal this rule exists to add below the WCAG 1.4.11 floor of 3:1. The
    content still recedes; the edge stays at full strength. */
 .mon-row[data-status="paused"] > * { opacity: .62; }
+
+/*
+ * A row that already carries a tint deepens under the pointer instead of
+ * taking the neutral edge highlight above.
+ *
+ * Only `down` qualifies, and that is the rule rather than an oversight: it is
+ * the one status with a resting fill. `pending` and `waiting` mark themselves
+ * with a coloured left edge and nothing else, so tinting them on hover would
+ * *introduce* a colour rather than deepen one — which is the neutral-fill
+ * problem in fancy dress. They take the edge highlight like every other row.
+ *
+ * The background sits on the cells rather than on the row, because under
+ * `border-collapse: separate` a <tr> cannot paint one: the cells are what the
+ * reader sees, so the cells are what change. Row as target, cells responding,
+ * is the same group-hover shape the reference style uses throughout.
+ */
+.mon-row[data-status="down"]:hover > * { background: var(--down-deep); }
 
 .mon-cell {
   height: 58px;
@@ -706,6 +727,12 @@
 
 /* Same rule as the row and the card: trouble warms the leading edge. */
 .mon-line[data-status="down"] { border-left: 2px solid var(--down); background: var(--down-dim); }
+
+/* A tinted line deepens rather than taking `.panel-row`'s neutral hover fill.
+   Without this the shared row rule paints --surface-2 straight over the red,
+   so passing the pointer across a broken monitor made it look healthy for as
+   long as the cursor sat on it. */
+.mon-line[data-status="down"]:hover { background: var(--down-deep); }
 .mon-line[data-status="pending"] { border-left: 2px solid var(--warn); }
 .mon-line[data-status="waiting"] { border-left: 2px solid var(--idle); }
 .mon-line[data-status="paused"] {

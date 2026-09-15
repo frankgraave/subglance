@@ -298,7 +298,12 @@
   gap: var(--space-2);
   min-height: var(--control-h);
   padding-inline: var(--space-2);
-  border: 0;
+  /* Transparent, not absent. The hover state below brings a border in, and a
+     control that gains its edge on hover shifts its own contents by a pixel
+     unless the space is already reserved. Measured against the reference
+     style, `border-transparent` appears on 20 of its controls for exactly
+     this reason — it is why their chrome never jumps under the pointer. */
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
   background: none;
   font: inherit;
@@ -307,10 +312,15 @@
   color: var(--ink-2);
   text-align: left;
   cursor: pointer;
-  transition: background-color var(--dur-hover) var(--ease), color var(--dur-hover) var(--ease);
+  transition: background-color var(--dur-hover) var(--ease), color var(--dur-hover) var(--ease),
+    border-color var(--dur-hover) var(--ease);
 }
 
-.shell-signout:hover { background: var(--surface-2); color: var(--ink); }
+.shell-signout:hover {
+  background: var(--surface-2);
+  border-color: var(--border-hi);
+  color: var(--ink);
+}
 
 .shell-signout:focus-visible {
   outline: 2px solid var(--accent-border);

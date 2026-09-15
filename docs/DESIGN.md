@@ -106,6 +106,20 @@ mode, because the dark originals are unreadable on white.
 Every status colour has a `-dim` variant for badge and row backgrounds
 (`--up-dim`, `--warn-dim`, `--down-dim`).
 
+`--down` additionally has `--down-deep`, one step past `--down-dim`, for a
+tinted row under the pointer. **Hover on a row that already means something
+must not switch signals.** A neutral highlight arrives as a second kind of
+colour on top of the first, and the reader has to work out which of the two
+they are being told about; the same red getting louder is the same statement
+said closer. A hovered down row therefore deepens its own tint rather than
+picking up `--surface-2` like a neutral row does.
+
+There is deliberately no `-deep` for the other three. Down is the only status
+with a resting fill to deepen — the others mark themselves with a coloured left
+edge and nothing else, so a hover tint would *introduce* a colour rather than
+intensify one, which is the same problem in the status palette's clothes. A
+token with no caller is a decision nobody made.
+
 **The label on a filled status mark.** A status badge fills itself with its own
 status colour, and the ink scale is wrong on that fill: `--ink` measures 1.59:1
 on `--up` in dark, so the word naming the status would be the least readable

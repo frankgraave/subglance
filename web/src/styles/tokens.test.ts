@@ -2120,3 +2120,126 @@ describe("a dashed edge means the chip is about the data (§8.1)", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe("hover does not overwrite a status tint with a neutral one", () => {
+  // The failure this exists to stop is quiet and specific: a row is red
+  // because the monitor is down, the shared hover rule paints --surface-2 over
+  // it, and for as long as the pointer rests there the broken monitor looks
+  // ordinary. It is invisible in a screenshot and invisible in jsdom, because
+  // it only exists while something is hovered.
+  //
+  // The rule: any selector that sets a resting status fill must either leave
+  // hover alone or answer it with a status tone. What it may not do is let a
+  // neutral surface win by specificity.
+
+  /** Selectors with a resting fill from the status palette. */
+  const tinted = (): { path: string; selector: string; token: string }[] => {
+    const found: { path: string; selector: string; token: string }[] = [];
+    for (const { path, selector, body } of cssRules()) {
+      if (/:hover|:focus/.test(selector)) continue;
+      const clean = stripComments(body);
+      const fill =
+        /(?:^|[;{\s])background(?:-color)?:\s*var\((--(?:up|warn|down|idle)-dim)\)/.exec(
+          clean,
+        );
+      if (fill) found.push({ path, selector, token: fill[1] });
+    }
+    return found;
+  };
+
+  it("answers a tinted row's hover with a status tone, or not at all", () => {
+    const rules = cssRules();
+    const offenders: string[] = [];
+
+    for (const { path, selector, token } of tinted()) {
+      // What does this element look like under the pointer? Either its own
+      // :hover rule, or an inherited one from a base class it also carries.
+      const hoverRules = rules.filter(
+        (r) =>
+          /:hover/.test(r.selector) &&
+          // The tinted selector's own hover, e.g. `.mon-line[data-status=down]`
+          // -> `.mon-line[data-status=down]:hover`
+          r.selector.includes(selector.replace(/\s+/g, " ").trim()),
+      );
+
+      for (const hover of hoverRules) {
+        const clean = stripComments(hover.body);
+        const fill =
+          /(?:^|[;{\s])background(?:-color)?:\s*var\((--[a-z0-9-]+)\)/.exec(
+            clean,
+          );
+        if (!fill) continue;
+        const isStatus = /^--(?:up|warn|down|idle)-(?:dim|deep)$/.test(fill[1]);
+        if (!isStatus) {
+          offenders.push(
+            `${path} | ${hover.selector} paints ${fill[1]} over ${token}`,
+          );
+        }
+      }
+    }
+
+    expect(
+      offenders,
+      "a hovered status row must deepen its own tint, not take a neutral fill",
+    ).toEqual([]);
+  });
+
+  it("keeps a -deep tone for every status that has a resting fill", () => {
+    // The inverse: a status that grew a hover tint but no token to hold it
+    // would be spelling the colour inline. Down is currently the only status
+    // with a resting fill; if another gains one, this fails and asks for the
+    // matching token rather than letting the fill be hand-written.
+    const root = declarations(
+      tokensCss.slice(tokensCss.indexOf(":root"), tokensCss.indexOf("\n}")),
+    );
+    const restingFills = new Set(
+      tinted().map(({ token }) => token.replace(/-dim$/, "")),
+    );
+    for (const base of restingFills) {
+      // Only rows and cards deepen; a badge or a chip fills itself at rest and
+      // has no hover state, so the token is only required where a :hover rule
+      // actually reaches for it.
+      const used = cssRules().some(
+        (r) =>
+          /:hover/.test(r.selector) &&
+          stripComments(r.body).includes(`var(${base}-deep)`),
+      );
+      if (!used) continue;
+      expect(
+        root.has(`${base}-deep`) ||
+          declarations(themeBlock("dark")).has(`${base}-deep`),
+        `${base}-deep is used on hover but not defined`,
+      ).toBe(true);
+    }
+  });
+
+  it("defines --down-deep in both themes, moving away from the page", () => {
+    // Direction, not value: on dark a deepening tint gets lighter, on light it
+    // gets darker. A value copied from one theme to the other would make a
+    // hovered row fade in exactly one of them, which is the kind of thing that
+    // ships because nobody switches themes while hovering.
+    const dark = declarations(themeBlock("dark"));
+    const light = declarations(themeBlock("light"));
+    const deepDark = dark.get("--down-deep");
+    const dimDark = dark.get("--down-dim");
+    const deepLight = light.get("--down-deep");
+    const dimLight = light.get("--down-dim");
+    expect(deepDark, "dark --down-deep").toBeTruthy();
+    expect(deepLight, "light --down-deep").toBeTruthy();
+
+    const lum = (hex: string) => {
+      const h = hex.replace("#", "");
+      return [0, 2, 4]
+        .map((i) => Number.parseInt(h.slice(i, i + 2), 16))
+        .reduce((a, b) => a + b, 0);
+    };
+    expect(
+      lum(deepDark as string),
+      "on dark, deep must be lighter than dim",
+    ).toBeGreaterThan(lum(dimDark as string));
+    expect(
+      lum(deepLight as string),
+      "on light, deep must be darker than dim",
+    ).toBeLessThan(lum(dimLight as string));
+  });
+});
