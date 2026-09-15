@@ -307,7 +307,7 @@ func TestRestoreSuppressesDuplicateAlert(t *testing.T) {
 	e := New(Options{Now: c.Now, FlapThreshold: 99})
 
 	// Simulate a restart while an incident was already confirmed.
-	e.Restore(1, StatusDown, true, true)
+	e.Restore(1, StatusDown, true, true, 2)
 
 	if got := e.Status(1); got != StatusDown {
 		t.Fatalf("restored status = %q, want down", got)
@@ -512,4 +512,38 @@ func TestConcurrentObserveIsSafe(t *testing.T) {
 		}(id)
 	}
 	wg.Wait()
+}
+
+func TestRestoreKeepsTheFailureStreak(t *testing.T) {
+	c := newClock()
+	e := New(Options{Now: c.Now, FlapThreshold: 99})
+
+	// A restart three checks into an outage. The streak is what bounds the
+	// response-snapshot budget, so restoring it as zero would hand this
+	// outage a second budget on every restart.
+	e.Restore(1, StatusDown, true, true, 3)
+
+	tr := e.Observe(Observation{MonitorID: 1, OK: false, At: c.Now(), FailureThreshold: 2})
+	if tr.ConsecutiveFails != 4 {
+		t.Errorf("consecutive fails after restore = %d, want 4: the streak must continue, not restart", tr.ConsecutiveFails)
+	}
+
+	// A recovery still clears it, so a restored streak cannot outlive its
+	// outage.
+	tr = e.Observe(Observation{MonitorID: 1, OK: true, At: c.Now(), FailureThreshold: 2})
+	if tr.ConsecutiveFails != 0 {
+		t.Errorf("consecutive fails after recovery = %d, want 0", tr.ConsecutiveFails)
+	}
+}
+
+func TestRestoreRejectsANegativeStreak(t *testing.T) {
+	c := newClock()
+	e := New(Options{Now: c.Now, FlapThreshold: 99})
+
+	e.Restore(1, StatusDown, true, true, -5)
+
+	tr := e.Observe(Observation{MonitorID: 1, OK: false, At: c.Now(), FailureThreshold: 2})
+	if tr.ConsecutiveFails != 1 {
+		t.Errorf("consecutive fails = %d, want 1: a negative seed must floor at zero, not count backwards", tr.ConsecutiveFails)
+	}
 }
