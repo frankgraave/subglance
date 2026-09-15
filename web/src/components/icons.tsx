@@ -1,8 +1,8 @@
 /**
- * The small glyph set used by card headers.
+ * The small glyph set used by card headers and the toolbar.
  *
- * Inline rather than an icon package: five shapes at one size do not justify a
- * dependency, and every one of them is drawn on the same 24-unit grid with the
+ * Inline rather than an icon package: a dozen shapes at one size do not justify
+ * a dependency, and every one of them is drawn on the same 24-unit grid with the
  * same 1.5 stroke so they sit at one optical weight inside a tile.
  *
  * All of them are `aria-hidden` by way of IconTile, which is where the
@@ -124,6 +124,81 @@ export function IconColumnsThree() {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor">
       {columnBars(3)}
+    </svg>
+  );
+}
+
+/**
+ * Theme glyphs: sun, crescent, and a circle half-filled for "follow the system".
+ *
+ * Same 24-unit grid as the rest of this file, at a 1.7 stroke rather than 1.5 —
+ * the sun is mostly short rays, and a 1.5 hairline of that length disappears
+ * beside the solid bars of the column glyphs in the same toolbar.
+ *
+ * ## The geometry is measured, not eyeballed
+ *
+ * A sun, a crescent and a half-filled disc are three very different amounts of
+ * ink in the same box, and the first draft showed it: rasterised at the 16px
+ * these actually render at, the auto disc carried 1.87x the ink of the sun and
+ * read as the selected one no matter which segment was pressed.
+ *
+ * The numbers below come from sweeping sun radius, ray length, crescent size
+ * and disc radius, rasterising each combination at 16px and scoring it on the
+ * ratio between the heaviest and lightest glyph. This set measures 1.06 —
+ * 864/904/918 coverage units. Change one of them and the row tilts again, so
+ * change them together and re-measure.
+ */
+const THEME = { ...BASE, strokeWidth: 1.7 };
+
+/** Light: a sun. */
+export function IconSun() {
+  return (
+    <svg {...THEME}>
+      <circle cx="12" cy="12" r="5" />
+      {/* Eight separate rays rather than a dashed circle: a dash array is
+          relative to the path length, so it would re-space itself at every
+          size instead of holding the 4-unit ray this is tuned to. */}
+      <path d="M12 1.8v4M12 18.2v4M22.2 12h-4M5.8 12h-4" />
+      <path d="M19.21 4.79 16.38 7.62M7.62 16.38 4.79 19.21M19.21 19.21 16.38 16.38M7.62 7.62 4.79 4.79" />
+    </svg>
+  );
+}
+
+/**
+ * Dark: a crescent.
+ *
+ * One filled path rather than a circle with a circle punched out of it. The
+ * subtractive version needs the cut-out painted in the button background,
+ * which is `--accent` when the segment is selected and transparent when it is
+ * not — so the glyph would have to know which state it is in. A crescent that
+ * is its own shape works in both.
+ */
+export function IconMoon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor">
+      <path d="M19.98 14.52A8.4 8.4 0 0 1 9.48 4.02a8.4 8.4 0 1 0 10.5 10.5Z" />
+    </svg>
+  );
+}
+
+/**
+ * Auto: one circle, half of it filled.
+ *
+ * The usual glyph for "follow the operating system" is a computer display.
+ * It is wrong *here*: in SubGlance a monitor is a check on a target, and a
+ * screen-shaped button in the toolbar of a monitoring tool reads as one more
+ * thing about monitors. The half-filled circle says light-and-dark-at-once
+ * without borrowing a noun the product has already spent.
+ *
+ * The outline is stroked separately from the fill so the circle keeps a full
+ * edge — a filled half-disc alone is a shape with one straight side, which at
+ * 16px reads as a chipped dot rather than as a divided circle.
+ */
+export function IconThemeAuto() {
+  return (
+    <svg {...THEME}>
+      <circle cx="12" cy="12" r="6.8" />
+      <path d="M12 5.2a6.8 6.8 0 0 0 0 13.6Z" fill="currentColor" stroke="none" />
     </svg>
   );
 }
