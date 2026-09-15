@@ -24,12 +24,46 @@
   gap: var(--space-4);
 }
 
+/*
+ * The tools row: search, the status filter, and whatever the current view
+ * brings with it.
+ *
+ * `align-items: center` rather than `flex-start`, and a single row rather than
+ * a title block beside a field: the page title moved into `.sr-only` because
+ * the card below already says "Monitors (2)", and once the title is gone the
+ * row is three controls that belong on one baseline.
+ *
+ * The shell's topbar above holds what is true on every screen. This holds what
+ * is true on *this* one, which is what lets a view-specific control appear and
+ * disappear without moving anything above it.
+ */
 .mon-topbar {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-4);
+  align-items: center;
+  gap: var(--space-3);
   flex-wrap: wrap;
+}
+
+/* Search and the counts travel together and wrap together: they are both
+   about narrowing the list, and splitting them across a wrap boundary reads
+   as two unrelated rows. */
+.mon-topbar-lead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/*
+ * View tools sit at the far end, and the margin is what keeps the row honest:
+ * `auto` pushes them right, so the gap between them and the search field is
+ * whatever is left rather than a value that has to be maintained.
+ */
+.mon-view-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
 }
 
 .mon-title {
@@ -42,7 +76,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3);
-  margin-top: var(--space-2);
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
   color: var(--ink-3);
@@ -85,22 +118,89 @@
   color: var(--ink);
 }
 
-.mon-search-input {
-  width: 240px;
+/*
+ * The search field, as one box holding three things.
+ *
+ * The icon and the shortcut hint sit *inside* the border rather than beside
+ * it, so the whole affordance is one target: a magnifier floating next to an
+ * input reads as decoration, and a keycap floating next to one reads as a
+ * legend for something else on the page.
+ *
+ * `focus-within` on the wrapper is what makes that work — the real focus is on
+ * the `<input>`, and without this the box the user sees would never respond to
+ * the keyboard.
+ */
+.mon-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2h);
+  width: 280px;
   max-width: 100%;
-  padding: var(--space-2) var(--space-3);
-  font: inherit;
-  font-size: var(--type-body);
-  line-height: var(--lead-body);
-  color: var(--ink);
+  height: 32px;
   background: var(--surface);
   border: 1px solid var(--border-control);
   border-radius: var(--r-sm);
+  color: var(--ink-4);
   transition: border-color var(--dur-hover) var(--ease);
 }
 
+.mon-search:hover { border-color: var(--border-hi); }
+
+/* The accent ring the rest of the product uses for focus (§2.8), moved to the
+   wrapper because that is the box with the edge. */
+.mon-search:focus-within {
+  border-color: var(--accent-border);
+  outline: 3px solid var(--accent-ring);
+  outline-offset: 1px;
+}
+
+.mon-search > .shell-icon {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+/* The input gives up its own chrome entirely: the wrapper is the field now. */
+.mon-search-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  font: inherit;
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  color: var(--ink);
+  background: none;
+  border: 0;
+}
+
+.mon-search-input:focus { outline: none; }
 .mon-search-input::placeholder { color: var(--ink-4); }
-.mon-search-input:hover { border-color: var(--border-hi); }
+
+/*
+ * The shortcut hint. It does nothing yet, and that is a decision rather than
+ * an oversight: the palette is later work, and this is `aria-hidden` so no
+ * screen reader announces a shortcut the product does not honour.
+ */
+.mon-search-kbd {
+  @apply face-mono;
+  flex: none;
+  /* Helper size, not a smaller one: there is no rung below 12px in the type
+     scale and inventing a 10px literal here would be the exact drift the
+     spacing guard exists to catch. The keycap reads as small because of its
+     border and its ink, not because the text shrank. */
+  font-size: var(--type-helper);
+  /* The role's own leading (§2.5), not a tighter one. A one-line label does
+     not need 16px of leading, but the pairing rule is worth more than the two
+     pixels: `--type-helper` renders at one leading everywhere, or it renders
+     at three on one screen and nobody can name why. The keycap gets its height
+     from its padding instead. */
+  line-height: var(--lead-helper);
+  padding: 0 var(--space-1h);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  color: var(--ink-4);
+}
 
 /* One labelled native select per tag key. Native because these lists are
    short and a custom listbox would have to re-earn keyboard support, the
@@ -746,13 +846,37 @@
     padding: var(--space-2) var(--space-3);
   }
 
+  .mon-search {
+    /* Full width: a 280px field beside anything on a 375px screen leaves
+       neither usable. */
+    width: 100%;
+    /* Taller, because the input inside it grows to the 16px no-zoom floor. */
+    height: auto;
+    padding: var(--space-2) var(--space-2h);
+  }
+
   .mon-search-input {
     width: 100%;
     /* 16px is not a style choice: iOS Safari zooms the page when a focused
-       input is smaller, and the zoom does not undo itself on blur. */
+       input is smaller, and the zoom does not undo itself on blur. The desktop
+       field is helper-sized, so this floor only applies here — and it is why
+       the wrapper gives up its fixed height rather than clipping the text. */
     font-size: var(--type-nozoom);
     line-height: var(--lead-nozoom);
-    padding: var(--space-3);
+  }
+
+  /* The shortcut hint goes: there is no keyboard to press it with, and on the
+     one screen where width is scarce it is the first thing that should give
+     its space back to the field. */
+  .mon-search-kbd {
+    display: none;
+  }
+
+  /* The view tools stop being right-aligned once the row is a column — an
+     `auto` margin in a stretched column pushes them to the far edge alone,
+     which reads as a stray control rather than as part of the row. */
+  .mon-view-tools {
+    margin-left: 0;
   }
 }
 

@@ -121,3 +121,13 @@ export function PlusIcon(props: IconProps) {
     </Icon>
   );
 }
+
+/** Search: the field's own affordance, inside the input rather than beside it. */
+export function SearchIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="M19.5 19.5 16 16" />
+    </Icon>
+  );
+}

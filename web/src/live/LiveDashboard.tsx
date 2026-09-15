@@ -26,6 +26,7 @@ export type LiveDashboardProps = LiveOptions & {
   layout?: LayoutId;
   /** How many cards per row, in the Cards layout. */
   cardColumns?: CardColumns;
+  onCardColumnsChange?: (next: CardColumns) => void;
   /** Shown on the status wall's header line. */
   instance?: string;
   /** Leaves the status wall. Provided by the shell, which owns the setting. */
@@ -40,6 +41,7 @@ export function LiveDashboard({
   beatWidth,
   layout,
   cardColumns,
+  onCardColumnsChange,
   instance,
   onExitWall,
   onOpenMonitor,
@@ -116,6 +118,7 @@ export function LiveDashboard({
       beatWidth={beatWidth}
       layout={layout}
       cardColumns={cardColumns}
+      onCardColumnsChange={onCardColumnsChange}
       stale={status === "offline"}
       onOpenMonitor={onOpenMonitor}
       banner={

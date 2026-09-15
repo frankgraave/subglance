@@ -269,8 +269,6 @@ export default function App() {
           layout={layout}
           effectiveLayout={shown}
           onLayoutChange={setLayout}
-          cardColumns={cardColumns}
-          onCardColumnsChange={setCardColumns}
           themePreference={preference}
           onThemeChange={setPreference}
           workbenchOpen={workbenchOpen}
@@ -311,6 +309,7 @@ export default function App() {
             client={queryClient}
             layout={shown}
             cardColumns={cardColumns}
+            onCardColumnsChange={setCardColumns}
             onOpenMonitor={openMonitor}
           />
         )}

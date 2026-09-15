@@ -8,6 +8,8 @@ import {
   type LayoutId,
 } from "../shell/preferences";
 import { Led } from "./Led";
+import { CardColumnsSwitcher } from "../shell/CardColumnsSwitcher";
+import { SearchIcon } from "../shell/icons";
 import { MonitorCardList } from "./MonitorCardList";
 import { MonitorCompactList } from "./MonitorCompactList";
 import { MonitorTable } from "./MonitorTable";
@@ -59,6 +61,8 @@ export type DashboardProps = {
   layout?: LayoutId;
   /** How many cards per row, in the Cards layout. See CardColumnsSwitcher. */
   cardColumns?: CardColumns;
+  /** Omitted where the count is fixed, e.g. the workbench. */
+  onCardColumnsChange?: (next: CardColumns) => void;
   /**
    * Chrome about the data itself, e.g. the connection badge.
    *
@@ -108,6 +112,7 @@ export function Dashboard({
   beatWidth,
   layout = DEFAULT_LAYOUT,
   cardColumns = "1",
+  onCardColumnsChange,
   banner = null,
   stale = false,
   onOpenMonitor,
@@ -186,15 +191,29 @@ export function Dashboard({
           them. */}
       {banner}
 
+      {/*
+       * The tools row: what belongs to *this* screen.
+       *
+       * The shell's topbar holds what is true everywhere — add, layout,
+       * workbench, theme — and this row holds search, the status filter and
+       * whatever the current view brings with it. The split is what lets a
+       * view-specific control appear and disappear without moving anything in
+       * the bar above it.
+       */}
       <header className="mon-topbar">
-        <div>
-          {/* `h1`, not `h2` (SUB-100). This is the top of the page, and the
-              detail view already uses `h1` for the monitor's name — the two
-              screens were disagreeing about where the outline starts, which
-              leaves a screen reader's heading navigation with no level-1
-              landmark on the busier of the two. The visual size is unchanged:
-              it comes from `.mon-title`, not from the element. */}
-          <h1 id={`${searchId}-title`} className="mon-title">
+        <div className="mon-topbar-lead">
+          {/*
+           * `h1`, not `h2` (SUB-100): the detail view uses `h1` for the
+           * monitor's name, and the two screens disagreeing about where the
+           * outline starts leaves heading navigation with no level-1 landmark
+           * on the busier of the two.
+           *
+           * Visually hidden, because the card below already carries the
+           * visible title — "Monitors (2)" — and printing the word twice on
+           * one screen is what this row was rearranged to stop. The outline
+           * keeps its landmark; the eye does not get the same noun twice.
+           */}
+          <h1 id={`${searchId}-title`} className="sr-only">
             Monitors
           </h1>
           <p className="mon-counts">
@@ -243,6 +262,7 @@ export function Dashboard({
           <label htmlFor={searchId} className="sr-only">
             Search monitors by name or target
           </label>
+          <SearchIcon />
           <input
             id={searchId}
             type="search"
@@ -253,7 +273,39 @@ export function Dashboard({
             spellCheck={false}
             onChange={(event) => onQueryChange(event.target.value)}
           />
+          {/*
+           * The shortcut hint, and it does nothing yet.
+           *
+           * Deliberate and agreed: the palette is a later piece of work, and
+           * the hint is here because the field it belongs to is being built
+           * now. `aria-hidden` keeps it out of the accessibility tree — a
+           * screen reader announcing a shortcut that is not wired up would be
+           * a promise the product does not keep. When ⌘K lands this becomes
+           * the button that opens it.
+           */}
+          <span className="mon-search-kbd" aria-hidden="true">
+            ⌘K
+          </span>
         </div>
+
+        {/*
+         * View tools: the right-hand end of the row, and empty for three of
+         * the four layouts.
+         *
+         * Keyed off the layout actually on screen rather than the stored
+         * preference — on a narrow viewport the preference may be Rows while
+         * Cards is what renders, and the control has to follow what the user
+         * can see. Nothing above this row can move when it appears, which is
+         * the whole reason it is here and not in the shell's topbar.
+         */}
+        {shown === "cards" && onCardColumnsChange !== undefined && (
+          <div className="mon-view-tools">
+            <CardColumnsSwitcher
+              value={cardColumns}
+              onChange={onCardColumnsChange}
+            />
+          </div>
+        )}
       </header>
 
       {/*

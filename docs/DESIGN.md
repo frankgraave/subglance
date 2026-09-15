@@ -884,6 +884,22 @@ layout rather than the stored one: a setting visible while it governs nothing
 teaches people it does nothing. The count is stored under its own key so it
 survives a trip through Rows and back.
 
+**It lives in the dashboard's tools row, not in the shell's topbar.** The
+topbar holds what is true on every screen — add, layout, workbench, theme — and
+a second row under it holds what belongs to *this* screen: search, the status
+filter, and whatever the current view brings with it. The split is not
+tidiness. A view-specific control in the topbar appears and disappears inside a
+right-aligned group, which slides everything before it sideways — measured at
+121px, including the layout switcher the user had just clicked. Chrome that
+moves out from under the cursor is what §10's no-transform rule exists to
+prevent, and it applies to the toolbar too.
+
+The page title is visually hidden rather than deleted: the card below already
+says "Monitors (2)", so printing the word twice was the duplication this row
+was rearranged to remove — but the `h1` stays in the outline, because the
+detail view uses `h1` for a monitor's name and a screen reader needs a level-1
+landmark on the busier of the two screens.
+
 There is no breakpoint behind it. The grid asks for "at most N columns, never
 narrower than 380px", so a narrow window drops to as many as genuinely fit —
 one column on a phone because one is what fits, not because a media query
