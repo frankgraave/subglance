@@ -9,7 +9,7 @@
  */
 
 import { apiFetch, apiRequest } from "../api/http";
-import { inventoryFromPayload } from "./inventory";
+import { inventoryFromApi, inventoryFromPayload } from "./inventory";
 import type { ChannelState, InventoryMonitor } from "./inventory";
 import type { ApiMonitor } from "./types";
 
@@ -30,6 +30,20 @@ export async function fetchInventory(
     throw new Error(`could not load monitors: HTTP ${res.status}`);
   }
   const body = (await res.json()) as { monitors?: ApiMonitor[] };
+  /*
+   * A payload with no `monitors` array is a failure, not an empty instance.
+   *
+   * `inventoryFromPayload` would turn `null`, a missing key or an unexpected
+   * shape into `[]`, and the screen would then say "Nothing is being watched
+   * yet" to somebody with forty monitors. That claim is the most alarming
+   * wrong thing this page can make, so it is never made on the strength of a
+   * body we could not read.
+   */
+  if (!Array.isArray(body?.monitors)) {
+    throw new Error(
+      "could not load monitors: the server's reply had no monitor list in it",
+    );
+  }
   return inventoryFromPayload(body);
 }
 
@@ -229,21 +243,33 @@ export async function patchMonitor(
   });
 }
 
+/** One monitor and the version stamp that was true of it at that moment. */
+export type VersionedMonitor = {
+  monitor: InventoryMonitor;
+  etag: string | null;
+};
+
 /**
- * Reads one monitor and the ETag that versions it.
+ * Reads one monitor together with the ETag that versions it.
  *
  * The list endpoint sends no ETag — only `GET /api/v1/monitors/{id}` does — so
- * opening the edit drawer costs one request. That request is what makes the
- * conditional PATCH above possible: without a validator read at the moment the
- * form was filled, "nothing changed underneath me" is a claim with nothing
- * behind it.
+ * opening the edit drawer costs one request. Both halves of that response are
+ * returned, and the form is filled from *this* monitor rather than from the
+ * list row that was clicked, because the two have to describe the same moment:
+ * showing values read a minute ago while sending a validator read just now
+ * would let a conditional PATCH sail through and overwrite a change the user
+ * never saw. The ETag is only a promise about the values it came with.
  */
-export async function fetchMonitorVersion(
+export async function fetchMonitorForEdit(
   id: string,
   signal?: AbortSignal,
-): Promise<string | null> {
+): Promise<VersionedMonitor> {
   const res = await apiRequest(`/api/v1/monitors/${encodeURIComponent(id)}`, {
     signal,
   });
-  return res.headers.get("ETag");
+  const body = (await res.json()) as ApiMonitor;
+  return {
+    monitor: inventoryFromApi(body as Parameters<typeof inventoryFromApi>[0]),
+    etag: res.headers.get("ETag"),
+  };
 }

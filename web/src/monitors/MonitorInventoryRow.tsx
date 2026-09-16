@@ -265,10 +265,15 @@ function MonitorInventoryRowImpl({
           {checkResult.error !== undefined ? ` ${checkResult.error}` : ""}
           {/* A paused monitor's manual check is deliberately not recorded by
               the server, and silence about that makes a green result look
-              like a dashboard that failed to update. */}
+              like a dashboard that failed to update.
+              Past tense, and deliberately so: the result outlives the pause.
+              Resuming the monitor refetches the row but does not erase a check
+              that already ran, so "this monitor is paused" would go on being
+              said about a monitor that is now running. What the sentence is
+              actually about is the check, not the current state. */}
           {checkResult.recorded
             ? ""
-            : " Not recorded — this monitor is paused, so the result is not part of its history."}
+            : " Not recorded — the monitor was paused when this check ran, so the result is not part of its history."}
         </p>
       )}
 

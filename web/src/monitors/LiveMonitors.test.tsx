@@ -82,15 +82,25 @@ describe("LiveMonitors", () => {
     expect(fetchMonitors.mock.calls.length).toBeGreaterThan(1);
   });
 
-  it("reads the ETag and sends it back with the edit", async () => {
-    // Without a validator the endpoint is last-write-wins, and two people
-    // tidying the same inventory is exactly the situation this page creates.
+  it("fills the edit form from the same read the ETag came from", async () => {
+    /*
+     * The list row and the validator must describe one moment. Filling the
+     * form from a row read a minute ago while sending an ETag read just now
+     * would let a conditional PATCH sail straight through and overwrite a
+     * change the user never saw — a precondition that guards the wrong instant
+     * is worse than none, because it looks like it worked.
+     */
     const patch = vi.fn(
       (_id: string, _body: unknown, _version?: string | null) =>
         Promise.resolve(),
     );
-    const version = vi.fn((_id: string) =>
-      Promise.resolve<string | null>('W/"1757606400"'),
+    const forEdit = vi.fn((_id: string) =>
+      Promise.resolve({
+        // Renamed elsewhere since the list was fetched. The form must show
+        // this name, not the stale one.
+        monitor: make({ name: "auth-renamed-elsewhere" }),
+        etag: 'W/"1757606400"',
+      }),
     );
 
     render(
@@ -99,22 +109,39 @@ describe("LiveMonitors", () => {
         fetchMonitors={() => Promise.resolve([make()])}
         fetchChannels={noChannels}
         patch={patch}
-        version={version}
+        forEdit={forEdit}
       />,
     );
 
     fireEvent.click(await screen.findByRole("button", { name: "Edit auth" }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText("Name"), {
-      target: { value: "auth-eu" },
-    });
+    const nameInput = within(dialog).getByLabelText("Name") as HTMLInputElement;
+    expect(nameInput.value).toBe("auth-renamed-elsewhere");
+
+    fireEvent.change(nameInput, { target: { value: "auth-eu" } });
     fireEvent.click(
       within(dialog).getByRole("button", { name: /save changes/i }),
     );
 
     await waitFor(() => expect(patch).toHaveBeenCalled());
     expect(patch.mock.calls[0][2]).toBe('W/"1757606400"');
-    expect(version).toHaveBeenCalledWith("1");
+    expect(forEdit).toHaveBeenCalledWith("1");
+  });
+
+  it("says so when the monitor cannot be re-read for editing", async () => {
+    // A button that opens no drawer reads as a broken page.
+    render(
+      <LiveMonitorsRoot
+        client={client()}
+        fetchMonitors={() => Promise.resolve([make()])}
+        fetchChannels={noChannels}
+        forEdit={() => Promise.reject(new Error("monitor not found"))}
+      />,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Edit auth" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/monitor not found/);
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("puts a failed pause on the row it failed for", async () => {

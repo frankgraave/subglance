@@ -14,12 +14,16 @@ import {
   deleteMonitor,
   fetchInventory,
   fetchMonitorChannels,
-  fetchMonitorVersion,
+  fetchMonitorForEdit,
   inventoryQueryKey,
   patchMonitor,
   setMonitorPaused,
 } from "./inventoryApi";
-import type { CheckOutcome, MonitorPatch } from "./inventoryApi";
+import type {
+  CheckOutcome,
+  MonitorPatch,
+  VersionedMonitor,
+} from "./inventoryApi";
 
 /**
  * The inventory's data owner.
@@ -45,7 +49,7 @@ export type LiveMonitorsProps = {
   remove?: typeof deleteMonitor;
   check?: typeof checkMonitorNow;
   patch?: typeof patchMonitor;
-  version?: typeof fetchMonitorVersion;
+  forEdit?: typeof fetchMonitorForEdit;
   /** Opens a monitor's detail view. */
   onOpen?: (id: string) => void;
   /** True when the URL is /monitors/new. */
@@ -62,7 +66,7 @@ export function LiveMonitors({
   remove = deleteMonitor,
   check = checkMonitorNow,
   patch = patchMonitor,
-  version = fetchMonitorVersion,
+  forEdit = fetchMonitorForEdit,
   onOpen,
   createOpen = false,
   onCreateOpenChange,
@@ -220,23 +224,63 @@ export function LiveMonitors({
   );
 
   /*
-   * Saving reads the monitor's ETag first, then sends a conditional PATCH.
+   * Opening the edit drawer re-reads the monitor, with its ETag.
    *
-   * The extra request is what makes "nobody changed this underneath me" a
-   * claim with something behind it. Without a validator the endpoint is
-   * last-write-wins, and two people tidying the same inventory is exactly the
-   * situation this page creates. A 412 comes back as the server's own
-   * sentence, which tells the user to re-open the row — rather than the edit
-   * silently winning or silently vanishing.
+   * The form is filled from that response rather than from the list row that
+   * was clicked, and the same response's ETag is what the save sends back.
+   * Those two have to come from one moment: values read a minute ago plus a
+   * validator read just now would let a conditional PATCH sail through and
+   * overwrite a change the user never saw — a precondition that guards the
+   * wrong instant is worse than none, because it looks like it worked.
+   */
+  const [editing, setEditing] = useState<VersionedMonitor | null>(null);
+  const [editLoadError, setEditLoadError] = useState<string | null>(null);
+
+  const onEdit = useCallback(
+    (id: string) => {
+      clearError(id);
+      setEditLoadError(null);
+      void (async () => {
+        try {
+          setEditing(await forEdit(id));
+        } catch (error) {
+          setEditLoadError(
+            error instanceof Error
+              ? error.message
+              : "the monitor could not be loaded for editing",
+          );
+        }
+      })();
+    },
+    [clearError, forEdit],
+  );
+
+  const closeEdit = useCallback(() => {
+    setEditing(null);
+    setEditLoadError(null);
+  }, []);
+
+  /*
+   * Saving sends the validator that came with the values on screen.
+   *
+   * Without one the endpoint is last-write-wins, and two people tidying the
+   * same inventory is exactly the situation this page creates. A 412 comes
+   * back as the server's own sentence, which tells the user to re-open the
+   * row — rather than the edit silently winning or silently vanishing.
    */
   const onSave = useCallback(
     async (id: string, body: MonitorPatch) => {
       clearError(id);
-      const etag = await version(id);
-      await patch(id, body, etag);
+      await patch(id, body, editing?.etag ?? null);
       await queryClient.invalidateQueries({ queryKey: inventoryQueryKey });
+      /*
+       * A successful edit invalidates its own ETag: the write bumped
+       * `updated_at`, so the stamp in hand is now stale and reusing it would
+       * make the next save fail with a conflict about the user's own change.
+       */
+      setEditing(null);
     },
-    [clearError, patch, queryClient, version],
+    [clearError, editing, patch, queryClient],
   );
 
   const onCreated = useCallback(() => {
@@ -262,6 +306,10 @@ export function LiveMonitors({
       onCheckNow={canWrite ? onCheckNow : undefined}
       onDelete={canWrite ? onDelete : undefined}
       onSave={canWrite ? onSave : undefined}
+      onEdit={canWrite ? onEdit : undefined}
+      editing={editing?.monitor ?? null}
+      editError={editLoadError}
+      onEditClose={closeEdit}
       onCreated={onCreated}
       busyIds={busyIds}
       checkingIds={checkingIds}

@@ -159,6 +159,19 @@
 .inv-search { flex: 1 1 14rem; min-width: 0; }
 
 /*
+ * The search box keeps the no-zoom size at every width.
+ *
+ * `.add-input` steps down to `--type-body` above 640px, which is right for a
+ * form but not for this: a search field is the one control on the page people
+ * reach for on a tablet in landscape, and anything under 16px makes iOS Safari
+ * zoom on focus and leave them scrolled sideways (DESIGN.md §13).
+ */
+.inv-search-input {
+  font-size: var(--type-nozoom);
+  line-height: var(--lead-nozoom);
+}
+
+/*
  * Phone: the settings columns stop pretending to be a table and wrap under the
  * name. The page itself never scrolls sideways — that lesson is already in
  * incidents.css — so nothing here keeps a fixed width that could push the

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SessionGate } from "./auth/SessionGate";
 import { useSession } from "./auth/useSession";
+import { canWrite } from "./auth/permissions";
 import { useTheme } from "./theme/useTheme";
 import { TokenSheet } from "./components/TokenSheet";
 import { HeartbeatGallery } from "./heartbeat/Gallery";
@@ -195,10 +196,23 @@ export default function App() {
     setAddOpen(false);
     setWorkbenchOpen((open) => !open);
   }, []);
+  /*
+   * Add a monitor, from wherever you pressed it.
+   *
+   * On the inventory the drawer is the route — `/monitors/new` is a real
+   * address — so the topbar has to navigate rather than set a local flag.
+   * Setting `addOpen` there would open a second, unrouted copy of the same
+   * form over the list, leave the URL on `/monitors`, and light the button as
+   * pressed for a state the address bar does not have.
+   */
   const toggleAdd = useCallback(() => {
+    if (onMonitors) {
+      setCreateOpen(!route.create);
+      return;
+    }
     setWorkbenchOpen(false);
     setAddOpen((open) => !open);
-  }, []);
+  }, [onMonitors, route, setCreateOpen]);
   /*
    * Closing on success rather than navigating to the new monitor.
    *
@@ -330,7 +344,7 @@ export default function App() {
           workbenchOpen={workbenchOpen}
           onToggleWorkbench={toggleWorkbench}
           onAddMonitor={toggleAdd}
-          addOpen={addOpen}
+          addOpen={onMonitors ? route.create : addOpen}
         />
       }
     >
@@ -362,6 +376,12 @@ export default function App() {
             onOpen={openMonitor}
             createOpen={route.create}
             onCreateOpenChange={setCreateOpen}
+            /* A viewer is shown no write controls at all rather than controls
+               that 403: the server's rule is the one consulted, not a guess
+               about what this screen would like to offer. */
+            canWrite={
+              session.state === "signedIn" && canWrite(session.user)
+            }
           />
         ) : route.name === "monitor" ? (
           <LiveMonitorDetailRoot

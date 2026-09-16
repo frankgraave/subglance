@@ -110,6 +110,55 @@ describe("EditMonitorForm", () => {
     ).toBeTruthy();
   });
 
+  it("saves a rename when a stored tag value contains a comma", async () => {
+    /*
+     * `note: "a,b"` is a legal stored tag — the API carries an object so a
+     * value may contain punctuation — but rendered as `note:a,b` it reads back
+     * as two entries, the second with no key. Re-parsing that on every save
+     * refused every save, including a rename that never touched the tags.
+     */
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <EditMonitorForm monitor={make({ tags: { note: "a,b" } })} onSave={onSave} />,
+    );
+    fireEvent.change(screen.getByLabelText("Name"), {
+      target: { value: "auth-eu" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    // And the tags are not sent at all, so nothing can be mangled on the way.
+    expect(onSave.mock.calls[0][0]).toEqual({ name: "auth-eu" });
+  });
+
+  it("puts a field rejection beside the field and moves focus there", () => {
+    /*
+     * A message under the submit button is one a screen reader user has to go
+     * looking for, and one a sighted user reads after the field they then have
+     * to scroll back up to fix.
+     */
+    render(<EditMonitorForm monitor={make()} onSave={vi.fn()} />);
+    const interval = screen.getByLabelText(/interval/i);
+    fireEvent.change(interval, { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+
+    expect(interval.getAttribute("aria-invalid")).toBe("true");
+    const describedBy = interval.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy!)?.textContent).toMatch(
+      /between 20 and 86400/,
+    );
+    expect(document.activeElement).toBe(interval);
+  });
+
+  it("leaves a rejection that is about no single field unpinned", () => {
+    // "Nothing changed" is not about an input, and pinning it under one would
+    // tell the user to edit something that is not wrong.
+    render(<EditMonitorForm monitor={make()} onSave={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    expect(screen.getByLabelText("Name").getAttribute("aria-invalid")).toBeNull();
+    expect(screen.getByRole("alert").textContent).toMatch(/nothing changed/i);
+  });
+
   it("warns that saving tags replaces the whole set", () => {
     render(<EditMonitorForm monitor={make()} onSave={vi.fn()} />);
     expect(screen.getByText(/a tag left out here is a tag removed/i)).toBeTruthy();

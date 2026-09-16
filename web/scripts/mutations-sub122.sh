@@ -9,7 +9,10 @@
 # Every file is restored in a trap, so an interrupt cannot leave the tree
 # mutated.
 set -uo pipefail
-cd "$(dirname "$0")/.."
+# `|| exit` is not decoration here: without it a failed cd leaves the script
+# running in the caller's directory, where `save`, the Python mutation and
+# `restore` would rewrite whatever files happen to match those relative paths.
+cd "$(dirname "$0")/.." || exit 1
 
 BAK=$(mktemp -d)
 # The vitest transcript lives OUTSIDE $BAK. The restore loop below copies
@@ -39,7 +42,21 @@ PY
   local status=0
   npx vitest run "$@" > "$LOG" 2>&1 || status=$?
   grep -E "Tests +[0-9]+ (failed|passed)|AssertionError|→" "$LOG" | head -6
-  if [ "$status" -eq 0 ]; then
+  #
+  # A non-zero exit is not by itself proof that the mutation was caught.
+  #
+  # A missing node_modules, an unresolvable npx, a broken vitest config or a
+  # TypeScript error unrelated to the mutation all exit non-zero too — and a
+  # harness that read those as "caught" would report every mutation green
+  # without a single assertion having run, which is the one failure mode a
+  # verification tool may not have. So the log has to show that vitest got far
+  # enough to print a test summary before the exit status means anything.
+  #
+  if ! grep -qE "Tests +[0-9]+ (failed|passed)" "$LOG"; then
+    echo "!!! NO RESULT — vitest printed no test summary, so this mutation proves nothing"
+    tail -5 "$LOG"
+    MISSED+=("$name (vitest produced no summary)")
+  elif [ "$status" -eq 0 ]; then
     echo "!!! SURVIVED — the suite stayed green with this defect in place"
     SURVIVED+=("$name")
   fi
@@ -113,7 +130,7 @@ s = s.replace(old, "    recorded: body.recorded !== false,")
 mutate "row hides the not-recorded warning" "$ROW" '
 old = """          {checkResult.recorded
             ? ""
-            : " Not recorded — this monitor is paused, so the result is not part of its history."}"""
+            : " Not recorded — the monitor was paused when this check ran, so the result is not part of its history."}"""
 assert old in s
 s = s.replace(old, "")
 ' $SRC/MonitorsView.test.tsx
@@ -228,10 +245,9 @@ s = s.replace(old, new)
 # 19. The edit drops the If-Match, so two people tidying the inventory silently
 #     overwrite each other.
 mutate "edit becomes last-write-wins" "$LIVE" '
-old = """      const etag = await version(id);
-      await patch(id, body, etag);"""
+old = "      await patch(id, body, editing?.etag ?? null);"
 assert old in s
-s = s.replace(old, """      await patch(id, body);""")
+s = s.replace(old, "      await patch(id, body);")
 ' $SRC/LiveMonitors.test.tsx
 
 # 20. The same, one layer down: the header is built but never sent.
@@ -368,5 +384,66 @@ s = s.replace("""const PLANNED_CONFIG: readonly Destination[] = [""",
               """const PLANNED_CONFIG: readonly Destination[] = [
   { id: "monitors", label: "Monitors", Icon: MonitorsIcon },""")
 ' src/shell/shell.test.tsx
+
+# --- Second round: each of these reverts a fix that CodeRabbit's review found,
+# --- so the tests written alongside them have to bite too.
+
+# 33. A 200 whose body has no monitor list reads as an empty instance.
+mutate "unreadable payload reported as no monitors" "$API" '
+old = "  if (!Array.isArray(body?.monitors)) {"
+assert old in s
+s = s.replace(old, "  if (false) {")
+' $SRC/inventoryApi.test.ts
+
+# 34. The edit form is filled from the list row while the ETag is read fresh,
+#     so a conditional PATCH guards a different instant from the one on screen.
+mutate "form values and ETag from different moments" "$LIVE" '
+old = "      editing={editing?.monitor ?? null}"
+assert old in s
+s = s.replace(old, """      editing={
+        editing === null
+          ? null
+          : ((monitors.data ?? []).find((m) => m.id === editing.monitor.id) ??
+            editing.monitor)
+      }""")
+' $SRC/LiveMonitors.test.tsx
+
+# 35. A monitor that cannot be re-read opens no drawer and says nothing.
+mutate "failed edit load says nothing" "$LIVE" '
+old = """          setEditLoadError(
+            error instanceof Error
+              ? error.message
+              : "the monitor could not be loaded for editing",
+          );"""
+assert old in s
+s = s.replace(old, "          void error;")
+' $SRC/LiveMonitors.test.tsx
+
+# 36. A stored tag value containing a comma is re-parsed on every save, so a
+#     rename that never touched the tags is refused forever.
+mutate "comma-bearing tag blocks every save" "$EDIT" '
+old = "    const tags = tagsUntouched ? monitor.tags : textToTags(tagText);"
+assert old in s
+s = s.replace(old, "    const tags = textToTags(tagText);")
+' $SRC/EditMonitorForm.test.tsx
+
+# 37. A field rejection is no longer attached to its field, so the message
+#     sits under the submit button with focus still on it.
+mutate "field errors lose their field" "$EDIT" '
+old = """    if (field === \"name\") nameRef.current?.focus();"""
+assert old in s
+i = s.index(old)
+j = s.index("  };", i)
+s = s[:i] + s[j:]
+s = s.replace("""    setProblem({ message, field });""", """    setProblem({ message, field: null });""")
+' $SRC/EditMonitorForm.test.tsx
+
+# 38. The role check goes, so a viewer is handed controls that 403 — which
+#     reads as a broken instance rather than a permission they lack.
+mutate "unknown role treated as a writer" src/auth/permissions.ts '
+old = """  return user?.role === "admin" || user?.role === "editor";"""
+assert old in s
+s = s.replace(old, """  return user?.role !== "viewer";""")
+' src/auth/permissions.test.ts
 
 report

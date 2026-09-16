@@ -53,6 +53,20 @@ export type MonitorsViewProps = {
   onDelete?: (id: string) => void;
   /** Applies an edit. Resolves when the server accepted it. */
   onSave?: (id: string, patch: MonitorPatch) => Promise<void>;
+  /**
+   * Asks the owner to load a monitor for editing. Absent for a viewer.
+   *
+   * The owner re-reads it rather than this screen handing over the list row,
+   * because the edit has to be filled from the same response the ETag came
+   * with — a precondition guarding a different instant from the values on
+   * screen is worse than none, since it looks like it worked.
+   */
+  onEdit?: (id: string) => void;
+  /** The monitor the owner loaded, freshly read. Null closes the drawer. */
+  editing?: InventoryMonitor | null;
+  /** A failed load of the monitor to edit. */
+  editError?: string | null;
+  onEditClose?: () => void;
   /** Called after a monitor is created, so the owner can refetch. */
   onCreated?: () => void;
   /** Ids with a pause/resume in flight. */
@@ -83,6 +97,10 @@ export function MonitorsView({
   onCheckNow,
   onDelete,
   onSave,
+  onEdit,
+  editing = null,
+  editError = null,
+  onEditClose,
   onCreated,
   busyIds = NO_SET,
   checkingIds = NO_SET,
@@ -96,7 +114,6 @@ export function MonitorsView({
   /** "" = every monitor, "active", "paused". The default shows everything,
    *  which is precisely where this page differs from the dashboard. */
   const [pausedFilter, setPausedFilter] = useState<string>("");
-  const [editing, setEditing] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
 
   const visible = useMemo(() => {
@@ -106,7 +123,6 @@ export function MonitorsView({
     return out;
   }, [monitors, query, type, pausedFilter]);
 
-  const editTarget = monitors.find((m) => m.id === editing) ?? null;
   const deleteTarget = monitors.find((m) => m.id === confirming) ?? null;
 
   return (
@@ -119,6 +135,15 @@ export function MonitorsView({
       {error !== null && (
         <p className="inc-notice" role="alert">
           {error.message}
+        </p>
+      )}
+
+      {/* A monitor that could not be re-read for editing. Stated rather than
+          silently doing nothing: a button that opens no drawer reads as a
+          broken page. */}
+      {editError !== null && (
+        <p className="inc-notice" role="alert">
+          {editError}
         </p>
       )}
 
@@ -158,7 +183,12 @@ export function MonitorsView({
             <span className="inv-label">Search</span>
             <input
               type="search"
-              className="add-input"
+              /* `inv-search-input` pins the 16px minimum at every width.
+                 `.add-input` drops to 14px above 640px, which is fine for a
+                 form nobody types into on a phone in landscape and wrong for
+                 a search box: iOS Safari zooms the page on focus below 16px
+                 and leaves the reader scrolled sideways (DESIGN.md §13). */
+              className="add-input inv-search-input"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Name or target"
@@ -244,7 +274,7 @@ export function MonitorsView({
                 onOpen={onOpen}
                 onTogglePaused={onTogglePaused}
                 onCheckNow={onCheckNow}
-                onEdit={onSave === undefined ? undefined : setEditing}
+                onEdit={onEdit}
                 onDelete={onDelete === undefined ? undefined : setConfirming}
                 busy={busyIds.has(monitor.id)}
                 checking={checkingIds.has(monitor.id)}
@@ -281,18 +311,19 @@ export function MonitorsView({
       </Drawer>
 
       <Drawer
-        open={editTarget !== null}
-        onClose={() => setEditing(null)}
-        title={editTarget === null ? "Edit monitor" : `Edit ${editTarget.name}`}
+        open={editing !== null}
+        onClose={() => onEditClose?.()}
+        title={editing === null ? "Edit monitor" : `Edit ${editing.name}`}
       >
-        {editTarget !== null && onSave !== undefined && (
+        {editing !== null && onSave !== undefined && (
           <EditMonitorForm
-            monitor={editTarget}
-            onSave={async (patch) => {
-              await onSave(editTarget.id, patch);
-              setEditing(null);
-            }}
-            onCancel={() => setEditing(null)}
+            /* Keyed on the id AND the name, so re-opening a monitor that
+               changed elsewhere rebuilds the form from the new values rather
+               than keeping state from the previous open. */
+            key={`${editing.id}:${editing.name}`}
+            monitor={editing}
+            onSave={(patch) => onSave(editing.id, patch)}
+            onCancel={() => onEditClose?.()}
           />
         )}
       </Drawer>

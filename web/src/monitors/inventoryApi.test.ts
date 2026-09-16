@@ -32,6 +32,14 @@ describe("fetchInventory", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/monitors");
   });
 
+  it("refuses a 200 with no monitor list rather than reading it as empty", async () => {
+    // "Nothing is being watched yet" to somebody with forty monitors is the
+    // most alarming wrong thing this page can say, so it is never said on the
+    // strength of a body we could not read.
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(json({ ok: true }));
+    await expect(fetchInventory()).rejects.toThrow(/no monitor list/);
+  });
+
   it("reports a failed list rather than rendering an empty instance", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       json({ error: "nope" }, { status: 500 }),
