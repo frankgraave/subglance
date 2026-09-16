@@ -208,3 +208,80 @@ describe("LiveNotifications", () => {
     );
   });
 });
+
+describe("enabling and disabling through the server", () => {
+  /*
+   * The write that had no path at all before this: the row could report
+   * "Disabled" and offer no way back.
+   *
+   * The assertion that matters is not that a PUT happened but *what was in
+   * it*. The channel is sent back as it was read, masked config included,
+   * because `handleUpdateChannel` treats a value still equal to its own mask
+   * as unchanged and substitutes the stored secret. A request that dropped
+   * the config, or sent an empty one, would destroy the webhook token on
+   * every toggle — which is exactly the kind of damage that looks like
+   * nothing until somebody needs an alert.
+   */
+  it("sends the channel back unchanged apart from the flag", async () => {
+    const update = vi.fn().mockResolvedValue(undefined);
+    render(
+      <LiveNotificationsRoot
+        client={client()}
+        list={async () => [make()]}
+        test={async () => ({ ok: true }) as const}
+        update={update}
+      />,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /^Disable / }),
+    );
+
+    await waitFor(() => expect(update).toHaveBeenCalled());
+    const [id, input] = update.mock.calls[0];
+    expect(id).toBe("1");
+    expect(input).toMatchObject({
+      name: "On-call Slack",
+      type: "slack",
+      enabled: false,
+    });
+    // The masked secret goes back verbatim; the server restores the real one.
+    expect(input.config).toEqual({ url: "****B07F" });
+  });
+
+  it("turns a disabled channel back on", async () => {
+    const update = vi.fn().mockResolvedValue(undefined);
+    render(
+      <LiveNotificationsRoot
+        client={client()}
+        list={async () => [make({ enabled: false })]}
+        test={async () => ({ ok: true }) as const}
+        update={update}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /^Enable / }));
+    await waitFor(() => expect(update).toHaveBeenCalled());
+    expect(update.mock.calls[0][1]).toMatchObject({ enabled: true });
+  });
+
+  it("reports a refused toggle on the row rather than silently reverting", async () => {
+    /*
+     * A failed write that leaves the switch where it was, with no message,
+     * teaches the reader the button is broken — or worse, that the channel is
+     * off when it is not.
+     */
+    const update = vi.fn().mockRejectedValue(new Error("channel is locked"));
+    render(
+      <LiveNotificationsRoot
+        client={client()}
+        list={async () => [make()]}
+        test={async () => ({ ok: true }) as const}
+        update={update}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /^Disable / }));
+    expect(await screen.findByText(/channel is locked/i)).toBeTruthy();
+  });
+});
