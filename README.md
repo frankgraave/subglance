@@ -224,10 +224,19 @@ install and nothing to serve alongside it.
 # replace VERSION and the platform with the ones you want
 curl -fsSLO https://github.com/frankgraave/subglance/releases/download/vVERSION/subglance_VERSION_linux_amd64.tar.gz
 curl -fsSLO https://github.com/frankgraave/subglance/releases/download/vVERSION/SHA256SUMS
-sha256sum -c SHA256SUMS --ignore-missing
+sha256sum -c SHA256SUMS --ignore-missing   # macOS: shasum -a 256 -c SHA256SUMS --ignore-missing
 
 tar xzf subglance_VERSION_linux_amd64.tar.gz
 ./subglance --data-dir ./data
+```
+
+On Windows, PowerShell prints the hash and you compare it against the line for
+your archive in `SHA256SUMS` — there is no `-c` equivalent that checks the file
+for you:
+
+```powershell
+(Get-FileHash subglance_VERSION_windows_amd64.zip -Algorithm SHA256).Hash.ToLower()
+Select-String subglance_VERSION_windows_amd64.zip SHA256SUMS
 ```
 
 The checksum file is itself signed with [cosign](https://docs.sigstore.dev/),

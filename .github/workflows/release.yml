@@ -39,7 +39,13 @@ env:
   # has newest, and a release must be reproducible from its tag. Keep this in
   # step with ci.yml so that what CI proved is what gets shipped.
   GO_VERSION: "1.26.8"
-  NODE_VERSION: "24"
+  # Node is pinned to a patch too, for the same reason and one more: this
+  # stage builds the dashboard that gets compiled into the binary, so an
+  # unpinned minor can change the bundle a tag ships without a commit
+  # explaining why. ci.yml still says "24"; that is a gap worth closing,
+  # but a range in CI only risks a red build, while a range here changes
+  # the artefact people download.
+  NODE_VERSION: "24.21.0"
 
 jobs:
   release:
@@ -91,7 +97,14 @@ jobs:
       - name: Release
         uses: goreleaser/goreleaser-action@9c156ee8a17a598857849441385a2041ef570552 # v6.3.0
         with:
-          version: "~> v2"
+          # Exact, not "~> v2". The range resolves to whatever the action
+          # finds newest at run time, so two tags built months apart would
+          # ship archives cut by different tools with no commit recording
+          # the change. 2.18.1 is the version this configuration was
+          # validated against locally (`goreleaser check`, a full
+          # five-platform snapshot, and a checksum verification), so it is
+          # the version that should produce the real thing.
+          version: "2.18.1"
           # `release` on a tag; `--snapshot` on a manual dispatch, which
           # builds and archives everything but contacts no registry and
           # creates no release. That is what makes this workflow testable
