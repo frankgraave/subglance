@@ -46,6 +46,13 @@ type Server struct {
 	// Nil disables that endpoint, on the same principle as the others.
 	tester ChannelTester
 
+	// targetGuard vets a channel's destination when the channel is saved,
+	// so a target that can never be delivered to is refused while the
+	// operator is still looking at the form instead of during an outage.
+	// Nil skips the check; see WithTargetGuard and checkChannelTarget, and
+	// note that it is a usability layer, never the security boundary.
+	targetGuard TargetGuard
+
 	// pushReports rate-limits the public push endpoint per monitor. It is
 	// separate from manualChecks because the two protect against different
 	// things: one bounds what an authenticated human can ask the server to

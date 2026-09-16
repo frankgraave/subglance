@@ -183,6 +183,12 @@ func run(args []string) error {
 	apiSrv, err := api.New(log, db).WithBus(bus).
 		WithProber(runner).WithPushRecorder(runner).
 		WithChannelTester(notify).
+		// The same guard the notifier delivers through, so the save-time
+		// refusal and the delivery-time refusal cannot disagree about
+		// what --allow-private-targets permits. A channel the operator
+		// is allowed to deliver to must be a channel they are allowed
+		// to save.
+		WithTargetGuard(guard).
 		WithTrustedProxies(cfg.TrustedProxies)
 	if err != nil {
 		return err

@@ -186,6 +186,10 @@ func (s *Server) handleCreateChannel(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
+	if msg := s.checkChannelTarget(r.Context(), req); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
 
 	c := store.Channel{
 		Name:    strings.TrimSpace(req.Name),
@@ -254,6 +258,14 @@ func (s *Server) handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if msg := validateChannel(req); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
+	// Edit is guarded as well as create. A channel that was saved before
+	// this check existed, or before the operator dropped
+	// --allow-private-targets, must not be able to keep a blocked target
+	// alive simply because it is being updated rather than created.
+	if msg := s.checkChannelTarget(r.Context(), req); msg != "" {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}

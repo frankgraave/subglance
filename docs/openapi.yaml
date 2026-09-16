@@ -1403,6 +1403,22 @@ paths:
         now turns a silently, permanently failing channel into an error at the
         moment the mistake is made.
 
+        The destination host is also checked against the SSRF guard: `config.url`
+        for webhook, discord and slack, and `config.host` (the SMTP relay) for
+        email. Telegram has no user-supplied destination — the Bot API host is a
+        constant — so nothing is checked for it. A blocked destination is a 400
+        naming the offending field. Start SubGlance with `--allow-private-targets`
+        to permit internal addresses; the same flag governs delivery, so anything
+        deliverable is savable.
+
+        This save-time check is a usability layer, not the security boundary.
+        The boundary is the dial-time check that runs after DNS resolution on
+        every delivery, which is what covers DNS rebinding and redirect hops. A
+        name that resolves somewhere harmless today and somewhere blocked
+        tomorrow therefore saves cleanly and is still refused at delivery. A
+        lookup that fails or times out is likewise not a refusal: an internal
+        relay the API process cannot resolve is an ordinary configuration.
+
         The response masks secrets, so the full value is only ever seen by the
         client that sent it.
       requestBody:
@@ -1422,7 +1438,8 @@ paths:
           description: |
             Malformed or unknown-field JSON, a missing or over-long name, an
             unknown type, a missing required config key, a config value that is
-            not a valid http/https URL, or over-long config keys or values.
+            not a valid http/https URL, a destination host the SSRF guard
+            refuses, or over-long config keys or values.
           content:
             application/json:
               schema:
@@ -1484,6 +1501,12 @@ paths:
         destroy it.
 
         `enabled` is left as-is when the field is omitted.
+
+        The destination host is checked against the SSRF guard on edit exactly
+        as on create — see `createChannel` for which field is checked per type
+        and why this is a usability layer rather than the security boundary. A
+        channel stored before the check existed cannot keep a blocked
+        destination alive merely by being updated.
       requestBody:
         required: true
         content:
