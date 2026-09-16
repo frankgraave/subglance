@@ -8,10 +8,13 @@ a glance whether everything is running, what is broken, and since when.
 One binary, one command, no configuration required.
 
 > **Status: early development, not yet released.** The engine works end to end:
-> monitors are scheduled, checked, confirmed into incidents, and streamed to a
-> live dashboard. What is missing before a first release is listed under
-> [Where it stands](#where-it-stands) — most notably, **notifications are stored
-> but never sent**. Watch or star the repo if you want to know when v0.1 lands.
+> monitors are scheduled, checked, confirmed into incidents, streamed to a live
+> dashboard, and delivered to a human over five notification channels. What is
+> missing before a first release is listed under
+> [Where it stands](#where-it-stands) — most of it is screens that do not exist
+> yet, and **there is no tagged release, so there are no prebuilt binaries**:
+> Docker or a build from source are the two ways to run this today. Watch or
+> star the repo if you want to know when v0.1 lands.
 
 ## Why another uptime monitor
 
@@ -57,38 +60,69 @@ code exists for it.
 - **REST API v1** with an OpenAPI 3.1 specification, checked against the server's
   own route table on every test run
 - **Authentication**: sessions, API tokens, three roles, first-run setup
+- **Delivering the alert**: webhook, Discord, Slack, Telegram and email, sent
+  from an outbox that retries with exponential backoff and jitter and
+  dead-letters a delivery that keeps failing, so a Slack outage never blocks the
+  checker loop. `POST /api/v1/channels/{id}/test` sends a real message through a
+  channel, so a misconfigured webhook is found when it is saved rather than
+  during the first outage
+- **Alert grouping**: twenty monitors failing on one dead uplink send one
+  message per channel naming all twenty, with the waiting window configurable
+  down to zero
+- **Repeat alerts** on a growing schedule until someone acknowledges the
+  incident, with the schedule stored so a restart mid-outage continues it
 - **Live dashboard**: rows on a laptop, cards on a phone, heartbeat bars, and an
   SSE stream that warns when it loses the connection
+- **Search, tag filtering and grouping** on the dashboard, with a render budget
+  test that fails if one arriving heartbeat re-renders more than the one monitor
+  it belongs to at 200 monitors
+- **The stale state**: when the stream drops, the LEDs and heartbeat bars drain
+  their colour, so the screen stops asserting a status it can no longer verify
+- **Monitor detail view**: heartbeat over a longer window than the row shows,
+  uptime over real windows, and the incident history for that monitor
+- **The app shell**: sidebar, layout switcher, mobile nav drawer, status wall,
+  keyboard shortcuts, and a crash boundary
+- **Tags and pausing**: tags are key/value pairs the dashboard turns into
+  filters, and a paused monitor reads differently from one that has no data yet
 - **One binary**: the dashboard is compiled in with `go:embed`
 
 ### Not working yet
 
-- **Sending notifications.** Channels can be created, stored and validated
-  (webhook, Discord, Slack, Telegram, email), and the state engine decides
-  correctly *when* a human should be told — but nothing delivers the message.
-  This is the largest gap between the README and reality, and the reason there
-  is no release yet.
-- **The stale state.** When the stream drops, a banner says so — but every LED
-  keeps its last known colour, so the screen still asserts a status it can no
-  longer verify. `docs/DESIGN.md` §6 specifies draining the colour instead; that
-  is not implemented yet.
-- **Most of the UI beyond the dashboard.** No monitor detail view, no incident
-  screen, no settings, no notification configuration. The app shell (sidebar,
-  layout switcher, status wall) is designed in `docs/DESIGN.md` but not built.
-- **Scale.** The dashboard is tested with a handful of monitors, not the 200 it
-  targets: no search, no filtering, no virtualisation.
-- **Maintenance windows**, tags, and a paused monitor that looks different from
-  one that has no data yet.
+- **Maintenance windows.** There is no way to tell SubGlance that a target is
+  down on purpose, so a planned deployment alerts like an outage.
+- **A latency graph.** The detail view shows the latest latency as a number and
+  the heartbeat as a bar; the trend over time is not drawn anywhere.
+- **The incident screen.** Acknowledging works over the API
+  (`POST /api/v1/incidents/{id}/ack`), but there is no screen for it: the
+  sidebar entries for Incidents, Monitors, Notifications and Settings say
+  "Soon" because that is the truth.
+- **A release.** There is no release workflow, so there are no prebuilt
+  binaries for any platform and no version to pin. The container image is built
+  on every push to `develop` and moves under you.
+
+### Known sharp edges
+
+Things that work, but not the way they eventually should:
+
+- **Channel configuration is stored as plain text.** `notif_channels.config_json`
+  holds webhook URLs, bot tokens and SMTP passwords unencrypted, so anyone who
+  can read the database file can read them. The API masks them on the way out;
+  the file does not.
+- **A channel's target address is only checked when a message is sent**, not
+  when the channel is saved. The SSRF guard runs at delivery, which is what
+  stops a channel from reaching `169.254.169.254` — but a channel pointed
+  there saves without complaint and only reports the problem on the first
+  alert.
 
 ## Still planned for v0.1
 
 What the list above does not yet cover, and what has to exist before a first
 release:
 
-- Delivering notifications: webhook, Discord, Slack, Telegram, email
-- Per-monitor detail view with a latency graph
-- Incident, monitor, notification and settings screens
 - Maintenance windows
+- A latency graph on the monitor detail view
+- Incident, monitor, notification and settings screens
+- A release workflow, so there are tagged versions and binaries to download
 
 Deliberately **not** in v0.1: status pages, config-as-code, multi-region checks,
 on-call schedules, SSO, mobile app, CLI, Postgres. They are on the roadmap; they
