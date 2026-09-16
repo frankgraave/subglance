@@ -70,21 +70,41 @@ export function LiveMonitorDetail({
    * incident, so it is refetched too — two screens disagreeing about whether
    * somebody is on it is exactly the confusion ack is meant to end.
    */
-  const [ackingId, setAckingId] = useState<string | null>(null);
+  /*
+   * Every ack in flight, not just the most recent one.
+   *
+   * A single `ackingId` was overwritten the moment a second incident was
+   * clicked: incident A's control re-enabled while its request was still
+   * running, so a second click sent a duplicate ack for A. During a cluster
+   * outage — exactly when several incidents are acked in quick succession —
+   * that is the normal way to use this screen, not an edge case.
+   */
+  const [ackingIds, setAckingIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const markAcking = useCallback((incidentId: string, busy: boolean) => {
+    setAckingIds((current) => {
+      if (current.has(incidentId) === busy) return current;
+      const next = new Set(current);
+      if (busy) next.add(incidentId);
+      else next.delete(incidentId);
+      return next;
+    });
+  }, []);
   const ackMutation = useMutation({
     mutationFn: (incidentId: string) => ack(incidentId),
     onSettled: (_data, _error, incidentId) => {
-      setAckingId((current) => (current === incidentId ? null : current));
+      markAcking(incidentId, false);
       void queryClient.invalidateQueries({ queryKey: detailQueryKey(id) });
       void queryClient.invalidateQueries({ queryKey: openIncidentsQueryKey });
     },
   });
   const onAck = useCallback(
     (incidentId: string) => {
-      setAckingId(incidentId);
+      markAcking(incidentId, true);
       ackMutation.mutate(incidentId);
     },
-    [ackMutation],
+    [ackMutation, markAcking],
   );
 
   const monitor = monitors.find((m) => m.id === id);
@@ -134,7 +154,7 @@ export function LiveMonitorDetail({
        */
       stale={status !== "live"}
       onAck={onAck}
-      ackingId={ackingId}
+      ackingIds={ackingIds}
       ackError={ackMutation.error instanceof Error ? ackMutation.error : null}
     />
   );

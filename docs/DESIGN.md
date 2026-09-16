@@ -1559,9 +1559,12 @@ The sidebar advertises five destinations; two exist.
 
 - ~~**Incidents**~~ **Closed (partly).** `/incidents` is a real destination
   now, and the sidebar item is a real link rather than a "Soon" label. It lists
-  every open incident, oldest outage first — everything on it is still broken,
-  so the one broken longest is the one most likely to have been missed — and it
-  carries acknowledge. It carries **no count badge**: the number lives on the
+  every open incident, newest first — the ordering "Grouping is additive, and
+  it states a suspicion" specifies and the code implements, because at 03:00
+  the question is "what just happened" — and it
+  carries acknowledge. The duration is on every row, so the outage running
+  longest stays findable without reordering the list around it. It carries
+  **no count badge**: the number lives on the
   screen, beside the list it is the length of, where the two cannot disagree.
   The fabricated "2 incidents" this entry once described is exactly the failure
   a real badge risks reintroducing.

@@ -17,6 +17,9 @@ import { Led } from "./Led";
 import { Unknown } from "./Unknown";
 import type { Monitor } from "./types";
 
+/** Shared empty default: a new Set per render would break memoisation. */
+const EMPTY_ACKING: ReadonlySet<string> = new Set();
+
 /**
  * One monitor, in full.
  *
@@ -87,7 +90,8 @@ export type MonitorDetailProps = {
    */
   onAck?: (id: string) => void;
   /** The incident currently being acknowledged, if any. */
-  ackingId?: string | null;
+  /** Incidents whose ack request is still in flight. */
+  ackingIds?: ReadonlySet<string>;
   /** The ack that failed, and why. */
   ackError?: Error | null;
 };
@@ -103,7 +107,7 @@ export function MonitorDetail({
   beatWidth = DETAIL_BEAT_WIDTH,
   stale = false,
   onAck,
-  ackingId = null,
+  ackingIds = EMPTY_ACKING,
   ackError = null,
 }: MonitorDetailProps) {
   const {
@@ -401,7 +405,7 @@ export function MonitorDetail({
                   incident={incident}
                   now={now}
                   onAck={onAck}
-                  acking={ackingId === incident.id}
+                  acking={ackingIds.has(incident.id)}
                   stale={stale}
                   past={incident.resolved}
                 />

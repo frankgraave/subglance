@@ -12,10 +12,14 @@ trap 'for f in "$BAK"/*; do [ -e "$f" ] || continue; n=$(basename "$f" | tr "%" 
 save() { cp "$1" "$BAK/$(echo "$1" | tr '/' '%')"; }
 restore() { cp "$BAK/$(echo "$1" | tr '/' '%')" "$1"; }
 
+# Verdicts, so the script can judge rather than only narrate.
+SURVIVED=()
+MISSED=()
+
 mutate() { # name file python-replace-script testfiles...
   local name="$1" file="$2" script="$3"; shift 3
   save "$file"
-  python3 - "$file" <<PY || { echo "### $name: PATTERN MISSED"; restore "$file"; return; }
+  python3 - "$file" <<PY || { echo "### $name: PATTERN MISSED"; MISSED+=("$name"); restore "$file"; return; }
 import sys
 p = sys.argv[1]
 s = open(p).read()
@@ -23,9 +27,42 @@ $script
 open(p, "w").write(s)
 PY
   echo "### MUTATION: $name"
-  npx vitest run "$@" 2>&1 | grep -E "Tests +[0-9]+ (failed|passed)|AssertionError|→" | head -6
+  #
+  # The exit status is the verdict, not the printed summary.
+  #
+  # A mutation reverts a decision the tests claim to protect, so the suite
+  # MUST fail. Vitest exiting 0 means the mutation survived — the test does
+  # not bite and the protection is imaginary. Previously every `mutate` call
+  # ended in an `echo` and returned success regardless, so this script could
+  # only ever be read by a human who trusted their own eyes over 20 blocks of
+  # output. A verification tool that cannot fail verifies nothing.
+  #
+  local status=0
+  npx vitest run "$@" > "$BAK/out.txt" 2>&1 || status=$?
+  grep -E "Tests +[0-9]+ (failed|passed)|AssertionError|→" "$BAK/out.txt" | head -6
+  if [ "$status" -eq 0 ]; then
+    echo "!!! SURVIVED — the suite stayed green with this defect in place"
+    SURVIVED+=("$name")
+  fi
   restore "$file"
   echo
+}
+
+report() {
+  echo "================================================================"
+  if [ ${#MISSED[@]} -eq 0 ] && [ ${#SURVIVED[@]} -eq 0 ]; then
+    echo "All mutations applied, and every one of them was caught."
+    return 0
+  fi
+  for m in ${MISSED[@]+"${MISSED[@]}"}; do
+    # A missed pattern is not a pass. The code moved on and the mutation
+    # silently stopped testing anything.
+    echo "PATTERN MISSED (mutation never applied): $m"
+  done
+  for m in ${SURVIVED[@]+"${SURVIVED[@]}"}; do
+    echo "SURVIVED (test does not bite): $m"
+  done
+  return 1
 }
 
 SRC=src/incidents
@@ -124,9 +161,11 @@ s = s.replace(old, new)
 
 # 11. Clustering hides incidents: one monitor flapping becomes a "cluster".
 mutate "one monitor flapping is clustered" "$CLUSTER" '
-old = "    if (run.length > 1 && monitors.size >= CLUSTER_MIN_MONITORS) {"
+old = "    if (firstPerMonitor.length >= CLUSTER_MIN_MONITORS) {"
 assert old in s
 s = s.replace(old, "    if (run.length > 1) {")
+s = s.replace("        items: firstPerMonitor,", "        items: run,")
+s = s.replace("        monitorCount: firstPerMonitor.length,", "        monitorCount: seen.size,")
 ' $SRC/cluster.test.ts
 
 # 12. The cluster count hides behind the disclosure.
@@ -205,3 +244,57 @@ old = """  {
 assert old in s
 s = s.replace(old, "")
 ' src/shell/shell.test.tsx
+
+# --- Added after the second review round. Each of these reverts a fix that
+# --- review found, so the tests written alongside them must bite too.
+
+API=$SRC/api.ts
+
+# 21. A failed request becomes an invisible gap in the month.
+mutate "failed history request looks complete" "$API" '
+old = "  return { incidents, truncated: failed || monitorIds.length > ids.length };"
+assert old in s
+s = s.replace(old, "  return { incidents, truncated: monitorIds.length > ids.length };")
+' $SRC/api.test.ts
+
+# 22. The window filters on when an outage began rather than when it ended,
+#     dropping the long outages a reader most wants to find.
+mutate "history window filters on start, not recovery" "$API" '
+old = """        incident.resolvedAt !== null &&
+        incident.resolvedAt >= cutoff,"""
+assert old in s
+s = s.replace(old, """        incident.startedAt !== null &&
+        incident.startedAt >= cutoff,""")
+' $SRC/api.test.ts
+
+# 23. The cluster keeps one monitor'"'"'s repeats, so its count disagrees with
+#     its contents and flapping is offered as evidence of a shared cause.
+mutate "cluster holds one monitor repeats" "$CLUSTER" '
+old = "    if (firstPerMonitor.length >= CLUSTER_MIN_MONITORS) {"
+assert old in s
+s = s.replace(old, "    if (run.length > 1 && seen.size >= CLUSTER_MIN_MONITORS) {")
+s = s.replace("        items: firstPerMonitor,", "        items: run,")
+s = s.replace("        monitorCount: firstPerMonitor.length,", "        monitorCount: seen.size,")
+' $SRC/cluster.test.ts
+
+# 24. The expanded timeline asserts current status on a dead stream (SUB-111,
+#     one level deeper than the collapsed line).
+mutate "expanded timeline ignores stale" "$ITEM" '
+old = "incidentTimeline(incident, stale)"
+assert old in s
+s = s.replace(old, "incidentTimeline(incident)")
+' $SRC/IncidentsView.test.tsx
+
+# 25. The disclosure loses its accessible name: aria-hidden removes content
+#     from the name computation, so the story must live inside the button.
+mutate "disclosure button has no accessible name" "$ITEM" '
+import re
+m = re.search(r"        <span className=\"sr-only\">\n.*?\n        </span>\n", s, re.S)
+assert m
+blok = m.group(0)
+s = s.replace(blok, "")
+s = s.replace("    >\n      {/*\n       * The collapsed line is a button",
+              "    >\n" + blok.replace("        ", "      ") + "      {/*\n       * The collapsed line is a button")
+' $SRC/IncidentsView.test.tsx
+
+report

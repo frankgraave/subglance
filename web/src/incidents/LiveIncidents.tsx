@@ -94,12 +94,32 @@ export function LiveIncidents({
    * with several open incidents on screen, a spinner on all of them would be
    * a lie about four requests that are not happening.
    */
-  const [ackingId, setAckingId] = useState<string | null>(null);
+  /*
+   * Every ack in flight, not just the most recent one.
+   *
+   * A single `ackingId` was overwritten the moment a second incident was
+   * clicked: incident A's control re-enabled while its request was still
+   * running, so a second click sent a duplicate ack for A. During a cluster
+   * outage — exactly when several incidents are acked in quick succession —
+   * that is the normal way to use this screen, not an edge case.
+   */
+  const [ackingIds, setAckingIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const markAcking = useCallback((incidentId: string, busy: boolean) => {
+    setAckingIds((current) => {
+      if (current.has(incidentId) === busy) return current;
+      const next = new Set(current);
+      if (busy) next.add(incidentId);
+      else next.delete(incidentId);
+      return next;
+    });
+  }, []);
 
   const mutation = useMutation({
     mutationFn: (id: string) => ack(id),
     onSettled: (_data, _error, id) => {
-      setAckingId((current) => (current === id ? null : current));
+      markAcking(id, false);
       /*
        * Refetch rather than patch the cache.
        *
@@ -126,10 +146,10 @@ export function LiveIncidents({
 
   const onAck = useCallback(
     (id: string) => {
-      setAckingId(id);
+      markAcking(id, true);
       mutation.mutate(id);
     },
-    [mutation],
+    [markAcking, mutation],
   );
 
   const names: Record<string, string> = {};
@@ -147,7 +167,7 @@ export function LiveIncidents({
       loading={incidents.isPending}
       error={incidents.error instanceof Error ? incidents.error : null}
       onAck={onAck}
-      ackingId={ackingId}
+      ackingIds={ackingIds}
       ackError={mutation.error instanceof Error ? mutation.error : null}
       /*
        * Anything other than a confirmed live stream is stale, exactly as on

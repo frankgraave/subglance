@@ -341,10 +341,24 @@ describe("the incidents screen", () => {
       ],
     });
     const times = [...document.querySelectorAll(".inc-col-time")].map(
-      (n) => n.textContent,
+      (n) => n.textContent ?? "",
     );
-    // Two singles (same monitor, an hour apart), newest at the top.
+    /*
+     * Asserting the order, not just the count.
+     *
+     * Counting two rows passes just as happily when they render reversed,
+     * which makes this test a witness to nothing — and the ordering tests in
+     * cluster.test.ts exercise `clusterIncidents`, not what the view does with
+     * what it returns.
+     */
     expect(times.length).toBe(2);
+    const clock = (at: number) =>
+      new Date(at).toLocaleTimeString(undefined, {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    expect(times[0]).toBe(clock(T0));
+    expect(times[1]).toBe(clock(T0 - 60 * 60_000));
   });
 
   it("states the open count and the acked count separately", () => {
@@ -407,19 +421,35 @@ describe("the empty state is the good news, with its proof", () => {
 });
 
 describe("the resolved history", () => {
+/*
+ * Pinned to local noon, three days back, and then offset in hours.
+ *
+ * `groupByDay` keys on the *local* calendar date, so a fixture written as a
+ * UTC instant lands on different days in different timezones: T0 is
+ * 22:13 UTC, and east of UTC+2 the two incidents split across two local days,
+ * breaking the "2 incidents · 20 min total" assertions for anyone running the
+ * suite outside Europe. Noon has twelve hours of slack in both directions, so
+ * the day is the same everywhere without pinning TZ for the whole run.
+ */
+const DAY_START = (() => {
+  const d = new Date(NOW - 3 * 86_400_000);
+  d.setHours(12, 0, 0, 0);
+  return d.getTime();
+})();
+
   const resolved = [
     incident({
       id: "r1",
-      startedAt: T0 - 3 * 86_400_000,
+      startedAt: DAY_START + 10_200_000,
       resolved: true,
-      resolvedAt: T0 - 3 * 86_400_000 + 600_000,
+      resolvedAt: DAY_START + 10_800_000,
       durationS: 600,
     }),
     incident({
       id: "r2",
-      startedAt: T0 - 3 * 86_400_000 - 3600_000,
+      startedAt: DAY_START + 3600_000,
       resolved: true,
-      resolvedAt: T0 - 3 * 86_400_000 - 3000_000,
+      resolvedAt: DAY_START + 4200_000,
       durationS: 600,
     }),
   ];

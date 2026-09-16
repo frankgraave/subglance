@@ -8,6 +8,9 @@ import { formatDuration } from "../monitors/detail";
 import type { IncidentEntry } from "./cluster";
 import type { Incident } from "../monitors/detail";
 
+/** Shared empty default: a new Set per render would break memoisation. */
+const EMPTY_ACKING: ReadonlySet<string> = new Set();
+
 /**
  * Everything that is broken right now, and what broke recently.
  *
@@ -70,7 +73,8 @@ export type IncidentsViewProps = {
   /** Acknowledges one incident. Absent for a viewer, who may not write. */
   onAck?: (id: string) => void;
   /** The id currently being acknowledged, if any. */
-  ackingId?: string | null;
+  /** Incidents whose ack request is still in flight. */
+  ackingIds?: ReadonlySet<string>;
   /** The ack that failed, and why. Shown once, above the list. */
   ackError?: Error | null;
   /** True when the live stream is dead (DESIGN.md §6). */
@@ -88,7 +92,7 @@ export function IncidentsView({
   loading = false,
   error = null,
   onAck,
-  ackingId = null,
+  ackingIds = EMPTY_ACKING,
   ackError = null,
   stale = false,
 }: IncidentsViewProps) {
@@ -253,7 +257,7 @@ export function IncidentsView({
                       now={now}
                       names={names}
                       onAck={onAck}
-                      ackingId={ackingId}
+                      ackingIds={ackingIds}
                       stale={stale}
                     />
                   ) : (
@@ -266,7 +270,7 @@ export function IncidentsView({
                         `Monitor ${entry.incident.monitorId}`
                       }
                       onAck={onAck}
-                      acking={ackingId === entry.incident.id}
+                      acking={ackingIds.has(entry.incident.id)}
                       stale={stale}
                     />
                   ),

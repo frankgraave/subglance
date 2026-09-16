@@ -6,6 +6,9 @@ import { Value } from "../components/Value";
 import type { IncidentCluster } from "./cluster";
 import type { Incident } from "../monitors/detail";
 
+/** Shared empty default: a new Set per render would break memoisation. */
+const EMPTY_ACKING: ReadonlySet<string> = new Set();
+
 /**
  * Several monitors that started failing at once, offered as one row.
  *
@@ -34,7 +37,8 @@ export type IncidentClusterItemProps = {
   now: number;
   names: Readonly<Record<string, string>>;
   onAck?: (id: string) => void;
-  ackingId?: string | null;
+  /** Incidents whose ack request is still in flight. */
+  ackingIds?: ReadonlySet<string>;
   stale?: boolean;
   past?: boolean;
 };
@@ -44,7 +48,7 @@ export function IncidentClusterItem({
   now,
   names,
   onAck,
-  ackingId = null,
+  ackingIds = EMPTY_ACKING,
   stale = false,
   past = false,
 }: IncidentClusterItemProps) {
@@ -114,7 +118,7 @@ export function IncidentClusterItem({
                 names[incident.monitorId] ?? `Monitor ${incident.monitorId}`
               }
               onAck={onAck}
-              acking={ackingId === incident.id}
+              acking={ackingIds.has(incident.id)}
               stale={stale}
               past={past || incident.resolved}
             />

@@ -247,7 +247,13 @@ export default function App() {
                 // overlays: anything layered on top of one must be dismissed
                 // before Esc means "leave this screen". Both land on the
                 // dashboard, which is the one place that always exists.
-                showDashboard
+                //
+                // Via `goTo` rather than `showDashboard`, so Esc resets the
+                // scroll the same way clicking Dashboard in the rail does.
+                // Leaving a long incidents list by keyboard used to arrive at
+                // the dashboard scrolled to an offset that belonged to a
+                // different screen, with the header off-screen.
+                () => goTo("dashboard")
               : undefined,
   });
 
