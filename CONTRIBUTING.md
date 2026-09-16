@@ -118,6 +118,12 @@ as a sentence is not a problem.
    `security`, `documentation`) sorts it into a section; without one it still
    appears, just under "Everything else".
 
+   That fallback is deliberate, but it stops being a fallback once nothing is
+   labelled: the first generated notes put *every* entry under "Everything
+   else", which is a flat list with the structure switched off. Applying one
+   label is a few seconds and it is the only thing standing between a release
+   page and a wall of undifferentiated lines.
+
 ## Releases
 
 A release is cut by pushing a tag, and by nothing else:
