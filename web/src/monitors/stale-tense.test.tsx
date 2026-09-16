@@ -10,6 +10,7 @@ import { MonitorCompactList } from "./MonitorCompactList";
 import { MonitorTable } from "./MonitorTable";
 import { STATUS_LABEL, STATUS_LABEL_LAST_KNOWN } from "./format";
 import { StatusWall } from "../wall/StatusWall";
+import { IncidentsView } from "../incidents/IncidentsView";
 import type { Monitor, MonitorStatus } from "./types";
 
 /**
@@ -183,6 +184,64 @@ const views: {
       render(<StatusWall monitors={everyStatus()} stale={stale} now={NOW} />),
   },
 ];
+
+/**
+ * The incidents screen, guarded separately.
+ *
+ * It is the sixth view and it does not fit the table above, because it states
+ * an *incident's* state rather than a monitor's: its present-tense claim is
+ * "Down now", not "Up", and it has no last-known monitor status to print.
+ * The rule is the same one though — when the stream dies, nothing on the page
+ * is allowed to assert a state in the present tense — so it gets the same two
+ * assertions rather than an exemption.
+ */
+describe("the incidents screen stops asserting when the stream dies", () => {
+  const openIncident = {
+    id: "1",
+    monitorId: "alpha",
+    startedAt: T0,
+    confirmedAt: T0 + 60_000,
+    resolvedAt: null,
+    ackedAt: null,
+    confirmed: true,
+    resolved: false,
+    acked: false,
+    durationS: 720,
+  };
+
+  const screenAt = (stale: boolean) =>
+    render(
+      <IncidentsView
+        incidents={[openIncident]}
+        now={NOW}
+        names={{ alpha: "service-alpha" }}
+        stale={stale}
+      />,
+    );
+
+  it("drops the present tense once the stream is dead", () => {
+    const { container } = screenAt(true);
+    const text = container.textContent ?? "";
+    expect(text, "an incidents list still claiming an outage is live").not.toContain(
+      "Down since",
+    );
+    expect(text).not.toContain("and counting");
+  });
+
+  it("still says what was happening when we lost contact", () => {
+    // The other half, and the half the obvious fix breaks: blanking the row
+    // would destroy the most useful thing left on a dead screen.
+    const { container } = screenAt(true);
+    expect(container.textContent).toContain("Was down");
+  });
+
+  it("is unchanged while the stream is alive", () => {
+    const { container } = screenAt(false);
+    expect(container.textContent).toContain("Down since");
+    expect(container.textContent).toContain("and counting");
+    expect(container.textContent).not.toContain("Was down");
+  });
+});
 
 describe("a dead stream leaves no status in the present tense", () => {
   for (const view of views) {

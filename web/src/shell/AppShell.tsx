@@ -29,6 +29,10 @@ export type AppShellProps = {
   /** Holds the element focus returns to when the drawer closes; see NavDrawer. */
   navReturnFocusRef?: RefObject<HTMLElement | null>;
   instance?: string;
+  /** Which built destination is on screen; lights the matching nav item. */
+  current?: "dashboard" | "incidents" | "monitor";
+  /** Client-side navigation from the sidebar and the drawer. */
+  onNavigate?: (route: "dashboard" | "incidents") => void;
   /** The signed-in address, shown in the navigation footer. */
   account?: string;
   onSignOut?: () => void;
@@ -51,6 +55,8 @@ export function AppShell({
   onNavClose,
   navReturnFocusRef,
   instance,
+  current,
+  onNavigate,
   account,
   onSignOut,
   topbar,
@@ -100,6 +106,8 @@ export function AppShell({
           <Sidebar
             collapsed={sidebarCollapsed}
             instance={instance}
+            current={current}
+            onNavigate={onNavigate}
             account={account}
             onSignOut={onSignOut}
           />
@@ -134,6 +142,8 @@ export function AppShell({
           onClose={onNavClose ?? (() => {})}
           returnFocusRef={navReturnFocusRef}
           instance={instance}
+          current={current}
+          onNavigate={onNavigate}
           account={account}
           onSignOut={onSignOut}
         />

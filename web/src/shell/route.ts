@@ -12,9 +12,19 @@
 
 export type Route =
   | { name: "dashboard" }
+  | { name: "incidents" }
   | { name: "monitor"; id: string };
 
 export const DASHBOARD_PATH = "/";
+
+/**
+ * The incidents screen.
+ *
+ * A place, like a monitor, and for a stronger reason than the monitor was: it
+ * is the screen somebody is sent to at 03:00, usually by a person pasting a
+ * link into a chat window. A boolean cannot be pasted.
+ */
+export const INCIDENTS_PATH = "/incidents";
 
 /** The canonical path for one monitor. The only place this shape is written. */
 export function monitorPath(id: string): string {
@@ -32,6 +42,9 @@ export function monitorPath(id: string): string {
  */
 export function parseRoute(pathname: string): Route {
   const segments = pathname.split("/").filter((segment) => segment !== "");
+  if (segments.length === 1 && segments[0] === "incidents") {
+    return { name: "incidents" };
+  }
   if (segments.length === 2 && segments[0] === "monitors") {
     /*
      * Decoded, because `monitorPath` encoded it. Ids are digits today, but
@@ -53,5 +66,7 @@ export function parseRoute(pathname: string): Route {
 
 /** The path a route lives at. Inverse of `parseRoute` for known routes. */
 export function routePath(route: Route): string {
-  return route.name === "monitor" ? monitorPath(route.id) : DASHBOARD_PATH;
+  if (route.name === "monitor") return monitorPath(route.id);
+  if (route.name === "incidents") return INCIDENTS_PATH;
+  return DASHBOARD_PATH;
 }

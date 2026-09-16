@@ -1,3 +1,4 @@
+import { DASHBOARD_PATH, INCIDENTS_PATH } from "./route";
 import {
   DashboardIcon,
   IncidentsIcon,
@@ -10,17 +11,24 @@ import {
 /**
  * The primary navigation.
  *
- * **It does not promise what does not exist.** The mockup's sidebar advertises
- * five destinations and one of them is built (DESIGN.md §12); its "2
- * incidents" badge is fixture data. A badge that claims two open incidents and
- * goes nowhere is worse than no badge at all — on a monitoring tool it is
- * indistinguishable from a real alert. So the four unbuilt destinations are
+ * **It does not promise what does not exist.** The sidebar advertises five
+ * destinations and two of them are built (DESIGN.md §12); its "2 incidents"
+ * badge was fixture data. A badge that claims two open incidents and goes
+ * nowhere is worse than no badge at all — on a monitoring tool it is
+ * indistinguishable from a real alert. So the unbuilt destinations are
  * rendered as plainly unavailable: dimmed, not focusable as actions, each
  * saying "Soon" in words rather than relying on colour.
  *
  * They are shown rather than hidden because the shape of the product is
  * information too, and because a sidebar that grows items one release at a
  * time keeps moving the one item that works.
+ *
+ * **Incidents is a real destination now (SUB-34).** It was the oldest of the
+ * "Soon" promises and the one the product could least afford to keep breaking:
+ * `GET /api/v1/incidents` has been answering "what is broken right now" since
+ * the backend landed, and until this release the only way to ask was to open
+ * monitors one at a time. It carries no count — the count belongs on the
+ * screen, next to the list it is the length of, where the two cannot disagree.
  *
  * **Collapsed it becomes a rail, never nothing.** Hiding navigation entirely
  * leaves no way back to it; a 56px icon rail keeps every destination one click
@@ -34,14 +42,30 @@ type Destination = {
   Icon: (props: { className?: string }) => React.ReactElement;
 };
 
-const AVAILABLE: Destination = {
-  id: "dashboard",
-  label: "Dashboard",
-  Icon: DashboardIcon,
+type BuiltDestination = Destination & {
+  href: string;
+  /** Which route name lights this item up. */
+  route: "dashboard" | "incidents";
 };
 
+const BUILT: readonly BuiltDestination[] = [
+  {
+    id: "dashboard",
+    label: "Dashboard",
+    Icon: DashboardIcon,
+    href: DASHBOARD_PATH,
+    route: "dashboard",
+  },
+  {
+    id: "incidents",
+    label: "Incidents",
+    Icon: IncidentsIcon,
+    href: INCIDENTS_PATH,
+    route: "incidents",
+  },
+];
+
 const PLANNED: readonly Destination[] = [
-  { id: "incidents", label: "Incidents", Icon: IncidentsIcon },
   { id: "monitors", label: "Monitors", Icon: MonitorsIcon },
 ];
 
@@ -54,6 +78,10 @@ export type SidebarProps = {
   collapsed: boolean;
   /** Shown under the product name; the instance this dashboard watches. */
   instance?: string;
+  /** Which built destination is on screen. Defaults to the dashboard. */
+  current?: "dashboard" | "incidents" | "monitor";
+  /** Client-side navigation. Absent means the links do a full page load. */
+  onNavigate?: (route: "dashboard" | "incidents") => void;
   /** The signed-in address. Absent means no account footer is drawn. */
   account?: string;
   onSignOut?: () => void;
@@ -80,9 +108,62 @@ function Planned({ label, Icon }: Destination) {
   );
 }
 
+/**
+ * A destination that exists: a real `<a href>`, for the reasons `MonitorLink`
+ * spells out. Middle-click opens it in a tab, right-click copies the address,
+ * and the status bar shows where it goes — none of which a click handler on a
+ * `<span>` gets. The handler on top is an optimisation that stands aside the
+ * moment the user asks for anything but a plain left click.
+ */
+function Built({
+  item,
+  current,
+  onNavigate,
+}: {
+  item: BuiltDestination;
+  current: boolean;
+  onNavigate?: (route: "dashboard" | "incidents") => void;
+}) {
+  return (
+    <li>
+      <a
+        className="shell-nav-item"
+        href={item.href}
+        data-state={current ? "current" : "available"}
+        /*
+         * aria-current="page" rather than a styled class alone: which screen
+         * you are on should reach a screen reader without it reading the
+         * stylesheet.
+         */
+        {...(current ? { "aria-current": "page" as const } : {})}
+        onClick={(event) => {
+          if (onNavigate === undefined) return;
+          if (
+            event.defaultPrevented ||
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey
+          ) {
+            return;
+          }
+          event.preventDefault();
+          onNavigate(item.route);
+        }}
+      >
+        <item.Icon />
+        <span className="shell-nav-text">{item.label}</span>
+      </a>
+    </li>
+  );
+}
+
 export function Sidebar({
   collapsed,
   instance,
+  current = "dashboard",
+  onNavigate,
   account,
   onSignOut,
 }: SidebarProps) {
@@ -105,21 +186,22 @@ export function Sidebar({
       </div>
 
       <ul className="shell-nav">
-        <li>
-          {/*
-           * aria-current="page" rather than a styled class alone: the single
-           * built destination is also the one you are always on, and that fact
-           * should reach a screen reader without reading the stylesheet.
-           */}
-          <span
-            className="shell-nav-item"
-            data-state="current"
-            aria-current="page"
-          >
-            <AVAILABLE.Icon />
-            <span className="shell-nav-text">{AVAILABLE.label}</span>
-          </span>
-        </li>
+        {BUILT.map((item) => (
+          <Built
+            key={item.id}
+            item={item}
+            /*
+             * A monitor's detail view belongs to the dashboard branch of the
+             * product, so Dashboard stays lit while you are on one. Lighting
+             * nothing would leave the rail claiming you are nowhere.
+             */
+            current={
+              current === item.route ||
+              (current === "monitor" && item.route === "dashboard")
+            }
+            onNavigate={onNavigate}
+          />
+        ))}
         {PLANNED.map((item) => (
           <Planned key={item.id} {...item} />
         ))}

@@ -58,9 +58,35 @@ export type UptimeWindow = {
 
 export type Incident = {
   id: string;
+  /**
+   * Which monitor this incident belongs to.
+   *
+   * Carried even on the per-monitor list, where it is redundant, because the
+   * all-monitors incidents screen reads the same shape and has to name the
+   * service each row is about. A second type differing by one field would be
+   * two translations of one API object, and the two would drift.
+   */
+  monitorId: string;
   /** Unix milliseconds, or null if unparseable. */
   startedAt: number | null;
+  /**
+   * When the failure count crossed the threshold and a human was told.
+   *
+   * Distinct from `startedAt` on purpose: the gap between "we saw it" and "we
+   * alerted" is what support conversations turn on, and the server exposes
+   * both for that reason (see internal/api/incidents.go).
+   */
+  confirmedAt: number | null;
   resolvedAt: number | null;
+  /**
+   * When somebody said "seen, working on it".
+   *
+   * **This is not a resolution time.** An acknowledged incident is still open;
+   * acking stops the escalating repeat notifications and changes nothing about
+   * whether the service is down. Any view that draws these two the same way is
+   * telling a reader the outage is over when it is not.
+   */
+  ackedAt: number | null;
   confirmed: boolean;
   resolved: boolean;
   acked: boolean;
@@ -110,8 +136,13 @@ export function incidentFromApi(api: ApiIncident): Incident {
     // and a number that arrives as a string from some other endpoint would
     // silently become a second key for the same incident.
     id: String(api.id),
+    // Stringified for the same reason: a monitor id is a string everywhere
+    // else in this app, and a number here would fail every `===` against one.
+    monitorId: String(api.monitor_id),
     startedAt: toUnixMs(api.started_at),
+    confirmedAt: toUnixMs(api.confirmed_at),
     resolvedAt: toUnixMs(api.resolved_at),
+    ackedAt: toUnixMs(api.acked_at),
     confirmed: api.confirmed,
     resolved: api.resolved,
     acked: api.acked,

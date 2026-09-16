@@ -35,7 +35,23 @@ const dist = resolve(dirname(fileURLToPath(import.meta.url)), "../../internal/we
  */
 const budgets = {
   js: 112,
-  css: 12,
+  /*
+   * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
+   *
+   * The measurement: 12,259 bytes before, 12,715 after — 456 bytes, of which
+   * 29 were the headroom left under the old 12 kB ceiling. That is a whole new
+   * screen: a row with seven columns, an inline-expanding detail with a
+   * timeline and a code block, a cluster wrapper, and a day-grouped history —
+   * after being made to reuse everything that already existed. The row borrows
+   * `Card`, `Panel`, `StatusChip`, `Value`, `Led` and `.add-button`; the screen
+   * wears the detail page's own column classes rather than declaring a second
+   * copy; and the incident rules deleted from `detail.css` paid for part of it.
+   *
+   * Raised to 13 rather than to 12.5 because the gate reads whole kilobytes.
+   * It is stated here rather than nudged, which is the whole point of the
+   * budget: a ceiling that moves quietly is not a ceiling.
+   */
+  css: 13,
   fonts: 80,
 };
 

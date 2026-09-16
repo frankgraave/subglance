@@ -21,27 +21,60 @@ function fakeStorage(initial: Record<string, string> = {}) {
 }
 
 describe("Sidebar", () => {
-  it("names the one destination that exists as the current page", () => {
+  it("marks the screen you are on as the current page", () => {
     render(<Sidebar collapsed={false} />);
     const current = screen.getByText("Dashboard").closest("[aria-current]");
     expect(current).toBeTruthy();
   });
 
-  it("does not promise the four screens that do not exist", () => {
+  it("marks incidents as current when that is the screen you are on", () => {
+    render(<Sidebar collapsed={false} current="incidents" />);
+    expect(screen.getByText("Incidents").closest("[aria-current]")).toBeTruthy();
+    expect(screen.getByText("Dashboard").closest("[aria-current]")).toBeNull();
+  });
+
+  it("keeps the dashboard lit while a monitor's detail view is open", () => {
+    // A monitor belongs to the dashboard branch of the product. Lighting
+    // nothing would leave the rail claiming you are nowhere.
+    render(<Sidebar collapsed={false} current="monitor" />);
+    expect(screen.getByText("Dashboard").closest("[aria-current]")).toBeTruthy();
+  });
+
+  it("does not promise the three screens that do not exist", () => {
     render(<Sidebar collapsed={false} />);
     // They are shown — the shape of the product is information — but never as
     // something you can press, and never with a fabricated count beside them.
-    for (const label of [
-      "Incidents",
-      "Monitors",
-      "Notifications",
-      "Settings",
-    ]) {
+    for (const label of ["Monitors", "Notifications", "Settings"]) {
       const item = screen.getByText(label).closest(".shell-nav-item")!;
       expect(item.getAttribute("data-state")).toBe("planned");
       expect(item.querySelector("a, button")).toBeNull();
     }
-    expect(screen.getAllByText("Soon")).toHaveLength(4);
+    expect(screen.getAllByText("Soon")).toHaveLength(3);
+  });
+
+  it("makes incidents a real link now that the screen exists (SUB-34)", () => {
+    // The oldest of the "Soon" promises, and the one the product could least
+    // afford to keep breaking: the endpoint behind it has existed since the
+    // backend landed. A real <a href>, so it can be middle-clicked, copied
+    // and pasted into a chat window like any destination.
+    render(<Sidebar collapsed={false} />);
+    const link = screen.getByText("Incidents").closest("a");
+    expect(link?.getAttribute("href")).toBe("/incidents");
+    expect(
+      screen.getByText("Incidents").closest(".shell-nav-item")
+        ?.querySelector(".shell-nav-soon"),
+      "a built destination must not still say Soon",
+    ).toBeNull();
+  });
+
+  it("carries no incident count, because the count belongs on the screen", () => {
+    // DESIGN.md §12 records why the fabricated "2 incidents" badge was
+    // removed: on a monitoring tool an invented number is indistinguishable
+    // from a real alert. A real number here would be a second source of
+    // truth for the length of a list this component has never seen.
+    render(<Sidebar collapsed={false} />);
+    const item = screen.getByText("Incidents").closest(".shell-nav-item")!;
+    expect(item.textContent).toBe("Incidents");
   });
 
   it("keeps the labels readable to a screen reader when collapsed", () => {

@@ -62,6 +62,37 @@ describe("incidentFromApi", () => {
     expect(incidentFromApi(base).id).toBe("9");
   });
 
+  it("carries the monitor id, which the incidents screen needs (SUB-34)", () => {
+    // Left out of the original translation, and stringified like every other
+    // id in this app: a number here fails every `===` against a monitor's id,
+    // so the incidents screen would name none of its monitors.
+    expect(incidentFromApi(base).monitorId).toBe("1");
+  });
+
+  it("carries acked_at and confirmed_at, which were dropped (SUB-34)", () => {
+    /*
+     * Both were in the API response and absent from the render model.
+     *
+     * `acked_at` is the one that matters: without it the UI can say *that*
+     * somebody acknowledged an incident but not when, and "acknowledged at
+     * 14:10 — still down" is the sentence that keeps an acked outage from
+     * reading as a finished one. `confirmed_at` is the gap between "we saw
+     * it" and "we alerted", which the server exposes deliberately.
+     */
+    const incident = incidentFromApi({
+      ...base,
+      acked: true,
+      acked_at: "2026-09-13T04:07:00Z",
+      confirmed_at: "2026-09-13T04:01:00Z",
+    });
+    expect(incident.ackedAt).toBe(Date.parse("2026-09-13T04:07:00Z"));
+    expect(incident.confirmedAt).toBe(Date.parse("2026-09-13T04:01:00Z"));
+  });
+
+  it("leaves an un-acked incident's ack time null rather than 0", () => {
+    expect(incidentFromApi(base).ackedAt).toBeNull();
+  });
+
   it("parses timestamps to unix ms and leaves an absent one null", () => {
     const incident = incidentFromApi(base);
     expect(incident.startedAt).toBe(Date.parse("2026-09-13T04:00:00Z"));

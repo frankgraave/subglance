@@ -1,0 +1,308 @@
+/*
+ * The incident row and the incidents screen.
+ *
+ * Layout only; every colour, size and radius comes from tokens.css. The shape
+ * follows the approved page proposal: a single-line row with fixed columns
+ * that expands in place, stacked in a card.
+ *
+ * **The state is never carried by colour here.** The response column holds a
+ * `StatusChip`, so it is a word first (DESIGN.md §2.3), the failure kind is a
+ * word beside it, and the whole story is repeated as prose for a screen
+ * reader. Nothing in this file is load-bearing for meaning: with the
+ * stylesheet off, the row still says "Acked, still down" and still says why.
+ * That is deliberate — the risk this ticket is about is an acknowledged outage
+ * that *looks* finished, and a look is the one thing a CSS file controls.
+ *
+ * The dead-stream treatment (DESIGN.md §6) is likewise absent on purpose. On
+ * these rows every claim is a word — "Unacked", "12 min and counting" — and a
+ * stylesheet can dim a word but cannot change what it says. So the tense moves
+ * in the markup instead (`stateBadge`, `incidentStory`), exactly as SUB-111
+ * required of the status pill. The screen wears `.mon-detail`, so the lamp
+ * draining is inherited from connection.css rather than restated.
+ */
+
+/*
+ * A monitor that keeps bouncing, and a write that did not land.
+ *
+ * Flapping stops the notifications and not the record, so the incidents go on
+ * being written while the phone goes quiet. Drawn as a warn-edged note like
+ * the connection badge: nothing here is a new outage, it is an explanation of
+ * why nobody was paged for the ones already listed.
+ */
+.inc-churn,
+.inc-notice {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--warn);
+  border-radius: var(--r-sm);
+  background: var(--warn-dim);
+  color: var(--ink);
+  font-size: var(--type-helper);
+  line-height: var(--lead-prose);
+}
+
+/* An ack that failed is a failure of this screen, like an invalid input. */
+.inc-notice { border-color: var(--down); background: none; }
+
+.inc-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+}
+
+/*
+ * One incident.
+ *
+ * A column, not a row: the collapsed line is the first child and the expanded
+ * detail is the second, full width underneath it. That keeps the nesting at
+ * card -> row rather than card -> panel -> row, which is two visible surfaces
+ * instead of three.
+ */
+.inc-row {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-raised);
+  transition: border-color var(--dur-hover) var(--ease);
+}
+
+.inc-row:hover { border-color: var(--border-hi); }
+
+/*
+ * Open tints, acked warms, resolved stays neutral.
+ *
+ * `--warn` and not `--up` for the acked row, and this is the rule the whole
+ * ticket turns on: the middle state must not borrow the colour of health. It
+ * is only ever a second voice — the chip in the row says "Acked, still down"
+ * in words, which is what a reader who cannot separate amber from green has.
+ *
+ * A resolved row gets no tint at all: a column of coloured rows from last
+ * month reads, at a glance, as a wall of outages happening now.
+ */
+.inc-row[data-state="open"] { background: var(--down-dim); }
+.inc-row[data-state="acked"] { background: var(--warn-dim); }
+
+/* History is quieter still: the name recedes, because in that card the number
+   that matters is how long it lasted, not which host it was. */
+.inc-row--past .inc-name { color: var(--ink-2); }
+
+/*
+ * The collapsed line, which is the disclosure control.
+ *
+ * A real button stretched across the row: it gets Enter, Space, focus styling
+ * and the disclosure role for free, where a `tabindex` div would need all four
+ * hand-written and would eventually be missing one.
+ */
+.inc-line {
+  display: block;
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.inc-line-inner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.inc-led { flex: none; }
+
+.inc-main { min-width: 0; flex: 1; }
+
+/* Clipped, never wrapped. A hostname that wraps to two lines turns a stack of
+   rows into a ragged column and costs the scan the whole list exists for; the
+   full string is in the detail below, where it has room. */
+.inc-name,
+.inc-sub {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inc-name {
+  font-size: var(--type-row);
+  line-height: var(--lead-row);
+  color: var(--ink);
+}
+
+.inc-sub {
+  @apply face-mono;
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  color: var(--ink-3);
+}
+
+/*
+ * Fixed column widths, so the numbers line up down the stack.
+ *
+ * Mono and tabular figures come from `Value`; the width is what actually makes
+ * a column scannable — a time column that shifts by two pixels per row cannot
+ * be read as a column at all.
+ */
+.inc-col { flex: none; }
+.inc-col-kind { width: 116px; }
+.inc-col-time { width: 88px; color: var(--ink-2); }
+.inc-col-dur { width: 72px; }
+.inc-col-ack { width: 128px; display: flex; justify-content: flex-end; }
+
+.inc-act {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 var(--space-4) var(--space-3);
+}
+
+/* Always drawn, never revealed on hover, unlike a panel-list row's actions:
+   this is the control that stops an escalating alert sequence, and hiding it
+   until the pointer arrives makes it unfindable on a phone at 03:00. */
+.inc-ack {
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+}
+
+/*
+ * The detail, expanded in place.
+ *
+ * Not a 320px side panel: that width cannot hold an error string and a
+ * timeline without wrapping both into mush, and choosing a row would reflow
+ * the whole page under the reader's eye. In place keeps the incident where the
+ * eye already is and gives the detail the full content width.
+ */
+.inc-detail {
+  border-top: 1px solid var(--border);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}
+
+.inc-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-4);
+}
+
+.inc-label {
+  @apply caps-legend;
+  margin-bottom: var(--space-2);
+}
+
+.inc-tl {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+}
+
+.inc-tl-step {
+  display: flex;
+  gap: var(--space-3);
+  align-items: baseline;
+  font-size: var(--type-body);
+  line-height: var(--lead-body);
+  color: var(--ink-2);
+}
+
+.inc-tl-at { width: 88px; flex: none; color: var(--ink-3); }
+
+/* A step that has not happened yet. Quieter, but present: a timeline that
+   simply stops is indistinguishable from one that failed to render. */
+.inc-tl-what--pending { color: var(--ink-3); }
+
+/*
+ * The captured error. A code block, not a third surface — one radius step
+ * inside the row, and it wraps rather than scrolling sideways, because the
+ * strings here are sentences with no spaces in the useful places.
+ */
+.inc-snap {
+  @apply face-mono;
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  padding: var(--space-2h) var(--space-3);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.inc-snap--err { color: var(--down); }
+
+.inc-helper {
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  color: var(--ink-3);
+}
+
+/*
+ * A cluster: several monitors that started failing together.
+ *
+ * Dashed, and that is the whole argument in one property. In this product a
+ * dashed edge already means *about the data rather than the data* (§8.1), and
+ * a cluster is exactly that — an inference drawn from timestamps, not a fact
+ * the server reported. A solid row here would let a guess wear the clothes of
+ * a measurement, which on a monitoring tool is the expensive kind of mistake.
+ *
+ * It carries no status colour for the same reason. The incidents inside it
+ * keep their own tints; the wrapper is a statement about them, not a sixth
+ * status.
+ */
+.inc-cluster {
+  display: flex;
+  flex-direction: column;
+  border: 1px dashed var(--border-hi);
+  border-radius: var(--r-md);
+  background: none;
+}
+
+/* Indented, so the rows are visibly inside the group rather than merely after
+   it — and the indent is the only nesting cue, because a second fill here
+   would make the cluster a third surface. */
+.inc-cluster-items {
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+.inc-cluster-badge { flex: none; }
+
+/* The caveat wraps rather than clipping, unlike a row's error line: it is the
+   sentence that stops the grouping being read as a finding, and half of it
+   behind an ellipsis would be worse than none of it. */
+.inc-cluster-why {
+  white-space: normal;
+  overflow: visible;
+  line-height: var(--lead-prose);
+}
+
+.inc-day + .inc-day { margin-top: var(--space-4); }
+
+.inc-day-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2h);
+  padding: var(--space-2) 0 var(--space-2h);
+}
+
+/*
+ * Phone: the columns stop pretending to be a table and stack.
+ *
+ * The product already learned this once — a toolbar that scrolls sideways is
+ * fine, a page that scrolls sideways is a bug — so nothing here is allowed a
+ * fixed width that could push the document past the viewport.
+ */
+@media (max-width: 640px) {
+  .inc-line-inner { flex-wrap: wrap; row-gap: var(--space-2); }
+  .inc-main { flex: 1 1 100%; }
+  .inc-col-kind,
+  .inc-col-time,
+  .inc-col-dur,
+  .inc-col-ack { width: auto; }
+  .inc-col-ack { margin-left: auto; }
+}
