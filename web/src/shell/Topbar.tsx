@@ -125,6 +125,32 @@ export function Topbar({
       <div className="shell-topbar-page">
         {children}
         <div ref={setTopbarSlot} className="shell-topbar-slot" />
+        {/*
+         * Route-owned, so it lives with the route's own controls (SUB-131).
+         *
+         * It sat in the right-hand group at first, on the argument that a
+         * control appearing and disappearing from the middle of the bar
+         * slides everything after it sideways. That argument does not apply
+         * here: `.shell-topbar-right` carries `margin-left: auto`, so it is
+         * anchored to the right edge and does not move when this zone grows
+         * or shrinks. What the earlier placement did cost was honesty — the
+         * right-hand group is where the controls that are true on every
+         * screen live, and a dashboard-only switcher sitting among them says
+         * it belongs to the app rather than to one view.
+         *
+         * The column control stays out of the bar entirely, and that case is
+         * genuinely different: it belongs to one *layout* within one screen,
+         * and it shared a right-aligned group with the switcher that changes
+         * that layout — clicking Rows removed four buttons and slid the
+         * button you had just pressed 121px sideways.
+         */}
+        {showLayouts && onLayoutChange !== undefined && (
+          <LayoutSwitcher
+            layout={layout}
+            effective={effectiveLayout}
+            onChange={onLayoutChange}
+          />
+        )}
       </div>
 
       <div className="shell-topbar-right">
@@ -149,21 +175,6 @@ export function Topbar({
           >
             <PlusIcon />
           </button>
-        )}
-
-        {/*
-         * Only where there is something to switch between (SUB-131). It sits
-         * in the right-hand group rather than the page zone for a reason the
-         * bar has already paid for once: this group is right-aligned, and a
-         * control that appears and disappears from the middle of the bar
-         * slides everything after it sideways under the cursor.
-         */}
-        {showLayouts && onLayoutChange !== undefined && (
-          <LayoutSwitcher
-            layout={layout}
-            effective={effectiveLayout}
-            onChange={onLayoutChange}
-          />
         )}
 
         {/*

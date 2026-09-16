@@ -25,6 +25,9 @@ import { chromium, type Browser, type Page } from "./harness/browser";
 import { serveBuild, type Server } from "./harness/server";
 import { THEME_STORAGE_KEY } from "../theme/theme";
 
+/** The phone navigation toggle, by the name a screen reader announces. */
+const NAV_BUTTON = 'button[aria-label="Open navigation"]';
+
 let server: Server;
 let browser: Browser;
 
@@ -525,6 +528,77 @@ describe("the heartbeat readout", () => {
       expect(await colourAt(page, geometry.x, geometry.y)).toBe(
         await resolveColour(page, geometry.fill),
       );
+    } finally {
+      await page.close();
+    }
+  });
+});
+
+describe("the phone navigation drawer", () => {
+  /*
+   * The same defect as the add drawer, on a viewport nobody screenshotted.
+   *
+   * It survived the first pass precisely because the reported bug arrived
+   * with a desktop screenshot: `.shell-drawer` kept a layered `--surface`,
+   * which composites whatever is behind it, so the page read through the
+   * navigation. Found by a mutation surviving — the fix was already written
+   * and nothing held it down, which is the same as not having made it.
+   */
+  it("paints an opaque surface at phone width", async () => {
+    const page = await browser.newPage();
+    await page.setViewport({
+      width: 375,
+      height: 800,
+      deviceScaleFactor: 1,
+      isMobile: true,
+    });
+    await page.goto(server.url + "/blank-for-storage", {
+      waitUntil: "domcontentloaded",
+    });
+    await page.evaluate(() =>
+      window.localStorage.setItem("subglance.theme", "dark"),
+    );
+    await page.goto(server.url + "/", { waitUntil: "domcontentloaded" });
+    await page.waitForSelector(".shell-topbar", { timeout: 15_000 });
+
+    try {
+      /*
+       * By accessible name only. A fallback such as
+       * `.shell-topbar .shell-icon-btn` matches the first icon button in the
+       * bar, which on this viewport is a different control — the test then
+       * opens nothing and reports a colour it never measured.
+       */
+      await page.waitForSelector(NAV_BUTTON, { timeout: 15_000 });
+      await page.click(NAV_BUTTON);
+      await page.waitForSelector(".shell-drawer", { timeout: 15_000 });
+      await page.evaluate(() =>
+        Promise.all(
+          document
+            .getAnimations()
+            .map((animation) => animation.finished.catch(() => undefined)),
+        ),
+      );
+
+      const alpha = await page.evaluate(() => {
+        const panel = document.querySelector(".shell-drawer");
+        if (panel === null) return "no .shell-drawer in the document";
+        const colour = getComputedStyle(panel).backgroundColor;
+        /*
+         * Chrome reports oklch() straight through from getComputedStyle, so
+         * an rgb regex matches nothing and the check passes while measuring
+         * nothing at all. Painting the colour and reading the pixel back
+         * resolves any notation to concrete channels, alpha included.
+         */
+        const probe = document
+          .createElement("canvas")
+          .getContext("2d", { willReadFrequently: true });
+        if (probe === null) return "no canvas 2d context";
+        probe.clearRect(0, 0, 1, 1);
+        probe.fillStyle = colour;
+        probe.fillRect(0, 0, 1, 1);
+        return probe.getImageData(0, 0, 1, 1).data[3] / 255;
+      });
+      expect(alpha).toBe(1);
     } finally {
       await page.close();
     }

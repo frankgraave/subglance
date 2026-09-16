@@ -56,16 +56,19 @@ function MonitorRowImpl({
       data-status={status}
       data-testid={`monitor-row-${monitor.id}`}
     >
-      {/* The word is shown for everything except `up` (SUB-100).
-          Hidden for all four statuses, the only difference between down,
-          pending and paused in this layout was hue — red, amber and grey at
-          the same 2px edge and the same filled 20x7 pill — which is rule
-          "never colour alone" broken for exactly the readers it exists for.
-          Showing it for `up` as well would print the same word down 190 rows
-          and drown the three that matter, so the quiet default stays quiet:
-          no word *is* the up signal, and it is not a colour. */}
+      {/* The lamp, and the word beside it for every status including `up`.
+
+          The earlier version hid the word for `up` on the argument that "no
+          word *is* the up signal, and it is not a colour". That argument held
+          while the column had no header: absence read as a default against
+          three labelled exceptions. SUB-135 made the header visible and
+          labelled it "Status", and a column that announces itself as holding
+          a status may not leave its most common value to hue alone — an
+          empty cell under a "Status" heading reads as missing data, not as
+          health. The three that matter still stand out, now by word rather
+          than by being the only ones with any word at all. */}
       <td className="mon-cell mon-cell--led">
-        <Led status={status} hideLabel={status === "up"} stale={stale} />
+        <Led status={status} hideLabel={false} stale={stale} />
       </td>
 
       {/* scope="row" makes the name the row's header, so a screen reader

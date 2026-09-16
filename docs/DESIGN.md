@@ -55,7 +55,7 @@ Everything a user can click, hover or read still takes its radius from a token.
 
 ```css
 --canvas:     oklch(.205 0 0);            /* page background */
---surface:    rgba(255,255,255,.03);      /* card, sidebar, drawer */
+--surface:    rgba(255,255,255,.03);      /* card, sidebar */
 --surface-2:  rgba(255,255,255,.05);      /* inputs, hover */
 --surface-hi: rgba(255,255,255,.08);      /* active segments, tracks */
 --surface-float: oklch(.269 0 0);         /* tooltip, menu, drawer — opaque */

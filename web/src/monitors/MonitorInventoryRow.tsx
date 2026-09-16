@@ -211,8 +211,16 @@ function MonitorInventoryRowImpl({
                  a probe was in flight. With a glyph there is no word left, so
                  the state is announced rather than drawn — `aria-busy` is how
                  assistive technology hears it, and the label still says
-                 "Checking…" for the same reason. */
+                 "Checking…" for the same reason.
+                 `data-busy` is the same fact for the eye. Without it a check
+                 in flight and a check that is unavailable render identically:
+                 both are disabled, so both get the same dimming, and a
+                 sighted reader cannot tell "working on it" from "you cannot
+                 do this here". The spin is suppressed under
+                 prefers-reduced-motion, where the dimming plus the title
+                 remain. */
               aria-busy={checking}
+              data-busy={checking ? "true" : undefined}
               aria-label={
                 checkable
                   ? `${checkWord} ${monitor.name}`

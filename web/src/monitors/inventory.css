@@ -135,8 +135,8 @@
 .inv-act--icon {
   display: inline-grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: var(--control-icon);
+  height: var(--control-icon);
   padding: 0;
   border: 1px solid var(--border-control);
   border-radius: var(--r-sm);
@@ -147,7 +147,7 @@
     border-color var(--dur-hover) var(--ease);
 }
 
-.inv-act--icon > svg { width: 16px; height: 16px; }
+.inv-act--icon > svg { width: var(--space-4); height: var(--space-4); }
 
 .inv-act--icon:hover:not(:disabled) {
   background: var(--surface-2);
@@ -242,4 +242,26 @@
   .inv-col--chan,
   .inv-col--tags { width: auto; }
   .inv-acts { margin-left: auto; }
+}
+
+/*
+ * A check in flight, for the eye.
+ *
+ * `aria-busy` tells assistive technology, and until this rule nothing told
+ * anybody else: an in-flight check and a check that is unavailable are both
+ * disabled, so both got the same dimming, and a sighted reader could not tell
+ * "working on it" from "you cannot do this here". The glyph turns instead.
+ */
+@keyframes inv-act-spin {
+  to { transform: rotate(1turn); }
+}
+
+.inv-act--icon[data-busy="true"] > svg {
+  animation: inv-act-spin 900ms linear infinite;
+}
+
+/* Motion is the signal, not the only one: the title and the dimming stay, so
+   suppressing the rotation costs nothing but the movement. */
+@media (prefers-reduced-motion: reduce) {
+  .inv-act--icon[data-busy="true"] > svg { animation: none; }
 }

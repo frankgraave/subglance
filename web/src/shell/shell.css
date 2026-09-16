@@ -234,7 +234,12 @@
   display: flex;
   width: min(288px, 86vw);
   height: 100dvh;
-  background: var(--surface);
+  /* Opaque, for the reason the add drawer is (§2.11): a floating surface
+     composites whatever is behind it, and the layered `--surface` tokens are
+     built for surfaces that sit *on* the page rather than above it. The phone
+     nav was missed in the first pass — it is the same kind of element and had
+     the same defect, just on a viewport nobody screenshotted. */
+  background: var(--surface-float);
   border-right: 1px solid var(--border);
 }
 

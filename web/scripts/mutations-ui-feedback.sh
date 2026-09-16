@@ -371,4 +371,34 @@ assert old in s
 s = s.replace(old, "  --surface-float: rgba(255, 255, 255, .05);")
 ' "$BROWSER_TEST"
 
+# --- Added while working through the first review round.
+
+ROW=src/monitors/MonitorRow.tsx
+IROW=src/monitors/MonitorInventoryRow.tsx
+SHELLCSS=src/shell/shell.css
+
+# 19. An `up` row goes back to hue alone under a header that says "Status".
+mutate "up row has no status word" jsdom "$ROW" '
+old = "<Led status={status} hideLabel={false} stale={stale} />"
+assert old in s
+s = s.replace(old, "<Led status={status} hideLabel={status === \"up\"} stale={stale} />")
+' src/monitors/a11y-lists.test.tsx
+
+# 20. A check in flight becomes indistinguishable from one that cannot run:
+#     both disabled, both dimmed, no second signal.
+mutate "busy check looks like an unavailable one" jsdom "$IROW" '
+old = "              data-busy={checking ? \"true\" : undefined}\n"
+assert old in s
+s = s.replace(old, "")
+' src/monitors/MonitorsView.test.tsx
+
+# 21. The phone nav drawer goes back to a layered surface, so the page reads
+#     through it. Same defect as the add drawer, on a viewport nobody
+#     screenshotted.
+mutate "nav drawer becomes translucent again" browser "$SHELLCSS" '
+old = "  background: var(--surface-float);\n  border-right: 1px solid var(--border);"
+assert old in s
+s = s.replace(old, "  background: var(--surface);\n  border-right: 1px solid var(--border);")
+' src/layout/drawer-stacking.browser.test.ts
+
 report

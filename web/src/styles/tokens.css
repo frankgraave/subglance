@@ -203,6 +203,15 @@
   /* Control height. Not a spacing step: it is the height a row of interactive
      chrome settles on, and stating it beats padding chosen to reach it. */
   --control-h: 36px;
+  /* The square an icon-only action occupies inside a dense list row.
+     Smaller than `--control-h` on purpose: a full-height button repeated four
+     times per row across forty rows makes the list read as chrome with data
+     between it. Stated rather than written as a literal for the reason §2.7
+     gives for the ladders — a dimension nothing names is a dimension the
+     guards cannot check, and the next row of icons will pick its own. It is
+     deliberately not the shell's 30px `.shell-icon-btn`: that one sits alone
+     in the toolbar, where it is the only target in reach. */
+  --control-icon: 28px;
 
   --space-1: 4px;
   /* The quarter-step, and the smallest gap the system has.

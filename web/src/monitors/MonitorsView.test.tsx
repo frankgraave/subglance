@@ -355,3 +355,40 @@ describe("every row action names the monitor it acts on", () => {
     }
   });
 });
+
+describe("an icon-only action still says what it is doing", () => {
+  /*
+   * Losing the word to a glyph moved a fact out of sight. A check in flight
+   * and a check that is unavailable are both disabled, so both get the same
+   * dimming — without a second signal a sighted reader cannot tell "working
+   * on it" from "you cannot do this here", and the title does not close the
+   * gap because a disabled button is not focusable.
+   */
+  it("marks a check in flight distinctly from one that cannot run", () => {
+    const { container } = render(
+      <MonitorsView
+        monitors={[make({ id: "1", name: "auth" })]}
+        checkingIds={new Set(["1"])}
+        onCheckNow={() => {}}
+      />,
+    );
+    const busy = container.querySelector('[data-busy="true"]');
+    expect(busy).not.toBeNull();
+    expect(busy?.getAttribute("aria-busy")).toBe("true");
+  });
+
+  it("does not mark an unavailable check as busy", () => {
+    // A push monitor is not probed at all: disabled, but not working.
+    const { container } = render(
+      <MonitorsView
+        monitors={[make({ id: "1", name: "jobs", type: "push" })]}
+        onCheckNow={() => {}}
+      />,
+    );
+    expect(container.querySelector('[data-busy="true"]')).toBeNull();
+    // And it says why, rather than being a dead button.
+    expect(
+      screen.getByRole("button", { name: /unavailable for a push monitor/i }),
+    ).toBeTruthy();
+  });
+});
