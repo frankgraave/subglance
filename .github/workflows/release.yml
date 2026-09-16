@@ -1,0 +1,146 @@
+# Turn a `v*` tag into a downloadable release.
+#
+# Separate from docker.yml on purpose, even though both fire on the same tag.
+# They produce unrelated artefacts (archives on a release page vs. a manifest
+# list in a registry), they fail for unrelated reasons, and they should not
+# be able to take each other down: a registry hiccup must not cost the
+# binaries, and a signing failure must not unpublish the image. Two
+# workflows, two concurrency groups, two independently re-runnable jobs.
+# Merging them would only save a checkout.
+#
+# Triggers:
+#   tag v*            -> build, sign and publish the release
+#   workflow_dispatch -> a full dry run that publishes nothing
+#
+# The dispatch path is the only way to exercise this without a real tag, so
+# it is not an afterthought: it runs the same GoReleaser configuration in
+# snapshot mode and uploads the result as a workflow artefact, which is what
+# you look at before tagging.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+# Not cancel-in-progress. Everywhere else a newer push makes the older run
+# pointless; here a cancelled run can leave a half-published release behind,
+# and two different tags are genuinely independent work. Queue instead.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # Same pin, same reason, as ci.yml: a range resolves to whatever the runner
+  # has newest, and a release must be reproducible from its tag. Keep this in
+  # step with ci.yml so that what CI proved is what gets shipped.
+  GO_VERSION: "1.26.8"
+  # Node is pinned to a patch too, for the same reason and one more: this
+  # stage builds the dashboard that gets compiled into the binary, so an
+  # unpinned minor can change the bundle a tag ships without a commit
+  # explaining why. ci.yml still says "24"; that is a gap worth closing,
+  # but a range in CI only risks a red build, while a range here changes
+  # the artefact people download.
+  NODE_VERSION: "24.21.0"
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    permissions:
+      # Creating the release and uploading its assets.
+      contents: write
+      # Keyless cosign: the job exchanges this for a short-lived Sigstore
+      # certificate bound to this workflow's identity. No private key exists
+      # to leak, and the signature is verifiable by anyone against the public
+      # transparency log.
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # GoReleaser builds the release notes from the range between this
+          # tag and the previous one, so it needs the whole history. A
+          # shallow clone yields a release whose notes are empty and whose
+          # version string is wrong.
+          fetch-depth: 0
+
+      # Node before Go, and not optional. The dashboard is embedded into the
+      # binary by internal/webui, so a release built without this step starts
+      # fine, serves the whole API, and answers / with the "no dashboard
+      # embedded" fallback. The .goreleaser.yaml `before` hooks run the npm
+      # build itself; this step only makes a Node with a warm cache available
+      # to them.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      # A release is the one artefact nobody re-runs the tests for, so the
+      # gate lives here as well as in ci.yml. The same hermetic, -short suite
+      # CI runs: no network, so a flaky third party cannot block a release.
+      - name: Test before shipping
+        run: go test -race -short -count=1 ./...
+
+      - name: Release
+        uses: goreleaser/goreleaser-action@9c156ee8a17a598857849441385a2041ef570552 # v6.3.0
+        with:
+          # Exact, not "~> v2". The range resolves to whatever the action
+          # finds newest at run time, so two tags built months apart would
+          # ship archives cut by different tools with no commit recording
+          # the change. 2.18.1 is the version this configuration was
+          # validated against locally (`goreleaser check`, a full
+          # five-platform snapshot, and a checksum verification), so it is
+          # the version that should produce the real thing.
+          version: "2.18.1"
+          # `release` on a tag; `--snapshot` on a manual dispatch, which
+          # builds and archives everything but contacts no registry and
+          # creates no release. That is what makes this workflow testable
+          # without burning a version number.
+          args: >-
+            release --clean
+            ${{ github.ref_type == 'tag' && '' || '--snapshot --skip=sign' }}
+        env:
+          # The default token is enough: this only creates a release in the
+          # repository it runs in.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Only on a dry run. On a real tag the artefacts are already on the
+      # release page and a second copy with a 14-day expiry would just be
+      # confusing.
+      - name: Upload the dry-run artefacts
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: snapshot
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/SHA256SUMS
+          retention-days: 14
+
+      # The checksum file is the thing everyone verifies against, so it goes
+      # in the job summary where it can be read without downloading anything.
+      - name: Summarise
+        if: always()
+        run: |
+          if [ -f dist/SHA256SUMS ]; then
+            {
+              echo "### Artefacts"
+              echo '```'
+              cat dist/SHA256SUMS
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi

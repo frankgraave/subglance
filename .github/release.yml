@@ -1,0 +1,41 @@
+# How the notes on a release page get written.
+#
+# GitHub generates them from the **pull requests** merged since the previous
+# tag, by title — see `changelog: use: github-native` in .goreleaser.yaml.
+#
+# That is on purpose, and it is not what a Go project usually does. The
+# conventional alternative parses commit subjects for `feat:` / `fix:`
+# prefixes, and it would produce a near-empty changelog here: this repository
+# writes commit subjects as sentences ("Stop the screen saying \"Up\" after it
+# stopped knowing"), and the only commits carrying prefixes are Dependabot's.
+# Parsing prefixes would therefore list the dependency bumps and drop every
+# human change. Pull request titles are already sentences written for a
+# reader, so they are the better source and need nothing enforced on anyone.
+#
+# Categories are matched on labels. An unlabelled pull request still appears,
+# under "Everything else", so forgetting a label costs ordering and not
+# visibility.
+
+changelog:
+  exclude:
+    labels:
+      # Housekeeping that changes nothing a user can observe.
+      - skip-changelog
+    authors:
+      # Dependency bumps are real changes but they are not news; anyone who
+      # needs them can read the diff between two tags. Leaving them in would
+      # bury the handful of lines people actually came to read.
+      - dependabot
+      - app/dependabot
+
+  categories:
+    - title: Added
+      labels: [feature, enhancement]
+    - title: Fixed
+      labels: [bug, fix]
+    - title: Security
+      labels: [security]
+    - title: Documentation
+      labels: [documentation]
+    - title: Everything else
+      labels: ["*"]

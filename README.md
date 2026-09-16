@@ -96,9 +96,11 @@ code exists for it.
   (`POST /api/v1/incidents/{id}/ack`), but there is no screen for it: the
   sidebar entries for Incidents, Monitors, Notifications and Settings say
   "Soon" because that is the truth.
-- **A release.** There is no release workflow, so there are no prebuilt
-  binaries for any platform and no version to pin. The container image is built
-  on every push to `develop` and moves under you.
+- **A release.** The pipeline exists — pushing a `v*` tag builds binaries for
+  five platforms, checksums and signs them and publishes a GitHub release — but
+  no tag has been pushed, so there is still nothing to download and no version
+  to pin. The container image is built on every push to `develop` and moves
+  under you.
 
 ### Known sharp edges
 
@@ -122,7 +124,8 @@ release:
 - Maintenance windows
 - A latency graph on the monitor detail view
 - Incident, monitor, notification and settings screens
-- A release workflow, so there are tagged versions and binaries to download
+- A first tag, so there are versions to pin and binaries to download (the
+  release pipeline that produces them is in place)
 
 Deliberately **not** in v0.1: status pages, config-as-code, multi-region checks,
 on-call schedules, SSO, mobile app, CLI, Postgres. They are on the roadmap; they
@@ -208,6 +211,48 @@ TCP and SSL checks are unaffected either way.
 To build the image yourself, `docker build -t subglance .` — the Dockerfile
 builds the dashboard and the binary from source, so Go and Node are only needed
 inside the build.
+
+### With a downloaded binary
+
+Every tagged release publishes one archive per platform on the
+[releases page](https://github.com/frankgraave/subglance/releases): Linux and
+macOS on both amd64 and arm64, and Windows on amd64. The archive contains a
+single executable with the dashboard already inside it, so there is nothing to
+install and nothing to serve alongside it.
+
+```sh
+# replace VERSION and the platform with the ones you want
+curl -fsSLO https://github.com/frankgraave/subglance/releases/download/vVERSION/subglance_VERSION_linux_amd64.tar.gz
+curl -fsSLO https://github.com/frankgraave/subglance/releases/download/vVERSION/SHA256SUMS
+sha256sum -c SHA256SUMS --ignore-missing   # macOS: shasum -a 256 -c SHA256SUMS --ignore-missing
+
+tar xzf subglance_VERSION_linux_amd64.tar.gz
+./subglance --data-dir ./data
+```
+
+On Windows, PowerShell prints the hash and you compare it against the line for
+your archive in `SHA256SUMS` — there is no `-c` equivalent that checks the file
+for you:
+
+```powershell
+(Get-FileHash subglance_VERSION_windows_amd64.zip -Algorithm SHA256).Hash.ToLower()
+Select-String subglance_VERSION_windows_amd64.zip SHA256SUMS
+```
+
+The checksum file is itself signed with [cosign](https://docs.sigstore.dev/),
+keylessly, against the release workflow's own identity — so the signature can be
+checked without trusting a key I could lose:
+
+```sh
+cosign verify-blob SHA256SUMS \
+  --bundle SHA256SUMS.sigstore.json \
+  --certificate-identity-regexp 'https://github\.com/frankgraave/subglance/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+There are no releases yet, so for now this is the shape of the thing rather than
+something you can download today; the container image above tracks `develop` and
+is the working option until v0.1 ships.
 
 ### Building from source
 
