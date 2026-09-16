@@ -1,4 +1,9 @@
-import { DASHBOARD_PATH, INCIDENTS_PATH, MONITORS_PATH } from "./route";
+import {
+  DASHBOARD_PATH,
+  INCIDENTS_PATH,
+  MONITORS_PATH,
+  NOTIFICATIONS_PATH,
+} from "./route";
 import {
   DashboardIcon,
   IncidentsIcon,
@@ -86,13 +91,36 @@ const BUILT: readonly BuiltDestination[] = [
   },
 ];
 
+/**
+ * The Configure group's real destinations.
+ *
+ * **Notifications is a real destination now (SUB-123).** It was the "Soon" with
+ * the worst consequence attached: the channel endpoints have existed since the
+ * backend landed, so an instance could be running with no channel at all —
+ * every alert going nowhere — and the only item in the navigation that would
+ * have said so was inert. It leads to the channel list, which is where that is
+ * discovered and fixed.
+ */
+const BUILT_CONFIG: readonly BuiltDestination[] = [
+  {
+    id: "notifications",
+    label: "Notifications",
+    Icon: NotificationsIcon,
+    href: NOTIFICATIONS_PATH,
+    route: "notifications",
+  },
+];
+
 const PLANNED_CONFIG: readonly Destination[] = [
-  { id: "notifications", label: "Notifications", Icon: NotificationsIcon },
   { id: "settings", label: "Settings", Icon: SettingsIcon },
 ];
 
 /** The destinations the rail can navigate to. */
-export type NavRoute = "dashboard" | "incidents" | "monitors";
+export type NavRoute =
+  | "dashboard"
+  | "incidents"
+  | "monitors"
+  | "notifications";
 
 export type SidebarProps = {
   collapsed: boolean;
@@ -226,6 +254,14 @@ export function Sidebar({
 
       <p className="shell-nav-label">Configure</p>
       <ul className="shell-nav">
+        {BUILT_CONFIG.map((item) => (
+          <Built
+            key={item.id}
+            item={item}
+            current={current === item.route}
+            onNavigate={onNavigate}
+          />
+        ))}
         {PLANNED_CONFIG.map((item) => (
           <Planned key={item.id} {...item} />
         ))}

@@ -3,6 +3,8 @@ import {
   INCIDENTS_PATH,
   MONITORS_PATH,
   MONITOR_CREATE_PATH,
+  NOTIFICATIONS_PATH,
+  NOTIFICATION_CREATE_PATH,
   monitorPath,
   parseRoute,
   routePath,
@@ -79,6 +81,35 @@ describe("parseRoute", () => {
     });
   });
 
+  it("reads the notifications screen (SUB-123)", () => {
+    // A place, not a mode: "your alerts go nowhere, here is where you fix it"
+    // is a link somebody sends to the person running the instance.
+    expect(parseRoute(NOTIFICATIONS_PATH)).toEqual({
+      name: "notifications",
+      create: false,
+    });
+    expect(parseRoute("/notifications/")).toEqual({
+      name: "notifications",
+      create: false,
+    });
+  });
+
+  it("reads /notifications/new as the list with the add form open", () => {
+    expect(parseRoute(NOTIFICATION_CREATE_PATH)).toEqual({
+      name: "notifications",
+      create: true,
+    });
+  });
+
+  it("does not mistake a deeper notifications path for the screen", () => {
+    // There is no per-channel route, and rendering the list for
+    // /notifications/42 would claim an address that promises one channel.
+    expect(parseRoute("/notifications/42")).toEqual({ name: "dashboard" });
+    expect(parseRoute("/notifications/new/extra")).toEqual({
+      name: "dashboard",
+    });
+  });
+
   it("does not let an encoded spelling reach the create form", () => {
     // `%6eew` decodes to `new`. Accepting it would open the form at a URL
     // routePath can never produce, leaving the address bar and the screen
@@ -98,6 +129,8 @@ describe("routePath", () => {
       { name: "monitor", id: "7" },
       { name: "monitors", create: false },
       { name: "monitors", create: true },
+      { name: "notifications", create: false },
+      { name: "notifications", create: true },
     ] as const) {
       expect(parseRoute(routePath(route))).toEqual(route);
     }

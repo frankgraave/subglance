@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Card } from "../components/Card";
 import { Drawer } from "../components/Drawer";
+import { ConfirmDelete } from "../components/ConfirmDelete";
 import { StateChip } from "../components/Chip";
 import { EmptyState } from "./EmptyState";
 import { MonitorInventoryRow } from "./MonitorInventoryRow";
@@ -333,46 +334,25 @@ export function MonitorsView({
        *
        * Not a `confirm()` and not a one-click action: deleting a monitor takes
        * its heartbeats, its uptime history and its incident record with it, and
-       * that consequence is not obvious from a button that says Delete. The
-       * confirmation states it in the same words every time.
+       * that consequence is not obvious from a button that says Delete.
+       *
+       * The retyping is DESIGN.md §7.5, and it was missing here too — this
+       * screen shipped with the one-click version, which is why the rule now
+       * lives in `ConfirmDelete` rather than being written out per screen.
        */}
-      <Drawer
-        open={deleteTarget !== null}
-        onClose={() => setConfirming(null)}
-        title="Delete monitor"
-        footer={
-          deleteTarget === null ? null : (
-            <>
-              <button
-                type="button"
-                className="add-button"
-                onClick={() => setConfirming(null)}
-              >
-                Keep it
-              </button>
-              <button
-                type="button"
-                className="add-button inv-act--danger"
-                onClick={() => {
-                  onDelete?.(deleteTarget.id);
-                  setConfirming(null);
-                }}
-              >
-                Delete {deleteTarget.name}
-              </button>
-            </>
-          )
-        }
-      >
-        {deleteTarget !== null && (
-          <p className="add-help">
-            <b>{deleteTarget.name}</b> and everything recorded about it —
-            heartbeats, uptime history and past incidents — are removed. This
-            cannot be undone. If you only want it to stop checking, pause it
-            instead: a paused monitor keeps its history.
-          </p>
-        )}
-      </Drawer>
+      {deleteTarget !== null && (
+        <ConfirmDelete
+          open
+          onClose={() => setConfirming(null)}
+          kind="monitor"
+          name={deleteTarget.name}
+          consequence={`${deleteTarget.name} and everything recorded about it — heartbeats, uptime history and past incidents — are removed. This cannot be undone. If you only want it to stop checking, pause it instead: a paused monitor keeps its history.`}
+          onConfirm={() => {
+            onDelete?.(deleteTarget.id);
+            setConfirming(null);
+          }}
+        />
+      )}
 
       {onTogglePaused === undefined && !loading && monitors.length > 0 && (
         <p className="add-help">

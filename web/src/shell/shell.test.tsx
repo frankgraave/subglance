@@ -40,16 +40,41 @@ describe("Sidebar", () => {
     expect(screen.getByText("Dashboard").closest("[aria-current]")).toBeTruthy();
   });
 
-  it("does not promise the two screens that do not exist", () => {
+  it("does not promise the screen that does not exist", () => {
     render(<Sidebar collapsed={false} />);
-    // They are shown — the shape of the product is information — but never as
-    // something you can press, and never with a fabricated count beside them.
-    for (const label of ["Notifications", "Settings"]) {
-      const item = screen.getByText(label).closest(".shell-nav-item")!;
-      expect(item.getAttribute("data-state")).toBe("planned");
-      expect(item.querySelector("a, button")).toBeNull();
-    }
-    expect(screen.getAllByText("Soon")).toHaveLength(2);
+    // It is shown — the shape of the product is information — but never as
+    // something you can press, and never with a fabricated count beside it.
+    const item = screen.getByText("Settings").closest(".shell-nav-item")!;
+    expect(item.getAttribute("data-state")).toBe("planned");
+    expect(item.querySelector("a, button")).toBeNull();
+    // Exactly one, because Notifications stopped being a promise in SUB-123.
+    // A count rather than a presence check: the failure this guards against is
+    // a second "Soon" quietly reappearing next to a screen that now exists.
+    expect(screen.getAllByText("Soon")).toHaveLength(1);
+  });
+
+  it("makes notifications a real link now that the screen exists (SUB-123)", () => {
+    // The "Soon" with the worst consequence attached: an instance can be
+    // running with no channel at all, every alert going nowhere, and this was
+    // the one item in the navigation that would have said so.
+    render(<Sidebar collapsed={false} />);
+    const link = screen.getByText("Notifications").closest("a");
+    expect(link?.getAttribute("href")).toBe("/notifications");
+    expect(
+      screen
+        .getByText("Notifications")
+        .closest(".shell-nav-item")
+        ?.querySelector(".shell-nav-soon"),
+      "a built destination must not still say Soon",
+    ).toBeNull();
+  });
+
+  it("marks notifications as current when that is the screen you are on", () => {
+    render(<Sidebar collapsed={false} current="notifications" />);
+    expect(
+      screen.getByText("Notifications").closest("[aria-current]"),
+    ).toBeTruthy();
+    expect(screen.getByText("Dashboard").closest("[aria-current]")).toBeNull();
   });
 
   it("makes monitors a real link now that the screen exists (SUB-122)", () => {
