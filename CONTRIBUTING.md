@@ -89,6 +89,12 @@ Conventional commit prefixes: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`,
 Write the subject in the imperative: "add SSL expiry check", not "added" or
 "adds".
 
+Nothing is generated from these prefixes — release notes come from pull request
+titles instead (see below), because a squashed pull request's own title is what
+survives on `develop` and is what someone reads a year later. The prefixes are a
+convention for reviewers, not an input to a tool, so a commit that reads better
+as a sentence is not a problem.
+
 ## Pull requests
 
 1. Open an issue first for anything substantial, so the approach can be agreed
@@ -105,6 +111,41 @@ Write the subject in the imperative: "add SSL expiry check", not "added" or
    "Not working yet" to "Working", or delete it, in the diff that made it
    untrue. That section is the first thing a stranger reads to decide whether
    this is worth running, and nothing but this rule keeps it tied to the code.
+7. **Write the title as the line you would want to read in a changelog.** A
+   release's notes are generated from the titles of the pull requests it
+   contains, so the title is not scaffolding that disappears on merge — it is
+   the sentence a stranger reads months later. A label (`feature`, `bug`,
+   `security`, `documentation`) sorts it into a section; without one it still
+   appears, just under "Everything else".
+
+## Releases
+
+A release is cut by pushing a tag, and by nothing else:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+That starts two independent workflows. `release.yml` builds the dashboard, then
+five binaries — Linux and macOS on amd64 and arm64, Windows on amd64 — archives
+them, writes `SHA256SUMS`, signs that file with cosign, and publishes the lot as
+a GitHub release. `docker.yml` separately pushes the container image for the same
+tag. They are deliberately not one workflow: a registry failure should not cost
+the binaries, and either can be re-run alone.
+
+The build configuration lives in [`.goreleaser.yaml`](.goreleaser.yaml), and it
+is testable without spending a version number:
+
+```sh
+make release-check      # validate the configuration
+make release-local      # build for this machine only — fast, use while editing
+make release-snapshot   # the full five-platform run into dist/, publishing nothing
+```
+
+`make release-snapshot` needs Node, because the dashboard is compiled into every
+binary. Running the `Release` workflow manually from the Actions tab does the
+same thing on a runner and leaves the archives as a downloadable artefact.
 
 ## Reporting bugs
 

@@ -94,6 +94,24 @@ web-budget: web-build ## Check the built bundle against its size budget
 web-lint: ## Lint the frontend
 	cd web && npm run lint
 
+# --- Release ------------------------------------------------------------
+# The real release runs in .github/workflows/release.yml on a `v*` tag. These
+# targets exist so the same .goreleaser.yaml can be exercised locally, because
+# the alternative way to find out whether a release works is to push a tag and
+# find out in public.
+
+.PHONY: release-check
+release-check: ## Validate .goreleaser.yaml without building anything
+	goreleaser check
+
+.PHONY: release-snapshot
+release-snapshot: ## Build the full release locally into dist/ — no tag, nothing published
+	goreleaser release --snapshot --clean --skip=sign
+
+.PHONY: release-local
+release-local: ## Snapshot for this machine's platform only (fast; what to run while editing the config)
+	goreleaser build --snapshot --clean --single-target
+
 .PHONY: clean
 clean: ## Remove build artefacts
-	rm -rf bin tmp coverage.out internal/webui/dist/assets internal/webui/dist/index.html
+	rm -rf bin tmp dist coverage.out internal/webui/dist/assets internal/webui/dist/index.html
