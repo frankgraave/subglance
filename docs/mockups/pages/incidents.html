@@ -287,20 +287,34 @@ x-envoy-upstream-service-time: 30001
         is how you compare two failures that started a minute apart.
       </div>
 
-      <div class="note q">
-        <b>Question 1 — chronological or grouped by monitor?</b> This list is strictly newest
-        first. When one monitor flaps, that is right (one incident, flaps suppressed), but when
-        a shared dependency takes out four monitors at once you get four rows that are really
-        one event. Do we want an optional "group by monitor", or even a heuristic "4 monitors
-        failed within 60s" cluster row — or is grouping a lie we should not tell?
+      <div class="note">
+        <b>Question 1 — answered: both.</b> The list stays strictly newest first, because that is
+        what you want at 3am. On top of that, incidents that start close together are offered as a
+        cluster — the heuristic this question proposed, "several monitors failed within ~60s". The
+        constraint that came with the answer is the important half: <b>a cluster is a suspicion
+        drawn from timing, not an established common cause</b>, so it has to be worded as one and
+        the individual incidents must stay reachable. Grouping that claims more than it knows is
+        the lie this question was worried about; grouping that shows its reasoning is not.
       </div>
 
-      <div class="note q">
-        <b>Question 2 — does Acknowledge silence notifications?</b> Right now it is drawn as a
-        pure human marker: "someone is on this", visible to the team, notifications keep firing.
-        The alternative is that ack also stops re-alerts and escalation for this incident until
-        it resolves. That is a much bigger promise and needs to be obvious in the button label
-        ("Acknowledge" vs "Acknowledge &amp; mute"). Which one is SubGlance?
+      <div class="note">
+        <b>Question 2 — answered by the code, against what this page draws.</b> Acknowledge
+        <b>does</b> silence re-alerts. SUB-81 shipped the escalating reminder series (15min → 1h →
+        4h → 16h, then daily) and <code>ack</code> stops it; that behaviour is already documented in
+        the README, the OpenAPI spec and <code>internal/store/incidents.go</code>.
+        <br><br>
+        So the "pure human marker" reading drawn above is wrong and must not be built. Two things
+        follow. The button has to say what it does before it is pressed — this question's own
+        suggestion of "Acknowledge &amp; mute" over a bare "Acknowledge" is the right instinct.
+        And after it is pressed, the incident must still read as <b>open</b>: acknowledging is a
+        promise that someone is looking, not a claim that the service came back.
+      </div>
+
+      <div class="note">
+        <b>Question 3 — answered: 30 days stands for now.</b> The history section keeps its 30-day
+        window. A longer range is wanted later, so the shape should not have to be rebuilt to take
+        one — but no date picker is drawn or built until then, because a control that does nothing
+        is worse than an absent one.
       </div>
 
       <!-- ============ RESOLVED / HISTORY ============ -->
@@ -506,13 +520,12 @@ content-type: text/html; charset=utf-8
         </div>
       </section>
 
-      <div class="note q">
-        <b>Question 3 — how long do we keep history, and is 30 days the right window?</b>
-        The history section is capped at 30 days here because that is what fits a
-        "grouped by day" list before it needs pagination. But incidents are cheap rows and the
-        SLA question people actually ask is "how did this look last quarter". Do we keep
-        forever and add a date range picker, prune on a retention setting, or keep the page at
-        30 days and push longer windows into an export?
+      <div class="note">
+        <b>Question 3 — answered above: 30 days stands.</b> The window was capped here because
+        that is what fits a "grouped by day" list before it needs pagination, and the open part
+        was whether the SLA question people actually ask — "how did this look last quarter" —
+        deserves more. It does, later: a longer range or a date picker can be added without
+        rebuilding this section, and is deliberately not drawn until it is wanted.
       </div>
 
       <!-- ============ EMPTY STATE, standalone ============ -->
