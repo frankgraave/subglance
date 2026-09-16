@@ -43,6 +43,20 @@
 /* An ack that failed is a failure of this screen, like an invalid input. */
 .inc-notice { border-color: var(--down); background: none; }
 
+/*
+ * The card's body, where a Panel used to be (SUB-133).
+ *
+ * A plain box with no fill, no border and no radius: it groups the notices,
+ * the empty state and the day sections so they share one rhythm, and it draws
+ * nothing. That is the difference between structure and a surface — the card
+ * is the surface, the rows rest on it, and there is no third box.
+ */
+.inc-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
 .inc-list {
   display: flex;
   flex-direction: column;

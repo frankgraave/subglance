@@ -405,3 +405,29 @@ describe("the panel look does not cost the table its semantics", () => {
     );
   });
 });
+
+/**
+ * SUB-135: the lamp column's header is a visible word.
+ *
+ * It was `sr-only`, so the cell was real, 104px wide and drew nothing — an
+ * empty block beside four labelled headers, which is what made the top-left of
+ * the table look unfinished. The existing header test above reads
+ * `textContent`, which is identical whether the word is visible or clipped, so
+ * it could not tell the two apart.
+ *
+ * Asserted as "not inside an sr-only span" rather than by measuring, because
+ * jsdom has no layout and the decision under test is markup: the word is in
+ * the cell for everyone, or it is hidden from the eye.
+ */
+describe("the status column has a visible header", () => {
+  it("does not hide its label from sighted readers", () => {
+    render(
+      <MonitorTable monitors={[monitor("api", "up")]} beatWidth={WIDTH} />,
+    );
+    const first = monTable().querySelector(
+      ":scope > thead > tr > th",
+    ) as HTMLElement;
+    expect(first.textContent).toBe("Status");
+    expect(first.querySelector(".sr-only")).toBeNull();
+  });
+});

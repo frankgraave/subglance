@@ -19,7 +19,7 @@
 
 .menu-panel {
   position: absolute;
-  z-index: 40;
+  z-index: var(--z-float);
   top: calc(100% + var(--space-1));
   left: 0;
   min-width: var(--space-16);
@@ -27,7 +27,9 @@
   flex-direction: column;
   gap: var(--space-1);
   padding: var(--space-1);
-  background: var(--surface);
+  /* Opaque: a menu floats over the page, so it must not be read through.
+     `--surface` is 3% white in dark, which is very nearly not there. */
+  background: var(--surface-float);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   /* Floating, so it takes the top rung of the depth ladder: it is in front of
@@ -60,6 +62,8 @@
 
 .menu-item:hover:not(:disabled),
 .menu-item[data-active="true"] {
+  /* The hover sits on the opaque panel, so it may stay an alpha step: it is
+     resting on a surface rather than floating over the page. */
   background: var(--surface-2);
 }
 
@@ -118,8 +122,8 @@
   color: var(--down);
 }
 
-.menu-separator {
-  height: 1px;
-  margin: var(--space-1) 0;
-  background: var(--border);
-}
+/* `.menu-separator` lived here and `Menu` never rendered one: the items carry
+   a description each, so a rule between them was a divider between things that
+   were already separated. Removed rather than kept for a menu that might want
+   one — the CSS budget is 13 kB for the whole product, and an unused rule is
+   paid for on every page load. */

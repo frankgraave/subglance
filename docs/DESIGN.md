@@ -58,6 +58,7 @@ Everything a user can click, hover or read still takes its radius from a token.
 --surface:    rgba(255,255,255,.03);      /* card, sidebar, drawer */
 --surface-2:  rgba(255,255,255,.05);      /* inputs, hover */
 --surface-hi: rgba(255,255,255,.08);      /* active segments, tracks */
+--surface-float: oklch(.269 0 0);         /* tooltip, menu, drawer — opaque */
 --border:     rgba(255,255,255,.05);      /* default border, divider */
 --border-hi:  rgba(255,255,255,.10);      /* border on interactive elements */
 
@@ -66,6 +67,18 @@ Everything a user can click, hover or read still takes its radius from a token.
 --ink-3:      oklch(.556 0 0);            /* labels, help text */
 --ink-4:      oklch(.439 0 0);            /* placeholders, disabled */
 ```
+
+**`--surface-float` is the one exception, and the exception proves the rule.**
+Everything that *rests* on something else is an alpha, for the reason below.
+Anything that *floats* above the page — a tooltip, a menu, a drawer — must not
+be, and it fails twice if it is. It fails on legibility: at 5% white, 95% of
+the row behind a tooltip is still readable through the thing that exists to
+explain it. And it fails on identity: an alpha composites against whatever is
+beneath it, so the same tooltip was `#232323` over the page and `#292929` over
+a card — one element, two colours, decided by where it happened to open. The
+opaque token is measured rather than picked: `--ink` reaches 13.9:1 on it,
+`--ink-2` 5.9:1 and `--ink-3` 3.2:1, so every ink that appears on a floating
+surface clears AA at its size and the quietest clears the 3:1 non-text floor.
 
 **Surfaces are white at low alpha, not lighter greys.** This is the decision
 that makes a stack of panels read as one material rather than as separately
@@ -84,6 +97,7 @@ something.
 ```css
 --canvas:     #fbfbfa;   --surface:    #ffffff;
 --surface-2:  #f6f6f5;   --surface-hi: #f0f0ef;
+--surface-float: #ffffff;
 --border:     #e6e6e4;   --border-hi:  #d6d6d3;
 --ink:        #16181a;   --ink-2:      #5c6165;
 --ink-3:      #8b9196;   --ink-4:      #b6bbbf;
@@ -640,6 +654,42 @@ depth flattens the distinction it exists to create. Writing it as a token makes
 Light gets weaker alphas than dark. The same values over white read as dirt
 rather than as depth, and on a light ground the border is already doing most of
 the separating.
+
+### 2.11 Stacking is a ladder too
+
+```css
+--z-chrome:  20;   /* sticky topbar, the wall's exit control */
+--z-float:   40;   /* menus, the heartbeat readout */
+--z-overlay: 60;   /* drawers and the phone navigation; scrims at rung − 1 */
+--z-skip:   100;   /* the skip link */
+```
+
+**No component writes a bare `z-index`.** The product had six of them — 10, 20,
+40, 41, 50, 51, 100 — each correct against whatever it was written next to and
+none of them stating an order, because the order was never written down
+anywhere. The heartbeat readout carried 10 and the sticky topbar carried 20, so
+the readout was clipped the moment it opened on the top row; and the obvious
+repair, raising the readout, is the same move that produced the other six.
+
+The rungs are spaced by ten so a layer that needs a companion just beneath it —
+a scrim under its panel — takes `rung − 1` without a new token and without
+colliding with the rung below.
+
+Read top to bottom the ladder is the product's answer to *what covers what*:
+page chrome sits above the page; a floating readout sits above the chrome,
+because it is a reply to something you pointed at and it grows upward out of
+rows that scroll under that chrome; a modal overlay sits above everything,
+because it owns the screen while it is open; and the skip link sits above even
+that, because it is the one control that has to be reachable when the rest has
+gone wrong.
+
+A note on what this does *not* fix. A z-index only ranks siblings within a
+stacking context, so an ancestor with its own context can still confine a
+descendant however high the number is. The ladder makes the intended order
+legible in one place; it cannot make a trapped element escape. That is a
+question only a real browser can answer, which is why the checks that guard it
+live in `web/src/layout/drawer-stacking.browser.test.ts` and measure painted
+pixels rather than declarations.
 
 ---
 

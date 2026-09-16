@@ -12,7 +12,14 @@
 .drawer-scrim {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  /* One below the panel it dims, which is what the ten-step spacing on the
+     ladder is for: a scrim needs a rung of its own and does not deserve one. */
+  z-index: calc(var(--z-overlay) - 1);
+  /* NB: this pair was 50/51 and it was NOT broken — measured in a browser, the
+     drawer already painted above the page. The suspicion that a sticky
+     ancestor had trapped it was a reasonable reading of the stylesheet and a
+     wrong one; the drawer's real defect was its fill, below. These are the
+     ladder's rungs rather than a repair. */
   /* A button so the dismissal handler sits on something interactive, but
      hidden from assistive technology and out of the tab order: Escape and the
      close control are the accessible routes out. */
@@ -23,14 +30,18 @@
 
 .drawer-panel {
   position: fixed;
-  z-index: 51;
+  z-index: var(--z-overlay);
   top: 0;
   right: 0;
   bottom: 0;
   width: min(100%, 26rem);
   display: flex;
   flex-direction: column;
-  background: var(--surface);
+  /* Opaque. This was `--surface` — 3% white in dark — and the monitor list
+     behind the drawer read straight through it. A drawer is modal: it owns
+     the screen while it is open, so it may not be a tint over the thing it
+     is covering. */
+  background: var(--surface-float);
   /* Only the leading edge: the other three sit against the viewport, where a
      border would draw a line nothing is on the far side of. */
   border-left: 1px solid var(--border);

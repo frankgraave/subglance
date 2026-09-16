@@ -739,3 +739,72 @@ describe("the screen does not claim more than it knows", () => {
     expect(text).not.toMatch(/0 monitors watched/i);
   });
 });
+
+/**
+ * SUB-133: two surfaces, not three — as a guard rather than as a hope.
+ *
+ * PR #42 (`1eaa151`, *"Two surfaces, not three"*) deleted exactly this
+ * construction and it came back, which is the argument for a test rather than
+ * a code comment. What returned was `Card` > `Panel padded={false}` >
+ * `section.inc-day` > `li.inc-row`, where `.inc-row` already draws its own
+ * border, radius, fill and raised shadow — three nested fills to say one
+ * thing.
+ *
+ * Counted structurally rather than measured, and deliberately: jsdom applies
+ * no CSS, so the fills cannot be observed here. What CAN be observed is the
+ * nesting, and the nesting is the decision. `.panel` and `.card` are the two
+ * classes in the product that paint a surface, so the rule is stated as a
+ * depth over those two class names — which also means it catches a third
+ * wrapper introduced under any other element name, not just a re-added
+ * `<Panel>`.
+ */
+describe("no list is more than two surfaces deep", () => {
+  /** How many surface-bearing ancestors an element has, itself included. */
+  function surfaceDepth(node: Element): number {
+    let depth = 0;
+    for (let at: Element | null = node; at !== null; at = at.parentElement) {
+      if (at.classList.contains("panel") || at.classList.contains("card")) {
+        depth += 1;
+      }
+    }
+    return depth;
+  }
+
+  it("keeps every incident row on a card, and on nothing else", () => {
+    render(
+      <IncidentsView
+        incidents={[incident({ id: "1" })]}
+        resolved={[
+          incident({ id: "2", resolved: true, resolvedAt: T0 + 720_000 }),
+        ]}
+        names={{ "7": "web" }}
+        now={NOW}
+      />,
+    );
+    const rows = [...document.querySelectorAll(".inc-row")];
+    // A vacuous pass is the failure mode this guard is most exposed to: an
+    // empty list satisfies every depth rule there is.
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(surfaceDepth(row)).toBe(1);
+    }
+  });
+
+  it("keeps the day heading on the card rather than in a box of its own", () => {
+    render(
+      <IncidentsView
+        incidents={[]}
+        resolved={[
+          incident({ id: "2", resolved: true, resolvedAt: T0 + 720_000 }),
+        ]}
+        names={{ "7": "web" }}
+        now={NOW}
+      />,
+    );
+    const days = [...document.querySelectorAll(".inc-day")];
+    expect(days.length).toBeGreaterThan(0);
+    for (const day of days) {
+      expect(surfaceDepth(day)).toBe(1);
+    }
+  });
+});

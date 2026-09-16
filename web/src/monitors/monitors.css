@@ -343,9 +343,19 @@
   border-spacing: 0 var(--space-1);
 }
 
-/* Wide enough for the lamp plus the longest status word ("Pending"), because
-   since SUB-100 the column carries both. 46px held the lamp alone. */
-.mon-col--led { width: 104px; }
+/*
+ * Wide enough for the lamp plus the longest status word ("Pending"), and no
+ * wider (SUB-135).
+ *
+ * It was 104px, which is ~35px more than the widest thing measured in it, and
+ * the surplus showed: the lamps sat marooned in the middle of a column that
+ * was mostly nothing, next to a header cell whose only content was visually
+ * hidden — so the top-left of the table read as an empty block hanging beside
+ * the column titles. Measured in the browser at the shipped face and size, the
+ * longest cell ("Pending", lamp included) is 70px; 84px leaves the column's
+ * own 12px of padding on each side and nothing else.
+ */
+.mon-col--led { width: 84px; }
 .mon-col--name { width: auto; }
 .mon-col--beats { width: 184px; }
 .mon-col--num { width: 92px; }
@@ -509,13 +519,24 @@
   text-overflow: ellipsis;
 }
 
+/*
+ * The target, one step quieter than the name it belongs to (SUB-135).
+ *
+ * --ink-3, not --ink-2. The name is the finding and the address is what it
+ * points at, which is exactly the ladder DESIGN.md §9 states — and until now
+ * the two rendered in the same ink, so the only thing separating them was the
+ * face. Measured against the row's surface in the browser: 3.5:1 in dark and
+ * 3.2:1 in light, which clears the 3:1 floor. It stays above that deliberately
+ * rather than receding further: an address you cannot read is not a quieter
+ * address, it is a missing one.
+ */
 .mon-target {
   display: block;
   margin-top: 3px;
   @apply face-mono;
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
-  color: var(--ink-2);
+  color: var(--ink-3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -811,11 +832,9 @@
   gap: var(--space-2);
 }
 
-/* The lamp's own label is rendered visibly, so the card's status word comes
-   from it; this span is the styling hook for that text. */
-.mon-card-status {
-  @apply caps-legend;
-}
+/* There was a `.mon-card-status` hook here for a span `MonitorCard` does not
+   render — the card's status word comes from the lamp's own label, which
+   carries the caps role already. */
 
 .mon-card-name {
   margin-top: var(--space-2);
@@ -1331,13 +1350,24 @@
  * that never shows it is interactive is a control nobody finds, so the
  * affordance appears the moment a pointer or the keyboard arrives.
  *
- * `color: inherit` keeps each layout's own name colour; only the interaction
- * is shared.
+ * `color: inherit` on `.mon-card-name > a` is right — there the class is on
+ * the heading and the anchor inside it should take the heading's colour. It
+ * was wrong on `.mon-name`, and that is the second half of SUB-135: the class
+ * IS the anchor there, so `inherit` resolved to the cell's `--ink-2` and
+ * quietly overrode the `--ink` that `.mon-name` declares twenty lines above.
+ * Measured in the browser, the name and the target both computed to
+ * oklch(.708) — the two were literally the same ink, which is what Frank
+ * saw. Reading the stylesheet did not show it: both rules are correct on
+ * their own and only the cascade between them is not.
  */
-.mon-name,
 .mon-line-name,
 .mon-card-name > a {
   color: inherit;
+}
+
+.mon-name,
+.mon-line-name,
+.mon-card-name > a {
   text-decoration: none;
   cursor: pointer;
 }

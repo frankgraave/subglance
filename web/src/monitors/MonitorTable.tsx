@@ -63,10 +63,19 @@ function Head() {
   return (
     <thead>
       <tr>
-        {/* The lamp column's header is text-only: the column holds a status,
-            and a blank <th> leaves a screen reader announcing nothing. */}
+        {/*
+         * The lamp column's header, and it is visible (SUB-135).
+         *
+         * It was `sr-only`, which left a real 104px-wide header cell drawn
+         * with nothing in it beside four labelled ones — an empty block in
+         * the top-left corner that made the header row look broken rather
+         * than deliberate. The column holds a status and its rows already
+         * print the word for anything other than `up`, so "Status" is the
+         * honest label for it; showing it costs nothing and gives the column
+         * the same footing as the four beside it.
+         */}
         <th scope="col" className="mon-head">
-          <span className="sr-only">Status</span>
+          Status
         </th>
         <th scope="col" className="mon-head">
           Monitor

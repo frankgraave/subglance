@@ -146,17 +146,54 @@ describe("the app shell", () => {
     // shell's <main> and mounts the wall's own one. Without a focus target on
     // the wall the route change is silent for a keyboard user: focus stays on
     // a control in a document that no longer exists.
+    //
+    // The preference is seeded rather than clicked, which is the honest way to
+    // reach this state since SUB-131: the layout switcher is the dashboard's
+    // control, and the wall shows no monitor links, so there is no sequence of
+    // clicks that puts a monitor on screen with `wall` already chosen. A
+    // reload with the stored preference is exactly that sequence, and storage
+    // is where the preference genuinely lives.
+    window.localStorage.setItem(LAYOUT_STORAGE_KEY, "wall");
+    window.history.replaceState(null, "", "/monitors/1");
     render(<App />);
-    fireEvent.click(await screen.findByRole("link", { name: "api" }));
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Status wall" })).toBeTruthy(),
+      expect(document.querySelector(".mon-detail")).toBeTruthy(),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Status wall" }));
 
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => expect(document.querySelector(".wall")).toBeTruthy());
     await waitFor(() =>
       expect(document.activeElement).toBe(document.querySelector(".wall")),
+    );
+  });
+
+  /*
+   * SUB-131. The layout switcher is the dashboard's control, and it used to
+   * appear on every screen — including Incidents and Monitors, where the four
+   * options rearranged nothing, and the monitor detail view, where the wall
+   * would have replaced a single monitor with a chrome-less grid of all of
+   * them.
+   *
+   * Asserted per route rather than once, because "it is absent somewhere" is
+   * the assertion that passes when someone removes it everywhere.
+   */
+  it("offers the layout switcher only where there are layouts", async () => {
+    render(<App />);
+    await screen.findByText("api");
+    expect(screen.getByRole("button", { name: "Status wall" })).toBeTruthy();
+
+    for (const destination of ["Incidents", "Monitors"]) {
+      fireEvent.click(screen.getByRole("link", { name: destination }));
+      await waitFor(() =>
+        expect(
+          screen.queryByRole("button", { name: "Status wall" }),
+        ).toBeNull(),
+      );
+    }
+
+    fireEvent.click(screen.getByRole("link", { name: "Dashboard" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Status wall" })).toBeTruthy(),
     );
   });
 
@@ -191,7 +228,24 @@ describe("the app shell", () => {
     );
   });
 
-  it("never shows one content mode while a control claims the other", async () => {
+  /*
+   * Every control in the bar reports the state the screen is actually in.
+   *
+   * The defect this began as: the add form was a *screen*, the render branch
+   * preferred the workbench, and pressing Add while the workbench was open lit
+   * the add button over a workbench that stayed on screen — a control claiming
+   * a state the page did not have. SUB-132 makes the add form an overlay, so
+   * the two are no longer rivals for the same space and both can honestly be
+   * pressed at once: the drawer is over the workbench, and that is what both
+   * buttons now say.
+   *
+   * What still has to hold is the rule underneath, which is the one worth
+   * asserting: a button reads as pressed if and only if the thing it opens is
+   * on screen. Leaving the workbench therefore takes the drawer with it — a
+   * modal form describing a screen that has been swapped out is the same lie
+   * in a new position.
+   */
+  it("never lets a control claim a state the screen does not have", async () => {
     render(<App />);
     await screen.findByText("api");
 
@@ -199,27 +253,56 @@ describe("the app shell", () => {
       name: "Component workbench",
     });
     const add = screen.getByRole("button", { name: "Add a monitor" });
+    const form = () => screen.queryByLabelText(/what should be watched/i);
+    // The workbench's own content, which is what "the workbench is on screen"
+    // has to be asserted against — the button's own state is the claim under
+    // test and cannot also be the evidence for it.
+    const gallery = () => screen.queryByText(/Component workbench/);
 
     fireEvent.click(workbench);
     await waitFor(() =>
       expect(workbench.getAttribute("aria-pressed")).toBe("true"),
     );
 
-    // The render branch prefers the workbench, so without the toggles clearing
-    // each other this left the workbench on screen with the add button lit —
-    // and Esc then closed a form nobody could see.
+    // The drawer opens over the workbench, and both controls say so.
     fireEvent.click(add);
+    await waitFor(() => expect(form()).toBeTruthy());
+    expect(add.getAttribute("aria-pressed")).toBe("true");
+    expect(workbench.getAttribute("aria-pressed")).toBe("true");
+    expect(gallery()).toBeTruthy();
+
+    // Leaving the workbench closes the form with it: the screen the form was
+    // opened over is gone, so the form may not outlive it.
+    fireEvent.click(workbench);
+    await waitFor(() => expect(form()).toBeNull());
+    expect(add.getAttribute("aria-pressed")).toBe("false");
+    expect(workbench.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  /*
+   * SUB-132: the same button did two different things. On the inventory it
+   * opened a drawer; on the dashboard it replaced the whole screen with the
+   * form, taking the monitor list with it. Asserted as "the list is still
+   * there", because a missing form was never the failure — a disappearing
+   * dashboard was.
+   */
+  it("opens the add form as a drawer over the dashboard, not instead of it", async () => {
+    render(<App />);
+    await screen.findByText("api");
+
+    fireEvent.click(screen.getByRole("button", { name: "Add a monitor" }));
     await waitFor(() =>
       expect(screen.getByLabelText(/what should be watched/i)).toBeTruthy(),
     );
-    expect(workbench.getAttribute("aria-pressed")).toBe("false");
 
-    // And the other way round: opening the workbench unlights the add button.
-    fireEvent.click(workbench);
-    await waitFor(() =>
-      expect(screen.queryByLabelText(/what should be watched/i)).toBeNull(),
-    );
-    expect(add.getAttribute("aria-pressed")).toBe("false");
+    // A dialog, and the list it was opened from is still behind it.
+    expect(screen.getByRole("dialog", { name: /add monitor/i })).toBeTruthy();
+    expect(screen.getByText("api")).toBeTruthy();
+
+    // And the form wears the product's surfaces rather than sitting bare on
+    // the drawer's background (SUB-132).
+    const dialog = screen.getByRole("dialog", { name: /add monitor/i });
+    expect(dialog.querySelector(".card .panel .add-form")).toBeTruthy();
   });
 });
 

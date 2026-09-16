@@ -109,7 +109,7 @@
   transition: filter var(--dur-attention) var(--ease);
 }
 
-.wall-exit { position: fixed; top: 18px; right: 18px; z-index: 30; opacity: 0; }
+.wall-exit { position: fixed; top: 18px; right: 18px; z-index: var(--z-chrome); opacity: 0; }
 .wall-exit:hover, .wall-exit:focus-visible { opacity: 1; }
 
 /* Touch has no hover, so the exit would be invisible and unreachable. */

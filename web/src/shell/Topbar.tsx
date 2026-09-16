@@ -3,6 +3,7 @@ import { ThemeToggle } from "../components/ThemeToggle";
 import type { ThemePreference } from "../theme/theme";
 import { LayoutSwitcher } from "./LayoutSwitcher";
 import { BeakerIcon, PlusIcon, SidebarIcon } from "./icons";
+import { setTopbarSlot } from "./topbarSlot";
 import type { LayoutId } from "./preferences";
 
 /**
@@ -16,6 +17,20 @@ import type { LayoutId } from "./preferences";
  * The connection banner is rendered *above* this bar by the dashboard itself:
  * a warning that the numbers are frozen has to be read before the numbers, and
  * this is the last chrome before them.
+ *
+ * **Two zones, and the split is the point (SUB-131).** The global zone holds
+ * what is true on every screen: the sidebar toggle, the theme, the workbench.
+ * The page zone holds what belongs to the route you are on, and the layout
+ * switcher is a resident of that zone rather than of the bar — it changes how
+ * the dashboard's monitors are drawn, and on Incidents it offered a choice
+ * between four arrangements of a list that has one. A control that does
+ * nothing where it is shown teaches people to stop reading the bar.
+ *
+ * The page zone is filled two ways, and both are needed. `children` is for a
+ * caller that already holds the state, which is how `App` puts the layout
+ * switcher here; `TopbarTools` portals into the empty slot from inside the
+ * screen, which is how a page contributes controls whose state lives in the
+ * page. Same zone, same visual row, no state hoisted into the shell.
  */
 
 export type TopbarProps = {
@@ -23,9 +38,22 @@ export type TopbarProps = {
   /** True below the breakpoint, where this button opens a drawer. */
   narrow?: boolean;
   onToggleSidebar: () => void;
-  layout: LayoutId;
+  /**
+   * The layout switcher's state. Omitted where the switcher does not belong —
+   * see `showLayouts`.
+   */
+  layout?: LayoutId;
   effectiveLayout?: LayoutId;
-  onLayoutChange: (next: LayoutId) => void;
+  onLayoutChange?: (next: LayoutId) => void;
+  /**
+   * Whether this route has layouts to switch between.
+   *
+   * A prop rather than something inferred here from `onLayoutChange`, because
+   * "this screen has no layouts" is a fact about the route and `App` is what
+   * knows the route. Inferring it from a missing callback would make the bar's
+   * contents depend on how carefully a caller spelled its props.
+   */
+  showLayouts?: boolean;
   themePreference: ThemePreference;
   onThemeChange: (next: ThemePreference) => void;
   workbenchOpen: boolean;
@@ -41,9 +69,10 @@ export function Topbar({
   sidebarCollapsed,
   narrow = false,
   onToggleSidebar,
-  layout,
+  layout = "rows",
   effectiveLayout,
   onLayoutChange,
+  showLayouts = false,
   themePreference,
   onThemeChange,
   workbenchOpen,
@@ -86,7 +115,17 @@ export function Topbar({
         <SidebarIcon />
       </button>
 
-      {children}
+      {/*
+       * The page zone. It carries the slot even when it is empty, because the
+       * slot is what `TopbarTools` portals into and a container created only
+       * when something wants it would never exist on the render that wants it.
+       * An empty flex row occupies no space, so a screen with no tools costs
+       * nothing.
+       */}
+      <div className="shell-topbar-page">
+        {children}
+        <div ref={setTopbarSlot} className="shell-topbar-slot" />
+      </div>
 
       <div className="shell-topbar-right">
         {/*
@@ -112,11 +151,20 @@ export function Topbar({
           </button>
         )}
 
-        <LayoutSwitcher
-          layout={layout}
-          effective={effectiveLayout}
-          onChange={onLayoutChange}
-        />
+        {/*
+         * Only where there is something to switch between (SUB-131). It sits
+         * in the right-hand group rather than the page zone for a reason the
+         * bar has already paid for once: this group is right-aligned, and a
+         * control that appears and disappears from the middle of the bar
+         * slides everything after it sideways under the cursor.
+         */}
+        {showLayouts && onLayoutChange !== undefined && (
+          <LayoutSwitcher
+            layout={layout}
+            effective={effectiveLayout}
+            onChange={onLayoutChange}
+          />
+        )}
 
         {/*
          * The column control is deliberately NOT here.
