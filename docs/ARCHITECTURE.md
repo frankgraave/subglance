@@ -6,8 +6,8 @@
 
 | Layer | Choice | Reason |
 |---|---|---|
-| Backend | Go 1.23+ | Thousands of parallel checks is exactly what goroutines exist for. One static binary, no runtime. |
-| HTTP | chi or stdlib `net/http` | Lightweight, no framework lock-in |
+| Backend | Go 1.26+ | Thousands of parallel checks is exactly what goroutines exist for. One static binary, no runtime. The minimum tracks `go.mod`, and CONTRIBUTING.md states the same version |
+| HTTP | stdlib `net/http` | Decided: the stdlib router does everything the API needs since method patterns landed, and `go.mod` carries no router dependency. No framework lock-in because there is no framework |
 | Database | SQLite | Zero configuration is the #1 reason self-hosted software actually gets installed. SQLite is the only supported database: there is no Postgres driver in `go.mod` and Postgres is explicitly outside v0.1 |
 | DB driver | `modernc.org/sqlite` | Pure Go, no cgo — cross-compiling stays trivial |
 | Migrations | Hand-rolled, embed.FS + transactions | See §3.1: an external library adds nothing here |
@@ -226,7 +226,7 @@ gets built):
 - Status transitions morph, they don't reload.
 - Keyboard-first: cmd-K opens everything.
 - When everything is fine, the screen is calm and almost colorless.
-- Taste references: Linear, Vercel, Raycast.
+- The full design system, including the measured tokens and the component rules, lives in `docs/DESIGN.md`.
 
 ## 6. Security
 
@@ -265,7 +265,5 @@ docs/
 
 ## 9. Open decisions
 
-- [ ] chi vs. stdlib router
 - [ ] sqlc vs. hand-written queries
 - [ ] Alert rules in the database or in code
-- [ ] Multi-region protocol for the cloud version (agent pull or push)
