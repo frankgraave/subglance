@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/frankgraave/subglance/internal/notifier"
 	"github.com/frankgraave/subglance/internal/store"
 	"github.com/frankgraave/subglance/internal/trustedproxy"
 	"github.com/frankgraave/subglance/internal/watchdog"
@@ -67,6 +68,21 @@ type Config struct {
 	// this option existed.
 	RollupRetention time.Duration
 
+	// AlertGroupWindow is how long an alert waits for others before it is
+	// sent, so that one outage across many monitors becomes one message
+	// instead of one per monitor.
+	//
+	// Zero turns grouping off and delivers every alert the moment it
+	// happens. That is the right setting for someone watching three
+	// services, who has nothing to group and would only be paying the
+	// delay; it is the wrong setting for a fleet, where the burst is the
+	// reason people mute the channel.
+	//
+	// The default follows the check schedule rather than taste: monitors on
+	// a 60-second interval do not fail in the same second, they fail across
+	// the following minute as each one's turn comes round.
+	AlertGroupWindow time.Duration
+
 	// TrustedProxies lists the peers whose X-Forwarded-For and X-Real-Ip
 	// headers may be believed, as a comma-separated list of addresses and
 	// CIDR blocks. Empty means believe nobody.
@@ -85,6 +101,21 @@ func (c Config) DBPath() string {
 	return strings.TrimRight(c.DataDir, "/") + "/subglance.db"
 }
 
+// NotifierGroupWindow translates the configured window into the value the
+// notifier expects.
+//
+// The two disagree about zero on purpose. To an operator, "0" plainly means
+// off; inside Options, zero has to mean "use the default", because that is how
+// every other field there behaves and an Options literal that omits a field
+// must keep working. Doing the translation here, once, is cheaper than making
+// either side surprising.
+func (c Config) NotifierGroupWindow() time.Duration {
+	if c.AlertGroupWindow <= 0 {
+		return notifier.GroupingDisabled
+	}
+	return c.AlertGroupWindow
+}
+
 func defaults() Config {
 	return Config{
 		Addr:                ":8080",
@@ -98,6 +129,7 @@ func defaults() Config {
 		AllowPrivateTargets: false,
 		RawRetention:        store.DefaultRawRetention,
 		RollupRetention:     store.DefaultRollupRetention,
+		AlertGroupWindow:    notifier.DefaultGroupWindow,
 		TrustedProxies:      "",
 	}
 }
@@ -120,6 +152,11 @@ func Load(args []string) (Config, error) {
 	c.AllowPrivateTargets = envBool("SUBGLANCE_ALLOW_PRIVATE_TARGETS", c.AllowPrivateTargets)
 	c.RawRetention = envDur("SUBGLANCE_RAW_RETENTION", c.RawRetention)
 	c.RollupRetention = envDur("SUBGLANCE_ROLLUP_RETENTION", c.RollupRetention)
+	groupWindow, err := envDurStrict("SUBGLANCE_ALERT_GROUP_WINDOW", c.AlertGroupWindow)
+	if err != nil {
+		return Config{}, err
+	}
+	c.AlertGroupWindow = groupWindow
 	c.TrustedProxies = envStr("SUBGLANCE_TRUSTED_PROXIES", c.TrustedProxies)
 
 	fs := flag.NewFlagSet("subglance", flag.ContinueOnError)
@@ -139,6 +176,8 @@ func Load(args []string) (Config, error) {
 		"how long raw heartbeats are kept before being rolled up into hourly buckets")
 	fs.DurationVar(&c.RollupRetention, "rollup-retention", c.RollupRetention,
 		"how long hourly buckets and resolved incidents are kept (0 = forever)")
+	fs.DurationVar(&c.AlertGroupWindow, "alert-group-window", c.AlertGroupWindow,
+		"how long an alert waits for others so one outage sends one message (0 = send immediately)")
 	fs.StringVar(&c.TrustedProxies, "trusted-proxies", c.TrustedProxies,
 		"comma-separated addresses or CIDR blocks whose X-Forwarded-For may be believed (empty = none)")
 
@@ -189,6 +228,9 @@ func (c Config) validate() error {
 		return fmt.Errorf("rollup-retention (%s) must be at least raw-retention (%s)",
 			c.RollupRetention, c.RawRetention)
 	}
+	if c.AlertGroupWindow < 0 {
+		return fmt.Errorf("alert-group-window must not be negative, got %s (use 0 to send alerts immediately)", c.AlertGroupWindow)
+	}
 	if c.TrustedProxies != "" {
 		if err := trustedproxy.Validate(c.TrustedProxies); err != nil {
 			return err
@@ -234,6 +276,22 @@ func envBool(key string, def bool) bool {
 		return def
 	}
 	return b
+}
+
+// envDurStrict reads a duration from the environment and reports a malformed
+// value instead of falling back to the default. An operator who mistypes a
+// duration wants to hear about it, not to run with a window they never asked
+// for.
+func envDurStrict(key string, def time.Duration) (time.Duration, error) {
+	v, ok := os.LookupEnv(key)
+	if !ok || v == "" {
+		return def, nil
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s: %w", key, err)
+	}
+	return d, nil
 }
 
 func envDur(key string, def time.Duration) time.Duration {

@@ -354,3 +354,72 @@ func TestOrderFollowsWhatHappened(t *testing.T) {
 		}
 	}
 }
+
+// TestGroupWindowModes pins both ends of the zero convention. GroupingDisabled
+// is the setting an operator reaches for when they watch a handful of
+// services: there is nothing to group, so the window is pure delay and the
+// alert must reach the outbox before any window could have elapsed. A zero
+// GroupWindow means the opposite, because every other field in Options reads
+// zero as "use the default" and a caller omitting the field is not asking for
+// a behaviour change — the config layer is what turns an operator's 0 into
+// GroupingDisabled.
+func TestGroupWindowModes(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		window  time.Duration
+		monitor string
+		// hold is the window the notifier is expected to apply. Zero means
+		// the alert is written straight away.
+		hold time.Duration
+	}{
+		{name: "grouping disabled writes immediately", window: GroupingDisabled, monitor: "alpha"},
+		{name: "zero window means the default", window: 0, monitor: "bravo", hold: DefaultGroupWindow},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			db := groupDB(t)
+			clock := newTestClock()
+			n := groupNotifier(t, db, clock, tc.window)
+			ch := groupChannel(t, db, "ops")
+
+			m := groupMonitor(t, db, tc.monitor, ch.ID)
+			inc := openIncident(t, db, m.ID, clock.Now(), "no such host")
+			if err := n.Enqueue(context.Background(), m, inc, state.EventIncidentConfirmed, clock.Now()); err != nil {
+				t.Fatalf("enqueue: %v", err)
+			}
+
+			if tc.hold == 0 {
+				if got := countDeliveries(t, db); got != 1 {
+					t.Fatalf("expected the alert in the outbox at once, got %d rows", got)
+				}
+				alert := decodeOnlyDelivery(t, db)
+				if len(alert.GroupedNames) != 0 {
+					t.Fatalf("an ungrouped alert must not carry group members, got %v", alert.GroupedNames)
+				}
+				return
+			}
+
+			if got := countDeliveries(t, db); got != 0 {
+				t.Fatalf("a %s window must still batch, got %d rows already in the outbox", tc.window, got)
+			}
+
+			// Just short of the window: still held.
+			clock.Advance(tc.hold - time.Second)
+			n.flushDue(context.Background())
+			if got := countDeliveries(t, db); got != 0 {
+				t.Fatalf("flushed %d rows before the window closed", got)
+			}
+
+			clock.Advance(2 * time.Second)
+			n.flushDue(context.Background())
+			if got := countDeliveries(t, db); got != 1 {
+				t.Fatalf("expected one delivery after the window, got %d", got)
+			}
+		})
+	}
+}

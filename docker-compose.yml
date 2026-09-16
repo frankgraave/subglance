@@ -53,6 +53,11 @@ services:
       # caller pick a fresh rate-limit bucket for every password guess.
       # Accepts addresses and CIDR blocks, comma-separated.
       # SUBGLANCE_TRUSTED_PROXIES: "172.16.0.0/12"
+      # How long an alert waits for others before it is sent, so one outage
+      # across many monitors becomes one message instead of one per monitor.
+      # Set to 0 to deliver every alert immediately; that suits a handful of
+      # services, where there is nothing to group and the wait is pure delay.
+      # SUBGLANCE_ALERT_GROUP_WINDOW: 90s
       # SubGlance cannot report its own death: if this container is killed or
       # the host goes down, nothing turns red — the dashboard just stops
       # existing. Point this at a dead man's switch (Healthchecks.io, Dead

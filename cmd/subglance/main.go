@@ -152,7 +152,12 @@ func run(args []string) error {
 	// alerts. It only writes to the outbox on that path; the delivery
 	// itself happens in its own goroutine below, which is what keeps a
 	// slow webhook from delaying a check.
-	notify := notifier.New(notifier.Options{DB: db, Log: log, Guard: guard})
+	notify := notifier.New(notifier.Options{
+		DB:          db,
+		Log:         log,
+		Guard:       guard,
+		GroupWindow: cfg.NotifierGroupWindow(),
+	})
 
 	runner := monitor.New(monitor.Options{
 		DB:                  db,
