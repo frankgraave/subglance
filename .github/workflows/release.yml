@@ -109,9 +109,25 @@ jobs:
           # builds and archives everything but contacts no registry and
           # creates no release. That is what makes this workflow testable
           # without burning a version number.
+          #
+          # The condition is inverted on purpose, and it is not a style
+          # choice. GitHub's `a && b || c` follows JavaScript: when `a` is
+          # true the result is `b`, but only if `b` is itself truthy —
+          # and an empty string is not. Written the obvious way round,
+          #
+          #     ${{ github.ref_type == 'tag' && '' || '--snapshot ...' }}
+          #
+          # a real tag evaluates `true && ''` → `''` → falsy → falls
+          # through to the `||` branch, so EVERY run gets `--snapshot`
+          # and no release is ever published. The workflow still exits 0,
+          # which is what makes it nasty: green build, five archives in
+          # the log, no release page.
+          #
+          # Keeping the non-empty string in the true branch avoids the
+          # falsy-fallthrough entirely. Verified against tag v0.1.0-rc1.
           args: >-
             release --clean
-            ${{ github.ref_type == 'tag' && '' || '--snapshot --skip=sign' }}
+            ${{ github.ref_type != 'tag' && '--snapshot --skip=sign' || '' }}
         env:
           # The default token is enough: this only creates a release in the
           # repository it runs in.
