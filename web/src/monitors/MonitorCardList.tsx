@@ -42,6 +42,11 @@ export type MonitorCardListProps = {
   columns?: CardColumns;
   /** Opens a monitor's detail view client-side. See MonitorLink. */
   onOpen?: (id: string) => void;
+  /**
+   * True when the live stream is dead. Forwarded to every card so its status
+   * word moves into the past tense (DESIGN.md §6).
+   */
+  stale?: boolean;
 };
 
 export function MonitorCardList({
@@ -53,6 +58,7 @@ export function MonitorCardList({
   groupKey = null,
   columns = "1",
   onOpen,
+  stale = false,
 }: MonitorCardListProps) {
   const total = totalCount ?? monitors.length;
 
@@ -84,6 +90,7 @@ export function MonitorCardList({
         monitor={monitor}
         beatWidth={beatWidth}
         onOpen={onOpen}
+        stale={stale}
       />
     ));
 

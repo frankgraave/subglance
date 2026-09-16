@@ -31,12 +31,22 @@ export type MonitorRowProps = {
   beatWidth?: number;
   /** Opens this monitor's detail view client-side. See MonitorLink. */
   onOpen?: (id: string) => void;
+  /**
+   * True when the live stream is dead, so the lamp's word reads "Was up".
+   *
+   * Passed down rather than read from CSS: the row's status word is `sr-only`
+   * for `up` and visible otherwise, and `[data-conn="stale"]` in a stylesheet
+   * cannot rewrite either of them. Draining only the colour would leave the
+   * text saying "Up" to the readers the text exists for (DESIGN.md §6, §2.3).
+   */
+  stale?: boolean;
 };
 
 function MonitorRowImpl({
   monitor,
   beatWidth = ROW_BEAT_WIDTH,
   onOpen,
+  stale = false,
 }: MonitorRowProps) {
   const { name, status, latencyMs, uptime24h, beats, error } = monitor;
 
@@ -55,7 +65,7 @@ function MonitorRowImpl({
           and drown the three that matter, so the quiet default stays quiet:
           no word *is* the up signal, and it is not a colour. */}
       <td className="mon-cell mon-cell--led">
-        <Led status={status} hideLabel={status === "up"} />
+        <Led status={status} hideLabel={status === "up"} stale={stale} />
       </td>
 
       {/* scope="row" makes the name the row's header, so a screen reader
@@ -125,6 +135,10 @@ export const MonitorRow = memo(MonitorRowImpl, (prev, next) => {
   const b = next.monitor;
   return (
     prev.beatWidth === next.beatWidth &&
+    // Compared because it changes the rendered word. A memo that ignored it
+    // would freeze "Up" on screen for as long as the monitor's own fields
+    // happened to stay equal — which, once the stream is dead, is forever.
+    prev.stale === next.stale &&
     // Compared, not ignored: the row renders it into a link's handler, so a
     // changed callback must reach the DOM. It is a stable useCallback in
     // practice, so this costs nothing.

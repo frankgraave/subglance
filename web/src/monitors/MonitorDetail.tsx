@@ -3,12 +3,12 @@ import { Legend, type LegendItem } from "../components/Legend";
 import { IconAlert, IconGauge, IconPulse } from "../components/icons";
 import { HeartbeatBar } from "../heartbeat/HeartbeatBar";
 import type { Beat } from "../heartbeat/model";
-import { describeAge } from "../live/age";
+import { describeAge, describeGap } from "../live/age";
 import {
   describePushWindow,
   formatLatency,
   formatUptime,
-  STATUS_LABEL,
+  statusWord,
 } from "./format";
 import { formatDuration, formatMoment } from "./detail";
 import type { Incident, UptimeWindow } from "./detail";
@@ -64,7 +64,13 @@ export type MonitorDetailProps = {
   onBack?: () => void;
   /** Heartbeat width for environments without layout, such as jsdom. */
   beatWidth?: number;
-  /** True when the live stream is down; drains colour exactly as on the list. */
+  /**
+   * True when the live stream is down.
+   *
+   * It drains colour exactly as on the list, and it moves the status word out
+   * of the present tense — see the pill below for why that is markup and not
+   * another CSS rule.
+   */
   stale?: boolean;
 };
 
@@ -89,6 +95,7 @@ export function MonitorDetail({
     error: lastError,
   } = monitor;
   const age = describeAge(lastCheck, now);
+  const gap = describeGap(lastCheck, now);
   const push = monitor.push;
 
   return (
@@ -131,11 +138,56 @@ export function MonitorDetail({
            * anyway; printing both would have a screen reader say "Up Up", the
            * duplication `MonitorCard` avoids the same way. DESIGN.md §2.3 is
            * satisfied by the word, not by the lamp.
+           *
+           * **The tense is the honesty (SUB-111).** With a live stream this
+           * says "Up · checked 2 min ago". With a dead one it says "Was up ·
+           * no data for 4 min", and the age half stops being a footnote: it
+           * becomes the loud part, because how long we have been blind is the
+           * fact that decides what to do next.
+           *
+           * The word is kept rather than replaced by "Status stale", which was
+           * the obvious fix and is the wrong one: during an outage the last
+           * known status is the most valuable thing on the page. "It was down
+           * when we lost it" and "it was up when we lost it" send someone to
+           * two different places, and blanking the word to be truthful would
+           * cost more than the lie did.
+           *
+           * It is markup and not another rule in connection.css, unlike the
+           * draining of the lamp beside it: CSS can dim text, but it cannot
+           * change what the text says — and a dimmed "Up" is still an assertion
+           * in the present tense.
+           *
+           * The emphasis swaps with the tense, and it swaps by moving the
+           * `<strong>` rather than by adding a class. `<strong>` means "this
+           * matters now": on a live stream that is the status, and once the
+           * stream is dead it is how long we have been blind. Moving the
+           * element says so in the markup, costs the stylesheet nothing — the
+           * existing `.mon-detail-status > strong` rule already gives whatever
+           * sits inside it full ink against the pill's drained `--ink-3` — and
+           * survives a reader who has turned stylesheets off.
            */}
           <p className="mon-detail-status" data-status={status}>
             <Led status={status} labelled={false} className="mon-detail-led" />
-            <strong>{STATUS_LABEL[status]}</strong>
-            {age !== null ? (
+            {stale ? (
+              <span>{statusWord(status, true)}</span>
+            ) : (
+              <strong>{statusWord(status, false)}</strong>
+            )}
+            {stale && gap !== null ? (
+              // The silence, not the reading's age. The two are the same
+              // arithmetic, but "no data for 4 min" is a statement about now
+              // and "checked 4 min ago" is a statement about then — and on a
+              // dead stream only the first one is still true.
+              //
+              // A direct child of the pill, like the word it changes places
+              // with, because `.mon-detail-status > strong` is what hands it
+              // the full ink — nesting it inside the quiet age span would keep
+              // the emphasis in the markup and lose it on screen.
+              <>
+                {" "}
+                <strong>· no data for {gap}</strong>
+              </>
+            ) : age !== null ? (
               <span className="mon-detail-age">
                 {" "}
                 · {push === undefined ? "checked" : "last reported"} {age}

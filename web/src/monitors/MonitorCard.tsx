@@ -45,12 +45,20 @@ export type MonitorCardProps = {
   beatWidth?: number;
   /** Opens this monitor's detail view client-side. See MonitorLink. */
   onOpen?: (id: string) => void;
+  /**
+   * True when the live stream is dead, so the card's status word reads
+   * "Was up" rather than "Up". See `Led`: the lamp's colour drains in CSS, but
+   * the word beside it is the half a stylesheet cannot reach — and on a phone
+   * this word is the largest claim on the card.
+   */
+  stale?: boolean;
 };
 
 function MonitorCardImpl({
   monitor,
   beatWidth = CARD_BEAT_WIDTH,
   onOpen,
+  stale = false,
 }: MonitorCardProps) {
   const { name, status, latencyMs, uptime24h, beats, error } = monitor;
 
@@ -66,7 +74,12 @@ function MonitorCardImpl({
             for. Colour plus word, never colour alone (DESIGN.md §2.3).
             The word comes from the lamp itself rather than a span beside it —
             printing it twice would have a screen reader say "Up Up". */}
-        <Led status={status} hideLabel={false} className="mon-card-led" />
+        <Led
+          status={status}
+          hideLabel={false}
+          stale={stale}
+          className="mon-card-led"
+        />
       </div>
 
       <h3 className="mon-card-name">
@@ -129,6 +142,8 @@ export const MonitorCard = memo(MonitorCardImpl, (prev, next) => {
   const b = next.monitor;
   return (
     prev.beatWidth === next.beatWidth &&
+    // See MonitorRow: it changes the word, so it has to defeat the memo.
+    prev.stale === next.stale &&
     prev.onOpen === next.onOpen &&
     a.id === b.id &&
     a.name === b.name &&

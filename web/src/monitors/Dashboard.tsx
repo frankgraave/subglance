@@ -74,12 +74,18 @@ export type DashboardProps = {
   /**
    * True when the live stream is down and everything on screen is history.
    *
-   * It sets one attribute on the root and nothing else; the draining of colour
-   * is CSS (DESIGN.md §6). Doing it in CSS rather than by rewriting statuses
-   * matters: the last known state is still the most useful thing on the
-   * screen, so it must stay readable and stay in place. Nothing is hidden,
-   * nothing moves, nothing is replaced by a skeleton — the display simply
-   * stops presenting itself as current truth.
+   * It sets one attribute on the root, and it reaches the list layout, which
+   * puts every status word into the past tense. The draining of *colour* is
+   * CSS (DESIGN.md §6); the change of *tense* cannot be, because a stylesheet
+   * cannot rewrite text and in the rows and compact layouts the status word is
+   * `sr-only` — draining the hue alone would fix the lie for sighted readers
+   * and leave it intact for everyone using a screen reader (SUB-111).
+   *
+   * What does not happen is the status being rewritten or dropped: the last
+   * known state is still the most useful thing on the screen, so it must stay
+   * readable and stay in place. Nothing is hidden, nothing moves, nothing is
+   * replaced by a skeleton — the display simply stops presenting itself as
+   * current truth.
    *
    * It is a boolean rather than a `ConnectionStatus` for the same reason
    * `banner` is a slot: this component renders monitors and should not grow an
@@ -429,6 +435,7 @@ export function Dashboard({
           beatWidth={beatWidth}
           columns={cardColumns}
           onOpen={onOpenMonitor}
+          stale={stale}
         />
       ) : shown === "compact" ? (
         <MonitorCompactList
@@ -438,6 +445,7 @@ export function Dashboard({
           filtered={narrowed}
           groupKey={liveGroupKey}
           onOpen={onOpenMonitor}
+          stale={stale}
         />
       ) : (
         <MonitorTable
@@ -448,6 +456,7 @@ export function Dashboard({
           groupKey={liveGroupKey}
           beatWidth={beatWidth ?? ROW_BEAT_WIDTH}
           onOpen={onOpenMonitor}
+          stale={stale}
         />
       )}
     </section>

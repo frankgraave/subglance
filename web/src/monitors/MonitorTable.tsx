@@ -39,6 +39,12 @@ export type MonitorTableProps = {
   beatWidth?: number;
   /** Opens a monitor's detail view client-side. See MonitorLink. */
   onOpen?: (id: string) => void;
+  /**
+   * True when the live stream is dead. Handed straight to every row, which
+   * puts the last known status into the past tense (DESIGN.md §6). The table
+   * itself says nothing about the connection — the dashboard's banner does.
+   */
+  stale?: boolean;
 };
 
 function Columns() {
@@ -87,6 +93,7 @@ export function MonitorTable({
   filtered = false,
   groupKey = null,
   onOpen,
+  stale = false,
 }: MonitorTableProps) {
   const total = totalCount ?? monitors.length;
 
@@ -101,6 +108,7 @@ export function MonitorTable({
         monitor={monitor}
         beatWidth={beatWidth}
         onOpen={onOpen}
+        stale={stale}
       />
     ));
 
