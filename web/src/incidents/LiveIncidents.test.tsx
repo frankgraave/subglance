@@ -180,3 +180,50 @@ describe("acknowledging, end to end", () => {
     expect(document.body.textContent).not.toContain("Monitor 1");
   });
 });
+
+describe("a monitor list that failed is not a monitor list of zero", () => {
+  it("does not announce an all-clear it cannot back up", async () => {
+    /*
+     * `useLiveMonitors` reports an empty array both while loading and after a
+     * failed fetch. Passing `monitors.length` unconditionally let the empty
+     * state say "0 monitors watched, zero confirmed outages" — an
+     * authoritative all-clear about a population we had just failed to read.
+     *
+     * The wording without a count claims nothing, which is the honest thing
+     * to say when the answer is unknown.
+     */
+    const fetchIncidents = vi.fn(async () => []);
+    const fetchHistory = vi.fn(async () => ({
+      incidents: [],
+      truncated: false,
+    }));
+    // The monitor list 500s; the incidents endpoint is fine.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 500,
+        json: async () => ({}),
+      })),
+    );
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <LiveIncidentsRoot
+        client={client}
+        fetchIncidents={fetchIncidents as unknown as typeof fetchOpenIncidents}
+        fetchHistory={
+          fetchHistory as unknown as typeof import("./api").fetchResolvedIncidents
+        }
+        ack={vi.fn(async () => {}) as unknown as typeof ackIncident}
+        createEventSource={() => new FakeSource()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(document.body.textContent).toMatch(/nothing is broken/i);
+    });
+    expect(document.body.textContent).not.toMatch(/0 monitors watched/i);
+  });
+});

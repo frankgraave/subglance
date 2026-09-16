@@ -62,17 +62,28 @@ export async function fetchOpenIncidents(
  */
 export const HISTORY_MONITOR_LIMIT = 24;
 
+/**
+ * Page size asked of the API, matching the server's own `LIMIT 50`.
+ *
+ * Named rather than inlined because the comparison that decides whether a
+ * page was capped has to use the same number the request asked for.
+ */
+export const INCIDENT_PAGE_LIMIT = 50;
+
 export type ResolvedHistory = {
   incidents: Incident[];
   /**
    * True when this history is not the whole window.
    *
-   * Two causes, one flag, because the reader's question is the same for both:
-   * can I trust this list to be complete? Either `HISTORY_MONITOR_LIMIT` cut
-   * the fan-out short, or one of the requests that did go out failed. The
-   * second used to be invisible — a failed monitor contributed an empty array
-   * and the card reported a complete history that was silently missing a
-   * monitor's outages. For a tool whose whole claim is that the screen can be
+   * Three causes, one flag, because the reader's question is the same for all
+   * of them: can I trust this list to be complete? `HISTORY_MONITOR_LIMIT` cut
+   * the fan-out short; a request that did go out failed; or a monitor filled
+   * its page and the API gave no way to ask for the rest.
+   *
+   * All three were once invisible. A failed monitor contributed an empty array
+   * and the card reported a complete history silently missing that monitor's
+   * outages, and a capped page looked exactly like a monitor that happened to
+   * have fifty. For a tool whose whole claim is that the screen can be
    * trusted, quietly short is not acceptable; visibly short is.
    */
   truncated: boolean;
@@ -96,21 +107,34 @@ export async function fetchResolvedIncidents(
   const ids = monitorIds.slice(0, HISTORY_MONITOR_LIMIT);
   const cutoff = now - days * 86_400_000;
 
-  let failed = false;
+  let incomplete = false;
 
   const pages = await Promise.all(
     ids.map(async (id) => {
       try {
         const res = await apiFetch(
-          `/api/v1/monitors/${encodeURIComponent(id)}/incidents?limit=50`,
+          `/api/v1/monitors/${encodeURIComponent(id)}/incidents?limit=${INCIDENT_PAGE_LIMIT}`,
           { signal },
         );
         if (!res.ok) {
-          failed = true;
+          incomplete = true;
           return [];
         }
         const body = (await res.json()) as { incidents?: ApiIncident[] };
-        return (body.incidents ?? []).map(incidentFromApi);
+        const page = body.incidents ?? [];
+        /*
+         * A full page means there may be more behind it.
+         *
+         * `ListIncidents` applies LIMIT 50 and returns no completeness
+         * metadata, so a monitor that filled the page may have older incidents
+         * still inside the 30-day window that this card will never see. That
+         * is indistinguishable, on screen, from a monitor that simply had 50 —
+         * unless we say so. Pagination or a total from the API is the real
+         * fix and belongs on the backend ticket; until then the card admits
+         * the ceiling rather than presenting a capped list as a full month.
+         */
+        if (page.length >= INCIDENT_PAGE_LIMIT) incomplete = true;
+        return page.map(incidentFromApi);
       } catch (err) {
         /*
          * A cancelled request is not a failure and must not be reported as
@@ -119,7 +143,7 @@ export async function fetchResolvedIncidents(
          * Rethrowing lets the query layer recognise its own cancellation.
          */
         if (err instanceof DOMException && err.name === "AbortError") throw err;
-        failed = true;
+        incomplete = true;
         return [];
       }
     }),
@@ -141,7 +165,10 @@ export async function fetchResolvedIncidents(
     )
     .sort((a, b) => (b.resolvedAt ?? 0) - (a.resolvedAt ?? 0));
 
-  return { incidents, truncated: failed || monitorIds.length > ids.length };
+  return {
+    incidents,
+    truncated: incomplete || monitorIds.length > ids.length,
+  };
 }
 
 /**

@@ -252,3 +252,52 @@ describe("a flapping monitor inside a mixed run", () => {
     expect(ids.sort()).toEqual(["a", "b", "c", "d"]);
   });
 });
+
+describe("a repeat must not bridge two unrelated monitors", () => {
+  /*
+   * Found by review, as a follow-on defect of the fix above: repeats were
+   * removed *after* the chain was built, so they still advanced it.
+   *
+   * A at 0s, B at 50s, B again at 100s, C at 150s formed one run. Dropping
+   * the repeat then produced a row claiming A, B and C "started failing
+   * together" — three monitors spanning 150 seconds inside a 60-second
+   * window. One monitor's flapping was carrying two unrelated monitors into
+   * the same sentence, which is exactly the inference the window is there to
+   * bound.
+   */
+  const list = [
+    incident("C", "3", T0 + 150_000),
+    incident("B2", "2", T0 + 100_000),
+    incident("B1", "2", T0 + 50_000),
+    incident("A", "1", T0),
+  ];
+
+  it("keeps every cluster inside the window it claims", () => {
+    for (const entry of clusterIncidents(list)) {
+      if (entry.kind !== "cluster") continue;
+      const times = entry.items
+        .map((i) => i.startedAt ?? 0)
+        .sort((a, b) => a - b);
+      const span = times[times.length - 1] - times[0];
+      expect(span).toBeLessThanOrEqual(CLUSTER_WINDOW_MS);
+      // And spanMs must be the truth about that group, not a leftover.
+      expect(entry.spanMs).toBe(span);
+    }
+  });
+
+  it("does not put A and C in one group", () => {
+    const groups = clusterIncidents(list)
+      .filter((e) => e.kind === "cluster")
+      .map((e) => (e.kind === "cluster" ? e.items.map((i) => i.id) : []));
+    for (const ids of groups) {
+      expect(ids.includes("A") && ids.includes("C")).toBe(false);
+    }
+  });
+
+  it("still loses nothing", () => {
+    const ids = clusterIncidents(list).flatMap((e) =>
+      e.kind === "cluster" ? e.items.map((i) => i.id) : [e.incident.id],
+    );
+    expect(ids.sort()).toEqual(["A", "B1", "B2", "C"]);
+  });
+});

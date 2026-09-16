@@ -336,4 +336,19 @@ describe("flapping suppresses the alerts, not the record", () => {
     const undated = bouncing(4).map((i) => ({ ...i, startedAt: null }));
     expect(describeChurn(undated, T0)).toBeNull();
   });
+
+  it("does not count incidents stamped in the future", () => {
+    /*
+     * The window was bounded at one end only: a negative age satisfies
+     * `age <= CHURN_WINDOW_MS`, so incidents timestamped ahead of the browser
+     * clock counted as "in the last hour". Clock skew between the server and
+     * the reader's machine is the ordinary way that happens, and a flapping
+     * notice is loud enough that it must not fire on a clock a minute fast.
+     */
+    const ahead = bouncing(4).map((i) => ({
+      ...i,
+      startedAt: (i.startedAt ?? 0) + 6 * 60 * 60_000,
+    }));
+    expect(describeChurn(ahead, T0)).toBeNull();
+  });
 });

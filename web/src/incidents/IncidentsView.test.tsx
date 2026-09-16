@@ -661,3 +661,81 @@ describe("the disclosure has a name, and the expanded detail keeps the tense", (
     expect(seen).not.toMatch(/when we last heard/i);
   });
 });
+
+describe("the screen does not claim more than it knows", () => {
+  it("keeps the Resolved card when history exists but cannot be grouped", () => {
+    /*
+     * `days.length === 0` used to remove the card outright, and it took the
+     * truncation notice with it. An absent card reads as "nothing happened",
+     * which is the one thing this screen may never imply by accident.
+     */
+    render(
+      <IncidentsView
+        incidents={[incident()]}
+        resolved={[
+          incident({ id: "u1", startedAt: null, resolved: true, resolvedAt: T0 }),
+        ]}
+        now={NOW}
+        names={{ "7": "api" }}
+      />,
+    );
+    expect(document.body.textContent).toMatch(/could not be placed on a day/i);
+  });
+
+  it("keeps the truncation notice even with nothing groupable", () => {
+    render(
+      <IncidentsView
+        incidents={[incident()]}
+        resolved={[]}
+        historyTruncated
+        now={NOW}
+        names={{ "7": "api" }}
+      />,
+    );
+    expect(document.body.textContent).toMatch(/first monitors only/i);
+  });
+
+  it("labels days against the injected now, not the wall clock", () => {
+    /*
+     * The component receives `now` so every duration on the screen agrees.
+     * `dayLabel` reaching for `new Date()` meant the headings could say
+     * "Today" about the real date while the rest of the view described a
+     * different one: two clocks in a single card.
+     *
+     * The fixture is *the real today* while `now` is a year later. Reading
+     * the wall clock therefore heads it "Today"; reading `now` gives a plain
+     * date. A fixture in the distant past would not distinguish the two --
+     * both produce a plain date and the assertion would pass either way.
+     */
+    const realToday = new Date();
+    realToday.setHours(12, 0, 0, 0);
+    const laterNow = realToday.getTime() + 365 * 86_400_000;
+    render(
+      <IncidentsView
+        incidents={[]}
+        resolved={[
+          incident({
+            id: "r",
+            startedAt: realToday.getTime(),
+            resolved: true,
+            resolvedAt: realToday.getTime() + 600_000,
+            durationS: 600,
+          }),
+        ]}
+        now={laterNow}
+        names={{ "7": "api" }}
+      />,
+    );
+    const head = document.querySelector(".inc-day-head")!;
+    expect(head.textContent).not.toMatch(/today|yesterday/i);
+  });
+
+  it("does not announce a monitor count it does not have", () => {
+    // "0 monitors watched, zero confirmed outages" is an all-clear about a
+    // population we failed to read. Without a count it must claim nothing.
+    render(<IncidentsView incidents={[]} resolved={[]} now={NOW} />);
+    const text = document.body.textContent ?? "";
+    expect(text).toMatch(/nothing is broken/i);
+    expect(text).not.toMatch(/0 monitors watched/i);
+  });
+});

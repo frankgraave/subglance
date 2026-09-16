@@ -141,7 +141,7 @@ export function IncidentsView({
     if (note !== null) churn.push({ monitorId, note });
   }
 
-  const days = groupByDay(resolved);
+  const days = groupByDay(resolved, now);
   const nothingAtAll =
     !loading &&
     error === null &&
@@ -281,7 +281,18 @@ export function IncidentsView({
         </Card>
       )}
 
-      {days.length === 0 ? null : (
+      {/*
+       * The card renders whenever there is history to speak about, even when
+       * nothing groups into a day.
+       *
+       * `days.length === 0` used to remove it outright, which took the
+       * truncation notice with it: an instance whose resolved incidents all
+       * failed to load, or arrived without a start date, showed no Resolved
+       * card and therefore no hint that anything was missing. Absence of a
+       * card reads as "nothing happened", and that is the one thing this
+       * screen may never imply by accident.
+       */}
+      {days.length === 0 && resolved.length === 0 && !historyTruncated ? null : (
         <Card
           title="Resolved"
           icon={<IconClock />}
@@ -306,6 +317,23 @@ export function IncidentsView({
                 Showing history for the first monitors only — the API has no
                 instance-wide endpoint for resolved incidents yet, so this card
                 is assembled one monitor at a time.
+              </p>
+            ) : null}
+            {days.length === 0 ? (
+              /*
+               * An explicit empty state, because a card with nothing in it is
+               * ambiguous: it could mean "a quiet month" or "we failed to
+               * load". The undated case is stated separately rather than
+               * silently dropped — `groupByDay` cannot place an incident with
+               * no start date on any day, and a reader is owed the count
+               * rather than a shorter list.
+               */
+              <p className="inc-notice" role="status">
+                {resolved.length === 0
+                  ? `Nothing resolved in the last ${historyDays} days.`
+                  : `${resolved.length} resolved ${
+                      resolved.length === 1 ? "incident" : "incidents"
+                    } could not be placed on a day — no start time was recorded.`}
               </p>
             ) : null}
             {days.map((day) => (
@@ -368,7 +396,7 @@ type Day = {
  * how the reader thinks about them — and every other day keeps its date, since
  * "3 days ago" stops being countable almost immediately.
  */
-function groupByDay(incidents: readonly Incident[]): Day[] {
+function groupByDay(incidents: readonly Incident[], now: number): Day[] {
   const days = new Map<string, Day>();
   const sorted = [...incidents].sort(
     (a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0),
@@ -379,7 +407,7 @@ function groupByDay(incidents: readonly Incident[]): Day[] {
     const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
     let day = days.get(key);
     if (day === undefined) {
-      day = { key, label: dayLabel(date), items: [], totalS: 0 };
+      day = { key, label: dayLabel(date, now), items: [], totalS: 0 };
       days.set(key, day);
     }
     day.items.push(incident);
@@ -388,8 +416,17 @@ function groupByDay(incidents: readonly Incident[]): Day[] {
   return [...days.values()];
 }
 
-function dayLabel(date: Date): string {
-  const today = new Date();
+/*
+ * `now` is threaded through rather than read from the wall clock.
+ *
+ * The component already receives `now` — it is how every duration on the
+ * screen stays consistent and how tests pin time. `dayLabel` reaching for
+ * `new Date()` meant a render with an injected `now` could head its groups
+ * "Today" against the real date instead of the one the rest of the screen was
+ * describing: two clocks in one view, disagreeing.
+ */
+function dayLabel(date: Date, now: number): string {
+  const today = new Date(now);
   const sameDay = (a: Date, b: Date) =>
     a.getFullYear() === b.getFullYear() &&
     a.getMonth() === b.getMonth() &&

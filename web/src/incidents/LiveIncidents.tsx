@@ -57,7 +57,12 @@ export function LiveIncidents({
   ...live
 }: LiveIncidentsProps) {
   const queryClient = useQueryClient();
-  const { monitors, status } = useLiveMonitors(live);
+  const {
+    monitors,
+    status,
+    loading: monitorsLoading,
+    error: monitorsError,
+  } = useLiveMonitors(live);
   const now = useNow();
 
   const incidents = useQuery({
@@ -161,7 +166,18 @@ export function LiveIncidents({
       resolved={history.data?.incidents ?? []}
       historyTruncated={history.data?.truncated ?? false}
       historyDays={HISTORY_DAYS}
-      monitorCount={monitors.length}
+      /*
+       * The count is only passed once the monitor list is actually known.
+       *
+       * `useLiveMonitors` reports an empty array while loading and after a
+       * failed fetch, so passing `monitors.length` unconditionally let the
+       * empty state announce "0 monitors watched, zero confirmed outages" —
+       * an authoritative all-clear about a population we had failed to read.
+       * Undefined makes the view fall back to the wording that claims nothing.
+       */
+      monitorCount={
+        monitorsLoading || monitorsError !== null ? undefined : monitors.length
+      }
       names={names}
       now={now}
       loading={incidents.isPending}

@@ -101,8 +101,8 @@ export function clusterIncidents(
   let index = 0;
   while (index < dated.length) {
     /*
-     * Walk forward while each next incident is within the window of the one
-     * before it, not of the group's first member.
+     * Walk forward while each next incident is within the window of the last
+     * *kept* one — not of the group's first member, and not of a repeat.
      *
      * Chained rather than anchored on purpose. A dependency failing takes its
      * monitors down as each one next probes, so six monitors on a 30s interval
@@ -110,51 +110,52 @@ export function clusterIncidents(
      * are more than a few seconds apart. Anchoring on the first member would
      * cut that event in half at an arbitrary point.
      *
-     * The risk of chaining is the opposite error — a slow drip of unrelated
-     * failures, each just inside the window of the last, welding into one
-     * enormous "cluster". That is what `spanMs` is for: it is stated on the
-     * row, so a cluster spanning twenty minutes announces itself as one and
-     * the reader can judge the inference rather than being handed a verdict.
+     * A repeat from a monitor already in the run is collected but does **not**
+     * advance the chain. Letting it advance built a bridge: A at 0s, B at 50s,
+     * B again at 100s and C at 150s formed one run, and after the repeat was
+     * dropped the row claimed A, B and C "started failing together" — three
+     * monitors spanning 150 seconds inside a 60-second window. One monitor's
+     * flapping was carrying two unrelated monitors into the same sentence,
+     * which is precisely the inference this window exists to bound.
+     *
+     * The remaining risk of chaining is the opposite error — a slow drip of
+     * unrelated failures, each just inside the window of the last, welding
+     * into one enormous "cluster". That is what `spanMs` is for: it is stated
+     * on the row, so a cluster spanning twenty minutes announces itself as one
+     * and the reader can judge the inference rather than being handed a
+     * verdict.
      */
-    let end = index + 1;
-    while (
-      end < dated.length &&
-      (dated[end - 1].startedAt ?? 0) - (dated[end].startedAt ?? 0) <= windowMs
-    ) {
-      end += 1;
-    }
+    const firstPerMonitor: Incident[] = [dated[index]];
+    const repeats: Incident[] = [];
+    const seen = new Set<string>([dated[index].monitorId]);
+    let lastKept = dated[index].startedAt ?? 0;
+    let cursor = index + 1;
 
-    const run = dated.slice(index, end);
+    while (
+      cursor < dated.length &&
+      lastKept - (dated[cursor].startedAt ?? 0) <= windowMs
+    ) {
+      const candidate = dated[cursor];
+      if (seen.has(candidate.monitorId)) {
+        repeats.push(candidate);
+      } else {
+        seen.add(candidate.monitorId);
+        firstPerMonitor.push(candidate);
+        lastKept = candidate.startedAt ?? 0;
+      }
+      cursor += 1;
+    }
 
     /*
      * One incident per monitor in the cluster; a monitor's repeats stay
      * singles.
      *
-     * The earlier guard only rejected a run where *every* incident was the
-     * same monitor, which let a mixed run through intact: monitor 7 failing
-     * three times in a minute alongside one failure of monitor 8 produced a
-     * four-item cluster saying "2 monitors started failing together" — and
-     * the same three incidents also drove a churn notice, so one flapping
-     * monitor was presented both as noise and as evidence of a shared cause.
-     *
-     * DESIGN.md §14 states the rule this restores: clustering is limited to
-     * distinct monitors, and repeated outages from one monitor are never
-     * clustered. Keeping the first (newest) incident per monitor is the
-     * honest representative — it is the one the reader would open — and the
-     * repeats are emitted alongside, where `describeChurn` explains them in
-     * the words that actually fit.
+     * DESIGN.md states the rule: clustering is limited to distinct monitors,
+     * and repeated outages from one monitor are never clustered. Keeping the
+     * first (newest) incident per monitor is the honest representative — it is
+     * the one the reader would open — and the repeats are emitted alongside,
+     * where `describeChurn` explains them in the words that actually fit.
      */
-    const firstPerMonitor: Incident[] = [];
-    const repeats: Incident[] = [];
-    const seen = new Set<string>();
-    for (const incident of run) {
-      if (seen.has(incident.monitorId)) repeats.push(incident);
-      else {
-        seen.add(incident.monitorId);
-        firstPerMonitor.push(incident);
-      }
-    }
-
     if (firstPerMonitor.length >= CLUSTER_MIN_MONITORS) {
       const newest = firstPerMonitor[0].startedAt ?? 0;
       const oldest = firstPerMonitor[firstPerMonitor.length - 1].startedAt ?? 0;
@@ -182,7 +183,9 @@ export function clusterIncidents(
        * and a run of one monitor's own incidents is flapping, which
        * `describeChurn` already explains in the right words.
        */
-      for (const incident of run) {
+      for (const incident of [...firstPerMonitor, ...repeats].sort(
+        (a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0),
+      )) {
         entries.push({
           kind: "single",
           key: incident.id,
@@ -191,7 +194,7 @@ export function clusterIncidents(
         });
       }
     }
-    index = end;
+    index = cursor;
   }
 
   for (const incident of undated) {

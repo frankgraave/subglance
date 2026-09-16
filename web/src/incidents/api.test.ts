@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchResolvedIncidents, HISTORY_MONITOR_LIMIT } from "./api";
+import {
+  fetchResolvedIncidents,
+  HISTORY_MONITOR_LIMIT,
+  INCIDENT_PAGE_LIMIT,
+} from "./api";
 
 /**
  * What the history card is allowed to claim.
@@ -144,5 +148,34 @@ describe("the window is about when an outage ended", () => {
 
     const history = await fetchResolvedIncidents(["1"], 30, T0);
     expect(history.incidents).toHaveLength(0);
+  });
+});
+
+describe("a full page may be hiding older incidents", () => {
+  it("reports incomplete when a monitor fills its page", () => {
+    /*
+     * ListIncidents applies LIMIT 50 and returns no completeness metadata, so
+     * a monitor with 60 outages in the window looks identical to one with
+     * exactly 50. The difference matters and only the client can flag it.
+     */
+    const full = Array.from({ length: INCIDENT_PAGE_LIMIT }, (_, i) =>
+      apiIncident({ id: i + 1 }),
+    );
+    mockFetch(() => ok(full));
+
+    return fetchResolvedIncidents(["1"], 30, T0).then((history) => {
+      expect(history.truncated).toBe(true);
+    });
+  });
+
+  it("stays complete one incident below the cap", () => {
+    const nearly = Array.from({ length: INCIDENT_PAGE_LIMIT - 1 }, (_, i) =>
+      apiIncident({ id: i + 1 }),
+    );
+    mockFetch(() => ok(nearly));
+
+    return fetchResolvedIncidents(["1"], 30, T0).then((history) => {
+      expect(history.truncated).toBe(false);
+    });
   });
 });

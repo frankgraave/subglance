@@ -448,10 +448,21 @@ export function describeChurn(
   incidents: readonly Incident[],
   now: number,
 ): string | null {
-  const recent = incidents.filter(
-    (incident) =>
-      incident.startedAt !== null && now - incident.startedAt <= CHURN_WINDOW_MS,
-  );
+  const recent = incidents.filter((incident) => {
+    if (incident.startedAt === null) return false;
+    /*
+     * Bounded at both ends, not just the old one.
+     *
+     * `now - startedAt <= CHURN_WINDOW_MS` is satisfied by any negative age,
+     * so three incidents timestamped in the future counted as "3 separate
+     * outages in the last hour" — a flapping notice about a window they are
+     * not in. Clock skew between the server and the browser is the ordinary
+     * way that happens, and this sentence is loud enough that it should not
+     * fire on a machine whose clock is a minute fast.
+     */
+    const age = now - incident.startedAt;
+    return age >= 0 && age <= CHURN_WINDOW_MS;
+  });
   if (recent.length < CHURN_THRESHOLD) return null;
   return (
     `${recent.length} separate outages in the last hour. A monitor that ` +

@@ -252,9 +252,9 @@ API=$SRC/api.ts
 
 # 21. A failed request becomes an invisible gap in the month.
 mutate "failed history request looks complete" "$API" '
-old = "  return { incidents, truncated: failed || monitorIds.length > ids.length };"
+old = "    truncated: incomplete || monitorIds.length > ids.length,"
 assert old in s
-s = s.replace(old, "  return { incidents, truncated: monitorIds.length > ids.length };")
+s = s.replace(old, "    truncated: monitorIds.length > ids.length,")
 ' $SRC/api.test.ts
 
 # 22. The window filters on when an outage began rather than when it ended,
@@ -296,5 +296,55 @@ s = s.replace(blok, "")
 s = s.replace("    >\n      {/*\n       * The collapsed line is a button",
               "    >\n" + blok.replace("        ", "      ") + "      {/*\n       * The collapsed line is a button")
 ' $SRC/IncidentsView.test.tsx
+
+# --- Third review round.
+
+# 26. A repeat advances the chain, bridging two monitors 150s apart into one
+#     cluster inside a 60s window.
+mutate "a repeat bridges unrelated monitors" "$CLUSTER" '
+old = "        lastKept = candidate.startedAt ?? 0;"
+assert old in s
+s = s.replace(old, "")
+s = s.replace("      if (seen.has(candidate.monitorId)) {\n        repeats.push(candidate);\n      } else {",
+              "      lastKept = candidate.startedAt ?? 0;\n      if (seen.has(candidate.monitorId)) {\n        repeats.push(candidate);\n      } else {")
+' $SRC/cluster.test.ts
+
+# 27. A capped page passes as a complete month.
+mutate "full page reported as complete" "$API" '
+old = "        if (page.length >= INCIDENT_PAGE_LIMIT) incomplete = true;"
+assert old in s
+s = s.replace(old, "")
+' $SRC/api.test.ts
+
+# 28. The Resolved card disappears when nothing groups, taking the truncation
+#     notice with it -- absence reads as "nothing happened".
+mutate "resolved card vanishes with its notice" "$VIEW" '
+old = "      {days.length === 0 && resolved.length === 0 && !historyTruncated ? null : ("
+assert old in s
+s = s.replace(old, "      {days.length === 0 ? null : (")
+' $SRC/IncidentsView.test.tsx
+
+# 29. Day headings read the wall clock instead of the injected now.
+mutate "day labels use the wall clock" "$VIEW" '
+old = "  const today = new Date(now);"
+assert old in s
+s = s.replace(old, "  const today = new Date();")
+' $SRC/IncidentsView.test.tsx
+
+# 30. An all-clear about a monitor population we failed to read.
+mutate "zero monitors claimed after a failed list" "$SRC/LiveIncidents.tsx" '
+old = """      monitorCount={
+        monitorsLoading || monitorsError !== null ? undefined : monitors.length
+      }"""
+assert old in s
+s = s.replace(old, "      monitorCount={monitors.length}")
+' $SRC/LiveIncidents.test.tsx
+
+# 31. Future timestamps count as "the last hour".
+mutate "churn window unbounded at the new end" "$STORY" '
+old = "    return age >= 0 && age <= CHURN_WINDOW_MS;"
+assert old in s
+s = s.replace(old, "    return age <= CHURN_WINDOW_MS;")
+' $SRC/story.test.ts
 
 report
