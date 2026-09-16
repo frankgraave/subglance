@@ -79,15 +79,21 @@ export function EditMonitorForm({
     monitor.timeoutS === null ? "" : String(monitor.timeoutS),
   );
   /*
-   * The tag field starts as text, and the text it starts as may not parse.
+   * The tag field is one `key:value` per line, and it round-trips exactly.
    *
-   * `note: "a,b"` is a legal stored tag — the API carries an object precisely
-   * so a value can contain punctuation — but rendered as `note:a,b` it reads
-   * back as two entries, the second of which has no key. Re-parsing that on
-   * every save refused every save, including a rename that never touched the
-   * tags. So the initial text is remembered, and text that is still exactly
-   * what we put there means "unchanged": the stored tags are used as they are
-   * and nothing is parsed. Only text the user actually edited has to parse.
+   * A comma-separated rendering could not: `{note: "a,b"}` came back as two
+   * entries, one of them a bare `b`, so editing any *other* tag on that
+   * monitor became impossible and a plain rename was refused outright. Lines
+   * work because the store already guarantees the one thing needed — it trims
+   * values and rejects newlines, tabs and carriage returns in them
+   * (`NormaliseTags`, internal/store/tags.go) — so a stored tag can never
+   * contain the separator and what is shown always parses back to what was
+   * stored.
+   *
+   * An earlier fix also skipped parsing when the text was untouched. That is
+   * gone: with a lossless format it can make no difference to any storable
+   * tag, and a defence no test can observe is a comment pretending to be
+   * code. The round trip is the protection, and it is tested directly.
    */
   const initialTagText = tagsToText(monitor.tags);
   const [tagText, setTagText] = useState(initialTagText);
@@ -111,7 +117,7 @@ export function EditMonitorForm({
   const nameRef = useRef<HTMLInputElement>(null);
   const intervalRef = useRef<HTMLInputElement>(null);
   const timeoutRef = useRef<HTMLInputElement>(null);
-  const tagsRef = useRef<HTMLInputElement>(null);
+  const tagsRef = useRef<HTMLTextAreaElement>(null);
 
   const reject = (
     message: string,
@@ -140,11 +146,10 @@ export function EditMonitorForm({
       );
       return;
     }
-    const tagsUntouched = tagText === initialTagText;
-    const tags = tagsUntouched ? monitor.tags : textToTags(tagText);
+    const tags = textToTags(tagText);
     if (tags === null) {
       reject(
-        "Tags are written key:value, separated by commas — for example env:prod, team:payments.",
+        "Tags are written key:value, one per line — for example env:prod.",
         "tags",
       );
       return;
@@ -175,7 +180,7 @@ export function EditMonitorForm({
       }
       if (timeout !== monitor.timeoutS) patch.timeout_s = timeout;
     }
-    if (!tagsUntouched && tagsToText(tags) !== initialTagText) patch.tags = tags;
+    if (tagsToText(tags) !== initialTagText) patch.tags = tags;
 
     if (Object.keys(patch).length === 0) {
       reject("Nothing changed, so nothing was sent.");
@@ -263,19 +268,21 @@ export function EditMonitorForm({
         <label className="add-label" htmlFor={`${ids}-tags`}>
           Tags
         </label>
-        <input
+        <textarea
           id={`${ids}-tags`}
           ref={tagsRef}
           className="add-input"
+          rows={3}
           value={tagText}
           onChange={(event) => setTagText(event.target.value)}
-          placeholder="env:prod, team:payments"
+          placeholder={"env:prod\nteam:payments"}
           {...fieldProblem("tags", problem, ids)}
         />
         <FieldError field="tags" problem={problem} ids={ids} />
         <p className="add-help">
-          Written key:value, separated by commas. Saving replaces the whole set,
-          so a tag left out here is a tag removed.
+          One key:value per line — a value may contain commas and colons.
+          Saving replaces the whole set, so a tag left out here is a tag
+          removed.
         </p>
       </div>
 

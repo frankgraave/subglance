@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   QueryClientProvider,
   useMutation,
@@ -235,15 +235,33 @@ export function LiveMonitors({
    */
   const [editing, setEditing] = useState<VersionedMonitor | null>(null);
   const [editLoadError, setEditLoadError] = useState<string | null>(null);
+  /*
+   * A token for the edit session currently on screen.
+   *
+   * Every open, close and completed save advances it, and a request only
+   * writes its result if the token has not moved since it started. Without
+   * that, pressing Edit on A and then on B before A's read lands lets A's
+   * monitor — or A's error — replace B's drawer, so the form would show one
+   * monitor's values under another monitor's title and save them with a third
+   * monitor's ETag. It is a ref rather than state because nothing renders
+   * from it, and because the check has to see the value at the moment the
+   * promise settles rather than the one captured when it started.
+   */
+  const editSession = useRef(0);
 
   const onEdit = useCallback(
     (id: string) => {
       clearError(id);
       setEditLoadError(null);
+      setEditing(null);
+      const session = (editSession.current += 1);
       void (async () => {
         try {
-          setEditing(await forEdit(id));
+          const loaded = await forEdit(id);
+          if (editSession.current !== session) return;
+          setEditing(loaded);
         } catch (error) {
+          if (editSession.current !== session) return;
           setEditLoadError(
             error instanceof Error
               ? error.message
@@ -256,6 +274,7 @@ export function LiveMonitors({
   );
 
   const closeEdit = useCallback(() => {
+    editSession.current += 1;
     setEditing(null);
     setEditLoadError(null);
   }, []);
@@ -271,14 +290,23 @@ export function LiveMonitors({
   const onSave = useCallback(
     async (id: string, body: MonitorPatch) => {
       clearError(id);
+      const session = editSession.current;
       await patch(id, body, editing?.etag ?? null);
       await queryClient.invalidateQueries({ queryKey: inventoryQueryKey });
       /*
        * A successful edit invalidates its own ETag: the write bumped
        * `updated_at`, so the stamp in hand is now stale and reusing it would
        * make the next save fail with a conflict about the user's own change.
+       *
+       * Only if this is still the session that started the save, though. The
+       * Cancel button stays live while a save is in flight, so the user can
+       * close A and open B before A lands — and closing B's drawer because A
+       * finished would throw away edits B had already typed.
        */
-      setEditing(null);
+      if (editSession.current === session) {
+        editSession.current += 1;
+        setEditing(null);
+      }
     },
     [clearError, editing, patch, queryClient],
   );

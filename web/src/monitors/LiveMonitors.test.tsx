@@ -8,9 +8,11 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import { act } from "react";
 import { QueryClient } from "@tanstack/react-query";
 import { LiveMonitorsRoot } from "./LiveMonitors";
 import { inventoryFromApi } from "./inventory";
+import type { VersionedMonitor } from "./inventoryApi";
 
 /*
  * The data owner, tested through the screen it drives.
@@ -126,6 +128,107 @@ describe("LiveMonitors", () => {
     await waitFor(() => expect(patch).toHaveBeenCalled());
     expect(patch.mock.calls[0][2]).toBe('W/"1757606400"');
     expect(forEdit).toHaveBeenCalledWith("1");
+  });
+
+  it("lets a slow edit load overwrite neither the drawer nor the error of a newer one", async () => {
+    /*
+     * Press Edit on A, then on B before A's read lands. A's monitor arriving
+     * second would put A's values under B's title and save them with a third
+     * monitor's ETag — the exact confusion the conditional PATCH exists to
+     * prevent, arriving through the front door.
+     */
+    const resolvers: Record<string, (v: VersionedMonitor) => void> = {};
+    const forEdit = vi.fn(
+      (id: string) =>
+        new Promise<VersionedMonitor>((resolve) => {
+          resolvers[id] = resolve;
+        }),
+    );
+
+    render(
+      <LiveMonitorsRoot
+        client={client()}
+        fetchMonitors={() =>
+          Promise.resolve([make(), make({ id: 2, name: "cdn" })])
+        }
+        fetchChannels={noChannels}
+        forEdit={forEdit}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit auth" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit cdn" }));
+
+    // B lands first, then A — the out-of-order case.
+    await act(async () => {
+      resolvers["2"]({ monitor: make({ id: 2, name: "cdn" }), etag: 'W/"2"' });
+    });
+    await act(async () => {
+      resolvers["1"]({ monitor: make(), etag: 'W/"1"' });
+    });
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.textContent).toMatch(/Edit cdn/);
+    expect(dialog.textContent).not.toMatch(/Edit auth/);
+  });
+
+  it("does not close a second monitor's drawer when the first save lands", async () => {
+    /*
+     * Cancel stays live while a save is in flight, so the user can close A and
+     * open B before A finishes. Closing B's drawer because A landed would
+     * throw away edits B had already typed — and the user would have no idea
+     * why the form vanished.
+     */
+    let finishSave: () => void = () => {};
+    const patch = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishSave = resolve;
+        }),
+    );
+
+    render(
+      <LiveMonitorsRoot
+        client={client()}
+        fetchMonitors={() =>
+          Promise.resolve([make(), make({ id: 2, name: "cdn" })])
+        }
+        fetchChannels={noChannels}
+        patch={patch}
+        forEdit={(id) =>
+          Promise.resolve({
+            monitor: id === "1" ? make() : make({ id: 2, name: "cdn" }),
+            etag: `W/"${id}"`,
+          })
+        }
+      />,
+    );
+
+    // Start a save on A…
+    fireEvent.click(await screen.findByRole("button", { name: "Edit auth" }));
+    const first = await screen.findByRole("dialog");
+    fireEvent.change(within(first).getByLabelText("Name"), {
+      target: { value: "auth-eu" },
+    });
+    fireEvent.click(
+      within(first).getByRole("button", { name: /save changes/i }),
+    );
+    await waitFor(() => expect(patch).toHaveBeenCalled());
+
+    // …then leave it and open B while A is still in flight.
+    fireEvent.click(within(first).getByRole("button", { name: /cancel/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit cdn" }));
+    await waitFor(() =>
+      expect(screen.getByRole("dialog").textContent).toMatch(/Edit cdn/),
+    );
+
+    await act(async () => {
+      finishSave();
+    });
+
+    // B is still open, with its own values.
+    const open = screen.getByRole("dialog");
+    expect(open.textContent).toMatch(/Edit cdn/);
   });
 
   it("says so when the monitor cannot be re-read for editing", async () => {

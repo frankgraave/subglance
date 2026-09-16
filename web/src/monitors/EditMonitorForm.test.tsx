@@ -68,6 +68,7 @@ describe("EditMonitorForm", () => {
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
     expect(onSave).not.toHaveBeenCalled();
     expect(screen.getByRole("alert").textContent).toMatch(/key:value/);
+    expect(onSave).not.toHaveBeenCalled();
   });
 
   it("shows the server's own sentence when the save is refused", async () => {
@@ -108,6 +109,52 @@ describe("EditMonitorForm", () => {
     expect(
       screen.getByText(/never received their current values/),
     ).toBeTruthy();
+  });
+
+  it("lets one tag be edited on a monitor whose other tag holds a comma", async () => {
+    /*
+     * The residual half of the round-trip bug. Remembering the initial text
+     * covers a save that never touched the tags; this covers the one that did.
+     * With a comma separator, changing `env` here would have made the
+     * untouched `note:a,b` read as a bare `b` and refused the save.
+     */
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <EditMonitorForm
+        monitor={make({ tags: { note: "a,b", env: "prod" } })}
+        onSave={onSave}
+      />,
+    );
+    const field = screen.getByLabelText("Tags") as HTMLTextAreaElement;
+    fireEvent.change(field, {
+      target: { value: field.value.replace("env:prod", "env:staging") },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    expect(onSave.mock.calls[0][0]).toEqual({
+      tags: { note: "a,b", env: "staging" },
+    });
+  });
+
+  it("does not send tags at all for an edit that never touched them", async () => {
+    /*
+     * PATCH replaces the whole tag set, so a patch that carries `tags` on
+     * every save turns any drift between what is shown and what is stored
+     * into a silent data change on an unrelated edit. The line format makes
+     * the round trip exact, so the re-parsed text equals what was stored and
+     * the field is correctly left out of the patch.
+     */
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <EditMonitorForm monitor={make({ tags: { env: "prod" } })} onSave={onSave} />,
+    );
+    fireEvent.change(screen.getByLabelText(/interval/i), {
+      target: { value: "120" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    expect(onSave.mock.calls[0][0]).toEqual({ interval_s: 120 });
+    expect(onSave.mock.calls[0][0]).not.toHaveProperty("tags");
   });
 
   it("saves a rename when a stored tag value contains a comma", async () => {

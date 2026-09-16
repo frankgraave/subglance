@@ -419,13 +419,13 @@ assert old in s
 s = s.replace(old, "          void error;")
 ' $SRC/LiveMonitors.test.tsx
 
-# 36. A stored tag value containing a comma is re-parsed on every save, so a
-#     rename that never touched the tags is refused forever.
-mutate "comma-bearing tag blocks every save" "$EDIT" '
-old = "    const tags = tagsUntouched ? monitor.tags : textToTags(tagText);"
-assert old in s
-s = s.replace(old, "    const tags = textToTags(tagText);")
-' $SRC/EditMonitorForm.test.tsx
+# 36. (retired) There used to be a mutation here for an "untouched tags are
+#     not re-parsed" shortcut in EditMonitorForm. The line-based tag format
+#     round-trips every storable tag exactly, so that shortcut could not
+#     change the outcome for any input and the mutation stayed green — which
+#     is this script working: it said the protection was imaginary, so the
+#     code went rather than the mutation. What the shortcut was standing in
+#     for is covered directly by 41 and 42 below.
 
 # 37. A field rejection is no longer attached to its field, so the message
 #     sits under the submit button with focus still on it.
@@ -445,5 +445,44 @@ old = """  return user?.role === "admin" || user?.role === "editor";"""
 assert old in s
 s = s.replace(old, """  return user?.role !== "viewer";""")
 ' src/auth/permissions.test.ts
+
+# --- Third review round.
+
+# 39. The edit session token goes, so a slow read for monitor A lands after
+#     the user opened B and puts A's values under B's title.
+mutate "stale edit load overwrites a newer one" "$LIVE" '
+old = "          if (editSession.current !== session) return;\n          setEditing(loaded);"
+assert old in s
+s = s.replace(old, "          setEditing(loaded);")
+' $SRC/LiveMonitors.test.tsx
+
+# 40. A finished save closes whatever drawer happens to be open, including a
+#     different monitor the user opened while the save was in flight.
+mutate "finished save closes someone else drawer" "$LIVE" '
+old = """      if (editSession.current === session) {
+        editSession.current += 1;
+        setEditing(null);
+      }"""
+assert old in s
+s = s.replace(old, "      setEditing(null);")
+' $SRC/LiveMonitors.test.tsx
+
+# 41. Tags go back to a comma separator, so a stored value containing a comma
+#     cannot be shown and saved as the same value.
+mutate "tag text stops round-tripping" "$TAGS" '
+old = """    .join("\\n");"""
+assert old in s
+s = s.replace(old, """    .join(", ");""")
+s = s.replace("""  for (const piece of text.split("\\n")) {""",
+              """  for (const piece of text.split(/[\\n,]/)) {""")
+' $SRC/tags.test.ts $SRC/EditMonitorForm.test.tsx
+
+# 42. The parser accepts commas as well as newlines, which looks generous and
+#     silently cuts a legal value in half.
+mutate "comma accepted as a tag separator" "$TAGS" '
+old = """  for (const piece of text.split("\\n")) {"""
+assert old in s
+s = s.replace(old, """  for (const piece of text.split(/[\\n,]/)) {""")
+' $SRC/tags.test.ts $SRC/EditMonitorForm.test.tsx
 
 report

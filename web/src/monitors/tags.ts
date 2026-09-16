@@ -8,16 +8,24 @@
  */
 
 /**
- * `{env: "prod", team: "payments"}` as `env:prod, team:payments`.
+ * `{env: "prod", team: "payments"}` as one `key:value` per line.
  *
- * `key:value` is how a person writes a tag; the API carries an object so a
- * value may contain a colon. The split below therefore takes only the first
- * colon, which keeps `url:https://example.com` intact.
+ * One per line rather than comma-separated, and that is the whole design of
+ * this pair. A comma separator cannot round-trip a value that contains a
+ * comma: `{note: "a,b", env: "prod"}` renders as `note:a,b, env:prod`, which
+ * reads back as three entries, one of which is the bare word `b`. The user
+ * then cannot edit any other tag on that monitor, because the text they never
+ * touched no longer parses.
+ *
+ * A newline can be ruled out of a value in a way a comma cannot: the store
+ * rejects control characters in tag keys and values, so a line break is never
+ * part of one and splitting on it is lossless. The colon still splits at the
+ * first occurrence only, so `url:https://example.com` survives too.
  */
 export function tagsToText(tags: Record<string, string>): string {
   return Object.entries(tags)
     .map(([key, value]) => `${key}:${value}`)
-    .join(", ");
+    .join("\n");
 }
 
 /**
@@ -27,7 +35,16 @@ export function tagsToText(tags: Record<string, string>): string {
  */
 export function textToTags(text: string): Record<string, string> | null {
   const out: Record<string, string> = {};
-  for (const piece of text.split(",")) {
+  /*
+   * Newline is the only separator, and a comma is deliberately NOT one.
+   *
+   * Accepting both looks generous and quietly destroys the guarantee the line
+   * format exists for: `note:a,b` would split again, and the value a user can
+   * see in the box would stop being the value that gets saved. A format that
+   * round-trips only sometimes is worse than one that asks for a line break,
+   * because the failure is invisible until a tag is silently cut in half.
+   */
+  for (const piece of text.split("\n")) {
     const entry = piece.trim();
     if (entry === "") continue;
     const at = entry.indexOf(":");
