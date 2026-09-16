@@ -823,6 +823,42 @@ their infrastructure. Red is reserved for things that are actually down.
 it just stops being presented as current truth. No modal, no overlay, no
 skeletons replacing real data.
 
+**The rule extends from colour to language (SUB-111).** Colour was the first
+claim to drain because it is the one we make loudest, but it is not the only
+one. A word is a stronger assertion than a hue: a lamp at 18% saturation beside
+the word **Up** still says *is up*, and it says it at exactly the moment
+somebody opened the screen because they suspect otherwise. So the status word
+goes into the past tense along with everything else — **Was up**, **Was down** —
+on every surface that states one: the detail pill, the row, the card, the
+compact line and the wall.
+
+**The tense carries the honesty, not the omission.** The obvious version of
+this is to replace the word with something like "Status stale", and it is
+wrong. During an outage the last known status is the most valuable thing left
+on the screen: "it was *down* when we lost it" and "it was *up* when we lost
+it" send someone to two different places. Throwing that away to avoid lying
+costs more than the lie did. Keep the word, take away its present tense.
+
+**On the detail view the silence becomes the loud half.** Live, the pill reads
+`Up · checked 2 min ago`: the status is the answer and the age is a footnote.
+Once the stream is dead it reads `Was up · no data for 4 min`, and the emphasis
+swaps with it — how long we have been blind is now the fact that decides what
+anyone does next. "no data for 4 min" rather than "checked 4 min ago" because
+the first describes a gap that is still growing and the second dates a reading
+that will be true forever.
+
+**This half cannot be done in CSS, and that is the whole lesson.** The drain
+above is one attribute and one stylesheet, which is why it was cheap and why it
+was incomplete: a stylesheet can dim text but cannot change what the text says.
+Worse, on every list layout the status word is `sr-only` — hidden so that 190
+healthy rows do not print the same word 190 times — so a treatment made of
+colour alone corrects the lie for people who can see the lamp fade and leaves
+it standing, word for word, for everyone using a screen reader. That is §2.3
+inverted: the text alternative, which exists precisely for the readers colour
+fails, becomes the last place the product is still lying. The tense is applied
+in the markup, in one place (`statusWord`), so both halves of the audience are
+told the same thing.
+
 **Status wall** has no chrome to put a banner in, so the whole canvas carries
 the message: a 2px warm border around the viewport and a suffix on the header
 line. A wall that cannot be trusted must not look calm — but it must not grow a

@@ -149,7 +149,20 @@ export function StatusWall({
                 className="wall-card"
                 data-status={monitor.status}
               >
-                <Led status={monitor.status} className="wall-card-led" />
+                {/*
+                 * The lamp's word goes past tense with the rest of the screen.
+                 * It is `sr-only` here — the wall is read from across a room,
+                 * and a word per card at that distance is unreadable noise —
+                 * which is exactly why the CSS treatment the border and the
+                 * header line get cannot reach it. Without this the card still
+                 * announced "Up" to a screen reader while the header beside it
+                 * said the connection was lost (SUB-111).
+                 */}
+                <Led
+                  status={monitor.status}
+                  stale={stale}
+                  className="wall-card-led"
+                />
                 <span className="wall-card-name">{monitor.name}</span>
               </li>
             ))}

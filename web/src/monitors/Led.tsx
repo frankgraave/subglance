@@ -1,5 +1,6 @@
 import type { MonitorStatus } from "./types";
-import { LED_LABELS, LED_STATE } from "./ledState";
+import { statusWord } from "./format";
+import { LED_STATE } from "./ledState";
 
 /**
  * The status lamp (DESIGN.md §3) — the product's brand mark.
@@ -29,6 +30,18 @@ export type LedProps = {
   labelled?: boolean;
   /** Visually hides the label while keeping it for assistive technology. */
   hideLabel?: boolean;
+  /**
+   * True when the live stream is dead and this reading is history.
+   *
+   * It changes the *word*, not the lamp: "Was up" instead of "Up". The lamp's
+   * own withdrawal is CSS on `[data-conn="stale"]` (see connection.css), and
+   * that is precisely why this prop has to exist — a stylesheet cannot reach
+   * the label, and on every list layout the label is `sr-only`. Draining the
+   * colour while the hidden text still says "Up" would fix the lie for sighted
+   * readers and leave it standing for everyone using a screen reader, which is
+   * the reverse of who DESIGN.md §2.3 exists for.
+   */
+  stale?: boolean;
   className?: string;
 };
 
@@ -36,9 +49,10 @@ export function Led({
   status,
   labelled = true,
   hideLabel = true,
+  stale = false,
   className,
 }: LedProps) {
-  const label = LED_LABELS[status];
+  const label = statusWord(status, stale);
   const lamp = (
     <span
       className="led"

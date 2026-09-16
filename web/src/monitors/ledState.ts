@@ -35,11 +35,14 @@ export const LED_STATE: Record<MonitorStatus, LedState> = {
   waiting: "idle",
 };
 
-/** How each status is spoken. Colour never stands alone (DESIGN.md §2.3). */
-export const LED_LABELS: Record<MonitorStatus, string> = {
-  up: "Up",
-  down: "Down",
-  pending: "Pending",
-  paused: "Paused",
-  waiting: "Waiting",
-};
+/*
+ * How each status is spoken lives in `format.ts`, not here.
+ *
+ * There used to be a `LED_LABELS` table at this spot that was a character-for-
+ * character duplicate of `STATUS_LABEL`. Duplicating a word list is cheap
+ * right up to the moment one copy grows a rule the other has not heard of —
+ * which is what happened: the stale-connection tense (DESIGN.md §6) landed in
+ * `format.ts`, and a lamp reading from its own copy would have gone on
+ * whispering "Up" to a screen reader after the stream died. `Led` calls
+ * `statusWord` instead, so a status becomes language in exactly one place.
+ */

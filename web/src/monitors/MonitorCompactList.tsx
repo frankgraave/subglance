@@ -60,11 +60,22 @@ export type MonitorCompactListProps = {
   groupKey?: string | null;
   /** Opens a monitor's detail view client-side. See MonitorLink. */
   onOpen?: (id: string) => void;
+  /**
+   * True when the live stream is dead. Forwarded to every line so its status
+   * word moves into the past tense (DESIGN.md §6). It matters most here: this
+   * layout hides the word for `up`, so without it a hundred lines would go on
+   * telling a screen reader "Up" with nothing on screen to contradict them.
+   */
+  stale?: boolean;
 };
 
-type CompactLineProps = { monitor: Monitor; onOpen?: (id: string) => void };
+type CompactLineProps = {
+  monitor: Monitor;
+  onOpen?: (id: string) => void;
+  stale?: boolean;
+};
 
-function CompactLineImpl({ monitor, onOpen }: CompactLineProps) {
+function CompactLineImpl({ monitor, onOpen, stale = false }: CompactLineProps) {
   const { name, status, latencyMs, uptime24h, error } = monitor;
   return (
     <PanelRow
@@ -75,6 +86,7 @@ function CompactLineImpl({ monitor, onOpen }: CompactLineProps) {
         <Led
           status={status}
           hideLabel={status === "up"}
+          stale={stale}
           className="mon-line-led"
         />
       }
@@ -116,6 +128,8 @@ const CompactLine = memo(CompactLineImpl, (prev, next) => {
   const b = next.monitor;
   return (
     prev.onOpen === next.onOpen &&
+    // See MonitorRow: it changes the word, so it has to defeat the memo.
+    prev.stale === next.stale &&
     a.id === b.id &&
     a.name === b.name &&
     a.status === b.status &&
@@ -136,6 +150,7 @@ export function MonitorCompactList({
   filtered = false,
   groupKey = null,
   onOpen,
+  stale = false,
 }: MonitorCompactListProps) {
   const total = totalCount ?? monitors.length;
   if (monitors.length === 0) {
@@ -144,7 +159,12 @@ export function MonitorCompactList({
 
   const lines = (list: readonly Monitor[]) =>
     list.map((monitor) => (
-      <CompactLine key={monitor.id} monitor={monitor} onOpen={onOpen} />
+      <CompactLine
+        key={monitor.id}
+        monitor={monitor}
+        onOpen={onOpen}
+        stale={stale}
+      />
     ));
 
   if (groupKey !== null) {

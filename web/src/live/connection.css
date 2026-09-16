@@ -119,3 +119,23 @@
   color: var(--ink-3);
   transition: color 600ms var(--ease);
 }
+
+/*
+ * The status word itself is not treated here, and that is the point (SUB-111).
+ *
+ * The rule above drains the screen's *claims*, and for a long time the one
+ * claim it could not reach was the loudest: the word. A stylesheet can dim
+ * text but cannot change what it says, and a dimmed "Up" is still an assertion
+ * in the present tense — so the fix is in the markup, where "Up" becomes "Was
+ * up" (see `format.ts`, `statusWord`). Every list layout hides that word as
+ * `sr-only`, which makes the point twice: a CSS-only treatment would have
+ * corrected the lie for people who can see the colour drain and left it
+ * standing for everyone using a screen reader.
+ *
+ * The matching change of *emphasis* is in the markup too. `MonitorDetail`
+ * drops the `<strong>` around a stale status, so the word falls back to the
+ * pill's own `--ink-3` from the rule above and stops out-shouting the silence
+ * beside it. An element rather than a class because the element is the
+ * argument: `<strong>` means "this matters now", and a reading we can no
+ * longer vouch for does not.
+ */
