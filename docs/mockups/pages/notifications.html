@@ -163,7 +163,7 @@
               <div class="row-sub">5 monitors · last fired 2h ago · delivered in 410ms</div>
             </div>
             <span class="chip chip--up">✓ Delivered</span>
-            <span class="testout helper" data-testout></span>
+            <span class="testout helper" data-testout role="status" aria-live="polite"></span>
             <button class="btn btn--sm" type="button" data-test="email-ops">Send test</button>
             <button class="btn btn--sm" type="button" data-edit="email-ops">Edit</button>
           </div>
@@ -179,7 +179,7 @@
               <div class="row-sub">3 monitors · last fired 2h ago · webhook ••••/B07F4 · delivered in 180ms</div>
             </div>
             <span class="chip chip--up">✓ Delivered</span>
-            <span class="testout helper" data-testout></span>
+            <span class="testout helper" data-testout role="status" aria-live="polite"></span>
             <button class="btn btn--sm" type="button" data-test="slack-alerts">Send test</button>
             <button class="btn btn--sm" type="button" data-edit="slack-alerts">Edit</button>
           </div>
@@ -198,7 +198,7 @@
               <div class="row-sub">2 monitors · failing since 3d ago · 11 failed deliveries · 401 unauthorized: bot token revoked</div>
             </div>
             <span class="chip chip--down">✗ Failed ×11</span>
-            <span class="testout helper" data-testout></span>
+            <span class="testout helper" data-testout role="status" aria-live="polite"></span>
             <button class="btn btn--sm" type="button" data-test="telegram-oncall">Send test</button>
             <button class="btn btn--sm" type="button" data-edit="telegram-oncall">Fix token</button>
           </div>
@@ -216,7 +216,7 @@
               <div class="row-sub">1 monitor · created 12d ago · POST · signed with secret ••••a91f</div>
             </div>
             <span class="chip chip--meta">Never fired · untested</span>
-            <span class="testout helper" data-testout></span>
+            <span class="testout helper" data-testout role="status" aria-live="polite"></span>
             <button class="btn btn--sm" type="button" data-test="webhook-gateway">Send test</button>
             <button class="btn btn--sm" type="button" data-edit="webhook-gateway">Edit</button>
           </div>
@@ -314,7 +314,7 @@
             <div class="field">
               <label for="f-discord">Incoming webhook URL</label>
               <div style="display:flex; gap:var(--space-2)">
-                <input class="input mono" id="f-discord" type="text" placeholder="discord.com/api/webhooks/…" data-secret>
+                <input class="input mono" id="f-discord" type="password" placeholder="discord.com/api/webhooks/…" data-secret>
                 <button class="btn" type="button" data-replace="f-discord">Replace</button>
               </div>
             </div>
@@ -405,7 +405,7 @@
                 <div class="row-name">Monitors tagged <span class="chip">production</span> → Slack #alerts</div>
                 <div class="row-sub">rule 1 · matches 3 monitors</div>
               </div>
-              <button class="sw" type="button" aria-pressed="true" data-rule="r1" data-tag="production" data-ch="Slack #alerts">
+              <button class="sw" type="button" aria-label="Rule: tag production routes to Slack #alerts" aria-pressed="true" data-rule="r1" data-tag="production" data-ch="Slack #alerts">
                 <i aria-hidden="true"></i><span data-swlabel>Enabled</span>
               </button>
             </div>
@@ -415,7 +415,7 @@
                 <div class="row-name">Monitors tagged <span class="chip">critical</span> → Email ops@acme.example</div>
                 <div class="row-sub">rule 2 · matches 2 monitors</div>
               </div>
-              <button class="sw" type="button" aria-pressed="true" data-rule="r2" data-tag="critical" data-ch="Email ops@acme.example">
+              <button class="sw" type="button" aria-label="Rule: tag critical routes to Email ops@acme.example" aria-pressed="true" data-rule="r2" data-tag="critical" data-ch="Email ops@acme.example">
                 <i aria-hidden="true"></i><span data-swlabel>Enabled</span>
               </button>
             </div>
@@ -425,7 +425,7 @@
                 <div class="row-name">Monitors tagged <span class="chip">batch</span> → Webhook ops-gateway</div>
                 <div class="row-sub">rule 3 · matches 1 monitor</div>
               </div>
-              <button class="sw" type="button" aria-pressed="false" data-rule="r3" data-tag="batch" data-ch="Webhook ops-gateway">
+              <button class="sw" type="button" aria-label="Rule: tag batch routes to Webhook ops-gateway" aria-pressed="false" data-rule="r3" data-tag="batch" data-ch="Webhook ops-gateway">
                 <i aria-hidden="true"></i><span data-swlabel>Disabled</span>
               </button>
             </div>
@@ -435,7 +435,7 @@
                 <div class="row-name">Everything else → Email ops@acme.example</div>
                 <div class="row-sub">default channel · catch-all, evaluated last</div>
               </div>
-              <button class="sw" type="button" aria-pressed="true" data-rule="default" data-tag="*" data-ch="Email ops@acme.example">
+              <button class="sw" type="button" aria-label="Default rule: everything else routes to Email ops@acme.example" aria-pressed="true" data-rule="default" data-tag="*" data-ch="Email ops@acme.example">
                 <i aria-hidden="true"></i><span data-swlabel>Enabled</span>
               </button>
             </div>
@@ -521,14 +521,14 @@
                   <div class="row-name">Notify on recovery</div>
                   <div class="row-sub">one message when the incident closes</div>
                 </div>
-                <button class="sw" type="button" aria-pressed="true"><i aria-hidden="true"></i><span data-swlabel>Enabled</span></button>
+                <button class="sw" type="button" aria-label="Quiet hours" aria-pressed="true"><i aria-hidden="true"></i><span data-swlabel aria-hidden="true">Enabled</span></button>
               </div>
               <div class="row">
                 <div class="row-main">
                   <div class="row-name">Re-notify while open</div>
                   <div class="row-sub" id="renotify-sub">every 30 minutes, up to 4 times</div>
                 </div>
-                <button class="sw" type="button" aria-pressed="false" id="renotify-sw"><i aria-hidden="true"></i><span data-swlabel>Disabled</span></button>
+                <button class="sw" type="button" aria-label="Re-notify while an incident stays open" aria-pressed="false" id="renotify-sw"><i aria-hidden="true"></i><span data-swlabel aria-hidden="true">Disabled</span></button>
               </div>
             </div>
           </div>
@@ -812,11 +812,18 @@
       var input = document.getElementById(b.getAttribute("data-replace"));
       if (b.textContent === "Replace") {
         input.value = "";
+        /*
+         * password while it accepts input, text while it shows the mask.
+         * The mask and fingerprint are meant to be read; a real secret pasted
+         * during a review is not, and this file gets opened on shared screens.
+         */
+        input.type = "password";
         input.readOnly = false;
         input.placeholder = "Paste the new value — it is stored write-only";
         input.focus();
         b.textContent = "Keep current";
       } else {
+        input.type = "text";
         input.value = "••••••••••••••••••  unchanged";
         input.readOnly = true;
         b.textContent = "Replace";

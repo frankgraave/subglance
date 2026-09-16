@@ -192,7 +192,7 @@ details.adv > .fieldset { padding-top: var(--space-3); }
 
         <!-- Toolbar: search hard left, filters hard right. -->
         <div class="toolbar" id="toolbar">
-          <input class="input" type="search" id="q" placeholder="Search name, target, tag" oninput="filterRows()">
+          <input class="input" type="search" id="q" aria-label="Search monitors by name, target or tag" placeholder="Search name, target, tag" oninput="filterRows()">
           <div class="toolbar-right">
             <select class="input" id="ftype" aria-label="Filter by check type" onchange="filterRows()" style="width:auto">
               <option value="">All types</option>
@@ -225,7 +225,7 @@ details.adv > .fieldset { padding-top: var(--space-3); }
         </div>
 
         <div class="checkline">
-          <input type="checkbox" id="selall" onchange="toggleAll(this.checked)">
+          <input type="checkbox" id="selall" aria-label="Select all monitors" onchange="toggleAll(this.checked)">
           <label for="selall">Select all</label>
           <span class="helper" style="margin-left:auto">Sorted by name · <span class="mono">GET /api/v1/monitors</span></span>
         </div>
@@ -236,8 +236,8 @@ details.adv > .fieldset { padding-top: var(--space-3); }
                Both are single-line: an inventory that reflows to two lines on
                one row stops being scannable. -->
           <div class="row" data-type="http" data-paused="false" data-status="up">
-            <input type="checkbox" onchange="onSelect(this)">
-            <span class="led led--sm" data-state="up"></span>
+            <input type="checkbox" aria-label="Select checkout-api-eu-west-1.internal.acme-corporation.example" onchange="onSelect(this)">
+            <span class="led led--sm" data-state="up"></span><span class="sr-only" data-statusword>Up</span>
             <div class="row-main">
               <div class="row-name">checkout-api-eu-west-1.internal.acme-corporation.example</div>
               <div class="row-sub">GET https://checkout-api-eu-west-1.internal.acme-corporation.example/healthz</div>
@@ -257,8 +257,8 @@ details.adv > .fieldset { padding-top: var(--space-3); }
           </div>
 
           <div class="row" data-type="http" data-paused="false" data-status="down">
-            <input type="checkbox" onchange="onSelect(this)">
-            <span class="led led--sm" data-state="down"></span>
+            <input type="checkbox" aria-label="Select auth.example.com" onchange="onSelect(this)">
+            <span class="led led--sm" data-state="down"></span><span class="sr-only" data-statusword>Down</span>
             <div class="row-main">
               <div class="row-name">auth.example.com</div>
               <div class="row-sub">GET https://auth.example.com/login · keyword must_contain "Sign in"</div>
@@ -278,8 +278,8 @@ details.adv > .fieldset { padding-top: var(--space-3); }
           </div>
 
           <div class="row" data-type="http" data-paused="false" data-status="up">
-            <input type="checkbox" onchange="onSelect(this)">
-            <span class="led led--sm" data-state="up"></span>
+            <input type="checkbox" aria-label="Select cdn.example.com" onchange="onSelect(this)">
+            <span class="led led--sm" data-state="up"></span><span class="sr-only" data-statusword>Up</span>
             <div class="row-main">
               <div class="row-name">cdn.example.com</div>
               <div class="row-sub">HEAD https://cdn.example.com/assets/app.css · expects 200</div>
@@ -301,8 +301,8 @@ details.adv > .fieldset { padding-top: var(--space-3); }
           </div>
 
           <div class="row" data-type="ssl" data-paused="false" data-status="warn">
-            <input type="checkbox" onchange="onSelect(this)">
-            <span class="led led--sm" data-state="warn"></span>
+            <input type="checkbox" aria-label="Select status.acme.studio" onchange="onSelect(this)">
+            <span class="led led--sm" data-state="warn"></span><span class="sr-only" data-statusword>Warning</span>
             <div class="row-main">
               <div class="row-name">status.acme.studio</div>
               <div class="row-sub">TLS status.acme.studio:443 · warn 14 days before expiry</div>
@@ -322,8 +322,8 @@ details.adv > .fieldset { padding-top: var(--space-3); }
           </div>
 
           <div class="row" data-type="tcp" data-paused="false" data-status="up">
-            <input type="checkbox" onchange="onSelect(this)">
-            <span class="led led--sm" data-state="up"></span>
+            <input type="checkbox" aria-label="Select db.internal.example" onchange="onSelect(this)">
+            <span class="led led--sm" data-state="up"></span><span class="sr-only" data-statusword>Up</span>
             <div class="row-main">
               <div class="row-name">db.internal.example</div>
               <div class="row-sub">TCP db.internal.example:5432</div>
@@ -345,8 +345,8 @@ details.adv > .fieldset { padding-top: var(--space-3); }
           <!-- Push monitors invert the direction of the check, so the row says
                "expects a ping" where the others say what they call. -->
           <div class="row" data-type="push" data-paused="false" data-status="up">
-            <input type="checkbox" onchange="onSelect(this)">
-            <span class="led led--sm" data-state="up"></span>
+            <input type="checkbox" aria-label="Select nightly-database-backup-verification" onchange="onSelect(this)">
+            <span class="led led--sm" data-state="up"></span><span class="sr-only" data-statusword>Up</span>
             <div class="row-main">
               <div class="row-name">nightly-database-backup-verification</div>
               <div class="row-sub">PUSH expects a ping every 24h · /api/push/hk3f…9qz1</div>
@@ -369,8 +369,8 @@ details.adv > .fieldset { padding-top: var(--space-3); }
                signal, and "paused" gets no status colour because it is not a
                health state — it is a configuration state. -->
           <div class="row" data-type="ping" data-paused="true" data-status="idle">
-            <input type="checkbox" onchange="onSelect(this)">
-            <span class="led led--sm" data-state="idle"></span>
+            <input type="checkbox" aria-label="Select harbor-goods.app" onchange="onSelect(this)">
+            <span class="led led--sm" data-state="idle"></span><span class="sr-only" data-statusword>Paused</span>
             <div class="row-main">
               <div class="row-name">harbor-goods.app <span class="chip chip--meta">PAUSED</span></div>
               <div class="row-sub">PING harbor-goods.app · paused 3 days ago by operator@example.com</div>
@@ -462,7 +462,7 @@ details.adv > .fieldset { padding-top: var(--space-3); }
           <p class="prose">SubGlance checks a URL, a host or a port on a schedule and tells you when
             it stops answering. Paste a URL and you will have a working monitor in under a minute.</p>
           <div style="display:flex;gap:var(--space-2);align-items:center;margin-top:var(--space-2);flex-wrap:wrap;justify-content:center;max-width:100%">
-            <input class="input" style="width:22rem;max-width:100%" placeholder="https://example.com/healthz" onfocus="openDrawer()">
+            <input class="input" style="width:22rem;max-width:100%" aria-label="URL of the first thing to watch" placeholder="https://example.com/healthz" onfocus="openDrawer()">
             <button class="btn btn--primary" onclick="openDrawer()">Add your first monitor</button>
           </div>
           <span class="helper">Or import from an existing Uptime Kuma export.</span>
@@ -692,9 +692,38 @@ function bulk(action) {
 
 /* ── pause / resume ───────────────────────────────────────────────────── */
 function setPaused(row, paused) {
+  /*
+   * Pausing remembers the health it interrupted; resuming restores it rather
+   * than claiming "up".
+   *
+   * Asserting up on resume is the lie this whole product is built against: a
+   * monitor paused while down would come back green and stay green until the
+   * next check happened to run, which is exactly the window an operator
+   * resumes in to see whether it recovered. We do not know the state yet, and
+   * the honest answer to "how is it" right after resuming is the last thing we
+   * actually observed, not an optimistic guess.
+   */
+  var status;
+  if (paused) {
+    row.dataset.prevStatus = row.getAttribute("data-status");
+    status = "idle";
+  } else {
+    status = row.dataset.prevStatus || "idle";
+    delete row.dataset.prevStatus;
+  }
   row.setAttribute("data-paused", paused ? "true" : "false");
-  row.setAttribute("data-status", paused ? "idle" : "up");
-  row.querySelector(".led").setAttribute("data-state", paused ? "idle" : "up");
+  row.setAttribute("data-status", status);
+  row.querySelector(".led").setAttribute("data-state", paused ? "idle" : status);
+  /*
+   * The lamp is colour; this is the same fact in words, for everyone the
+   * colour never reaches. It has to move with the state or the two disagree,
+   * and the one a screen reader hears is the one that would be wrong.
+   */
+  var word = row.querySelector("[data-statusword]");
+  if (word) {
+    var WORDS = { up: "Up", down: "Down", warn: "Warning", idle: "Paused" };
+    word.textContent = WORDS[paused ? "idle" : status] || "Unknown";
+  }
   var name = row.querySelector(".row-name");
   var chip = name.querySelector(".chip");
   if (paused && !chip) {

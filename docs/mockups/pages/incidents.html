@@ -170,7 +170,7 @@
             <span class="value col-time">14:02</span>
             <span class="value col-dur">41m</span>
             <span class="col-ack"><span class="chip chip--meta">unacked</span></span>
-            <span class="col-act"><button class="btn btn--sm" type="button" data-ack>Acknowledge</button></span>
+            <span class="col-act"><button class="btn btn--sm" type="button" data-ack>Acknowledge &amp; mute</button></span>
 
             <div class="inc-detail">
               <div class="grid2">
@@ -203,7 +203,7 @@
             <span class="value col-time">13:48</span>
             <span class="value col-dur">55m</span>
             <span class="col-ack"><span class="chip chip--meta">unacked</span></span>
-            <span class="col-act"><button class="btn btn--sm" type="button" data-ack>Acknowledge</button></span>
+            <span class="col-act"><button class="btn btn--sm" type="button" data-ack>Acknowledge &amp; mute</button></span>
 
             <div class="inc-detail">
               <div class="grid2">
@@ -244,8 +244,8 @@ x-envoy-upstream-service-time: 30001
             <span class="col-kind"><span class="chip chip--warn">cert_expiry</span></span>
             <span class="value col-time">09:00</span>
             <span class="value col-dur">5h 43m</span>
-            <span class="col-ack"><span class="chip chip--up">acked · frank</span></span>
-            <span class="col-act"><button class="btn btn--sm" type="button" data-ack disabled>Acknowledged</button></span>
+            <span class="col-ack"><span class="chip chip--up">acked · frank · reminders muted</span></span>
+            <span class="col-act"><button class="btn btn--sm" type="button" data-ack disabled>Acknowledged · reminders muted</button></span>
 
             <div class="inc-detail">
               <div class="grid2">
@@ -337,7 +337,7 @@ x-envoy-upstream-service-time: 30001
              heading is a .label because it sits inside the card as a divider. -->
         <div class="stack" id="pastStack">
 
-          <div class="day-head" data-day><span class="label">Today · 15 Sep</span><span class="helper">2 incidents · 24m total</span></div>
+          <div class="day-head" data-day><span class="label">15 Sep 2026</span><span class="helper">2 incidents · 24m total</span></div>
 
           <article class="row inc inc--past" data-scope="resolved" data-mon="auth" data-open="false" tabindex="0">
             <span class="led led--sm" data-state="up"></span>
@@ -409,7 +409,7 @@ content-type: text/html; charset=utf-8
             </div>
           </article>
 
-          <div class="day-head" data-day><span class="label">Yesterday · 14 Sep</span><span class="helper">2 incidents · 1h 07m total</span></div>
+          <div class="day-head" data-day><span class="label">14 Sep 2026</span><span class="helper">2 incidents · 1h 07m total</span></div>
 
           <article class="row inc inc--past" data-scope="resolved" data-mon="backup" data-open="false" tabindex="0">
             <span class="led led--sm" data-state="up"></span>
@@ -477,7 +477,7 @@ content-type: text/html; charset=utf-8
             </div>
           </article>
 
-          <div class="day-head" data-day><span class="label">12 Sep</span><span class="helper">1 incident · 3m total</span></div>
+          <div class="day-head" data-day><span class="label">12 Sep 2026</span><span class="helper">1 incident · 3m total</span></div>
 
           <article class="row inc inc--past" data-scope="resolved" data-mon="harbor" data-open="false" tabindex="0">
             <span class="led led--sm" data-state="up"></span>
@@ -599,10 +599,25 @@ content-type: text/html; charset=utf-8
       h.hidden = !any;
     });
 
-    openEmpty.hidden = shownOpen > 0;
-    openStack.hidden = shownOpen === 0;
-    pastEmpty.hidden = shownPast > 0;
-    pastStack.hidden = shownPast === 0;
+    /*
+     * An empty state is a claim, and it must only be made about a section the
+     * filter is actually showing. Selecting "Resolved" hides every open row,
+     * and an unconditional `shownOpen === 0` would then print "Everything is
+     * up" over three live outages — the filter's own doing, reported as the
+     * state of the world. So a section the scope excludes is hidden whole,
+     * headline and empty state together, rather than being shown empty.
+     *
+     * The conditions mirror the two row loops above: whatever decides that a
+     * row may show has to decide that its section may show, or the two drift
+     * apart the first time a scope is added.
+     */
+    var showOpen = scope === "open" || scope === "all";
+    var showPast = scope === "resolved" || scope === "all";
+
+    openEmpty.hidden = !showOpen || shownOpen > 0;
+    openStack.hidden = !showOpen || shownOpen === 0;
+    pastEmpty.hidden = !showPast || shownPast > 0;
+    pastStack.hidden = !showPast || shownPast === 0;
 
     var total = rows(openStack).length;
     var acked = rows(openStack).filter(function (r) { return r.dataset.acked === "true"; }).length;
@@ -630,9 +645,9 @@ content-type: text/html; charset=utf-8
       var row = ackBtn.closest(".inc");
       row.dataset.acked = "true";
       row.querySelector(".col-ack").innerHTML =
-        '<span class="chip chip--up">acked · you</span>';
+        '<span class="chip chip--up">acked · you · reminders muted</span>';
       ackBtn.disabled = true;
-            ackBtn.textContent = "Acknowledged";
+            ackBtn.textContent = "Acknowledged · reminders muted";
       apply();
       return;
     }
@@ -678,7 +693,7 @@ content-type: text/html; charset=utf-8
       '<span class="value col-time">' + hh + '</span>' +
       '<span class="value col-dur" data-zero="true">0m</span>' +
       '<span class="col-ack"><span class="chip chip--meta">unacked</span></span>' +
-      '<span class="col-act"><button class="btn btn--sm" type="button" data-ack>Acknowledge</button></span>' +
+      '<span class="col-act"><button class="btn btn--sm" type="button" data-ack>Acknowledge &amp; mute</button></span>' +
       '<div class="inc-detail"><div class="grid2">' +
         '<div><div class="label">Timeline</div><div class="tl" style="margin-top:var(--space-2)">' +
           '<div class="tl-step"><span class="value">' + hh + '</span><span>First failure observed</span></div>' +

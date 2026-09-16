@@ -646,7 +646,7 @@
                   <div class="row-sub">last probe 2 s ago · 200 OK · scheduler, database, notifier all reporting</div>
                 </div>
                 <span class="chip chip--up">healthy</span>
-                <a class="btn btn--sm" href="/api/v1/health">Open /api/v1/health</a>
+                <code class="mono-path">GET /api/v1/health</code>
               </div>
               <div class="row">
                 <span class="led led--sm" aria-hidden="true"></span>
@@ -655,7 +655,7 @@
                   <div class="row-sub">used by your reverse proxy or orchestrator to decide whether to send traffic</div>
                 </div>
                 <span class="chip chip--up">ready</span>
-                <a class="btn btn--sm" href="/api/v1/ready">Open /api/v1/ready</a>
+                <code class="mono-path">GET /api/v1/ready</code>
               </div>
             </div>
 
@@ -758,7 +758,13 @@
   var jumps = Array.prototype.slice.call(document.querySelectorAll("[data-jump]"));
   function markCurrent(el) {
     jumps.forEach(function (a) { a.removeAttribute("aria-current"); });
-    el.setAttribute("aria-current", "page");
+    /*
+     * "true", not "page". The shell nav above uses aria-current="page" and
+     * means it: Settings is the page you are on. This rail points at sections
+     * inside that page, so claiming "page" here tells a screen reader there
+     * are two current pages and neither claim can be trusted.
+     */
+    el.setAttribute("aria-current", "true");
   }
   jumps.forEach(function (a) {
     a.addEventListener("click", function (e) {
@@ -813,6 +819,21 @@
     flash("Theme saved");
   });
   paintThemeSeg();
+
+  /*
+   * The topbar toggle writes the same key this control reads, so after using
+   * it the Appearance control would keep its old pressed state and report a
+   * choice the page is no longer showing — a settings screen lying about its
+   * own setting. Wrapping the shared toggle keeps the two in step rather than
+   * duplicating the logic, which would only drift the next time one changes.
+   */
+  if (typeof window.__toggleTheme === "function") {
+    var sharedToggle = window.__toggleTheme;
+    window.__toggleTheme = function () {
+      sharedToggle();
+      paintThemeSeg();
+    };
+  }
 
   /* ---------- plain segmented controls (layout, density, motion) ---------- */
   document.querySelectorAll(".segmented").forEach(function (group) {
