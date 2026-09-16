@@ -211,3 +211,44 @@ describe("the wording states an inference, not a finding", () => {
     expect(describeCluster(cluster)).toMatch(/open the group/i);
   });
 });
+
+describe("a flapping monitor inside a mixed run", () => {
+  /*
+   * Found by review, reproduced before it was fixed. The old guard only
+   * rejected a run where *every* incident was the same monitor, so a mixed
+   * run kept the repeats: monitor 7 failing three times inside a minute
+   * beside one failure of monitor 8 produced a four-item cluster announcing
+   * "2 monitors started failing together".
+   *
+   * Two lies in one row. The count disagreed with the contents, and one
+   * flapping monitor was offered as evidence of a shared cause while
+   * `describeChurn` was simultaneously explaining it as churn — the screen
+   * telling two incompatible stories about the same three incidents.
+   */
+  const base = T0;
+  const list = [
+    incident("a", "7", base),
+    incident("b", "7", base - 20_000),
+    incident("c", "8", base - 30_000),
+    incident("d", "7", base - 40_000),
+  ];
+
+  it("holds one incident per monitor, so the count matches the contents", () => {
+    const clusters = clusterIncidents(list).filter((e) => e.kind === "cluster");
+    for (const group of clusters) {
+      if (group.kind !== "cluster") continue;
+      const monitors = group.items.map((i) => i.monitorId);
+      expect(new Set(monitors).size).toBe(monitors.length);
+      expect(group.monitorCount).toBe(group.items.length);
+    }
+  });
+
+  it("emits the repeats as singles rather than dropping them", () => {
+    const entries = clusterIncidents(list);
+    const ids = entries.flatMap((e) =>
+      e.kind === "cluster" ? e.items.map((i) => i.id) : [e.incident.id],
+    );
+    // Nothing invented, nothing lost: the same four incidents come back.
+    expect(ids.sort()).toEqual(["a", "b", "c", "d"]);
+  });
+});

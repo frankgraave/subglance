@@ -64,7 +64,17 @@ export const HISTORY_MONITOR_LIMIT = 24;
 
 export type ResolvedHistory = {
   incidents: Incident[];
-  /** True when `HISTORY_MONITOR_LIMIT` cut the fan-out short. */
+  /**
+   * True when this history is not the whole window.
+   *
+   * Two causes, one flag, because the reader's question is the same for both:
+   * can I trust this list to be complete? Either `HISTORY_MONITOR_LIMIT` cut
+   * the fan-out short, or one of the requests that did go out failed. The
+   * second used to be invisible — a failed monitor contributed an empty array
+   * and the card reported a complete history that was silently missing a
+   * monitor's outages. For a tool whose whole claim is that the screen can be
+   * trusted, quietly short is not acceptable; visibly short is.
+   */
   truncated: boolean;
 };
 
@@ -74,7 +84,8 @@ export type ResolvedHistory = {
  * One request per monitor, in parallel, then filtered to the window and sorted
  * newest first. A monitor whose request fails contributes nothing rather than
  * failing the whole card: a history panel that disappears because one monitor
- * of twelve 500'd is worse than one that is quietly short.
+ * of twelve 500'd is worse than one that is quietly short — but it must say
+ * so, which is what `truncated` carries.
  */
 export async function fetchResolvedIncidents(
   monitorIds: readonly string[],
@@ -85,6 +96,8 @@ export async function fetchResolvedIncidents(
   const ids = monitorIds.slice(0, HISTORY_MONITOR_LIMIT);
   const cutoff = now - days * 86_400_000;
 
+  let failed = false;
+
   const pages = await Promise.all(
     ids.map(async (id) => {
       try {
@@ -92,10 +105,21 @@ export async function fetchResolvedIncidents(
           `/api/v1/monitors/${encodeURIComponent(id)}/incidents?limit=50`,
           { signal },
         );
-        if (!res.ok) return [];
+        if (!res.ok) {
+          failed = true;
+          return [];
+        }
         const body = (await res.json()) as { incidents?: ApiIncident[] };
         return (body.incidents ?? []).map(incidentFromApi);
-      } catch {
+      } catch (err) {
+        /*
+         * A cancelled request is not a failure and must not be reported as
+         * one: React Query aborts the previous fetch on every refetch, so
+         * swallowing an abort here would mark almost every load incomplete.
+         * Rethrowing lets the query layer recognise its own cancellation.
+         */
+        if (err instanceof DOMException && err.name === "AbortError") throw err;
+        failed = true;
         return [];
       }
     }),
@@ -105,13 +129,19 @@ export async function fetchResolvedIncidents(
     .flat()
     .filter(
       (incident) =>
+        /*
+         * Filtered on `resolvedAt`, not `startedAt`. This list answers "what
+         * recovered recently", so an outage that began five weeks ago and
+         * came back yesterday belongs in it — filtering on the start date
+         * dropped exactly the long outages a reader most wants to find.
+         */
         incident.resolved &&
-        incident.startedAt !== null &&
-        incident.startedAt >= cutoff,
+        incident.resolvedAt !== null &&
+        incident.resolvedAt >= cutoff,
     )
-    .sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0));
+    .sort((a, b) => (b.resolvedAt ?? 0) - (a.resolvedAt ?? 0));
 
-  return { incidents, truncated: monitorIds.length > ids.length };
+  return { incidents, truncated: failed || monitorIds.length > ids.length };
 }
 
 /**

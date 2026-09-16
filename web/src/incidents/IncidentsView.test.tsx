@@ -289,7 +289,7 @@ describe("the acknowledge control", () => {
     // The most important requirement of the ticket, asserted on the state the
     // row reports *and* on the words beside the now-disabled control.
     row({ acked: true, ackedAt: T0 + 60_000 }, { onAck: () => {} });
-    const button = screen.getByRole("button", { name: /muted/i });
+    const button = screen.getByRole("button", { name: /^Repeat alerts muted$/ });
     expect(button.hasAttribute("disabled")).toBe(true);
     expect(document.querySelector(".inc-row")?.getAttribute("data-state")).toBe(
       "acked",
@@ -576,5 +576,58 @@ describe("flapping is visible as a pattern, not just as rows", () => {
       <IncidentsView incidents={[incident()]} now={T0} names={{ "7": "api" }} />,
     );
     expect(document.querySelector(".inc-churn")).toBeNull();
+  });
+});
+
+describe("the disclosure has a name, and the expanded detail keeps the tense", () => {
+  /*
+   * Both found in review, and both are one mistake wearing two hats: a fact
+   * stated correctly in one place and contradicted a few lines away.
+   */
+
+  it("names the disclosure with the story instead of leaving it silent", () => {
+    /*
+     * The sentence used to sit outside the button while the button's own
+     * contents were aria-hidden — and `aria-hidden` removes content from the
+     * accessible name computation, so the control announced itself as an
+     * unnamed button. A keyboard reader was told something could be expanded
+     * but not what it was about.
+     *
+     * Querying by role *and* name is the assertion: this only resolves if the
+     * story is inside the button.
+     */
+    row();
+    const button = screen.getByRole("button", { name: /down since|down from/i });
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("still says it only once", () => {
+    // The original aria-hidden existed for a real reason: without it the story
+    // is announced twice, once as prose and once as a pile of fragments.
+    const { container } = row();
+    expect(container.querySelectorAll(".sr-only").length).toBe(1);
+    expect(
+      container.querySelector(".inc-line-inner")!.getAttribute("aria-hidden"),
+    ).toBe("true");
+  });
+
+  it("does not claim current status inside an expanded stale row", () => {
+    /*
+     * SUB-111, one level deeper. The collapsed line said "Was down from ...",
+     * and opening it revealed a timeline still asserting "Not recovered" about
+     * a stream that had stopped reporting.
+     */
+    const { container } = row({}, { stale: true });
+    fireEvent.click(container.querySelector(".inc-line")!);
+    const seen = container.textContent ?? "";
+    expect(seen).toMatch(/not recovered when we last heard/i);
+  });
+
+  it("keeps the present tense while the stream is alive", () => {
+    const { container } = row();
+    fireEvent.click(container.querySelector(".inc-line")!);
+    const seen = container.textContent ?? "";
+    expect(seen).toMatch(/not recovered/i);
+    expect(seen).not.toMatch(/when we last heard/i);
   });
 });

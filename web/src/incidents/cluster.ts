@@ -125,18 +125,55 @@ export function clusterIncidents(
     }
 
     const run = dated.slice(index, end);
-    const monitors = new Set(run.map((incident) => incident.monitorId));
-    if (run.length > 1 && monitors.size >= CLUSTER_MIN_MONITORS) {
-      const newest = run[0].startedAt ?? 0;
-      const oldest = run[run.length - 1].startedAt ?? 0;
+
+    /*
+     * One incident per monitor in the cluster; a monitor's repeats stay
+     * singles.
+     *
+     * The earlier guard only rejected a run where *every* incident was the
+     * same monitor, which let a mixed run through intact: monitor 7 failing
+     * three times in a minute alongside one failure of monitor 8 produced a
+     * four-item cluster saying "2 monitors started failing together" — and
+     * the same three incidents also drove a churn notice, so one flapping
+     * monitor was presented both as noise and as evidence of a shared cause.
+     *
+     * DESIGN.md §14 states the rule this restores: clustering is limited to
+     * distinct monitors, and repeated outages from one monitor are never
+     * clustered. Keeping the first (newest) incident per monitor is the
+     * honest representative — it is the one the reader would open — and the
+     * repeats are emitted alongside, where `describeChurn` explains them in
+     * the words that actually fit.
+     */
+    const firstPerMonitor: Incident[] = [];
+    const repeats: Incident[] = [];
+    const seen = new Set<string>();
+    for (const incident of run) {
+      if (seen.has(incident.monitorId)) repeats.push(incident);
+      else {
+        seen.add(incident.monitorId);
+        firstPerMonitor.push(incident);
+      }
+    }
+
+    if (firstPerMonitor.length >= CLUSTER_MIN_MONITORS) {
+      const newest = firstPerMonitor[0].startedAt ?? 0;
+      const oldest = firstPerMonitor[firstPerMonitor.length - 1].startedAt ?? 0;
       entries.push({
         kind: "cluster",
-        key: `cluster-${run[run.length - 1].id}`,
-        items: run,
-        monitorCount: monitors.size,
+        key: `cluster-${firstPerMonitor[firstPerMonitor.length - 1].id}`,
+        items: firstPerMonitor,
+        monitorCount: firstPerMonitor.length,
         spanMs: newest - oldest,
         at: newest,
       });
+      for (const incident of repeats) {
+        entries.push({
+          kind: "single",
+          key: incident.id,
+          incident,
+          at: incident.startedAt ?? 0,
+        });
+      }
     } else {
       /*
        * A run of one, or a run that is all the same monitor. Emitted as

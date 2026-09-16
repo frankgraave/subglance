@@ -87,7 +87,7 @@ export function IncidentStoryItem({
    * whose control vanishes gives the reader no evidence their click landed.
    */
   const ackable = story.state !== "resolved" && onAck !== undefined;
-  const timeline = incidentTimeline(incident);
+  const timeline = incidentTimeline(incident, stale);
 
   return (
     <li
@@ -96,15 +96,6 @@ export function IncidentStoryItem({
       data-open={open ? "true" : "false"}
     >
       {/*
-       * The sentence, for the ear. One string, the same one the eye is shown
-       * below, so the two cannot describe different incidents.
-       */}
-      <span className="sr-only">
-        {subject === undefined ? null : <>{subject}: </>}
-        {story.sentence}
-      </span>
-
-      {/*
        * The collapsed line is a button, and the whole line is the target.
        *
        * A row you can click needs to be a control a keyboard can reach, and
@@ -112,10 +103,6 @@ export function IncidentStoryItem({
        * rather than a link to somewhere. The mockup made the row itself
        * `tabindex="0"` with a keydown handler; a real `<button>` gets Enter,
        * Space, focus styling and the role for free, and cannot forget one.
-       *
-       * `aria-hidden` on its contents, because the sr-only sentence above has
-       * already said all of it — without this a screen reader would hear the
-       * whole story twice, once as prose and once as a pile of fragments.
        */}
       <button
         type="button"
@@ -124,6 +111,23 @@ export function IncidentStoryItem({
         aria-controls={detailId}
         onClick={() => setOpen((was) => !was)}
       >
+        {/*
+         * The sentence lives *inside* the button, because it is the button's
+         * accessible name.
+         *
+         * It used to sit outside as a sibling, with the button's contents
+         * `aria-hidden` to stop the story being heard twice. That silenced the
+         * duplicate and the name together: `aria-hidden` removes content from
+         * the accessible name computation, so the disclosure announced itself
+         * as an unnamed button and the reader had to guess what expanding it
+         * would reveal. Inside, one string does both jobs — and it is still
+         * the same `story.sentence` the eye is shown below, so the two cannot
+         * drift into describing different incidents.
+         */}
+        <span className="sr-only">
+          {subject === undefined ? null : <>{subject}: </>}
+          {story.sentence}
+        </span>
         <span className="inc-line-inner" aria-hidden="true">
           {/*
            * The lamp states the service. `labelled={false}` because the

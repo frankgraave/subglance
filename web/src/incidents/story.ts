@@ -360,7 +360,21 @@ export type TimelineStep = {
  * What the confirmation step *can* honestly say is that this is the moment a
  * human was told, because that is what confirmation means in the engine.
  */
-export function incidentTimeline(incident: Incident): TimelineStep[] {
+export function incidentTimeline(
+  incident: Incident,
+  stale = false,
+): TimelineStep[] {
+  /*
+   * `stale` means the live stream is dead, so every word here describes what
+   * we last heard rather than what is true now — the SUB-111 rule, applied to
+   * the expanded detail as well as the collapsed line.
+   *
+   * Without it the row contradicted itself the moment you opened it: the
+   * summary said "Was down from 14:02" and the timeline underneath still
+   * asserted "Not recovered" and "incident still open" in the present tense,
+   * about a stream that stopped reporting minutes ago. The guard on the
+   * collapsed line was never the point; not claiming current status is.
+   */
   const steps: TimelineStep[] = [
     { key: "started", at: incident.startedAt, what: "First failure observed" },
   ];
@@ -381,13 +395,20 @@ export function incidentTimeline(incident: Incident): TimelineStep[] {
        * rather than "alerts", because the first alert already went out and a
        * recovery notice will still arrive.
        */
-      what: "Acknowledged — repeat alerts muted, incident still open",
+      what: stale
+        ? "Acknowledged — repeat alerts muted, incident was still open"
+        : "Acknowledged — repeat alerts muted, incident still open",
     });
   }
   steps.push(
     incident.resolved
       ? { key: "resolved", at: incident.resolvedAt, what: "Recovered" }
-      : { key: "open", at: null, what: "Not recovered", pending: true },
+      : {
+          key: "open",
+          at: null,
+          what: stale ? "Not recovered when we last heard" : "Not recovered",
+          pending: true,
+        },
   );
   return steps;
 }
