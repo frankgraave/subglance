@@ -11,6 +11,7 @@ import { LiveDashboardRoot } from "./live/LiveDashboard";
 import { LiveMonitorDetailRoot } from "./live/LiveMonitorDetail";
 import { LiveIncidentsRoot } from "./incidents/LiveIncidents";
 import { LiveMonitorsRoot } from "./monitors/LiveMonitors";
+import { LiveNotificationsRoot } from "./notifications/LiveNotifications";
 import { createQueryClient } from "./live/queryClient";
 import { monitorsQueryKey } from "./live/api";
 import { ErrorBoundary } from "./shell/ErrorBoundary";
@@ -98,7 +99,11 @@ export default function App() {
     (name: NavRoute) => {
       setWorkbenchOpen(false);
       setAddOpen(false);
-      navigate(name === "monitors" ? { name, create: false } : { name });
+      navigate(
+        name === "monitors" || name === "notifications"
+          ? { name, create: false }
+          : { name },
+      );
       window.scrollTo(0, 0);
     },
     [navigate],
@@ -121,6 +126,7 @@ export default function App() {
   const onDetail = route.name === "monitor";
   const onIncidents = route.name === "incidents";
   const onMonitors = route.name === "monitors";
+  const onNotifications = route.name === "notifications";
   /*
    * Opening and closing the create drawer is a navigation, not a boolean.
    *
@@ -130,6 +136,12 @@ export default function App() {
    */
   const setCreateOpen = useCallback(
     (open: boolean) => navigate({ name: "monitors", create: open }),
+    [navigate],
+  );
+  /* Same argument for the channel form: `/notifications/new` is a real
+     address, so dismissing the drawer has to put the URL back. */
+  const setChannelCreateOpen = useCallback(
+    (open: boolean) => navigate({ name: "notifications", create: open }),
     [navigate],
   );
 
@@ -153,7 +165,9 @@ export default function App() {
         ? "Incidents"
         : onMonitors
           ? "Monitors"
-          : "Dashboard",
+          : onNotifications
+            ? "Notifications"
+            : "Dashboard",
   );
   const mainRef = useRef<HTMLElement | null>(null);
   useRouteFocus(path, mainRef);
@@ -168,7 +182,8 @@ export default function App() {
     !workbenchOpen &&
     !onDetail &&
     !onIncidents &&
-    !onMonitors;
+    !onMonitors &&
+    !onNotifications;
   /*
    * What "a different screen" means for the inner error boundary: the route,
    * plus the two overlays the shell owns. Changing any of them remounts the
@@ -370,6 +385,16 @@ export default function App() {
           <AddMonitor onCreated={onMonitorCreated} onCancel={closeAdd} />
         ) : onIncidents ? (
           <LiveIncidentsRoot client={queryClient} />
+        ) : route.name === "notifications" ? (
+          <LiveNotificationsRoot
+            client={queryClient}
+            createOpen={route.create}
+            onCreateOpenChange={setChannelCreateOpen}
+            /* A viewer sees no write controls and no test button: a test is a
+               real message to somebody else's inbox, and the server guards it
+               with the same write role for that reason. */
+            canWrite={session.state === "signedIn" && canWrite(session.user)}
+          />
         ) : route.name === "monitors" ? (
           <LiveMonitorsRoot
             client={queryClient}

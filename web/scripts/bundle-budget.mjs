@@ -54,8 +54,31 @@ const budgets = {
    * Raised to 115 rather than 114 because the gate reads whole kilobytes and
    * 114 would leave 0.3 kB — a ceiling that has to move again on the next
    * bugfix is not a ceiling, it is a tripwire.
+   *
+   * 115 -> 120 kB gzip, raised deliberately for SUB-123 (the notifications
+   * page).
+   *
+   * The measurement: 117,031 bytes before, 121,113 after — 4,082 bytes, of
+   * which 729 were the headroom left under the old 115 kB ceiling. That is the
+   * second management screen: a channel list, a five-type add/edit form whose
+   * field set changes with the type and whose secret fields have a write-only
+   * replace interaction, a delete confirmation, a per-row test button that
+   * reports the upstream error, and the data owner that drives create, update,
+   * delete and test.
+   *
+   * The CSS budget was NOT raised for the same screen, and that is the
+   * interesting half: the page cost 37 bytes of CSS gzip, because it wears
+   * `.mon-detail`'s column, `.inv-row`, `.inv-list`, `Card`, `Drawer`,
+   * `StateChip`, `StatusChip`, `.add-*` and `.mon-facet-select` rather than
+   * declaring a second copy of any of them. A whole screen for 0.04 kB of CSS
+   * and 4 kB of behaviour is what reuse looks like when it works; the weight
+   * of a management screen lives in what it does, not in how it is drawn.
+   *
+   * Raised to 120 rather than 119 because the gate reads whole kilobytes and
+   * 119 would leave 0.7 kB, which is a tripwire rather than a ceiling — the
+   * same argument that took the last raise to 115 rather than 114.
    */
-  js: 115,
+  js: 120,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *

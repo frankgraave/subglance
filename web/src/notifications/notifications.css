@@ -1,0 +1,54 @@
+/*
+ * The notifications page.
+ *
+ * Three rules, and that is the whole file. The CSS budget had roughly 0.2 kB
+ * of gzip headroom when this screen was built, so every surface on the page is
+ * borrowed: the screen wears `.mon-detail`'s column, the rows are `.inv-row`
+ * from the monitors inventory (a channel row and a monitor row are the same
+ * object — an identity, some settings columns and inline actions), the
+ * controls are `.add-button`, `.add-input` and `.mon-facet-select`, and the
+ * chips, drawers and cards are the shared components.
+ *
+ * Nothing here is load-bearing for meaning. With the stylesheet off, a
+ * disabled channel still says Disabled, an unverified one still says Not
+ * verified, and a failed test still prints the upstream error.
+ */
+
+/*
+ * A disabled channel is dimmed and dashed, never coloured.
+ *
+ * It is a configuration state, not a health state, so borrowing a status hue
+ * would make "somebody switched this off" look like "this is failing". Shares
+ * its treatment with a paused monitor for that reason.
+ */
+.inv-row[data-disabled="true"] {
+  opacity: .72;
+  border-style: dashed;
+}
+
+/*
+ * The mask tail the API hands back — `****` plus the last four characters.
+ *
+ * Mono, because it is compared character by character against another mask to
+ * tell two Slack webhooks apart, which is the only job it has.
+ */
+.nt-mask {
+  @apply face-mono;
+  color: var(--ink-3);
+}
+
+/* Secret controls sit in an `.add-actions` row, which is sized for a form's
+   submit pair. These are field-level buttons and take the row scale. */
+.nt-act {
+  padding: var(--space-1) var(--space-2h);
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+}
+
+/* The empty state is a stack, not a centred illustration: the headline is a
+   fact, and facts are read left to right like the rest of the page. */
+.nt-empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}

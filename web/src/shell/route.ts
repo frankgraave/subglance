@@ -20,6 +20,13 @@ export type Route =
    * pasted link a self-hoster sends a colleague.
    */
   | { name: "monitors"; create: boolean }
+  /**
+   * The notification channels. `create` is part of the route for the same
+   * reason it is on `/monitors`: `/notifications/new` has to be a real
+   * address, because "alerts are going nowhere" is the state a fresh install
+   * is in and "here is the form that fixes it" is the link somebody sends.
+   */
+  | { name: "notifications"; create: boolean }
   | { name: "monitor"; id: string };
 
 export const DASHBOARD_PATH = "/";
@@ -45,6 +52,12 @@ export const MONITORS_PATH = "/monitors";
  * *against* the inventory.
  */
 export const MONITOR_CREATE_PATH = "/monitors/new";
+
+/** The notification channels: who hears about an incident, and whether they can. */
+export const NOTIFICATIONS_PATH = "/notifications";
+
+/** The channel list with the add drawer open. */
+export const NOTIFICATION_CREATE_PATH = "/notifications/new";
 
 /**
  * The id segment `/monitors/new` occupies, and therefore the one id that can
@@ -78,6 +91,22 @@ export function parseRoute(pathname: string): Route {
   }
   if (segments.length === 1 && segments[0] === "monitors") {
     return { name: "monitors", create: false };
+  }
+  if (segments.length === 1 && segments[0] === "notifications") {
+    return { name: "notifications", create: false };
+  }
+  /*
+   * `/notifications/new` opens the add drawer, and nothing else under
+   * `/notifications` is a place. There is no per-channel route — a channel has
+   * no detail view — so a deeper path falls through to the dashboard rather
+   * than quietly rendering the list for an address that promises one channel.
+   */
+  if (
+    segments.length === 2 &&
+    segments[0] === "notifications" &&
+    segments[1] === CREATE_SEGMENT
+  ) {
+    return { name: "notifications", create: true };
   }
   if (segments.length === 2 && segments[0] === "monitors") {
     /*
@@ -114,6 +143,8 @@ export function routePath(route: Route): string {
   if (route.name === "monitor") return monitorPath(route.id);
   if (route.name === "monitors")
     return route.create ? MONITOR_CREATE_PATH : MONITORS_PATH;
+  if (route.name === "notifications")
+    return route.create ? NOTIFICATION_CREATE_PATH : NOTIFICATIONS_PATH;
   if (route.name === "incidents") return INCIDENTS_PATH;
   return DASHBOARD_PATH;
 }
