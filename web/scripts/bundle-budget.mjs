@@ -34,7 +34,28 @@ const dist = resolve(dirname(fileURLToPath(import.meta.url)), "../../internal/we
  * it is meant to be a deliberate, reviewed act rather than an accident.
  */
 const budgets = {
-  js: 112,
+  /*
+   * 112 -> 115 kB gzip, raised deliberately for SUB-122 (the monitors page).
+   *
+   * The measurement: 109,148 bytes before, 113,689 after — 4,541 bytes, of
+   * which 2,920 were the headroom left under the old 112 kB ceiling. That is a
+   * whole management screen: an inventory row with five settings columns and
+   * four inline actions, a toolbar with three filters, an edit form, a delete
+   * confirmation, a create drawer, and the data owner that drives pause,
+   * resume, delete, check-now and a conditional PATCH.
+   *
+   * It is stated rather than nudged, and it is the smaller half of the story:
+   * the CSS budget was NOT raised for the same screen. The page wears
+   * `.mon-detail`'s column, `Card`, `Drawer`, `Value`, `StateChip`, `Led`,
+   * `.add-button`, `.add-input` and `.mon-facet-select`, so the entire screen
+   * cost 0.4 kB of CSS and stayed under the 13 kB ceiling SUB-34 set. The
+   * behaviour is where a management screen's weight actually lives.
+   *
+   * Raised to 115 rather than 114 because the gate reads whole kilobytes and
+   * 114 would leave 0.3 kB — a ceiling that has to move again on the next
+   * bugfix is not a ceiling, it is a tripwire.
+   */
+  js: 115,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *

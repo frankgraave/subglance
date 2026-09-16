@@ -1,6 +1,7 @@
 import type { ReactNode, RefObject } from "react";
 import { NavDrawer } from "./NavDrawer";
 import { Sidebar } from "./Sidebar";
+import type { NavRoute } from "./Sidebar";
 
 /**
  * The frame: sidebar beside content, both scrolling independently.
@@ -30,9 +31,9 @@ export type AppShellProps = {
   navReturnFocusRef?: RefObject<HTMLElement | null>;
   instance?: string;
   /** Which built destination is on screen; lights the matching nav item. */
-  current?: "dashboard" | "incidents" | "monitor";
+  current?: NavRoute | "monitor";
   /** Client-side navigation from the sidebar and the drawer. */
-  onNavigate?: (route: "dashboard" | "incidents") => void;
+  onNavigate?: (route: NavRoute) => void;
   /** The signed-in address, shown in the navigation footer. */
   account?: string;
   onSignOut?: () => void;

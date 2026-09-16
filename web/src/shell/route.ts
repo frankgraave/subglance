@@ -13,6 +13,13 @@
 export type Route =
   | { name: "dashboard" }
   | { name: "incidents" }
+  /**
+   * The monitors inventory. `create` is part of the route rather than a
+   * component flag because `/monitors/new` has to be a real address: the
+   * empty state is the onboarding, and "here is the form" is the single most
+   * pasted link a self-hoster sends a colleague.
+   */
+  | { name: "monitors"; create: boolean }
   | { name: "monitor"; id: string };
 
 export const DASHBOARD_PATH = "/";
@@ -25,6 +32,30 @@ export const DASHBOARD_PATH = "/";
  * link into a chat window. A boolean cannot be pasted.
  */
 export const INCIDENTS_PATH = "/incidents";
+
+/** The monitors inventory: what is configured, and where it is changed. */
+export const MONITORS_PATH = "/monitors";
+
+/**
+ * The inventory with the create drawer open.
+ *
+ * A child of `/monitors` rather than a `?new` query, because it is a place you
+ * can be sent to and the list behind it is part of what you were sent to see —
+ * the ticket's argument for a drawer over a page is that you add a monitor
+ * *against* the inventory.
+ */
+export const MONITOR_CREATE_PATH = "/monitors/new";
+
+/**
+ * The id segment `/monitors/new` occupies, and therefore the one id that can
+ * never address a monitor.
+ *
+ * Server ids are int64s rendered as digits, so nothing real can collide — but
+ * the reservation is written down rather than assumed, because `parseRoute`
+ * has to make the choice explicitly and a reader has to be able to see which
+ * way it went.
+ */
+export const CREATE_SEGMENT = "new";
 
 /** The canonical path for one monitor. The only place this shape is written. */
 export function monitorPath(id: string): string {
@@ -45,7 +76,21 @@ export function parseRoute(pathname: string): Route {
   if (segments.length === 1 && segments[0] === "incidents") {
     return { name: "incidents" };
   }
+  if (segments.length === 1 && segments[0] === "monitors") {
+    return { name: "monitors", create: false };
+  }
   if (segments.length === 2 && segments[0] === "monitors") {
+    /*
+     * `new` is the create address, not a monitor id. It is checked before the
+     * decode so that `/monitors/new` cannot be reached twice by two spellings:
+     * `%6eew` decodes to `new` and would otherwise open the form at a URL that
+     * `routePath` can never produce, leaving the address bar disagreeing with
+     * the screen. An id is what the server issued, and the server issues
+     * digits.
+     */
+    if (segments[1] === CREATE_SEGMENT) {
+      return { name: "monitors", create: true };
+    }
     /*
      * Decoded, because `monitorPath` encoded it. Ids are digits today, but
      * round-tripping through the encoder is what keeps this correct if they
@@ -67,6 +112,8 @@ export function parseRoute(pathname: string): Route {
 /** The path a route lives at. Inverse of `parseRoute` for known routes. */
 export function routePath(route: Route): string {
   if (route.name === "monitor") return monitorPath(route.id);
+  if (route.name === "monitors")
+    return route.create ? MONITOR_CREATE_PATH : MONITORS_PATH;
   if (route.name === "incidents") return INCIDENTS_PATH;
   return DASHBOARD_PATH;
 }
