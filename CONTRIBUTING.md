@@ -100,6 +100,11 @@ Write the subject in the imperative: "add SSL expiry check", not "added" or
 4. Keep a pull request to one subject.
 5. Describe what you are changing and why. The why is the part reviewers cannot
    reconstruct from the diff.
+6. **If your pull request closes a gap listed in the README's "Where it stands"
+   section, update that section in the same pull request.** Move the bullet from
+   "Not working yet" to "Working", or delete it, in the diff that made it
+   untrue. That section is the first thing a stranger reads to decide whether
+   this is worth running, and nothing but this rule keeps it tied to the code.
 
 ## Reporting bugs
 

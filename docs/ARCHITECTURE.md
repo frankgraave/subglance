@@ -6,9 +6,9 @@
 
 | Layer | Choice | Reason |
 |---|---|---|
-| Backend | Go 1.23+ | Thousands of parallel checks is exactly what goroutines exist for. One static binary, no runtime. |
-| HTTP | chi or stdlib `net/http` | Lightweight, no framework lock-in |
-| Database | SQLite (default), Postgres (optional) | Zero configuration is the #1 reason self-hosted software actually gets installed |
+| Backend | Go 1.26+ | Thousands of parallel checks is exactly what goroutines exist for. One static binary, no runtime. The minimum tracks `go.mod`, and CONTRIBUTING.md states the same version |
+| HTTP | stdlib `net/http` | Decided: the stdlib router does everything the API needs since method patterns landed, and `go.mod` carries no router dependency. No framework lock-in because there is no framework |
+| Database | SQLite | Zero configuration is the #1 reason self-hosted software actually gets installed. SQLite is the only supported database: there is no Postgres driver in `go.mod` and Postgres is explicitly outside v0.1 |
 | DB driver | `modernc.org/sqlite` | Pure Go, no cgo — cross-compiling stays trivial |
 | Migrations | Hand-rolled, embed.FS + transactions | See §3.1: an external library adds nothing here |
 | Frontend | React 19 + Vite + TypeScript | Richest ecosystem for exactly the UI quality this product needs |
@@ -51,7 +51,7 @@ sit on a Raspberry Pi alongside everything else already running there.
 │          ▼                       ▼                  │
 │  ┌──────────────┐        ┌──────────────────┐       │
 │  │  Storage     │        │  Notifier        │       │
-│  │  SQLite/PG   │        │  (queue+retry)   │       │
+│  │  SQLite      │        │  (outbox+retry)  │       │
 │  └──────┬───────┘        └──────────────────┘       │
 │         │                                            │
 │         ▼                                            │
@@ -92,8 +92,11 @@ The part that separates SubGlance from "curl in a loop". It handles:
 - **Maintenance windows:** scheduled muting (post-v0.1)
 
 ### Notifier
-A queue with exponential backoff. A failing Slack webhook must never block the
-checker loop. Every channel implements the same interface.
+An outbox in the database, drained with exponential backoff and jitter, and a
+dead letter after a fixed number of attempts. A failing Slack webhook must never
+block the checker loop. Every channel implements the same interface; the
+implementations live in `internal/notifier`. Alerts that land inside one window
+are grouped so a single outage sends a single message per channel.
 
 ## 3. Data model (v0.1)
 
@@ -223,14 +226,14 @@ gets built):
 - Status transitions morph, they don't reload.
 - Keyboard-first: cmd-K opens everything.
 - When everything is fine, the screen is calm and almost colorless.
-- Taste references: Linear, Vercel, Raycast.
+- The full design system, including the measured tokens and the component rules, lives in `docs/DESIGN.md`.
 
 ## 6. Security
 
 - Passwords with argon2id
 - Rate limiting on login
-- All user-configurable URLs SSRF-filtered (no internal networks without explicit permission)
-- Notification configuration encrypted in the database
+- All user-configurable URLs SSRF-filtered (no internal networks without explicit permission). The guard runs when a check or a notification is sent; it does not yet run when a notification channel is saved, so a channel pointed at a blocked address is refused at delivery rather than at save time
+- Notification configuration is stored as plain JSON in the database. It is masked in every API response, but it is not encrypted at rest — that is still open
 - CSRF token on cookie-based requests
 - Secure headers by default, no inline scripts
 
@@ -252,7 +255,7 @@ internal/
   checker/            check implementations
   scheduler/          time wheel + worker pool
   state/              incidents, confirmation, flapping
-  notify/             channels
+  notifier/           channels, outbox, grouping
   store/              database, migrations, queries
   api/                handlers, middleware, auth
   config/
@@ -262,7 +265,5 @@ docs/
 
 ## 9. Open decisions
 
-- [ ] chi vs. stdlib router
 - [ ] sqlc vs. hand-written queries
 - [ ] Alert rules in the database or in code
-- [ ] Multi-region protocol for the cloud version (agent pull or push)
