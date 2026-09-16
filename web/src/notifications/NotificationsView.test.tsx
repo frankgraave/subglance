@@ -183,9 +183,24 @@ describe("NotificationsView", () => {
     // pointing only at this channel will alert nobody.
     expect(onDelete).not.toHaveBeenCalled();
     expect(screen.getByText(/will go on being checked and will tell nobody/i)).toBeTruthy();
-    fireEvent.click(
-      screen.getByRole("button", { name: /Delete On-call Slack/ }),
-    );
+
+    /*
+     * The name has to be retyped (DESIGN.md §7.5). This deletion destroys
+     * stored credentials and detaches every monitor pointing at the channel,
+     * which is precisely the kind of consequence a reflex click skips past.
+     */
+    const confirm = screen.getByRole("button", {
+      name: /Delete On-call Slack/,
+    });
+    expect(confirm.hasAttribute("disabled")).toBe(true);
+    fireEvent.click(confirm);
+    expect(onDelete).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText(/to confirm/i), {
+      target: { value: "On-call Slack" },
+    });
+    expect(confirm.hasAttribute("disabled")).toBe(false);
+    fireEvent.click(confirm);
     expect(onDelete).toHaveBeenCalledWith("1");
   });
 
@@ -214,5 +229,70 @@ describe("NotificationsView", () => {
     const { container } = render(<NotificationsView channels={[make()]} />);
     const list = container.querySelector(".inv-list")!;
     expect(list.parentElement?.classList.contains("card")).toBe(true);
+  });
+});
+
+describe("enabling and disabling a channel", () => {
+  /*
+   * A disabled channel was visible but unchangeable: the row said "Disabled"
+   * and offered no way back, so the only route to a working channel again was
+   * to delete it and retype the webhook. Disabling is also the honest
+   * alternative to deleting when a channel is temporarily noisy — it keeps
+   * the credentials and the monitor attachments that deleting destroys.
+   */
+  it("offers the state it moves to, not the state it is in", () => {
+    const onSetEnabled = vi.fn();
+    render(
+      <NotificationsView
+        channels={[make()]}
+        onSetEnabled={onSetEnabled}
+        onSave={async () => {}}
+      />,
+    );
+    // Named after the channel: several identically-named buttons are a list a
+    // screen reader cannot navigate and voice control cannot address.
+    fireEvent.click(
+      screen.getByRole("button", { name: "Disable Slack On-call Slack" }),
+    );
+    expect(onSetEnabled).toHaveBeenCalledWith("1", false);
+  });
+
+  it("offers a disabled channel a way back", () => {
+    const onSetEnabled = vi.fn();
+    render(
+      <NotificationsView
+        channels={[make({ enabled: false })]}
+        onSetEnabled={onSetEnabled}
+        onSave={async () => {}}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Enable Slack On-call Slack" }),
+    );
+    expect(onSetEnabled).toHaveBeenCalledWith("1", true);
+  });
+
+  it("says it is saving and refuses a second press", () => {
+    const onSetEnabled = vi.fn();
+    render(
+      <NotificationsView
+        channels={[make()]}
+        onSetEnabled={onSetEnabled}
+        togglingIds={new Set(["1"])}
+        onSave={async () => {}}
+      />,
+    );
+    const button = screen.getByRole("button", {
+      name: "Disable Slack On-call Slack",
+    });
+    expect(button.hasAttribute("disabled")).toBe(true);
+    fireEvent.click(button);
+    expect(onSetEnabled).not.toHaveBeenCalled();
+  });
+
+  it("offers no toggle at all to an account that may not write", () => {
+    render(<NotificationsView channels={[make()]} onSave={async () => {}} />);
+    expect(screen.queryByRole("button", { name: /disable/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /enable/i })).toBeNull();
   });
 });

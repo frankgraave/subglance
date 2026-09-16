@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Card } from "../components/Card";
 import { Drawer } from "../components/Drawer";
+import { ConfirmDelete } from "../components/ConfirmDelete";
 import { StateChip } from "../components/Chip";
 import { ChannelRow } from "./ChannelRow";
 import { ChannelForm } from "./ChannelForm";
@@ -8,6 +9,9 @@ import { describeChannels } from "./channels";
 import type { Channel, DeliveryState } from "./channels";
 import { DELIVERY_UNKNOWN } from "./channels";
 import type { ChannelInput } from "./channelsApi";
+
+/** Shared empty default: a new Set per render would break memoisation. */
+const EMPTY_TOGGLING: ReadonlySet<string> = new Set();
 
 /**
  * Notifications, part one: can we reach you at all.
@@ -39,6 +43,10 @@ export type NotificationsViewProps = {
   /** Sends a real message. Absent for a viewer, who may not write. */
   onTest?: (id: string) => void;
   onDelete?: (id: string) => void;
+  /** Turns delivery through a channel on or off. Absent for a viewer. */
+  onSetEnabled?: (id: string, enabled: boolean) => void;
+  /** Channels whose enable/disable write is in flight. */
+  togglingIds?: ReadonlySet<string>;
   /** Saves a new or edited channel. Resolves when the server accepted it. */
   onSave?: (id: string | null, input: ChannelInput) => Promise<void>;
   /** True when the URL asked for the create form: /notifications/new. */
@@ -58,6 +66,8 @@ export function NotificationsView({
   rowErrors = NO_MAP,
   onTest,
   onDelete,
+  onSetEnabled,
+  togglingIds = EMPTY_TOGGLING,
   onSave,
   createOpen = false,
   onCreateOpenChange,
@@ -168,6 +178,8 @@ export function NotificationsView({
                 onTest={onTest}
                 onEdit={canWrite ? setEditingId : undefined}
                 onDelete={onDelete === undefined ? undefined : setConfirming}
+                onSetEnabled={onSetEnabled}
+                toggling={togglingIds.has(channel.id)}
                 rowError={rowErrors[channel.id] ?? null}
               />
             ))}
@@ -226,45 +238,23 @@ export function NotificationsView({
        * Not a `confirm()` and not one click: deleting a channel detaches it
        * from every monitor pointing at it, and those monitors then alert
        * nobody — a consequence that is not obvious from a button saying
-       * Delete.
+       * Delete. DESIGN.md §7.5 asks for the name to be retyped, and
+       * `ConfirmDelete` is where that rule now lives so the next destructive
+       * action inherits it rather than rediscovering it.
        */}
-      <Drawer
-        open={deleteTarget !== null}
-        onClose={() => setConfirming(null)}
-        title="Delete channel"
-        footer={
-          deleteTarget === null ? null : (
-            <>
-              <button
-                type="button"
-                className="add-button"
-                onClick={() => setConfirming(null)}
-              >
-                Keep it
-              </button>
-              <button
-                type="button"
-                className="add-button inv-act--danger"
-                onClick={() => {
-                  onDelete?.(deleteTarget.id);
-                  setConfirming(null);
-                }}
-              >
-                Delete {deleteTarget.name}
-              </button>
-            </>
-          )
-        }
-      >
-        {deleteTarget !== null && (
-          <p className="add-help">
-            <b>{deleteTarget.name}</b> is removed, along with its stored
-            credentials. Any monitor that alerts only through it will go on
-            being checked and will tell nobody when it breaks. This cannot be
-            undone.
-          </p>
-        )}
-      </Drawer>
+      {deleteTarget !== null && (
+        <ConfirmDelete
+          open
+          onClose={() => setConfirming(null)}
+          kind="notification channel"
+          name={deleteTarget.name}
+          consequence={`${deleteTarget.name} is removed, along with its stored credentials. Any monitor that alerts only through it will go on being checked and will tell nobody when it breaks. This cannot be undone.`}
+          onConfirm={() => {
+            onDelete?.(deleteTarget.id);
+            setConfirming(null);
+          }}
+        />
+      )}
 
       {!canWrite && !loading && channels.length > 0 && (
         <p className="add-help">

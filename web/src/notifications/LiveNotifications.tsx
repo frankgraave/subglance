@@ -17,7 +17,7 @@ import {
   updateChannel,
 } from "./channelsApi";
 import type { ChannelInput } from "./channelsApi";
-import type { DeliveryState } from "./channels";
+import type { Channel, DeliveryState } from "./channels";
 
 /**
  * The notifications page's data owner.
@@ -183,6 +183,56 @@ export function LiveNotifications({
     [clearError, deleteMutation],
   );
 
+  /*
+   * Enabling and disabling, which the page could report but not change.
+   *
+   * The PUT carries the channel back as it was read, with only `enabled`
+   * different — and that is safe because of something verified in the Go
+   * handler rather than assumed: `handleUpdateChannel` treats a config value
+   * that still equals its own mask as "unchanged" and substitutes the stored
+   * secret. Sending the masked config back therefore preserves the
+   * credential. Without that rule this round trip would quietly destroy every
+   * webhook token it touched, so it is the reason this is a whole-object PUT
+   * rather than a reason to avoid one.
+   *
+   * The delivery result is deliberately left alone: turning a channel off does
+   * not make its last test untrue, and the configuration has not changed.
+   */
+  const [togglingIds, setTogglingIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+
+  const enableMutation = useMutation({
+    mutationFn: ({ channel, enabled }: { channel: Channel; enabled: boolean }) =>
+      update(channel.id, {
+        name: channel.name,
+        type: channel.type,
+        config: channel.config,
+        enabled,
+      }),
+    onSettled: async (_data, _error, { channel }) => {
+      setTogglingIds((current) => {
+        if (!current.has(channel.id)) return current;
+        const next = new Set(current);
+        next.delete(channel.id);
+        return next;
+      });
+      await queryClient.invalidateQueries({ queryKey: channelsQueryKey });
+    },
+    onError: (error, { channel }) => noteError(channel.id, error),
+  });
+
+  const onSetEnabled = useCallback(
+    (id: string, enabled: boolean) => {
+      const channel = (channels.data ?? []).find((c) => c.id === id);
+      if (channel === undefined) return;
+      clearError(id);
+      setTogglingIds((current) => new Set(current).add(id));
+      enableMutation.mutate({ channel, enabled });
+    },
+    [channels.data, clearError, enableMutation],
+  );
+
   const onSave = useCallback(
     async (id: string | null, input: ChannelInput) => {
       if (id !== null) clearError(id);
@@ -225,6 +275,8 @@ export function LiveNotifications({
        */
       onTest={canWrite ? onTest : undefined}
       onDelete={canWrite ? onDelete : undefined}
+      onSetEnabled={canWrite ? onSetEnabled : undefined}
+      togglingIds={togglingIds}
       onSave={canWrite ? onSave : undefined}
       createOpen={canWrite && createOpen}
       onCreateOpenChange={canWrite ? onCreateOpenChange : undefined}

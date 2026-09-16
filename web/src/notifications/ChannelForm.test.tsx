@@ -43,6 +43,30 @@ describe("ChannelForm", () => {
     expect(screen.getByText(/never sent back to this page/i)).toBeTruthy();
   });
 
+  it("does not point a label at a control that is not there", () => {
+    /*
+     * While a stored secret is shown this field has no input — the only
+     * control is Replace. A `<label for>` aimed at the missing input is worse
+     * than no label: a screen reader reads the field name as loose text and
+     * clicking it does nothing, and both failures look correct in the markup.
+     *
+     * Asserted through the accessibility tree rather than by inspecting
+     * attributes: `getByLabelText` only resolves if a control really is
+     * labelled, which is the property that matters.
+     */
+    const { container } = render(
+      <ChannelForm channel={slack()} onSave={async () => {}} />,
+    );
+    const dangling = [...container.querySelectorAll("label[for]")]
+      .map((label) => label.getAttribute("for") ?? "")
+      .filter((target) => container.querySelector(`#${CSS.escape(target)}`) === null);
+    // Listed rather than counted: a failure names the field that is broken.
+    expect(dangling).toEqual([]);
+    // And the one control that is there names the field it replaces, so it is
+    // distinguishable from the Replace button of any other field.
+    expect(screen.getByRole("button", { name: /^Replace / })).toBeTruthy();
+  });
+
   it("sends the mask back unchanged when the secret is not touched", async () => {
     // handleUpdateChannel restores the stored credential when it sees a value
     // that still equals its own mask. An empty string would wipe it; omitting

@@ -214,9 +214,9 @@ s = s.replace(old, """                  type="text\"""")
 
 # 13. The stored secret is rendered into an input — a reveal with no button.
 mutate "stored secret rendered into a field" "$FORM" '
-old = "            {stored && !open ? ("
+old = "        const showingStored = stored && !open;"
 assert old in s
-s = s.replace(old, "            {false ? (")
+s = s.replace(old, "        const showingStored = false;")
 ' $FORM_T
 
 # 14. A field the API masks is declared public, so the mask lands in a text box
@@ -399,5 +399,42 @@ s = s.replace("""const PLANNED_CONFIG: readonly Destination[] = [""",
               """const PLANNED_CONFIG: readonly Destination[] = [
   { id: "notifications", label: "Notifications", Icon: NotificationsIcon },""")
 ' src/shell/shell.test.tsx
+
+# --- Added while working through the first review round.
+
+FORM=$SRC/ChannelForm.tsx
+ROW=$SRC/ChannelRow.tsx
+CONFIRM=src/components/ConfirmDelete.tsx
+
+# A one-click delete: DESIGN.md §7.5 asks for the name to be retyped, because
+# "are you sure?" is a reflex and retyping is a decision.
+mutate "delete needs no retyping" "$CONFIRM" '
+old = "  const matches = typed === name;"
+assert old in s
+s = s.replace(old, "  const matches = true;")
+' $SRC/NotificationsView.test.tsx src/monitors/MonitorsView.test.tsx
+
+# A forgiving comparison accepts a name the reader never read, and two
+# channels differing only in case is a real way to destroy the wrong one.
+mutate "delete confirmation folds case" "$CONFIRM" '
+old = "  const matches = typed === name;"
+assert old in s
+s = s.replace(old, "  const matches = typed.trim().toLowerCase() === name.trim().toLowerCase();")
+' src/monitors/MonitorsView.test.tsx
+
+# A label pointing at an element that does not exist: the screen reader reads
+# the field name as loose text and the click target does nothing.
+mutate "label points at a missing control" "$FORM" '
+old = "            {showingStored ? (\n              <p className=\"add-label\" id={`${inputId}-name`}>"
+assert old in s
+s = s.replace(old, "            {false ? (\n              <p className=\"add-label\" id={`${inputId}-name`}>")
+' $SRC/ChannelForm.test.tsx
+
+# A disabled channel with no way back: visible but unchangeable.
+mutate "no way to re-enable a channel" "$ROW" '
+old = "{onSetEnabled !== undefined && ("
+assert old in s
+s = s.replace(old, "{false && onSetEnabled !== undefined && (")
+' $SRC/NotificationsView.test.tsx
 
 report

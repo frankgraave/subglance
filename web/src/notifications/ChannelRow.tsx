@@ -41,6 +41,17 @@ export type ChannelRowProps = {
   onEdit?: (id: string) => void;
   /** Asks for the delete confirmation. Absent for a viewer. */
   onDelete?: (id: string) => void;
+  /**
+   * Turns delivery through this channel on or off. Absent for a viewer.
+   *
+   * A disabled channel was visible but unchangeable: the row said "Disabled"
+   * and offered no way back. Disabling is also the honest alternative to
+   * deleting when a webhook is temporarily noisy — it keeps the credentials
+   * and the monitor attachments, where deleting destroys both.
+   */
+  onSetEnabled?: (id: string, enabled: boolean) => void;
+  /** True while this row's enable/disable write is in flight. */
+  toggling?: boolean;
   /** A write on this row that failed, in the server's own words. */
   rowError?: string | null;
 };
@@ -52,6 +63,8 @@ function ChannelRowImpl({
   onTest,
   onEdit,
   onDelete,
+  onSetEnabled,
+  toggling = false,
   rowError = null,
 }: ChannelRowProps) {
   const destination = describeDestination(channel);
@@ -124,6 +137,24 @@ function ChannelRowImpl({
               aria-label={`Edit ${label}`}
             >
               Edit
+            </button>
+          )}
+
+          {onSetEnabled !== undefined && (
+            <button
+              type="button"
+              className="add-button inv-act"
+              onClick={() => onSetEnabled(channel.id, !channel.enabled)}
+              disabled={toggling}
+              /*
+               * The state it moves to, not the state it is in. "Disable" on an
+               * enabled channel says what pressing does; a label reading
+               * "Enabled" would be a status wearing a button's clothes, and
+               * the status is already stated in the row above.
+               */
+              aria-label={`${channel.enabled ? "Disable" : "Enable"} ${label}`}
+            >
+              {toggling ? "Saving…" : channel.enabled ? "Disable" : "Enable"}
             </button>
           )}
 

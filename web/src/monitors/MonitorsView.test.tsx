@@ -183,9 +183,32 @@ describe("MonitorsView", () => {
     expect(
       within(dialog).getByText(/heartbeats, uptime history and past incidents/),
     ).toBeTruthy();
-    fireEvent.click(
-      within(dialog).getByRole("button", { name: /^Delete auth$/ }),
-    );
+
+    /*
+     * The name has to be retyped (DESIGN.md §7.5). "Are you sure?" is a
+     * reflex — the hand is already moving toward the button that dismisses
+     * the dialog — where retyping cannot be completed without reading what is
+     * about to be destroyed.
+     */
+    const confirm = within(dialog).getByRole("button", {
+      name: /^Delete auth$/,
+    });
+    expect(confirm.hasAttribute("disabled")).toBe(true);
+    fireEvent.click(confirm);
+    expect(onDelete).not.toHaveBeenCalled();
+
+    // A near miss stays refused: two monitors differing only in case is a
+    // real way to destroy the wrong one.
+    fireEvent.change(within(dialog).getByLabelText(/to confirm/i), {
+      target: { value: "Auth" },
+    });
+    expect(confirm.hasAttribute("disabled")).toBe(true);
+
+    fireEvent.change(within(dialog).getByLabelText(/to confirm/i), {
+      target: { value: "auth" },
+    });
+    expect(confirm.hasAttribute("disabled")).toBe(false);
+    fireEvent.click(confirm);
     expect(onDelete).toHaveBeenCalledWith("1");
   });
 

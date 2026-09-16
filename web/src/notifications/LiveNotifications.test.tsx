@@ -193,6 +193,10 @@ describe("LiveNotifications", () => {
     expect(await screen.findByText("Test delivered")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /^Delete Slack/ }));
+    // The confirmation requires the name (DESIGN.md §7.5).
+    fireEvent.change(await screen.findByLabelText(/to confirm/i), {
+      target: { value: "On-call Slack" },
+    });
     fireEvent.click(
       await screen.findByRole("button", { name: /Delete On-call Slack/ }),
     );

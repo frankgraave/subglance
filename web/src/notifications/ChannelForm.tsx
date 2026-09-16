@@ -166,9 +166,20 @@ export function ChannelForm({
        * the consequence of.
        */}
       <div className="add-field">
-        <label className="add-label" htmlFor={`${ids}-type`}>
-          Type
-        </label>
+        {/*
+         * Same rule as the stored-secret field below: while the type is stated
+         * rather than chosen, there is no select for the label to point at.
+         * This one was not in the review — it was found by asserting the
+         * property across the whole form instead of fixing the single case
+         * that was reported.
+         */}
+        {editing ? (
+          <p className="add-label">Type</p>
+        ) : (
+          <label className="add-label" htmlFor={`${ids}-type`}>
+            Type
+          </label>
+        )}
         {editing ? (
           <p className="add-help">
             <b>{typeLabel(type)}</b> — a channel's type cannot be changed here.
@@ -225,14 +236,32 @@ export function ChannelForm({
         const open = accepting(spec);
         const inputId = `${ids}-${spec.key}`;
         const invalid = problem?.key === spec.key;
+        const showingStored = stored && !open;
         return (
           <div className="add-field" key={spec.key}>
-            <label className="add-label" htmlFor={inputId}>
-              {spec.label}
-              {!spec.required && " (optional)"}
-            </label>
+            {/*
+             * A label is a promise that something is labelled.
+             *
+             * While a stored secret is shown there is no input in this field —
+             * the only control is Replace — so `htmlFor` would point at an
+             * element that does not exist. A screen reader then reads the
+             * field name as loose text and clicking it does nothing, which is
+             * worse than no label because both look correct. The name becomes
+             * plain text and the button names itself after it instead.
+             */}
+            {showingStored ? (
+              <p className="add-label" id={`${inputId}-name`}>
+                {spec.label}
+                {!spec.required && " (optional)"}
+              </p>
+            ) : (
+              <label className="add-label" htmlFor={inputId}>
+                {spec.label}
+                {!spec.required && " (optional)"}
+              </label>
+            )}
 
-            {stored && !open ? (
+            {showingStored ? (
               /*
                * A stored secret, stated rather than shown.
                *
