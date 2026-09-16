@@ -264,58 +264,16 @@
   color: var(--ink-4);
 }
 
-.mon-detail-incidents {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  list-style: none;
-}
-
-.mon-detail-incident {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-3) 0;
-  border-top: 1px solid var(--border);
-}
-
-.mon-detail-incident:first-child {
-  border-top: 0;
-  padding-top: 0;
-}
-
-/* An open incident is the only thing on this page allowed a status colour of
-   its own: it is the one fact that changes what you do next. Resolved ones
-   stay in the ink scale — they are history, and a list of red rows from last
-   month reads as an outage happening now. */
-.mon-detail-incident[data-resolved="false"] .mon-detail-incident-state {
-  color: var(--down);
-  font-weight: var(--weight-mid);
-}
-
-/* A timestamp is measurable, so it takes the mono role — which is also where
-   its lined-up figures now come from. It asked the sans face for them before,
-   which is a face whose figures are proportional. */
-.mon-detail-incident-when {
-  @apply face-mono;
-  font-size: var(--type-helper);
-  line-height: var(--lead-helper);
-  color: var(--ink-3);
-}
-
-.mon-detail-incident-state {
-  font-size: var(--type-body);
-  line-height: var(--lead-body);
-  color: var(--ink);
-}
-
-.mon-detail-incident-error {
-  @apply face-mono;
-  font-size: var(--type-helper);
-  line-height: var(--lead-prose);
-  color: var(--ink-3);
-  overflow-wrap: anywhere;
-}
+/*
+ * The incident rules that used to live here are gone, not moved.
+ *
+ * They dressed a two-state row: a timestamp, one line of state, and an error.
+ * SUB-34 replaced that row with a sentence shared by this page and the
+ * incidents screen, so its styling belongs beside the component that draws it
+ * — `incidents/incidents.css`. Keeping a copy here would have been a second
+ * stylesheet writing selectors for one component, which is the cascade race
+ * `chips.css` already records losing once.
+ */
 
 /*
  * Phone. The page already stacks, so this only reclaims the horizontal

@@ -8,6 +8,7 @@ import { DashboardWorkbench } from "./monitors/Workbench";
 import { AddMonitor } from "./monitors/AddMonitor";
 import { LiveDashboardRoot } from "./live/LiveDashboard";
 import { LiveMonitorDetailRoot } from "./live/LiveMonitorDetail";
+import { LiveIncidentsRoot } from "./incidents/LiveIncidents";
 import { createQueryClient } from "./live/queryClient";
 import { monitorsQueryKey } from "./live/api";
 import { ErrorBoundary } from "./shell/ErrorBoundary";
@@ -81,6 +82,24 @@ export default function App() {
     () => navigate({ name: "dashboard" }),
     [navigate],
   );
+  /*
+   * Navigation from the rail and the phone drawer.
+   *
+   * It closes the two overlays for the same reason `toggleWorkbench` does:
+   * the render branch below can only show one thing, and leaving `addOpen`
+   * set while navigating would light the add button as pressed over a screen
+   * that is not the add form. Same scroll reset as `openMonitor` — a new
+   * screen starts at the top.
+   */
+  const goTo = useCallback(
+    (name: "dashboard" | "incidents") => {
+      setWorkbenchOpen(false);
+      setAddOpen(false);
+      navigate({ name });
+      window.scrollTo(0, 0);
+    },
+    [navigate],
+  );
 
   const [navOpen, setNavOpen] = useState(false);
   /*
@@ -97,6 +116,7 @@ export default function App() {
   const narrow = useCompactViewport();
   const shown = effectiveLayout(layout, narrow);
   const onDetail = route.name === "monitor";
+  const onIncidents = route.name === "incidents";
 
   /*
    * The screen names itself and takes focus when the route changes
@@ -111,7 +131,7 @@ export default function App() {
    * re-render on every heartbeat.
    */
   const path = routePath(route);
-  useDocumentTitle(onDetail ? "Monitor" : "Monitors");
+  useDocumentTitle(onDetail ? "Monitor" : onIncidents ? "Incidents" : "Monitors");
   const mainRef = useRef<HTMLElement | null>(null);
   useRouteFocus(path, mainRef);
 
@@ -120,7 +140,7 @@ export default function App() {
    * monitor is open. Without this, choosing the wall from the detail page
    * would replace it with a chrome-less grid and no way back.
    */
-  const isWall = shown === "wall" && !workbenchOpen && !onDetail;
+  const isWall = shown === "wall" && !workbenchOpen && !onDetail && !onIncidents;
   /*
    * What "a different screen" means for the inner error boundary: the route,
    * plus the two overlays the shell owns. Changing any of them remounts the
@@ -222,10 +242,11 @@ export default function App() {
           ? leaveWall
           : workbenchOpen
             ? toggleWorkbench
-            : onDetail
-              ? // Last in the queue, because the detail view is a place rather
-                // than an overlay: anything layered on top of it must be
-                // dismissed before Esc means "leave this monitor".
+            : onDetail || onIncidents
+              ? // Last in the queue, because these are places rather than
+                // overlays: anything layered on top of one must be dismissed
+                // before Esc means "leave this screen". Both land on the
+                // dashboard, which is the one place that always exists.
                 showDashboard
               : undefined,
   });
@@ -259,6 +280,8 @@ export default function App() {
       navOpen={navOpen}
       onNavClose={closeNav}
       navReturnFocusRef={navOpenerRef}
+      current={route.name}
+      onNavigate={goTo}
       account={session.state === "signedIn" ? session.user.email : undefined}
       onSignOut={signOut}
       topbar={
@@ -298,7 +321,9 @@ export default function App() {
           <Workbench />
         ) : addOpen ? (
           <AddMonitor onCreated={onMonitorCreated} onCancel={closeAdd} />
-        ) : onDetail ? (
+        ) : onIncidents ? (
+          <LiveIncidentsRoot client={queryClient} />
+        ) : route.name === "monitor" ? (
           <LiveMonitorDetailRoot
             client={queryClient}
             id={route.id}

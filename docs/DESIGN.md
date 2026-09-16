@@ -1227,6 +1227,177 @@ Whether a column is partial is arithmetic, not a flag from the server:
 
 ---
 
+### 8.4 The incident row
+
+An incident is told as a sentence, not as a log line: **when it started, how
+long, why, and how it ended.** "Down since 15 Nov, 14:03, 12 min and counting.
+DNS failure." A reader who has to reassemble four columns into that sentence is
+doing work the screen should have done.
+
+The same row is drawn on the monitor detail page and on `/incidents`. One
+component, because two would grow two vocabularies for the three states below —
+and one of them would eventually get the third state wrong.
+
+The collapsed row's column order is the order the questions get asked at
+03:00: **is it bad** (the lamp) → **what is it** (the name, error beneath) →
+**why** (the failure kind) → **since when** → **for how long** → **is anyone on
+it** → **can I take it**. Fixed column widths, because a time column that
+shifts by two pixels per row is not a column.
+
+#### Acknowledged is not resolved
+
+There are **three** states, never two:
+
+| State | Response chip | Row tint | What it means |
+|---|---|---|---|
+| open | Unacked | `--down` | Broken. Repeat alerts are escalating. |
+| acked | Acked, still down | `--warn` | Broken. Somebody is on it; repeats muted. |
+| resolved | Resolved | none | Over. |
+
+**The lamp states the service; the chip states the response.** They are two
+questions and they get two columns. That separation is the structural half of
+the rule — one combined word is how "acked" comes to read as "fixed" — and it
+is why the row can carry the middle state without hedging.
+
+Acknowledging stops the escalating repeat sequence and changes nothing about
+whether the service is answering. The server models this honestly — `acked_at`
+and `resolved_at` are separate columns — and so must the screen, because a row
+that reads as finished while the service is still down is the exact comfortable
+untruth this product exists to avoid.
+
+Three consequences, all load-bearing:
+
+* **The chip is never just "Acknowledged".** On its own that label is what
+  makes a still-broken service look handled. It says "Acked, still down", and
+  it is not allowed to be shorter than the truth just because its column is
+  narrow.
+* **The acked tint is `--warn`, never `--up`.** The middle state must not
+  borrow the colour of health — colour is the channel that reads fastest, so it
+  would say "fixed" before the word beside it could say otherwise.
+* **The acknowledgement clause carries "still down" inside the same string.**
+  Not as a flag a component decorates, so no caller can print the reassuring
+  half alone.
+
+#### The eye and the ear are given the same sentence
+
+The visible parts of the row are `aria-hidden` and the whole story is rendered
+once as `sr-only` beside them, both from one call. There is no second string to
+keep in step. §9.1 documents the general failure — a state that is a colour on
+screen and a different word for the ear — and here the divergence is not merely
+discouraged, it is unexpressible.
+
+#### The button says what it does
+
+**"Mute repeat alerts"**, on the row, on both screens, always drawn rather than
+revealed on hover. Ack exists to stop an escalating sequence, and a control
+that takes three navigations to reach is one nobody uses at 03:00 — which
+leaves the repeats running. It is disabled rather than removed once acked: a
+control that vanishes gives the reader no evidence their click landed, and the
+incident is still open.
+
+The label names the consequence rather than the verb, and it is allowed to,
+because the consequence is real: acknowledging genuinely stops the escalating
+repeat ladder. "Acknowledge" standing alone was rejected — it invites the
+reading "mark this done", which is the one label that could make a
+still-broken service look handled. "Acknowledge & mute" was rejected too: it
+spends its first word on a term of art and its second on the thing that
+actually happens. The reader must be able to know *before* clicking that the
+repeats will stop, and *after* clicking that the incident is still open; the
+label carries the first, the response column carries the second.
+
+#### The detail expands in place
+
+A 320px side panel cannot hold an error string and a timeline without wrapping
+both into mush, and selecting a row would reflow the whole page at the moment
+somebody is reading it. The detail is a child of the row, so it opens where the
+eye already is and takes the full content width. Several rows can be open at
+once — that is the point rather than a side-effect, because two failures a
+minute apart are usually one event and comparing them requires seeing both.
+
+The row's collapsed line is a real `<button>` with `aria-expanded`, not a
+`tabindex` div with a keydown handler: Enter, Space, focus styling and the
+disclosure role come with the element and cannot be half-implemented.
+
+**The timeline says only what the payload carries.** An incident has four
+timestamps — started, confirmed, acked, resolved — and nothing about delivery,
+so the timeline never names a channel or claims "Alert sent". Inventing those
+from a confirmation timestamp would be the same class of fiction as the
+sidebar's old "2 incidents" badge: plausible, unverifiable, and on a monitoring
+tool indistinguishable from a fact. For the same reason there is no "Response
+snapshot" panel; the API captures no response body.
+
+#### Grouping is additive, and it states a suspicion
+
+The list is chronological, newest first — at 03:00 the question is "what just
+happened". On top of that, several *distinct* monitors that started failing
+within 60 seconds of each other are offered as one cluster row, sitting at the
+position its newest member already held. Opening it yields exactly the rows
+that would have been there ungrouped, in the same order, with the same
+controls. Nothing is hidden and nothing is reordered; the only change is that a
+pattern which was implicit becomes stated.
+
+**A cluster is drawn dashed**, because in this product a dashed edge already
+means *about the data rather than the data* (§8.1) — and a cluster is an
+inference from timestamps, not something the server reported. SubGlance has no
+dependency graph, so the wording says what was measured (how many monitors,
+over what span), flags the guess as a guess, and invites the reader to open the
+group and judge. It never says "caused by", "related" or "one outage".
+
+The count is readable without opening the group: it is in the visible badge and
+in the control's accessible name, so neither reader has to expand a disclosure
+to find out how much is inside.
+
+One monitor's own repeated outages are never clustered. That is flapping, which
+has its own sentence below, and calling it "3 monitors failed together" would
+be false.
+
+#### History is a 30-day window, grouped by day
+
+Each day heading carries its own totals — "2 incidents · 24 min total" — because
+that is the sentence someone writes in a status update the next morning, and
+adding the rows up is work the screen can do. The window is a parameter rather
+than a constant, so a longer range or a date picker changes the data owner and
+not the screen; nothing is staged for it today, because a disabled control
+shipped ahead of its feature is a promise with the wiring cut.
+
+The history is assembled one request per monitor — the API has no
+instance-wide endpoint for resolved incidents — and the fan-out is capped. When
+the cap bites, the card says so. A partial month presented as a whole month is
+the one thing a monitoring tool must not do.
+
+#### The empty state is the good news, with its proof
+
+The headline states the fact at page-title weight; the helper line quantifies
+it with the monitor count. The count is not decoration — it is the evidence
+that the silence was measured rather than the result of a poller that died.
+There is no call to action, because there is nothing for the operator to do.
+
+#### Flapping suppresses the alerts, not the record
+
+A monitor that oscillates has its repeat alerts stopped by the state engine and
+goes on opening and closing incidents the whole time. Left unsaid, that is the
+screen at its most misleading exactly when the service is at its worst: the
+phone has gone quiet, and a quiet phone above a list of rows reads as a problem
+that settled down. Three or more separate outages inside an hour draws a
+`--warn` note above the list naming the monitor, the count, and why nobody is
+being paged.
+
+It is counted from the rows rather than read from a flag, because the incident
+payload carries none — so the note says "the record shows N separate outages in
+the last hour", which is what we actually know, rather than claiming the engine
+has marked the monitor flapping.
+
+#### On a dead stream, the row changes tense
+
+§6's rule applies here with no exemption. "Down since …" and "12 min and
+counting" are present-tense claims as loud as "Up", and a stylesheet can dim a
+word but cannot change what it says — so the wording moves in the markup: "Was
+down from …, 12 min when we last heard." The state is never blanked; which
+state we lost an incident in is the most useful thing left on a screen that has
+stopped updating.
+
+---
+
 ## 9. Accessibility
 
 Not an afterthought — several of the decisions above exist precisely for it.
@@ -1384,10 +1555,25 @@ to discover late.
 
 ### Screens promised but not designed
 
-The sidebar advertises five destinations; one exists.
+The sidebar advertises five destinations; two exist.
 
-- **Incidents** — the badge says 2, there is no screen. Needs at least:
-  acknowledge, resolve, a cause, and a note.
+- ~~**Incidents**~~ **Closed (partly).** `/incidents` is a real destination
+  now, and the sidebar item is a real link rather than a "Soon" label. It lists
+  every open incident, oldest outage first — everything on it is still broken,
+  so the one broken longest is the one most likely to have been missed — and it
+  carries acknowledge. It carries **no count badge**: the number lives on the
+  screen, beside the list it is the length of, where the two cannot disagree.
+  The fabricated "2 incidents" this entry once described is exactly the failure
+  a real badge risks reintroducing.
+
+  Resolved history ships with it, as a 30-day list grouped by day. It is
+  assembled one request per monitor because the API has no instance-wide
+  endpoint for resolved incidents, so the fan-out is capped and the card says
+  when it was — a server-side endpoint is the real fix and belongs to the
+  backend.
+
+  Still open: resolve (a manual close, which the state engine does not offer),
+  a note, a per-monitor filter, CSV export, and a window longer than 30 days.
 - **Monitors** — the management list. Bulk actions (pause 20 monitors at once)
   have no design; today that would be 20 individual clicks.
 - **Notifications** — channel configuration (Discord, Slack, Telegram, webhook,

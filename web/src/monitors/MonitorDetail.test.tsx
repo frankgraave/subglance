@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { MonitorDetail } from "./MonitorDetail";
 import type { Incident, UptimeWindow } from "./detail";
 import type { Monitor, MonitorStatus } from "./types";
@@ -40,8 +40,11 @@ const window_ = (over: Partial<UptimeWindow> = {}): UptimeWindow => ({
 
 const incident = (over: Partial<Incident> = {}): Incident => ({
   id: "1",
+  monitorId: "7",
   startedAt: 1_699_900_000_000,
+  confirmedAt: 1_699_900_060_000,
   resolvedAt: 1_699_903_600_000,
+  ackedAt: null,
   confirmed: true,
   resolved: true,
   acked: false,
@@ -173,14 +176,58 @@ describe("incidents", () => {
         incident({ resolved: false, resolvedAt: null, durationS: 900 }),
       ],
     });
-    expect(document.body.textContent).toContain("Ongoing for 15 min");
-    const item = document.querySelector(".mon-detail-incident");
-    expect(item?.getAttribute("data-resolved")).toBe("false");
+    expect(document.body.textContent).toContain("15 min and counting");
+    const item = document.querySelector(".inc-row");
+    expect(item?.getAttribute("data-state")).toBe("open");
   });
 
-  it("reports how long a resolved incident lasted", () => {
+  it("reports how long a resolved incident lasted, and when it came back", () => {
     view({ incidents: [incident({ durationS: 3600 })] });
-    expect(document.body.textContent).toContain("Resolved after 1 h");
+    expect(document.body.textContent).toContain("Resolved");
+    expect(document.body.textContent).toContain("1 h");
+    expect(document.body.textContent).toContain("Recovered at");
+  });
+
+  it("offers the ack control here too, not only on the incidents screen", () => {
+    /*
+     * The plumbing test, and it exists because a mutation found the hole: the
+     * detail page can accept `onAck` and quietly not forward it, and every
+     * other assertion in this file would still pass.
+     *
+     * It matters because this is the screen an alert link lands on. SUB-81
+     * made ack the control that stops the escalating repeat ladder, and a
+     * control one navigation further away than the page you arrive at is one
+     * nobody uses at 03:00 — which leaves the repeats running.
+     */
+    const onAck = vi.fn();
+    view({
+      incidents: [incident({ resolved: false, resolvedAt: null })],
+      onAck,
+    });
+    const button = screen.getByRole("button", { name: /mute repeat/i });
+    fireEvent.click(button);
+    expect(onAck).toHaveBeenCalledWith("1");
+  });
+
+  it("keeps an acked incident visibly open on this page as well", () => {
+    // The ticket's central requirement, asserted on the surface that already
+    // existed rather than only on the new screen.
+    view({
+      incidents: [
+        incident({
+          resolved: false,
+          resolvedAt: null,
+          acked: true,
+          ackedAt: 1_699_900_300_000,
+        }),
+      ],
+      onAck: () => {},
+    });
+    expect(document.querySelector(".inc-row")?.getAttribute("data-state")).toBe(
+      "acked",
+    );
+    expect(document.body.textContent).toMatch(/still down/i);
+    expect(document.body.textContent).not.toMatch(/Recovered|Resolved/);
   });
 
   it("says nothing has gone wrong rather than showing an empty list", () => {
@@ -193,7 +240,7 @@ describe("incidents", () => {
     // worse than no element at all.
     view({ incidents: [incident({ startedAt: null })] });
     expect(document.querySelector("time")).toBeNull();
-    expect(document.body.textContent).toContain("Unknown start");
+    expect(document.body.textContent).toContain("start time unknown");
   });
 });
 

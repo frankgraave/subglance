@@ -85,6 +85,7 @@
 @import "./monitors/led.css";
 @import "./monitors/monitors.css";
 @import "./monitors/detail.css";
+@import "./incidents/incidents.css";
 @import "./live/connection.css";
 @import "./shell/shell.css";
 @import "./shell/crash.css";

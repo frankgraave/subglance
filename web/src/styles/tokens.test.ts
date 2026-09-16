@@ -1240,6 +1240,19 @@ const statusBorders = new Set<string>([
   'web/src/monitors/detail.css | .mon-detail-status[data-status="pending"] | border-color: var(--warn)',
   'web/src/monitors/detail.css | .mon-detail-status[data-status="waiting"] | border-color: var(--idle)',
   "web/src/live/connection.css | .conn-badge | border: 1px solid var(--warn)",
+  /*
+   * The two notes above the incidents list.
+   *
+   * The churn note edges in `--warn` like the connection badge: it explains
+   * why a bouncing monitor has gone quiet rather than announcing a new
+   * outage. The ack failure edges in `--down` because a write that did not
+   * land is a failure of this screen, exactly like an invalid input.
+   *
+   * The incident rows themselves need no entry here: they carry their state as
+   * a background tint plus a word, not as a coloured edge.
+   */
+  "web/src/incidents/incidents.css | .inc-churn, .inc-notice | border: 1px solid var(--warn)",
+  "web/src/incidents/incidents.css | .inc-notice | border-color: var(--down)",
   "web/src/live/connection.css | .conn-badge-retry | border: 1px solid var(--warn)",
   'web/src/monitors/monitors.css | .mon-row[data-status="down"] | border-left: 2px solid var(--down)',
   'web/src/monitors/monitors.css | .mon-row[data-status="pending"] | border-left: 2px solid var(--warn)',

@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createQueryClient } from "./queryClient";
 import { useLiveMonitors } from "./useLiveMonitors";
 import { useNow } from "./useNow";
 import { MonitorDetail } from "../monitors/MonitorDetail";
 import { detailQueryKey, fetchMonitorDetail } from "../monitors/detail";
+import { ackIncident } from "../incidents/api";
+import { openIncidentsQueryKey } from "../incidents/api";
 import type { LiveOptions } from "./useLiveMonitors";
 
 /**
@@ -30,16 +32,20 @@ export type LiveMonitorDetailProps = LiveOptions & {
   /** Heartbeat width for environments without layout, such as jsdom. */
   beatWidth?: number;
   onBack?: () => void;
+  /** Ack seam for tests; defaults to the real endpoint. */
+  ack?: typeof ackIncident;
 };
 
 export function LiveMonitorDetail({
   id,
   beatWidth,
   onBack,
+  ack = ackIncident,
   ...live
 }: LiveMonitorDetailProps) {
   const { monitors, status, loading, error } = useLiveMonitors(live);
   const now = useNow();
+  const queryClient = useQueryClient();
 
   const detail = useQuery({
     queryKey: detailQueryKey(id),
@@ -53,6 +59,33 @@ export function LiveMonitorDetail({
     refetchInterval: 60_000,
     staleTime: 30_000,
   });
+
+  /*
+   * Acknowledging, from the screen an alert link lands on.
+   *
+   * Both caches are invalidated afterwards, never patched: the claim an acked
+   * row makes is "a human has seen this", and a row that says so because the
+   * browser assumed a request would succeed is the product inventing the one
+   * fact this control exists to record. The incidents screen holds the same
+   * incident, so it is refetched too — two screens disagreeing about whether
+   * somebody is on it is exactly the confusion ack is meant to end.
+   */
+  const [ackingId, setAckingId] = useState<string | null>(null);
+  const ackMutation = useMutation({
+    mutationFn: (incidentId: string) => ack(incidentId),
+    onSettled: (_data, _error, incidentId) => {
+      setAckingId((current) => (current === incidentId ? null : current));
+      void queryClient.invalidateQueries({ queryKey: detailQueryKey(id) });
+      void queryClient.invalidateQueries({ queryKey: openIncidentsQueryKey });
+    },
+  });
+  const onAck = useCallback(
+    (incidentId: string) => {
+      setAckingId(incidentId);
+      ackMutation.mutate(incidentId);
+    },
+    [ackMutation],
+  );
 
   const monitor = monitors.find((m) => m.id === id);
 
@@ -100,6 +133,9 @@ export function LiveMonitorDetail({
        * truth. Only "live" earns the live colours.
        */
       stale={status !== "live"}
+      onAck={onAck}
+      ackingId={ackingId}
+      ackError={ackMutation.error instanceof Error ? ackMutation.error : null}
     />
   );
 }

@@ -150,7 +150,11 @@ describe("LiveMonitorDetail", () => {
     expect(await screen.findByText("api")).toBeTruthy();
     expect(await screen.findByText("24h")).toBeTruthy();
     await waitFor(() => {
-      expect(document.body.textContent).toContain("Resolved after 1 h");
+      // SUB-34 turned the log line into a sentence: "Down from …, 1 h.
+      // Recovered at 09:00." The duration and the ending are both asserted,
+      // because either alone would pass against a row that lost the other.
+      expect(document.body.textContent).toContain("1 h");
+      expect(document.body.textContent).toMatch(/Recovered at/);
     });
     expect(document.body.textContent).toContain("500 Internal Server Error");
   });

@@ -10,8 +10,9 @@ import {
   formatUptime,
   statusWord,
 } from "./format";
-import { formatDuration, formatMoment } from "./detail";
 import type { Incident, UptimeWindow } from "./detail";
+import { IncidentStoryItem } from "../incidents/IncidentStoryItem";
+import { describeChurn } from "../incidents/story";
 import { Led } from "./Led";
 import { Unknown } from "./Unknown";
 import type { Monitor } from "./types";
@@ -72,6 +73,23 @@ export type MonitorDetailProps = {
    * another CSS rule.
    */
   stale?: boolean;
+  /**
+   * Acknowledges one incident: "seen, working on it".
+   *
+   * Offered here rather than only on the incidents screen because ack exists
+   * to stop an escalating repeat sequence, and the detail view is where
+   * somebody lands from an alert link. A control that is one navigation
+   * further away than the place you arrive is a control that does not get
+   * used at 03:00 — which leaves the repeats running.
+   *
+   * Absent means the control is not drawn at all: a viewer cannot write, and
+   * a button that always answers 403 is worse than no button.
+   */
+  onAck?: (id: string) => void;
+  /** The incident currently being acknowledged, if any. */
+  ackingId?: string | null;
+  /** The ack that failed, and why. */
+  ackError?: Error | null;
 };
 
 export function MonitorDetail({
@@ -84,6 +102,9 @@ export function MonitorDetail({
   onBack,
   beatWidth = DETAIL_BEAT_WIDTH,
   stale = false,
+  onAck,
+  ackingId = null,
+  ackError = null,
 }: MonitorDetailProps) {
   const {
     name,
@@ -97,6 +118,7 @@ export function MonitorDetail({
   const age = describeAge(lastCheck, now);
   const gap = describeGap(lastCheck, now);
   const push = monitor.push;
+  const churn = describeChurn(incidents, now);
 
   return (
     <article
@@ -330,6 +352,25 @@ export function MonitorDetail({
 
       <Card title="Incidents" icon={<IconAlert />} headingLevel={2}>
         <Panel>
+          {/*
+           * Flapping suppresses the notifications, not the record.
+           *
+           * A monitor that oscillates has its repeat alerts stopped by the
+           * engine and goes on opening incidents the whole time. Without this
+           * note the panel is at its most misleading exactly when the service
+           * is at its worst: three rows and a silent phone read as a problem
+           * that settled down.
+           */}
+          {churn === null ? null : (
+            <p className="inc-churn" role="status">
+              {churn}
+            </p>
+          )}
+          {ackError !== null ? (
+            <p role="alert" className="inc-notice">
+              Could not acknowledge: {ackError.message}
+            </p>
+          ) : null}
           {error !== null ? (
             <p
               role="alert"
@@ -346,11 +387,26 @@ export function MonitorDetail({
             // as the good news it actually is.
             <p className="mon-detail-empty">Nothing has gone wrong yet.</p>
           ) : (
-            <ol className="mon-detail-incidents">
+            /*
+             * No `subject` on this page: the monitor's name is the page title
+             * six inches above, and repeating it on every row would spend the
+             * name column on a word the reader already has. The row falls back
+             * to stating when the outage began, which is the fact that
+             * actually distinguishes one of these rows from the next.
+             */
+            <ul className="inc-list">
               {incidents.map((incident) => (
-                <IncidentItem key={incident.id} incident={incident} />
+                <IncidentStoryItem
+                  key={incident.id}
+                  incident={incident}
+                  now={now}
+                  onAck={onAck}
+                  acking={ackingId === incident.id}
+                  stale={stale}
+                  past={incident.resolved}
+                />
               ))}
-            </ol>
+            </ul>
           )}
         </Panel>
       </Card>
@@ -382,36 +438,13 @@ function legendItems(beats: Beat[]): LegendItem[] {
   ];
 }
 
-function IncidentItem({ incident }: { incident: Incident }) {
-  const started = formatMoment(incident.startedAt);
-  return (
-    <li
-      className="mon-detail-incident"
-      data-resolved={incident.resolved ? "true" : "false"}
-    >
-      <span className="mon-detail-incident-when">
-        {/* <time> only when there is a real instant behind it: a dateTime
-            attribute built from an unparseable timestamp is worse than none,
-            because it is machine-readable and wrong. */}
-        {started === null || incident.startedAt === null ? (
-          "Unknown start"
-        ) : (
-          <time dateTime={new Date(incident.startedAt).toISOString()}>
-            {started}
-          </time>
-        )}
-      </span>
-      <span className="mon-detail-incident-state">
-        {incident.resolved
-          ? `Resolved after ${formatDuration(incident.durationS)}`
-          : `Ongoing for ${formatDuration(incident.durationS)}`}
-        {incident.acked ? " · acknowledged" : ""}
-      </span>
-      {incident.lastError ? (
-        <span className="mon-detail-incident-error">{incident.lastError}</span>
-      ) : incident.cause ? (
-        <span className="mon-detail-incident-error">{incident.cause}</span>
-      ) : null}
-    </li>
-  );
-}
+/*
+ * `IncidentItem` used to live here, and it is gone rather than moved.
+ *
+ * It printed "Resolved after 1 h" or "Ongoing for 15 min" with "· acknowledged"
+ * tacked on the end, which is four facts short of the sentence SUB-34 asks for
+ * and — more seriously — drew an acknowledged outage as a footnote on the same
+ * line as a resolved one. Its replacement is `IncidentStoryItem`, shared with
+ * the incidents screen so the two surfaces cannot grow separate vocabularies
+ * for the three states.
+ */

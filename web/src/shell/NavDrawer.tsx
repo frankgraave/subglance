@@ -42,6 +42,12 @@ export type NavDrawerProps = {
    */
   returnFocusRef?: RefObject<HTMLElement | null>;
   instance?: string;
+  current?: "dashboard" | "incidents" | "monitor";
+  /**
+   * Client-side navigation. The drawer closes itself on the way out: a phone
+   * has no room to leave an overlay standing over the screen it just opened.
+   */
+  onNavigate?: (route: "dashboard" | "incidents") => void;
   account?: string;
   onSignOut?: () => void;
 };
@@ -51,6 +57,8 @@ export function NavDrawer({
   onClose,
   returnFocusRef,
   instance,
+  current,
+  onNavigate,
   account,
   onSignOut,
 }: NavDrawerProps) {
@@ -161,6 +169,15 @@ export function NavDrawer({
         <Sidebar
           collapsed={false}
           instance={instance}
+          current={current}
+          onNavigate={
+            onNavigate === undefined
+              ? undefined
+              : (route) => {
+                  onNavigate(route);
+                  onClose();
+                }
+          }
           account={account}
           onSignOut={onSignOut}
         />
