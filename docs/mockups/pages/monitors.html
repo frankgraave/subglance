@@ -194,7 +194,7 @@ details.adv > .fieldset { padding-top: var(--space-3); }
         <div class="toolbar" id="toolbar">
           <input class="input" type="search" id="q" placeholder="Search name, target, tag" oninput="filterRows()">
           <div class="toolbar-right">
-            <select class="input" id="ftype" onchange="filterRows()" style="width:auto">
+            <select class="input" id="ftype" aria-label="Filter by check type" onchange="filterRows()" style="width:auto">
               <option value="">All types</option>
               <option value="http">HTTP</option>
               <option value="tcp">TCP</option>
@@ -544,7 +544,7 @@ details.adv > .fieldset { padding-top: var(--space-3); }
     <!-- Interval/timeout/retries are shared by every type, so they stay put
          when the type changes. Only the type-specific block swaps. -->
     <div class="formgrid">
-      <div class="field"><label for="iv">Interval</label><select class="input" id="iv"><option>30s</option><option selected>60s</option><option>5m</option><option>1h</option><option>6h</option></select></div>
+      <div class="field"><label for="iv">Interval</label><select class="input" id="iv" aria-label="Check interval"><option>30s</option><option selected>60s</option><option>5m</option><option>1h</option><option>6h</option></select></div>
       <div class="field"><label for="to">Timeout</label><input class="input mono" id="to" value="10s"></div>
       <div class="field"><label for="rt">Retries before down</label><input class="input mono" id="rt" value="3"></div>
       <div class="field"><label for="tg">Tags</label><input class="input" id="tg" placeholder="prod, auth"></div>
@@ -555,11 +555,11 @@ details.adv > .fieldset { padding-top: var(--space-3); }
     <div class="fieldset" data-type-block="http">
       <span class="label">HTTP options</span>
       <div class="formgrid">
-        <div class="field"><label for="method">Method</label><select class="input" id="method"><option>GET</option><option>HEAD</option><option>POST</option><option>PUT</option></select></div>
+        <div class="field"><label for="method">Method</label><select class="input" id="method" aria-label="HTTP method"><option>GET</option><option>HEAD</option><option>POST</option><option>PUT</option></select></div>
         <div class="field"><label for="status">Expected status</label><input class="input mono" id="status" value="200-299"></div>
       </div>
       <div class="formgrid">
-        <div class="field"><label for="kwmode">Keyword</label><select class="input" id="kwmode"><option>must contain</option><option>must not contain</option></select></div>
+        <div class="field"><label for="kwmode">Keyword</label><select class="input" id="kwmode" aria-label="Keyword match mode"><option>must contain</option><option>must not contain</option></select></div>
         <div class="field"><label for="kw">&nbsp;</label><input class="input" id="kw" placeholder="Sign in"></div>
       </div>
       <label class="checkline"><input type="checkbox" checked> Follow redirects</label>
