@@ -39,7 +39,7 @@ kbd { font-family:var(--font-mono); font-size:10.5px; border:1px solid var(--bor
 <body>
 <div class="wrap">
   <div class="brand"><span class="led"></span><h1>SubGlance — design review</h1></div>
-  <p class="sub">Two clickable mockups. Nothing here is wired to a backend: the data is fixed and the interactions are simulated, so it is safe to click anything.</p>
+  <p class="sub">Three clickable sets of mockups. Nothing here is wired to a backend: the data is fixed and the interactions are simulated, so it is safe to click anything.</p>
 
   <a class="card" href="dashboard-directions.html">
     <div class="card-top">
@@ -64,7 +64,19 @@ kbd { font-family:var(--font-mono); font-size:10.5px; border:1px solid var(--bor
     </div>
   </a>
 
-  <p class="note">Both pages remember your theme and layout in localStorage. If something looks stale after a <code>git pull</code>, hard-refresh with <kbd>⌘⇧R</kbd>.</p>
+  <a class="card" href="pages/index.html">
+    <div class="card-top">
+      <span class="card-title">Page proposals</span>
+      <span class="card-file">pages/index.html</span>
+    </div>
+    <div class="card-desc">The four screens the sidebar promises but does not have yet: Incidents, Monitors, Notifications and Settings. Proposals rather than built product — each carries its annotations, and the amber ones are open questions.</div>
+    <div class="card-list">
+      Incidents · Monitors · Notifications · Settings<br>
+      Try: “Simulate new incident”, add a monitor, “Send test”, create an API token
+    </div>
+  </a>
+
+  <p class="note">The dashboard and component mockups remember your theme and layout in localStorage; the page proposals remember your theme. If something looks stale after a <code>git pull</code>, hard-refresh with <kbd>⌘⇧R</kbd>.</p>
 
   <p class="note" style="border-top:0; padding-top:0; margin-top:14px">
     The reasoning behind every choice here is written down in

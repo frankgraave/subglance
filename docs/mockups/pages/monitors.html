@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monitors — SubGlance page proposal</title>
+<link rel="stylesheet" href="shared.css">
+<!-- Theme script copied verbatim from _shell.html. Copied, not imported, so the
+     file opens standalone from disk with no fetch(). -->
+<script>
+(function () {
+  var KEY = "subglance:mockup-theme";
+  var saved = null;
+  try { saved = localStorage.getItem(KEY); } catch (e) {}
+  var t = saved || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+  document.documentElement.setAttribute("data-theme", t);
+  window.__toggleTheme = function () {
+    var next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem(KEY, next); } catch (e) {}
+  };
+})();
+</script>
+<style>
+/* ── page-specific rules ───────────────────────────────────────────────
+   Deliberately few, and all built from the shared custom properties.
+   Everything else on this page is a class that already exists in
+   shared.css. If a rule here starts looking generally useful it belongs
+   in shared.css, not in a page proposal. */
+
+/* The management row is denser than a dashboard row: it carries settings,
+   not state. Fixed-width metadata columns so the eye can scan DOWN a
+   column — the whole point of an inventory. */
+.mrow-meta { display: flex; align-items: center; gap: var(--space-3); flex: none; }
+.mrow-col  { display: flex; flex-direction: column; gap: var(--space-0h); align-items: flex-start; min-width: 0; }
+.mrow-col--num { align-items: flex-end; text-align: right; }
+.mrow-w-type { width: 4.5rem; }
+.mrow-w-num  { width: 3.5rem; }
+.mrow-w-num2 { width: 5rem; }
+.mrow-w-chan { width: 7.5rem; }
+.mrow-w-tags { width: 7.5rem; }
+/* The elastic column must never be squeezed out of existence by the fixed
+   settings columns — name and target are the only way to identify the row. */
+.row-main { flex: 1 1 12rem; }
+@media (max-width: 1280px) { .mrow-w-tags { display: none; } }
+.mrow-acts { display: flex; gap: var(--space-1h); flex: none; }
+.mrow-chips { display: flex; gap: var(--space-1); flex-wrap: nowrap; overflow: hidden; }
+
+/* A paused monitor is not a failure, so it does not get a failure colour.
+   It is dimmed AND carries a PAUSED chip — colour plus a second signal. */
+.row[data-paused="true"] { opacity: .62; border-style: dashed; }
+
+/* Selection is a border change, not a fill: a filled selected row would
+   collide with the down/warn row backgrounds. */
+.row[data-selected="true"] { border-color: var(--accent-border); box-shadow: 0 0 0 1px var(--accent-ring); }
+
+/* Toolbar: search hard left, view/filter controls hard right. */
+.toolbar { display: flex; align-items: center; gap: var(--space-2); }
+.toolbar-right { margin-left: auto; display: flex; align-items: center; gap: var(--space-2); }
+.toolbar .input { width: 16rem; }
+
+/* The bulk bar replaces the toolbar in place rather than sliding in over
+   the list — no layout jump, no new surface, no covered content. */
+.bulkbar { display: none; align-items: center; gap: var(--space-2); }
+.bulkbar[data-open="true"] { display: flex; }
+.toolbar[data-hidden="true"] { display: none; }
+
+/* The drawer. A third surface, which breaks the two-surface budget — that
+   is exactly why it is a drawer and not an inline panel: it is modal, it
+   owns the screen while open, so the budget is spent on IT, not alongside
+   the list. */
+.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; z-index: 20; }
+.scrim[data-open="true"] { display: block; }
+.drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; width: min(30rem, 100%);
+  background: var(--surface); border-left: 1px solid var(--border);
+  box-shadow: var(--shadow-float); z-index: 21;
+  display: none; flex-direction: column;
+}
+.drawer[data-open="true"] { display: flex; }
+.drawer-head { display: flex; align-items: center; gap: var(--space-2h); padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--border); }
+.drawer-body { padding: var(--space-5); display: flex; flex-direction: column; gap: var(--space-5); overflow: auto; }
+.drawer-foot { margin-top: auto; display: flex; align-items: center; gap: var(--space-2); padding: var(--space-4) var(--space-5); border-top: 1px solid var(--border); }
+.drawer-foot .spacer { margin-left: auto; }
+
+.formgrid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+/* `display:flex` on .fieldset beats the UA rule for [hidden]; restore it. */
+[hidden] { display: none !important; }
+.fieldset { display: flex; flex-direction: column; gap: var(--space-3); }
+.checkline { display: flex; align-items: center; gap: var(--space-2); font-size: var(--type-helper); color: var(--ink-2); }
+.checkgroup { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+details.adv > summary { cursor: pointer; font-size: var(--type-helper); color: var(--ink-2); list-style: none; display: flex; align-items: center; gap: var(--space-1h); }
+details.adv > summary::-webkit-details-marker { display: none; }
+details.adv > summary::before { content: "▸"; color: var(--ink-3); }
+details.adv[open] > summary::before { content: "▾"; }
+details.adv > .fieldset { padding-top: var(--space-3); }
+
+.testresult { display: none; }
+.testresult[data-open="true"] { display: block; }
+
+/* ---------- phone ----------
+   The metadata columns are a desktop affordance: at 375px they stop being
+   columns and become a wrapped strip under the name. The toolbar scrolls
+   sideways rather than widening the page. */
+@media (max-width: 720px) {
+  .mrow-meta { flex-wrap: wrap; flex: 1 1 100%; gap: var(--space-2) var(--space-3); }
+  .mrow-chips { flex-wrap: wrap; overflow: visible; }
+  .toolbar-right { margin-left: 0; width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .toolbar-right::-webkit-scrollbar { display: none; }
+  .toolbar-right > * { flex: none; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <aside class="shell-side">
+    <div class="shell-brand">
+      <span class="led" data-state="up" aria-hidden="true"></span>
+      <span class="shell-brand-name">SubGlance</span>
+    </div>
+
+    <ul class="shell-nav">
+      <li><a class="shell-nav-item" href="#">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        Dashboard</a></li>
+      <li><a class="shell-nav-item" href="incidents.html">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 2.4 17.2A1.8 1.8 0 0 0 4 20h16a1.8 1.8 0 0 0 1.6-2.8L13.7 3.9a1.8 1.8 0 0 0-3.4 0Z"/></svg>
+        Incidents <span class="shell-nav-badge">3</span></a></li>
+      <li><a class="shell-nav-item" href="#" aria-current="page">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3 7 4-14 3 7h4"/></svg>
+        Monitors</a></li>
+      <li class="shell-nav-section">Configure</li>
+      <li><a class="shell-nav-item" href="notifications.html">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        Notifications</a></li>
+      <li><a class="shell-nav-item" href="settings.html">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/></svg>
+        Settings</a></li>
+    </ul>
+
+    <div class="shell-foot">operator@example.com</div>
+
+    <div class="shell-foot" style="margin-top:var(--space-3);padding-top:var(--space-3);border-top:1px solid var(--border)">
+      <a href="index.html" style="color:var(--ink-3);text-decoration:none">&larr; All proposals</a>
+    </div>
+  </aside>
+
+  <div class="shell-main">
+    <!-- Topbar carries page-level controls only. Search and filters live in the
+         card toolbar with the thing they filter, not up here — a control that
+         floats away from its list stops being obviously attached to it. -->
+    <header class="shell-topbar">
+      <span class="shell-title">Monitors</span>
+      <span class="chip chip--meta">7 configured</span>
+      <span class="chip chip--meta">1 paused</span>
+      <div class="shell-topbar-right">
+        <button class="btn btn--primary" onclick="openDrawer()">Add monitor</button>
+        <button class="btn btn--sm" onclick="__toggleTheme()">Theme</button>
+      </div>
+    </header>
+
+    <main class="page">
+
+      <!-- ══ THE CENTRAL ARGUMENT ══════════════════════════════════════════
+           Reviewers will open this page and immediately ask why it is not the
+           dashboard. Answer it above the fold, in the product's own voice. -->
+      <div class="note">
+        <b>Why this page exists at all.</b> The Dashboard is for <b>watching</b>: is everything
+        healthy right now, and if not, which one. It shows live state — heartbeat, latency,
+        24h uptime — and it is designed to be left open on a second screen.
+        This page is for <b>managing</b>: what is configured, how it is configured, and changing it.
+        It deliberately shows the columns the dashboard refuses to show — type, interval,
+        timeout, retries, attached notification channels, tags, created date, paused —
+        and deliberately drops the ones the dashboard owns: no heartbeat bar, no latency
+        sparkline, no uptime percentage. <b>If you can answer it by looking, it belongs on
+        the Dashboard. If you answer it by editing, it belongs here.</b> The one shared
+        signal is the status LED, because you need to know what you are about to pause.
+      </div>
+
+      <!-- ══ THE INVENTORY ════════════════════════════════════════════════
+           page → card → row. The rows ARE the panels; there is no panel
+           wrapped around the list and no table element. Two surfaces spent. -->
+      <section class="card">
+        <div class="card-head">
+          <span class="icontile"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span>
+          <span class="card-title">Configured monitors</span>
+          <div class="card-actions">
+            <button class="btn btn--sm" onclick="openDrawer()">Add monitor</button>
+          </div>
+        </div>
+
+        <!-- Toolbar: search hard left, filters hard right. -->
+        <div class="toolbar" id="toolbar">
+          <input class="input" type="search" id="q" aria-label="Search monitors by name, target or tag" placeholder="Search name, target, tag" oninput="filterRows()">
+          <div class="toolbar-right">
+            <select class="input" id="ftype" aria-label="Filter by check type" onchange="filterRows()" style="width:auto">
+              <option value="">All types</option>
+              <option value="http">HTTP</option>
+              <option value="tcp">TCP</option>
+              <option value="ping">Ping</option>
+              <option value="ssl">SSL</option>
+              <option value="push">Push</option>
+            </select>
+            <div class="segmented" role="group" aria-label="Paused filter">
+              <button aria-pressed="true"  onclick="setPausedFilter(this,'')">All</button>
+              <button aria-pressed="false" onclick="setPausedFilter(this,'false')">Active</button>
+              <button aria-pressed="false" onclick="setPausedFilter(this,'true')">Paused</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- The bulk bar takes the toolbar's place rather than floating over the
+             list. Same height, same row, so nothing reflows and nothing is hidden. -->
+        <div class="bulkbar" id="bulkbar">
+          <span class="label" id="bulkcount">0 selected</span>
+          <div class="toolbar-right">
+            <button class="btn btn--sm" onclick="bulk('pause')">Pause</button>
+            <button class="btn btn--sm" onclick="bulk('resume')">Resume</button>
+            <button class="btn btn--sm" onclick="bulk('channels')">Attach channel…</button>
+            <!-- Destructive is outlined, never filled. -->
+            <button class="btn btn--sm btn--danger" onclick="bulk('delete')">Delete</button>
+            <button class="btn btn--sm" onclick="clearSelection()">Cancel</button>
+          </div>
+        </div>
+
+        <div class="checkline">
+          <input type="checkbox" id="selall" aria-label="Select all monitors" onchange="toggleAll(this.checked)">
+          <label for="selall">Select all</label>
+          <span class="helper" style="margin-left:auto">Sorted by name · <span class="mono">GET /api/v1/monitors</span></span>
+        </div>
+
+        <div class="stack" id="list">
+
+          <!-- Long name must truncate, target must truncate independently.
+               Both are single-line: an inventory that reflows to two lines on
+               one row stops being scannable. -->
+          <div class="row" data-type="http" data-paused="false" data-status="up">
+            <input type="checkbox" aria-label="Select checkout-api-eu-west-1.internal.acme-corporation.example" onchange="onSelect(this)">
+            <span class="led led--sm" data-state="up"></span><span class="sr-only" data-statusword>Up</span>
+            <div class="row-main">
+              <div class="row-name">checkout-api-eu-west-1.internal.acme-corporation.example</div>
+              <div class="row-sub">GET https://checkout-api-eu-west-1.internal.acme-corporation.example/healthz</div>
+            </div>
+            <div class="mrow-meta">
+              <div class="mrow-col mrow-w-type"><span class="label">Type</span><span class="chip">HTTP</span></div>
+              <div class="mrow-col mrow-col--num mrow-w-num"><span class="label">Every</span><span class="value">30s</span></div>
+              <div class="mrow-col mrow-col--num mrow-w-num2"><span class="label">T/O · Retry</span><span class="value">5s · 3</span></div>
+              <div class="mrow-col mrow-w-chan"><span class="label">Channels</span><div class="mrow-chips"><span class="chip">slack</span><span class="chip">pagerduty</span></div></div>
+              <div class="mrow-col mrow-w-tags"><span class="label">Tags</span><div class="mrow-chips"><span class="chip chip--meta">prod</span><span class="chip chip--meta">payments</span></div></div>
+            </div>
+            <div class="mrow-acts">
+              <button class="btn btn--sm" onclick="checkNow(this)">Check now</button>
+              <button class="btn btn--sm" onclick="togglePause(this)">Pause</button>
+              <button class="btn btn--sm" onclick="openDrawer('edit')">Edit</button>
+            </div>
+          </div>
+
+          <div class="row" data-type="http" data-paused="false" data-status="down">
+            <input type="checkbox" aria-label="Select auth.example.com" onchange="onSelect(this)">
+            <span class="led led--sm" data-state="down"></span><span class="sr-only" data-statusword>Down</span>
+            <div class="row-main">
+              <div class="row-name">auth.example.com</div>
+              <div class="row-sub">GET https://auth.example.com/login · keyword must_contain "Sign in"</div>
+            </div>
+            <div class="mrow-meta">
+              <div class="mrow-col mrow-w-type"><span class="label">Type</span><span class="chip">HTTP</span></div>
+              <div class="mrow-col mrow-col--num mrow-w-num"><span class="label">Every</span><span class="value">60s</span></div>
+              <div class="mrow-col mrow-col--num mrow-w-num2"><span class="label">T/O · Retry</span><span class="value">10s · 2</span></div>
+              <div class="mrow-col mrow-w-chan"><span class="label">Channels</span><div class="mrow-chips"><span class="chip">slack</span></div></div>
+              <div class="mrow-col mrow-w-tags"><span class="label">Tags</span><div class="mrow-chips"><span class="chip chip--meta">prod</span></div></div>
+            </div>
+            <div class="mrow-acts">
+              <button class="btn btn--sm" onclick="checkNow(this)">Check now</button>
+              <button class="btn btn--sm" onclick="togglePause(this)">Pause</button>
+              <button class="btn btn--sm" onclick="openDrawer('edit')">Edit</button>
+            </div>
+          </div>
+
+          <div class="row" data-type="http" data-paused="false" data-status="up">
+            <input type="checkbox" aria-label="Select cdn.example.com" onchange="onSelect(this)">
+            <span class="led led--sm" data-state="up"></span><span class="sr-only" data-statusword>Up</span>
+            <div class="row-main">
+              <div class="row-name">cdn.example.com</div>
+              <div class="row-sub">HEAD https://cdn.example.com/assets/app.css · expects 200</div>
+            </div>
+            <div class="mrow-meta">
+              <div class="mrow-col mrow-w-type"><span class="label">Type</span><span class="chip">HTTP</span></div>
+              <div class="mrow-col mrow-col--num mrow-w-num"><span class="label">Every</span><span class="value">60s</span></div>
+              <div class="mrow-col mrow-col--num mrow-w-num2"><span class="label">T/O · Retry</span><span class="value">5s · 1</span></div>
+              <!-- A zero renders dimmer: no channels attached is a real finding
+                   on this page, not an empty cell to gloss over. -->
+              <div class="mrow-col mrow-w-chan"><span class="label">Channels</span><span class="value" data-zero="true">none</span></div>
+              <div class="mrow-col mrow-w-tags"><span class="label">Tags</span><div class="mrow-chips"><span class="chip chip--meta">edge</span></div></div>
+            </div>
+            <div class="mrow-acts">
+              <button class="btn btn--sm" onclick="checkNow(this)">Check now</button>
+              <button class="btn btn--sm" onclick="togglePause(this)">Pause</button>
+              <button class="btn btn--sm" onclick="openDrawer('edit')">Edit</button>
+            </div>
+          </div>
+
+          <div class="row" data-type="ssl" data-paused="false" data-status="warn">
+            <input type="checkbox" aria-label="Select status.acme.studio" onchange="onSelect(this)">
+            <span class="led led--sm" data-state="warn"></span><span class="sr-only" data-statusword>Warning</span>
+            <div class="row-main">
+              <div class="row-name">status.acme.studio</div>
+              <div class="row-sub">TLS status.acme.studio:443 · warn 14 days before expiry</div>
+            </div>
+            <div class="mrow-meta">
+              <div class="mrow-col mrow-w-type"><span class="label">Type</span><span class="chip">SSL</span></div>
+              <div class="mrow-col mrow-col--num mrow-w-num"><span class="label">Every</span><span class="value">6h</span></div>
+              <div class="mrow-col mrow-col--num mrow-w-num2"><span class="label">T/O · Retry</span><span class="value">10s · 1</span></div>
+              <div class="mrow-col mrow-w-chan"><span class="label">Channels</span><div class="mrow-chips"><span class="chip">email</span></div></div>
+              <div class="mrow-col mrow-w-tags"><span class="label">Tags</span><div class="mrow-chips"><span class="chip chip--meta">tls</span></div></div>
+            </div>
+            <div class="mrow-acts">
+              <button class="btn btn--sm" onclick="checkNow(this)">Check now</button>
+              <button class="btn btn--sm" onclick="togglePause(this)">Pause</button>
+              <button class="btn btn--sm" onclick="openDrawer('edit')">Edit</button>
+            </div>
+          </div>
+
+          <div class="row" data-type="tcp" data-paused="false" data-status="up">
+            <input type="checkbox" aria-label="Select db.internal.example" onchange="onSelect(this)">
+            <span class="led led--sm" data-state="up"></span><span class="sr-only" data-statusword>Up</span>
+            <div class="row-main">
+              <div class="row-name">db.internal.example</div>
+              <div class="row-sub">TCP db.internal.example:5432</div>
+            </div>
+            <div class="mrow-meta">
+              <div class="mrow-col mrow-w-type"><span class="label">Type</span><span class="chip">TCP</span></div>
+              <div class="mrow-col mrow-col--num mrow-w-num"><span class="label">Every</span><span class="value">30s</span></div>
+              <div class="mrow-col mrow-col--num mrow-w-num2"><span class="label">T/O · Retry</span><span class="value">3s · 2</span></div>
+              <div class="mrow-col mrow-w-chan"><span class="label">Channels</span><div class="mrow-chips"><span class="chip">slack</span></div></div>
+              <div class="mrow-col mrow-w-tags"><span class="label">Tags</span><div class="mrow-chips"><span class="chip chip--meta">prod</span><span class="chip chip--meta">data</span></div></div>
+            </div>
+            <div class="mrow-acts">
+              <button class="btn btn--sm" onclick="checkNow(this)">Check now</button>
+              <button class="btn btn--sm" onclick="togglePause(this)">Pause</button>
+              <button class="btn btn--sm" onclick="openDrawer('edit')">Edit</button>
+            </div>
+          </div>
+
+          <!-- Push monitors invert the direction of the check, so the row says
+               "expects a ping" where the others say what they call. -->
+          <div class="row" data-type="push" data-paused="false" data-status="up">
+            <input type="checkbox" aria-label="Select nightly-database-backup-verification" onchange="onSelect(this)">
+            <span class="led led--sm" data-state="up"></span><span class="sr-only" data-statusword>Up</span>
+            <div class="row-main">
+              <div class="row-name">nightly-database-backup-verification</div>
+              <div class="row-sub">PUSH expects a ping every 24h · /api/push/hk3f…9qz1</div>
+            </div>
+            <div class="mrow-meta">
+              <div class="mrow-col mrow-w-type"><span class="label">Type</span><span class="chip">PUSH</span></div>
+              <div class="mrow-col mrow-col--num mrow-w-num"><span class="label">Every</span><span class="value">24h</span></div>
+              <div class="mrow-col mrow-col--num mrow-w-num2"><span class="label">T/O · Retry</span><span class="value" data-zero="true">— · —</span></div>
+              <div class="mrow-col mrow-w-chan"><span class="label">Channels</span><div class="mrow-chips"><span class="chip">email</span><span class="chip">slack</span></div></div>
+              <div class="mrow-col mrow-w-tags"><span class="label">Tags</span><div class="mrow-chips"><span class="chip chip--meta">backup</span></div></div>
+            </div>
+            <div class="mrow-acts">
+              <button class="btn btn--sm" disabled title="Push monitors are triggered by your job, not by SubGlance">Check now</button>
+              <button class="btn btn--sm" onclick="togglePause(this)">Pause</button>
+              <button class="btn btn--sm" onclick="openDrawer('edit')">Edit</button>
+            </div>
+          </div>
+
+          <!-- Paused: dimmed AND dashed AND chipped. Colour is never the only
+               signal, and "paused" gets no status colour because it is not a
+               health state — it is a configuration state. -->
+          <div class="row" data-type="ping" data-paused="true" data-status="idle">
+            <input type="checkbox" aria-label="Select harbor-goods.app" onchange="onSelect(this)">
+            <span class="led led--sm" data-state="idle"></span><span class="sr-only" data-statusword>Paused</span>
+            <div class="row-main">
+              <div class="row-name">harbor-goods.app <span class="chip chip--meta">PAUSED</span></div>
+              <div class="row-sub">PING harbor-goods.app · paused 3 days ago by operator@example.com</div>
+            </div>
+            <div class="mrow-meta">
+              <div class="mrow-col mrow-w-type"><span class="label">Type</span><span class="chip">PING</span></div>
+              <div class="mrow-col mrow-col--num mrow-w-num"><span class="label">Every</span><span class="value">60s</span></div>
+              <div class="mrow-col mrow-col--num mrow-w-num2"><span class="label">T/O · Retry</span><span class="value">4s · 3</span></div>
+              <div class="mrow-col mrow-w-chan"><span class="label">Channels</span><span class="value" data-zero="true">none</span></div>
+              <div class="mrow-col mrow-w-tags"><span class="label">Tags</span><div class="mrow-chips"><span class="chip chip--meta">staging</span></div></div>
+            </div>
+            <div class="mrow-acts">
+              <button class="btn btn--sm" onclick="checkNow(this)">Check now</button>
+              <button class="btn btn--sm" onclick="togglePause(this)">Resume</button>
+              <button class="btn btn--sm" onclick="openDrawer('edit')">Edit</button>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <div class="note">
+        <b>Why the row is shaped like this.</b> Name and target take the elastic
+        column and truncate; everything else is a fixed-width column so you can
+        read straight <i>down</i> "Every" or "Channels" and spot the monitor
+        checked once an hour or the one with no channel attached. That is the
+        job: finding the misconfiguration, not the outage. Numbers are mono and
+        tabular and right-aligned, and a monitor with no channels renders
+        <span class="mono">none</span> in the dim zero ink rather than an empty
+        cell — the emptiness <i>is</i> the finding. Row actions are inline and
+        identical on every row: no control that only works in one view, and no
+        hover-only "⋯" menu that hides destructive-adjacent actions behind a
+        pointer.
+      </div>
+
+      <div class="note q">
+        <b>Q1 for Frank — does bulk edit earn its complexity?</b> Bulk selection costs a
+        checkbox on every row, a select-all, a mode switch in the toolbar and a
+        whole second set of confirm paths. A self-hosted SubGlance instance
+        realistically has 5–40 monitors, and the honest daily need is "pause
+        these four while we deploy" — which is one action, not four. The proposal
+        keeps it because <b>pause/resume during a maintenance window is the single
+        strongest case</b> and doing it one row at a time is genuinely annoying, and
+        because "attach channel to all of these" is the second-most common setup
+        chore. But bulk <b>delete</b> may be complexity we are buying for nobody:
+        deleting seven monitors at once is rare and unrecoverable. Option: ship
+        bulk pause/resume/attach, leave delete as a per-monitor action only.
+      </div>
+
+      <!-- ══ THE FORM ═════════════════════════════════════════════════════
+           The product principle is "nothing to a working monitor in 60
+           seconds". So the form opens with ONE field that matters. -->
+      <div class="note">
+        <b>Drawer, not page.</b> Argument for a drawer: adding a monitor is almost always
+        done <i>from</i> the inventory and <i>checked against</i> the inventory — you want to
+        see that the name is not already taken and that the new interval matches its
+        neighbours. A full page navigation throws that context away and adds a
+        back-button round trip to a 60-second task. Argument against: the drawer is a
+        third surface, the advanced section can grow taller than the viewport, and
+        HTTP headers/body want real width. Compromise in this proposal: the drawer is
+        the default, it is modal (it owns the screen while open, so the two-surface
+        budget is spent on it rather than alongside the list), and the URL
+        <span class="mono">/monitors/new</span> resolves to the same form rendered
+        full-page for deep links and for the empty state. <b>Click "Add monitor" above
+        to open it.</b>
+      </div>
+
+      <div class="note">
+        <b>60 seconds, concretely.</b> Paste a URL and everything else is already
+        answered: type inferred from the scheme (<span class="mono">https://</span> → HTTP,
+        <span class="mono">host:port</span> → TCP), name inferred from the host, interval 60s,
+        timeout 10s, retries 3, expected status 2xx, follow redirects on. Advanced
+        options are collapsed, not absent. <b>Test check</b> calls
+        <span class="mono">POST /monitors/preview</span> and shows the real response
+        before anything is saved — so the first thing a new user sees is proof the
+        thing works, not a row that goes red because they typo'd the path. Save is
+        one click after that.
+      </div>
+
+      <!-- ══ EMPTY STATE ══════════════════════════════════════════════════ -->
+      <section class="card">
+        <div class="card-head"><span class="card-title">Fresh install — empty state</span>
+          <div class="card-actions"><span class="chip chip--meta">state preview</span></div>
+        </div>
+        <!-- An empty state is a fact at headline weight, not an apology. No
+             "Oops, nothing here yet!". The fact is: nothing is being watched. -->
+        <div class="empty">
+          <div class="empty-head">Nothing is being watched yet</div>
+          <p class="prose">SubGlance checks a URL, a host or a port on a schedule and tells you when
+            it stops answering. Paste a URL and you will have a working monitor in under a minute.</p>
+          <div style="display:flex;gap:var(--space-2);align-items:center;margin-top:var(--space-2);flex-wrap:wrap;justify-content:center;max-width:100%">
+            <input class="input" style="width:22rem;max-width:100%" aria-label="URL of the first thing to watch" placeholder="https://example.com/healthz" onfocus="openDrawer()">
+            <button class="btn btn--primary" onclick="openDrawer()">Add your first monitor</button>
+          </div>
+          <span class="helper">Or import from an existing Uptime Kuma export.</span>
+        </div>
+      </section>
+
+      <div class="note">
+        <b>The empty state is the onboarding.</b> This is the literal first screen after
+        setup, so it does the loud version: the headline states the fact, one sentence
+        explains what the product does in the user's terms, and the primary action is a
+        URL field that is already focusable — typing into it opens the same drawer with
+        the value carried over. No illustration, no empty-box icon, no exclamation mark.
+        The import line is deliberately quiet: it matters enormously to the people
+        migrating and not at all to everyone else.
+      </div>
+
+      <div class="note q">
+        <b>Q2 for Frank — is a separate Monitors page justified, or is it a mode of the
+        Dashboard?</b> The dashboard already has four layouts (Rows, Cards, Compact, Status
+        wall). A fifth called "Manage" is a defensible alternative: one list, one search,
+        one set of filters, and a toggle that swaps live columns for settings columns.
+        Against it: the two views want different sort orders, different default filters
+        (dashboard hides paused, this page must show them), and a settings view
+        inside a screen people leave open on a wall display invites accidental edits.
+        For it: one less nav item, and no "which page was that on" for the user. The
+        proposal assumes separate. It is worth ten minutes of argument.
+      </div>
+
+      <div class="note q">
+        <b>Q3 for Frank — does "Check now" belong on this page, on the Dashboard, or both?</b>
+        <span class="mono">POST /monitors/{id}/check</span> is a watching action ("is it
+        back yet?") living on a managing page ("did my config change take?"). Both readings
+        are real, which usually means it belongs in both places — but "no control that only
+        works in one view" cuts the other way too: if it is here it must behave identically
+        on the dashboard, including what it does to the heartbeat bar. Related: should
+        "Check now" on a <i>paused</i> monitor be allowed? This proposal allows it (you want to
+        verify before resuming) and disables it only for push monitors, where SubGlance
+        does not do the calling.
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- ══ THE DRAWER ══════════════════════════════════════════════════════════ -->
+<div class="scrim" id="scrim" onclick="closeDrawer()"></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Add monitor">
+  <div class="drawer-head">
+    <span class="icontile"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+    <span class="card-title" id="drawertitle">Add monitor</span>
+    <div class="card-actions"><button class="btn btn--sm" onclick="closeDrawer()">Close</button></div>
+  </div>
+
+  <div class="drawer-body">
+
+    <!-- ONE field first. Everything below it is pre-answered. -->
+    <div class="field">
+      <label for="url">URL or host</label>
+      <input class="input mono" id="url" value="https://auth.example.com/login" oninput="inferFromUrl()">
+      <span class="helper" id="inferred">Detected HTTP · name and defaults filled in below.</span>
+    </div>
+
+    <div class="field">
+      <label>Type</label>
+      <div class="segmented" role="group" aria-label="Monitor type">
+        <button aria-pressed="true"  onclick="setType(this,'http')">HTTP</button>
+        <button aria-pressed="false" onclick="setType(this,'tcp')">TCP</button>
+        <button aria-pressed="false" onclick="setType(this,'ping')">Ping</button>
+        <button aria-pressed="false" onclick="setType(this,'ssl')">SSL</button>
+        <button aria-pressed="false" onclick="setType(this,'push')">Push</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="name">Name</label>
+      <input class="input" id="name" value="auth.example.com">
+    </div>
+
+    <!-- Interval/timeout/retries are shared by every type, so they stay put
+         when the type changes. Only the type-specific block swaps. -->
+    <div class="formgrid">
+      <div class="field"><label for="iv">Interval</label><select class="input" id="iv" aria-label="Check interval"><option>30s</option><option selected>60s</option><option>5m</option><option>1h</option><option>6h</option></select></div>
+      <div class="field"><label for="to">Timeout</label><input class="input mono" id="to" value="10s"></div>
+      <div class="field"><label for="rt">Retries before down</label><input class="input mono" id="rt" value="3"></div>
+      <div class="field"><label for="tg">Tags</label><input class="input" id="tg" placeholder="prod, auth"></div>
+    </div>
+
+    <!-- ── per-type blocks ─────────────────────────────────────────────── -->
+
+    <div class="fieldset" data-type-block="http">
+      <span class="label">HTTP options</span>
+      <div class="formgrid">
+        <div class="field"><label for="method">Method</label><select class="input" id="method" aria-label="HTTP method"><option>GET</option><option>HEAD</option><option>POST</option><option>PUT</option></select></div>
+        <div class="field"><label for="status">Expected status</label><input class="input mono" id="status" value="200-299"></div>
+      </div>
+      <div class="formgrid">
+        <div class="field"><label for="kwmode">Keyword</label><select class="input" id="kwmode" aria-label="Keyword match mode"><option>must contain</option><option>must not contain</option></select></div>
+        <div class="field"><label for="kw">&nbsp;</label><input class="input" id="kw" placeholder="Sign in"></div>
+      </div>
+      <label class="checkline"><input type="checkbox" checked> Follow redirects</label>
+    </div>
+
+    <div class="fieldset" data-type-block="tcp" hidden>
+      <span class="label">TCP options</span>
+      <div class="formgrid">
+        <div class="field"><label for="tcphost">Host</label><input class="input mono" id="tcphost" value="db.internal.example"></div>
+        <div class="field"><label for="tcpport">Port</label><input class="input mono" id="tcpport" value="5432"></div>
+      </div>
+      <span class="helper">A TCP monitor only proves the port accepts a connection. It says nothing about what is listening on it.</span>
+    </div>
+
+    <div class="fieldset" data-type-block="ping" hidden>
+      <span class="label">Ping options</span>
+      <span class="helper">ICMP echo. No further options — this is the whole check. Requires the container to run with <span class="mono">NET_RAW</span>.</span>
+    </div>
+
+    <div class="fieldset" data-type-block="ssl" hidden>
+      <span class="label">Certificate options</span>
+      <div class="formgrid">
+        <div class="field"><label for="warndays">Warn this many days before expiry</label><input class="input mono" id="warndays" value="14"></div>
+        <div class="field"><label for="sslport">Port</label><input class="input mono" id="sslport" value="443"></div>
+      </div>
+      <span class="helper">An SSL monitor goes <b>warn</b>, not down, when the certificate is close to expiry — you still have time, and a red board for a problem with two weeks of slack trains people to ignore red.</span>
+    </div>
+
+    <!-- Push inverts everything: there is nothing to test, only something to
+         copy. So the primary artefact of the form becomes the URL itself. -->
+    <div class="fieldset" data-type-block="push" hidden>
+      <span class="label">Push endpoint</span>
+      <span class="helper">SubGlance does not call anything. Your job calls this URL when it finishes; if a ping does not arrive within the interval, the monitor goes down.</span>
+      <div class="field">
+        <label>Call this from your job</label>
+        <textarea class="input mono" rows="2" readonly>curl -fsS https://subglance.example/api/push/hk3f7d2a4b1c9qz1</textarea>
+      </div>
+      <div><button class="btn btn--sm" onclick="this.textContent='Copied'">Copy command</button></div>
+    </div>
+
+    <!-- Advanced: collapsed, not absent. Present for the 10% who need it,
+         invisible to the 90% who do not. -->
+    <details class="adv" data-type-block="http">
+      <summary>Advanced — headers, body, response capture</summary>
+      <div class="fieldset">
+        <div class="field"><label for="hdrs">Request headers</label><textarea class="input mono" id="hdrs" rows="3" placeholder="Authorization: Bearer …"></textarea></div>
+        <div class="field"><label for="body">Request body</label><textarea class="input mono" id="body" rows="3"></textarea></div>
+        <label class="checkline"><input type="checkbox"> Capture response body on failure (stored with the incident)</label>
+        <label class="checkline"><input type="checkbox"> Ignore TLS certificate errors</label>
+      </div>
+    </details>
+
+    <div class="field">
+      <label>Notification channels</label>
+      <div class="checkgroup">
+        <label class="checkline"><input type="checkbox" checked> Slack #ops</label>
+        <label class="checkline"><input type="checkbox"> PagerDuty</label>
+        <label class="checkline"><input type="checkbox"> Email</label>
+      </div>
+      <span class="helper">A monitor with no channel is a monitor nobody hears. It is allowed, but the list marks it.</span>
+    </div>
+
+    <!-- Preview result. Appears where the button is, not in a toast: you want
+         to read it next to the field you would have to fix. -->
+    <div class="panel testresult" id="testresult">
+      <div class="toolbar">
+        <span class="label" id="testlabel">Result</span>
+        <div class="toolbar-right"><span class="chip" id="testchip">…</span></div>
+      </div>
+      <div class="helper mono" id="testbody" style="margin-top:var(--space-2)"></div>
+    </div>
+
+  </div>
+
+  <div class="drawer-foot">
+    <button class="btn" id="testbtn" onclick="testCheck()">Test check</button>
+    <span class="spacer"></span>
+    <button class="btn" onclick="closeDrawer()">Cancel</button>
+    <button class="btn btn--primary" onclick="saveMonitor()">Save monitor</button>
+  </div>
+</aside>
+
+<script>
+/* Mockup behaviour only. Vanilla, no framework, no network. Every handler here
+   corresponds to a real endpoint listed in the notes, so the proposal can be
+   read as an API contract as well as a layout. */
+
+var list = document.getElementById("list");
+
+/* ── selection + bulk bar ─────────────────────────────────────────────── */
+function selected() {
+  return Array.prototype.filter.call(list.querySelectorAll(".row"), function (r) {
+    return r.querySelector('input[type="checkbox"]').checked;
+  });
+}
+function syncBulk() {
+  var n = selected().length;
+  document.getElementById("bulkbar").setAttribute("data-open", n > 0 ? "true" : "false");
+  document.getElementById("toolbar").setAttribute("data-hidden", n > 0 ? "true" : "false");
+  document.getElementById("bulkcount").textContent = n + (n === 1 ? " selected" : " selected");
+  Array.prototype.forEach.call(list.querySelectorAll(".row"), function (r) {
+    r.setAttribute("data-selected", r.querySelector('input[type="checkbox"]').checked ? "true" : "false");
+  });
+}
+function onSelect() { syncBulk(); }
+function toggleAll(on) {
+  Array.prototype.forEach.call(list.querySelectorAll(".row"), function (r) {
+    if (r.hidden) return;
+    r.querySelector('input[type="checkbox"]').checked = on;
+  });
+  syncBulk();
+}
+function clearSelection() {
+  document.getElementById("selall").checked = false;
+  toggleAll(false);
+}
+function bulk(action) {
+  var rows = selected();
+  if (action === "pause" || action === "resume") {
+    rows.forEach(function (r) { setPaused(r, action === "pause"); });
+  } else if (action === "delete") {
+    // Real product: this opens a confirm naming every monitor. Deliberately
+    // not a one-click action, and deliberately outlined rather than filled.
+    rows.forEach(function (r) { r.remove(); });
+  } else if (action === "channels") {
+    alert("Mockup: opens a channel picker, then PUT /monitors/{id}/channels for each selection.");
+  }
+  clearSelection();
+}
+
+/* ── pause / resume ───────────────────────────────────────────────────── */
+function setPaused(row, paused) {
+  /*
+   * Pausing remembers the health it interrupted; resuming restores it rather
+   * than claiming "up".
+   *
+   * Asserting up on resume is the lie this whole product is built against: a
+   * monitor paused while down would come back green and stay green until the
+   * next check happened to run, which is exactly the window an operator
+   * resumes in to see whether it recovered. We do not know the state yet, and
+   * the honest answer to "how is it" right after resuming is the last thing we
+   * actually observed, not an optimistic guess.
+   */
+  var status;
+  if (paused) {
+    row.dataset.prevStatus = row.getAttribute("data-status");
+    status = "idle";
+  } else {
+    status = row.dataset.prevStatus || "idle";
+    delete row.dataset.prevStatus;
+  }
+  row.setAttribute("data-paused", paused ? "true" : "false");
+  row.setAttribute("data-status", status);
+  row.querySelector(".led").setAttribute("data-state", paused ? "idle" : status);
+  /*
+   * The lamp is colour; this is the same fact in words, for everyone the
+   * colour never reaches. It has to move with the state or the two disagree,
+   * and the one a screen reader hears is the one that would be wrong.
+   */
+  var word = row.querySelector("[data-statusword]");
+  if (word) {
+    var WORDS = { up: "Up", down: "Down", warn: "Warning", idle: "Paused" };
+    word.textContent = WORDS[paused ? "idle" : status] || "Unknown";
+  }
+  var name = row.querySelector(".row-name");
+  var chip = name.querySelector(".chip");
+  if (paused && !chip) {
+    chip = document.createElement("span");
+    chip.className = "chip chip--meta";
+    chip.textContent = "PAUSED";
+    name.appendChild(document.createTextNode(" "));
+    name.appendChild(chip);
+  } else if (!paused && chip) {
+    chip.remove();
+  }
+  var btn = row.querySelector(".mrow-acts .btn:nth-child(2)");
+  if (btn) btn.textContent = paused ? "Resume" : "Pause";
+}
+function togglePause(btn) {
+  var row = btn.closest(".row");
+  setPaused(row, row.getAttribute("data-paused") !== "true");
+}
+
+/* ── check now ────────────────────────────────────────────────────────── */
+function checkNow(btn) {
+  var old = btn.textContent;
+  btn.textContent = "Checking…";
+  btn.disabled = true;
+  setTimeout(function () {
+    btn.textContent = "Checked";
+    setTimeout(function () { btn.textContent = old; btn.disabled = false; }, 1200);
+  }, 700);
+}
+
+/* ── filtering ────────────────────────────────────────────────────────── */
+var pausedFilter = "";
+function setPausedFilter(btn, v) {
+  Array.prototype.forEach.call(btn.parentNode.children, function (b) { b.setAttribute("aria-pressed", "false"); });
+  btn.setAttribute("aria-pressed", "true");
+  pausedFilter = v;
+  filterRows();
+}
+function filterRows() {
+  var q = document.getElementById("q").value.toLowerCase();
+  var t = document.getElementById("ftype").value;
+  Array.prototype.forEach.call(list.querySelectorAll(".row"), function (r) {
+    var text = r.textContent.toLowerCase();
+    var ok = (!q || text.indexOf(q) !== -1)
+          && (!t || r.getAttribute("data-type") === t)
+          && (!pausedFilter || r.getAttribute("data-paused") === pausedFilter);
+    r.hidden = !ok;
+  });
+}
+
+/* ── drawer ───────────────────────────────────────────────────────────── */
+function openDrawer(mode) {
+  document.getElementById("drawertitle").textContent = mode === "edit" ? "Edit monitor" : "Add monitor";
+  document.getElementById("drawer").setAttribute("data-open", "true");
+  document.getElementById("scrim").setAttribute("data-open", "true");
+  document.getElementById("testresult").setAttribute("data-open", "false");
+}
+function closeDrawer() {
+  document.getElementById("drawer").setAttribute("data-open", "false");
+  document.getElementById("scrim").setAttribute("data-open", "false");
+}
+document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeDrawer(); });
+
+/* ── type switching: the form visibly changes shape ───────────────────── */
+function setType(btn, type) {
+  Array.prototype.forEach.call(btn.parentNode.children, function (b) { b.setAttribute("aria-pressed", "false"); });
+  btn.setAttribute("aria-pressed", "true");
+  Array.prototype.forEach.call(document.querySelectorAll("[data-type-block]"), function (el) {
+    el.hidden = el.getAttribute("data-type-block") !== type;
+  });
+  // Push has nothing to preview — SubGlance is the receiver, not the caller.
+  var tb = document.getElementById("testbtn");
+  tb.disabled = (type === "push");
+  tb.textContent = type === "push" ? "Nothing to test" : "Test check";
+  document.getElementById("testresult").setAttribute("data-open", "false");
+}
+
+/* ── infer from a pasted URL — the 60-second path ─────────────────────── */
+function inferFromUrl() {
+  var v = document.getElementById("url").value.trim();
+  var type = "http", host = v;
+  if (/^https?:\/\//i.test(v)) {
+    host = v.replace(/^https?:\/\//i, "").split("/")[0];
+    type = "http";
+  } else if (/^[^\s\/]+:\d+$/.test(v)) {
+    host = v.split(":")[0];
+    type = "tcp";
+  } else if (v) {
+    type = "ping";
+  }
+  document.getElementById("name").value = host;
+  document.getElementById("inferred").textContent =
+    v ? "Detected " + type.toUpperCase() + " · name and defaults filled in below." : "Paste a URL, host or host:port.";
+  var seg = document.querySelectorAll('.drawer .segmented button');
+  Array.prototype.forEach.call(seg, function (b) {
+    if (b.textContent.toLowerCase() === type) setType(b, type);
+  });
+}
+
+/* ── test check: POST /monitors/preview, before anything is saved ─────── */
+function testCheck() {
+  var btn = document.getElementById("testbtn");
+  var box = document.getElementById("testresult");
+  var chip = document.getElementById("testchip");
+  var body = document.getElementById("testbody");
+  btn.disabled = true;
+  btn.textContent = "Testing…";
+  box.setAttribute("data-open", "true");
+  chip.className = "chip chip--meta";
+  chip.textContent = "running";
+  body.textContent = "Connecting…";
+  setTimeout(function () {
+    // Simulated: an HTTP monitor whose keyword did not match. Chosen on purpose
+    // — a green preview teaches nothing. The value of preview is catching the
+    // typo, so the mockup shows the failure shape.
+    var kw = document.getElementById("kw").value;
+    if (kw) {
+      chip.className = "chip chip--warn";
+      chip.textContent = "KEYWORD NOT FOUND";
+      body.textContent = "200 OK · 148 ms · 24.1 KB · TLS valid 61 days\nKeyword \u201c" + kw + "\u201d not found in response body.";
+    } else {
+      chip.className = "chip chip--up";
+      chip.textContent = "UP";
+      body.textContent = "200 OK · 148 ms · 24.1 KB · TLS valid 61 days\nRedirect chain: 1 hop (http \u2192 https).";
+    }
+    body.style.whiteSpace = "pre-line";
+    btn.disabled = false;
+    btn.textContent = "Test again";
+  }, 900);
+}
+
+function saveMonitor() {
+  // Real product: POST /api/v1/monitors, then PUT /monitors/{id}/channels.
+  closeDrawer();
+  alert("Mockup: POST /api/v1/monitors, then PUT /monitors/{id}/channels for the ticked channels.");
+}
+
+syncBulk();
+</script>
+</body>
+</html>

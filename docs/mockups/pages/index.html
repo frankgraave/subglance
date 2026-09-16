@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<!--
+  Index for the page proposals.
+
+  These four screens are what the sidebar currently advertises as "Soon".
+  They are proposals to review, not built product: every one of them is a
+  standalone file with fixture data and simulated interaction, so it can be
+  opened from disk and clicked without a server.
+
+  Each page carries its own annotations. Blue notes explain a decision;
+  amber notes are questions that need Frank's answer before anything is built.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Page proposals — SubGlance</title>
+<link rel="stylesheet" href="shared.css">
+<script>
+(function () {
+  var KEY = "subglance:mockup-theme";
+  var saved = null;
+  try { saved = localStorage.getItem(KEY); } catch (e) {}
+  var t = saved || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+  document.documentElement.setAttribute("data-theme", t);
+  window.__toggleTheme = function () {
+    var next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem(KEY, next); } catch (e) {}
+  };
+})();
+</script>
+<style>
+  body { display: grid; place-items: start center; padding: var(--space-12) var(--space-6); }
+  .wrap { width: min(820px, 100%); display: flex; flex-direction: column; gap: var(--space-5); }
+  .head { display: flex; align-items: center; gap: var(--space-2h); }
+  .head h1 { font-size: var(--type-page); line-height: var(--lead-page); font-weight: var(--weight-strong); }
+  .head .btn { margin-left: auto; }
+  a.proposal {
+    display: block; text-decoration: none; color: inherit;
+    border: 1px solid var(--border); border-radius: var(--r-lg);
+    background: var(--surface); padding: var(--space-5);
+    transition: border-color var(--dur-hover) var(--ease), background var(--dur-hover) var(--ease);
+  }
+  a.proposal:hover { border-color: var(--border-hi); background: var(--surface-2); }
+  .proposal-top { display: flex; align-items: center; gap: var(--space-2h); margin-bottom: var(--space-2); }
+  .proposal-title { font-size: var(--type-card); line-height: var(--lead-card); font-weight: var(--weight-strong); }
+  .proposal-file { margin-left: auto; font-family: var(--font-mono); font-size: var(--type-section); color: var(--ink-3); }
+  .proposal-try { margin-top: var(--space-3); display: flex; flex-wrap: wrap; gap: var(--space-1h); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="head">
+    <span class="led"></span>
+    <h1>Page proposals</h1>
+    <button class="btn btn--sm" onclick="__toggleTheme()">Toggle theme</button>
+  </div>
+
+  <p class="prose">
+    The sidebar promises four destinations that do not exist yet. These are proposals for what
+    they should be. Nothing is wired to a backend — the data is fixed and the interactions are
+    simulated, so it is safe to click anything.
+  </p>
+
+  <div class="note">
+    <b>How to read the annotations.</b> Blue notes explain why a layout is the way it is.
+    <span style="color:var(--warn)">Amber notes</span> are open questions: decisions I did not want to
+    make on your behalf. Answering those is the useful part of this review — the pixels can move later,
+    the questions shape what gets built.
+  </div>
+
+  <div class="note">
+    <b>Status, 16 September.</b> These proposals are no longer only proposals: each page now has a
+    ticket, and Incidents is being built. The annotations were left in place rather than stripped on
+    merge, because the reasoning is the part worth keeping — but an answered question carries its
+    answer in blue, so nobody re-opens a settled decision.
+    <br><br>
+    Incidents has all three of its questions answered (both chronological and clustered; ack does
+    silence re-alerts, which contradicts what that page originally drew; history stays at 30 days).
+    Monitors, Notifications and Settings still carry ten amber questions between them. Those are
+    recorded in their tickets, so answering them here or there amounts to the same thing — but
+    nothing is blocked on them except the parts they describe.
+  </div>
+
+  <a class="proposal" href="incidents.html">
+    <div class="proposal-top">
+      <span class="icontile"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></span>
+      <span class="proposal-title">Incidents</span>
+      <span class="proposal-file">incidents.html</span>
+    </div>
+    <div class="prose">
+      What is broken right now, what was broken, and what actually happened during an outage.
+      The 3am screen: it has to answer one question before you have finished reading it.
+    </div>
+    <div class="proposal-try">
+      <span class="chip chip--meta">Try: Simulate new incident</span>
+      <span class="chip chip--meta">Acknowledge</span>
+      <span class="chip chip--meta">Open / Resolved / All</span>
+    </div>
+  </a>
+
+  <a class="proposal" href="monitors.html">
+    <div class="proposal-top">
+      <span class="icontile"><svg viewBox="0 0 24 24"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg></span>
+      <span class="proposal-title">Monitors</span>
+      <span class="proposal-file">monitors.html</span>
+    </div>
+    <div class="prose">
+      Managing rather than watching: configuration, bulk changes, adding and removing.
+      The page has to earn its existence next to the dashboard — that argument is on the page.
+    </div>
+    <div class="proposal-try">
+      <span class="chip chip--meta">Try: Add monitor</span>
+      <span class="chip chip--meta">Switch monitor type</span>
+      <span class="chip chip--meta">Select rows for bulk actions</span>
+    </div>
+  </a>
+
+  <a class="proposal" href="notifications.html">
+    <div class="proposal-top">
+      <span class="icontile"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></span>
+      <span class="proposal-title">Notifications</span>
+      <span class="proposal-file">notifications.html</span>
+    </div>
+    <div class="prose">
+      Where alerts go, and the rules that decide when. Includes the failure mode that matters most:
+      a channel that quietly stopped delivering.
+    </div>
+    <div class="proposal-try">
+      <span class="chip chip--meta">Try: Send test</span>
+      <span class="chip chip--meta">Add a channel</span>
+      <span class="chip chip--meta">Routing rules</span>
+    </div>
+  </a>
+
+  <a class="proposal" href="settings.html">
+    <div class="proposal-top">
+      <span class="icontile"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.9 15.2a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.3 7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 2.9-1.2V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.9H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1 .2z"/></svg></span>
+      <span class="proposal-title">Settings</span>
+      <span class="proposal-file">settings.html</span>
+    </div>
+    <div class="prose">
+      Everything about this instance rather than one monitor. Written as a server admin screen,
+      not a SaaS account page — including the diagnostics a self-hoster wants and a hosted product
+      would never show.
+    </div>
+    <div class="proposal-try">
+      <span class="chip chip--meta">Try: Create API token</span>
+      <span class="chip chip--meta">Retention</span>
+      <span class="chip chip--meta">Danger zone</span>
+    </div>
+  </a>
+
+  <div class="note">
+    <b>Shared chrome.</b> All four use the same sidebar, toolbar and tokens as the built dashboard,
+    copied from <code>web/src/styles/tokens.css</code>. The theme toggle in each toolbar works and the
+    choice is remembered, so both themes can be judged on every screen.
+  </div>
+
+  <p class="helper">
+    ← <a href="../index.html" style="color:var(--ink-2)">Back to the design review index</a>
+  </p>
+
+</div>
+</body>
+</html>
