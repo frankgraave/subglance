@@ -307,7 +307,7 @@ func TestRestoreSuppressesDuplicateAlert(t *testing.T) {
 	e := New(Options{Now: c.Now, FlapThreshold: 99})
 
 	// Simulate a restart while an incident was already confirmed.
-	e.Restore(1, StatusDown, true, true, 2)
+	e.Restore(1, RestoredState{Status: StatusDown, IncidentOpen: true, IncidentConfirmed: true, ConsecutiveFails: 2, SnapshotsSpent: 2})
 
 	if got := e.Status(1); got != StatusDown {
 		t.Fatalf("restored status = %q, want down", got)
@@ -514,14 +514,124 @@ func TestConcurrentObserveIsSafe(t *testing.T) {
 	wg.Wait()
 }
 
+// The restore path is a state transition like any other in this package, so
+// it gets the same treatment: a table over the boundaries that matter. The
+// seed and the next observation together decide whether an outage that spans
+// a restart still confirms, and each row pins one of those boundaries.
+func TestRestoreTransitionMatrix(t *testing.T) {
+	const threshold = 3
+
+	cases := []struct {
+		name string
+		seed RestoredState
+
+		wantStatus Status
+		wantEvent  Event
+		wantFails  int
+		wantNotify bool
+	}{
+		{
+			// A zero seed is a monitor whose incident row exists but whose
+			// failures are not known. It starts counting from one and stays
+			// pending, two checks short of confirming.
+			name: "zero seed stays pending",
+			seed: RestoredState{Status: StatusPending, IncidentOpen: true},
+
+			wantStatus: StatusPending,
+			wantEvent:  EventNone,
+			wantFails:  1,
+		},
+		{
+			// The boundary this whole change is about: restored one failure
+			// short of the threshold, the next failure has to confirm.
+			name: "pending at threshold minus one confirms on the next failure",
+			seed: RestoredState{
+				Status: StatusPending, IncidentOpen: true,
+				ConsecutiveFails: threshold - 1,
+			},
+
+			wantStatus: StatusDown,
+			wantEvent:  EventIncidentConfirmed,
+			wantFails:  threshold,
+			wantNotify: true,
+		},
+		{
+			// Two short of the threshold is the other side of that boundary:
+			// still pending, and no alert.
+			name: "pending at threshold minus two stays pending",
+			seed: RestoredState{
+				Status: StatusPending, IncidentOpen: true,
+				ConsecutiveFails: threshold - 2,
+			},
+
+			wantStatus: StatusPending,
+			wantEvent:  EventNone,
+			wantFails:  threshold - 1,
+		},
+		{
+			// Already confirmed before the restart. The user has been told,
+			// so a further failure must announce nothing.
+			name: "confirmed incident does not re-announce",
+			seed: RestoredState{
+				Status: StatusDown, IncidentOpen: true, IncidentConfirmed: true,
+				ConsecutiveFails: threshold + 4,
+			},
+
+			wantStatus: StatusDown,
+			wantEvent:  EventNone,
+			wantFails:  threshold + 5,
+		},
+		{
+			// A negative seed is a count that went wrong somewhere upstream.
+			// It floors at zero rather than counting backwards towards the
+			// threshold from the far side.
+			name: "negative seed floors at zero",
+			seed: RestoredState{
+				Status: StatusPending, IncidentOpen: true, ConsecutiveFails: -5,
+			},
+
+			wantStatus: StatusPending,
+			wantEvent:  EventNone,
+			wantFails:  1,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := newClock()
+			e := New(Options{Now: c.Now, FlapThreshold: 99})
+
+			e.Restore(1, tc.seed)
+
+			tr := e.Observe(Observation{
+				MonitorID: 1, OK: false, At: c.Now(), FailureThreshold: threshold,
+			})
+
+			if tr.To != tc.wantStatus {
+				t.Errorf("status = %q, want %q", tr.To, tc.wantStatus)
+			}
+			if tr.Event != tc.wantEvent {
+				t.Errorf("event = %q, want %q", tr.Event, tc.wantEvent)
+			}
+			if tr.ConsecutiveFails != tc.wantFails {
+				t.Errorf("consecutive fails = %d, want %d", tr.ConsecutiveFails, tc.wantFails)
+			}
+			if tr.Notify != tc.wantNotify {
+				t.Errorf("notify = %v, want %v", tr.Notify, tc.wantNotify)
+			}
+		})
+	}
+}
+
 func TestRestoreKeepsTheFailureStreak(t *testing.T) {
 	c := newClock()
 	e := New(Options{Now: c.Now, FlapThreshold: 99})
 
-	// A restart three checks into an outage. The streak is what bounds the
-	// response-snapshot budget, so restoring it as zero would hand this
-	// outage a second budget on every restart.
-	e.Restore(1, StatusDown, true, true, 3)
+	// A restart three checks into an outage.
+	e.Restore(1, RestoredState{
+		Status: StatusDown, IncidentOpen: true, IncidentConfirmed: true,
+		ConsecutiveFails: 3, SnapshotsSpent: 3,
+	})
 
 	tr := e.Observe(Observation{MonitorID: 1, OK: false, At: c.Now(), FailureThreshold: 2})
 	if tr.ConsecutiveFails != 4 {
@@ -536,14 +646,49 @@ func TestRestoreKeepsTheFailureStreak(t *testing.T) {
 	}
 }
 
-func TestRestoreRejectsANegativeStreak(t *testing.T) {
+// The snapshot budget rides a counter of its own because the two counts
+// genuinely disagree after a restart: a monitor whose responses are not
+// captured fails without spending any budget, and a flapping monitor skips
+// snapshots while still failing. Seeding one from the other loses whichever
+// of the two is smaller.
+func TestRestoreSeedsTheSnapshotBudgetSeparately(t *testing.T) {
 	c := newClock()
 	e := New(Options{Now: c.Now, FlapThreshold: 99})
 
-	e.Restore(1, StatusDown, true, true, -5)
+	// Eight failures recorded, but only two snapshots ever written.
+	e.Restore(1, RestoredState{
+		Status: StatusDown, IncidentOpen: true, IncidentConfirmed: true,
+		ConsecutiveFails: 8, SnapshotsSpent: 2,
+	})
 
 	tr := e.Observe(Observation{MonitorID: 1, OK: false, At: c.Now(), FailureThreshold: 2})
-	if tr.ConsecutiveFails != 1 {
-		t.Errorf("consecutive fails = %d, want 1: a negative seed must floor at zero, not count backwards", tr.ConsecutiveFails)
+	if tr.ConsecutiveFails != 9 {
+		t.Errorf("consecutive fails = %d, want 9", tr.ConsecutiveFails)
+	}
+	if tr.SnapshotsSpent != 3 {
+		t.Errorf("snapshots spent = %d, want 3: the budget must continue from what "+
+			"was written, not from the failure count", tr.SnapshotsSpent)
+	}
+
+	// A recovery clears both, so neither can outlive its incident.
+	tr = e.Observe(Observation{MonitorID: 1, OK: true, At: c.Now(), FailureThreshold: 2})
+	if tr.ConsecutiveFails != 0 || tr.SnapshotsSpent != 0 {
+		t.Errorf("after recovery: fails = %d, snapshots = %d, want 0 and 0",
+			tr.ConsecutiveFails, tr.SnapshotsSpent)
+	}
+}
+
+func TestRestoreRejectsANegativeSnapshotBudget(t *testing.T) {
+	c := newClock()
+	e := New(Options{Now: c.Now, FlapThreshold: 99})
+
+	e.Restore(1, RestoredState{
+		Status: StatusDown, IncidentOpen: true, IncidentConfirmed: true,
+		SnapshotsSpent: -5,
+	})
+
+	tr := e.Observe(Observation{MonitorID: 1, OK: false, At: c.Now(), FailureThreshold: 2})
+	if tr.SnapshotsSpent != 1 {
+		t.Errorf("snapshots spent = %d, want 1: a negative seed must floor at zero", tr.SnapshotsSpent)
 	}
 }

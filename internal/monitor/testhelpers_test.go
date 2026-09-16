@@ -29,3 +29,11 @@ func outcomeFor(m store.Monitor, target string, ok bool) scheduler.Outcome {
 
 	return scheduler.Outcome{Monitor: cm, Result: res}
 }
+
+// at stamps an outcome with a specific check time. Tests that depend on the
+// flap window use it to move time forward without sleeping: the engine expires
+// recorded flips against the result's timestamp, never against the wall clock.
+func at(o scheduler.Outcome, ts time.Time) scheduler.Outcome {
+	o.Result.CheckedAt = ts
+	return o
+}

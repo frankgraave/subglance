@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/frankgraave/subglance/internal/state"
 	"github.com/frankgraave/subglance/internal/store"
 )
 
@@ -80,12 +81,15 @@ func TestAFlappingMonitorStopsStoringResponses(t *testing.T) {
 
 // Once the oscillation stops, capture has to come back. A rule that silenced a
 // monitor permanently after one bad afternoon would be worse than the leak.
+//
+// The flap window expires against the timestamp on the check result, not
+// against the wall clock, so the settling period is simulated by moving that
+// timestamp forward. A real sleep would make this test both slow and
+// timing-dependent for no extra coverage.
 func TestCaptureResumesAfterTheFlappingSettles(t *testing.T) {
 	db := testDB(t)
 
-	// A short flap window so the recorded flips can genuinely expire inside
-	// the test rather than being simulated away with a second runner.
-	const window = 100 * time.Millisecond
+	const window = time.Hour
 	r := New(Options{
 		DB:                  db,
 		Log:                 quietLogger(),
@@ -102,9 +106,15 @@ func TestCaptureResumesAfterTheFlappingSettles(t *testing.T) {
 		t.Fatalf("CreateMonitor: %v", err)
 	}
 
+	clock := time.Date(2025, 3, 1, 12, 0, 0, 0, time.UTC)
+	tick := func() time.Time {
+		clock = clock.Add(time.Second)
+		return clock
+	}
+
 	for i := range 10 {
-		r.record(failureWithBody(m, fmt.Sprintf("flap %d", i)))
-		r.record(outcomeFor(m, m.Target, true))
+		r.record(at(failureWithBody(m, fmt.Sprintf("flap %d", i)), tick()))
+		r.record(at(outcomeFor(m, m.Target, true), tick()))
 	}
 	if !r.engine.Flapping(m.ID) {
 		t.Fatal("precondition: the monitor should be flapping after ten flips")
@@ -113,9 +123,9 @@ func TestCaptureResumesAfterTheFlappingSettles(t *testing.T) {
 
 	// Let every recorded flip fall out of the window, which is what a
 	// monitor that settled down looks like to the engine.
-	time.Sleep(3 * window)
+	clock = clock.Add(3 * window)
 
-	r.record(failureWithBody(m, "after settling"))
+	r.record(at(failureWithBody(m, "after settling"), tick()))
 
 	if got := storedSnapshots(t, db); got != before+1 {
 		t.Errorf("snapshots after settling = %d, want %d: a monitor that stopped "+
@@ -158,5 +168,50 @@ func TestARestartDoesNotRefillTheSnapshotBudget(t *testing.T) {
 	if got := storedSnapshots(t, db); got != spent {
 		t.Errorf("stored %d snapshots after the restart, want %d: the restart "+
 			"refilled a budget this outage had already spent", got, spent)
+	}
+}
+
+// Response capture is optional per monitor, and that is where seeding the
+// alert streak from the snapshot count broke down: a monitor that stores no
+// snapshots recorded no budget either, so a restart restored a streak of zero.
+// A pending incident one failure short of confirming then had to start over,
+// and a restart loop could keep a monitor pending through an outage it should
+// have alerted on.
+func TestARestartKeepsTheAlertStreakWithoutCapture(t *testing.T) {
+	db := testDB(t)
+	first := recordingRunner(t, db)
+
+	// Three retries, no capture: this monitor confirms on its third failure
+	// and never writes a snapshot.
+	m, err := db.CreateMonitor(context.Background(), store.Monitor{
+		Name: "no capture", Type: "http", Target: "https://example.com/health",
+		Enabled: true, CaptureResponse: false, Retries: 3,
+	})
+	if err != nil {
+		t.Fatalf("CreateMonitor: %v", err)
+	}
+
+	// Two failures: the incident is open and pending, one short of confirmed.
+	for range 2 {
+		first.record(outcomeFor(m, m.Target, false))
+	}
+	if got := first.engine.Status(m.ID); got != state.StatusPending {
+		t.Fatalf("precondition: status = %q, want pending", got)
+	}
+	if n := storedSnapshots(t, db); n != 0 {
+		t.Fatalf("precondition: stored %d snapshots, want 0 with capture off", n)
+	}
+
+	second := recordingRunner(t, db)
+	if err := second.restore(context.Background()); err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+
+	// The third failure of the same outage. It has to confirm.
+	second.record(outcomeFor(m, m.Target, false))
+
+	if got := second.engine.Status(m.ID); got != state.StatusDown {
+		t.Errorf("status after the third failure = %q, want down: the restart "+
+			"dropped the alert streak, so this outage never confirms", got)
 	}
 }
