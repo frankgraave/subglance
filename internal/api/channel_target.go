@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"net"
 	"net/url"
 	"strings"
 	"time"
@@ -82,7 +83,25 @@ func channelTarget(req channelRequest) (field, host string) {
 		return "config.url", u.Hostname()
 
 	case store.ChannelEmail:
-		return "config.host", strings.TrimSpace(req.Config["host"])
+		host := strings.TrimSpace(req.Config["host"])
+		// `port` is its own config field, but the host field takes any
+		// string and an operator may well type "relay.example:587" into
+		// it. That string is neither an address literal nor a resolvable
+		// name, so it would reach the guard intact, come back as a
+		// lookup failure, and be waved through by the deliberate rule
+		// that an unresolvable name is somebody else's valid setup —
+		// turning the port into a way to smuggle a blocked relay past a
+		// check that catches the same trick in a URL.
+		//
+		// SplitHostPort fails on a bare name and on a bracketless IPv6
+		// literal, and failing is the signal that there was no port to
+		// strip; keeping the original is then correct. It also unwraps
+		// the bracketed IPv6 form, which is the only way a host field
+		// can carry an IPv6 address and a port at once.
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			host = h
+		}
+		return "config.host", host
 
 	default:
 		return "", ""
