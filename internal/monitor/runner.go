@@ -554,6 +554,11 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 		r.log.Error("failed to record heartbeat",
 			"monitor_id", o.Monitor.ID, "monitor", o.Monitor.Name, "error", err)
 		hbErr = fmt.Errorf("record heartbeat: %w", err)
+	} else if hb.Response != nil {
+		// The budget is charged only now. RecordHeartbeat writes the
+		// heartbeat and its response in one transaction, so a failure
+		// stored neither and this outage still has its allowance.
+		r.engine.SpendSnapshot(o.Monitor.ID)
 	}
 
 	// Publish before applying the transition so the dashboard paints the new
@@ -576,17 +581,19 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 // snapshotToStore decides whether this result's captured response is worth a
 // row, and converts it to the storage shape.
 //
-// Two rules, because one streak-shaped budget only covers one of the two ways
-// the same error page gets written over and over.
+// Two rules, because one budget only covers one of the two ways the same error
+// page gets written over and over.
 //
-// The first is the streak: the first maxSnapshotsPerIncident failures of it. A
+// The first is the budget: the first maxSnapshotsPerIncident stored snapshots
+// of an incident. Only a stored snapshot spends it, so the failures that write
+// nothing leave the allowance for the ones that do. A
 // monitor that has been returning the same 503 for six hours has already said
 // everything it has to say, and every repeat after that is storage spent on a
 // copy of something already on disk.
 //
-// The second is flapping, which the streak cannot see. A monitor that fails,
+// The second is flapping, which the budget cannot see. A monitor that fails,
 // recovers and fails again every minute resolves its incident on each recovery
-// and so starts every failure with a streak of one — permanently inside the
+// and so starts every failure with an empty budget — permanently inside the
 // budget, writing a snapshot per check, for as long as it oscillates. The
 // engine already knows that monitor is flapping, and a flapping monitor is
 // precisely the case where snapshots are worthless: there are already twenty
@@ -602,7 +609,7 @@ func snapshotToStore(res checker.Result, snapshotsSpent int, flapping bool) *sto
 	if flapping {
 		return nil
 	}
-	if snapshotsSpent > maxSnapshotsPerIncident {
+	if snapshotsSpent >= maxSnapshotsPerIncident {
 		return nil
 	}
 	return &store.ResponseSnapshot{

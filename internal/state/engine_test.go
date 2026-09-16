@@ -646,12 +646,13 @@ func TestRestoreKeepsTheFailureStreak(t *testing.T) {
 	}
 }
 
-// The snapshot budget rides a counter of its own because the two counts
-// genuinely disagree after a restart: a monitor whose responses are not
-// captured fails without spending any budget, and a flapping monitor skips
-// snapshots while still failing. Seeding one from the other loses whichever
-// of the two is smaller.
-func TestRestoreSeedsTheSnapshotBudgetSeparately(t *testing.T) {
+// The snapshot budget rides a counter of its own because it counts something
+// else entirely: snapshots that reached the disk, not failures that happened.
+// A monitor whose responses are not captured fails without storing anything,
+// a flapping monitor skips snapshots while still failing, and a heartbeat
+// write can fail outright. Seeding one count from the other, or charging the
+// budget for those failures, loses the allowance a real snapshot needs.
+func TestTheSnapshotBudgetCountsStoredSnapshotsOnly(t *testing.T) {
 	c := newClock()
 	e := New(Options{Now: c.Now, FlapThreshold: 99})
 
@@ -665,9 +666,18 @@ func TestRestoreSeedsTheSnapshotBudgetSeparately(t *testing.T) {
 	if tr.ConsecutiveFails != 9 {
 		t.Errorf("consecutive fails = %d, want 9", tr.ConsecutiveFails)
 	}
+	if tr.SnapshotsSpent != 2 {
+		t.Errorf("snapshots spent = %d, want 2: a failure that stored nothing "+
+			"must not charge the budget", tr.SnapshotsSpent)
+	}
+
+	// This failure did store a snapshot, so the caller charges it.
+	if got := e.SpendSnapshot(1); got != 3 {
+		t.Errorf("SpendSnapshot = %d, want 3", got)
+	}
+	tr = e.Observe(Observation{MonitorID: 1, OK: false, At: c.Now(), FailureThreshold: 2})
 	if tr.SnapshotsSpent != 3 {
-		t.Errorf("snapshots spent = %d, want 3: the budget must continue from what "+
-			"was written, not from the failure count", tr.SnapshotsSpent)
+		t.Errorf("snapshots spent after a stored snapshot = %d, want 3", tr.SnapshotsSpent)
 	}
 
 	// A recovery clears both, so neither can outlive its incident.
@@ -675,6 +685,19 @@ func TestRestoreSeedsTheSnapshotBudgetSeparately(t *testing.T) {
 	if tr.ConsecutiveFails != 0 || tr.SnapshotsSpent != 0 {
 		t.Errorf("after recovery: fails = %d, snapshots = %d, want 0 and 0",
 			tr.ConsecutiveFails, tr.SnapshotsSpent)
+	}
+}
+
+// Charging a monitor the engine has never seen must not create state for it.
+func TestSpendSnapshotIgnoresAnUnknownMonitor(t *testing.T) {
+	c := newClock()
+	e := New(Options{Now: c.Now, FlapThreshold: 99})
+
+	if got := e.SpendSnapshot(404); got != 0 {
+		t.Errorf("SpendSnapshot on an unknown monitor = %d, want 0", got)
+	}
+	if e.Len() != 0 {
+		t.Errorf("engine tracks %d monitors, want 0", e.Len())
 	}
 }
 
@@ -688,7 +711,7 @@ func TestRestoreRejectsANegativeSnapshotBudget(t *testing.T) {
 	})
 
 	tr := e.Observe(Observation{MonitorID: 1, OK: false, At: c.Now(), FailureThreshold: 2})
-	if tr.SnapshotsSpent != 1 {
-		t.Errorf("snapshots spent = %d, want 1: a negative seed must floor at zero", tr.SnapshotsSpent)
+	if tr.SnapshotsSpent != 0 {
+		t.Errorf("snapshots spent = %d, want 0: a negative seed must floor at zero", tr.SnapshotsSpent)
 	}
 }
