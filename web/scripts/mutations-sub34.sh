@@ -302,11 +302,29 @@ s = s.replace("    >\n      {/*\n       * The collapsed line is a button",
 # 26. A repeat advances the chain, bridging two monitors 150s apart into one
 #     cluster inside a 60s window.
 mutate "a repeat bridges unrelated monitors" "$CLUSTER" '
-old = "        lastKept = candidate.startedAt ?? 0;"
+old = "      if (seen.has(candidate.monitorId)) break;"
 assert old in s
-s = s.replace(old, "")
-s = s.replace("      if (seen.has(candidate.monitorId)) {\n        repeats.push(candidate);\n      } else {",
-              "      lastKept = candidate.startedAt ?? 0;\n      if (seen.has(candidate.monitorId)) {\n        repeats.push(candidate);\n      } else {")
+s = s.replace(old, """      if (seen.has(candidate.monitorId)) {
+        cursor += 1;
+        continue;
+      }""")
+' $SRC/cluster.test.ts
+
+# 26b. Repeats are carried past the cluster, so a row moves backwards in a
+#      list that promises to run one way in time.
+mutate "repeat reordered behind its cluster" "$CLUSTER" '
+old = "      if (seen.has(candidate.monitorId)) break;"
+assert old in s
+s = s.replace(old, """      if (seen.has(candidate.monitorId)) {
+        entries.push({
+          kind: \"single\",
+          key: candidate.id,
+          incident: candidate,
+          at: candidate.startedAt ?? 0,
+        });
+        cursor += 1;
+        continue;
+      }""")
 ' $SRC/cluster.test.ts
 
 # 27. A capped page passes as a complete month.

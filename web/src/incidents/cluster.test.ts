@@ -301,3 +301,46 @@ describe("a repeat must not bridge two unrelated monitors", () => {
     expect(ids.sort()).toEqual(["A", "B1", "B2", "C"]);
   });
 });
+
+describe("chronology survives a repeat inside a run", () => {
+  /*
+   * Found by review. Repeats were collected and emitted *after* the cluster,
+   * so A@150s, A@125s, B@100s rendered as the A/B cluster followed by the
+   * 125s repeat — a row moving backwards in a list that promises to run one
+   * way in time.
+   *
+   * "Nothing is hidden and nothing is reordered" is the basis on which
+   * grouping was allowed to be additive at all: a reader who distrusts the
+   * cluster must be able to ignore it and still read the list as a timeline.
+   * A grouping that quietly reorders is a grouping that has to be trusted,
+   * which is the opposite of the deal.
+   */
+  const list = [
+    incident("A150", "1", T0 + 150_000),
+    incident("A125", "1", T0 + 125_000),
+    incident("B100", "2", T0 + 100_000),
+  ];
+
+  it("keeps the repeat between its neighbours", () => {
+    const flat = clusterIncidents(list).flatMap((entry) =>
+      entry.kind === "cluster"
+        ? entry.items.map((i) => i.id)
+        : [entry.incident.id],
+    );
+    expect(flat).toEqual(["A150", "A125", "B100"]);
+  });
+
+  it("never emits an entry out of time order", () => {
+    // The property behind the case above, asserted directly: entry timestamps
+    // only ever descend.
+    const entries = clusterIncidents([
+      incident("a", "1", T0 + 200_000),
+      incident("b", "1", T0 + 180_000),
+      incident("c", "2", T0 + 160_000),
+      incident("d", "3", T0 + 140_000),
+      incident("e", "2", T0 + 120_000),
+    ]);
+    const times = entries.map((entry) => entry.at);
+    expect([...times].sort((x, y) => y - x)).toEqual(times);
+  });
+});

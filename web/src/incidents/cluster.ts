@@ -126,7 +126,6 @@ export function clusterIncidents(
      * verdict.
      */
     const firstPerMonitor: Incident[] = [dated[index]];
-    const repeats: Incident[] = [];
     const seen = new Set<string>([dated[index].monitorId]);
     let lastKept = dated[index].startedAt ?? 0;
     let cursor = index + 1;
@@ -136,13 +135,27 @@ export function clusterIncidents(
       lastKept - (dated[cursor].startedAt ?? 0) <= windowMs
     ) {
       const candidate = dated[cursor];
-      if (seen.has(candidate.monitorId)) {
-        repeats.push(candidate);
-      } else {
-        seen.add(candidate.monitorId);
-        firstPerMonitor.push(candidate);
-        lastKept = candidate.startedAt ?? 0;
-      }
+      /*
+       * A repeat ends the run rather than being carried past it.
+       *
+       * Collecting repeats and emitting them after the cluster reordered the
+       * list: A at 150s, A again at 125s and B at 100s produced the A/B
+       * cluster first and the 125s repeat *after* it, so a row moved
+       * backwards in a list that promises to be chronological. "Nothing is
+       * hidden and nothing is reordered" is the whole basis on which grouping
+       * was allowed to be additive, and a reader who distrusts the grouping
+       * has to be able to ignore it and still read time in one direction.
+       *
+       * Stopping here keeps every entry in place: the cluster covers what
+       * came before the repeat, the repeat follows as a single, and the next
+       * pass picks up from it. A cluster cut short this way is also the
+       * honest one — the repeat is evidence the monitor is flapping, which is
+       * not evidence of a shared cause.
+       */
+      if (seen.has(candidate.monitorId)) break;
+      seen.add(candidate.monitorId);
+      firstPerMonitor.push(candidate);
+      lastKept = candidate.startedAt ?? 0;
       cursor += 1;
     }
 
@@ -151,10 +164,10 @@ export function clusterIncidents(
      * singles.
      *
      * DESIGN.md states the rule: clustering is limited to distinct monitors,
-     * and repeated outages from one monitor are never clustered. Keeping the
-     * first (newest) incident per monitor is the honest representative — it is
-     * the one the reader would open — and the repeats are emitted alongside,
-     * where `describeChurn` explains them in the words that actually fit.
+     * and repeated outages from one monitor are never clustered. The run
+     * already stopped at the first repeat, so a monitor's later outages fall
+     * to the next pass and are emitted in their own place, where
+     * `describeChurn` explains them in the words that actually fit.
      */
     if (firstPerMonitor.length >= CLUSTER_MIN_MONITORS) {
       const newest = firstPerMonitor[0].startedAt ?? 0;
@@ -167,14 +180,6 @@ export function clusterIncidents(
         spanMs: newest - oldest,
         at: newest,
       });
-      for (const incident of repeats) {
-        entries.push({
-          kind: "single",
-          key: incident.id,
-          incident,
-          at: incident.startedAt ?? 0,
-        });
-      }
     } else {
       /*
        * A run of one, or a run that is all the same monitor. Emitted as
@@ -183,9 +188,7 @@ export function clusterIncidents(
        * and a run of one monitor's own incidents is flapping, which
        * `describeChurn` already explains in the right words.
        */
-      for (const incident of [...firstPerMonitor, ...repeats].sort(
-        (a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0),
-      )) {
+      for (const incident of firstPerMonitor) {
         entries.push({
           kind: "single",
           key: incident.id,
