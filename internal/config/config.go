@@ -152,7 +152,11 @@ func Load(args []string) (Config, error) {
 	c.AllowPrivateTargets = envBool("SUBGLANCE_ALLOW_PRIVATE_TARGETS", c.AllowPrivateTargets)
 	c.RawRetention = envDur("SUBGLANCE_RAW_RETENTION", c.RawRetention)
 	c.RollupRetention = envDur("SUBGLANCE_ROLLUP_RETENTION", c.RollupRetention)
-	c.AlertGroupWindow = envDur("SUBGLANCE_ALERT_GROUP_WINDOW", c.AlertGroupWindow)
+	groupWindow, err := envDurStrict("SUBGLANCE_ALERT_GROUP_WINDOW", c.AlertGroupWindow)
+	if err != nil {
+		return Config{}, err
+	}
+	c.AlertGroupWindow = groupWindow
 	c.TrustedProxies = envStr("SUBGLANCE_TRUSTED_PROXIES", c.TrustedProxies)
 
 	fs := flag.NewFlagSet("subglance", flag.ContinueOnError)
@@ -272,6 +276,22 @@ func envBool(key string, def bool) bool {
 		return def
 	}
 	return b
+}
+
+// envDurStrict reads a duration from the environment and reports a malformed
+// value instead of falling back to the default. An operator who mistypes a
+// duration wants to hear about it, not to run with a window they never asked
+// for.
+func envDurStrict(key string, def time.Duration) (time.Duration, error) {
+	v, ok := os.LookupEnv(key)
+	if !ok || v == "" {
+		return def, nil
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s: %w", key, err)
+	}
+	return d, nil
 }
 
 func envDur(key string, def time.Duration) time.Duration {
