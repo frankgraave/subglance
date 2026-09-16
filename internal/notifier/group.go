@@ -10,7 +10,7 @@ import (
 	"github.com/frankgraave/subglance/internal/store"
 )
 
-// groupWindow is how long an alert waits for company.
+// DefaultGroupWindow is how long an alert waits for company.
 //
 // The number is a trade between two costs that pull opposite ways. Too short
 // and a shared outage still arrives as a burst, because twenty monitors on a
@@ -20,10 +20,20 @@ import (
 //
 // Ninety seconds covers a full 60-second check cycle plus the confirmation
 // delay that follows it, which is what actually decides whether two failures
-// belong to the same event. It is deliberately not configurable yet: a knob
-// invites tuning, and I would rather learn from one default in use than ship
-// five opinions.
-const groupWindow = 90 * time.Second
+// belong to the same event. It is the default rather than a fixed rule: the
+// right window follows the check schedule, so someone running 10-second checks
+// on a handful of services has a legitimate reason to shorten it, and someone
+// with a fleet on five-minute checks has one to lengthen it.
+const DefaultGroupWindow = 90 * time.Second
+
+// GroupingDisabled is the window value that turns batching off entirely, so
+// every alert is written to the outbox the moment it happens.
+//
+// It is a negative duration rather than zero because zero in Options means
+// "use the default" — the same convention the other Options fields follow.
+// Callers that take a window from a user should translate whatever they spell
+// "off" into this value rather than passing a raw negative number around.
+const GroupingDisabled time.Duration = -1
 
 // Grouper collects alerts that arrive close together and sends one message
 // about all of them.
@@ -43,11 +53,12 @@ type Grouper struct {
 	now    func() time.Time
 }
 
-// newGrouper builds a Grouper. Window zero means groupWindow; a negative
-// window means grouping is off and every alert is written immediately.
+// newGrouper builds a Grouper. Window zero means DefaultGroupWindow; a
+// negative window means grouping is off and every alert is written
+// immediately.
 func newGrouper(window time.Duration, now func() time.Time) *Grouper {
 	if window == 0 {
-		window = groupWindow
+		window = DefaultGroupWindow
 	}
 	if now == nil {
 		now = time.Now

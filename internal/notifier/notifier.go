@@ -119,14 +119,14 @@ type Options struct {
 	Now func() time.Time
 
 	// GroupWindow is how long an alert waits for others before it is sent.
-	// Zero means groupWindow.
+	// Zero means DefaultGroupWindow.
 	//
-	// Negative disables grouping: Enqueue writes to the outbox straight
-	// away, as it did before grouping existed. That is a real preference —
-	// someone with three monitors has nothing to group and may want the
-	// alert the instant it happens — and it is also what the delivery
-	// tests use, since they are about retries and failures rather than
-	// about batching.
+	// Negative (see GroupingDisabled) disables grouping: Enqueue writes to
+	// the outbox straight away, as it did before grouping existed. That is
+	// a real preference — someone with three monitors has nothing to group
+	// and may want the alert the instant it happens — and it is also what
+	// the delivery tests use, since they are about retries and failures
+	// rather than about batching.
 	GroupWindow time.Duration
 }
 
@@ -180,8 +180,8 @@ func New(opts Options) *Notifier {
 // It does not write to the outbox directly. Alerts go into a batch keyed on
 // channel and direction, and a batch is flushed once its window closes — so a
 // shared outage becomes one message per channel rather than one per monitor.
-// The window is short (see groupWindow) and it never delays a batch that has
-// already been flushed, so a lone failure still arrives promptly.
+// The window is short (see DefaultGroupWindow) and it never delays a batch that
+// has already been flushed, so a lone failure still arrives promptly.
 //
 // What has not changed is the important part: no network call happens here. A
 // broken channel still cannot slow a check down.

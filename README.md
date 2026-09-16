@@ -222,6 +222,7 @@ defaults.
 | `--check-workers` | `SUBGLANCE_CHECK_WORKERS` | `0` (auto) | Maximum concurrent checks |
 | `--allow-private-targets` | `SUBGLANCE_ALLOW_PRIVATE_TARGETS` | `false` | Permit monitoring private/loopback addresses |
 | `--trusted-proxies` | `SUBGLANCE_TRUSTED_PROXIES` | empty (none) | Addresses or CIDR blocks whose `X-Forwarded-For` may be believed |
+| `--alert-group-window` | `SUBGLANCE_ALERT_GROUP_WINDOW` | `90s` | How long an alert waits for others so one outage sends one message (`0` = send immediately) |
 | `--watchdog-url` | `SUBGLANCE_WATCHDOG_URL` | empty (off) | External dead man's switch to ping while checks are running |
 | `--watchdog-interval` | `SUBGLANCE_WATCHDOG_INTERVAL` | `5m` | How often to ping that URL |
 | `--raw-retention` | `SUBGLANCE_RAW_RETENTION` | `168h` (7d) | How long raw heartbeats are kept before being rolled up into hourly buckets |
@@ -233,6 +234,20 @@ into hourly buckets, then drops hourly buckets and resolved incidents older than
 database into SQLite's incremental auto-vacuum mode at startup; on an existing
 database that requires one rebuild, which is logged when it happens and skipped
 with a warning if the file is large enough that the pause would hurt.
+
+`--alert-group-window` is why twenty monitors failing on one dead uplink send
+one message instead of twenty. An alert waits that long for company, and the
+batch is delivered as a single notification per channel naming everything in it.
+The cost is that a lone failure is also delayed by up to that window, so set it
+to `0` to deliver every alert the instant it happens — sensible when you watch a
+handful of services and there is nothing to group. Recoveries are never held
+back: a grouped outage is summarised the moment its last member comes back.
+
+The default follows the check schedule rather than taste. Monitors on a
+60-second interval do not fail in the same second; they fail across the minute
+that follows, as each one's turn comes round. 90s covers a full check cycle plus
+the confirmation delay after it, which is what decides whether two failures
+belong to the same event. Raise it if your checks run less often than that.
 
 `--allow-private-targets` is off by default on purpose. Users supply the URLs to
 monitor, and without that guard SubGlance would happily act as an SSRF proxy into
