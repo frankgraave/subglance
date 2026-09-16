@@ -21,12 +21,24 @@ changelog:
     labels:
       # Housekeeping that changes nothing a user can observe.
       - skip-changelog
-    authors:
       # Dependency bumps are real changes but they are not news; anyone who
       # needs them can read the diff between two tags. Leaving them in would
       # bury the handful of lines people actually came to read.
-      - dependabot
-      - app/dependabot
+      #
+      # Excluded by LABEL rather than by author, which is what v0.1.0-rc2
+      # proved necessary: the `authors` list below held "dependabot" and
+      # "app/dependabot" — the latter being exactly what `gh pr view` prints
+      # — and all five bump pull requests still appeared in the notes. The
+      # login GitHub matches against here is spelled "dependabot[bot]", and
+      # a name that does not match fails silently, which is the worst
+      # property a filter can have. The `dependencies` label is applied by
+      # Dependabot itself on every one of its pull requests, so it needs no
+      # exact string to be right.
+      - dependencies
+    authors:
+      # Kept as a second net, now spelled the way GitHub spells it. Either
+      # of the two catches a bump on its own.
+      - dependabot[bot]
 
   categories:
     - title: Added
