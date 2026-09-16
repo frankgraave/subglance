@@ -106,6 +106,12 @@ type Transition struct {
 	// "2 of 3 failures" while a monitor is pending.
 	ConsecutiveFails int
 
+	// SnapshotsSpent is how much of this incident's response-snapshot budget
+	// is already on disk, not counting the check being reported. A failure
+	// only spends budget once its snapshot is stored, so the caller confirms
+	// a write with SpendSnapshot; see monitorState.
+	SnapshotsSpent int
+
 	// Notify says whether this transition should reach a human. It is false
 	// for uninteresting changes and false while flapping is suppressed.
 	Notify bool
@@ -167,6 +173,15 @@ type monitorState struct {
 	status Status
 
 	consecutiveFails int
+
+	// snapshotsSpent is the per-incident response-snapshot budget: how many
+	// snapshots this incident has actually stored. It is not the failure
+	// streak, because plenty of failures store nothing — a monitor with
+	// response capture off, a check whose response was never captured, a
+	// failure while the monitor flaps, a heartbeat whose write fails. Each of
+	// those used to consume budget and could leave a genuine failure later in
+	// the same outage with nothing left to spend.
+	snapshotsSpent int
 
 	// incidentOpen tracks whether an incident record exists but has not been
 	// resolved. It survives the pending→down promotion.
@@ -239,6 +254,7 @@ func (e *Engine) Observe(o Observation) Transition {
 	}
 
 	t.ConsecutiveFails = ms.consecutiveFails
+	t.SnapshotsSpent = ms.snapshotsSpent
 
 	// Flapping is evaluated after the transition so a monitor that just
 	// flipped counts its own flip. Suppression applies to the transition that
@@ -288,6 +304,7 @@ func (e *Engine) observeFailure(ms *monitorState, t *Transition, o Observation) 
 // observeSuccess resets the streak and resolves any open incident.
 func (e *Engine) observeSuccess(ms *monitorState, t *Transition) {
 	ms.consecutiveFails = 0
+	ms.snapshotsSpent = 0
 
 	if !ms.incidentOpen {
 		// Steady state: up and staying up, or the very first check.
@@ -429,10 +446,56 @@ func (e *Engine) Retain(live map[int64]struct{}) {
 
 // Len reports how many monitors the engine is tracking. It exists so tests
 // and metrics can assert the map does not grow without bound.
+// SpendSnapshot records that one response snapshot was stored for a monitor's
+// open incident and reports the incident's new total.
+//
+// The budget is charged here rather than in Observe because only the caller
+// knows whether the snapshot reached the disk. Charging on every failure meant
+// suppressed and failed writes drained an allowance they never used.
+func (e *Engine) SpendSnapshot(monitorID int64) int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	ms, ok := e.state[monitorID]
+	if !ok {
+		return 0
+	}
+	ms.snapshotsSpent++
+	return ms.snapshotsSpent
+}
+
 func (e *Engine) Len() int {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return len(e.state)
+}
+
+// RestoredState is what the database still knows about a monitor when the
+// process starts, as opposed to what the engine has observed itself.
+type RestoredState struct {
+	Status            Status
+	IncidentOpen      bool
+	IncidentConfirmed bool
+
+	// ConsecutiveFails seeds the alert streak: how many failures this open
+	// incident has already recorded. Restoring it as zero meant a pending
+	// incident that was one check away from confirming had to start counting
+	// again, so a monitor could stay pending across a restart loop and never
+	// alert at all.
+	ConsecutiveFails int
+
+	// SnapshotsSpent seeds the response-snapshot budget with the number of
+	// snapshots this incident already wrote. Restoring it as zero handed
+	// every restart during a long outage a fresh budget, so the same error
+	// page was written again on each one.
+	//
+	// It is separate from ConsecutiveFails because the two counts disagree:
+	// a monitor with response capture disabled fails without ever storing a
+	// snapshot, and a snapshot is skipped while a monitor flaps.
+	//
+	// The database count is authoritative here for the same reason: it is a
+	// count of rows that exist, not of failures that happened.
+	SnapshotsSpent int
 }
 
 // Restore seeds a monitor's state from the database at startup.
@@ -440,13 +503,22 @@ func (e *Engine) Len() int {
 // Without this, a restart would re-open an incident that is already open and
 // re-alert for an outage the user was told about ten minutes ago — which is
 // exactly the kind of noise this package exists to prevent.
-func (e *Engine) Restore(monitorID int64, status Status, incidentOpen, incidentConfirmed bool) {
+func (e *Engine) Restore(monitorID int64, rs RestoredState) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	if rs.ConsecutiveFails < 0 {
+		rs.ConsecutiveFails = 0
+	}
+	if rs.SnapshotsSpent < 0 {
+		rs.SnapshotsSpent = 0
+	}
+
 	e.state[monitorID] = &monitorState{
-		status:            status,
-		incidentOpen:      incidentOpen,
-		incidentConfirmed: incidentConfirmed,
+		status:            rs.Status,
+		incidentOpen:      rs.IncidentOpen,
+		incidentConfirmed: rs.IncidentConfirmed,
+		consecutiveFails:  rs.ConsecutiveFails,
+		snapshotsSpent:    rs.SnapshotsSpent,
 	}
 }

@@ -176,3 +176,132 @@ func TestSuccessNeverStoresAResponse(t *testing.T) {
 		t.Errorf("stored %d snapshots for a successful check", got)
 	}
 }
+
+// Only a snapshot that reached the disk may spend the budget. Several kinds of
+// failure store nothing at all — the response was never captured, the monitor
+// is flapping, the write failed — and charging those meant an outage could run
+// out of allowance before it had stored a single body. Each case below drains
+// the budget the old way, then asserts that a genuinely eligible failure in the
+// same incident still gets stored.
+func TestOnlyAStoredSnapshotSpendsTheBudget(t *testing.T) {
+	const window = time.Hour
+
+	cases := []struct {
+		name  string
+		setup func(t *testing.T, db *store.DB) (*Runner, store.Monitor)
+		// drain records failures that must store nothing, and returns an
+		// outcome that is eligible and has to be stored.
+		drain func(t *testing.T, db *store.DB, r *Runner, m store.Monitor) scheduler.Outcome
+	}{
+		{
+			// The checker hands over no body — a connection refused, a
+			// timeout, a monitor with capture switched off.
+			name: "a failure with no response body",
+			setup: func(t *testing.T, db *store.DB) (*Runner, store.Monitor) {
+				return recordingRunner(t, db), captureMonitorRow(t, db)
+			},
+			drain: func(t *testing.T, db *store.DB, r *Runner, m store.Monitor) scheduler.Outcome {
+				for range maxSnapshotsPerIncident + 2 {
+					r.record(outcomeFor(m, m.Target, false))
+				}
+				if got := storedSnapshots(t, db); got != 0 {
+					t.Fatalf("stored %d snapshots for failures without a body, want 0", got)
+				}
+				return failureWithBody(m, "the first body of this outage")
+			},
+		},
+		{
+			// The heartbeat and its response are written in one
+			// transaction, so a write error stored neither.
+			name: "a failure whose heartbeat write fails",
+			setup: func(t *testing.T, db *store.DB) (*Runner, store.Monitor) {
+				return recordingRunner(t, db), captureMonitorRow(t, db)
+			},
+			drain: func(t *testing.T, db *store.DB, r *Runner, m store.Monitor) scheduler.Outcome {
+				exec(t, db, "ALTER TABLE heartbeat_responses RENAME TO heartbeat_responses_away")
+				for range maxSnapshotsPerIncident + 2 {
+					r.record(failureWithBody(m, "lost to a failed write"))
+				}
+				exec(t, db, "ALTER TABLE heartbeat_responses_away RENAME TO heartbeat_responses")
+				if got := storedSnapshots(t, db); got != 0 {
+					t.Fatalf("stored %d snapshots while writes failed, want 0", got)
+				}
+				return failureWithBody(m, "the first body that could be written")
+			},
+		},
+		{
+			// Suppression while flapping ends when the recorded flips age
+			// out, and that can happen part-way through an outage that
+			// never recovered. The failures suppressed before then must
+			// not have spent the budget the rest of the outage needs.
+			name: "failures suppressed while the monitor flaps",
+			setup: func(t *testing.T, db *store.DB) (*Runner, store.Monitor) {
+				r := New(Options{
+					DB: db, Log: quietLogger(), AllowPrivateTargets: true,
+					FlapWindow: window, FlapThreshold: 2,
+				})
+				// One retry, so every failure confirms and every recovery
+				// resolves: that is what a flip is.
+				m, err := db.CreateMonitor(context.Background(), store.Monitor{
+					Name: "flaps", Type: "http", Target: "https://example.com/health",
+					Enabled: true, CaptureResponse: true, Retries: 1,
+				})
+				if err != nil {
+					t.Fatalf("CreateMonitor: %v", err)
+				}
+				return r, m
+			},
+			drain: func(t *testing.T, db *store.DB, r *Runner, m store.Monitor) scheduler.Outcome {
+				clock := time.Date(2025, 3, 1, 12, 0, 0, 0, time.UTC)
+				tick := func() time.Time {
+					clock = clock.Add(time.Second)
+					return clock
+				}
+				for i := range 10 {
+					r.record(at(failureWithBody(m, fmt.Sprintf("flap %d", i)), tick()))
+					r.record(at(outcomeFor(m, m.Target, true), tick()))
+				}
+				if !r.engine.Flapping(m.ID) {
+					t.Fatalf("precondition: the monitor should be flapping after ten flips")
+				}
+
+				// The outage that stays. Every one of these is suppressed.
+				before := storedSnapshots(t, db)
+				for range maxSnapshotsPerIncident + 2 {
+					r.record(at(failureWithBody(m, "suppressed"), tick()))
+				}
+				if got := storedSnapshots(t, db); got != before {
+					t.Fatalf("stored %d snapshots while flapping, want %d", got, before)
+				}
+
+				// The flips age out, but the incident never closed.
+				clock = clock.Add(3 * window)
+				return at(failureWithBody(m, "still down after the flapping settled"), tick())
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := testDB(t)
+			r, m := tc.setup(t, db)
+
+			eligible := tc.drain(t, db, r, m)
+
+			before := storedSnapshots(t, db)
+			r.record(eligible)
+
+			if got := storedSnapshots(t, db); got != before+1 {
+				t.Errorf("stored %d snapshots, want %d: failures that stored "+
+					"nothing spent the budget this one needed", got, before+1)
+			}
+		})
+	}
+}
+
+func exec(t *testing.T, db *store.DB, q string) {
+	t.Helper()
+	if _, err := db.Writer.ExecContext(context.Background(), q); err != nil {
+		t.Fatalf("exec %q: %v", q, err)
+	}
+}

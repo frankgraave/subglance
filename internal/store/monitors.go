@@ -552,6 +552,66 @@ func (db *DB) attachResponses(ctx context.Context, hbs []Heartbeat) error {
 	return nil
 }
 
+// CountSnapshotsSince reports how many failure-response snapshots a monitor has
+// stored since a given moment.
+//
+// The runner needs this at startup. Its per-outage snapshot budget lives in
+// memory on the failure streak, so a restart during a long outage would hand
+// the monitor a fresh budget and write the same error page again — every
+// restart, for as long as the outage lasts. Counting what is already on disk
+// for the open incident lets the budget survive the process that spent it.
+//
+// The count is capped by the caller's limit so an outage that predates the
+// budget cannot make startup read an unbounded number of rows.
+func (db *DB) CountSnapshotsSince(ctx context.Context, monitorID int64, since time.Time, limit int) (int, error) {
+	if limit <= 0 {
+		return 0, nil
+	}
+	var n int
+	err := db.Reader.QueryRowContext(ctx, `
+		SELECT count(*) FROM (
+			SELECT 1
+			FROM heartbeat_responses r
+			JOIN heartbeats h ON h.id = r.heartbeat_id
+			WHERE h.monitor_id = ? AND h.ts >= ?
+			LIMIT ?
+		)`, monitorID, since.Unix(), limit).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("count snapshots for monitor %d: %w", monitorID, err)
+	}
+	return n, nil
+}
+
+// CountFailedHeartbeatsSince reports how many failed heartbeats a monitor has
+// recorded since a given moment.
+//
+// The runner needs this at startup to rebuild the alert streak of an incident
+// that is open but not yet confirmed. The snapshot count cannot stand in for
+// it: a monitor with response capture disabled fails without ever writing a
+// snapshot, so a restart would restore a streak of zero and the incident would
+// have to start counting towards its failure threshold again.
+//
+// The count is capped by the caller's limit, so a long outage cannot make
+// startup read an unbounded number of rows. Only the distance to the failure
+// threshold is meaningful, and that is a small number.
+func (db *DB) CountFailedHeartbeatsSince(ctx context.Context, monitorID int64, since time.Time, limit int) (int, error) {
+	if limit <= 0 {
+		return 0, nil
+	}
+	var n int
+	err := db.Reader.QueryRowContext(ctx, `
+		SELECT count(*) FROM (
+			SELECT 1
+			FROM heartbeats
+			WHERE monitor_id = ? AND ts >= ? AND ok = 0
+			LIMIT ?
+		)`, monitorID, since.Unix(), limit).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("count failed heartbeats for monitor %d: %w", monitorID, err)
+	}
+	return n, nil
+}
+
 // RecentHeartbeatsForAll returns the most recent perMonitor heartbeats for
 // every monitor that has any, keyed by monitor id and newest first — the same
 // order as ListHeartbeats.
