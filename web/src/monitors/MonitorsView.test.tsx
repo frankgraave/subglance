@@ -1,7 +1,15 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render as renderBare,
+  screen,
+  within,
+} from "@testing-library/react";
+import type { ReactElement } from "react";
 import { MonitorsView } from "./MonitorsView";
+import { setTopbarSlot } from "../shell/topbarSlot";
 import { inventoryFromApi } from "./inventory";
 import type { InventoryMonitor } from "./inventory";
 
@@ -30,7 +38,34 @@ function make(over: Record<string, unknown> = {}): InventoryMonitor {
   } as Parameters<typeof inventoryFromApi>[0]);
 }
 
-afterEach(cleanup);
+/**
+ * Renders the screen with a toolbar to put its controls in.
+ *
+ * Since SUB-134 the search box, the two filters and the "n of m shown" counter
+ * are portalled into the shell's toolbar instead of sitting in a band inside
+ * the Card. That is the behaviour under test in several assertions below, and
+ * a bare `render` has no toolbar — so the controls would have nowhere to go
+ * and every assertion about them would fail for an absence the product does
+ * not have.
+ *
+ * A stand-in slot rather than mounting the real `Topbar`: what these tests are
+ * about is the inventory, and dragging the whole shell in would make a change
+ * to the theme toggle able to fail a test about type filters. `App.test.tsx`
+ * is where the two are asserted together.
+ */
+function render(ui: ReactElement) {
+  const slot = document.createElement("div");
+  document.body.append(slot);
+  setTopbarSlot(slot);
+  return renderBare(ui);
+}
+
+afterEach(() => {
+  cleanup();
+  // Otherwise the next test portals into the previous test's detached slot,
+  // and its controls are rendered into a node nobody can query.
+  setTopbarSlot(null);
+});
 
 describe("MonitorsView", () => {
   it("shows the settings the dashboard refuses to show", () => {
@@ -271,6 +306,112 @@ describe("MonitorsView", () => {
     );
     expect(
       screen.getByText("monitor 1 was modified by someone else"),
+    ).toBeTruthy();
+  });
+});
+
+/**
+ * SUB-134: the row actions became glyphs, and their names had to survive it.
+ *
+ * This is the failure mode icon buttons ship with. The visible word used to be
+ * the accessible name's prefix (WCAG 2.5.3); with the word gone, the only
+ * thing standing between forty rows and forty buttons called "Pause" is an
+ * `aria-label` nobody can see. A rename that drops the monitor's name breaks
+ * screen-reader navigation and voice control at once and looks like nothing on
+ * screen, which is why it is asserted per action rather than spot-checked.
+ *
+ * Two monitors on purpose: with one, "Pause" and "Pause auth" are equally
+ * unambiguous and the test would pass against the very defect it exists for.
+ */
+describe("every row action names the monitor it acts on", () => {
+  const ACTIONS = [/check now/i, /pause/i, /edit/i, /delete/i];
+
+  function inventory() {
+    return render(
+      <MonitorsView
+        monitors={[make(), make({ id: 2, name: "cdn" })]}
+        onCheckNow={() => {}}
+        onTogglePaused={() => {}}
+        onEdit={() => {}}
+        onDelete={() => {}}
+        onSave={async () => {}}
+      />,
+    );
+  }
+
+  it("carries the name in the accessible name of all four", () => {
+    inventory();
+    for (const action of ACTIONS) {
+      const buttons = screen.getAllByRole("button", { name: action });
+      const names = buttons.map((b) => b.getAttribute("aria-label") ?? b.textContent ?? "");
+      // One per monitor, and no two of them are the same string.
+      expect(names).toHaveLength(2);
+      expect(new Set(names).size).toBe(2);
+      expect(names.some((n) => n.includes("auth"))).toBe(true);
+      expect(names.some((n) => n.includes("cdn"))).toBe(true);
+    }
+  });
+
+  it("keeps Delete readable without colour", () => {
+    /*
+     * DESIGN.md §2.3: colour is never the only carrier. The other three
+     * actions are glyphs and Delete is not, because a red bin beside three
+     * grey glyphs is a grey bin to a reader who cannot see the red — and this
+     * is the one action that cannot be undone.
+     *
+     * Asserted as "the button contains the word" rather than as "it has no
+     * icon", so adding a glyph BESIDE the word stays allowed while replacing
+     * the word with one does not.
+     */
+    inventory();
+    for (const button of screen.getAllByRole("button", { name: /delete/i })) {
+      expect(button.textContent).toContain("Delete");
+    }
+
+    // And the three that did become glyphs really are glyphs: if they kept
+    // their words, this file would be asserting nothing about icon buttons.
+    for (const action of [/check now/i, /pause/i, /edit/i]) {
+      for (const button of screen.getAllByRole("button", { name: action })) {
+        expect(button.textContent?.trim()).toBe("");
+        expect(button.querySelector("svg")).not.toBeNull();
+      }
+    }
+  });
+});
+
+describe("an icon-only action still says what it is doing", () => {
+  /*
+   * Losing the word to a glyph moved a fact out of sight. A check in flight
+   * and a check that is unavailable are both disabled, so both get the same
+   * dimming — without a second signal a sighted reader cannot tell "working
+   * on it" from "you cannot do this here", and the title does not close the
+   * gap because a disabled button is not focusable.
+   */
+  it("marks a check in flight distinctly from one that cannot run", () => {
+    const { container } = render(
+      <MonitorsView
+        monitors={[make({ id: "1", name: "auth" })]}
+        checkingIds={new Set(["1"])}
+        onCheckNow={() => {}}
+      />,
+    );
+    const busy = container.querySelector('[data-busy="true"]');
+    expect(busy).not.toBeNull();
+    expect(busy?.getAttribute("aria-busy")).toBe("true");
+  });
+
+  it("does not mark an unavailable check as busy", () => {
+    // A push monitor is not probed at all: disabled, but not working.
+    const { container } = render(
+      <MonitorsView
+        monitors={[make({ id: "1", name: "jobs", type: "push" })]}
+        onCheckNow={() => {}}
+      />,
+    );
+    expect(container.querySelector('[data-busy="true"]')).toBeNull();
+    // And it says why, rather than being a dead button.
+    expect(
+      screen.getByRole("button", { name: /unavailable for a push monitor/i }),
     ).toBeTruthy();
   });
 });

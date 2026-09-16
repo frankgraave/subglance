@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Card } from "../components/Card";
+import { Card, Panel } from "../components/Card";
+import { TopbarTools } from "../shell/TopbarTools";
 import { Drawer } from "../components/Drawer";
 import { ConfirmDelete } from "../components/ConfirmDelete";
 import { StateChip } from "../components/Chip";
@@ -164,24 +165,31 @@ export function MonitorsView({
         </p>
       )}
 
-      <Card
-        title="Configured monitors"
-        headingLevel={2}
-        action={
-          onCreateOpenChange === undefined ? undefined : (
-            <button
-              type="button"
-              className="add-button add-button-primary"
-              onClick={() => onCreateOpenChange(true)}
-            >
-              Add monitor
-            </button>
-          )
-        }
-      >
-        <div className="inv-toolbar">
-          <label className="inv-search">
-            <span className="inv-label">Search</span>
+      {/*
+       * The page's own tools, in the shell's toolbar rather than in a band
+       * inside the Card (SUB-134, SUB-131).
+       *
+       * It used to be a fourth strip of chrome — topbar, card header, filter
+       * bar, then finally rows — with the SEARCH label sitting on its own line
+       * beside its box and out of line with the two selects next to it. That
+       * misalignment is not repaired here, it is removed with the bar: the
+       * controls belong in the toolbar, where the dashboard already puts its
+       * search, and the card goes back to holding only the list.
+       *
+       * The counter travels with them, and that is not tidiness. "3 of 3
+       * shown" is the filter's honesty — it says you are looking at a
+       * selection rather than at everything — and leaving it behind in the
+       * card while the controls moved up would strand the claim away from the
+       * action that makes it true.
+       *
+       * Portalled from here rather than passed up as props, so the three
+       * pieces of filter state stay inside the screen that filters. See
+       * `TopbarTools`.
+       */}
+      <TopbarTools>
+        <div className="inv-tools">
+          <label className="inv-tool">
+            <span className="inv-tool-label">Search</span>
             <input
               type="search"
               /* `inv-search-input` pins the 16px minimum at every width.
@@ -196,8 +204,8 @@ export function MonitorsView({
             />
           </label>
 
-          <label className="inv-select">
-            <span className="inv-label">Type</span>
+          <label className="inv-tool">
+            <span className="inv-tool-label">Type</span>
             <select
               className="mon-facet-select"
               value={type}
@@ -212,8 +220,8 @@ export function MonitorsView({
             </select>
           </label>
 
-          <label className="inv-select">
-            <span className="inv-label">Paused</span>
+          <label className="inv-tool">
+            <span className="inv-tool-label">Paused</span>
             <select
               className="mon-facet-select"
               value={pausedFilter}
@@ -235,7 +243,23 @@ export function MonitorsView({
               : `${visible.length} of ${monitors.length} shown`}
           </p>
         </div>
+      </TopbarTools>
 
+      <Card
+        title="Configured monitors"
+        headingLevel={2}
+        action={
+          onCreateOpenChange === undefined ? undefined : (
+            <button
+              type="button"
+              className="add-button add-button-primary"
+              onClick={() => onCreateOpenChange(true)}
+            >
+              Add monitor
+            </button>
+          )
+        }
+      >
         {loading || error !== null ? (
           /*
            * Neither loading nor a failed request may reach the empty state.
@@ -302,13 +326,21 @@ export function MonitorsView({
         onClose={() => onCreateOpenChange?.(false)}
         title="Add monitor"
       >
-        <AddMonitor
-          onCreated={() => {
-            onCreated?.();
-            onCreateOpenChange?.(false);
-          }}
-          onCancel={() => onCreateOpenChange?.(false)}
-        />
+        {/* Card holding a Panel, the same as everywhere else in the product
+            (SUB-132). A drawer is a place to put the existing surfaces, not a
+            second visual language, and the form on its own is bare fields on
+            the drawer's own background. */}
+        <Card title="New monitor" headingLevel={3}>
+          <Panel>
+            <AddMonitor
+              onCreated={() => {
+                onCreated?.();
+                onCreateOpenChange?.(false);
+              }}
+              onCancel={() => onCreateOpenChange?.(false)}
+            />
+          </Panel>
+        </Card>
       </Drawer>
 
       <Drawer
@@ -317,15 +349,19 @@ export function MonitorsView({
         title={editing === null ? "Edit monitor" : `Edit ${editing.name}`}
       >
         {editing !== null && onSave !== undefined && (
-          <EditMonitorForm
-            /* Keyed on the id AND the name, so re-opening a monitor that
-               changed elsewhere rebuilds the form from the new values rather
-               than keeping state from the previous open. */
-            key={`${editing.id}:${editing.name}`}
-            monitor={editing}
-            onSave={(patch) => onSave(editing.id, patch)}
-            onCancel={() => onEditClose?.()}
-          />
+          <Card title={editing.name} headingLevel={3}>
+            <Panel>
+              <EditMonitorForm
+              /* Keyed on the id AND the name, so re-opening a monitor that
+                 changed elsewhere rebuilds the form from the new values
+                 rather than keeping state from the previous open. */
+                key={`${editing.id}:${editing.name}`}
+                monitor={editing}
+                onSave={(patch) => onSave(editing.id, patch)}
+                onCancel={() => onEditClose?.()}
+              />
+            </Panel>
+          </Card>
         )}
       </Drawer>
 

@@ -228,7 +228,20 @@ export function IncidentsView({
             </span>
           }
         >
-          <Panel padded={false}>
+          {/*
+           * No Panel around this list (SUB-133).
+           *
+           * `.inc-row` already draws a border, a radius, a fill and a raised
+           * shadow: a row here IS a panel. Wrapping a list of panels in
+           * another panel is what PR #42 deleted under the name "two
+           * surfaces, not three", and it came back. What it produced was card
+           * fill, panel fill, then a row lifting itself off the panel — three
+           * nested boxes to say one thing, and rows that looked like they
+           * were sitting in a tray inside a tray.
+           *
+           * The card is the surface, the row is what rests on it. Two.
+           */}
+          <div className="inc-body">
             {ackError !== null ? (
               <p role="alert" className="inc-notice">
                 Could not acknowledge: {ackError.message}
@@ -277,7 +290,7 @@ export function IncidentsView({
                 )}
               </ul>
             )}
-          </Panel>
+          </div>
         </Card>
       )}
 
@@ -303,7 +316,11 @@ export function IncidentsView({
             </span>
           }
         >
-          <Panel padded={false}>
+          {/* Same two-surface count as the open card above (SUB-133): the day
+              heading is a heading ON the card, and the rows carry their own
+              surface. A Panel here made the day section read as a card of its
+              own inside the card. */}
+          <div className="inc-body">
             {historyTruncated ? (
               /*
                * Said, not hidden. The history is assembled one request per
@@ -370,7 +387,7 @@ export function IncidentsView({
                 </ul>
               </section>
             ))}
-          </Panel>
+          </div>
         </Card>
       )}
     </section>

@@ -123,6 +123,48 @@
   line-height: var(--lead-helper);
 }
 
+/*
+ * An icon action (SUB-134). A square the size of the shell's icon buttons,
+ * carrying a glyph and nothing else.
+ *
+ * Square rather than the text button's padding, because a 16px glyph in a box
+ * shaped for a word sits in a pool of space and stops reading as a target.
+ * The 28px box still clears the 24px minimum target size (WCAG 2.2 SC 2.5.8)
+ * with the row's own gap around it.
+ */
+.inv-act--icon {
+  display: inline-grid;
+  place-items: center;
+  width: var(--control-icon);
+  height: var(--control-icon);
+  padding: 0;
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: background var(--dur-hover) var(--ease), color var(--dur-hover) var(--ease),
+    border-color var(--dur-hover) var(--ease);
+}
+
+.inv-act--icon > svg { width: var(--space-4); height: var(--space-4); }
+
+.inv-act--icon:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--border-hi);
+  color: var(--ink);
+}
+
+/* One focus language across the product, and it is the accent ring. */
+.inv-act--icon:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+/* A disabled action is dimmed and says why in its title — the push monitor
+   case. The dimming is never the only signal. */
+.inv-act--icon:disabled { opacity: .45; cursor: default; }
+
 /* Destructive is outlined, never filled: a filled red button is the one a
    hand lands on by accident. The red is in the *ink*, not in the edge —
    §2.9 gives borders to three role tokens, and spending a status colour on
@@ -141,22 +183,36 @@
 
 .inv-paused-chip { margin-left: var(--space-2); }
 
-.inv-toolbar {
+/*
+ * The page's tools, as they sit in the shell's toolbar (SUB-134).
+ *
+ * A single baseline row, which is the fix for the misalignment Frank pointed
+ * at: the old bar stacked each label ABOVE its control in a column, so SEARCH
+ * sat on its own line while the selects beside it did not, and the three
+ * controls never shared an edge. Label beside control, everything centred on
+ * one line, and the row is what aligns them rather than three separate
+ * columns that happen to be adjacent.
+ */
+.inv-tools {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: var(--space-3);
   flex-wrap: wrap;
-  margin-bottom: var(--space-3);
+  min-width: 0;
 }
 
-.inv-search,
-.inv-select {
+.inv-tool {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
-.inv-search { flex: 1 1 14rem; min-width: 0; }
+/* The search box takes the slack; the two selects stay at their content
+   width. */
+.inv-tool:first-child { flex: 1 1 14rem; }
+
+.inv-tool-label { @apply caps-legend; white-space: nowrap; }
 
 /*
  * The search box keeps the no-zoom size at every width.
@@ -186,4 +242,26 @@
   .inv-col--chan,
   .inv-col--tags { width: auto; }
   .inv-acts { margin-left: auto; }
+}
+
+/*
+ * A check in flight, for the eye.
+ *
+ * `aria-busy` tells assistive technology, and until this rule nothing told
+ * anybody else: an in-flight check and a check that is unavailable are both
+ * disabled, so both got the same dimming, and a sighted reader could not tell
+ * "working on it" from "you cannot do this here". The glyph turns instead.
+ */
+@keyframes inv-act-spin {
+  to { transform: rotate(1turn); }
+}
+
+.inv-act--icon[data-busy="true"] > svg {
+  animation: inv-act-spin 900ms linear infinite;
+}
+
+/* Motion is the signal, not the only one: the title and the dimming stay, so
+   suppressing the rotation costs nothing but the movement. */
+@media (prefers-reduced-motion: reduce) {
+  .inv-act--icon[data-busy="true"] > svg { animation: none; }
 }

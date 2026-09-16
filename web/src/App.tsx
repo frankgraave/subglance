@@ -7,6 +7,8 @@ import { TokenSheet } from "./components/TokenSheet";
 import { HeartbeatGallery } from "./heartbeat/Gallery";
 import { DashboardWorkbench } from "./monitors/Workbench";
 import { AddMonitor } from "./monitors/AddMonitor";
+import { Drawer } from "./components/Drawer";
+import { Card, Panel } from "./components/Card";
 import { LiveDashboardRoot } from "./live/LiveDashboard";
 import { LiveMonitorDetailRoot } from "./live/LiveMonitorDetail";
 import { LiveIncidentsRoot } from "./incidents/LiveIncidents";
@@ -186,33 +188,46 @@ export default function App() {
     !onNotifications;
   /*
    * What "a different screen" means for the inner error boundary: the route,
-   * plus the two overlays the shell owns. Changing any of them remounts the
-   * boundary and so clears a caught error — otherwise a crash on one screen
-   * would latch and every screen after it would show the panel instead.
+   * plus the workbench. Changing either remounts the boundary and so clears a
+   * caught error — otherwise a crash on one screen would latch and every
+   * screen after it would show the panel instead.
+   *
+   * The add drawer is deliberately not in the key any more. It is an overlay
+   * rather than a screen now, so opening it does not replace what is behind
+   * it — and remounting the dashboard every time someone opens the form would
+   * throw away its filters and scroll position for a panel that covers a
+   * quarter of the width.
    */
   const boundaryKey = `${route.name}:${route.name === "monitor" ? route.id : ""}:${
-    workbenchOpen ? "w" : addOpen ? "a" : ""
+    workbenchOpen ? "w" : ""
   }`;
 
   const leaveWall = useCallback(() => setLayout("rows"), [setLayout]);
   /*
-   * The workbench and the add form are mutually exclusive, and the toggles —
-   * not the render branch — are where that is enforced.
+   * Leaving the workbench closes the add drawer with it.
    *
-   * The branch below can only show one of them, and it picks the workbench. So
-   * opening the workbench and then pressing Add a monitor used to set
-   * `addOpen`, light the button up as pressed, and leave the workbench on
-   * screen: a control reporting a state the page does not have. Esc then closed
-   * a form nobody could see. Closing the other mode here keeps "what the
-   * buttons claim" and "what is rendered" the same thing, which asserting it
-   * in the branch alone cannot do.
+   * The two are no longer mutually exclusive as *content* — the drawer is an
+   * overlay now, so it can sit over the workbench the way it sits over any
+   * other screen — but switching the screen underneath a modal form is a
+   * context change, and a form left open across one is a form describing a
+   * page that is gone. Closing it here keeps what the add button claims and
+   * what is on screen the same thing.
    */
   const toggleWorkbench = useCallback(() => {
     setAddOpen(false);
     setWorkbenchOpen((open) => !open);
   }, []);
   /*
-   * Add a monitor, from wherever you pressed it.
+   * Add a monitor, from wherever you pressed it — and it is the same drawer
+   * everywhere (SUB-132).
+   *
+   * It used to be two different things behind one icon: a drawer over the
+   * inventory, and on the dashboard a branch that replaced the entire screen
+   * with the form. Same glyph, same position, one of them took the monitors
+   * away. The drawer is the one that survives, for the reason SUB-122 chose
+   * it: you add a monitor *from* the inventory and check it *against* the
+   * inventory — that the name is still free, that the interval matches its
+   * neighbours — and that argument is no weaker on the dashboard.
    *
    * On the inventory the drawer is the route — `/monitors/new` is a real
    * address — so the topbar has to navigate rather than set a local flag.
@@ -225,7 +240,6 @@ export default function App() {
       setCreateOpen(!route.create);
       return;
     }
-    setWorkbenchOpen(false);
     setAddOpen((open) => !open);
   }, [onMonitors, route, setCreateOpen]);
   /*
@@ -354,6 +368,17 @@ export default function App() {
           layout={layout}
           effectiveLayout={shown}
           onLayoutChange={setLayout}
+          /*
+           * The layout switcher belongs to the dashboard and to nothing else
+           * (SUB-131). Rows, Cards, Compact and Status wall are four ways of
+           * drawing a monitor list, and Incidents and Monitors do not have
+           * one — the control was offering a choice that changed nothing on
+           * two of the four screens it appeared on. The workbench is excluded
+           * for the same reason: it is a fixture gallery, not a list.
+           */
+          showLayouts={
+            !workbenchOpen && !onDetail && !onIncidents && !onMonitors
+          }
           themePreference={preference}
           onThemeChange={setPreference}
           workbenchOpen={workbenchOpen}
@@ -381,8 +406,6 @@ export default function App() {
       >
         {workbenchOpen ? (
           <Workbench />
-        ) : addOpen ? (
-          <AddMonitor onCreated={onMonitorCreated} onCancel={closeAdd} />
         ) : onIncidents ? (
           <LiveIncidentsRoot client={queryClient} />
         ) : route.name === "notifications" ? (
@@ -424,6 +447,31 @@ export default function App() {
           />
         )}
       </ErrorBoundary>
+
+      {/*
+       * Add a monitor: one drawer, over whatever screen you were on (SUB-132).
+       *
+       * Rendered here rather than inside each screen because the button that
+       * opens it lives in the shell's topbar and is on every screen. The
+       * inventory keeps its own copy — there the form is a route,
+       * `/monitors/new`, so its open state has to be the URL — and this one
+       * is suppressed there so the two cannot both be on screen at once.
+       *
+       * The form is wrapped in a Card holding a Panel, which is the shape the
+       * rest of the product uses and the shape the drawer was built to
+       * contain: `AddMonitor` on its own is bare fields on the page
+       * background, which is what Frank saw when the dashboard replaced
+       * itself with it.
+       */}
+      {!onMonitors && (
+        <Drawer open={addOpen} onClose={closeAdd} title="Add monitor">
+          <Card title="New monitor" headingLevel={3}>
+            <Panel>
+              <AddMonitor onCreated={onMonitorCreated} onCancel={closeAdd} />
+            </Panel>
+          </Card>
+        </Drawer>
+      )}
     </AppShell>
   );
 

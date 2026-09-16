@@ -82,7 +82,19 @@ function visibleText(el: Element): string {
 }
 
 describe("status is never hue alone in a list layout", () => {
-  it("shows the status word on rows for everything that is not up", () => {
+  it("shows the status word on every row, up included", () => {
+    /*
+     * `up` used to be the deliberate exception: no word was the up signal,
+     * on the argument that printing "Up" down 190 rows would drown the three
+     * that matter. That held while the lamp column had no header — absence
+     * read as a default against three labelled exceptions.
+     *
+     * SUB-135 made the header visible and called it "Status", and a column
+     * that announces itself as holding a status may not leave its most
+     * common value to hue alone: an empty cell under a "Status" heading
+     * reads as missing data, not as health. The exceptions still stand out,
+     * now by word rather than by being the only ones carrying any word.
+     */
     render(
       <MonitorTable
         monitors={ALL.map((s) => monitor(IDS[s], s))}
@@ -91,12 +103,7 @@ describe("status is never hue alone in a list layout", () => {
     );
     for (const status of ALL) {
       const row = screen.getByTestId(`monitor-row-${IDS[status]}`);
-      const shown = visibleText(row);
-      if (status === "up") {
-        expect(shown).not.toMatch(/Up/);
-      } else {
-        expect(shown).toMatch(new RegExp(status, "i"));
-      }
+      expect(visibleText(row)).toMatch(new RegExp(status, "i"));
     }
   });
 

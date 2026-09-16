@@ -70,6 +70,61 @@ export function IconClock() {
 }
 
 /**
+ * The three row actions that become glyphs on the inventory (SUB-134).
+ *
+ * Drawn on the same 24-unit grid at the same stroke as the header icons above,
+ * so a row of them sits at one optical weight. They are decorative by
+ * construction: each one is rendered inside a button whose `aria-label`
+ * carries the verb AND the monitor's name, because forty buttons called
+ * "Pause" is a list a screen reader cannot navigate and a voice-control user
+ * cannot address.
+ *
+ * Delete deliberately has no glyph here. It stays a word — see
+ * MonitorInventoryRow for the argument.
+ */
+
+/** Check now: an arrow completing a circle. */
+export function IconRefresh() {
+  return (
+    <svg {...BASE}>
+      <path d="M20 12a8 8 0 1 1-2.6-5.9" />
+      <path d="M20 4v4h-4" />
+    </svg>
+  );
+}
+
+/** Pause: two bars. Stroked like the rest rather than filled, so it carries
+    the same weight as the glyphs beside it. */
+export function IconPause() {
+  return (
+    <svg {...BASE}>
+      <path d="M9.5 5.5v13M14.5 5.5v13" />
+    </svg>
+  );
+}
+
+/** Resume: a play triangle. The counterpart to pause, and a different shape
+    rather than the same shape in a different colour — the button's state has
+    to survive greyscale (DESIGN.md §2.3). */
+export function IconPlay() {
+  return (
+    <svg {...BASE}>
+      <path d="M8 5.5 19 12 8 18.5Z" />
+    </svg>
+  );
+}
+
+/** Edit: a pencil. */
+export function IconPencil() {
+  return (
+    <svg {...BASE}>
+      <path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17v3Z" />
+      <path d="M14.5 5.5l4 4" />
+    </svg>
+  );
+}
+
+/**
  * Column-count glyphs: N filled bars in the same 24-unit box.
  *
  * Filled rather than stroked, which is the one deviation from `BASE` in this

@@ -3,6 +3,12 @@ import { Led } from "./Led";
 import { MonitorLink } from "./MonitorLink";
 import { Value } from "../components/Value";
 import { StateChip } from "../components/Chip";
+import {
+  IconPause,
+  IconPencil,
+  IconPlay,
+  IconRefresh,
+} from "../components/icons";
 import { formatDuration } from "./detail";
 import { describeTarget, statusWord } from "./format";
 import {
@@ -26,9 +32,18 @@ import type { CheckOutcome } from "./inventoryApi";
  *
  * **Every action is inline and present on every row.** No hover-only `⋯` menu:
  * a menu that hides Pause next to Delete behind a pointer is unusable on a
- * phone and dangerous everywhere else. The actions are ordinary buttons with
- * their words in them, so each one has an accessible name without an
- * `aria-label` that could drift from the label beside it.
+ * phone and dangerous everywhere else.
+ *
+ * **Three of the four are glyphs, and Delete is not (SUB-134).** Four text
+ * buttons behind every row is already busy at three monitors and a wall at
+ * forty, so check, pause and edit became icons. Delete stayed a word, and that
+ * is the decision rather than an omission: a red bin beside three grey glyphs
+ * is a grey bin to a reader who cannot see the red, and colour may never be
+ * the only carrier of meaning (DESIGN.md §2.3). It is also rare and
+ * irreversible — exactly the profile where an extra moment of reading is a
+ * feature. So the word Delete says what the button does without depending on
+ * its hue, and the ink is the second copy of that signal rather than the
+ * first.
  *
  * **Status is never only the lamp.** `Led` carries the word for a screen
  * reader, the paused row additionally says PAUSED in a chip that is read out,
@@ -189,9 +204,23 @@ function MonitorInventoryRowImpl({
           {onCheckNow !== undefined && (
             <button
               type="button"
-              className="add-button inv-act"
+              className="inv-act inv-act--icon"
               onClick={() => onCheckNow(monitor.id)}
               disabled={!checkable || checking}
+              /* The word used to carry this: the label read "Checking…" while
+                 a probe was in flight. With a glyph there is no word left, so
+                 the state is announced rather than drawn — `aria-busy` is how
+                 assistive technology hears it, and the label still says
+                 "Checking…" for the same reason.
+                 `data-busy` is the same fact for the eye. Without it a check
+                 in flight and a check that is unavailable render identically:
+                 both are disabled, so both get the same dimming, and a
+                 sighted reader cannot tell "working on it" from "you cannot
+                 do this here". The spin is suppressed under
+                 prefers-reduced-motion, where the dimming plus the title
+                 remain. */
+              aria-busy={checking}
+              data-busy={checking ? "true" : undefined}
               aria-label={
                 checkable
                   ? `${checkWord} ${monitor.name}`
@@ -203,34 +232,42 @@ function MonitorInventoryRowImpl({
                  monitor rather than about permissions. */
               title={
                 checkable
-                  ? undefined
+                  ? `${checkWord} ${monitor.name}`
                   : "A push monitor is reported to, not probed — your job calls SubGlance"
               }
             >
-              {checkWord}
+              <IconRefresh />
             </button>
           )}
 
           {onTogglePaused !== undefined && (
             <button
               type="button"
-              className="add-button inv-act"
+              className="inv-act inv-act--icon"
               onClick={() => onTogglePaused(monitor.id, !paused)}
               disabled={busy}
+              aria-busy={busy}
               aria-label={`${pauseWord} ${monitor.name}`}
+              /* The hint a pointer gets. It repeats the accessible name rather
+                 than abbreviating it: a title that says less than the label is
+                 a second, worse description of the same button. */
+              title={`${pauseWord} ${monitor.name}`}
             >
-              {pauseWord}
+              {/* Two different shapes, not one shape in two colours: which
+                  state the button is in has to survive greyscale. */}
+              {paused ? <IconPlay /> : <IconPause />}
             </button>
           )}
 
           {onEdit !== undefined && (
             <button
               type="button"
-              className="add-button inv-act"
+              className="inv-act inv-act--icon"
               onClick={() => onEdit(monitor.id)}
               aria-label={`Edit ${monitor.name}`}
+              title={`Edit ${monitor.name}`}
             >
-              Edit
+              <IconPencil />
             </button>
           )}
 

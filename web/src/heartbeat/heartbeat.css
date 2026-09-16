@@ -46,27 +46,30 @@
   animation: hb-enter var(--dur-attention) var(--ease);
 }
 
-@keyframes hb-flare {
-  0% { opacity: .5; }
-  100% { opacity: 0; }
-}
-
-.hb-flare {
-  transform-origin: bottom;
-  animation: hb-flare 520ms var(--ease) forwards;
-  fill: var(--ink);
-  pointer-events: none;
-}
+/*
+ * There was an `.hb-flare` rule here, plus its keyframes and two withdrawal
+ * selectors in connection.css, and nothing has ever carried the class: the
+ * arrival animation is `.hb-bar--new` alone. Removed rather than left as
+ * documentation of an intention — a rule with no element is a decision nobody
+ * made, and this file is spending a budget that has 13 kB in it for the whole
+ * product.
+ */
 
 .hb-tooltip {
   position: absolute;
   bottom: calc(100% + var(--space-2));
-  z-index: 10;
+  /* The float rung, not a number picked to beat whatever was nearest. The
+     readout grows upward out of its row, so on the first row of a list it
+     rises past the sticky topbar; anything below `--z-float` is clipped by
+     it. See the ladder in tokens.css. */
+  z-index: var(--z-float);
   min-width: 148px;
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border-hi);
   border-radius: var(--r-md);
-  background: var(--surface-2);
+  /* Opaque, because this floats rather than rests. `--surface-2` is 5% white,
+     which left the rows behind it legible straight through the readout. */
+  background: var(--surface-float);
   box-shadow: var(--shadow-float);
   pointer-events: none;
   white-space: nowrap;

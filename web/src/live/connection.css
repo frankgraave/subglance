@@ -97,10 +97,8 @@
 /* Live check animations stop. A bar flaring into place while the stream is
    down is fiction — nothing arrived. */
 .mon-dashboard[data-conn="stale"] .hb-bar--new,
-.mon-dashboard[data-conn="stale"] .hb-flare,
 .mon-dashboard[data-conn="stale"] .conn-badge-dot,
-.mon-detail[data-conn="stale"] .hb-bar--new,
-.mon-detail[data-conn="stale"] .hb-flare {
+.mon-detail[data-conn="stale"] .hb-bar--new {
   animation: none;
 }
 

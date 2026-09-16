@@ -133,3 +133,37 @@ describe("the shape and weight steps reach the pixels", () => {
     expect(await computed(".led", "border-top-left-radius")).toBe("2px");
   });
 });
+
+/**
+ * The ink ladder on a monitor row (SUB-135).
+ *
+ * Frank, on the dashboard screenshot: *"not sure about the same font color
+ * here"* — about the monitor's name and the URL under it.
+ *
+ * He was right, and the stylesheet did not say so. `.mon-name` declares
+ * `color: var(--ink)`, and twenty lines further down a shared link rule set
+ * `color: inherit` on the same selector to keep each layout's own colour —
+ * correct for the card layout, where the class is on the heading and the
+ * anchor is inside it, and wrong here, where the class IS the anchor. The
+ * later rule won, so the name resolved to the cell's `--ink-2` and matched the
+ * target exactly. Both declarations read correctly on their own; only the
+ * cascade between them was wrong, which is why this needs a browser.
+ *
+ * Asserted against resolved tokens rather than literals, so it holds in both
+ * themes, and as an ordering rather than as two fixed values, so the ladder
+ * can be re-tuned without rewriting the test.
+ */
+describe("a monitor row uses the ink ladder", () => {
+  it("gives the name the primary ink and the target a quieter one", async () => {
+    const name = await computed(".mon-name", "color");
+    const target = await computed(".mon-target", "color");
+
+    expect(name).toBe(await resolved("--ink"));
+    expect(target).toBe(await resolved("--ink-3"));
+    // The finding and its footnote are not the same colour. Stated separately
+    // from the two checks above because it is the claim Frank actually made,
+    // and because it keeps failing usefully if the ladder is ever re-tuned to
+    // two different tokens that happen to be equal.
+    expect(target).not.toBe(name);
+  });
+});
