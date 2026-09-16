@@ -40,16 +40,38 @@ describe("Sidebar", () => {
     expect(screen.getByText("Dashboard").closest("[aria-current]")).toBeTruthy();
   });
 
-  it("does not promise the three screens that do not exist", () => {
+  it("does not promise the two screens that do not exist", () => {
     render(<Sidebar collapsed={false} />);
     // They are shown — the shape of the product is information — but never as
     // something you can press, and never with a fabricated count beside them.
-    for (const label of ["Monitors", "Notifications", "Settings"]) {
+    for (const label of ["Notifications", "Settings"]) {
       const item = screen.getByText(label).closest(".shell-nav-item")!;
       expect(item.getAttribute("data-state")).toBe("planned");
       expect(item.querySelector("a, button")).toBeNull();
     }
-    expect(screen.getAllByText("Soon")).toHaveLength(3);
+    expect(screen.getAllByText("Soon")).toHaveLength(2);
+  });
+
+  it("makes monitors a real link now that the screen exists (SUB-122)", () => {
+    // The most misleading "Soon" left: the dashboard is full of monitors, so
+    // an item called Monitors that leads nowhere reads as a broken link to the
+    // screen already on display.
+    render(<Sidebar collapsed={false} />);
+    const link = screen.getByText("Monitors").closest("a");
+    expect(link?.getAttribute("href")).toBe("/monitors");
+    expect(
+      screen
+        .getByText("Monitors")
+        .closest(".shell-nav-item")
+        ?.querySelector(".shell-nav-soon"),
+      "a built destination must not still say Soon",
+    ).toBeNull();
+  });
+
+  it("marks monitors as current when that is the screen you are on", () => {
+    render(<Sidebar collapsed={false} current="monitors" />);
+    expect(screen.getByText("Monitors").closest("[aria-current]")).toBeTruthy();
+    expect(screen.getByText("Dashboard").closest("[aria-current]")).toBeNull();
   });
 
   it("makes incidents a real link now that the screen exists (SUB-34)", () => {

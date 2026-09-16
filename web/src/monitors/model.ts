@@ -101,10 +101,10 @@ export function partition(monitors: readonly Monitor[]): Partitioned {
  * An empty or whitespace-only query returns the input untouched, so "not
  * searching" costs nothing.
  */
-export function filterMonitors(
-  monitors: readonly Monitor[],
+export function filterMonitors<T extends Monitor>(
+  monitors: readonly T[],
   query: string,
-): Monitor[] {
+): T[] {
   const needle = query.trim().toLowerCase();
   if (needle === "") return [...monitors];
   return monitors.filter(

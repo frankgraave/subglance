@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { INCIDENTS_PATH, monitorPath, parseRoute, routePath } from "./route";
+import {
+  INCIDENTS_PATH,
+  MONITORS_PATH,
+  MONITOR_CREATE_PATH,
+  monitorPath,
+  parseRoute,
+  routePath,
+} from "./route";
 
 describe("parseRoute", () => {
   it("reads a monitor id out of the path", () => {
@@ -37,12 +44,49 @@ describe("parseRoute", () => {
   it("treats an unknown path as the dashboard, not as a crash", () => {
     expect(parseRoute("/nope")).toEqual({ name: "dashboard" });
     expect(parseRoute("/")).toEqual({ name: "dashboard" });
-    expect(parseRoute("/monitors")).toEqual({ name: "dashboard" });
     expect(parseRoute("/monitors/1/extra")).toEqual({ name: "dashboard" });
   });
 
   it("refuses an empty id, which would otherwise select monitor ''", () => {
-    expect(parseRoute("/monitors//")).toEqual({ name: "dashboard" });
+    // `/monitors//` has no id segment at all once empties are dropped, so it
+    // is the inventory — not monitor "". The distinction matters: selecting a
+    // monitor with an empty id would fetch /api/v1/monitors/ and render a
+    // detail page about nothing.
+    expect(parseRoute("/monitors//")).toEqual({
+      name: "monitors",
+      create: false,
+    });
+    expect(parseRoute("/monitors/%20")).toEqual({ name: "monitor", id: " " });
+  });
+
+  it("reads the monitors inventory (SUB-122)", () => {
+    // The last "Soon" in the rail. It is a place because it is where the
+    // configuration lives, and \"open the monitor settings\" is a link people
+    // send each other.
+    expect(parseRoute(MONITORS_PATH)).toEqual({
+      name: "monitors",
+      create: false,
+    });
+    expect(parseRoute("/monitors/")).toEqual({ name: "monitors", create: false });
+  });
+
+  it("reads /monitors/new as the inventory with the create form open", () => {
+    // The drawer is a real address, so the empty state's call to action can be
+    // linked to and a reload does not lose the form.
+    expect(parseRoute(MONITOR_CREATE_PATH)).toEqual({
+      name: "monitors",
+      create: true,
+    });
+  });
+
+  it("does not let an encoded spelling reach the create form", () => {
+    // `%6eew` decodes to `new`. Accepting it would open the form at a URL
+    // routePath can never produce, leaving the address bar and the screen
+    // disagreeing about where the user is.
+    expect(parseRoute("/monitors/%6eew")).toEqual({
+      name: "monitor",
+      id: "new",
+    });
   });
 });
 
@@ -52,6 +96,8 @@ describe("routePath", () => {
       { name: "dashboard" },
       { name: "incidents" },
       { name: "monitor", id: "7" },
+      { name: "monitors", create: false },
+      { name: "monitors", create: true },
     ] as const) {
       expect(parseRoute(routePath(route))).toEqual(route);
     }

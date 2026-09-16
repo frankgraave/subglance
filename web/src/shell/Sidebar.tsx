@@ -1,4 +1,4 @@
-import { DASHBOARD_PATH, INCIDENTS_PATH } from "./route";
+import { DASHBOARD_PATH, INCIDENTS_PATH, MONITORS_PATH } from "./route";
 import {
   DashboardIcon,
   IncidentsIcon,
@@ -12,7 +12,7 @@ import {
  * The primary navigation.
  *
  * **It does not promise what does not exist.** The sidebar advertises five
- * destinations and two of them are built (DESIGN.md §12); its "2 incidents"
+ * destinations and three of them are built (DESIGN.md §12); its "2 incidents"
  * badge was fixture data. A badge that claims two open incidents and goes
  * nowhere is worse than no badge at all — on a monitoring tool it is
  * indistinguishable from a real alert. So the unbuilt destinations are
@@ -30,6 +30,12 @@ import {
  * monitors one at a time. It carries no count — the count belongs on the
  * screen, next to the list it is the length of, where the two cannot disagree.
  *
+ * **Monitors is a real destination now (SUB-122).** It was the most misleading
+ * "Soon" left: the dashboard is full of monitors, so an item called Monitors
+ * that leads nowhere reads as a broken link to the screen already on display.
+ * It now leads to the inventory, which is a different question — not "is
+ * anything wrong" but "what is configured, and how".
+ *
  * **Collapsed it becomes a rail, never nothing.** Hiding navigation entirely
  * leaves no way back to it; a 56px icon rail keeps every destination one click
  * away. The labels stay in the DOM when collapsed, hidden the accessible way,
@@ -45,7 +51,7 @@ type Destination = {
 type BuiltDestination = Destination & {
   href: string;
   /** Which route name lights this item up. */
-  route: "dashboard" | "incidents";
+  route: NavRoute;
 };
 
 const BUILT: readonly BuiltDestination[] = [
@@ -63,10 +69,21 @@ const BUILT: readonly BuiltDestination[] = [
     href: INCIDENTS_PATH,
     route: "incidents",
   },
-];
-
-const PLANNED: readonly Destination[] = [
-  { id: "monitors", label: "Monitors", Icon: MonitorsIcon },
+  /*
+   * **Monitors is a real destination now (SUB-122).** It was the last of the
+   * "Soon" promises in this group and the most misleading one: the dashboard
+   * shows monitors, so an item labelled Monitors that goes nowhere reads as a
+   * broken link to the screen you are already looking at. It leads to the
+   * inventory — the page that shows what the dashboard refuses to (interval,
+   * timeout, retries, channels, tags) and is where those are changed.
+   */
+  {
+    id: "monitors",
+    label: "Monitors",
+    Icon: MonitorsIcon,
+    href: MONITORS_PATH,
+    route: "monitors",
+  },
 ];
 
 const PLANNED_CONFIG: readonly Destination[] = [
@@ -74,14 +91,17 @@ const PLANNED_CONFIG: readonly Destination[] = [
   { id: "settings", label: "Settings", Icon: SettingsIcon },
 ];
 
+/** The destinations the rail can navigate to. */
+export type NavRoute = "dashboard" | "incidents" | "monitors";
+
 export type SidebarProps = {
   collapsed: boolean;
   /** Shown under the product name; the instance this dashboard watches. */
   instance?: string;
   /** Which built destination is on screen. Defaults to the dashboard. */
-  current?: "dashboard" | "incidents" | "monitor";
+  current?: NavRoute | "monitor";
   /** Client-side navigation. Absent means the links do a full page load. */
-  onNavigate?: (route: "dashboard" | "incidents") => void;
+  onNavigate?: (route: NavRoute) => void;
   /** The signed-in address. Absent means no account footer is drawn. */
   account?: string;
   onSignOut?: () => void;
@@ -122,7 +142,7 @@ function Built({
 }: {
   item: BuiltDestination;
   current: boolean;
-  onNavigate?: (route: "dashboard" | "incidents") => void;
+  onNavigate?: (route: NavRoute) => void;
 }) {
   return (
     <li>
@@ -201,9 +221,6 @@ export function Sidebar({
             }
             onNavigate={onNavigate}
           />
-        ))}
-        {PLANNED.map((item) => (
-          <Planned key={item.id} {...item} />
         ))}
       </ul>
 

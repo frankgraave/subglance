@@ -1,0 +1,189 @@
+/*
+ * The monitors inventory.
+ *
+ * Deliberately small, and it has to be: the CSS budget had ~0.6 kB of gzip
+ * headroom and a whole screen had to fit inside it. So almost everything here
+ * is borrowed rather than declared — the screen wears `.mon-detail`'s column,
+ * the rows borrow `.panel-row`'s surface treatment through their own minimal
+ * rule, the controls are `.add-button`, `.add-input` and `.mon-facet-select`,
+ * and the chips, values and lamps are the shared components. What is left is
+ * the one thing that genuinely differs from every other list in the product:
+ * fixed-width settings columns, so the eye can read straight *down* a column
+ * and find the monitor checked once an hour or the one with no channel.
+ *
+ * Nothing in this file is load-bearing for meaning. With the stylesheet off
+ * the row still says the status, still says "Paused", still says "none" or
+ * "not loaded" for its channels. The dimming of a paused row is the second
+ * copy of a signal the markup already carries (DESIGN.md §2.3).
+ */
+
+.inv-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+}
+
+.inv-row {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  padding: var(--space-2) var(--space-3);
+}
+
+/*
+ * A paused monitor is dimmed and dashed — never coloured.
+ *
+ * It is a configuration state, not a health state, so borrowing a status hue
+ * would make "somebody switched this off" look like "something is wrong". The
+ * row also carries a Paused chip in words, which is the signal that survives a
+ * stylesheet, a printout and colour blindness alike.
+ */
+.inv-row[data-paused="true"] {
+  opacity: .72;
+  border-style: dashed;
+}
+
+.inv-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.inv-led { flex: none; }
+
+/* The elastic column. It must never be squeezed out by the fixed settings
+   columns: name and target are the only way to identify the row. */
+.inv-main { flex: 1 1 12rem; min-width: 0; }
+
+.inv-name,
+.inv-sub {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inv-name { font-size: var(--type-row); line-height: var(--lead-row); }
+
+.inv-sub {
+  @apply face-mono;
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  color: var(--ink-3);
+}
+
+.inv-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: none;
+}
+
+.inv-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0h);
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Fixed widths are what make the column readable downward. A settings column
+   that shifts by two pixels per row is not a column at all. */
+.inv-col--type { width: 4rem; }
+.inv-col--num { width: 4.5rem; align-items: flex-end; text-align: right; }
+.inv-col--chan { width: 8rem; }
+.inv-col--tags { width: 8rem; }
+
+.inv-label { @apply caps-legend; }
+
+.inv-type,
+.inv-tag,
+.inv-na {
+  @apply face-mono;
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.inv-na { color: var(--ink-3); }
+
+.inv-tags { display: flex; gap: var(--space-1h); overflow: hidden; }
+
+.inv-acts { display: flex; gap: var(--space-1h); flex: none; }
+
+/* Always drawn, never revealed on hover. A control that appears only under a
+   pointer is unfindable on a phone, and these are the controls the page is
+   for. */
+.inv-act {
+  padding: var(--space-1) var(--space-2h);
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+}
+
+/* Destructive is outlined, never filled: a filled red button is the one a
+   hand lands on by accident. The red is in the *ink*, not in the edge —
+   §2.9 gives borders to three role tokens, and spending a status colour on
+   an edge would make a control look like a monitor that is down. The word
+   Delete carries the meaning; the ink is its second copy. */
+.inv-act--danger { color: var(--down); }
+
+.inv-result {
+  margin-top: var(--space-2);
+  font-size: var(--type-helper);
+  line-height: var(--lead-prose);
+  color: var(--ink-2);
+}
+
+.inv-result--bad { color: var(--down); }
+
+.inv-paused-chip { margin-left: var(--space-2); }
+
+.inv-toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+
+.inv-search,
+.inv-select {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.inv-search { flex: 1 1 14rem; min-width: 0; }
+
+/*
+ * The search box keeps the no-zoom size at every width.
+ *
+ * `.add-input` steps down to `--type-body` above 640px, which is right for a
+ * form but not for this: a search field is the one control on the page people
+ * reach for on a tablet in landscape, and anything under 16px makes iOS Safari
+ * zoom on focus and leave them scrolled sideways (DESIGN.md §13).
+ */
+.inv-search-input {
+  font-size: var(--type-nozoom);
+  line-height: var(--lead-nozoom);
+}
+
+/*
+ * Phone: the settings columns stop pretending to be a table and wrap under the
+ * name. The page itself never scrolls sideways — that lesson is already in
+ * incidents.css — so nothing here keeps a fixed width that could push the
+ * document past the viewport.
+ */
+@media (max-width: 900px) {
+  .inv-line { flex-wrap: wrap; row-gap: var(--space-2); }
+  .inv-main { flex: 1 1 100%; }
+  .inv-meta { flex: 1 1 100%; flex-wrap: wrap; }
+  .inv-col--type,
+  .inv-col--num,
+  .inv-col--chan,
+  .inv-col--tags { width: auto; }
+  .inv-acts { margin-left: auto; }
+}

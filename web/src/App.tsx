@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SessionGate } from "./auth/SessionGate";
 import { useSession } from "./auth/useSession";
+import { canWrite } from "./auth/permissions";
 import { useTheme } from "./theme/useTheme";
 import { TokenSheet } from "./components/TokenSheet";
 import { HeartbeatGallery } from "./heartbeat/Gallery";
@@ -9,11 +10,13 @@ import { AddMonitor } from "./monitors/AddMonitor";
 import { LiveDashboardRoot } from "./live/LiveDashboard";
 import { LiveMonitorDetailRoot } from "./live/LiveMonitorDetail";
 import { LiveIncidentsRoot } from "./incidents/LiveIncidents";
+import { LiveMonitorsRoot } from "./monitors/LiveMonitors";
 import { createQueryClient } from "./live/queryClient";
 import { monitorsQueryKey } from "./live/api";
 import { ErrorBoundary } from "./shell/ErrorBoundary";
 import { useRoute } from "./shell/useRoute";
 import { routePath } from "./shell/route";
+import type { NavRoute } from "./shell/Sidebar";
 import { useDocumentTitle } from "./shell/documentTitle";
 import { useRouteFocus } from "./shell/useRouteFocus";
 import { AppShell } from "./shell/AppShell";
@@ -92,10 +95,10 @@ export default function App() {
    * screen starts at the top.
    */
   const goTo = useCallback(
-    (name: "dashboard" | "incidents") => {
+    (name: NavRoute) => {
       setWorkbenchOpen(false);
       setAddOpen(false);
-      navigate({ name });
+      navigate(name === "monitors" ? { name, create: false } : { name });
       window.scrollTo(0, 0);
     },
     [navigate],
@@ -117,6 +120,18 @@ export default function App() {
   const shown = effectiveLayout(layout, narrow);
   const onDetail = route.name === "monitor";
   const onIncidents = route.name === "incidents";
+  const onMonitors = route.name === "monitors";
+  /*
+   * Opening and closing the create drawer is a navigation, not a boolean.
+   *
+   * `/monitors/new` is a real address, so closing the drawer has to put the
+   * URL back on `/monitors` — otherwise Back would reopen a form the user just
+   * dismissed, and a reload would reopen it too.
+   */
+  const setCreateOpen = useCallback(
+    (open: boolean) => navigate({ name: "monitors", create: open }),
+    [navigate],
+  );
 
   /*
    * The screen names itself and takes focus when the route changes
@@ -131,7 +146,15 @@ export default function App() {
    * re-render on every heartbeat.
    */
   const path = routePath(route);
-  useDocumentTitle(onDetail ? "Monitor" : onIncidents ? "Incidents" : "Monitors");
+  useDocumentTitle(
+    onDetail
+      ? "Monitor"
+      : onIncidents
+        ? "Incidents"
+        : onMonitors
+          ? "Monitors"
+          : "Dashboard",
+  );
   const mainRef = useRef<HTMLElement | null>(null);
   useRouteFocus(path, mainRef);
 
@@ -140,7 +163,12 @@ export default function App() {
    * monitor is open. Without this, choosing the wall from the detail page
    * would replace it with a chrome-less grid and no way back.
    */
-  const isWall = shown === "wall" && !workbenchOpen && !onDetail && !onIncidents;
+  const isWall =
+    shown === "wall" &&
+    !workbenchOpen &&
+    !onDetail &&
+    !onIncidents &&
+    !onMonitors;
   /*
    * What "a different screen" means for the inner error boundary: the route,
    * plus the two overlays the shell owns. Changing any of them remounts the
@@ -168,10 +196,23 @@ export default function App() {
     setAddOpen(false);
     setWorkbenchOpen((open) => !open);
   }, []);
+  /*
+   * Add a monitor, from wherever you pressed it.
+   *
+   * On the inventory the drawer is the route — `/monitors/new` is a real
+   * address — so the topbar has to navigate rather than set a local flag.
+   * Setting `addOpen` there would open a second, unrouted copy of the same
+   * form over the list, leave the URL on `/monitors`, and light the button as
+   * pressed for a state the address bar does not have.
+   */
   const toggleAdd = useCallback(() => {
+    if (onMonitors) {
+      setCreateOpen(!route.create);
+      return;
+    }
     setWorkbenchOpen(false);
     setAddOpen((open) => !open);
-  }, []);
+  }, [onMonitors, route, setCreateOpen]);
   /*
    * Closing on success rather than navigating to the new monitor.
    *
@@ -303,7 +344,7 @@ export default function App() {
           workbenchOpen={workbenchOpen}
           onToggleWorkbench={toggleWorkbench}
           onAddMonitor={toggleAdd}
-          addOpen={addOpen}
+          addOpen={onMonitors ? route.create : addOpen}
         />
       }
     >
@@ -329,6 +370,19 @@ export default function App() {
           <AddMonitor onCreated={onMonitorCreated} onCancel={closeAdd} />
         ) : onIncidents ? (
           <LiveIncidentsRoot client={queryClient} />
+        ) : route.name === "monitors" ? (
+          <LiveMonitorsRoot
+            client={queryClient}
+            onOpen={openMonitor}
+            createOpen={route.create}
+            onCreateOpenChange={setCreateOpen}
+            /* A viewer is shown no write controls at all rather than controls
+               that 403: the server's rule is the one consulted, not a guess
+               about what this screen would like to offer. */
+            canWrite={
+              session.state === "signedIn" && canWrite(session.user)
+            }
+          />
         ) : route.name === "monitor" ? (
           <LiveMonitorDetailRoot
             client={queryClient}

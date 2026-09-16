@@ -2,6 +2,7 @@ import { useEffect, useRef, type RefObject } from "react";
 import { COMPACT_MAX_WIDTH } from "../layout/useMediaQuery";
 import { CloseIcon } from "./icons";
 import { Sidebar } from "./Sidebar";
+import type { NavRoute } from "./Sidebar";
 
 /**
  * The primary navigation on a phone: an overlay drawer, not a rail.
@@ -42,12 +43,12 @@ export type NavDrawerProps = {
    */
   returnFocusRef?: RefObject<HTMLElement | null>;
   instance?: string;
-  current?: "dashboard" | "incidents" | "monitor";
+  current?: NavRoute | "monitor";
   /**
    * Client-side navigation. The drawer closes itself on the way out: a phone
    * has no room to leave an overlay standing over the screen it just opened.
    */
-  onNavigate?: (route: "dashboard" | "incidents") => void;
+  onNavigate?: (route: NavRoute) => void;
   account?: string;
   onSignOut?: () => void;
 };
