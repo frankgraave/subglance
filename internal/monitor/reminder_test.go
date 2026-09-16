@@ -11,7 +11,23 @@ import (
 
 // downMonitor creates a monitor, takes it down, and returns it with its
 // confirmed incident.
-func downMonitor(t *testing.T, db *store.DB, r *Runner, repeatAfterS int) (store.Monitor, store.Incident) {
+// downMonitor creates a confirmed, down monitor and syncs the test clock to
+// the confirmation that was actually stored.
+//
+// `clock` is synced rather than left where the caller set it because the two
+// timestamps come from different places: the outcome is stamped with the real
+// time.Now() when the check is recorded, while `confirmed_at` is persisted as
+// whole seconds (at.Unix()). A caller that captured its clock a moment earlier
+// therefore has a clock that can sit *behind* the stored confirmation whenever
+// a second boundary falls between the two calls — and then "confirmed + 15m"
+// is not yet due at "clock + 15m", the reminder never goes out, and the test
+// fails for reasons that have nothing to do with reminders. Rare locally,
+// regular on a loaded CI runner under -race.
+//
+// Anchoring the clock to inc.ConfirmedAt also states the thing these tests are
+// actually about: a reminder is due some interval after the incident was
+// confirmed, not after an arbitrary moment in the test setup.
+func downMonitor(t *testing.T, db *store.DB, r *Runner, repeatAfterS int, clock *time.Time) (store.Monitor, store.Incident) {
 	t.Helper()
 	ctx := context.Background()
 
@@ -33,6 +49,7 @@ func downMonitor(t *testing.T, db *store.DB, r *Runner, repeatAfterS int) (store
 	if !inc.Confirmed() {
 		t.Fatal("expected the incident to be confirmed with retries=1")
 	}
+	*clock = inc.ConfirmedAt
 	return m, inc
 }
 
@@ -46,7 +63,7 @@ func TestUnacknowledgedIncidentIsRepeated(t *testing.T) {
 	r := New(Options{DB: db, Log: quietLogger(), Notify: rec.record})
 	r.now = func() time.Time { return clock }
 
-	m, _ := downMonitor(t, db, r, 900)
+	m, _ := downMonitor(t, db, r, 900, &clock)
 
 	// Not yet: fourteen minutes is inside the first gap.
 	clock = clock.Add(14 * time.Minute)
@@ -105,7 +122,7 @@ func TestAcknowledgedIncidentIsNotRepeated(t *testing.T) {
 	r := New(Options{DB: db, Log: quietLogger(), Notify: rec.record})
 	r.now = func() time.Time { return clock }
 
-	_, inc := downMonitor(t, db, r, 900)
+	_, inc := downMonitor(t, db, r, 900, &clock)
 
 	if err := db.AckIncident(ctx, inc.ID, clock); err != nil {
 		t.Fatalf("AckIncident: %v", err)
@@ -129,7 +146,7 @@ func TestRepeatAfterZeroDisablesReminders(t *testing.T) {
 	r := New(Options{DB: db, Log: quietLogger(), Notify: rec.record})
 	r.now = func() time.Time { return clock }
 
-	downMonitor(t, db, r, 0)
+	downMonitor(t, db, r, 0, &clock)
 
 	clock = clock.Add(72 * time.Hour)
 	r.sendDueReminders(context.Background())
@@ -149,7 +166,7 @@ func TestResolvedIncidentIsNotRepeated(t *testing.T) {
 	r := New(Options{DB: db, Log: quietLogger(), Notify: rec.record})
 	r.now = func() time.Time { return clock }
 
-	m, _ := downMonitor(t, db, r, 900)
+	m, _ := downMonitor(t, db, r, 900, &clock)
 
 	r.record(outcomeFor(m, "https://example.com", true)) // recovered
 
@@ -215,7 +232,7 @@ func TestReminderScheduleSurvivesRestart(t *testing.T) {
 	r1 := New(Options{DB: db, Log: quietLogger(), Notify: first.record})
 	r1.now = func() time.Time { return clock }
 
-	m, _ := downMonitor(t, db, r1, 900)
+	m, _ := downMonitor(t, db, r1, 900, &clock)
 
 	clock = clock.Add(15 * time.Minute)
 	r1.sendDueReminders(ctx)
@@ -271,7 +288,7 @@ func TestPausedMonitorIsNotReminded(t *testing.T) {
 	r := New(Options{DB: db, Log: quietLogger(), Notify: rec.record})
 	r.now = func() time.Time { return clock }
 
-	m, _ := downMonitor(t, db, r, 900)
+	m, _ := downMonitor(t, db, r, 900, &clock)
 
 	if err := db.SetMonitorEnabled(ctx, m.ID, false); err != nil {
 		t.Fatalf("SetMonitorEnabled: %v", err)
@@ -296,7 +313,7 @@ func TestRemindersStillRunWithoutNotifier(t *testing.T) {
 	r := New(Options{DB: db, Log: quietLogger()})
 	r.now = func() time.Time { return clock }
 
-	m, _ := downMonitor(t, db, r, 900)
+	m, _ := downMonitor(t, db, r, 900, &clock)
 
 	clock = clock.Add(15 * time.Minute)
 	r.sendDueReminders(ctx)
