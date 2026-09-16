@@ -245,7 +245,7 @@ checked without trusting a key I could lose:
 
 ```sh
 cosign verify-blob SHA256SUMS \
-  --certificate SHA256SUMS.pem --signature SHA256SUMS.sig \
+  --bundle SHA256SUMS.sigstore.json \
   --certificate-identity-regexp 'https://github\.com/frankgraave/subglance/' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```

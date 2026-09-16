@@ -121,10 +121,19 @@ checksum:
 # covers every artefact, so one signature over it authenticates all of them —
 # five signatures would say nothing extra and cost five more Rekor entries.
 #
+# The output is a single Sigstore bundle (`SHA256SUMS.sigstore.json`) rather
+# than a detached .sig plus .pem. That is not a style choice: cosign v3 —
+# which is what sigstore/cosign-installer installs by default — deprecated
+# `--output-signature` and `--output-certificate` and now *ignores* them,
+# printing "will be ignored" and writing nothing. GoReleaser would then look
+# for files that were never created. The bundle carries the signature, the
+# certificate and the transparency-log proof in one file, and is the only
+# supported shape going forward.
+#
 # Verifying a download:
 #
 #   cosign verify-blob SHA256SUMS \
-#     --certificate SHA256SUMS.pem --signature SHA256SUMS.sig \
+#     --bundle SHA256SUMS.sigstore.json \
 #     --certificate-identity-regexp 'https://github\.com/frankgraave/subglance/' \
 #     --certificate-oidc-issuer https://token.actions.githubusercontent.com
 #   sha256sum -c SHA256SUMS --ignore-missing
@@ -132,13 +141,11 @@ signs:
   - id: cosign-checksums
     cmd: cosign
     artifacts: checksum
-    signature: "${artifact}.sig"
-    certificate: "${artifact}.pem"
+    signature: "${artifact}.sigstore.json"
     output: true
     args:
       - sign-blob
-      - "--output-signature=${signature}"
-      - "--output-certificate=${certificate}"
+      - "--bundle=${signature}"
       - "${artifact}"
       - "--yes"
 
