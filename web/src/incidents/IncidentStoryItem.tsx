@@ -34,7 +34,7 @@ import type { Incident } from "../monitors/detail";
  *
  * **Acknowledged is not resolved, and this row says so four ways.**
  *
- * The lamp and the tint state the *service*; the chip in the response column
+ * The lamp and the status rail state the *service*; the chip in the response column
  * states the *response*. Those are two different questions and they get two
  * different columns — which is what makes them impossible to conflate. On top
  * of that the duration keeps counting, and the sr-only sentence spells the
@@ -63,7 +63,7 @@ export type IncidentStoryItemProps = {
   acking?: boolean;
   /** True when the live stream is dead; moves every claim out of the present. */
   stale?: boolean;
-  /** Renders the quieter history treatment: no tint, dimmer name. */
+  /** Renders the quieter history treatment: no status rail, dimmer name. */
   past?: boolean;
 };
 
@@ -227,7 +227,7 @@ export function IncidentStoryItem({
       {open ? (
         <div className="inc-detail" id={detailId}>
           <div className="inc-detail-grid">
-            <div>
+            <div className="inc-detail-col">
               <p className="inc-label">Timeline</p>
               <ol className="inc-tl">
                 {timeline.map((step) => (
@@ -244,7 +244,7 @@ export function IncidentStoryItem({
                 ))}
               </ol>
             </div>
-            <div>
+            <div className="inc-detail-col">
               <p className="inc-label">Last error</p>
               {incident.lastError ? (
                 <p className="inc-snap inc-snap--err">{incident.lastError}</p>
