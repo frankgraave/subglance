@@ -39,6 +39,12 @@ const monitorsCss = readFileSync(
   "utf8",
 );
 
+/** card.css on disk: the frame around this table is the shared `Card` now. */
+const cardCss = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "..", "components", "card.css"),
+  "utf8",
+);
+
 /**
  * The monitor table, found by the accessible name its <caption> gives it.
  *
@@ -317,6 +323,52 @@ describe("MonitorTable grouped by a tag", () => {
     render(<MonitorTable monitors={tagged()} beatWidth={WIDTH} />);
     expect(headings()).toEqual(["Needs attention (1)", "All monitors (3)"]);
   });
+
+  /*
+   * SUB-140: the card that frames this table names and counts the list.
+   *
+   * The rows layout was the one list screen with no icon and no title on its
+   * frame, next to a compact layout that already said "Monitors (N)" — which
+   * is the inconsistency the product owner named. DESIGN.md §8.3 fixes the
+   * form as `Name (N)`.
+   */
+  it("heads the table with a card titled `Monitors (N)`", () => {
+    render(<MonitorTable monitors={tagged()} beatWidth={WIDTH} />);
+    expect(
+      screen.getByRole("heading", { name: "Monitors (4)", level: 2 }),
+      "the frame around the rows layout needs the same titled card every other list screen has",
+    ).toBeTruthy();
+  });
+
+  it("counts every monitor in the title, not one section of them", () => {
+    // The fixture splits 4 into "Needs attention (1)" and "All monitors (3)".
+    // The card names the whole; a title equal to either section would make the
+    // two headings read as alternatives rather than as parts (§8.3).
+    render(<MonitorTable monitors={tagged()} beatWidth={WIDTH} />);
+    const title = screen.getByRole("heading", { level: 2 }).textContent;
+    expect(title).toBe("Monitors (4)");
+    expect(headings()).toEqual(["Needs attention (1)", "All monitors (3)"]);
+  });
+
+  it("keeps the title and its count when the table is grouped", () => {
+    render(
+      <MonitorTable monitors={tagged()} groupKey="env" beatWidth={WIDTH} />,
+    );
+    expect(
+      screen.getByRole("heading", { name: "Monitors (4)", level: 2 }),
+    ).toBeTruthy();
+  });
+
+  it("gives the card header a decorative glyph, not a second accessible name", () => {
+    const { container } = render(
+      <MonitorTable monitors={tagged()} beatWidth={WIDTH} />,
+    );
+    const glyph = container.querySelector(".icon-tile svg");
+    expect(glyph, "the card header needs its icon tile").not.toBeNull();
+    // The heading already says what the list is; a glyph that announces itself
+    // makes a screen reader say it twice (§8.3, AGENTS.md).
+    expect(glyph?.getAttribute("aria-hidden")).toBe("true");
+  });
 });
 
 describe("the panel look does not cost the table its semantics", () => {
@@ -337,10 +389,79 @@ describe("the panel look does not cost the table its semantics", () => {
     const table = monTable();
     expect(table.querySelector("caption")).not.toBeNull();
     expect(table.querySelectorAll("th[scope='col']").length).toBeGreaterThan(0);
+    // Section headings are `th[scope="rowgroup"]`, which is also a `rowheader`
+    // — correctly so, since they label the rows of their tbody. They are
+    // excluded here because this assertion is about the per-monitor name cell:
+    // counting both made the number a function of how many sections the
+    // fixture happens to produce.
     expect(
-      within(table).getAllByRole("rowheader").length,
+      within(table)
+        .getAllByRole("rowheader")
+        .filter((cell) => !cell.classList.contains("mon-section-title")).length,
       "every monitor row needs its own row header",
     ).toBe(2);
+  });
+
+  it("gives a down row no status fill, at rest or under the pointer", () => {
+    /*
+     * SUB-140. The product owner asked for the red row background to go
+     * ("graag geen rode achtergrond"), and DESIGN.md §2.3 was rewritten to
+     * match rather than left contradicting the code — which is exactly how a
+     * later change re-adds the fill citing the old rule. This is the
+     * assertion that makes the doc's new position enforceable.
+     *
+     * Read off the stylesheet, not computed style: jsdom applies no CSS.
+     *
+     * What counts as an offender is a *status* fill, not any fill. The first
+     * version of this rejected every background under a `[data-status="down"]`
+     * selector, which would have failed a permitted neutral `:hover` and a
+     * background-based leading edge — both things §2.3 explicitly allows, and
+     * the second of which is how three other statuses could legitimately be
+     * drawn. Narrowing it to "not a neutral" rather than dropping state rules
+     * altogether is deliberate: excluding `:hover` wholesale would admit
+     * `.mon-row[data-status="down"]:hover > * { background: var(--down-dim) }`
+     * — red introduced by the pointer, the precise signal-switching failure
+     * §2.3 forbids, and one the sibling `-deep` check does not catch because
+     * `--down-dim` is a live token.
+     *
+     * Descendant selectors are kept: the fill this guards against was applied
+     * to every cell of the row, via `> *`.
+     *
+     * Every background declaration in the block is inspected, not just the
+     * first. `exec` returns one match, so a rule that set a neutral fill and
+     * then a status tint below it — which is what a careless merge produces —
+     * would have been read as neutral and passed.
+     */
+    const NEUTRAL =
+      /^(?:none|transparent|inherit|initial|unset|revert|var\(--surface[a-z0-9-]*\)|var\(--border[a-z0-9-]*\))$/;
+    const offenders: string[] = [];
+    for (const match of monitorsCss.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+      const selector = match[1].trim();
+      if (!/\[data-status="down"\]/.test(selector)) continue;
+      const body = match[2].replace(/\/\*[\s\S]*?\*\//g, "");
+      for (const [, raw] of body.matchAll(
+        /(?:^|[;{\s])background(?:-color)?:\s*([^;]+)/g,
+      )) {
+        const value = raw.trim();
+        if (NEUTRAL.test(value)) continue;
+        offenders.push(`${selector} fills with ${value}`);
+      }
+    }
+    expect(
+      offenders,
+      "down marks itself with a coloured leading edge like every other status (§2.3)",
+    ).toEqual([]);
+  });
+
+  it("leaves no `-deep` hover fill behind either", () => {
+    // The hover tint existed only to deepen a resting tint. With no resting
+    // fill it would *introduce* red under the pointer, which is the signal
+    // switching the deepening rule was written to forbid (§2.3).
+    //
+    // Comments are stripped first: this file explains at length why the token
+    // went, and a naive scan would match its own reasoning.
+    const live = monitorsCss.replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(live).not.toMatch(/var\(--[a-z]+-deep\)/);
   });
 
   it("leaves the table parts as table elements", () => {
@@ -378,8 +499,16 @@ describe("the panel look does not cost the table its semantics", () => {
     // padding, so the panels sit inset from its border rather than flush
     // against it. A frame without padding is two edges at the same level, and
     // that is the double-framing an earlier pass rightly removed.
-    const board = /\.mon-board\s*\{([^}]*)\}/.exec(monitorsCss);
-    expect(board, "missing the .mon-board rule").not.toBeNull();
+    //
+    // Read off `.card` rather than the `.mon-board` this used to check
+    // (SUB-140). That class restated, declaration for declaration, what the
+    // shared `Card` component already says, and the rows layout was the only
+    // list screen drawing its frame by hand — which is why it was also the
+    // only one with no icon and no title in its header. The assertion did not
+    // move to a weaker place: it now guards the rule for every card in the
+    // product instead of one screen's copy of it.
+    const board = /\.card\s*\{([^}]*)\}/.exec(cardCss);
+    expect(board, "missing the .card rule").not.toBeNull();
     const body = board?.[1] ?? "";
 
     expect(body, "the card needs its own edge").toMatch(/border:\s*1px/);
@@ -404,6 +533,7 @@ describe("the panel look does not cost the table its semantics", () => {
       /border-start-start-radius:\s*var\(--r-md\)/,
     );
   });
+
 });
 
 /**

@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import type { ReactNode } from "react";
 import { useCompactViewport } from "../layout/useMediaQuery";
+import { IconGroup, IconTag } from "../components/icons";
 import {
   DEFAULT_LAYOUT,
   effectiveLayout,
@@ -321,7 +322,16 @@ export function Dashboard({
             // The key is also the text of an option in the Group by control,
             // so an explicit attribute — not the visible text — is what
             // identifies a facet unambiguously.
-            <label key={facet.key} className="tb-field" data-facet-key={facet.key}>
+            <label
+              key={facet.key}
+              className="tb-field tb-field--framed"
+              data-facet-key={facet.key}
+            >
+              {/* The glyph, and it is decorative: the <label> around the
+                  select is already the control's accessible name, so an icon
+                  that announced itself would make a screen reader say the
+                  filter twice. */}
+              <IconTag />
               <span className="tb-label">{facet.key}</span>
               <select
                 className="tb-select mon-facet-select"
@@ -353,7 +363,11 @@ export function Dashboard({
            * is visible is the kind of thing people press twice.
            */}
           {facets.length > 0 && (
-            <label className="tb-field">
+            <label className="tb-field tb-field--framed">
+              {/* A different glyph from the facets, because it is a different
+                  kind of control: rows gathered under headings, not a filter.
+                  Decorative — the <label> names the select. */}
+              <IconGroup />
               <span className="tb-label">Group by</span>
               {/* Its own class, not `mon-facet-select`: it looks the same but
                   it is not a facet, and one selector must not match both. */}

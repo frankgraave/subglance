@@ -548,30 +548,66 @@
      statements and the screen has to be able to make both. */
   --ink-zero:    oklch(.62 0 0);
 
-  /* `--down-deep` is one step past `--down-dim`, for a tinted row under the
-     pointer.
+  /* The status palette. Each status has a strong tone for the marks that
+     carry it -- the lamp, the chip, the legend swatch, the leading edge of a
+     row -- and a `-dim` companion for the rare surface that is tinted with
+     the status rather than merely marked by it. The pairs are separate tokens
+     because they are different jobs: the strong tone is read as a signal and
+     is held to a contrast floor, the dim tone sits under text and must not
+     be. */
 
-     Hover on a row that already means something must not switch signals. A
-     neutral highlight arrives as a second kind of colour on top of the first
-     and the eye has to work out which one it is being told about; the same red
-     getting louder is the same statement said closer. Measured against the
-     reference style, that is what it does — hovered status rows deepen to 20%
-     of their own colour rather than picking up a grey.
-
-     There is deliberately no `--up-deep`, `--warn-deep` or `--idle-deep`. Down
-     is the only status with a resting fill to deepen: the others mark
-     themselves with a coloured edge alone, so a hover tint would introduce a
-     colour rather than intensify one, which is the neutral-fill problem again
-     wearing the status palette. A token with no caller is a decision nobody
-     made. */
+  /* A check that answered, in time. The lamp, the `Up` chip and the legend
+     swatch; also the uptime figure when it is at full health. */
   --up:          #34d399;
+  /* The tinted plate behind an up mark. One caller: the icon tile that fronts
+     a healthy panel. Deliberately far enough from `--surface-2` to read as
+     coloured and dark enough to carry `--ink` on top. */
   --up-dim:      #10241d;
+
+  /* Something is off but the monitor is not down: a slow answer, a stale
+     reading, a pending first check, an acknowledged incident. The tone the
+     product reaches for whenever it wants attention without alarm. */
   --warn:        #fbbf24;
+  /* The tinted plate behind a warn mark -- the acknowledged incident row, the
+     degraded connection banner, the warn icon tile. This is the `-dim` with
+     the most callers, because "off but not broken" is the state a dashboard
+     spends most of its time in. */
   --warn-dim:    #2a2110;
+
+  /* A check that failed. The loudest tone in the product and the only one
+     with a glow, spent on the lamp, the `Down` chip, the 2px leading edge of
+     a down row and the failure reason in words.
+
+     There is no `--down-deep`, and there is no `-deep` for any other status
+     either. It existed as one step past `--down-dim`, for a down row
+     deepening its own tint under the pointer rather than picking up a neutral
+     `--surface-2` -- the argument being that hover on a row which already
+     means something must not switch signals. That argument was sound, and it
+     depended entirely on down having a *resting* fill to deepen.
+
+     The product owner asked for the red row background to go, and it has
+     (DESIGN.md 2.3). With no resting fill, a hover tint would *introduce*
+     red rather than intensify it -- which is the exact failure the original
+     rule forbade -- so every caller of `--down-deep` went with the fill, and a
+     token with no caller is a decision nobody made. Down now marks itself the
+     way pending, waiting and paused already do: a coloured leading edge, the
+     lamp, and the status word. */
   --down:        #f43f5e;
+  /* The tinted plate behind a down mark. It survived the row fill because it
+     still has live callers that are *not* rows: the down icon tile and the
+     open incident row, both of which are a single object saying what it is
+     rather than a line in a list of mostly-fine things. */
   --down-dim:    #2c1017;
-  --down-deep:   #3d1620;
+
+  /* No signal and nothing wrong with that: a paused monitor, a check that has
+     not been asked to run yet, a window with no data. Grey rather than a hue,
+     because idle is the absence of a statement and a colour would make it
+     one. */
   --idle:        #4b5257;
+  /* The tinted plate behind an idle mark, and the fill of an empty heartbeat
+     bar -- the one place the product draws "no reading" as a shape. A step
+     from `--surface-1` rather than a colour, so a row of empty bars reads as
+     texture instead of data. */
   --idle-dim:    #16191b;
 
   /* The label on a *filled* status mark (§2.3).
@@ -669,17 +705,12 @@
      above the tone that means "no data". */
   --ink-zero:    #7b8186;
 
-  /* `--down-deep` moves away from the page, not toward a fixed lightness: on
-     dark it lightens, here it darkens. Same rule, opposite direction — a tint
-     that "deepens" has to read as more of itself in both themes, and copying
-     the dark value across would have made a hovered row fade instead. */
   --up:          #059669;
   --up-dim:      #d9f5e9;
   --warn:        #b45309;
   --warn-dim:    #fdf0d5;
   --down:        #e11d48;
   --down-dim:    #fde4e9;
-  --down-deep:   #fbccd7;
   --idle:        #c2c7cb;
   --idle-dim:    #f0f0ef;
 

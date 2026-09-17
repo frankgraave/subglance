@@ -1,5 +1,5 @@
 /*
- * The readout tooltip (DESIGN.md §8.3).
+ * The readout tooltip (DESIGN.md §8.5).
  *
  * The structure is a small table: a mono timestamp header carrying the unit
  * for everything below it, a full-width divider, one row per series, and an

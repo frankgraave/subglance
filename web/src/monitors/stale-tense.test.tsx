@@ -315,12 +315,21 @@ describe("the treatment reaches the word a sighted reader sees", () => {
     expect(visibleOnly(card)).toContain("Was down");
   });
 
-  it("rewrites the row's visible word for statuses that print one", () => {
+  it("rewrites the row's hidden word, which is the only copy it has now", () => {
+    // SUB-140 made the rows layout's status word `sr-only` at the product
+    // owner's request, so this row has exactly one copy of the word and it is
+    // the one a screen reader reads. That makes the tense fix *more* load-
+    // bearing here, not less: `connection.css` desaturates the lamp for a
+    // sighted reader, and nothing at all would reach the reader this test is
+    // about if `Led` did not take `stale`. Asserted on `textContent` rather
+    // than `visibleOnly`, because the word is deliberately not drawn.
     const { container } = render(
       <MonitorTable monitors={[monitor("down")]} beatWidth={WIDTH} stale />,
     );
     const row = container.querySelector(".mon-row")!;
-    expect(visibleOnly(row)).toContain("Was down");
+    expect(row.textContent ?? "").toContain("Was down");
+    // And the present tense must be gone, not merely joined.
+    expect(visibleOnly(row)).not.toMatch(/\bDown\b/);
   });
 });
 

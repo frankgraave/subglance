@@ -1,3 +1,6 @@
+import type { ReactNode } from "react";
+import { Card } from "../components/Card";
+import { IconList } from "../components/icons";
 import { EmptyState } from "./EmptyState";
 import { MonitorRow, ROW_BEAT_WIDTH } from "./MonitorRow";
 import { partition, sectionsByTag } from "./model";
@@ -123,38 +126,69 @@ export function MonitorTable({
 
   const sections = groupKey === null ? null : sectionsByTag(monitors, groupKey);
 
+  /*
+   * The card that names the list, and counts it.
+   *
+   * The rows layout was the one list screen whose card had no icon and no
+   * title: the compact layout says "Monitors (N)" with an `IconList` tile, the
+   * cards layout titles every section, the inventory says "Configured
+   * monitors" — and the rows layout, which is the default, opened on an
+   * unlabelled frame. The product owner's note was exactly that: icon and
+   * title missing relative to the other views, keep it consistent, so
+   * "Monitors (5)".
+   *
+   * The count is `monitors.length` — every monitor this table draws, before
+   * the attention/rest split. It is deliberately not the sum of the two
+   * section headings read as alternatives: "Needs attention (3)" and "All
+   * monitors (2)" are two parts of one list of 5, and the card names the
+   * whole. That is also why the second heading stays "All monitors" rather
+   * than becoming "The rest" — it is the section that is not the exception,
+   * and it reads correctly under a card that has already said how many there
+   * are in total.
+   *
+   * `headingLevel` is 2: the dashboard's `h1` is its own visually hidden
+   * "Monitors" heading, and this card sits inside that section.
+   */
+  const card = (children: ReactNode) => (
+    <Card
+      title={`Monitors (${monitors.length})`}
+      icon={<IconList />}
+      headingLevel={2}
+    >
+      {children}
+    </Card>
+  );
+
   if (sections !== null) {
     // The caption states the arrangement, because a sighted reader infers it
     // from the headings and someone using a screen reader cannot.
     const caption = `${monitors.length} monitors, grouped by ${groupKey}. Monitors needing attention are listed first.`;
-    return (
-      <div className="mon-board">
-        <table className="mon-table">
-          <caption className="sr-only">{caption}</caption>
-          <Columns />
-          <Head />
-          {/* One tbody per section: a tbody is the only table element allowed
-              to repeat, so grouping needs no extra nesting and the table stays
-              a single set of columns and a single row list. */}
-          {sections.map((section) => (
-            <tbody
-              key={section.id}
-              className={
-                section.attention
-                  ? "mon-section mon-section--attention"
-                  : "mon-section"
-              }
-            >
-              <tr className="mon-section-head">
-                <th scope="rowgroup" colSpan={5} className="mon-section-title">
-                  {section.label} ({section.monitors.length})
-                </th>
-              </tr>
-              {rows(section.monitors)}
-            </tbody>
-          ))}
-        </table>
-      </div>
+    return card(
+      <table className="mon-table">
+        <caption className="sr-only">{caption}</caption>
+        <Columns />
+        <Head />
+        {/* One tbody per section: a tbody is the only table element allowed
+            to repeat, so grouping needs no extra nesting and the table stays
+            a single set of columns and a single row list. */}
+        {sections.map((section) => (
+          <tbody
+            key={section.id}
+            className={
+              section.attention
+                ? "mon-section mon-section--attention"
+                : "mon-section"
+            }
+          >
+            <tr className="mon-section-head">
+              <th scope="rowgroup" colSpan={5} className="mon-section-title">
+                {section.label} ({section.monitors.length})
+              </th>
+            </tr>
+            {rows(section.monitors)}
+          </tbody>
+        ))}
+      </table>,
     );
   }
 
@@ -164,43 +198,41 @@ export function MonitorTable({
       ? `${monitors.length} monitors. ${attention.length} needing attention are listed first, the rest alphabetically by name.`
       : `${monitors.length} monitors, alphabetically by name.`;
 
-  return (
-    <div className="mon-board">
-      <table className="mon-table">
-        {/* Visually hidden, but the table's accessible name and the one place
-            the ordering rule is stated for someone who cannot see it. */}
-        <caption className="sr-only">{caption}</caption>
-        <Columns />
-        <Head />
+  return card(
+    <table className="mon-table">
+      {/* Visually hidden, but the table's accessible name and the one place
+          the ordering rule is stated for someone who cannot see it. */}
+      <caption className="sr-only">{caption}</caption>
+      <Columns />
+      <Head />
 
-        {/*
-         * Two tbodies rather than two tables: one table means one set of
-         * column headers and one consistent width, and a screen reader still
-         * reports a single list of rows. Only this first section reorders as
-         * status changes; the main list below stays put (research note 4).
-         */}
-        {attention.length > 0 && (
-          <tbody className="mon-section mon-section--attention">
-            <tr className="mon-section-head">
-              <th scope="colgroup" colSpan={5} className="mon-section-title">
-                Needs attention ({attention.length})
-              </th>
-            </tr>
-            {rows(attention)}
-          </tbody>
-        )}
-
-        <tbody className="mon-section">
-          {attention.length > 0 && (
-            <tr className="mon-section-head">
-              <th scope="colgroup" colSpan={5} className="mon-section-title">
-                All monitors ({rest.length})
-              </th>
-            </tr>
-          )}
-          {rows(rest)}
+      {/*
+       * Two tbodies rather than two tables: one table means one set of
+       * column headers and one consistent width, and a screen reader still
+       * reports a single list of rows. Only this first section reorders as
+       * status changes; the main list below stays put (research note 4).
+       */}
+      {attention.length > 0 && (
+        <tbody className="mon-section mon-section--attention">
+          <tr className="mon-section-head">
+            <th scope="rowgroup" colSpan={5} className="mon-section-title">
+              Needs attention ({attention.length})
+            </th>
+          </tr>
+          {rows(attention)}
         </tbody>
-      </table>
-    </div>
+      )}
+
+      <tbody className="mon-section">
+        {attention.length > 0 && (
+          <tr className="mon-section-head">
+            <th scope="rowgroup" colSpan={5} className="mon-section-title">
+              All monitors ({rest.length})
+            </th>
+          </tr>
+        )}
+        {rows(rest)}
+      </tbody>
+    </table>,
   );
 }

@@ -2108,6 +2108,48 @@ const shadowExceptions = new Set<string>([
   "0 0 0 3px var(--ring-down)",
 ]);
 
+/**
+ * A declaration of any border property that paints with the static `--border`
+ * token, and the narrower "colour only" form of the same.
+ *
+ * Both match every border property name rather than `border` plus a single
+ * suffix. The single-suffix version had a hole with real consequences:
+ * `border-inline-start: 1px solid var(--border)` matched neither the
+ * violation pattern nor the state-rule exemption, so a `[data-state]` rule
+ * could introduce a whole static edge on a control and this contract would
+ * pass. Logical properties are the natural way to write that edge, which is
+ * what made the gap reachable rather than theoretical.
+ *
+ * The exemption is keyed on the property being colour-only — a name ending in
+ * `-color` — rather than on the value having no digits. `border-color` cannot
+ * create an edge that the resting rule has not already reserved; any form
+ * carrying a width can.
+ */
+const BORDER_ON_STATIC = /(?:^|[;{\s])(border[a-z-]*)\s*:[^;]*var\(--border\)/;
+const BORDER_COLOUR_ONLY = /^border(?:-[a-z]+)*-color$/;
+
+/**
+ * Does this declaration block paint a static `--border` edge through a
+ * property that could introduce one?
+ */
+function restsOnStaticBorder(body: string): boolean {
+  return BORDER_ON_STATIC.test(body);
+}
+
+/**
+ * A `[data-state]` rule that only re-*paints* an edge the resting rule has
+ * already reserved. Colour-only declarations, and nothing else.
+ */
+function repaintsReservedEdge(selector: string, body: string): boolean {
+  if (!/\[data-state=/.test(selector)) return false;
+  for (const [, property] of body.matchAll(
+    /(?:^|[;{\s])(border[a-z-]*)\s*:/g,
+  )) {
+    if (!BORDER_COLOUR_ONLY.test(property)) return false;
+  }
+  return true;
+}
+
 describe("an interactive element does not rest on the static border", () => {
   it("gives every control the control role at rest", () => {
     // The defect §2.9 closes: --border-hi was used only on :hover and :active,
@@ -2125,16 +2167,56 @@ describe("an interactive element does not rest on the static border", () => {
           )
         )
           continue;
-        if (
-          /border(?:-[a-z]+)?(?:-color)?\s*:[^;]*var\(--border\)/.test(
-            block.body,
-          )
-        ) {
+        // So does a `[data-state=…]` rule that only re-*paints* an edge the
+        // resting rule has already reserved (SUB-140).
+        //
+        // The sidebar's current destination carries the same subtle `--border`
+        // a panel does, which is what the product owner asked for, and §8.2
+        // now states. It is not a resting edge: `.shell-nav-item` declares
+        // `border: 1px solid transparent` at rest — the reserve pattern this
+        // repo uses everywhere so a box does not change size when its state
+        // changes — and the state rule changes only the paint.
+        //
+        // Narrow on purpose. Only a colour-only declaration is exempt, and a
+        // colour cannot introduce an edge where none was reserved, so this
+        // cannot be used to declare a control resting on the static token; a
+        // `border: 1px solid var(--border)` shorthand under a `[data-state]`
+        // selector — or its `border-inline-start` equivalent — still fails
+        // here.
+        if (repaintsReservedEdge(block.selector, block.body)) continue;
+        if (restsOnStaticBorder(block.body)) {
           offenders.push(`${relative(repoRoot, file)}: ${block.selector}`);
         }
       }
     }
     expect(offenders).toEqual([]);
+  });
+
+  it("still bites on a `[data-state]` rule that declares a whole static edge", () => {
+    // The exemption above is for re-painting a reserved edge, never for
+    // introducing one. A shorthand under a data-state selector is a resting
+    // edge wearing a state's clothes, and must still fail — including when it
+    // is written as a logical property, which is the form that used to slip
+    // past both the exemption and the violation matcher.
+    const blocks = declarationBlocks(`
+      .a-button[data-state="current"] { border-color: var(--border); }
+      .b-button[data-state="current"] { border: 1px solid var(--border); }
+      .c-button[data-state="current"] { border-inline-start: 1px solid var(--border); }
+      .d-button[data-state="current"] { border-inline-start-color: var(--border); }
+    `);
+    expect(
+      blocks
+        .filter(
+          (b) =>
+            paintsControl(b.selector) &&
+            !repaintsReservedEdge(b.selector, b.body) &&
+            restsOnStaticBorder(b.body),
+        )
+        .map((b) => b.selector),
+    ).toEqual([
+      '.b-button[data-state="current"]',
+      '.c-button[data-state="current"]',
+    ]);
   });
 
   it("bites on a control that rests on the static token", () => {
@@ -2149,9 +2231,7 @@ describe("an interactive element does not rest on the static border", () => {
           (b) =>
             paintsControl(b.selector) &&
             !/:(hover|focus|active|disabled|checked)/.test(b.selector) &&
-            /border(?:-[a-z]+)?(?:-color)?\s*:[^;]*var\(--border\)/.test(
-              b.body,
-            ),
+            restsOnStaticBorder(b.body),
         )
         .map((b) => b.selector),
     ).toEqual([".a-button"]);
@@ -3010,34 +3090,29 @@ describe("hover does not overwrite a status tint with a neutral one", () => {
     }
   });
 
-  it("defines --down-deep in both themes, moving away from the page", () => {
-    // Direction, not value: on dark a deepening tint gets lighter, on light it
-    // gets darker. A value copied from one theme to the other would make a
-    // hovered row fade in exactly one of them, which is the kind of thing that
-    // ships because nobody switches themes while hovering.
-    const dark = declarations(themeBlock("dark"));
-    const light = declarations(themeBlock("light"));
-    const deepDark = dark.get("--down-deep");
-    const dimDark = dark.get("--down-dim");
-    const deepLight = light.get("--down-deep");
-    const dimLight = light.get("--down-dim");
-    expect(deepDark, "dark --down-deep").toBeTruthy();
-    expect(deepLight, "light --down-deep").toBeTruthy();
-
-    const lum = (hex: string) => {
-      const h = hex.replace("#", "");
-      return [0, 2, 4]
-        .map((i) => Number.parseInt(h.slice(i, i + 2), 16))
-        .reduce((a, b) => a + b, 0);
-    };
-    expect(
-      lum(deepDark as string),
-      "on dark, deep must be lighter than dim",
-    ).toBeGreaterThan(lum(dimDark as string));
-    expect(
-      lum(deepLight as string),
-      "on light, deep must be darker than dim",
-    ).toBeLessThan(lum(dimLight as string));
+  it("defines no `-deep` tone, because nothing has a resting fill to deepen", () => {
+    // This replaces a test that asserted `--down-deep` exists and moves away
+    // from the page in each theme. It was right for as long as a down row
+    // carried a resting `--down-dim` fill; the product owner asked for that
+    // fill to go (DESIGN.md §2.3), and with no resting tint a hover deepening
+    // would *introduce* red rather than intensify it — the exact failure the
+    // original rule forbade.
+    //
+    // So the assertion is inverted rather than deleted: the decision under
+    // test is still "a `-deep` tone exists exactly when a status has a resting
+    // fill to deepen". Re-adding the token without re-adding a caller now
+    // fails here, which is the repo's own rule that a token with no caller is
+    // a decision nobody made.
+    for (const theme of ["dark", "light"] as const) {
+      const declared = declarations(themeBlock(theme));
+      const deep = [...declared.keys()].filter((name) =>
+        /^--(?:up|warn|down|idle)-deep$/.test(name),
+      );
+      expect(
+        deep,
+        `${theme}: a -deep tone with no resting fill to deepen is a token with no caller`,
+      ).toEqual([]);
+    }
   });
 });
 

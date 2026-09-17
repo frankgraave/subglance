@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { StateChip, type ChipStatus } from "./Chip";
 
 /**
- * The readout tooltip (DESIGN.md §8.3).
+ * The readout tooltip (DESIGN.md §8.5).
  *
  * A tooltip in this product is a small table, not a sentence. The reference
  * style's structure, and the reason each part earns its place:

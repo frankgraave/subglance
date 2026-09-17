@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "./AppShell";
@@ -376,5 +379,45 @@ describe("the topbar holds only what is true on every screen", () => {
       screen.queryByRole("group", { name: "Cards per row" }),
       "view tools belong to the dashboard's tools row, not the shell",
     ).toBeNull();
+  });
+});
+
+/*
+ * SUB-140: the current destination is a surface, with a panel's edge.
+ *
+ * The product owner asked for "dezelfde subtiele border als een paneel" on the
+ * active nav item, which had only a fill. The rule is in shell.css, so it is
+ * read off disk: jsdom applies no stylesheet, and a computed-style check here
+ * would pass against a file that had been emptied.
+ */
+describe("the sidebar's current item carries a panel's edge", () => {
+  const shellCss = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "shell.css"),
+    "utf8",
+  );
+
+  const rule = (selector: string) => {
+    const at = shellCss.indexOf(`${selector} {`);
+    expect(at, `missing rule for ${selector}`).toBeGreaterThan(-1);
+    return shellCss.slice(at, shellCss.indexOf("}", at));
+  };
+
+  it("paints the current item's border in the static role token", () => {
+    // `--border`, the edge `.panel` and `.card` take — not `--border-control`,
+    // which §2.9 reserves for the resting edge of a clickable thing.
+    expect(
+      rule('.shell-nav-item[data-state="current"]'),
+      "the active nav item needs the same subtle border a panel has",
+    ).toMatch(/border-color:\s*var\(--border\)/);
+  });
+
+  it("reserves the edge at rest, so becoming current does not resize the item", () => {
+    // Without a transparent 1px edge at rest, the current item would be 2px
+    // taller and wider than its neighbours and the rail would jog on every
+    // navigation — the same reserve `.mon-row > :first-child` makes.
+    expect(
+      rule(".shell-nav-item"),
+      "a border that appears on a state must be reserved at rest",
+    ).toMatch(/border:\s*1px\s+solid\s+transparent/);
   });
 });
