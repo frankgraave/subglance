@@ -894,6 +894,37 @@ const sizeExceptions = new Map<string, string>([
 const BREAKPOINTS = new Set(["640px", "641px", "900px"]);
 
 /**
+ * The top-level parenthesised conditions of a media query, balanced.
+ *
+ * Regex cannot count brackets, and a media condition may legitimately
+ * contain them: `(width <= calc(640px + 1px))` nests one level, and a
+ * `[^)]+` capture stops at the inner `)` and hands back the truncated
+ * `calc(640px + 1px`, which is not a value anything can check. Scanning for
+ * balance costs a few lines and is the only form that is actually correct.
+ */
+function mediaConditions(query: string): string[] {
+  const found: string[] = [];
+  let depth = 0;
+  let start = -1;
+  for (let i = 0; i < query.length; i += 1) {
+    const ch = query[i];
+    if (ch === "(") {
+      if (depth === 0) start = i + 1;
+      depth += 1;
+    } else if (ch === ")") {
+      depth -= 1;
+      if (depth === 0 && start !== -1) {
+        found.push(query.slice(start, i));
+        start = -1;
+      }
+      // A stray `)` cannot take the scanner negative and desynchronise it.
+      if (depth < 0) depth = 0;
+    }
+  }
+  return found;
+}
+
+/**
  * Every width bound stated by a media query, whatever syntax states it.
  *
  * Two syntaxes express the same thing and both have to be read. The legacy
@@ -903,24 +934,28 @@ const BREAKPOINTS = new Set(["640px", "641px", "900px"]);
  * range query -- and nothing at all reads, to an `offenders` assertion, as
  * clean. That is how the px-only expression this replaces let `40rem`
  * through, so it is worth not repeating one layer up.
+ *
+ * Both forms are read out of balanced conditions rather than by regex, so a
+ * value that nests brackets survives extraction whole and can be compared
+ * against the ladder instead of being silently truncated past checking.
  */
 function mediaWidths(css: string): string[] {
   const found: string[] = [];
   for (const query of css.matchAll(/@media[^{]+/g)) {
-    const text = query[0];
-    for (const [, value] of text.matchAll(/(?:min-|max-)?width\s*:\s*([^)]+)/g)) {
-      found.push(value.trim());
-    }
-    /*
-     * The range form, read as the bounds on either side of `width`. Split on
-     * the comparison operators so a chained condition yields both of its
-     * bounds rather than only the first, and drop the `width` keyword itself
-     * along with anything that carries no digit -- `(orientation: portrait)`
-     * and a bare `(width)` presence check state no length to check.
-     */
-    for (const [, condition] of text.matchAll(
-      /\(([^()]*[<>]=?[^()]*)\)/g,
-    )) {
+    for (const condition of mediaConditions(query[0])) {
+      const legacy = condition.match(/^\s*(?:min-|max-)?width\s*:\s*(.+)$/);
+      if (legacy) {
+        found.push(legacy[1].trim());
+        continue;
+      }
+      /*
+       * The range form, read as the bounds on either side of `width`. Split
+       * on the comparison operators so a chained condition yields both of
+       * its bounds rather than only the first, and drop the `width` keyword
+       * itself along with anything carrying no digit -- `(orientation:
+       * portrait)` and a bare `(width)` presence check state no length.
+       */
+      if (!/[<>]/.test(condition)) continue;
       if (!/\bwidth\b/.test(condition)) continue;
       for (const part of condition.split(/[<>]=?/)) {
         const bound = part.trim();
@@ -1009,6 +1044,14 @@ describe("tokens.css is the only source of size", () => {
       "700px",
     ]);
     expect(off("@media (width > 40rem) {}")).toEqual(["40rem"]);
+
+    // A value that nests brackets survives extraction whole, in both forms.
+    expect(off("@media (width <= calc(640px + 1px)) {}")).toEqual([
+      "calc(640px + 1px)",
+    ]);
+    expect(off("@media (max-width: calc(640px + 1px)) {}")).toEqual([
+      "calc(640px + 1px)",
+    ]);
 
     // The rungs, in both syntaxes, must keep passing.
     expect(off("@media (max-width: 640px) {}")).toEqual([]);
