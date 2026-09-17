@@ -1128,6 +1128,405 @@ describe("tokens.css is the only source of size", () => {
   });
 });
 
+/**
+ * SUB-139: the column ladder is a *proportion*, and a proportion nothing
+ * checks is a story told about numbers that were picked one at a time.
+ *
+ * The rungs `--size-col-1..5` are 8 x the Fibonacci sequence (5, 8, 13, 21,
+ * 34), which approximates phi to within 1.2% at its worst step while landing
+ * on whole pixels — see tokens.css §2.14 for why the exact phi value is the
+ * wrong choice here. The guards below are what make that claim falsifiable
+ * rather than decorative:
+ *
+ *   1. every consecutive pair is within tolerance of phi;
+ *   2. every rung is a whole number of pixels and a multiple of 8;
+ *   3. every column width in the product's screens is a rung.
+ *
+ * (1) is the one that bites hardest. It is easy to "fix" a clipped column by
+ * nudging one rung, and the nudge is invisible in review — the value still
+ * looks like a considered number, the comment above it still reads true, and
+ * the relationship it was part of is gone. A ratio check fails on exactly
+ * that edit, and names the pair it broke.
+ */
+const PHI = (1 + Math.sqrt(5)) / 2;
+
+/**
+ * 2%, and it is a measurement rather than a round number.
+ *
+ * The worst consecutive pair on the ladder is 64/40 = 1.600, which sits 1.11%
+ * under phi; the best is 272/168 = 1.61905, 0.06% over. 2% admits every rung
+ * of the Fibonacci ladder with room for the next one up (440/272 = 1.61765)
+ * and refuses the nearest plausible alternatives — a doubling ladder (2.0,
+ * 23.6% off), a 1.5 ladder (7.3% off) and a single rung nudged by one 8px
+ * step (104 -> 112 gives 1.75, 8.2% off).
+ */
+const PHI_TOLERANCE = 0.02;
+
+/**
+ * The Fibonacci column rungs, read from tokens.css rather than restated, in
+ * RUNG ORDER — `--size-col-1` first, whatever pixel value it carries.
+ *
+ * Ordering by rung number rather than by value is the whole point, and it was
+ * wrong here. Sorting by px made the ratio check a test of the *set* of
+ * numbers rather than of the ladder: exchange the values of `--size-col-1`
+ * and `--size-col-2` and the sort puts them back in ascending order, every
+ * ratio assertion passes, and every consumer of rung 1 gets a 64px column
+ * where it asked for 40. The sort restored exactly the property the swap
+ * destroyed. A rung is a name bound to a value, so the name has to lead.
+ */
+function columnLadder(): { name: string; px: number }[] {
+  const css = stripComments(readFileSync(join(webSrc, "styles/tokens.css"), "utf8"));
+  const rungs: { name: string; px: number; rung: number }[] = [];
+  for (const [, name, rung, px] of css.matchAll(
+    /(--size-col-(\d+))\s*:\s*(\d+(?:\.\d+)?)px/g,
+  )) {
+    rungs.push({ name, px: Number(px), rung: Number(rung) });
+  }
+  return rungs
+    .sort((a, b) => a.rung - b.rung)
+    .map(({ name, px }) => ({ name, px }));
+}
+
+/**
+ * Every width a screen gives a data column, as `path: declaration`.
+ *
+ * Only the product's own screens: the style guide's tables are chrome for
+ * reading the ladder, not a use of it, and holding them to it would mean the
+ * page documenting the system had to be built from the system it documents in
+ * places where that says nothing.
+ */
+const COLUMN_RULE = /\.(?:mon-col--|mon-cell--|mon-head--|inc-col-|inv-col--|inc-tl-at)/;
+
+/**
+ * Terms in a column width that state a *relationship* to the container rather
+ * than a size: `auto`, `0`, a percentage, an intrinsic keyword, and the
+ * `minmax()`/`fr` pieces of an elastic track. The ladder has nothing to say
+ * about any of them — only the fixed columns beside them take a rung.
+ */
+const RELATIONSHIP_TERM =
+  /^(?:auto|0|100%|max-content|min-content|fit-content|minmax\(0,|\d+(?:\.\d+)?fr\)?|\d+(?:\.\d+)?%|,)$/;
+
+/**
+ * Everything in a data-column width declaration that is not a rung of the
+ * ladder: a `var()` naming some other token, or a fixed literal.
+ *
+ * The whole declaration is judged, term by term. The earlier form walked only
+ * `var(--size-col-…)` matches and reported those that were not rungs, so a
+ * declaration naming no column token at all produced no match and passed —
+ * `width: 92px` and `width: var(--size-pane-xs)` are exactly the drift §2.14
+ * exists to stop, and both were invisible to a guard that could only see the
+ * tokens it was already happy about.
+ */
+function notOnTheLadder(value: string, ladder: Set<string>): string[] {
+  const bad: string[] = [];
+  for (const term of value.split(/\s+/)) {
+    if (!term || RELATIONSHIP_TERM.test(term)) continue;
+    const token = /^var\((--[\w-]+)\)/.exec(term);
+    if (token) {
+      if (!ladder.has(token[1])) bad.push(token[1]);
+      continue;
+    }
+    if (/\d/.test(term)) bad.push(term);
+  }
+  return bad;
+}
+
+describe("the column ladder is phi, and stays phi (§2.14)", () => {
+  it("has at least four rungs, or there is no ladder to check", () => {
+    expect(columnLadder().length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("steps by phi from each rung to the next", () => {
+    const rungs = columnLadder();
+    const broken: string[] = [];
+    for (let i = 1; i < rungs.length; i += 1) {
+      const lower = rungs[i - 1];
+      const upper = rungs[i];
+      const ratio = upper.px / lower.px;
+      const drift = Math.abs(ratio - PHI) / PHI;
+      if (drift <= PHI_TOLERANCE) continue;
+      broken.push(
+        `${upper.name} (${upper.px}px) / ${lower.name} (${lower.px}px) = ` +
+          `${ratio.toFixed(4)}, which is ${(drift * 100).toFixed(1)}% from phi ` +
+          `(${PHI.toFixed(4)}); the ladder allows ${(PHI_TOLERANCE * 100).toFixed(0)}%. ` +
+          `The nearest whole-pixel rung that keeps the proportion is ` +
+          `${Math.round((lower.px * PHI) / 8) * 8}px.`,
+      );
+    }
+    expect(broken).toEqual([]);
+  });
+
+  it("puts every rung on a whole pixel and on the 8px grid", () => {
+    // Whole pixels because a fractional width renders a border differently per
+    // device pixel ratio -- the defect the type scale and the lamp's corner
+    // each rejected already. Multiples of 8 so a column is also a multiple of
+    // the gaps beside it.
+    const offenders = columnLadder().filter(
+      ({ px }) => !Number.isInteger(px) || px % 8 !== 0,
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it("gives every data column in a screen a rung, never a loose token", () => {
+    const ladder = new Set(columnLadder().map(({ name }) => name));
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (!file.endsWith(".css")) continue;
+      const css = stripComments(readFileSync(file, "utf8")).replace(/\s+/g, " ");
+      for (const match of css.matchAll(
+        /([^{}]*)\{([^{}]*(?:width|grid-template-columns)\s*:[^{}]*)\}/g,
+      )) {
+        const [, selector, body] = match;
+        if (!COLUMN_RULE.test(selector)) continue;
+        for (const declaration of body.matchAll(
+          /((?:min-|max-)?width|grid-template-columns)\s*:\s*([^;}]+)/g,
+        )) {
+          const value = declaration[2].trim();
+          for (const term of notOnTheLadder(value, ladder)) {
+            offenders.push(
+              `${relative(repoRoot, file)}: ${selector.trim()} { ${declaration[1]}: ${value} } ` +
+                `uses \`${term}\`, which is not a rung of the phi column ladder ` +
+                `(${[...ladder].join(", ")}).`,
+            );
+          }
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("bites on a fixed literal and on a size token that is not a rung", () => {
+    /*
+     * The two forms the old matchAll version could not see, pinned directly.
+     * Both are shaped exactly like the declarations it did catch and neither
+     * names a `--size-col-*` token, which is why they walked straight through.
+     */
+    const ladder = new Set(columnLadder().map(({ name }) => name));
+    expect(notOnTheLadder("92px", ladder)).toEqual(["92px"]);
+    expect(notOnTheLadder("var(--size-pane-xs)", ladder)).toEqual([
+      "--size-pane-xs",
+    ]);
+    expect(notOnTheLadder("5rem", ladder)).toEqual(["5rem"]);
+    // And the shapes that must keep passing, or the guard is unusable.
+    expect(notOnTheLadder("var(--size-col-3)", ladder)).toEqual([]);
+    expect(notOnTheLadder("auto", ladder)).toEqual([]);
+    expect(
+      notOnTheLadder(
+        "minmax(0, 1.1fr) minmax(0, 1.2fr) var(--size-col-2) var(--size-col-2)",
+        ladder,
+      ),
+    ).toEqual([]);
+  });
+
+  it("states the ladder and its ratio in docs/DESIGN.md", () => {
+    expect(designMd).toContain("### 2.14 The column ladder");
+    // The number itself, so the document cannot claim a proportion it does not
+    // name -- and the honest part, which is that the rungs are Fibonacci
+    // rather than phi exactly.
+    expect(designMd).toContain("1.618");
+    expect(designMd).toContain("Fibonacci");
+  });
+});
+
+/*
+ * SUB-139: every `var(--token)` names a token that exists.
+ *
+ * This is the failure mode none of the guards above can see, and it is the
+ * quietest one in the whole system. A custom property that was never declared
+ * does not error, does not warn and does not fail a build: the declaration is
+ * simply dropped at computed-value time and the element keeps whatever it
+ * inherited. Nothing on screen says which rule went missing. Every other
+ * guard here asks "is this value from the ladder"; none of them asks whether
+ * the name on the right-hand side resolves to anything at all, so a token
+ * renamed in tokens.css leaves its old name working perfectly in review and
+ * silently doing nothing in the browser.
+ *
+ * It is not hypothetical. Writing this guard found two live ones on a file
+ * nobody had flagged: `led.css` asked for `--stroke-fine`, which has never
+ * been declared, so the lamp's lens highlight has been drawing square corners
+ * inside a rounded lamp; and `.push-reveal-warn` asked for `--ink-1`, which
+ * does not exist either — the scale is `--ink`, `--ink-2`, `--ink-3`,
+ * `--ink-4` — so a caveat the reader is meant to notice took whatever colour
+ * the panel behind it happened to have.
+ *
+ * The concrete edit it exists to stop is a rename across branches. Rename
+ * `--size-col-sm-alt` to `--size-col-gutter` here while another branch writes
+ * `var(--size-col-sm-alt)` in its own stylesheet, and both branches are green,
+ * both merge cleanly, and the result is a layout that is quietly wrong with no
+ * test, no error and no diff to point at.
+ *
+ * The style guide's generator is in scope for the same reason: it writes CSS
+ * as string literals, so its `var()`s are not in any stylesheet a linter
+ * reads, and the page documenting the system is the last place that may
+ * reference a token the system does not have.
+ */
+
+/** Every custom property tokens.css declares. */
+function declaredTokens(): Set<string> {
+  const declared = new Set<string>();
+  for (const [, name] of stripComments(tokensCss).matchAll(
+    /(--[\w-]+)\s*:/g,
+  )) {
+    declared.add(name);
+  }
+  return declared;
+}
+
+/**
+ * Custom properties the product declares for itself, which are legitimate
+ * without being tokens: `shell.css` computes `--sidebar-w` from
+ * `--size-sidebar` and flips it to `--rail-w` when collapsed, and
+ * `MonitorCardList` sets `--mon-card-cols` as an inline style which
+ * `monitors.css` then reads. They are local plumbing rather than design
+ * decisions, so they do not belong to the ladder — but they must still be
+ * declared *somewhere*, which is what this collects.
+ *
+ * Collected across the whole tree rather than per file, because the
+ * `--mon-card-cols` pairing is a component declaring a property for its own
+ * stylesheet one directory over. Scope is still enforced by the thing that
+ * matters here: rename either half and the name disappears from the tree
+ * entirely, which is exactly what the guard fails on.
+ *
+ * Takes file *contents* rather than paths so the fixture below can exercise
+ * it directly. Reading the disk inside it would make the declaration half of
+ * the guard testable only through the product's own files, which is how an
+ * underscored declaration would have stayed unprotected.
+ */
+function locallyDeclared(sources: string[]): Set<string> {
+  const declared = new Set<string>();
+  for (const contents of sources) {
+    for (const [, name] of stripComments(contents).matchAll(
+      /(--[\w-]+)\s*:/g,
+    )) {
+      declared.add(name);
+    }
+    // `{ "--mon-card-cols": columns }` — a custom property set from TSX.
+    for (const [, name] of contents.matchAll(/["'](--[\w-]+)["']\s*:/g)) {
+      declared.add(name);
+    }
+  }
+  return declared;
+}
+
+/**
+ * Every `var(--token)` in a file that has NO fallback, with the token it
+ * names.
+ *
+ * The fallback is the whole distinction. `var(--x, 1)` cannot fail silently:
+ * an undeclared `--x` yields `1`, which is a stated decision about what
+ * happens when the property is absent. `var(--x)` with nothing after it is
+ * the dangerous form — the declaration is dropped and the element keeps what
+ * it inherited, with nothing anywhere saying so.
+ */
+function tokenReferences(contents: string): string[] {
+  return [
+    ...stripComments(contents).matchAll(/var\(\s*(--[\w-]+)\s*([,)])/g),
+  ]
+    .filter(([, , next]) => next === ")")
+    .map(([, name]) => name);
+}
+
+describe("every var() names a token that exists", () => {
+  /*
+   * The generator's own source, read as one more file. It emits the style
+   * guide's CSS from template literals, so its `var()` calls are invisible to
+   * every stylesheet-shaped check in this file.
+   */
+  const generator = join(repoRoot, "web", "scripts", "build-styleguide.mjs");
+
+  /**
+   * The guard itself, over a set of `[label, contents]` sources.
+   *
+   * Both halves run here — `locallyDeclared` over every source, then
+   * `tokenReferences` over each — so a fixture exercises the same code path
+   * the tree does rather than a re-implementation of half of it.
+   */
+  function unresolved(sources: [string, string][]): string[] {
+    const declared = declaredTokens();
+    const local = locallyDeclared(sources.map(([, contents]) => contents));
+    const offenders: string[] = [];
+    for (const [label, contents] of sources) {
+      for (const name of tokenReferences(contents)) {
+        if (declared.has(name) || local.has(name)) continue;
+        offenders.push(
+          `${label} references var(${name}), which is declared nowhere in ` +
+            `tokens.css or under web/src. An undeclared custom property ` +
+            `fails silently: the declaration is dropped and the element ` +
+            `keeps what it inherited.`,
+        );
+      }
+    }
+    return offenders;
+  }
+
+  it("resolves every var() under web/src and in the style guide generator", () => {
+    expect(
+      unresolved(
+        [...sourceFiles(webSrc), generator].map((file) => [
+          relative(repoRoot, file),
+          readFileSync(file, "utf8"),
+        ]),
+      ),
+    ).toEqual([]);
+  });
+
+  it("bites on an undeclared token, and only on an undeclared one", () => {
+    const judge = (contents: string) =>
+      unresolved([["fixture.css", contents]]).map(
+        (line) => /var\((--[\w-]+)\)/.exec(line)![1],
+      );
+    // The rename case: the old name still parses and resolves to nothing.
+    // `--size-col-sm-alt` is this branch's own former name for
+    // `--size-col-gutter`, which is the edit the guard exists to catch.
+    expect(judge(".a { width: var(--size-col-sm-alt); }")).toEqual([
+      "--size-col-sm-alt",
+    ]);
+    // Tokens that exist pass.
+    expect(judge(".a { color: var(--ink); padding: var(--space-3); }")).toEqual(
+      [],
+    );
+    // A fallback is a stated decision about absence, not a silent failure.
+    expect(judge(".a { grid-template-columns: var(--cols, 1); }")).toEqual([]);
+    // Prose naming a token it does not use is not a reference.
+    expect(
+      judge("/* var(--gone) was removed. */ .a { color: var(--ink); }"),
+    ).toEqual([]);
+  });
+
+  it("sees an underscore on both sides of the comparison", () => {
+    /*
+     * A custom property name may contain an underscore, and a scanner that
+     * excludes them is blind in exactly the shape of the bug this guard
+     * exists to catch: the name parses, resolves to nothing, and is skipped
+     * rather than reported.
+     *
+     * Both halves are asserted, because widening only the reference scan
+     * turns every legitimately declared underscored property into a false
+     * offender — which is the failure mode of fixing one site of four.
+     */
+    expect(
+      unresolved([["fixture.css", ".a { color: var(--missing_token); }"]]),
+    ).toEqual([
+      "fixture.css references var(--missing_token), which is declared " +
+        "nowhere in tokens.css or under web/src. An undeclared custom " +
+        "property fails silently: the declaration is dropped and the element " +
+        "keeps what it inherited.",
+    ]);
+    // Declared and referenced in one file.
+    expect(
+      unresolved([["fixture.css", ".a { --local_w: 10px; width: var(--local_w); }"]]),
+    ).toEqual([]);
+    // Declared in one source and referenced from another, which is the
+    // `--mon-card-cols` shape: a component sets it, a stylesheet reads it.
+    expect(
+      unresolved([
+        ["setter.tsx", 'const s = { "--local_w": 10 };'],
+        ["reader.css", ".a { width: var(--local_w); }"],
+      ]),
+    ).toEqual([]);
+  });
+});
+
 describe("tokens.css is the only source of spacing and radius", () => {
   it("finds no literal spacing or radius at or above the ladder floor under web/src", () => {
     const offenders: string[] = [];
@@ -1569,10 +1968,50 @@ const statusBorders = new Set<string>([
   "web/src/incidents/incidents.css | .inc-churn, .inc-notice | border: 1px solid var(--warn)",
   "web/src/incidents/incidents.css | .inc-notice | border-color: var(--down)",
   "web/src/live/connection.css | .conn-badge-retry | border: 1px solid var(--warn)",
-  'web/src/monitors/monitors.css | .mon-row[data-status="down"] | border-left: 2px solid var(--down)',
-  'web/src/monitors/monitors.css | .mon-row[data-status="pending"] | border-left: 2px solid var(--warn)',
-  'web/src/monitors/monitors.css | .mon-row[data-status="paused"] | border-left: 2px dotted var(--ink-3)',
-  'web/src/monitors/monitors.css | .mon-row[data-status="waiting"] | border-left: 2px solid var(--idle)',
+  /*
+   * The rows layout's status stripe, drawn on the row's FIRST CELL.
+   *
+   * These read `> :first-child` rather than the row itself, and the change is
+   * not cosmetic: under `border-collapse: separate` a `<tr>` paints no border
+   * at all, so the four rules that used to sit on `.mon-row[data-status=…]`
+   * were live in the computed style and invisible on screen. Verified by
+   * sampling the row's leftmost pixels in Chromium — the neutral cell border,
+   * then the fill, with no status colour anywhere. The `.mon-card` and
+   * `.mon-line` entries below never had the problem; they are ordinary
+   * elements.
+   *
+   * `border-left-color` alone for three of them, because the resting rule
+   * already reserves the 2px so the cells do not shift when a status arrives;
+   * paused also changes the style, which is the second, non-colour signal.
+   */
+  'web/src/monitors/monitors.css | .mon-row[data-status="down"] > :first-child | border-left-color: var(--down)',
+  'web/src/monitors/monitors.css | .mon-row[data-status="pending"] > :first-child | border-left-color: var(--warn)',
+  'web/src/monitors/monitors.css | .mon-row[data-status="paused"] > :first-child | border-left-color: var(--ink-3)',
+  'web/src/monitors/monitors.css | .mon-row[data-status="waiting"] > :first-child | border-left-color: var(--idle)',
+  /*
+   * The resting edge those four colour in. 2px rather than 1 so the row's
+   * contents do not move one pixel right the moment a monitor goes down —
+   * `--border` is a role token, but the width needs an entry.
+   */
+  "web/src/monitors/monitors.css | .mon-row > :first-child | border-left: 2px solid var(--border)",
+  /*
+   * The two headers above those rows, carrying the SAME 2px as a transparent
+   * edge so their text starts on the line the row content starts on.
+   *
+   * `:first-child` on the header, because only the row's first child carries
+   * the real border. `.mon-head` alone applied the reserve to all five header
+   * cells and pushed the four with an unbordered cell beneath them two pixels
+   * right of their own data — MONITOR at x=381 over a name at 379, measured
+   * in Chromium at 1280px.
+   *
+   * This is the width guard doing its job and being answered rather than
+   * silenced: 2px here is not a second status stripe, it is the *absence* of
+   * one, reserved so the column reads as one line. A padding of 14px would
+   * produce the same pixels and would not survive the next edit to the row's
+   * border, because nothing would connect the two numbers.
+   */
+  "web/src/monitors/monitors.css | .mon-head:first-child | border-left: 2px solid transparent",
+  "web/src/monitors/monitors.css | .mon-section-title | border-left: 2px solid transparent",
   'web/src/monitors/monitors.css | .mon-card[data-status="down"] | border-left: 2px solid var(--down)',
   'web/src/monitors/monitors.css | .mon-card[data-status="pending"] | border-left: 2px solid var(--warn)',
   'web/src/monitors/monitors.css | .mon-card[data-status="paused"] | border-left: 2px dotted var(--ink-3)',

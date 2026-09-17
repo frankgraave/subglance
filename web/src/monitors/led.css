@@ -37,7 +37,12 @@
   content: "";
   position: absolute;
   inset: 1px 1px 3px;
-  border-radius: var(--stroke-fine);
+  /* `--r-2xs` (2px), not the `--stroke-fine` this said before: that token is
+     declared nowhere, so the highlight's radius was falling back to 0 and the
+     lens has been a hard-cornered rectangle inside a rounded lamp since the
+     size ladder landed. 2px is the rung the lamp itself takes, and the inset
+     keeps the highlight inside the lamp's own corner either way. */
+  border-radius: var(--r-2xs);
   background: linear-gradient(180deg, color-mix(in srgb, white 55%, transparent), transparent);
   opacity: .5;
   pointer-events: none;

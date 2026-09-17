@@ -162,12 +162,25 @@
  * Mono and tabular figures come from `Value`; the width is what actually makes
  * a column scannable — a time column that shifts by two pixels per row cannot
  * be read as a column at all.
+ *
+ * All four sit on the Fibonacci column ladder (§2.14), which is what relates
+ * them to the dashboard's columns one screen away. They were 116 / 88 / 72 /
+ * 128 before — four numbers agreeing with nothing, and one of them measurably
+ * short: a "Connection refused" chip measures 142px and had 116px to sit in,
+ * so the longest failure kind was clipped in the column whose whole job is to
+ * name it.
+ *
+ * kind takes rung 4 (168) because the widest chip needs 142; time and dur
+ * share rung 2 (64) because both hold one mono reading of the same shape
+ * ("14:03:27" is 63px, "12 d 23 h" is 63px) — two columns of the same kind of
+ * thing should be one width, and were not; ack takes rung 4 because its
+ * button measures 113 and rung 3 is 104.
  */
 .inc-col { flex: none; }
-.inc-col-kind { width: var(--size-col-lg); }
-.inc-col-time { width: var(--size-col-md); color: var(--ink-2); }
-.inc-col-dur { width: var(--size-col-sm-alt); }
-.inc-col-ack { width: var(--size-col-2xl); display: flex; justify-content: flex-end; }
+.inc-col-kind { width: var(--size-col-4); }
+.inc-col-time { width: var(--size-col-2); color: var(--ink-2); }
+.inc-col-dur { width: var(--size-col-2); }
+.inc-col-ack { width: var(--size-col-4); display: flex; justify-content: flex-end; }
 
 .inc-act {
   display: flex;
@@ -223,7 +236,10 @@
   color: var(--ink-2);
 }
 
-.inc-tl-at { width: var(--size-col-md); flex: none; color: var(--ink-3); }
+/* Rung 2, the same width the collapsed row's time column takes: the timeline
+   holds the same kind of reading, and a detail that restates a column at a
+   different width makes the reader check whether it is the same field. */
+.inc-tl-at { width: var(--size-col-2); flex: none; color: var(--ink-3); }
 
 /* A step that has not happened yet. Quieter, but present: a timeline that
    simply stops is indistinguishable from one that failed to render. */
