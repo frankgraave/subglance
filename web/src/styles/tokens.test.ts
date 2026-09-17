@@ -1386,11 +1386,15 @@ function declaredTokens(): Set<string> {
  * stylesheet one directory over. Scope is still enforced by the thing that
  * matters here: rename either half and the name disappears from the tree
  * entirely, which is exactly what the guard fails on.
+ *
+ * Takes file *contents* rather than paths so the fixture below can exercise
+ * it directly. Reading the disk inside it would make the declaration half of
+ * the guard testable only through the product's own files, which is how an
+ * underscored declaration would have stayed unprotected.
  */
-function locallyDeclared(files: string[]): Set<string> {
+function locallyDeclared(sources: string[]): Set<string> {
   const declared = new Set<string>();
-  for (const file of files) {
-    const contents = readFileSync(file, "utf8");
+  for (const contents of sources) {
     for (const [, name] of stripComments(contents).matchAll(
       /(--[\w-]+)\s*:/g,
     )) {
@@ -1430,50 +1434,95 @@ describe("every var() names a token that exists", () => {
    */
   const generator = join(repoRoot, "web", "scripts", "build-styleguide.mjs");
 
-  it("resolves every var() under web/src and in the style guide generator", () => {
-    const files = [...sourceFiles(webSrc), generator];
+  /**
+   * The guard itself, over a set of `[label, contents]` sources.
+   *
+   * Both halves run here — `locallyDeclared` over every source, then
+   * `tokenReferences` over each — so a fixture exercises the same code path
+   * the tree does rather than a re-implementation of half of it.
+   */
+  function unresolved(sources: [string, string][]): string[] {
     const declared = declaredTokens();
-    const local = locallyDeclared(files);
+    const local = locallyDeclared(sources.map(([, contents]) => contents));
     const offenders: string[] = [];
-    for (const file of files) {
-      for (const name of tokenReferences(readFileSync(file, "utf8"))) {
+    for (const [label, contents] of sources) {
+      for (const name of tokenReferences(contents)) {
         if (declared.has(name) || local.has(name)) continue;
         offenders.push(
-          `${relative(repoRoot, file)} references var(${name}), which is ` +
-            `declared nowhere in tokens.css or under web/src. An undeclared ` +
-            `custom property fails silently: the declaration is dropped and ` +
-            `the element keeps what it inherited.`,
+          `${label} references var(${name}), which is declared nowhere in ` +
+            `tokens.css or under web/src. An undeclared custom property ` +
+            `fails silently: the declaration is dropped and the element ` +
+            `keeps what it inherited.`,
         );
       }
     }
-    expect(offenders).toEqual([]);
+    return offenders;
+  }
+
+  it("resolves every var() under web/src and in the style guide generator", () => {
+    expect(
+      unresolved(
+        [...sourceFiles(webSrc), generator].map((file) => [
+          relative(repoRoot, file),
+          readFileSync(file, "utf8"),
+        ]),
+      ),
+    ).toEqual([]);
   });
 
   it("bites on an undeclared token, and only on an undeclared one", () => {
-    const declared = new Set(["--ink", "--space-3"]);
     const judge = (contents: string) =>
-      tokenReferences(contents).filter((name) => !declared.has(name));
+      unresolved([["fixture.css", contents]]).map(
+        (line) => /var\((--[\w-]+)\)/.exec(line)![1],
+      );
     // The rename case: the old name still parses and resolves to nothing.
+    // `--size-col-sm-alt` is this branch's own former name for
+    // `--size-col-gutter`, which is the edit the guard exists to catch.
     expect(judge(".a { width: var(--size-col-sm-alt); }")).toEqual([
       "--size-col-sm-alt",
     ]);
-    // A token that exists passes.
+    // Tokens that exist pass.
     expect(judge(".a { color: var(--ink); padding: var(--space-3); }")).toEqual(
       [],
     );
     // A fallback is a stated decision about absence, not a silent failure.
     expect(judge(".a { grid-template-columns: var(--cols, 1); }")).toEqual([]);
-    // Underscores are valid in a custom property name, so a scanner that
-    // excludes them hands the guard a blind spot shaped exactly like the bug
-    // it exists to catch: `--missing_token` parses, resolves to nothing, and
-    // would have been skipped rather than reported.
-    expect(judge(".a { color: var(--missing_token); }")).toEqual([
-      "--missing_token",
-    ]);
-    expect(judge(".a { --local_w: 10px; }")).toEqual([]);
     // Prose naming a token it does not use is not a reference.
     expect(
       judge("/* var(--gone) was removed. */ .a { color: var(--ink); }"),
+    ).toEqual([]);
+  });
+
+  it("sees an underscore on both sides of the comparison", () => {
+    /*
+     * A custom property name may contain an underscore, and a scanner that
+     * excludes them is blind in exactly the shape of the bug this guard
+     * exists to catch: the name parses, resolves to nothing, and is skipped
+     * rather than reported.
+     *
+     * Both halves are asserted, because widening only the reference scan
+     * turns every legitimately declared underscored property into a false
+     * offender — which is the failure mode of fixing one site of four.
+     */
+    expect(
+      unresolved([["fixture.css", ".a { color: var(--missing_token); }"]]),
+    ).toEqual([
+      "fixture.css references var(--missing_token), which is declared " +
+        "nowhere in tokens.css or under web/src. An undeclared custom " +
+        "property fails silently: the declaration is dropped and the element " +
+        "keeps what it inherited.",
+    ]);
+    // Declared and referenced in one file.
+    expect(
+      unresolved([["fixture.css", ".a { --local_w: 10px; width: var(--local_w); }"]]),
+    ).toEqual([]);
+    // Declared in one source and referenced from another, which is the
+    // `--mon-card-cols` shape: a component sets it, a stylesheet reads it.
+    expect(
+      unresolved([
+        ["setter.tsx", 'const s = { "--local_w": 10 };'],
+        ["reader.css", ".a { width: var(--local_w); }"],
+      ]),
     ).toEqual([]);
   });
 });
