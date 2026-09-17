@@ -954,10 +954,14 @@ function mediaWidths(css: string): string[] {
        * its bounds rather than only the first, and drop the `width` keyword
        * itself along with anything carrying no digit -- `(orientation:
        * portrait)` and a bare `(width)` presence check state no length.
+       *
+       * `=` is one of the operators (MQ4 permits `(width = 700px)`), and the
+       * split alternation puts the two-character forms first so `<=` is not
+       * cut in half into a `<` bound and an empty one.
        */
-      if (!/[<>]/.test(condition)) continue;
+      if (!/[<>=]/.test(condition)) continue;
       if (!/\bwidth\b/.test(condition)) continue;
-      for (const part of condition.split(/[<>]=?/)) {
+      for (const part of condition.split(/<=|>=|[<>=]/)) {
         const bound = part.trim();
         if (bound === "" || bound === "width") continue;
         if (!/\d/.test(bound)) continue;
@@ -1044,6 +1048,7 @@ describe("tokens.css is the only source of size", () => {
       "700px",
     ]);
     expect(off("@media (width > 40rem) {}")).toEqual(["40rem"]);
+    expect(off("@media (width = 700px) {}")).toEqual(["700px"]);
 
     // A value that nests brackets survives extraction whole, in both forms.
     expect(off("@media (width <= calc(640px + 1px)) {}")).toEqual([
@@ -1060,6 +1065,7 @@ describe("tokens.css is the only source of size", () => {
     );
     expect(off("@media (width <= 640px) {}")).toEqual([]);
     expect(off("@media (641px <= width <= 900px) {}")).toEqual([]);
+    expect(off("@media (width = 640px) {}")).toEqual([]);
 
     // A query stating no width contributes no bound to check.
     expect(mediaWidths("@media (prefers-reduced-motion: reduce) {}")).toEqual(
