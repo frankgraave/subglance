@@ -286,6 +286,30 @@ describe("NotificationsView", () => {
     expect(container.querySelector(".card-note")).toBeNull();
   });
 
+  it("puts exactly one h1 on the page, with the card a level under it", () => {
+    /*
+     * `Card` renders `headingLevel` as a real heading element, so
+     * `headingLevel={1}` on the card produced a second `h1`: the sr-only one
+     * naming the route, and the card's naming a section inside it (CodeRabbit,
+     * PR #61). Two level-one headings is not an outline, and it breaks heading
+     * navigation for exactly the reader the sr-only heading was added for —
+     * "the page" and "a card on it" stop being distinguishable.
+     *
+     * Asserted on both states, because the card's title is conditional and a
+     * regression could reach only one of them.
+     */
+    for (const channels of [[], [make(), make({ id: 2 })]]) {
+      const { container, unmount } = render(
+        <NotificationsView channels={channels} />,
+      );
+      const h1s = [...container.querySelectorAll("h1")];
+      expect(h1s.map((h) => h.textContent)).toEqual(["Notifications"]);
+      const title = container.querySelector(".card-title")!;
+      expect(title.tagName).toBe("H2");
+      unmount();
+    }
+  });
+
   it("keeps the disabled channels findable once the count line is gone", () => {
     /*
      * "2 channels, 1 disabled" carried a real fact and `Channels (2)` does

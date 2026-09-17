@@ -174,8 +174,23 @@ export function NotificationsView({
             ? "Channels"
             : `Channels (${channels.length})`
         }
-        /* This card's title is the page's heading now (SUB-138). */
-        headingLevel={1}
+        /*
+         * `h2`, under the screen-reader-only `Notifications` `h1` above.
+         *
+         * `Card` renders `headingLevel` as a real heading element, so
+         * `headingLevel={1}` put a second `h1` in the document: the page's own
+         * sr-only one naming the route, and this card's naming a section
+         * inside it. Two level-one headings is not an outline, and the reader
+         * it costs is exactly the one the sr-only heading exists for — heading
+         * navigation stops distinguishing "the page" from "a card on it"
+         * (CodeRabbit, PR #61).
+         *
+         * `IncidentsView` already has this shape — an sr-only `h1` for the
+         * route and its cards at `h2` — and this screen is the outlier.
+         * `MonitorsView` keeps `headingLevel={1}` correctly, because it has no
+         * sr-only heading and its card title is the page's only one.
+         */
+        headingLevel={2}
         /*
          * The header action steps aside for the empty state (SUB-138).
          *
