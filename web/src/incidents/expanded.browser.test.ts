@@ -309,6 +309,33 @@ describe("the expanded incident row", () => {
           };
         })()`)) as Record<string, any>;
 
+        // The tokens this test names must actually exist.
+        //
+        // `resolve()` paints `var(--token)` onto a probe and reads it back, so
+        // a token that has been deleted resolves to `rgba(0, 0, 0, 0)` rather
+        // than throwing — and every assertion below is `not.toBe(fill)`, which
+        // a transparent fill passes trivially. The check would go on reporting
+        // green while measuring nothing.
+        //
+        // The repo's guard cannot cover this: `tokens.test.ts` walks web/src
+        // but its `sourceFiles()` skips anything matching `.test.`, so a
+        // `var()` naming a dead token inside a test file is invisible to it.
+        // `--down-deep` in particular has only two callers left, both in
+        // `monitors.css`; if the last one goes the token can go with it, and
+        // this is what will say so.
+        for (const [name, fill] of [
+          ["--down-dim", paint.dimFill],
+          ["--down-deep", paint.deepFill],
+        ] as const) {
+          expect(
+            fill,
+            `${name} resolved to nothing, so it no longer exists. The ` +
+              `assertions below compare the row's fill against it and would ` +
+              `pass against any colour at all — this test must be updated, ` +
+              `not deleted, or the flat status fill can come back unnoticed`,
+          ).not.toBe("rgba(0, 0, 0, 0)");
+        }
+
         // The row no longer paints its status across itself and its detail.
         for (const [name, fill] of [
           ["--down-dim", paint.dimFill],
