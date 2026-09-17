@@ -3,10 +3,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   cleanup,
   fireEvent,
-  render,
+  render as renderBare,
   screen,
   within,
 } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { setToolbarSlot, setTopbarSlot } from "../shell/topbarSlot";
 import { NotificationsView } from "./NotificationsView";
 import { channelFromApi } from "./channels";
 import type { Channel } from "./channels";
@@ -32,7 +34,32 @@ function make(over: Record<string, unknown> = {}): Channel {
   });
 }
 
-afterEach(cleanup);
+/*
+ * A stand-in masthead slot, so the screen's filter field has somewhere to
+ * portal to (SUB-138). `TopbarTools` renders nothing when no slot is
+ * registered, which is correct behaviour — the status wall has no chrome —
+ * but it means a test file that never registers one cannot see the filter at
+ * all, and an assertion about filtering would fail for an absence the product
+ * does not have. A bare node rather than the real `Topbar`: these tests are
+ * about channels, and mounting the shell would let a change to the theme
+ * toggle fail one.
+ */
+function render(ui: ReactElement) {
+  const masthead = document.createElement("div");
+  const toolbar = document.createElement("div");
+  document.body.append(masthead, toolbar);
+  setTopbarSlot(masthead);
+  setToolbarSlot(toolbar);
+  return renderBare(ui);
+}
+
+afterEach(() => {
+  cleanup();
+  // Otherwise the next test portals into the previous test's detached slot,
+  // and its controls are rendered into a node nobody can query.
+  setTopbarSlot(null);
+  setToolbarSlot(null);
+});
 
 describe("NotificationsView", () => {
   it("shows a channel's type and destination", () => {
@@ -165,6 +192,151 @@ describe("NotificationsView", () => {
     render(<NotificationsView channels={[]} loading />);
     expect(screen.queryByText("Alerts are going nowhere.")).toBeNull();
     expect(screen.getAllByText(/loading channels/i).length).toBeGreaterThan(0);
+  });
+
+  it("states no count while the channels are still loading", () => {
+    /*
+     * The defect this page was reopened for (SUB-138). `channels` is `[]`
+     * before the first response resolves, and the card's note was computed
+     * from it unconditionally — so the screen rendered "No channels
+     * configured" directly above its own "Loading channels…", stating a fact
+     * it had no way to know and picking the most alarming of the two
+     * possibilities to be confident about.
+     *
+     * Asserted as "the note says nothing at all", not as "the note does not
+     * say zero": any placeholder count here is the same lie with different
+     * wording.
+     */
+    const { container } = render(<NotificationsView channels={[]} loading />);
+    expect(screen.getAllByText(/loading channels/i).length).toBeGreaterThan(0);
+    expect(container.querySelector(".card-note")).toBeNull();
+    expect(screen.queryByText(/no channels configured/i)).toBeNull();
+  });
+
+  it("states no count while the load is failing either", () => {
+    const { container } = render(
+      <NotificationsView channels={[]} error={new Error("HTTP 500")} />,
+    );
+    expect(container.querySelector(".card-note")).toBeNull();
+    expect(screen.queryByText(/no channels configured/i)).toBeNull();
+  });
+
+  it("counts the channels once they have actually arrived", () => {
+    // The other half of the rule: silence while unknown, and a real count the
+    // moment there is one. A note that never appeared would pass the test
+    // above and lose the page its heading count.
+    render(<NotificationsView channels={[make(), make({ id: 2, enabled: false })]} />);
+    expect(screen.getByText("2 channels, 1 disabled")).toBeTruthy();
+  });
+
+  it("does not say alerts are going nowhere when a filter matched nothing", () => {
+    /*
+     * A search box must not be able to fire the page's most alarming
+     * sentence. Previously "no visible channels" and "no channels" were one
+     * branch, so typing a non-matching query on a healthy instance announced
+     * that every alert was going into a void.
+     */
+    render(
+      <NotificationsView
+        channels={[make(), make({ id: 2, name: "Ops mail", type: "email" })]}
+        onCreateOpenChange={() => {}}
+        onSave={async () => {}}
+      />,
+    );
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: "zzzz" },
+    });
+    expect(screen.queryByText("Alerts are going nowhere.")).toBeNull();
+    expect(screen.getByText(/no channel matches/i).textContent).toContain(
+      "2 channels are configured",
+    );
+  });
+
+  it("offers exactly one way to add a channel when there are none", () => {
+    /*
+     * The empty state is the one screen that must present a single obvious
+     * next step, and it was presenting two identical primary buttons — the
+     * card header's "Add channel" and the body's "Add a channel" — a few
+     * centimetres apart.
+     */
+    render(
+      <NotificationsView
+        channels={[]}
+        onCreateOpenChange={() => {}}
+        onSave={async () => {}}
+      />,
+    );
+    expect(
+      screen.getAllByRole("button", { name: /add (a )?channel/i }),
+    ).toHaveLength(1);
+  });
+
+  it("keeps the header's add button on a list filtered down to nothing", () => {
+    // The suppression above is for an empty instance only: with channels that
+    // the filter hid, the header button is the only way to add one.
+    render(
+      <NotificationsView
+        channels={[make()]}
+        onCreateOpenChange={() => {}}
+        onSave={async () => {}}
+      />,
+    );
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: "zzzz" },
+    });
+    expect(screen.getByRole("button", { name: "Add channel" })).toBeTruthy();
+  });
+
+  it("says what a channel is, not only what happens without one", () => {
+    // The empty state is the first thing a new self-hoster reads, and it used
+    // to assume they already knew what they were being asked to add.
+    render(<NotificationsView channels={[]} onCreateOpenChange={() => {}} onSave={async () => {}} />);
+    expect(
+      screen.getByText(/a channel is where SubGlance sends a message/i),
+    ).toBeTruthy();
+    // The supported types, from CHANNEL_TYPES rather than from a hand-written
+    // list that could advertise a type the store's CHECK constraint rejects.
+    expect(screen.getByText(/Email, Slack, Discord, Telegram, Webhook/)).toBeTruthy();
+  });
+
+  it("keeps the delivery caveat on the page, beside the rows it explains", () => {
+    /*
+     * The honesty rule (SUB-55): this text is why every row reads "Not
+     * verified" instead of a green tick, and it may be moved or made louder
+     * but never dropped. Asserted on its two load-bearing clauses so a
+     * reword survives and a deletion does not.
+     */
+    const { container } = render(<NotificationsView channels={[make()]} />);
+    const legend = container.querySelector(".nt-legend");
+    expect(legend).not.toBeNull();
+    expect(legend!.textContent).toMatch(/carries no delivery history/i);
+    expect(legend!.textContent).toMatch(
+      /failed every delivery for three days looks exactly the same/i,
+    );
+    // Above the list, not after it: it explains the column that follows.
+    expect(
+      legend!.compareDocumentPosition(container.querySelector(".inv-list")!) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("reserves the width of the row actions whose label changes", () => {
+    /*
+     * The class is asserted here; the geometry it buys is asserted in
+     * `channel-row.browser.test.ts`, which has a layout engine. jsdom reports
+     * every width as zero, so a test here claiming the columns line up would
+     * pass against a stylesheet that does nothing — which is the exact failure
+     * mode that let the misalignment ship in the first place.
+     */
+    const { container } = render(
+      <NotificationsView
+        channels={[make()]}
+        onTest={() => {}}
+        onSetEnabled={() => {}}
+      />,
+    );
+    expect(container.querySelector(".nt-act-test")).not.toBeNull();
+    expect(container.querySelector(".nt-act-toggle")).not.toBeNull();
   });
 
   it("confirms a delete and names what goes silent with it", () => {
