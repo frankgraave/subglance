@@ -718,7 +718,7 @@ three and that none is written as `var()`.
 ```
 
 **The ratio is phi, 1.618, and the rungs are Fibonacci.** Each rung over the
-one below it measures 1.600, 1.625, 1.6154 and 1.6190 — between 0.16% and
+one below it measures 1.600, 1.625, 1.6154 and 1.6190 — between 0.06% and
 1.11% off phi. They are not phi itself, and that is a decision rather than a
 rounding: phi applied to a 64px rung gives 103.55px, and a fractional width
 puts a border on a half pixel, which the engine resolves differently depending

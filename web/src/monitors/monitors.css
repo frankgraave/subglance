@@ -300,14 +300,6 @@
 .mon-head {
   height: var(--size-col-2xs);
   padding: 0 var(--space-3);
-  /* A transparent edge the width of the body cell's, so the header's text
-     starts on the same vertical line as the content beneath it rather than
-     one pixel to the left of it. The rows below carry a real 2px left border
-     (neutral at rest, coloured by status); without this the STATUS label and
-     the lamp under it disagreed by exactly that border — measured at 275 and
-     276 in Chromium, which is small enough to look like bad kerning and large
-     enough to stop the column reading as one line. */
-  border-left: 2px solid transparent;
   text-align: left;
   @apply caps-legend;
   /* No rule under the header: the panels below carry their own edges, and a
@@ -317,6 +309,26 @@
 }
 
 .mon-head--num { text-align: right; }
+
+/*
+ * The 2px reserve belongs to the leading header cell and to no other.
+ *
+ * `.mon-row > :first-child` gives the status column — and only it — a 2px
+ * left border, so only that column's header has two pixels to make up. It was
+ * on `.mon-head`, which `Head` puts on all five cells, and that moved the
+ * four headers with no bordered cell under them two pixels right of their own
+ * data. Measured in Chromium at 1280px: MONITOR sat at 381 over a name at
+ * 379, LAST CHECKS at 875 over a bar at 873, and the two numeric headers
+ * were off by the same two pixels — the alignment defect this rule exists to
+ * remove, reproduced in four columns to fix it in one.
+ *
+ * Still a transparent border rather than padding: it must be the same box
+ * component as the edge it mirrors, so the cell keeps `--space-3` of real
+ * padding and the reserve tracks the border it is reserving for.
+ */
+.mon-head:first-child {
+  border-left: 2px solid transparent;
+}
 
 /* The heartbeat's header shares its cell's decision to give up padding, so
    the label and the bar start on one line. */
@@ -1279,7 +1291,12 @@
   border-left: 2px solid var(--warn);
   border-radius: var(--radius-sm);
   background: var(--warn-dim);
-  color: var(--ink-1);
+  /* `--ink`, not the `--ink-1` this said: there is no `--ink-1` in tokens.css
+     — the scale runs `--ink`, `--ink-2`, `--ink-3`, `--ink-4` — so the colour
+     was falling through to whatever the panel inherited. This is a caveat the
+     reader must not skim past, and `--ink` is the ink the rest of the product
+     gives text that matters. */
+  color: var(--ink);
   font-size: var(--type-body);
   line-height: var(--lead-body);
 }
