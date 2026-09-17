@@ -197,6 +197,16 @@ jobs:
         working-directory: web
         run: npm ci
 
+      # Before the tests, because one of them regenerates the style guide and
+      # compares it to the committed file — and the generator renders the real
+      # components against the built application CSS. Without a build present
+      # it exits with "no built frontend at internal/webui/dist", which is the
+      # honest failure: a guide rendered without the product's stylesheet would
+      # not be showing the product.
+      - name: Build
+        working-directory: web
+        run: npm run build
+
       # The token guards are the reason this job exists. They read
       # docs/DESIGN.md off disk and fail if the stylesheet drifts from the
       # design document, or if any component grows a literal colour.

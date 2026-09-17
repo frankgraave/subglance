@@ -46,7 +46,7 @@
 .value[data-warn="true"] .value-text {
   text-decoration: underline dotted;
   text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
+  text-underline-offset: var(--outline-offset);
   text-decoration-color: var(--warn);
 }
 

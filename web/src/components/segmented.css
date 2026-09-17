@@ -46,7 +46,7 @@
 .segmented .segmented-option {
   /* 0 10px with the height coming from the row, matching the reference. */
   padding: 0 var(--space-2h);
-  min-height: 26px;
+  min-height: var(--size-square-compact);
   display: inline-flex;
   align-items: center;
   border: 1px solid transparent;
@@ -89,13 +89,13 @@
  */
 .segmented .segmented-option--icon {
   padding: 0;
-  width: 26px;
+  width: var(--size-square-compact);
   justify-content: center;
 }
 
 .segmented .segmented-option--icon > svg {
-  width: 16px;
-  height: 16px;
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
   display: block;
 }
 

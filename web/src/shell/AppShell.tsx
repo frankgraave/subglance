@@ -37,8 +37,14 @@ export type AppShellProps = {
   /** The signed-in address, shown in the navigation footer. */
   account?: string;
   onSignOut?: () => void;
-  /** The topbar, rendered sticky above the content column. */
+  /** The masthead, rendered sticky above the content column. */
   topbar: ReactNode;
+  /**
+   * The page toolbar, directly under the masthead. Separate from `topbar`
+   * because the two bars have opposite contracts: the masthead never changes
+   * between routes and this one is expected to (SUB-138).
+   */
+  toolbar?: ReactNode;
   /**
    * Focus target for a client-side navigation, put on `<main>`.
    *
@@ -61,6 +67,7 @@ export function AppShell({
   account,
   onSignOut,
   topbar,
+  toolbar,
   mainRef,
   children,
 }: AppShellProps) {
@@ -115,6 +122,7 @@ export function AppShell({
         )}
         <div className="shell-main">
           {topbar}
+          {toolbar}
           {/*
            * `<main>` starts here, not around the whole grid: the sidebar is
            * navigation, and including it would make "skip to main content"

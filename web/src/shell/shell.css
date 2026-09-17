@@ -14,8 +14,8 @@
   /* Animating the track rather than translating the sidebar keeps the content
      column honest: it really is narrower, so nothing hides underneath. */
   transition: grid-template-columns var(--dur-panel) var(--ease);
-  --sidebar-w: 232px;
-  --rail-w: 56px;
+  --sidebar-w: var(--size-sidebar);
+  --rail-w: var(--size-rail);
 }
 
 .shell[data-collapsed="true"] { --sidebar-w: var(--rail-w); }
@@ -37,7 +37,7 @@
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-0h);
 }
 
 .shell-main {
@@ -61,8 +61,8 @@
   flex: none;
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: var(--size-square-compact);
+  height: var(--size-square-compact);
   border-radius: var(--r-sm);
   background: var(--surface-hi);
   border: 1px solid var(--border-hi);
@@ -74,7 +74,7 @@
 
 /* ── Navigation ────────────────────────────────────────────────────────── */
 
-.shell-nav { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.shell-nav { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-0h); }
 
 .shell-nav-label {
   padding: var(--space-4) var(--space-2) var(--space-1);
@@ -121,7 +121,7 @@
   color: var(--ink-4);
 }
 
-.shell-icon { width: 15px; height: 15px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.6; }
+.shell-icon { width: var(--size-icon-nav); height: var(--size-icon-nav); flex: none; stroke: currentColor; fill: none; stroke-width: 1.6; }
 .shell-nav-item .shell-icon { opacity: .85; }
 
 /*
@@ -163,7 +163,7 @@
   /* Translucent rather than opaque so rows scrolling under it stay visible as
      movement; the blur keeps the controls legible over them. */
   background: color-mix(in srgb, var(--canvas) 86%, transparent);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(var(--blur-bar));
 }
 
 /*
@@ -197,8 +197,8 @@
   flex: none;
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: var(--size-icon-xl);
+  height: var(--size-icon-xl);
   border: 1px solid var(--border-control);
   border-radius: var(--r-sm);
   background: var(--surface);
@@ -223,7 +223,7 @@
   inset: 0;
   z-index: calc(var(--z-overlay) - 1);
   background: color-mix(in srgb, var(--canvas) 72%, transparent);
-  backdrop-filter: blur(2px);
+  backdrop-filter: blur(var(--blur-scrim));
 }
 
 .shell-drawer {
@@ -232,7 +232,7 @@
   left: 0;
   z-index: var(--z-overlay);
   display: flex;
-  width: min(288px, 86vw);
+  width: min(var(--size-pane-drawer), 86vw);
   height: 100dvh;
   /* Opaque, for the reason the add drawer is (§2.11): a floating surface
      composites whatever is behind it, and the layered `--surface` tokens are
@@ -346,7 +346,7 @@
 }
 
 .shell-signout:focus-visible {
-  outline: 2px solid var(--accent-border);
+  outline: var(--outline-w) solid var(--accent-border);
   outline-offset: -2px;
 }
 
@@ -407,6 +407,241 @@
      keyboard is here" — and §2.8 gives that job to the accent so it never
      reads as a fact about the data. This was the last neutral focus ring
      left in the product; every other one already moved. */
-  outline: 2px solid var(--accent-border);
+  outline: var(--outline-w) solid var(--accent-border);
   outline-offset: -3px;
+}
+
+/* ---------------------------------------------------------------------------
+   The masthead's search, and the page toolbar beneath it (SUB-138).
+
+   Both were per-screen before: the dashboard had `.mon-topbar` with its own
+   search and the monitors page had `.inv-tools` with another, so two screens
+   that search the same kind of list put the field in two places and styled it
+   two ways. These classes are the shared ones, and they live in the shell
+   because the shell is what owns a bar that must look identical everywhere.
+   --------------------------------------------------------------------------- */
+
+/*
+ * The search field, as one box holding three things.
+ *
+ * The icon and the shortcut hint sit *inside* the border rather than beside
+ * it, so the whole affordance is one target: a magnifier floating next to an
+ * input reads as decoration, and a keycap floating next to one reads as a
+ * legend for something else on the page.
+ *
+ * `focus-within` on the wrapper is what makes that work — the real focus is on
+ * the `<input>`, and without this the box the user sees would never respond to
+ * the keyboard.
+ */
+.shell-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2h);
+  width: var(--size-pane-sm);
+  max-width: 100%;
+  height: var(--size-row-md);
+  background: var(--surface);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  color: var(--ink-4);
+  transition: border-color var(--dur-hover) var(--ease);
+}
+
+.shell-search:hover { border-color: var(--border-hi); }
+
+/* The accent ring the rest of the product uses for focus (§2.8), moved to the
+   wrapper because that is the box with the edge. */
+.shell-search:focus-within {
+  border-color: var(--accent-border);
+  outline: var(--outline-ring-w) solid var(--accent-ring);
+  outline-offset: 1px;
+}
+
+.shell-search > .shell-icon {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+  flex: none;
+}
+
+/* The input gives up its own chrome entirely: the wrapper is the field now. */
+.shell-search-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  font: inherit;
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  color: var(--ink);
+  background: none;
+  border: 0;
+}
+
+.shell-search-input:focus { outline: none; }
+.shell-search-input::placeholder { color: var(--ink-4); }
+
+/*
+ * The shortcut hint. It does nothing yet, and that is a decision rather than
+ * an oversight: the palette is later work, and this is `aria-hidden` so no
+ * screen reader announces a shortcut the product does not honour.
+ */
+.shell-search-kbd {
+  @apply face-mono;
+  flex: none;
+  /* Helper size, not a smaller one: there is no rung below 12px in the type
+     scale and inventing a 10px literal here would be the exact drift the
+     spacing guard exists to catch. The keycap reads as small because of its
+     border and its ink, not because the text shrank. */
+  font-size: var(--type-helper);
+  /* The role's own leading (§2.5), not a tighter one. A one-line label does
+     not need 16px of leading, but the pairing rule is worth more than the two
+     pixels: `--type-helper` renders at one leading everywhere, or it renders
+     at three on one screen and nobody can name why. The keycap gets its height
+     from its padding instead. */
+  line-height: var(--lead-helper);
+  padding: 0 var(--space-1h);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  color: var(--ink-4);
+}
+
+
+/*
+ * The toolbar: the bar under the masthead, whose contents change with the
+ * route.
+ *
+ * It collapses to nothing when a screen contributes no tools — `:empty` on
+ * the slot rather than a prop, because the screen portals in after the shell
+ * has rendered and the shell cannot know in advance. An always-present strip
+ * that is usually empty is a promise the product does not keep.
+ */
+.shell-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-5);
+  border-bottom: 1px solid var(--border);
+  background: var(--canvas);
+}
+
+.shell-toolbar:has(.shell-toolbar-slot:empty) {
+  display: none;
+}
+
+.shell-toolbar-slot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+  min-width: 0;
+}
+
+/* A run of related controls. `flex-wrap` so a narrow viewport stacks them
+   rather than clipping the count at the end, which is the one thing in the
+   group that states how much of the list you are looking at. */
+.tb-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  min-height: var(--control-h);
+  padding: var(--space-2) 0;
+}
+
+/* Label and control on one baseline, which is the misalignment SUB-134
+   reported: the monitors page put the label on its own line above the field
+   while the selects beside it were inline, so nothing in the row lined up. */
+.tb-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.tb-label {
+  @apply caps-legend;
+  white-space: nowrap;
+}
+
+/* Every select in the bar is the same width, so a row of filters reads as a
+   row rather than as three controls that happen to sit together. The widest
+   option text is what sets it: "All types" and "Active only" are within a
+   character of each other, and a shared rung keeps the next filter in line. */
+.tb-select {
+  width: var(--size-control-select);
+  font: inherit;
+  text-overflow: ellipsis;
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  padding: var(--space-1) var(--space-2);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+}
+
+.tb-select:hover { border-color: var(--border-hi); }
+
+.tb-select:focus-visible {
+  border-color: var(--accent-border);
+  outline: var(--outline-ring-w) solid var(--accent-ring);
+  outline-offset: 1px;
+}
+
+.tb-count {
+  @apply text-helper;
+  color: var(--ink-3);
+  white-space: nowrap;
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .shell-search {
+    /* Full width: a 280px field beside anything on a 375px screen leaves
+       neither usable. */
+    width: 100%;
+    /* Taller, because the input inside it grows to the 16px no-zoom floor. */
+    height: auto;
+    padding: var(--space-2) var(--space-2h);
+  }
+
+  .shell-search-input {
+    width: 100%;
+    /* 16px is not a style choice: iOS Safari zooms the page when a focused
+       input is smaller, and the zoom does not undo itself on blur. The desktop
+       field is helper-sized, so this floor only applies here — and it is why
+       the wrapper gives up its fixed height rather than clipping the text. */
+    font-size: var(--type-nozoom);
+    line-height: var(--lead-nozoom);
+    /*
+     * The input clears 24px on its own, and the wrapper now helps rather than
+     * pretending to.
+     *
+     * It used to be a <div> carrying the border, the fill and the magnifier
+     * while focusing nothing when tapped — verified in a real browser — so at
+     * a 20px line box the one control someone uses one-handed after an alert
+     * sat below WCAG 2.5.8 while merely looking big enough. It is a <label>
+     * now (SUB-138), so its whole box is the target; the padding below stays
+     * because the input should clear the floor by itself even so.
+     */
+    padding-block: var(--space-0h);
+  }
+
+  /* The shortcut hint goes: there is no keyboard to press it with, and on the
+     one screen where width is scarce it is the first thing that should give
+     its space back to the field. */
+  .shell-search-kbd {
+    display: none;
+  }
+
+  .tb-select {
+    /* Same 16px floor as the search input: iOS Safari zooms the page for any
+       focused form control below it, including a select, and does not zoom
+       back out on blur. Moved here with the class it belongs to — it used to
+       live in monitors.css, keyed off `.mon-facet-select`, which meant a
+       filter added to any other screen's toolbar silently lost the floor. */
+    width: auto;
+    font-size: var(--type-nozoom);
+    line-height: var(--lead-nozoom);
+    padding: var(--space-2) var(--space-3);
+  }
 }

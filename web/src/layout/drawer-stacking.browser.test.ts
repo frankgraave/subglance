@@ -69,22 +69,49 @@ afterAll(async () => {
 });
 
 /**
- * Opens a screen and presses the toolbar's add button, which is the path a
- * user takes and therefore the one worth testing. Going straight to
- * `/monitors/new` would exercise the route but not the button that was
- * reported.
+ * Splits an "r,g,b" reading into numbers, so two colours can be compared with
+ * a tolerance instead of as strings.
+ */
+function parseChannels(reading: string): number[] {
+  const parts = reading.split(",").map((n) => Number(n.trim()));
+  if (parts.length !== 3 || parts.some(Number.isNaN)) {
+    throw new Error(`not a colour reading: ${reading}`);
+  }
+  return parts;
+}
+
+/**
+ * Opens a screen and reaches the add drawer, which is the path a user takes
+ * and therefore the one worth testing.
+ *
+ * The button moved in SUB-138. It used to sit in the masthead on every
+ * screen; it now sits in the header of the monitors card it adds to, because
+ * a control in chrome that is present on Notifications while meaning
+ * something about monitors is chrome that has to be re-read per screen. So
+ * from anywhere else the path is: navigate to Monitors, then press it.
+ *
+ * What these tests assert is unchanged and is not about the button: the
+ * drawer is one surface, opaque, painted and hit-tested over the page it was
+ * opened from, whichever screen that was.
  */
 async function openAddDrawer(path: string): Promise<Page> {
   const page = await darkPage();
   await page.goto(server.url + path, { waitUntil: "domcontentloaded" });
   await page.waitForSelector(".shell-topbar", { timeout: 15_000 });
 
+  if (path !== "/monitors") {
+    await page.click('a[href="/monitors"]');
+    await page.waitForSelector('button[aria-label="Add monitor"]', {
+      timeout: 15_000,
+    });
+  }
+
   /*
    * Found by its accessible name rather than a test id, so the selector is
    * the same string a screen-reader user hears. A rename that breaks this
    * test is a rename that broke the button's name.
    */
-  await page.click('button[aria-label="Add a monitor"]');
+  await page.click('button[aria-label="Add monitor"]');
   await page.waitForSelector(".drawer-panel", { timeout: 15_000 });
   /*
    * Wait for the entrance to *finish*, not for two frames to pass.
@@ -200,9 +227,33 @@ describe.each(SCREENS)("the add drawer on $name", (screen) => {
         };
       });
       if (seen === null) throw new Error("no drawer on screen");
-      expect(await colourAt(page, seen.x, seen.y)).toBe(
-        await resolveColour(page, seen.fill),
-      );
+
+      /*
+       * Compared within one unit per channel rather than exactly.
+       *
+       * `--surface-float` is authored in oklch, and Chromium converts it to
+       * sRGB twice by two different routes: once for `getComputedStyle`, once
+       * for the compositor that fills the pixel. Those two round
+       * independently, and here they land a single unit apart — 37 painted
+       * against 38 computed. Asserting equality made the test fail on a
+       * correct drawer, which is a false alarm about the most expensive kind
+       * of bug to chase.
+       *
+       * The tolerance costs nothing this test was buying. The defect it
+       * exists for is the drawer painting as the page showing through it —
+       * `--surface` at 3% alpha over a dark canvas, tens of units away from
+       * the opaque fill, not one. `mutations-ui-feedback.sh` reverts exactly
+       * that and this assertion still fails, which is what keeps the number
+       * below honest.
+       */
+      const painted = parseChannels(await colourAt(page, seen.x, seen.y));
+      const declared = parseChannels(await resolveColour(page, seen.fill));
+      for (const [i, channel] of painted.entries()) {
+        expect(
+          Math.abs(channel - declared[i]),
+          `channel ${i}: painted ${painted.join(",")} against declared ${declared.join(",")}`,
+        ).toBeLessThanOrEqual(1);
+      }
     } finally {
       await page.close();
     }

@@ -95,7 +95,28 @@ const budgets = {
    * It is stated here rather than nudged, which is the whole point of the
    * budget: a ceiling that moves quietly is not a ceiling.
    */
-  css: 13,
+  /*
+   * 13 -> 14 kB gzip, raised deliberately for SUB-137 (the size ladder and
+   * the living style guide).
+   *
+   * The measurement: 13,213 bytes on develop, 13,510 after — 297 bytes, and
+   * the 13 kB ceiling sat at 13,312, so 99 bytes of it were headroom already
+   * spent. What the 297 bytes buy: 33 named size rungs, three breakpoint
+   * rungs, and the replacement of 88 literal pixel values across 26
+   * stylesheets with var() references.
+   *
+   * It is worth stating plainly that the ladder COSTS bytes rather than
+   * saving them. `var(--size-col-md)` is sixteen characters where `88px` is
+   * four, and gzip only partly closes that gap because the literals were
+   * already repeating. The trade is deliberate: 297 bytes against a class of
+   * drift that no review reliably catches, measured at 88 occurrences in a
+   * codebase that had zero literal colours under an equivalent guard.
+   *
+   * The ceiling moves to 14 rather than to 13.5 because a budget that tracks
+   * the current measurement to the byte is not a budget, it is a record of
+   * what happened.
+   */
+  css: 14,
   fonts: 80,
 };
 

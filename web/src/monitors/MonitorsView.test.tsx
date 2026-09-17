@@ -9,9 +9,10 @@ import {
 } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { MonitorsView } from "./MonitorsView";
-import { setTopbarSlot } from "../shell/topbarSlot";
+import { setToolbarSlot, setTopbarSlot } from "../shell/topbarSlot";
 import { inventoryFromApi } from "./inventory";
 import type { InventoryMonitor } from "./inventory";
+
 
 /*
  * The inventory screen, rendered from fixtures.
@@ -42,11 +43,12 @@ function make(over: Record<string, unknown> = {}): InventoryMonitor {
  * Renders the screen with a toolbar to put its controls in.
  *
  * Since SUB-134 the search box, the two filters and the "n of m shown" counter
- * are portalled into the shell's toolbar instead of sitting in a band inside
- * the Card. That is the behaviour under test in several assertions below, and
- * a bare `render` has no toolbar — so the controls would have nowhere to go
- * and every assertion about them would fail for an absence the product does
- * not have.
+ * are portalled out of the Card into the shell, and since SUB-138 they go to
+ * two different bars: search to the masthead, filters to the page toolbar.
+ * That is the behaviour under test in several assertions below, and a bare
+ * `render` has neither bar — so the controls would have nowhere to go and
+ * every assertion about them would fail for an absence the product does not
+ * have.
  *
  * A stand-in slot rather than mounting the real `Topbar`: what these tests are
  * about is the inventory, and dragging the whole shell in would make a change
@@ -54,9 +56,11 @@ function make(over: Record<string, unknown> = {}): InventoryMonitor {
  * is where the two are asserted together.
  */
 function render(ui: ReactElement) {
-  const slot = document.createElement("div");
-  document.body.append(slot);
-  setTopbarSlot(slot);
+  const masthead = document.createElement("div");
+  const toolbar = document.createElement("div");
+  document.body.append(masthead, toolbar);
+  setTopbarSlot(masthead);
+  setToolbarSlot(toolbar);
   return renderBare(ui);
 }
 
@@ -65,6 +69,7 @@ afterEach(() => {
   // Otherwise the next test portals into the previous test's detached slot,
   // and its controls are rendered into a node nobody can query.
   setTopbarSlot(null);
+  setToolbarSlot(null);
 });
 
 describe("MonitorsView", () => {
@@ -354,23 +359,39 @@ describe("every row action names the monitor it acts on", () => {
 
   it("keeps Delete readable without colour", () => {
     /*
-     * DESIGN.md §2.3: colour is never the only carrier. The other three
-     * actions are glyphs and Delete is not, because a red bin beside three
-     * grey glyphs is a grey bin to a reader who cannot see the red — and this
-     * is the one action that cannot be undone.
+     * DESIGN.md §2.3: colour is never the only carrier.
      *
-     * Asserted as "the button contains the word" rather than as "it has no
-     * icon", so adding a glyph BESIDE the word stays allowed while replacing
-     * the word with one does not.
+     * This test used to require the literal word "Delete" while the other
+     * three actions were glyphs, on the argument that a red bin beside three
+     * grey glyphs is a grey bin to a reader who cannot see the red. The rule
+     * is right and the conclusion was too strong: a bin is destructive in its
+     * *shape*, so what has to be checked is that the glyph is not merely a
+     * tinted copy of its neighbours — and that the name still says the word.
+     *
+     * The pause that the word used to buy is bought one step later and
+     * better: deleting opens a confirmation naming the history it destroys,
+     * with its button disabled until the monitor's name is typed out.
      */
     inventory();
+    const paths = (button: HTMLElement) =>
+      [...button.querySelectorAll("path")].map((p) => p.getAttribute("d"));
+
     for (const button of screen.getAllByRole("button", { name: /delete/i })) {
-      expect(button.textContent).toContain("Delete");
+      // The accessible name carries the word, always.
+      expect(button.getAttribute("aria-label")).toMatch(/^Delete /);
+      // And the shape is its own, not a recoloured neighbour.
+      const bin = paths(button);
+      expect(bin.length).toBeGreaterThan(1);
+      for (const other of [/check now/i, /pause/i, /edit/i]) {
+        for (const sibling of screen.getAllByRole("button", { name: other })) {
+          expect(paths(sibling)).not.toEqual(bin);
+        }
+      }
     }
 
-    // And the three that did become glyphs really are glyphs: if they kept
-    // their words, this file would be asserting nothing about icon buttons.
-    for (const action of [/check now/i, /pause/i, /edit/i]) {
+    // And every row action really is a glyph: if they kept their words, this
+    // file would be asserting nothing about icon buttons.
+    for (const action of [/check now/i, /pause/i, /edit/i, /delete/i]) {
       for (const button of screen.getAllByRole("button", { name: action })) {
         expect(button.textContent?.trim()).toBe("");
         expect(button.querySelector("svg")).not.toBeNull();

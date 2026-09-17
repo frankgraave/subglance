@@ -10,6 +10,7 @@ import {
 import { LED_STATE } from "./ledState";
 import { CardColumnsSwitcher } from "../shell/CardColumnsSwitcher";
 import { SearchIcon } from "../shell/icons";
+import { ToolbarTools, TopbarTools } from "../shell/TopbarTools";
 import { MonitorCardList } from "./MonitorCardList";
 import { MonitorCompactList } from "./MonitorCompactList";
 import { MonitorTable } from "./MonitorTable";
@@ -198,41 +199,38 @@ export function Dashboard({
       {banner}
 
       {/*
-       * The tools row: what belongs to *this* screen.
+       * Search goes to the masthead; everything that narrows the list goes to
+       * the page toolbar (SUB-138).
        *
-       * The shell's topbar holds what is true everywhere — add, layout,
-       * workbench, theme — and this row holds search, the status filter and
-       * whatever the current view brings with it. The split is what lets a
-       * view-specific control appear and disappear without moving anything in
-       * the bar above it.
+       * This screen used to carry its own bar, and the monitors page carried
+       * a different one, so two screens that both search a list of monitors
+       * put the field in two places. The split is by what a control *is*:
+       * search is true on every list screen and holds one position; a status
+       * filter is this screen's alone and is expected to change with the
+       * route.
        */}
-      <header className="mon-topbar">
-        {/*
-         * `h1`, not `h2` (SUB-100): the detail view uses `h1` for the
-         * monitor's name, and the two screens disagreeing about where the
-         * outline starts leaves heading navigation with no level-1 landmark
-         * on the busier of the two.
-         *
-         * Visually hidden, because the card below already carries the visible
-         * title — "Monitors (2)" — and printing the word twice on one screen
-         * is what this bar was rearranged to stop. The outline keeps its
-         * landmark; the eye does not get the same noun twice.
-         */}
-        <h1 id={`${searchId}-title`} className="sr-only">
-          Monitors
-        </h1>
+      {/*
+       * `h1`, visually hidden (SUB-100): the detail view uses `h1` for the
+       * monitor's name, and the two screens disagreeing about where the
+       * outline starts leaves heading navigation with no level-1 landmark on
+       * the busier of the two. Hidden because the card below carries the
+       * visible title, and printing the same noun twice is what this
+       * rearrangement exists to stop.
+       */}
+      <h1 id={`${searchId}-title`} className="sr-only">
+        Monitors
+      </h1>
 
-        <div className="mon-search">
+      <TopbarTools>
+        <label className="shell-search">
           {/* A real <label>, hidden. Placeholder-as-label disappears the
               moment someone types, which is when they most need it. */}
-          <label htmlFor={searchId} className="sr-only">
-            Search monitors by name or target
-          </label>
+          <span className="sr-only">Search monitors by name or target</span>
           <SearchIcon />
           <input
             id={searchId}
             type="search"
-            className="mon-search-input"
+            className="shell-search-input"
             value={query}
             placeholder="Search monitors…"
             autoComplete="off"
@@ -249,21 +247,17 @@ export function Dashboard({
            * a promise the product does not keep. When ⌘K lands this becomes
            * the button that opens it.
            */}
-          <span className="mon-search-kbd" aria-hidden="true">
+          <span className="shell-search-kbd" aria-hidden="true">
             ⌘K
           </span>
-        </div>
+        </label>
+      </TopbarTools>
 
-        {/*
-         * Everything that narrows or reshapes the list sits at the far right,
-         * in two framed clusters: filter, then view.
-         */}
-        <div className="mon-view-tools">
+      <ToolbarTools>
+        <div className="tb-group">
           {/*
            * The status filter.
            *
-           * Framed like the segmented control beside it so the two read as
-           * siblings rather than as loose toggles next to a framed thing — but
            * `role="group"` and `aria-pressed`, never a radio group: these are
            * independent toggles and "none selected" is a real state. The
            * frame is a visual family, not a promise of one-of-N; pressing the
@@ -316,45 +310,21 @@ export function Dashboard({
           )}
 
           {/*
-           * View tools, empty for three of the four layouts.
-           *
-           * Keyed off the layout actually on screen rather than the stored
-           * preference — on a narrow viewport the preference may be Rows while
-           * Cards is what renders, and the control has to follow what the user
-           * can see. Nothing above this bar can move when it appears, which is
-           * the whole reason it is here and not in the shell's topbar.
+           * One native <select> per tag key, and native on purpose: a custom
+           * listbox would have to re-earn keyboard support, screen-reader
+           * semantics and the OS picker on a phone, and these lists are a
+           * handful of values long — the case where a native select is simply
+           * better. The key is the visible label, so the control reads
+           * "env: prod" without a separate legend.
            */}
-          {shown === "cards" && onCardColumnsChange !== undefined && (
-            <CardColumnsSwitcher
-              value={cardColumns}
-              onChange={onCardColumnsChange}
-            />
-          )}
-        </div>
-      </header>
-
-      {/*
-       * One native <select> per tag key, and native on purpose: a custom
-       * listbox would have to re-earn keyboard support, screen-reader
-       * semantics and the OS picker on a phone, and these lists are a handful
-       * of values long — the case where a native select is simply better. The
-       * key is the visible label, so the control reads "env: prod" without a
-       * separate legend.
-       */}
-      {facets.length > 0 && (
-        <div className="mon-facets">
           {facets.map((facet) => (
             // The key is also the text of an option in the Group by control,
             // so an explicit attribute — not the visible text — is what
             // identifies a facet unambiguously.
-            <label
-              key={facet.key}
-              className="mon-facet"
-              data-facet-key={facet.key}
-            >
-              <span className="mon-facet-key">{facet.key}</span>
+            <label key={facet.key} className="tb-field" data-facet-key={facet.key}>
+              <span className="tb-label">{facet.key}</span>
               <select
-                className="mon-facet-select"
+                className="tb-select mon-facet-select"
                 value={tags[facet.key] ?? ""}
                 onChange={(event) =>
                   setTags((current) => ({
@@ -382,25 +352,44 @@ export function Dashboard({
            * control that looks like a filter while changing nothing about what
            * is visible is the kind of thing people press twice.
            */}
-          <label className="mon-facet">
-            <span className="mon-facet-key">Group by</span>
-            {/* Its own class, not `mon-facet-select`: it looks the same but it
-                is not a facet, and one selector must not match both. */}
-            <select
-              className="mon-group-select"
-              value={groupKey ?? ""}
-              onChange={(event) => setGroupKey(event.target.value || null)}
-            >
-              <option value="">None</option>
-              {facets.map((facet) => (
-                <option key={facet.key} value={facet.key}>
-                  {facet.key}
-                </option>
-              ))}
-            </select>
-          </label>
+          {facets.length > 0 && (
+            <label className="tb-field">
+              <span className="tb-label">Group by</span>
+              {/* Its own class, not `mon-facet-select`: it looks the same but
+                  it is not a facet, and one selector must not match both. */}
+              <select
+                className="tb-select mon-group-select"
+                value={groupKey ?? ""}
+                onChange={(event) => setGroupKey(event.target.value || null)}
+              >
+                <option value="">None</option>
+                {facets.map((facet) => (
+                  <option key={facet.key} value={facet.key}>
+                    {facet.key}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          {/*
+           * View tools, empty for three of the four layouts.
+           *
+           * Keyed off the layout actually on screen rather than the stored
+           * preference — on a narrow viewport the preference may be Rows while
+           * Cards is what renders, and the control has to follow what the user
+           * can see. It sits at the end of this bar rather than in the
+           * masthead: appearing and disappearing costs nothing here, and in
+           * the masthead it slid the control you had just pressed sideways.
+           */}
+          {shown === "cards" && onCardColumnsChange !== undefined && (
+            <CardColumnsSwitcher
+              value={cardColumns}
+              onChange={onCardColumnsChange}
+            />
+          )}
         </div>
-      )}
+      </ToolbarTools>
 
       {/*
        * The single live region, and it lives *outside* the table

@@ -20,8 +20,8 @@
 }
 
 .conn-badge-dot {
-  width: 7px;
-  height: 7px;
+  width: var(--size-icon-xxs);
+  height: var(--size-icon-xxs);
   border-radius: 999px;
   background: var(--warn);
   flex: none;
@@ -47,7 +47,7 @@
      colour next to warn text is two shouts for one message — and this badge
      already has the reader's attention by existing at all. */
   margin-left: var(--space-2);
-  padding: 2px var(--space-2);
+  padding: var(--space-0h) var(--space-2);
   border: 1px solid var(--warn);
   border-radius: var(--r-sm);
   background: transparent;

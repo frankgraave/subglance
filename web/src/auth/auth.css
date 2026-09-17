@@ -45,8 +45,8 @@
   flex: none;
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: var(--size-square-compact);
+  height: var(--size-square-compact);
   border-radius: var(--r-sm);
   background: var(--surface-2);
 }
@@ -203,8 +203,8 @@
 }
 
 .auth-submit:focus-visible {
-  outline: 2px solid var(--accent-border);
-  outline-offset: 2px;
+  outline: var(--outline-w) solid var(--accent-border);
+  outline-offset: var(--outline-offset);
 }
 
 /* Announced, not drawn. Clipped rather than display:none, which would take it

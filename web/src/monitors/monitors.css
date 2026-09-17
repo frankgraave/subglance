@@ -56,7 +56,7 @@
   padding: var(--space-2) var(--space-6);
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--canvas) 86%, transparent);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(var(--blur-bar));
 }
 
 /*
@@ -107,7 +107,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  height: 26px;
+  height: var(--size-square-compact);
   padding: 0 var(--space-2h);
   font: inherit;
   font-size: var(--type-helper);
@@ -167,90 +167,6 @@
 .mon-count-dot[data-state="idle"] { background: var(--idle); }
 .mon-count-dot[data-state="off"]  { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-2); }
 
-/*
- * The search field, as one box holding three things.
- *
- * The icon and the shortcut hint sit *inside* the border rather than beside
- * it, so the whole affordance is one target: a magnifier floating next to an
- * input reads as decoration, and a keycap floating next to one reads as a
- * legend for something else on the page.
- *
- * `focus-within` on the wrapper is what makes that work — the real focus is on
- * the `<input>`, and without this the box the user sees would never respond to
- * the keyboard.
- */
-.mon-search {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 0 var(--space-2h);
-  width: 280px;
-  max-width: 100%;
-  height: 32px;
-  background: var(--surface);
-  border: 1px solid var(--border-control);
-  border-radius: var(--r-sm);
-  color: var(--ink-4);
-  transition: border-color var(--dur-hover) var(--ease);
-}
-
-.mon-search:hover { border-color: var(--border-hi); }
-
-/* The accent ring the rest of the product uses for focus (§2.8), moved to the
-   wrapper because that is the box with the edge. */
-.mon-search:focus-within {
-  border-color: var(--accent-border);
-  outline: 3px solid var(--accent-ring);
-  outline-offset: 1px;
-}
-
-.mon-search > .shell-icon {
-  width: 14px;
-  height: 14px;
-  flex: none;
-}
-
-/* The input gives up its own chrome entirely: the wrapper is the field now. */
-.mon-search-input {
-  flex: 1;
-  min-width: 0;
-  padding: 0;
-  font: inherit;
-  font-size: var(--type-helper);
-  line-height: var(--lead-helper);
-  color: var(--ink);
-  background: none;
-  border: 0;
-}
-
-.mon-search-input:focus { outline: none; }
-.mon-search-input::placeholder { color: var(--ink-4); }
-
-/*
- * The shortcut hint. It does nothing yet, and that is a decision rather than
- * an oversight: the palette is later work, and this is `aria-hidden` so no
- * screen reader announces a shortcut the product does not honour.
- */
-.mon-search-kbd {
-  @apply face-mono;
-  flex: none;
-  /* Helper size, not a smaller one: there is no rung below 12px in the type
-     scale and inventing a 10px literal here would be the exact drift the
-     spacing guard exists to catch. The keycap reads as small because of its
-     border and its ink, not because the text shrank. */
-  font-size: var(--type-helper);
-  /* The role's own leading (§2.5), not a tighter one. A one-line label does
-     not need 16px of leading, but the pairing rule is worth more than the two
-     pixels: `--type-helper` renders at one leading everywhere, or it renders
-     at three on one screen and nobody can name why. The keycap gets its height
-     from its padding instead. */
-  line-height: var(--lead-helper);
-  padding: 0 var(--space-1h);
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  color: var(--ink-4);
-}
-
 /* One labelled native select per tag key. Native because these lists are
    short and a custom listbox would have to re-earn keyboard support, the
    screen-reader contract and the OS picker on a phone. Wrapping in a <label>
@@ -277,22 +193,18 @@
   color: var(--ink-2);
 }
 
-.mon-facet-select,
-.mon-group-select {
-  padding: var(--space-1) var(--space-2);
-  font: inherit;
-  font-size: var(--type-helper);
-  line-height: var(--lead-helper);
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--border-control);
-  border-radius: var(--r-sm);
-  cursor: pointer;
-  transition: border-color var(--dur-hover) var(--ease);
-}
-
-.mon-facet-select:hover,
-.mon-group-select:hover { border-color: var(--border-hi); }
+/*
+ * The facet and group selects are `.tb-select` now (SUB-138).
+ *
+ * They used to restate its padding, type, fill and border here, which is how
+ * the dashboard's filters ended up a different width from the monitors page's
+ * — same intent, two declarations, one of them edited. The shared class is in
+ * shell.css because the bar it sits in is the shell's.
+ *
+ * The two names survive for one reason each: `.mon-facet-select` marks a
+ * control that narrows the list and `.mon-group-select` one that does not,
+ * and `Dashboard.test.tsx` tells them apart by exactly that.
+ */
 
 .mon-result-count {
   font-size: var(--type-helper);
@@ -355,13 +267,13 @@
  * longest cell ("Pending", lamp included) is 70px; 84px leaves the column's
  * own 12px of padding on each side and nothing else.
  */
-.mon-col--led { width: 84px; }
+.mon-col--led { width: var(--size-col-tag); }
 .mon-col--name { width: auto; }
-.mon-col--beats { width: 184px; }
-.mon-col--num { width: 92px; }
+.mon-col--beats { width: var(--size-col-xl); }
+.mon-col--num { width: var(--size-col-alt); }
 
 .mon-head {
-  height: 34px;
+  height: var(--size-col-2xs);
   padding: 0 var(--space-3);
   text-align: left;
   @apply caps-legend;
@@ -490,7 +402,7 @@
 .mon-row[data-status="down"]:hover > * { background: var(--down-deep); }
 
 .mon-cell {
-  height: 58px;
+  height: var(--size-row-xl);
   padding: 0 var(--space-3);
   vertical-align: middle;
   font-size: var(--type-body);
@@ -532,7 +444,7 @@
  */
 .mon-target {
   display: block;
-  margin-top: 3px;
+  margin-top: var(--space-0h);
   @apply face-mono;
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
@@ -666,8 +578,8 @@
 
 /* Focus is the accent ring, not a neutral outline (§2.8). */
 .mon-empty-cta:focus-visible {
-  outline: 3px solid var(--accent-ring);
-  outline-offset: 2px;
+  outline: var(--outline-ring-w) solid var(--accent-ring);
+  outline-offset: var(--outline-offset);
 }
 
 /* The fallback when no caller owns the add form: the step is still stated, it
@@ -740,7 +652,7 @@
       min(
         100%,
         max(
-          380px,
+          var(--size-pane-md),
           calc(
             (100% - (var(--mon-card-cols, 1) - 1) * var(--space-1h)) /
               var(--mon-card-cols, 1)
@@ -771,7 +683,7 @@
  */
 .mon-card-stack[data-cols="auto"] {
   /* Same `min(100%, …)` guard as above, for the same overflow. */
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--size-pane-md)), 1fr));
 }
 
 /*
@@ -849,7 +761,7 @@
 }
 
 .mon-card-target {
-  margin-top: 2px;
+  margin-top: var(--space-0h);
   @apply face-mono;
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
@@ -884,7 +796,7 @@
 }
 
 .mon-card-fact dd {
-  margin-top: 2px;
+  margin-top: var(--space-0h);
   @apply face-mono;
   font-size: var(--type-body);
   line-height: var(--lead-body);
@@ -921,61 +833,16 @@
      * simply hung 17px off the right edge of a 375px screen and took the
      * whole page's scrollWidth with it.
      *
-     * `100%` is the same instrument `.mon-search` below already uses, and the
-     * one the phone-layout guard measures.
+     * `100%` is the same instrument `.shell-search` uses in shell.css, and
+     * the one the phone-layout guard measures.
      */
     width: 100%;
     overflow-x: auto;
     /* Room for the frame's own edge and shadow inside the scroller. */
-    padding-bottom: 2px;
+    padding-bottom: var(--space-0h);
   }
 
-  .mon-facet-select,
-  .mon-group-select {
-    /* Same 16px floor as the search input: iOS Safari zooms the page for any
-       focused form control below it, including a select, and does not zoom
-       back out on blur. */
-    font-size: var(--type-nozoom);
-    line-height: var(--lead-nozoom);
-    padding: var(--space-2) var(--space-3);
-  }
 
-  .mon-search {
-    /* Full width: a 280px field beside anything on a 375px screen leaves
-       neither usable. */
-    width: 100%;
-    /* Taller, because the input inside it grows to the 16px no-zoom floor. */
-    height: auto;
-    padding: var(--space-2) var(--space-2h);
-  }
-
-  .mon-search-input {
-    width: 100%;
-    /* 16px is not a style choice: iOS Safari zooms the page when a focused
-       input is smaller, and the zoom does not undo itself on blur. The desktop
-       field is helper-sized, so this floor only applies here — and it is why
-       the wrapper gives up its fixed height rather than clipping the text. */
-    font-size: var(--type-nozoom);
-    line-height: var(--lead-nozoom);
-    /*
-     * And the box itself clears 24px, because the tap lands on the *input*.
-     *
-     * The wrapper looks like the target — it carries the border, the fill and
-     * the magnifier — but it is a <div>, not a <label>, so tapping its padding
-     * focuses nothing; verified in a real browser. At a 20px line box that left
-     * the one control someone uses one-handed after an alert below WCAG 2.5.8,
-     * while the thing around it merely looked big enough. Two quarter-steps
-     * take the input to 24 and the shell to 42; nothing else on the row moves.
-     */
-    padding-block: var(--space-0h);
-  }
-
-  /* The shortcut hint goes: there is no keyboard to press it with, and on the
-     one screen where width is scarce it is the first thing that should give
-     its space back to the field. */
-  .mon-search-kbd {
-    display: none;
-  }
 
 }
 
@@ -1029,7 +896,7 @@
 .mon-line .panel-row-icon {
   /* The lamp plus its status word, at the width the column used to reserve so
      the names below still start on one vertical line. */
-  width: 78px;
+  width: var(--size-col-xxs);
   justify-content: flex-start;
 }
 
@@ -1040,7 +907,7 @@
   /* The first column grew from 22px to hold the status word next to the lamp
      (SUB-100). The space comes out of the target column, which is the one
      field on the line that is still readable truncated. */
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.2fr) 76px 62px;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.2fr) var(--size-col-sm) var(--size-col-xs);
   align-items: center;
   gap: var(--space-3);
 }
@@ -1259,6 +1126,12 @@
 }
 
 .add-button {
+  /* Inline-flex, not the default inline-block: a button whose label is a word
+     plus a glyph (SUB-138) stacks them onto two lines otherwise, which is how
+     "Add monitor" grew a second row with a lonely + under it. */
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   padding: var(--space-2) var(--space-4);
   font: inherit;
   font-size: var(--type-body);
@@ -1269,6 +1142,17 @@
   border-radius: var(--r-sm);
   cursor: pointer;
   transition: background var(--dur-hover) var(--ease), border-color var(--dur-hover) var(--ease);
+}
+
+.add-button > svg {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+  flex: none;
+  /* The glyph leads visually and the word follows, which is the shape a
+     primary add action has everywhere it appears. In the markup the order is
+     reversed, because the button is named by aria-label there and the DOM
+     order is free to serve layout. */
+  order: -1;
 }
 
 .add-button:hover:not(:disabled) { background: var(--surface-2); border-color: var(--border-hi); }
@@ -1388,7 +1272,7 @@
  */
 .mon-card-name > a {
   display: inline-block;
-  min-height: 24px;
+  min-height: var(--size-row-sm);
 }
 
 .mon-name:hover,

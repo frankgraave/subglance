@@ -104,7 +104,12 @@ describe("creating a monitor", () => {
     await screen.findByText("alpha");
     expect(screen.queryByText("bravo")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Add a monitor" }));
+    // Adding a monitor lives on Monitors since SUB-138, where the button sits
+    // in the header of the card it adds to.
+    fireEvent.click(screen.getByRole("link", { name: "Monitors" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /add monitor/i }),
+    );
     const save = await screen.findByRole("button", {
       name: /pretend the monitor saved/,
     });
@@ -114,10 +119,13 @@ describe("creating a monitor", () => {
     expect(await screen.findByText("bravo")).toBeTruthy();
   });
 
-  it("returns to the dashboard rather than staying on the form", async () => {
+  it("returns to the list rather than staying on the form", async () => {
     render(<App />);
     await screen.findByText("alpha");
-    fireEvent.click(screen.getByRole("button", { name: "Add a monitor" }));
+    fireEvent.click(screen.getByRole("link", { name: "Monitors" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /add monitor/i }),
+    );
     const save = await screen.findByRole("button", {
       name: /pretend the monitor saved/,
     });

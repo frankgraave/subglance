@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { Card } from "../components/Card";
+import { PlusIcon, SearchIcon } from "../shell/icons";
+import { TopbarTools } from "../shell/TopbarTools";
 import { Drawer } from "../components/Drawer";
 import { ConfirmDelete } from "../components/ConfirmDelete";
 import { StateChip } from "../components/Chip";
@@ -72,6 +74,22 @@ export function NotificationsView({
   createOpen = false,
   onCreateOpenChange,
 }: NotificationsViewProps) {
+  const [query, setQuery] = useState("");
+  /*
+   * Filtering by what a row shows: its name and its type. Not by the secret,
+   * obviously, and not by the destination either — the destination is masked
+   * for most channel types, so a query would appear to search something the
+   * page will not show you.
+   */
+  const needle = query.trim().toLowerCase();
+  const visibleChannels =
+    needle === ""
+      ? channels
+      : channels.filter(
+          (channel) =>
+            channel.name.toLowerCase().includes(needle) ||
+            channel.type.toLowerCase().includes(needle),
+        );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
 
@@ -81,10 +99,30 @@ export function NotificationsView({
 
   return (
     <section className="mon-detail inv-screen" aria-label="Notifications">
-      <header className="mon-detail-head">
-        <h1 className="mon-detail-name">Notifications</h1>
-        <p className="mon-detail-note">{describeChannels(channels)}</p>
-      </header>
+      {/*
+       * Search in the masthead, like every other list screen (SUB-138). It
+       * filters by channel name and by type, which are the two things written
+       * on a row.
+       */}
+      <TopbarTools>
+        <label className="shell-search">
+          <span className="sr-only">Filter channels by name or type</span>
+          <SearchIcon />
+          <input
+            type="search"
+            className="shell-search-input"
+            value={query}
+            placeholder="Filter channels…"
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+      </TopbarTools>
+
+      {/* No visible page heading: the sidebar says Notifications and the card
+          below says Channels. The `h1` stays for heading navigation. */}
+      <h1 className="sr-only">Notifications</h1>
 
       {error !== null && (
         <p className="inc-notice" role="alert">
@@ -112,14 +150,21 @@ export function NotificationsView({
 
       <Card
         title="Channels"
-        headingLevel={2}
+        /* This card's title is the page's heading now (SUB-138). */
+        headingLevel={1}
+        note={describeChannels(channels)}
         action={
           onCreateOpenChange === undefined ? undefined : (
             <button
               type="button"
               className="add-button add-button-primary"
+              // Named here rather than by its text content, for the same
+              // reason as Add monitor: an unnamed inline <svg> leaves the
+              // button's accessible name up to the screen reader.
+              aria-label="Add channel"
               onClick={() => onCreateOpenChange(true)}
             >
+              <PlusIcon aria-hidden="true" />
               Add channel
             </button>
           )
@@ -167,9 +212,22 @@ export function NotificationsView({
               </div>
             )}
           </div>
+        ) : visibleChannels.length === 0 ? (
+          /*
+           * A filter that matched nothing, which is not the same fact.
+           *
+           * "Alerts are going nowhere" is a claim about the instance. Typed
+           * over a search, it told a self-hoster their alerting was gone when
+           * four working channels were sitting one keystroke away. The filter
+           * gets its own line, and it does not repeat the alarm.
+           */
+          <p className="add-help">
+            No channels match “{query.trim()}”. The filter matches a channel’s
+            name and its type.
+          </p>
         ) : (
           <ul className="inv-list">
-            {channels.map((channel) => (
+            {visibleChannels.map((channel) => (
               <ChannelRow
                 key={channel.id}
                 channel={channel}

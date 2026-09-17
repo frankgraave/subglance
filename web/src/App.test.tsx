@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { COMPACT_MAX_WIDTH } from "./layout/useMediaQuery";
 import { LAYOUT_STORAGE_KEY } from "./shell/preferences";
+import { setToolbarSlot, setTopbarSlot } from "./shell/topbarSlot";
 
 /**
  * The shell as a whole. These are the acceptance criteria of SUB-64 rather
@@ -92,6 +93,19 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  /*
+   * The shell's portal slots are module state (SUB-138), so an unmounted
+   * topbar leaves its detached node published. The next test then portals its
+   * search into a node nobody can query, and every assertion that walks the
+   * masthead sees a bar with one control missing — which is exactly the kind
+   * of failure that looks like a product bug and is not.
+   *
+   * React clears them on unmount via the ref callback, but `cleanup()` runs
+   * the unmount after this file's own listeners have already been torn down
+   * in some orderings, so this is belt and braces.
+   */
+  setTopbarSlot(null);
+  setToolbarSlot(null);
 });
 
 describe("the app shell", () => {
@@ -177,26 +191,6 @@ describe("the app shell", () => {
    * Asserted per route rather than once, because "it is absent somewhere" is
    * the assertion that passes when someone removes it everywhere.
    */
-  it("offers the layout switcher only where there are layouts", async () => {
-    render(<App />);
-    await screen.findByText("api");
-    expect(screen.getByRole("button", { name: "Status wall" })).toBeTruthy();
-
-    for (const destination of ["Incidents", "Monitors"]) {
-      fireEvent.click(screen.getByRole("link", { name: destination }));
-      await waitFor(() =>
-        expect(
-          screen.queryByRole("button", { name: "Status wall" }),
-        ).toBeNull(),
-      );
-    }
-
-    fireEvent.click(screen.getByRole("link", { name: "Dashboard" }));
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Status wall" })).toBeTruthy(),
-    );
-  });
-
   it("collapses the sidebar with Ctrl+B and keeps it reachable", async () => {
     render(<App />);
     await screen.findByText("api");
@@ -210,14 +204,29 @@ describe("the app shell", () => {
     expect(screen.getByText("Dashboard")).toBeTruthy();
   });
 
-  it("reaches the add-monitor form from the topbar, and leaves it with Esc", async () => {
+  it("reaches the add-monitor form in two clicks, and leaves it with Esc", async () => {
+    /*
+     * SUB-24 still holds: the primary action must be reachable from the
+     * screen you land on, because a form behind a settings page fails the
+     * sixty seconds before it is even opened.
+     *
+     * What changed in SUB-138 is the route to it, not the requirement. The
+     * masthead's [+] was global chrome opening a monitor-shaped drawer, which
+     * on Notifications meant pressing it added a *monitor* to a screen about
+     * channels. Adding a monitor now lives on Monitors, one sidebar click
+     * away, where the button sits in the card header of the list it adds to.
+     */
     render(<App />);
     await screen.findByText("api");
 
-    // SUB-24: the primary action must be reachable from the screen you land
-    // on. A form behind a settings page fails the sixty seconds before it is
-    // even opened.
-    fireEvent.click(screen.getByRole("button", { name: "Add a monitor" }));
+    fireEvent.click(screen.getByRole("link", { name: "Monitors" }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /add monitor/i }),
+      ).toBeTruthy(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /add monitor/i }));
     await waitFor(() =>
       expect(screen.getByLabelText(/what should be watched/i)).toBeTruthy(),
     );
@@ -234,16 +243,15 @@ describe("the app shell", () => {
    * The defect this began as: the add form was a *screen*, the render branch
    * preferred the workbench, and pressing Add while the workbench was open lit
    * the add button over a workbench that stayed on screen — a control claiming
-   * a state the page did not have. SUB-132 makes the add form an overlay, so
-   * the two are no longer rivals for the same space and both can honestly be
-   * pressed at once: the drawer is over the workbench, and that is what both
-   * buttons now say.
+   * a state the page did not have.
    *
-   * What still has to hold is the rule underneath, which is the one worth
-   * asserting: a button reads as pressed if and only if the thing it opens is
-   * on screen. Leaving the workbench therefore takes the drawer with it — a
-   * modal form describing a screen that has been swapped out is the same lie
-   * in a new position.
+   * The add button has since left the masthead entirely (SUB-138), so the
+   * original pairing cannot be staged any more. The rule underneath is what
+   * was always worth asserting and it still applies to every control that
+   * remains: a button reads as pressed if and only if the thing it opens is
+   * on screen. The workbench is the one toggle left in the bar, and it is
+   * checked against its own content rather than against its own attribute —
+   * the claim under test cannot also be the evidence for it.
    */
   it("never lets a control claim a state the screen does not have", async () => {
     render(<App />);
@@ -252,30 +260,23 @@ describe("the app shell", () => {
     const workbench = screen.getByRole("button", {
       name: "Component workbench",
     });
-    const add = screen.getByRole("button", { name: "Add a monitor" });
-    const form = () => screen.queryByLabelText(/what should be watched/i);
-    // The workbench's own content, which is what "the workbench is on screen"
-    // has to be asserted against — the button's own state is the claim under
-    // test and cannot also be the evidence for it.
-    const gallery = () => screen.queryByText(/Component workbench/);
+    /*
+     * The workbench's own content, not the button's attribute: the claim
+     * under test cannot also be the evidence for it. Its fixture gallery
+     * carries a heading no other screen has.
+     */
+    const gallery = () =>
+      screen.queryByText(/fixtures, not live data/i);
+
+    expect(workbench.getAttribute("aria-pressed")).toBe("false");
+    expect(gallery()).toBeNull();
 
     fireEvent.click(workbench);
-    await waitFor(() =>
-      expect(workbench.getAttribute("aria-pressed")).toBe("true"),
-    );
-
-    // The drawer opens over the workbench, and both controls say so.
-    fireEvent.click(add);
-    await waitFor(() => expect(form()).toBeTruthy());
-    expect(add.getAttribute("aria-pressed")).toBe("true");
+    await waitFor(() => expect(gallery()).toBeTruthy());
     expect(workbench.getAttribute("aria-pressed")).toBe("true");
-    expect(gallery()).toBeTruthy();
 
-    // Leaving the workbench closes the form with it: the screen the form was
-    // opened over is gone, so the form may not outlive it.
     fireEvent.click(workbench);
-    await waitFor(() => expect(form()).toBeNull());
-    expect(add.getAttribute("aria-pressed")).toBe("false");
+    await waitFor(() => expect(gallery()).toBeNull());
     expect(workbench.getAttribute("aria-pressed")).toBe("false");
   });
 
@@ -285,37 +286,42 @@ describe("the app shell", () => {
    * form, taking the monitor list with it. Asserted as "the list is still
    * there", because a missing form was never the failure — a disappearing
    * dashboard was.
+   *
+   * Reached from the Monitors page since SUB-138, which is where adding a
+   * monitor now lives. The guarantee is unchanged: the form is an overlay and
+   * the list it was opened from survives underneath it.
    */
-  it("opens the add form as a drawer over the dashboard, not instead of it", async () => {
+  it("opens the add form as a drawer over the list, not instead of it", async () => {
     render(<App />);
     await screen.findByText("api");
 
-    fireEvent.click(screen.getByRole("button", { name: "Add a monitor" }));
+    fireEvent.click(screen.getByRole("link", { name: "Monitors" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /add monitor/i })).toBeTruthy(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /add monitor/i }));
     await waitFor(() =>
       expect(screen.getByLabelText(/what should be watched/i)).toBeTruthy(),
     );
 
     // A dialog, and the list it was opened from is still behind it.
-    expect(screen.getByRole("dialog", { name: /add monitor/i })).toBeTruthy();
+    const dialog = screen.getByRole("dialog", { name: /add monitor/i });
+    expect(dialog).toBeTruthy();
     expect(screen.getByText("api")).toBeTruthy();
 
-    // And the form wears the product's surfaces rather than sitting bare on
-    // the drawer's background (SUB-132).
-    const dialog = screen.getByRole("dialog", { name: /add monitor/i });
-    expect(dialog.querySelector(".card .panel .add-form")).toBeTruthy();
+    /*
+     * Two surfaces, never three (PR #42, tightened in SUB-138).
+     *
+     * This used to assert `.card .panel .add-form` — drawer, card, panel,
+     * form — which is the third frame Frank pointed at in the drawer
+     * screenshot. The card is gone; the drawer's own header is what it was
+     * reaching for. The panel stays, so the form is not bare on the drawer
+     * background.
+     */
+    expect(dialog.querySelector(".card")).toBeNull();
+    expect(dialog.querySelector(".panel .add-form")).toBeTruthy();
   });
-});
 
-/**
- * The phone drawer, wired into the real shell (SUB-66).
- *
- * `NavDrawer.test.tsx` covers the drawer as a component. What is untested
- * there is the wiring: that one topbar button means "collapse the rail" on a
- * laptop and "open the drawer" on a phone, and that Esc prefers the drawer
- * over everything else it could have meant. Both are decided in `App.tsx`, so
- * both have to be asserted from `App.tsx`.
- */
-describe("the app shell on a phone", () => {
   /**
    * A `matchMedia` that actually answers the query it is given.
    *
@@ -448,9 +454,25 @@ describe("the app shell on a phone", () => {
     render(<App />);
     await screen.findByText("api");
 
-    // Two things Esc could mean at once. The drawer is the newer and more
-    // modal of the two, so it goes first; the form must survive that press.
-    fireEvent.click(screen.getByRole("button", { name: "Add a monitor" }));
+    /*
+     * Two things Esc could mean at once. The navigation drawer is the newer
+     * and more modal of the two, so it goes first; the form must survive that
+     * press.
+     *
+     * The form is reached through Monitors since SUB-138. That route change
+     * is what exposed a real gap: `/monitors/new` is a route rather than a
+     * flag, and it was missing from the Esc queue entirely — so Esc fell past
+     * an open modal form straight through to "leave this screen".
+     */
+    // On a phone the rail is a drawer, so getting to Monitors means opening
+    // it first — and it closes itself on navigation, which is what leaves
+    // this test free to reopen it below.
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
+    fireEvent.click(await screen.findByRole("link", { name: "Monitors" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /add monitor/i })).toBeTruthy(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /add monitor/i }));
     await waitFor(() =>
       expect(screen.getByLabelText(/what should be watched/i)).toBeTruthy(),
     );
