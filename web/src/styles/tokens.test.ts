@@ -1365,7 +1365,7 @@ describe("the column ladder is phi, and stays phi (§2.14)", () => {
 function declaredTokens(): Set<string> {
   const declared = new Set<string>();
   for (const [, name] of stripComments(tokensCss).matchAll(
-    /(--[a-z0-9-]+)\s*:/g,
+    /(--[\w-]+)\s*:/g,
   )) {
     declared.add(name);
   }
@@ -1392,12 +1392,12 @@ function locallyDeclared(files: string[]): Set<string> {
   for (const file of files) {
     const contents = readFileSync(file, "utf8");
     for (const [, name] of stripComments(contents).matchAll(
-      /(--[a-z0-9-]+)\s*:/g,
+      /(--[\w-]+)\s*:/g,
     )) {
       declared.add(name);
     }
     // `{ "--mon-card-cols": columns }` — a custom property set from TSX.
-    for (const [, name] of contents.matchAll(/["'](--[a-z0-9-]+)["']\s*:/g)) {
+    for (const [, name] of contents.matchAll(/["'](--[\w-]+)["']\s*:/g)) {
       declared.add(name);
     }
   }
@@ -1416,7 +1416,7 @@ function locallyDeclared(files: string[]): Set<string> {
  */
 function tokenReferences(contents: string): string[] {
   return [
-    ...stripComments(contents).matchAll(/var\(\s*(--[a-z0-9-]+)\s*([,)])/g),
+    ...stripComments(contents).matchAll(/var\(\s*(--[\w-]+)\s*([,)])/g),
   ]
     .filter(([, , next]) => next === ")")
     .map(([, name]) => name);
@@ -1463,6 +1463,14 @@ describe("every var() names a token that exists", () => {
     );
     // A fallback is a stated decision about absence, not a silent failure.
     expect(judge(".a { grid-template-columns: var(--cols, 1); }")).toEqual([]);
+    // Underscores are valid in a custom property name, so a scanner that
+    // excludes them hands the guard a blind spot shaped exactly like the bug
+    // it exists to catch: `--missing_token` parses, resolves to nothing, and
+    // would have been skipped rather than reported.
+    expect(judge(".a { color: var(--missing_token); }")).toEqual([
+      "--missing_token",
+    ]);
+    expect(judge(".a { --local_w: 10px; }")).toEqual([]);
     // Prose naming a token it does not use is not a reference.
     expect(
       judge("/* var(--gone) was removed. */ .a { color: var(--ink); }"),
