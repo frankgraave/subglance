@@ -105,14 +105,14 @@ describe("NotificationsView", () => {
     expect(seen).not.toMatch(/verified/i);
     expect(srOnly).toMatch(/Not verified/);
     /*
-     * And the sentence that replaces it is present and unhedged. "Known to be
-     * working" is the load-bearing phrase: it is a statement about what
-     * SubGlance can see, not a reassurance, and it is in the summary rather
-     * than behind the disclosure so it is read without a click.
+     * And the sentence that replaces it is present and unhedged. "Keeps no
+     * delivery history" is the load-bearing phrase: it is a statement about
+     * what SubGlance can see, not a reassurance, and it is in the summary
+     * rather than behind the disclosure so it is read without a click.
      */
     const summary = container.querySelector(".nt-legend-summary");
     expect(summary).not.toBeNull();
-    expect(summary!.textContent).toMatch(/known to be working/i);
+    expect(summary!.textContent).toMatch(/keeps no delivery history/i);
   });
 
   it("draws a delivery chip only once a test has produced a result", () => {
@@ -252,6 +252,7 @@ describe("NotificationsView", () => {
      */
     const { container } = render(<NotificationsView channels={[]} loading />);
     expect(screen.getAllByText(/loading channels/i).length).toBeGreaterThan(0);
+    expect(container.querySelector(".card-title")!.textContent).toBe("Channels");
     expect(container.querySelector(".card-note")).toBeNull();
     expect(screen.queryByText(/no channels configured/i)).toBeNull();
   });
@@ -260,16 +261,71 @@ describe("NotificationsView", () => {
     const { container } = render(
       <NotificationsView channels={[]} error={new Error("HTTP 500")} />,
     );
+    expect(container.querySelector(".card-title")!.textContent).toBe("Channels");
     expect(container.querySelector(".card-note")).toBeNull();
     expect(screen.queryByText(/no channels configured/i)).toBeNull();
   });
 
-  it("counts the channels once they have actually arrived", () => {
-    // The other half of the rule: silence while unknown, and a real count the
-    // moment there is one. A note that never appeared would pass the test
-    // above and lose the page its heading count.
-    render(<NotificationsView channels={[make(), make({ id: 2, enabled: false })]} />);
-    expect(screen.getByText("2 channels, 1 disabled")).toBeTruthy();
+  it("counts the channels in the heading once they have actually arrived", () => {
+    /*
+     * The other half of the rule: bare while unknown, and a real count the
+     * moment there is one. A heading that never gained its count would pass
+     * the two tests above and lose the page its count entirely.
+     *
+     * `Channels (2)` rather than a separate "2 channels" line (round-2
+     * review), and the same form the Monitors screen uses, so the two screens
+     * are read the same way.
+     */
+    const { container } = render(
+      <NotificationsView channels={[make(), make({ id: 2, enabled: false })]} />,
+    );
+    expect(container.querySelector(".card-title")!.textContent).toBe(
+      "Channels (2)",
+    );
+    // The count is in the heading, not on a line of its own beneath it.
+    expect(container.querySelector(".card-note")).toBeNull();
+  });
+
+  it("keeps the disabled channels findable once the count line is gone", () => {
+    /*
+     * "2 channels, 1 disabled" carried a real fact and `Channels (2)` does
+     * not carry it, so it has to survive somewhere or this is a silent
+     * deletion. It survives on the rows: every disabled channel wears a
+     * `Disabled` chip beside its name.
+     *
+     * That is strictly more than the header line said. "1 disabled" told you
+     * a channel was silent and left you to work out which; the chip names it.
+     * Asserted as "one chip per disabled channel, and none on an enabled
+     * one", which is what makes it a substitute rather than a coincidence.
+     */
+    const { container } = render(
+      <NotificationsView
+        channels={[
+          make({ id: 1, name: "Enabled one" }),
+          make({ id: 2, name: "Quiet one", enabled: false }),
+        ]}
+      />,
+    );
+    const rows = [...container.querySelectorAll(".inv-row")];
+    const disabledRows = rows.filter(
+      (row) => row.getAttribute("data-disabled") === "true",
+    );
+    expect(disabledRows).toHaveLength(1);
+    expect(disabledRows[0].textContent).toContain("Quiet one");
+    /*
+     * The visible chip, not the row's text. Every row carries an `sr-only`
+     * sentence that already ends "Enabled." or "Disabled.", so asserting on
+     * `textContent` passes with the chip deleted — the eye would lose the
+     * fact while the assertion went on being satisfied by the screen-reader
+     * copy. The chip element is the thing that has to be there.
+     */
+    const chip = disabledRows[0].querySelector(".inv-paused-chip");
+    expect(chip, "the disabled row lost its visible Disabled chip").not.toBeNull();
+    expect(chip!.textContent).toBe("Disabled");
+    const enabledRow = rows.find(
+      (row) => row.getAttribute("data-disabled") === "false",
+    )!;
+    expect(enabledRow.querySelector(".inv-paused-chip")).toBeNull();
   });
 
   it("does not say alerts are going nowhere when a filter matched nothing", () => {
@@ -381,8 +437,16 @@ describe("NotificationsView", () => {
     const details = container.querySelector(".nt-legend") as HTMLDetailsElement;
     expect(details.open).toBe(false);
     const summary = container.querySelector(".nt-legend-summary")!;
-    expect(summary.textContent).toMatch(/known to be working/i);
-    expect(summary.textContent).toMatch(/cannot see delivery history/i);
+    expect(summary.textContent).toMatch(/keeps no delivery history/i);
+    /*
+     * And it must not overreach into denying a result the rows can carry.
+     * "No channel below is known to be working" contradicted a row that had
+     * just passed a test and says "Test delivered" (CodeRabbit, PR #61): the
+     * two sentences appeared on the same screen the moment anyone pressed
+     * Send test. The caveat SUB-55 requires is the missing *history*, which
+     * is true whatever any row says.
+     */
+    expect(summary.textContent).not.toMatch(/known to be working/i);
   });
 
   it("gives the delivery caveat less prose than the list it qualifies", () => {
@@ -428,20 +492,11 @@ describe("NotificationsView", () => {
     );
     expect(container.querySelector(".card-note")).toBeNull();
     expect(screen.queryByText("No channels configured")).toBeNull();
-    // Both surfaces that should be there, still are.
-    expect(screen.getByText("Channels")).toBeTruthy();
+    // Both surfaces that should be there, still are — and the heading is bare
+    // rather than reading "Channels (0)", which is the same count said in the
+    // one place the headline below is about to say it better.
+    expect(container.querySelector(".card-title")!.textContent).toBe("Channels");
     expect(screen.getByText("Alerts are going nowhere.")).toBeTruthy();
-  });
-
-  it("keeps the count once the instance has channels to count", () => {
-    // The note is silent on an empty instance, not deleted: on a populated one
-    // it is what the page heading used to carry and must still say it.
-    const { container } = render(
-      <NotificationsView channels={[make(), make({ id: 2, enabled: false })]} />,
-    );
-    expect(container.querySelector(".card-note")!.textContent).toBe(
-      "2 channels, 1 disabled",
-    );
   });
 
   it("draws the destructive row action as a bin, quietly, like the monitors row", () => {

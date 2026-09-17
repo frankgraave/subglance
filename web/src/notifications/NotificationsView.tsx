@@ -7,7 +7,7 @@ import { ConfirmDelete } from "../components/ConfirmDelete";
 import { StateChip } from "../components/Chip";
 import { ChannelRow } from "./ChannelRow";
 import { ChannelForm } from "./ChannelForm";
-import { describeChannels, typeLabel, CHANNEL_TYPES } from "./channels";
+import { typeLabel, CHANNEL_TYPES } from "./channels";
 import type { Channel, DeliveryState } from "./channels";
 import { DELIVERY_UNKNOWN } from "./channels";
 import type { ChannelInput } from "./channelsApi";
@@ -131,42 +131,51 @@ export function NotificationsView({
       )}
 
       <Card
-        title="Channels"
-        /* This card's title is the page's heading now (SUB-138). */
-        headingLevel={1}
+        className="nt-card"
         /*
-         * The note has no opinion until the load resolves, and none at all on
-         * an empty instance (SUB-138).
+         * `Channels (2)`, not "Channels" over "2 channels, 1 disabled".
          *
-         * It used to be `describeChannels(channels)` unconditionally, and
+         * The count belongs in the heading rather than on a line of its own,
+         * and it is the form the Monitors screen uses for the same fact, so
+         * the two screens can be read the same way. A two-line header also
+         * made the card's header taller than the rule that separates it from
+         * the list, which is what made it look misaligned against its own
+         * edges.
+         *
+         * The parenthesis appears only once the count is actually known. It
+         * used to be `describeChannels(channels)` unconditionally, and
          * `channels` is `[]` before the first response — so the card headed
          * itself "No channels configured" while its own body said "Loading
          * channels…", in the same screenshot. Two sentences, one screen,
          * flatly contradicting each other, and the wrong one was the
-         * confident one. On a page whose entire character is refusing to
-         * claim what it cannot know, stating "no channels" over an
-         * unfinished request is the worst available failure: it is the
-         * sentence that tells a self-hoster their alerting is gone.
+         * confident one. `Channels (0)` over "Loading channels…" would be
+         * that same lie in fewer characters, so the heading stays bare until
+         * a response has arrived.
          *
-         * It is also silent when the instance genuinely has no channels, and
-         * that is the three-headings fix. The empty state used to stack
-         * "Channels" (card title), "No channels configured" (this note) and
-         * "Alerts are going nowhere." (the body's headline) — three names for
-         * one thing, which is exactly the pattern PR #57 removed from the add
-         * drawer with "two surfaces, never three" and which came straight
-         * back here. The body's headline is the one that says something, so
-         * it is the one that stays; a count of zero above it is the same fact
-         * said worse, first.
+         * Bare on a genuinely empty instance too, and that is the
+         * three-headings fix. The empty state used to stack "Channels" (card
+         * title), "No channels configured" (a note) and "Alerts are going
+         * nowhere." (the body's headline) — three names for one thing, which
+         * is exactly the pattern PR #57 removed from the add drawer with "two
+         * surfaces, never three". The body's headline is the one that says
+         * something, so it is the one that stays; a count of zero above it is
+         * the same fact said worse, first.
          *
-         * `undefined` rather than a placeholder string, because `Card` omits
-         * the element entirely for `undefined` — and a skeleton line here
-         * would be a second thing on screen pretending to be a count.
+         * The disabled count is not lost with the note: it is on the rows, as
+         * a `Disabled` chip beside the name of each channel that is switched
+         * off. That is strictly more than the header line carried — the chip
+         * names *which* channel is silent, where "1 disabled" only told you
+         * that one of them was and left you to find it — and it is the only
+         * one of the two that stays true under the masthead filter, which
+         * hides rows without changing `channels.length`.
          */
-        note={
+        title={
           loading || error !== null || channels.length === 0
-            ? undefined
-            : describeChannels(channels)
+            ? "Channels"
+            : `Channels (${channels.length})`
         }
+        /* This card's title is the page's heading now (SUB-138). */
+        headingLevel={1}
         /*
          * The header action steps aside for the empty state (SUB-138).
          *
@@ -296,11 +305,21 @@ export function NotificationsView({
              * Open by default would be the same block again. Closed by
              * default, above the list, and the one sentence is short enough to
              * be read on the way past.
+             *
+             * The summary states the absence of history rather than claiming
+             * that nothing below works. It used to say "No channel below is
+             * known to be working", and a row that has just passed a test says
+             * "Test delivered" and that the channel can deliver right now — so
+             * the two contradicted each other on the same screen the moment
+             * anyone pressed Send test. The caveat SUB-55 requires is the
+             * missing history, and that is what survives here; the row result
+             * is a separate, narrower claim about one moment and is left to
+             * make it.
              */}
             <details className="nt-legend">
               <summary className="nt-legend-summary">
-                No channel below is known to be working — SubGlance cannot see
-                delivery history.
+                SubGlance keeps no delivery history — no record of any alert
+                arriving.
               </summary>
               <p className="nt-legend-body">
                 The channel API carries no delivery history, so a channel that

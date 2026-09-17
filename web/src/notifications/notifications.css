@@ -15,6 +15,72 @@
  */
 
 /*
+ * The card header, aligned to the card's own edges (round-2 review).
+ *
+ * The owner's note: *"Niet mooi uitgelijnd t.o.v. de randen van de kaart,
+ * graag evenveel ruimte boven/onder zoals ook rechts en links is
+ * aangehouden."* Measured in Chromium at 1440 rather than eyeballed, from the
+ * card's padding box (the 1px border is the edge, not space):
+ *
+ *   left of the title block   14px   (card 6 + header 8)
+ *   right of the action       14px   (card 6 + header 8)
+ *   above the title block     14px   (card 6 + header 8)
+ *   below it, to the list     12px   (header 6 + the card's 6px gap)
+ *
+ * So three sides were 14 and the fourth was 12, and the two-line title block
+ * made the shortfall visible: the header grew to 62px against a 46px row
+ * while the space under it did not, so the whole block sat high in a box that
+ * had stretched around it.
+ *
+ * `Card`'s asymmetric default is deliberate and stays for every other card:
+ * an 8px gap under a one-line title reads looser than the 6px beside it,
+ * because the space below is *shared* with the card's own gap. That argument
+ * is about a 46px header. This card's header is the page's heading and sits
+ * above a rule rather than a panel, so the four gaps are simply made equal
+ * here instead. Scoped to `.nt-card`, not changed in `card.css`.
+ *
+ * 8px on all four sides, so the bottom resolves to 8 + the card's 6px gap =
+ * 14, matching the 6 + 8 kept on the other three.
+ */
+.nt-card > .card-head {
+  padding: var(--space-2);
+}
+
+/*
+ * Phone: `card.css` tightens every header to 6/6/4 at this rung, and the rule
+ * above is more specific, so the tightening has to be restated rather than
+ * inherited. 6px all round keeps the same equality against the card's 6px
+ * padding and 6px gap: 12 on each of the four sides.
+ *
+ * The literal is deliberate: a `var()` inside a media query never matches,
+ * because media queries are evaluated before custom properties are
+ * substituted, and it fails silently (AGENTS.md).
+ */
+@media (max-width: 640px) {
+  .nt-card > .card-head {
+    padding: var(--space-1h);
+  }
+}
+
+/*
+ * The type column, widened for the one label this page can produce that the
+ * monitors inventory cannot.
+ *
+ * `inventory.css` sizes `.inv-col--type` at rung 2 (64px) against its widest
+ * label, "TYPE" at 56px. On a channel row the cell holds a *type name*, and
+ * `typeLabel` falls back to "Unknown type" for a type this build has no field
+ * set for — 83px in the mono face, which overflowed a 64px cell and was
+ * clipped mid-word. The server is free to name a type newer than this build,
+ * so that row is a real one, and a page whose whole argument is refusing to
+ * claim what it cannot know must not truncate the words in which it says so.
+ *
+ * Rung 3 (104px), the next one up, which clears 83 by 21. Rung 2 is 21 short.
+ * Only on this page: the monitors inventory's own labels still fit rung 2 and
+ * widening them there would take 40px from the name column for nothing.
+ */
+.nt-card .inv-col--type { width: var(--size-col-3); }
+
+/*
  * A disabled channel is dimmed and dashed, never coloured.
  *
  * It is a configuration state, not a health state, so borrowing a status hue
@@ -162,7 +228,23 @@
 
 .nt-legend-summary:hover { color: var(--ink); }
 
-/* One focus language across the product, and it is the accent ring. */
+/*
+ * One focus language across the product, and it is the accent ring.
+ *
+ * The literal `3px` rather than `var(--outline-ring-w)`, which is the same
+ * value, and deliberately so (CodeRabbit, PR #61). `tokens.test.ts` checks
+ * every `box-shadow` against the depth ladder by matching the *whole*
+ * declaration string, and lets a focus ring through only via an exception set
+ * keyed on the literal text `0 0 0 3px var(--accent-ring)`. The tokenised form
+ * is a different string, so it is read as a shadow off the ladder and fails
+ * the build. All five `box-shadow` focus rings in this repo are written this
+ * way for that reason; the token is used by the four `outline` rings, which
+ * the shadow guard never sees.
+ *
+ * Retokenising this one site would therefore break the build, and doing it
+ * across all five plus the guard's exception entry is a sweep over files this
+ * change does not own. It is worth doing as its own change.
+ */
 .nt-legend-summary:focus-visible {
   outline: none;
   border-radius: var(--r-sm);
@@ -253,4 +335,12 @@
  */
 @media (max-width: 900px) {
   .inv-col--added { width: auto; }
+  /*
+   * And the type column this page widened above. `inventory.css` releases
+   * `.inv-col--type` at this rung, but `.nt-card .inv-col--type` is more
+   * specific and would hold 104px through the release — which is exactly the
+   * sideways scroll the rule above exists to prevent, arrived at from the
+   * other side.
+   */
+  .nt-card .inv-col--type { width: auto; }
 }

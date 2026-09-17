@@ -44,21 +44,39 @@ afterAll(async () => {
   await server?.close();
 });
 
-async function openChannels(): Promise<Page> {
-  const page = await browser.newPage();
-  await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
-  await page.goto(server.url + "/notifications", {
-    waitUntil: "domcontentloaded",
-  });
-  await page.waitForSelector(".inv-row", { timeout: 15_000 });
-  await page.evaluate(() => document.fonts.ready);
-  await page.evaluate(
-    () =>
-      new Promise<void>((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-      ),
-  );
-  return page;
+async function openChannels(options: { channels?: string } = {}): Promise<Page> {
+  /*
+   * The fixture shape is an env var the harness reads per request, so it is
+   * set around the navigation and restored afterwards rather than for the
+   * whole file — the other cases in here want the full five-channel set, and
+   * a leaked variable would silently give them two.
+   */
+  const previous = process.env.SUBGLANCE_HARNESS_CHANNELS;
+  if (options.channels !== undefined) {
+    process.env.SUBGLANCE_HARNESS_CHANNELS = options.channels;
+  }
+  try {
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
+    await page.goto(server.url + "/notifications", {
+      waitUntil: "domcontentloaded",
+    });
+    await page.waitForSelector(".inv-row", { timeout: 15_000 });
+    await page.evaluate(() => document.fonts.ready);
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+    return page;
+  } finally {
+    if (previous === undefined) {
+      delete process.env.SUBGLANCE_HARNESS_CHANNELS;
+    } else {
+      process.env.SUBGLANCE_HARNESS_CHANNELS = previous;
+    }
+  }
 }
 
 /** The left edge of each row's action cluster, one number per row. */
@@ -71,6 +89,122 @@ function actionEdges(page: Page): Promise<number[]> {
 }
 
 describe("the channel rows", () => {
+  it("holds the strings a type this build does not know produces", async () => {
+    /*
+     * The fixture's fifth channel names a type outside `CHANNEL_TYPES`, so
+     * `typeLabel` falls back to "Unknown type" and `describeDestination` to
+     * "this build does not know this channel type". Both are strings the
+     * layout has to hold and neither is produced by any other row.
+     *
+     * Measured rather than merely asserted present, which is the only part of
+     * this jsdom cannot do: "Unknown type" is 4ch wider than the widest real
+     * label, in a type column sized for the real ones, and a fallback that
+     * silently clips or wraps its row to two lines is exactly the defect this
+     * file exists for. So the cell is required to render its whole string on
+     * one line, and the row is required to be no taller than its neighbours.
+     */
+    const page = await openChannels();
+    try {
+      const unknown = await page.evaluate(() => {
+        const rows = [...document.querySelectorAll<HTMLElement>(".inv-row")];
+        const row = rows.find((r) =>
+          /Unknown type/.test(r.querySelector(".inv-type")?.textContent ?? ""),
+        );
+        if (row === undefined) return null;
+        const type = row.querySelector<HTMLElement>(".inv-type")!;
+        const sub = row.querySelector<HTMLElement>(".inv-sub")!;
+        const others = rows
+          .filter((r) => r !== row)
+          /*
+           * Compared against the rows carrying no chip only. One fixture
+           * channel is disabled and wears a `Disabled` chip, which makes its
+           * name line 23px rather than 20 and its row 57px rather than 54 —
+           * a legitimate 3px that has nothing to do with the type label.
+           * Measuring against the tallest row would fold that in and make
+           * this assertion a test of the chip.
+           */
+          .filter((r) => r.querySelector(".inv-paused-chip") === null)
+          .map((r) => Math.round(r.getBoundingClientRect().height));
+        return {
+          typeText: (type.textContent ?? "").trim(),
+          subText: (sub.textContent ?? "").trim(),
+          typeClipped: type.scrollWidth > Math.ceil(type.clientWidth) + 1,
+          typeLines: Math.round(
+            type.getBoundingClientRect().height /
+              parseFloat(getComputedStyle(type).lineHeight),
+          ),
+          rowHeight: Math.round(row.getBoundingClientRect().height),
+          otherRowHeights: others,
+        };
+      });
+      expect(unknown, "no row rendered the unknown-type fallback").not.toBeNull();
+      expect(unknown!.typeText).toBe("Unknown type");
+      expect(unknown!.subText).toBe("this build does not know this channel type");
+      expect(unknown!.typeClipped, "the Unknown type label is clipped").toBe(
+        false,
+      );
+      expect(unknown!.typeLines, "the Unknown type label wrapped").toBe(1);
+      expect(
+        Math.max(...unknown!.otherRowHeights),
+        "the unknown-type row is taller than the rows around it",
+      ).toBe(unknown!.rowHeight);
+    } finally {
+      await page.close();
+    }
+  });
+
+  it("gives the delivery caveat less height than the list it qualifies", async () => {
+    /*
+     * The rejection, measured in a real layout engine.
+     *
+     * On the owner's instance the caveat was a six-line block above two rows:
+     * you read an explanation of the Delivery column before you ever reached
+     * the Delivery column. `NotificationsView.test.tsx` pins the amount of
+     * prose, which is what *produced* the height, but jsdom reports every box
+     * as zero — so the thing actually rejected has never been checked. The
+     * summary is bounded to a 62ch measure, and unchanged text that gains a
+     * word, or a narrower viewport, puts it onto a second line with no unit
+     * test able to see it.
+     *
+     * Two channels, matching the instance the rejection was written against.
+     * A relationship rather than a number: the closed caveat must be shorter
+     * than the list below it, which is the shape that was rejected and not a
+     * particular pixel count.
+     */
+    const page = await openChannels({ channels: "two" });
+    try {
+      const measured = await page.evaluate(() => {
+        const legend = document.querySelector<HTMLElement>(".nt-legend");
+        const list = document.querySelector<HTMLElement>(".inv-list");
+        if (legend === null || list === null) return null;
+        const summary = legend.querySelector<HTMLElement>(".nt-legend-summary")!;
+        return {
+          open: (legend as HTMLDetailsElement).open,
+          rows: list.querySelectorAll(".inv-row").length,
+          legendHeight: Math.round(legend.getBoundingClientRect().height),
+          listHeight: Math.round(list.getBoundingClientRect().height),
+          summaryLines: Math.round(
+            summary.getBoundingClientRect().height /
+              parseFloat(getComputedStyle(summary).lineHeight),
+          ),
+        };
+      });
+      expect(measured, "the notifications page did not render a legend").not.toBeNull();
+      expect(measured!.open, "the caveat is open by default").toBe(false);
+      expect(measured!.rows).toBe(2);
+      expect(
+        measured!.summaryLines,
+        "the closed caveat wrapped onto more than one line",
+      ).toBe(1);
+      expect(
+        measured!.legendHeight,
+        "the closed caveat is taller than the list it qualifies",
+      ).toBeLessThan(measured!.listHeight);
+    } finally {
+      await page.close();
+    }
+  });
+
   it("lines the columns up across rows whatever the toggle says", async () => {
     const page = await openChannels();
     try {

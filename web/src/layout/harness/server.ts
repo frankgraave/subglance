@@ -185,10 +185,26 @@ const CHANNELS = [
     updated_at: new Date(Date.now() - 86_400_000).toISOString(),
   },
   {
+    /*
+     * A type this build does not know.
+     *
+     * `pagerduty` is deliberately *not* one of the five in `CHANNEL_TYPES`,
+     * which mirrors the store's CHECK constraint. This fixture exists to make
+     * the layout hold the fallback strings — `typeLabel` returns "Unknown
+     * type" and `describeDestination` returns "this build does not know this
+     * channel type" — and nothing else in the set produces them. It was
+     * `discord`, which is supported, so the row rendered "Discord" and the
+     * fixture measured a case the file's own comment says it is here to
+     * measure (CodeRabbit, PR #61).
+     *
+     * A newer server naming a type this build has no field set for is the
+     * real situation being drawn, so the config is left in the shape such a
+     * server would send: keys this build never reads.
+     */
     id: 5,
-    name: "Discord #incidents",
-    type: "discord",
-    config: { url: "****ab19" },
+    name: "PagerDuty escalation",
+    type: "pagerduty",
+    config: { routing_key: "****ab19" },
     enabled: true,
     created_at: new Date(Date.now() - 86_400_000).toISOString(),
     updated_at: new Date(Date.now() - 86_400_000).toISOString(),

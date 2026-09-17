@@ -306,11 +306,3 @@ export function describeDelivery(state: DeliveryState): string {
       return "Not verified";
   }
 }
-
-/** The heading count: "4 channels, 1 disabled". */
-export function describeChannels(channels: readonly Channel[]): string {
-  if (channels.length === 0) return "No channels configured";
-  const disabled = channels.filter((c) => !c.enabled).length;
-  const total = `${channels.length} channel${channels.length === 1 ? "" : "s"}`;
-  return disabled === 0 ? total : `${total}, ${disabled} disabled`;
-}
