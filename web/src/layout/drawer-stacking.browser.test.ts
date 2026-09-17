@@ -99,11 +99,27 @@ async function openAddDrawer(path: string): Promise<Page> {
   await page.goto(server.url + path, { waitUntil: "domcontentloaded" });
   await page.waitForSelector(".shell-topbar", { timeout: 15_000 });
 
+  /*
+   * The add button lives on `/monitors` only, so every other screen has to
+   * get there first — but NOT by clicking the sidebar link.
+   *
+   * A client-side navigation swaps the whole main region while React is still
+   * committing: the button can be matched by `waitForSelector` and then
+   * replaced by a different node before `click` reaches it. The click then
+   * lands on a detached element, no drawer opens, and the failure surfaces
+   * 15 seconds later as `Waiting for selector .drawer-panel failed` — which
+   * reads like a broken drawer rather than a missed click. It failed that way
+   * on dashboard and incidents, the two screens that navigate, while
+   * `/monitors` passed every run; the tell was that the *route* being tested
+   * made no difference to the assertion, only to how it arrived.
+   *
+   * A fresh `goto` has no such window. The drawer is stacking-context
+   * behaviour and does not care how the route was reached, so nothing this
+   * file measures is weakened by arriving directly.
+   */
   if (path !== "/monitors") {
-    await page.click('a[href="/monitors"]');
-    await page.waitForSelector('button[aria-label="Add monitor"]', {
-      timeout: 15_000,
-    });
+    await page.goto(server.url + "/monitors", { waitUntil: "domcontentloaded" });
+    await page.waitForSelector(".shell-topbar", { timeout: 15_000 });
   }
 
   /*
@@ -111,7 +127,16 @@ async function openAddDrawer(path: string): Promise<Page> {
    * the same string a screen-reader user hears. A rename that breaks this
    * test is a rename that broke the button's name.
    */
-  await page.click('button[aria-label="Add monitor"]');
+  const add = await page.waitForSelector('button[aria-label="Add monitor"]', {
+    timeout: 15_000,
+  });
+  if (add === null) throw new Error("the monitors screen has no add button");
+  /*
+   * Click the handle we just resolved rather than re-querying by selector:
+   * the second lookup is the one that can return a node React is about to
+   * replace.
+   */
+  await add.click();
   await page.waitForSelector(".drawer-panel", { timeout: 15_000 });
   /*
    * Wait for the entrance to *finish*, not for two frames to pass.
