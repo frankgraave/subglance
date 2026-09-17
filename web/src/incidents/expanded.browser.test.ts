@@ -300,6 +300,8 @@ describe("the expanded incident row", () => {
             words: Array.from(row.querySelectorAll(".chip, .sr-only"))
               .map((el) => (el.textContent || "").trim())
               .filter(Boolean),
+            visibleStatus:
+              (row.querySelector(".inc-col-ack")?.textContent || "").trim(),
             detailArea: (() => {
               const r = detail.getBoundingClientRect();
               return Math.round(r.width * r.height);
@@ -325,11 +327,17 @@ describe("the expanded incident row", () => {
         }
 
         // It marks itself with an edge instead, and the edge is real.
+        //
+        // Exactly 2px, not "at least". `>= 2` also admits the 12px slab this
+        // ticket was opened to remove — the fill came back as a wide rail and
+        // the assertion still passed. The width is `--outline-w`, which is the
+        // 2px rung, so the exact number is the documented one.
         expect(
           paint.railWidth,
-          "an open incident must carry a status rail; without it the state is " +
-            "carried by nothing visual at all",
-        ).toBeGreaterThanOrEqual(2);
+          `the status rail rendered ${paint.railWidth}px; an open incident ` +
+            `carries the documented 2px edge, and a wider one is the panel ` +
+            `fill returning under another name`,
+        ).toBe(2);
         expect(
           paint.railFill,
           "the status rail must be painted in the down colour",
@@ -337,6 +345,18 @@ describe("the expanded incident row", () => {
 
         // DESIGN.md §9: never colour alone. The row says its state in words
         // whether or not the rail is seen.
+        //
+        // The visible column is asserted by its exact word, not by a pattern
+        // over every chip and `.sr-only` string in the row. The broad form
+        // could be satisfied entirely by text the reader never sees, or by the
+        // failure chip's "Connection refused" matching /refused/ — so it would
+        // have passed with the response column empty, which is the one place
+        // this row states whether anybody is on it.
+        expect(
+          paint.visibleStatus,
+          "the open row's response column must say its state in a visible " +
+            "word; colour is not allowed to be the only signal",
+        ).toBe("Unacked");
         expect(
           paint.words.some((w: string) => /unacked|acked|down|refused|failure/i.test(w)),
           `the open row must state its condition in words as well as colour; found ${JSON.stringify(
@@ -423,6 +443,145 @@ describe("the expanded incident row", () => {
           `columns consumed the line and left the name nothing`,
       ).toBeGreaterThanOrEqual(80);
       expect(name.insideRow, "the name must not overflow its line").toBe(true);
+    } finally {
+      await page.close();
+    }
+  }, 60_000);
+
+  it("drains the status rail once the stream goes stale", async () => {
+    /*
+     * The rail is a status colour, so §6 applies to it: when the stream dies
+     * the screen stops asserting. Everything else in the row already withdrew
+     * — the lamp desaturates, the numbers drop to `--ink-3`, the badge word
+     * becomes "Was unacked" — and the rail was sitting through all of it at
+     * full strength.
+     *
+     * `data-conn` is set on the container here rather than by killing the
+     * stream, because the binding is already covered in the unit suite
+     * (`IncidentsView` writes the attribute) and what is unproven is the CSS:
+     * a rule reaching a pseudo-element through two attribute selectors is
+     * exactly the kind that silently matches nothing.
+     */
+    const page = await openExpanded("dark", 1440);
+    try {
+      const drain = (await page.evaluate(`(() => {
+        const screen = document.querySelector(".mon-detail");
+        const row = document.querySelector('.inc-row[data-state="open"]');
+        const railFilter = () =>
+          window.getComputedStyle(row, "::before").filter;
+        const live = railFilter();
+        screen.setAttribute("data-conn", "stale");
+        const stale = railFilter();
+        const lamp = window.getComputedStyle(row.querySelector(".led")).filter;
+        screen.setAttribute("data-conn", "live");
+        return { live, stale, lamp, railWidth: Math.round(parseFloat(
+          window.getComputedStyle(row, "::before").width)) };
+      })()`)) as {
+        live: string;
+        stale: string;
+        lamp: string;
+        railWidth: number;
+      };
+
+      expect(
+        drain.live,
+        "a live rail asserts at full strength; that is the point of it",
+      ).toBe("none");
+      expect(
+        drain.stale,
+        `the rail kept filter "${drain.stale}" after the stream went stale; a ` +
+          `saturated status colour is a claim about now, and we have stopped ` +
+          `knowing (DESIGN.md §6)`,
+      ).not.toBe("none");
+      expect(
+        drain.stale,
+        "the rail must drain by the same amount as the lamp beside it, or the " +
+          "row withdraws in two stages",
+      ).toBe(drain.lamp);
+      // Drained, not deleted: the last known state is still the most useful
+      // thing on the screen, and §6's method is that nothing is hidden.
+      expect(
+        drain.railWidth,
+        "a stale rail must still be drawn; removing it would delete the last " +
+          "known state rather than stop asserting it",
+      ).toBe(2);
+    } finally {
+      await page.close();
+    }
+  }, 60_000);
+
+  it("keeps the expanded row inside a phone viewport", async () => {
+    /*
+     * The `@media (max-width: 640px)` branch had no browser coverage at all.
+     * The suite measured 1440 and 900, and 900 is above the phone rung — so
+     * the stacked `.inc-line-inner` and the wrapped columns were asserted by
+     * nothing, on the layout most likely to overflow. A page that scrolls
+     * sideways is the bug this file's own comment says the product already
+     * learned once.
+     */
+    const page = await openExpanded("dark", 375);
+    try {
+      const phone = (await page.evaluate(`(() => {
+        const row = document.querySelector(".inc-row");
+        const rowBox = row.getBoundingClientRect();
+        const within = (el) => {
+          const r = el.getBoundingClientRect();
+          return Math.round(r.left) >= Math.round(rowBox.left) - 1 &&
+            Math.round(r.right) <= Math.round(rowBox.right) + 1;
+        };
+        const detail = row.querySelector(".inc-detail");
+        const parts = Array.from(
+          row.querySelectorAll(".inc-detail-col, .inc-snap, .inc-tl, .inc-line-inner"),
+        );
+        return {
+          documentOverflows:
+            document.documentElement.scrollWidth > window.innerWidth + 1,
+          rowWithinViewport: Math.round(rowBox.right) <= window.innerWidth + 1,
+          detailWithinRow: within(detail),
+          escaping: parts
+            .filter((el) => !within(el))
+            .map((el) => el.className + " @ " + Math.round(el.getBoundingClientRect().right)),
+          detailWidth: Math.round(detail.getBoundingClientRect().width),
+          errorLines: (() => {
+            const snap = row.querySelector(".inc-snap");
+            const lead = parseFloat(window.getComputedStyle(snap).lineHeight);
+            return Math.round(snap.getBoundingClientRect().height / lead);
+          })(),
+        };
+      })()`)) as {
+        documentOverflows: boolean;
+        rowWithinViewport: boolean;
+        detailWithinRow: boolean;
+        escaping: string[];
+        detailWidth: number;
+        errorLines: number;
+      };
+
+      expect(
+        phone.documentOverflows,
+        "an expanded row must never push the document sideways on a phone",
+      ).toBe(false);
+      expect(
+        phone.rowWithinViewport,
+        "the incident row itself must fit the phone viewport",
+      ).toBe(true);
+      expect(
+        phone.escaping,
+        `these parts of the expanded detail rendered outside the row at 375px: ` +
+          `${JSON.stringify(phone.escaping)}`,
+      ).toEqual([]);
+      expect(phone.detailWithinRow, "the detail must stay inside its row").toBe(true);
+      // And it is still worth opening: a detail squeezed to nothing is inside
+      // the row too, which is why the bound above is not the whole assertion.
+      expect(
+        phone.detailWidth,
+        `the expanded detail was ${phone.detailWidth}px wide at a 375px ` +
+          `viewport; readable content, not merely contained content`,
+      ).toBeGreaterThanOrEqual(280);
+      expect(
+        phone.errorLines,
+        "the captured error must still wrap rather than be clipped to one line",
+      ).toBeGreaterThan(1);
     } finally {
       await page.close();
     }

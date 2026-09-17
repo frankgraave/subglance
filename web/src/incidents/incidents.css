@@ -146,6 +146,32 @@
 .inc-row[data-state="open"]::before { background: var(--down); }
 .inc-row[data-state="acked"]::before { background: var(--warn); }
 
+/*
+ * The rail drains with everything else once the stream is dead (DESIGN.md §6).
+ *
+ * The rail is a status colour, and §6's rule is that colour is our claim about
+ * reality — so when we stop knowing, it has to stop asserting along with the
+ * lamp beside it. Without this the rail was the one mark on the screen still
+ * at full strength after the stream died: `connection.css` drains `.led` and
+ * `.hb-bar`, dims the numbers to `--ink-3`, and `stateBadge` moves the word to
+ * "Was unacked" — and a fully saturated red edge sat through all of it,
+ * outshouting the drained lamp two pixels away and re-asserting in colour
+ * exactly what the badge had just stopped asserting in words.
+ *
+ * Drained rather than removed, which is the whole of §6's method: "nothing is
+ * hidden and nothing moves". `content: none` would delete the rail, and the
+ * last known state is still the most useful thing on the screen — an open
+ * incident that we can no longer confirm is open is not an incident that
+ * stopped existing. It is the same saturation and the same deliberately slow
+ * 600ms as the lamps, so the row withdraws as one object rather than in two
+ * stages.
+ */
+.mon-detail[data-conn="stale"] .inc-row[data-state="open"]::before,
+.mon-detail[data-conn="stale"] .inc-row[data-state="acked"]::before {
+  filter: saturate(.18);
+  transition: filter 600ms var(--ease);
+}
+
 /* History is quieter still: the name recedes, because in that card the number
    that matters is how long it lasted, not which host it was. */
 .inc-row--past .inc-name { color: var(--ink-2); }
