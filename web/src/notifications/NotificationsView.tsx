@@ -183,7 +183,7 @@ export function NotificationsView({
           <p className="add-help">
             {loading ? "Loading channels…" : "The list could not be loaded."}
           </p>
-        ) : visibleChannels.length === 0 ? (
+        ) : channels.length === 0 ? (
           /*
            * The empty state is a fact at headline weight, not an apology.
            *
@@ -212,6 +212,19 @@ export function NotificationsView({
               </div>
             )}
           </div>
+        ) : visibleChannels.length === 0 ? (
+          /*
+           * A filter that matched nothing, which is not the same fact.
+           *
+           * "Alerts are going nowhere" is a claim about the instance. Typed
+           * over a search, it told a self-hoster their alerting was gone when
+           * four working channels were sitting one keystroke away. The filter
+           * gets its own line, and it does not repeat the alarm.
+           */
+          <p className="add-help">
+            No channels match “{query.trim()}”. The filter matches a channel’s
+            name and its type.
+          </p>
         ) : (
           <ul className="inv-list">
             {visibleChannels.map((channel) => (

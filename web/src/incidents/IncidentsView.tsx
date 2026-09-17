@@ -146,9 +146,14 @@ export function IncidentsView({
    * count can tell them apart. Both lists feed it: a flapping monitor's
    * incidents keep resolving, so counting only the open ones would miss
    * exactly the pattern this is for.
+   *
+   * Built from the filtered lists rather than the raw ones, for the same
+   * reason clustering is: a churn notice is a sentence about the rows on
+   * screen. Counting the unfiltered arrays left "api is flapping" sitting
+   * above a list that had been searched down to one unrelated monitor.
    */
   const byMonitor = new Map<string, Incident[]>();
-  for (const incident of [...incidents, ...resolved]) {
+  for (const incident of [...shown, ...shownResolved]) {
     const list = byMonitor.get(incident.monitorId);
     if (list === undefined) byMonitor.set(incident.monitorId, [incident]);
     else list.push(incident);
@@ -160,9 +165,27 @@ export function IncidentsView({
   }
 
   const days = groupByDay(shownResolved, now);
+  /*
+   * "Nothing is broken right now" is a claim about the instance, not about
+   * the search box.
+   *
+   * It is keyed on the source arrays rather than the filtered ones because
+   * the sentence beside it counts monitors and says "zero confirmed
+   * outages" — which, typed over a search for a monitor that has never
+   * failed, tells an operator their outage is gone while it is still open
+   * two rows up. A query that matches nothing gets its own line instead.
+   */
+  const searching = needle !== "";
   const nothingAtAll =
     !loading &&
     error === null &&
+    incidents.length === 0 &&
+    resolved.length === 0;
+  const noMatches =
+    !loading &&
+    error === null &&
+    !nothingAtAll &&
+    searching &&
     shown.length === 0 &&
     shownResolved.length === 0;
 
@@ -228,7 +251,28 @@ export function IncidentsView({
         </p>
       ))}
 
-      {nothingAtAll ? (
+      {noMatches ? (
+        /*
+         * A search that matched nothing, which is a different fact.
+         *
+         * It says what was searched and how to get back, and it deliberately
+         * does not count monitors: the instance's health is not what the
+         * reader just asked about, and stating it here is how "zero confirmed
+         * outages" ended up on a screen with an open incident sitting behind
+         * the filter.
+         */
+        <Card title="Incidents" icon={<IconAlert />} headingLevel={2}>
+          <Panel>
+            <p className="mon-detail-empty">
+              No incidents match “{query.trim()}”
+            </p>
+            <p className="mon-detail-note">
+              The filter matches monitor names. Clear it to see every incident
+              on this instance.
+            </p>
+          </Panel>
+        </Card>
+      ) : nothingAtAll ? (
         /*
          * The whole screen is the good news.
          *

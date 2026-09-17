@@ -340,6 +340,15 @@
      outside the box where the ring draws inside it. */
   --outline-w: 2px;
   --outline-offset: 2px;
+  /* The accent ring's width, which is not the outline's.
+     A rung of its own because the two focus treatments are genuinely
+     different marks: `--outline-w` draws a solid edge in `--accent-border`
+     and needs to stay thin so it does not read as a second border, while the
+     ring is `--accent-ring` at 24% alpha and needs the extra pixel to be
+     seen at all. Named because the value was sitting as a literal `3px` in
+     four stylesheets, which is exactly how a ring ends up 2px on one control
+     and 3px on the one beside it. */
+  --outline-ring-w: 3px;
   /* The blur behind a sticky bar, and the lighter one behind a scrim. */
   --blur-bar: 12px;
   /* Just enough to soften the page behind a scrim without hiding it. */

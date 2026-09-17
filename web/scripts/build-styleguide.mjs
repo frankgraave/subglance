@@ -363,7 +363,14 @@ function typeRow(name) {
       </tr>`;
 }
 
-const colourTokens = group(dark, "--surface", "--ink", "--border", "--accent");
+const colourTokens = group(
+  dark,
+  "--canvas",
+  "--surface",
+  "--ink",
+  "--border",
+  "--accent",
+);
 const accentTokens = [
   ...group(root, "--accent", "--on-", "--scrim", "--ring-"),
   ...group(dark, "--accent", "--on-", "--scrim", "--ring-"),
@@ -394,7 +401,7 @@ const depthTokens = [
   ...group(root, "--z-", "--shadow", "--glow"),
   ...group(dark, "--z-", "--shadow", "--glow"),
 ].filter(([name], i, all) => all.findIndex(([n]) => n === name) === i);
-const motionTokens = group(root, "--dur-", "--ease");
+const motionTokens = group(root, "--dur", "--ease");
 const bpTokens = group(root, "--bp-");
 const controlTokens = group(root, "--control-");
 
@@ -678,7 +685,7 @@ const html = `<!doctype html>
     font: inherit;
     font-size: var(--type-section);
     line-height: var(--lead-section);
-    letter-spacing: var(--track-caps);
+    letter-spacing: var(--track-body);
     text-transform: uppercase;
     color: var(--ink-3);
     padding: 0 var(--space-3) var(--space-2) 0;

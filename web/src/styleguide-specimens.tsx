@@ -196,7 +196,7 @@ export const specimens: Specimen[] = [
         <div className="shell-topbar">
           <button
             type="button"
-            className="shell-topbar-icon"
+            className="shell-icon-btn"
             aria-label="Collapse sidebar (Ctrl+B)"
           >
             <SidebarIcon />
@@ -212,15 +212,23 @@ export const specimens: Specimen[] = [
           </label>
         </div>
         <div className="shell-toolbar">
-          <span className="tb-label">Type</span>
-          <select className="tb-select" aria-label="Type">
-            <option>All types</option>
-          </select>
-          <span className="tb-label">Paused</span>
-          <select className="tb-select" aria-label="Paused">
-            <option>All</option>
-          </select>
-          <span className="tb-count">4 of 4 shown</span>
+          <div className="shell-toolbar-slot">
+            <div className="tb-group">
+              <label className="tb-field">
+                <span className="tb-label">Type</span>
+                <select className="tb-select">
+                  <option>All types</option>
+                </select>
+              </label>
+              <label className="tb-field">
+                <span className="tb-label">Paused</span>
+                <select className="tb-select">
+                  <option>All</option>
+                </select>
+              </label>
+              <p className="tb-count">4 of 4 shown</p>
+            </div>
+          </div>
         </div>
       </div>
     ),

@@ -826,19 +826,28 @@ const spacingExceptions = new Map<string, string>([
 const SIZE_LADDER_FLOOR = 2;
 
 /**
- * Every width/height declaration in a stylesheet, collapsed to one line.
+ * Every width/height/track declaration in a stylesheet, collapsed to one line.
  *
  * The collapse is the point. A declaration may span a dozen lines when its
  * value carries explanatory comments -- the card grid's `minmax()` does --
  * and a line-oriented scan reads only the first fragment, finds no literal,
  * and reports the file clean. The first version of this guard did exactly
  * that and passed while a 380px floor sat three lines below it.
+ *
+ * Every track-sizing property is matched, not only `grid-template-columns`:
+ * a `48px` row in `grid-template-rows` or `grid-auto-rows` is the same kind
+ * of unnamed dimension as a `48px` column, and the narrower matcher let it
+ * through. Placement properties (`grid-column`, `grid-row`, `grid-area`,
+ * `grid-auto-flow`) are deliberately excluded -- their integers are line
+ * numbers and spans, not lengths the ladder could express. The alternation
+ * is ordered longest-first because `grid` is a prefix of every other name,
+ * and `grid` matching first would capture `grid-template-rows` as `grid`.
  */
 function sizeDeclarations(css: string): string[] {
   const found: string[] = [];
   const flat = css.replace(/\s+/g, " ");
   for (const match of flat.matchAll(
-    /(?:^|[\s;{])((?:min-|max-)?(?:width|height)|grid-template-columns|flex-basis)\s*:\s*([^;{}]+)/g,
+    /(?:^|[\s;{])((?:min-|max-)?(?:width|height)|grid-template-columns|grid-template-rows|grid-auto-columns|grid-auto-rows|grid-template|grid|flex-basis)\s*:\s*([^;{}]+)/g,
   )) {
     found.push(`${match[1]}: ${match[2].trim().replace(/\s+/g, " ")}`);
   }
@@ -919,18 +928,84 @@ describe("tokens.css is the only source of size", () => {
   });
 
   it("uses only ladder breakpoints in media queries", () => {
+    /*
+     * The complete value of each width condition, not the px numbers in it.
+     *
+     * Extracting `(\d+px)` and checking those meant a query with no px at
+     * all -- `@media (max-width: 40rem)` -- produced no match and therefore
+     * no offender, so the one form of drift this guard exists to stop was
+     * the one form it could not see. Every `*-width` condition is now read
+     * whole and required to be a rung, whatever unit it is written in.
+     */
     const offenders: string[] = [];
     for (const file of sourceFiles(webSrc)) {
       if (!file.endsWith(".css")) continue;
       const css = stripComments(readFileSync(file, "utf8"));
       for (const match of css.matchAll(/@media[^{]+/g)) {
-        for (const [, width] of match[0].matchAll(/(\d+(?:\.\d+)?px)/g)) {
-          if (BREAKPOINTS.has(width)) continue;
-          offenders.push(`${relative(repoRoot, file)}: @media ... ${width}`);
+        for (const [, width] of match[0].matchAll(
+          /(?:min-|max-)?width\s*:\s*([^)]+)/g,
+        )) {
+          const value = width.trim();
+          if (BREAKPOINTS.has(value)) continue;
+          offenders.push(`${relative(repoRoot, file)}: @media ... ${value}`);
         }
       }
     }
     expect(offenders).toEqual([]);
+  });
+
+  it("rejects a media width that is off the ladder, in any unit", () => {
+    /*
+     * The guard's own fixture. `40rem` is 640px at the default root size, so
+     * it is the most tempting way to write a rung that is not one -- and the
+     * earlier px-only expression passed it silently.
+     */
+    const widths = (css: string) =>
+      [...css.matchAll(/@media[^{]+/g)].flatMap((match) =>
+        [
+          ...match[0].matchAll(/(?:min-|max-)?width\s*:\s*([^)]+)/g),
+        ].map(([, w]) => w.trim()),
+      );
+    expect(widths("@media (max-width: 40rem) { .a { color: red; } }")).toEqual([
+      "40rem",
+    ]);
+    expect(
+      widths("@media (max-width: 40rem) {}").filter((w) => !BREAKPOINTS.has(w)),
+    ).toEqual(["40rem"]);
+    expect(
+      widths("@media (max-width: 640px) {}").filter((w) => !BREAKPOINTS.has(w)),
+    ).toEqual([]);
+    expect(
+      widths("@media (min-width: 641px) and (max-width: 900px) {}").filter(
+        (w) => !BREAKPOINTS.has(w),
+      ),
+    ).toEqual([]);
+    // A feature query with no width condition contributes nothing.
+    expect(widths("@media (prefers-reduced-motion: reduce) {}")).toEqual([]);
+  });
+
+  it("catches a literal track in every grid sizing property, not just columns", () => {
+    /*
+     * The guard's own fixture. `grid-template-columns` was the only property
+     * matched, so a 48px row was as invisible to this suite as a 48px column
+     * was visible -- and placement integers must stay out of it, or every
+     * `grid-column: 1 / 3` in the product becomes an offender.
+     */
+    const css = `
+      .a { grid-template-rows: 48px 1fr; }
+      .b { grid-auto-rows: 64px; }
+      .c { grid-auto-columns: 32px; }
+      .d { grid-template-columns: repeat(2, 120px); }
+      .e { grid-column: 1 / 3; }
+      .f { grid-row: 2 / span 4; }
+      .g { grid-auto-flow: column dense; }
+    `;
+    expect(sizeDeclarations(css).filter(driftsFromSizeLadder)).toEqual([
+      "grid-template-rows: 48px 1fr",
+      "grid-auto-rows: 64px",
+      "grid-auto-columns: 32px",
+      "grid-template-columns: repeat(2, 120px)",
+    ]);
   });
 
   it("never writes a breakpoint as a custom property, which silently never matches", () => {

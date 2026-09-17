@@ -578,7 +578,7 @@
 
 /* Focus is the accent ring, not a neutral outline (§2.8). */
 .mon-empty-cta:focus-visible {
-  outline: 3px solid var(--accent-ring);
+  outline: var(--outline-ring-w) solid var(--accent-ring);
   outline-offset: var(--outline-offset);
 }
 

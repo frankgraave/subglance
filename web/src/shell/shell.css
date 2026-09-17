@@ -454,7 +454,7 @@
    wrapper because that is the box with the edge. */
 .shell-search:focus-within {
   border-color: var(--accent-border);
-  outline: 3px solid var(--accent-ring);
+  outline: var(--outline-ring-w) solid var(--accent-ring);
   outline-offset: 1px;
 }
 
@@ -583,7 +583,7 @@
 
 .tb-select:focus-visible {
   border-color: var(--accent-border);
-  outline: 3px solid var(--accent-ring);
+  outline: var(--outline-ring-w) solid var(--accent-ring);
   outline-offset: 1px;
 }
 

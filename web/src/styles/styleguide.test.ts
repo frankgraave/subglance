@@ -77,8 +77,17 @@ describe("the living style guide", () => {
      * theme, and the colour table already prints both values on one row.
      */
     const html = readFileSync(guidePath, "utf8");
+    /*
+     * Matched against the token's own table row, not against the raw HTML.
+     *
+     * `html.includes(name)` also matches rationale prose, and the rationales
+     * cross-reference each other constantly — `--size-pane-xs` is named in
+     * the reason given for `--size-control-select`. So a generator that
+     * stopped emitting the `--size-pane-xs` row still passed, which is
+     * precisely the regression this test is the only guard against.
+     */
     const missing = [...declaredTokens()].filter(
-      (name) => !html.includes(name),
+      (name) => !html.includes(`<td><code>${name}</code></td>`),
     );
     expect(missing).toEqual([]);
   });

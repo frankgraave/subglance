@@ -75,7 +75,7 @@
     font: inherit;
     font-size: var(--type-section);
     line-height: var(--lead-section);
-    letter-spacing: var(--track-caps);
+    letter-spacing: var(--track-body);
     text-transform: uppercase;
     color: var(--ink-3);
     padding: 0 var(--space-3) var(--space-2) 0;
@@ -230,7 +230,7 @@
     <article class="sg-specimen" id="c-chrome">
       <h3>Masthead and toolbar</h3>
       <p class="sg-why">Two bars, and which one a control belongs in is decided by a single question: is it true on every screen? The masthead holds what is — the sidebar toggle, search, the layout switcher, the theme. It never changes as you navigate, so it stays readable without being re-read. The toolbar below holds what is true of this screen only, and disappears on screens with nothing to put in it rather than sitting there empty. An action that operates on one kind of thing fails the question: adding a monitor is a monitors action, so it lives in the header of the card it adds to, not in chrome that is also present on Notifications. <code>web/src/shell/Topbar.tsx, web/src/shell/PageToolbar.tsx</code></p>
-      <div class="sg-stage"><div class="sg-chrome"><div class="shell-topbar"><button type="button" class="shell-topbar-icon" aria-label="Collapse sidebar (Ctrl+B)"><svg viewBox="0 0 24 24" class="shell-icon" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M9 4v16"></path></svg></button><label class="shell-search"><svg viewBox="0 0 24 24" class="shell-icon" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="6.5"></circle><path d="M19.5 19.5 16 16"></path></svg><input type="search" class="shell-search-input" placeholder="Search monitors..." readOnly=""/></label></div><div class="shell-toolbar"><span class="tb-label">Type</span><select class="tb-select" aria-label="Type"><option>All types</option></select><span class="tb-label">Paused</span><select class="tb-select" aria-label="Paused"><option>All</option></select><span class="tb-count">4 of 4 shown</span></div></div></div>
+      <div class="sg-stage"><div class="sg-chrome"><div class="shell-topbar"><button type="button" class="shell-icon-btn" aria-label="Collapse sidebar (Ctrl+B)"><svg viewBox="0 0 24 24" class="shell-icon" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M9 4v16"></path></svg></button><label class="shell-search"><svg viewBox="0 0 24 24" class="shell-icon" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="6.5"></circle><path d="M19.5 19.5 16 16"></path></svg><input type="search" class="shell-search-input" placeholder="Search monitors..." readOnly=""/></label></div><div class="shell-toolbar"><div class="shell-toolbar-slot"><div class="tb-group"><label class="tb-field"><span class="tb-label">Type</span><select class="tb-select"><option>All types</option></select></label><label class="tb-field"><span class="tb-label">Paused</span><select class="tb-select"><option>All</option></select></label><p class="tb-count">4 of 4 shown</p></div></div></div></div></div>
     </article>
     <article class="sg-specimen" id="c-card">
       <h3>Card, panel, row</h3>
@@ -249,6 +249,17 @@
       <colgroup><col class="sg-col-sample"><col class="sg-col-token"><col class="sg-col-value"><col></colgroup>
       <thead><tr><th></th><th>Token</th><th>Dark / light</th><th>What it is for</th></tr></thead>
       <tbody>
+      <tr>
+        <td class="sg-cell-swatch">
+          <span class="sg-checker"
+            ><span class="sg-swatch" style="background: oklch(.205 0 0)"></span
+            ><span class="sg-swatch sg-swatch-light" style="background: #fbfbfa"></span
+          ></span>
+        </td>
+        <td><code>--canvas</code></td>
+        <td class="sg-value"><code>oklch(.205 0 0)</code><br><code class="sg-light">#fbfbfa</code></td>
+        <td class="sg-why">The page sits one step above true black, and every surface above it is white at a very low alpha rather than a lighter grey. <details class="sg-more"><summary>more</summary>That difference is why a stack of panels reads as glass over one background instead of as separately-painted boxes: an alpha surface inherits whatever is beneath it, so nesting stays coherent at every depth, and a panel dropped on a different background still belongs.</details></td>
+      </tr>
       <tr>
         <td class="sg-cell-swatch">
           <span class="sg-checker"
@@ -1196,6 +1207,11 @@
         <td><code>--dur-attention</code></td>
         <td class="sg-value"><code>420ms</code></td>
         <td class="sg-why">Motion. One duration for everything interactive, because a hover, a segment change and a menu opening are the same kind of event to the person watching; giving each its own timing makes the interface feel assembled from <details class="sg-more"><summary>more</summary>parts. 150ms is short enough to feel immediate and long enough to read as movement rather than a jump.</details></td>
+      </tr>
+      <tr>
+        <td><code>--dur</code></td>
+        <td class="sg-value"><code>var(--dur-attention)</code></td>
+        <td class="sg-why">Motion. One duration for everything interactive, because a hover, a segment change and a menu opening are the same kind of event to the person watching; giving each its own timing makes the interface feel assembled from <details class="sg-more"><summary>more</summary>parts. 150ms is short enough to feel immediate and long enough to read as movement rather than a jump.</details></td>
       </tr></tbody>
     </table>
 </section>
@@ -1441,6 +1457,11 @@
         <td><code>--outline-offset</code></td>
         <td class="sg-value"><code>2px</code></td>
         <td class="sg-why">The keyboard outline and its offset. A different mechanism from the ring above (outline, not shadow) and deliberately thinner: it draws outside the box where the ring draws inside it.</td>
+      </tr>
+      <tr>
+        <td><code>--outline-ring-w</code></td>
+        <td class="sg-value"><code>3px</code></td>
+        <td class="sg-why">The accent ring's width, which is not the outline's. A rung of its own because the two focus treatments are genuinely different marks: `--outline-w` draws a solid edge in `--accent-border` and needs to stay thin so it <details class="sg-more"><summary>more</summary>does not read as a second border, while the ring is `--accent-ring` at 24% alpha and needs the extra pixel to be seen at all. Named because the value was sitting as a literal `3px` in four stylesheets, which is exactly how a ring ends up 2px on one control and 3px on the one beside it.</details></td>
       </tr>
       <tr>
         <td><code>--blur-bar</code></td>
