@@ -296,7 +296,6 @@ describe("the expanded incident row", () => {
             railFill: rail.backgroundColor,
             downFill: resolve("--down"),
             dimFill: resolve("--down-dim"),
-            deepFill: resolve("--down-deep"),
             words: Array.from(row.querySelectorAll(".chip, .sr-only"))
               .map((el) => (el.textContent || "").trim())
               .filter(Boolean),
@@ -320,13 +319,16 @@ describe("the expanded incident row", () => {
         // The repo's guard cannot cover this: `tokens.test.ts` walks web/src
         // but its `sourceFiles()` skips anything matching `.test.`, so a
         // `var()` naming a dead token inside a test file is invisible to it.
-        // `--down-deep` in particular has only two callers left, both in
-        // `monitors.css`; if the last one goes the token can go with it, and
-        // this is what will say so.
-        for (const [name, fill] of [
-          ["--down-dim", paint.dimFill],
-          ["--down-deep", paint.deepFill],
-        ] as const) {
+        //
+        // `--down-deep` was on this list and has been removed from it, which
+        // is the outcome the note above predicted: SUB-140 took the resting
+        // red fill off the monitor rows, that was its last caller, and the
+        // token went with it. This is the update that note asked for rather
+        // than a deletion — `--down-dim` is still live (the icon tile and the
+        // open incident row both fill with it), so the contract this test
+        // exists to hold is unchanged and still measured against a real
+        // colour.
+        for (const [name, fill] of [["--down-dim", paint.dimFill]] as const) {
           expect(
             fill,
             `${name} resolved to nothing, so it no longer exists. The ` +
@@ -337,10 +339,7 @@ describe("the expanded incident row", () => {
         }
 
         // The row no longer paints its status across itself and its detail.
-        for (const [name, fill] of [
-          ["--down-dim", paint.dimFill],
-          ["--down-deep", paint.deepFill],
-        ] as const) {
+        for (const [name, fill] of [["--down-dim", paint.dimFill]] as const) {
           expect(
             paint.rowFill,
             `an open row must not fill itself with ${name}: that fill covers the ` +
