@@ -1,5 +1,13 @@
 import { memo } from "react";
 import { StateChip, StatusChip } from "../components/Chip";
+import { Value } from "../components/Value";
+import {
+  IconBell,
+  IconBellOff,
+  IconPencil,
+  IconTrash,
+} from "../components/icons";
+import { formatMoment } from "../monitors/detail";
 import {
   describeDelivery,
   describeDestination,
@@ -15,18 +23,43 @@ import type { Channel, DeliveryState } from "./channels";
  * the second. There is no wrapper between them — the row is a direct child of
  * the card's list.
  *
- * **Every action names the channel it operates.** Four rows of buttons all
- * called "Test" is a list a screen reader user cannot navigate and a
- * voice-control user cannot address. It is an `aria-label` rather than a
- * visually hidden span because the accessible name concatenates descendant
- * text with no separator, so a hidden span beside the word produces
- * "TestSlack #ops" — and the visible word stays a prefix of the name, which is
- * what WCAG 2.5.3 (label in name) asks for.
+ * **It is the monitors inventory row, and now it looks like one (SUB-138).**
+ * A channel row and a monitor row are the same object — an identity, a couple
+ * of settings columns and inline actions — and they already shared `.inv-row`.
+ * What they did not share was the actions: this row drew four full outlined
+ * buttons, "Send test | Edit | Disable | Delete", with Delete in red on every
+ * single row, while the monitors row two files away drew four quiet 26px
+ * glyphs. Four bordered rectangles per row is a wall at five channels and the
+ * loudest thing on a screen whose subject is the two lines of text to their
+ * left. Edit, disable and delete are now glyphs on the inventory's own
+ * `.inv-act--icon`, borrowed rather than re-specified so the two lists cannot
+ * drift apart again.
  *
- * **Delivery state is never colour alone.** Each of the three states carries a
- * word, and the untested state is a dashed `StateChip` — the register this
- * product already uses for "about the data" rather than "the data" — so it can
- * be told apart from both green and red with the stylesheet off.
+ * **Send test stays a word, and that is the one deliberate departure.** It is
+ * this page's primary verb: the whole argument of the screen is that nothing
+ * here is known to work until you press it, so it is the only control a reader
+ * arriving with a broken alert is looking for. It is also the one action that
+ * is not in the monitors row's vocabulary — check, pause, edit, delete are
+ * learned there, and a fifth unfamiliar glyph would be the one nobody presses.
+ * It sends a real message to somebody else's inbox, which is not an act to put
+ * behind an unlabelled square. So: one word, three glyphs, and the word is the
+ * one that matters.
+ *
+ * **Disable is a struck-through bell, not a pause (SUB-138).** Pausing a
+ * monitor stops SubGlance checking; disabling a channel leaves every check
+ * running and stops SubGlance telling anyone. Same-shaped buttons for those
+ * two would claim they are the same act.
+ *
+ * **Delivery is not a column any more.** It used to be one, and it read "Not
+ * verified" in a dashed chip on every row, always, because the API carries no
+ * delivery history at all. A value that is identical on every row and
+ * structurally incapable of differing carries no information, and this one was
+ * taking the most visual weight in the row to carry it. The fact is now stated
+ * once for the whole list, where it belongs — it is a property of the product,
+ * not of a channel — and the row prints a delivery state only when a test has
+ * actually produced one, as a chip on the name line beside the row's other
+ * state. Nothing was softened: see `NotificationsView`'s legend, which still
+ * says a channel failing for three days looks exactly like one never needed.
  */
 
 export type ChannelRowProps = {
@@ -71,6 +104,16 @@ function ChannelRowImpl({
   const deliveryWord = describeDelivery(delivery);
   const testWord = testing ? "Sending test…" : "Send test";
   const label = `${typeLabel(channel.type)} ${channel.name}`;
+  /*
+   * The state it moves to, not the state it is in. "Disable" on an enabled
+   * channel says what pressing does; a label reading "Enabled" would be a
+   * status wearing a button's clothes, and the status is already on the row.
+   */
+  const toggleWord = toggling
+    ? "Saving…"
+    : channel.enabled
+      ? "Disable"
+      : "Enable";
 
   return (
     <li className="inv-row" data-disabled={channel.enabled ? "false" : "true"}>
@@ -85,6 +128,22 @@ function ChannelRowImpl({
                  indistinguishable from working — so it has to say so. */
               <StateChip className="inv-paused-chip">Disabled</StateChip>
             )}
+            {delivery.kind !== "unknown" && (
+              /*
+               * A real result, and the only delivery state that is ever drawn
+               * on a row. It appears because a test was run and it says what
+               * that test found; the sentence underneath says what the result
+               * does and does not prove. Never rendered for `unknown`, which
+               * is every row on a freshly loaded page — that fact is the
+               * list's, not the row's.
+               */
+              <StatusChip
+                className="inv-paused-chip"
+                status={delivery.kind === "passed" ? "up" : "down"}
+              >
+                {deliveryWord}
+              </StatusChip>
+            )}
           </span>
           <span className="inv-sub">{destination}</span>
         </div>
@@ -95,24 +154,36 @@ function ChannelRowImpl({
             <span className="inv-type">{typeLabel(channel.type)}</span>
           </span>
 
-          <span className="inv-col inv-col--chan">
-            <span className="inv-label">Delivery</span>
-            {delivery.kind === "unknown" ? (
-              /*
-               * The honest default, and the most important cell on the page.
-               *
-               * `GET /channels` carries no delivery history — no counts, no
-               * last error, no last-sent time — so nothing here knows whether
-               * this channel has ever worked. A green tick would be invented,
-               * and inventing it on a monitoring tool is how a channel that
-               * has been failing for three days keeps looking fine.
-               */
-              <StateChip>Not verified</StateChip>
-            ) : delivery.kind === "passed" ? (
-              <StatusChip status="up">{deliveryWord}</StatusChip>
-            ) : (
-              <StatusChip status="down">{deliveryWord}</StatusChip>
-            )}
+          {/*
+           * When the channel was added (SUB-138).
+           *
+           * The column that used to sit here said "Not verified" in a dashed
+           * chip on every row, always — the API carries no delivery history,
+           * so it was structurally incapable of ever differing. A value
+           * identical on every row is not a column; it is a caption repeated N
+           * times, and it was taking the most visual weight in the row to be
+           * one. That fact is now stated once above the list.
+           *
+           * This is the honest thing to put in its place: `created_at` is
+           * already on the wire, already parsed, and was being thrown away.
+           * It genuinely differs per row, and it is the one date that bears on
+           * the page's own argument — a channel added eleven months ago and
+           * never tested is a different risk from one added this morning, and
+           * until now nothing on the screen let you tell those apart.
+           *
+           * Absolute, not "3 days ago", matching the monitor detail view: this
+           * is a date you line up against when someone changed something, and
+           * a relative stamp goes stale while the page sits open.
+           *
+           * A server that sends no timestamp gets an empty `Value`, which
+           * renders in the tone that means "no measurement" — not a zero, and
+           * not an invented date.
+           */}
+          <span className="inv-col inv-col--added">
+            <span className="inv-label">Added</span>
+            <Value value={channel.createdAt}>
+              {formatMoment(channel.createdAt)}
+            </Value>
           </span>
         </div>
 
@@ -120,52 +191,60 @@ function ChannelRowImpl({
           {onTest !== undefined && (
             <button
               type="button"
-              className="add-button inv-act"
+              className="add-button inv-act nt-act-test"
               onClick={() => onTest(channel.id)}
               disabled={testing}
+              aria-busy={testing}
               aria-label={`${testWord} ${label}`}
             >
               {testWord}
             </button>
           )}
 
-          {onEdit !== undefined && (
-            <button
-              type="button"
-              className="add-button inv-act"
-              onClick={() => onEdit(channel.id)}
-              aria-label={`Edit ${label}`}
-            >
-              Edit
-            </button>
-          )}
-
           {onSetEnabled !== undefined && (
             <button
               type="button"
-              className="add-button inv-act"
+              className="inv-act inv-act--icon nt-act-toggle"
               onClick={() => onSetEnabled(channel.id, !channel.enabled)}
               disabled={toggling}
-              /*
-               * The state it moves to, not the state it is in. "Disable" on an
-               * enabled channel says what pressing does; a label reading
-               * "Enabled" would be a status wearing a button's clothes, and
-               * the status is already stated in the row above.
-               */
-              aria-label={`${channel.enabled ? "Disable" : "Enable"} ${label}`}
+              aria-busy={toggling}
+              aria-label={`${toggleWord} ${label}`}
+              /* The word is gone from the face of the button, so the hint a
+                 pointer gets is the whole of it — and it repeats the
+                 accessible name rather than abbreviating it. */
+              title={`${toggleWord} ${label}`}
             >
-              {toggling ? "Saving…" : channel.enabled ? "Disable" : "Enable"}
+              {/* Two different shapes, not one shape in two colours: which
+                  state the button is in has to survive greyscale. */}
+              {channel.enabled ? <IconBellOff /> : <IconBell />}
+            </button>
+          )}
+
+          {onEdit !== undefined && (
+            <button
+              type="button"
+              className="inv-act inv-act--icon"
+              onClick={() => onEdit(channel.id)}
+              aria-label={`Edit ${label}`}
+              title={`Edit ${label}`}
+            >
+              <IconPencil />
             </button>
           )}
 
           {onDelete !== undefined && (
             <button
               type="button"
-              className="add-button inv-act inv-act--danger"
+              className="inv-act inv-act--icon inv-act--danger"
               onClick={() => onDelete(channel.id)}
               aria-label={`Delete ${label}`}
+              title={`Delete ${label}`}
             >
-              Delete
+              {/* A bin, matching the monitors row. Destructive in its shape,
+                  so it survives greyscale without the word; the pause the
+                  word used to buy is bought by the confirmation, which keeps
+                  its button disabled until the channel's name is typed. */}
+              <IconTrash />
             </button>
           )}
         </div>
@@ -203,7 +282,10 @@ function ChannelRowImpl({
 
       <span className="sr-only">
         {/* The row's facts as one sentence, so a screen reader gets the same
-            page as the eye rather than a run of unlabelled columns. */}
+            page as the eye rather than a run of unlabelled columns. The
+            delivery state is spoken on every row, including the unknown one:
+            the eye has the list's legend a few centimetres above and in view,
+            and a reader moving item by item through a list does not. */}
         {typeLabel(channel.type)} channel, delivering to {destination}.{" "}
         {channel.enabled ? "Enabled" : "Disabled"}. {deliveryWord}.
       </span>

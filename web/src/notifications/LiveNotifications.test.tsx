@@ -78,9 +78,20 @@ describe("LiveNotifications", () => {
     fireEvent.click(await screen.findByRole("button", { name: /send test/i }));
     expect(await screen.findByText("Failed to fetch")).toBeTruthy();
     const row = screen.getByRole("listitem");
+    /*
+     * No delivery chip at all, which is the shape this assertion took when the
+     * always-"Not verified" column was removed (SUB-138). The row draws a chip
+     * only for a result a test actually produced, so "nothing was proven"
+     * renders as the absence of one rather than as a badge that said the same
+     * thing on every row of every instance. A red "Test failed" here would be
+     * the bug; so would a green one.
+     */
+    expect(within(row).queryByText("Test failed", { selector: ".chip" })).toBeNull();
     expect(
-      within(row).getByText("Not verified", { selector: ".chip" }),
-    ).toBeTruthy();
+      within(row).queryByText("Test delivered", { selector: ".chip" }),
+    ).toBeNull();
+    // And the page still says, once, why nothing here is known to work.
+    expect(screen.getByText(/carries no delivery history/i)).toBeTruthy();
   });
 
   it("drops a test result when the channel is edited", async () => {

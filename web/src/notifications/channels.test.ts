@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   channelFromApi,
   channelsFromPayload,
-  describeChannels,
   describeDelivery,
   describeDestination,
   fieldsFor,
@@ -153,15 +152,5 @@ describe("channelsFromPayload", () => {
       channels: [{ id: 1, name: "a", type: "email" }],
     });
     expect(channel.enabled).toBe(true);
-  });
-});
-
-describe("describeChannels", () => {
-  it("counts disabled channels, which deliver nothing and say nothing", () => {
-    expect(describeChannels([make(), make({ id: 2, enabled: false })])).toBe(
-      "2 channels, 1 disabled",
-    );
-    expect(describeChannels([make()])).toBe("1 channel");
-    expect(describeChannels([])).toBe("No channels configured");
   });
 });

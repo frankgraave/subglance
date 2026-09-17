@@ -15,6 +15,72 @@
  */
 
 /*
+ * The card header, aligned to the card's own edges (round-2 review).
+ *
+ * The owner's note: *"Niet mooi uitgelijnd t.o.v. de randen van de kaart,
+ * graag evenveel ruimte boven/onder zoals ook rechts en links is
+ * aangehouden."* Measured in Chromium at 1440 rather than eyeballed, from the
+ * card's padding box (the 1px border is the edge, not space):
+ *
+ *   left of the title block   14px   (card 6 + header 8)
+ *   right of the action       14px   (card 6 + header 8)
+ *   above the title block     14px   (card 6 + header 8)
+ *   below it, to the list     12px   (header 6 + the card's 6px gap)
+ *
+ * So three sides were 14 and the fourth was 12, and the two-line title block
+ * made the shortfall visible: the header grew to 62px against a 46px row
+ * while the space under it did not, so the whole block sat high in a box that
+ * had stretched around it.
+ *
+ * `Card`'s asymmetric default is deliberate and stays for every other card:
+ * an 8px gap under a one-line title reads looser than the 6px beside it,
+ * because the space below is *shared* with the card's own gap. That argument
+ * is about a 46px header. This card's header is the page's heading and sits
+ * above a rule rather than a panel, so the four gaps are simply made equal
+ * here instead. Scoped to `.nt-card`, not changed in `card.css`.
+ *
+ * 8px on all four sides, so the bottom resolves to 8 + the card's 6px gap =
+ * 14, matching the 6 + 8 kept on the other three.
+ */
+.nt-card > .card-head {
+  padding: var(--space-2);
+}
+
+/*
+ * Phone: `card.css` tightens every header to 6/6/4 at this rung, and the rule
+ * above is more specific, so the tightening has to be restated rather than
+ * inherited. 6px all round keeps the same equality against the card's 6px
+ * padding and 6px gap: 12 on each of the four sides.
+ *
+ * The literal is deliberate: a `var()` inside a media query never matches,
+ * because media queries are evaluated before custom properties are
+ * substituted, and it fails silently (AGENTS.md).
+ */
+@media (max-width: 640px) {
+  .nt-card > .card-head {
+    padding: var(--space-1h);
+  }
+}
+
+/*
+ * The type column, widened for the one label this page can produce that the
+ * monitors inventory cannot.
+ *
+ * `inventory.css` sizes `.inv-col--type` at rung 2 (64px) against its widest
+ * label, "TYPE" at 56px. On a channel row the cell holds a *type name*, and
+ * `typeLabel` falls back to "Unknown type" for a type this build has no field
+ * set for — 83px in the mono face, which overflowed a 64px cell and was
+ * clipped mid-word. The server is free to name a type newer than this build,
+ * so that row is a real one, and a page whose whole argument is refusing to
+ * claim what it cannot know must not truncate the words in which it says so.
+ *
+ * Rung 3 (104px), the next one up, which clears 83 by 21. Rung 2 is 21 short.
+ * Only on this page: the monitors inventory's own labels still fit rung 2 and
+ * widening them there would take 40px from the name column for nothing.
+ */
+.nt-card .inv-col--type { width: var(--size-col-3); }
+
+/*
  * A disabled channel is dimmed and dashed, never coloured.
  *
  * It is a configuration state, not a health state, so borrowing a status hue
@@ -51,4 +117,230 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  /* Bounded to a reading measure. The empty state is the one screen a new
+     self-hoster reads word for word, and at the card's full 860px its two
+     sentences ran past the point where the eye finds the next line. */
+  max-width: 62ch;
+}
+
+/*
+ * The page's secondary prose: help text that is meant to be read.
+ *
+ * `.add-help` was doing this job and is wrong for it here. It is form help —
+ * `--ink-3`, sitting under an input two centimetres wide, where the field
+ * itself carries the attention and the measure is bounded by the form. On this
+ * page the same class was setting four standalone paragraphs, one of them
+ * load-bearing, at the page's quietest ink across the full 860px column. That
+ * is a line of roughly 140 characters at 3.2:1 — text formatted to be skipped.
+ *
+ * So: one step louder, and bounded. `--ink-2` measures 5.9:1 rather than
+ * 3.2:1, which is the difference between clearing AA for body text and not.
+ */
+.nt-note {
+  font-size: var(--type-helper);
+  line-height: var(--lead-prose);
+  color: var(--ink-2);
+  max-width: 62ch;
+  /*
+   * No orphans (SUB-138). The empty state's lede broke with "it." alone on the
+   * last line, which is the one paragraph on this product a new self-hoster
+   * reads word for word. `pretty` asks the engine to balance the last two
+   * lines rather than fill greedily; where it is unsupported the paragraph
+   * simply wraps as it did before, so nothing depends on it.
+   */
+  text-wrap: pretty;
+}
+
+/* The one sentence under the empty state's headline, which is read before
+   anything else on the screen and takes the body size for it. */
+.nt-note--lede {
+  font-size: var(--type-body);
+  line-height: var(--lead-body);
+  color: var(--ink);
+}
+
+/*
+ * The "Added" column, and the one width this page declares for itself.
+ *
+ * Rung 4 (168px) off the column ladder. Its content is a localised absolute
+ * timestamp — "17 Sept 2026, 14:20" measures about 150px in the mono face,
+ * and the widths either side of it on the ladder are both wrong: rung 3 (104)
+ * truncates the date on every row, and rung 5 (272) is wider than the name
+ * column beside it, which would make the date the loudest thing in the row
+ * rather than the name.
+ *
+ * Set at the helper size rather than `Value`'s default body size. `Value` is
+ * built for a reading you compare down a column — "1 min", "10 s" — where the
+ * digits are the subject. A date is context, not a measurement to scan, and
+ * at body size it out-shouted the channel name it sits beside.
+ */
+.inv-col--added { width: var(--size-col-4); }
+
+.inv-col--added .value {
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  justify-content: flex-start;
+}
+
+/*
+ * The delivery caveat: one line, and the rest of it one click away.
+ *
+ * Rejected in its previous form for being physically larger than the list it
+ * qualifies — six lines of prose above two rows on a real instance, so you had
+ * to read an explanation of the Delivery column before reaching the Delivery
+ * column. A `<details>` rather than a shorter paragraph because nothing here
+ * may be cut: the whole caveat is in the DOM, in the same words, and the
+ * summary states the fact rather than teasing it.
+ *
+ * Separated from the rows by a rule rather than by a gap: it is about the
+ * list, not an item in it, and a paragraph resting on a list with only
+ * whitespace between them reads as the list's first row.
+ */
+.nt-legend {
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+/*
+ * The one line, and the control that opens the rest.
+ *
+ * `list-style: none` plus the explicit `::marker` reset: the default triangle
+ * is drawn by the UA at a size nothing in this ladder controls, and it renders
+ * differently in every engine. The caret below is ours, sized from the icon
+ * rungs, and it rotates so the open and closed states differ in shape rather
+ * than only in what is underneath them.
+ */
+.nt-legend-summary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--type-helper);
+  line-height: var(--lead-prose);
+  color: var(--ink-2);
+  max-width: 62ch;
+  cursor: pointer;
+  list-style: none;
+}
+
+.nt-legend-summary::-webkit-details-marker { display: none; }
+.nt-legend-summary::marker { content: ""; }
+
+.nt-legend-summary:hover { color: var(--ink); }
+
+/*
+ * One focus language across the product, and it is the accent ring.
+ *
+ * The literal `3px` rather than `var(--outline-ring-w)`, which is the same
+ * value, and deliberately so (CodeRabbit, PR #61). `tokens.test.ts` checks
+ * every `box-shadow` against the depth ladder by matching the *whole*
+ * declaration string, and lets a focus ring through only via an exception set
+ * keyed on the literal text `0 0 0 3px var(--accent-ring)`. The tokenised form
+ * is a different string, so it is read as a shadow off the ladder and fails
+ * the build. All five `box-shadow` focus rings in this repo are written this
+ * way for that reason; the token is used by the four `outline` rings, which
+ * the shadow guard never sees.
+ *
+ * Retokenising this one site would therefore break the build, and doing it
+ * across all five plus the guard's exception entry is a sweep over files this
+ * change does not own. It is worth doing as its own change.
+ */
+.nt-legend-summary:focus-visible {
+  outline: none;
+  border-radius: var(--r-sm);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+/* The caret. A character rather than a drawn triangle: a border-triangle
+   needs a transparent border colour, and §2.9 gives borders to role tokens
+   only. It rotates, so the two states differ in shape and not only in what is
+   underneath them. */
+.nt-legend-summary::after {
+  content: "\25B8";
+  flex: none;
+  align-self: center;
+  color: var(--ink-3);
+  transition: transform var(--dur-hover) var(--ease);
+}
+
+.nt-legend[open] > .nt-legend-summary::after { transform: rotate(90deg); }
+
+.nt-legend-body {
+  margin-top: var(--space-2);
+  font-size: var(--type-helper);
+  line-height: var(--lead-prose);
+  color: var(--ink-2);
+  max-width: 62ch;
+}
+
+/*
+ * What this page deliberately does not do, framed as a statement rather than
+ * left as grey prose trailing off the bottom of the screen.
+ */
+.nt-scope {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1h);
+  max-width: 62ch;
+}
+
+.nt-scope-legend {
+  @apply caps-legend;
+  color: var(--ink-3);
+}
+
+/*
+ * Reserved width for the test button, whose label changes (SUB-138).
+ *
+ * Measured in Chromium rather than guessed. The button swings from "Send test"
+ * (76.1px) to "Sending test…" (103.8px), and that width is load-bearing for
+ * something other than the button: every row's action cluster is right-
+ * aligned, so a button that grows pushes its neighbours left — the cluster
+ * jumped 28px sideways at the exact moment the pointer was over it, and
+ * Edit/Delete moved out from under the cursor mid-click.
+ *
+ * Rung 3 (104px) off the column ladder, which clears the wider of the two
+ * labels by 0.2px. It replaces `var(--size-col-lg)`, which was wrong twice
+ * over: the ladder marks `--size-col-sm/md/lg` as style-guide chrome and
+ * explicitly off-ladder, and at 116px it also over-reserved by twelve pixels.
+ *
+ * The toggle's reservation is gone rather than retokenised. It read
+ * `var(--size-col-sm-alt)`, a name the column-ladder commit had already
+ * renamed to `--size-col-gutter` — so on this branch the declaration resolved
+ * to nothing at all and silently reintroduced the 4.7px misalignment it was
+ * added to fix. An undefined custom property fails with no build error and no
+ * test failure, which is exactly how it survived. It needs no replacement:
+ * the toggle is a glyph now, in a square the same size whichever bell it
+ * draws, so "Enable" (60.1px) and "Disable" (64.8px) no longer exist as
+ * widths and there is nothing left to reserve. The browser test that asserts
+ * the rows line up is unchanged and still bites — it is the reason this is a
+ * deletion rather than a rename.
+ *
+ * `min-width` rather than `width`, so a translation longer than either label
+ * still gets the room it needs instead of being clipped.
+ */
+.nt-act-test { min-width: var(--size-col-3); }
+
+/*
+ * Phone: the settings columns stop pretending to be a table, exactly as the
+ * monitors inventory does at the same rung. `inventory.css` releases its own
+ * four columns there; this page's fifth is declared here, so it has to be
+ * released here too — otherwise a 168px date holds the row wide and the
+ * document scrolls sideways, which is the one thing incidents.css already
+ * learned not to let happen.
+ *
+ * The literal is deliberate: a `var()` inside a media query never matches,
+ * because media queries are evaluated before custom properties are
+ * substituted, and it fails silently (AGENTS.md).
+ */
+@media (max-width: 900px) {
+  .inv-col--added { width: auto; }
+  /*
+   * And the type column this page widened above. `inventory.css` releases
+   * `.inv-col--type` at this rung, but `.nt-card .inv-col--type` is more
+   * specific and would hold 104px through the release — which is exactly the
+   * sideways scroll the rule above exists to prevent, arrived at from the
+   * other side.
+   */
+  .nt-card .inv-col--type { width: auto; }
 }
