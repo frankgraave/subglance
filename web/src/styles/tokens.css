@@ -548,29 +548,31 @@
      statements and the screen has to be able to make both. */
   --ink-zero:    oklch(.62 0 0);
 
-  /* `--down-deep` is one step past `--down-dim`, for a tinted row under the
-     pointer.
+  /* There is no `--down-deep`, and there is no `-deep` for any other status
+     either.
 
-     Hover on a row that already means something must not switch signals. A
-     neutral highlight arrives as a second kind of colour on top of the first
-     and the eye has to work out which one it is being told about; the same red
-     getting louder is the same statement said closer. Measured against the
-     reference style, that is what it does — hovered status rows deepen to 20%
-     of their own colour rather than picking up a grey.
+     It existed as one step past `--down-dim`, for a down row deepening its own
+     tint under the pointer rather than picking up a neutral `--surface-2` --
+     the argument being that hover on a row which already means something must
+     not switch signals. That argument was sound, and it depended entirely on
+     down having a *resting* fill to deepen.
 
-     There is deliberately no `--up-deep`, `--warn-deep` or `--idle-deep`. Down
-     is the only status with a resting fill to deepen: the others mark
-     themselves with a coloured edge alone, so a hover tint would introduce a
-     colour rather than intensify one, which is the neutral-fill problem again
-     wearing the status palette. A token with no caller is a decision nobody
-     made. */
+     The product owner asked for the red row background to go, and it has
+     (DESIGN.md 2.3). With no resting fill, a hover tint would *introduce*
+     red rather than intensify it -- which is the exact failure the original
+     rule forbade -- so every caller of `--down-deep` went with the fill, and a
+     token with no caller is a decision nobody made. Down now marks itself the
+     way pending, waiting and paused already do: a coloured leading edge, the
+     lamp, and the status word.
+
+     `--down-dim` stays: the icon tile and the incidents row still fill
+     themselves with it, so it is a live decision with live callers. */
   --up:          #34d399;
   --up-dim:      #10241d;
   --warn:        #fbbf24;
   --warn-dim:    #2a2110;
   --down:        #f43f5e;
   --down-dim:    #2c1017;
-  --down-deep:   #3d1620;
   --idle:        #4b5257;
   --idle-dim:    #16191b;
 
@@ -669,17 +671,12 @@
      above the tone that means "no data". */
   --ink-zero:    #7b8186;
 
-  /* `--down-deep` moves away from the page, not toward a fixed lightness: on
-     dark it lightens, here it darkens. Same rule, opposite direction — a tint
-     that "deepens" has to read as more of itself in both themes, and copying
-     the dark value across would have made a hovered row fade instead. */
   --up:          #059669;
   --up-dim:      #d9f5e9;
   --warn:        #b45309;
   --warn-dim:    #fdf0d5;
   --down:        #e11d48;
   --down-dim:    #fde4e9;
-  --down-deep:   #fbccd7;
   --idle:        #c2c7cb;
   --idle-dim:    #f0f0ef;
 

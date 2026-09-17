@@ -163,7 +163,7 @@ export function TokenSheet() {
       {/* The tooltip out of its hover, so its structure can be judged and
           measured: the divider running the full width, the value column
           aligned right, and the dashed chip that says the window is
-          incomplete (DESIGN.md §8.3). */}
+          incomplete (DESIGN.md §8.5). */}
       <Section title="Tooltip">
         <div className="flex flex-wrap gap-4">
           <div className="hb-tooltip" style={{ position: "static" }}>

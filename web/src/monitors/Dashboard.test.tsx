@@ -420,6 +420,53 @@ describe("Dashboard", () => {
         `[data-facet-key="${key}"] .mon-facet-select`,
       )!;
 
+    /*
+     * SUB-140: the framed filter (DESIGN.md §8.4).
+     *
+     * The product owner asked for something better-looking than the bare
+     * `ENV [Any] / GROUP BY [None]` pair, with icons. The frame and the glyph
+     * are CSS and markup; what must not change is that these are still native
+     * labelled `<select>`s. A "nicer filter" that quietly became a div with a
+     * click handler is the failure mode this guards.
+     */
+    it("keeps every toolbar filter a native select inside a real label", () => {
+      render(<Harness monitors={tagged()} />);
+      const controls = [
+        ...document.querySelectorAll<HTMLElement>(
+          ".mon-facet-select, .mon-group-select",
+        ),
+      ];
+      expect(controls.length, "env, customer and group by").toBe(3);
+      for (const control of controls) {
+        // A real select: the OS picker, the keyboard behaviour and the
+        // listbox role all come free, and none of them can be re-earned by a
+        // div without writing them out.
+        expect(control.tagName).toBe("SELECT");
+        // Named by a wrapping <label>, so the key text IS the accessible name
+        // and no visually hidden legend is needed.
+        const label = control.closest("label");
+        expect(label, "a filter must be inside its <label>").not.toBeNull();
+        expect((label?.textContent ?? "").trim().length).toBeGreaterThan(0);
+        // Focusable from the keyboard without a tabindex of its own.
+        expect(control.hasAttribute("disabled")).toBe(false);
+      }
+    });
+
+    it("frames each filter and leads it with a decorative glyph", () => {
+      render(<Harness monitors={tagged()} />);
+      const frames = [
+        ...document.querySelectorAll<HTMLElement>(".tb-field--framed"),
+      ];
+      expect(frames.length, "two facets plus Group by").toBe(3);
+      for (const frame of frames) {
+        const glyph = frame.querySelector("svg");
+        expect(glyph, "a framed filter leads with a glyph").not.toBeNull();
+        // The <label> already names the control; a glyph that announced
+        // itself would make a screen reader say the filter twice.
+        expect(glyph?.getAttribute("aria-hidden")).toBe("true");
+      }
+    });
+
     it("offers one select per tag key, with Any first", () => {
       render(<Harness monitors={tagged()} />);
       const selects = [...document.querySelectorAll(".mon-facet-select")];

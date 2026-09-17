@@ -213,34 +213,21 @@
 }
 
 /*
- * The frame around the panels.
+ * The frame around the panels is the shared `Card` now (SUB-140).
  *
- * An earlier pass removed this entirely, on the reasoning that panels inside a
- * box is one frame too many. That was right about the frame it removed and
- * wrong about frames: what made that one too many was that it was drawn in the
- * same weight as the panels inside it, so the eye read two competing edges at
- * the same level.
+ * `.mon-board` used to declare `padding: var(--space-1h)`, a 1px `--border`,
+ * `--r-lg` and `--surface` — which is, declaration for declaration, what
+ * `.card` in components/card.css already says. It was a second spelling of one
+ * pattern, and the dashboard's rows layout was the only list screen using it,
+ * which is exactly why that screen's frame had no icon and no title while
+ * every other list's card did. Restating a component's rules under a private
+ * class is how a screen ends up half a component behind.
  *
- * Measured against the reference style, the outer card is not a second panel —
- * it is a 6px margin with an edge on it. The padding does the work: the panels
- * sit inset from the card's border, so the card reads as the surface they rest
- * on rather than as another object beside them. Its fill is one step below
- * theirs for the same reason.
- *
- * The radius pair is 12 outside, 8 inside, across 6px of padding. Strictly
- * concentric would be 8 + 6 = 14, but 12 is the better call: a 14px outer
- * corner starts to read as a pill on a wide card, while 12 still reads as a
- * card that happens to have rounded corners.
- *
- * `overflow` stays unset: it existed to clip rows against the old container's
- * corners, and it would crop the focus ring on the first and last row.
+ * The reasoning that rule carried is not lost: it is the argument in
+ * `Card`'s own comment — the card is padding with an edge, not a second panel,
+ * and the panels sit inset from its border so it reads as the surface they
+ * rest on. `MonitorTable.test.tsx` asserts that against `.card`.
  */
-.mon-board {
-  padding: var(--space-1h);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  background: var(--surface);
-}
 
 .mon-table {
   width: 100%;
@@ -256,34 +243,24 @@
 }
 
 /*
- * The status column's width, and why it is a rung rather than a measurement.
+ * Status takes rung 2 (64), not rung 3 (104) (SUB-140).
  *
- * SUB-135 narrowed it from 104px to 84px against the widest cell it could
- * then see ("Pending", lamp included, measured at 70px). SUB-139 re-measured
- * in the shipped face and got 77px — the earlier number missed the gap
- * between lamp and word — so 84px minus 24px of cell padding was clipping the
- * longest status word by 5px on every pending monitor. See §2.14 below for
- * the ladder it now takes its width from.
- */
-/*
- * The four fixed columns, all on the Fibonacci column ladder (§2.14).
+ * Rung 3 was sized against the widest *word* the cell could hold — the lamp
+ * plus "Pending", measured at 77px. The cell no longer holds a word: the
+ * product owner asked for the lamp alone, and the status word is `sr-only`
+ * now (see `MonitorRow`), so the column's content is a 20px lamp and nothing
+ * else. Sizing a 104px column for text that is not drawn is 84px of empty
+ * cell, which is what made the status cell read as oversized beside the ones
+ * carrying real readings.
  *
- * Before SUB-139 these were 84 / 184 / 92 / 92 — four numbers with no
- * relationship to each other and none to the incidents or inventory columns
- * two screens away. Measured in Chromium at 1440px, the 84 was also wrong:
- * the widest thing the status column holds is the lamp plus "Pending", which
- * is 77px of content inside 24px of cell padding, so the word overflowed its
- * own column by 5px on every pending monitor.
+ * Rung 2 rather than rung 1 (40) because the header above it is still the
+ * visible word "Status" (SUB-135), which measures ~40px in the shipped mono
+ * face at `--type-section` — rung 1 would clip the header to buy back 24px
+ * the row does not need. 64 is the smallest rung that holds both the lamp and
+ * the label that names it.
  *
- * Status takes rung 3 (104): 80px of content budget against 77px of widest
- * label, which is the smallest rung that holds it. SUB-135 was right that the
- * old 104 was 35px of surplus beside "Down" — but it measured the wrong cell,
- * and 84 cut past the widest word. The rung is the same number for a
- * different and checkable reason.
- *
- * Latency and 24h share rung 3 as well, and sharing it is the point: they are
- * the same kind of thing — one measured number, right-aligned — so a reader
- * scanning down learns one column width rather than two.
+ * Latency and 24h stay on rung 3 and sharing it is still the point: they are
+ * the same kind of thing, one measured number right-aligned.
  *
  * Last checks takes rung 4 (168). The heartbeat inside it needs
  * `--size-pane-xs` (148px) to stay legible, and 168 minus the cell's own
@@ -292,7 +269,7 @@
  * floor with 20px to spare and puts the bar's left edge on the same line as
  * the header above it.
  */
-.mon-col--led { width: var(--size-col-3); }
+.mon-col--led { width: var(--size-col-2); }
 .mon-col--name { width: auto; }
 .mon-col--beats { width: var(--size-col-4); }
 .mon-col--num { width: var(--size-col-3); }
@@ -328,6 +305,11 @@
  */
 .mon-head:first-child {
   border-left: 2px solid transparent;
+  /* Centred and flush, following its column's cell (SUB-140): the cell now
+     centres a lamp in a padding-free box, so a left-aligned header with 12px
+     of padding would sit visibly off the mark it names. */
+  text-align: center;
+  padding-inline: 0;
 }
 
 /* The heartbeat's header shares its cell's decision to give up padding, so
@@ -430,7 +412,30 @@
    edge this product uses on cards, lines and inventory rows has therefore
    been missing from its main table the whole time. */
 .mon-row[data-status="down"] > :first-child { border-left-color: var(--down); }
-.mon-row[data-status="down"] > * { background: var(--down-dim); }
+
+/*
+ * No resting fill on a down row (DESIGN.md §2.3).
+ *
+ * This rule used to be `background: var(--down-dim)` on every cell, and it was
+ * the one thing on the dashboard the product owner asked to be removed:
+ * "graag geen rode achtergrond". His call wins, and §2.3 has been rewritten to
+ * match rather than left contradicting the code.
+ *
+ * It also makes the table more consistent, not less. Down was the *only*
+ * status with a resting fill; pending, waiting and paused each mark themselves
+ * with a coloured or dotted 2px leading edge and nothing else. Down now does
+ * the same thing the other four do, one rule instead of two.
+ *
+ * What still carries "down" is not colour alone (§9):
+ *   - the 2px `--down` leading edge above — a position as well as a hue;
+ *   - the lamp, which is red AND is the only lamp with the `down` glow;
+ *   - the word "Down" in the status cell, which is the signal §9.1 exists for;
+ *   - the row's place in the list: `partition` sorts down to the top, under a
+ *     "Needs attention (n)" heading that states the count in words;
+ *   - the failure reason printed where the latency would be.
+ * Removing the tint removes the fifth of five, and the four that remain are
+ * the four that work in greyscale.
+ */
 
 .mon-row[data-status="pending"] > :first-child { border-left-color: var(--warn); }
 /* Grey, not amber: nothing is in flight for a monitor nobody has pinged. */
@@ -455,21 +460,23 @@
 .mon-row[data-status="paused"] > * { opacity: .62; }
 
 /*
- * A row that already carries a tint deepens under the pointer instead of
- * taking the neutral edge highlight above.
+ * A down row hovers like every other row: the edge lights, the fill does not.
  *
- * Only `down` qualifies, and that is the rule rather than an oversight: it is
- * the one status with a resting fill. `pending` and `waiting` mark themselves
- * with a coloured left edge and nothing else, so tinting them on hover would
- * *introduce* a colour rather than deepen one — which is the neutral-fill
- * problem in fancy dress. They take the edge highlight like every other row.
+ * This used to be `background: var(--down-deep)`, and the argument for it was
+ * good — a hovered row that already means something must not switch signals,
+ * so it deepened its own tint rather than picking up the neutral
+ * `--surface-2`. That argument depended entirely on there *being* a resting
+ * tint to deepen. With the fill gone (see above, and §2.3), deepening would
+ * now *introduce* red on hover, which is the precise thing the original rule
+ * forbade — and worse, it would make a row look more broken because the
+ * pointer happened to cross it.
  *
- * The background sits on the cells rather than on the row, because under
- * `border-collapse: separate` a <tr> cannot paint one: the cells are what the
- * reader sees, so the cells are what change. Row as target, cells responding,
- * is the same group-hover shape the reference style uses throughout.
+ * So down takes `.mon-row:hover`'s `--border-hi` edge like every other status.
+ * Its own `--down` leading edge survives the hover: the two rules have equal
+ * specificity (0,3,0 each) and the status rule is declared after the hover
+ * rule, so source order decides and the red edge wins. Verified in Chromium in
+ * both themes.
  */
-.mon-row[data-status="down"]:hover > * { background: var(--down-deep); }
 
 .mon-cell {
   height: var(--size-row-xl);
@@ -480,7 +487,37 @@
   color: var(--ink-2);
 }
 
-.mon-cell--led { text-align: left; }
+/*
+ * The lamp sits in the middle of its cell, both ways (SUB-140).
+ *
+ * `text-align: left` and `--space-3` of padding put the lamp hard against the
+ * cell's leading edge, which was correct while a status word sat beside it —
+ * lamp and word read as one left-aligned phrase. With the word gone the lamp
+ * is the cell's entire content, and a 20px mark pinned to one side of an empty
+ * box reads as content that failed to load.
+ *
+ * `padding-inline: 0` is what makes the centring honest. With 12px of padding
+ * the content box is inset from the cell's borders, so "centred" would mean
+ * centred in the padding box rather than between the rules the reader sees.
+ * The owner's note asks for centred with respect to the dividing line, which
+ * is the border — so the padding goes and the 20px lamp centres in the full
+ * 64px cell.
+ *
+ * One asymmetry survives and is not worth chasing: the leading edge is 2px and
+ * the trailing one is 1px (the status edge reserve), so the lamp's optical
+ * centre sits half a pixel right of the geometric one. Half a pixel on a 20px
+ * mark is below the threshold at which anything can be seen; removing it would
+ * mean giving the status edge a different box, which is the ragged left edge
+ * `.mon-row > :first-child` exists to prevent.
+ *
+ * Vertical centring is `.mon-cell`'s `vertical-align: middle`, which was
+ * already correct and now has nothing tall beside the lamp to be measured
+ * against.
+ */
+.mon-cell--led {
+  text-align: center;
+  padding-inline: 0;
+}
 
 /*
  * The heartbeat cell gives up its horizontal padding.
@@ -808,10 +845,14 @@
 
 /* Same rule as the row: trouble warms the leading edge, it does not flood the
    card. The border is on the left so a stack of cards still scans as a column
-   of lamps down the same axis. */
+   of lamps down the same axis.
+
+   The `background: var(--down-dim)` that used to sit here went with the row's
+   (§2.3): a down monitor looks the same in every layout, or the three views of
+   one dataset disagree about what down looks like. The card keeps the 2px
+   `--down` edge, the lamp, the status word and the failure reason. */
 .mon-card[data-status="down"] {
   border-left: 2px solid var(--down);
-  background: var(--down-dim);
 }
 
 .mon-card[data-status="pending"] { border-left: 2px solid var(--warn); }
@@ -978,10 +1019,15 @@
 }
 
 .mon-line .panel-row-icon {
-  /* The lamp plus its status word, on rung 3 like the rows layout's status
-     column. The compact list and the rows list show the same field; showing
-     it at 78px on one screen and 104px on the other made two views of one
-     dataset disagree about how wide a status is. */
+  /* Rung 3 (104), sized for the lamp plus its status word — which this layout
+     still draws for anything that is not up.
+
+     It no longer matches the rows layout's status column, and that is the
+     honest answer rather than drift: since SUB-140 the two columns hold
+     different things. A row shows the lamp alone and takes rung 2; a compact
+     line shows lamp plus word and needs the width the word asks for. Making
+     them equal again would mean either clipping the word here or leaving 40px
+     of empty cell there. */
   width: var(--size-col-3);
   justify-content: flex-start;
 }
@@ -999,14 +1045,18 @@
   gap: var(--space-3);
 }
 
-/* Same rule as the row and the card: trouble warms the leading edge. */
-.mon-line[data-status="down"] { border-left: 2px solid var(--down); background: var(--down-dim); }
+/* Same rule as the row and the card: trouble warms the leading edge, and no
+   more. The resting `--down-dim` fill and its `--down-deep` hover both went
+   with the row's (§2.3).
 
-/* A tinted line deepens rather than taking `.panel-row`'s neutral hover fill.
-   Without this the shared row rule paints --surface-2 straight over the red,
-   so passing the pointer across a broken monitor made it look healthy for as
-   long as the cursor sat on it. */
-.mon-line[data-status="down"]:hover { background: var(--down-deep); }
+   The hover consequence is real and worth stating: `.panel-row`'s neutral
+   `--surface-2` hover now applies to a down line like any other. That used to
+   be a bug — it painted grey straight over the red and made a broken monitor
+   look healthy under the pointer — but only because the red was a *fill*. With
+   the fill gone there is nothing for the neutral highlight to overwrite: the
+   2px `--down` edge, the lamp and the word are all outside the fill and all
+   survive the hover. */
+.mon-line[data-status="down"] { border-left: 2px solid var(--down); }
 .mon-line[data-status="pending"] { border-left: 2px solid var(--warn); }
 .mon-line[data-status="waiting"] { border-left: 2px solid var(--idle); }
 .mon-line[data-status="paused"] {
@@ -1377,13 +1427,16 @@
 }
 
 /*
- * The status word beside the lamp in the two list layouts (SUB-100).
+ * The status word beside the lamp in the compact layout (SUB-100).
  *
  * Caps at the smallest step: it is a label, not a reading, and it has to sit
- * beside a 7px lamp without out-shouting the monitor's name. It is absent on
- * an `up` monitor by design — see MonitorRow — so what the eye learns is "a
- * word here means something other than fine", which works with the hue rather
- * than repeating it.
+ * beside a 7px lamp without out-shouting the monitor's name.
+ *
+ * The rows layout dropped out of this selector in SUB-140 — its word is
+ * `sr-only` now, so there is nothing visible left for this rule to style. The
+ * compact line still draws it, and it is absent there for an `up` monitor by
+ * design, so what the eye learns is "a word here means something other than
+ * fine", which works with the hue rather than repeating it.
  *
  * --ink-2, not --ink-3. DESIGN.md §9 reserves ink-3 for labels and helper
  * text, and at first glance this is a label — but it was measured at 2.65:1
@@ -1392,7 +1445,6 @@
  * from amber it *is* the status, and unreadable text is a worse signal than
  * the colour it was added to replace.
  */
-.mon-cell--led .led-label,
 .mon-line-led .led-label {
   @apply caps-legend;
   white-space: nowrap;

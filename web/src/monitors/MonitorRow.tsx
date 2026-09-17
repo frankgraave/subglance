@@ -56,19 +56,29 @@ function MonitorRowImpl({
       data-status={status}
       data-testid={`monitor-row-${monitor.id}`}
     >
-      {/* The lamp, and the word beside it for every status including `up`.
-
-          The earlier version hid the word for `up` on the argument that "no
-          word *is* the up signal, and it is not a colour". That argument held
-          while the column had no header: absence read as a default against
-          three labelled exceptions. SUB-135 made the header visible and
-          labelled it "Status", and a column that announces itself as holding
-          a status may not leave its most common value to hue alone — an
-          empty cell under a "Status" heading reads as missing data, not as
-          health. The three that matter still stand out, now by word rather
-          than by being the only ones with any word at all. */}
+      {/*
+       * The lamp, and the status word as `sr-only` text beside it (SUB-140).
+       *
+       * The product owner asked for the lamp alone in this cell — "graag
+       * alleen de Led, geen tekst er achter" — with the cell smaller, squarer,
+       * and the lamp centred in it both ways.
+       *
+       * The word is hidden, never removed. It is the status for anyone using a
+       * screen reader, and `hideLabel` clips it rather than dropping it, so
+       * the row's accessible name is unchanged: "Down, api.example.com,
+       * Latency, …" reads exactly as it did.
+       *
+       * What carries the status for a *sighted* reader who cannot separate the
+       * hues is no longer this cell, and that is a real narrowing of §9 — see
+       * DESIGN.md §9.1, which now states where the second signal lives
+       * instead: the heartbeat bar's height, which §2.3 already names as a
+       * non-colour carrier (a failed check is drawn full height), plus, for
+       * `down`, the row's position under a counted "Needs attention (n)"
+       * heading and the failure reason printed in words where the latency
+       * would be.
+       */}
       <td className="mon-cell mon-cell--led">
-        <Led status={status} hideLabel={false} stale={stale} />
+        <Led status={status} stale={stale} />
       </td>
 
       {/* scope="row" makes the name the row's header, so a screen reader

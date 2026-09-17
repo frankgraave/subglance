@@ -112,6 +112,12 @@
   /* The 36px control height is the intent; deriving it from a 7px padding hid
      that behind a number the next edit would have "tidied up". */
   min-height: var(--control-h);
+  /* A transparent edge at rest, so the box does not change size the moment an
+     item becomes current. Same instrument `.mon-count` and `.shell-signout`
+     take, for the same reason: only the paint is a state. Without it the
+     current item would be 2px taller and 2px wider than its neighbours and
+     the whole rail would jog on every navigation. */
+  border: 1px solid transparent;
   padding: 0 var(--space-2);
   border-radius: var(--r-sm);
   font-size: var(--type-body);
@@ -121,8 +127,26 @@
   min-width: 0;
 }
 
+/*
+ * The current destination carries the same subtle edge a panel does.
+ *
+ * The product owner asked for exactly this — "graag dezelfde subtiele border
+ * als een paneel" — and it is also the treatment the rest of the product
+ * already uses: a surface that is *a thing* has a fill and an edge, and every
+ * other raised surface here (`.panel`, `.mon-card`, `.card`) draws that
+ * edge in `--border`. The nav item was the one filled surface with no contour,
+ * which is what made it read as a highlight painted on the sidebar rather than
+ * as an object sitting on it.
+ *
+ * `--border` and not `--border-control`: §2.9 reserves the control edge for
+ * the resting edge of a *clickable* thing, and while this item is a link, what
+ * is being drawn is the surface marking where you are — the same static edge
+ * `.panel` takes. `--border-control` is also the one opaque, slightly blue
+ * value in the set and sits nearly flush against this fill.
+ */
 .shell-nav-item[data-state="current"] {
   background: var(--surface-hi);
+  border-color: var(--border);
   color: var(--ink);
   font-weight: var(--weight-strong);
 }
@@ -592,6 +616,86 @@
   white-space: nowrap;
 }
 
+/*
+ * A framed filter, so the toolbar reads as one bar instead of a pill cluster
+ * beside some loose form controls.
+ *
+ * The product owner's note on the dashboard toolbar was that the `ENV [Any]`
+ * / `GROUP BY [None]` pair is plain beside the `3 down / 2 up` cluster next to
+ * it, and asked for icons. That cluster is `.mon-filter`: a 1px
+ * `--border-control` frame at `--r-md` over `--surface-2`, 2px of padding,
+ * `--r-sm` on the things inside it. This is deliberately the *same* frame and
+ * the same geometry — 8 − 2 = 6, concentric by §2.7 — so the two clusters read
+ * as siblings rather than as two different ideas of what a toolbar control is.
+ *
+ * **It is still a native `<select>`.** Nothing here replaces the control: the
+ * frame is a box drawn around a real labelled select, so the OS picker on a
+ * phone, the keyboard behaviour, the screen-reader role and the `<label>`
+ * association all survive untouched. A custom listbox would have to re-earn
+ * every one of those, and these lists are a handful of values long — the case
+ * where native is simply better.
+ *
+ * **Focus.** The select keeps its own `:focus-visible` outline (below): it is
+ * drawn outside the select's box, the frame sets no `overflow`, so the ring
+ * paints over the frame and stays fully visible. The frame additionally warms
+ * on `:focus-within`. Nothing here writes `outline: none`, so the indicator is
+ * never removed — only doubled.
+ */
+.tb-field--framed {
+  gap: var(--space-2);
+  height: var(--size-col-2xs);
+  padding: var(--space-0h) var(--space-2h) var(--space-0h) var(--space-2);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  transition: border-color var(--dur-hover) var(--ease);
+}
+
+.tb-field--framed:hover,
+.tb-field--framed:focus-within { border-color: var(--border-hi); }
+
+/*
+ * The glyph, ahead of the key.
+ *
+ * `aria-hidden` on the icon component itself: the `<label>` already names the
+ * control, and an icon that announces itself makes a screen reader say the
+ * filter twice. Selected as the frame's direct `<svg>` child rather than by a
+ * class, the same way `.icon-tile > svg` sizes a card header's glyph — the
+ * icons in this set carry no class of their own, so the container sizes them
+ * and a mixed set still lands on one optical size.
+ */
+.tb-field--framed > svg {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+  flex: none;
+  color: var(--ink-3);
+}
+
+.tb-field--framed:hover > svg,
+.tb-field--framed:focus-within > svg { color: var(--ink-2); }
+
+/*
+ * Inside the frame the select gives up its own edge and fill.
+ *
+ * The frame is already the control's box, and a bordered select inside a
+ * bordered frame is the double-framing §2.7 removes everywhere else. It keeps
+ * its width rung, its type and — this is the part that matters — its focus
+ * ring.
+ */
+.tb-field--framed .tb-select {
+  height: 100%;
+  border-color: transparent;
+  background: transparent;
+  padding-inline: 0;
+  /* Rung 2 (64px) plus the "Any"/"None" the options actually hold. The
+     unframed rung is `--size-control-select` (148px), sized for "Active only"
+     on the inventory toolbar; inside a frame that leaves a visible gutter of
+     empty fill after a three-letter value. */
+  width: var(--size-col-3);
+}
+
+.tb-field--framed .tb-select:hover { border-color: transparent; }
+
 /* Every select in the bar is the same width, so a row of filters reads as a
    row rather than as three controls that happen to sit together. The widest
    option text is what sets it: "All types" and "Active only" are within a
@@ -673,5 +777,29 @@
     font-size: var(--type-nozoom);
     line-height: var(--lead-nozoom);
     padding: var(--space-2) var(--space-3);
+  }
+
+  /*
+   * The frame gives up its fixed height on a phone, for the same reason
+   * `.shell-search` does two rules up.
+   *
+   * `--size-col-2xs` is 34px, sized for a helper-scale select. The no-zoom
+   * floor above puts a 16px control inside it, which does not fit: measured
+   * at 375px the value was sheared in half horizontally across the frame's
+   * bottom edge — the control was there and its text was not readable, which
+   * is worse than either an overflow or a smaller field.
+   *
+   * The frame also stops pinning the select's width here, so the no-zoom
+   * rule's `width: auto` is what applies and the control takes the width its
+   * own text needs on the one screen where width is scarce.
+   */
+  .tb-field--framed {
+    height: auto;
+    padding-block: var(--space-0h);
+  }
+
+  .tb-field--framed .tb-select {
+    width: auto;
+    padding-block: var(--space-0h);
   }
 }

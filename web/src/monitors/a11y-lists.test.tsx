@@ -82,18 +82,25 @@ function visibleText(el: Element): string {
 }
 
 describe("status is never hue alone in a list layout", () => {
-  it("shows the status word on every row, up included", () => {
+  it("keeps the rows layout's status word in the accessibility tree", () => {
     /*
      * `up` used to be the deliberate exception: no word was the up signal,
      * on the argument that printing "Up" down 190 rows would drown the three
-     * that matter. That held while the lamp column had no header — absence
-     * read as a default against three labelled exceptions.
+     * that matter. SUB-135 then made the header visible and printed the word
+     * on every row, including `up`.
      *
-     * SUB-135 made the header visible and called it "Status", and a column
-     * that announces itself as holding a status may not leave its most
-     * common value to hue alone: an empty cell under a "Status" heading
-     * reads as missing data, not as health. The exceptions still stand out,
-     * now by word rather than by being the only ones carrying any word.
+     * SUB-140 hid it again, all five of them: the product owner asked for the
+     * lamp alone in this cell. The assertion moved with the feature rather
+     * than being deleted — what this file exists to stop is the status being
+     * *unavailable*, and `sr-only` is not unavailable. The word must still be
+     * in the row's accessible name for every status.
+     *
+     * That it is genuinely clipped rather than `display: none` — which would
+     * take it out of the tree along with the pixels — is a CSS claim, so it
+     * is checked in a real browser by
+     * `layout/status-legibility.browser.test.ts`, which also keeps a WCAG
+     * measurement on what now carries status visually. DESIGN.md §9.1 states
+     * the whole trade.
      */
     render(
       <MonitorTable
@@ -103,7 +110,10 @@ describe("status is never hue alone in a list layout", () => {
     );
     for (const status of ALL) {
       const row = screen.getByTestId(`monitor-row-${IDS[status]}`);
-      expect(visibleText(row)).toMatch(new RegExp(status, "i"));
+      // Announced…
+      expect(row.textContent ?? "").toMatch(new RegExp(status, "i"));
+      // …and not drawn, which is the change the owner asked for.
+      expect(visibleText(row)).not.toMatch(new RegExp(status, "i"));
     }
   });
 

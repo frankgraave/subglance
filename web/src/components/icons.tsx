@@ -5,9 +5,12 @@
  * a dependency, and every one of them is drawn on the same 24-unit grid with the
  * same 1.5 stroke so they sit at one optical weight inside a tile.
  *
- * All of them are `aria-hidden` by way of IconTile, which is where the
- * accessibility decision lives — a glyph next to a heading that already says
- * "Uptime" adds a word and no information.
+ * They are `aria-hidden` here, on the `<svg>` itself, rather than only by way
+ * of `IconTile`. The tile was the only consumer when that was written; the
+ * dashboard toolbar now places one of these directly inside a `<label>`, where
+ * a wrapper would have to remember. What a screen reader makes of an unnamed
+ * inline `<svg>` is not fixed — some skip it, some announce "graphic" — so the
+ * decision belongs on the element rather than on whoever holds it.
  */
 
 const BASE = {
@@ -17,6 +20,8 @@ const BASE = {
   strokeWidth: 1.5,
   strokeLinecap: "round" as const,
   strokeLinejoin: "round" as const,
+  "aria-hidden": true,
+  focusable: false,
 };
 
 /** Recent checks: a pulse line. */
@@ -55,6 +60,40 @@ export function IconList() {
     <svg {...BASE}>
       <path d="M8 6h13M8 12h13M8 18h13" />
       <path d="M3 6h.01M3 12h.01M3 18h.01" />
+    </svg>
+  );
+}
+
+/**
+ * A tag, for a filter that narrows the list by one of a monitor's tag keys.
+ *
+ * The same glyph for every facet on purpose: `env`, `team` and `customer` are
+ * one kind of control, and giving each its own picture would ask the reader to
+ * learn three symbols for one idea. The key's own word beside it is what tells
+ * them apart — the icon says "this narrows the list", the label says by what.
+ */
+export function IconTag() {
+  return (
+    <svg {...BASE}>
+      <path d="M11.6 3.5H4.5a1 1 0 0 0-1 1v7.1a1 1 0 0 0 .3.7l8.4 8.4a1 1 0 0 0 1.4 0l7.1-7.1a1 1 0 0 0 0-1.4L12.3 3.8a1 1 0 0 0-.7-.3Z" />
+      <path d="M7.8 7.8h.01" />
+    </svg>
+  );
+}
+
+/**
+ * Grouping: rows gathered under headings.
+ *
+ * Deliberately *not* the tag glyph. Group by sits beside the facet filters and
+ * answers a neighbouring question about the same tags, but it does not narrow
+ * anything — and a control that looks like a filter while changing nothing
+ * about what is visible is the kind of thing people press twice.
+ */
+export function IconGroup() {
+  return (
+    <svg {...BASE}>
+      <path d="M3 5h8M3 12h8M3 19h8" />
+      <path d="M15 5h6M15 12h6M15 19h6" />
     </svg>
   );
 }

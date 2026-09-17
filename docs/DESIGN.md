@@ -118,21 +118,44 @@ mode, because the dark originals are unreadable on white.
 | `--idle` | `#4b5257` | `#c2c7cb` | No data yet |
 
 Every status colour has a `-dim` variant for badge and row backgrounds
-(`--up-dim`, `--warn-dim`, `--down-dim`).
+(`--up-dim`, `--warn-dim`, `--down-dim`). They are used by the icon tile and by
+the incident row; **no monitor row, card or compact line carries one**, which is
+the next paragraph.
 
-`--down` additionally has `--down-deep`, one step past `--down-dim`, for a
-tinted row under the pointer. **Hover on a row that already means something
-must not switch signals.** A neutral highlight arrives as a second kind of
-colour on top of the first, and the reader has to work out which of the two
-they are being told about; the same red getting louder is the same statement
-said closer. A hovered down row therefore deepens its own tint rather than
-picking up `--surface-2` like a neutral row does.
+**No status has a resting fill on a monitor.** A down monitor used to be the
+one exception: `--down-dim` across every cell of its row, its card and its
+compact line, with `--down-deep` one step past it for the hover.
 
-There is deliberately no `-deep` for the other three. Down is the only status
-with a resting fill to deepen — the others mark themselves with a coloured left
-edge and nothing else, so a hover tint would *introduce* a colour rather than
-intensify one, which is the same problem in the status palette's clothes. A
-token with no caller is a decision nobody made.
+That is gone, at the product owner's instruction ("graag geen rode
+achtergrond"), and this section is written to match rather than left
+contradicting the code. Two consequences, both deliberate:
+
+- **It is more consistent, not less.** Pending, waiting and paused each mark
+  themselves with a 2px coloured or dotted leading edge and nothing else. Down
+  now does the same thing the other four do. The previous text argued that down
+  "is the only status with a resting fill to deepen"; the honest reading of that
+  sentence was always that down was the odd one out.
+- **Hover is the ordinary hover.** A down row lights its edge to `--border-hi`
+  like a neutral row and takes no fill. `--down-deep` no longer exists in
+  either theme: with no resting tint, deepening would *introduce* red on hover
+  rather than intensify it — which is precisely the signal-switching the
+  deepening rule was written to forbid — so every caller went, and a token with
+  no caller is a decision nobody made. `--down-dim` stays, because the icon
+  tile and the incident row still call it.
+
+**A down monitor is still unmistakable, and still not by colour alone** (§9):
+
+| Carrier | Works in greyscale |
+|---|---|
+| 2px `--down` leading edge | yes — it is a position as well as a hue |
+| the lamp, plus the `--down` glow no other state has | yes |
+| the word `Down`, `sr-only` in rows, visible in compact and card layouts | yes |
+| sorted to the top under a counted **Needs attention (n)** heading | yes |
+| the failure reason printed in words where the latency would be | yes |
+| the heartbeat bar: a failed check is drawn **full height** | yes |
+
+Removing the tint removed the one carrier of the six that could not survive a
+greyscale screenshot.
 
 **The label on a filled status mark.** A status badge fills itself with its own
 status colour, and the ink scale is wrong on that fill: `--ink` measures 1.59:1
@@ -1328,9 +1351,64 @@ The glyph inside is hidden from assistive technology unless it is the only
 thing saying what the row is. A tile beside a monitor's name that announces
 "globe" adds a word carrying no information.
 
+### 8.3 A card that heads a list is titled `Name (N)`
+
+**Every card that frames a list of things carries an icon tile and a title, and
+the title is the plural noun followed by the total in parentheses.** Not
+"5 Monitors", not "Monitors — 5", not a bare "Monitors" with the count
+somewhere else: `Monitors (5)`, `Notifications (3)`, `Needs attention (2)`.
+
+The convention is worth fixing because it is the first thing a reader uses to
+tell one screen from another, and it was being spelled three ways. The rows
+layout of the dashboard carried *no* header at all until this was written down
+— an unlabelled frame on the product's default screen, next to a compact
+layout that already said `Monitors (N)` and a cards layout that titled every
+section. That is the inconsistency the product owner named.
+
+Two rules about the number:
+
+- **`N` is the total the card frames, not the length of any one section
+  beneath it.** A card reading `Monitors (5)` over sections headed
+  `Needs attention (3)` and `All monitors (2)` is correct and is meant to read
+  that way: the card names the whole and the sections partition it. A card
+  whose number equalled its first section's would make the two headings look
+  like alternatives.
+- **The count comes from the data the card renders**, never from a separate
+  prop a caller could let drift. Where a card also has a `note`, the count is
+  still in the title — `note` is for qualifiers ("1 paused"), not for the
+  number the title is already carrying.
+
+The icon is decorative: the title already says what the list is, so the glyph
+is `aria-hidden` and the heading is the accessible name.
+
+### 8.4 A toolbar filter is a framed control with a glyph
+
+A filter in the page toolbar — a `<label>`, a key, and a `<select>` — takes the
+same frame as the status filter beside it: 1px `--border-control` at `--r-md`
+over `--surface-2`, with the control inside giving up its own edge and fill. A
+glyph leads the key.
+
+The reason is legibility of *kind*: the toolbar holds two clusters that do the
+same job, and before this one was framed and one was three bare form controls,
+so they read as a designed thing sitting next to some leftovers. The geometry
+is the concentric rule (§2.7) and the same 8 − 2 = 6 §7.8 measured.
+
+**It stays a native `<select>`.** The frame is a box around a real labelled
+control, so the keyboard behaviour, the screen-reader role, the `<label>`
+association and the OS picker on a phone all survive. A custom listbox would
+have to re-earn every one of them, and these lists are a handful of values
+long. The select keeps its own `:focus-visible` ring — the frame adds a
+`:focus-within` warming on top, and nothing anywhere writes `outline: none`.
+
+The glyph is `aria-hidden` on the `<svg>` itself rather than on a wrapper, and
+it is the same glyph for every facet: `env`, `team` and `customer` are one kind
+of control, and three pictures for one idea is three symbols to learn. A
+control that does something else — grouping, which reshapes rather than narrows
+— takes a different glyph, because that difference is the one worth drawing.
+
 ---
 
-### 8.3 The readout tooltip
+### 8.5 The readout tooltip
 
 A tooltip here is a small table, not a sentence. The parts, in order:
 
@@ -1378,7 +1456,7 @@ Whether a column is partial is arithmetic, not a flag from the server:
 
 ---
 
-### 8.4 The incident row
+### 8.6 The incident row
 
 An incident is told as a sentence, not as a log line: **when it started, how
 long, why, and how it ended.** "Down since 15 Nov, 14:03, 12 min and counting.
@@ -1566,20 +1644,45 @@ Not an afterthought — several of the decisions above exist precisely for it.
 
 ### 9.1 The status word in list layouts
 
-`up` shows a lamp and nothing else. Every other status shows its name beside the
-lamp, in caps at `--type-section` and `--ink-2`.
+**Rows:** the lamp alone, with the status word as `sr-only` text beside it.
+**Compact:** the lamp, plus the word in caps at `--type-section` and `--ink-2`
+for everything that is not `up`. **Cards:** the lamp plus the word, always.
 
-The card layout always said the word; rows and compact lines did not, so `down`,
-`pending` and `paused` were red, amber and grey at the same 2px leading edge and
-the same filled 20x7 pill. A screen reader was fine — the status is in the row's
-accessible name — and the reader this rule exists for, the sighted person who
-cannot separate those hues, had nothing at all.
+The rows layout printed the word too, until the product owner asked for the
+lamp alone in that cell ("graag alleen de Led, geen tekst er achter"). That is
+a real narrowing of **Never colour alone** and it is written down rather than
+quietly taken:
 
-`up` stays wordless on purpose: printing "Up" down 190 rows would bury the three
-that matter, and *absence* of a word is a non-colour signal too. `--ink-2` rather
-than the `--ink-3` §9 reserves for labels, because this word is measured at
-2.6:1 in `--ink-3` against the row surface — under the 4.5:1 AA floor. It is not
-a caption next to a value; for the reader it was added for, it **is** the status.
+- **Nothing was removed from the accessibility tree.** The word is still
+  rendered, still inside the lamp's own `.led-wrap`, clipped by `.sr-only`
+  rather than `display: none` — which would take it out of the tree along with
+  the pixels. A screen reader reads the row exactly as it did.
+- **Shape is not the second signal, and must not be claimed as one.** §3.1
+  distinguishes `idle` from `off` by filled-versus-hollow, which is genuine —
+  but `up`, `warn` and `down` are *the same 20×7 filled pill* in three hues.
+  A reader who cannot separate red from green cannot separate those three by
+  looking at the lamp. Saying "the shape differs per status" would be true of
+  two of the five states and false of the three that matter.
+- **So the second signal for a sighted reader lives outside the cell.** For
+  `down`, which is the case the rule exists for: position (sorted to the top,
+  under a counted **Needs attention (n)** heading), the failure reason printed
+  in words where the latency would be, and the heartbeat bar, where a failed
+  check is drawn full height — a non-colour carrier §2.3 already names. For
+  `pending`, `waiting` and `paused`: the 2px leading edge, solid for pending,
+  dotted for paused (§3.1).
+- **The cost is stated honestly.** `up` versus `pending` in the rows layout is
+  now carried, for a sighted colour-blind reader, by the leading edge alone —
+  amber versus neutral — plus the heartbeat, and not by a word in the status
+  cell. That is weaker than it was. It is the trade the owner asked for, the
+  compact and card layouts still print the word, and the detail view states it
+  in full.
+
+`status-legibility.browser.test.ts` holds both halves of this in a real
+browser: that the rows layout's word is present, associated with its lamp and
+clipped rather than `display: none`; that the lamp clears the 3:1 WCAG 1.4.11
+floor now that it is alone in the cell; and that the compact layout's visible
+word still clears 4.5:1 — the assertion that once caught a real 3.64:1 failure,
+kept pointed at a word that is still drawn.
 
 ### 9.2 The heartbeat bar is an instrument only once per page
 

@@ -2125,6 +2125,25 @@ describe("an interactive element does not rest on the static border", () => {
           )
         )
           continue;
+        // So does a `[data-state=…]` rule that only re-*paints* an edge the
+        // resting rule has already reserved (SUB-140).
+        //
+        // The sidebar's current destination carries the same subtle `--border`
+        // a panel does, which is what the product owner asked for, and §8.2
+        // now states. It is not a resting edge: `.shell-nav-item` declares
+        // `border: 1px solid transparent` at rest — the reserve pattern this
+        // repo uses everywhere so a box does not change size when its state
+        // changes — and the state rule changes only the paint.
+        //
+        // Narrow on purpose. `border-color` alone cannot introduce an edge
+        // where none was reserved, so this cannot be used to declare a control
+        // resting on the static token; a `border: 1px solid var(--border)`
+        // shorthand under a `[data-state]` selector still fails here.
+        if (
+          /\[data-state=/.test(block.selector) &&
+          !/border(?:-[a-z]+)?\s*:\s*\d/.test(block.body)
+        )
+          continue;
         if (
           /border(?:-[a-z]+)?(?:-color)?\s*:[^;]*var\(--border\)/.test(
             block.body,
@@ -2135,6 +2154,29 @@ describe("an interactive element does not rest on the static border", () => {
       }
     }
     expect(offenders).toEqual([]);
+  });
+
+  it("still bites on a `[data-state]` rule that declares a whole static edge", () => {
+    // The exemption above is for re-painting a reserved edge, never for
+    // introducing one. A shorthand under a data-state selector is a resting
+    // edge wearing a state's clothes, and must still fail.
+    const blocks = declarationBlocks(`
+      .a-button[data-state="current"] { border-color: var(--border); }
+      .b-button[data-state="current"] { border: 1px solid var(--border); }
+    `);
+    const exempt = (b: { selector: string; body: string }) =>
+      /\[data-state=/.test(b.selector) &&
+      !/border(?:-[a-z]+)?\s*:\s*\d/.test(b.body);
+    expect(
+      blocks
+        .filter(
+          (b) =>
+            paintsControl(b.selector) &&
+            !exempt(b) &&
+            /border(?:-[a-z]+)?(?:-color)?\s*:[^;]*var\(--border\)/.test(b.body),
+        )
+        .map((b) => b.selector),
+    ).toEqual(['.b-button[data-state="current"]']);
   });
 
   it("bites on a control that rests on the static token", () => {
@@ -3010,34 +3052,29 @@ describe("hover does not overwrite a status tint with a neutral one", () => {
     }
   });
 
-  it("defines --down-deep in both themes, moving away from the page", () => {
-    // Direction, not value: on dark a deepening tint gets lighter, on light it
-    // gets darker. A value copied from one theme to the other would make a
-    // hovered row fade in exactly one of them, which is the kind of thing that
-    // ships because nobody switches themes while hovering.
-    const dark = declarations(themeBlock("dark"));
-    const light = declarations(themeBlock("light"));
-    const deepDark = dark.get("--down-deep");
-    const dimDark = dark.get("--down-dim");
-    const deepLight = light.get("--down-deep");
-    const dimLight = light.get("--down-dim");
-    expect(deepDark, "dark --down-deep").toBeTruthy();
-    expect(deepLight, "light --down-deep").toBeTruthy();
-
-    const lum = (hex: string) => {
-      const h = hex.replace("#", "");
-      return [0, 2, 4]
-        .map((i) => Number.parseInt(h.slice(i, i + 2), 16))
-        .reduce((a, b) => a + b, 0);
-    };
-    expect(
-      lum(deepDark as string),
-      "on dark, deep must be lighter than dim",
-    ).toBeGreaterThan(lum(dimDark as string));
-    expect(
-      lum(deepLight as string),
-      "on light, deep must be darker than dim",
-    ).toBeLessThan(lum(dimLight as string));
+  it("defines no `-deep` tone, because nothing has a resting fill to deepen", () => {
+    // This replaces a test that asserted `--down-deep` exists and moves away
+    // from the page in each theme. It was right for as long as a down row
+    // carried a resting `--down-dim` fill; the product owner asked for that
+    // fill to go (DESIGN.md §2.3), and with no resting tint a hover deepening
+    // would *introduce* red rather than intensify it — the exact failure the
+    // original rule forbade.
+    //
+    // So the assertion is inverted rather than deleted: the decision under
+    // test is still "a `-deep` tone exists exactly when a status has a resting
+    // fill to deepen". Re-adding the token without re-adding a caller now
+    // fails here, which is the repo's own rule that a token with no caller is
+    // a decision nobody made.
+    for (const theme of ["dark", "light"] as const) {
+      const declared = declarations(themeBlock(theme));
+      const deep = [...declared.keys()].filter((name) =>
+        /^--(?:up|warn|down|idle)-deep$/.test(name),
+      );
+      expect(
+        deep,
+        `${theme}: a -deep tone with no resting fill to deepen is a token with no caller`,
+      ).toEqual([]);
+    }
   });
 });
 
