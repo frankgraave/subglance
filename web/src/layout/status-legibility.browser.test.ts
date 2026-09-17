@@ -47,13 +47,24 @@ async function open(
     LAYOUT_STORAGE_KEY,
     layout,
   );
-  if (theme !== undefined) {
-    await page.evaluate(
-      (key: string, value: string) => window.localStorage.setItem(key, value),
-      THEME_STORAGE_KEY,
-      theme,
-    );
-  }
+  /*
+   * The theme is set explicitly or explicitly cleared, never left alone.
+   *
+   * `newPage()` shares a browser context, so every page on this origin shares
+   * one `localStorage`, and closing a page does not empty it. Setting the key
+   * only when a theme is asked for therefore leaked: the dark lamp case ran
+   * before the compact contrast case, and the compact case inherited "dark"
+   * while its name and comments claimed it measured the default. It passed,
+   * which is worse — the suite was reporting a theme it had not tested.
+   */
+  await page.evaluate(
+    (key: string, value: string | null) => {
+      if (value === null) window.localStorage.removeItem(key);
+      else window.localStorage.setItem(key, value);
+    },
+    THEME_STORAGE_KEY,
+    theme ?? null,
+  );
   await page.goto(server.url + "/", { waitUntil: "domcontentloaded" });
   await page.waitForSelector(ready, { timeout: 15_000 });
   await page.evaluate(
