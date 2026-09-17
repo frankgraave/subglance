@@ -7,7 +7,7 @@ import { ConfirmDelete } from "../components/ConfirmDelete";
 import { StateChip } from "../components/Chip";
 import { ChannelRow } from "./ChannelRow";
 import { ChannelForm } from "./ChannelForm";
-import { describeChannels } from "./channels";
+import { describeChannels, typeLabel, CHANNEL_TYPES } from "./channels";
 import type { Channel, DeliveryState } from "./channels";
 import { DELIVERY_UNKNOWN } from "./channels";
 import type { ChannelInput } from "./channelsApi";
@@ -130,31 +130,44 @@ export function NotificationsView({
         </p>
       )}
 
-      {/*
-       * The page admits what it cannot know.
-       *
-       * The mockup promises a delivery state on every row, and the ticket asks
-       * for three of them. The API supplies none: `GET /channels` returns id,
-       * name, type, masked config, enabled and timestamps — no delivery
-       * counts, no last error, no last-sent time. Saying so once, here, is
-       * what keeps "Not verified" on a row from reading as a bug.
-       */}
-      <p className="add-help">
-        SubGlance cannot yet tell you whether a channel has been delivering.
-        The channel API carries no delivery history, so every row starts as{" "}
-        <b>Not verified</b> and only a test you run here can change it. A
-        channel that has failed every delivery for three days looks exactly the
-        same as one that has never been needed — which is why the test button
-        is on every row.
-      </p>
-
       <Card
         title="Channels"
         /* This card's title is the page's heading now (SUB-138). */
         headingLevel={1}
-        note={describeChannels(channels)}
+        /*
+         * The note has no opinion until the load resolves (SUB-138).
+         *
+         * It used to be `describeChannels(channels)` unconditionally, and
+         * `channels` is `[]` before the first response — so the card headed
+         * itself "No channels configured" while its own body said "Loading
+         * channels…", in the same screenshot. Two sentences, one screen,
+         * flatly contradicting each other, and the wrong one was the
+         * confident one. On a page whose entire character is refusing to
+         * claim what it cannot know, stating "no channels" over an
+         * unfinished request is the worst available failure: it is the
+         * sentence that tells a self-hoster their alerting is gone.
+         *
+         * `undefined` rather than a placeholder string, because `Card` omits
+         * the element entirely for `undefined` — and a skeleton line here
+         * would be a second thing on screen pretending to be a count.
+         */
+        note={loading || error !== null ? undefined : describeChannels(channels)}
+        /*
+         * The header action steps aside for the empty state (SUB-138).
+         *
+         * With no channels the screen offered "Add channel" in the card header
+         * and "Add a channel" in the body — two primary buttons, 200px apart,
+         * doing the same thing, on the one screen whose job is to present a
+         * single obvious next step. The empty state's button is the one that
+         * keeps its explanation beside it, so it is the one that stays.
+         *
+         * Only for the genuinely empty instance: while loading, on an error,
+         * and on a list filtered down to nothing, the header button is the
+         * only way to add a channel and must not vanish.
+         */
         action={
-          onCreateOpenChange === undefined ? undefined : (
+          onCreateOpenChange === undefined ||
+          (!loading && error === null && channels.length === 0) ? undefined : (
             <button
               type="button"
               className="add-button add-button-primary"
@@ -180,68 +193,113 @@ export function NotificationsView({
            * request 500'd. The error is stated above and this space stays
            * quiet rather than filling it with a claim we cannot support.
            */
-          <p className="add-help">
+          <p className="nt-note">
             {loading ? "Loading channels…" : "The list could not be loaded."}
           </p>
-        ) : channels.length === 0 ? (
-          /*
-           * The empty state is a fact at headline weight, not an apology.
-           *
-           * No channels is not "nothing here yet": it is a silent
-           * misconfiguration that looks exactly like a working install, and
-           * every failure this product detects goes nowhere. It is not red —
-           * red means something is failing right now, and nothing is — the
-           * weight and the wording carry it (DESIGN.md §2.3).
-           */
-          <div className="nt-empty">
-            <p className="add-title">Alerts are going nowhere.</p>
-            <p className="add-help">
-              SubGlance will record every failure it detects and show it on the
-              dashboard, and nobody will be told about any of them. Adding one
-              channel and testing it takes about a minute.
-            </p>
-            {onCreateOpenChange !== undefined && (
-              <div className="add-actions">
-                <button
-                  type="button"
-                  className="add-button add-button-primary"
-                  onClick={() => onCreateOpenChange(true)}
-                >
-                  Add a channel
-                </button>
-              </div>
-            )}
-          </div>
         ) : visibleChannels.length === 0 ? (
-          /*
-           * A filter that matched nothing, which is not the same fact.
-           *
-           * "Alerts are going nowhere" is a claim about the instance. Typed
-           * over a search, it told a self-hoster their alerting was gone when
-           * four working channels were sitting one keystroke away. The filter
-           * gets its own line, and it does not repeat the alarm.
-           */
-          <p className="add-help">
-            No channels match “{query.trim()}”. The filter matches a channel’s
-            name and its type.
-          </p>
+          channels.length === 0 ? (
+            /*
+             * The empty state is a fact at headline weight, not an apology.
+             *
+             * No channels is not "nothing here yet": it is a silent
+             * misconfiguration that looks exactly like a working install, and
+             * every failure this product detects goes nowhere. It is not red —
+             * red means something is failing right now, and nothing is — the
+             * weight and the wording carry it (DESIGN.md §2.3).
+             *
+             * It also says what a channel *is* (SUB-138). This is the first
+             * screen a new self-hoster reaches with nothing configured, and
+             * the previous version assumed the reader already knew what they
+             * were being asked to add: it named a consequence and offered a
+             * button, with nothing in between. The types are listed because
+             * they are the honest answer to "what can I even use here" — they
+             * come from `CHANNEL_TYPES`, which mirrors the store's CHECK
+             * constraint, so the list cannot drift into advertising a type the
+             * server would reject.
+             */
+            <div className="nt-empty">
+              <p className="add-title">Alerts are going nowhere.</p>
+              <p className="nt-note nt-note--lede">
+                A channel is where SubGlance sends a message when a monitor
+                fails. Until one exists, every failure is recorded and shown on
+                the dashboard and nobody is told about any of it.
+              </p>
+              <p className="nt-note">
+                {CHANNEL_TYPES.map(typeLabel).join(", ")} are supported. Adding
+                one and testing it takes about a minute.
+              </p>
+              {onCreateOpenChange !== undefined && (
+                <div className="add-actions">
+                  <button
+                    type="button"
+                    className="add-button add-button-primary"
+                    onClick={() => onCreateOpenChange(true)}
+                  >
+                    <PlusIcon aria-hidden="true" />
+                    Add a channel
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            /*
+             * A filter that matched nothing is not an empty instance.
+             *
+             * Previously the two shared one branch, so typing "zz" into the
+             * masthead filter on an instance with four working channels
+             * produced "Alerts are going nowhere." — the page's single most
+             * alarming sentence, fired by a search box. The distinction costs
+             * one comparison and prevents the screen from lying about the
+             * thing it exists to be honest about.
+             */
+            <p className="nt-note">
+              No channel matches {`“${query.trim()}”`}. {channels.length}{" "}
+              {channels.length === 1 ? "channel is" : "channels are"} configured.
+            </p>
+          )
         ) : (
-          <ul className="inv-list">
-            {visibleChannels.map((channel) => (
-              <ChannelRow
-                key={channel.id}
-                channel={channel}
-                delivery={deliveries[channel.id] ?? DELIVERY_UNKNOWN}
-                testing={testingIds.has(channel.id)}
-                onTest={onTest}
-                onEdit={canWrite ? setEditingId : undefined}
-                onDelete={onDelete === undefined ? undefined : setConfirming}
-                onSetEnabled={onSetEnabled}
-                toggling={togglingIds.has(channel.id)}
-                rowError={rowErrors[channel.id] ?? null}
-              />
-            ))}
-          </ul>
+          <>
+            {/*
+             * The caveat that explains the Delivery column, beside the Delivery
+             * column (SUB-138).
+             *
+             * This text is load-bearing — it is the reason every row reads
+             * "Not verified" rather than a green tick — and it used to sit
+             * outside the card, above it, in the page's quietest ink at the
+             * full 860px measure. Caveat text set faint and wide is text
+             * designed not to be read, and a reader who skips it sees a column
+             * of grey chips with no explanation for why nothing is ever green.
+             *
+             * So it is louder, not quieter: --ink-2 rather than --ink-3, a
+             * bounded measure, and inside the card directly above the list it
+             * describes. Nothing was cut.
+             */}
+            <p className="nt-legend">
+              SubGlance cannot yet tell you whether a channel has been
+              delivering. The channel API carries no delivery history, so every
+              row starts as <b>Not verified</b> and only a test you run here can
+              change it. A channel that has failed every delivery for three days
+              looks exactly the same as one that has never been needed — which
+              is why the test button is on every row.
+            </p>
+
+            <ul className="inv-list">
+              {visibleChannels.map((channel) => (
+                <ChannelRow
+                  key={channel.id}
+                  channel={channel}
+                  delivery={deliveries[channel.id] ?? DELIVERY_UNKNOWN}
+                  testing={testingIds.has(channel.id)}
+                  onTest={onTest}
+                  onEdit={canWrite ? setEditingId : undefined}
+                  onDelete={onDelete === undefined ? undefined : setConfirming}
+                  onSetEnabled={onSetEnabled}
+                  toggling={togglingIds.has(channel.id)}
+                  rowError={rowErrors[channel.id] ?? null}
+                />
+              ))}
+            </ul>
+          </>
         )}
       </Card>
 
@@ -315,7 +373,7 @@ export function NotificationsView({
       )}
 
       {!canWrite && !loading && channels.length > 0 && (
-        <p className="add-help">
+        <p className="nt-note">
           <StateChip>read only</StateChip> This account may see the channels
           but not change them, and may not send a test — a test is a real
           message to somebody else's inbox.
@@ -328,13 +386,23 @@ export function NotificationsView({
        * Stated rather than silently missing, because the approved mockup draws
        * all of it and a reader comparing the two would otherwise conclude the
        * page is unfinished by accident.
+       *
+       * Given a heading rather than left as an unlabelled grey paragraph
+       * trailing the card (SUB-138). Unheaded caveat prose at the bottom of a
+       * screen reads as boilerplate and is skipped; what it actually contains
+       * is a scope decision a reader may want to disagree with, so it is
+       * framed as one. The text is unchanged and the measure is bounded, which
+       * is the only reason it is now legible at all.
        */}
-      <p className="add-help">
-        Routing rules, quiet hours, severity floors and the delivery log are
-        not here. They have no backend today (SUB-124), and a quiet-hours
-        switch that silently changes nothing is worse than no switch at all.
-        Which monitors use a channel is set on the monitor.
-      </p>
+      <aside className="nt-scope" aria-label="Not on this page">
+        <p className="nt-scope-legend">Not on this page</p>
+        <p className="nt-note">
+          Routing rules, quiet hours, severity floors and the delivery log are
+          not here. They have no backend today (SUB-124), and a quiet-hours
+          switch that silently changes nothing is worse than no switch at all.
+          Which monitors use a channel is set on the monitor.
+        </p>
+      </aside>
     </section>
   );
 }

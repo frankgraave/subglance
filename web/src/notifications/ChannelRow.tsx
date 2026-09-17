@@ -120,7 +120,7 @@ function ChannelRowImpl({
           {onTest !== undefined && (
             <button
               type="button"
-              className="add-button inv-act"
+              className="add-button inv-act nt-act-test"
               onClick={() => onTest(channel.id)}
               disabled={testing}
               aria-label={`${testWord} ${label}`}
@@ -143,7 +143,7 @@ function ChannelRowImpl({
           {onSetEnabled !== undefined && (
             <button
               type="button"
-              className="add-button inv-act"
+              className="add-button inv-act nt-act-toggle"
               onClick={() => onSetEnabled(channel.id, !channel.enabled)}
               disabled={toggling}
               /*

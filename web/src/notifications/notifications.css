@@ -51,4 +51,88 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  /* Bounded to a reading measure. The empty state is the one screen a new
+     self-hoster reads word for word, and at the card's full 860px its two
+     sentences ran past the point where the eye finds the next line. */
+  max-width: 62ch;
 }
+
+/*
+ * The page's secondary prose: help text that is meant to be read.
+ *
+ * `.add-help` was doing this job and is wrong for it here. It is form help —
+ * `--ink-3`, sitting under an input two centimetres wide, where the field
+ * itself carries the attention and the measure is bounded by the form. On this
+ * page the same class was setting four standalone paragraphs, one of them
+ * load-bearing, at the page's quietest ink across the full 860px column. That
+ * is a line of roughly 140 characters at 3.2:1 — text formatted to be skipped.
+ *
+ * So: one step louder, and bounded. `--ink-2` measures 5.9:1 rather than
+ * 3.2:1, which is the difference between clearing AA for body text and not.
+ */
+.nt-note {
+  font-size: var(--type-helper);
+  line-height: var(--lead-prose);
+  color: var(--ink-2);
+  max-width: 62ch;
+}
+
+/* The one sentence under the empty state's headline, which is read before
+   anything else on the screen and takes the body size for it. */
+.nt-note--lede {
+  font-size: var(--type-body);
+  line-height: var(--lead-body);
+  color: var(--ink);
+}
+
+/*
+ * The caveat that explains the Delivery column, directly above the list.
+ *
+ * Separated from the rows by its own rule rather than by a gap: it is about
+ * the list, not an item in it, and a paragraph resting on a list with only
+ * whitespace between them reads as the list's first row.
+ */
+.nt-legend {
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--type-helper);
+  line-height: var(--lead-prose);
+  color: var(--ink-2);
+  max-width: 62ch;
+}
+
+/*
+ * What this page deliberately does not do, framed as a statement rather than
+ * left as grey prose trailing off the bottom of the screen.
+ */
+.nt-scope {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1h);
+  max-width: 62ch;
+}
+
+.nt-scope-legend {
+  @apply caps-legend;
+  color: var(--ink-3);
+}
+
+/*
+ * Reserved width for the two row actions whose label changes (SUB-138).
+ *
+ * Measured in Chromium rather than guessed. The toggle renders "Enable"
+ * (60.1px), "Disable" (64.8px) or "Saving…" (70.8px), and the test button
+ * swings from "Send test" (76.1px) to "Sending test…" (103.8px). Both widths
+ * are load-bearing for something other than the button: every row's action
+ * cluster is right-aligned, so a button that grows pushes its neighbours left
+ * — which is why the one disabled channel in the fixture sat 4.7px out of
+ * line with the four enabled ones, in every column, for no reason a reader
+ * could see. Pressing Test was worse: the cluster jumped 28px sideways at the
+ * exact moment the pointer was over it.
+ *
+ * `min-width` rather than `width`, so a translation longer than either label
+ * still gets the room it needs instead of being clipped.
+ */
+.nt-act-toggle { min-width: var(--size-col-sm-alt); }
+.nt-act-test { min-width: var(--size-col-lg); }
