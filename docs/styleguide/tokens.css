@@ -291,14 +291,52 @@
   --size-icon-lg: 20px;  /* the LED, and marks that carry status */
   --size-icon-xl: 30px;  /* a standalone icon button in the toolbar */
 
-  /* Column widths in dense tables. Stated because a column that is 88px in
-     one table and 92px in the next reads as a mistake at a glance, and
-     because a guard cannot check a literal. */
-  --size-col-xs: 62px;   /* the compact list's last column: a short reading */
-  --size-col-sm: 76px;   /* the compact list's status column */
-  --size-col-md: 88px;   /* a timestamp: the incident time column, the timeline's "at" */
-  --size-col-lg: 116px;  /* the incident kind column */
-  --size-col-xl: 184px;  /* the dashboard's heartbeat column */
+  /* ---------------------------------------------------------------- §2.14
+     The column ladder: Fibonacci x 8, so widths are RELATED, not chosen.
+
+     40 / 64 / 104 / 168 / 272 = 8 x (5, 8, 13, 21, 34). Each rung over the
+     one below it: 1.600, 1.625, 1.6154, 1.6190 — phi (1.6180) to within
+     1.2% at the worst rung and 0.06% at the best.
+
+     Why Fibonacci and not phi itself. phi applied literally to a 64px rung
+     gives 103.55px. A fractional width puts a border on a half pixel, which
+     the engine resolves differently per device pixel ratio, and the product
+     already rejected that once for the type scale (§2.5) and once for the
+     lamp's 2.5px corner (§2.7). The Fibonacci ladder is phi to a rounding
+     error and lands on whole pixels by construction. Base 8 rather than 4 so
+     every rung is also on the 4px spacing grid — 8x4 would give 20 and 52,
+     which are on the grid at 4 but not at 8, and a column that is not a
+     multiple of the gap beside it reads as off by a pixel even when it is not.
+
+     What the ladder replaced: eleven hand-picked column widths — 62, 72, 76,
+     78, 84, 88, 92, 116, 128, 148, 184 — across three screens, each correct
+     against the one table it was written for and unrelated to the other ten.
+     Three of them were also measurably too small for their own content at
+     1440px, verified in Chromium: the dashboard's status column clipped
+     "Pending" by 5px, the incidents kind column clipped a
+     "Connection refused" chip by 26px, and the inventory's timeout column
+     clipped its own "TIMEOUT" label by 11px. A per-column width is not a
+     decision anybody can check; a rung is.
+
+     A column takes the smallest rung its widest *label* fits in. Data
+     truncates — the same argument `--size-control-select` already makes: a
+     channel name or a tag is data, and a longer one tomorrow must not drag
+     one column out of line with its neighbours. */
+  --size-col-1: 40px;
+  --size-col-2: 64px;
+  --size-col-3: 104px;
+  --size-col-4: 168px;
+  --size-col-5: 272px;
+
+  /* Column widths that are NOT on the ladder, because they are not data
+     columns in the product: three belong to the style guide's own tables and
+     one caps a viewport-relative gutter. Kept as their own rungs so the guard
+     can see them, and named apart from `--size-col-1..5` so nobody reaches
+     for one when laying out a screen. */
+  --size-col-sm: 76px;   /* the style guide's swatch column */
+  --size-col-md: 88px;   /* the style guide's value column and radius sample */
+  --size-col-lg: 116px;  /* the style guide's specimen column */
+  --size-col-gutter: 72px; /* the cap on the status wall's 5vw side gutter */
 
   /* Panel and container widths. */
   --size-pane-sm: 280px;  /* the search field, the drawer's natural width */
@@ -310,11 +348,6 @@
   --size-icon-xxs: 7px;   /* the connection dot and the LED's height */
   --size-icon-nav: 15px;  /* a glyph inside the sidebar's nav row */
   --size-col-2xs: 34px;   /* the toolbar's own control row */
-  --size-col-sm-alt: 72px; /* the incident duration column; also the wall's gutter cap */
-  --size-col-xxs: 78px;   /* the lamp-plus-word icon slot in a monitor line */
-  --size-col-tag: 84px;   /* the dashboard's lamp column, narrowed from 104 in SUB-135 */
-  --size-col-alt: 92px;   /* the dashboard's numeric column */
-  --size-col-2xl: 128px;  /* the incident acknowledge column, right-aligned */
   --size-row-sm: 24px;    /* the floor a one-line row settles on */
   --size-row-md: 32px;
   --size-row-lg: 46px;

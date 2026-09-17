@@ -256,25 +256,58 @@
 }
 
 /*
- * Wide enough for the lamp plus the longest status word ("Pending"), and no
- * wider (SUB-135).
+ * The status column's width, and why it is a rung rather than a measurement.
  *
- * It was 104px, which is ~35px more than the widest thing measured in it, and
- * the surplus showed: the lamps sat marooned in the middle of a column that
- * was mostly nothing, next to a header cell whose only content was visually
- * hidden — so the top-left of the table read as an empty block hanging beside
- * the column titles. Measured in the browser at the shipped face and size, the
- * longest cell ("Pending", lamp included) is 70px; 84px leaves the column's
- * own 12px of padding on each side and nothing else.
+ * SUB-135 narrowed it from 104px to 84px against the widest cell it could
+ * then see ("Pending", lamp included, measured at 70px). SUB-139 re-measured
+ * in the shipped face and got 77px — the earlier number missed the gap
+ * between lamp and word — so 84px minus 24px of cell padding was clipping the
+ * longest status word by 5px on every pending monitor. See §2.14 below for
+ * the ladder it now takes its width from.
  */
-.mon-col--led { width: var(--size-col-tag); }
+/*
+ * The four fixed columns, all on the Fibonacci column ladder (§2.14).
+ *
+ * Before SUB-139 these were 84 / 184 / 92 / 92 — four numbers with no
+ * relationship to each other and none to the incidents or inventory columns
+ * two screens away. Measured in Chromium at 1440px, the 84 was also wrong:
+ * the widest thing the status column holds is the lamp plus "Pending", which
+ * is 77px of content inside 24px of cell padding, so the word overflowed its
+ * own column by 5px on every pending monitor.
+ *
+ * Status takes rung 3 (104): 80px of content budget against 77px of widest
+ * label, which is the smallest rung that holds it. SUB-135 was right that the
+ * old 104 was 35px of surplus beside "Down" — but it measured the wrong cell,
+ * and 84 cut past the widest word. The rung is the same number for a
+ * different and checkable reason.
+ *
+ * Latency and 24h share rung 3 as well, and sharing it is the point: they are
+ * the same kind of thing — one measured number, right-aligned — so a reader
+ * scanning down learns one column width rather than two.
+ *
+ * Last checks takes rung 4 (168). The heartbeat inside it needs
+ * `--size-pane-xs` (148px) to stay legible, and 168 minus the cell's own
+ * padding would leave 144 — four pixels short. So that one cell gives up its
+ * horizontal padding instead (see `.mon-cell--beats`), which both clears the
+ * floor with 20px to spare and puts the bar's left edge on the same line as
+ * the header above it.
+ */
+.mon-col--led { width: var(--size-col-3); }
 .mon-col--name { width: auto; }
-.mon-col--beats { width: var(--size-col-xl); }
-.mon-col--num { width: var(--size-col-alt); }
+.mon-col--beats { width: var(--size-col-4); }
+.mon-col--num { width: var(--size-col-3); }
 
 .mon-head {
   height: var(--size-col-2xs);
   padding: 0 var(--space-3);
+  /* A transparent edge the width of the body cell's, so the header's text
+     starts on the same vertical line as the content beneath it rather than
+     one pixel to the left of it. The rows below carry a real 2px left border
+     (neutral at rest, coloured by status); without this the STATUS label and
+     the lamp under it disagreed by exactly that border — measured at 275 and
+     276 in Chromium, which is small enough to look like bad kerning and large
+     enough to stop the column reading as one line. */
+  border-left: 2px solid transparent;
   text-align: left;
   @apply caps-legend;
   /* No rule under the header: the panels below carry their own edges, and a
@@ -285,8 +318,15 @@
 
 .mon-head--num { text-align: right; }
 
+/* The heartbeat's header shares its cell's decision to give up padding, so
+   the label and the bar start on one line. */
+.mon-head--beats { padding-inline: 0; }
+
 .mon-section-title {
   padding: var(--space-2) var(--space-3);
+  /* Same transparent edge, same reason: the section legend heads the rows
+     below it and must start where they do. */
+  border-left: 2px solid transparent;
   text-align: left;
   @apply caps-legend;
   background: transparent;
@@ -325,8 +365,18 @@
   transition: border-color var(--dur-hover) var(--ease);
 }
 
+/*
+ * The leading edge is 2px at every status, including none.
+ *
+ * It used to be 1px at rest and 2px when a status wanted to colour it, which
+ * moved every cell in the row one pixel right the moment a monitor went down
+ * — so a list of forty rows had a ragged left edge that changed as the data
+ * changed. Reserving the two pixels and only changing their colour is the
+ * same fix `.shell-signout` already makes with `border: 1px solid
+ * transparent`: the space is always there, and only its paint is a state.
+ */
 .mon-row > :first-child {
-  border-left: 1px solid var(--border);
+  border-left: 2px solid var(--border);
   border-start-start-radius: var(--r-md);
   border-end-start-radius: var(--r-md);
 }
@@ -356,16 +406,23 @@
 
 /* Trouble warms the row's leading edge instead of filling it. A coloured fill
    across a list of 200 is noise; two warm edges in a quiet list is
-   information (DESIGN.md §6, §10). border-left rather than a ::before,
-   because absolutely positioning inside a <td> is unreliable across engines. */
-.mon-row[data-status="down"] {
-  border-left: 2px solid var(--down);
-  background: var(--down-dim);
-}
+   information (DESIGN.md §6, §10).
 
-.mon-row[data-status="pending"] { border-left: 2px solid var(--warn); }
+   Drawn on the first CELL, not on the `<tr>`. This is the same fact the fill
+   rule below already knew and this rule did not: under
+   `border-collapse: separate` a `<tr>` paints neither a background nor a
+   border. The declaration was live in the computed style — a 2px solid
+   `--down` edge on the down row, verified in Chromium — and nothing of it
+   reached the screen; sampling the row's leftmost pixels gave
+   the neutral cell border and then the fill, with no red anywhere. The status
+   edge this product uses on cards, lines and inventory rows has therefore
+   been missing from its main table the whole time. */
+.mon-row[data-status="down"] > :first-child { border-left-color: var(--down); }
+.mon-row[data-status="down"] > * { background: var(--down-dim); }
+
+.mon-row[data-status="pending"] > :first-child { border-left-color: var(--warn); }
 /* Grey, not amber: nothing is in flight for a monitor nobody has pinged. */
-.mon-row[data-status="waiting"] { border-left: 2px solid var(--idle); }
+.mon-row[data-status="waiting"] > :first-child { border-left-color: var(--idle); }
 /* Paused is not trouble and not a gap in the data: someone switched it off.
    A dotted neutral edge says "deliberate" where down and pending say "look at
    this", and it keeps the two apart in greyscale as well as in colour.
@@ -373,8 +430,9 @@
    (dark) / 3.2:1 (light) and clears the 3:1 non-text floor, ink-4 is 1.9:1 in
    both and would be a signal only people with good monitors could see.
    The reduced opacity stays: a monitor nobody is watching should recede. */
-.mon-row[data-status="paused"] {
-  border-left: 2px dotted var(--ink-3);
+.mon-row[data-status="paused"] > :first-child {
+  border-left-style: dotted;
+  border-left-color: var(--ink-3);
 }
 
 /* The opacity sits on the children, never on the block itself.
@@ -411,6 +469,20 @@
 }
 
 .mon-cell--led { text-align: left; }
+
+/*
+ * The heartbeat cell gives up its horizontal padding.
+ *
+ * Two reasons, and the second is the one that matters. The bar has a
+ * `--size-pane-xs` (148px) legibility floor, and rung 4 is 168px — 24px of
+ * cell padding would leave 144 and squeeze it below that floor. And with the
+ * padding gone the bar starts exactly where the LAST CHECKS label above it
+ * does, so the column reads as one line rather than as a label with a chart
+ * indented under it. The bar draws its own edges, which is what
+ * `.panel--flush` already codifies for a child that reaches its container's
+ * sides.
+ */
+.mon-cell--beats { padding-inline: 0; }
 
 .mon-cell--name {
   /* min-width:0 on a fixed-layout cell is what lets the ellipsis engage
@@ -894,9 +966,11 @@
 }
 
 .mon-line .panel-row-icon {
-  /* The lamp plus its status word, at the width the column used to reserve so
-     the names below still start on one vertical line. */
-  width: var(--size-col-xxs);
+  /* The lamp plus its status word, on rung 3 like the rows layout's status
+     column. The compact list and the rows list show the same field; showing
+     it at 78px on one screen and 104px on the other made two views of one
+     dataset disagree about how wide a status is. */
+  width: var(--size-col-3);
   justify-content: flex-start;
 }
 
@@ -904,10 +978,11 @@
    line up down the list even though each line is now its own panel. */
 .mon-line .panel-row-body {
   display: grid;
-  /* The first column grew from 22px to hold the status word next to the lamp
-     (SUB-100). The space comes out of the target column, which is the one
-     field on the line that is still readable truncated. */
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.2fr) var(--size-col-sm) var(--size-col-xs);
+  /* The two elastic columns and then two ladder rungs. The numeric pair used
+     to be 76 and 62 — two adjacent columns of the same kind of reading at two
+     widths, which is the drift §2.14 exists to stop. Rung 2 (64) for both:
+     the widest reading here is a latency, at 49px. */
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.2fr) var(--size-col-2) var(--size-col-2);
   align-items: center;
   gap: var(--space-3);
 }

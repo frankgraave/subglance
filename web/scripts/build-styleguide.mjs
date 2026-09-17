@@ -346,6 +346,39 @@ function sizeRow([name, value]) {
       </tr>`;
 }
 
+/*
+ * A column rung, showing the ratio to the rung below it.
+ *
+ * The ratio column is the section's whole reason for existing separately: the
+ * claim this ladder makes is not "these are the five widths", it is "each one
+ * is phi times the one below", and a table of widths cannot show that.
+ */
+function columnRungRow([name, value], index, all) {
+  const px = Number.parseFloat(value);
+  const below = index === 0 ? null : Number.parseFloat(all[index - 1][1]);
+  const phi = (1 + Math.sqrt(5)) / 2;
+  const ratio = below === null ? null : px / below;
+  const drift = ratio === null ? null : ((ratio - phi) / phi) * 100;
+  return `
+      <tr>
+        <td class="sg-cell-swatch">
+          <span class="sg-bar" style="width: var(${name})"${
+            px > 116 ? " data-overflows" : ""
+          }></span>
+        </td>
+        <td><code>${esc(name)}</code></td>
+        <td class="sg-value"><code>${esc(value)}</code></td>
+        <td class="sg-value">${
+          ratio === null
+            ? "<span class=\"sg-light\">base</span>"
+            : `<code>${ratio.toFixed(4)}</code><br><span class="sg-light">${
+                drift >= 0 ? "+" : ""
+              }${drift.toFixed(2)}% from phi</span>`
+        }</td>
+        <td class="sg-why">${why(rationaleFor(name))}</td>
+      </tr>`;
+}
+
 function typeRow(name) {
   const size = root.get(name);
   const leadName = name.replace("--type-", "--lead-");
@@ -395,7 +428,16 @@ const statusTokens = group(dark, "--up", "--down", "--warn", "--idle", "--zero")
 const textTokens = [...root.keys()].filter((n) => n.startsWith("--type-"));
 const leadTokens = group(root, "--lead-");
 const spaceTokens = group(root, "--space-");
-const sizeTokens = group(root, "--size-");
+/* The Fibonacci column rungs get their own section, because the thing worth
+   showing about them is the ratio between them, and a column of widths with
+   no ratio beside it is exactly the presentation that let eleven unrelated
+   column widths look considered. */
+const columnLadderTokens = group(root, "--size-col-").filter(([name]) =>
+  /^--size-col-\d+$/.test(name),
+);
+const sizeTokens = group(root, "--size-").filter(
+  ([name]) => !/^--size-col-\d+$/.test(name),
+);
 const radiusTokens = group(root, "--r-");
 const depthTokens = [
   ...group(root, "--z-", "--shadow", "--glow"),
@@ -492,6 +534,23 @@ const sections = [
       <colgroup><col class="sg-col-sample"><col class="sg-col-token"><col class="sg-col-value"><col></colgroup>
       <thead><tr><th></th><th>Token</th><th>Value</th><th>What it is for</th></tr></thead>
       <tbody>${sizeTokens.map(sizeRow).join("")}</tbody>
+    </table>`,
+  },
+  {
+    id: "columns",
+    title: "The column ladder",
+    lead: `Five rungs at 8 x the Fibonacci sequence, so every data column in
+      the product is related to every other by the same ratio instead of
+      chosen one table at a time. The ratio column is the point: each rung is
+      phi (1.618) times the one below, to within 1.2% at its worst step. They
+      are Fibonacci rather than phi exactly because phi lands on a fractional
+      pixel — 64 x 1.618 = 103.55 — and a border on a half pixel renders
+      differently per device pixel ratio. A column takes the smallest rung its
+      widest <em>label</em> fits in; data truncates.`,
+    html: `<table class="sg-table">
+      <colgroup><col class="sg-col-sample"><col class="sg-col-token"><col class="sg-col-value"><col class="sg-col-value"><col></colgroup>
+      <thead><tr><th></th><th>Token</th><th>Value</th><th>Ratio to the rung below</th><th>What it is for</th></tr></thead>
+      <tbody>${columnLadderTokens.map(columnRungRow).join("")}</tbody>
     </table>`,
   },
   {

@@ -691,6 +691,107 @@ question only a real browser can answer, which is why the checks that guard it
 live in `web/src/layout/drawer-stacking.browser.test.ts` and measure painted
 pixels rather than declarations.
 
+### 2.12 Size is a ladder
+
+Named in `tokens.css` and guarded by `tokens.test.ts` with a 2px floor. See
+that file for the rungs and the reason beside each one; the short version is
+that width and height were the last two scales with no ladder at all and had
+drifted furthest — an audit counted 88 loose pixel values across 26
+stylesheets against zero loose colours.
+
+### 2.13 Breakpoints are tokens that cannot be used
+
+640 / 641 / 900. Documented as `--bp-*` and written as literals everywhere
+else, because a custom property inside a media query never resolves — the
+query is evaluated before custom properties are substituted, so the block is
+silently dropped. `tokens.test.ts` asserts every `@media` width is one of the
+three and that none is written as `var()`.
+
+### 2.14 The column ladder is a proportion
+
+```css
+--size-col-1:  40px;   /* 8 x 5  */
+--size-col-2:  64px;   /* 8 x 8  */
+--size-col-3: 104px;   /* 8 x 13 */
+--size-col-4: 168px;   /* 8 x 21 */
+--size-col-5: 272px;   /* 8 x 34 */
+```
+
+**The ratio is phi, 1.618, and the rungs are Fibonacci.** Each rung over the
+one below it measures 1.600, 1.625, 1.6154 and 1.6190 — between 0.16% and
+1.11% off phi. They are not phi itself, and that is a decision rather than a
+rounding: phi applied to a 64px rung gives 103.55px, and a fractional width
+puts a border on a half pixel, which the engine resolves differently depending
+on the device pixel ratio. The type scale rejected fractional sizes for that
+reason (§2.5) and the lamp's corner rejected a 2.5px radius for it (§2.7).
+The Fibonacci sequence is phi to within a rounding error *by construction* and
+lands on whole numbers, so the ladder gets the proportion and the crisp edge
+both. Base 8 rather than 4 so every rung is a multiple of the gaps beside it.
+
+**A column takes the smallest rung its widest label fits in, and data
+truncates.** This is the same argument `--size-control-select` already makes
+for filter selects: a tag value or a channel name is data, and a longer one
+tomorrow must not drag one column out of line with its neighbours. A label is
+a fixed string the product controls, so it is the thing a width can be
+measured against.
+
+**What it replaced.** Eleven hand-picked widths — 62, 72, 76, 78, 84, 88, 92,
+116, 128 and two written in rem — across the dashboard, the incidents screen
+and the monitors inventory. Each was defensible against the one table it was
+written for and related to none of the other ten, which is how a dashboard
+ends up with a 76px column beside a 62px column holding the same kind of
+reading. Three of them were also measurably short for their own content at
+1440px, verified in Chromium rather than eyeballed: the dashboard clipped
+"Pending" by 5px, the incidents kind column clipped a "Connection refused"
+chip by 26px, and the inventory's timeout column clipped its own TIMEOUT
+label by 11px.
+
+**Where it does not apply.** Four things stay off the ladder, each for a
+stated reason rather than by omission:
+
+* **The LED.** `led.css` writes `20px` and `7px` against §3, checked by
+  `ledSizes.test.ts`. Those are a claim about legibility at a glance, not a
+  column, and a rung there would satisfy one guard while breaking another.
+* **Elastic columns.** The monitor name, the incident's main column and the
+  inventory's name/target take `auto` or `1fr`. A ladder states how wide a
+  fixed thing is; a column whose job is to absorb the remaining width has no
+  fixed width to state.
+* **The style guide's own tables.** `--size-col-sm/md/lg` are the generated
+  page's swatch, value and specimen columns. They are chrome for reading the
+  system, not a use of it, and holding them to the product's proportion would
+  be a claim about nothing.
+* **The heartbeat's legibility floor.** `--size-pane-xs` (148px) is the
+  narrowest the bar stays readable at — a measurement of the instrument, not a
+  proportion. Rung 4 (168px) holds it, which is why the heartbeat cell drops
+  its horizontal padding rather than the ladder gaining a rung between 104 and
+  168 to accommodate one component.
+
+**The guard is a ratio check, not a value check.** `tokens.test.ts` reads the
+rungs out of `tokens.css`, asserts every consecutive pair is within 2% of phi,
+asserts each rung is a whole number and a multiple of 8, and asserts every
+column width in a screen stylesheet resolves to a rung. The tolerance is
+measured: it admits the whole Fibonacci ladder including the next rung up
+(440/272 = 1.61765) and refuses a doubling ladder (23.6% off), a 1.5 ladder
+(7.3% off) and a single rung nudged by one 8px step (104 → 112 gives 1.75,
+8.2% off). That last case is the one worth having a test for — nudging one
+rung to fix a clipped column is invisible in review, leaves the comment above
+it still reading true, and quietly destroys the relationship the ladder is.
+
+### 2.15 A short page still fills the screen
+
+`.shell-content` takes `flex: 1` and `align-content: start`. The column always
+fills the viewport and its children always stack from the top, so the canvas
+below a short screen belongs to the layout rather than to nothing. Before this
+the incidents page with nothing broken measured 174px of content in a 900px
+viewport, and the 726px underneath was not space anybody decided about — which
+showed in small ways, like the keyboard focus ring on `<main>` drawing a box
+around one card instead of around the screen.
+
+Deliberately not centred. A dashboard is read top-down and a list that floats
+in the middle of the screen moves every time a row arrives. The status wall
+(§7) does centre, and it is the one screen that should: it is read from across
+a room and never scrolled.
+
 ---
 
 ## 3. The LED

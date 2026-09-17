@@ -46,7 +46,30 @@
   flex-direction: column;
 }
 
-.shell-content { padding: var(--space-6) var(--space-6) var(--space-16); }
+/*
+ * The content column, and what it does when the page is short.
+ *
+ * `flex: 1` and `align-content: start` together are the rule: the column
+ * always fills the viewport, and its children always stack from the top.
+ * Before this the `<main>` was only as tall as its content, so on a screen
+ * with one card — the incidents page with nothing broken, measured at 174px
+ * of content inside a 900px viewport — 726px of canvas below it belonged to
+ * nothing. That is not empty space a designer left; it is space nobody
+ * decided about, and the difference shows: a focus ring on `<main>` drew a
+ * box around the card instead of around the screen, and a future footer or
+ * empty state had no container to sit in.
+ *
+ * Deliberately NOT centring the content vertically. A dashboard is read from
+ * the top down and a list that floats in the middle of the screen moves every
+ * time a row arrives. The status wall (`wall.css`) does centre, and it is the
+ * one screen that should: it is looked at from across a room and never
+ * scrolled.
+ */
+.shell-content {
+  flex: 1;
+  align-content: start;
+  padding: var(--space-6) var(--space-6) var(--space-16);
+}
 
 /* ── Brand ─────────────────────────────────────────────────────────────── */
 
@@ -519,7 +542,14 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: 0 var(--space-5);
+  /* 24px, matching `.shell-content` and `.shell-topbar`, not the 20px this
+     used to carry. That four-pixel difference put the toolbar's first control
+     at x=252 while the card below it started at x=256 — measured in Chromium
+     at 1440px — so the two strongest left edges on the dashboard disagreed by
+     less than a character width. A misalignment that small does not read as a
+     second column; it reads as a mistake nobody can name. Every bar in the
+     shell now opens on one line. */
+  padding: 0 var(--space-6);
   border-bottom: 1px solid var(--border);
   background: var(--canvas);
 }

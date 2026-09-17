@@ -15,7 +15,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: var(--space-16) clamp(var(--space-6), 5vw, var(--size-col-sm-alt)) var(--space-16);
+  padding: var(--space-16) clamp(var(--space-6), 5vw, var(--size-col-gutter)) var(--space-16);
 }
 
 .wall-head {

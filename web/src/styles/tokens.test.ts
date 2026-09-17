@@ -1128,6 +1128,140 @@ describe("tokens.css is the only source of size", () => {
   });
 });
 
+/**
+ * SUB-139: the column ladder is a *proportion*, and a proportion nothing
+ * checks is a story told about numbers that were picked one at a time.
+ *
+ * The rungs `--size-col-1..5` are 8 x the Fibonacci sequence (5, 8, 13, 21,
+ * 34), which approximates phi to within 1.2% at its worst step while landing
+ * on whole pixels — see tokens.css §2.14 for why the exact phi value is the
+ * wrong choice here. The guards below are what make that claim falsifiable
+ * rather than decorative:
+ *
+ *   1. every consecutive pair is within tolerance of phi;
+ *   2. every rung is a whole number of pixels and a multiple of 8;
+ *   3. every column width in the product's screens is a rung.
+ *
+ * (1) is the one that bites hardest. It is easy to "fix" a clipped column by
+ * nudging one rung, and the nudge is invisible in review — the value still
+ * looks like a considered number, the comment above it still reads true, and
+ * the relationship it was part of is gone. A ratio check fails on exactly
+ * that edit, and names the pair it broke.
+ */
+const PHI = (1 + Math.sqrt(5)) / 2;
+
+/**
+ * 2%, and it is a measurement rather than a round number.
+ *
+ * The worst consecutive pair on the ladder is 64/40 = 1.600, which sits 1.11%
+ * under phi; the best is 168/104 = 1.61538, 0.16% under. 2% admits every rung
+ * of the Fibonacci ladder with room for the next one up (440/272 = 1.61765)
+ * and refuses the nearest plausible alternatives — a doubling ladder (2.0,
+ * 23.6% off), a 1.5 ladder (7.3% off) and a single rung nudged by one 8px
+ * step (104 -> 112 gives 1.75, 8.2% off).
+ */
+const PHI_TOLERANCE = 0.02;
+
+/** The Fibonacci column rungs, read from tokens.css rather than restated. */
+function columnLadder(): { name: string; px: number }[] {
+  const css = stripComments(readFileSync(join(webSrc, "styles/tokens.css"), "utf8"));
+  const rungs: { name: string; px: number }[] = [];
+  for (const [, name, px] of css.matchAll(/(--size-col-\d+)\s*:\s*(\d+(?:\.\d+)?)px/g)) {
+    rungs.push({ name, px: Number(px) });
+  }
+  // Declaration order is reading order in tokens.css; sort anyway so the
+  // ratio check tests the ladder rather than the order someone typed it in.
+  return rungs.sort((a, b) => a.px - b.px);
+}
+
+/**
+ * Every width a screen gives a data column, as `path: declaration`.
+ *
+ * Only the product's own screens: the style guide's tables are chrome for
+ * reading the ladder, not a use of it, and holding them to it would mean the
+ * page documenting the system had to be built from the system it documents in
+ * places where that says nothing.
+ */
+const COLUMN_RULE = /\.(?:mon-col--|mon-cell--|mon-head--|inc-col-|inv-col--|inc-tl-at)/;
+
+describe("the column ladder is phi, and stays phi (§2.14)", () => {
+  it("has at least four rungs, or there is no ladder to check", () => {
+    expect(columnLadder().length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("steps by phi from each rung to the next", () => {
+    const rungs = columnLadder();
+    const broken: string[] = [];
+    for (let i = 1; i < rungs.length; i += 1) {
+      const lower = rungs[i - 1];
+      const upper = rungs[i];
+      const ratio = upper.px / lower.px;
+      const drift = Math.abs(ratio - PHI) / PHI;
+      if (drift <= PHI_TOLERANCE) continue;
+      broken.push(
+        `${upper.name} (${upper.px}px) / ${lower.name} (${lower.px}px) = ` +
+          `${ratio.toFixed(4)}, which is ${(drift * 100).toFixed(1)}% from phi ` +
+          `(${PHI.toFixed(4)}); the ladder allows ${(PHI_TOLERANCE * 100).toFixed(0)}%. ` +
+          `The nearest whole-pixel rung that keeps the proportion is ` +
+          `${Math.round((lower.px * PHI) / 8) * 8}px.`,
+      );
+    }
+    expect(broken).toEqual([]);
+  });
+
+  it("puts every rung on a whole pixel and on the 8px grid", () => {
+    // Whole pixels because a fractional width renders a border differently per
+    // device pixel ratio -- the defect the type scale and the lamp's corner
+    // each rejected already. Multiples of 8 so a column is also a multiple of
+    // the gaps beside it.
+    const offenders = columnLadder().filter(
+      ({ px }) => !Number.isInteger(px) || px % 8 !== 0,
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it("gives every data column in a screen a rung, never a loose token", () => {
+    const ladder = new Set(columnLadder().map(({ name }) => name));
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (!file.endsWith(".css")) continue;
+      const css = stripComments(readFileSync(file, "utf8")).replace(/\s+/g, " ");
+      for (const match of css.matchAll(
+        /([^{}]*)\{([^{}]*(?:width|grid-template-columns)\s*:[^{}]*)\}/g,
+      )) {
+        const [, selector, body] = match;
+        if (!COLUMN_RULE.test(selector)) continue;
+        for (const declaration of body.matchAll(
+          /((?:min-|max-)?width|grid-template-columns)\s*:\s*([^;}]+)/g,
+        )) {
+          const value = declaration[2].trim();
+          // `auto`, `0` and a bare percentage state a relationship to the
+          // container rather than a size; the ladder has nothing to say there.
+          if (/^(auto|0|100%|max-content|min-content)$/.test(value)) continue;
+          for (const [, token] of value.matchAll(/var\((--size-col-[\w-]+)\)/g)) {
+            if (ladder.has(token)) continue;
+            offenders.push(
+              `${relative(repoRoot, file)}: ${selector.trim()} { ${declaration[1]}: ${value} } ` +
+                `uses ${token}, which is not a rung of the phi column ladder ` +
+                `(${[...ladder].join(", ")}).`,
+            );
+          }
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("states the ladder and its ratio in docs/DESIGN.md", () => {
+    expect(designMd).toContain("### 2.14 The column ladder");
+    // The number itself, so the document cannot claim a proportion it does not
+    // name -- and the honest part, which is that the rungs are Fibonacci
+    // rather than phi exactly.
+    expect(designMd).toContain("1.618");
+    expect(designMd).toContain("Fibonacci");
+  });
+});
+
 describe("tokens.css is the only source of spacing and radius", () => {
   it("finds no literal spacing or radius at or above the ladder floor under web/src", () => {
     const offenders: string[] = [];
@@ -1569,10 +1703,47 @@ const statusBorders = new Set<string>([
   "web/src/incidents/incidents.css | .inc-churn, .inc-notice | border: 1px solid var(--warn)",
   "web/src/incidents/incidents.css | .inc-notice | border-color: var(--down)",
   "web/src/live/connection.css | .conn-badge-retry | border: 1px solid var(--warn)",
-  'web/src/monitors/monitors.css | .mon-row[data-status="down"] | border-left: 2px solid var(--down)',
-  'web/src/monitors/monitors.css | .mon-row[data-status="pending"] | border-left: 2px solid var(--warn)',
-  'web/src/monitors/monitors.css | .mon-row[data-status="paused"] | border-left: 2px dotted var(--ink-3)',
-  'web/src/monitors/monitors.css | .mon-row[data-status="waiting"] | border-left: 2px solid var(--idle)',
+  /*
+   * The rows layout's status stripe, drawn on the row's FIRST CELL.
+   *
+   * These read `> :first-child` rather than the row itself, and the change is
+   * not cosmetic: under `border-collapse: separate` a `<tr>` paints no border
+   * at all, so the four rules that used to sit on `.mon-row[data-status=…]`
+   * were live in the computed style and invisible on screen. Verified by
+   * sampling the row's leftmost pixels in Chromium — the neutral cell border,
+   * then the fill, with no status colour anywhere. The `.mon-card` and
+   * `.mon-line` entries below never had the problem; they are ordinary
+   * elements.
+   *
+   * `border-left-color` alone for three of them, because the resting rule
+   * already reserves the 2px so the cells do not shift when a status arrives;
+   * paused also changes the style, which is the second, non-colour signal.
+   */
+  'web/src/monitors/monitors.css | .mon-row[data-status="down"] > :first-child | border-left-color: var(--down)',
+  'web/src/monitors/monitors.css | .mon-row[data-status="pending"] > :first-child | border-left-color: var(--warn)',
+  'web/src/monitors/monitors.css | .mon-row[data-status="paused"] > :first-child | border-left-color: var(--ink-3)',
+  'web/src/monitors/monitors.css | .mon-row[data-status="waiting"] > :first-child | border-left-color: var(--idle)',
+  /*
+   * The resting edge those four colour in. 2px rather than 1 so the row's
+   * contents do not move one pixel right the moment a monitor goes down —
+   * `--border` is a role token, but the width needs an entry.
+   */
+  "web/src/monitors/monitors.css | .mon-row > :first-child | border-left: 2px solid var(--border)",
+  /*
+   * The two headers above those rows, carrying the SAME 2px as a transparent
+   * edge so their text starts on the line the row content starts on.
+   *
+   * This is the width guard doing its job and being answered rather than
+   * silenced: 2px here is not a second status stripe, it is the *absence* of
+   * one, reserved so the column reads as one line. Measured in Chromium at
+   * 1440px before the change, the STATUS label sat at x=275 and the lamp
+   * beneath it at x=276 — small enough to look like bad kerning and large
+   * enough to stop a column being a column. A padding of 14px would produce
+   * the same pixels and would not survive the next edit to the row's border,
+   * because nothing would connect the two numbers.
+   */
+  "web/src/monitors/monitors.css | .mon-head | border-left: 2px solid transparent",
+  "web/src/monitors/monitors.css | .mon-section-title | border-left: 2px solid transparent",
   'web/src/monitors/monitors.css | .mon-card[data-status="down"] | border-left: 2px solid var(--down)',
   'web/src/monitors/monitors.css | .mon-card[data-status="pending"] | border-left: 2px solid var(--warn)',
   'web/src/monitors/monitors.css | .mon-card[data-status="paused"] | border-left: 2px dotted var(--ink-3)',

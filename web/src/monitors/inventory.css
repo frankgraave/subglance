@@ -90,11 +90,23 @@
 }
 
 /* Fixed widths are what make the column readable downward. A settings column
-   that shifts by two pixels per row is not a column at all. */
-.inv-col--type { width: 4rem; }
-.inv-col--num { width: 4.5rem; align-items: flex-end; text-align: right; }
-.inv-col--chan { width: 8rem; }
-.inv-col--tags { width: 8rem; }
+   that shifts by two pixels per row is not a column at all.
+
+   All four now sit on the Fibonacci column ladder (§2.14) rather than on a
+   rem value each. They were 4 / 4.5 / 8 / 8rem — 64 / 72 / 128 / 128px — and
+   two of them were wrong for their own content: the num column's widest label
+   is "TIMEOUT", which measures 83px against 72 of column, and the channels
+   column's "not loaded" needs 87 against what the tags column beside it also
+   claimed. Written in rem they also escaped the size guard entirely, which is
+   why they drifted while the px columns two files away did not.
+
+   type takes rung 2 (64): its widest label, "TYPE", is 56px. num, chan and
+   tags take rung 3 (104): 83, 87 and — tags being data — the rung that holds
+   the longest label rather than the longest value, which truncates. */
+.inv-col--type { width: var(--size-col-2); }
+.inv-col--num { width: var(--size-col-3); align-items: flex-end; text-align: right; }
+.inv-col--chan { width: var(--size-col-3); }
+.inv-col--tags { width: var(--size-col-3); }
 
 .inv-label { @apply caps-legend; }
 

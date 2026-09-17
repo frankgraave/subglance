@@ -80,7 +80,7 @@ function Head() {
         <th scope="col" className="mon-head">
           Monitor
         </th>
-        <th scope="col" className="mon-head">
+        <th scope="col" className="mon-head mon-head--beats">
           Last checks
         </th>
         <th scope="col" className="mon-head mon-head--num">

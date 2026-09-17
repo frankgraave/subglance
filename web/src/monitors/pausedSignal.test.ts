@@ -19,12 +19,28 @@ const css = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 const monitorsCss = css("src/monitors/monitors.css");
 const wallCss = css("src/wall/wall.css");
 
-/** The body of the `[data-status="…"]` rule for one block class. */
+/**
+ * Where each layout draws its leading edge.
+ *
+ * `.mon-row` paints on its first cell rather than on itself, and that is not
+ * a stylistic preference: it is a `<tr>` under `border-collapse: separate`,
+ * which paints neither a background nor a border. SUB-139 found the four
+ * status rules sitting on the row, live in the computed style and invisible
+ * on screen — so this suffix is the thing that keeps them honest. The other
+ * two layouts are ordinary elements and carry the edge themselves.
+ */
+const EDGE_TARGET: Record<string, string> = {
+  "mon-row": " > :first-child",
+  "mon-card": "",
+  "mon-line": "",
+};
+
+/** The body of the `[data-status="…"]` rule that draws one block's edge. */
 function statusRule(sheet: string, block: string, status: string): string {
   // The trailing ` {` matters: `.wall-card[data-status="paused"]` is also the
   // prefix of a descendant selector, and matching that would read the wrong
   // rule body and quietly assert nothing.
-  const selector = `.${block}[data-status="${status}"] {`;
+  const selector = `.${block}[data-status="${status}"]${EDGE_TARGET[block] ?? ""} {`;
   const at = sheet.indexOf(selector);
   expect(at, `missing ${selector}`).toBeGreaterThan(-1);
   return sheet.slice(at, sheet.indexOf("}", at));
@@ -33,12 +49,31 @@ function statusRule(sheet: string, block: string, status: string): string {
 describe("paused carries a second signal in every list layout", () => {
   for (const block of ["mon-row", "mon-card", "mon-line"]) {
     it(`marks ${block} with a dotted leading edge`, () => {
-      expect(statusRule(monitorsCss, block, "paused")).toContain("2px dotted");
+      expect(statusRule(monitorsCss, block, "paused")).toContain("dotted");
     });
 
     it(`keeps ${block}'s trouble edges solid, so the two never read alike`, () => {
-      expect(statusRule(monitorsCss, block, "down")).toContain("2px solid");
-      expect(statusRule(monitorsCss, block, "pending")).toContain("2px solid");
+      // Solid is the default the resting rule states, so a status that does
+      // not say `dotted` is solid. Asserting the absence rather than the
+      // presence of `solid` is what lets `.mon-row` reserve its 2px once and
+      // change only the colour per status — reserving the width is why a row
+      // does not shift one pixel right the moment a monitor goes down.
+      expect(statusRule(monitorsCss, block, "down")).not.toContain("dotted");
+      expect(statusRule(monitorsCss, block, "pending")).not.toContain("dotted");
+    });
+
+    it(`draws ${block}'s leading edge at 2px in every status`, () => {
+      // The width belongs to the edge, not to the state. `.mon-row` states it
+      // once on the resting rule; the other two state it per status because
+      // they have no resting edge to reserve it on.
+      const resting =
+        block === "mon-row"
+          ? monitorsCss.slice(
+              monitorsCss.indexOf(".mon-row > :first-child {"),
+              monitorsCss.indexOf("}", monitorsCss.indexOf(".mon-row > :first-child {")),
+            )
+          : statusRule(monitorsCss, block, "paused");
+      expect(resting).toContain("2px");
     });
 
     it(`draws ${block}'s paused edge in --ink-3, which clears 3:1`, () => {
@@ -46,6 +81,7 @@ describe("paused carries a second signal in every list layout", () => {
       // that contrast is decoration. See DESIGN.md §3.1.
       expect(statusRule(monitorsCss, block, "paused")).toContain("var(--ink-3)");
     });
+
     it(`keeps ${block}'s paused edge out of the faded content`, () => {
       // `opacity` on the element composites its own border, so fading the
       // block would take the dotted edge down with it — from 3.4:1 to roughly
@@ -57,6 +93,11 @@ describe("paused carries a second signal in every list layout", () => {
   }
 
   it("dashes the wall card, where the lamp is too small to be read across a room", () => {
-    expect(statusRule(wallCss, "wall-card", "paused")).toContain("border-style: dashed");
+    expect(
+      wallCss.slice(
+        wallCss.indexOf('.wall-card[data-status="paused"] {'),
+        wallCss.indexOf("}", wallCss.indexOf('.wall-card[data-status="paused"] {')),
+      ),
+    ).toContain("border-style: dashed");
   });
 });
