@@ -47,6 +47,36 @@ Each guard has an exception map keyed `path: declaration`, and a companion
 test that fails when an exception stops matching live code — so the allow-list
 cannot quietly rot into a list of justified-sounding lies.
 
+### Where a control belongs
+
+Two bars, and one question decides between them: **is this true on every
+screen?**
+
+- **Yes** — the masthead (`web/src/shell/Topbar.tsx`). The sidebar toggle,
+  search, the layout switcher, the theme. It is identical on every route, so
+  it can be read once instead of re-read per screen.
+- **No** — the page toolbar (`web/src/shell/PageToolbar.tsx`), filled through
+  a portal slot by whichever view is mounted. It hides itself on screens with
+  nothing to put in it rather than sitting there empty.
+- **Neither** — an action that operates on one kind of thing belongs in the
+  header of the card it acts on. Adding a monitor is a monitors action; it is
+  not chrome, because chrome that is also present on Notifications while
+  meaning something about monitors is chrome you have to re-read.
+
+`web/src/App.masthead.test.tsx` walks all four routes and compares the bar's
+accessible names, so a control added to one screen's masthead fails the build
+rather than being noticed in review.
+
+A page whose card already names it does not also get an `<h1>` — but do not
+delete what the heading was carrying. When the Monitors title went, its "4
+configured, 1 paused" moved to the card's `note` prop, which is what `Card`
+grew that prop for.
+
+A button that is a glyph plus a word needs an explicit `aria-label`. What a
+screen reader makes of an unnamed inline `<svg>` is not fixed — some skip it,
+some announce "graphic" — so leaving the name to text content makes it depend
+on the reader. Name it in the markup, order the glyph in CSS.
+
 ### Three facts that will save you an hour
 
 1. **A CSS custom property does not work inside a media query.** Verified in
