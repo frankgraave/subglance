@@ -893,6 +893,46 @@ const sizeExceptions = new Map<string, string>([
  */
 const BREAKPOINTS = new Set(["640px", "641px", "900px"]);
 
+/**
+ * Every width bound stated by a media query, whatever syntax states it.
+ *
+ * Two syntaxes express the same thing and both have to be read. The legacy
+ * form is `(max-width: 640px)`; the range form is `(width <= 640px)` and its
+ * chained variant `(400px <= width <= 700px)`, which states two bounds in one
+ * condition. A matcher that knows only `width:` returns nothing at all for a
+ * range query -- and nothing at all reads, to an `offenders` assertion, as
+ * clean. That is how the px-only expression this replaces let `40rem`
+ * through, so it is worth not repeating one layer up.
+ */
+function mediaWidths(css: string): string[] {
+  const found: string[] = [];
+  for (const query of css.matchAll(/@media[^{]+/g)) {
+    const text = query[0];
+    for (const [, value] of text.matchAll(/(?:min-|max-)?width\s*:\s*([^)]+)/g)) {
+      found.push(value.trim());
+    }
+    /*
+     * The range form, read as the bounds on either side of `width`. Split on
+     * the comparison operators so a chained condition yields both of its
+     * bounds rather than only the first, and drop the `width` keyword itself
+     * along with anything that carries no digit -- `(orientation: portrait)`
+     * and a bare `(width)` presence check state no length to check.
+     */
+    for (const [, condition] of text.matchAll(
+      /\(([^()]*[<>]=?[^()]*)\)/g,
+    )) {
+      if (!/\bwidth\b/.test(condition)) continue;
+      for (const part of condition.split(/[<>]=?/)) {
+        const bound = part.trim();
+        if (bound === "" || bound === "width") continue;
+        if (!/\d/.test(bound)) continue;
+        found.push(bound);
+      }
+    }
+  }
+  return found;
+}
+
 describe("tokens.css is the only source of size", () => {
   it("finds no literal width or height at or above the floor under web/src", () => {
     const offenders: string[] = [];
@@ -941,47 +981,49 @@ describe("tokens.css is the only source of size", () => {
     for (const file of sourceFiles(webSrc)) {
       if (!file.endsWith(".css")) continue;
       const css = stripComments(readFileSync(file, "utf8"));
-      for (const match of css.matchAll(/@media[^{]+/g)) {
-        for (const [, width] of match[0].matchAll(
-          /(?:min-|max-)?width\s*:\s*([^)]+)/g,
-        )) {
-          const value = width.trim();
-          if (BREAKPOINTS.has(value)) continue;
-          offenders.push(`${relative(repoRoot, file)}: @media ... ${value}`);
-        }
+      for (const value of mediaWidths(css)) {
+        if (BREAKPOINTS.has(value)) continue;
+        offenders.push(`${relative(repoRoot, file)}: @media ... ${value}`);
       }
     }
     expect(offenders).toEqual([]);
   });
 
-  it("rejects a media width that is off the ladder, in any unit", () => {
+  it("rejects a media width that is off the ladder, in any unit or syntax", () => {
     /*
      * The guard's own fixture. `40rem` is 640px at the default root size, so
      * it is the most tempting way to write a rung that is not one -- and the
      * earlier px-only expression passed it silently.
+     *
+     * The range forms are here for the same reason one layer up: a matcher
+     * that reads only `width:` returns nothing for `(width <= 700px)`, and
+     * nothing reads as clean to an `offenders` assertion.
      */
-    const widths = (css: string) =>
-      [...css.matchAll(/@media[^{]+/g)].flatMap((match) =>
-        [
-          ...match[0].matchAll(/(?:min-|max-)?width\s*:\s*([^)]+)/g),
-        ].map(([, w]) => w.trim()),
-      );
-    expect(widths("@media (max-width: 40rem) { .a { color: red; } }")).toEqual([
-      "40rem",
+    const off = (css: string) =>
+      mediaWidths(css).filter((w) => !BREAKPOINTS.has(w));
+
+    expect(off("@media (max-width: 40rem) {}")).toEqual(["40rem"]);
+    expect(off("@media (width <= 700px) {}")).toEqual(["700px"]);
+    expect(off("@media (400px <= width <= 700px) {}")).toEqual([
+      "400px",
+      "700px",
     ]);
-    expect(
-      widths("@media (max-width: 40rem) {}").filter((w) => !BREAKPOINTS.has(w)),
-    ).toEqual(["40rem"]);
-    expect(
-      widths("@media (max-width: 640px) {}").filter((w) => !BREAKPOINTS.has(w)),
-    ).toEqual([]);
-    expect(
-      widths("@media (min-width: 641px) and (max-width: 900px) {}").filter(
-        (w) => !BREAKPOINTS.has(w),
-      ),
-    ).toEqual([]);
-    // A feature query with no width condition contributes nothing.
-    expect(widths("@media (prefers-reduced-motion: reduce) {}")).toEqual([]);
+    expect(off("@media (width > 40rem) {}")).toEqual(["40rem"]);
+
+    // The rungs, in both syntaxes, must keep passing.
+    expect(off("@media (max-width: 640px) {}")).toEqual([]);
+    expect(off("@media (min-width: 641px) and (max-width: 900px) {}")).toEqual(
+      [],
+    );
+    expect(off("@media (width <= 640px) {}")).toEqual([]);
+    expect(off("@media (641px <= width <= 900px) {}")).toEqual([]);
+
+    // A query stating no width contributes no bound to check.
+    expect(mediaWidths("@media (prefers-reduced-motion: reduce) {}")).toEqual(
+      [],
+    );
+    expect(mediaWidths("@media (orientation: portrait) {}")).toEqual([]);
+    expect(mediaWidths("@media (min-resolution: 2dppx) {}")).toEqual([]);
   });
 
   it("catches a literal track in every grid sizing property, not just columns", () => {
