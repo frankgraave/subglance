@@ -137,6 +137,6 @@
  */
 .panel-row :is(a, button):focus-visible {
   outline: 3px solid var(--accent-ring);
-  outline-offset: 2px;
+  outline-offset: var(--outline-offset);
   border-radius: var(--r-xs);
 }

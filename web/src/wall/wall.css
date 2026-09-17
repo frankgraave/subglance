@@ -15,7 +15,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: var(--space-16) clamp(var(--space-6), 5vw, 72px) 96px;
+  padding: var(--space-16) clamp(var(--space-6), 5vw, var(--size-col-sm-alt)) var(--space-16);
 }
 
 .wall-head {
@@ -45,7 +45,7 @@
 
 .wall-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(226px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(var(--size-pane-grid-md), 1fr));
   gap: var(--space-2);
   list-style: none;
   padding: 0;
@@ -56,7 +56,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: 17px 18px;
+  padding: var(--space-4) var(--space-5);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   background: var(--surface);
@@ -109,7 +109,7 @@
   transition: filter var(--dur-attention) var(--ease);
 }
 
-.wall-exit { position: fixed; top: 18px; right: 18px; z-index: var(--z-chrome); opacity: 0; }
+.wall-exit { position: fixed; top: var(--space-5); right: var(--space-5); z-index: var(--z-chrome); opacity: 0; }
 .wall-exit:hover, .wall-exit:focus-visible { opacity: 1; }
 
 /* Touch has no hover, so the exit would be invisible and unreachable. */

@@ -803,15 +803,164 @@ const spacingExceptions = new Map<string, string>([
     "web/src/shell/shell.css: padding: 1px 6px",
     "SOON badge: sized to the cap height of --type-section so it hugs the label rather than the line box.",
   ],
+]);
+
+/**
+ * SUB-137 extends the rule to the last two unguarded scales: size and
+ * breakpoint.
+ *
+ * The audit that prompted it is the argument for it. Across 26 stylesheets
+ * there were zero literal colours and zero literal font sizes -- both are
+ * guarded -- and 88 literal sizes, which were not. The same people wrote
+ * both. The difference is that one of them fails a test.
+ *
+ * The clearest case: `--control-icon: 28px` was added as a *new token*,
+ * correctly following the "name your dimensions" rule, two pixels away from
+ * three files that already drew that square at 26px. Naming a value does not
+ * prevent drift if nothing compares it to the values that already exist.
+ *
+ * Floor and exceptions work as they do for spacing: below 2px there is
+ * nothing a token could usefully say (a hairline, an sr-only clip), and an
+ * exception must be listed with a reason.
+ */
+const SIZE_LADDER_FLOOR = 2;
+
+/**
+ * Every width/height declaration in a stylesheet, collapsed to one line.
+ *
+ * The collapse is the point. A declaration may span a dozen lines when its
+ * value carries explanatory comments -- the card grid's `minmax()` does --
+ * and a line-oriented scan reads only the first fragment, finds no literal,
+ * and reports the file clean. The first version of this guard did exactly
+ * that and passed while a 380px floor sat three lines below it.
+ */
+function sizeDeclarations(css: string): string[] {
+  const found: string[] = [];
+  const flat = css.replace(/\s+/g, " ");
+  for (const match of flat.matchAll(
+    /(?:^|[\s;{])((?:min-|max-)?(?:width|height)|grid-template-columns|flex-basis)\s*:\s*([^;{}]+)/g,
+  )) {
+    found.push(`${match[1]}: ${match[2].trim().replace(/\s+/g, " ")}`);
+  }
+  return found;
+}
+
+/** True when a declaration carries a literal length the ladder could express. */
+function driftsFromSizeLadder(value: string): boolean {
+  return [...value.matchAll(/(-?[\d.]+)(px)\b/g)].some(
+    ([, length]) => Math.abs(Number.parseFloat(length)) >= SIZE_LADDER_FLOOR,
+  );
+}
+
+const sizeExceptions = new Map<string, string>([
   [
-    "web/src/wall/wall.css: padding: var(--space-16) clamp(var(--space-6), 5vw, 72px) 96px",
-    "Wall gutter is fluid and intentionally above the ladder ceiling; tracked in SUB-77.",
+    "web/src/monitors/led.css: width: 20px",
+    "The lamp is measured against DESIGN.md §3 by ledSizes.test.ts, which requires the literal. A token here would satisfy this guard, break that one, and invite the next mark to borrow a size that is a claim about legibility rather than a rung.",
   ],
   [
-    "web/src/wall/wall.css: padding: 17px 18px",
-    "Wall card padding, measured rather than derived; tracked in SUB-77.",
+    "web/src/monitors/led.css: height: 7px",
+    "The other half of the lamp; same reason.",
+  ],
+  [
+    "web/src/shell/shell.css: width: min(var(--size-pane-drawer), 86vw)",
+    "Token plus a viewport cap: the cap is a relationship to the screen, not a size the ladder could state.",
   ],
 ]);
+
+/**
+ * Breakpoints cannot be tokens, so they are guarded as literals.
+ *
+ * Verified in Chromium rather than assumed: `@media (max-width: var(--bp))`
+ * never matches -- media queries are evaluated before custom properties are
+ * substituted, so the block is silently dropped. That silence is the reason
+ * this guard exists: a breakpoint written as a token would not fail loudly,
+ * it would simply stop applying, and the layout would quietly be wrong at
+ * one width.
+ *
+ * So the ladder lives in tokens.css as documentation, and this list is what
+ * actually holds the literals together. The `+1` partners are separate rungs
+ * because `max-width: 640px` and `min-width: 641px` must not both match at
+ * exactly 640px.
+ */
+const BREAKPOINTS = new Set(["640px", "641px", "900px"]);
+
+describe("tokens.css is the only source of size", () => {
+  it("finds no literal width or height at or above the floor under web/src", () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (!file.endsWith(".css")) continue;
+      const path = relative(repoRoot, file);
+      for (const declaration of sizeDeclarations(
+        stripComments(readFileSync(file, "utf8")),
+      )) {
+        if (!driftsFromSizeLadder(declaration)) continue;
+        const key = `${path}: ${declaration}`;
+        if (sizeExceptions.has(key)) continue;
+        offenders.push(key);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps every documented size exception real, so the allow-list cannot rot", () => {
+    const present = new Set<string>();
+    for (const file of sourceFiles(webSrc)) {
+      if (!file.endsWith(".css")) continue;
+      const path = relative(repoRoot, file);
+      for (const declaration of sizeDeclarations(
+        stripComments(readFileSync(file, "utf8")),
+      )) {
+        present.add(`${path}: ${declaration}`);
+      }
+    }
+    expect(
+      [...sizeExceptions.keys()].filter((key) => !present.has(key)),
+    ).toEqual([]);
+  });
+
+  it("uses only ladder breakpoints in media queries", () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (!file.endsWith(".css")) continue;
+      const css = stripComments(readFileSync(file, "utf8"));
+      for (const match of css.matchAll(/@media[^{]+/g)) {
+        for (const [, width] of match[0].matchAll(/(\d+(?:\.\d+)?px)/g)) {
+          if (BREAKPOINTS.has(width)) continue;
+          offenders.push(`${relative(repoRoot, file)}: @media ... ${width}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("never writes a breakpoint as a custom property, which silently never matches", () => {
+    // Not a style preference: the query is dropped entirely, so the guarded
+    // layout simply stops existing at that width with nothing to show for it.
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (!file.endsWith(".css")) continue;
+      const css = stripComments(readFileSync(file, "utf8"));
+      for (const match of css.matchAll(/@media[^{]+/g)) {
+        if (!match[0].includes("var(--")) continue;
+        offenders.push(`${relative(repoRoot, file)}: ${match[0].trim()}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("states every breakpoint in the ladder as a token, so the guide can show them", () => {
+    const declared = new Set(
+      [...readFileSync(join(webSrc, "styles/tokens.css"), "utf8").matchAll(
+        /--bp-[a-z-]+:\s*([^;]+);/g,
+      )].map(([, value]) => value.trim()),
+    );
+    for (const breakpoint of BREAKPOINTS) {
+      expect(declared, `${breakpoint} is enforced but not documented`).toContain(
+        breakpoint,
+      );
+    }
+  });
+});
 
 describe("tokens.css is the only source of spacing and radius", () => {
   it("finds no literal spacing or radius at or above the ladder floor under web/src", () => {

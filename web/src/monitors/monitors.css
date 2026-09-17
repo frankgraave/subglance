@@ -56,7 +56,7 @@
   padding: var(--space-2) var(--space-6);
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--canvas) 86%, transparent);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(var(--blur-bar));
 }
 
 /*
@@ -107,7 +107,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  height: 26px;
+  height: var(--size-square-compact);
   padding: 0 var(--space-2h);
   font: inherit;
   font-size: var(--type-helper);
@@ -184,9 +184,9 @@
   align-items: center;
   gap: var(--space-2);
   padding: 0 var(--space-2h);
-  width: 280px;
+  width: var(--size-pane-sm);
   max-width: 100%;
-  height: 32px;
+  height: var(--size-row-md);
   background: var(--surface);
   border: 1px solid var(--border-control);
   border-radius: var(--r-sm);
@@ -205,8 +205,8 @@
 }
 
 .mon-search > .shell-icon {
-  width: 14px;
-  height: 14px;
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
   flex: none;
 }
 
@@ -355,13 +355,13 @@
  * longest cell ("Pending", lamp included) is 70px; 84px leaves the column's
  * own 12px of padding on each side and nothing else.
  */
-.mon-col--led { width: 84px; }
+.mon-col--led { width: var(--size-col-tag); }
 .mon-col--name { width: auto; }
-.mon-col--beats { width: 184px; }
-.mon-col--num { width: 92px; }
+.mon-col--beats { width: var(--size-col-xl); }
+.mon-col--num { width: var(--size-col-alt); }
 
 .mon-head {
-  height: 34px;
+  height: var(--size-col-2xs);
   padding: 0 var(--space-3);
   text-align: left;
   @apply caps-legend;
@@ -490,7 +490,7 @@
 .mon-row[data-status="down"]:hover > * { background: var(--down-deep); }
 
 .mon-cell {
-  height: 58px;
+  height: var(--size-row-xl);
   padding: 0 var(--space-3);
   vertical-align: middle;
   font-size: var(--type-body);
@@ -532,7 +532,7 @@
  */
 .mon-target {
   display: block;
-  margin-top: 3px;
+  margin-top: var(--space-0h);
   @apply face-mono;
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
@@ -667,7 +667,7 @@
 /* Focus is the accent ring, not a neutral outline (§2.8). */
 .mon-empty-cta:focus-visible {
   outline: 3px solid var(--accent-ring);
-  outline-offset: 2px;
+  outline-offset: var(--outline-offset);
 }
 
 /* The fallback when no caller owns the add form: the step is still stated, it
@@ -740,7 +740,7 @@
       min(
         100%,
         max(
-          380px,
+          var(--size-pane-md),
           calc(
             (100% - (var(--mon-card-cols, 1) - 1) * var(--space-1h)) /
               var(--mon-card-cols, 1)
@@ -771,7 +771,7 @@
  */
 .mon-card-stack[data-cols="auto"] {
   /* Same `min(100%, …)` guard as above, for the same overflow. */
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--size-pane-md)), 1fr));
 }
 
 /*
@@ -849,7 +849,7 @@
 }
 
 .mon-card-target {
-  margin-top: 2px;
+  margin-top: var(--space-0h);
   @apply face-mono;
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
@@ -884,7 +884,7 @@
 }
 
 .mon-card-fact dd {
-  margin-top: 2px;
+  margin-top: var(--space-0h);
   @apply face-mono;
   font-size: var(--type-body);
   line-height: var(--lead-body);
@@ -927,7 +927,7 @@
     width: 100%;
     overflow-x: auto;
     /* Room for the frame's own edge and shadow inside the scroller. */
-    padding-bottom: 2px;
+    padding-bottom: var(--space-0h);
   }
 
   .mon-facet-select,
@@ -1029,7 +1029,7 @@
 .mon-line .panel-row-icon {
   /* The lamp plus its status word, at the width the column used to reserve so
      the names below still start on one vertical line. */
-  width: 78px;
+  width: var(--size-col-xxs);
   justify-content: flex-start;
 }
 
@@ -1040,7 +1040,7 @@
   /* The first column grew from 22px to hold the status word next to the lamp
      (SUB-100). The space comes out of the target column, which is the one
      field on the line that is still readable truncated. */
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.2fr) 76px 62px;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.2fr) var(--size-col-sm) var(--size-col-xs);
   align-items: center;
   gap: var(--space-3);
 }
@@ -1388,7 +1388,7 @@
  */
 .mon-card-name > a {
   display: inline-block;
-  min-height: 24px;
+  min-height: var(--size-row-sm);
 }
 
 .mon-name:hover,

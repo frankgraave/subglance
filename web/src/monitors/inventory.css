@@ -135,8 +135,8 @@
 .inv-act--icon {
   display: inline-grid;
   place-items: center;
-  width: var(--control-icon);
-  height: var(--control-icon);
+  width: var(--size-square-compact);
+  height: var(--size-square-compact);
   padding: 0;
   border: 1px solid var(--border-control);
   border-radius: var(--r-sm);

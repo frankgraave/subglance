@@ -63,7 +63,7 @@
      rises past the sticky topbar; anything below `--z-float` is clipped by
      it. See the ladder in tokens.css. */
   z-index: var(--z-float);
-  min-width: 148px;
+  min-width: var(--size-pane-xs);
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border-hi);
   border-radius: var(--r-md);

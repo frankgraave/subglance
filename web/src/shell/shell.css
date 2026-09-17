@@ -14,8 +14,8 @@
   /* Animating the track rather than translating the sidebar keeps the content
      column honest: it really is narrower, so nothing hides underneath. */
   transition: grid-template-columns var(--dur-panel) var(--ease);
-  --sidebar-w: 232px;
-  --rail-w: 56px;
+  --sidebar-w: var(--size-sidebar);
+  --rail-w: var(--size-rail);
 }
 
 .shell[data-collapsed="true"] { --sidebar-w: var(--rail-w); }
@@ -37,7 +37,7 @@
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-0h);
 }
 
 .shell-main {
@@ -61,8 +61,8 @@
   flex: none;
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: var(--size-square-compact);
+  height: var(--size-square-compact);
   border-radius: var(--r-sm);
   background: var(--surface-hi);
   border: 1px solid var(--border-hi);
@@ -74,7 +74,7 @@
 
 /* ── Navigation ────────────────────────────────────────────────────────── */
 
-.shell-nav { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.shell-nav { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-0h); }
 
 .shell-nav-label {
   padding: var(--space-4) var(--space-2) var(--space-1);
@@ -121,7 +121,7 @@
   color: var(--ink-4);
 }
 
-.shell-icon { width: 15px; height: 15px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.6; }
+.shell-icon { width: var(--size-icon-nav); height: var(--size-icon-nav); flex: none; stroke: currentColor; fill: none; stroke-width: 1.6; }
 .shell-nav-item .shell-icon { opacity: .85; }
 
 /*
@@ -163,7 +163,7 @@
   /* Translucent rather than opaque so rows scrolling under it stay visible as
      movement; the blur keeps the controls legible over them. */
   background: color-mix(in srgb, var(--canvas) 86%, transparent);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(var(--blur-bar));
 }
 
 /*
@@ -197,8 +197,8 @@
   flex: none;
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: var(--size-icon-xl);
+  height: var(--size-icon-xl);
   border: 1px solid var(--border-control);
   border-radius: var(--r-sm);
   background: var(--surface);
@@ -223,7 +223,7 @@
   inset: 0;
   z-index: calc(var(--z-overlay) - 1);
   background: color-mix(in srgb, var(--canvas) 72%, transparent);
-  backdrop-filter: blur(2px);
+  backdrop-filter: blur(var(--blur-scrim));
 }
 
 .shell-drawer {
@@ -232,7 +232,7 @@
   left: 0;
   z-index: var(--z-overlay);
   display: flex;
-  width: min(288px, 86vw);
+  width: min(var(--size-pane-drawer), 86vw);
   height: 100dvh;
   /* Opaque, for the reason the add drawer is (§2.11): a floating surface
      composites whatever is behind it, and the layered `--surface` tokens are
@@ -346,7 +346,7 @@
 }
 
 .shell-signout:focus-visible {
-  outline: 2px solid var(--accent-border);
+  outline: var(--outline-w) solid var(--accent-border);
   outline-offset: -2px;
 }
 
@@ -407,6 +407,6 @@
      keyboard is here" — and §2.8 gives that job to the accent so it never
      reads as a fact about the data. This was the last neutral focus ring
      left in the product; every other one already moved. */
-  outline: 2px solid var(--accent-border);
+  outline: var(--outline-w) solid var(--accent-border);
   outline-offset: -3px;
 }

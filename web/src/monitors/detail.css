@@ -16,7 +16,7 @@
   gap: var(--space-5);
   /* ~70 characters of target/error text. Past this the eye loses the line on
      the way back, and none of the content here benefits from being wider. */
-  max-width: 860px;
+  max-width: var(--size-pane-lg);
 }
 
 .mon-detail-nav {
@@ -232,7 +232,7 @@
    by side on a laptop and stack on a phone with no breakpoint of their own. */
 .mon-detail-windows {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(var(--size-pane-grid-sm), 1fr));
   gap: var(--space-4);
 }
 

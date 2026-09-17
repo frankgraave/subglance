@@ -164,10 +164,10 @@
  * be read as a column at all.
  */
 .inc-col { flex: none; }
-.inc-col-kind { width: 116px; }
-.inc-col-time { width: 88px; color: var(--ink-2); }
-.inc-col-dur { width: 72px; }
-.inc-col-ack { width: 128px; display: flex; justify-content: flex-end; }
+.inc-col-kind { width: var(--size-col-lg); }
+.inc-col-time { width: var(--size-col-md); color: var(--ink-2); }
+.inc-col-dur { width: var(--size-col-sm-alt); }
+.inc-col-ack { width: var(--size-col-2xl); display: flex; justify-content: flex-end; }
 
 .inc-act {
   display: flex;
@@ -198,7 +198,7 @@
 
 .inc-detail-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(var(--size-pane-sm), 1fr));
   gap: var(--space-4);
 }
 
@@ -223,7 +223,7 @@
   color: var(--ink-2);
 }
 
-.inc-tl-at { width: 88px; flex: none; color: var(--ink-3); }
+.inc-tl-at { width: var(--size-col-md); flex: none; color: var(--ink-3); }
 
 /* A step that has not happened yet. Quieter, but present: a timeline that
    simply stops is indistinguishable from one that failed to render. */
@@ -244,7 +244,7 @@
   color: var(--ink-2);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  max-height: 180px;
+  max-height: var(--size-pane-scroll);
   overflow-y: auto;
 }
 

@@ -12,6 +12,7 @@
     "test:coverage": "vitest run --coverage",
     "audit:ci": "npm audit --audit-level=high",
     "bundle-budget": "node scripts/bundle-budget.mjs",
+    "styleguide": "node scripts/build-styleguide.mjs",
     "test:browser": "npm run build && vitest run --config vitest.browser.config.ts",
     "test:browser:setup": "npx --yes @puppeteer/browsers install chrome-headless-shell@152.0.7977.75"
   },

@@ -8,6 +8,13 @@
  * stops short of fully round. It was hand-rolled at 2.5px because the ladder
  * started at 4px; the 2px step now exists, and a whole pixel draws the same
  * silhouette on every device pixel ratio rather than one the engine rounds.
+ *
+ * The 20x7 is written as literals on purpose, and `ledSizes.test.ts` requires
+ * it: that test reads this file against DESIGN.md §3 and asserts the lamp is
+ * the size the document says. A `var()` would satisfy the size guard and
+ * break that one, because the lamp's size is not a rung others may reuse --
+ * it is a measurement tied to a specific claim about legibility, and a token
+ * would invite the next mark to borrow it.
  */
 
 .led {
@@ -30,7 +37,7 @@
   content: "";
   position: absolute;
   inset: 1px 1px 3px;
-  border-radius: 1.5px;
+  border-radius: var(--stroke-fine);
   background: linear-gradient(180deg, color-mix(in srgb, white 55%, transparent), transparent);
   opacity: .5;
   pointer-events: none;
