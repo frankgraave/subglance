@@ -195,6 +195,29 @@
   cursor: pointer;
 }
 
+/*
+ * The focus ring turns inward, because this row now clips.
+ *
+ * `index.css` gives every control `outline-offset: var(--outline-offset)`, a
+ * 2px *outward* gap, which is right for a control sitting on open canvas. It
+ * is wrong here for a reason this PR created: `.inc-row` took `overflow:
+ * hidden` above so the status rail and the detail tray are cut to the row's
+ * rounded corners, and `.inc-line` spans the row edge to edge. An outward ring
+ * is therefore drawn outside the clipping box on all four sides and the row
+ * eats it — measured in Chromium, the ring lands at 262–1110 while the row
+ * clips at 263–1109, so the left and right edges are simply gone.
+ *
+ * A keyboard user would see the top and bottom of a ring with no sides, on the
+ * control that opens the row. Negating the offset puts the same 2px ring just
+ * inside the boundary, where nothing clips it. `calc(-1 * ...)` rather than a
+ * literal so the ring stays tied to the token: if the offset rung moves, this
+ * moves with it instead of drifting.
+ */
+.inc-line:focus-visible {
+  outline: var(--outline-w) solid var(--accent-border);
+  outline-offset: calc(-1 * var(--outline-offset));
+}
+
 .inc-line-inner {
   display: flex;
   align-items: center;

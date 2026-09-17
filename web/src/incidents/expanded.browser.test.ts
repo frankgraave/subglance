@@ -491,13 +491,22 @@ describe("the expanded incident row", () => {
      */
     const page = await openExpanded("dark", 1440);
     try {
-      const drain = (await page.evaluate(`(() => {
+      const drain = (await page.evaluate(`(async () => {
         const screen = document.querySelector(".mon-detail");
         const row = document.querySelector('.inc-row[data-state="open"]');
         const railFilter = () =>
           window.getComputedStyle(row, "::before").filter;
         const live = railFilter();
         screen.setAttribute("data-conn", "stale");
+        /*
+         * The drain is a 600ms transition, so the computed filter read on the
+         * next tick is its *starting* value, not its settled one. Waiting is
+         * not padding here: without it both reads return saturate(1) — the
+         * rail undrained and the lamp undrained — and "the rail matches the
+         * lamp" is satisfied by the two of them being equally unchanged,
+         * which is the assertion passing for the wrong reason.
+         */
+        await new Promise((r) => setTimeout(r, 750));
         const stale = railFilter();
         const lamp = window.getComputedStyle(row.querySelector(".led")).filter;
         screen.setAttribute("data-conn", "live");
@@ -520,6 +529,13 @@ describe("the expanded incident row", () => {
           `saturated status colour is a claim about now, and we have stopped ` +
           `knowing (DESIGN.md §6)`,
       ).not.toBe("none");
+      // Settled, not merely changed: `saturate(1)` is the transition's first
+      // frame and means nothing has drained yet.
+      expect(
+        drain.stale,
+        `the rail settled at "${drain.stale}"; the drained state is the 18% ` +
+          `the lamps take, and anything at full saturation is still asserting`,
+      ).not.toBe("saturate(1)");
       expect(
         drain.stale,
         "the rail must drain by the same amount as the lamp beside it, or the " +
@@ -532,6 +548,82 @@ describe("the expanded incident row", () => {
         "a stale rail must still be drawn; removing it would delete the last " +
           "known state rather than stop asserting it",
       ).toBe(2);
+    } finally {
+      await page.close();
+    }
+  }, 60_000);
+
+  it("keeps the focus ring on the disclosure inside the clipping row", async () => {
+    /*
+     * `.inc-row` takes `overflow: hidden` in this PR, to cut the status rail
+     * and the detail tray to its rounded corners. `.inc-line` fills the row
+     * edge to edge, and the global ring in `index.css` is drawn 2px *outside*
+     * the control — so the row clips the left and right sides of the ring on
+     * the one control that opens it, leaving a keyboard user a ring with no
+     * sides. Measured, not inferred: the outward ring lands at 262–1110 while
+     * the row clips at 263–1109.
+     *
+     * The ring is driven with a real Tab press. `HTMLElement.focus()` sets
+     * `:focus` but not `:focus-visible`, so the rule under test would not
+     * match at all and the check would measure an unstyled button.
+     */
+    const page = await openExpanded("dark", 1440);
+    try {
+      await page.evaluate(
+        `document.querySelector('.inc-row[data-state="open"] .inc-line').focus()`,
+      );
+      await page.keyboard.down("Shift");
+      await page.keyboard.press("Tab");
+      await page.keyboard.up("Shift");
+      await page.keyboard.press("Tab");
+
+      const ring = (await page.evaluate(`(() => {
+        const line = document.activeElement;
+        const row = line.closest(".inc-row");
+        const cs = window.getComputedStyle(line);
+        const rowBox = row.getBoundingClientRect();
+        const lineBox = line.getBoundingClientRect();
+        const offset = parseFloat(cs.outlineOffset);
+        const width = parseFloat(cs.outlineWidth);
+        return {
+          focused: line.className,
+          keyboardRing: line.matches(":focus-visible"),
+          width,
+          offset,
+          // Where the ring's outer edge actually lands, against the box that
+          // clips it.
+          ringLeft: Math.round(lineBox.left - offset - width),
+          ringRight: Math.round(lineBox.right + offset + width),
+          clipLeft: Math.round(rowBox.left),
+          clipRight: Math.round(rowBox.right),
+          rowClips: window.getComputedStyle(row).overflow === "hidden",
+        };
+      })()`)) as Record<string, any>;
+
+      expect(ring.focused, "Tab must land on the disclosure").toBe("inc-line");
+      expect(
+        ring.keyboardRing,
+        "the ring must be the keyboard one, or this measures an unstyled button",
+      ).toBe(true);
+      expect(
+        ring.rowClips,
+        "this check exists because the row clips; if it stopped clipping the " +
+          "inward offset is no longer needed and this test should be revisited",
+      ).toBe(true);
+      expect(
+        ring.width,
+        "the disclosure keeps a 2px ring; it must be turned inward, not removed",
+      ).toBe(2);
+      expect(
+        ring.ringLeft,
+        `the focus ring's left edge is at ${ring.ringLeft} and the row clips ` +
+          `at ${ring.clipLeft}; an outward ring on a clipping row loses its sides`,
+      ).toBeGreaterThanOrEqual(ring.clipLeft);
+      expect(
+        ring.ringRight,
+        `the focus ring's right edge is at ${ring.ringRight} and the row clips ` +
+          `at ${ring.clipRight}`,
+      ).toBeLessThanOrEqual(ring.clipRight);
     } finally {
       await page.close();
     }
