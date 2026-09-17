@@ -130,7 +130,15 @@
     background-position: 0 0, 0 6px, 6px -6px, -6px 0;
     background-color: #4a4a4a;
   }
-  .sg-bar { display: block; height: var(--space-3); background: var(--accent); border-radius: var(--r-sm); }
+  /*
+   * The bar is drawn at the token's real width, and the cell is 116px wide,
+   * so a 860px rung used to paint straight across the token name, the value
+   * and the reason. Capped at the cell; a rung wider than the cell shows a
+   * fade at its right edge so "cut off" reads as "longer than this" rather
+   * than as a bar that happens to be exactly cell-width.
+   */
+  .sg-bar { display: block; height: var(--space-3); max-width: 100%; background: var(--accent); border-radius: var(--r-sm); }
+  .sg-bar[data-overflows] { border-radius: var(--r-sm) 0 0 var(--r-sm); mask-image: linear-gradient(to right, #000 60%, transparent); }
   .sg-radius { display: block; width: var(--size-col-md); height: var(--control-h); background: var(--surface-2); border: 1px solid var(--border-control); }
 </style>
 </head>
@@ -782,7 +790,7 @@
         </td>
         <td><code>--size-col-xs</code></td>
         <td class="sg-value"><code>62px</code></td>
-        <td class="sg-why">Column widths in dense tables. Stated because a column that is 88px in one table and 92px in the next reads as a mistake at a glance, and because a guard cannot check a literal.</td>
+        <td class="sg-why">the compact list's last column: a short reading</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -790,7 +798,7 @@
         </td>
         <td><code>--size-col-sm</code></td>
         <td class="sg-value"><code>76px</code></td>
-        <td class="sg-why">Column widths in dense tables. Stated because a column that is 88px in one table and 92px in the next reads as a mistake at a glance, and because a guard cannot check a literal.</td>
+        <td class="sg-why">the compact list's status column</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -798,7 +806,7 @@
         </td>
         <td><code>--size-col-md</code></td>
         <td class="sg-value"><code>88px</code></td>
-        <td class="sg-why">Column widths in dense tables. Stated because a column that is 88px in one table and 92px in the next reads as a mistake at a glance, and because a guard cannot check a literal.</td>
+        <td class="sg-why">a timestamp: the incident time column, the timeline's &quot;at&quot;</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -806,19 +814,19 @@
         </td>
         <td><code>--size-col-lg</code></td>
         <td class="sg-value"><code>116px</code></td>
-        <td class="sg-why">Column widths in dense tables. Stated because a column that is 88px in one table and 92px in the next reads as a mistake at a glance, and because a guard cannot check a literal.</td>
+        <td class="sg-why">the incident kind column</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
-          <span class="sg-bar" style="width: var(--size-col-xl)"></span>
+          <span class="sg-bar" style="width: var(--size-col-xl)" data-overflows></span>
         </td>
         <td><code>--size-col-xl</code></td>
         <td class="sg-value"><code>184px</code></td>
-        <td class="sg-why">Column widths in dense tables. Stated because a column that is 88px in one table and 92px in the next reads as a mistake at a glance, and because a guard cannot check a literal.</td>
+        <td class="sg-why">the dashboard's heartbeat column</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
-          <span class="sg-bar" style="width: var(--size-pane-sm)"></span>
+          <span class="sg-bar" style="width: var(--size-pane-sm)" data-overflows></span>
         </td>
         <td><code>--size-pane-sm</code></td>
         <td class="sg-value"><code>280px</code></td>
@@ -826,7 +834,7 @@
       </tr>
       <tr>
         <td class="sg-cell-swatch">
-          <span class="sg-bar" style="width: var(--size-pane-md)"></span>
+          <span class="sg-bar" style="width: var(--size-pane-md)" data-overflows></span>
         </td>
         <td><code>--size-pane-md</code></td>
         <td class="sg-value"><code>380px</code></td>
@@ -834,7 +842,7 @@
       </tr>
       <tr>
         <td class="sg-cell-swatch">
-          <span class="sg-bar" style="width: var(--size-pane-lg)"></span>
+          <span class="sg-bar" style="width: var(--size-pane-lg)" data-overflows></span>
         </td>
         <td><code>--size-pane-lg</code></td>
         <td class="sg-value"><code>860px</code></td>
@@ -870,7 +878,7 @@
         </td>
         <td><code>--size-col-sm-alt</code></td>
         <td class="sg-value"><code>72px</code></td>
-        <td class="sg-why">the toolbar's own control row</td>
+        <td class="sg-why">the incident duration column; also the wall's gutter cap</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -878,7 +886,7 @@
         </td>
         <td><code>--size-col-xxs</code></td>
         <td class="sg-value"><code>78px</code></td>
-        <td class="sg-why">Additional rungs, from the same audit. Each is a size the product already drew; naming them is what lets the guard see them.</td>
+        <td class="sg-why">the lamp-plus-word icon slot in a monitor line</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -886,7 +894,7 @@
         </td>
         <td><code>--size-col-tag</code></td>
         <td class="sg-value"><code>84px</code></td>
-        <td class="sg-why">Additional rungs, from the same audit. Each is a size the product already drew; naming them is what lets the guard see them.</td>
+        <td class="sg-why">the dashboard's lamp column, narrowed from 104 in SUB-135</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -894,15 +902,15 @@
         </td>
         <td><code>--size-col-alt</code></td>
         <td class="sg-value"><code>92px</code></td>
-        <td class="sg-why">Additional rungs, from the same audit. Each is a size the product already drew; naming them is what lets the guard see them.</td>
+        <td class="sg-why">the dashboard's numeric column</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
-          <span class="sg-bar" style="width: var(--size-col-2xl)"></span>
+          <span class="sg-bar" style="width: var(--size-col-2xl)" data-overflows></span>
         </td>
         <td><code>--size-col-2xl</code></td>
         <td class="sg-value"><code>128px</code></td>
-        <td class="sg-why">Additional rungs, from the same audit. Each is a size the product already drew; naming them is what lets the guard see them.</td>
+        <td class="sg-why">the incident acknowledge column, right-aligned</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -938,7 +946,7 @@
       </tr>
       <tr>
         <td class="sg-cell-swatch">
-          <span class="sg-bar" style="width: var(--size-pane-xs)"></span>
+          <span class="sg-bar" style="width: var(--size-pane-xs)" data-overflows></span>
         </td>
         <td><code>--size-pane-xs</code></td>
         <td class="sg-value"><code>148px</code></td>
@@ -946,7 +954,7 @@
       </tr>
       <tr>
         <td class="sg-cell-swatch">
-          <span class="sg-bar" style="width: var(--size-pane-grid-sm)"></span>
+          <span class="sg-bar" style="width: var(--size-pane-grid-sm)" data-overflows></span>
         </td>
         <td><code>--size-pane-grid-sm</code></td>
         <td class="sg-value"><code>150px</code></td>
@@ -954,7 +962,7 @@
       </tr>
       <tr>
         <td class="sg-cell-swatch">
-          <span class="sg-bar" style="width: var(--size-pane-grid-md)"></span>
+          <span class="sg-bar" style="width: var(--size-pane-grid-md)" data-overflows></span>
         </td>
         <td><code>--size-pane-grid-md</code></td>
         <td class="sg-value"><code>226px</code></td>
@@ -962,7 +970,7 @@
       </tr>
       <tr>
         <td class="sg-cell-swatch">
-          <span class="sg-bar" style="width: var(--size-pane-drawer)"></span>
+          <span class="sg-bar" style="width: var(--size-pane-drawer)" data-overflows></span>
         </td>
         <td><code>--size-pane-drawer</code></td>
         <td class="sg-value"><code>288px</code></td>
@@ -970,7 +978,7 @@
       </tr>
       <tr>
         <td class="sg-cell-swatch">
-          <span class="sg-bar" style="width: var(--size-pane-scroll)"></span>
+          <span class="sg-bar" style="width: var(--size-pane-scroll)" data-overflows></span>
         </td>
         <td><code>--size-pane-scroll</code></td>
         <td class="sg-value"><code>180px</code></td>
@@ -978,7 +986,7 @@
       </tr>
       <tr>
         <td class="sg-cell-swatch">
-          <span class="sg-bar" style="width: var(--size-sidebar)"></span>
+          <span class="sg-bar" style="width: var(--size-sidebar)" data-overflows></span>
         </td>
         <td><code>--size-sidebar</code></td>
         <td class="sg-value"><code>232px</code></td>

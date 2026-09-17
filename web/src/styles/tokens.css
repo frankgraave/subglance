@@ -294,11 +294,11 @@
   /* Column widths in dense tables. Stated because a column that is 88px in
      one table and 92px in the next reads as a mistake at a glance, and
      because a guard cannot check a literal. */
-  --size-col-xs: 62px;
-  --size-col-sm: 76px;
-  --size-col-md: 88px;
-  --size-col-lg: 116px;
-  --size-col-xl: 184px;
+  --size-col-xs: 62px;   /* the compact list's last column: a short reading */
+  --size-col-sm: 76px;   /* the compact list's status column */
+  --size-col-md: 88px;   /* a timestamp: the incident time column, the timeline's "at" */
+  --size-col-lg: 116px;  /* the incident kind column */
+  --size-col-xl: 184px;  /* the dashboard's heartbeat column */
 
   /* Panel and container widths. */
   --size-pane-sm: 280px;  /* the search field, the drawer's natural width */
@@ -310,11 +310,11 @@
   --size-icon-xxs: 7px;   /* the connection dot and the LED's height */
   --size-icon-nav: 15px;  /* a glyph inside the sidebar's nav row */
   --size-col-2xs: 34px;   /* the toolbar's own control row */
-  --size-col-sm-alt: 72px;
-  --size-col-xxs: 78px;
-  --size-col-tag: 84px;
-  --size-col-alt: 92px;
-  --size-col-2xl: 128px;
+  --size-col-sm-alt: 72px; /* the incident duration column; also the wall's gutter cap */
+  --size-col-xxs: 78px;   /* the lamp-plus-word icon slot in a monitor line */
+  --size-col-tag: 84px;   /* the dashboard's lamp column, narrowed from 104 in SUB-135 */
+  --size-col-alt: 92px;   /* the dashboard's numeric column */
+  --size-col-2xl: 128px;  /* the incident acknowledge column, right-aligned */
   --size-row-sm: 24px;    /* the floor a one-line row settles on */
   --size-row-md: 32px;
   --size-row-lg: 46px;

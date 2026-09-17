@@ -336,7 +336,9 @@ function sizeRow([name, value]) {
   return `
       <tr>
         <td class="sg-cell-swatch">
-          <span class="sg-bar" style="width: var(${name})"></span>
+          <span class="sg-bar" style="width: var(${name})"${
+            Number.parseFloat(value) > 116 ? " data-overflows" : ""
+          }></span>
         </td>
         <td><code>${esc(name)}</code></td>
         <td class="sg-value"><code>${esc(value)}</code></td>
@@ -731,7 +733,15 @@ const html = `<!doctype html>
     background-position: 0 0, 0 6px, 6px -6px, -6px 0;
     background-color: #4a4a4a;
   }
-  .sg-bar { display: block; height: var(--space-3); background: var(--accent); border-radius: var(--r-sm); }
+  /*
+   * The bar is drawn at the token's real width, and the cell is 116px wide,
+   * so a 860px rung used to paint straight across the token name, the value
+   * and the reason. Capped at the cell; a rung wider than the cell shows a
+   * fade at its right edge so "cut off" reads as "longer than this" rather
+   * than as a bar that happens to be exactly cell-width.
+   */
+  .sg-bar { display: block; height: var(--space-3); max-width: 100%; background: var(--accent); border-radius: var(--r-sm); }
+  .sg-bar[data-overflows] { border-radius: var(--r-sm) 0 0 var(--r-sm); mask-image: linear-gradient(to right, #000 60%, transparent); }
   .sg-radius { display: block; width: var(--size-col-md); height: var(--control-h); background: var(--surface-2); border: 1px solid var(--border-control); }
 </style>
 </head>
