@@ -26,7 +26,7 @@ const EMPTY_ACKING: ReadonlySet<string> = new Set();
  *
  * The shape is the approved page proposal's: two cards, open above resolved.
  * They are two cards and not one filtered list because they are read in two
- * different moods. The top one is the 03:00 screen — tinted, loud, every row
+ * different moods. The top one is the 03:00 screen — railed, loud, every row
  * carrying an action. The bottom one is the morning-after screen, quieter by
  * design, where the number that matters is how long each outage lasted rather
  * than how long it has been going on.

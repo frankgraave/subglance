@@ -75,6 +75,10 @@
 .inc-row {
   display: flex;
   flex-direction: column;
+  position: relative;
+  /* Clips the status rail and the detail tray to the row's own corners, so a
+     square edge never pokes out of a rounded box at the bottom of the row. */
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   background: var(--surface);
@@ -85,18 +89,62 @@
 .inc-row:hover { border-color: var(--border-hi); }
 
 /*
- * Open tints, acked warms, resolved stays neutral.
+ * State is an edge, not a fill.
+ *
+ * This replaces `background: var(--down-dim)` on an open row, and the reason
+ * is measurable rather than a matter of taste. The fill was painted on the
+ * whole `.inc-row`, and a row is a column: when the detail opens, the tint
+ * grows with it. Measured in Chromium at 1440, the open row's detail is 844px
+ * wide and 165px tall, so expanding one incident turned 139,260px² of the page
+ * into flat `--down-dim` carrying no information that the lamp, the failure
+ * chip and the word "Unacked" were not already carrying three times over. A
+ * tint that says "down" is a reasonable mark on a 40px line; the same tint
+ * stretched over a panel is a background, and a red background is the loudest
+ * thing on the screen for as long as the row stays open.
+ *
+ * The edge says the same thing in ~2px instead of ~139,000px², which is the
+ * treatment the dashboard's down rows take (`.mon-card`, `.mon-line`) — the
+ * two screens now mark an outage the same way, and a reader moving between
+ * them is not asked to learn a second convention.
  *
  * `--warn` and not `--up` for the acked row, and this is the rule the whole
  * ticket turns on: the middle state must not borrow the colour of health. It
  * is only ever a second voice — the chip in the row says "Acked, still down"
  * in words, which is what a reader who cannot separate amber from green has.
  *
- * A resolved row gets no tint at all: a column of coloured rows from last
- * month reads, at a glance, as a wall of outages happening now.
+ * A resolved row gets no edge at all: a column of marked rows from last month
+ * reads, at a glance, as a wall of outages happening now.
+ *
+ * DESIGN.md §9 is not weakened by dropping the fill. Colour was never doing
+ * the work here: the lamp, the `StatusChip`, the failure-kind chip and the
+ * sr-only sentence all say the state in words, and the edge is the fourth
+ * copy rather than the first.
+ *
+ * The rail is a painted pseudo-element rather than `border-left`, because a
+ * border carrying a status colour is not a border *role* (§2.9) and the
+ * guard's allow-list is the wrong place to register a rule that applies to
+ * every open incident. A background is the honest description anyway: this
+ * is a mark drawn inside the row, not an edge the box is made of.
  */
-.inc-row[data-state="open"] { background: var(--down-dim); }
-.inc-row[data-state="acked"] { background: var(--warn-dim); }
+.inc-row[data-state="open"]::before,
+.inc-row[data-state="acked"]::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  /*
+   * A 2px status rail. `--outline-w` is the nearest declared rung at this
+   * magnitude and there is no `--size-status-rail`; the dashboard writes the
+   * same 2px as a literal inside a border shorthand, which this cannot do.
+   * Flagged for the token owner rather than invented here.
+   */
+  width: var(--outline-w);
+  border-start-start-radius: var(--r-md);
+  border-end-start-radius: var(--r-md);
+}
+
+.inc-row[data-state="open"]::before { background: var(--down); }
+.inc-row[data-state="acked"]::before { background: var(--warn); }
 
 /* History is quieter still: the name recedes, because in that card the number
    that matters is how long it lasted, not which host it was. */
@@ -170,22 +218,57 @@
  * so the longest failure kind was clipped in the column whose whole job is to
  * name it.
  *
- * kind takes rung 4 (168) because the widest chip needs 142; time and dur
- * share rung 2 (64) because both hold one mono reading of the same shape
- * ("14:03:27" is 63px, "12 d 23 h" is 63px) — two columns of the same kind of
- * thing should be one width, and were not; ack takes rung 4 because its
- * button measures 113 and rung 3 is 104.
+ * kind takes rung 4 (168) because the widest chip needs 142; ack takes rung 4
+ * because its button measures 113 and rung 3 is 104.
+ *
+ * **time and dur take rung 3 (104), not rung 2 (64), and that is a bug fix.**
+ * The note that put them on rung 2 measured the wrong strings. It priced time
+ * as `14:03:27` (63px) and duration as `12 d 23 h` (62px), but `formatClock`
+ * renders a 12-hour clock and `formatDuration` renders words: measured in
+ * Chromium in the shipped mono face, `01:59 PM` is **66.45px** and
+ * `7 h 24 min` is **72.81px**. Both overflow a 64px column, so both wrapped
+ * onto two lines in every open incident — the `PM` fell under the digits and
+ * the column the width exists to create was destroyed by the width itself.
+ * Rung 3 is the smallest rung that holds the widest label of each.
+ *
+ * They still share one rung as the old note intended, because they still hold
+ * one kind of reading; only the rung was wrong.
  */
 .inc-col { flex: none; }
 .inc-col-kind { width: var(--size-col-4); }
-.inc-col-time { width: var(--size-col-2); color: var(--ink-2); }
-.inc-col-dur { width: var(--size-col-2); }
+.inc-col-time { width: var(--size-col-3); color: var(--ink-2); }
+.inc-col-dur { width: var(--size-col-3); }
 .inc-col-ack { width: var(--size-col-4); display: flex; justify-content: flex-end; }
 
+/*
+ * The action bar: attached to the line when closed, the tray's footer when
+ * open.
+ *
+ * The complaint was that "Mute repeat alerts" floats at the right with no
+ * visual anchor, and that it sits in the same place on an expanded row as on
+ * the collapsed rows below it — so the two states do not read as different.
+ * Both are one fact: the bar is a sibling of the line, drawn after it, with no
+ * fill and no rule, and it never moved when the row opened. Measured at 1440
+ * the open row put the button at y=205 and the closed rows put theirs at the
+ * identical offset within their own row.
+ *
+ * `order: 3` sends it below the detail once the row is open, where it picks up
+ * the tray's own fill and a rule above it. The control keeps its promise —
+ * always drawn, never hover-revealed, still one click — and gains the two
+ * things it was missing: an edge to sit on, and a position that is evidence of
+ * which state you are in.
+ */
 .inc-act {
   display: flex;
   justify-content: flex-end;
   padding: 0 var(--space-4) var(--space-3);
+}
+
+.inc-row[data-open="true"] .inc-act {
+  order: 3;
+  background: var(--surface-2);
+  border-top: 1px solid var(--border);
+  padding: var(--space-3) var(--space-4);
 }
 
 /* Always drawn, never revealed on hover, unlike a panel-list row's actions:
@@ -197,22 +280,74 @@
 }
 
 /*
- * The detail, expanded in place.
+ * The detail, expanded in place — a recessed tray, not more of the row.
  *
  * Not a 320px side panel: that width cannot hold an error string and a
  * timeline without wrapping both into mush, and choosing a row would reflow
  * the whole page under the reader's eye. In place keeps the incident where the
  * eye already is and gives the detail the full content width.
+ *
+ * **It is filled, and that is what makes expanded legible as a state.** Before
+ * this the detail drew a 1px top rule and nothing else, so an open row and a
+ * closed row differed only in height — and because the whole row carried the
+ * status tint, the detail was the same red as the line above it. Two rows,
+ * same fill, one of them 165px taller. A neutral recess is a structural cue
+ * rather than a second status colour: it works in greyscale, it does not
+ * compete with the rail, and it says "this belongs to the line above" the way
+ * an indent does.
+ *
+ * `--surface-2` and not `--surface-float`: this is inset in the page, not
+ * floating over it, so the translucency composites against the row exactly as
+ * intended rather than letting content read through a layer that should be
+ * opaque.
  */
 .inc-detail {
   border-top: 1px solid var(--border);
-  padding: var(--space-3) var(--space-4) var(--space-4);
+  background: var(--surface-2);
+  padding: var(--space-4);
 }
 
+/*
+ * Two columns sized by what they hold, not two equal halves.
+ *
+ * The old track list was `repeat(auto-fit, minmax(var(--size-pane-sm), 1fr))`,
+ * which at 1440 resolved to `398px 398px` — measured. Half of that is wrong
+ * for both occupants. The timeline is a fixed-shape list: its widest line is
+ * a 104px time column, a 12px gap and a 301px step, 417px in total, and no
+ * amount of extra width makes it longer, so a 398px equal share was 398px of
+ * column holding a list that wanted 417 and then stopped. The captured error
+ * is the opposite — elastic prose that takes whatever it is given, and at
+ * 398px it wrapped "…unsupported protocol version 301" onto a second line
+ * while 398px of page sat empty beside it. That is the "empty space on the
+ * right" in one sentence: the elastic content was rationed and the rigid
+ * content was over-served.
+ *
+ * `auto` lets the timeline take its own measure and stop; `1fr` gives every
+ * remaining pixel to the thing that can use them. The error track carries a
+ * `--size-pane-sm` floor (280px, the width this product already treats as the
+ * narrowest a readable panel gets) because `auto` is greedy: at a 1024px
+ * viewport the timeline still claimed its full 388px intrinsic measure and
+ * left the error 267px, and at 901px it left it 144px — six wrapped lines of
+ * mono in a column narrower than the sentence it holds. With the floor the
+ * timeline yields first, which is the right order: its own wrapping costs a
+ * line, the error's costs legibility. Both tracks are wrapped in `minmax(0, …)`
+ * so a long unbroken error string cannot push a track past the grid and give
+ * the card a horizontal scrollbar.
+ *
+ * The rule between them is the shared grid the two sections did not have.
+ * Their labels already sat on one baseline; nothing said they were two halves
+ * of one statement rather than two panels that happened to be adjacent.
+ */
 .inc-detail-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(var(--size-pane-sm), 1fr));
-  gap: var(--space-4);
+  grid-template-columns: minmax(0, auto) minmax(var(--size-pane-sm), 1fr);
+  column-gap: var(--space-5);
+  row-gap: var(--space-4);
+}
+
+.inc-detail-col + .inc-detail-col {
+  border-left: 1px solid var(--border);
+  padding-left: var(--space-5);
 }
 
 .inc-label {
@@ -236,10 +371,17 @@
   color: var(--ink-2);
 }
 
-/* Rung 2, the same width the collapsed row's time column takes: the timeline
+/* Rung 3, the same width the collapsed row's time column takes: the timeline
    holds the same kind of reading, and a detail that restates a column at a
-   different width makes the reader check whether it is the same field. */
-.inc-tl-at { width: var(--size-col-2); flex: none; color: var(--ink-3); }
+   different width makes the reader check whether it is the same field.
+
+   It was rung 2 (64px) and that is what broke the column. `01:59 PM` measures
+   66.45px in the shipped mono face, so every timeline entry wrapped its `PM`
+   onto a second line — the three steps each became 40px tall instead of 20px,
+   the times no longer formed a left edge, and the ragged result was the most
+   visible thing in the panel. Rung 3 (104px) is the smallest rung that holds
+   the string whole, and clears the widest 12-hour reading by 37.55px. */
+.inc-tl-at { width: var(--size-col-3); flex: none; color: var(--ink-3); }
 
 /* A step that has not happened yet. Quieter, but present: a timeline that
    simply stops is indistinguishable from one that failed to render. */
@@ -249,6 +391,10 @@
  * The captured error. A code block, not a third surface — one radius step
  * inside the row, and it wraps rather than scrolling sideways, because the
  * strings here are sentences with no spaces in the useful places.
+ *
+ * `--surface-hi` rather than `--surface-2`: the tray it sits in now takes
+ * `--surface-2`, and a block that matches its own container is not a block.
+ * One step up is the smallest difference that keeps it a distinct object.
  */
 .inc-snap {
   @apply face-mono;
@@ -256,7 +402,7 @@
   line-height: var(--lead-helper);
   padding: var(--space-2h) var(--space-3);
   border-radius: var(--r-sm);
-  background: var(--surface-2);
+  background: var(--surface-hi);
   color: var(--ink-2);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -330,9 +476,45 @@
 @media (max-width: 640px) {
   .inc-line-inner { flex-wrap: wrap; row-gap: var(--space-2); }
   .inc-main { flex: 1 1 100%; }
+  /* The widths were already released at the tablet rung below; only the wrap
+     and the push-right are new here. */
+  .inc-col-ack { margin-left: auto; }
+}
+
+/*
+ * Tablet and below: the detail stacks, and the fixed columns give up.
+ *
+ * Measured, not guessed. `minmax(0, auto)` lets the timeline claim its own
+ * 388px intrinsic measure, which is right while there is width to spare and
+ * wrong the moment there is not: at a 900px viewport the card's content is
+ * 572px, the timeline still took 388, and the captured error was rationed to
+ * 143px — it grew from 52px tall to 116px and turned back into the mush the
+ * inline expansion exists to avoid. One column below the tablet rung, where
+ * the error gets the full 572 and the timeline keeps its rung.
+ *
+ * The rule between the sections goes with the second column: a vertical
+ * divider on a single-column grid is a line down the side of the content
+ * pointing at nothing. The row gap already separates them.
+ *
+ * **And the collapsed line's fixed columns stop being fixed here**, which is
+ * the cost of putting time and dur on rung 3. 104 + 104 + 168 + 168 is 544px
+ * of column plus 48px of gaps in a 572px card, which leaves −20px for the
+ * monitor name: measured at 900, the name rendered at zero width and the
+ * response chip hung outside the card. A column that cannot fit is not a
+ * column, so below the tablet rung each cell takes its content's width — the
+ * same line, still in order, alignment traded for the name being present at
+ * all. The widths return above 900px, where the card is 812 and they fit with
+ * 200px to spare.
+ */
+@media (max-width: 900px) {
+  .inc-detail-grid { grid-template-columns: minmax(0, 1fr); }
+  .inc-detail-col + .inc-detail-col {
+    border-left: 0;
+    padding-left: 0;
+  }
+
   .inc-col-kind,
   .inc-col-time,
   .inc-col-dur,
   .inc-col-ack { width: auto; }
-  .inc-col-ack { margin-left: auto; }
 }

@@ -54,7 +54,7 @@ export function incidentState(incident: Incident): IncidentState {
  * The badge in the row's response column.
  *
  * **It states the response, not the service.** The row already says whether
- * the service is answering, in three other places: the lamp, the row's tint,
+ * the service is answering, in three other places: the lamp, the row's rail,
  * and a duration that is still counting. This column answers the separate
  * question "is anybody on it" — which is exactly the separation the whole
  * ticket turns on, and drawing it as a second column rather than as one
