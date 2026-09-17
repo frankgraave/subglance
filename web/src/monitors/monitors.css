@@ -428,13 +428,15 @@
  *
  * What still carries "down" is not colour alone (§9):
  *   - the 2px `--down` leading edge above — a position as well as a hue;
- *   - the lamp, which is red AND is the only lamp with the `down` glow;
- *   - the word "Down" in the status cell, which is the signal §9.1 exists for;
  *   - the row's place in the list: `partition` sorts down to the top, under a
  *     "Needs attention (n)" heading that states the count in words;
- *   - the failure reason printed where the latency would be.
- * Removing the tint removes the fifth of five, and the four that remain are
- * the four that work in greyscale.
+ *   - the failure reason printed where the latency would be;
+ *   - the heartbeat bar, which draws a failed check full height.
+ * The lamp is deliberately not on that list: `up`, `warn` and `down` all carry
+ * a glow, so it marks the cell as a status without saying which one. The word
+ * "Down" is `sr-only` here and visible in the compact and card layouts, so it
+ * completes the accessible name rather than the greyscale picture.
+ * Removing the tint removed the one carrier that needed colour to be read.
  */
 
 .mon-row[data-status="pending"] > :first-child { border-left-color: var(--warn); }

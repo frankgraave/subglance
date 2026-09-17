@@ -17,6 +17,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { chromium, type Browser, type Page } from "./harness/browser";
 import { LAYOUT_STORAGE_KEY } from "../shell/preferences";
+import { THEME_STORAGE_KEY } from "../theme/theme";
 import { serveBuild, type Server } from "./harness/server";
 
 let server: Server;
@@ -32,7 +33,12 @@ afterAll(async () => {
   await server?.close();
 });
 
-async function open(layout: string, ready: string, width = 1280): Promise<Page> {
+async function open(
+  layout: string,
+  ready: string,
+  width = 1280,
+  theme?: string,
+): Promise<Page> {
   const page = await browser.newPage();
   await page.setViewport({ width, height: 900, deviceScaleFactor: 1 });
   await page.goto(server.url + "/blank-for-storage", { waitUntil: "domcontentloaded" });
@@ -41,6 +47,13 @@ async function open(layout: string, ready: string, width = 1280): Promise<Page> 
     LAYOUT_STORAGE_KEY,
     layout,
   );
+  if (theme !== undefined) {
+    await page.evaluate(
+      (key: string, value: string) => window.localStorage.setItem(key, value),
+      THEME_STORAGE_KEY,
+      theme,
+    );
+  }
   await page.goto(server.url + "/", { waitUntil: "domcontentloaded" });
   await page.waitForSelector(ready, { timeout: 15_000 });
   await page.evaluate(
@@ -61,6 +74,100 @@ const LUMINANCE = `(rgb) => {
   const [r, g, b] = rgb;
   return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
 }`;
+
+/**
+ * Any CSS colour, as `[r, g, b, a]` in sRGB.
+ *
+ * Every parse in this file used to be `match(/\d+(\.\d+)?/g).slice(0, 3)`,
+ * which silently assumes the string is `rgb()`. The ink scale is authored in
+ * `oklch()`, so `oklch(0.708 0 0)` — a mid grey — was read as the numbers
+ * 0.708, 0 and 0 and treated as near-black RGB. That bug and the
+ * alpha-dropping backdrop cancelled each other out: a nonsense dark
+ * foreground measured against a wrongly-white backdrop produced a large
+ * ratio, and the assertion passed. Fixing either one alone makes this file
+ * fail, which is what happened, and is why both are fixed together.
+ *
+ * The canvas normalises whatever the computed style hands over — `oklch()`,
+ * `color()`, a keyword, a hex — to sRGB bytes, using the browser's own
+ * conversion rather than a reimplementation of it here.
+ */
+const TO_RGBA = `(() => {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1;
+  canvas.height = 1;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  return (colour) => {
+    if (!colour) return null;
+    ctx.clearRect(0, 0, 1, 1);
+    ctx.fillStyle = "#000";
+    ctx.fillStyle = colour;
+    // An unparseable value leaves fillStyle at the previous colour, so a
+    // typo cannot quietly measure black.
+    ctx.globalCompositeOperation = "copy";
+    ctx.fillRect(0, 0, 1, 1);
+    ctx.globalCompositeOperation = "source-over";
+    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+    return [r, g, b, a / 255];
+  };
+})()`;
+
+/**
+ * The real backdrop of an element: every ancestor background composited down
+ * to an opaque colour.
+ *
+ * This existed as "walk up, take the first background that is not fully
+ * transparent, drop its alpha". In the dark theme that is measurably wrong,
+ * and wrong in the dangerous direction. `--surface` is
+ * `rgba(255, 255, 255, .03)` — a 3% white veil over a near-black page — so
+ * discarding the alpha reported the backdrop as pure white. Every ratio on
+ * this page was then computed against white rather than against the almost
+ * black composite the eye actually sees, which flatters a light lamp and
+ * penalises a dark one: the check could pass a lamp that fails and fail a
+ * lamp that passes.
+ *
+ * So the walk collects the layers instead of stopping at the first, and
+ * composites them back to front with the standard source-over formula,
+ * ending on the page's own opaque colour. Only an alpha of exactly 0 is
+ * skipped, because a 3% veil is a layer.
+ */
+const BACKDROP = `(() => {
+  const toRgba = ${TO_RGBA};
+  return (el) => {
+    const layers = [];
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      const parsed = toRgba(window.getComputedStyle(p).backgroundColor);
+      if (parsed === null || parsed[3] === 0) continue;
+      layers.push(parsed);
+      if (parsed[3] >= 1) break;
+    }
+    // Bottom-most first, so each layer paints over the one below it.
+    let out = [255, 255, 255];
+    for (let i = layers.length - 1; i >= 0; i -= 1) {
+      const layer = layers[i];
+      const a = layer[3];
+      out = [0, 1, 2].map((k) => layer[k] * a + out[k] * (1 - a));
+    }
+    return out;
+  };
+})()`;
+
+/**
+ * The element's own painted colour, composited over its backdrop.
+ *
+ * A lamp or a label can itself be translucent, and the same alpha-dropping
+ * bug applies to the foreground. Returns null when there is nothing painted.
+ */
+const OVER_BACKDROP = `(() => {
+  const toRgba = ${TO_RGBA};
+  const backdrop = ${BACKDROP};
+  return (el, colour) => {
+    const parsed = toRgba(colour);
+    if (parsed === null || parsed[3] === 0) return null;
+    const a = parsed[3];
+    const back = backdrop(el);
+    return [0, 1, 2].map((k) => parsed[k] * a + back[k] * (1 - a));
+  };
+})()`;
 
 describe("the status word beside the lamp", () => {
   /*
@@ -152,19 +259,30 @@ describe("the status word beside the lamp", () => {
     }
   });
 
-  it("clears the 3:1 non-text floor on the lamp that now carries status alone", async () => {
-    const page = await open("rows", "[data-testid^='monitor-row-']");
-    try {
-      const worst = await page.evaluate(`(() => {
+  /*
+   * Both themes, because the compositing this measurement depends on only
+   * matters in one of them.
+   *
+   * The light theme's surfaces are opaque hex values, so an alpha-dropping
+   * backdrop walk and a correct one return the same colour and every ratio
+   * agrees. The dark theme's are not: `--surface` is
+   * `rgba(255, 255, 255, .03)` over a near-black page. Running this in light
+   * alone meant the harness had never measured the theme where the tokens are
+   * translucent — which is also the theme the product opens in.
+   */
+  for (const theme of ["light", "dark"]) {
+    it(`clears the 3:1 non-text floor on the lamp that now carries status alone (${theme})`, async () => {
+      const page = await open(
+        "rows",
+        "[data-testid^='monitor-row-']",
+        1280,
+        theme,
+      );
+      try {
+        const worst = await page.evaluate(`(() => {
         const luminance = ${LUMINANCE};
-        const parse = (c) => c.match(/\\d+(\\.\\d+)?/g).slice(0, 3).map(Number);
-        const backdrop = (el) => {
-          for (let p = el.parentElement; p; p = p.parentElement) {
-            const bg = window.getComputedStyle(p).backgroundColor;
-            if (bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") return parse(bg);
-          }
-          return [0, 0, 0];
-        };
+        const backdrop = ${BACKDROP};
+        const overBackdrop = ${OVER_BACKDROP};
         let worst = 21;
         let counted = 0;
         for (const lamp of Array.from(document.querySelectorAll(".mon-cell--led .led"))) {
@@ -173,7 +291,9 @@ describe("the status word beside the lamp", () => {
           // A hollow lamp (paused) is a ring, not a fill; its contrast is the
           // ring's, which led.css sets from --ink-2 and DESIGN.md §3 measures.
           if (!bgRaw || bgRaw === "rgba(0, 0, 0, 0)" || bgRaw === "transparent") continue;
-          const fg = luminance(parse(bgRaw));
+          const painted = overBackdrop(lamp, bgRaw);
+          if (painted === null) continue;
+          const fg = luminance(painted);
           const bg = luminance(backdrop(lamp));
           const ratio = (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
           worst = Math.min(worst, ratio);
@@ -181,16 +301,25 @@ describe("the status word beside the lamp", () => {
         }
         return { worst, counted };
       })()`);
-      // Without a lamp to measure this assertion is vacuous, so say so.
-      expect((worst as { counted: number }).counted).toBeGreaterThan(0);
-      // WCAG 1.4.11: a non-text indicator carrying information needs 3:1
-      // against what is adjacent to it. This is the floor the lamp is held to
-      // now that it is the only thing in the cell.
-      expect((worst as { worst: number }).worst).toBeGreaterThanOrEqual(3);
-    } finally {
-      await page.close();
-    }
-  });
+        // The theme actually took effect. Without this the dark case could
+        // silently measure the light palette twice.
+        expect(
+          await page.evaluate(
+            () => document.documentElement.getAttribute("data-theme"),
+          ),
+          "the theme preference must reach the document",
+        ).toBe(theme);
+        // Without a lamp to measure this assertion is vacuous, so say so.
+        expect((worst as { counted: number }).counted).toBeGreaterThan(0);
+        // WCAG 1.4.11: a non-text indicator carrying information needs 3:1
+        // against what is adjacent to it. This is the floor the lamp is held to
+        // now that it is the only thing in the cell.
+        expect((worst as { worst: number }).worst).toBeGreaterThanOrEqual(3);
+      } finally {
+        await page.close();
+      }
+    });
+  }
 
   it("clears the 4.5:1 AA floor on the status word the compact layout still draws", async () => {
     // The visible status word did not leave the product, it left one layout.
@@ -202,14 +331,8 @@ describe("the status word beside the lamp", () => {
     try {
       const measured = await page.evaluate(`(() => {
         const luminance = ${LUMINANCE};
-        const parse = (c) => c.match(/\\d+(\\.\\d+)?/g).slice(0, 3).map(Number);
-        const backdrop = (el) => {
-          for (let p = el; p; p = p.parentElement) {
-            const bg = window.getComputedStyle(p).backgroundColor;
-            if (bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") return parse(bg);
-          }
-          return [0, 0, 0];
-        };
+        const backdrop = ${BACKDROP};
+        const overBackdrop = ${OVER_BACKDROP};
         let worst = 21;
         let counted = 0;
         for (const label of Array.from(document.querySelectorAll(".mon-line-led .led-label"))) {
@@ -217,7 +340,9 @@ describe("the status word beside the lamp", () => {
           // Only what is actually painted: the sr-only variant carries no
           // contrast obligation and would drag the worst case to nonsense.
           if (r.width < 2 || r.height < 2) continue;
-          const fg = luminance(parse(window.getComputedStyle(label).color));
+          const painted = overBackdrop(label, window.getComputedStyle(label).color);
+          if (painted === null) continue;
+          const fg = luminance(painted);
           const bg = luminance(backdrop(label));
           const ratio = (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
           worst = Math.min(worst, ratio);

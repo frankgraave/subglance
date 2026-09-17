@@ -389,8 +389,15 @@ describe("the panel look does not cost the table its semantics", () => {
     const table = monTable();
     expect(table.querySelector("caption")).not.toBeNull();
     expect(table.querySelectorAll("th[scope='col']").length).toBeGreaterThan(0);
+    // Section headings are `th[scope="rowgroup"]`, which is also a `rowheader`
+    // — correctly so, since they label the rows of their tbody. They are
+    // excluded here because this assertion is about the per-monitor name cell:
+    // counting both made the number a function of how many sections the
+    // fixture happens to produce.
     expect(
-      within(table).getAllByRole("rowheader").length,
+      within(table)
+        .getAllByRole("rowheader")
+        .filter((cell) => !cell.classList.contains("mon-section-title")).length,
       "every monitor row needs its own row header",
     ).toBe(2);
   });
@@ -419,6 +426,11 @@ describe("the panel look does not cost the table its semantics", () => {
      *
      * Descendant selectors are kept: the fill this guards against was applied
      * to every cell of the row, via `> *`.
+     *
+     * Every background declaration in the block is inspected, not just the
+     * first. `exec` returns one match, so a rule that set a neutral fill and
+     * then a status tint below it — which is what a careless merge produces —
+     * would have been read as neutral and passed.
      */
     const NEUTRAL =
       /^(?:none|transparent|inherit|initial|unset|revert|var\(--surface[a-z0-9-]*\)|var\(--border[a-z0-9-]*\))$/;
@@ -427,11 +439,13 @@ describe("the panel look does not cost the table its semantics", () => {
       const selector = match[1].trim();
       if (!/\[data-status="down"\]/.test(selector)) continue;
       const body = match[2].replace(/\/\*[\s\S]*?\*\//g, "");
-      const fill = /(?:^|[;{\s])background(?:-color)?:\s*([^;]+)/.exec(body);
-      if (!fill) continue;
-      const value = fill[1].trim();
-      if (NEUTRAL.test(value)) continue;
-      offenders.push(`${selector} fills with ${value}`);
+      for (const [, raw] of body.matchAll(
+        /(?:^|[;{\s])background(?:-color)?:\s*([^;]+)/g,
+      )) {
+        const value = raw.trim();
+        if (NEUTRAL.test(value)) continue;
+        offenders.push(`${selector} fills with ${value}`);
+      }
     }
     expect(
       offenders,

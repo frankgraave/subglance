@@ -145,17 +145,26 @@ contradicting the code. Two consequences, both deliberate:
 
 **A down monitor is still unmistakable, and still not by colour alone** (§9):
 
-| Carrier | Works in greyscale |
+| Carrier | Visible without colour |
 |---|---|
 | 2px `--down` leading edge | yes — it is a position as well as a hue |
-| the lamp, plus the `--down` glow no other state has | yes |
-| the word `Down`, `sr-only` in rows, visible in compact and card layouts | yes |
 | sorted to the top under a counted **Needs attention (n)** heading | yes |
 | the failure reason printed in words where the latency would be | yes |
 | the heartbeat bar: a failed check is drawn **full height** | yes |
+| the word `Down`, visible in the compact and card layouts | yes, in those layouts |
+| the word `Down`, `sr-only` in the rows layout | to assistive technology only |
 
-Removing the tint removed the one carrier of the six that could not survive a
-greyscale screenshot.
+Two things this table deliberately does not claim. The lamp's glow is **not** a
+carrier: `up`, `warn` and `down` all have one (`--glow-up`, `--glow-warn`,
+`--glow-down`), so it says "this is a status" and not which. And the `sr-only`
+word is not a visual carrier — it is listed because it is what keeps the row's
+accessible name complete, which is a different obligation from §9's, and the
+last row says so rather than letting a reader count it twice.
+
+What the rows layout actually rests on for a sighted reader is therefore the
+first four: position, edge, words, and bar height. Removing the tint removed a
+fifth, and it was the one that could not survive a greyscale screenshot
+anyway.
 
 **The label on a filled status mark.** A status badge fills itself with its own
 status colour, and the ink scale is wrong on that fill: `--ink` measures 1.59:1

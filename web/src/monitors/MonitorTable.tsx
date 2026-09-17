@@ -215,7 +215,7 @@ export function MonitorTable({
       {attention.length > 0 && (
         <tbody className="mon-section mon-section--attention">
           <tr className="mon-section-head">
-            <th scope="colgroup" colSpan={5} className="mon-section-title">
+            <th scope="rowgroup" colSpan={5} className="mon-section-title">
               Needs attention ({attention.length})
             </th>
           </tr>
@@ -226,7 +226,7 @@ export function MonitorTable({
       <tbody className="mon-section">
         {attention.length > 0 && (
           <tr className="mon-section-head">
-            <th scope="colgroup" colSpan={5} className="mon-section-title">
+            <th scope="rowgroup" colSpan={5} className="mon-section-title">
               All monitors ({rest.length})
             </th>
           </tr>
