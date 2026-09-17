@@ -128,6 +128,73 @@ const MONITORS: ApiMonitor[] = [
   },
 ];
 
+/*
+ * Channels in the wire shape `channelFromApi` reads, with the config values
+ * already masked the way `internal/api/channels.go` masks them — `****` plus
+ * the last four characters. A fixture that returned a plain webhook URL would
+ * measure a row this product never renders.
+ *
+ * The set is chosen for width and for state, not for tidiness: five types, one
+ * disabled, one with the longest realistic email recipient list, and one whose
+ * type this build does not know — because "Unknown type" and "this build does
+ * not know this channel type" are strings the layout has to hold, and nothing
+ * else in the fixture produces them.
+ */
+const CHANNELS = [
+  {
+    id: 1,
+    name: "platform-oncall-primary-escalation",
+    type: "slack",
+    config: { url: "****0f3a" },
+    enabled: true,
+    created_at: new Date(Date.now() - 40 * 86_400_000).toISOString(),
+    updated_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+  },
+  {
+    id: 2,
+    name: "Ops mailing list",
+    type: "email",
+    config: {
+      to: "ops@acme-corporation.example, platform-oncall@acme-corporation.example",
+      from: "subglance@acme-corporation.example",
+      host: "smtp.acme-corporation.example",
+      port: "587",
+      username: "subglance",
+      password: "********",
+    },
+    enabled: true,
+    created_at: new Date(Date.now() - 30 * 86_400_000).toISOString(),
+    updated_at: new Date(Date.now() - 30 * 86_400_000).toISOString(),
+  },
+  {
+    id: 3,
+    name: "Status page webhook",
+    type: "webhook",
+    config: { url: "****hook", headers: "****4f21" },
+    enabled: true,
+    created_at: new Date(Date.now() - 12 * 86_400_000).toISOString(),
+    updated_at: new Date(Date.now() - 12 * 86_400_000).toISOString(),
+  },
+  {
+    id: 4,
+    name: "Weekend pager",
+    type: "telegram",
+    config: { bot_token: "****9xQ2", chat_id: "-1001234567890" },
+    enabled: false,
+    created_at: new Date(Date.now() - 5 * 86_400_000).toISOString(),
+    updated_at: new Date(Date.now() - 86_400_000).toISOString(),
+  },
+  {
+    id: 5,
+    name: "Discord #incidents",
+    type: "discord",
+    config: { url: "****ab19" },
+    enabled: true,
+    created_at: new Date(Date.now() - 86_400_000).toISOString(),
+    updated_at: new Date(Date.now() - 86_400_000).toISOString(),
+  },
+];
+
 export interface Server {
   url: string;
   close(): Promise<void>;
@@ -158,6 +225,63 @@ export async function serveBuild(): Promise<Server> {
           created_at: new Date(Date.now() - 86_400_000).toISOString(),
         }),
       );
+      return;
+    }
+
+    /*
+     * The channel list. Without this route the notifications page fell through
+     * to the 404 below, React Query retried, and the screen sat on "Loading
+     * channels…" forever — which looked exactly like a product bug and wasted
+     * a review pass (SUB-138). A layout harness that cannot render one of the
+     * four screens is not a harness.
+     */
+    if (url.pathname === "/api/v1/channels") {
+      /*
+       * `SUBGLANCE_HARNESS_CHANNELS=none` serves the empty list. The empty
+       * state is the first thing every new self-hoster sees and it had never
+       * been looked at in a browser — the review that prompted SUB-138 in fact
+       * mistook the *loading* line for it, because with no route here the page
+       * never got past loading. A harness that can only draw the populated
+       * case cannot catch that.
+       */
+      const empty = process.env.SUBGLANCE_HARNESS_CHANNELS === "none";
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ channels: empty ? [] : CHANNELS }));
+      return;
+    }
+
+    /*
+     * Testing a channel, answered as a refusal rather than a success.
+     *
+     * The layout check presses this button to watch whether the row's controls
+     * hold still while the label says "Sending test…", and a fixture that
+     * returned `ok` would paint a green "Test delivered" chip — a claim this
+     * product is careful never to make without a real delivery behind it, in a
+     * harness that delivers nothing. The refusal is the honest stub, and it
+     * also exercises the wider of the two result paragraphs.
+     */
+    const test = url.pathname.match(/^\/api\/v1\/channels\/[^/]+\/test$/);
+    if (test) {
+      /*
+       * Answered after a beat, not instantly. A real test delivery opens a
+       * socket to Slack or an SMTP server, so an instant reply is the one
+       * timing this endpoint never has — and it made the row's in-flight
+       * state ("Sending test…", the disabled button) unobservable, which is
+       * precisely the state the layout check needs to measure. The delay is
+       * the fixture being honest about the shape of the thing it stands in
+       * for, not a sleep bolted on to make a test pass.
+       */
+      setTimeout(() => {
+        res.writeHead(200, {
+          "content-type": "application/json; charset=utf-8",
+        });
+        res.end(
+          JSON.stringify({
+            ok: false,
+            error: "the layout harness does not deliver messages",
+          }),
+        );
+      }, 400);
       return;
     }
 
