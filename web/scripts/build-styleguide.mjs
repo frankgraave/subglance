@@ -667,6 +667,12 @@ const html = `<!doctype html>
   .sg-specimen .sg-why { max-width: 70ch; margin: 0 0 var(--space-3); }
   .sg-stage { padding: var(--space-5); border: 1px dashed var(--border); border-radius: var(--r-lg); }
   .sg-specimen-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); }
+  /* The chrome specimen shows two bars stacked as the shell stacks them, so
+     the boundary between "true everywhere" and "true here" is the thing you
+     look at. Bounded and clipped because both bars are built to span a
+     viewport, and a specimen is not one. */
+  .sg-chrome { border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; }
+  .sg-chrome .shell-topbar, .sg-chrome .shell-toolbar { position: static; }
   .sg-table th {
     text-align: left;
     font: inherit;

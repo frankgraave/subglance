@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Card, Panel } from "../components/Card";
-import { TopbarTools } from "../shell/TopbarTools";
+import { PlusIcon, SearchIcon } from "../shell/icons";
+import { ToolbarTools, TopbarTools } from "../shell/TopbarTools";
 import { Drawer } from "../components/Drawer";
 import { ConfirmDelete } from "../components/ConfirmDelete";
 import { StateChip } from "../components/Chip";
@@ -129,10 +130,20 @@ export function MonitorsView({
 
   return (
     <section className="mon-detail inv-screen" aria-label="Monitors">
-      <header className="mon-detail-head">
-        <h1 className="mon-detail-name">Monitors</h1>
-        <p className="mon-detail-note">{describeInventory(monitors)}</p>
-      </header>
+      {/*
+       * No page heading (SUB-138).
+       *
+       * The sidebar already says Monitors, and the card below says
+       * "Configured monitors" — three statements of the same word before a
+       * single row of data. The dashboard never had one, which is what made
+       * the inconsistency visible: the two list screens looked like different
+       * products. The card's title is the heading, and the count that used to
+       * sit under the page title is the toolbar's "n of m shown".
+       *
+       * `aria-label` on the section still names the region for assistive
+       * technology, so removing the visible heading does not remove the
+       * landmark's name.
+       */}
 
       {error !== null && (
         <p className="inc-notice" role="alert">
@@ -166,48 +177,47 @@ export function MonitorsView({
       )}
 
       {/*
-       * The page's own tools, in the shell's toolbar rather than in a band
-       * inside the Card (SUB-134, SUB-131).
+       * Search in the masthead, filters in the page toolbar (SUB-138).
        *
-       * It used to be a fourth strip of chrome — topbar, card header, filter
-       * bar, then finally rows — with the SEARCH label sitting on its own line
-       * beside its box and out of line with the two selects next to it. That
-       * misalignment is not repaired here, it is removed with the bar: the
-       * controls belong in the toolbar, where the dashboard already puts its
-       * search, and the card goes back to holding only the list.
+       * Both used to sit together in one bar, which made the monitors page
+       * look different from the dashboard even though both screens search a
+       * list of monitors. The split follows what the control *is*: searching
+       * "the things this screen lists" is true everywhere and holds the same
+       * position everywhere, while a type facet is this screen's alone.
        *
-       * The counter travels with them, and that is not tidiness. "3 of 3
-       * shown" is the filter's honesty — it says you are looking at a
-       * selection rather than at everything — and leaving it behind in the
-       * card while the controls moved up would strand the claim away from the
-       * action that makes it true.
+       * The counter travels with the filters, and that is not tidiness.
+       * "3 of 3 shown" is the filter's honesty — it says you are looking at a
+       * selection rather than at everything — so it belongs beside the
+       * controls that make the claim true.
        *
-       * Portalled from here rather than passed up as props, so the three
-       * pieces of filter state stay inside the screen that filters. See
-       * `TopbarTools`.
+       * Portalled rather than passed up as props, so the filter state stays
+       * inside the screen that filters. See `TopbarTools`.
        */}
       <TopbarTools>
-        <div className="inv-tools">
-          <label className="inv-tool">
-            <span className="inv-tool-label">Search</span>
-            <input
-              type="search"
-              /* `inv-search-input` pins the 16px minimum at every width.
-                 `.add-input` drops to 14px above 640px, which is fine for a
-                 form nobody types into on a phone in landscape and wrong for
-                 a search box: iOS Safari zooms the page on focus below 16px
-                 and leaves the reader scrolled sideways (DESIGN.md §13). */
-              className="add-input inv-search-input"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Name or target"
-            />
-          </label>
+        <label className="shell-search">
+          <span className="sr-only">Search monitors</span>
+          <SearchIcon />
+          <input
+            type="search"
+            /* `shell-search-input` pins the 16px minimum at every width.
+               `.add-input` drops to 14px above 640px, which is fine for a
+               form nobody types into on a phone in landscape and wrong for a
+               search box: iOS Safari zooms the page on focus below 16px and
+               leaves the reader scrolled sideways (DESIGN.md §13). */
+            className="shell-search-input"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search monitors…"
+          />
+        </label>
+      </TopbarTools>
 
-          <label className="inv-tool">
-            <span className="inv-tool-label">Type</span>
+      <ToolbarTools>
+        <div className="tb-group">
+          <label className="tb-field">
+            <span className="tb-label">Type</span>
             <select
-              className="mon-facet-select"
+              className="tb-select"
               value={type}
               onChange={(event) => setType(event.target.value)}
             >
@@ -220,10 +230,10 @@ export function MonitorsView({
             </select>
           </label>
 
-          <label className="inv-tool">
-            <span className="inv-tool-label">Paused</span>
+          <label className="tb-field">
+            <span className="tb-label">Paused</span>
             <select
-              className="mon-facet-select"
+              className="tb-select"
               value={pausedFilter}
               onChange={(event) => setPausedFilter(event.target.value)}
             >
@@ -237,24 +247,44 @@ export function MonitorsView({
             </select>
           </label>
 
-          <p className="mon-result-count" role="status">
+          <p className="tb-count" role="status">
             {loading
               ? "Loading monitors…"
               : `${visible.length} of ${monitors.length} shown`}
           </p>
         </div>
-      </TopbarTools>
+      </ToolbarTools>
 
       <Card
         title="Configured monitors"
-        headingLevel={2}
+        headingLevel={1}
+        /*
+         * `h1`, because this card's title is now the page's heading (SUB-138).
+         * The document must still have exactly one, and the level is a fact
+         * about where the card sits rather than a style choice.
+         */
+        note={describeInventory(monitors)}
         action={
           onCreateOpenChange === undefined ? undefined : (
             <button
               type="button"
               className="add-button add-button-primary"
+              /*
+               * Named explicitly rather than left to its text content. The
+               * button is a glyph plus a word, and what a screen reader makes
+               * of an inline <svg> is not fixed — an unnamed one is skipped by
+               * some and announced as "graphic" by others, which would make
+               * this button's name depend on the reader rather than on us.
+               * The visual order is set in CSS; the name is set here.
+               */
+              aria-label="Add monitor"
               onClick={() => onCreateOpenChange(true)}
             >
+              {/* The glyph accompanies the words rather than replacing them:
+                  this is the one action on the screen that should be findable
+                  without reading, and a `+` alone would make it the only
+                  unlabelled primary button in the product. */}
+              <PlusIcon aria-hidden="true" />
               Add monitor
             </button>
           )
@@ -330,17 +360,23 @@ export function MonitorsView({
             (SUB-132). A drawer is a place to put the existing surfaces, not a
             second visual language, and the form on its own is bare fields on
             the drawer's own background. */}
-        <Card title="New monitor" headingLevel={3}>
-          <Panel>
-            <AddMonitor
-              onCreated={() => {
-                onCreated?.();
-                onCreateOpenChange?.(false);
-              }}
-              onCancel={() => onCreateOpenChange?.(false)}
-            />
-          </Panel>
-        </Card>
+        {/*
+         * No Card around the form (SUB-138).
+         *
+         * The drawer is already a surface with a header; wrapping the form in a
+         * card made three nested frames — drawer, card, then the form's own
+         * fieldset — and PR #42 fixed the rule at two surfaces, never three. The
+         * drawer's header is the card header this was reaching for.
+         */}
+        <Panel>
+          <AddMonitor
+            onCreated={() => {
+              onCreated?.();
+              onCreateOpenChange?.(false);
+            }}
+            onCancel={() => onCreateOpenChange?.(false)}
+          />
+        </Panel>
       </Drawer>
 
       <Drawer

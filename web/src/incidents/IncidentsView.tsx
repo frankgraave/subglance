@@ -2,6 +2,9 @@ import { Card, Panel } from "../components/Card";
 import { IconAlert, IconClock } from "../components/icons";
 import { IncidentStoryItem } from "./IncidentStoryItem";
 import { IncidentClusterItem } from "./IncidentClusterItem";
+import { useState } from "react";
+import { SearchIcon } from "../shell/icons";
+import { TopbarTools } from "../shell/TopbarTools";
 import { clusterIncidents } from "./cluster";
 import { describeChurn, incidentState } from "./story";
 import { formatDuration } from "../monitors/detail";
@@ -96,6 +99,7 @@ export function IncidentsView({
   ackError = null,
   stale = false,
 }: IncidentsViewProps) {
+  const [query, setQuery] = useState("");
   /*
    * Chronological, newest first, with clusters folded in where they exist.
    *
@@ -114,10 +118,24 @@ export function IncidentsView({
    * every caller, including a test rendering a fixture in whatever order it
    * wrote it.
    */
-  const entries = clusterIncidents(incidents);
-  const ackedCount = incidents.filter(
-    (i) => incidentState(i) === "acked",
-  ).length;
+  /*
+   * The filter is applied before clustering, not after.
+   *
+   * Clustering answers "did several monitors fail together", and a cluster
+   * built from the full list and then filtered would keep saying "4 monitors"
+   * while showing one row. Filtering first means the sentence and the rows it
+   * sits above are computed from the same set.
+   */
+  const needle = query.trim().toLowerCase();
+  const matches = (incident: Incident) =>
+    needle === "" ||
+    (names[incident.monitorId] ?? `Monitor ${incident.monitorId}`)
+      .toLowerCase()
+      .includes(needle);
+  const shown = incidents.filter(matches);
+  const shownResolved = resolved.filter(matches);
+  const entries = clusterIncidents(shown);
+  const ackedCount = shown.filter((i) => incidentState(i) === "acked").length;
 
   /*
    * Churn is computed per monitor, not over the whole list.
@@ -141,12 +159,12 @@ export function IncidentsView({
     if (note !== null) churn.push({ monitorId, note });
   }
 
-  const days = groupByDay(resolved, now);
+  const days = groupByDay(shownResolved, now);
   const nothingAtAll =
     !loading &&
     error === null &&
-    incidents.length === 0 &&
-    resolved.length === 0;
+    shown.length === 0 &&
+    shownResolved.length === 0;
 
   return (
     /*
@@ -163,9 +181,37 @@ export function IncidentsView({
       data-conn={stale ? "stale" : "live"}
       aria-label="Incidents"
     >
-      <header className="mon-detail-head">
-        <h1 className="mon-detail-name">Incidents</h1>
-      </header>
+      {/*
+       * Search, in the masthead like every other list screen (SUB-138).
+       *
+       * It filters by monitor name, which is the question this screen is
+       * actually read with: "did api go down again". It does not search
+       * incident text, because an incident has none — inventing a field to
+       * search would be a control that looks like it does more than it does.
+       */}
+      <TopbarTools>
+        <label className="shell-search">
+          <span className="sr-only">Filter incidents by monitor</span>
+          <SearchIcon />
+          <input
+            type="search"
+            className="shell-search-input"
+            value={query}
+            placeholder="Filter by monitor…"
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+      </TopbarTools>
+
+      {/*
+       * No visible page heading, for the reason Monitors has none (SUB-138):
+       * the sidebar says Incidents and the cards below say "Open incidents"
+       * and "Resolved". The `h1` survives, visually hidden, so heading
+       * navigation still has a level-1 landmark.
+       */}
+      <h1 className="sr-only">Incidents</h1>
 
       {churn.map(({ monitorId, note }) => (
         /*
@@ -224,7 +270,7 @@ export function IncidentsView({
             <span className="mon-detail-note">
               {loading
                 ? "Loading…"
-                : `${incidents.length} open · ${ackedCount} acknowledged`}
+                : `${shown.length} open · ${ackedCount} acknowledged`}
             </span>
           }
         >
@@ -305,7 +351,7 @@ export function IncidentsView({
        * card reads as "nothing happened", and that is the one thing this
        * screen may never imply by accident.
        */}
-      {days.length === 0 && resolved.length === 0 && !historyTruncated ? null : (
+      {days.length === 0 && shownResolved.length === 0 && !historyTruncated ? null : (
         <Card
           title="Resolved"
           icon={<IconClock />}
@@ -346,10 +392,10 @@ export function IncidentsView({
                * rather than a shorter list.
                */
               <p className="inc-notice" role="status">
-                {resolved.length === 0
+                {shownResolved.length === 0
                   ? `Nothing resolved in the last ${historyDays} days.`
-                  : `${resolved.length} resolved ${
-                      resolved.length === 1 ? "incident" : "incidents"
+                  : `${shownResolved.length} resolved ${
+                      shownResolved.length === 1 ? "incident" : "incidents"
                     } could not be placed on a day — no start time was recorded.`}
               </p>
             ) : null}

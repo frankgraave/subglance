@@ -242,7 +242,16 @@ export function AddMonitorForm({
       onSubmit={submit}
       aria-labelledby={`${ids}-heading`}
     >
-      <h2 id={`${ids}-heading`} className="add-title">
+      {/*
+       * The heading is visually hidden, not removed (SUB-138).
+       *
+       * The drawer that contains this form already says "Add monitor" in its
+       * own header, so the form printed the same instruction twice, one line
+       * apart, in two different sizes. What the heading is *for* is naming
+       * the form for assistive technology — `aria-labelledby` points at it —
+       * and that job does not need pixels.
+       */}
+      <h2 id={`${ids}-heading`} className="sr-only">
         Add a monitor
       </h2>
       <p className="add-lede">

@@ -34,13 +34,21 @@ export type CardProps = {
   icon?: ReactNode;
   /** Optional control on the header's right: a link, a button, a menu. */
   action?: ReactNode;
+  /**
+   * A quiet line under the title: a count, a qualifier, a caveat.
+   *
+   * It exists so a card that *is* a page heading can carry what used to sit
+   * under the page title (SUB-138) without inventing a second heading. Not a
+   * subtitle — it is helper text, and it never competes with the title.
+   */
+  note?: ReactNode;
   /** The panels. */
   children: ReactNode;
   /**
    * Heading level. A card's title is a real heading in the document outline,
    * so the level has to fit where the card sits rather than always being h2.
    */
-  headingLevel?: 2 | 3 | 4;
+  headingLevel?: 1 | 2 | 3 | 4;
   className?: string;
   /** Marks the card's own region for assistive technology. */
   "aria-label"?: string;
@@ -50,12 +58,13 @@ export function Card({
   title,
   icon,
   action,
+  note,
   children,
   headingLevel = 2,
   className,
   "aria-label": ariaLabel,
 }: CardProps) {
-  const Heading = `h${headingLevel}` as "h2" | "h3" | "h4";
+  const Heading = `h${headingLevel}` as "h1" | "h2" | "h3" | "h4";
   // The section is named by its own heading rather than by a repeated string.
   // `useId` rather than a caller-supplied id: two tag values differing only in
   // case used to collide into one id and silently break the association, and a
@@ -70,9 +79,14 @@ export function Card({
       <div className="card-head">
         <div className="card-head-lead">
           {icon ? <IconTile>{icon}</IconTile> : null}
-          <Heading id={headingId} className="card-title">
-            {title}
-          </Heading>
+          <div className="card-head-text">
+            <Heading id={headingId} className="card-title">
+              {title}
+            </Heading>
+            {note === undefined ? null : (
+              <p className="card-note">{note}</p>
+            )}
+          </div>
         </div>
         {action ? <div className="card-head-action">{action}</div> : null}
       </div>

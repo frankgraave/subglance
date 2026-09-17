@@ -2,13 +2,15 @@ import { useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 import {
+  getToolbarSlot,
   getTopbarSlot,
   getTopbarSlotServerSnapshot,
+  subscribeToToolbarSlot,
   subscribeToTopbarSlot,
 } from "./topbarSlot";
 
 /**
- * Puts a screen's own controls into the shell's toolbar (SUB-131).
+ * Puts a screen's own controls into one of the shell's two bars.
  *
  * `Topbar` has always had a `children` slot documented for "controls owned by
  * the page", and nothing ever passed anything into it — so every screen showed
@@ -28,14 +30,46 @@ import {
  * behaviour a route-bound toolbar needs and a prop threaded through the shell
  * would have to reimplement.
  */
-export function TopbarTools({ children }: { children: ReactNode }) {
+function Slotted({
+  children,
+  subscribe,
+  read,
+}: {
+  children: ReactNode;
+  subscribe: (listener: () => void) => () => void;
+  read: () => HTMLElement | null;
+}) {
   const target = useSyncExternalStore(
-    subscribeToTopbarSlot,
-    getTopbarSlot,
+    subscribe,
+    read,
     getTopbarSlotServerSnapshot,
   );
-  // No slot is not an error: the status wall renders no topbar at all, and a
+  // No slot is not an error: the status wall renders no chrome at all, and a
   // screen mounted under it simply has nowhere to put its tools.
   if (target === null) return null;
   return createPortal(children, target);
+}
+
+/** Controls for the masthead — the bar that is identical on every screen. */
+export function TopbarTools({ children }: { children: ReactNode }) {
+  return (
+    <Slotted subscribe={subscribeToTopbarSlot} read={getTopbarSlot}>
+      {children}
+    </Slotted>
+  );
+}
+
+/**
+ * Controls for the page toolbar — the bar that changes with the route.
+ *
+ * This is where sorting, grouping and filtering go. The masthead above it
+ * holds only what is true everywhere, so that moving between screens never
+ * moves the controls that are always there (SUB-138).
+ */
+export function ToolbarTools({ children }: { children: ReactNode }) {
+  return (
+    <Slotted subscribe={subscribeToToolbarSlot} read={getToolbarSlot}>
+      {children}
+    </Slotted>
+  );
 }

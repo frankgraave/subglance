@@ -125,6 +125,26 @@ export function IconPencil() {
 }
 
 /**
+ * Delete: a bin.
+ *
+ * Drawn on the same 24-unit grid at the same stroke as its neighbours, so the
+ * destructive action is not also the odd shape in the row. What makes it read
+ * as destructive is the silhouette — a lid, a body, two lines — rather than
+ * the colour it is given: the row tints it, but a greyscale screen still
+ * shows a bin (DESIGN.md §2.3).
+ */
+export function IconTrash() {
+  return (
+    <svg {...BASE}>
+      <path d="M5 7h14" />
+      <path d="M9.5 7V5.5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V7" />
+      <path d="M6.5 7l.8 11a1.6 1.6 0 0 0 1.6 1.5h6.2a1.6 1.6 0 0 0 1.6-1.5L17.5 7" />
+      <path d="M10.5 10.5v6M13.5 10.5v6" />
+    </svg>
+  );
+}
+
+/**
  * Column-count glyphs: N filled bars in the same 24-unit box.
  *
  * Filled rather than stroked, which is the one deviation from `BASE` in this

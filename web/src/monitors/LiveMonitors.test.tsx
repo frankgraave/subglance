@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   cleanup,
   fireEvent,
-  render,
+  render as renderBare,
   screen,
   waitFor,
   within,
@@ -13,6 +13,26 @@ import { QueryClient } from "@tanstack/react-query";
 import { LiveMonitorsRoot } from "./LiveMonitors";
 import { inventoryFromApi } from "./inventory";
 import type { VersionedMonitor } from "./inventoryApi";
+
+import { ShellSlots } from "../shell/ShellSlots";
+
+/*
+ * Every render gets the shell's two portal targets (SUB-138).
+ *
+ * This screen contributes its search to the masthead and its filters to the
+ * page toolbar. Without the slots `TopbarTools` renders null — which is
+ * correct for the status wall and wrong here — so the controls would vanish
+ * and every assertion about them would pass by not looking.
+ */
+function render(ui: React.ReactElement) {
+  return renderBare(
+    <>
+      <ShellSlots />
+      {ui}
+    </>,
+  );
+}
+
 
 /*
  * The data owner, tested through the screen it drives.

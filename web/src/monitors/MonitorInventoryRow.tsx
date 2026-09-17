@@ -6,6 +6,7 @@ import { StateChip } from "../components/Chip";
 import {
   IconPause,
   IconPencil,
+  IconTrash,
   IconPlay,
   IconRefresh,
 } from "../components/icons";
@@ -274,11 +275,31 @@ function MonitorInventoryRowImpl({
           {onDelete !== undefined && (
             <button
               type="button"
-              className="add-button inv-act inv-act--danger"
+              className="inv-act inv-act--icon inv-act--danger"
               onClick={() => onDelete(monitor.id)}
               aria-label={`Delete ${monitor.name}`}
+              title={`Delete ${monitor.name}`}
             >
-              Delete
+              {/*
+               * A glyph, where this used to be the one action that stayed a
+               * word (SUB-138).
+               *
+               * The earlier rule was that colour may not be the only carrier
+               * of "destructive", and that rule stands — it is just not what
+               * was keeping the word here. A bin is destructive in its
+               * *shape*, so the meaning survives greyscale without the word,
+               * which is the actual requirement. What the word was really
+               * buying was a pause before the click, and that is bought
+               * properly one step later: deleting opens a confirmation that
+               * names the history about to be destroyed and keeps its button
+               * disabled until the monitor's name is typed out.
+               *
+               * The row reads better for it: four actions, four glyphs, one
+               * of them red. A single word among icons was louder than the
+               * action deserved at rest and quieter than it deserved at the
+               * moment of pressing.
+               */}
+              <IconTrash />
             </button>
           )}
         </div>

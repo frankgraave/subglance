@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { Dashboard } from "./Dashboard";
 import type { Monitor, MonitorStatus } from "./types";
 import type { CardColumns, LayoutId } from "../shell/preferences";
+import { ShellSlots } from "../shell/ShellSlots";
 
 afterEach(cleanup);
 
@@ -48,16 +49,20 @@ function Harness({
   const [query, setQuery] = useState("");
   const [columns, setColumns] = useState<CardColumns>(cardColumns ?? "1");
   return (
-    <Dashboard
-      monitors={monitors}
-      layout={layout}
-      query={query}
-      onQueryChange={setQuery}
-      announcement={announcement}
-      beatWidth={WIDTH}
-      cardColumns={columns}
-      onCardColumnsChange={cardColumns === undefined ? undefined : setColumns}
-    />
+    <>
+      {/* The two bars the screen portals into (SUB-138). */}
+      <ShellSlots />
+      <Dashboard
+        monitors={monitors}
+        layout={layout}
+        query={query}
+        onQueryChange={setQuery}
+        announcement={announcement}
+        beatWidth={WIDTH}
+        cardColumns={columns}
+        onCardColumnsChange={cardColumns === undefined ? undefined : setColumns}
+      />
+    </>
   );
 }
 
@@ -278,27 +283,27 @@ describe("Dashboard", () => {
     expect(chips[0].getAttribute("aria-pressed")).toBe("false");
   });
 
-  it("puts search at one end of the toolbar and the tools at the other", () => {
+  it("puts search in the masthead and the filters in the page toolbar", () => {
     /*
-     * The order the toolbar exists for: search hard left, then the filter and
-     * the view tools together at the right. Asserted as document order rather
-     * than geometry, because jsdom has no layout — but document order is what
-     * `margin-left: auto` and the flex row turn into position, and it is also
-     * the order a keyboard walks them in.
+     * The split this screen was rearranged for (SUB-138): searching a list is
+     * true on every list screen and holds one position, while a status filter
+     * belongs to this screen alone. Asserted by which bar each lands in
+     * rather than by geometry, because jsdom has no layout — and which bar is
+     * the thing that was wrong, not the pixels.
      */
     render(
       <Harness monitors={[monitor("a", "up")]} layout="cards" cardColumns="2" />,
     );
-    const bar = document.querySelector(".mon-topbar")!;
-    const parts = [...bar.children].map((el) => el.className);
-    expect(parts).toEqual(["sr-only", "mon-search", "mon-view-tools"]);
+    const masthead = document.querySelector(".shell-topbar-search")!;
+    expect(masthead.querySelector(".shell-search")).toBeTruthy();
+    expect(masthead.querySelector(".mon-filter")).toBeNull();
 
-    // Both clusters live in the right-hand group, in that order.
-    const tools = bar.querySelector(".mon-view-tools")!;
-    expect([...tools.children].map((el) => el.className.split(" ")[0])).toEqual([
-      "mon-filter",
-      "segmented",
-    ]);
+    const toolbar = document.querySelector(".shell-toolbar-slot")!;
+    expect(toolbar.querySelector(".shell-search")).toBeNull();
+    const group = toolbar.querySelector(".tb-group")!;
+    expect(
+      [...group.children].map((el) => el.className.split(" ")[0]),
+    ).toEqual(["mon-filter", "segmented"]);
   });
 
   it("has a real label on the search field, not just a placeholder", () => {

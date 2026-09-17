@@ -320,12 +320,20 @@
   --size-row-lg: 46px;
   --size-row-xl: 58px;
   --size-pane-xs: 148px;  /* the heartbeat bar's minimum legible width */
-  --size-pane-grid-sm: 150px;
-  --size-pane-grid-md: 226px;
-  --size-pane-drawer: 288px;
+  /* Every filter select in a page toolbar, at one width, so a row of them
+     reads as a row instead of as three controls that happen to be adjacent.
+     Deliberately not derived from its own content: the options include tag
+     values, which are data — the widest one here is 138px today and a longer
+     tag tomorrow would drag one control out of line with its neighbours. Long
+     text truncates instead. Set to --size-pane-xs's number rather than a new
+     one, since nothing about this asked for a different measurement. */
+  --size-control-select: 148px;
+  --size-pane-grid-sm: 150px;   /* the narrowest a wall tile may be squeezed to */
+  --size-pane-grid-md: 226px;   /* a dashboard group card at its natural width */
+  --size-pane-drawer: 288px;    /* the phone navigation drawer */
   --size-pane-scroll: 180px;  /* the tallest a nested scroller may grow */
   --size-sidebar: 232px;
-  --size-rail: 56px;
+  --size-rail: 56px;      /* the sidebar once collapsed: icons, no labels */
 
   /* The keyboard outline and its offset. A different mechanism from the
      ring above (outline, not shadow) and deliberately thinner: it draws

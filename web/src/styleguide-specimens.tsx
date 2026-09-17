@@ -21,7 +21,8 @@ import {
   StateChip,
   StatusChip,
 } from "./components/Chip";
-import { IconPause, IconPencil, IconRefresh } from "./components/icons";
+import { IconPause, IconPencil, IconRefresh, IconTrash } from "./components/icons";
+import { PlusIcon, SearchIcon, SidebarIcon } from "./shell/icons";
 import { IconTile } from "./components/IconTile";
 import { PanelList, PanelRow } from "./components/PanelList";
 import { SegmentedControl } from "./components/SegmentedControl";
@@ -99,9 +100,15 @@ export const specimens: Specimen[] = [
     title: "Buttons",
     source: "web/src/monitors/monitors.css, web/src/monitors/inventory.css",
     rule:
-      "The accent fills controls and nothing else. A primary action gets the accent border; a compact icon action sits in a 26px square with its name in aria-label. Delete stays a word, because colour may not be the only carrier of destructive.",
+      "The accent fills controls and nothing else. A primary action gets the accent border, and carries a + when it adds the thing the surface it sits on is a list of. A compact row action sits in a 26px square with its name in aria-label. Delete is a glyph like its neighbours: the bin carries destructive in its shape, so it survives greyscale where red alone would not, and the confirmation that makes you type the name is what buys back the pause the word used to.",
     node: row(
-      <button key="p" type="button" className="add-button add-button-primary">
+      <button
+        key="p"
+        type="button"
+        className="add-button add-button-primary"
+        aria-label="Add monitor"
+      >
+        <PlusIcon aria-hidden="true" />
         Add monitor
       </button>,
       <button key="s" type="button" className="add-button">
@@ -134,8 +141,14 @@ export const specimens: Specimen[] = [
       >
         <IconPencil />
       </button>,
-      <button key="del" type="button" className="inv-act inv-act--danger">
-        Delete
+      <button
+        key="del"
+        type="button"
+        className="inv-act inv-act--icon inv-act--danger"
+        aria-label="Delete"
+        title="Delete"
+      >
+        <IconTrash />
       </button>,
     ),
   },
@@ -170,6 +183,46 @@ export const specimens: Specimen[] = [
       <IconTile key="b">
         <IconPencil />
       </IconTile>,
+    ),
+  },
+  {
+    id: "chrome",
+    title: "Masthead and toolbar",
+    source: "web/src/shell/Topbar.tsx, web/src/shell/PageToolbar.tsx",
+    rule:
+      "Two bars, and which one a control belongs in is decided by a single question: is it true on every screen? The masthead holds what is — the sidebar toggle, search, the layout switcher, the theme. It never changes as you navigate, so it stays readable without being re-read. The toolbar below holds what is true of this screen only, and disappears on screens with nothing to put in it rather than sitting there empty. An action that operates on one kind of thing fails the question: adding a monitor is a monitors action, so it lives in the header of the card it adds to, not in chrome that is also present on Notifications.",
+    node: (
+      <div className="sg-chrome">
+        <div className="shell-topbar">
+          <button
+            type="button"
+            className="shell-topbar-icon"
+            aria-label="Collapse sidebar (Ctrl+B)"
+          >
+            <SidebarIcon />
+          </button>
+          <label className="shell-search">
+            <SearchIcon />
+            <input
+              type="search"
+              className="shell-search-input"
+              placeholder="Search monitors..."
+              readOnly
+            />
+          </label>
+        </div>
+        <div className="shell-toolbar">
+          <span className="tb-label">Type</span>
+          <select className="tb-select" aria-label="Type">
+            <option>All types</option>
+          </select>
+          <span className="tb-label">Paused</span>
+          <select className="tb-select" aria-label="Paused">
+            <option>All</option>
+          </select>
+          <span className="tb-count">4 of 4 shown</span>
+        </div>
+      </div>
     ),
   },
   {

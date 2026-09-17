@@ -8,7 +8,7 @@ import { HeartbeatGallery } from "./heartbeat/Gallery";
 import { DashboardWorkbench } from "./monitors/Workbench";
 import { AddMonitor } from "./monitors/AddMonitor";
 import { Drawer } from "./components/Drawer";
-import { Card, Panel } from "./components/Card";
+import { Panel } from "./components/Card";
 import { LiveDashboardRoot } from "./live/LiveDashboard";
 import { LiveMonitorDetailRoot } from "./live/LiveMonitorDetail";
 import { LiveIncidentsRoot } from "./incidents/LiveIncidents";
@@ -23,6 +23,7 @@ import type { NavRoute } from "./shell/Sidebar";
 import { useDocumentTitle } from "./shell/documentTitle";
 import { useRouteFocus } from "./shell/useRouteFocus";
 import { AppShell } from "./shell/AppShell";
+import { PageToolbar } from "./shell/PageToolbar";
 import { Topbar } from "./shell/Topbar";
 import { useShellPreferences } from "./shell/useShellPreferences";
 import { useShellShortcuts } from "./shell/useShortcuts";
@@ -218,31 +219,6 @@ export default function App() {
     setWorkbenchOpen((open) => !open);
   }, []);
   /*
-   * Add a monitor, from wherever you pressed it — and it is the same drawer
-   * everywhere (SUB-132).
-   *
-   * It used to be two different things behind one icon: a drawer over the
-   * inventory, and on the dashboard a branch that replaced the entire screen
-   * with the form. Same glyph, same position, one of them took the monitors
-   * away. The drawer is the one that survives, for the reason SUB-122 chose
-   * it: you add a monitor *from* the inventory and check it *against* the
-   * inventory — that the name is still free, that the interval matches its
-   * neighbours — and that argument is no weaker on the dashboard.
-   *
-   * On the inventory the drawer is the route — `/monitors/new` is a real
-   * address — so the topbar has to navigate rather than set a local flag.
-   * Setting `addOpen` there would open a second, unrouted copy of the same
-   * form over the list, leave the URL on `/monitors`, and light the button as
-   * pressed for a state the address bar does not have.
-   */
-  const toggleAdd = useCallback(() => {
-    if (onMonitors) {
-      setCreateOpen(!route.create);
-      return;
-    }
-    setAddOpen((open) => !open);
-  }, [onMonitors, route, setCreateOpen]);
-  /*
    * Closing on success rather than navigating to the new monitor.
    *
    * The dashboard is where the answer is: the monitor appears in the list
@@ -308,7 +284,18 @@ export default function App() {
       ? closeNav
       : addOpen
         ? closeAdd
-        : isWall
+        : /*
+           * The inventory's add form is a *route*, `/monitors/new`, so its own
+           * state is the URL and closing it is a navigation. It belongs at the
+           * same position in the queue as the dashboard's drawer — it is the
+           * same form in the same drawer — and it was missing here: Esc fell
+           * straight through to "leave this screen" while a modal form was
+           * open over it. Found by SUB-138's test, which reaches the form the
+           * way a user now does rather than through the masthead button.
+           */
+          route.name === "monitors" && route.create
+          ? () => setCreateOpen(false)
+          : isWall
           ? leaveWall
           : workbenchOpen
             ? toggleWorkbench
@@ -369,24 +356,25 @@ export default function App() {
           effectiveLayout={shown}
           onLayoutChange={setLayout}
           /*
-           * The layout switcher belongs to the dashboard and to nothing else
-           * (SUB-131). Rows, Cards, Compact and Status wall are four ways of
-           * drawing a monitor list, and Incidents and Monitors do not have
-           * one — the control was offering a choice that changed nothing on
-           * two of the four screens it appeared on. The workbench is excluded
-           * for the same reason: it is a fixture gallery, not a list.
+           * Layouts are how this product draws a list of monitors, and the
+           * masthead is the same on every screen (SUB-138), so the switcher
+           * stays put rather than following the dashboard around.
+           *
+           * It still renders nothing where there is nothing to switch: the
+           * workbench is a fixture gallery and a monitor's detail page is one
+           * monitor, so four arrangements of a list would be a choice that
+           * changes nothing. Incidents and Monitors keep it — both are lists
+           * of monitor-shaped things, and offering the same four views there
+           * is the consistency Frank asked for rather than a dead control.
            */
-          showLayouts={
-            !workbenchOpen && !onDetail && !onIncidents && !onMonitors
-          }
+          showLayouts={!workbenchOpen && !onDetail}
           themePreference={preference}
           onThemeChange={setPreference}
           workbenchOpen={workbenchOpen}
           onToggleWorkbench={toggleWorkbench}
-          onAddMonitor={toggleAdd}
-          addOpen={onMonitors ? route.create : addOpen}
         />
       }
+      toolbar={<PageToolbar />}
     >
       {/*
        * A second boundary, inside the shell rather than around it.
@@ -465,11 +453,17 @@ export default function App() {
        */}
       {!onMonitors && (
         <Drawer open={addOpen} onClose={closeAdd} title="Add monitor">
-          <Card title="New monitor" headingLevel={3}>
-            <Panel>
-              <AddMonitor onCreated={onMonitorCreated} onCancel={closeAdd} />
-            </Panel>
-          </Card>
+          {/*
+           * No Card around the form (SUB-138).
+           *
+           * The drawer is already a surface with a header; wrapping the form in a
+           * card made three nested frames — drawer, card, then the form's own
+           * fieldset — and PR #42 fixed the rule at two surfaces, never three. The
+           * drawer's header is the card header this was reaching for.
+           */}
+          <Panel>
+            <AddMonitor onCreated={onMonitorCreated} onCancel={closeAdd} />
+          </Panel>
         </Drawer>
       )}
     </AppShell>
