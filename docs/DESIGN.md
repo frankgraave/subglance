@@ -118,9 +118,9 @@ mode, because the dark originals are unreadable on white.
 | `--idle` | `#4b5257` | `#c2c7cb` | No data yet |
 
 Every status colour has a `-dim` variant for badge and row backgrounds
-(`--up-dim`, `--warn-dim`, `--down-dim`). They are used by the icon tile and by
-the incident row; **no monitor row, card or compact line carries one**, which is
-the next paragraph.
+(`--up-dim`, `--warn-dim`, `--down-dim`). `--down-dim` is called by the icon
+tile alone; **no monitor row, card or compact line carries one**, which is the
+next paragraph.
 
 **No status has a resting fill on a monitor.** A down monitor used to be the
 one exception: `--down-dim` across every cell of its row, its card and its
@@ -141,7 +141,7 @@ contradicting the code. Two consequences, both deliberate:
   rather than intensify it — which is precisely the signal-switching the
   deepening rule was written to forbid — so every caller went, and a token with
   no caller is a decision nobody made. `--down-dim` stays, because the icon
-  tile and the incident row still call it.
+  tile still calls it.
 
 **A down monitor is still unmistakable, and still not by colour alone** (§9):
 
