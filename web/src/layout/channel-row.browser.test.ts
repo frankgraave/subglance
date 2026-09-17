@@ -76,13 +76,21 @@ describe("the channel rows", () => {
     try {
       /*
        * The fixture is deliberately mixed — one of its channels is disabled,
-       * so one toggle says "Enable" and the rest say "Disable". If the test
+       * so one toggle means "Enable" and the rest mean "Disable". If the test
        * ran against a uniform list it would pass with the widths unreserved
        * and prove nothing.
+       *
+       * Read from the accessible name rather than from `textContent`, which
+       * is empty by design: the toggle is a glyph now (SUB-138) and the verb
+       * lives in `aria-label`. That change is also *why* the geometry below
+       * holds without a reserved width — the two states are the same square —
+       * so the assertion is kept exactly as it was rather than relaxed. It
+       * would still catch a regression that put words back without reserving
+       * room for them.
        */
       const labels = await page.evaluate(() =>
-        [...document.querySelectorAll(".inv-row .nt-act-toggle")].map(
-          (el) => (el.textContent ?? "").trim(),
+        [...document.querySelectorAll(".inv-row .nt-act-toggle")].map((el) =>
+          (el.getAttribute("aria-label") ?? "").split(" ")[0],
         ),
       );
       expect(new Set(labels).size).toBeGreaterThan(1);

@@ -135,7 +135,8 @@ export function NotificationsView({
         /* This card's title is the page's heading now (SUB-138). */
         headingLevel={1}
         /*
-         * The note has no opinion until the load resolves (SUB-138).
+         * The note has no opinion until the load resolves, and none at all on
+         * an empty instance (SUB-138).
          *
          * It used to be `describeChannels(channels)` unconditionally, and
          * `channels` is `[]` before the first response — so the card headed
@@ -147,11 +148,25 @@ export function NotificationsView({
          * unfinished request is the worst available failure: it is the
          * sentence that tells a self-hoster their alerting is gone.
          *
+         * It is also silent when the instance genuinely has no channels, and
+         * that is the three-headings fix. The empty state used to stack
+         * "Channels" (card title), "No channels configured" (this note) and
+         * "Alerts are going nowhere." (the body's headline) — three names for
+         * one thing, which is exactly the pattern PR #57 removed from the add
+         * drawer with "two surfaces, never three" and which came straight
+         * back here. The body's headline is the one that says something, so
+         * it is the one that stays; a count of zero above it is the same fact
+         * said worse, first.
+         *
          * `undefined` rather than a placeholder string, because `Card` omits
          * the element entirely for `undefined` — and a skeleton line here
          * would be a second thing on screen pretending to be a count.
          */
-        note={loading || error !== null ? undefined : describeChannels(channels)}
+        note={
+          loading || error !== null || channels.length === 0
+            ? undefined
+            : describeChannels(channels)
+        }
         /*
          * The header action steps aside for the empty state (SUB-138).
          *
@@ -221,8 +236,8 @@ export function NotificationsView({
               <p className="add-title">Alerts are going nowhere.</p>
               <p className="nt-note nt-note--lede">
                 A channel is where SubGlance sends a message when a monitor
-                fails. Until one exists, every failure is recorded and shown on
-                the dashboard and nobody is told about any of it.
+                fails. Until one exists, every failure is still detected,
+                recorded and drawn on the dashboard — and nobody is ever told.
               </p>
               <p className="nt-note">
                 {CHANNEL_TYPES.map(typeLabel).join(", ")} are supported. Adding
@@ -260,28 +275,41 @@ export function NotificationsView({
         ) : (
           <>
             {/*
-             * The caveat that explains the Delivery column, beside the Delivery
-             * column (SUB-138).
+             * The caveat that explains why no row says "delivered", as one
+             * line that opens into the whole of it (SUB-138).
              *
-             * This text is load-bearing — it is the reason every row reads
-             * "Not verified" rather than a green tick — and it used to sit
-             * outside the card, above it, in the page's quietest ink at the
-             * full 860px measure. Caveat text set faint and wide is text
-             * designed not to be read, and a reader who skips it sees a column
-             * of grey chips with no explanation for why nothing is ever green.
+             * It was rejected as a six-line block of prose sitting above two
+             * rows on a real instance — physically larger than the list it
+             * qualifies, so you had to read an explanation of the Delivery
+             * column before you ever reached the Delivery column. The previous
+             * pass had been asked to make it *more legible* and made it bigger
+             * and earlier instead, which is not the same thing.
              *
-             * So it is louder, not quieter: --ink-2 rather than --ink-3, a
-             * bounded measure, and inside the card directly above the list it
-             * describes. Nothing was cut.
+             * Nothing is cut. Every clause is in the DOM, in the same words,
+             * and the summary is not a teaser — it states the fact itself, so
+             * a reader who never opens the disclosure has still been told the
+             * thing they most need to know. What the disclosure removes is
+             * six lines of weight above a two-line list, not the content: the
+             * detail is the *reason*, which is worth reading once and worth
+             * nobody's eye a second time.
+             *
+             * Open by default would be the same block again. Closed by
+             * default, above the list, and the one sentence is short enough to
+             * be read on the way past.
              */}
-            <p className="nt-legend">
-              SubGlance cannot yet tell you whether a channel has been
-              delivering. The channel API carries no delivery history, so every
-              row starts as <b>Not verified</b> and only a test you run here can
-              change it. A channel that has failed every delivery for three days
-              looks exactly the same as one that has never been needed — which
-              is why the test button is on every row.
-            </p>
+            <details className="nt-legend">
+              <summary className="nt-legend-summary">
+                No channel below is known to be working — SubGlance cannot see
+                delivery history.
+              </summary>
+              <p className="nt-legend-body">
+                The channel API carries no delivery history, so a channel that
+                has failed every delivery for three days looks exactly the same
+                here as one that has never been needed. Sending a test is the
+                only thing that tells you which you have, and it proves only
+                that the channel worked at the moment you pressed it.
+              </p>
+            </details>
 
             <ul className="inv-list">
               {visibleChannels.map((channel) => (

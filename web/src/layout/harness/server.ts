@@ -244,9 +244,23 @@ export async function serveBuild(): Promise<Server> {
        * never got past loading. A harness that can only draw the populated
        * case cannot catch that.
        */
-      const empty = process.env.SUBGLANCE_HARNESS_CHANNELS === "none";
+      /*
+       * `SUBGLANCE_HARNESS_CHANNELS=two` serves the first two.
+       *
+       * Five channels is not the shape most instances are in, and a layout
+       * reviewed only at five is a layout nobody checked at the size it will
+       * usually be seen. The rejection that prompted this redesign was written
+       * against a real instance with two channels, where a caveat paragraph
+       * that looks proportionate above five rows is taller than the list it
+       * qualifies. Two is therefore a case the harness has to be able to draw,
+       * rather than something a reviewer reproduces by editing the fixture and
+       * remembering to put it back.
+       */
+      const mode = process.env.SUBGLANCE_HARNESS_CHANNELS;
+      const served =
+        mode === "none" ? [] : mode === "two" ? CHANNELS.slice(0, 2) : CHANNELS;
       res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ channels: empty ? [] : CHANNELS }));
+      res.end(JSON.stringify({ channels: served }));
       return;
     }
 

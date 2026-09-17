@@ -79,8 +79,11 @@ export function IconClock() {
  * "Pause" is a list a screen reader cannot navigate and a voice-control user
  * cannot address.
  *
- * Delete deliberately has no glyph here. It stays a word — see
- * MonitorInventoryRow for the argument.
+ * Delete has a glyph too, and this comment used to say the opposite: it was
+ * the one action kept as a word, and SUB-138 replaced the word with the bin
+ * for both lists. A bin is destructive in its silhouette, so the meaning
+ * survives greyscale without the word, and the pause the word was buying is
+ * bought properly by the confirmation that makes you retype the name.
  */
 
 /** Check now: an arrow completing a circle. */
@@ -110,6 +113,40 @@ export function IconPlay() {
   return (
     <svg {...BASE}>
       <path d="M8 5.5 19 12 8 18.5Z" />
+    </svg>
+  );
+}
+
+/**
+ * Mute a channel: a bell with a stroke through it.
+ *
+ * Not `IconPause`, though the row action is structurally the same toggle a
+ * monitor has. Pausing a monitor stops SubGlance *checking* something;
+ * disabling a channel leaves every check running and stops SubGlance
+ * *telling* anyone. Drawing both with the same two bars would say those are
+ * the same act, and the difference between them is the whole reason a
+ * self-hoster would ever pick one over the other.
+ *
+ * The slash is a shape, not a colour, so "muted" survives greyscale — and it
+ * is the opposite silhouette from the plain bell rather than the same one
+ * tinted (DESIGN.md §2.3).
+ */
+export function IconBellOff() {
+  return (
+    <svg {...BASE}>
+      <path d="M9 17a3 3 0 0 0 6 0" />
+      <path d="M6.2 9.8A5.8 5.8 0 0 1 12 4a5.8 5.8 0 0 1 5.8 5.8c0 4 .8 5.6 1.5 6.4H5.1c.4-.5.8-1.3 1-2.6" />
+      <path d="M4 4l16 16" />
+    </svg>
+  );
+}
+
+/** Unmute a channel: the same bell without the stroke. */
+export function IconBell() {
+  return (
+    <svg {...BASE}>
+      <path d="M9 17a3 3 0 0 0 6 0" />
+      <path d="M6.2 9.8A5.8 5.8 0 0 1 12 4a5.8 5.8 0 0 1 5.8 5.8c0 4 .8 5.6 1.5 6.4H4.7c.7-.8 1.5-2.4 1.5-6.4Z" />
     </svg>
   );
 }

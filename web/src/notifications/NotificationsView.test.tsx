@@ -70,26 +70,69 @@ describe("NotificationsView", () => {
     expect(within(row).getByText("endpoint ending ****B07F")).toBeTruthy();
   });
 
-  it("calls an untested channel 'Not verified', never healthy", () => {
-    // The API carries no delivery history, so a green tick here would be
-    // invented — and an invented green tick on a monitoring tool is how a dead
-    // channel goes on looking fine for three days.
-    render(<NotificationsView channels={[make()]} />);
-    const row = screen.getByRole("listitem");
-    const chip = within(row).getByText("Not verified", { selector: ".chip" });
-    expect(within(row).queryByText(/delivered/i)).toBeNull();
+  it("never claims an untested channel is healthy, and draws no chip for it", () => {
     /*
-     * The dashed "about the data" chip, specifically — not a status chip
-     * wearing the same words.
+     * The API carries no delivery history, so a green tick here would be
+     * invented — and an invented green tick on a monitoring tool is how a dead
+     * channel goes on looking fine for three days.
      *
-     * `StatusChip` carries `chip--status` and a `data-status` colour; a green
-     * one labelled "Not verified" would pass a text assertion while telling
-     * every sighted reader the channel is healthy, and one-meaning-per-signal
-     * (DESIGN.md §2.3) is exactly what that breaks. The absence of a status is
-     * the assertion.
+     * This used to assert a dashed "Not verified" chip on the row. The chip is
+     * gone (SUB-138) because it was on 100% of rows, always, and structurally
+     * incapable of differing: a value that cannot vary is not information, and
+     * that one was taking the heaviest ink in the row to be none. What must
+     * not change is the claim, so the assertion is now in two halves — the row
+     * states nothing about delivery, and the list states the reason once.
      */
-    expect(chip.className).toContain("chip--state");
-    expect(chip.getAttribute("data-status")).toBeNull();
+    const { container } = render(<NotificationsView channels={[make()]} />);
+    const row = screen.getByRole("listitem");
+    // No status chip on the row: not green, not red, not any colour at all.
+    expect(row.querySelector(".chip--status")).toBeNull();
+    expect(row.querySelector(".chip--state")).toBeNull();
+    /*
+     * Nothing about delivery in the row's *visible* text. The `sr-only`
+     * sentence deliberately still says "Not verified" and is excluded here:
+     * the eye has the list's legend a few centimetres above and in view, and
+     * a screen-reader user moving item by item through a list does not, so
+     * dropping it there would take the caveat away from the one reader who
+     * cannot see it stated once.
+     */
+    const visible = [...row.childNodes]
+      .map((node) => (node as HTMLElement).textContent ?? "")
+      .join(" ");
+    const srOnly = row.querySelector(".sr-only")!.textContent ?? "";
+    const seen = visible.replace(srOnly, "");
+    expect(seen).not.toMatch(/delivered/i);
+    expect(seen).not.toMatch(/verified/i);
+    expect(srOnly).toMatch(/Not verified/);
+    /*
+     * And the sentence that replaces it is present and unhedged. "Known to be
+     * working" is the load-bearing phrase: it is a statement about what
+     * SubGlance can see, not a reassurance, and it is in the summary rather
+     * than behind the disclosure so it is read without a click.
+     */
+    const summary = container.querySelector(".nt-legend-summary");
+    expect(summary).not.toBeNull();
+    expect(summary!.textContent).toMatch(/known to be working/i);
+  });
+
+  it("draws a delivery chip only once a test has produced a result", () => {
+    /*
+     * The other half of the same decision. Removing the always-on chip must
+     * not remove the chip: a real result is per-row information and is exactly
+     * what the row should carry. A page that dropped both would be quieter and
+     * less honest.
+     */
+    render(
+      <NotificationsView
+        channels={[make(), make({ id: 2, name: "Pager" })]}
+        deliveries={{ "1": { kind: "passed" } }}
+      />,
+    );
+    const [tested, untested] = screen.getAllByRole("listitem");
+    expect(
+      within(tested).getByText("Test delivered", { selector: ".chip" }),
+    ).toBeTruthy();
+    expect(untested.querySelector(".chip--status")).toBeNull();
   });
 
   it("states once that delivery history is not available", () => {
@@ -299,12 +342,15 @@ describe("NotificationsView", () => {
     expect(screen.getByText(/Email, Slack, Discord, Telegram, Webhook/)).toBeTruthy();
   });
 
-  it("keeps the delivery caveat on the page, beside the rows it explains", () => {
+  it("keeps the whole delivery caveat on the page, above the rows it explains", () => {
     /*
-     * The honesty rule (SUB-55): this text is why every row reads "Not
-     * verified" instead of a green tick, and it may be moved or made louder
-     * but never dropped. Asserted on its two load-bearing clauses so a
-     * reword survives and a deletion does not.
+     * The honesty rule (SUB-55): this text is why no row ever says
+     * "delivered", and it may be moved, re-weighted or folded into a
+     * disclosure but never dropped. That is the distinction this test
+     * enforces — the previous block was rejected for its *weight*, not its
+     * content, and the easy way to satisfy that rejection is to delete a
+     * sentence. Asserted on the load-bearing clauses so a reword survives and
+     * a quiet deletion does not.
      */
     const { container } = render(<NotificationsView channels={[make()]} />);
     const legend = container.querySelector(".nt-legend");
@@ -313,20 +359,148 @@ describe("NotificationsView", () => {
     expect(legend!.textContent).toMatch(
       /failed every delivery for three days looks exactly the same/i,
     );
-    // Above the list, not after it: it explains the column that follows.
+    // Above the list, not after it: it explains the rows that follow.
     expect(
       legend!.compareDocumentPosition(container.querySelector(".inv-list")!) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
 
-  it("reserves the width of the row actions whose label changes", () => {
+  it("states the caveat without needing the disclosure opened", () => {
+    /*
+     * A disclosure is only an acceptable home for a caveat if the part that is
+     * always visible already makes the claim. Folding "nothing here is known
+     * to work" behind a click would be silencing it, which SUB-55 forbids —
+     * what is behind the click is the *reason*, not the fact.
+     *
+     * So: the summary alone, with the details element closed, has to carry the
+     * statement. And the element must genuinely start closed, or this is the
+     * rejected six-line block wearing a triangle.
+     */
+    const { container } = render(<NotificationsView channels={[make()]} />);
+    const details = container.querySelector(".nt-legend") as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+    const summary = container.querySelector(".nt-legend-summary")!;
+    expect(summary.textContent).toMatch(/known to be working/i);
+    expect(summary.textContent).toMatch(/cannot see delivery history/i);
+  });
+
+  it("gives the delivery caveat less prose than the list it qualifies", () => {
+    /*
+     * The rejection, as an assertion. On the owner's instance the caveat was a
+     * six-line block above two rows — you read an explanation of a column
+     * before reaching the column. jsdom has no layout, so height cannot be
+     * measured here; what can be measured is the thing that produced the
+     * height, which is how much prose is on screen before the first row.
+     *
+     * Two channels, matching his instance. The always-visible text above the
+     * list must be shorter than the rows themselves. This is deliberately a
+     * weak bound — it does not dictate a design, it only fails the shape that
+     * was rejected — and `channel-row.browser.test.ts` measures the real
+     * geometry in a real engine.
+     */
+    const { container } = render(
+      <NotificationsView
+        channels={[make(), make({ id: 2, name: "Weekend pager" })]}
+      />,
+    );
+    const summary = container.querySelector(".nt-legend-summary")!;
+    const list = container.querySelector(".inv-list")!;
+    const visibleCaveat = (summary.textContent ?? "").trim().length;
+    const rows = (list.textContent ?? "").trim().length;
+    expect(visibleCaveat).toBeLessThan(rows);
+  });
+
+  it("gives the empty state two surfaces, never three", () => {
+    /*
+     * PR #57 removed exactly this from the add drawer — "drawer title, card
+     * title and a heading inside the form were three names for one thing" —
+     * and it came back here as "Channels" / "No channels configured" /
+     * "Alerts are going nowhere.", stacked, on the first screen a new
+     * self-hoster ever sees.
+     *
+     * The card's title is one surface and the body's headline is the other.
+     * The count in between is the one that goes, because a count of zero is
+     * the headline's own fact said first and worse.
+     */
+    const { container } = render(
+      <NotificationsView channels={[]} onSave={async () => {}} />,
+    );
+    expect(container.querySelector(".card-note")).toBeNull();
+    expect(screen.queryByText("No channels configured")).toBeNull();
+    // Both surfaces that should be there, still are.
+    expect(screen.getByText("Channels")).toBeTruthy();
+    expect(screen.getByText("Alerts are going nowhere.")).toBeTruthy();
+  });
+
+  it("keeps the count once the instance has channels to count", () => {
+    // The note is silent on an empty instance, not deleted: on a populated one
+    // it is what the page heading used to carry and must still say it.
+    const { container } = render(
+      <NotificationsView channels={[make(), make({ id: 2, enabled: false })]} />,
+    );
+    expect(container.querySelector(".card-note")!.textContent).toBe(
+      "2 channels, 1 disabled",
+    );
+  });
+
+  it("draws the destructive row action as a bin, quietly, like the monitors row", () => {
+    /*
+     * The criticism this answers: four full outlined buttons per row with
+     * Delete in red on every one of them, on a screen whose subject is the two
+     * lines of text to their left. The monitors inventory had already solved
+     * it — small square icon buttons, the bin carrying "destructive" in its
+     * shape so it survives greyscale — and this page ignored the precedent.
+     *
+     * Asserted against the inventory's own classes rather than against new
+     * ones, because the point is that the two lists share a vocabulary. A
+     * reimplementation that looked identical would pass a screenshot and fail
+     * this.
+     */
+    const { container } = render(
+      <NotificationsView
+        channels={[make()]}
+        onTest={() => {}}
+        onSetEnabled={() => {}}
+        onDelete={() => {}}
+        onSave={async () => {}}
+      />,
+    );
+    const del = screen.getByRole("button", { name: "Delete Slack On-call Slack" });
+    expect(del.className).toContain("inv-act--icon");
+    expect(del.className).toContain("inv-act--danger");
+    // A glyph, not a word: the accessible name carries the verb, the face does not.
+    expect((del.textContent ?? "").trim()).toBe("");
+    expect(del.querySelector("svg")).not.toBeNull();
+    // Edit and the toggle are glyphs on the same class.
+    for (const name of ["Edit Slack On-call Slack", "Disable Slack On-call Slack"]) {
+      const button = screen.getByRole("button", { name });
+      expect(button.className).toContain("inv-act--icon");
+      expect((button.textContent ?? "").trim()).toBe("");
+    }
+    /*
+     * Send test is the deliberate exception and stays a word. It is the page's
+     * primary verb, the one action not in the monitors row's vocabulary, and
+     * it sends a real message to somebody else's inbox — not something to put
+     * behind an unlabelled square.
+     */
+    const test = container.querySelector(".nt-act-test")!;
+    expect(test.textContent).toBe("Send test");
+    expect(test.className).not.toContain("inv-act--icon");
+  });
+
+  it("reserves the width of the test button, whose label changes", () => {
     /*
      * The class is asserted here; the geometry it buys is asserted in
      * `channel-row.browser.test.ts`, which has a layout engine. jsdom reports
      * every width as zero, so a test here claiming the columns line up would
      * pass against a stylesheet that does nothing — which is the exact failure
      * mode that let the misalignment ship in the first place.
+     *
+     * Only the test button now. The toggle's reservation existed because
+     * "Enable" and "Disable" are different widths; it is a fixed square glyph
+     * (SUB-138), so there is nothing left to reserve and the rule that did it
+     * was deleted rather than left pointing at a token.
      */
     const { container } = render(
       <NotificationsView
@@ -336,7 +510,6 @@ describe("NotificationsView", () => {
       />,
     );
     expect(container.querySelector(".nt-act-test")).not.toBeNull();
-    expect(container.querySelector(".nt-act-toggle")).not.toBeNull();
   });
 
   it("confirms a delete and names what goes silent with it", () => {
@@ -454,9 +627,16 @@ describe("enabling and disabling a channel", () => {
         onSave={async () => {}}
       />,
     );
+    /*
+     * The button is a glyph now (SUB-138), so the in-flight state has no word
+     * on its face and is announced instead: the accessible name says
+     * "Saving…" and `aria-busy` is what assistive technology hears. Asserted
+     * on the name rather than on `textContent`, which is empty by design.
+     */
     const button = screen.getByRole("button", {
-      name: "Disable Slack On-call Slack",
+      name: "Saving… Slack On-call Slack",
     });
+    expect(button.getAttribute("aria-busy")).toBe("true");
     expect(button.hasAttribute("disabled")).toBe(true);
     fireEvent.click(button);
     expect(onSetEnabled).not.toHaveBeenCalled();
