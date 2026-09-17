@@ -2108,6 +2108,48 @@ const shadowExceptions = new Set<string>([
   "0 0 0 3px var(--ring-down)",
 ]);
 
+/**
+ * A declaration of any border property that paints with the static `--border`
+ * token, and the narrower "colour only" form of the same.
+ *
+ * Both match every border property name rather than `border` plus a single
+ * suffix. The single-suffix version had a hole with real consequences:
+ * `border-inline-start: 1px solid var(--border)` matched neither the
+ * violation pattern nor the state-rule exemption, so a `[data-state]` rule
+ * could introduce a whole static edge on a control and this contract would
+ * pass. Logical properties are the natural way to write that edge, which is
+ * what made the gap reachable rather than theoretical.
+ *
+ * The exemption is keyed on the property being colour-only — a name ending in
+ * `-color` — rather than on the value having no digits. `border-color` cannot
+ * create an edge that the resting rule has not already reserved; any form
+ * carrying a width can.
+ */
+const BORDER_ON_STATIC = /(?:^|[;{\s])(border[a-z-]*)\s*:[^;]*var\(--border\)/;
+const BORDER_COLOUR_ONLY = /^border(?:-[a-z]+)*-color$/;
+
+/**
+ * Does this declaration block paint a static `--border` edge through a
+ * property that could introduce one?
+ */
+function restsOnStaticBorder(body: string): boolean {
+  return BORDER_ON_STATIC.test(body);
+}
+
+/**
+ * A `[data-state]` rule that only re-*paints* an edge the resting rule has
+ * already reserved. Colour-only declarations, and nothing else.
+ */
+function repaintsReservedEdge(selector: string, body: string): boolean {
+  if (!/\[data-state=/.test(selector)) return false;
+  for (const [, property] of body.matchAll(
+    /(?:^|[;{\s])(border[a-z-]*)\s*:/g,
+  )) {
+    if (!BORDER_COLOUR_ONLY.test(property)) return false;
+  }
+  return true;
+}
+
 describe("an interactive element does not rest on the static border", () => {
   it("gives every control the control role at rest", () => {
     // The defect §2.9 closes: --border-hi was used only on :hover and :active,
@@ -2135,20 +2177,14 @@ describe("an interactive element does not rest on the static border", () => {
         // repo uses everywhere so a box does not change size when its state
         // changes — and the state rule changes only the paint.
         //
-        // Narrow on purpose. `border-color` alone cannot introduce an edge
-        // where none was reserved, so this cannot be used to declare a control
-        // resting on the static token; a `border: 1px solid var(--border)`
-        // shorthand under a `[data-state]` selector still fails here.
-        if (
-          /\[data-state=/.test(block.selector) &&
-          !/border(?:-[a-z]+)?\s*:\s*\d/.test(block.body)
-        )
-          continue;
-        if (
-          /border(?:-[a-z]+)?(?:-color)?\s*:[^;]*var\(--border\)/.test(
-            block.body,
-          )
-        ) {
+        // Narrow on purpose. Only a colour-only declaration is exempt, and a
+        // colour cannot introduce an edge where none was reserved, so this
+        // cannot be used to declare a control resting on the static token; a
+        // `border: 1px solid var(--border)` shorthand under a `[data-state]`
+        // selector — or its `border-inline-start` equivalent — still fails
+        // here.
+        if (repaintsReservedEdge(block.selector, block.body)) continue;
+        if (restsOnStaticBorder(block.body)) {
           offenders.push(`${relative(repoRoot, file)}: ${block.selector}`);
         }
       }
@@ -2159,24 +2195,28 @@ describe("an interactive element does not rest on the static border", () => {
   it("still bites on a `[data-state]` rule that declares a whole static edge", () => {
     // The exemption above is for re-painting a reserved edge, never for
     // introducing one. A shorthand under a data-state selector is a resting
-    // edge wearing a state's clothes, and must still fail.
+    // edge wearing a state's clothes, and must still fail — including when it
+    // is written as a logical property, which is the form that used to slip
+    // past both the exemption and the violation matcher.
     const blocks = declarationBlocks(`
       .a-button[data-state="current"] { border-color: var(--border); }
       .b-button[data-state="current"] { border: 1px solid var(--border); }
+      .c-button[data-state="current"] { border-inline-start: 1px solid var(--border); }
+      .d-button[data-state="current"] { border-inline-start-color: var(--border); }
     `);
-    const exempt = (b: { selector: string; body: string }) =>
-      /\[data-state=/.test(b.selector) &&
-      !/border(?:-[a-z]+)?\s*:\s*\d/.test(b.body);
     expect(
       blocks
         .filter(
           (b) =>
             paintsControl(b.selector) &&
-            !exempt(b) &&
-            /border(?:-[a-z]+)?(?:-color)?\s*:[^;]*var\(--border\)/.test(b.body),
+            !repaintsReservedEdge(b.selector, b.body) &&
+            restsOnStaticBorder(b.body),
         )
         .map((b) => b.selector),
-    ).toEqual(['.b-button[data-state="current"]']);
+    ).toEqual([
+      '.b-button[data-state="current"]',
+      '.c-button[data-state="current"]',
+    ]);
   });
 
   it("bites on a control that rests on the static token", () => {
@@ -2191,9 +2231,7 @@ describe("an interactive element does not rest on the static border", () => {
           (b) =>
             paintsControl(b.selector) &&
             !/:(hover|focus|active|disabled|checked)/.test(b.selector) &&
-            /border(?:-[a-z]+)?(?:-color)?\s*:[^;]*var\(--border\)/.test(
-              b.body,
-            ),
+            restsOnStaticBorder(b.body),
         )
         .map((b) => b.selector),
     ).toEqual([".a-button"]);

@@ -188,8 +188,21 @@ function rationaleAt(at) {
   if (trailing) return collect(`/*${trailing[1]}*/`);
 
   const prevEnd = boundaryBefore(at);
-  // The previous declaration's own trailing comment is not ours.
-  const own = collect(stripTrailing(tokensCss.slice(prevEnd + 1, at)));
+  /*
+   * The previous declaration's own trailing comment is not ours -- and
+   * neither is a group heading that happens to sit in the same gap.
+   *
+   * `collect` flattens *every* comment block it is handed into one string,
+   * which is right for a single block written as several paragraphs and
+   * wrong when the gap holds two separate comments: a run's heading, a blank
+   * line, then the token's own reason. That shape printed the heading and
+   * the reason joined end to end, so `--up` read "The status palette... A
+   * check that answered, in time." while `--up-dim` -- whose gap holds one
+   * comment -- read correctly. The nearest comment is the token's own, and
+   * the specific one always wins over the heading, exactly as it does in the
+   * run-walk below.
+   */
+  const own = collect(lastComment(stripTrailing(tokensCss.slice(prevEnd + 1, at))));
   if (own) return own;
   // Nothing of our own, and a blank line above: we open a group without a
   // heading, and must not borrow the previous group's.
@@ -231,6 +244,19 @@ function rationaleAt(at) {
  */
 function stripTrailing(gap) {
   return gap.replace(/^[ \t]+\/\*[^\n]*?\*\/[ \t]*(?=\n)/, "");
+}
+
+/**
+ * The last comment block in a fragment, which is the one nearest the
+ * declaration and therefore the one written about it.
+ *
+ * Returns the fragment unchanged when it holds one block or none, so the
+ * multi-paragraph rationales that make up most of this file are untouched.
+ */
+function lastComment(fragment) {
+  const blocks = [...fragment.matchAll(/\/\*[\s\S]*?\*\//g)];
+  if (blocks.length < 2) return fragment;
+  return blocks[blocks.length - 1][0];
 }
 
 /** Flatten any comment blocks in a fragment into one line of prose. */

@@ -77,8 +77,32 @@ const budgets = {
    * Raised to 120 rather than 119 because the gate reads whole kilobytes and
    * 119 would leave 0.7 kB, which is a tripwire rather than a ceiling — the
    * same argument that took the last raise to 115 rather than 114.
+   *
+   * 120 -> 122 kB gzip, raised deliberately for SUB-140 (the dashboard
+   * chrome).
+   *
+   * The measurement: 122,771 bytes on develop, 122,918 after — 147 bytes,
+   * against a 120 kB ceiling sitting at 122,880, so the change cleared the
+   * remaining 109 bytes of headroom and went 38 over. This is the smallest
+   * raise in the file's history and it is worth being explicit about what it
+   * buys, because 147 bytes is the kind of number that gets waved through
+   * without a reason: two new icons in `icons.tsx` (a tag for the facet
+   * filters, a different glyph for Group by, because a control that looks
+   * like a filter while narrowing nothing gets pressed twice), the `Card`
+   * component replacing the rows layout's hand-drawn `.mon-board` frame so
+   * the default list screen has the icon and counted title every other list
+   * screen already had, and `aria-hidden` moving onto the `<svg>` itself
+   * where it cannot be forgotten by a new consumer.
+   *
+   * The CSS budget was NOT raised: the framed toolbar, the sidebar's active
+   * edge and the centred status cell cost 0.1 kB of CSS, and deleting the
+   * down row's resting fill and `.mon-board`'s duplicate frame paid most of
+   * that back.
+   *
+   * 122 rather than 121 for the reason the last two raises give: 121 would
+   * leave 962 bytes, which this file has twice refused to call a ceiling.
    */
-  js: 120,
+  js: 122,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *

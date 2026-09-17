@@ -395,7 +395,7 @@ describe("the panel look does not cost the table its semantics", () => {
     ).toBe(2);
   });
 
-  it("gives a down row no resting fill, in any layout", () => {
+  it("gives a down row no status fill, at rest or under the pointer", () => {
     /*
      * SUB-140. The product owner asked for the red row background to go
      * ("graag geen rode achtergrond"), and DESIGN.md §2.3 was rewritten to
@@ -404,7 +404,24 @@ describe("the panel look does not cost the table its semantics", () => {
      * assertion that makes the doc's new position enforceable.
      *
      * Read off the stylesheet, not computed style: jsdom applies no CSS.
+     *
+     * What counts as an offender is a *status* fill, not any fill. The first
+     * version of this rejected every background under a `[data-status="down"]`
+     * selector, which would have failed a permitted neutral `:hover` and a
+     * background-based leading edge — both things §2.3 explicitly allows, and
+     * the second of which is how three other statuses could legitimately be
+     * drawn. Narrowing it to "not a neutral" rather than dropping state rules
+     * altogether is deliberate: excluding `:hover` wholesale would admit
+     * `.mon-row[data-status="down"]:hover > * { background: var(--down-dim) }`
+     * — red introduced by the pointer, the precise signal-switching failure
+     * §2.3 forbids, and one the sibling `-deep` check does not catch because
+     * `--down-dim` is a live token.
+     *
+     * Descendant selectors are kept: the fill this guards against was applied
+     * to every cell of the row, via `> *`.
      */
+    const NEUTRAL =
+      /^(?:none|transparent|inherit|initial|unset|revert|var\(--surface[a-z0-9-]*\)|var\(--border[a-z0-9-]*\))$/;
     const offenders: string[] = [];
     for (const match of monitorsCss.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
       const selector = match[1].trim();
@@ -412,7 +429,9 @@ describe("the panel look does not cost the table its semantics", () => {
       const body = match[2].replace(/\/\*[\s\S]*?\*\//g, "");
       const fill = /(?:^|[;{\s])background(?:-color)?:\s*([^;]+)/.exec(body);
       if (!fill) continue;
-      offenders.push(`${selector} fills with ${fill[1].trim()}`);
+      const value = fill[1].trim();
+      if (NEUTRAL.test(value)) continue;
+      offenders.push(`${selector} fills with ${value}`);
     }
     expect(
       offenders,

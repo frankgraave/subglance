@@ -425,7 +425,7 @@
         </td>
         <td><code>--up</code></td>
         <td class="sg-value"><code>#34d399</code><br><code class="sg-light">#059669</code></td>
-        <td class="sg-why">There is no `--down-deep`, and there is no `-deep` for any other status either. It existed as one step past `--down-dim`, for a down row deepening its own tint under the pointer rather than picking up a neutral <details class="sg-more"><summary>more</summary>`--surface-2` -- the argument being that hover on a row which already means something must not switch signals. That argument was sound, and it depended entirely on down having a *resting* fill to deepen. The product owner asked for the red row background to go, and it has (DESIGN.md 2.3). With no resting fill, a hover tint would *introduce* red rather than intensify it -- which is the exact failure the original rule forbade -- so every caller of `--down-deep` went with the fill, and a token with no caller is a decision nobody made. Down now marks itself the way pending, waiting and paused already do: a coloured leading edge, the lamp, and the status word. `--down-dim` stays: the icon tile and the incidents row still fill themselves with it, so it is a live decision with live callers.</details></td>
+        <td class="sg-why">A check that answered, in time. The lamp, the `Up` chip and the legend swatch; also the uptime figure when it is at full health.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -436,7 +436,7 @@
         </td>
         <td><code>--up-dim</code></td>
         <td class="sg-value"><code>#10241d</code><br><code class="sg-light">#d9f5e9</code></td>
-        <td class="sg-why">There is no `--down-deep`, and there is no `-deep` for any other status either. It existed as one step past `--down-dim`, for a down row deepening its own tint under the pointer rather than picking up a neutral <details class="sg-more"><summary>more</summary>`--surface-2` -- the argument being that hover on a row which already means something must not switch signals. That argument was sound, and it depended entirely on down having a *resting* fill to deepen. The product owner asked for the red row background to go, and it has (DESIGN.md 2.3). With no resting fill, a hover tint would *introduce* red rather than intensify it -- which is the exact failure the original rule forbade -- so every caller of `--down-deep` went with the fill, and a token with no caller is a decision nobody made. Down now marks itself the way pending, waiting and paused already do: a coloured leading edge, the lamp, and the status word. `--down-dim` stays: the icon tile and the incidents row still fill themselves with it, so it is a live decision with live callers.</details></td>
+        <td class="sg-why">The tinted plate behind an up mark. One caller: the icon tile that fronts a healthy panel. Deliberately far enough from `--surface-2` to read as coloured and dark enough to carry `--ink` on top.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -447,7 +447,7 @@
         </td>
         <td><code>--warn</code></td>
         <td class="sg-value"><code>#fbbf24</code><br><code class="sg-light">#b45309</code></td>
-        <td class="sg-why">There is no `--down-deep`, and there is no `-deep` for any other status either. It existed as one step past `--down-dim`, for a down row deepening its own tint under the pointer rather than picking up a neutral <details class="sg-more"><summary>more</summary>`--surface-2` -- the argument being that hover on a row which already means something must not switch signals. That argument was sound, and it depended entirely on down having a *resting* fill to deepen. The product owner asked for the red row background to go, and it has (DESIGN.md 2.3). With no resting fill, a hover tint would *introduce* red rather than intensify it -- which is the exact failure the original rule forbade -- so every caller of `--down-deep` went with the fill, and a token with no caller is a decision nobody made. Down now marks itself the way pending, waiting and paused already do: a coloured leading edge, the lamp, and the status word. `--down-dim` stays: the icon tile and the incidents row still fill themselves with it, so it is a live decision with live callers.</details></td>
+        <td class="sg-why">Something is off but the monitor is not down: a slow answer, a stale reading, a pending first check, an acknowledged incident. The tone the product reaches for whenever it wants attention without alarm.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -458,7 +458,7 @@
         </td>
         <td><code>--warn-dim</code></td>
         <td class="sg-value"><code>#2a2110</code><br><code class="sg-light">#fdf0d5</code></td>
-        <td class="sg-why">There is no `--down-deep`, and there is no `-deep` for any other status either. It existed as one step past `--down-dim`, for a down row deepening its own tint under the pointer rather than picking up a neutral <details class="sg-more"><summary>more</summary>`--surface-2` -- the argument being that hover on a row which already means something must not switch signals. That argument was sound, and it depended entirely on down having a *resting* fill to deepen. The product owner asked for the red row background to go, and it has (DESIGN.md 2.3). With no resting fill, a hover tint would *introduce* red rather than intensify it -- which is the exact failure the original rule forbade -- so every caller of `--down-deep` went with the fill, and a token with no caller is a decision nobody made. Down now marks itself the way pending, waiting and paused already do: a coloured leading edge, the lamp, and the status word. `--down-dim` stays: the icon tile and the incidents row still fill themselves with it, so it is a live decision with live callers.</details></td>
+        <td class="sg-why">The tinted plate behind a warn mark -- the acknowledged incident row, the degraded connection banner, the warn icon tile. <details class="sg-more"><summary>more</summary>This is the `-dim` with the most callers, because &quot;off but not broken&quot; is the state a dashboard spends most of its time in.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -469,7 +469,7 @@
         </td>
         <td><code>--down</code></td>
         <td class="sg-value"><code>#f43f5e</code><br><code class="sg-light">#e11d48</code></td>
-        <td class="sg-why">There is no `--down-deep`, and there is no `-deep` for any other status either. It existed as one step past `--down-dim`, for a down row deepening its own tint under the pointer rather than picking up a neutral <details class="sg-more"><summary>more</summary>`--surface-2` -- the argument being that hover on a row which already means something must not switch signals. That argument was sound, and it depended entirely on down having a *resting* fill to deepen. The product owner asked for the red row background to go, and it has (DESIGN.md 2.3). With no resting fill, a hover tint would *introduce* red rather than intensify it -- which is the exact failure the original rule forbade -- so every caller of `--down-deep` went with the fill, and a token with no caller is a decision nobody made. Down now marks itself the way pending, waiting and paused already do: a coloured leading edge, the lamp, and the status word. `--down-dim` stays: the icon tile and the incidents row still fill themselves with it, so it is a live decision with live callers.</details></td>
+        <td class="sg-why">A check that failed. The loudest tone in the product and the only one with a glow, spent on the lamp, the `Down` chip, the 2px leading edge of a down row and the failure reason in words. <details class="sg-more"><summary>more</summary>There is no `--down-deep`, and there is no `-deep` for any other status either. It existed as one step past `--down-dim`, for a down row deepening its own tint under the pointer rather than picking up a neutral `--surface-2` -- the argument being that hover on a row which already means something must not switch signals. That argument was sound, and it depended entirely on down having a *resting* fill to deepen. The product owner asked for the red row background to go, and it has (DESIGN.md 2.3). With no resting fill, a hover tint would *introduce* red rather than intensify it -- which is the exact failure the original rule forbade -- so every caller of `--down-deep` went with the fill, and a token with no caller is a decision nobody made. Down now marks itself the way pending, waiting and paused already do: a coloured leading edge, the lamp, and the status word.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -480,7 +480,7 @@
         </td>
         <td><code>--down-dim</code></td>
         <td class="sg-value"><code>#2c1017</code><br><code class="sg-light">#fde4e9</code></td>
-        <td class="sg-why">There is no `--down-deep`, and there is no `-deep` for any other status either. It existed as one step past `--down-dim`, for a down row deepening its own tint under the pointer rather than picking up a neutral <details class="sg-more"><summary>more</summary>`--surface-2` -- the argument being that hover on a row which already means something must not switch signals. That argument was sound, and it depended entirely on down having a *resting* fill to deepen. The product owner asked for the red row background to go, and it has (DESIGN.md 2.3). With no resting fill, a hover tint would *introduce* red rather than intensify it -- which is the exact failure the original rule forbade -- so every caller of `--down-deep` went with the fill, and a token with no caller is a decision nobody made. Down now marks itself the way pending, waiting and paused already do: a coloured leading edge, the lamp, and the status word. `--down-dim` stays: the icon tile and the incidents row still fill themselves with it, so it is a live decision with live callers.</details></td>
+        <td class="sg-why">The tinted plate behind a down mark. It survived the row fill because it still has live callers that are *not* rows: the down icon tile and the open incident row, both of which are a single object saying what it is <details class="sg-more"><summary>more</summary>rather than a line in a list of mostly-fine things.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -491,7 +491,7 @@
         </td>
         <td><code>--idle</code></td>
         <td class="sg-value"><code>#4b5257</code><br><code class="sg-light">#c2c7cb</code></td>
-        <td class="sg-why">There is no `--down-deep`, and there is no `-deep` for any other status either. It existed as one step past `--down-dim`, for a down row deepening its own tint under the pointer rather than picking up a neutral <details class="sg-more"><summary>more</summary>`--surface-2` -- the argument being that hover on a row which already means something must not switch signals. That argument was sound, and it depended entirely on down having a *resting* fill to deepen. The product owner asked for the red row background to go, and it has (DESIGN.md 2.3). With no resting fill, a hover tint would *introduce* red rather than intensify it -- which is the exact failure the original rule forbade -- so every caller of `--down-deep` went with the fill, and a token with no caller is a decision nobody made. Down now marks itself the way pending, waiting and paused already do: a coloured leading edge, the lamp, and the status word. `--down-dim` stays: the icon tile and the incidents row still fill themselves with it, so it is a live decision with live callers.</details></td>
+        <td class="sg-why">No signal and nothing wrong with that: a paused monitor, a check that has not been asked to run yet, a window with no data. <details class="sg-more"><summary>more</summary>Grey rather than a hue, because idle is the absence of a statement and a colour would make it one.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -502,7 +502,7 @@
         </td>
         <td><code>--idle-dim</code></td>
         <td class="sg-value"><code>#16191b</code><br><code class="sg-light">#f0f0ef</code></td>
-        <td class="sg-why">There is no `--down-deep`, and there is no `-deep` for any other status either. It existed as one step past `--down-dim`, for a down row deepening its own tint under the pointer rather than picking up a neutral <details class="sg-more"><summary>more</summary>`--surface-2` -- the argument being that hover on a row which already means something must not switch signals. That argument was sound, and it depended entirely on down having a *resting* fill to deepen. The product owner asked for the red row background to go, and it has (DESIGN.md 2.3). With no resting fill, a hover tint would *introduce* red rather than intensify it -- which is the exact failure the original rule forbade -- so every caller of `--down-deep` went with the fill, and a token with no caller is a decision nobody made. Down now marks itself the way pending, waiting and paused already do: a coloured leading edge, the lamp, and the status word. `--down-dim` stays: the icon tile and the incidents row still fill themselves with it, so it is a live decision with live callers.</details></td>
+        <td class="sg-why">The tinted plate behind an idle mark, and the fill of an empty heartbeat bar -- the one place the product draws &quot;no reading&quot; as a shape. <details class="sg-more"><summary>more</summary>A step from `--surface-1` rather than a colour, so a row of empty bars reads as texture instead of data.</details></td>
       </tr></tbody>
     </table>
 </section>
@@ -1051,7 +1051,7 @@
         </td>
         <td><code>--control-h</code></td>
         <td class="sg-value"><code>36px</code></td>
-        <td class="sg-why">There is deliberately no `--track-caps`, `--track-badge` or `--track-mono`. All three existed on reasoning that sounds right and measures wrong: uppercase needs opening up, a mono badge is already wide, a monospace face <details class="sg-more"><summary>more</summary>sits on a fixed advance so the body correction does not apply. Measured against the reference style, none of it holds: it sets one absolute -0.32px on the body and overrides it nowhere — sans and mono, sentence case and uppercase, badges and headers all inherit the same value. The tightening is a house style applied to the page, not a per-face or per-casing fix. Every exception we had pushed letters apart while the style we were aiming at pulled them together. The caps one was the worst: +.09em at 12px is +1.08px per pair against the body's -0.32px, so section labels sat 1.4px per pair wider and read as spaced-out small caps rather than as a quiet header. Mono opting out is what made panel headers and IDs read wide. If a future face genuinely needs its own value, add it with a measurement attached, not with an argument. Space moves in steps of 4px. Named so a row's rhythm is a decision that can be changed in one place, not 40 ad-hoc paddings. Control height. Not a spacing step: it is the height a row of interactive chrome settles on, and stating it beats padding chosen to reach it.</details></td>
+        <td class="sg-why">Control height. Not a spacing step: it is the height a row of interactive chrome settles on, and stating it beats padding chosen to reach it.</td>
       </tr></tbody>
     </table>
 </section>
@@ -1128,7 +1128,7 @@
       <tr>
         <td><code>--z-chrome</code></td>
         <td class="sg-value"><code>20</code></td>
-        <td class="sg-why">The stacking ladder. Every z-index in the product is a rung on this list and nothing writes a bare number. <details class="sg-more"><summary>more</summary>That is the whole point: the defect these tokens replace was a tooltip at 10 clipped under a sticky bar at 20, and the obvious repair — raise the tooltip — is the same move that produced 20, 40, 41, 50, 51 and 100 in the first place. Each of those was correct against whatever it was written next to and wrong against something in another file, because nowhere stated the order. Here the order is the artefact, in one place, in reading order, so &quot;is a tooltip above the topbar&quot; is answered by looking at two lines rather than by grepping six stylesheets. The rungs are spaced by ten, which is not decoration: a layer that needs a companion sitting just under it (a scrim under its panel) takes `rung − 1` without a new token and without colliding with the rung below. Read top to bottom, this is the product's answer to &quot;what covers what&quot;: page chrome is above the page, a floating readout is above the chrome because it is a reply to something you pointed at in the chrome's shadow, a modal overlay is above everything because it owns the screen while it is open, and the skip link is above even that because it is the one control that has to be reachable when everything else has gone wrong. Sticky page chrome: the topbar, the wall's exit control.</details></td>
+        <td class="sg-why">Sticky page chrome: the topbar, the wall's exit control.</td>
       </tr>
       <tr>
         <td><code>--z-float</code></td>
