@@ -11,6 +11,7 @@
   A test asserts this file matches a fresh render, so an edit here fails CI.
 -->
 <link rel="stylesheet" href="./tokens.css">
+<link rel="stylesheet" href="./app.css">
 <style>
   body {
     margin: 0;
@@ -54,8 +55,15 @@
    */
   .sg-table { width: 100%; border-collapse: collapse; margin: 0; table-layout: fixed; }
   .sg-col-sample { width: var(--size-col-lg); }
-  .sg-col-token { width: 16%; }
-  .sg-col-value { width: 15%; }
+  .sg-col-token { width: 18%; }
+  .sg-col-value { width: 22%; }
+  /* A specimen: the rule above, the component below, on the page canvas so a
+     card composites against what it composites against in the product. */
+  .sg-specimen { margin: 0 0 var(--space-8); }
+  .sg-specimen h3 { font-size: var(--type-row); line-height: var(--lead-row); margin: 0 0 var(--space-1); }
+  .sg-specimen .sg-why { max-width: 70ch; margin: 0 0 var(--space-3); }
+  .sg-stage { padding: var(--space-5); border: 1px dashed var(--border); border-radius: var(--r-lg); }
+  .sg-specimen-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); }
   .sg-table th {
     text-align: left;
     font: inherit;
@@ -151,6 +159,7 @@
 </div>
 
 <ul class="sg-toc">
+  <li><a href="#components">Components</a></li>
   <li><a href="#colour">Colour</a></li>
   <li><a href="#status">Status colour</a></li>
   <li><a href="#type">Type</a></li>
@@ -165,6 +174,51 @@
   <li><a href="#effect">Blur and outline</a></li>
   <li><a href="#breakpoints">Breakpoints</a></li>
 </ul>
+
+<section id="components">
+  <h2>Components</h2>
+  <p class="sg-lead">The real components, rendered by React from
+      <code>web/src/styleguide-specimens.tsx</code> against the built
+      stylesheet. Not drawings of them: the markup and class names here are the
+      ones the product ships, so a chip that looks wrong on this page looks
+      wrong in the product. Each carries the rule it exists to keep.</p>
+  
+    <article class="sg-specimen" id="c-led">
+      <h3>The LED</h3>
+      <p class="sg-why">The brand mark. 20x7, a horizontal pill, never a circle. Colour never stands alone: every lamp carries its status as a word, visibly or to assistive technology. <code>web/src/monitors/Led.tsx</code></p>
+      <div class="sg-stage"><div class="sg-specimen-row"><span class="led-wrap"><span class="led" data-state="up" data-status="up" aria-hidden="true"></span><span class="led-label">Up</span></span><span class="led-wrap"><span class="led" data-state="down" data-status="down" aria-hidden="true"></span><span class="led-label">Down</span></span><span class="led-wrap"><span class="led" data-state="warn" data-status="pending" aria-hidden="true"></span><span class="led-label">Pending</span></span><span class="led-wrap"><span class="led" data-state="off" data-status="paused" aria-hidden="true"></span><span class="led-label">Paused</span></span><span class="led-wrap"><span class="led" data-state="up" data-status="up" aria-hidden="true"></span><span class="led-label">Was up</span></span></div></div>
+    </article>
+    <article class="sg-specimen" id="c-chips">
+      <h3>Chips</h3>
+      <p class="sg-why">A filled chip states a status and is labelled in words. A dashed chip is a statement about the data — partial, stale, not verified — and is never drawn in a status colour, so it cannot be mistaken for one. <code>web/src/components/Chip.tsx</code></p>
+      <div class="sg-stage"><div class="sg-specimen-row"><span class="chip chip--status" data-status="up">Up</span><span class="chip chip--status" data-status="warn">Slow</span><span class="chip chip--status" data-status="down">Down</span><span class="chip chip--status" data-status="idle">Paused</span><span class="chip chip--state">Not verified</span><span class="chip chip--count">12</span><span class="chip chip--meta"><span class="chip-label">Every</span><span class="chip-value">60 s</span></span><span class="chip-avatar" role="img" aria-label="Nobody assigned"></span></div></div>
+    </article>
+    <article class="sg-specimen" id="c-value">
+      <h3>Value</h3>
+      <p class="sg-why">A measurement. Tabular figures so a column lines up. A zero reading dims; an absent reading renders nothing, because nothing and zero are different statements. A caveat draws the dotted underline and is read aloud. <code>web/src/components/Value.tsx</code></p>
+      <div class="sg-stage"><div class="sg-specimen-row"><span class="value"><span class="value-text">142 ms</span></span><span class="value" data-zero="true"><span class="value-text">0 ms</span></span><span class="value"><span class="value-text">—</span></span><span class="value" data-warn="true" title="measured from one probe"><span class="value-text">99.98%</span><span class="value-warn" role="img" aria-label="measured from one probe">⚠</span></span></div></div>
+    </article>
+    <article class="sg-specimen" id="c-buttons">
+      <h3>Buttons</h3>
+      <p class="sg-why">The accent fills controls and nothing else. A primary action gets the accent border; a compact icon action sits in a 26px square with its name in aria-label. Delete stays a word, because colour may not be the only carrier of destructive. <code>web/src/monitors/monitors.css, web/src/monitors/inventory.css</code></p>
+      <div class="sg-stage"><div class="sg-specimen-row"><button type="button" class="add-button add-button-primary">Add monitor</button><button type="button" class="add-button">Cancel</button><button type="button" class="inv-act inv-act--icon" aria-label="Check now" title="Check now"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.6-5.9"></path><path d="M20 4v4h-4"></path></svg></button><button type="button" class="inv-act inv-act--icon" aria-label="Pause" title="Pause"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 5.5v13M14.5 5.5v13"></path></svg></button><button type="button" class="inv-act inv-act--icon" aria-label="Edit" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17v3Z"></path><path d="M14.5 5.5l4 4"></path></svg></button><button type="button" class="inv-act inv-act--danger">Delete</button></div></div>
+    </article>
+    <article class="sg-specimen" id="c-segmented">
+      <h3>Segmented control</h3>
+      <p class="sg-why">An 8px shell around 6px segments, concentric. The selected segment takes the accent. The group carries a label for assistive technology even when every segment is a word. <code>web/src/components/SegmentedControl.tsx</code></p>
+      <div class="sg-stage"><div class="segmented" role="group" aria-label="Range"><button type="button" class="segmented-option" aria-pressed="false">1h</button><button type="button" class="segmented-option" aria-pressed="true">24h</button><button type="button" class="segmented-option" aria-pressed="false">7d</button></div></div>
+    </article>
+    <article class="sg-specimen" id="c-icontile">
+      <h3>Icon tile</h3>
+      <p class="sg-why">The 24px tile beside a card title. Its border adds optical weight, which is why the gap to the title is a half-step wider than the grid would give. <code>web/src/components/IconTile.tsx</code></p>
+      <div class="sg-stage"><div class="sg-specimen-row"><span class="icon-tile" data-tone="neutral" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.6-5.9"></path><path d="M20 4v4h-4"></path></svg></span><span class="icon-tile" data-tone="neutral" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17v3Z"></path><path d="M14.5 5.5l4 4"></path></svg></span></div></div>
+    </article>
+    <article class="sg-specimen" id="c-card">
+      <h3>Card, panel, row</h3>
+      <p class="sg-why">Two surfaces, never three. A card frames a group; a panel row sits on it, and a panel is the quieter fill for a block that sits on a card. A row carries its status as a lamp plus a word, never as colour alone. <code>web/src/components/Card.tsx, web/src/components/PanelList.tsx</code></p>
+      <div class="sg-stage"><section class="card" aria-labelledby="_R_0_"><div class="card-head"><div class="card-head-lead"><h3 id="_R_0_" class="card-title">Checks</h3></div></div><ul class="panel-list" aria-label="Recent checks"><li class="panel-row" data-status="up"><span class="panel-row-icon"><span class="led-wrap"><span class="led" data-state="up" data-status="up" aria-hidden="true"></span><span class="sr-only">Up</span></span></span><div class="panel-row-body">api.example.com <span class="value"><span class="value-text">88 ms</span></span></div></li><li class="panel-row" data-status="down"><span class="panel-row-icon"><span class="led-wrap"><span class="led" data-state="down" data-status="down" aria-hidden="true"></span><span class="sr-only">Down</span></span></span><div class="panel-row-body">db.example.com <span class="chip chip--status" data-status="down">Down</span></div></li><li class="panel-row" data-status="paused"><span class="panel-row-icon"><span class="led-wrap"><span class="led" data-state="off" data-status="paused" aria-hidden="true"></span><span class="sr-only">Paused</span></span></span><div class="panel-row-body">staging.example.com <span class="chip chip--state">Paused</span></div></li></ul><div class="panel"><p class="text-helper text-ink-3">A panel: the quieter fill for a block that sits on a card.</p></div></section></div>
+    </article>
+</section>
 
 <section id="colour">
   <h2>Colour</h2>
@@ -185,7 +239,7 @@
         </td>
         <td><code>--surface</code></td>
         <td class="sg-value"><code>rgba(255, 255, 255, .03)</code><br><code class="sg-light">#ffffff</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Light is not dark flipped. `--canvas` is a warm grey and cards are pure white, so a card sits in front of the page instead of dissolving into it. <details class="sg-more"><summary>more</summary>The status colours are darker and more saturated than their dark counterparts, which are unreadable on white.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -207,7 +261,7 @@
         </td>
         <td><code>--surface-2</code></td>
         <td class="sg-value"><code>rgba(255, 255, 255, .05)</code><br><code class="sg-light">#f6f6f5</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">One step up from a surface on the page: menus, inputs, the shell.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -218,7 +272,7 @@
         </td>
         <td><code>--surface-hi</code></td>
         <td class="sg-value"><code>rgba(255, 255, 255, .08)</code><br><code class="sg-light">#f0f0ef</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">The highlight step: a hovered row, a pressed control.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -240,7 +294,7 @@
         </td>
         <td><code>--border</code></td>
         <td class="sg-value"><code>rgba(255, 255, 255, .05)</code><br><code class="sg-light">#e6e6e4</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">The resting edge of a card or row. Translucent so it picks up the surface beneath, which is why a control gets `--border-control` instead.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -251,7 +305,7 @@
         </td>
         <td><code>--border-hi</code></td>
         <td class="sg-value"><code>rgba(255, 255, 255, .10)</code><br><code class="sg-light">#d6d6d3</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">The edge under the pointer or on the selected item.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -273,7 +327,7 @@
         </td>
         <td><code>--ink-2</code></td>
         <td class="sg-value"><code>oklch(.708 0 0)</code><br><code class="sg-light">#5c6165</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">The neutral scale is achromatic — chroma exactly 0. A grey with a hint of blue in it reads as a colour decision, and this palette leaves colour to the data.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -284,7 +338,7 @@
         </td>
         <td><code>--ink-3</code></td>
         <td class="sg-value"><code>oklch(.556 0 0)</code><br><code class="sg-light">#8b9196</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">The neutral scale is achromatic — chroma exactly 0. A grey with a hint of blue in it reads as a colour decision, and this palette leaves colour to the data.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -295,7 +349,7 @@
         </td>
         <td><code>--ink-4</code></td>
         <td class="sg-value"><code>oklch(.439 0 0)</code><br><code class="sg-light">#b6bbbf</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">The neutral scale is achromatic — chroma exactly 0. A grey with a hint of blue in it reads as a colour decision, and this palette leaves colour to the data.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -340,7 +394,7 @@
         </td>
         <td><code>--up</code></td>
         <td class="sg-value"><code>#34d399</code><br><code class="sg-light">#059669</code></td>
-        <td class="sg-why">`--down-deep` moves away from the page, not toward a fixed lightness: on dark it lightens, here it darkens. <details class="sg-more"><summary>more</summary>Same rule, opposite direction — a tint that &quot;deepens&quot; has to read as more of itself in both themes, and copying the dark value across would have made a hovered row fade instead.</details></td>
+        <td class="sg-why">`--down-deep` is one step past `--down-dim`, for a tinted row under the pointer. Hover on a row that already means something must not switch signals. <details class="sg-more"><summary>more</summary>A neutral highlight arrives as a second kind of colour on top of the first and the eye has to work out which one it is being told about; the same red getting louder is the same statement said closer. Measured against the reference style, that is what it does — hovered status rows deepen to 20% of their own colour rather than picking up a grey. There is deliberately no `--up-deep`, `--warn-deep` or `--idle-deep`. Down is the only status with a resting fill to deepen: the others mark themselves with a coloured edge alone, so a hover tint would introduce a colour rather than intensify one, which is the neutral-fill problem again wearing the status palette. A token with no caller is a decision nobody made.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -351,7 +405,7 @@
         </td>
         <td><code>--up-dim</code></td>
         <td class="sg-value"><code>#10241d</code><br><code class="sg-light">#d9f5e9</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">`--down-deep` is one step past `--down-dim`, for a tinted row under the pointer. Hover on a row that already means something must not switch signals. <details class="sg-more"><summary>more</summary>A neutral highlight arrives as a second kind of colour on top of the first and the eye has to work out which one it is being told about; the same red getting louder is the same statement said closer. Measured against the reference style, that is what it does — hovered status rows deepen to 20% of their own colour rather than picking up a grey. There is deliberately no `--up-deep`, `--warn-deep` or `--idle-deep`. Down is the only status with a resting fill to deepen: the others mark themselves with a coloured edge alone, so a hover tint would introduce a colour rather than intensify one, which is the neutral-fill problem again wearing the status palette. A token with no caller is a decision nobody made.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -362,7 +416,7 @@
         </td>
         <td><code>--warn</code></td>
         <td class="sg-value"><code>#fbbf24</code><br><code class="sg-light">#b45309</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">`--down-deep` is one step past `--down-dim`, for a tinted row under the pointer. Hover on a row that already means something must not switch signals. <details class="sg-more"><summary>more</summary>A neutral highlight arrives as a second kind of colour on top of the first and the eye has to work out which one it is being told about; the same red getting louder is the same statement said closer. Measured against the reference style, that is what it does — hovered status rows deepen to 20% of their own colour rather than picking up a grey. There is deliberately no `--up-deep`, `--warn-deep` or `--idle-deep`. Down is the only status with a resting fill to deepen: the others mark themselves with a coloured edge alone, so a hover tint would introduce a colour rather than intensify one, which is the neutral-fill problem again wearing the status palette. A token with no caller is a decision nobody made.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -373,7 +427,7 @@
         </td>
         <td><code>--warn-dim</code></td>
         <td class="sg-value"><code>#2a2110</code><br><code class="sg-light">#fdf0d5</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">`--down-deep` is one step past `--down-dim`, for a tinted row under the pointer. Hover on a row that already means something must not switch signals. <details class="sg-more"><summary>more</summary>A neutral highlight arrives as a second kind of colour on top of the first and the eye has to work out which one it is being told about; the same red getting louder is the same statement said closer. Measured against the reference style, that is what it does — hovered status rows deepen to 20% of their own colour rather than picking up a grey. There is deliberately no `--up-deep`, `--warn-deep` or `--idle-deep`. Down is the only status with a resting fill to deepen: the others mark themselves with a coloured edge alone, so a hover tint would introduce a colour rather than intensify one, which is the neutral-fill problem again wearing the status palette. A token with no caller is a decision nobody made.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -384,7 +438,7 @@
         </td>
         <td><code>--down</code></td>
         <td class="sg-value"><code>#f43f5e</code><br><code class="sg-light">#e11d48</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">`--down-deep` is one step past `--down-dim`, for a tinted row under the pointer. Hover on a row that already means something must not switch signals. <details class="sg-more"><summary>more</summary>A neutral highlight arrives as a second kind of colour on top of the first and the eye has to work out which one it is being told about; the same red getting louder is the same statement said closer. Measured against the reference style, that is what it does — hovered status rows deepen to 20% of their own colour rather than picking up a grey. There is deliberately no `--up-deep`, `--warn-deep` or `--idle-deep`. Down is the only status with a resting fill to deepen: the others mark themselves with a coloured edge alone, so a hover tint would introduce a colour rather than intensify one, which is the neutral-fill problem again wearing the status palette. A token with no caller is a decision nobody made.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -395,7 +449,7 @@
         </td>
         <td><code>--down-dim</code></td>
         <td class="sg-value"><code>#2c1017</code><br><code class="sg-light">#fde4e9</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">`--down-deep` is one step past `--down-dim`, for a tinted row under the pointer. Hover on a row that already means something must not switch signals. <details class="sg-more"><summary>more</summary>A neutral highlight arrives as a second kind of colour on top of the first and the eye has to work out which one it is being told about; the same red getting louder is the same statement said closer. Measured against the reference style, that is what it does — hovered status rows deepen to 20% of their own colour rather than picking up a grey. There is deliberately no `--up-deep`, `--warn-deep` or `--idle-deep`. Down is the only status with a resting fill to deepen: the others mark themselves with a coloured edge alone, so a hover tint would introduce a colour rather than intensify one, which is the neutral-fill problem again wearing the status palette. A token with no caller is a decision nobody made.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -406,7 +460,7 @@
         </td>
         <td><code>--down-deep</code></td>
         <td class="sg-value"><code>#3d1620</code><br><code class="sg-light">#fbccd7</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">`--down-deep` is one step past `--down-dim`, for a tinted row under the pointer. Hover on a row that already means something must not switch signals. <details class="sg-more"><summary>more</summary>A neutral highlight arrives as a second kind of colour on top of the first and the eye has to work out which one it is being told about; the same red getting louder is the same statement said closer. Measured against the reference style, that is what it does — hovered status rows deepen to 20% of their own colour rather than picking up a grey. There is deliberately no `--up-deep`, `--warn-deep` or `--idle-deep`. Down is the only status with a resting fill to deepen: the others mark themselves with a coloured edge alone, so a hover tint would introduce a colour rather than intensify one, which is the neutral-fill problem again wearing the status palette. A token with no caller is a decision nobody made.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -417,7 +471,7 @@
         </td>
         <td><code>--idle</code></td>
         <td class="sg-value"><code>#4b5257</code><br><code class="sg-light">#c2c7cb</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">`--down-deep` is one step past `--down-dim`, for a tinted row under the pointer. Hover on a row that already means something must not switch signals. <details class="sg-more"><summary>more</summary>A neutral highlight arrives as a second kind of colour on top of the first and the eye has to work out which one it is being told about; the same red getting louder is the same statement said closer. Measured against the reference style, that is what it does — hovered status rows deepen to 20% of their own colour rather than picking up a grey. There is deliberately no `--up-deep`, `--warn-deep` or `--idle-deep`. Down is the only status with a resting fill to deepen: the others mark themselves with a coloured edge alone, so a hover tint would introduce a colour rather than intensify one, which is the neutral-fill problem again wearing the status palette. A token with no caller is a decision nobody made.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -428,7 +482,7 @@
         </td>
         <td><code>--idle-dim</code></td>
         <td class="sg-value"><code>#16191b</code><br><code class="sg-light">#f0f0ef</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">`--down-deep` is one step past `--down-dim`, for a tinted row under the pointer. Hover on a row that already means something must not switch signals. <details class="sg-more"><summary>more</summary>A neutral highlight arrives as a second kind of colour on top of the first and the eye has to work out which one it is being told about; the same red getting louder is the same statement said closer. Measured against the reference style, that is what it does — hovered status rows deepen to 20% of their own colour rather than picking up a grey. There is deliberately no `--up-deep`, `--warn-deep` or `--idle-deep`. Down is the only status with a resting fill to deepen: the others mark themselves with a coloured edge alone, so a hover tint would introduce a colour rather than intensify one, which is the neutral-fill problem again wearing the status palette. A token with no caller is a decision nobody made.</details></td>
       </tr></tbody>
     </table>
 </section>
@@ -448,7 +502,7 @@
         </td>
         <td><code>--type-page</code></td>
         <td class="sg-value"><code>24px</code> / <code>32px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Type. Six roles, one scale — §2.5. A component never spells out a font size, for the same reason it never spells out a colour: &quot;make everything a step larger&quot; has to be one edit, not sixty, and sixty hand-tuned sizes <details class="sg-more"><summary>more</summary>drift out of proportion the first time one of them is touched. Nothing here is below 12px; smaller than that stops being readable at a glance, which is the entire product. Every size is a whole number of pixels: a fractional size puts the engine's glyph rounding on the text, and it was the 12.5px helper — the most used role in the product — that carried it.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-specimen">
@@ -456,7 +510,7 @@
         </td>
         <td><code>--type-card</code></td>
         <td class="sg-value"><code>16px</code> / <code>24px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">16px, not 18. A card title sits beside a 24px icon tile and above a panel of 14px text; at 18px it competes with the page title two levels up instead of sitting between it and the body. <details class="sg-more"><summary>more</summary>Measured against the reference style, its card headings are 16px/500 — the same size as body copy, doing its work through weight and position rather than through size.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-specimen">
@@ -464,7 +518,7 @@
         </td>
         <td><code>--type-row</code></td>
         <td class="sg-value"><code>15px</code> / <code>20px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">A row's primary text: one step above body so a list scans.</td>
       </tr>
       <tr>
         <td class="sg-cell-specimen">
@@ -472,7 +526,7 @@
         </td>
         <td><code>--type-body</code></td>
         <td class="sg-value"><code>14px</code> / <code>20px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Body copy and the default for anything unstated.</td>
       </tr>
       <tr>
         <td class="sg-cell-specimen">
@@ -480,7 +534,7 @@
         </td>
         <td><code>--type-helper</code></td>
         <td class="sg-value"><code>12px</code> / <code>16px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Secondary text under a value or beside a control. Never below 12.</td>
       </tr>
       <tr>
         <td class="sg-cell-specimen">
@@ -488,7 +542,7 @@
         </td>
         <td><code>--type-section</code></td>
         <td class="sg-value"><code>12px</code> / <code>12px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">The caps legend that heads a section; same size as helper, set in caps.</td>
       </tr>
       <tr>
         <td class="sg-cell-specimen">
@@ -507,37 +561,37 @@
       <tr>
         <td><code>--lead-page</code></td>
         <td class="sg-value"><code>32px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Leading is paired with a size, not multiplied by it. A ratio times a size lands between device pixels (12.5 x 1.45 = 18.125) and the result depends on engine, font and pixel ratio; a whole-pixel leading does not. <details class="sg-more"><summary>more</summary>Each value is a multiple of 4 so a column of rows keeps the baseline grid. Every rule that sets a size sets its partner in the same block — the defect this replaces was 56 rules that set only the size and inherited whatever leading was above them, so one size rendered at three leadings. Single-line roles set leading equal to the size: no half-leading above and below means vertical centring is exact.</details></td>
       </tr>
       <tr>
         <td><code>--lead-card</code></td>
         <td class="sg-value"><code>24px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Leading is paired with a size, not multiplied by it. A ratio times a size lands between device pixels (12.5 x 1.45 = 18.125) and the result depends on engine, font and pixel ratio; a whole-pixel leading does not. <details class="sg-more"><summary>more</summary>Each value is a multiple of 4 so a column of rows keeps the baseline grid. Every rule that sets a size sets its partner in the same block — the defect this replaces was 56 rules that set only the size and inherited whatever leading was above them, so one size rendered at three leadings. Single-line roles set leading equal to the size: no half-leading above and below means vertical centring is exact.</details></td>
       </tr>
       <tr>
         <td><code>--lead-row</code></td>
         <td class="sg-value"><code>20px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Leading is paired with a size, not multiplied by it. A ratio times a size lands between device pixels (12.5 x 1.45 = 18.125) and the result depends on engine, font and pixel ratio; a whole-pixel leading does not. <details class="sg-more"><summary>more</summary>Each value is a multiple of 4 so a column of rows keeps the baseline grid. Every rule that sets a size sets its partner in the same block — the defect this replaces was 56 rules that set only the size and inherited whatever leading was above them, so one size rendered at three leadings. Single-line roles set leading equal to the size: no half-leading above and below means vertical centring is exact.</details></td>
       </tr>
       <tr>
         <td><code>--lead-body</code></td>
         <td class="sg-value"><code>20px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Leading is paired with a size, not multiplied by it. A ratio times a size lands between device pixels (12.5 x 1.45 = 18.125) and the result depends on engine, font and pixel ratio; a whole-pixel leading does not. <details class="sg-more"><summary>more</summary>Each value is a multiple of 4 so a column of rows keeps the baseline grid. Every rule that sets a size sets its partner in the same block — the defect this replaces was 56 rules that set only the size and inherited whatever leading was above them, so one size rendered at three leadings. Single-line roles set leading equal to the size: no half-leading above and below means vertical centring is exact.</details></td>
       </tr>
       <tr>
         <td><code>--lead-helper</code></td>
         <td class="sg-value"><code>16px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Leading is paired with a size, not multiplied by it. A ratio times a size lands between device pixels (12.5 x 1.45 = 18.125) and the result depends on engine, font and pixel ratio; a whole-pixel leading does not. <details class="sg-more"><summary>more</summary>Each value is a multiple of 4 so a column of rows keeps the baseline grid. Every rule that sets a size sets its partner in the same block — the defect this replaces was 56 rules that set only the size and inherited whatever leading was above them, so one size rendered at three leadings. Single-line roles set leading equal to the size: no half-leading above and below means vertical centring is exact.</details></td>
       </tr>
       <tr>
         <td><code>--lead-section</code></td>
         <td class="sg-value"><code>12px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Leading is paired with a size, not multiplied by it. A ratio times a size lands between device pixels (12.5 x 1.45 = 18.125) and the result depends on engine, font and pixel ratio; a whole-pixel leading does not. <details class="sg-more"><summary>more</summary>Each value is a multiple of 4 so a column of rows keeps the baseline grid. Every rule that sets a size sets its partner in the same block — the defect this replaces was 56 rules that set only the size and inherited whatever leading was above them, so one size rendered at three leadings. Single-line roles set leading equal to the size: no half-leading above and below means vertical centring is exact.</details></td>
       </tr>
       <tr>
         <td><code>--lead-nozoom</code></td>
         <td class="sg-value"><code>20px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Leading is paired with a size, not multiplied by it. A ratio times a size lands between device pixels (12.5 x 1.45 = 18.125) and the result depends on engine, font and pixel ratio; a whole-pixel leading does not. <details class="sg-more"><summary>more</summary>Each value is a multiple of 4 so a column of rows keeps the baseline grid. Every rule that sets a size sets its partner in the same block — the defect this replaces was 56 rules that set only the size and inherited whatever leading was above them, so one size rendered at three leadings. Single-line roles set leading equal to the size: no half-leading above and below means vertical centring is exact.</details></td>
       </tr>
       <tr>
         <td><code>--lead-prose</code></td>
@@ -562,7 +616,7 @@
         </td>
         <td><code>--space-1</code></td>
         <td class="sg-value"><code>4px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">The spacing ladder: steps of 4px. Named so a row's rhythm is a decision that can be changed in one place, not forty ad-hoc paddings. Below 4px the half- and quarter-steps sit; at 4px and above a literal is drift.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -586,7 +640,7 @@
         </td>
         <td><code>--space-2</code></td>
         <td class="sg-value"><code>8px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">The base step. The gap between items inside a control.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -602,7 +656,7 @@
         </td>
         <td><code>--space-3</code></td>
         <td class="sg-value"><code>12px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">The grid proper. 12 is the inset of a panel row; 16 the padding of a card and the gap between cards; 20 and 24 the breathing room around a section; 32 and beyond page-level rhythm.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -610,7 +664,7 @@
         </td>
         <td><code>--space-4</code></td>
         <td class="sg-value"><code>16px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">The grid proper. 12 is the inset of a panel row; 16 the padding of a card and the gap between cards; 20 and 24 the breathing room around a section; 32 and beyond page-level rhythm.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -618,7 +672,7 @@
         </td>
         <td><code>--space-5</code></td>
         <td class="sg-value"><code>20px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">The grid proper. 12 is the inset of a panel row; 16 the padding of a card and the gap between cards; 20 and 24 the breathing room around a section; 32 and beyond page-level rhythm.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -626,7 +680,7 @@
         </td>
         <td><code>--space-6</code></td>
         <td class="sg-value"><code>24px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">The grid proper. 12 is the inset of a panel row; 16 the padding of a card and the gap between cards; 20 and 24 the breathing room around a section; 32 and beyond page-level rhythm.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -634,7 +688,7 @@
         </td>
         <td><code>--space-8</code></td>
         <td class="sg-value"><code>32px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">The grid proper. 12 is the inset of a panel row; 16 the padding of a card and the gap between cards; 20 and 24 the breathing room around a section; 32 and beyond page-level rhythm.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -642,7 +696,7 @@
         </td>
         <td><code>--space-10</code></td>
         <td class="sg-value"><code>40px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">The grid proper. 12 is the inset of a panel row; 16 the padding of a card and the gap between cards; 20 and 24 the breathing room around a section; 32 and beyond page-level rhythm.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -650,7 +704,7 @@
         </td>
         <td><code>--space-12</code></td>
         <td class="sg-value"><code>48px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">The grid proper. 12 is the inset of a panel row; 16 the padding of a card and the gap between cards; 20 and 24 the breathing room around a section; 32 and beyond page-level rhythm.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -658,7 +712,7 @@
         </td>
         <td><code>--space-16</code></td>
         <td class="sg-value"><code>64px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">The grid proper. 12 is the inset of a panel row; 16 the padding of a card and the gap between cards; 20 and 24 the breathing room around a section; 32 and beyond page-level rhythm.</td>
       </tr></tbody>
     </table>
 </section>
@@ -688,7 +742,7 @@
         </td>
         <td><code>--size-icon-xs</code></td>
         <td class="sg-value"><code>8px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">tooltip arrow, connection dot</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -696,7 +750,7 @@
         </td>
         <td><code>--size-icon-sm</code></td>
         <td class="sg-value"><code>14px</code></td>
-        <td class="sg-why">tooltip arrow, connection dot</td>
+        <td class="sg-why">inline glyph beside text at body size</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -704,7 +758,7 @@
         </td>
         <td><code>--size-icon-md</code></td>
         <td class="sg-value"><code>16px</code></td>
-        <td class="sg-why">inline glyph beside text at body size</td>
+        <td class="sg-why">the default: a glyph in a control</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -712,7 +766,7 @@
         </td>
         <td><code>--size-icon-lg</code></td>
         <td class="sg-value"><code>20px</code></td>
-        <td class="sg-why">the default: a glyph in a control</td>
+        <td class="sg-why">the LED, and marks that carry status</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -720,7 +774,7 @@
         </td>
         <td><code>--size-icon-xl</code></td>
         <td class="sg-value"><code>30px</code></td>
-        <td class="sg-why">the LED, and marks that carry status</td>
+        <td class="sg-why">a standalone icon button in the toolbar</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -728,7 +782,7 @@
         </td>
         <td><code>--size-col-xs</code></td>
         <td class="sg-value"><code>62px</code></td>
-        <td class="sg-why">a standalone icon button in the toolbar Column widths in dense tables. Stated because a column that is 88px in one table and 92px in the next reads as a mistake at a glance, and because a guard cannot check a literal.</td>
+        <td class="sg-why">Column widths in dense tables. Stated because a column that is 88px in one table and 92px in the next reads as a mistake at a glance, and because a guard cannot check a literal.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -736,7 +790,7 @@
         </td>
         <td><code>--size-col-sm</code></td>
         <td class="sg-value"><code>76px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Column widths in dense tables. Stated because a column that is 88px in one table and 92px in the next reads as a mistake at a glance, and because a guard cannot check a literal.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -744,7 +798,7 @@
         </td>
         <td><code>--size-col-md</code></td>
         <td class="sg-value"><code>88px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Column widths in dense tables. Stated because a column that is 88px in one table and 92px in the next reads as a mistake at a glance, and because a guard cannot check a literal.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -752,7 +806,7 @@
         </td>
         <td><code>--size-col-lg</code></td>
         <td class="sg-value"><code>116px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Column widths in dense tables. Stated because a column that is 88px in one table and 92px in the next reads as a mistake at a glance, and because a guard cannot check a literal.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -760,7 +814,7 @@
         </td>
         <td><code>--size-col-xl</code></td>
         <td class="sg-value"><code>184px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Column widths in dense tables. Stated because a column that is 88px in one table and 92px in the next reads as a mistake at a glance, and because a guard cannot check a literal.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -768,7 +822,7 @@
         </td>
         <td><code>--size-pane-sm</code></td>
         <td class="sg-value"><code>280px</code></td>
-        <td class="sg-why">Panel and container widths.</td>
+        <td class="sg-why">the search field, the drawer's natural width</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -776,7 +830,7 @@
         </td>
         <td><code>--size-pane-md</code></td>
         <td class="sg-value"><code>380px</code></td>
-        <td class="sg-why">the search field, the drawer's natural width</td>
+        <td class="sg-why">the card grid's minimum column</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -784,7 +838,7 @@
         </td>
         <td><code>--size-pane-lg</code></td>
         <td class="sg-value"><code>860px</code></td>
-        <td class="sg-why">the card grid's minimum column</td>
+        <td class="sg-why">a detail page's reading measure</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -792,7 +846,7 @@
         </td>
         <td><code>--size-icon-xxs</code></td>
         <td class="sg-value"><code>7px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">the connection dot and the LED's height</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -800,7 +854,7 @@
         </td>
         <td><code>--size-icon-nav</code></td>
         <td class="sg-value"><code>15px</code></td>
-        <td class="sg-why">the connection dot and the LED's height</td>
+        <td class="sg-why">a glyph inside the sidebar's nav row</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -808,7 +862,7 @@
         </td>
         <td><code>--size-col-2xs</code></td>
         <td class="sg-value"><code>34px</code></td>
-        <td class="sg-why">a glyph inside the sidebar's nav row</td>
+        <td class="sg-why">the toolbar's own control row</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -824,7 +878,7 @@
         </td>
         <td><code>--size-col-xxs</code></td>
         <td class="sg-value"><code>78px</code></td>
-        <td class="sg-why">the toolbar's own control row</td>
+        <td class="sg-why">Additional rungs, from the same audit. Each is a size the product already drew; naming them is what lets the guard see them.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -832,7 +886,7 @@
         </td>
         <td><code>--size-col-tag</code></td>
         <td class="sg-value"><code>84px</code></td>
-        <td class="sg-why">the toolbar's own control row</td>
+        <td class="sg-why">Additional rungs, from the same audit. Each is a size the product already drew; naming them is what lets the guard see them.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -840,7 +894,7 @@
         </td>
         <td><code>--size-col-alt</code></td>
         <td class="sg-value"><code>92px</code></td>
-        <td class="sg-why">the toolbar's own control row</td>
+        <td class="sg-why">Additional rungs, from the same audit. Each is a size the product already drew; naming them is what lets the guard see them.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -848,7 +902,7 @@
         </td>
         <td><code>--size-col-2xl</code></td>
         <td class="sg-value"><code>128px</code></td>
-        <td class="sg-why">the toolbar's own control row</td>
+        <td class="sg-why">Additional rungs, from the same audit. Each is a size the product already drew; naming them is what lets the guard see them.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -856,7 +910,7 @@
         </td>
         <td><code>--size-row-sm</code></td>
         <td class="sg-value"><code>24px</code></td>
-        <td class="sg-why">the toolbar's own control row</td>
+        <td class="sg-why">the floor a one-line row settles on</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -872,7 +926,7 @@
         </td>
         <td><code>--size-row-lg</code></td>
         <td class="sg-value"><code>46px</code></td>
-        <td class="sg-why">the floor a one-line row settles on</td>
+        <td class="sg-why">Additional rungs, from the same audit. Each is a size the product already drew; naming them is what lets the guard see them.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -880,7 +934,7 @@
         </td>
         <td><code>--size-row-xl</code></td>
         <td class="sg-value"><code>58px</code></td>
-        <td class="sg-why">the floor a one-line row settles on</td>
+        <td class="sg-why">Additional rungs, from the same audit. Each is a size the product already drew; naming them is what lets the guard see them.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -888,7 +942,7 @@
         </td>
         <td><code>--size-pane-xs</code></td>
         <td class="sg-value"><code>148px</code></td>
-        <td class="sg-why">the floor a one-line row settles on</td>
+        <td class="sg-why">the heartbeat bar's minimum legible width</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -904,7 +958,7 @@
         </td>
         <td><code>--size-pane-grid-md</code></td>
         <td class="sg-value"><code>226px</code></td>
-        <td class="sg-why">the heartbeat bar's minimum legible width</td>
+        <td class="sg-why">Additional rungs, from the same audit. Each is a size the product already drew; naming them is what lets the guard see them.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -912,7 +966,7 @@
         </td>
         <td><code>--size-pane-drawer</code></td>
         <td class="sg-value"><code>288px</code></td>
-        <td class="sg-why">the heartbeat bar's minimum legible width</td>
+        <td class="sg-why">Additional rungs, from the same audit. Each is a size the product already drew; naming them is what lets the guard see them.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -920,7 +974,7 @@
         </td>
         <td><code>--size-pane-scroll</code></td>
         <td class="sg-value"><code>180px</code></td>
-        <td class="sg-why">the heartbeat bar's minimum legible width</td>
+        <td class="sg-why">the tallest a nested scroller may grow</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -936,7 +990,7 @@
         </td>
         <td><code>--size-rail</code></td>
         <td class="sg-value"><code>56px</code></td>
-        <td class="sg-why">the tallest a nested scroller may grow</td>
+        <td class="sg-why">Additional rungs, from the same audit. Each is a size the product already drew; naming them is what lets the guard see them.</td>
       </tr></tbody>
     </table>
 </section>
@@ -983,7 +1037,7 @@
         </td>
         <td><code>--r-xs</code></td>
         <td class="sg-value"><code>4px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Shape. Four steps in use, and the gaps between them are deliberate: 2px for a mark, 6px for anything you click, 8px for a panel, 12px for the card that frames panels. <details class="sg-more"><summary>more</summary>`--r-2xs` exists because the lamp drew itself at 2.5px only while the ladder stopped at 4px, and a fractional radius is the same defect the type scale already rejected: what the engine does with the half pixel depends on the device pixel ratio, so the lamp was not the same shape on every screen. `--r-xs` (4px) is kept for compatibility but is not part of the ladder in use: a control at 4px reads as a mark rather than as something pressable, and the jump from 2 to 6 is what keeps those two jobs apart.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -991,7 +1045,7 @@
         </td>
         <td><code>--r-sm</code></td>
         <td class="sg-value"><code>6px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Shape. Four steps in use, and the gaps between them are deliberate: 2px for a mark, 6px for anything you click, 8px for a panel, 12px for the card that frames panels. <details class="sg-more"><summary>more</summary>`--r-2xs` exists because the lamp drew itself at 2.5px only while the ladder stopped at 4px, and a fractional radius is the same defect the type scale already rejected: what the engine does with the half pixel depends on the device pixel ratio, so the lamp was not the same shape on every screen. `--r-xs` (4px) is kept for compatibility but is not part of the ladder in use: a control at 4px reads as a mark rather than as something pressable, and the jump from 2 to 6 is what keeps those two jobs apart.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -999,7 +1053,7 @@
         </td>
         <td><code>--r-md</code></td>
         <td class="sg-value"><code>8px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Shape. Four steps in use, and the gaps between them are deliberate: 2px for a mark, 6px for anything you click, 8px for a panel, 12px for the card that frames panels. <details class="sg-more"><summary>more</summary>`--r-2xs` exists because the lamp drew itself at 2.5px only while the ladder stopped at 4px, and a fractional radius is the same defect the type scale already rejected: what the engine does with the half pixel depends on the device pixel ratio, so the lamp was not the same shape on every screen. `--r-xs` (4px) is kept for compatibility but is not part of the ladder in use: a control at 4px reads as a mark rather than as something pressable, and the jump from 2 to 6 is what keeps those two jobs apart.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -1007,7 +1061,7 @@
         </td>
         <td><code>--r-lg</code></td>
         <td class="sg-value"><code>12px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Shape. Four steps in use, and the gaps between them are deliberate: 2px for a mark, 6px for anything you click, 8px for a panel, 12px for the card that frames panels. <details class="sg-more"><summary>more</summary>`--r-2xs` exists because the lamp drew itself at 2.5px only while the ladder stopped at 4px, and a fractional radius is the same defect the type scale already rejected: what the engine does with the half pixel depends on the device pixel ratio, so the lamp was not the same shape on every screen. `--r-xs` (4px) is kept for compatibility but is not part of the ladder in use: a control at 4px reads as a mark rather than as something pressable, and the jump from 2 to 6 is what keeps those two jobs apart.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -1052,22 +1106,22 @@
       <tr>
         <td><code>--glow-up</code></td>
         <td class="sg-value"><code>0 0 0 1px rgba(52,211,153,.35), 0 0 7px -1px rgba(52,211,153,.6)</code></td>
-        <td class="sg-why">In light the glow reads as a soft halo, not a light bulb.</td>
+        <td class="sg-why">Tight halo, not a haze. A wide soft glow at this size reads as an out-of-focus smudge; a 1px ring plus a short bloom keeps the lamp's edge legible while still looking lit.</td>
       </tr>
       <tr>
         <td><code>--glow-warn</code></td>
         <td class="sg-value"><code>0 0 0 1px rgba(251,191,36,.38), 0 0 7px -1px rgba(251,191,36,.62)</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Tight halo, not a haze. A wide soft glow at this size reads as an out-of-focus smudge; a 1px ring plus a short bloom keeps the lamp's edge legible while still looking lit.</td>
       </tr>
       <tr>
         <td><code>--glow-down</code></td>
         <td class="sg-value"><code>0 0 0 1px rgba(244,63,94,.4),   0 0 8px -1px rgba(244,63,94,.72)</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Tight halo, not a haze. A wide soft glow at this size reads as an out-of-focus smudge; a 1px ring plus a short bloom keeps the lamp's edge legible while still looking lit.</td>
       </tr>
       <tr>
         <td><code>--glow-idle</code></td>
         <td class="sg-value"><code>none</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Tight halo, not a haze. A wide soft glow at this size reads as an out-of-focus smudge; a 1px ring plus a short bloom keeps the lamp's edge legible while still looking lit.</td>
       </tr>
       <tr>
         <td><code>--shadow-flat</code></td>
@@ -1082,7 +1136,7 @@
       <tr>
         <td><code>--shadow-float</code></td>
         <td class="sg-value"><code>0 10px 15px -3px rgba(0,0,0,.12), 0 4px 6px -4px rgba(0,0,0,.1)</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Weaker than in dark: the same alphas over white read as dirt rather than as depth, and on a light ground the border already does most of the separating.</td>
       </tr></tbody>
     </table>
 </section>
@@ -1099,22 +1153,22 @@
       <tr>
         <td><code>--ease</code></td>
         <td class="sg-value"><code>cubic-bezier(.4, 0, .2, 1)</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Motion. One duration for everything interactive, because a hover, a segment change and a menu opening are the same kind of event to the person watching; giving each its own timing makes the interface feel assembled from <details class="sg-more"><summary>more</summary>parts. 150ms is short enough to feel immediate and long enough to read as movement rather than a jump.</details></td>
       </tr>
       <tr>
         <td><code>--dur-hover</code></td>
         <td class="sg-value"><code>150ms</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Motion. One duration for everything interactive, because a hover, a segment change and a menu opening are the same kind of event to the person watching; giving each its own timing makes the interface feel assembled from <details class="sg-more"><summary>more</summary>parts. 150ms is short enough to feel immediate and long enough to read as movement rather than a jump.</details></td>
       </tr>
       <tr>
         <td><code>--dur-panel</code></td>
         <td class="sg-value"><code>150ms</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Motion. One duration for everything interactive, because a hover, a segment change and a menu opening are the same kind of event to the person watching; giving each its own timing makes the interface feel assembled from <details class="sg-more"><summary>more</summary>parts. 150ms is short enough to feel immediate and long enough to read as movement rather than a jump.</details></td>
       </tr>
       <tr>
         <td><code>--dur-attention</code></td>
         <td class="sg-value"><code>420ms</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Motion. One duration for everything interactive, because a hover, a segment change and a menu opening are the same kind of event to the person watching; giving each its own timing makes the interface feel assembled from <details class="sg-more"><summary>more</summary>parts. 150ms is short enough to feel immediate and long enough to read as movement rather than a jump.</details></td>
       </tr></tbody>
     </table>
 </section>
@@ -1148,7 +1202,7 @@
         </td>
         <td><code>--accent-border</code></td>
         <td class="sg-value"><code>oklch(.623 .214 259.815)</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">The control accent (§2.8). It sits in :root rather than in the two theme blocks because it is deliberately the same colour in both: an accent that shifts with the theme is a second thing to remember and a second thing <details class="sg-more"><summary>more</summary>to get wrong. It fills controls and nothing else -- a segment you can pick, a primary button, a focus ring. It never touches a data mark, because status colour already owns that job and a dashboard that says &quot;blue&quot; in two different senses says nothing. `tokens.test.ts` enforces the split in both directions. `--accent-border` is the same hue one step lighter, which is what makes a filled control look crisp instead of printed on. It is also the readable half of the pair: measured, #2b7fff reaches 5.3:1 against the dark canvas and 3.6:1 against the light one, so it clears the 3:1 that a non-text UI edge needs in both themes, while white on the #155dfc fill reaches 5.25:1 and clears AA for the label sitting on it.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -1181,7 +1235,7 @@
         </td>
         <td><code>--accent-ring-dark</code></td>
         <td class="sg-value"><code>rgba(255,255,255,.30)</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">The ring on a dark surface, where blue at low alpha vanishes.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -1192,7 +1246,7 @@
         </td>
         <td><code>--on-up</code></td>
         <td class="sg-value"><code>#08090a</code></td>
-        <td class="sg-why">Same role as in dark (§2.3), re-measured: the light fills are darker, so up keeps a near-black label while warn and down take white.</td>
+        <td class="sg-why">The label on a *filled* status mark (§2.3). A status badge fills itself with its own status colour, and the text on that fill cannot come from the ink scale: --ink measures 1.59:1 on --up in dark and --ink-2 is worse, <details class="sg-more"><summary>more</summary>so the word naming the status would be the least readable thing in the row it explains. These are the near-black or near-white the fill actually needs, measured per theme and per status — lowest of the eight is 4.70:1, which clears AA. Only a solid status fill may use them; on a -dim background the ink scale is still correct.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -1203,7 +1257,7 @@
         </td>
         <td><code>--on-warn</code></td>
         <td class="sg-value"><code>#08090a</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">The label on a *filled* status mark (§2.3). A status badge fills itself with its own status colour, and the text on that fill cannot come from the ink scale: --ink measures 1.59:1 on --up in dark and --ink-2 is worse, <details class="sg-more"><summary>more</summary>so the word naming the status would be the least readable thing in the row it explains. These are the near-black or near-white the fill actually needs, measured per theme and per status — lowest of the eight is 4.70:1, which clears AA. Only a solid status fill may use them; on a -dim background the ink scale is still correct.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -1214,7 +1268,7 @@
         </td>
         <td><code>--on-down</code></td>
         <td class="sg-value"><code>#08090a</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">The label on a *filled* status mark (§2.3). A status badge fills itself with its own status colour, and the text on that fill cannot come from the ink scale: --ink measures 1.59:1 on --up in dark and --ink-2 is worse, <details class="sg-more"><summary>more</summary>so the word naming the status would be the least readable thing in the row it explains. These are the near-black or near-white the fill actually needs, measured per theme and per status — lowest of the eight is 4.70:1, which clears AA. Only a solid status fill may use them; on a -dim background the ink scale is still correct.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -1225,7 +1279,7 @@
         </td>
         <td><code>--on-idle</code></td>
         <td class="sg-value"><code>#e8eaec</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">The label on a *filled* status mark (§2.3). A status badge fills itself with its own status colour, and the text on that fill cannot come from the ink scale: --ink measures 1.59:1 on --up in dark and --ink-2 is worse, <details class="sg-more"><summary>more</summary>so the word naming the status would be the least readable thing in the row it explains. These are the near-black or near-white the fill actually needs, measured per theme and per status — lowest of the eight is 4.70:1, which clears AA. Only a solid status fill may use them; on a -dim background the ink scale is still correct.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -1236,7 +1290,7 @@
         </td>
         <td><code>--ring-down</code></td>
         <td class="sg-value"><code>rgba(244,63,94,.14)</code></td>
-        <td class="sg-why">Slightly stronger than in dark: the same alpha over white all but disappears.</td>
+        <td class="sg-why">The ring around an *invalid* field. Focus uses --accent-ring (§2.8); this is the validation signal, which stays red because that is the convention and because aria-invalid carries it a second time for anyone who cannot <details class="sg-more"><summary>more</summary>see the difference.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -1247,7 +1301,7 @@
         </td>
         <td><code>--scrim</code></td>
         <td class="sg-value"><code>rgba(0,0,0,.5)</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Weaker than in dark: the same alphas over white read as dirt rather than as depth, and on a light ground the border already does most of the separating.</td>
       </tr></tbody>
     </table>
 </section>
@@ -1265,12 +1319,12 @@
       <tr>
         <td><code>--font-sans</code></td>
         <td class="sg-value"><code>&quot;InterVariable&quot;, ui-sans-serif, system-ui, -apple-system, sans-serif</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">The product ships both faces itself; see styles/fonts.css. The stacks behind them are the fallback for the seconds before the file lands and for an install where it genuinely fails to.</td>
       </tr>
       <tr>
         <td><code>--font-mono</code></td>
         <td class="sg-value"><code>&quot;CommitMono&quot;, ui-monospace, &quot;SF Mono&quot;, Menlo, monospace</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Values, IDs, code. Tabular by construction, so columns line up.</td>
       </tr>
       <tr>
         <td><code>--feat-sans</code></td>
@@ -1281,22 +1335,22 @@
         <td><code>--feat-mono</code></td>
         <td class="sg-value"><code>&quot;ss01&quot; 1, &quot;ss02&quot; 1, &quot;ss03&quot; 1, &quot;ss04&quot; 1, &quot;ss05&quot; 1,
                &quot;cv01&quot; 1, &quot;cv05&quot; 1, &quot;cv06&quot; 1, &quot;cv11&quot; 1</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Layout features, pinned per role rather than left to the browser's defaults, which differ per engine and per face. Verified against the shipped files, not copied from a specimen page. <details class="sg-more"><summary>more</summary>The sans keeps only what is structurally necessary — contextual alternates, glyph composition, localised forms, kerning — plus `cv01`, the face's alternate figure one, which carries a foot serif so a bare `1` cannot be read as a lowercase `l` in a monitor name. Everything discretionary is therefore off, including `tnum` and `zero`: the sans sets words and proportional figures read better in them, because anything measurable is set in the mono instead (§2.5). The mono takes the opposite position. `ss01`-`ss05` are the face's contextual sets for code-like text — arrow, comparison and equality sequences are drawn as one mark rather than two colliding ones, which is what makes a status line or a header value scan. `cv01` is its single-storey `a`, `cv05` a narrower `@`, `cv06` straightened `6`/`9`, and `cv11` the alternate `1`, all chosen so characters that differ by a stroke are told apart at 13px. Figures need no `tnum`: the face is monospaced, so every figure is already one column wide.</details></td>
       </tr>
       <tr>
         <td><code>--ligatures-sans</code></td>
         <td class="sg-value"><code>common-ligatures contextual</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">A face is a configuration, not a family name. Both faces fall back to a system font on most machines, so anything spelled as an OpenType feature tag would apply to one font and silently do nothing on the next; these are <details class="sg-more"><summary>more</summary>the standard properties, which every face answers. Sans neutralises what is discretionary: it keeps the two ligature kinds that exist to fix letter collisions (common and contextual) and turns off the historical and discretionary sets, so a font update cannot change how the product's text renders without an edit here.</details></td>
       </tr>
       <tr>
         <td><code>--numeric-sans</code></td>
         <td class="sg-value"><code>normal</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">A face is a configuration, not a family name. Both faces fall back to a system font on most machines, so anything spelled as an OpenType feature tag would apply to one font and silently do nothing on the next; these are <details class="sg-more"><summary>more</summary>the standard properties, which every face answers. Sans neutralises what is discretionary: it keeps the two ligature kinds that exist to fix letter collisions (common and contextual) and turns off the historical and discretionary sets, so a font update cannot change how the product's text renders without an edit here.</details></td>
       </tr>
       <tr>
         <td><code>--render-sans</code></td>
         <td class="sg-value"><code>optimizeLegibility</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">A face is a configuration, not a family name. Both faces fall back to a system font on most machines, so anything spelled as an OpenType feature tag would apply to one font and silently do nothing on the next; these are <details class="sg-more"><summary>more</summary>the standard properties, which every face answers. Sans neutralises what is discretionary: it keeps the two ligature kinds that exist to fix letter collisions (common and contextual) and turns off the historical and discretionary sets, so a font update cannot change how the product's text renders without an edit here.</details></td>
       </tr>
       <tr>
         <td><code>--ligatures-mono</code></td>
@@ -1306,12 +1360,12 @@
       <tr>
         <td><code>--numeric-mono</code></td>
         <td class="sg-value"><code>slashed-zero tabular-nums</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Mono switches on what makes it legible and off what fuses characters. `slashed-zero` is the one that matters: IDs, latencies and timestamps are set in mono precisely so 0 cannot be read as O. <details class="sg-more"><summary>more</summary>Ligatures are off outright — a mono ligature turns `-&gt;` or `!=` inside a URL or an error string into a glyph that is no longer the characters it stands for. `tabular-nums` belongs to the face and not to seven call sites: if the rule is &quot;anything measurable is mono&quot;, every mono digit is already meant to line up.</details></td>
       </tr>
       <tr>
         <td><code>--render-mono</code></td>
         <td class="sg-value"><code>geometricPrecision</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Mono switches on what makes it legible and off what fuses characters. `slashed-zero` is the one that matters: IDs, latencies and timestamps are set in mono precisely so 0 cannot be read as O. <details class="sg-more"><summary>more</summary>Ligatures are off outright — a mono ligature turns `-&gt;` or `!=` inside a URL or an error string into a glyph that is no longer the characters it stands for. `tabular-nums` belongs to the face and not to seven call sites: if the rule is &quot;anything measurable is mono&quot;, every mono digit is already meant to line up.</details></td>
       </tr>
       <tr>
         <td><code>--weight-plain</code></td>
@@ -1321,22 +1375,22 @@
       <tr>
         <td><code>--weight-mid</code></td>
         <td class="sg-value"><code>450</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Weight. Three steps, §2.5. The middle step is not a rounding artefact: the sans is a variable face with a continuous weight axis and 450 is a real instance on it (verified against the shipped file: the axis runs <details class="sg-more"><summary>more</summary>400-600), which is what lets a monitor's name separate from the metadata beside it without being promoted to a heading.</details></td>
       </tr>
       <tr>
         <td><code>--weight-strong</code></td>
         <td class="sg-value"><code>500</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Weight. Three steps, §2.5. The middle step is not a rounding artefact: the sans is a variable face with a continuous weight axis and 450 is a real instance on it (verified against the shipped file: the axis runs <details class="sg-more"><summary>more</summary>400-600), which is what lets a monitor's name separate from the metadata beside it without being promoted to a heading.</details></td>
       </tr>
       <tr>
         <td><code>--weight-heavy</code></td>
         <td class="sg-value"><code>600</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Weight. Three steps, §2.5. The middle step is not a rounding artefact: the sans is a variable face with a continuous weight axis and 450 is a real instance on it (verified against the shipped file: the axis runs <details class="sg-more"><summary>more</summary>400-600), which is what lets a monitor's name separate from the metadata beside it without being promoted to a heading.</details></td>
       </tr>
       <tr>
         <td><code>--track-body</code></td>
         <td class="sg-value"><code>-.02em</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Tracking is an optical correction, never emphasis: sans set at its default looks loose, uppercase set at its default looks glued together. <details class="sg-more"><summary>more</summary>One value on the body covers the first case everywhere, so no component has to remember to ask for it; the two exceptions below are the faces the body value is wrong for, and they are opted into explicitly. Spelled `--track-*` because `--tracking-*` is Tailwind v4's own theme namespace and a token there would have to reference itself.</details></td>
       </tr></tbody>
     </table>
 </section>
@@ -1359,7 +1413,7 @@
       <tr>
         <td><code>--outline-offset</code></td>
         <td class="sg-value"><code>2px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">The keyboard outline and its offset. A different mechanism from the ring above (outline, not shadow) and deliberately thinner: it draws outside the box where the ring draws inside it.</td>
       </tr>
       <tr>
         <td><code>--blur-bar</code></td>
@@ -1369,7 +1423,7 @@
       <tr>
         <td><code>--blur-scrim</code></td>
         <td class="sg-value"><code>2px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Just enough to soften the page behind a scrim without hiding it.</td>
       </tr></tbody>
     </table>
 </section>
@@ -1389,17 +1443,17 @@
       <tr>
         <td><code>--bp-phone</code></td>
         <td class="sg-value"><code>640px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Breakpoints: named here, and NOT usable as var() in a media query. Verified in Chromium rather than assumed: a custom property inside `@media (max-width: var(--bp-phone))` does not resolve -- the query is evaluated <details class="sg-more"><summary>more</summary>before custom properties are substituted, so the whole block is silently dropped and the rule never applies. The literal form works. This is per CSS spec, not a browser bug, and `@custom-media` is not shipped anywhere. So these tokens document the ladder and give the guard a list to check the literals against; `tokens.test.ts` asserts every `@media` width in the product is one of them. They are not referenced by the stylesheets themselves, which is the one place in this file where a token is documentation rather than a value in use. The `+1` partners exist because `max-width: 640px` and `min-width: 641px` must not both match at exactly 640px.</details></td>
       </tr>
       <tr>
         <td><code>--bp-phone-up</code></td>
         <td class="sg-value"><code>641px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Breakpoints: named here, and NOT usable as var() in a media query. Verified in Chromium rather than assumed: a custom property inside `@media (max-width: var(--bp-phone))` does not resolve -- the query is evaluated <details class="sg-more"><summary>more</summary>before custom properties are substituted, so the whole block is silently dropped and the rule never applies. The literal form works. This is per CSS spec, not a browser bug, and `@custom-media` is not shipped anywhere. So these tokens document the ladder and give the guard a list to check the literals against; `tokens.test.ts` asserts every `@media` width in the product is one of them. They are not referenced by the stylesheets themselves, which is the one place in this file where a token is documentation rather than a value in use. The `+1` partners exist because `max-width: 640px` and `min-width: 641px` must not both match at exactly 640px.</details></td>
       </tr>
       <tr>
         <td><code>--bp-tablet</code></td>
         <td class="sg-value"><code>900px</code></td>
-        <td class="sg-why"></td>
+        <td class="sg-why">Breakpoints: named here, and NOT usable as var() in a media query. Verified in Chromium rather than assumed: a custom property inside `@media (max-width: var(--bp-phone))` does not resolve -- the query is evaluated <details class="sg-more"><summary>more</summary>before custom properties are substituted, so the whole block is silently dropped and the rule never applies. The literal form works. This is per CSS spec, not a browser bug, and `@custom-media` is not shipped anywhere. So these tokens document the ladder and give the guard a list to check the literals against; `tokens.test.ts` asserts every `@media` width in the product is one of them. They are not referenced by the stylesheets themselves, which is the one place in this file where a token is documentation rather than a value in use. The `+1` partners exist because `max-width: 640px` and `min-width: 641px` must not both match at exactly 640px.</details></td>
       </tr></tbody>
     </table>
 </section>

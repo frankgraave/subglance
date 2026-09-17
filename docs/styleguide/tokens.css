@@ -20,6 +20,7 @@
      behind them are the fallback for the seconds before the file lands and for
      an install where it genuinely fails to. */
   --font-sans: "InterVariable", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  /* Values, IDs, code. Tabular by construction, so columns line up. */
   --font-mono: "CommitMono", ui-monospace, "SF Mono", Menlo, monospace;
 
   /* Layout features, pinned per role rather than left to the browser's
@@ -125,9 +126,13 @@
      style, its card headings are 16px/500 — the same size as body copy, doing
      its work through weight and position rather than through size. */
   --type-card: 16px;
+  /* A row's primary text: one step above body so a list scans. */
   --type-row: 15px;
+  /* Body copy and the default for anything unstated. */
   --type-body: 14px;
+  /* Secondary text under a value or beside a control. Never below 12. */
   --type-helper: 12px;
+  /* The caps legend that heads a section; same size as helper, set in caps. */
   --type-section: 12px;
 
   /* iOS Safari zooms the page in when a focused input renders below 16px and
@@ -220,6 +225,9 @@
      standalone toolbar button that sits alone with room around it. */
   --size-square-compact: 26px;
 
+  /* The spacing ladder: steps of 4px. Named so a row's rhythm is a decision
+     that can be changed in one place, not forty ad-hoc paddings. Below 4px
+     the half- and quarter-steps sit; at 4px and above a literal is drift. */
   --space-1: 4px;
   /* The quarter-step, and the smallest gap the system has.
      It exists for one job: the frame of a segmented control, where the
@@ -235,11 +243,16 @@
      loose. They are not an escape hatch from the ladder — they are the rungs
      the ladder needs at small sizes. */
   --space-1h: 6px;
+  /* The base step. The gap between items inside a control. */
   --space-2: 8px;
   /* The second half-step. The gap between a 24px tile and the 16px title
      beside it: 8px reads tight because the tile's border adds optical weight,
      12px lets them drift apart. */
   --space-2h: 10px;
+
+  /* The grid proper. 12 is the inset of a panel row; 16 the padding of a
+     card and the gap between cards; 20 and 24 the breathing room around a
+     section; 32 and beyond page-level rhythm. */
   --space-3: 12px;
   --space-4: 16px;
   --space-5: 20px;
@@ -321,6 +334,7 @@
   --outline-offset: 2px;
   /* The blur behind a sticky bar, and the lighter one behind a scrim. */
   --blur-bar: 12px;
+  /* Just enough to soften the page behind a scrim without hiding it. */
   --blur-scrim: 2px;
 
   /* ---------------------------------------------------------------- §2.13
@@ -370,6 +384,7 @@
      accent ring loses contrast against the page, so it is white at low alpha
      there — the ring's job is visibility, not hue. */
   --accent-ring:   rgba(43,127,255,.24);
+  /* The ring on a dark surface, where blue at low alpha vanishes. */
   --accent-ring-dark: rgba(255,255,255,.30);
 
   /*
@@ -430,7 +445,9 @@
    * on the *page* — and stays correct for menus, inputs and the shell.
    */
   --surface-panel: rgba(255, 255, 255, .02);
+  /* One step up from a surface on the page: menus, inputs, the shell. */
   --surface-2:   rgba(255, 255, 255, .05);
+  /* The highlight step: a hovered row, a pressed control. */
   --surface-hi:  rgba(255, 255, 255, .08);
   /*
    * The fill of anything that FLOATS above the page: tooltip, menu, drawer.
@@ -458,7 +475,10 @@
    * non-text floor.
    */
   --surface-float: oklch(.269 0 0);
+  /* The resting edge of a card or row. Translucent so it picks up the
+     surface beneath, which is why a control gets `--border-control` instead. */
   --border:      rgba(255, 255, 255, .05);
+  /* The edge under the pointer or on the selected item. */
   --border-hi:   rgba(255, 255, 255, .10);
 
   /* The neutral scale is achromatic — chroma exactly 0. A grey with a hint of

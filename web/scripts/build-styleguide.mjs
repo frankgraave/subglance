@@ -14,9 +14,11 @@
  *
  * Run: node scripts/build-styleguide.mjs
  */
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createServer } from "vite";
+import { renderToStaticMarkup } from "react-dom/server";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const webSrc = join(here, "..", "src");
@@ -24,6 +26,49 @@ const repoRoot = join(here, "..", "..");
 const outDir = join(repoRoot, "docs", "styleguide");
 
 const tokensCss = readFileSync(join(webSrc, "styles", "tokens.css"), "utf8");
+
+/*
+ * The component specimens, rendered by React on the server through Vite's
+ * SSR loader so the TSX compiles the way it does for the app. The result is
+ * the real markup of the real components; the page then loads the app's
+ * built stylesheet beside tokens.css, so what appears is what ships.
+ *
+ * The built CSS is required, not optional. Rendering markup against tokens
+ * alone would show unstyled spans and call them chips.
+ */
+const distDir = join(here, "..", "..", "internal", "webui", "dist");
+const builtCss = (() => {
+  // The stylesheet the built index.html actually links, not whichever .css
+  // happens to be in assets/ -- a stale build leaves its predecessor beside it.
+  let indexHtml;
+  try {
+    indexHtml = readFileSync(join(distDir, "index.html"), "utf8");
+  } catch {
+    console.error(
+      "build-styleguide: no built frontend at internal/webui/dist. Run `npm run build` first.",
+    );
+    process.exit(1);
+  }
+  const link = indexHtml.match(/href="\/?(assets\/[^"]+\.css)"/);
+  if (!link) {
+    console.error("build-styleguide: built index.html links no stylesheet.");
+    process.exit(1);
+  }
+  return readFileSync(join(distDir, link[1]), "utf8");
+})();
+
+const vite = await createServer({
+  root: join(here, ".."),
+  server: { middlewareMode: true },
+  appType: "custom",
+  logLevel: "error",
+});
+let specimens;
+try {
+  ({ specimens } = await vite.ssrLoadModule("/src/styleguide-specimens.tsx"));
+} finally {
+  await vite.close();
+}
 
 /** Strip comments so prose about a token is never read as a token. */
 function stripComments(css) {
@@ -103,36 +148,89 @@ function rationaleFor(name) {
   return "";
 }
 
+/**
+ * Where the previous declaration ended, ignoring punctuation inside comments.
+ *
+ * `lastIndexOf(";")` on raw text finds a semicolon inside the prose ("at a
+ * glance; which is...") and cuts the comment in half, so the fragment above
+ * a declaration held no opening marker and read as having no comment at all.
+ * That single character blanked 87 of 138 rows. Boundaries are found on a
+ * copy with comments blanked to spaces, so offsets still line up.
+ */
+// Comments become runs of "x" (newlines kept) rather than spaces: a line that
+// held only a comment must still read as occupied, or the blank-line test
+// sees a group boundary at every heading.
+const blanked = tokensCss.replace(/\/\*[\s\S]*?\*\//g, (m) =>
+  m.replace(/[^\n]/g, "x"),
+);
+function boundaryBefore(offset) {
+  const head = blanked.slice(0, offset);
+  return Math.max(
+    head.lastIndexOf(";"),
+    head.lastIndexOf("{"),
+    head.lastIndexOf("}"),
+  );
+}
+
 /** The comment attached to the declaration at this offset, if any. */
 function rationaleAt(at) {
+  /*
+   * A trailing comment first: a comment on the same line as the value
+   * explains the declaration it sits behind. The first version only looked
+   * *before* a declaration, so every trailing comment was credited to the
+   * next row and the whole size table read one rung out of step -- 14px was
+   * labelled "tooltip arrow", 30px "the LED". Wrong reasons beside right
+   * values is worse than no reasons at all.
+   */
+  const lineEnd = tokensCss.indexOf("\n", at + 1);
+  const restOfLine = tokensCss.slice(at, lineEnd === -1 ? undefined : lineEnd);
+  const trailing = restOfLine.match(/;\s*\/\*([\s\S]*?)\*\//);
+  if (trailing) return collect(`/*${trailing[1]}*/`);
 
-  const before = tokensCss.slice(0, at);
-  const prevEnd = Math.max(
-    before.lastIndexOf(";"),
-    before.lastIndexOf("{"),
-    before.lastIndexOf("}"),
-  );
-  const own = collect(before.slice(prevEnd + 1));
+  const prevEnd = boundaryBefore(at);
+  // The previous declaration's own trailing comment is not ours.
+  const own = collect(stripTrailing(tokensCss.slice(prevEnd + 1, at)));
   if (own) return own;
+  // Nothing of our own, and a blank line above: we open a group without a
+  // heading, and must not borrow the previous group's.
+  if (/\n[ \t]*\n/.test(blanked.slice(prevEnd + 1, at))) return "";
 
-  // Walk back over the run: earlier declarations with no blank line between.
+  /*
+   * Walk back over the run to the comment that opens it.
+   *
+   * A run is a set of declarations with no blank line between them. The
+   * comment at the top of the run is the group's heading and applies to
+   * every member that has no comment of its own. A comment *inside* the run
+   * -- one that sits directly above some earlier member -- is that member's
+   * and nobody else's: `--type-card`'s "16px, not 18" must not become
+   * `--type-body`'s reason just because body follows card. So a comment is
+   * only inherited if it is the first thing in the run.
+   */
   let cursor = prevEnd;
-  for (let hops = 0; hops < 12 && cursor > 0; hops += 1) {
-    const chunk = tokensCss.slice(0, cursor);
-    const stop = Math.max(
-      chunk.lastIndexOf(";"),
-      chunk.lastIndexOf("{"),
-      chunk.lastIndexOf("}"),
-    );
+  for (let hops = 0; hops < 24 && cursor > 0; hops += 1) {
+    const stop = boundaryBefore(cursor);
     if (stop === -1) break;
-    const gap = tokensCss.slice(stop + 1, cursor);
-    // A blank line means the previous declaration is a different group.
-    if (/\n\s*\n/.test(gap.replace(/\/\*[\s\S]*?\*\//g, ""))) break;
+    const between = blanked.slice(stop + 1, cursor);
+    const gap = stripTrailing(tokensCss.slice(stop + 1, cursor));
     const text = collect(gap);
-    if (text) return text;
+    if (/\n[ \t]*\n/.test(between)) {
+      // The run starts here. Whatever comment sits in this gap is its
+      // heading, provided it sits *below* the blank line.
+      const afterBlank = gap.slice(gap.search(/\n[ \t]*\n/) + 1);
+      return collect(stripTrailing(afterBlank));
+    }
+    if (text) return ""; // an earlier member's own comment: not a heading
     cursor = stop;
   }
   return "";
+}
+
+/**
+ * Drop a comment that sits on the same line as the `;` this gap starts
+ * after: that comment belongs to the declaration before the gap.
+ */
+function stripTrailing(gap) {
+  return gap.replace(/^[ \t]+\/\*[^\n]*?\*\/[ \t]*(?=\n)/, "");
 }
 
 /** Flatten any comment blocks in a fragment into one line of prose. */
@@ -298,7 +396,26 @@ const motionTokens = group(root, "--dur-", "--ease");
 const bpTokens = group(root, "--bp-");
 const controlTokens = group(root, "--control-");
 
+function specimenBlock(spec) {
+  return `
+    <article class="sg-specimen" id="c-${esc(spec.id)}">
+      <h3>${esc(spec.title)}</h3>
+      <p class="sg-why">${esc(spec.rule)} <code>${esc(spec.source)}</code></p>
+      <div class="sg-stage">${renderToStaticMarkup(spec.node)}</div>
+    </article>`;
+}
+
 const sections = [
+  {
+    id: "components",
+    title: "Components",
+    lead: `The real components, rendered by React from
+      <code>web/src/styleguide-specimens.tsx</code> against the built
+      stylesheet. Not drawings of them: the markup and class names here are the
+      ones the product ships, so a chip that looks wrong on this page looks
+      wrong in the product. Each carries the rule it exists to keep.`,
+    html: specimens.map(specimenBlock).join(""),
+  },
   {
     id: "colour",
     title: "Colour",
@@ -495,6 +612,7 @@ const html = `<!doctype html>
   A test asserts this file matches a fresh render, so an edit here fails CI.
 -->
 <link rel="stylesheet" href="./tokens.css">
+<link rel="stylesheet" href="./app.css">
 <style>
   body {
     margin: 0;
@@ -538,8 +656,15 @@ const html = `<!doctype html>
    */
   .sg-table { width: 100%; border-collapse: collapse; margin: 0; table-layout: fixed; }
   .sg-col-sample { width: var(--size-col-lg); }
-  .sg-col-token { width: 16%; }
-  .sg-col-value { width: 15%; }
+  .sg-col-token { width: 18%; }
+  .sg-col-value { width: 22%; }
+  /* A specimen: the rule above, the component below, on the page canvas so a
+     card composites against what it composites against in the product. */
+  .sg-specimen { margin: 0 0 var(--space-8); }
+  .sg-specimen h3 { font-size: var(--type-row); line-height: var(--lead-row); margin: 0 0 var(--space-1); }
+  .sg-specimen .sg-why { max-width: 70ch; margin: 0 0 var(--space-3); }
+  .sg-stage { padding: var(--space-5); border: 1px dashed var(--border); border-radius: var(--r-lg); }
+  .sg-specimen-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); }
   .sg-table th {
     text-align: left;
     font: inherit;
@@ -657,6 +782,8 @@ mkdirSync(outDir, { recursive: true });
 writeFileSync(join(outDir, "index.html"), html);
 // The page loads the real token file, so it has to sit beside it.
 writeFileSync(join(outDir, "tokens.css"), tokensCss);
+// The built stylesheet too, so the component specimens are styled.
+writeFileSync(join(outDir, "app.css"), builtCss);
 
 const counts = {
   colour: colourTokens.length,

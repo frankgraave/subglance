@@ -129,9 +129,60 @@ describe("the living style guide", () => {
     const cells = [...html.matchAll(/<td class="sg-why">([\s\S]*?)<\/td>/g)];
     expect(cells.length).toBeGreaterThan(50);
     const filled = cells.filter(([, body]) => body.trim().length > 0);
+    /*
+     * Every row, not most. The threshold was 40% while the parser was being
+     * repaired; once it read the file correctly the count went to 138 of
+     * 138, and the seven that were still blank were fixed at the source by
+     * writing the missing comment. A token nobody can explain is a token
+     * nobody should have added, so a blank cell is a finding about
+     * tokens.css, and the fix belongs there.
+     */
     expect(
-      filled.length / cells.length,
-      "most rows should explain themselves",
-    ).toBeGreaterThan(0.4);
+      cells.length - filled.length,
+      "every token must explain itself in tokens.css",
+    ).toBe(0);
+  });
+  it("puts each token's own reason beside it, not its neighbour's", () => {
+    /*
+     * The earlier "carries the reasoning" check counted filled cells and
+     * passed while every trailing comment in the size ladder was credited to
+     * the row below it: 14px read "tooltip arrow", 30px read "the LED". A
+     * page that pairs right values with wrong reasons teaches the wrong
+     * thing with full confidence, which is worse than a blank cell.
+     *
+     * So three rows are checked by content. They are chosen from the tokens
+     * whose comment sits *after* the value on the same line, because that is
+     * the shape the parser got wrong.
+     */
+    const html = readFileSync(guidePath, "utf8");
+    const why = (token: string): string => {
+      const m = html.match(
+        new RegExp(
+          `<td><code>${token}</code></td>[\\s\\S]*?<td class="sg-why">([\\s\\S]*?)</td>`,
+        ),
+      );
+      return m ? m[1].replace(/<[^>]+>/g, "") : "";
+    };
+    expect(why("--size-icon-xs")).toMatch(/tooltip arrow/);
+    expect(why("--size-icon-lg")).toMatch(/the LED/);
+    expect(why("--size-icon-xl")).toMatch(/standalone icon button/);
+    // And the neighbour must NOT have inherited it.
+    expect(why("--size-icon-sm")).not.toMatch(/tooltip arrow/);
+  });
+
+  it("renders the real components, styled by the built stylesheet", () => {
+    /*
+     * A components section that is only markup is a components section that
+     * lies: an unstyled <span class="chip"> looks nothing like a chip. The
+     * page must link the built stylesheet, and the specimens must be the
+     * product's class names -- which is checked by looking for a class that
+     * only the real component emits.
+     */
+    const html = readFileSync(guidePath, "utf8");
+    expect(html).toContain('href="./app.css"');
+    expect(html).toContain('class="chip chip--status"');
+    expect(html).toContain('class="led"');
+    expect(html).toContain('class="segmented');
+    expect(html).toMatch(/inv-act inv-act--icon/);
   });
 });
