@@ -110,7 +110,25 @@ func run(args []string) error {
 	openCtx, cancelOpen := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancelOpen()
 
-	db, err := store.Open(openCtx, store.Options{Path: cfg.DBPath()})
+	// The keys are resolved before Open rather than passed as strings, so a
+	// bad path or a short key is reported as a configuration problem. Neither
+	// the key nor its length is logged; the only thing said out loud is
+	// whether encryption is on, which an operator needs and an attacker
+	// already knows from the flag they cannot see.
+	secretKey, err := cfg.ResolveSecretKey()
+	if err != nil {
+		return fmt.Errorf("secret-key: %w", err)
+	}
+	previousSecretKey, err := cfg.ResolvePreviousSecretKey()
+	if err != nil {
+		return fmt.Errorf("secret-key-previous: %w", err)
+	}
+
+	db, err := store.Open(openCtx, store.Options{
+		Path:              cfg.DBPath(),
+		SecretKey:         secretKey,
+		PreviousSecretKey: previousSecretKey,
+	})
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
@@ -120,6 +138,7 @@ func run(args []string) error {
 		}
 	}()
 	log.Info("database ready", "path", db.Path())
+	reportChannelEncryption(log, db.ChannelEncryption())
 
 	// Tell the operator plainly when the instance has no account yet. There is
 	// no seeded user and no default password to change — an instance exposed
@@ -395,6 +414,40 @@ func schedulerShutdownBudget(configured, maxCheckTimeout time.Duration) time.Dur
 		return configured
 	}
 	return max(configured, maxCheckTimeout+recordingMargin)
+}
+
+// reportChannelEncryption says, once, what state notification channel
+// configuration is stored in.
+//
+// The off case is a warning rather than silence. It is the default, so it is
+// the state most instances are in, and a self-hoster who assumed otherwise
+// should learn it from their own log rather than from a stranger reading the
+// database. It names the flag so the fix does not require finding the
+// documentation first.
+//
+// Nothing here touches the key or a config value — not at debug level either.
+// The counts are rows.
+func reportChannelEncryption(log *slog.Logger, r store.ChannelEncryptionReport) {
+	if !r.Enabled {
+		log.Warn("notification channel configuration is stored unencrypted, " +
+			"so webhook URLs, bot tokens and SMTP passwords are readable in the database file " +
+			"and in every backup of it; set --secret-key to encrypt them")
+		if r.Decrypted > 0 {
+			log.Warn("decrypted notification channel configuration back to plain text as asked",
+				"channels", r.Decrypted)
+		}
+		return
+	}
+	log.Info("notification channel configuration is encrypted at rest")
+	if r.Encrypted > 0 {
+		log.Info("encrypted the configuration of channels that were stored in plain text",
+			"channels", r.Encrypted)
+	}
+	if r.Rewrapped > 0 {
+		log.Info("moved notification channel configuration to the new secret key; "+
+			"--secret-key-previous is no longer needed and should be removed",
+			"channels", r.Rewrapped)
+	}
 }
 
 // displayAddr turns a listen address into something a person can paste into a

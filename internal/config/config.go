@@ -95,11 +95,61 @@ type Config struct {
 	// operator running behind a reverse proxy names it here and gets real
 	// client addresses back in the limiter and the session log.
 	TrustedProxies string
+
+	// SecretKey encrypts notification channel configuration at rest. It is
+	// either the key material itself or the path to a file holding it.
+	//
+	// **Empty by default, and empty means no encryption: webhook URLs, bot
+	// tokens and SMTP passwords are stored in plain text.** That is stated
+	// here as plainly as in the documentation, because it is the setting
+	// almost every instance runs with.
+	//
+	// It is not defaulted to something automatic. The rejected alternative
+	// was a key file created next to subglance.db on first start, which would
+	// have made encryption the default — and would have travelled inside
+	// every backup and every copy of the data volume, so it would have
+	// protected nothing against the one attacker this feature is about while
+	// looking like it did. An explicit setting that is off is more honest
+	// than an automatic one that is hollow.
+	//
+	// Prefer the file form over the environment variable: an environment
+	// variable is readable in /proc/<pid>/environ and in `docker inspect`,
+	// where it outlives the process in the container's stored config.
+	SecretKey string
+
+	// PreviousSecretKey is the key the stored rows are currently encrypted
+	// with, when that is not SecretKey. It exists because refusing to start
+	// on a key mismatch is only defensible if there is a deliberate way to
+	// change the key:
+	//
+	//   rotate: --secret-key-previous OLD --secret-key NEW
+	//   disable: --secret-key-previous OLD and no --secret-key
+	//
+	// Both rewrite every row once, at startup, in one transaction. It is
+	// meant to be passed for that one start and then removed, which is why
+	// nothing warns about leaving it set — the reconciliation is idempotent,
+	// so a stale value is inert rather than harmful.
+	PreviousSecretKey string
 }
 
 // DBPath returns the full path to the SQLite database file.
 func (c Config) DBPath() string {
 	return strings.TrimRight(c.DataDir, "/") + "/subglance.db"
+}
+
+// ResolveSecretKey turns the configured --secret-key into key material.
+//
+// It is a method rather than a field filled in by Load because the value may
+// be a file path, and a file read at validate time and again at Open time is
+// a file the operator can fix without restarting twice. It returns nil when no
+// key is configured, which is what store.Options treats as "no encryption".
+func (c Config) ResolveSecretKey() ([]byte, error) {
+	return store.ParseSecretKey(c.SecretKey)
+}
+
+// ResolvePreviousSecretKey does the same for --secret-key-previous.
+func (c Config) ResolvePreviousSecretKey() ([]byte, error) {
+	return store.ParseSecretKey(c.PreviousSecretKey)
 }
 
 // NotifierGroupWindow translates the configured window into the value the
@@ -132,6 +182,8 @@ func defaults() Config {
 		RollupRetention:     store.DefaultRollupRetention,
 		AlertGroupWindow:    notifier.DefaultGroupWindow,
 		TrustedProxies:      "",
+		SecretKey:           "",
+		PreviousSecretKey:   "",
 	}
 }
 
@@ -160,6 +212,8 @@ func Load(args []string) (Config, error) {
 	c.RollupRetention = env.dur("SUBGLANCE_ROLLUP_RETENTION", c.RollupRetention)
 	c.AlertGroupWindow = env.dur("SUBGLANCE_ALERT_GROUP_WINDOW", c.AlertGroupWindow)
 	c.TrustedProxies = envStr("SUBGLANCE_TRUSTED_PROXIES", c.TrustedProxies)
+	c.SecretKey = envStr("SUBGLANCE_SECRET_KEY", c.SecretKey)
+	c.PreviousSecretKey = envStr("SUBGLANCE_SECRET_KEY_PREVIOUS", c.PreviousSecretKey)
 	if err := env.err(); err != nil {
 		return Config{}, err
 	}
@@ -185,6 +239,12 @@ func Load(args []string) (Config, error) {
 		"how long an alert waits for others so one outage sends one message (0 = send immediately)")
 	fs.StringVar(&c.TrustedProxies, "trusted-proxies", c.TrustedProxies,
 		"comma-separated addresses or CIDR blocks whose X-Forwarded-For may be believed (empty = none)")
+	fs.StringVar(&c.SecretKey, "secret-key", c.SecretKey,
+		"32 bytes of key material, or a path to a file holding it, to encrypt notification channel "+
+			"configuration at rest (empty = no encryption, config stored in plain text)")
+	fs.StringVar(&c.PreviousSecretKey, "secret-key-previous", c.PreviousSecretKey,
+		"the key the stored configuration is currently under, for one start, to rotate to --secret-key "+
+			"or to decrypt back to plain text when --secret-key is empty")
 
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
@@ -240,6 +300,20 @@ func (c Config) validate() error {
 		if err := trustedproxy.Validate(c.TrustedProxies); err != nil {
 			return err
 		}
+	}
+	// Resolving the key here rather than at store.Open means a mistyped path
+	// or a short key is a config error named after the flag, next to every
+	// other config error, instead of a database error further in.
+	if _, err := c.ResolveSecretKey(); err != nil {
+		return fmt.Errorf("invalid secret-key: %w", err)
+	}
+	if _, err := c.ResolvePreviousSecretKey(); err != nil {
+		return fmt.Errorf("invalid secret-key-previous: %w", err)
+	}
+	if c.SecretKey != "" && c.SecretKey == c.PreviousSecretKey {
+		return errors.New("secret-key and secret-key-previous are the same value; " +
+			"secret-key-previous names the key the data is currently under, so pass it only " +
+			"when it differs from the new one")
 	}
 	if c.WatchdogURL != "" {
 		if err := watchdog.ValidateURL(c.WatchdogURL); err != nil {

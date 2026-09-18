@@ -58,7 +58,7 @@ func (db *DB) ListChannels(ctx context.Context) ([]Channel, error) {
 
 	var out []Channel
 	for rows.Next() {
-		c, err := scanChannel(rows)
+		c, err := db.scanChannel(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -71,7 +71,7 @@ func (db *DB) ListChannels(ctx context.Context) ([]Channel, error) {
 func (db *DB) GetChannel(ctx context.Context, id int64) (Channel, error) {
 	row := db.Reader.QueryRowContext(ctx,
 		"SELECT "+channelColumns+" FROM notif_channels WHERE id = ?", id)
-	c, err := scanChannel(row)
+	c, err := db.scanChannel(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Channel{}, fmt.Errorf("%w: channel %d", ErrNotFound, id)
 	}
@@ -80,7 +80,7 @@ func (db *DB) GetChannel(ctx context.Context, id int64) (Channel, error) {
 
 // CreateChannel inserts a channel and returns it with its assigned ID.
 func (db *DB) CreateChannel(ctx context.Context, c Channel) (Channel, error) {
-	cfg, err := encodeChannelConfig(c.Config)
+	cfg, err := db.encodeChannelConfig(c.Config)
 	if err != nil {
 		return Channel{}, err
 	}
@@ -110,7 +110,7 @@ func (db *DB) CreateChannel(ctx context.Context, c Channel) (Channel, error) {
 // It takes a whole Channel rather than a patch: merging partial updates is the
 // API's job, because only the API knows which fields the client actually sent.
 func (db *DB) UpdateChannel(ctx context.Context, c Channel) (Channel, error) {
-	cfg, err := encodeChannelConfig(c.Config)
+	cfg, err := db.encodeChannelConfig(c.Config)
 	if err != nil {
 		return Channel{}, err
 	}
@@ -168,7 +168,7 @@ func (db *DB) ListMonitorChannels(ctx context.Context, monitorID int64) ([]Chann
 
 	var out []Channel
 	for rows.Next() {
-		c, err := scanChannel(rows)
+		c, err := db.scanChannel(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -235,7 +235,7 @@ func (db *DB) SetMonitorChannels(ctx context.Context, monitorID int64, ids []int
 	return nil
 }
 
-func scanChannel(s scanner) (Channel, error) {
+func (db *DB) scanChannel(s scanner) (Channel, error) {
 	var (
 		c       Channel
 		cfg     sql.NullString
@@ -249,18 +249,53 @@ func scanChannel(s scanner) (Channel, error) {
 	c.CreatedAt = time.Unix(created, 0).UTC()
 	c.UpdatedAt = time.Unix(updated, 0).UTC()
 	c.Config = map[string]string{}
-	if cfg.Valid && cfg.String != "" {
-		if err := json.Unmarshal([]byte(cfg.String), &c.Config); err != nil {
+
+	raw := ""
+	if cfg.Valid {
+		raw = cfg.String
+	}
+
+	// Encryption is invisible to every caller above this line: the rest of the
+	// code sees the same map it always did.
+	//
+	// A row that is ciphertext when no key is configured, or that refuses to
+	// authenticate, cannot happen here — Open reconciles the whole table
+	// against the configured keys and refuses to start otherwise, which is the
+	// point of doing it there and not lazily on this path. It is still handled
+	// rather than ignored, because a row written by a concurrent process with
+	// a different key would otherwise become an empty config with no trace.
+	if isEncryptedConfig(raw) {
+		if db.cipher == nil {
+			return Channel{}, fmt.Errorf("store: channel %d has encrypted configuration "+
+				"but no secret key is configured", c.ID)
+		}
+		plain, err := db.cipher.open(raw)
+		if err != nil {
+			return Channel{}, fmt.Errorf("store: channel %d: %w", c.ID, err)
+		}
+		raw = plain
+	}
+
+	if raw != "" {
+		if err := json.Unmarshal([]byte(raw), &c.Config); err != nil {
 			// One unreadable row must not blank the whole list. An empty
 			// config is visibly broken in the UI, which is the honest
 			// outcome; a failed listing is not.
+			//
+			// This only covers malformed plaintext. Ciphertext that does not
+			// authenticate is refused above instead of being swallowed here:
+			// tampered config must never reach a notifier, and "the config
+			// looks empty" is the wrong way to learn that it was altered.
 			c.Config = map[string]string{}
 		}
 	}
 	return c, nil
 }
 
-func encodeChannelConfig(cfg map[string]string) (string, error) {
+// encodeChannelConfig renders a config for storage, encrypting it when a
+// secret key is configured. With no key the output is the same JSON this
+// function has always produced, byte for byte.
+func (db *DB) encodeChannelConfig(cfg map[string]string) (string, error) {
 	if cfg == nil {
 		cfg = map[string]string{}
 	}
@@ -268,5 +303,8 @@ func encodeChannelConfig(cfg map[string]string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("encode channel config: %w", err)
 	}
-	return string(b), nil
+	if db.cipher == nil {
+		return string(b), nil
+	}
+	return db.cipher.seal(string(b))
 }

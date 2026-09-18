@@ -68,6 +68,35 @@ services:
       # counts travel in cleartext.
       # SUBGLANCE_WATCHDOG_URL: ""
       # SUBGLANCE_WATCHDOG_INTERVAL: 5m
+      #
+      # Notification channel configuration — webhook URLs, bot tokens, SMTP
+      # passwords — is stored in SQLite. **Unset, as it is here, means those
+      # values are stored in plain text**, readable by anyone who obtains
+      # subglance.db, a backup of it, or a copy of this volume. Set this and
+      # they are encrypted with AES-256-GCM instead.
+      #
+      # Accepts 32 bytes of key material (`openssl rand -hex 32`) or a path to
+      # a file holding it. Prefer the file, mounted read-only:
+      #
+      #   volumes:
+      #     - ./subglance.key:/run/secrets/subglance.key:ro
+      #   environment:
+      #     SUBGLANCE_SECRET_KEY: /run/secrets/subglance.key
+      #
+      # A key written here as a literal value is visible in `docker inspect`
+      # and in /proc/<pid>/environ, so it survives outside the process in the
+      # container's stored configuration; a mounted file does not.
+      #
+      # Keep the key. A wrong key, or no key once channels are encrypted, is a
+      # deliberate refusal to start rather than five channels that fail during
+      # the outage they were meant to report. See SECURITY.md.
+      # SUBGLANCE_SECRET_KEY: /run/secrets/subglance.key
+      #
+      # Only for one start, to change the key or to turn encryption off:
+      # set this to the key the data is currently under, with
+      # SUBGLANCE_SECRET_KEY set to the new key (rotate) or left empty
+      # (decrypt back to plain text). Remove it again afterwards.
+      # SUBGLANCE_SECRET_KEY_PREVIOUS: /run/secrets/subglance.key.old
 
     # ICMP ping checks need the container to allow unprivileged ICMP for the
     # process GID. Docker's own default already does; some Podman and
