@@ -7,6 +7,7 @@
 package config
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -141,23 +142,27 @@ func Load(args []string) (Config, error) {
 	c := defaults()
 
 	// Environment first, so that flags can still override it.
+	//
+	// The reads are collected rather than early-returned so that an operator
+	// who mistyped two variables is told about both in one run, instead of
+	// fixing one, restarting, and being told about the next.
+	var env envErrors
 	c.Addr = envStr("SUBGLANCE_ADDR", c.Addr)
 	c.DataDir = envStr("SUBGLANCE_DATA_DIR", c.DataDir)
 	c.LogLevel = envStr("SUBGLANCE_LOG_LEVEL", c.LogLevel)
 	c.LogFormat = envStr("SUBGLANCE_LOG_FORMAT", c.LogFormat)
-	c.ShutdownTimeout = envDur("SUBGLANCE_SHUTDOWN_TIMEOUT", c.ShutdownTimeout)
-	c.CheckWorkers = envInt("SUBGLANCE_CHECK_WORKERS", c.CheckWorkers)
+	c.ShutdownTimeout = env.dur("SUBGLANCE_SHUTDOWN_TIMEOUT", c.ShutdownTimeout)
+	c.CheckWorkers = env.int("SUBGLANCE_CHECK_WORKERS", c.CheckWorkers)
 	c.WatchdogURL = envStr("SUBGLANCE_WATCHDOG_URL", c.WatchdogURL)
-	c.WatchdogInterval = envDur("SUBGLANCE_WATCHDOG_INTERVAL", c.WatchdogInterval)
-	c.AllowPrivateTargets = envBool("SUBGLANCE_ALLOW_PRIVATE_TARGETS", c.AllowPrivateTargets)
-	c.RawRetention = envDur("SUBGLANCE_RAW_RETENTION", c.RawRetention)
-	c.RollupRetention = envDur("SUBGLANCE_ROLLUP_RETENTION", c.RollupRetention)
-	groupWindow, err := envDurStrict("SUBGLANCE_ALERT_GROUP_WINDOW", c.AlertGroupWindow)
-	if err != nil {
+	c.WatchdogInterval = env.dur("SUBGLANCE_WATCHDOG_INTERVAL", c.WatchdogInterval)
+	c.AllowPrivateTargets = env.bool("SUBGLANCE_ALLOW_PRIVATE_TARGETS", c.AllowPrivateTargets)
+	c.RawRetention = env.dur("SUBGLANCE_RAW_RETENTION", c.RawRetention)
+	c.RollupRetention = env.dur("SUBGLANCE_ROLLUP_RETENTION", c.RollupRetention)
+	c.AlertGroupWindow = env.dur("SUBGLANCE_ALERT_GROUP_WINDOW", c.AlertGroupWindow)
+	c.TrustedProxies = envStr("SUBGLANCE_TRUSTED_PROXIES", c.TrustedProxies)
+	if err := env.err(); err != nil {
 		return Config{}, err
 	}
-	c.AlertGroupWindow = groupWindow
-	c.TrustedProxies = envStr("SUBGLANCE_TRUSTED_PROXIES", c.TrustedProxies)
 
 	fs := flag.NewFlagSet("subglance", flag.ContinueOnError)
 	fs.StringVar(&c.Addr, "addr", c.Addr, "HTTP listen address")
@@ -254,54 +259,94 @@ func envStr(key, def string) string {
 	return def
 }
 
-func envInt(key string, def int) int {
+// envErrors collects malformed environment variables so that Load can report
+// every one of them at once.
+//
+// Its methods return the default on failure. That is not a fallback in
+// disguise: Load refuses to return the Config when err() is non-nil, so the
+// value exists only to keep the read expressions assignable and readable.
+type envErrors struct {
+	errs []error
+}
+
+func (e *envErrors) int(key string, def int) int {
+	v, err := envInt(key, def)
+	if err != nil {
+		e.errs = append(e.errs, err)
+		return def
+	}
+	return v
+}
+
+func (e *envErrors) bool(key string, def bool) bool {
+	v, err := envBool(key, def)
+	if err != nil {
+		e.errs = append(e.errs, err)
+		return def
+	}
+	return v
+}
+
+func (e *envErrors) dur(key string, def time.Duration) time.Duration {
+	v, err := envDur(key, def)
+	if err != nil {
+		e.errs = append(e.errs, err)
+		return def
+	}
+	return v
+}
+
+func (e *envErrors) err() error { return errors.Join(e.errs...) }
+
+// The env readers below all report a malformed value instead of falling back
+// to the default, and every one of them names the variable and the text that
+// could not be parsed.
+//
+// This used to be true of durations only, for the alert group window, while
+// envInt, envBool and the other durations swallowed the parse error. That
+// split was the bug: SUBGLANCE_ALLOW_PRIVATE_TARGETS=yes is not a Go bool and
+// SUBGLANCE_WATCHDOG_INTERVAL=300 has no unit, so both started the process on
+// the default with no warning at any log level — an operator who believes they
+// enabled LAN monitoring, or that they have a dead man's switch on a five
+// minute timer, and has neither. `--log-level garbage` refuses to start, so
+// the inconsistency was inside the config layer rather than between layers.
+//
+// The cost is real and deliberate: an instance running with a malformed
+// variable today stops booting after this change, with a message saying which
+// variable and what it read.
+
+func envInt(key string, def int) (int, error) {
 	v, ok := os.LookupEnv(key)
 	if !ok || v == "" {
-		return def
+		return def, nil
 	}
 	n, err := strconv.Atoi(v)
 	if err != nil {
-		return def
+		return 0, fmt.Errorf("invalid %s %q: want a whole number", key, v)
 	}
-	return n
+	return n, nil
 }
 
-func envBool(key string, def bool) bool {
+func envBool(key string, def bool) (bool, error) {
 	v, ok := os.LookupEnv(key)
 	if !ok || v == "" {
-		return def
+		return def, nil
 	}
 	b, err := strconv.ParseBool(v)
 	if err != nil {
-		return def
+		return false, fmt.Errorf("invalid %s %q: want true or false", key, v)
 	}
-	return b
+	return b, nil
 }
 
-// envDurStrict reads a duration from the environment and reports a malformed
-// value instead of falling back to the default. An operator who mistypes a
-// duration wants to hear about it, not to run with a window they never asked
-// for.
-func envDurStrict(key string, def time.Duration) (time.Duration, error) {
+func envDur(key string, def time.Duration) (time.Duration, error) {
 	v, ok := os.LookupEnv(key)
 	if !ok || v == "" {
 		return def, nil
 	}
 	d, err := time.ParseDuration(v)
 	if err != nil {
-		return 0, fmt.Errorf("invalid %s: %w", key, err)
+		return 0, fmt.Errorf("invalid %s %q: want a duration with a unit, such as 30s or 5m", key, v)
 	}
 	return d, nil
-}
-
-func envDur(key string, def time.Duration) time.Duration {
-	v, ok := os.LookupEnv(key)
-	if !ok || v == "" {
-		return def
-	}
-	d, err := time.ParseDuration(v)
-	if err != nil {
-		return def
-	}
-	return d
 }

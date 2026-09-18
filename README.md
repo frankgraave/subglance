@@ -291,13 +291,20 @@ is what keeps `go build ./...` working on a fresh clone.
 Every option has a working default. Flags beat environment variables, which beat
 defaults.
 
+A malformed environment variable is a startup error, not a fallback:
+`SUBGLANCE_WATCHDOG_INTERVAL=300` (no unit) or
+`SUBGLANCE_ALLOW_PRIVATE_TARGETS=yes` (not a boolean) refuse to start and name
+the variable and the value they could not read. An invalid flag already
+behaved that way; silently running on the default meant believing you had a
+five-minute dead man's switch, or LAN monitoring, and having neither.
+
 | Flag | Environment variable | Default | Meaning |
 |---|---|---|---|
 | `--addr` | `SUBGLANCE_ADDR` | `:8080` | HTTP listen address |
 | `--data-dir` | `SUBGLANCE_DATA_DIR` | `/data` | Database and persistent state |
 | `--log-level` | `SUBGLANCE_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
 | `--log-format` | `SUBGLANCE_LOG_FORMAT` | `text` | `text` or `json` |
-| `--shutdown-timeout` | `SUBGLANCE_SHUTDOWN_TIMEOUT` | `15s` | Grace period for in-flight requests |
+| `--shutdown-timeout` | `SUBGLANCE_SHUTDOWN_TIMEOUT` | `15s` | Grace period for in-flight HTTP requests |
 | `--check-workers` | `SUBGLANCE_CHECK_WORKERS` | `0` (auto) | Maximum concurrent checks |
 | `--allow-private-targets` | `SUBGLANCE_ALLOW_PRIVATE_TARGETS` | `false` | Permit monitoring private/loopback addresses |
 | `--trusted-proxies` | `SUBGLANCE_TRUSTED_PROXIES` | empty (none) | Addresses or CIDR blocks whose `X-Forwarded-For` may be believed |
@@ -349,6 +356,77 @@ Getting this wrong fails safe. An unset or too-narrow value means everyone
 behind the proxy shares one bucket, which is inconvenient; a value that is too
 wide hands the limiter back to the attacker.
 
+### Worker sizing
+
+`--check-workers` caps how many checks run at once. Left at `0` it is derived,
+and recomputed every time the monitor set is reloaded, from two numbers: four
+per CPU, and one per four scheduled monitors, clamped to between 8 and 128.
+
+The monitor count is in there because the pool only matters when checks stop
+returning. Healthy checks finish in milliseconds and one worker serves
+hundreds of monitors; during a broad outage every check instead holds its
+worker for its full timeout. 200 monitors on a 2-vCPU box used to get 8
+workers, which clears roughly 48 checks a minute against 200 due — the queue
+backs up, `skipping check, previous run still active` starts appearing, and
+detection latency for the monitors that are *still fine* grows to minutes.
+That is the tool degrading worst exactly when it is needed most.
+
+The ceiling of 128 is a real limit, not a formality: every running check holds
+an open connection, and SubGlance is meant to run on a small VPS.
+
+Setting `--check-workers` yourself opts out of all of that — the number you
+name is used as-is and never adjusted, because the reason to set it is usually
+a resource limit the scheduler cannot see. The sizing rule if you are picking
+one by hand is `monitors × timeout ÷ interval`: that is how many checks are in
+flight at once when everything you watch is down. Watch
+`subglance_checks_skipped_total` and `subglance_check_queue_depth` on
+`/metrics` to see whether the pool is keeping up.
+
+### Metrics
+
+`GET /metrics` serves operational counters in Prometheus text format. It needs
+credentials — a bearer API token in the scrape config — unlike `/health` and
+`/api/v1/ready`, which are public: the counters say how many monitors an
+instance watches and when its writes are failing, which is a fleet inventory
+and a live signal of when the operator is least able to notice anything.
+
+```
+subglance_checks_recorded_total            checks whose heartbeat reached the database
+subglance_heartbeat_write_failures_total   heartbeats that could not be written
+subglance_rollup_failures_total            retention passes that failed
+subglance_checks_skipped_total             checks dropped because the previous run was still going
+subglance_check_queue_depth                dispatched checks waiting for a worker
+subglance_check_workers                    current worker pool size
+subglance_monitors_scheduled               monitors on the schedule
+```
+
+The one to alert on is `subglance_heartbeat_write_failures_total`. When the
+disk fills, every heartbeat write fails — but `/health` still answers 200
+because the process is alive, and `/ready` still answers 200 because a
+read-only SQLite database still answers a ping. Without this counter, an
+instance can record nothing for hours while looking perfectly healthy to every
+probe it exposes.
+
+Read it beside `subglance_checks_recorded_total`: both climbing is healthy,
+write failures climbing while recorded checks are flat is a full or read-only
+disk, and both flat is a wedged scheduler.
+
+### Shutdown
+
+`--shutdown-timeout` bounds in-flight HTTP requests. Running checks are not
+covered by it and do not need to be: a per-monitor timeout goes up to 120
+seconds, so a single number covering both would have to be sized for the
+slowest monitor or it would expire mid-check and close the database underneath
+a worker still writing its heartbeat — an error burst and a lost beat on every
+restart for anyone with a slow monitor, since Docker's default `--stop-timeout`
+is 10 seconds.
+
+So the check pipeline gets its own budget, derived from the slowest scheduled
+monitor timeout rather than configured separately. If it expires SubGlance logs
+that checks are still in flight and keeps the database open until they finish,
+because a check cannot outlive its own timeout and returning early would only
+trade a slow stop for a corrupted one.
+
 ### Watching the watcher
 
 SubGlance cannot report its own death. If the process is killed, runs out of
@@ -368,8 +446,12 @@ subglance --watchdog-url https://hc-ping.com/your-uuid --watchdog-interval 5m
 Two details matter:
 
 - The ping is tied to evidence, not to a timer. It is only sent when at least
-  one check has completed since the previous ping, so a process whose check
-  pipeline has wedged goes quiet instead of reporting health from a corpse. An
+  one check has been **recorded** since the previous ping — completed *and*
+  written to the database — so a process whose check pipeline has wedged, or
+  whose disk has filled, goes quiet instead of reporting health from a corpse.
+  Counting the check rather than the write was the old behaviour and it was
+  wrong in exactly the case the switch exists for: on a full disk every write
+  failed, the counter kept climbing and the switch kept being reset. An
   instance with no monitors scheduled still pings; there, zero checks is the
   correct answer rather than a symptom.
 - A clean shutdown sends one final ping marked `stopped`, so a planned restart

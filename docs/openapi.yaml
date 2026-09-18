@@ -126,6 +126,63 @@ paths:
                 database: down
                 error: 'context deadline exceeded'
       x-subglance-access: public
+  /metrics:
+    get:
+      tags: [Health]
+      operationId: getMetrics
+      summary: Operational counters in Prometheus text format
+      description: |
+        Counters an operator can alert on, in the Prometheus text exposition
+        format (`text/plain; version=0.0.4`).
+
+        This exists for the failure where SubGlance keeps answering every probe
+        while doing nothing. When the disk fills, every heartbeat write fails,
+        but `/health` still answers 200 because the process is alive and
+        `/ready` still answers 200 because a read-only SQLite database still
+        answers a ping. `subglance_heartbeat_write_failures_total` is that
+        failure as a number.
+
+        Read it beside `subglance_checks_recorded_total`, which counts checks
+        whose heartbeat reached the database. Both climbing is healthy; write
+        failures climbing while recorded checks are flat is a full or read-only
+        disk; both flat is a wedged scheduler.
+
+        `subglance_checks_skipped_total` and `subglance_check_queue_depth` rise
+        when the worker pool cannot keep up, which is what happens during a
+        broad outage and is otherwise invisible from outside the process.
+
+        Unlike `/health` and `/ready`, this endpoint requires authentication:
+        it discloses how many monitors an instance watches and when its writes
+        are failing. A bearer API token in the scrape config is enough.
+      responses:
+        '200':
+          description: The current counters.
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: |
+                # HELP subglance_checks_recorded_total Checks whose heartbeat was written to the database.
+                # TYPE subglance_checks_recorded_total counter
+                subglance_checks_recorded_total 1482
+                # HELP subglance_heartbeat_write_failures_total Heartbeats that could not be written, for example because the disk is full.
+                # TYPE subglance_heartbeat_write_failures_total counter
+                subglance_heartbeat_write_failures_total 0
+        '401':
+          description: No valid session or API token was presented.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: |
+            This instance has no checker pipeline attached, so there are no
+            counters to report.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: read
   /api/v1/setup:
     get:
       tags: [Setup]

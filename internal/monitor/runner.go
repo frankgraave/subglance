@@ -32,10 +32,36 @@ type Runner struct {
 	// in without touching this file.
 	notify func(Alert)
 
-	// checks counts completed checks. It is the liveness evidence the
-	// watchdog needs: a process whose scheduler has wedged keeps running
-	// and keeps serving HTTP, but this number stops moving.
+	// checks counts checks that were completed *and recorded*. It is the
+	// liveness evidence the watchdog needs.
+	//
+	// The order is the point, and it changed with SUB-97. This used to be
+	// incremented before the write, on the argument that the check itself is
+	// what proves the pipeline is alive and a read-only database should not
+	// make a working scheduler look dead. That is precisely backwards for a
+	// dead man's switch: on a full disk every RecordHeartbeat failed, this
+	// number kept climbing, the watchdog kept pinging "alive", and SubGlance
+	// recorded nothing for hours while every probe it exposes stayed green.
+	//
+	// A monitoring tool that cannot store a result is not doing its job, and
+	// the switch whose entire purpose is to notice that must not be fed by
+	// the half of the pipeline that still works. A scheduler that is running
+	// but writing nowhere is exactly the state an operator bought the
+	// watchdog to hear about. Write failures are separately counted below, so
+	// the distinction between "wedged" and "cannot write" is still available
+	// on /metrics rather than being lost.
 	checks atomic.Uint64
+
+	// hbFailures counts heartbeats that could not be written. A full disk or
+	// a read-only database moves this and stops moving checks, which is the
+	// pair of readings that names the failure on /metrics.
+	hbFailures atomic.Uint64
+
+	// rollupFailures counts failed retention passes. The runner does not run
+	// retention — cmd/subglance does — but it is where the process's check
+	// pipeline counters live, so the metrics endpoint has one source to read
+	// rather than two.
+	rollupFailures atomic.Uint64
 
 	// bus fans check results out to live listeners (the SSE endpoint). Nil
 	// means nobody is watching, which is the normal case in tests.
@@ -295,7 +321,67 @@ func (r *Runner) Size() int { return r.sch.Size() }
 // ChecksCompleted reports how many checks have finished since start.
 //
 // Only its movement is meaningful; it is not persisted and resets on restart.
+// It counts *recorded* checks — see the checks field for why the write, not
+// the check, is what the watchdog is allowed to read as liveness.
 func (r *Runner) ChecksCompleted() uint64 { return r.checks.Load() }
+
+// RecordRollupFailure notes that a retention pass failed, so /metrics can
+// report it. cmd/subglance drives retention and calls this.
+func (r *Runner) RecordRollupFailure() { r.rollupFailures.Add(1) }
+
+// MaxCheckTimeout reports the longest per-monitor timeout currently scheduled.
+// See scheduler.Scheduler.MaxCheckTimeout; shutdown uses it to size how long
+// the check pipeline is given to finish.
+func (r *Runner) MaxCheckTimeout() time.Duration { return r.sch.MaxCheckTimeout() }
+
+// Metrics reports the operational counters an operator alerts on.
+//
+// It is one struct rather than five accessors because the readings are only
+// meaningful together: checks climbing with zero write failures is healthy,
+// checks flat with write failures climbing is a full disk, and both flat is a
+// wedged scheduler. Handing those out one at a time invites a dashboard that
+// graphs one of them.
+type Metrics struct {
+	// ChecksRecorded is the number of checks whose heartbeat reached the
+	// database.
+	ChecksRecorded uint64
+
+	// HeartbeatWriteFailures is the number that did not. This is the full
+	// disk, and it is the number that used to be visible only as log lines
+	// nobody was grepping.
+	HeartbeatWriteFailures uint64
+
+	// RollupFailures counts failed retention passes. A failed pass costs
+	// disk, not correctness — but on a full disk it is also the thing that
+	// would have freed the space.
+	RollupFailures uint64
+
+	// SkippedChecks counts checks dropped because the previous run of that
+	// monitor had not finished. Rising means the pool is behind.
+	SkippedChecks uint64
+
+	// QueueDepth is how many dispatched checks are waiting for a worker.
+	QueueDepth int
+
+	// Workers is the current pool size, and Scheduled how many monitors are
+	// on the schedule. Neither is a failure signal on its own; they are what
+	// makes the two above readable.
+	Workers   int
+	Scheduled int
+}
+
+// Metrics returns the current counters.
+func (r *Runner) Metrics() Metrics {
+	return Metrics{
+		ChecksRecorded:         r.checks.Load(),
+		HeartbeatWriteFailures: r.hbFailures.Load(),
+		RollupFailures:         r.rollupFailures.Load(),
+		SkippedChecks:          r.sch.SkippedChecks(),
+		QueueDepth:             r.sch.QueueDepth(),
+		Workers:                r.sch.Workers(),
+		Scheduled:              r.sch.Size(),
+	}
+}
 
 // Engine exposes the state engine so the API can report current status.
 func (r *Runner) Engine() *state.Engine { return r.engine }
@@ -509,11 +595,6 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 		return nil
 	}
 
-	// Counted before the write: the check itself is what proves the
-	// pipeline is alive, and a database that has gone read-only must not
-	// make a working scheduler look dead to the watchdog.
-	r.checks.Add(1)
-
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -551,14 +632,23 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 	// even if the database is having a bad moment.
 	var hbErr error
 	if err := r.db.RecordHeartbeat(ctx, hb); err != nil {
+		r.hbFailures.Add(1)
 		r.log.Error("failed to record heartbeat",
 			"monitor_id", o.Monitor.ID, "monitor", o.Monitor.Name, "error", err)
 		hbErr = fmt.Errorf("record heartbeat: %w", err)
-	} else if hb.Response != nil {
-		// The budget is charged only now. RecordHeartbeat writes the
-		// heartbeat and its response in one transaction, so a failure
-		// stored neither and this outage still has its allowance.
-		r.engine.SpendSnapshot(o.Monitor.ID)
+	} else {
+		// The liveness counter moves here and only here: a recorded
+		// heartbeat is the evidence that the pipeline is doing its job end
+		// to end. See the field comment for why the write, not the check,
+		// is what feeds the dead man's switch.
+		r.checks.Add(1)
+
+		if hb.Response != nil {
+			// The budget is charged only now. RecordHeartbeat writes the
+			// heartbeat and its response in one transaction, so a failure
+			// stored neither and this outage still has its allowance.
+			r.engine.SpendSnapshot(o.Monitor.ID)
+		}
 	}
 
 	// Publish before applying the transition so the dashboard paints the new
