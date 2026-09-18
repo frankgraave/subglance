@@ -520,13 +520,39 @@ describe("the status rail stops asserting when the stream dies", () => {
           ).not.toBe(measured.live[status]);
           const got = measured.stale[status];
           const want = measured.expected[status]!;
+          /*
+           * Per channel, within one byte — the same tolerance the per-layout
+           * test above uses, rather than a byte-for-byte string compare.
+           *
+           * The harness resolves whatever Chromium it finds
+           * (`PUPPETEER_EXECUTABLE_PATH`, else the first build in the local
+           * Playwright cache), so the canvas filter path is not pinned to one
+           * version and a one-byte rounding difference is a property of the
+           * renderer rather than a decision anybody made. An exact compare
+           * here and a ±1 compare twenty lines up was an inconsistency, not a
+           * stricter standard (CodeRabbit, PR #67). One byte is still far
+           * tighter than any wrong token: the nearest plausible mistake,
+           * `--down-dim`, is 85 bytes away on the red channel.
+           */
+          const gotRgb = (/rgb\((\d+),\s*(\d+),\s*(\d+)\)/.exec(got) ?? [])
+            .slice(1)
+            .map(Number);
           expect(
-            got,
-            `a ${status} edge drained to ${got}, but a lamp filtered at ` +
-              `saturate(${measured.amount}) paints rgb(${want.join(", ")}). ` +
-              `Every mark on a stale screen withdraws by the same amount or ` +
-              `the row withdraws in stages.`,
-          ).toBe(`rgb(${want.join(", ")})`);
+            gotRgb.length,
+            `a ${status} edge computed to "${got}", which is not an rgb() ` +
+              `triple this assertion can compare`,
+          ).toBe(3);
+          for (const [i, channel] of ["r", "g", "b"].entries()) {
+            expect(
+              Math.abs(gotRgb[i] - want[i]),
+              `a ${status} edge drained to ${got}, but a lamp filtered at ` +
+                `saturate(${measured.amount}) paints rgb(${want.join(", ")}) ` +
+                `— the ${channel} channel is off by ` +
+                `${Math.abs(gotRgb[i] - want[i])}. Every mark on a stale ` +
+                `screen withdraws by the same amount or the row withdraws in ` +
+                `stages.`,
+            ).toBeLessThanOrEqual(1);
+          }
           // Drained, not deleted (§6: nothing is hidden and nothing moves).
           expect(
             measured.staleWidth[status],
