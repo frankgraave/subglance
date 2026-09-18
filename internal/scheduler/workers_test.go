@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -144,27 +145,80 @@ func TestExplicitWorkerCountIsNeverExceeded(t *testing.T) {
 
 // The skip counter is the saturation signal, and it has to count rather than
 // only log: at default level the per-skip warning is invisible.
+//
+// The check is held open by a channel rather than by a sleep, so the ordering
+// this depends on — a check still running when its next turn comes round — is
+// established by the test rather than hoped for from the host scheduler.
 func TestSkippedChecksAreCounted(t *testing.T) {
-	// A check far slower than its interval, so the second turn finds the
-	// first still running.
-	fake := &fakeChecker{delay: 500 * time.Millisecond}
+	gate := &gatedChecker{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
 
 	s := New(Options{
 		Registry:       staticRegistry(job(1, 20*time.Millisecond)),
-		Checkers:       map[checker.Type]checker.Checker{checker.TypeHTTP: fake},
+		Checkers:       map[checker.Type]checker.Checker{checker.TypeHTTP: gate},
 		OnResult:       func(Outcome) {},
 		JitterFraction: -1,
 		Log:            testLogger(),
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
-	defer cancel()
-	_ = s.Run(ctx)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		_ = s.Run(ctx)
+		close(done)
+	}()
 
-	if s.SkippedChecks() == 0 {
-		t.Error("a check that outran its interval was skipped but not counted, " +
+	// The first check is now running and cannot finish, so every turn after
+	// this one finds it in flight.
+	<-gate.started
+
+	waitForOr(t, 5*time.Second, func() bool { return s.SkippedChecks() > 0 },
+		"a check that outran its interval was skipped but not counted, "+
 			"so saturation is invisible to /metrics")
+
+	close(gate.release)
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not return within 5s of cancellation")
 	}
+}
+
+// gatedChecker blocks every check until release is closed, and announces the
+// first one on started. It is local to this file rather than a flag on
+// fakeChecker because only these tests need a check that never finishes on its
+// own, and a shared checker that can deadlock is a trap for the next test.
+type gatedChecker struct {
+	startOnce sync.Once
+	started   chan struct{}
+	release   chan struct{}
+}
+
+func (g *gatedChecker) Check(ctx context.Context, _ checker.Monitor) checker.Result {
+	g.startOnce.Do(func() { close(g.started) })
+	select {
+	case <-g.release:
+	case <-ctx.Done():
+	}
+	return checker.Result{OK: true, StatusCode: 200, Latency: time.Millisecond}
+}
+
+// waitForOr polls cond and fails with the caller's own message rather than a
+// generic timeout, so the failure names the behaviour that is missing.
+func waitForOr(t *testing.T, timeout time.Duration, cond func() bool, msg string) {
+	t.Helper()
+
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal(msg)
 }
 
 // MaxCheckTimeout is what shutdown sizes its budget from, so it has to read

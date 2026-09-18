@@ -50,6 +50,8 @@ func TestMetricsExposesTheOperationalCounters(t *testing.T) {
 		"subglance_rollup_failures_total":          "2",
 		"subglance_checks_skipped_total":           "9",
 		"subglance_check_queue_depth":              "16",
+		"subglance_check_workers":                  "50",
+		"subglance_monitors_scheduled":             "200",
 	}
 	for name, value := range want {
 		if !strings.Contains(body, "# HELP "+name+" ") {

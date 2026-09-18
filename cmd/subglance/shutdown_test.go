@@ -18,29 +18,45 @@ import (
 // wait returned before the "check" finished; a test that only asserted the
 // happy path (fast check, generous budget) would prove nothing, so the budget
 // here is deliberately far shorter than the work.
+//
+// The simulated check is released by a channel rather than by a sleep, so the
+// thing under test — that the wait outlasts the budget — does not depend on
+// the host scheduler getting two sleeps in the right order.
 func TestAwaitSchedulerOutlastsASlowCheck(t *testing.T) {
 	done := make(chan struct{})
+	finish := make(chan struct{})
 	var checkFinished atomic.Bool
 
-	// A check far slower than the budget, as a 60s monitor is against the
-	// 15s default and Docker's 10s stop timeout.
+	// A check that will not return until this test says so, as a 60s monitor
+	// will not against the 15s default or Docker's 10s stop timeout.
 	go func() {
-		time.Sleep(150 * time.Millisecond)
+		<-finish
 		checkFinished.Store(true)
 		close(done)
 	}()
 
 	returned := make(chan struct{})
 	go func() {
-		awaitScheduler(done, 10*time.Millisecond, quietLogger())
+		awaitScheduler(done, time.Millisecond, quietLogger())
 		close(returned)
 	}()
+
+	// The budget is already spent many times over by the time this runs; if
+	// awaitScheduler honoured it, returned would be closed and the check would
+	// still be in flight.
+	select {
+	case <-returned:
+		t.Fatal("awaitScheduler returned while a check was still running; " +
+			"the deferred db.Close() would run underneath it")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(finish)
 
 	select {
 	case <-returned:
 		if !checkFinished.Load() {
-			t.Fatal("awaitScheduler returned while a check was still running; " +
-				"the deferred db.Close() would run underneath it")
+			t.Fatal("awaitScheduler returned before the check finished")
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("awaitScheduler did not return after the check finished")
@@ -49,16 +65,24 @@ func TestAwaitSchedulerOutlastsASlowCheck(t *testing.T) {
 
 // The ordinary case still returns promptly: waiting for the scheduler must not
 // turn a clean restart into a wait for the whole budget.
+//
+// Asserted by making the budget effectively unreachable rather than by timing
+// the call — an elapsed-time assertion on a loaded host measures the host.
 func TestAwaitSchedulerReturnsAsSoonAsChecksFinish(t *testing.T) {
 	done := make(chan struct{})
 	close(done)
 
-	start := time.Now()
-	awaitScheduler(done, time.Minute, quietLogger())
+	returned := make(chan struct{})
+	go func() {
+		awaitScheduler(done, time.Hour, quietLogger())
+		close(returned)
+	}()
 
-	if elapsed := time.Since(start); elapsed > time.Second {
-		t.Errorf("awaitScheduler took %s on an already-stopped scheduler; "+
-			"it is waiting out the budget instead of the work", elapsed)
+	select {
+	case <-returned:
+	case <-time.After(10 * time.Second):
+		t.Fatal("awaitScheduler is waiting out the budget instead of the work; " +
+			"a clean restart would block for the whole budget")
 	}
 }
 
