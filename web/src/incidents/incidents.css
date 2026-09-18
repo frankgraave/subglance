@@ -67,14 +67,15 @@
 /*
  * One incident.
  *
- * A column, not a row: the collapsed line is the first child and the expanded
- * detail is the second, full width underneath it. That keeps the nesting at
- * card -> row rather than card -> panel -> row, which is two visible surfaces
- * instead of three.
+ * A wrapping flex row, not a column. The collapsed line and the mute control
+ * share the first line — which is what SUB-141 is about, see `.inc-act` below
+ * — and the detail tray and its footer wrap under them at `flex-basis: 100%`
+ * once the row is open. It is still card -> row rather than card -> panel ->
+ * row, which is two visible surfaces instead of three.
  */
 .inc-row {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   position: relative;
   /* Clips the status rail and the detail tray to the row's own corners, so a
      square edge never pokes out of a rounded box at the bottom of the row. */
@@ -182,10 +183,16 @@
  * A real button stretched across the row: it gets Enter, Space, focus styling
  * and the disclosure role for free, where a `tabindex` div would need all four
  * hand-written and would eventually be missing one.
+ *
+ * `flex: 1 1 0` rather than `width: 100%`: the row is a wrapping flex row now,
+ * and a 100%-wide child would push the mute control onto a second line — which
+ * is the strip SUB-141 removed, rebuilt by a width. `min-width: 0` so the
+ * clipped name inside can actually shrink instead of forcing the line wider
+ * than the row.
  */
 .inc-line {
-  display: block;
-  width: 100%;
+  flex: 1 1 0;
+  min-width: 0;
   padding: var(--space-3) var(--space-4);
   border: 0;
   background: none;
@@ -290,43 +297,71 @@
 .inc-col-ack { width: var(--size-col-4); display: flex; justify-content: flex-end; }
 
 /*
- * The action bar: attached to the line when closed, the tray's footer when
- * open.
+ * The action bar: *on* the line when closed, the tray's footer when open.
  *
- * The complaint was that "Mute repeat alerts" floats at the right with no
- * visual anchor, and that it sits in the same place on an expanded row as on
- * the collapsed rows below it — so the two states do not read as different.
- * Both are one fact: the bar is a sibling of the line, drawn after it, with no
- * fill and no rule, and it never moved when the row opened. Measured at 1440
- * the open row put the button at y=205 and the closed rows put theirs at the
- * identical offset within their own row.
+ * Two complaints, one rule, and the second one is this ticket.
  *
- * `order: 3` sends it below the detail once the row is open, where it picks up
- * the tray's own fill and a rule above it. The control keeps its promise —
- * always drawn, never hover-revealed, still one click — and gains the two
- * things it was missing: an edge to sit on, and a position that is evidence of
- * which state you are in.
+ * The first (SUB-135) was that "Mute repeat alerts" floated at the right with
+ * no visual anchor, and sat in the same place on an expanded row as on the
+ * collapsed rows below it — so the two states did not read as different.
+ * Measured at 1440 the open row put the button at y=205 and the closed rows
+ * put theirs at the identical offset within their own row. `order: 3` fixed
+ * that by sending it below the detail once the row is open, where it picks up
+ * the tray's own fill and a rule above it.
+ *
+ * The second is what that left behind on a *closed* row. The bar was a block
+ * in the row's column, so it claimed a strip of its own under the line: 46px
+ * of unfilled row, per incident, to surface one control. Measured at 1440 a
+ * collapsed row was 108px tall to carry a 60px line, and a screen showing six
+ * open incidents spent 276px — most of a phone viewport — on repeated copies
+ * of the same button.
+ *
+ * So the row is a wrapping flex *row* rather than a column. Closed, the line
+ * and the action sit on one line, the action taking the 26px square this
+ * product already gives a per-row action; the strip is gone and the row is
+ * exactly as tall as its line. Open, `flex-basis: 100%` on the detail and on
+ * the bar restores the three-deck stack, so the footer treatment SUB-135
+ * argued for is unchanged — it still sits below the detail, on the tray's
+ * fill, under a rule.
+ *
+ * The saving is not paid for in state legibility, which was the trap. An open
+ * row still differs from a closed one in four ways rather than one: the tray
+ * is there and filled, the control has moved from the line to the footer, it
+ * has grown from a square to a labelled button, and the row is ~240px taller.
+ * The collapsed row got shorter; the *gap* between the two states got larger.
+ *
+ * The three rules this needs on the row, the line and the tray are written
+ * where those are declared above, rather than restated here as a second
+ * `.inc-row` block contradicting the first.
  */
 .inc-act {
-  display: flex;
-  justify-content: flex-end;
-  padding: 0 var(--space-4) var(--space-3);
+  flex: none;
+  padding: var(--space-3) var(--space-4);
 }
+
+.inc-detail,
+.inc-row[data-open="true"] .inc-act { flex-basis: 100%; }
 
 .inc-row[data-open="true"] .inc-act {
   order: 3;
+  display: flex;
+  justify-content: flex-end;
   background: var(--surface-2);
   border-top: 1px solid var(--border);
-  padding: var(--space-3) var(--space-4);
 }
 
 /* Always drawn, never revealed on hover, unlike a panel-list row's actions:
    this is the control that stops an escalating alert sequence, and hiding it
-   until the pointer arrives makes it unfindable on a phone at 03:00. */
-.inc-ack {
-  font-size: var(--type-helper);
-  line-height: var(--lead-helper);
-}
+   until the pointer arrives makes it unfindable on a phone at 03:00. That is
+   also why the height came out of the *strip* and not out of the control: a
+   hover reveal would have saved the same 46px and made the button unfindable
+   on the one device somebody is holding at 03:00.
+
+   It declares nothing of its own. Closed it wears `.inv-act--icon`, the square
+   the monitors rows and the channel rows already use for a per-row action, and
+   open it wears `.add-button .inv-act` — the same pairing the channels screen's
+   worded row action takes. Three screens, one vocabulary, and a rule here would
+   only be a fourth dialect of it. */
 
 /*
  * The detail, expanded in place — a recessed tray, not more of the row.
