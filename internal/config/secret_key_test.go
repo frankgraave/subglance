@@ -9,10 +9,24 @@ import (
 
 const testHexKey = "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0"
 
+// clearSecretKeyEnv removes both secret-key variables for the duration of a
+// test. Load reads the environment before flags, so a developer or a CI job
+// that happens to export either one would otherwise change what these tests
+// measure — and the failure would look like a bug in the code under test.
+// t.Setenv("") is what restores the previous value at cleanup; os.Unsetenv
+// alone would leak across tests.
+func clearSecretKeyEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("SUBGLANCE_SECRET_KEY", "")
+	t.Setenv("SUBGLANCE_SECRET_KEY_PREVIOUS", "")
+}
+
 // The default has to stay off, and that has to be a test rather than a
 // convention: the whole honesty argument for this feature rests on the default
 // being plain text and documented, and on nobody later making it implicit.
 func TestSecretKeyDefaultsToOffMeaningPlaintext(t *testing.T) {
+	clearSecretKeyEnv(t)
+
 	cfg, err := Load(nil)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -35,6 +49,7 @@ func TestSecretKeyAcceptsFlagAndEnvironmentWithFlagWinning(t *testing.T) {
 		t.Fatalf("write key file: %v", err)
 	}
 
+	clearSecretKeyEnv(t)
 	t.Setenv("SUBGLANCE_SECRET_KEY", testHexKey)
 	cfg, err := Load(nil)
 	if err != nil {
@@ -90,6 +105,7 @@ func TestSecretKeyIsValidatedAtLoad(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			clearSecretKeyEnv(t)
 			_, err := Load(tc.args)
 			if err == nil {
 				t.Fatal("Load accepted it")
@@ -106,6 +122,8 @@ func TestSecretKeyIsValidatedAtLoad(t *testing.T) {
 // Turning encryption off is --secret-key-previous alone, so that combination
 // must load cleanly; it is a supported state, not a half-configured one.
 func TestPreviousKeyAloneIsValid(t *testing.T) {
+	clearSecretKeyEnv(t)
+
 	cfg, err := Load([]string{"--secret-key-previous", testHexKey})
 	if err != nil {
 		t.Fatalf("Load: %v", err)

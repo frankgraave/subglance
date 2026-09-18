@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"strings"
 )
@@ -158,11 +159,17 @@ func isEncryptedConfig(stored string) bool {
 // ParseSecretKey turns the value of --secret-key into key material.
 //
 // The option accepts either the key itself or the path to a file holding it,
-// and the two are told apart by trying the key form first. That order is not
-// arbitrary: key material is 64 hex characters or 44 base64 characters with no
-// separators, which no real filesystem path looks like, whereas stat-ing first
-// would report a mistyped key as "no such file or directory" — the least
-// helpful of the two possible messages.
+// and an existing file always wins. The two forms are not quite disjoint:
+// base64's alphabet contains '/', so a 43-character path such as
+// /tmp/AAAA...  is also valid raw base64 for 32 bytes, and deciding by shape
+// first would quietly use a key derived from the path instead of the key in
+// the file it names. On an existing database that is a start-up failure with a
+// misleading cause; worse, the derived key is reconstructible by anyone who can
+// see the command line, which the file form exists to avoid.
+//
+// Statting first costs nothing in message quality, because a value that is
+// neither a readable file nor key material still falls through to the combined
+// error below.
 //
 // Only raw key material of exactly SecretKeyLength bytes is accepted; a
 // passphrase is not stretched into a key. Accepting one would mean choosing
@@ -175,18 +182,29 @@ func ParseSecretKey(value string) ([]byte, error) {
 		return nil, nil
 	}
 
-	if key, ok := decodeSecretKey(value); ok {
-		return key, nil
+	if _, statErr := os.Stat(value); statErr != nil {
+		if key, ok := decodeSecretKey(value); ok {
+			return key, nil
+		}
 	}
 
 	// The path is the operator's own --secret-key value, read by the process
 	// they started; there is no untrusted input anywhere near it.
 	contents, err := os.ReadFile(value) //nolint:gosec // operator-supplied key file path
 	if err != nil {
-		// The message has to cover both readings, because at this point
-		// either could have been meant.
+		// The message has to cover both readings, because at this point either
+		// could have been meant — and it must not repeat the value. A mistyped
+		// key is still key material, and os.ReadFile's *fs.PathError carries
+		// the path it was given, so wrapping it with %w would print the
+		// supplied key to stderr on the one failure where the operator most
+		// likely typed a key by hand. Only the reason survives.
+		reason := err
+		var pathErr *fs.PathError
+		if errors.As(err, &pathErr) {
+			reason = pathErr.Err
+		}
 		return nil, fmt.Errorf("secret key is neither %d bytes of key material "+
-			"(64 hex or base64 characters) nor a readable file path: %w", SecretKeyLength, err)
+			"(64 hex or base64 characters) nor a readable file path (%v)", SecretKeyLength, reason)
 	}
 	key, ok := decodeSecretKey(string(contents))
 	if !ok {

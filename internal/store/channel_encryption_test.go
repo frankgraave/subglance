@@ -513,6 +513,11 @@ func copyFixture(t *testing.T, name string) string {
 // rawChannelConfigs reads config_json through its own connection, deliberately
 // not through DB: a test that asks this package what it stored is a test that
 // believes this package.
+//
+// Read-only, and it must stay that way. This is a second pool against a file
+// the DB under test still holds open, which SQLite allows for readers only; a
+// write issued here would be a second writer and would start failing with
+// SQLITE_BUSY at a distance from whatever added it.
 func rawChannelConfigs(t *testing.T, path string) map[int64]string {
 	t.Helper()
 	conn, err := openPool(path, 1)
@@ -588,6 +593,48 @@ func TestParseSecretKeyAcceptsKeyMaterialAndFiles(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), "32 bytes") {
 			t.Errorf("error does not state the required length: %v", err)
+		}
+	})
+
+	// A path can also be valid raw base64 for 32 bytes, because base64's
+	// alphabet contains '/'. The file must win, or the process would run on a
+	// key derived from the path — reconstructible by anyone who can read the
+	// command line, which is what the file form exists to avoid.
+	t.Run("an existing file wins over a value that also decodes", func(t *testing.T) {
+		// 43 raw-base64 characters that are also a usable relative path. The
+		// test chdirs so the name can be short enough to be both at once;
+		// t.Chdir restores the previous directory.
+		t.Chdir(t.TempDir())
+		path := strings.Repeat("A", 43)
+		if _, ok := decodeSecretKey(path); !ok {
+			t.Fatalf("%q is no longer raw base64 for 32 bytes; the test premise is gone", path)
+		}
+		if err := os.WriteFile(path, []byte(hexKey), 0o600); err != nil {
+			t.Fatalf("write key file: %v", err)
+		}
+		got, err := ParseSecretKey(path)
+		if err != nil {
+			t.Fatalf("ParseSecretKey: %v", err)
+		}
+		if string(got) != string(key) {
+			t.Error("the path was decoded as key material instead of read as a file")
+		}
+	})
+
+	// A mistyped key falls through to the file branch, and os.ReadFile's error
+	// carries what it was given. Repeating it would print key material to
+	// stderr on exactly the failure where someone typed a key by hand.
+	t.Run("the supplied value is not repeated in the error", func(t *testing.T) {
+		const typo = "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f" // one char short
+		_, err := ParseSecretKey(typo)
+		if err == nil {
+			t.Fatal("ParseSecretKey accepted a 63-character key")
+		}
+		if strings.Contains(err.Error(), typo) {
+			t.Errorf("the error repeats the supplied key material: %v", err)
+		}
+		if !strings.Contains(err.Error(), "no such file") {
+			t.Errorf("the error lost the underlying reason: %v", err)
 		}
 	})
 
