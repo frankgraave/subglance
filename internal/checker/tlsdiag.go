@@ -228,26 +228,29 @@ func describeCertProblem(host string, certs []*x509.Certificate, err error, now 
 // five-minute fix becomes a support ticket, and it is one of the most common
 // TLS misconfigurations there is.
 //
-// # Why the leaf alone, and not any chain that does not close
+// # What the evidence supports, and what it does not
 //
-// The tell has to identify the absent certificate as an *intermediate*, not
-// merely as absent. A server that sends leaf and intermediate but omits an
-// untrusted root has a chain that also does not close and whose top also
-// carries an AIA URL — and telling its operator to add the missing
-// intermediate would be wrong twice over: nothing is missing from the chain
-// they are required to send, and the certificate they would be sent to fetch
-// is a root, which belongs in a trust store and not in a server's chain.
+// The tell has to be about the absent certificate, not merely about its
+// absence. Two shapes had to be excluded.
 //
-// So the diagnosis is made only when the server sent the leaf and nothing
-// else. Then the absent issuer is the leaf's own issuer, and a certificate
-// that signs an end-entity certificate is an intermediate by definition — a
-// root does not sign leaves directly in any chain a public CA issues. That is
-// also exactly the shape badssl's incomplete-chain endpoint has.
+// A server that sends leaf and intermediate but omits an untrusted root has a
+// chain that also does not close and whose top also carries an AIA URL.
+// Nothing is missing from the chain that server is required to send, and what
+// it would be sent to fetch is a root, which belongs in a trust store. So the
+// diagnosis is made only when the server sent the leaf and nothing else.
 //
-// The narrower rule costs a longer chain that is missing a middle
-// certificate, which falls back to the unknown-authority wording. That is the
-// right way to be wrong: a vaguer true sentence beats a specific false one
-// that sends the reader to fix something that is not broken.
+// Even then, the leaf does not prove what its issuer *is*. The common case by
+// far is a public CA whose intermediate was left out of the server
+// configuration — that is badssl's incomplete-chain endpoint and the case this
+// exists for — but a private CA whose root signs end-entity certificates
+// directly produces the same evidence, and there its certificate belongs in
+// the trust store rather than in the server's chain.
+//
+// Since that cannot be told apart without the issuer's certificate, the
+// message does not claim to have told it apart. It states what is observable —
+// the server sent only its own certificate, the issuer it names was not sent
+// and is not trusted here — and names both fixes. Asserting "intermediate"
+// would be a guess in the one case where following it does nothing.
 //
 // The AIA URL is read and never fetched. Fetching it would make the check pass
 // for a server that is still misconfigured for every real client, which is the
@@ -265,8 +268,8 @@ func missingIntermediate(certs []*x509.Certificate) string {
 		return ""
 	}
 	if leaf.IsCA {
-		// Not an end-entity certificate, so its issuer need not be an
-		// intermediate and the inference above does not hold.
+		// Not an end-entity certificate, so "the server sent only its leaf"
+		// is not what we are looking at.
 		return ""
 	}
 	if len(leaf.IssuingCertificateURL) == 0 {
@@ -278,6 +281,6 @@ func missingIntermediate(certs []*x509.Certificate) string {
 		issuer = leaf.Issuer.String()
 	}
 	return fmt.Sprintf(
-		"incomplete certificate chain: the server did not send the intermediate certificate for issuer %q, which the certificate says is published at %s — add it to the server's certificate chain",
+		"incomplete certificate chain: the server sent only its own certificate, not the certificate for issuer %q, which it says is published at %s — add that certificate to the server's chain, or to this host's trust store if it is your own CA",
 		issuer, leaf.IssuingCertificateURL[0])
 }

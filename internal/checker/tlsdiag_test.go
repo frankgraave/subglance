@@ -150,8 +150,8 @@ func TestIncompleteChainIsNotBlamedOnTheCA(t *testing.T) {
 	if !strings.Contains(got, "incomplete certificate chain") {
 		t.Errorf("message = %q, want it to name the incomplete chain", got)
 	}
-	if !strings.Contains(got, "intermediate") {
-		t.Errorf("message = %q, want it to say the intermediate is missing", got)
+	if !strings.Contains(got, "sent only its own certificate") {
+		t.Errorf("message = %q, want it to say what the server failed to send", got)
 	}
 	if !strings.Contains(got, "SubGlance Test Intermediate") {
 		t.Errorf("message = %q, want it to name the issuer the server did not send", got)
@@ -555,5 +555,78 @@ func TestUnsupportedProtocolVersionAdvisesLoweringTheFloor(t *testing.T) {
 	}
 	if strings.Contains(res.Error, "raise the minimum") {
 		t.Errorf("error = %q, tells the reader to raise a floor the server is already below", res.Error)
+	}
+}
+
+// A private CA whose root signs end-entity certificates directly presents the
+// same evidence as a public CA with a forgotten intermediate: one certificate,
+// not self-issued, not a CA, carrying an AIA URL. The two cannot be told apart
+// without fetching the issuer, so the message must not claim to have told them
+// apart — it must not send this operator to their server's chain for something
+// that only a trust store will fix.
+func TestLeafSignedDirectlyByAnUntrustedRootIsNotToldToFixTheChainAlone(t *testing.T) {
+	rootKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	now := time.Now()
+	rootTmpl := &x509.Certificate{
+		SerialNumber:          big.NewInt(10),
+		Subject:               pkix.Name{CommonName: "Private CA Root"},
+		NotBefore:             now.Add(-time.Hour),
+		NotAfter:              now.Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageCertSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+	rootDER, err := x509.CreateCertificate(rand.Reader, rootTmpl, rootTmpl, &rootKey.PublicKey, rootKey)
+	if err != nil {
+		t.Fatalf("create root: %v", err)
+	}
+	root, err := x509.ParseCertificate(rootDER)
+	if err != nil {
+		t.Fatalf("parse root: %v", err)
+	}
+
+	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	leafDER, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
+		SerialNumber:          big.NewInt(11),
+		Subject:               pkix.Name{CommonName: "leaf.test"},
+		DNSNames:              []string{"leaf.test"},
+		NotBefore:             now.Add(-time.Hour),
+		NotAfter:              now.Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IssuingCertificateURL: []string{"http://aia.test/private-root.crt"},
+	}, root, &leafKey.PublicKey, rootKey)
+	if err != nil {
+		t.Fatalf("create leaf: %v", err)
+	}
+	leaf, err := x509.ParseCertificate(leafDER)
+	if err != nil {
+		t.Fatalf("parse leaf: %v", err)
+	}
+
+	chain := []*x509.Certificate{leaf}
+	verr := verifyErrFor(t, chain, x509.NewCertPool())
+
+	got := describeCertProblem("leaf.test", chain, verr, now)
+
+	// The one thing that must not happen: asserting the absent certificate is
+	// an intermediate, when here it is a root and the server's chain is not
+	// where this gets fixed.
+	if strings.Contains(got, "intermediate") {
+		t.Errorf("message = %q, calls a root an intermediate on evidence that cannot tell them apart", got)
+	}
+	// The fix that does work for this operator has to be named.
+	if !strings.Contains(got, "trust store") {
+		t.Errorf("message = %q, never mentions the trust store, which is the only fix in this case", got)
+	}
+	if !strings.Contains(got, "Private CA Root") {
+		t.Errorf("message = %q, want the issuer the server did not send", got)
 	}
 }

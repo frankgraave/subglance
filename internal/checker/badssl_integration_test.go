@@ -188,7 +188,7 @@ var badsslCases = []badsslCase{
 	{
 		target:         "incomplete-chain.badssl.com",
 		wantKind:       FailTLS,
-		wantPhrases:    []string{"incomplete certificate chain", "intermediate"},
+		wantPhrases:    []string{"incomplete certificate chain", "sent only its own certificate"},
 		mustNotContain: []string{"unknown authority"},
 	},
 	{
@@ -259,6 +259,27 @@ func badsslMonitor(c badsslCase, typ Type) Monitor {
 	}
 }
 
+// checkTLS runs one probe, retrying once if the answer was not a TLS verdict
+// at all.
+//
+// badssl rate-limits, and running the two suites back to back earns the
+// occasional `connection failed: read: connection reset by peer` — a TCP reset
+// carries no opinion about anybody's certificate. Failing on it would be
+// failing on somebody else's rate limiter rather than on our diagnosis.
+//
+// Only FailConnection is retried, and only once. Every actual verdict — any
+// FailTLS, and success — is returned as it came, so a wrong diagnosis can
+// never be retried into a right one, and a reset that persists still fails
+// the run rather than skipping it.
+func checkTLS(check func() Result) Result {
+	res := check()
+	if !res.OK && res.Kind == FailConnection {
+		time.Sleep(2 * time.Second)
+		return check()
+	}
+	return res
+}
+
 func checkCase(t *testing.T, c badsslCase, res Result) {
 	t.Helper()
 
@@ -296,7 +317,9 @@ func TestBadSSLSSLChecker(t *testing.T) {
 			name += "@" + tlsVersionName(tc.minTLS)
 		}
 		t.Run(name, func(t *testing.T) {
-			res := c.Check(context.Background(), badsslMonitor(tc, TypeSSL))
+			res := checkTLS(func() Result {
+				return c.Check(context.Background(), badsslMonitor(tc, TypeSSL))
+			})
 			checkCase(t, tc, res)
 		})
 	}
@@ -326,8 +349,12 @@ func TestBadSSLBothCheckersAgree(t *testing.T) {
 	for _, host := range shared {
 		t.Run(host, func(t *testing.T) {
 			m := badsslCase{target: host}
-			sslRes := sslC.Check(context.Background(), badsslMonitor(m, TypeSSL))
-			httpRes := httpC.Check(context.Background(), badsslMonitor(m, TypeHTTP))
+			sslRes := checkTLS(func() Result {
+				return sslC.Check(context.Background(), badsslMonitor(m, TypeSSL))
+			})
+			httpRes := checkTLS(func() Result {
+				return httpC.Check(context.Background(), badsslMonitor(m, TypeHTTP))
+			})
 
 			if sslRes.Kind != httpRes.Kind {
 				t.Errorf("kind: ssl=%q http=%q", sslRes.Kind, httpRes.Kind)
