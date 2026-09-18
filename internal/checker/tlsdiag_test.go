@@ -85,6 +85,11 @@ func newChain(t *testing.T, opts chainOpts) (leaf, intermediate, root *x509.Cert
 		KeyUsage:              x509.KeyUsageCertSign,
 		BasicConstraintsValid: true,
 		IsCA:                  true,
+		// Real intermediates name where their issuer is published, and that
+		// matters here: a chain of leaf and intermediate with an untrusted
+		// root omitted is the case that must NOT read as a missing
+		// intermediate. Without an AIA it would pass for the wrong reason.
+		IssuingCertificateURL: []string{"http://aia.test/root.crt"},
 	}, root, rootKey)
 
 	leafTmpl := &x509.Certificate{
@@ -507,5 +512,48 @@ func TestHandshakeFailureAtARaisedFloorNamesTheFloorNotTheCiphers(t *testing.T) 
 	}
 	if strings.Contains(res.Error, "cipher") {
 		t.Errorf("error = %q, blames the server's ciphers for a constraint the monitor imposed", res.Error)
+	}
+}
+
+// A chain of leaf and intermediate that omits an untrusted root also does not
+// close, and its top also carries an AIA URL — but nothing is missing from the
+// chain the server is required to send, and what it would be sent to fetch is
+// a root, which belongs in a trust store and not in a server's chain. Telling
+// that operator to add the intermediate would be wrong twice over.
+func TestChainMissingOnlyAnUntrustedRootIsNotCalledIncomplete(t *testing.T) {
+	leaf, intermediate, _, _ := newChain(t, chainOpts{aia: "http://aia.test/intermediate.crt"})
+
+	// Everything a correctly configured server sends; the root is absent
+	// because a server is not supposed to send it, and it is untrusted here.
+	chain := []*x509.Certificate{leaf, intermediate}
+	err := verifyErrFor(t, chain, x509.NewCertPool())
+
+	got := describeCertProblem("leaf.test", chain, err, time.Now())
+	if strings.Contains(got, "incomplete") {
+		t.Errorf("message = %q, tells the operator to add an intermediate they already sent", got)
+	}
+	if strings.Contains(got, "http://aia.test/root.crt") {
+		t.Errorf("message = %q, points the operator at a root certificate to add to their chain", got)
+	}
+	if !strings.Contains(got, "unknown authority") {
+		t.Errorf("message = %q, want the unknown-authority wording", got)
+	}
+}
+
+// The advice has to point the only way that can work. The server already
+// answered below our floor, so raising it widens the gap; lowering it is what
+// makes the endpoint monitorable.
+func TestUnsupportedProtocolVersionAdvisesLoweringTheFloor(t *testing.T) {
+	err := errors.New("tls: server selected unsupported protocol version 301")
+
+	res, handled := classifyTLSHandshakeError(time.Now(), err, Monitor{})
+	if !handled {
+		t.Fatal("not recognised as a TLS fault")
+	}
+	if !strings.Contains(res.Error, "lower the minimum") {
+		t.Errorf("error = %q, want it to advise lowering the floor", res.Error)
+	}
+	if strings.Contains(res.Error, "raise the minimum") {
+		t.Errorf("error = %q, tells the reader to raise a floor the server is already below", res.Error)
 	}
 }

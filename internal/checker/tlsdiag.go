@@ -104,7 +104,7 @@ func classifyTLSHandshakeError(start time.Time, err error, m Monitor) (Result, b
 		var v uint16
 		if _, scanErr := fmt.Sscanf(msg[i+len(serverSelectedVersionPrefix):], "%x", &v); scanErr == nil && v != 0 {
 			return fail(start, FailTLS,
-				"server speaks %s, below this monitor's minimum of %s (raise the minimum to monitor it anyway)",
+				"server speaks %s, below this monitor's minimum of %s (lower the minimum to monitor it anyway)",
 				tlsVersionName(v), tlsVersionName(effectiveMinTLSVersion(m))), true
 		}
 		return fail(start, FailTLS,
@@ -228,36 +228,56 @@ func describeCertProblem(host string, certs []*x509.Certificate, err error, now 
 // five-minute fix becomes a support ticket, and it is one of the most common
 // TLS misconfigurations there is.
 //
-// The tell is the top of the presented chain. If the last certificate the
-// server sent is not self-issued, the chain does not close — something has to
-// sign it — and if that certificate names where its issuer can be fetched
-// (the Authority Information Access extension), the server had everything it
-// needed to send one more certificate and did not.
+// # Why the leaf alone, and not any chain that does not close
 //
-// That URL is read and never fetched. Fetching it would make the check pass
+// The tell has to identify the absent certificate as an *intermediate*, not
+// merely as absent. A server that sends leaf and intermediate but omits an
+// untrusted root has a chain that also does not close and whose top also
+// carries an AIA URL — and telling its operator to add the missing
+// intermediate would be wrong twice over: nothing is missing from the chain
+// they are required to send, and the certificate they would be sent to fetch
+// is a root, which belongs in a trust store and not in a server's chain.
+//
+// So the diagnosis is made only when the server sent the leaf and nothing
+// else. Then the absent issuer is the leaf's own issuer, and a certificate
+// that signs an end-entity certificate is an intermediate by definition — a
+// root does not sign leaves directly in any chain a public CA issues. That is
+// also exactly the shape badssl's incomplete-chain endpoint has.
+//
+// The narrower rule costs a longer chain that is missing a middle
+// certificate, which falls back to the unknown-authority wording. That is the
+// right way to be wrong: a vaguer true sentence beats a specific false one
+// that sends the reader to fix something that is not broken.
+//
+// The AIA URL is read and never fetched. Fetching it would make the check pass
 // for a server that is still misconfigured for every real client, which is the
 // opposite of the job; it would also give a monitoring probe an outbound
 // request to an address the monitored server chooses.
 func missingIntermediate(certs []*x509.Certificate) string {
-	if len(certs) == 0 {
+	if len(certs) != 1 {
 		return ""
 	}
-	top := certs[len(certs)-1]
+	leaf := certs[0]
 
-	// Self-issued: the chain closes on a root the server sent itself. Nothing
-	// is missing — that root is simply not trusted here.
-	if top.Issuer.String() == top.Subject.String() {
+	// Self-issued: the chain closes on a certificate the server signed itself.
+	// Nothing is missing — it is simply not trusted here.
+	if leaf.Issuer.String() == leaf.Subject.String() {
 		return ""
 	}
-	if len(top.IssuingCertificateURL) == 0 {
+	if leaf.IsCA {
+		// Not an end-entity certificate, so its issuer need not be an
+		// intermediate and the inference above does not hold.
+		return ""
+	}
+	if len(leaf.IssuingCertificateURL) == 0 {
 		return ""
 	}
 
-	issuer := top.Issuer.CommonName
+	issuer := leaf.Issuer.CommonName
 	if issuer == "" {
-		issuer = top.Issuer.String()
+		issuer = leaf.Issuer.String()
 	}
 	return fmt.Sprintf(
 		"incomplete certificate chain: the server did not send the intermediate certificate for issuer %q, which the certificate says is published at %s — add it to the server's certificate chain",
-		issuer, top.IssuingCertificateURL[0])
+		issuer, leaf.IssuingCertificateURL[0])
 }
