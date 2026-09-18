@@ -42,37 +42,31 @@ func TestMetricsExposesTheOperationalCounters(t *testing.T) {
 
 	body := rec.Body.String()
 
-	// Every counter the ticket names, with its value. A HELP and TYPE line
-	// each, because a series without them is not a well-formed exposition.
-	want := map[string]string{
-		"subglance_heartbeat_write_failures_total": "37",
-		"subglance_checks_recorded_total":          "1482",
-		"subglance_rollup_failures_total":          "2",
-		"subglance_checks_skipped_total":           "9",
-		"subglance_check_queue_depth":              "16",
-		"subglance_check_workers":                  "50",
-		"subglance_monitors_scheduled":             "200",
+	// Every counter the ticket names, with its value and its type. A HELP and
+	// TYPE line each, because a series without them is not a well-formed
+	// exposition — and the type is asserted rather than merely present,
+	// because a depth reported as a counter makes rate() produce nonsense in
+	// every dashboard built on it.
+	want := map[string]struct{ kind, value string }{
+		"subglance_heartbeat_write_failures_total": {"counter", "37"},
+		"subglance_checks_recorded_total":          {"counter", "1482"},
+		"subglance_rollup_failures_total":          {"counter", "2"},
+		"subglance_checks_skipped_total":           {"counter", "9"},
+		"subglance_check_queue_depth":              {"gauge", "16"},
+		"subglance_check_workers":                  {"gauge", "50"},
+		"subglance_monitors_scheduled":             {"gauge", "200"},
 	}
-	for name, value := range want {
+	for name, exp := range want {
 		if !strings.Contains(body, "# HELP "+name+" ") {
 			t.Errorf("%s has no HELP line:\n%s", name, body)
 		}
-		if !strings.Contains(body, "# TYPE "+name+" ") {
-			t.Errorf("%s has no TYPE line:\n%s", name, body)
+		if !strings.Contains(body, "# TYPE "+name+" "+exp.kind+"\n") {
+			t.Errorf("%s is not typed as a %s:\n%s", name, exp.kind, body)
 		}
-		if !strings.Contains(body, "\n"+name+" "+value+"\n") &&
-			!strings.HasPrefix(body, name+" "+value+"\n") {
-			t.Errorf("%s is not reported as %s:\n%s", name, value, body)
+		if !strings.Contains(body, "\n"+name+" "+exp.value+"\n") &&
+			!strings.HasPrefix(body, name+" "+exp.value+"\n") {
+			t.Errorf("%s is not reported as %s:\n%s", name, exp.value, body)
 		}
-	}
-
-	// Counters are counters and gauges are gauges. A depth reported as a
-	// counter makes rate() produce nonsense in every dashboard built on it.
-	if !strings.Contains(body, "# TYPE subglance_heartbeat_write_failures_total counter") {
-		t.Error("the write-failure metric is not typed as a counter")
-	}
-	if !strings.Contains(body, "# TYPE subglance_check_queue_depth gauge") {
-		t.Error("queue depth is not typed as a gauge")
 	}
 }
 
