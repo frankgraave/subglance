@@ -33,6 +33,15 @@ type Monitor struct {
 	SSLWarnDays int
 	Enabled     bool
 
+	// MinTLSVersion is the lowest TLS version this monitor will negotiate,
+	// as a crypto/tls constant. Zero means the monitor has no opinion and
+	// the checker's default (TLS 1.2) applies.
+	//
+	// Stored as the constant rather than as a label so the value travels to
+	// tls.Config.MinVersion untouched; the "1.0".."1.3" spelling the API
+	// accepts is translated in internal/checker, next to the dial.
+	MinTLSVersion uint16
+
 	// CaptureResponse allows a failed HTTP check to keep the beginning of the
 	// response body. Stored as a column so it travels with the monitor into
 	// the checker without a second lookup per result.
@@ -88,7 +97,7 @@ const monitorColumns = `
 	id, name, type, target, interval_s, timeout_s, retries,
 	method, expected_status, keyword, keyword_mode, follow_redirects,
 	headers_json, body, ssl_warn_days, enabled, capture_response, repeat_after_s,
-	push_token_prefix, push_interval_s, push_grace_s,
+	min_tls_version, push_token_prefix, push_interval_s, push_grace_s,
 	created_at, updated_at`
 
 // queryMonitors runs a monitor SELECT with a caller-supplied WHERE clause.
@@ -162,6 +171,7 @@ func scanMonitor(s scanner) (Monitor, error) {
 		keyword     sql.NullString
 		headersJSON sql.NullString
 		body        sql.NullString
+		minTLS      sql.NullInt64
 		pushPrefix  sql.NullString
 		pushEvery   sql.NullInt64
 		pushGrace   sql.NullInt64
@@ -174,7 +184,7 @@ func scanMonitor(s scanner) (Monitor, error) {
 		&m.IntervalS, &m.TimeoutS, &m.Retries,
 		&m.Method, &m.ExpectedStatus, &keyword, &m.KeywordMode, &m.FollowRedirects,
 		&headersJSON, &body, &m.SSLWarnDays, &m.Enabled, &m.CaptureResponse, &m.RepeatAfterS,
-		&pushPrefix, &pushEvery, &pushGrace,
+		&minTLS, &pushPrefix, &pushEvery, &pushGrace,
 		&created, &updated,
 	)
 	if err != nil {
@@ -183,6 +193,9 @@ func scanMonitor(s scanner) (Monitor, error) {
 
 	m.Keyword = keyword.String
 	m.Body = body.String
+	// NULL and 0 both mean "no opinion"; the checker reads zero as its
+	// default, so the two collapse into the same Go value here.
+	m.MinTLSVersion = uint16(minTLS.Int64)
 	m.PushTokenPrefix = pushPrefix.String
 	m.PushIntervalS = int(pushEvery.Int64)
 	m.PushGraceS = int(pushGrace.Int64)
@@ -242,13 +255,13 @@ func (db *DB) CreateMonitor(ctx context.Context, m Monitor) (Monitor, error) {
 			name, type, target, interval_s, timeout_s, retries,
 			method, expected_status, keyword, keyword_mode, follow_redirects,
 			headers_json, body, ssl_warn_days, enabled, capture_response, repeat_after_s,
-			push_token_hash, push_token_prefix, push_interval_s, push_grace_s,
+			min_tls_version, push_token_hash, push_token_prefix, push_interval_s, push_grace_s,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		m.Name, m.Type, m.Target, m.IntervalS, m.TimeoutS, m.Retries,
 		m.Method, m.ExpectedStatus, nullString(m.Keyword), m.KeywordMode, m.FollowRedirects,
 		headersJSON, nullString(m.Body), m.SSLWarnDays, m.Enabled, m.CaptureResponse, m.RepeatAfterS,
-		tokenHash, nullString(m.PushTokenPrefix),
+		nullTLSVersion(m.MinTLSVersion), tokenHash, nullString(m.PushTokenPrefix),
 		nullInt(m.PushIntervalS), pushGraceValue(m),
 		now, now,
 	)
@@ -797,6 +810,18 @@ func nullInt(i int) any {
 	return i
 }
 
+// nullTLSVersion writes a monitor with no TLS opinion as NULL rather than as
+// 0. Both read back the same way, but NULL is what "unset" looks like to
+// anyone querying the table by hand, and the column's whole reason for being
+// nullable is that "no opinion" and "explicitly the current default" are
+// different things.
+func nullTLSVersion(v uint16) any {
+	if v == 0 {
+		return nil
+	}
+	return int64(v)
+}
+
 // ErrVersionConflict reports that a conditional update was refused because the
 // row had already moved on. The API layer maps it to 412 Precondition Failed.
 var ErrVersionConflict = errors.New("monitor was modified by someone else")
@@ -878,6 +903,7 @@ func (db *DB) updateMonitor(ctx context.Context, m Monitor, expected []int64) (M
 		m.Method, m.ExpectedStatus, nullString(m.Keyword), m.KeywordMode,
 		m.FollowRedirects, headersJSON, nullString(m.Body), m.SSLWarnDays,
 		m.Enabled, m.CaptureResponse, m.RepeatAfterS,
+		nullTLSVersion(m.MinTLSVersion),
 		nullInt(m.PushIntervalS), pushGraceValue(m),
 		next, m.ID,
 	}
@@ -954,6 +980,7 @@ const updateMonitorSetClause = `
 		method = ?, expected_status = ?, keyword = ?, keyword_mode = ?,
 		follow_redirects = ?, headers_json = ?, body = ?, ssl_warn_days = ?,
 		enabled = ?, capture_response = ?, repeat_after_s = ?,
+		min_tls_version = ?,
 		push_interval_s = ?, push_grace_s = ?,
 		updated_at = MAX(?, updated_at + 1)
 	WHERE id = ?`
