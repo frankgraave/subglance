@@ -20,10 +20,12 @@ docker compose up -d
 ```
 
 That is the whole installation. The file needs no edits to work: it publishes
-8080, keeps the database in a named volume, and every option in it is commented
-out with the default it would override. `internal/config` has a test that fails
-if an option is added to the binary without reaching that file, or named there
-without the binary reading it.
+8080 on loopback, keeps the database in a named volume, and sets only
+`SUBGLANCE_LOG_LEVEL` and `SUBGLANCE_LOG_FORMAT` to their own defaults so the
+shape of the block is visible. Every other option is commented out beside the
+default it would override. `internal/config` has a test that fails if an option
+is added to the binary without reaching that file, or named there without the
+binary reading it.
 
 To follow the logs or stop it again:
 
@@ -100,15 +102,34 @@ macOS on both amd64 and arm64, and Windows on amd64. The archive contains a
 single executable with the dashboard already inside it, so there is nothing to
 install and nothing to serve alongside it.
 
+The checksum file is itself signed with [cosign](https://docs.sigstore.dev/),
+keylessly, against the release workflow's own identity — so the signature can be
+checked without trusting a key I could lose. Verify the signature *before*
+trusting the checksums, and the checksums before extracting anything: a
+`SHA256SUMS` you have not authenticated only proves the archive matches the file
+that arrived next to it.
+
 ```sh
 # replace VERSION and the platform with the ones you want
 curl -fsSLO https://github.com/frankgraave/subglance/releases/download/vVERSION/subglance_VERSION_linux_amd64.tar.gz
 curl -fsSLO https://github.com/frankgraave/subglance/releases/download/vVERSION/SHA256SUMS
+curl -fsSLO https://github.com/frankgraave/subglance/releases/download/vVERSION/SHA256SUMS.sigstore.json
+
+cosign verify-blob SHA256SUMS \
+  --bundle SHA256SUMS.sigstore.json \
+  --certificate-identity-regexp '^https://github\.com/frankgraave/subglance/\.github/workflows/release\.yml@refs/tags/.*$' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
 sha256sum -c SHA256SUMS --ignore-missing   # macOS: shasum -a 256 -c SHA256SUMS --ignore-missing
 
 tar xzf subglance_VERSION_linux_amd64.tar.gz
 ./subglance --data-dir ./data
 ```
+
+The identity pattern is pinned to the release workflow running on a tag, not
+merely to something under this repository. A looser pattern would accept a
+signature from any workflow in the repo, which is most of the value of keyless
+signing given away.
 
 On Windows, PowerShell prints the hash and you compare it against the line for
 your archive in `SHA256SUMS` — there is no `-c` equivalent that checks the file
@@ -117,17 +138,6 @@ for you:
 ```powershell
 (Get-FileHash subglance_VERSION_windows_amd64.zip -Algorithm SHA256).Hash.ToLower()
 Select-String subglance_VERSION_windows_amd64.zip SHA256SUMS
-```
-
-The checksum file is itself signed with [cosign](https://docs.sigstore.dev/),
-keylessly, against the release workflow's own identity — so the signature can be
-checked without trusting a key I could lose:
-
-```sh
-cosign verify-blob SHA256SUMS \
-  --bundle SHA256SUMS.sigstore.json \
-  --certificate-identity-regexp 'https://github\.com/frankgraave/subglance/' \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
 > [!NOTE]
@@ -172,7 +182,8 @@ is what keeps `go build ./...` working on a fresh clone.
 ```sh
 make check         # format, vet and the hermetic suite — run before committing
 make test          # the same suite with the race detector
-go test ./...      # everything, including tests that need the network
+go test ./...      # every untagged test, including the ones that need network
+make test-badssl   # the TLS acceptance suite against badssl.com (build-tagged)
 ```
 
 The suite is split in two. Most tests are hermetic: they parse strings or talk

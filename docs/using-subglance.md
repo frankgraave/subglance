@@ -68,8 +68,8 @@ Two credential types reach the same endpoints with the same rights:
 - **API token** — for scripts and CI, sent as an `Authorization: Bearer` header.
 
 ```sh
-# create a token (requires an existing session)
-curl -X POST http://localhost:8080/api/v1/tokens \
+# create a token (requires an existing session — `-b jar` from the setup call above)
+curl -b jar -X POST http://localhost:8080/api/v1/tokens \
   -H 'Content-Type: application/json' -d '{"name":"ci"}'
 
 # use it
@@ -116,7 +116,7 @@ A push monitor turns the direction around. It gets a secret URL, the job calls i
 when it finishes, and if nothing arrives inside the window the monitor goes down.
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/monitors \
+curl -b jar -X POST http://localhost:8080/api/v1/monitors \
   -H 'Content-Type: application/json' \
   -d '{"name":"Nightly backup","type":"push","push_interval_s":86400,"push_grace_s":3600}'
 ```
