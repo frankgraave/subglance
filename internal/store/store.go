@@ -40,6 +40,13 @@ type DB struct {
 	Reader *sql.DB
 
 	path string
+
+	// cipher encrypts notification channel configuration on the way to disk.
+	// Nil means no key was configured, which is the default and leaves the
+	// stored value exactly as it was before encryption existed.
+	cipher *configCipher
+
+	cryptoReport ChannelEncryptionReport
 }
 
 // Options configures Open.
@@ -48,6 +55,28 @@ type Options struct {
 	Path string
 	// MaxReaders caps concurrent read connections. Zero means 4.
 	MaxReaders int
+
+	// SecretKey is SecretKeyLength bytes of key material for encrypting
+	// notification channel configuration at rest. Nil or empty means no
+	// encryption: config is stored in plain text, which is the default.
+	// Use ParseSecretKey to turn the --secret-key value into this.
+	SecretKey []byte
+
+	// SkipChannelEncryption leaves the notification channel rows entirely
+	// alone: no reconciliation, no refusal, no rewriting.
+	//
+	// It exists for `subglance backup`, which copies pages and never reads a
+	// channel config. Making a backup depend on having the key would be
+	// backwards — the ciphertext is exactly what should be in the snapshot —
+	// and the alternative of passing the key to a read-only command would let
+	// a backup silently rewrap every row.
+	SkipChannelEncryption bool
+
+	// PreviousSecretKey is the key the stored rows are currently under, when
+	// that differs from SecretKey. It is the whole of the rotation and the
+	// disable path: with SecretKey set, every row is moved to the new key at
+	// startup; with SecretKey empty, every row is written back as plain text.
+	PreviousSecretKey []byte
 }
 
 // Open connects to the database, applies the required pragmas and runs any
@@ -96,7 +125,39 @@ func Open(ctx context.Context, opts Options) (*DB, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
+
+	// After the migrations, so the table is guaranteed to exist, and before
+	// returning, so that a key which cannot read the stored rows is a failure
+	// to start rather than a channel that breaks during an outage.
+	current, previous, err := buildCiphers(opts)
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	db.cipher = current
+	if !opts.SkipChannelEncryption {
+		if err := db.prepareChannelEncryption(ctx, current, previous); err != nil {
+			_ = db.Close()
+			return nil, err
+		}
+	}
 	return db, nil
+}
+
+func buildCiphers(opts Options) (current, previous *configCipher, err error) {
+	if len(opts.SecretKey) > 0 {
+		current, err = newConfigCipher(opts.SecretKey)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	if len(opts.PreviousSecretKey) > 0 {
+		previous, err = newConfigCipher(opts.PreviousSecretKey)
+		if err != nil {
+			return nil, nil, fmt.Errorf("previous %w", err)
+		}
+	}
+	return current, previous, nil
 }
 
 // pragmas are applied to every new connection through the DSN, so they hold

@@ -58,7 +58,15 @@ func runBackup(args []string, out io.Writer) error {
 	// half-migrated database is not something anyone should be handed. It also
 	// means a backup taken with an older binary than the database refuses
 	// rather than producing a misleading copy.
-	db, err := store.Open(ctx, store.Options{Path: cfg.DBPath()})
+	// No secret key: a backup copies bytes, so encrypted channel configuration
+	// belongs in the snapshot exactly as it is stored. Requiring the key here
+	// would mean an operator who lost it also cannot take a backup of the data
+	// they still have, and passing it would let this read-only command rewrite
+	// every channel row on the way past.
+	db, err := store.Open(ctx, store.Options{
+		Path:                  cfg.DBPath(),
+		SkipChannelEncryption: true,
+	})
 	if err != nil {
 		return fmt.Errorf("open database %s: %w", cfg.DBPath(), err)
 	}
