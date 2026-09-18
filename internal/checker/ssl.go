@@ -85,10 +85,16 @@ func (c *SSLChecker) Check(ctx context.Context, m Monitor) Result {
 	tlsConn := tls.Client(conn, &tls.Config{
 		ServerName:         host,
 		InsecureSkipVerify: true, //nolint:gosec // verified manually below
-		MinVersion:         tls.VersionTLS12,
+		MinVersion:         effectiveMinTLSVersion(m),
 	})
 
 	if err := tlsConn.HandshakeContext(ctx); err != nil {
+		// A negotiation that failed over ciphers or versions is a TLS fault,
+		// not a network one; classifyRequestError sees only a net.OpError and
+		// would send the reader to their firewall.
+		if res, handled := classifyTLSHandshakeError(start, err, m); handled {
+			return res
+		}
 		return classifyRequestError(start, ctx, err)
 	}
 
@@ -109,20 +115,12 @@ func (c *SSLChecker) Check(ctx context.Context, m Monitor) Result {
 
 	// Expiry first: it is the specific, actionable answer, and it would
 	// otherwise be reported as the vaguer "unknown authority" style error that
-	// chain verification produces for an expired leaf.
-	switch {
-	case now.After(leaf.NotAfter):
+	// chain verification produces for an expired leaf. describeCertProblem
+	// applies the same ordering for the HTTP checker, which has only the error.
+	if now.After(leaf.NotAfter) || now.Before(leaf.NotBefore) {
 		res.OK = false
 		res.Kind = FailTLS
-		res.Error = fmt.Sprintf("certificate expired %s ago (on %s)",
-			humanDuration(now.Sub(leaf.NotAfter)), leaf.NotAfter.Format(time.DateOnly))
-		return res
-
-	case now.Before(leaf.NotBefore):
-		res.OK = false
-		res.Kind = FailTLS
-		res.Error = fmt.Sprintf("certificate is not valid until %s",
-			leaf.NotBefore.Format(time.DateOnly))
+		res.Error = describeCertProblem(host, certs, nil, now)
 		return res
 	}
 
@@ -151,11 +149,14 @@ func (c *SSLChecker) Check(ctx context.Context, m Monitor) Result {
 }
 
 // verifyChain performs the validation that InsecureSkipVerify skipped.
+//
+// Wording is delegated to describeCertProblem so that a monitor of type ssl
+// and an https monitor of the same host produce the same sentence.
 func verifyChain(host string, certs []*x509.Certificate, now time.Time, roots *x509.CertPool) error {
 	leaf := certs[0]
 
 	if err := leaf.VerifyHostname(host); err != nil {
-		return fmt.Errorf("certificate does not match hostname %s: %w", host, err)
+		return errors.New(describeCertProblem(host, certs, err, now))
 	}
 
 	intermediates := x509.NewCertPool()
@@ -170,11 +171,7 @@ func verifyChain(host string, certs []*x509.Certificate, now time.Time, roots *x
 		CurrentTime:   now,
 	})
 	if err != nil {
-		var authErr x509.UnknownAuthorityError
-		if errors.As(err, &authErr) {
-			return fmt.Errorf("certificate signed by unknown authority")
-		}
-		return fmt.Errorf("certificate verification failed: %w", err)
+		return errors.New(describeCertProblem(host, certs, err, now))
 	}
 	return nil
 }

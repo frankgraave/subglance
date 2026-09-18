@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -60,6 +61,19 @@ type HTTPChecker struct {
 	client *http.Client
 	guard  *Guard
 	ua     string
+
+	// transport is the shared pool, kept so a monitor asking for a different
+	// TLS floor can be given a clone of it rather than a fresh one built per
+	// check — see minVersionClient.
+	transport *http.Transport
+
+	// minVersionClients caches one client per non-default TLS floor. A
+	// monitor with a lowered floor must not share a connection pool with the
+	// default one: http.Transport keys idle connections on host and scheme,
+	// not on tls.Config, so a reused connection would silently carry the
+	// wrong negotiated terms.
+	minVersionMu      sync.Mutex
+	minVersionClients map[uint16]*http.Client
 }
 
 // HTTPOptions configures NewHTTPChecker.
@@ -103,11 +117,17 @@ func NewHTTPChecker(opts HTTPOptions) *HTTPChecker {
 		ExpectContinueTimeout: 1 * time.Second,
 		ForceAttemptHTTP2:     true,
 		DisableCompression:    false,
+		// Stated rather than left to the default so that the https path and
+		// the ssl path negotiate on identical terms; a monitor that asks for
+		// another floor gets its own transport in Check.
+		TLSClientConfig: &tls.Config{MinVersion: minTLSVersion}, //nolint:gosec // minTLSVersion is TLS 1.2
 	}
 
 	c := &HTTPChecker{
-		guard: opts.Guard,
-		ua:    opts.UserAgent,
+		guard:             opts.Guard,
+		ua:                opts.UserAgent,
+		transport:         transport,
+		minVersionClients: make(map[uint16]*http.Client),
 		client: &http.Client{
 			Transport: transport,
 			// Per-request deadlines come from the context, so no client-level
@@ -168,11 +188,14 @@ func (c *HTTPChecker) Check(ctx context.Context, m Monitor) Result {
 	}
 
 	client := c.client
+	if v := effectiveMinTLSVersion(m); v != minTLSVersion {
+		client = c.minVersionClient(v)
+	}
 	if !m.FollowRedirects {
 		// Copy rather than mutate: the checker is shared across goroutines and
 		// assigning to c.client.CheckRedirect here would be a data race that
 		// silently changes behaviour for every other monitor.
-		noRedirect := *c.client
+		noRedirect := *client
 		noRedirect.CheckRedirect = func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse
 		}
@@ -181,6 +204,13 @@ func (c *HTTPChecker) Check(ctx context.Context, m Monitor) Result {
 
 	resp, err := client.Do(req)
 	if err != nil {
+		// A negotiation that failed over ciphers or versions is a TLS fault,
+		// not a network one. classifyRequestError sees only the net.OpError
+		// underneath and would report "connection failed", which sends the
+		// reader to their firewall for a server that is plainly answering.
+		if res, handled := classifyTLSHandshakeError(start, err, m); handled {
+			return res
+		}
 		return classifyRequestError(start, ctx, err)
 	}
 	defer func() {
@@ -356,6 +386,31 @@ func sanitiseBody(b []byte) string {
 	return strings.ToValidUTF8(string(b), "")
 }
 
+// minVersionClient returns the client for a monitor that asked for a TLS floor
+// other than the default, building it on first use.
+//
+// The transport is cloned so the monitor keeps every other transport setting —
+// the SSRF-guarded dialer above all — and differs only in the one field it
+// asked to differ in.
+func (c *HTTPChecker) minVersionClient(v uint16) *http.Client {
+	c.minVersionMu.Lock()
+	defer c.minVersionMu.Unlock()
+
+	if cl, ok := c.minVersionClients[v]; ok {
+		return cl
+	}
+
+	tr := c.transport.Clone()
+	if tr.TLSClientConfig == nil {
+		tr.TLSClientConfig = &tls.Config{} //nolint:gosec // MinVersion set on the next line
+	}
+	tr.TLSClientConfig.MinVersion = v
+
+	cl := &http.Client{Transport: tr, CheckRedirect: c.client.CheckRedirect}
+	c.minVersionClients[v] = cl
+	return cl
+}
+
 // classifyRequestError turns a transport error into a FailureKind.
 //
 // "Monitor is down" is not useful on its own. A DNS failure, a refused
@@ -385,25 +440,31 @@ func classifyRequestError(start time.Time, ctx context.Context, err error) Resul
 		return fail(start, FailDNS, "DNS lookup failed: %s", dnsErr.Err)
 	}
 
-	// Go wraps verification failures in CertificateVerificationError, so this
-	// must be checked before the specific x509 types below — errors.As would
-	// still find them, but the outer type carries the clearer message.
+	// Go wraps verification failures in CertificateVerificationError, which
+	// carries the chain the server actually presented — the one thing the raw
+	// message does not have and that the diagnosis needs. It must be checked
+	// before the specific x509 types below: errors.As would still find them,
+	// but only the outer type has the certificates.
 	var verifyErr *tls.CertificateVerificationError
 	if errors.As(err, &verifyErr) {
-		return fail(start, FailTLS, "TLS certificate verification failed: %v", unwrapMessage(verifyErr.Err))
+		return fail(start, FailTLS, "%s",
+			describeCertProblem("", verifyErr.UnverifiedCertificates, verifyErr.Err, time.Now()))
 	}
 
-	var certErr *x509.CertificateInvalidError
+	// The same x509 failures reaching us unwrapped — a custom VerifyConnection
+	// hook, or a path that verified by hand. No chain in hand here, so
+	// describeCertProblem can only word the error itself.
+	var certErr x509.CertificateInvalidError
 	if errors.As(err, &certErr) {
-		return fail(start, FailTLS, "TLS certificate invalid: %v", certErr)
+		return fail(start, FailTLS, "%s", describeCertProblem("", nil, certErr, time.Now()))
 	}
-	var hostErr *x509.HostnameError
+	var hostErr x509.HostnameError
 	if errors.As(err, &hostErr) {
-		return fail(start, FailTLS, "TLS certificate does not match hostname: %v", hostErr)
+		return fail(start, FailTLS, "%s", describeCertProblem("", nil, hostErr, time.Now()))
 	}
-	var authErr *x509.UnknownAuthorityError
+	var authErr x509.UnknownAuthorityError
 	if errors.As(err, &authErr) {
-		return fail(start, FailTLS, "TLS certificate signed by unknown authority")
+		return fail(start, FailTLS, "%s", describeCertProblem("", nil, authErr, time.Now()))
 	}
 	var recordErr *tls.RecordHeaderError
 	if errors.As(err, &recordErr) {
