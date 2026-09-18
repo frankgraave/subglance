@@ -183,6 +183,9 @@ func run(args []string) error {
 	apiSrv, err := api.New(log, db).WithBus(bus).
 		WithProber(runner).WithPushRecorder(runner).
 		WithChannelTester(notify).
+		// The same runner that records checks reports the counters, so
+		// /metrics cannot disagree with what actually happened.
+		WithMetrics(runner).
 		// The same guard the notifier delivers through, so the save-time
 		// refusal and the delivery-time refusal cannot disagree about
 		// what --allow-private-targets permits. A channel the operator
@@ -269,7 +272,7 @@ func run(args []string) error {
 
 	// Raw heartbeats are the fastest-growing table in the product. Rolling
 	// them up keeps history unlimited at a bounded cost.
-	go rollupHeartbeats(ctx, db, log, store.RetentionPolicy{
+	go rollupHeartbeats(ctx, db, log, runner, store.RetentionPolicy{
 		Raw:    cfg.RawRetention,
 		Rollup: cfg.RollupRetention,
 	})
@@ -298,12 +301,29 @@ func run(args []string) error {
 		return fmt.Errorf("graceful shutdown: %w", err)
 	}
 
-	// Wait for in-flight checks so no result is lost mid-write.
-	select {
-	case <-schedulerDone:
-	case <-shutdownCtx.Done():
-		log.Warn("scheduler did not stop within the shutdown timeout")
-	}
+	// The scheduler gets its own budget, not a share of the HTTP one.
+	//
+	// Those are two different quantities. --shutdown-timeout is how long an
+	// in-flight HTTP request may take; the scheduler's floor is how long the
+	// slowest check that may be running right now takes to return, and a
+	// per-monitor timeout goes up to 120s against a 15s default. With one
+	// budget covering both in series, SIGTERM with a slow monitor mid-check
+	// expired the deadline, fell through to the deferred db.Close(), and left
+	// workers writing heartbeats against closed pools — an error-log burst
+	// and lost beats on every restart, not an edge case. Docker's default
+	// --stop-timeout is 10s, so this was the normal deploy path for anyone
+	// with one slow monitor.
+	//
+	// The budget is derived rather than configured: it is a property of the
+	// monitor set, which the operator already expressed one monitor at a
+	// time. Asking them to keep --shutdown-timeout above their slowest
+	// timeout by hand is asking them to maintain the same number twice.
+	schedulerBudget := schedulerShutdownBudget(cfg.ShutdownTimeout, runner.MaxCheckTimeout())
+
+	// Wait for in-flight checks so no result is lost mid-write, and do not
+	// stop waiting when the budget expires: db.Close() is deferred and runs
+	// the moment this function returns.
+	awaitScheduler(schedulerDone, schedulerBudget, log)
 
 	// And for the watchdog's farewell ping, so a planned restart does not
 	// read as a crash at the other end.
@@ -327,6 +347,56 @@ func run(args []string) error {
 	return nil
 }
 
+// awaitScheduler blocks until the check pipeline has stopped.
+//
+// It always waits for done, and the budget only decides when the operator is
+// told that it is taking a while. That asymmetry is the fix: db.Close() is
+// deferred in run and therefore executes the instant run returns, so a wait
+// that gives up on a deadline is a wait that closes the database underneath a
+// worker still calling RecordHeartbeat. Returning early bought nothing — the
+// process cannot exit without closing the pools anyway — and cost an error-log
+// burst and a lost heartbeat on every restart with a slow monitor.
+//
+// This cannot hang indefinitely: every checker applies the monitor's own
+// timeout to its context, so a check cannot outlive it, and the scheduler
+// returns once the last one has. A supervisor's SIGKILL is the backstop if one
+// ever does.
+func awaitScheduler(done <-chan struct{}, budget time.Duration, log *slog.Logger) {
+	timer := time.NewTimer(budget)
+	defer timer.Stop()
+
+	select {
+	case <-done:
+		return
+	case <-timer.C:
+		log.Warn("scheduler still has checks in flight after its shutdown budget; "+
+			"the database stays open until they finish", "budget", budget)
+	}
+
+	<-done
+	log.Info("in-flight checks finished; closing the database")
+}
+
+// schedulerShutdownBudget is how long the check pipeline is given to finish.
+//
+// It is the larger of the operator's --shutdown-timeout and the slowest
+// scheduled per-monitor timeout plus a margin. The margin covers the work
+// after a check returns — recording the heartbeat, advancing the state
+// machine, queueing an alert — which the monitor's own timeout does not
+// include.
+//
+// The floor is never lowered below --shutdown-timeout: an operator who raised
+// it wanted the longer grace, and this is about the setting being too small
+// for the monitor set, never too large.
+func schedulerShutdownBudget(configured, maxCheckTimeout time.Duration) time.Duration {
+	const recordingMargin = 5 * time.Second
+
+	if maxCheckTimeout <= 0 {
+		return configured
+	}
+	return max(configured, maxCheckTimeout+recordingMargin)
+}
+
 // displayAddr turns a listen address into something a person can paste into a
 // browser: ":8080" alone is not a URL anyone can click.
 func displayAddr(addr string) string {
@@ -347,7 +417,7 @@ func displayAddr(addr string) string {
 // instance that is restarted more often than the interval would otherwise
 // never roll up at all, and that is exactly the instance whose database grows
 // without anyone noticing.
-func rollupHeartbeats(ctx context.Context, db *store.DB, log *slog.Logger, policy store.RetentionPolicy) {
+func rollupHeartbeats(ctx context.Context, db *store.DB, log *slog.Logger, runner *monitor.Runner, policy store.RetentionPolicy) {
 	const interval = 24 * time.Hour
 
 	// Space is only actually returned to the filesystem when the database is
@@ -370,7 +440,11 @@ func rollupHeartbeats(ctx context.Context, db *store.DB, log *slog.Logger, polic
 		res, err := db.ApplyRetention(ctx, policy)
 		if err != nil {
 			// A failed pass costs disk, not correctness: the rows are still
-			// there and the next pass picks them up.
+			// there and the next pass picks them up. It is counted as well as
+			// logged because the pass that fails on a full disk is the one
+			// that would have freed the space, and a daily error line is not
+			// something anyone is watching for.
+			runner.RecordRollupFailure()
 			log.Error("heartbeat rollup", "error", err)
 			return
 		}

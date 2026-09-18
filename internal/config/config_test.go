@@ -78,21 +78,9 @@ func TestEnvParsing(t *testing.T) {
 	}
 }
 
-func TestMalformedEnvFallsBackToDefault(t *testing.T) {
-	t.Setenv("SUBGLANCE_CHECK_WORKERS", "not-a-number")
-	t.Setenv("SUBGLANCE_SHUTDOWN_TIMEOUT", "banana")
-
-	c, err := Load(nil)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if c.CheckWorkers != 0 {
-		t.Errorf("CheckWorkers = %d, want 0 (default)", c.CheckWorkers)
-	}
-	if c.ShutdownTimeout != 15*time.Second {
-		t.Errorf("ShutdownTimeout = %s, want 15s (default)", c.ShutdownTimeout)
-	}
-}
+// A malformed variable used to fall back to the default here. It now refuses
+// to start; see TestMalformedEnvRefusesToStart in env_strict_test.go for the
+// behaviour and the argument.
 
 func TestValidationRejectsBadInput(t *testing.T) {
 	tests := []struct {

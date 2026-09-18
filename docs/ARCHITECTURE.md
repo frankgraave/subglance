@@ -70,6 +70,19 @@ One time wheel that schedules monitors on their interval. No goroutine per
 monitor — a bounded worker pool stops 500 monitors from firing 500 concurrent
 requests. Jitter on the interval prevents thundering herds.
 
+The pool is sized from CPU count *and* from the number of scheduled monitors,
+recomputed on every reload and clamped to [8, 128]. The monitor count belongs
+in that figure because the pool only binds when checks stop returning: healthy
+checks take milliseconds, but during a broad outage every check holds its
+worker for its full timeout, and a pool sized for a 2-vCPU box would then push
+detection latency for the still-healthy monitors out to minutes. The ceiling
+keeps that from becoming an unbounded-goroutine failure on a small VPS. An
+explicit `--check-workers` is taken literally and never adjusted.
+
+The pool only ever grows, and only on the scheduling loop's own goroutine —
+`sync.WaitGroup.Add` racing the `Wait` in the shutdown path is a panic, and
+`Reload` is reachable from an API request.
+
 ### Checker
 An interface with a single method so check types can be extended
 independently:
@@ -134,6 +147,16 @@ pools:
 
 In WAL mode readers never block the writer, and vice versa.
 
+Closing those pools is therefore the last thing shutdown does, and it waits on
+the check pipeline without a deadline to get there. `--shutdown-timeout` bounds
+HTTP requests, but a per-monitor check timeout goes up to 120s, so a shared
+budget expires mid-check and closes the pools underneath a worker still calling
+`RecordHeartbeat`. The check pipeline gets its own budget derived from the
+slowest scheduled monitor timeout; if even that expires, SubGlance logs that
+checks are still in flight and keeps the database open until they finish. A
+check cannot outlive its own timeout, so the wait is bounded by the monitor
+set rather than open-ended.
+
 Pragmas are set through the DSN, not with a separate `PRAGMA` statement after
 `Open()`. The latter would only apply to the one connection that happened to
 run that statement; via the DSN it applies to every connection in the pool. On
@@ -173,6 +196,7 @@ POST   /channels/{id}/test
 GET    /stream                  Server-Sent Events, live updates
 GET    /health                  liveness of SubGlance itself
 GET    /ready                   readiness: can the database be reached?
+GET    /metrics                 operational counters, Prometheus text format
 ```
 
 **Liveness vs. readiness.** `/health` is deliberately dependency-free: it has
@@ -180,6 +204,23 @@ to answer even when the database is unhappy, because an orchestrator uses it to
 decide whether the process should be restarted — and restarting doesn't fix a
 sick database. `/ready` does check the dependencies. So `/health` 200 with
 `/ready` 503 means: leave this process alone, but don't send it traffic yet.
+
+**Why `/metrics` is authenticated when the two probes are not.** Neither probe
+distinguishes the failure that matters most: when the disk fills, `/health`
+answers 200 because the process is alive and `/ready` answers 200 because a
+read-only SQLite database still answers a ping, while every heartbeat write
+fails. `/metrics` is where that becomes a number
+(`subglance_heartbeat_write_failures_total`) — but it also publishes how many
+monitors an instance watches, how much of its check budget it is using and when
+its writes are failing. A probe discloses one bit about this process; a metrics
+endpoint is a fleet inventory plus a live map of when the operator is least able
+to notice anything. It sits behind the same auth as the rest of the API, which
+costs a scrape config one bearer token, and the counters carry no per-monitor
+labels so names and targets never appear there at all.
+
+The format is hand-written text, not a client library: it is six lines per
+counter, there are no histograms or dynamic labels, and the distribution
+promise is one static binary.
 
 **Authentication:** session cookie for the UI, `Authorization: Bearer <token>`
 with API tokens for machines. Both hit exactly the same endpoints — the UI gets

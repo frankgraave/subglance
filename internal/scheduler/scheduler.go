@@ -30,6 +30,7 @@ import (
 	"math/rand/v2"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/frankgraave/subglance/internal/checker"
@@ -94,9 +95,13 @@ type Options struct {
 	// Checkers maps a monitor type to its implementation. Required.
 	Checkers map[checker.Type]checker.Checker
 
-	// Workers caps concurrent checks. Zero means 4x GOMAXPROCS, bounded to
-	// [8, 128] — checks are IO-bound, so more workers than cores is right,
-	// but unbounded growth would defeat the purpose.
+	// Workers caps concurrent checks. Zero means auto: sized from CPU count
+	// and from how many monitors are scheduled, recomputed on every reload
+	// and bounded to [minWorkers, maxWorkers]. See autoWorkerCount for why
+	// the monitor count belongs in that figure.
+	//
+	// A non-zero value is taken literally and never adjusted: an operator who
+	// names a number owns it.
 	Workers int
 
 	// OnResult receives every completed check. It runs on a worker goroutine
@@ -130,6 +135,24 @@ type Scheduler struct {
 	now            func() time.Time
 	log            *slog.Logger
 
+	// autoWorkers records that Options.Workers was left at zero, so the pool
+	// is ours to size and to re-size when the monitor set changes. An
+	// operator who named a number owns it: --check-workers is a ceiling they
+	// chose, and silently exceeding it would make the flag a suggestion.
+	autoWorkers bool
+
+	// workerTarget is the pool size reload would like, published for the Run
+	// loop to act on. Growth happens on the loop's own goroutine and nowhere
+	// else: wg.Wait runs there too, and a WaitGroup.Add racing its Wait is a
+	// panic, not a slow shutdown. Reload is callable from the API, so
+	// spawning workers inside it would be exactly that race.
+	workerTarget int
+
+	// skipped counts checks dropped because the previous run of the same
+	// monitor was still going. It is the number that says the pool is behind:
+	// a log line per skip is invisible at default level, a counter is not.
+	skipped atomic.Uint64
+
 	mu    sync.Mutex
 	queue *jobHeap
 	// inFlight guards against a slow monitor being scheduled twice. A check
@@ -153,8 +176,9 @@ type task struct {
 
 // New builds a Scheduler. It does not start until Run is called.
 func New(opts Options) *Scheduler {
-	if opts.Workers <= 0 {
-		opts.Workers = min(max(runtime.GOMAXPROCS(0)*4, 8), 128)
+	autoWorkers := opts.Workers <= 0
+	if autoWorkers {
+		opts.Workers = autoWorkerCount(runtime.GOMAXPROCS(0), 0)
 	}
 	if opts.ReloadInterval <= 0 {
 		opts.ReloadInterval = 30 * time.Second
@@ -180,6 +204,7 @@ func New(opts Options) *Scheduler {
 		checkers:       opts.Checkers,
 		onResult:       opts.OnResult,
 		workers:        opts.Workers,
+		autoWorkers:    autoWorkers,
 		reloadInterval: opts.ReloadInterval,
 		jitterFraction: opts.JitterFraction,
 		now:            opts.Now,
@@ -187,8 +212,53 @@ func New(opts Options) *Scheduler {
 		queue:          q,
 		inFlight:       map[int64]bool{},
 		wake:           make(chan struct{}, 1),
-		tasks:          make(chan task, opts.Workers*2),
+		// The task buffer is sized for maxWorkers rather than for the
+		// starting pool, because the pool grows and the channel cannot be
+		// resized afterwards. Its capacity is queue depth, not concurrency:
+		// a buffered task holds a Job value, not a goroutine.
+		tasks: make(chan task, maxWorkers*2),
 	}
+}
+
+// Worker-pool bounds.
+//
+// minWorkers keeps a single-core box from serialising checks; maxWorkers is
+// the ceiling that makes the pool a pool. It is a real limit and not a
+// formality: every running check holds an open connection and whatever the
+// response body cost, and SubGlance's target deployment is a small VPS, so an
+// auto-sized pool that grows with the monitor count has to stop somewhere.
+const (
+	minWorkers = 8
+	maxWorkers = 128
+)
+
+// monitorsPerWorker is the sizing rule behind the auto worker count.
+//
+// The pool only matters when checks stop returning: a healthy check finishes
+// in milliseconds and one worker serves hundreds of monitors. During a broad
+// outage — the moment this tool exists for — every check instead holds its
+// worker for the full timeout. With N monitors on interval I and timeout T,
+// keeping up needs N*T/I workers. The defaults are I=60s and T=10s, so N/6;
+// this uses N/4 so that a monitor configured with a longer timeout, or an
+// interval shorter than a minute, still has headroom.
+//
+// Without it, 200 monitors on a 2-vCPU box got 8 workers, cleared about 48
+// checks a minute against 200 due, and pushed detection latency for the
+// still-healthy monitors out to minutes. The tool degraded worst exactly when
+// it was needed most.
+const monitorsPerWorker = 4
+
+// autoWorkerCount is the auto pool size for a given CPU count and number of
+// scheduled monitors, bounded to [minWorkers, maxWorkers].
+//
+// It is a pure function so the sizing rule can be tested at monitor counts
+// nobody wants to instantiate, and so the rule lives in one place rather than
+// once in New and once in reload.
+func autoWorkerCount(procs, scheduled int) int {
+	byCPU := procs * 4
+	// Round up: 5 monitors needing 1.25 workers get 2, not 1.
+	byMonitors := (scheduled + monitorsPerWorker - 1) / monitorsPerWorker
+	return min(max(byCPU, byMonitors, minWorkers), maxWorkers)
 }
 
 // Run schedules monitors until ctx is cancelled.
@@ -208,6 +278,7 @@ func (s *Scheduler) Run(ctx context.Context) error {
 	if err := s.reload(ctx); err != nil {
 		s.log.Error("initial monitor load failed", "error", err)
 	}
+	s.growPool(ctx)
 
 	reloadTicker := time.NewTicker(s.reloadInterval)
 	defer reloadTicker.Stop()
@@ -242,14 +313,48 @@ func (s *Scheduler) Run(ctx context.Context) error {
 				}
 				s.log.Error("monitor reload failed", "error", err)
 			}
+			s.growPool(ctx)
 
 		case <-s.wake:
-			// A reload changed the queue; recompute the wait.
+			// A reload changed the queue; recompute the wait — and take on any
+			// workers that reload decided the new monitor set needs. This is
+			// the path an API-triggered Reload arrives by, so it is what makes
+			// a bulk import size the pool without waiting for the next tick.
+			s.growPool(ctx)
 
 		case <-timer.C:
 			s.dispatchDue(ctx)
 		}
 	}
+}
+
+// growPool starts however many workers reload has asked for since the last
+// call. It must only ever be called from Run's goroutine; see workerTarget.
+//
+// The pool only grows. Shrinking it would mean signalling chosen workers to
+// exit, and a worker is only interruptible between checks — so a pool sized
+// for an outage would stay large until that outage ended anyway. Idle workers
+// are a blocked receive on one channel, which is the cheapest thing in the
+// runtime; the memory that matters is the in-flight checks, and those are
+// bounded by the ceiling in autoWorkerCount.
+func (s *Scheduler) growPool(ctx context.Context) {
+	s.mu.Lock()
+	want := s.workerTarget
+	have := s.workers
+	if want > have {
+		s.workers = want
+	}
+	s.mu.Unlock()
+
+	if want <= have {
+		return
+	}
+	for range want - have {
+		s.wg.Add(1)
+		go s.worker(ctx)
+	}
+	s.log.Info("worker pool resized for the monitor set",
+		"workers", want, "was", have)
 }
 
 // timeUntilNext reports how long to sleep before the next job is due.
@@ -291,6 +396,7 @@ func (s *Scheduler) dispatchDue(ctx context.Context) {
 		s.mu.Unlock()
 
 		if skip {
+			s.skipped.Add(1)
 			s.log.Warn("skipping check, previous run still active",
 				"monitor_id", item.job.Monitor.ID,
 				"monitor", item.job.Monitor.Name,
@@ -452,6 +558,15 @@ func (s *Scheduler) reload(ctx context.Context) error {
 	heap.Init(next)
 	s.queue = next
 
+	// Re-size the pool for the monitor set we now hold. The whole point of
+	// recomputing on reload rather than once at startup is that the count
+	// that matters is the one after a bulk import, not the one at boot.
+	if s.autoWorkers {
+		if want := autoWorkerCount(runtime.GOMAXPROCS(0), next.Len()); want > s.workerTarget {
+			s.workerTarget = want
+		}
+	}
+
 	if added > 0 || updated > 0 || removed > 0 {
 		s.log.Info("monitor set reloaded",
 			"total", len(*next), "added", added, "updated", updated, "removed", removed)
@@ -481,6 +596,54 @@ func (s *Scheduler) Size() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.queue.Len()
+}
+
+// Workers reports the current pool size. It moves when the auto-sized pool
+// grows with the monitor set, which is why it is a method and not the
+// Options value the caller passed.
+func (s *Scheduler) Workers() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.workers
+}
+
+// SkippedChecks reports how many checks were dropped because the previous run
+// of the same monitor had not finished.
+//
+// This is the saturation signal. A rising count means checks are taking longer
+// than their interval, which during a broad outage is the pool falling behind
+// and detection latency growing for monitors that are still fine.
+func (s *Scheduler) SkippedChecks() uint64 { return s.skipped.Load() }
+
+// QueueDepth reports how many dispatched checks are waiting for a worker.
+//
+// Zero is the healthy reading: a pool that keeps up hands each task straight
+// to a blocked worker. A depth that stays high is the pool saturated, and it
+// is the reading that moves before the skip counter does.
+func (s *Scheduler) QueueDepth() int { return len(s.tasks) }
+
+// MaxCheckTimeout reports the longest per-monitor timeout currently scheduled.
+//
+// It exists for shutdown. A worker is only interruptible between checks, so
+// the time the scheduler needs to stop is bounded by the slowest check that
+// may be in flight — which is a property of the monitor set, not of the
+// --shutdown-timeout an operator picked for HTTP requests. Reading it from
+// the live queue rather than from config is what keeps the two from drifting
+// when a monitor's timeout is edited.
+//
+// Zero when nothing is scheduled, which the caller must treat as "no
+// constraint" rather than "stop immediately".
+func (s *Scheduler) MaxCheckTimeout() time.Duration {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var maxTimeout time.Duration
+	for _, item := range *s.queue {
+		if t := item.job.Monitor.Timeout; t > maxTimeout {
+			maxTimeout = t
+		}
+	}
+	return maxTimeout
 }
 
 // CheckerFor returns the implementation registered for a check type.

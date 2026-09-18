@@ -97,6 +97,12 @@ type Server struct {
 	// time; neither survives horizontal scaling on its own.
 	previewChecks cooldown
 
+	// metrics supplies the operational counters for /metrics. Nil disables
+	// that endpoint rather than crashing it, matching bus, prober and the
+	// rest: an API assembled without a checker pipeline must still serve
+	// everything else.
+	metrics MetricsSource
+
 	// streamPing overrides the SSE keepalive interval. Zero means the
 	// default. It exists so a test can assert the ping behaviour in
 	// milliseconds instead of sitting out twenty real seconds.
@@ -256,6 +262,30 @@ func (s *Server) routes() []route {
 		{http.MethodPost, "/api/v1/push/{token}", accessPublic},
 
 		// Authenticated: any role.
+		//
+		// /metrics is authenticated, unlike /health and /ready beside it,
+		// and the difference is what each one discloses. A health probe
+		// answers one bit about this process. A metrics endpoint publishes
+		// how many monitors an instance watches, how much of its check
+		// budget it is using and when its writes start failing — a fleet
+		// inventory and a live map of when the operator is least able to
+		// notice anything, to anyone who can reach the port.
+		//
+		// The counters carry no per-monitor labels, deliberately: names and
+		// targets are the part an unauthenticated scrape would leak worst,
+		// and per-monitor series would also make cardinality grow with the
+		// monitor set. That is a reason to keep the surface small, not a
+		// reason to leave it open.
+		//
+		// Authenticated costs a Prometheus operator one line
+		// (`bearer_token`), which the API tokens already mint, and the
+		// alternative — a public endpoint with an opt-in flag to close it —
+		// is a default that fails open. Anything reachable without
+		// credentials in this product is something that cannot work
+		// otherwise: the login form, the setup screen, a push URL whose
+		// token is the credential. A scrape is not in that set.
+		{http.MethodGet, "/metrics", accessRead},
+
 		{http.MethodGet, "/api/v1/auth/me", accessRead},
 		{http.MethodPost, "/api/v1/auth/password", accessRead},
 
@@ -353,6 +383,8 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 		return s.handleHealth
 	case "GET /api/v1/ready":
 		return s.handleReady
+	case "GET /metrics":
+		return s.handleMetrics
 	case "GET /api/v1/setup":
 		return s.handleSetupStatus
 	case "POST /api/v1/setup":
