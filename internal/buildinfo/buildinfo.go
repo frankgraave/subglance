@@ -29,6 +29,27 @@ func Short() string {
 	return fmt.Sprintf("%s (%s, %s)", Version, commit, runtime.Version())
 }
 
+// Full returns the multi-line form a person pastes into a bug report.
+//
+// Its first line is exactly what Short() produces, which is what the startup
+// log and GET /api/v1/health already report. That is deliberate: a maintainer
+// reading a bug report and a maintainer reading a health response should not
+// have to learn two renderings of the same fact, and the extra lines here are
+// additions rather than a different format.
+//
+// The build date is only printed when it was stamped in. A `go build` without
+// ldflags has no date to report, and inventing one — the file's mtime, the
+// current time — would put a confident wrong answer in a bug report. Saying
+// nothing is the honest version of not knowing, the same way Version already
+// says "dev" rather than guessing at a release number.
+func Full() string {
+	s := "subglance " + Short()
+	if Date != "" {
+		s += "\nbuilt " + Date
+	}
+	return s
+}
+
 // vcsRevision recovers the git commit from the build info embedded by the Go
 // toolchain, so that `go build` without ldflags still reports something useful.
 func vcsRevision() string {

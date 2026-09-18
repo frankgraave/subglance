@@ -8,6 +8,8 @@
 //	subglance healthcheck [--addr :8080]
 //	subglance backup <path> [--data-dir /data]
 //
+// and it answers --version without loading configuration at all.
+//
 // See docs/ARCHITECTURE.md for how the pieces fit together.
 package main
 
@@ -40,6 +42,14 @@ import (
 
 func main() {
 	args := os.Args[1:]
+
+	// Before anything else, including the subcommands: what this binary is
+	// must be answerable without a data directory, a free port or a valid
+	// configuration. See runVersion.
+	if wantsVersion(args) {
+		runSubcommand("version", runVersion, nil)
+		return
+	}
 
 	// Subcommands, and deliberately only these two: the shipped image is
 	// distroless with no shell, so a container HEALTHCHECK and an operator

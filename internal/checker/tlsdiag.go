@@ -69,6 +69,56 @@ func tlsVersionName(v uint16) string {
 	return fmt.Sprintf("unknown version 0x%04x", v)
 }
 
+// tlsVersionLabels maps the way a person writes a TLS version onto the
+// constant crypto/tls negotiates with.
+//
+// It is the vocabulary anything outside this package uses to talk about
+// Monitor.MinTLSVersion, and it exists because the alternative is worse in
+// both directions. A raw uint16 in an API is an implementation detail leaking
+// out — `771` is meaningless to anyone writing JSON by hand, and a client that
+// sent `1.2` would be storing a number the checker reads as SSL 3.0 territory.
+// Keeping the pair here rather than in the API package means the set of
+// versions the product accepts is decided next to the code that dials with
+// them.
+//
+// SSL 3.0 is deliberately absent even though tlsVersionName can print it:
+// crypto/tls cannot negotiate it at all, so offering it would be a setting
+// that makes every check fail for a reason the message could not explain.
+var tlsVersionLabels = map[string]uint16{
+	"1.0": tls.VersionTLS10,
+	"1.1": tls.VersionTLS11,
+	"1.2": tls.VersionTLS12,
+	"1.3": tls.VersionTLS13,
+}
+
+// TLSVersions lists the accepted labels, lowest first. Callers use it to
+// validate input and to say in an error message what was allowed, so there is
+// one list rather than one per caller.
+func TLSVersions() []string { return []string{"1.0", "1.1", "1.2", "1.3"} }
+
+// ParseTLSVersion turns "1.2" into the crypto/tls constant. ok is false for
+// anything outside TLSVersions.
+//
+// The empty string is not accepted here. It means "no opinion" to a caller
+// reading a JSON field, and translating that into the default silently would
+// let a monitor store an explicit TLS 1.2 that looks identical to an unset
+// one — the difference matters the day the default moves.
+func ParseTLSVersion(label string) (uint16, bool) {
+	v, ok := tlsVersionLabels[label]
+	return v, ok
+}
+
+// TLSVersionLabel is the inverse: the constant as a person writes it, or ""
+// for zero, which is how a monitor with no opinion is stored.
+func TLSVersionLabel(v uint16) string {
+	for label, constant := range tlsVersionLabels {
+		if constant == v {
+			return label
+		}
+	}
+	return ""
+}
+
 // serverSelectedVersionPrefix is the fixed part of crypto/tls's error for a
 // server that answered below our floor. Matched as a string because the
 // library returns a bare errors.New for it — there is no typed error and no

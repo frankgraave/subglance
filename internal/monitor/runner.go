@@ -542,6 +542,7 @@ func toCheckerMonitor(m store.Monitor) checker.Monitor {
 		Headers:         m.Headers,
 		Body:            m.Body,
 		SSLWarnDays:     m.SSLWarnDays,
+		MinTLSVersion:   m.MinTLSVersion,
 		Retries:         m.Retries,
 		CaptureResponse: m.CaptureResponse,
 	}

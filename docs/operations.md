@@ -4,6 +4,7 @@ Configuration, sizing, metrics, shutdown behaviour, the dead man's switch, and
 how to take a backup that actually restores.
 
 - [Configuration](#configuration)
+- [Which build is this](#which-build-is-this)
 - [Worker sizing](#worker-sizing)
 - [Metrics](#metrics)
 - [Shutdown](#shutdown)
@@ -135,6 +136,23 @@ and real client addresses reappear in the rate limiter and the session list:
 Getting this wrong fails safe. An unset or too-narrow value means everyone
 behind the proxy shares one bucket, which is inconvenient; a value that is too
 wide hands the limiter back to the attacker.
+
+## Which build is this
+
+```
+$ subglance --version
+subglance 0.4.1 (a1b2c3d, go1.26.8)
+built 2026-09-18T09:14:02Z
+```
+
+It answers before any configuration is read, so it works on a binary you have
+only just downloaded: no data directory, no free port, no valid settings. The
+first line is exactly what the startup log and `GET /api/v1/health` report, so
+a bug report and a health response do not have to be read differently. `version`
+without dashes does the same thing.
+
+A build made without the release pipeline says `dev` and omits the build date,
+rather than inventing either.
 
 ## Worker sizing
 
