@@ -95,77 +95,9 @@ func (db *DB) prepareChannelEncryption(ctx context.Context, current, previous *c
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	rows, err := tx.QueryContext(ctx, "SELECT id, config_json FROM notif_channels ORDER BY id")
+	pending, report, err := planChannelRewrites(ctx, tx, current, previous)
 	if err != nil {
-		return fmt.Errorf("store: read channel configuration: %w", err)
-	}
-
-	type rewrite struct {
-		id    int64
-		value string
-	}
-	var (
-		pending []rewrite
-		report  = ChannelEncryptionReport{Enabled: current != nil}
-	)
-	for rows.Next() {
-		var (
-			id     int64
-			stored sql.NullString
-		)
-		if err := rows.Scan(&id, &stored); err != nil {
-			_ = rows.Close()
-			return fmt.Errorf("store: read channel configuration: %w", err)
-		}
-
-		plain := stored.String
-		if isEncryptedConfig(plain) {
-			opened, err := openWithEitherKey(plain, current, previous)
-			if err != nil {
-				_ = rows.Close()
-				return keyMismatchError(id, current != nil, previous != nil)
-			}
-			// A row the current key already opens is where it belongs;
-			// re-sealing it would be work and a new nonce for nothing.
-			if current != nil && opened.byCurrent {
-				continue
-			}
-			plain = opened.plaintext
-			if current == nil {
-				pending = append(pending, rewrite{id: id, value: plain})
-				report.Decrypted++
-				continue
-			}
-			sealed, err := current.seal(plain)
-			if err != nil {
-				_ = rows.Close()
-				return err
-			}
-			pending = append(pending, rewrite{id: id, value: sealed})
-			report.Rewrapped++
-			continue
-		}
-
-		// Plaintext row. With a current key it becomes ciphertext; without
-		// one there is nothing to do, including in the disable case — it is
-		// already the shape that was asked for.
-		if current == nil {
-			continue
-		}
-		sealed, err := current.seal(plain)
-		if err != nil {
-			_ = rows.Close()
-			return err
-		}
-		pending = append(pending, rewrite{id: id, value: sealed})
-		report.Encrypted++
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return fmt.Errorf("store: read channel configuration: %w", err)
-	}
-	if err := rows.Close(); err != nil {
-		return fmt.Errorf("store: read channel configuration: %w", err)
+		return err
 	}
 
 	// updated_at is deliberately left alone: re-wrapping a row changes how it
@@ -183,6 +115,85 @@ func (db *DB) prepareChannelEncryption(ctx context.Context, current, previous *c
 	}
 	db.cryptoReport = report
 	return nil
+}
+
+// channelRewrite is one row's new stored value.
+type channelRewrite struct {
+	id    int64
+	value string
+}
+
+// planChannelRewrites reads every channel config and works out what each row
+// should hold, without writing anything.
+//
+// It is a separate function so the rows can be closed by a defer rather than
+// by a manual Close on every one of the six error paths inside the loop — one
+// of which would eventually be forgotten, leaking a cursor inside the
+// transaction that is about to do the writing. Collecting the plan first and
+// executing it afterwards also avoids issuing UPDATEs on the same connection
+// while a cursor from it is still open.
+func planChannelRewrites(ctx context.Context, tx *sql.Tx, current, previous *configCipher) ([]channelRewrite, ChannelEncryptionReport, error) {
+	report := ChannelEncryptionReport{Enabled: current != nil}
+
+	rows, err := tx.QueryContext(ctx, "SELECT id, config_json FROM notif_channels ORDER BY id")
+	if err != nil {
+		return nil, report, fmt.Errorf("store: read channel configuration: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var pending []channelRewrite
+	for rows.Next() {
+		var (
+			id     int64
+			stored sql.NullString
+		)
+		if err := rows.Scan(&id, &stored); err != nil {
+			return nil, report, fmt.Errorf("store: read channel configuration: %w", err)
+		}
+
+		plain := stored.String
+		if isEncryptedConfig(plain) {
+			opened, err := openWithEitherKey(plain, current, previous)
+			if err != nil {
+				return nil, report, keyMismatchError(id, current != nil, previous != nil)
+			}
+			// A row the current key already opens is where it belongs;
+			// re-sealing it would be work and a new nonce for nothing.
+			if current != nil && opened.byCurrent {
+				continue
+			}
+			plain = opened.plaintext
+			if current == nil {
+				pending = append(pending, channelRewrite{id: id, value: plain})
+				report.Decrypted++
+				continue
+			}
+			sealed, err := current.seal(plain)
+			if err != nil {
+				return nil, report, err
+			}
+			pending = append(pending, channelRewrite{id: id, value: sealed})
+			report.Rewrapped++
+			continue
+		}
+
+		// Plaintext row. With a current key it becomes ciphertext; without
+		// one there is nothing to do, including in the disable case — it is
+		// already the shape that was asked for.
+		if current == nil {
+			continue
+		}
+		sealed, err := current.seal(plain)
+		if err != nil {
+			return nil, report, err
+		}
+		pending = append(pending, channelRewrite{id: id, value: sealed})
+		report.Encrypted++
+	}
+	if err := rows.Err(); err != nil {
+		return nil, report, fmt.Errorf("store: read channel configuration: %w", err)
+	}
+	return pending, report, nil
 }
 
 type openedConfig struct {

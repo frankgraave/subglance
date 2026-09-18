@@ -117,12 +117,17 @@ func (c *configCipher) sameKeyAs(other *configCipher) bool {
 // database — is available to anyone who can write to the database at all,
 // which is strictly more access than this design claims to defend against.
 func (c *configCipher) seal(plaintext string) (string, error) {
-	nonce := make([]byte, c.aead.NonceSize())
-	if _, err := rand.Read(nonce); err != nil {
+	// One buffer holds the nonce and then the sealed output, so the stored
+	// value is nonce||ciphertext||tag with no second allocation. Seal appends
+	// to the slice it is given, which is why the nonce is read into the first
+	// NonceSize bytes and the sealed output is appended after it.
+	n := c.aead.NonceSize()
+	buf := make([]byte, n, n+len(plaintext)+c.aead.Overhead())
+	if _, err := rand.Read(buf); err != nil {
 		return "", fmt.Errorf("store: read nonce: %w", err)
 	}
-	sealed := c.aead.Seal(nil, nonce, []byte(plaintext), nil)
-	return configCipherPrefix + base64.RawURLEncoding.EncodeToString(append(nonce, sealed...)), nil
+	buf = c.aead.Seal(buf, buf[:n], []byte(plaintext), nil)
+	return configCipherPrefix + base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
 // open decrypts a stored value produced by seal.
@@ -174,7 +179,9 @@ func ParseSecretKey(value string) ([]byte, error) {
 		return key, nil
 	}
 
-	contents, err := os.ReadFile(value)
+	// The path is the operator's own --secret-key value, read by the process
+	// they started; there is no untrusted input anywhere near it.
+	contents, err := os.ReadFile(value) //nolint:gosec // operator-supplied key file path
 	if err != nil {
 		// The message has to cover both readings, because at this point
 		// either could have been meant.
