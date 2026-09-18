@@ -3,6 +3,8 @@ package store
 import (
 	"context"
 	"encoding/hex"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -633,8 +635,32 @@ func TestParseSecretKeyAcceptsKeyMaterialAndFiles(t *testing.T) {
 		if strings.Contains(err.Error(), typo) {
 			t.Errorf("the error repeats the supplied key material: %v", err)
 		}
-		if !strings.Contains(err.Error(), "no such file") {
+		// Assert the reason by identity, not by its text: os.ReadFile's
+		// wording for a missing file differs between platforms, and a test
+		// that pinned the Unix phrasing would fail on Windows for a correct
+		// error. Wrapping PathError.Err rather than flattening it to a string
+		// is what makes this checkable at all.
+		if !errors.Is(err, fs.ErrNotExist) {
 			t.Errorf("the error lost the underlying reason: %v", err)
+		}
+	})
+
+	// Only a value that names nothing may fall through to being read as key
+	// material. A path whose parent is not a directory exists as far as the
+	// operator is concerned and stats with ENOTDIR, so decoding it would hand
+	// the process a key derived from the command line.
+	t.Run("a stat failure that is not ErrNotExist fails closed", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		if err := os.WriteFile("A", []byte(hexKey), 0o600); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		// 43 raw-base64 characters, and a path whose first component is a file.
+		path := "A/" + strings.Repeat("A", 41)
+		if _, ok := decodeSecretKey(path); !ok {
+			t.Fatalf("%q is not raw base64 for 32 bytes; the test premise is gone", path)
+		}
+		if _, err := ParseSecretKey(path); err == nil {
+			t.Fatal("ParseSecretKey derived a key from a path it could not stat")
 		}
 	})
 

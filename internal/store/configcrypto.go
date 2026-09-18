@@ -182,7 +182,14 @@ func ParseSecretKey(value string) ([]byte, error) {
 		return nil, nil
 	}
 
-	if _, statErr := os.Stat(value); statErr != nil {
+	// Only a value that demonstrably names nothing may be read as key
+	// material. Any other stat failure — a component that is not a directory,
+	// a directory this process may not traverse — means something is there
+	// that could not be looked at, and falling back to the shape of the path
+	// would silently run on a key anyone who can read the command line can
+	// reconstruct. Failing closed here costs one confusing start; guessing
+	// costs the confidentiality the key was for.
+	if _, statErr := os.Stat(value); errors.Is(statErr, fs.ErrNotExist) {
 		if key, ok := decodeSecretKey(value); ok {
 			return key, nil
 		}
@@ -198,13 +205,16 @@ func ParseSecretKey(value string) ([]byte, error) {
 		// the path it was given, so wrapping it with %w would print the
 		// supplied key to stderr on the one failure where the operator most
 		// likely typed a key by hand. Only the reason survives.
+		// The reason is still wrapped rather than flattened to text, so a
+		// caller can errors.Is it against fs.ErrNotExist or fs.ErrPermission;
+		// PathError.Err is the half that carries no path.
 		reason := err
 		var pathErr *fs.PathError
 		if errors.As(err, &pathErr) {
 			reason = pathErr.Err
 		}
 		return nil, fmt.Errorf("secret key is neither %d bytes of key material "+
-			"(64 hex or base64 characters) nor a readable file path (%v)", SecretKeyLength, reason)
+			"(64 hex or base64 characters) nor a readable file path (%w)", SecretKeyLength, reason)
 	}
 	key, ok := decodeSecretKey(string(contents))
 	if !ok {
