@@ -70,6 +70,21 @@ type Monitor struct {
 	// failing. Zero disables the check.
 	SSLWarnDays int
 
+	// MinTLSVersion is the lowest TLS version this monitor will negotiate, as
+	// a crypto/tls version constant. Zero means the default, TLS 1.2.
+	//
+	// It exists in both directions. Lowered, it makes a legacy endpoint
+	// monitorable at all: an appliance that only speaks TLS 1.0 is exactly the
+	// kind of thing a self-hoster needs to watch, and a monitor that cannot
+	// connect to it reports a permanent, unexplained outage. Raised, it is a
+	// deliberate assertion about the server — set TLS 1.3 and the check fails
+	// the day the endpoint stops offering it.
+	//
+	// The default stays at TLS 1.2 rather than at whatever the endpoint will
+	// accept: a monitoring tool that quietly negotiates down would report
+	// green for a server no browser will open.
+	MinTLSVersion uint16
+
 	// CaptureResponse allows a failed HTTP check to keep the beginning of the
 	// response body. It is off for a monitor whose responses may carry a
 	// session token or personal data; see ResponseSnapshot.

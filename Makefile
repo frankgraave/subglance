@@ -38,6 +38,14 @@ test: ## Run the hermetic suite with the race detector (what CI runs)
 test-network: ## Run everything, including tests that need real network access
 	SUBGLANCE_TEST_NETWORK=1 $(GO) test -race -count=1 ./...
 
+.PHONY: test-badssl
+test-badssl: ## Run the TLS acceptance suite against badssl.com (needs the internet)
+	$(GO) test -tags badssl -v -count=1 -timeout 5m ./internal/checker/ -run TestBadSSL
+
+.PHONY: vet-badssl
+vet-badssl: ## Compile the badssl suite without running it, so the tag cannot rot
+	$(GO) vet -tags badssl ./internal/checker/
+
 .PHONY: cover
 cover: ## Run tests and open a coverage report
 	$(GO) test -coverprofile=coverage.out ./...

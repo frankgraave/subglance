@@ -55,6 +55,36 @@ detector. CI runs the same thing, so this saves you a round trip.
 If you touched anything concurrent, run the tests a few times — race conditions
 are shy.
 
+### The badssl acceptance suite
+
+The TLS diagnosis in `internal/checker` has a second suite behind the `badssl`
+build tag. It runs the SSL and HTTP checkers against badssl.com's failure
+subdomains and asserts, per endpoint, the `FailureKind` and the sentence the
+user is shown. It is the ground truth the hermetic TLS tests are abstractions
+of.
+
+```bash
+make test-badssl    # run it (needs outbound internet)
+make vet-badssl     # compile it without running it
+```
+
+It is out of `make test` and out of CI on purpose: it depends on the public
+internet and on the state of somebody else's certificates, and a third-party
+host having a bad day must not turn this repository red.
+
+Two things to know before changing it. It **fails rather than skips** when
+badssl is unreachable — a network test that skips into green reports a pass for
+a run that proved nothing, and nobody reads a skip. And many badssl subdomains
+have themselves expired (`sha1-intermediate`, `no-common-name`, `superfish`,
+`extended-validation`, `10000-sans`), so they fail on expiry rather than on the
+thing they are named for; asserting on those would be asserting on badssl's
+renewal schedule. Only endpoints that hold for their stated reason belong in
+the table.
+
+Because it is not compiled by the default build, run `make vet-badssl` after
+touching anything in `internal/checker` — otherwise the tag rots quietly and
+nobody finds out until the next person needs it.
+
 ## Code conventions
 
 **Everything in this repository is written in English** — code, comments,
