@@ -34,16 +34,27 @@ func envKeysInOperations(t *testing.T) []string {
 	}
 
 	// The table under `## Configuration`, up to the blank line that ends it.
+	//
+	// The section is sliced at the next level-two heading first. Searching the
+	// rest of the file for a table separator would otherwise find one in a
+	// later section if the configuration table were ever removed — and the
+	// guard would then quietly grade a different table, reporting that every
+	// option is documented when the table documenting them is gone. That is
+	// the one failure a drift guard must not have.
 	body := string(raw)
 	start := strings.Index(body, "\n## Configuration\n")
 	if start == -1 {
 		t.Fatalf("%s has no `## Configuration` heading; the scan is broken", operationsPath)
 	}
-	header := strings.Index(body[start:], "\n|---")
+	section := body[start+len("\n## Configuration\n"):]
+	if next := strings.Index(section, "\n## "); next != -1 {
+		section = section[:next]
+	}
+	header := strings.Index(section, "\n|---")
 	if header == -1 {
 		t.Fatalf("%s has no table under `## Configuration`; the scan is broken", operationsPath)
 	}
-	table := body[start+header:]
+	table := section[header:]
 	if end := strings.Index(table, "\n\n"); end != -1 {
 		table = table[:end]
 	}
