@@ -39,12 +39,21 @@ docker compose down          # add -v to delete the database too
 Compose is only a wrapper here; a single `docker run` is equivalent:
 
 ```sh
-docker run -d -p 8080:8080 -v subglance:/data ghcr.io/frankgraave/subglance:edge
+docker run -d -p 127.0.0.1:8080:8080 -v subglance:/data ghcr.io/frankgraave/subglance:edge
 ```
 
 That is the whole installation. Open <http://localhost:8080/> and the first
 screen asks you to create an administrator; the database is SQLite inside the
 volume, so there is nothing else to run alongside it.
+
+> [!IMPORTANT]
+> The `127.0.0.1:` prefix matters, and the Compose file above carries it for
+> the same reason. The first start has no users, so whoever reaches the
+> dashboard first becomes the administrator; publishing on every interface
+> means that can be anyone who can route to this host, before you have
+> finished reading this sentence. Reach it from elsewhere over a reverse proxy
+> or an SSH tunnel, or drop the prefix as a deliberate choice once an
+> administrator exists.
 
 The image tags track branches rather than releases. `:edge` and `:develop` both
 follow the head of `develop` and will change under you; a short-SHA tag is
@@ -82,7 +91,7 @@ monitor reports a permission error, the binary names both fixes; the narrower
 one is:
 
 ```sh
-docker run -d -p 8080:8080 -v subglance:/data \
+docker run -d -p 127.0.0.1:8080:8080 -v subglance:/data \
   --sysctl net.ipv4.ping_group_range="0 2147483647" \
   ghcr.io/frankgraave/subglance:edge
 ```

@@ -79,8 +79,11 @@ curl -H "Authorization: Bearer $SUBGLANCE_TOKEN" http://localhost:8080/api/v1/mo
 A token's plaintext is shown once and stored only as a hash; it cannot be
 recovered, only replaced.
 
-Three roles: **viewer** (read-only), **editor** (manage monitors, acknowledge
-incidents) and **admin** (also manages users and tokens).
+Three roles decide what a credential may do to monitors and incidents:
+**viewer** (read-only), **editor** (manage monitors, acknowledge incidents) and
+**admin** (also manages users). Tokens are scoped a little differently, because
+listing and revoking are limited to the caller's own: any role may list its
+tokens and revoke one, while minting a new token needs editor or admin.
 
 ## Check types
 

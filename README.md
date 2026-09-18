@@ -27,13 +27,20 @@ everything is running, what is broken, and since when.
 ## Quick start
 
 ```sh
-docker run -d -p 8080:8080 -v subglance:/data ghcr.io/frankgraave/subglance:edge
+docker run -d -p 127.0.0.1:8080:8080 -v subglance:/data ghcr.io/frankgraave/subglance:edge
 ```
 
 Open <http://localhost:8080/>, create an administrator on the first screen, and
 add a monitor. That is the whole installation — the database is SQLite inside
 the volume, and the dashboard is compiled into the binary, so there is nothing
 to run alongside it.
+
+> [!IMPORTANT]
+> The port is published on loopback on purpose. Until an account exists,
+> whoever reaches the dashboard first becomes the administrator — so binding to
+> every interface hands that to anyone who can route to the host. Reach it from
+> elsewhere over a reverse proxy or an SSH tunnel, or drop the `127.0.0.1:`
+> prefix deliberately once an administrator exists.
 
 Prefer Compose, a downloaded binary, or a build from source?
 See **[Installing SubGlance](docs/installation.md)**.
