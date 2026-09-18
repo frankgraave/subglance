@@ -163,10 +163,12 @@ are not in the first release.
 
 Things that work, but not the way they eventually should:
 
-- **Channel configuration is stored as plain text.** `notif_channels.config_json`
-  holds webhook URLs, bot tokens and SMTP passwords unencrypted, so anyone who
-  can read the database file can read them. The API masks them on the way out;
-  the file does not.
+- **Channel configuration is stored as plain text unless you set a key.**
+  `notif_channels.config_json` holds webhook URLs, bot tokens and SMTP
+  passwords, and without `--secret-key` they are readable by anyone who can
+  read the database file or any backup of it. The API masks them on the way
+  out; the file does not. Setting a key encrypts them at rest — see
+  [encrypting channel configuration](docs/operations.md#encrypting-channel-configuration).
 - **A channel's target address is only checked when a message is sent**, not
   when the channel is saved. The SSRF guard runs at delivery, which is what
   stops a channel from reaching `169.254.169.254` — but a channel pointed

@@ -37,6 +37,8 @@ five-minute dead man's switch, or LAN monitoring, and having neither.
 | `--watchdog-interval` | `SUBGLANCE_WATCHDOG_INTERVAL` | `5m` | How often to ping that URL |
 | `--raw-retention` | `SUBGLANCE_RAW_RETENTION` | `168h` (7d) | How long raw heartbeats are kept before being rolled up into hourly buckets |
 | `--rollup-retention` | `SUBGLANCE_ROLLUP_RETENTION` | `8760h` (1y) | How long hourly buckets and resolved incidents are kept (`0` = forever) |
+| `--secret-key` | `SUBGLANCE_SECRET_KEY` | empty (off) | 32 bytes of key material, or a path to a file holding it, to encrypt notification channel configuration at rest. Empty means **no encryption** |
+| `--secret-key-previous` | `SUBGLANCE_SECRET_KEY_PREVIOUS` | empty | The key the stored configuration is currently under, for one start: rotates to `--secret-key`, or decrypts back to plain text when `--secret-key` is empty |
 
 ### Retention
 
@@ -68,6 +70,52 @@ belong to the same event. Raise it if your checks run less often than that.
 `--allow-private-targets` is off by default on purpose. Users supply the URLs to
 monitor, and without that guard SubGlance would happily act as an SSRF proxy into
 the host network. Turn it on only if you intend to monitor internal services.
+
+### Encrypting channel configuration
+
+Notification channel configuration — webhook URLs, bot tokens, SMTP passwords —
+is stored in the SQLite database. **Without `--secret-key` it is stored in plain
+text**, so anyone who can read the database file, or any backup of it, can read
+those credentials. The API masks them on the way out; the file does not. That is
+the default, and it is stated here rather than left to be discovered in the code.
+
+Set a key to encrypt it:
+
+```
+openssl rand -hex 32 > /etc/subglance/secret.key
+chmod 600 /etc/subglance/secret.key
+subglance --secret-key /etc/subglance/secret.key
+```
+
+**Prefer the file form.** A key passed as an environment variable is readable in
+`/proc/<pid>/environ` and is printed by `docker inspect` from the stored
+container configuration, where it outlives the process.
+
+A key file that appeared automatically beside the database was deliberately
+rejected: it would travel with every backup and every `docker cp` of the data
+volume, so it would encrypt nothing against the attacker who takes the data,
+while creating the impression of protection.
+
+On the first start with a key, existing plaintext rows are encrypted in one
+transaction before SubGlance serves anything. Turning it on is therefore a
+restart, not a migration you run separately.
+
+**A wrong key, or a removed key while encrypted rows exist, is a refusal to
+start.** Not a warning: starting anyway would mean every channel failing at
+delivery, during exactly the incident the alerts exist to report, and refusing
+leaves the database correct so restoring the right key is complete recovery.
+
+To rotate, pass both for one start — rows already under the new key are skipped,
+so a retried rotation is safe:
+
+```
+subglance --secret-key-previous OLD --secret-key NEW
+```
+
+To turn encryption off on purpose, pass the current key as `--secret-key-previous`
+with no `--secret-key`; every row is written back as plain text.
+
+See [SECURITY.md](../SECURITY.md) for the threat model.
 
 ### Trusted proxies
 
