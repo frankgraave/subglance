@@ -70,11 +70,19 @@ afterAll(async () => {
   await server?.close();
 });
 
-/** The dashboard in one layout and one theme, fonts settled. */
+/**
+ * One screen, in one layout and one theme, fonts settled.
+ *
+ * `route` defaults to the dashboard. The detail page is reached by its real
+ * URL (`/monitors/1`, the fixture's down monitor) rather than by clicking
+ * through a row: the pill's border is what is under test, and a click path
+ * adds a way for the test to fail that has nothing to do with the border.
+ */
 async function openDashboard(
   layout: "rows" | "cards" | "compact",
   ready: string,
   theme: "dark" | "light",
+  route = "/",
 ): Promise<Page> {
   const page = await browser.newPage();
   await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
@@ -91,7 +99,7 @@ async function openDashboard(
     THEME_STORAGE_KEY,
     theme,
   );
-  await page.goto(server.url + "/", { waitUntil: "domcontentloaded" });
+  await page.goto(server.url + route, { waitUntil: "domcontentloaded" });
   await page.waitForSelector(ready, { timeout: 15_000 });
   await page.evaluate(() => document.fonts.ready);
   await page.evaluate(
@@ -175,12 +183,16 @@ const DRAIN_AMOUNT = `((lamp) => {
  * and what colour it paints them. A rule addressing `> :first-child` through
  * two attribute selectors is exactly the kind that silently matches nothing.
  */
-function probe(selector: string, edge: "border-left-color" | "border-color"): string {
+function probe(
+  selector: string,
+  edge: "border-left-color" | "border-color",
+  host = ".mon-dashboard",
+): string {
   return `(async () => {
     const filtered = ${FILTERED};
     const toRgb = ${TO_RGB};
     const drainAmount = ${DRAIN_AMOUNT};
-    const screen = document.querySelector(".mon-dashboard");
+    const screen = document.querySelector(${JSON.stringify(host)});
     const target = document.querySelector(${JSON.stringify(selector)});
     if (!screen || !target) return { missing: true };
     const read = () => window.getComputedStyle(target).getPropertyValue(${JSON.stringify(edge)});
@@ -201,10 +213,14 @@ function probe(selector: string, edge: "border-left-color" | "border-color"): st
     // to the stale rule passed the whole file.
     const staleWidth = Math.round(
       Number.parseFloat(
-        window.getComputedStyle(target).getPropertyValue("border-left-width"),
+        window.getComputedStyle(target).getPropertyValue(
+          ${JSON.stringify(
+            edge === "border-color" ? "border-top-width" : "border-left-width",
+          )},
+        ),
       ),
     );
-    const lamp = document.querySelector(".mon-dashboard .led");
+    const lamp = document.querySelector(${JSON.stringify(host)} + " .led");
     const amount = lamp ? drainAmount(lamp) : null;
     const expected = amount === null ? null : filtered(live, amount);
     screen.setAttribute("data-conn", "live");
@@ -244,6 +260,9 @@ const CARRIERS: {
   selector: string;
   edge: "border-left-color" | "border-color";
   what: string;
+  /** The element carrying `data-conn`; the detail page has its own. */
+  host?: string;
+  route?: string;
 }[] = [
   {
     layout: "rows",
@@ -266,6 +285,26 @@ const CARRIERS: {
     edge: "border-left-color",
     what: "the compact line's leading edge",
   },
+  /*
+   * The detail page's status pill, which states the same claim as a full
+   * border rather than a leading edge — so it drains with them, and the
+   * `border-color` branch of `probe()` exists for it.
+   *
+   * It was missing here while the type and the comment both mentioned it,
+   * which meant connection.css's two `.mon-detail-status` rules had no
+   * browser coverage at all: the unit tests assert markup and `data-conn`,
+   * and tokens.test.ts only reads the stylesheet as text (CodeRabbit, PR
+   * #67). Reached by its real URL — monitor 1 is the fixture's down one.
+   */
+  {
+    layout: "rows",
+    ready: ".mon-detail-status",
+    selector: '.mon-detail-status[data-status="down"]',
+    edge: "border-color",
+    what: "the detail page's status pill",
+    host: ".mon-detail",
+    route: "/monitors/1",
+  },
 ];
 
 describe("the status rail stops asserting when the stream dies", () => {
@@ -276,6 +315,7 @@ describe("the status rail stops asserting when the stream dies", () => {
           carrier.layout,
           carrier.ready,
           theme,
+          carrier.route,
         );
         try {
           expect(
@@ -286,7 +326,7 @@ describe("the status rail stops asserting when the stream dies", () => {
           ).toBe(theme);
 
           const result = (await page.evaluate(
-            probe(carrier.selector, carrier.edge),
+            probe(carrier.selector, carrier.edge, carrier.host),
           )) as Probe;
 
           expect(
@@ -330,12 +370,17 @@ describe("the status rail stops asserting when the stream dies", () => {
           //    nothing moves": removing the edge would say the monitor
           //    stopped being down, and the last known state is the most
           //    useful thing left on a stale screen.
+          //    The pill's border is 1px (it frames a box); the three leading
+          //    edges are the 2px status rail. Both are "still painted", which
+          //    is the claim — so the expectation follows the carrier rather
+          //    than hard-coding the rail's number for all four.
+          const expectedWidth = carrier.edge === "border-color" ? 1 : 2;
           expect(
             result.width,
-            `${carrier.what} must still be drawn at its full 2px once stale; ` +
-              `dropping it would delete the last known state rather than ` +
-              `stop asserting it`,
-          ).toBe(2);
+            `${carrier.what} must still be drawn at its full ${expectedWidth}px ` +
+              `once stale; dropping it would delete the last known state ` +
+              `rather than stop asserting it`,
+          ).toBe(expectedWidth);
         } finally {
           await page.close();
         }

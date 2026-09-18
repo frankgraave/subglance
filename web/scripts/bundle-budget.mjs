@@ -167,7 +167,7 @@ const budgets = {
    * review suggestion and it makes the number go the wrong way.
    *
    * The ceiling moves to 15 rather than to 14.5 for the same reason the last
-   * raise went to 14: 14.5 would leave 331 bytes, which is two more bugfixes
+   * raise went to 14: 14.5 would leave 369 bytes, which is two more bugfixes
    * and then another raise. It is also the first CSS raise since SUB-137 —
    * two whole management screens (SUB-122, SUB-123) landed in between and
    * cost 0.4 kB and 37 bytes respectively, because they reused what was
