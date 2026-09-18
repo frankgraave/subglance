@@ -122,6 +122,15 @@ Every status colour has a `-dim` variant for badge and row backgrounds
 tile alone; **no monitor row, card or compact line carries one**, which is the
 next paragraph.
 
+`--down` and `--warn` also have a `-drained` variant — `--down-drained`,
+`--warn-drained` — which is not a resting tone and never paints a live mark.
+Each is its base colour at `saturate(.18)`, and it exists only for the moment
+the SSE stream dies: §6 drains every claim on the screen, the 2px status edge
+is a claim, and a border cannot be drained with a `filter` without taking the
+row's text with it. There is no `--up-drained` or `--idle-drained`, because no
+status edge is painted in `--up` and `--idle` is already neutral. §6 has the
+whole argument.
+
 **No status has a resting fill on a monitor.** A down monitor used to be the
 one exception: `--down-dim` across every cell of its row, its card and its
 compact line, with `--down-deep` one step past it for the hover.
@@ -153,6 +162,13 @@ contradicting the code. Two consequences, both deliberate:
 | the heartbeat bar: a failed check is drawn **full height** | yes |
 | the word `Down`, visible in the compact and card layouts | yes, in those layouts |
 | the word `Down`, `sr-only` in the rows layout | to assistive technology only |
+
+The edge is the one carrier that is *conditional on the stream*, and §6 is
+where that is stated: once the stream dies the edge drains to
+`--down-drained`, keeping its position and its 2px while losing its
+saturation. Everything else in the table is untouched by that, which is why
+§9 still holds on a stale screen — position, words and bar height do not
+depend on a hue in the first place.
 
 Two things this table deliberately does not claim. The lamp's glow is **not** a
 carrier: `up`, `warn` and `down` all have one (`--glow-up`, `--glow-warn`,
@@ -731,6 +747,16 @@ that width and height were the last two scales with no ladder at all and had
 drifted furthest — an audit counted 88 loose pixel values across 26
 stylesheets against zero loose colours.
 
+`--size-status-rail: 2px` is the rung for the coloured leading edge that marks
+a row, card, compact line or incident (SUB-142). It sits at the ladder's floor
+and it is named rather than written inline because the alternative was the
+same decision spelled two incompatible ways: the incidents rail read
+`width: var(--outline-w)` — a token that names the keyboard *focus* outline,
+the same 2px only by coincidence — and the dashboard's edges wrote a bare
+`2px` inside a `border-left` shorthand, where the size guard cannot see it.
+Widening the focus outline for an accessibility reason would silently have
+moved a status indicator on two screens.
+
 ### 2.13 Breakpoints are tokens that cannot be used
 
 640 / 641 / 900. Documented as `--bp-*` and written as literals everywhere
@@ -992,10 +1018,57 @@ What happens when the connection is lost (`body[data-conn="stale"]`):
 
 - Every LED and heartbeat bar desaturates to ~18% and loses its glow, over
   600ms. Slow on purpose: this is not an alarm, it is a withdrawal.
-- Latency figures and the summary counts drop to `--ink-3`.
+- **The status rail — the 2px coloured leading edge on a row, card, compact
+  line or incident — drains with them, to the same ~18%** (SUB-140). It is the
+  row's main visual carrier since the red fill was removed (§2.3), so leaving
+  it lit meant the loudest mark on the screen was the one mark still
+  asserting.
+- Latency figures and the summary counts drop to `--ink-3`, and so does the
+  failure reason in every layout that prints one (`.mon-error`,
+  `.mon-card-error`, `.mon-line-error`).
 - Live check animations stop — they would be fiction.
 - A warm banner appears above the toolbar with a live "since" counter and a
   **Reconnect now** button.
+
+**Only the statuses that are making a claim drain.** `down` ("this is
+failing") and `pending` ("a check is in flight") are both present-tense
+statements about the monitored service, so both withdraw — pending is no less
+a claim for being quieter, and draining one without the other would leave the
+screen half-withdrawn. `waiting` and `paused` keep their edges at full
+strength: "no data yet" and "somebody switched this off" are facts about *our
+own configuration*, not readings of anything, and they are exactly as true
+after the stream dies as before it. Withdrawing them would invent doubt about
+the one thing we still know. Both are already neutral (`--idle`, a dotted
+`--ink-3`), so there is no colour claim left in them to drain either.
+
+**The rail drains by colour, not by filter, and the mechanism is a decision
+rather than an implementation detail.** The incident rail is a `::before`
+pseudo-element that is nothing but the rail, so `filter: saturate(.18)` is
+right there — the filter has nothing else to reach. The dashboard's three
+edges are `border-left-color` on the row's first cell, on the card and on the
+line: elements that also carry the monitor's name, its latency and its failure
+reason. A filter on those would desaturate all of that text along with the two
+pixels, and composite on top of the `--ink-3` ink-drain already applied to the
+same numbers. So the dashboard changes the colour instead, to
+`--down-drained` / `--warn-drained` — each its base colour at `saturate(.18)`,
+measured in Chromium per theme so the two halves of the screen land in the
+same place and the row withdraws as one object rather than in two stages.
+
+Converting the dashboard's edges to `::before` rails to match incidents was
+considered and rejected: `.mon-head:first-child` and `.mon-section-title`
+reserve the identical 2px as a *transparent border* so a header's text starts
+where its column's data starts, and a pseudo-element contributes no border box
+for that reserve to track.
+
+**Drained, never removed.** Dropping the edge would say the monitor stopped
+being down. The 2px stay painted at a strength that reads as "was", not "is".
+
+**Never colour alone, after the drain as before it** (§9). Once the edge is
+desaturated a down row is still carried by its position (sorted to the top,
+under a counted **Needs attention (n)** heading), by the failure reason
+printed in words where the latency would be, by the full-height failed checks
+in the heartbeat bar, and by the status word itself — moved to the past tense,
+in the markup, so it reaches a screen reader too.
 
 **The banner is warm, not red.** Red would be a false alarm: the monitored
 services may well be perfectly healthy. It is *the dashboard's* knowledge that
@@ -1641,6 +1714,22 @@ stopped updating.
 Not an afterthought — several of the decisions above exist precisely for it.
 
 - **Never colour alone.** See §2.3.
+- **Never colour alone on a *stale* screen either.** This is the case worth
+  stating separately, because §6's drain deliberately weakens the carrier
+  §2.3 lists first. Once the stream dies the down row's leading edge is
+  desaturated to `--down-drained`, so what distinguishes a down row from an
+  up row is no longer the edge's hue. It is:
+  **(a)** position — down sorts to the top, under a **Needs attention (n)**
+  heading that states the count in words;
+  **(b)** the failure reason, printed in words where the latency would be;
+  **(c)** the status word itself, moved to the past tense (**Was down**) in
+  the markup, which is what reaches a screen reader;
+  **(d)** the heartbeat bar, which draws a failed check full height.
+  None of the four is made of colour, which is precisely why the drain does
+  not cost the row its legibility. An up row has no coloured edge at rest and
+  none after the drain, so the comparison never rested on comparing two hues.
+  `statusRailDrain.browser.test.ts` measures (a), (b) and (c) in the drained
+  state rather than leaving this paragraph as prose.
 - **Contrast:** `--ink` and `--ink-2` clear AA against their backgrounds.
   `--ink-3` is for labels and helper text, `--ink-4` exclusively for placeholders
   and disabled state — never for text meant to be read.

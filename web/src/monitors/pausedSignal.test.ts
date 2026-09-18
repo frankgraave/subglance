@@ -62,10 +62,19 @@ describe("paused carries a second signal in every list layout", () => {
       expect(statusRule(monitorsCss, block, "pending")).not.toContain("dotted");
     });
 
-    it(`draws ${block}'s leading edge at 2px in every status`, () => {
+    it(`draws ${block}'s leading edge at the status-rail rung in every status`, () => {
       // The width belongs to the edge, not to the state. `.mon-row` states it
       // once on the resting rule; the other two state it per status because
       // they have no resting edge to reserve it on.
+      //
+      // Asserted as the TOKEN, not as `2px` (SUB-142). The literal moved into
+      // `--size-status-rail` so that one decision has one name — the incidents
+      // rail was writing the same 2px as `var(--outline-w)`, a focus-outline
+      // token, and this edge was writing it as a literal the size guard could
+      // not see. A grep for "2px" here would now pass only by accident if
+      // somebody wrote the literal back, which is the drift this test should
+      // fail on rather than accept. The rung's *value* is checked against the
+      // ladder in tokens.test.ts, which is where a pixel count belongs.
       const resting =
         block === "mon-row"
           ? monitorsCss.slice(
@@ -73,7 +82,7 @@ describe("paused carries a second signal in every list layout", () => {
               monitorsCss.indexOf("}", monitorsCss.indexOf(".mon-row > :first-child {")),
             )
           : statusRule(monitorsCss, block, "paused");
-      expect(resting).toContain("2px");
+      expect(resting).toContain("var(--size-status-rail)");
     });
 
     it(`draws ${block}'s paused edge in --ink-3, which clears 3:1`, () => {

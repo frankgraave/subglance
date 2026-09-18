@@ -480,7 +480,29 @@
         </td>
         <td><code>--down-dim</code></td>
         <td class="sg-value"><code>#2c1017</code><br><code class="sg-light">#fde4e9</code></td>
-        <td class="sg-why">The tinted plate behind a down mark. It survived the row fill because it still has live callers that are *not* rows: the down icon tile and the open incident row, both of which are a single object saying what it is <details class="sg-more"><summary>more</summary>rather than a line in a list of mostly-fine things.</details></td>
+        <td class="sg-why">The tinted plate behind a down mark. It survived the row fill because it still has a live caller that is not a row: the down icon tile, which is a single object saying what it is rather than a line in a list of <details class="sg-more"><summary>more</summary>mostly-fine things. This comment used to claim the open incident row as a second caller. That stopped being true when the incident row's fill became a 2px rail (incidents.css states the 139,260px² measurement behind that change), and §2.3 already says &quot;called by the icon tile alone&quot; — so the token file was the one place still describing neither tree. Corrected while draining the rail (SUB-140), because prose has no test and this is what that costs.</details></td>
+      </tr>
+      <tr>
+        <td class="sg-cell-swatch">
+          <span class="sg-checker"
+            ><span class="sg-swatch" style="background: #816066"></span
+            ><span class="sg-swatch sg-swatch-light" style="background: #65424a"></span
+          ></span>
+        </td>
+        <td><code>--down-drained</code></td>
+        <td class="sg-value"><code>#816066</code><br><code class="sg-light">#65424a</code></td>
+        <td class="sg-why">The status rail, no longer asserting: what a `--down` or `--warn` edge becomes once the stream has gone quiet (DESIGN.md §6, SUB-140). <details class="sg-more"><summary>more</summary>Each is its status colour at `saturate(.18)` -- the exact strength `connection.css` drains the lamp and the heartbeat bar to, and `incidents.css` the incident rail -- resolved to a flat hex here rather than applied as a filter. The reason is the mechanism: the dashboard's edges are `border-left-color` ON THE ROW CELL, CARD AND LINE, so a `filter` would desaturate the row's text along with its edge and collide with the `--ink-3` ink-drain those same rules already apply to the numbers and the failure reason. The incident rail can use a filter because it is a `::before` that is nothing but the rail; a border cannot. Measured in Chromium, not asserted: a swatch of each base colour under `filter: saturate(.18)` paints exactly these bytes, so a drained edge lands in the same place as a drained lamp two pixels away and the row withdraws as one object. `statusRailDrain.browser.test.ts` re-measures both halves against each other so the pair cannot drift apart. There is no `--idle-drained` and no drained paused tone, and that is a decision rather than an omission: §6 drains *claims*, and neither of those is one. See §6 in DESIGN.md.</details></td>
+      </tr>
+      <tr>
+        <td class="sg-cell-swatch">
+          <span class="sg-checker"
+            ><span class="sg-swatch" style="background: #cbc0a4"></span
+            ><span class="sg-swatch sg-swatch-light" style="background: #716052"></span
+          ></span>
+        </td>
+        <td><code>--warn-drained</code></td>
+        <td class="sg-value"><code>#cbc0a4</code><br><code class="sg-light">#716052</code></td>
+        <td class="sg-why">The status rail, no longer asserting: what a `--down` or `--warn` edge becomes once the stream has gone quiet (DESIGN.md §6, SUB-140). <details class="sg-more"><summary>more</summary>Each is its status colour at `saturate(.18)` -- the exact strength `connection.css` drains the lamp and the heartbeat bar to, and `incidents.css` the incident rail -- resolved to a flat hex here rather than applied as a filter. The reason is the mechanism: the dashboard's edges are `border-left-color` ON THE ROW CELL, CARD AND LINE, so a `filter` would desaturate the row's text along with its edge and collide with the `--ink-3` ink-drain those same rules already apply to the numbers and the failure reason. The incident rail can use a filter because it is a `::before` that is nothing but the rail; a border cannot. Measured in Chromium, not asserted: a swatch of each base colour under `filter: saturate(.18)` paints exactly these bytes, so a drained edge lands in the same place as a drained lamp two pixels away and the row withdraws as one object. `statusRailDrain.browser.test.ts` re-measures both halves against each other so the pair cannot drift apart. There is no `--idle-drained` and no drained paused tone, and that is a decision rather than an omission: §6 drains *claims*, and neither of those is one. See §6 in DESIGN.md.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -971,6 +993,14 @@
         <td><code>--size-rail</code></td>
         <td class="sg-value"><code>56px</code></td>
         <td class="sg-why">the sidebar once collapsed: icons, no labels</td>
+      </tr>
+      <tr>
+        <td class="sg-cell-swatch">
+          <span class="sg-bar" style="width: var(--size-status-rail)"></span>
+        </td>
+        <td><code>--size-status-rail</code></td>
+        <td class="sg-value"><code>2px</code></td>
+        <td class="sg-why">The status rail: the coloured leading edge that marks a row, card, compact line or incident as needing attention (SUB-142). Its own rung because it is a *status mark*, and no existing rung is one. <details class="sg-more"><summary>more</summary>Every caller used to write this decision twice over in two shapes that could not be kept in step: the incidents rail read `width: var(--outline-w)` -- a token that names the keyboard FOCUS outline below -- and the dashboard's three edges wrote a bare `2px` inside a `border-left` shorthand, where the size guard cannot see it (a standalone `width: 2px` would be refused). They are the same 2px today only by coincidence, so widening the focus outline for a keyboard-accessibility reason would silently have moved a status indicator on two screens. Not `--outline-w` (a focus affordance, drawn outside the box, changed for accessibility reasons), not `--size-icon-*` (those size glyphs, and the smallest is 7px), and not a `--space-*` rung (this is a painted mark, not a gap). 2px rather than 1 so the row's contents do not shift one pixel right the moment a monitor goes down -- the space is reserved at rest and only its paint is a state.</details></td>
       </tr></tbody>
     </table>
 </section>

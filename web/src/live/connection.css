@@ -109,13 +109,123 @@
 /* The detail view carries the same attribute and inherits the same rules:
    the reasoning above is about what the screen is claiming, not about which
    screen is claiming it. */
+/* `.mon-error` and `.mon-card-error` joined `.mon-line-error` here (SUB-140).
+   All three print the failure reason in `var(--down)`, and only the compact
+   one was listed — so the rows and card layouts kept a full-strength red
+   sentence asserting a live failure while the lamp beside it had drained. The
+   specificity is what makes this work rather than the order: this selector
+   carries three classes plus an attribute against the bare `.mon-error`'s
+   one, so it wins wherever the two stylesheets land in the bundle. */
 .mon-dashboard[data-conn="stale"] .mon-count-value,
 .mon-dashboard[data-conn="stale"] .mon-line-num,
+.mon-dashboard[data-conn="stale"] .mon-error,
+.mon-dashboard[data-conn="stale"] .mon-card-error,
 .mon-dashboard[data-conn="stale"] .mon-line-error,
 .mon-detail[data-conn="stale"] .mon-detail-status,
 .mon-detail[data-conn="stale"] .mon-detail-window-value {
   color: var(--ink-3);
   transition: color 600ms var(--ease);
+}
+
+/*
+ * The status rail stops asserting too (DESIGN.md §6, SUB-140).
+ *
+ * This was the one mark on a stale dashboard still at full strength. It did
+ * not matter as much when a down row also carried a `--down-dim` fill; PR #63
+ * removed that fill at the product owner's request, which promoted the 2px
+ * coloured edge from one carrier among several to the row's main visual one —
+ * so the single mark §6 could not reach became the loudest thing on a screen
+ * that had just stopped knowing anything.
+ *
+ * DRAINED BY COLOUR, NOT BY FILTER, and the mechanism is the decision.
+ *
+ * `incidents.css` drains its rail with `filter: saturate(.18)`, and that is
+ * right there because the rail is a `::before` pseudo-element that is nothing
+ * but the rail — the filter has nothing else to reach. These three edges are
+ * `border-left-color` on the row's first CELL, on the CARD and on the LINE:
+ * elements that also hold the monitor's name, its latency and its failure
+ * reason. A filter on them would desaturate all of that text along with the
+ * two pixels, and would composite on top of the `--ink-3` ink-drain the rule
+ * above applies to the very same numbers — one withdrawal applied twice, in
+ * two mechanisms, to text that is not a status colour at all.
+ *
+ * Converting the three to `::before` rails to match incidents was the other
+ * option and was rejected for a specific, measured reason: `.mon-head:first-
+ * child` and `.mon-section-title` reserve the identical 2px as a *transparent
+ * border* so a header's text starts exactly where its column's data starts
+ * (the four-column, two-pixel misalignment recorded in monitors.css). A
+ * pseudo-element paints an overlay and contributes no border box, so the
+ * reserve would no longer track the edge it exists to reserve for, and fixing
+ * that means re-deriving the header alignment from a different mechanism than
+ * the thing it mirrors — a layout change on three components to avoid naming
+ * two colours.
+ *
+ * So the colour changes instead, and it changes to exactly what the filter
+ * would have produced: `--down-drained` and `--warn-drained` are their base
+ * colours at `saturate(.18)`, measured in Chromium per theme rather than
+ * assumed. Same strength as the lamp, same deliberately slow 600ms, so the
+ * row withdraws as one object rather than in two stages.
+ *
+ * Drained, never removed — §6's method is "nothing is hidden and nothing
+ * moves". Dropping the edge to `--border` would say the monitor stopped being
+ * down, and the last known state is the most useful thing on a stale screen.
+ * The 2px stay painted, at a strength that reads as "was", not "is".
+ *
+ * DOWN AND PENDING ONLY, and the omissions are deliberate.
+ *
+ * §6 drains *claims*, and a claim is a present-tense statement about the
+ * monitored service. `down` ("this is failing") and `pending` ("a check is in
+ * flight") are both claims, and pending is no less one for being quieter — so
+ * both drain, or the screen would half-withdraw.
+ *
+ * `waiting` and `paused` are not claims and keep their edges at full
+ * strength. "No data yet" and "somebody switched this off" are facts about
+ * *our own configuration*, not readings of anything, and they are exactly as
+ * true after the stream dies as before it. Draining them would be the
+ * opposite of this rule: withdrawing a statement that has not been
+ * invalidated, and inventing doubt about the one thing we still know. Both
+ * are also already neutral — `--idle` and a dotted `--ink-3` — so there is no
+ * colour claim left in them to drain. Verified rather than argued: `--idle`
+ * measured under `saturate(.18)` in Chromium shifts by three bytes per
+ * channel, which is why no `--idle-drained` rung exists — there would be
+ * nothing for it to say.
+ */
+.mon-dashboard[data-conn="stale"] .mon-row[data-status="down"] > :first-child,
+.mon-dashboard[data-conn="stale"] .mon-card[data-status="down"],
+.mon-dashboard[data-conn="stale"] .mon-line[data-status="down"] {
+  border-left-color: var(--down-drained);
+  transition: border-left-color 600ms var(--ease);
+}
+
+.mon-dashboard[data-conn="stale"] .mon-row[data-status="pending"] > :first-child,
+.mon-dashboard[data-conn="stale"] .mon-card[data-status="pending"],
+.mon-dashboard[data-conn="stale"] .mon-line[data-status="pending"] {
+  border-left-color: var(--warn-drained);
+  transition: border-left-color 600ms var(--ease);
+}
+
+/*
+ * The detail page's status pill edges in the same colours (detail.css), and it
+ * is the same claim, so it drains with them. The pill is on `.mon-detail`,
+ * which carries its own `data-conn`.
+ *
+ * The 600ms is repeated per block rather than hoisted into one selector list.
+ * That was tried and measured: hoisting it cost 31 bytes MORE gzipped (14,510
+ * against 14,479), because an extra four-selector rule does not compress as
+ * well as a declaration gzip has already seen twice. The duplication is also
+ * the safer shape — `.mon-row > *` already carries a 150ms
+ * `transition: border-color` for hover, so the override has to live in the
+ * same block as the colour it slows down or the two can be separated by an
+ * edit.
+ */
+.mon-detail[data-conn="stale"] .mon-detail-status[data-status="down"] {
+  border-color: var(--down-drained);
+  transition: border-color 600ms var(--ease);
+}
+
+.mon-detail[data-conn="stale"] .mon-detail-status[data-status="pending"] {
+  border-color: var(--warn-drained);
+  transition: border-color 600ms var(--ease);
 }
 
 /*

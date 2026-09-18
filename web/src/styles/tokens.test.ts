@@ -1993,7 +1993,7 @@ const statusBorders = new Set<string>([
    * contents do not move one pixel right the moment a monitor goes down —
    * `--border` is a role token, but the width needs an entry.
    */
-  "web/src/monitors/monitors.css | .mon-row > :first-child | border-left: 2px solid var(--border)",
+  "web/src/monitors/monitors.css | .mon-row > :first-child | border-left: var(--size-status-rail) solid var(--border)",
   /*
    * The two headers above those rows, carrying the SAME 2px as a transparent
    * edge so their text starts on the line the row content starts on.
@@ -2010,23 +2010,43 @@ const statusBorders = new Set<string>([
    * produce the same pixels and would not survive the next edit to the row's
    * border, because nothing would connect the two numbers.
    */
-  "web/src/monitors/monitors.css | .mon-head:first-child | border-left: 2px solid transparent",
-  "web/src/monitors/monitors.css | .mon-section-title | border-left: 2px solid transparent",
-  'web/src/monitors/monitors.css | .mon-card[data-status="down"] | border-left: 2px solid var(--down)',
-  'web/src/monitors/monitors.css | .mon-card[data-status="pending"] | border-left: 2px solid var(--warn)',
-  'web/src/monitors/monitors.css | .mon-card[data-status="paused"] | border-left: 2px dotted var(--ink-3)',
-  'web/src/monitors/monitors.css | .mon-card[data-status="waiting"] | border-left: 2px solid var(--idle)',
-  'web/src/monitors/monitors.css | .mon-line[data-status="down"] | border-left: 2px solid var(--down)',
-  'web/src/monitors/monitors.css | .mon-line[data-status="pending"] | border-left: 2px solid var(--warn)',
-  'web/src/monitors/monitors.css | .mon-line[data-status="paused"] | border-left: 2px dotted var(--ink-3)',
-  'web/src/monitors/monitors.css | .mon-line[data-status="waiting"] | border-left: 2px solid var(--idle)',
-  "web/src/monitors/monitors.css | .push-reveal-warn | border-left: 2px solid var(--warn)",
+  "web/src/monitors/monitors.css | .mon-head:first-child | border-left: var(--size-status-rail) solid transparent",
+  "web/src/monitors/monitors.css | .mon-section-title | border-left: var(--size-status-rail) solid transparent",
+  'web/src/monitors/monitors.css | .mon-card[data-status="down"] | border-left: var(--size-status-rail) solid var(--down)',
+  'web/src/monitors/monitors.css | .mon-card[data-status="pending"] | border-left: var(--size-status-rail) solid var(--warn)',
+  'web/src/monitors/monitors.css | .mon-card[data-status="paused"] | border-left: var(--size-status-rail) dotted var(--ink-3)',
+  'web/src/monitors/monitors.css | .mon-card[data-status="waiting"] | border-left: var(--size-status-rail) solid var(--idle)',
+  'web/src/monitors/monitors.css | .mon-line[data-status="down"] | border-left: var(--size-status-rail) solid var(--down)',
+  'web/src/monitors/monitors.css | .mon-line[data-status="pending"] | border-left: var(--size-status-rail) solid var(--warn)',
+  'web/src/monitors/monitors.css | .mon-line[data-status="paused"] | border-left: var(--size-status-rail) dotted var(--ink-3)',
+  'web/src/monitors/monitors.css | .mon-line[data-status="waiting"] | border-left: var(--size-status-rail) solid var(--idle)',
+  "web/src/monitors/monitors.css | .push-reveal-warn | border-left: var(--size-status-rail) solid var(--warn)",
   'web/src/monitors/monitors.css | .add-input[aria-invalid="true"] | border-color: var(--down)',
   'web/src/monitors/monitors.css | .add-input[aria-invalid="true"]:focus | border-color: var(--down)',
   'web/src/auth/auth.css | .auth-input[aria-invalid="true"] | border-color: var(--down)',
   'web/src/auth/auth.css | .auth-input[aria-invalid="true"]:focus | border-color: var(--down)',
   'web/src/wall/wall.css | .wall-card[data-status="down"] | border-color: color-mix(in srgb, var(--down) 40%, var(--border))',
   'web/src/wall/wall.css | .wall-card[data-status="pending"] | border-color: color-mix(in srgb, var(--warn) 34%, var(--border))',
+  /*
+   * The same status edges, no longer asserting (SUB-140, DESIGN.md §6).
+   *
+   * These are the *drained* counterparts of the four `.mon-row`/`.mon-card`/
+   * `.mon-line` and `.mon-detail-status` entries above: once the stream is
+   * dead the edge keeps its two pixels and loses its saturation, because
+   * removing it would claim the monitor stopped being down. They need an
+   * entry for the same reason the live ones do — a status colour is not a
+   * border *role* — and the drained tones are status colours, one
+   * `saturate(.18)` step from their bases.
+   *
+   * A colour rather than a `filter` because these are borders on elements
+   * that also hold text; connection.css states the full argument beside the
+   * rules. That is also why these tones exist as tokens at all: the guard's
+   * alternative was a `color-mix()` spelled inline at four sites.
+   */
+  'web/src/live/connection.css | .mon-dashboard[data-conn="stale"] .mon-row[data-status="down"] > :first-child, .mon-dashboard[data-conn="stale"] .mon-card[data-status="down"], .mon-dashboard[data-conn="stale"] .mon-line[data-status="down"] | border-left-color: var(--down-drained)',
+  'web/src/live/connection.css | .mon-dashboard[data-conn="stale"] .mon-row[data-status="pending"] > :first-child, .mon-dashboard[data-conn="stale"] .mon-card[data-status="pending"], .mon-dashboard[data-conn="stale"] .mon-line[data-status="pending"] | border-left-color: var(--warn-drained)',
+  'web/src/live/connection.css | .mon-detail[data-conn="stale"] .mon-detail-status[data-status="down"] | border-color: var(--down-drained)',
+  'web/src/live/connection.css | .mon-detail[data-conn="stale"] .mon-detail-status[data-status="pending"] | border-color: var(--warn-drained)',
 ]);
 
 describe("depth comes from the ladder in §2.10", () => {
