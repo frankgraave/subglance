@@ -22,6 +22,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const webRoot = join(here, "..", "..");
 const repoRoot = join(webRoot, "..");
 const guidePath = join(repoRoot, "docs", "styleguide", "index.html");
+const appCssPath = join(repoRoot, "docs", "styleguide", "app.css");
 const tokensPath = join(webRoot, "src", "styles", "tokens.css");
 
 function stripComments(css: string): string {
@@ -56,6 +57,7 @@ describe("the living style guide", () => {
      * day someone last remembered to run the script.
      */
     const committed = readFileSync(guidePath, "utf8");
+    const committedCss = readFileSync(appCssPath, "utf8");
     execFileSync("node", [join(webRoot, "scripts", "build-styleguide.mjs")], {
       cwd: webRoot,
     });
@@ -63,6 +65,35 @@ describe("the living style guide", () => {
     expect(
       fresh === committed,
       "docs/styleguide/index.html is stale — run `npm run styleguide` in web/ and commit the result",
+    ).toBe(true);
+
+    /*
+     * The stylesheet, checked the same way, because it rotted while only the
+     * HTML was guarded.
+     *
+     * `app.css` is the other half of the generator's output: it embeds the
+     * built application CSS so the component specimens are drawn by the rules
+     * the product actually ships. Nothing compared it to a fresh render, so a
+     * PR that changed a component's CSS and did not rebuild left the guide
+     * demonstrating the previous layout — which is precisely the "screenshot
+     * of whatever things were on the day someone last ran the script" this
+     * file exists to prevent, one file over.
+     *
+     * It happened: after #66 changed `.inc-row` from a column to a wrapping
+     * flex row, the committed copy still carried `flex-direction: column`
+     * while the shipped stylesheet said `flex-wrap: wrap`. The HTML was
+     * byte-identical throughout, so this suite stayed green.
+     *
+     * Asserted second, and separately, so the failure names which of the two
+     * artifacts is behind.
+     */
+    const freshCss = readFileSync(appCssPath, "utf8");
+    expect(
+      freshCss === committedCss,
+      "docs/styleguide/app.css is stale — it embeds the built application CSS, " +
+        "so a component whose stylesheet changed is being demonstrated with the " +
+        "old rules. Run `npm run build && npm run styleguide` in web/ and commit " +
+        "the result",
     ).toBe(true);
   });
 
