@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import { StatusChip } from "../components/Chip";
+import { IconBellOff } from "../components/icons";
 import { Value } from "../components/Value";
 import { Led } from "../monitors/Led";
 import { formatClock, incidentStory, incidentTimeline, STATE_TONE } from "./story";
@@ -88,6 +89,31 @@ export function IncidentStoryItem({
    */
   const ackable = story.state !== "resolved" && onAck !== undefined;
   const timeline = incidentTimeline(incident, stale);
+
+  /*
+   * The control's words, computed once and used three ways: as the accessible
+   * name, as the pointer's title, and as the visible label in the expanded
+   * footer. One string, so the glyph the eye sees on a collapsed row and the
+   * name a screen reader hears cannot come to describe different acts.
+   */
+  const ackWord = incident.acked
+    ? "Repeat alerts muted"
+    : acking
+      ? "Muting…"
+      : "Mute repeat alerts";
+
+  /*
+   * Which incident this mutes. An icon-only control named "Mute" is ambiguous
+   * the moment a second row appears, and this list is never one row long at
+   * the time anybody reads it.
+   *
+   * The monitor's name when there is one — that is what distinguishes rows on
+   * the incidents screen. On a monitor's own page there is no subject, because
+   * the monitor is the page title, and the rows there differ by *when*; so the
+   * fallback is the start time rather than a repetition of the title.
+   */
+  const which =
+    subject ?? `the incident from ${formatClock(incident.startedAt) ?? story.began}`;
 
   return (
     <li
@@ -202,19 +228,50 @@ export function IncidentStoryItem({
            * alone, which reads as "mark this done" and is the one label that
            * could make a still-broken service look handled. The response
            * column beside it keeps saying "still down" afterwards.
+           *
+           * ---
+           *
+           * **A glyph while the row is closed, the same words once it opens.**
+           *
+           * The word cost a whole strip. `.inc-act` was a block of its own
+           * under the line, so a collapsed row measured 108px to carry a 60px
+           * line — 46px per row spent on one control, and a screen of open
+           * incidents is mostly repeated buttons. On the line there is no room
+           * for a 113px label beside four columns, and there is exactly room
+           * for the 26px square this product already uses for a per-row action
+           * (SUB-134 on monitors, SUB-137 on channels). This is the third
+           * screen to agree with that pattern rather than the first to invent
+           * something.
+           *
+           * `IconBellOff` and not a new shape, because it is the same act: the
+           * channels screen draws that bell for "leave every check running and
+           * stop telling anyone", which is precisely what acking does to the
+           * repeat ladder. A different glyph for the same promise would be the
+           * reader's problem, not the drawer's.
+           *
+           * The word comes back in the expanded footer, where the tray's fill
+           * gives it room. That is deliberate on both counts: opening a row is
+           * how a reader who does not recognise the bell learns what it does,
+           * and a control that changes shape between the two states is one
+           * more thing making them read as different states rather than as the
+           * same row at two heights.
+           *
+           * `aria-label` is set in *both* forms and names the incident, so the
+           * name never depends on which state the row is in and a list of five
+           * unacked incidents does not announce five buttons called "Mute".
+           * Screen readers do not agree on what an unnamed inline `<svg>` is
+           * (AGENTS.md), so the name is in the markup.
            */}
           <button
             type="button"
-            className="add-button inc-ack"
+            className={open ? "add-button inv-act" : "inv-act inv-act--icon"}
             onClick={() => onAck?.(incident.id)}
             disabled={acking || incident.acked}
-            title="Stops the escalating repeat notifications. The incident stays open until the service recovers."
+            aria-busy={acking}
+            aria-label={`${ackWord} for ${which}`}
+            title={`${ackWord} for ${which}. Stops the escalating repeat notifications. The incident stays open until the service recovers.`}
           >
-            {incident.acked
-              ? "Repeat alerts muted"
-              : acking
-                ? "Muting…"
-                : "Mute repeat alerts"}
+            {open ? ackWord : <IconBellOff />}
           </button>
         </div>
       ) : null}

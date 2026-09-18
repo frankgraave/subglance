@@ -278,18 +278,42 @@ describe("the acknowledge control", () => {
      * label states that consequence rather than the bare verb. "Acknowledge"
      * alone invites the reading "mark this done", which is the one label that
      * could make a still-broken service look handled.
+     *
+     * Asserted on the *accessible name*, not on `textContent`. SUB-141 made
+     * the collapsed control a glyph, so the visible text is empty and the
+     * promise now lives entirely in the name — which is the string both a
+     * screen reader and the pointer's title are built from. A textContent
+     * assertion would have gone on passing the day the name was dropped and
+     * failing the day a glyph replaced a word, which is precisely backwards.
      */
     row({}, { onAck: () => {} });
-    const button = screen.getByRole("button", { name: /mute repeat/i });
-    expect(button.textContent).toMatch(/mute repeat alerts/i);
+    const button = screen.getByRole("button", { name: /mute repeat alerts/i });
+    expect(button.getAttribute("aria-label")).toMatch(/mute repeat alerts/i);
     expect(button.getAttribute("title")).toMatch(/stays open/i);
+  });
+
+  it("names the incident it would mute, not merely the act", () => {
+    /*
+     * An icon-only control called "Mute" is ambiguous the moment a second row
+     * appears, and this list is never one row long when anybody reads it: a
+     * screen-reader user tabbing a column of five unacked incidents would hear
+     * five identical buttons and have no way to tell which one they were about
+     * to press. The name carries the monitor, which is what distinguishes the
+     * rows on this screen.
+     */
+    row({}, { onAck: () => {} });
+    const button = screen.getByRole("button", { name: /mute repeat alerts/i });
+    expect(
+      button.getAttribute("aria-label"),
+      "the mute control's accessible name must say which incident it mutes",
+    ).toContain("api");
   });
 
   it("keeps the incident visibly open after acking", () => {
     // The most important requirement of the ticket, asserted on the state the
     // row reports *and* on the words beside the now-disabled control.
     row({ acked: true, ackedAt: T0 + 60_000 }, { onAck: () => {} });
-    const button = screen.getByRole("button", { name: /^Repeat alerts muted$/ });
+    const button = screen.getByRole("button", { name: /^Repeat alerts muted for api$/ });
     expect(button.hasAttribute("disabled")).toBe(true);
     expect(document.querySelector(".inc-row")?.getAttribute("data-state")).toBe(
       "acked",
@@ -297,6 +321,28 @@ describe("the acknowledge control", () => {
     expect(document.querySelector(".inc-col-ack")?.textContent).toMatch(
       /still down/i,
     );
+  });
+
+  it("shows the words rather than the glyph once the row is open", () => {
+    /*
+     * The glyph is the *collapsed* treatment and nothing more. Opening a row
+     * is how a reader who does not recognise a struck-through bell finds out
+     * what it does, so the expanded footer spells it out — and a control that
+     * changes shape is one more thing making the two states read as different,
+     * which is the defect #62 fixed and SUB-141 must not undo to save height.
+     */
+    const { container } = row({}, { onAck: () => {} });
+    const button = screen.getByRole("button", { name: /mute repeat alerts/i });
+    expect(
+      button.textContent,
+      "a collapsed row's mute control is a glyph, so it carries no words",
+    ).toBe("");
+
+    fireEvent.click(container.querySelector(".inc-line")!);
+    expect(
+      screen.getByRole("button", { name: /mute repeat alerts/i }).textContent,
+      "an expanded row's mute control must say what it does in words",
+    ).toMatch(/mute repeat alerts/i);
   });
 
   it("is not offered on a resolved incident", () => {

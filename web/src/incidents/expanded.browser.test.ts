@@ -704,4 +704,194 @@ describe("the expanded incident row", () => {
       await page.close();
     }
   }, 60_000);
+
+  it("costs a collapsed row no more height than its own line", async () => {
+    /*
+     * SUB-141 in one measurement.
+     *
+     * The mute control used to be a block in the row's column, so it claimed a
+     * strip under the line: measured at 1440, a collapsed row was 108px tall
+     * to carry a 60px line, 46px per incident spent on one button. The control
+     * is on the line now, so the row is as tall as the line and nothing else.
+     *
+     * The bound is the *line* rather than a pixel count, deliberately. A
+     * literal `62` would fail the day the row's padding or type rung moved,
+     * for a reason that has nothing to do with this ticket; "the row is its
+     * line plus its border" stays true through both and is the actual claim.
+     *
+     * Checked at every width the suite knows, because the phone branch wraps
+     * the line to three decks and the tablet branch releases the columns —
+     * either could have put the control back on a line of its own without the
+     * desktop measurement noticing.
+     */
+    for (const width of [1440, 1280, 900, 375]) {
+      const page = await openExpanded("dark", width);
+      try {
+        const rows = (await page.evaluate(`(() => {
+          const closed = Array.from(document.querySelectorAll(".inc-row"))
+            .filter((r) => r.dataset.open !== "true");
+          return closed.map((row) => {
+            const line = row.querySelector(".inc-line");
+            const act = row.querySelector(".inc-act");
+            const r = row.getBoundingClientRect();
+            const l = line.getBoundingClientRect();
+            const a = act ? act.getBoundingClientRect() : null;
+            const cs = window.getComputedStyle(row);
+            return {
+              rowH: Math.round(r.height),
+              lineH: Math.round(l.height),
+              border:
+                Math.round(parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth)),
+              hasAct: act !== null,
+              // The control and the line share a band, rather than the control
+              // sitting entirely below it: that is what a strip *is*.
+              actOnLine: a ? Math.round(a.top) < Math.round(l.bottom) : null,
+              actH: a ? Math.round(a.height) : null,
+              // And it is still drawn. Reclaiming the height by hiding the
+              // button would satisfy every number above and defeat the point.
+              actVisible: act ? window.getComputedStyle(act).display !== "none" : null,
+            };
+          });
+        })()`)) as {
+          rowH: number;
+          lineH: number;
+          border: number;
+          hasAct: boolean;
+          actOnLine: boolean | null;
+          actH: number | null;
+          actVisible: boolean | null;
+        }[];
+
+        expect(rows.length, "the fixture must leave closed rows to measure").toBeGreaterThan(
+          0,
+        );
+        const withAct = rows.filter((r) => r.hasAct);
+        expect(
+          withAct.length,
+          "at least one closed row must still offer the mute control",
+        ).toBeGreaterThan(0);
+
+        for (const row of withAct) {
+          expect(
+            row.rowH,
+            `a collapsed row is ${row.rowH}px tall at ${width}px to carry a ` +
+              `${row.lineH}px line: ${row.rowH - row.lineH - row.border}px of it is ` +
+              `a strip holding nothing but the mute button, which is the height ` +
+              `SUB-141 exists to reclaim`,
+          ).toBeLessThanOrEqual(row.lineH + row.border);
+          expect(
+            row.actOnLine,
+            `the mute control starts below the line at ${width}px; it must share ` +
+              `the line rather than occupy a band of its own`,
+          ).toBe(true);
+          expect(
+            row.actVisible,
+            "the control must still be drawn — the height comes out of the " +
+              "strip, never out of the button's presence",
+          ).toBe(true);
+        }
+      } finally {
+        await page.close();
+      }
+    }
+  }, 120_000);
+
+  it("draws the mute control as a square on a closed row and a labelled button on an open one", async () => {
+    /*
+     * The trade this ticket was warned against: buying height by making the
+     * two states look the same. They must not.
+     *
+     * The collapsed control is the 26px square the monitors and channels rows
+     * already use for a per-row action; the expanded one keeps the worded
+     * button in the tray's footer that #62 argued for. Measured as a *shape*
+     * difference rather than a class-name difference, because a class name is
+     * exactly what a stylesheet change could leave in place while the drawing
+     * became identical.
+     */
+    const page = await openExpanded("dark", 1440);
+    try {
+      const shapes = (await page.evaluate(`(() => {
+        const rows = Array.from(document.querySelectorAll(".inc-row"));
+        const read = (row) => {
+          const btn = row.querySelector(".inc-act button");
+          if (!btn) return null;
+          const b = btn.getBoundingClientRect();
+          return {
+            width: Math.round(b.width),
+            height: Math.round(b.height),
+            words: (btn.textContent || "").trim(),
+            name: btn.getAttribute("aria-label") || "",
+            glyphs: btn.querySelectorAll("svg").length,
+          };
+        };
+        return {
+          open: read(rows.find((r) => r.dataset.open === "true")),
+          closed: read(rows.find((r) => r.dataset.open !== "true")),
+        };
+      })()`)) as {
+        open: { width: number; height: number; words: string; name: string; glyphs: number };
+        closed: {
+          width: number;
+          height: number;
+          words: string;
+          name: string;
+          glyphs: number;
+        };
+      };
+
+      expect(shapes.open, "an open row with a mute control").not.toBeNull();
+      expect(shapes.closed, "a closed row with a mute control").not.toBeNull();
+
+      // Closed: a square carrying a glyph and no words.
+      expect(
+        shapes.closed.glyphs,
+        "the collapsed control must carry a glyph; a button with neither word " +
+          "nor shape is an empty box",
+      ).toBe(1);
+      expect(
+        shapes.closed.words,
+        `the collapsed control rendered the words "${shapes.closed.words}"; on ` +
+          `the line there is no room for a label beside four columns, which is ` +
+          `why the strip existed`,
+      ).toBe("");
+      expect(
+        Math.abs(shapes.closed.width - shapes.closed.height),
+        `the collapsed control is ${shapes.closed.width}x${shapes.closed.height}; ` +
+          `the house per-row action is a square, and a glyph in a box shaped for ` +
+          `a word sits in a pool of space and stops reading as a target`,
+      ).toBeLessThanOrEqual(1);
+
+      // Open: the words come back, and the button is visibly a different object.
+      expect(
+        shapes.open.words,
+        "the expanded control must say what it does in words: opening a row is " +
+          "how a reader who does not recognise the glyph finds out",
+      ).toMatch(/mute repeat alerts|repeat alerts muted/i);
+      expect(
+        shapes.open.width,
+        `the open row's control is ${shapes.open.width}px wide and the closed ` +
+          `row's is ${shapes.closed.width}px; if the two states draw the same ` +
+          `control in the same place they do not read as different states`,
+      ).toBeGreaterThan(shapes.closed.width * 2);
+
+      // And the name is the same promise in both, naming the incident.
+      for (const [where, shape] of [
+        ["closed", shapes.closed],
+        ["open", shapes.open],
+      ] as const) {
+        expect(
+          shape.name,
+          `the ${where} control's accessible name is "${shape.name}"; it must ` +
+            `state the act, or a screen reader announces an unnamed button`,
+        ).toMatch(/mute repeat alerts|repeat alerts muted/i);
+        expect(
+          shape.name.length,
+          `the ${where} control's name must also say *which* incident it mutes; ` +
+            `five rows of a button called "Mute" cannot be told apart`,
+        ).toBeGreaterThan("Mute repeat alerts".length);
+      }
+    } finally {
+      await page.close();
+    }
+  }, 60_000);
 });
