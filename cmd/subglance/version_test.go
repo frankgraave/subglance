@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"testing"
 
@@ -49,8 +50,16 @@ func TestRunVersionRendersWhatWasStamped(t *testing.T) {
 			// `go build` with no ldflags. It must say what it knows and
 			// nothing else: a version invented from a tag or a date taken
 			// from the filesystem would read as a release in a bug report.
-			name: "unstamped", version: "dev", commit: "", date: "",
-			wantFirstLine:   "subglance " + buildinfo.Short(),
+			//
+			// A commit is stamped here even though the case is about the
+			// absence of a version and a date. Left empty, Short() falls
+			// back to the revision the Go toolchain embeds, which is
+			// whatever commit the test binary was built at — so the
+			// expectation would have to be computed from the same ambient
+			// state it is meant to be checking. That fallback has its own
+			// test below.
+			name: "unstamped", version: "dev", commit: "0000000deadbeef", date: "",
+			wantFirstLine:   "subglance dev (0000000, " + runtime.Version() + ")",
 			wantLineCount:   1,
 			wantNoDateClaim: true,
 		},
@@ -78,6 +87,11 @@ func TestRunVersionRendersWhatWasStamped(t *testing.T) {
 			if lines[0] != tc.wantFirstLine {
 				t.Errorf("first line = %q, want %q", lines[0], tc.wantFirstLine)
 			}
+			// Short() is read here, after stamp, so this compares the two
+			// renderings of the same state rather than against whatever the
+			// test binary was built with. It is the invariant that matters:
+			// a bug report and GET /api/v1/health must not need reading
+			// differently.
 			if lines[0] != "subglance "+buildinfo.Short() {
 				t.Errorf("first line %q is not Short() verbatim (%q)", lines[0], buildinfo.Short())
 			}
@@ -91,12 +105,54 @@ func TestRunVersionRendersWhatWasStamped(t *testing.T) {
 	}
 }
 
-// The unstamped default really is "dev": the assertion above would hold for
-// any value, so the value itself is pinned once, here.
+// The unstamped default really is "dev": the case above stamps that value in,
+// so the default itself is pinned once, here.
 func TestBuildinfoDefaultsToDev(t *testing.T) {
 	if buildinfo.Version != "dev" {
 		t.Errorf("buildinfo.Version defaults to %q, want dev", buildinfo.Version)
 	}
+}
+
+// With no commit stamped, Short() falls back to the revision the Go toolchain
+// embeds, so a `go build` with no ldflags still reports something a
+// maintainer can act on. This is the half the table above deliberately steps
+// around, since its expectation cannot both assert the fallback and be
+// independent of it.
+func TestVersionFallsBackToTheEmbeddedRevision(t *testing.T) {
+	stamp(t, "dev", "", "")
+
+	var out bytes.Buffer
+	if err := runVersion(nil, &out); err != nil {
+		t.Fatalf("runVersion: %v", err)
+	}
+	got := strings.TrimSpace(out.String())
+
+	// `go test` builds with VCS stamping off, so the fallback may legitimately
+	// find nothing. Both shapes are correct; what must never appear is an
+	// empty parenthesis or a bare "dev ()".
+	withRevision := "subglance dev (" + vcsRevisionShort() + ", " + runtime.Version() + ")"
+	withoutRevision := "subglance dev (" + runtime.Version() + ")"
+	if got != withRevision && got != withoutRevision {
+		t.Errorf("output = %q, want %q or %q", got, withRevision, withoutRevision)
+	}
+}
+
+// vcsRevisionShort is what Short() would use when no commit was stamped: the
+// toolchain's embedded revision, truncated the same way.
+func vcsRevisionShort() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return ""
+	}
+	for _, s := range info.Settings {
+		if s.Key == "vcs.revision" {
+			if len(s.Value) > 7 {
+				return s.Value[:7]
+			}
+			return s.Value
+		}
+	}
+	return ""
 }
 
 func TestWantsVersionRecognisesEverySpelling(t *testing.T) {
