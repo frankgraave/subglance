@@ -3002,6 +3002,7 @@ components:
             Used by the probe, unlike `tags`. It is the setting most likely
             to be the reason a target cannot be reached, so a preview that
             ignored it would answer a question nobody asked.
+        tags:
           $ref: '#/components/schemas/TagMap'
           description: |
             Accepted and validated exactly as on create, but not used by the

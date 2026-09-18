@@ -4,45 +4,98 @@ import (
 	"bytes"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/frankgraave/subglance/internal/buildinfo"
 )
 
-func TestRunVersionPrintsTheStampedBuild(t *testing.T) {
-	var out bytes.Buffer
-	if err := runVersion(nil, &out); err != nil {
-		t.Fatalf("runVersion: %v", err)
-	}
+// stamp sets the link-time metadata for one test and puts it back afterwards.
+//
+// The tests below read output that is derived from package-level variables, so
+// leaving them ambient would make every assertion true of whatever the test
+// binary happened to be built with — and a regression in either the stamped or
+// the unstamped rendering would pass unnoticed, because the expectation would
+// have drifted along with the output.
+func stamp(t *testing.T, version, commit, date string) {
+	t.Helper()
+	prevVersion, prevCommit, prevDate := buildinfo.Version, buildinfo.Commit, buildinfo.Date
+	t.Cleanup(func() {
+		buildinfo.Version, buildinfo.Commit, buildinfo.Date = prevVersion, prevCommit, prevDate
+	})
+	buildinfo.Version, buildinfo.Commit, buildinfo.Date = version, commit, date
+}
 
-	got := out.String()
-	if !strings.HasPrefix(got, "subglance ") {
-		t.Errorf("output does not name the program: %q", got)
-	}
-	if !strings.Contains(got, buildinfo.Short()) {
-		t.Errorf("output %q does not contain the string /api/v1/health reports (%q)",
-			got, buildinfo.Short())
-	}
-	if !strings.HasSuffix(got, "\n") {
-		t.Errorf("output is not newline-terminated: %q", got)
+func TestRunVersionRendersWhatWasStamped(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		version         string
+		commit          string
+		date            string
+		wantFirstLine   string
+		wantSecondLine  string
+		wantLineCount   int
+		wantNoDateClaim bool
+	}{
+		{
+			// What the release pipeline produces: all three stamped.
+			name: "released", version: "0.4.1", commit: "a1b2c3d4e5f6", date: "2026-09-18T09:14:02Z",
+			wantFirstLine:  "subglance 0.4.1 (a1b2c3d, " + runtime.Version() + ")",
+			wantSecondLine: "built 2026-09-18T09:14:02Z",
+			wantLineCount:  2,
+		},
+		{
+			// `go build` with no ldflags. It must say what it knows and
+			// nothing else: a version invented from a tag or a date taken
+			// from the filesystem would read as a release in a bug report.
+			name: "unstamped", version: "dev", commit: "", date: "",
+			wantFirstLine:   "subglance " + buildinfo.Short(),
+			wantLineCount:   1,
+			wantNoDateClaim: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stamp(t, tc.version, tc.commit, tc.date)
+
+			var out bytes.Buffer
+			if err := runVersion(nil, &out); err != nil {
+				t.Fatalf("runVersion: %v", err)
+			}
+			got := out.String()
+			if !strings.HasSuffix(got, "\n") {
+				t.Errorf("output is not newline-terminated: %q", got)
+			}
+
+			lines := strings.Split(strings.TrimSuffix(got, "\n"), "\n")
+			if len(lines) != tc.wantLineCount {
+				t.Fatalf("output has %d lines, want %d: %q", len(lines), tc.wantLineCount, got)
+			}
+			// The first line is Short() verbatim, which is the string the
+			// startup log and GET /api/v1/health already report. A bug
+			// report and a health response must not need reading
+			// differently.
+			if lines[0] != tc.wantFirstLine {
+				t.Errorf("first line = %q, want %q", lines[0], tc.wantFirstLine)
+			}
+			if lines[0] != "subglance "+buildinfo.Short() {
+				t.Errorf("first line %q is not Short() verbatim (%q)", lines[0], buildinfo.Short())
+			}
+			if tc.wantSecondLine != "" && lines[1] != tc.wantSecondLine {
+				t.Errorf("second line = %q, want %q", lines[1], tc.wantSecondLine)
+			}
+			if tc.wantNoDateClaim && strings.Contains(got, "built ") {
+				t.Errorf("a build with no stamped date claims one: %q", got)
+			}
+		})
 	}
 }
 
-// A build without ldflags must say what it honestly knows. "dev" is the
-// stamped-in default and the right answer; a version invented from the module
-// path or the tag of the checkout would read as a release in a bug report.
-func TestRunVersionSaysDevWhenNothingWasStamped(t *testing.T) {
-	var out bytes.Buffer
-	if err := runVersion(nil, &out); err != nil {
-		t.Fatalf("runVersion: %v", err)
-	}
-	if !strings.Contains(out.String(), "dev") {
-		t.Errorf("an unstamped test build reports %q, want it to say dev", out.String())
-	}
-	// And it must not claim a build date it was never given.
-	if strings.Contains(out.String(), "built ") {
-		t.Errorf("an unstamped build claims a build date: %q", out.String())
+// The unstamped default really is "dev": the assertion above would hold for
+// any value, so the value itself is pinned once, here.
+func TestBuildinfoDefaultsToDev(t *testing.T) {
+	if buildinfo.Version != "dev" {
+		t.Errorf("buildinfo.Version defaults to %q, want dev", buildinfo.Version)
 	}
 }
 

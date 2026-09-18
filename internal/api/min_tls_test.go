@@ -7,7 +7,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/frankgraave/subglance/internal/checker"
 	"github.com/frankgraave/subglance/internal/store"
 )
 
@@ -163,5 +165,55 @@ func TestPatchMonitorRejectsUnknownMinTLSVersion(t *testing.T) {
 	}
 	if stored.MinTLSVersion != tls.VersionTLS12 {
 		t.Errorf("a rejected patch changed the stored floor to %d", stored.MinTLSVersion)
+	}
+}
+
+// A preview exists to tell you whether a monitor will work before you save
+// it, so the floor has to reach the probe. It is the setting most likely to
+// be the reason an old endpoint cannot be reached, and a preview that dialled
+// with the default while the saved monitor dialled with TLS 1.0 would be
+// answering about a differently-configured probe.
+func TestPreviewCheckDialsWithTheRequestedTLSFloor(t *testing.T) {
+	srv, _ := testServerWithDB(t)
+	prober := &fakeProber{result: checker.Result{
+		OK: true, StatusCode: 200, Latency: 5 * time.Millisecond,
+		CheckedAt: time.Now().UTC(),
+	}}
+	srv.WithProber(prober)
+
+	rec := preview(t, srv,
+		`{"type":"http","target":"https://appliance.example.com","min_tls_version":"1.0"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	prober.mu.Lock()
+	defer prober.mu.Unlock()
+	if len(prober.calls) != 1 {
+		t.Fatalf("prober called %d times, want 1", len(prober.calls))
+	}
+	if got := prober.calls[0].MinTLSVersion; got != tls.VersionTLS10 {
+		t.Errorf("probed with MinTLSVersion %d, want %d", got, tls.VersionTLS10)
+	}
+}
+
+// And a floor the save would reject must be rejected here too, or a preview
+// passes and the create that follows it fails — the one outcome this endpoint
+// exists to prevent.
+func TestPreviewCheckRejectsUnknownMinTLSVersion(t *testing.T) {
+	srv, _ := testServerWithDB(t)
+	prober := &fakeProber{result: checker.Result{OK: true, CheckedAt: time.Now().UTC()}}
+	srv.WithProber(prober)
+
+	rec := preview(t, srv,
+		`{"type":"http","target":"https://example.com","min_tls_version":"TLSv1.2"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "min_tls_version") {
+		t.Errorf("rejection does not name the field: %s", rec.Body.String())
+	}
+	if prober.callCount() != 0 {
+		t.Errorf("a rejected preview still made an outbound request")
 	}
 }

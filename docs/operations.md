@@ -141,7 +141,7 @@ wide hands the limiter back to the attacker.
 
 ```
 $ subglance --version
-subglance 0.4.1 (a1b2c3d, go1.24.0)
+subglance 0.4.1 (a1b2c3d, go1.26.8)
 built 2026-09-18T09:14:02Z
 ```
 
