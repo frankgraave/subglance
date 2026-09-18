@@ -241,6 +241,103 @@ func (db *DB) ListOpenIncidents(ctx context.Context) ([]Incident, error) {
 	return scanIncidents(rows)
 }
 
+// ResolvedIncidentCursor is a position in the resolved-incident history.
+//
+// It is the sort key itself — resolution time plus id — rather than an offset.
+// An offset into a list that grows at the head is wrong by construction here:
+// incidents resolve while somebody is paging, and OFFSET 50 after one new
+// resolution shows a row the reader has already seen while hiding the one
+// behind it. A keyset asks "everything strictly older than this exact row",
+// which stays true no matter what lands above it.
+//
+// The id half is not decoration. Resolution timestamps have second
+// granularity and a recovery sweep can close several incidents in the same
+// second, so a cursor carrying only the timestamp would either repeat that
+// second's rows or skip past them — an outage missing from the history, which
+// is precisely the failure this endpoint was built to end.
+type ResolvedIncidentCursor struct {
+	ResolvedAt time.Time
+	ID         int64
+}
+
+// ResolvedIncidentPage is one page of instance-wide resolved history, plus the
+// answer to the question the page itself cannot carry: is there more?
+//
+// HasMore is derived by asking for one row beyond the page and discarding it,
+// not by comparing the row count to the limit. A full page and a full page
+// that happens to be the last one are indistinguishable otherwise, which is
+// exactly the ambiguity the client used to paper over by declaring any full
+// page "truncated".
+type ResolvedIncidentPage struct {
+	Incidents []Incident
+	HasMore   bool
+	// Next is the cursor to pass for the following page. Zero when HasMore
+	// is false, so a caller cannot accidentally page past the end.
+	Next ResolvedIncidentCursor
+}
+
+// ListResolvedIncidents returns resolved incidents across every monitor,
+// newest resolution first, one page at a time.
+//
+// Filtered on resolved_at rather than started_at, because the question the
+// screen asks is "what recovered recently". Filtering on the start date drops
+// exactly the long outages a reader most wants to find: an incident that began
+// five weeks ago and came back yesterday is the most interesting row on the
+// card and the first one a started_at filter deletes.
+//
+// The window is a half-open interval [since, cursor): since is inclusive so a
+// "last 30 days" request keeps an incident that resolved exactly on the
+// boundary, and the cursor is exclusive so the row that ended the previous
+// page is not repeated at the top of this one.
+func (db *DB) ListResolvedIncidents(ctx context.Context, since time.Time, cursor ResolvedIncidentCursor, limit int) (ResolvedIncidentPage, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+
+	args := []any{}
+	where := []string{"incidents.resolved_at IS NOT NULL"}
+
+	if !since.IsZero() {
+		where = append(where, "incidents.resolved_at >= ?")
+		args = append(args, since.Unix())
+	}
+	if !cursor.ResolvedAt.IsZero() {
+		// The tuple comparison spelled out, because SQLite has no row-value
+		// ordering here: strictly older by resolution, or the same second and
+		// a lower id. Written as one expression so the planner can still walk
+		// idx_incidents_resolved rather than filtering after the sort.
+		where = append(where, "(incidents.resolved_at < ? OR (incidents.resolved_at = ? AND incidents.id < ?))")
+		args = append(args, cursor.ResolvedAt.Unix(), cursor.ResolvedAt.Unix(), cursor.ID)
+	}
+
+	// One row beyond the page, so "there is more" is observed rather than
+	// inferred from a full page.
+	args = append(args, limit+1)
+
+	rows, err := db.Reader.QueryContext(ctx,
+		"SELECT "+incidentColumns+" FROM incidents WHERE "+strings.Join(where, " AND ")+
+			" ORDER BY incidents.resolved_at DESC, incidents.id DESC LIMIT ?",
+		args...)
+	if err != nil {
+		return ResolvedIncidentPage{}, fmt.Errorf("query resolved incidents: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	found, err := scanIncidents(rows)
+	if err != nil {
+		return ResolvedIncidentPage{}, err
+	}
+
+	page := ResolvedIncidentPage{Incidents: found}
+	if len(found) > limit {
+		last := found[limit-1]
+		page.Incidents = found[:limit]
+		page.HasMore = true
+		page.Next = ResolvedIncidentCursor{ResolvedAt: last.ResolvedAt, ID: last.ID}
+	}
+	return page, nil
+}
+
 // isUniqueViolation reports whether an error came from a UNIQUE constraint.
 //
 // The pure-Go SQLite driver does not export a typed error for this, so the

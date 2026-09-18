@@ -113,8 +113,12 @@ function renderScreen(pages: ApiIncidentFixture[][]) {
   });
   const ack = vi.fn(async () => {});
   /* No history in these fixtures: this file is about the ack round trip, and a
-     second fan-out would add noise without adding an assertion. */
-  const fetchHistory = vi.fn(async () => ({ incidents: [], truncated: false }));
+     second list would add noise without adding an assertion. */
+  const fetchHistory = vi.fn(async () => ({
+    incidents: [],
+    hasMore: false,
+    nextCursor: null,
+  }));
   vi.stubGlobal(
     "fetch",
     vi.fn(async () => ({
@@ -195,7 +199,8 @@ describe("a monitor list that failed is not a monitor list of zero", () => {
     const fetchIncidents = vi.fn(async () => []);
     const fetchHistory = vi.fn(async () => ({
       incidents: [],
-      truncated: false,
+      hasMore: false,
+      nextCursor: null,
     }));
     // The monitor list 500s; the incidents endpoint is fine.
     vi.stubGlobal(

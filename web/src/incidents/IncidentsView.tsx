@@ -4,7 +4,8 @@ import { IncidentStoryItem } from "./IncidentStoryItem";
 import { IncidentClusterItem } from "./IncidentClusterItem";
 import { useState } from "react";
 import { SearchIcon } from "../shell/icons";
-import { TopbarTools } from "../shell/TopbarTools";
+import { ToolbarTools, TopbarTools } from "../shell/TopbarTools";
+import { HISTORY_WINDOWS } from "./api";
 import { clusterIncidents } from "./cluster";
 import { describeChurn, incidentState } from "./story";
 import { formatDuration } from "../monitors/detail";
@@ -13,6 +14,18 @@ import type { Incident } from "../monitors/detail";
 
 /** Shared empty default: a new Set per render would break memoisation. */
 const EMPTY_ACKING: ReadonlySet<string> = new Set();
+
+/**
+ * Which of the two cards the reader is asking about.
+ *
+ * The scope filter SUB-131 named and SUB-136 left unbuilt. It is a filter over
+ * what is already on screen rather than a second query: both lists are already
+ * loaded, and the two questions this answers — "just show me what is still
+ * broken" and "I am writing up last night" — are about attention, not about
+ * data. Nothing here changes what was fetched, so switching back is instant
+ * and cannot fail.
+ */
+export type IncidentScope = "all" | "open" | "resolved";
 
 /**
  * Everything that is broken right now, and what broke recently.
@@ -42,23 +55,43 @@ export type IncidentsViewProps = {
    * Recently resolved incidents, for the history card.
    *
    * A separate prop rather than a filter over one list, because they come from
-   * different endpoints: the open list is instance-wide, and resolved history
-   * is per monitor. An empty array means "none to show", which is why the card
+   * different endpoints: `GET /api/v1/incidents` is what is open now, and
+   * `GET /api/v1/incidents/resolved` is what came back, paged and ordered by
+   * resolution. An empty array means "none to show", which is why the card
    * states its own emptiness rather than disappearing.
    */
   resolved?: readonly Incident[];
   /**
    * How far back the history card reaches, in days.
    *
-   * A prop rather than a constant read here, so a longer window or a date
-   * picker changes the data owner and not this component. Nothing is staged
-   * for that today — a disabled control shipped ahead of its feature is a
-   * promise with the wiring cut.
+   * A prop rather than a constant read here, so the window belongs to the data
+   * owner that fetches it. It is now a control in the toolbar rather than a
+   * fixed 30 (SUB-136) — see `onHistoryDaysChange`.
    */
   historyDays?: number;
-  /** True when the history fan-out was capped; the card says so rather than
-   *  presenting a partial month as a complete one. */
-  historyTruncated?: boolean;
+  /**
+   * Moves the history window.
+   *
+   * Absent for a caller that renders a fixture and has nothing to refetch, and
+   * then the control is not rendered at all rather than rendered dead. A
+   * control that promises a function it does not have is worse than an empty
+   * toolbar, which is the whole reason SUB-136 left this slot empty until the
+   * endpoint behind it existed.
+   */
+  onHistoryDaysChange?: (days: number) => void;
+  /**
+   * True when older incidents remain inside the window, straight from the
+   * API's `has_more`. Not a guess about a full page: the server reads one row
+   * past the page to answer it.
+   */
+  historyHasMore?: boolean;
+  /** Loads the next page of history. Absent when there is nothing to load. */
+  onLoadMoreHistory?: () => void;
+  /** True while the next page is in flight. */
+  historyLoadingMore?: boolean;
+  /** Why the history could not be loaded. One request now, so a failure is an
+   *  error to report rather than a completeness flag to raise. */
+  historyError?: Error | null;
   /** Monitor id to display name. A missing id falls back to the id itself. */
   names?: Readonly<Record<string, string>>;
   /** Now, in unix ms, for durations that are still running. */
@@ -88,7 +121,11 @@ export function IncidentsView({
   incidents,
   resolved = [],
   historyDays = 30,
-  historyTruncated = false,
+  onHistoryDaysChange,
+  historyHasMore = false,
+  onLoadMoreHistory,
+  historyLoadingMore = false,
+  historyError = null,
   names = {},
   now,
   monitorCount,
@@ -100,6 +137,7 @@ export function IncidentsView({
   stale = false,
 }: IncidentsViewProps) {
   const [query, setQuery] = useState("");
+  const [scope, setScope] = useState<IncidentScope>("all");
   /*
    * Chronological, newest first, with clusters folded in where they exist.
    *
@@ -132,8 +170,19 @@ export function IncidentsView({
     (names[incident.monitorId] ?? `Monitor ${incident.monitorId}`)
       .toLowerCase()
       .includes(needle);
-  const shown = incidents.filter(matches);
-  const shownResolved = resolved.filter(matches);
+  /*
+   * Scope hides a card; it does not filter rows inside one.
+   *
+   * The two cards answer two different questions, so "open only" means the
+   * history card is not the answer to anything right now — not that it should
+   * be shown empty. An empty Resolved card under a scope that excludes it
+   * would read as "nothing resolved", which is a claim about the instance and
+   * not about the filter.
+   */
+  const showOpen = scope !== "resolved";
+  const showResolved = scope !== "open";
+  const shown = showOpen ? incidents.filter(matches) : [];
+  const shownResolved = showResolved ? resolved.filter(matches) : [];
   const entries = clusterIncidents(shown);
   const ackedCount = shown.filter((i) => incidentState(i) === "acked").length;
 
@@ -181,11 +230,24 @@ export function IncidentsView({
     error === null &&
     incidents.length === 0 &&
     resolved.length === 0;
+  /*
+   * "Nothing matched" is only said when the *search* is what emptied the
+   * screen.
+   *
+   * Scope can empty it too — "open only" on an instance where nothing is
+   * broken — and that is good news rather than a failed search. Telling
+   * somebody to clear a filter that is not hiding anything sends them looking
+   * for an outage that does not exist, so the two cases are compared against
+   * the scoped lists before the search is applied.
+   */
+  const inScope =
+    (showOpen ? incidents.length : 0) + (showResolved ? resolved.length : 0);
   const noMatches =
     !loading &&
     error === null &&
     !nothingAtAll &&
     searching &&
+    inScope > 0 &&
     shown.length === 0 &&
     shownResolved.length === 0;
 
@@ -227,6 +289,69 @@ export function IncidentsView({
           />
         </label>
       </TopbarTools>
+
+      {/*
+       * The page toolbar's own controls — the slot SUB-131 opened and SUB-136
+       * left empty, deliberately, because the scope filter it named had
+       * nothing behind it and a control that promises a function it does not
+       * have is worse than an empty bar.
+       *
+       * Both are real now. Scope is a filter over what is already fetched, so
+       * it cannot fail and cannot be slow. The window is a refetch, and it is
+       * only shipped because `GET /api/v1/incidents/resolved` made a longer
+       * window cost the same as a shorter one — under the per-monitor fan-out
+       * this replaced, offering "90 days" would have been offering to send
+       * several hundred requests.
+       *
+       * The window control is rendered only when somebody is listening to it.
+       * A screen rendered from a fixture has no refetch to trigger, and a
+       * select that silently does nothing is exactly the dead control this
+       * ticket refused to ship.
+       */}
+      <ToolbarTools>
+        <div className="tb-group">
+          <label className="tb-field">
+            <span className="tb-label">Show</span>
+            <select
+              className="tb-select"
+              value={scope}
+              onChange={(event) => setScope(event.target.value as IncidentScope)}
+            >
+              {/* "All" first and selected by default: this screen's job is to
+                  show everything that happened, and a filter that starts
+                  narrowed hides rows the reader never asked to hide. */}
+              <option value="all">Open and resolved</option>
+              <option value="open">Open only</option>
+              <option value="resolved">Resolved only</option>
+            </select>
+          </label>
+
+          {onHistoryDaysChange === undefined ? null : (
+            <label className="tb-field">
+              <span className="tb-label">History</span>
+              <select
+                className="tb-select"
+                value={historyDays}
+                onChange={(event) =>
+                  onHistoryDaysChange(Number(event.target.value))
+                }
+              >
+                {HISTORY_WINDOWS.map((window) => (
+                  <option key={window.days} value={window.days}>
+                    {window.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          <p className="tb-count" role="status">
+            {loading
+              ? "Loading incidents…"
+              : `${shown.length} open · ${shownResolved.length} resolved`}
+          </p>
+        </div>
+      </ToolbarTools>
 
       {/*
        * No visible page heading, for the reason Monitors has none (SUB-138):
@@ -294,7 +419,7 @@ export function IncidentsView({
             </p>
           </Panel>
         </Card>
-      ) : (
+      ) : !showOpen ? null : (
         <Card
           title="Open incidents"
           icon={<IconAlert />}
@@ -393,16 +518,24 @@ export function IncidentsView({
        * failed to load, or arrived without a start date, showed no Resolved
        * card and therefore no hint that anything was missing. Absence of a
        * card reads as "nothing happened", and that is the one thing this
-       * screen may never imply by accident.
+       * screen may never imply by accident. The same reasoning keeps it on
+       * screen for a failed request and for a scope that asked for it
+       * explicitly.
        */}
-      {days.length === 0 && shownResolved.length === 0 && !historyTruncated ? null : (
+      {!showResolved ||
+      (days.length === 0 &&
+        shownResolved.length === 0 &&
+        scope !== "resolved" &&
+        !historyHasMore &&
+        historyError === null) ? null : (
         <Card
           title="Resolved"
           icon={<IconClock />}
           headingLevel={2}
           action={
             <span className="mon-detail-note">
-              Last {historyDays} days · grouped by day
+              Last {historyDays} {historyDays === 1 ? "day" : "days"} · grouped
+              by day
             </span>
           }
         >
@@ -411,33 +544,39 @@ export function IncidentsView({
               surface. A Panel here made the day section read as a card of its
               own inside the card. */}
           <div className="inc-body">
-            {historyTruncated ? (
+            {historyError !== null ? (
               /*
-               * Said, not hidden. The history is assembled one request per
-               * monitor because the API has no instance-wide endpoint for
-               * resolved incidents, and the fan-out is capped — so on a large
-               * instance this card is genuinely incomplete. Presenting a
-               * partial month as if it were the whole month is the one thing
-               * a monitoring tool must not do.
+               * A failed history is an error now, not a completeness flag.
+               *
+               * It used to be one of three causes folded into `truncated`,
+               * because under the fan-out a single monitor's 500 left the rest
+               * of the card usable and only slightly short. One request means
+               * a failure is total: there is no partial month to caveat, so
+               * saying "this could not be loaded" is both the honest and the
+               * simpler sentence.
                */
-              <p className="inc-notice" role="status">
-                Showing history for the first monitors only — the API has no
-                instance-wide endpoint for resolved incidents yet, so this card
-                is assembled one monitor at a time.
+              <p className="inc-notice" role="alert">
+                Could not load resolved history: {historyError.message}
               </p>
             ) : null}
-            {days.length === 0 ? (
+            {days.length === 0 && historyError === null ? (
               /*
                * An explicit empty state, because a card with nothing in it is
                * ambiguous: it could mean "a quiet month" or "we failed to
-               * load". The undated case is stated separately rather than
-               * silently dropped — `groupByDay` cannot place an incident with
-               * no start date on any day, and a reader is owed the count
-               * rather than a shorter list.
+               * load". Suppressed when there IS an error, because the error
+               * above already says which of the two it is and "nothing
+               * resolved in the last 30 days" under it would be the card
+               * asserting exactly the good news it does not have. The undated
+               * case is stated separately rather than silently dropped —
+               * `groupByDay` cannot place an incident with no start date on
+               * any day, and a reader is owed the count rather than a shorter
+               * list.
                */
               <p className="inc-notice" role="status">
                 {shownResolved.length === 0
-                  ? `Nothing resolved in the last ${historyDays} days.`
+                  ? `Nothing resolved in the last ${historyDays} ${
+                      historyDays === 1 ? "day" : "days"
+                    }.`
                   : `${shownResolved.length} resolved ${
                       shownResolved.length === 1 ? "incident" : "incidents"
                     } could not be placed on a day — no start time was recorded.`}
@@ -477,6 +616,34 @@ export function IncidentsView({
                 </ul>
               </section>
             ))}
+            {/*
+             * What the screen shows when there genuinely is more.
+             *
+             * The old card could only confess: it said "this is incomplete"
+             * and left the reader with nowhere to go, because the API had no
+             * way to ask for the rest. `has_more` comes with `next_cursor`, so
+             * the honest statement now has a control attached to it — the
+             * reader learns the list is short *and* can lengthen it.
+             *
+             * Rendered only when the owner passed a loader. A button that says
+             * "load older" and does nothing would be the dead control this
+             * ticket exists to avoid, one notch louder than an empty toolbar.
+             */}
+            {historyHasMore && onLoadMoreHistory !== undefined ? (
+              <p className="inc-more">
+                <button
+                  type="button"
+                  className="add-button"
+                  onClick={onLoadMoreHistory}
+                  disabled={historyLoadingMore}
+                >
+                  {historyLoadingMore ? "Loading…" : "Load older incidents"}
+                </button>
+                <span className="mon-detail-note" role="status">
+                  More resolved incidents lie inside this window.
+                </span>
+              </p>
+            ) : null}
           </div>
         </Card>
       )}

@@ -528,19 +528,57 @@ const DAY_START = (() => {
     expect(document.body.textContent).toContain("Last 30 days");
   });
 
-  it("admits when the history is incomplete rather than looking complete", () => {
-    // The API has no instance-wide endpoint for resolved incidents, so this
-    // card is assembled per monitor and capped. Showing a partial month as if
-    // it were the whole month is the one thing a monitoring tool must not do.
+  it("offers the rest rather than only confessing to being short", () => {
+    /*
+     * The card used to say "showing the first monitors only" and stop there,
+     * because the API had no way to ask for the rest. Now that it does, an
+     * incomplete list must come with the control that completes it — a notice
+     * with no way forward was always a stopgap, not the end state.
+     */
+    const onLoadMoreHistory = vi.fn();
     render(
       <IncidentsView
         incidents={[]}
         resolved={resolved}
         now={NOW}
-        historyTruncated
+        historyHasMore
+        onLoadMoreHistory={onLoadMoreHistory}
       />,
     );
-    expect(document.body.textContent).toMatch(/first monitors only/i);
+    expect(document.body.textContent).toMatch(/more resolved incidents/i);
+    fireEvent.click(screen.getByRole("button", { name: /load older/i }));
+    expect(onLoadMoreHistory).toHaveBeenCalledTimes(1);
+  });
+
+  it("never offers a control it cannot honour", () => {
+    /*
+     * SUB-136's rule, applied to the footer as well as the toolbar: a screen
+     * rendered from a fixture has no loader, and a "load older" button that
+     * silently does nothing is a promise with the wiring cut.
+     */
+    render(
+      <IncidentsView incidents={[]} resolved={resolved} now={NOW} historyHasMore />,
+    );
+    expect(screen.queryByRole("button", { name: /load older/i })).toBeNull();
+  });
+
+  it("reports a failed history as an error, not as a quiet month", () => {
+    /*
+     * One request now, so a failure is total. Saying "nothing resolved in the
+     * last 30 days" under a request that never arrived would be the card
+     * asserting exactly the good news it does not have.
+     */
+    render(
+      <IncidentsView
+        incidents={[]}
+        resolved={[]}
+        now={NOW}
+        historyError={new Error("HTTP 500")}
+      />,
+    );
+    const alert = screen.getByRole("alert");
+    expect(alert.textContent).toMatch(/could not load resolved history/i);
+    expect(document.body.textContent).not.toMatch(/nothing resolved in the last/i);
   });
 });
 
@@ -728,17 +766,18 @@ describe("the screen does not claim more than it knows", () => {
     expect(document.body.textContent).toMatch(/could not be placed on a day/i);
   });
 
-  it("keeps the truncation notice even with nothing groupable", () => {
+  it("keeps the card, and its way forward, with nothing groupable", () => {
     render(
       <IncidentsView
         incidents={[incident()]}
         resolved={[]}
-        historyTruncated
+        historyHasMore
+        onLoadMoreHistory={() => {}}
         now={NOW}
         names={{ "7": "api" }}
       />,
     );
-    expect(document.body.textContent).toMatch(/first monitors only/i);
+    expect(screen.getByRole("button", { name: /load older/i })).toBeTruthy();
   });
 
   it("labels days against the injected now, not the wall clock", () => {
