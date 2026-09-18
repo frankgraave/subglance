@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 )
@@ -294,30 +295,45 @@ func (db *DB) ListResolvedIncidents(ctx context.Context, since time.Time, cursor
 		limit = 50
 	}
 
-	args := []any{}
-	where := []string{"incidents.resolved_at IS NOT NULL"}
-
+	// The window's lower bound. Zero means "no lower bound", and 0 is the
+	// correct sentinel for that rather than a special case in the SQL: unix
+	// epoch is before every incident this table can hold.
+	var sinceUnix int64
 	if !since.IsZero() {
-		where = append(where, "incidents.resolved_at >= ?")
-		args = append(args, since.Unix())
-	}
-	if !cursor.ResolvedAt.IsZero() {
-		// The tuple comparison spelled out, because SQLite has no row-value
-		// ordering here: strictly older by resolution, or the same second and
-		// a lower id. Written as one expression so the planner can still walk
-		// idx_incidents_resolved rather than filtering after the sort.
-		where = append(where, "(incidents.resolved_at < ? OR (incidents.resolved_at = ? AND incidents.id < ?))")
-		args = append(args, cursor.ResolvedAt.Unix(), cursor.ResolvedAt.Unix(), cursor.ID)
+		sinceUnix = since.Unix()
 	}
 
-	// One row beyond the page, so "there is more" is observed rather than
-	// inferred from a full page.
-	args = append(args, limit+1)
+	/*
+	 * The cursor's upper bound, as a sentinel rather than as an optional
+	 * clause.
+	 *
+	 * The obvious shape here is to build the WHERE from a slice of predicates
+	 * and join it, and that is a string-concatenated query — gosec flags it,
+	 * and it is right to: the habit is what makes injection possible even when
+	 * this particular instance is safe. One fixed statement with bounds that
+	 * default to "past the newest row" says the same thing with no assembly,
+	 * and the planner sees the same keyset walk either way.
+	 */
+	cursorUnix, cursorID := int64(math.MaxInt64), int64(math.MaxInt64)
+	if !cursor.ResolvedAt.IsZero() {
+		cursorUnix, cursorID = cursor.ResolvedAt.Unix(), cursor.ID
+	}
 
 	rows, err := db.Reader.QueryContext(ctx,
-		"SELECT "+incidentColumns+" FROM incidents WHERE "+strings.Join(where, " AND ")+
-			" ORDER BY incidents.resolved_at DESC, incidents.id DESC LIMIT ?",
-		args...)
+		// The tuple comparison is spelled out because SQLite has no row-value
+		// ordering here: strictly older by resolution, or the same second and
+		// a lower id. One expression, so the planner can walk
+		// idx_incidents_resolved rather than filtering after the sort.
+		"SELECT "+incidentColumns+` FROM incidents
+		 WHERE incidents.resolved_at IS NOT NULL
+		   AND incidents.resolved_at >= ?
+		   AND (incidents.resolved_at < ?
+		        OR (incidents.resolved_at = ? AND incidents.id < ?))
+		 ORDER BY incidents.resolved_at DESC, incidents.id DESC
+		 LIMIT ?`,
+		// One row beyond the page, so "there is more" is observed rather than
+		// inferred from a full page.
+		sinceUnix, cursorUnix, cursorUnix, cursorID, limit+1)
 	if err != nil {
 		return ResolvedIncidentPage{}, fmt.Errorf("query resolved incidents: %w", err)
 	}
