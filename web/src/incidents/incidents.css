@@ -133,12 +133,14 @@
   inset-block: 0;
   inset-inline-start: 0;
   /*
-   * A 2px status rail. `--outline-w` is the nearest declared rung at this
-   * magnitude and there is no `--size-status-rail`; the dashboard writes the
-   * same 2px as a literal inside a border shorthand, which this cannot do.
-   * Flagged for the token owner rather than invented here.
+   * A 2px status rail, from the rung that names this decision:
+   * `--size-status-rail` (SUB-142). It used to read `--outline-w`, which
+   * names the keyboard FOCUS outline — the same 2px by coincidence, so
+   * widening the focus ring for an accessibility reason would have silently
+   * moved a status indicator. The dashboard's three edges now write the same
+   * token inside their `border-left`, so one decision has one name.
    */
-  width: var(--outline-w);
+  width: var(--size-status-rail);
   border-start-start-radius: var(--r-md);
   border-end-start-radius: var(--r-md);
 }

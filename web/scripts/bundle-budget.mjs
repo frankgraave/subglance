@@ -139,8 +139,42 @@ const budgets = {
    * The ceiling moves to 14 rather than to 13.5 because a budget that tracks
    * the current measurement to the byte is not a budget, it is a record of
    * what happened.
+   *
+   * 14 -> 15 kB gzip, raised deliberately for SUB-140 and SUB-142 (draining
+   * the status rail, and giving it its own rung).
+   *
+   * The measurement: 14,325 bytes on develop, 14,479 after — 154 bytes,
+   * against a 14 kB ceiling sitting at 14,336, so the change spent the last
+   * 11 bytes of headroom and went 143 over. What the 154 bytes buy:
+   *
+   *   - the §6 drain for the one mark that was still asserting at full
+   *     strength after the stream died. PR #63 removed the `--down-dim` row
+   *     fill, which promoted the 2px coloured edge to the row's main visual
+   *     carrier, and the edge was the single carrier §6's filter-based drain
+   *     could not reach. Six selectors across three layouts plus the detail
+   *     pill, and two `-drained` tones per theme.
+   *   - `.mon-error` and `.mon-card-error` joining the ink-drain, which two
+   *     of the three layouts were missing — a full-strength red failure
+   *     sentence beside an already-drained lamp.
+   *   - `--size-status-rail`, replacing a literal `2px` in eight border
+   *     shorthands and one `var(--outline-w)` that named a focus outline.
+   *
+   * Consolidating the four `transition` declarations into one selector list
+   * was tried first, to stay under the ceiling, and it was measured at 14,510
+   * — 31 bytes WORSE. An extra four-selector rule does not compress as well
+   * as a declaration gzip has already seen; the duplication is what is
+   * cheap. That is recorded here because "just dedupe it" is the obvious
+   * review suggestion and it makes the number go the wrong way.
+   *
+   * The ceiling moves to 15 rather than to 14.5 for the same reason the last
+   * raise went to 14: 14.5 would leave 331 bytes, which is two more bugfixes
+   * and then another raise. It is also the first CSS raise since SUB-137 —
+   * two whole management screens (SUB-122, SUB-123) landed in between and
+   * cost 0.4 kB and 37 bytes respectively, because they reused what was
+   * already declared. A ceiling that holds through two screens and moves for
+   * a change to what colour means is a ceiling doing its job.
    */
-  css: 14,
+  css: 15,
   fonts: 80,
 };
 

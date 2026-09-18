@@ -304,7 +304,7 @@
  * padding and the reserve tracks the border it is reserving for.
  */
 .mon-head:first-child {
-  border-left: 2px solid transparent;
+  border-left: var(--size-status-rail) solid transparent;
   /* Centred and flush, following its column's cell (SUB-140): the cell now
      centres a lamp in a padding-free box, so a left-aligned header with 12px
      of padding would sit visibly off the mark it names. */
@@ -320,7 +320,7 @@
   padding: var(--space-2) var(--space-3);
   /* Same transparent edge, same reason: the section legend heads the rows
      below it and must start where they do. */
-  border-left: 2px solid transparent;
+  border-left: var(--size-status-rail) solid transparent;
   text-align: left;
   @apply caps-legend;
   background: transparent;
@@ -370,7 +370,7 @@
  * transparent`: the space is always there, and only its paint is a state.
  */
 .mon-row > :first-child {
-  border-left: 2px solid var(--border);
+  border-left: var(--size-status-rail) solid var(--border);
   border-start-start-radius: var(--r-md);
   border-end-start-radius: var(--r-md);
 }
@@ -854,13 +854,13 @@
    one dataset disagree about what down looks like. The card keeps the 2px
    `--down` edge, the lamp, the status word and the failure reason. */
 .mon-card[data-status="down"] {
-  border-left: 2px solid var(--down);
+  border-left: var(--size-status-rail) solid var(--down);
 }
 
-.mon-card[data-status="pending"] { border-left: 2px solid var(--warn); }
-.mon-card[data-status="waiting"] { border-left: 2px solid var(--idle); }
+.mon-card[data-status="pending"] { border-left: var(--size-status-rail) solid var(--warn); }
+.mon-card[data-status="waiting"] { border-left: var(--size-status-rail) solid var(--idle); }
 .mon-card[data-status="paused"] {
-  border-left: 2px dotted var(--ink-3);
+  border-left: var(--size-status-rail) dotted var(--ink-3);
 }
 
 .mon-card[data-status="paused"] > * { opacity: .62; }
@@ -1058,11 +1058,11 @@
    the fill gone there is nothing for the neutral highlight to overwrite: the
    2px `--down` edge, the lamp and the word are all outside the fill and all
    survive the hover. */
-.mon-line[data-status="down"] { border-left: 2px solid var(--down); }
-.mon-line[data-status="pending"] { border-left: 2px solid var(--warn); }
-.mon-line[data-status="waiting"] { border-left: 2px solid var(--idle); }
+.mon-line[data-status="down"] { border-left: var(--size-status-rail) solid var(--down); }
+.mon-line[data-status="pending"] { border-left: var(--size-status-rail) solid var(--warn); }
+.mon-line[data-status="waiting"] { border-left: var(--size-status-rail) solid var(--idle); }
 .mon-line[data-status="paused"] {
-  border-left: 2px dotted var(--ink-3);
+  border-left: var(--size-status-rail) dotted var(--ink-3);
 }
 
 .mon-line[data-status="paused"] > * { opacity: .62; }
@@ -1340,7 +1340,7 @@
 
 .push-reveal-warn {
   padding: var(--space-3);
-  border-left: 2px solid var(--warn);
+  border-left: var(--size-status-rail) solid var(--warn);
   border-radius: var(--radius-sm);
   background: var(--warn-dim);
   /* `--ink`, not the `--ink-1` this said: there is no `--ink-1` in tokens.css
