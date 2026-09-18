@@ -189,7 +189,14 @@ func ParseSecretKey(value string) ([]byte, error) {
 	// would silently run on a key anyone who can read the command line can
 	// reconstruct. Failing closed here costs one confusing start; guessing
 	// costs the confidentiality the key was for.
-	if _, statErr := os.Stat(value); errors.Is(statErr, fs.ErrNotExist) {
+	//
+	// Lstat, not Stat, because Stat follows symlinks: a key file mounted as a
+	// link whose target is missing — the ordinary shape of a secret that
+	// failed to mount — reports ErrNotExist for a path that plainly names
+	// something. An operator who meant a key file must never end up
+	// encrypting with a key derived from its path, and the error they get
+	// instead names the file, which is the problem they actually have.
+	if _, statErr := os.Lstat(value); errors.Is(statErr, fs.ErrNotExist) {
 		if key, ok := decodeSecretKey(value); ok {
 			return key, nil
 		}

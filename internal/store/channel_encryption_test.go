@@ -664,6 +664,23 @@ func TestParseSecretKeyAcceptsKeyMaterialAndFiles(t *testing.T) {
 		}
 	})
 
+	// The ordinary shape of a secret that failed to mount. Stat would follow
+	// the link, find nothing and report ErrNotExist, so the path would be
+	// decoded as key material — which is why the decision is made with Lstat.
+	t.Run("a dangling symlink is a key file, not key material", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		path := strings.Repeat("A", 43)
+		if _, ok := decodeSecretKey(path); !ok {
+			t.Fatalf("%q is not raw base64 for 32 bytes; the test premise is gone", path)
+		}
+		if err := os.Symlink("missing-target", path); err != nil {
+			t.Fatalf("symlink: %v", err)
+		}
+		if _, err := ParseSecretKey(path); err == nil {
+			t.Fatal("ParseSecretKey derived a key from the path of a dangling key-file symlink")
+		}
+	})
+
 	t.Run("short key file names the file", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "short")
 		if err := os.WriteFile(path, []byte("abcd"), 0o600); err != nil {
