@@ -19,6 +19,15 @@ async function fill(page: Page, selector: string, value: string) {
   await page.$eval(selector, (input) => { (input as HTMLInputElement).value = ""; });
   await page.type(selector, value);
 }
+async function readyAddForm(page: Page): Promise<void> {
+  await page.waitForSelector(".add-form");
+  // Finding the form is not enough: the close button starts outside the
+  // viewport while its parent drawer slides in. Wait for that real animation,
+  // not a fixed delay or a retry of the click after it missed.
+  await page.$eval(".drawer-panel", async (panel) => {
+    await Promise.all(panel.getAnimations().map((animation) => animation.finished));
+  });
+}
 async function confirmAction(page: Page, action: () => Promise<unknown>, accept: boolean) {
   let dialogs = 0;
   let decided!: () => void;
@@ -94,17 +103,21 @@ it.each(["dashboard", "direct"])("protects Escape, close, Cancel, backdrop and h
       await (await page.waitForSelector('a[href="/monitors"]'))!.click();
       await (await page.waitForSelector('button[aria-label="Add monitor"]'))!.click();
     }
-    await page.waitForSelector(".add-form");
+    await readyAddForm(page);
     const name = 'input[id$="-name"]';
     await page.type(name, "browser draft");
-    for (const action of [
-      () => page.keyboard.press("Escape"),
-      () => page.click('.drawer-close'),
-      () => page.click('.add-button-quiet'),
-      () => page.click('.drawer-scrim', { offset: { x: 2, y: 100 } }),
-    ]) {
+    for (const [label, action] of [
+      ["Escape", () => page.keyboard.press("Escape")],
+      ["close", () => page.click('.drawer-close')],
+      ["Cancel", () => page.click('.add-button-quiet')],
+      ["backdrop", () => page.click('.drawer-scrim', { offset: { x: 2, y: 100 } })],
+    ] as const) {
       await page.focus(name);
-      await confirmAction(page, action, false);
+      try {
+        await confirmAction(page, action, false);
+      } catch (error) {
+        throw new Error(`Discard action failed: ${label}`, { cause: error });
+      }
       expect(await page.$eval(name, (el) => (el as HTMLInputElement).value)).toBe("browser draft");
       expect(new URL(page.url()).pathname).toBe("/monitors/new");
     }
@@ -127,7 +140,7 @@ it.each(["dashboard", "direct"])("protects Escape, close, Cancel, backdrop and h
     await confirmAction(page, () => page.keyboard.press("Escape"), true);
     await page.waitForFunction(() => !document.querySelector(".add-form"));
     await (await page.waitForSelector('button[aria-label="Add monitor"]'))!.click();
-    await page.waitForSelector(name);
+    await readyAddForm(page);
     expect(await page.$eval(name, (el) => (el as HTMLInputElement).value)).toBe("");
     let unexpected = 0;
     page.on("dialog", (dialog) => { unexpected++; void dialog.dismiss(); });

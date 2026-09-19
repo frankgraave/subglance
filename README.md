@@ -88,7 +88,7 @@ exists for it.
 | Signed multi-platform release builds | ✅ Working (`v0.1.0-rc3`) |
 | Maintenance windows | ⏳ Planned for v0.1 |
 | Latency graph on the detail view | ⏳ Planned for v0.1 |
-| Settings screen | ⏳ Planned for v0.1 |
+| Settings — password change | ✅ Working; remaining sections planned for v0.1 |
 
 <details>
 <summary><strong>What "working" covers, in detail</strong></summary>
@@ -151,9 +151,9 @@ exists for it.
 - **A latency graph.** The detail view shows the latest latency as a number and
   the heartbeat as a bar; the trend over time is not drawn anywhere. The chart
   component the heartbeat bar already uses is the piece this needs wiring to.
-- **The settings screen.** It is the one sidebar entry still marked "Soon",
-  because that is the truth. Everything it will hold is reachable over the API
-  today.
+- **The remaining settings sections.** Password changes work at `/settings`.
+  User and API-token management, retention and instance diagnostics still have
+  no settings UI.
 
 Deliberately **not** in v0.1: status pages, config-as-code, multi-region checks,
 on-call schedules, SSO, mobile app, CLI, Postgres. They are on the roadmap; they
