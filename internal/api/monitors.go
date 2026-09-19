@@ -100,20 +100,21 @@ type monitorChannelResponse struct {
 }
 
 // monitorDetailResponse adds raw editable settings to the versioned detail
-// read only. No omitempty: false, zero and empty are meaningful baselines.
+// read only. False, zero and empty are meaningful baselines. Only request
+// secrets may be omitted, for callers who cannot edit the monitor.
 // Keeping this separate prevents new consumers of monitorResponse (including
 // live payloads) from inadvertently disclosing request credentials.
 type monitorDetailResponse struct {
 	monitorResponse
-	Method          string            `json:"method"`
-	ExpectedStatus  string            `json:"expected_status"`
-	Keyword         string            `json:"keyword"`
-	KeywordMode     string            `json:"keyword_mode"`
-	FollowRedirects bool              `json:"follow_redirects"`
-	Headers         map[string]string `json:"headers"`
-	Body            string            `json:"body"`
-	Retries         int               `json:"retries"`
-	SSLWarnDays     int               `json:"ssl_warn_days"`
+	Method          string             `json:"method"`
+	ExpectedStatus  string             `json:"expected_status"`
+	Keyword         string             `json:"keyword"`
+	KeywordMode     string             `json:"keyword_mode"`
+	FollowRedirects bool               `json:"follow_redirects"`
+	Headers         *map[string]string `json:"headers,omitempty"`
+	Body            *string            `json:"body,omitempty"`
+	Retries         int                `json:"retries"`
+	SSLWarnDays     int                `json:"ssl_warn_days"`
 }
 
 // heartbeatResponse is the wire shape of one recorded check result. It is
@@ -619,7 +620,7 @@ func validateTargetForType(typ, target string) problem {
 		}
 		// Whitespace inside the host is never a hostname. ParseHostPort only
 		// trims the ends, so "a b.com" survives it and then fails to resolve.
-		if strings.ContainsAny(host, " \t\r\n") {
+		if strings.ContainsAny(host, " 	\r\n") {
 			return bad("a hostname cannot contain spaces")
 		}
 	}
@@ -658,13 +659,22 @@ func (s *Server) handleGetMonitor(w http.ResponseWriter, r *http.Request) {
 	if headers == nil {
 		headers = map[string]string{}
 	}
-	writeJSON(w, http.StatusOK, monitorDetailResponse{
+	resp := monitorDetailResponse{
 		monitorResponse: s.describeMonitor(r, m),
 		Method:          m.Method, ExpectedStatus: m.ExpectedStatus,
 		Keyword: m.Keyword, KeywordMode: m.KeywordMode,
-		FollowRedirects: m.FollowRedirects, Headers: headers, Body: m.Body,
-		Retries: m.Retries, SSLWarnDays: m.SSLWarnDays,
-	})
+		FollowRedirects: m.FollowRedirects,
+		Retries:         m.Retries, SSLWarnDays: m.SSLWarnDays,
+	}
+	// A viewer can inspect check rules but must not gain reusable credentials
+	// merely because edit settings became readable. Never mask secrets into an
+	// editable value: writers receive the exact stored value, viewers no field.
+	if user, ok := UserFromContext(r.Context()); ok && user.Role.CanWrite() {
+		resp.Headers = &headers
+		resp.Body = &m.Body
+	}
+	w.Header().Set("Cache-Control", "private, no-store")
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) handleDeleteMonitor(w http.ResponseWriter, r *http.Request) {

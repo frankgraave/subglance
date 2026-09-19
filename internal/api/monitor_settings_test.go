@@ -85,6 +85,39 @@ func TestMonitorDetailReadsCheckSettings(t *testing.T) {
 	}
 }
 
+func TestMonitorDetailRequestSecretsRequireWriteRole(t *testing.T) {
+	srv, db := testServerWithDB(t)
+	m := seedMonitor(t, db, store.Monitor{Name: "private", Type: "http", Target: "https://example.com", Headers: map[string]string{"Authorization": "private-header"}, Body: "private-body"})
+	for _, role := range []store.Role{store.RoleViewer, store.RoleEditor} {
+		t.Run(string(role), func(t *testing.T) {
+			token := seedUser(t, srv, db, string(role)+"@example.com", role)
+			req := httptest.NewRequest(http.MethodGet, monitorPath(m.ID), nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			srv.Handler().ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("read status: %d", rec.Code)
+			}
+			var got map[string]any
+			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+				t.Fatal(err)
+			}
+			for _, key := range []string{"headers", "body"} {
+				_, present := got[key]
+				if present != role.CanWrite() {
+					t.Errorf("%s: %s presence = %v, want %v", role, key, present, role.CanWrite())
+				}
+			}
+			if got["method"] != m.Method {
+				t.Errorf("viewer-safe settings missing: method = %v", got["method"])
+			}
+			if rec.Header().Get("Cache-Control") != "private, no-store" {
+				t.Error("sensitive detail must not be cached")
+			}
+		})
+	}
+}
+
 func TestMonitorSettingsStayOffBulkResponses(t *testing.T) {
 	srv, db := testServerWithDB(t)
 	m := seedMonitor(t, db, store.Monitor{Name: "private", Type: "http", Target: "https://example.com", Headers: map[string]string{"Authorization": "secret-header"}, Body: "secret-body"})

@@ -722,7 +722,9 @@ paths:
         strings, empty headers, false and zero are returned explicitly, not
         replaced with create defaults. Request headers and body may contain
         credentials; these settings are only on this authenticated detail
-        read, not the list or live stream. Treat the response as sensitive.
+        read, not the list or live stream. Headers and body are returned only
+        to editors and administrators; viewers receive neither field. The
+        response uses `Cache-Control: private, no-store`.
 
         The response carries a weak `ETag` derived from the monitor's
         `updated_at`. Hand it back as `If-Match` on a PATCH to make that update
@@ -2413,7 +2415,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/Monitor'
         - type: object
-          required: [method, expected_status, keyword, keyword_mode, follow_redirects, headers, body, retries, ssl_warn_days]
+          required: [method, expected_status, keyword, keyword_mode, follow_redirects, retries, ssl_warn_days]
           properties:
             method:
               type: string
@@ -2432,10 +2434,10 @@ components:
               type: object
               additionalProperties:
                 type: string
-              description: Stored request headers, including credentials. Empty is an object, not null.
+              description: Editors/admins only. Stored request headers including credentials; empty is an object, not null.
             body:
               type: string
-              description: Stored request body; may contain secrets.
+              description: Editors/admins only. Stored request body; may contain secrets.
             retries:
               type: integer
             ssl_warn_days:
