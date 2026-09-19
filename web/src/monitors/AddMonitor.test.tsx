@@ -230,6 +230,7 @@ describe("AddMonitor", () => {
     // repeat the inference here.
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({ type: "tcp", target: "db.example.com:5432" }),
+      expect.any(AbortSignal),
     );
   });
 

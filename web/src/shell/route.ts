@@ -13,6 +13,7 @@
 export type Route =
   | { name: "dashboard" }
   | { name: "incidents" }
+  | { name: "settings" }
   /**
    * The monitors inventory. `create` is part of the route rather than a
    * component flag because `/monitors/new` has to be a real address: the
@@ -39,6 +40,9 @@ export const DASHBOARD_PATH = "/";
  * link into a chat window. A boolean cannot be pasted.
  */
 export const INCIDENTS_PATH = "/incidents";
+
+/** Account settings, beginning with the password card. */
+export const SETTINGS_PATH = "/settings";
 
 /** The monitors inventory: what is configured, and where it is changed. */
 export const MONITORS_PATH = "/monitors";
@@ -86,6 +90,7 @@ export function monitorPath(id: string): string {
  */
 export function parseRoute(pathname: string): Route {
   const segments = pathname.split("/").filter((segment) => segment !== "");
+  if (segments.length === 1 && segments[0] === "settings") return { name: "settings" };
   if (segments.length === 1 && segments[0] === "incidents") {
     return { name: "incidents" };
   }
@@ -146,5 +151,6 @@ export function routePath(route: Route): string {
   if (route.name === "notifications")
     return route.create ? NOTIFICATION_CREATE_PATH : NOTIFICATIONS_PATH;
   if (route.name === "incidents") return INCIDENTS_PATH;
+  if (route.name === "settings") return SETTINGS_PATH;
   return DASHBOARD_PATH;
 }

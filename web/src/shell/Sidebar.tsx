@@ -3,6 +3,7 @@ import {
   INCIDENTS_PATH,
   MONITORS_PATH,
   NOTIFICATIONS_PATH,
+  SETTINGS_PATH,
 } from "./route";
 import {
   DashboardIcon,
@@ -16,17 +17,9 @@ import {
 /**
  * The primary navigation.
  *
- * **It does not promise what does not exist.** The sidebar advertises five
- * destinations and three of them are built (DESIGN.md §12); its "2 incidents"
- * badge was fixture data. A badge that claims two open incidents and goes
- * nowhere is worse than no badge at all — on a monitoring tool it is
- * indistinguishable from a real alert. So the unbuilt destinations are
- * rendered as plainly unavailable: dimmed, not focusable as actions, each
- * saying "Soon" in words rather than relying on colour.
- *
- * They are shown rather than hidden because the shape of the product is
- * information too, and because a sidebar that grows items one release at a
- * time keeps moving the one item that works.
+ * Every destination is a real screen. Settings opens the caller's password
+ * card; unfinished settings sections are not advertised as usable controls.
+ * Counts belong on their screens, next to the lists they describe.
  *
  * **Incidents is a real destination now (SUB-34).** It was the oldest of the
  * "Soon" promises and the one the product could least afford to keep breaking:
@@ -109,10 +102,7 @@ const BUILT_CONFIG: readonly BuiltDestination[] = [
     href: NOTIFICATIONS_PATH,
     route: "notifications",
   },
-];
-
-const PLANNED_CONFIG: readonly Destination[] = [
-  { id: "settings", label: "Settings", Icon: SettingsIcon },
+  { id: "settings", label: "Settings", Icon: SettingsIcon, href: SETTINGS_PATH, route: "settings" },
 ];
 
 /** The destinations the rail can navigate to. */
@@ -120,7 +110,8 @@ export type NavRoute =
   | "dashboard"
   | "incidents"
   | "monitors"
-  | "notifications";
+  | "notifications"
+  | "settings";
 
 export type SidebarProps = {
   collapsed: boolean;
@@ -134,27 +125,6 @@ export type SidebarProps = {
   account?: string;
   onSignOut?: () => void;
 };
-
-function Planned({ label, Icon }: Destination) {
-  return (
-    <li>
-      {/*
-       * A <span>, not a disabled <button>. There is nothing to press, and a
-       * disabled button in a nav list is a promise with the wiring cut. The
-       * "Soon" text is read out, so the state does not depend on the dimming.
-       */}
-      <span
-        className="shell-nav-item"
-        data-state="planned"
-        title={`${label} — not built yet`}
-      >
-        <Icon />
-        <span className="shell-nav-text">{label}</span>
-        <span className="shell-nav-soon">Soon</span>
-      </span>
-    </li>
-  );
-}
 
 /**
  * A destination that exists: a real `<a href>`, for the reasons `MonitorLink`
@@ -261,9 +231,6 @@ export function Sidebar({
             current={current === item.route}
             onNavigate={onNavigate}
           />
-        ))}
-        {PLANNED_CONFIG.map((item) => (
-          <Planned key={item.id} {...item} />
         ))}
       </ul>
 

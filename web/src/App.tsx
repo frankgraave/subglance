@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { confirmLeave } from "./shell/leaveGuard";
+import { Settings } from "./settings/Settings";
 import { SessionGate } from "./auth/SessionGate";
 import { useSession } from "./auth/useSession";
 import { canWrite } from "./auth/permissions";
@@ -75,6 +77,7 @@ export default function App() {
 
   const openMonitor = useCallback(
     (id: string) => {
+      if (!confirmLeave()) return;
       setWorkbenchOpen(false);
       setAddOpen(false);
       navigate({ name: "monitor", id });
@@ -100,6 +103,7 @@ export default function App() {
    */
   const goTo = useCallback(
     (name: NavRoute) => {
+      if (!confirmLeave()) return;
       setWorkbenchOpen(false);
       setAddOpen(false);
       navigate(
@@ -130,6 +134,7 @@ export default function App() {
   const onIncidents = route.name === "incidents";
   const onMonitors = route.name === "monitors";
   const onNotifications = route.name === "notifications";
+  const onSettings = route.name === "settings";
   /*
    * Opening and closing the create drawer is a navigation, not a boolean.
    *
@@ -170,7 +175,7 @@ export default function App() {
           ? "Monitors"
           : onNotifications
             ? "Notifications"
-            : "Dashboard",
+            : onSettings ? "Settings" : "Dashboard",
   );
   const mainRef = useRef<HTMLElement | null>(null);
   useRouteFocus(path, mainRef);
@@ -186,7 +191,8 @@ export default function App() {
     !onDetail &&
     !onIncidents &&
     !onMonitors &&
-    !onNotifications;
+    !onNotifications &&
+    !onSettings;
   /*
    * What "a different screen" means for the inner error boundary: the route,
    * plus the workbench. Changing either remounts the boundary and so clears a
@@ -215,6 +221,7 @@ export default function App() {
    * what is on screen the same thing.
    */
   const toggleWorkbench = useCallback(() => {
+    if (!confirmLeave()) return;
     setAddOpen(false);
     setWorkbenchOpen((open) => !open);
   }, []);
@@ -227,7 +234,9 @@ export default function App() {
    * page that has nothing on it yet — no checks, no uptime, no incidents. A
    * toast would say the same thing less durably (DESIGN.md §7.6).
    */
-  const closeAdd = useCallback(() => setAddOpen(false), []);
+  const closeAdd = useCallback(() => {
+    if (confirmLeave()) setAddOpen(false);
+  }, []);
   /*
    * Creating a monitor closes the form *and* invalidates the list.
    *
@@ -346,7 +355,7 @@ export default function App() {
       current={route.name}
       onNavigate={goTo}
       account={session.state === "signedIn" ? session.user.email : undefined}
-      onSignOut={signOut}
+      onSignOut={() => { if (confirmLeave()) void signOut(); }}
       topbar={
         <Topbar
           sidebarCollapsed={narrow ? !navOpen : sidebarCollapsed}
@@ -354,7 +363,13 @@ export default function App() {
           onToggleSidebar={toggleNav}
           layout={layout}
           effectiveLayout={shown}
-          onLayoutChange={setLayout}
+          onLayoutChange={(next) => {
+            if (next === "wall" && route.name === "dashboard" && addOpen) {
+              if (!confirmLeave()) return;
+              setAddOpen(false);
+            }
+            setLayout(next);
+          }}
           /*
            * Layouts are how this product draws a list of monitors, and the
            * masthead is the same on every screen (SUB-138), so the switcher
@@ -394,6 +409,8 @@ export default function App() {
       >
         {workbenchOpen ? (
           <Workbench />
+        ) : onSettings ? (
+          <Settings />
         ) : onIncidents ? (
           <LiveIncidentsRoot client={queryClient} />
         ) : route.name === "notifications" ? (

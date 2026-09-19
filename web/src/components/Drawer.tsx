@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useRef } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
+import { confirmLeave } from "../shell/leaveGuard";
 
 /**
  * The drawer (DESIGN.md §8).
@@ -53,6 +54,9 @@ export function Drawer({
   const panelRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
+  const requestClose = useCallback(() => {
+    if (confirmLeave(panelRef.current)) onClose();
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -74,7 +78,8 @@ export function Drawer({
     (event: KeyboardEvent<HTMLDivElement>) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        event.stopPropagation();
+        requestClose();
         return;
       }
       if (event.key !== "Tab") return;
@@ -94,7 +99,7 @@ export function Drawer({
         first.focus();
       }
     },
-    [onClose],
+    [requestClose],
   );
 
   if (!open) return null;
@@ -106,7 +111,7 @@ export function Drawer({
       <button
         type="button"
         className="drawer-scrim"
-        onClick={onClose}
+        onClick={requestClose}
         aria-hidden="true"
         tabIndex={-1}
       />
@@ -132,7 +137,7 @@ export function Drawer({
             type="button"
             className="drawer-close"
             aria-label={closeLabel}
-            onClick={onClose}
+            onClick={requestClose}
           >
             <span aria-hidden="true">&times;</span>
           </button>

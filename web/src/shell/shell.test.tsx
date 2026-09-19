@@ -43,17 +43,15 @@ describe("Sidebar", () => {
     expect(screen.getByText("Dashboard").closest("[aria-current]")).toBeTruthy();
   });
 
-  it("does not promise the screen that does not exist", () => {
-    render(<Sidebar collapsed={false} />);
-    // It is shown — the shape of the product is information — but never as
-    // something you can press, and never with a fabricated count beside it.
-    const item = screen.getByText("Settings").closest(".shell-nav-item")!;
-    expect(item.getAttribute("data-state")).toBe("planned");
-    expect(item.querySelector("a, button")).toBeNull();
-    // Exactly one, because Notifications stopped being a promise in SUB-123.
-    // A count rather than a presence check: the failure this guards against is
-    // a second "Soon" quietly reappearing next to a screen that now exists.
-    expect(screen.getAllByText("Soon")).toHaveLength(1);
+  it("makes settings reachable and current without Soon placeholders", () => {
+    const navigate = vi.fn();
+    render(<Sidebar collapsed={false} current="settings" onNavigate={navigate} />);
+    const link = screen.getByRole("link", { name: "Settings" });
+    expect(link.getAttribute("href")).toBe("/settings");
+    expect(link.getAttribute("aria-current")).toBe("page");
+    expect(screen.queryByText("Soon")).toBeNull();
+    fireEvent.click(link);
+    expect(navigate).toHaveBeenCalledWith("settings");
   });
 
   it("makes notifications a real link now that the screen exists (SUB-123)", () => {
