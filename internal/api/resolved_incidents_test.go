@@ -135,6 +135,38 @@ func TestResolvedIncidentsPaginateWithoutGapsOrRepeats(t *testing.T) {
 	}
 }
 
+// A walk at the maximum window survives its own second page.
+//
+// The bound is pinned on page one and re-checked against the cap on every
+// continuation, and both ends of that comparison move: `now - 730d` advances
+// while the pinned bound stays put. A walk begun at exactly the cap therefore
+// has its own cursor fall behind the ceiling within a second of being issued,
+// and the naive check refused the continuation of a walk it had just handed
+// out — the request being rejected as fabricated is the one the server wrote.
+//
+// A second past the cap stands in for the seconds or minutes a real walk takes
+// between pages.
+func TestResolvedIncidentsAllowAWalkAtTheMaximumWindow(t *testing.T) {
+	srv, db := testServerWithDB(t)
+
+	now := time.Now().Truncate(time.Second)
+	seedResolved(t, db, "recent", now.Add(-2*time.Hour), now.Add(-time.Hour))
+
+	justPastTheCap := now.AddDate(0, 0, -resolvedHistoryMaxDays).Add(-time.Second)
+	cursor := strconv.FormatInt(justPastTheCap.Unix(), 10) + "." +
+		strconv.FormatInt(now.Unix(), 10) + ".999999"
+
+	rec := httptest.NewRecorder()
+	authedHandler(srv).ServeHTTP(rec,
+		httptest.NewRequest(http.MethodGet,
+			"/api/v1/incidents/resolved?days=730&cursor="+cursor, nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("the server refused the continuation of a walk it issued: status = %d, body = %s",
+			rec.Code, rec.Body.String())
+	}
+}
+
 // A cursor may pin the window, but it may not widen it past the cap.
 //
 // The bound moved onto the cursor so a walk could not have the floor rise
@@ -145,6 +177,9 @@ func TestResolvedIncidentsPaginateWithoutGapsOrRepeats(t *testing.T) {
 //
 // The fabricated bound is refused rather than clamped: clamping would answer a
 // question nobody asked and call it the same walk.
+//
+// A day past the cap, which is well outside `resolvedCursorGrace` — the
+// neighbouring test covers the legitimate case just inside it.
 func TestResolvedIncidentsRejectCursorsOlderThanTheCap(t *testing.T) {
 	srv, _ := testServerWithDB(t)
 

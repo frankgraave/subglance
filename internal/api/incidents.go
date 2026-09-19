@@ -94,6 +94,17 @@ const resolvedHistoryDefaultDays = 30
 // is an export, not a scroll.
 const resolvedHistoryMaxDays = 730
 
+// resolvedCursorGrace is how far past the cap a continuation cursor may sit
+// before it is treated as fabricated.
+//
+// It exists because the cap is measured from `now` on every request while a
+// cursor's bound is fixed when the walk starts: at `days=730` the server's own
+// cursor is a second past the ceiling by the time the client asks for page
+// two. An hour is far more than any walk needs — a page is one indexed query —
+// and against a 730-day window it is a rounding error, so it cannot be used to
+// read meaningfully further back than the cap allows.
+const resolvedCursorGrace = time.Hour
+
 const (
 	resolvedPageDefaultLimit = 50
 	resolvedPageMaxLimit     = 200
@@ -173,7 +184,9 @@ func (s *Server) handleListResolvedIncidents(w http.ResponseWriter, r *http.Requ
 	since := cursor.Since
 	if since.IsZero() {
 		since = time.Now().Add(-time.Duration(days) * 24 * time.Hour)
-	} else if since.Before(time.Now().AddDate(0, 0, -resolvedHistoryMaxDays)) {
+	} else if since.Before(time.Now().
+		AddDate(0, 0, -resolvedHistoryMaxDays).
+		Add(-resolvedCursorGrace)) {
 		/*
 		 * A cursor pins the window; it does not get to widen it.
 		 *
@@ -186,6 +199,14 @@ func (s *Server) handleListResolvedIncidents(w http.ResponseWriter, r *http.Requ
 		 * would answer a different question than the one asked while calling
 		 * it the same walk, and this endpoint's whole point is that a page of
 		 * history means what it says.
+		 *
+		 * The grace is what makes the check survive its own first page. Both
+		 * ends of this comparison move — the ceiling advances with the clock
+		 * while the pinned bound stays where page one put it — so a walk begun
+		 * at exactly the cap falls behind the ceiling a second later, and a
+		 * bare comparison refused the continuation of a walk the server had
+		 * just issued. Wide enough for any real walk, and still narrower by
+		 * orders of magnitude than the window it guards.
 		 */
 		writeError(w, http.StatusBadRequest, "invalid cursor")
 		return
