@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../../../web/src/styles/tokens.css">
+<link rel="stylesheet" href="../../../web/src/monitors/led.css">
+<link rel="stylesheet" href="../common.css">
 <title>Notifications — SubGlance page proposal</title>
 <link rel="stylesheet" href="shared.css">
 <!-- Shared shell markup + theme script for the page proposals.
@@ -28,34 +31,34 @@
 
 /* A two-column key/value block inside a panel. Gap equals the panel's padding
    step down, per the nesting rule. */
-.kv { display: grid; grid-template-columns: 140px 1fr; gap: var(--space-2) var(--space-3); align-items: center; }
+.kv { display: grid; grid-template-columns: 140px 1fr; gap:var(--space-2) var(--space-3); align-items: center; }
 
-/* Inner surface inside a panel: one radius step down (--r-sm), no extra shadow.
-   This is the third and last surface we allow, and only for form groups. */
-.inner { border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface-2);
-         padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-3); }
+/* Form groups arrange controls without painting a third structural surface.
+   The surrounding panel already provides the fill, edge and inset. */
+.inner {
+          display: flex; flex-direction: column; gap:var(--space-3); border:0; border-radius:0; background:none; padding:0; }
 
 /* The test-result slot. Reserved inline, so a result appearing does not reflow
    the row — the page must stay still while you read it. */
 .testout { min-width: 168px; text-align: right; }
 
 /* Coverage matrix: monitor name, then the channels that would receive it. */
-.cov { display: grid; grid-template-columns: 1fr auto; gap: var(--space-2) var(--space-3); align-items: center; }
+.cov { display: grid; grid-template-columns: 1fr auto; gap:var(--space-2) var(--space-3); align-items: center; }
 
 /* A horizontal wrap of chips, used for tags and for coverage channels. */
-.chips { display: flex; flex-wrap: wrap; gap: var(--space-1h); justify-content: flex-end; }
+.chips { display: flex; flex-wrap: wrap; gap:var(--space-1h); justify-content: flex-end; }
 
 /* Toggle switch built out of the button token set, so it inherits focus ring.
    On/off is never colour alone: the knob physically moves and the label changes. */
-.sw { display: inline-flex; align-items: center; gap: var(--space-2); background: none; border: 0; padding: 0;
+.sw { display: inline-flex; align-items: center; gap:var(--space-2); background: none; border: 0; padding:0;
       font: inherit; color: var(--ink-2); cursor: pointer; }
-.sw i { width: 34px; height: 20px; border-radius: var(--r-pill); background: var(--surface-hi);
+.sw i { width: 34px; height: 20px; border-radius:var(--r-pill); background: var(--surface-hi);
         border: 1px solid var(--border-control); position: relative; flex: none; }
 .sw i::after { content: ""; position: absolute; top: 1px; left: 1px; width: 16px; height: 16px;
-               border-radius: var(--r-pill); background: var(--ink-3); transition: transform var(--dur-hover) var(--ease), background var(--dur-hover) var(--ease); }
+               border-radius:var(--r-pill); background: var(--ink-3); transition: transform var(--dur-hover) var(--ease), background var(--dur-hover) var(--ease); }
 .sw[aria-pressed="true"] i { background: color-mix(in srgb, var(--accent) 35%, transparent); border-color: var(--accent-border); }
 .sw[aria-pressed="true"] i::after { transform: translateX(14px); background: var(--accent-ink); }
-.sw:focus-visible { outline: 2px solid var(--accent-border); outline-offset: 2px; border-radius: var(--r-sm); }
+.sw:focus-visible { outline: 2px solid var(--accent-border); outline-offset: 2px; border-radius:var(--r-sm); }
 
 /* ---------- phone ----------
    Channel rows carry a destination string that cannot wrap (a webhook URL);
@@ -72,7 +75,7 @@
 
   <aside class="shell-side">
     <div class="shell-brand">
-      <span class="led" data-state="up" aria-hidden="true"></span>
+      <span class="led-wrap"><span class="led" data-state="up" aria-hidden="true"></span><span class="sr-only">Up</span></span>
       <span class="shell-brand-name">SubGlance</span>
     </div>
 
@@ -506,7 +509,7 @@
         </div>
 
         <div class="grid2">
-          <div class="panel">
+          <div class="stack">
             <div class="label">Events</div>
             <div class="stack" style="margin-top:var(--space-3)">
               <div class="row">

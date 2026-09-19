@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../../../web/src/styles/tokens.css">
+<link rel="stylesheet" href="../../../web/src/monitors/led.css">
+<link rel="stylesheet" href="../common.css">
 <title>Settings — SubGlance page proposal</title>
 <link rel="stylesheet" href="shared.css">
 <!-- Shared shell markup + theme script for the page proposals.
@@ -35,11 +38,11 @@
    them is the table of contents, and a table of contents that sits after the
    content is not a table of contents. */
 .split--rail-left { grid-template-columns: 200px 1fr; }
-.rail { position: sticky; top: var(--space-12); display: flex; flex-direction: column; gap: 1px; }
+.rail { position: sticky; top: var(--space-12); display: flex; flex-direction: column; gap:1px; }
 
 /* Definition list used inside diagnostics panels: label above, value below.
    Not a table — a table would be a third visible surface. */
-.kv { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.kv { display: flex; flex-direction: column; gap:var(--space-1); min-width: 0; }
 
 /* The three theme glyphs. shared.css styles .segmented button but not its
    icon, because only this page draws icons in a segmented control. */
@@ -56,7 +59,7 @@
 
   <aside class="shell-side">
     <div class="shell-brand">
-      <span class="led" data-state="up" aria-hidden="true"></span>
+      <span class="led-wrap"><span class="led" data-state="up" aria-hidden="true"></span><span class="sr-only">Up</span></span>
       <span class="shell-brand-name">SubGlance</span>
     </div>
 
@@ -141,7 +144,7 @@
           <a class="shell-nav-item" href="#danger" data-jump>Danger zone</a>
         </nav>
 
-        <div class="stack" style="gap: var(--space-5)">
+        <div class="stack" style="gap:var(--space-5)">
 
           <!-- ═══════════ 1. ACCOUNT ═══════════
                First because it is what people come here for, and because it is
@@ -185,7 +188,7 @@
               </div>
             </div>
 
-            <div class="card-actions" style="margin-left: 0">
+            <div class="card-actions" style="margin-left:0">
               <button class="btn btn--primary" type="button">Save account</button>
             </div>
 
@@ -297,7 +300,7 @@
                   a hash, not the token; if you lose it, revoke it and make
                   another one.
                 </div>
-                <div class="row" style="background: var(--surface)">
+                <div class="content-row">
                   <div class="row-main">
                     <div class="row-name mono" id="secret-value">sgl_5f3c9a1e7b0d4826ae91c7d35f08b642</div>
                     <div class="row-sub">name: deploy-pipeline · created just now</div>
@@ -418,7 +421,7 @@
             </div>
 
             <div class="panel">
-              <div class="row" style="box-shadow: none; background: none; border-color: transparent; padding: 0">
+              <div class="content-row">
                 <div class="row-main">
                   <div class="row-name">Reduce motion</div>
                   <div class="row-sub">Turns off the heartbeat sweep and every transition</div>
@@ -428,7 +431,7 @@
                   <button type="button" data-seg aria-pressed="true">On</button>
                 </div>
               </div>
-              <div class="helper" style="margin-top: var(--space-2)">
+              <div class="helper" style="margin-top:var(--space-2)">
                 Defaults to on when your system asks for reduced motion. Setting
                 it here overrides that in both directions.
               </div>
@@ -525,7 +528,7 @@
               <div class="panel">
                 <div class="stack">
                   <div class="label">Database on disk</div>
-                  <div class="value" style="font-size: var(--type-page); line-height: var(--lead-page)">241 MB</div>
+                  <div class="value" style="; font-size:var(--type-page); line-height:var(--lead-page); ">241 MB</div>
                   <div class="helper">
                     <span class="value">+3.1 MB</span> in the last 7 days · next prune in 4 h
                   </div>
@@ -536,14 +539,14 @@
             <div class="panel">
               <div class="stack">
                 <div class="label">Maintenance</div>
-                <div class="row" style="box-shadow: none; background: none; border-color: transparent; padding: 0">
+                <div class="content-row">
                   <div class="row-main">
                     <div class="row-name">Compact database</div>
                     <div class="row-sub">VACUUM · reclaims ~18 MB · locks writes for a few seconds</div>
                   </div>
                   <button class="btn btn--sm" type="button">Compact now</button>
                 </div>
-                <div class="row" style="box-shadow: none; background: none; border-color: transparent; padding: 0">
+                <div class="content-row">
                   <div class="row-main">
                     <div class="row-name">Export everything</div>
                     <div class="row-sub">Monitors, incidents and rollups as one JSON file</div>
@@ -640,7 +643,7 @@
                  the UI adds a second thing that can disagree with it. -->
             <div class="stack">
               <div class="row">
-                <span class="led led--sm" aria-hidden="true"></span>
+                <span class="led-wrap"><span class="led led--sm" aria-hidden="true" data-state="up"></span><span class="sr-only">Up</span></span>
                 <div class="row-main">
                   <div class="row-name">Health endpoint</div>
                   <div class="row-sub">last probe 2 s ago · 200 OK · scheduler, database, notifier all reporting</div>
@@ -649,7 +652,7 @@
                 <code class="mono-path">GET /api/v1/health</code>
               </div>
               <div class="row">
-                <span class="led led--sm" aria-hidden="true"></span>
+                <span class="led-wrap"><span class="led led--sm" aria-hidden="true" data-state="up"></span><span class="sr-only">Up</span></span>
                 <div class="row-main">
                   <div class="row-name">Readiness endpoint</div>
                   <div class="row-sub">used by your reverse proxy or orchestrator to decide whether to send traffic</div>
