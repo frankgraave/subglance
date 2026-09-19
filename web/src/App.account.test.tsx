@@ -103,6 +103,36 @@ it("preserves both the form and browser history when Back is cancelled, then all
   expect((await screen.findByLabelText("Name") as HTMLInputElement).value).toBe("");
 });
 
+it("guards the mounted draft even when the browser URL has already moved to the Cancel destination", async () => {
+  const input = await openFromDashboard();
+  fireEvent.change(input, { target: { value: "mounted draft" } });
+  // A traversal updates location before the router processes its popstate.
+  window.history.replaceState(window.history.state, "", "/monitors");
+  fireEvent.keyDown(window, { key: "Escape" });
+  expect(window.confirm).toHaveBeenCalledTimes(1);
+  expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe("mounted draft");
+});
+
+it("verifies the restoration target instead of swallowing an intervening Back", async () => {
+  const input = await openFromDashboard();
+  fireEvent.change(input, { target: { value: "racing draft" } });
+  const go = window.history.go.bind(window.history);
+  // Hold the router's reversal while another browser traversal wins the race.
+  const reversal = vi.spyOn(window.history, "go").mockImplementation(() => {});
+  go(-1);
+  await waitFor(() => expect(reversal).toHaveBeenCalledWith(1));
+  go(-1);
+  await waitFor(() => expect(window.location.pathname).toBe("/"));
+  await waitFor(() => expect(reversal).toHaveBeenLastCalledWith(2));
+  expect(window.confirm).toHaveBeenCalledTimes(1);
+  go(2);
+  await waitFor(() => expect(window.location.pathname).toBe("/monitors/new"));
+  expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe("racing draft");
+  fireEvent.keyDown(window, { key: "Escape" });
+  expect(window.confirm).toHaveBeenCalledTimes(2);
+  expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe("racing draft");
+});
+
 it("does not prompt after a real create succeeds, reopens pristine, but keeps a failed save dirty", async () => {
   await openFromDashboard();
   const fill = () => {

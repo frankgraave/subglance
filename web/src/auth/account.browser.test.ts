@@ -96,6 +96,102 @@ it("keeps the password card usable on a phone with no horizontal overflow", asyn
   } finally { await page.close(); }
 });
 
+it.each([[false, false], [true, false], [false, true]])("restores the exact draft entry after multi-entry Back across the native skip link (intervening Forward: %s, draft fragment: %s)", async (race, draftHash) => {
+  const page = await pageAt("/");
+  try {
+    const cdp = await page.createCDPSession();
+    const initialLength = await page.evaluate(() => history.length);
+    await page.focus('a[href="#shell-main"]');
+    await page.keyboard.press("Enter");
+    await page.waitForFunction(() => location.hash === "#shell-main");
+    expect(await page.evaluate(() => history.length)).toBe(initialLength + 1);
+    await (await page.waitForSelector('a[href="/monitors"]'))!.click();
+    await (await page.waitForSelector('button[aria-label="Add monitor"]'))!.click();
+    await readyAddForm(page);
+    const name = 'input[id$="-name"]';
+    await page.type(name, "native hash draft");
+    if (draftHash) {
+      await page.evaluate(() => { location.hash = "draft"; });
+      await page.waitForFunction(() => location.hash === "#draft");
+    }
+    const draftPath = `/monitors/new${draftHash ? "#draft" : ""}`;
+    const backSteps = draftHash ? -4 : -3;
+    const before = await cdp.send("Page.getNavigationHistory");
+    if (race) await page.evaluate(() => {
+      const go = history.go.bind(history);
+      let held = false;
+      history.go = (delta = 0) => {
+        if (delta > 0 && !held) {
+          // Hold the first reversal and let a real Forward win the race.
+          held = true;
+          history.forward();
+        } else go(delta);
+      };
+    });
+
+    await confirmAction(page, () => page.evaluate((delta) => history.go(delta), backSteps), false);
+    await expect.poll(() => new URL(page.url()).pathname + new URL(page.url()).hash).toBe(draftPath);
+    expect(await page.$eval(name, (el) => (el as HTMLInputElement).value)).toBe("native hash draft");
+    expect(await cdp.send("Page.getNavigationHistory")).toEqual(before);
+    for (const action of [
+      () => page.click(".add-button-quiet"),
+      () => page.evaluate(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))),
+    ]) {
+      await confirmAction(page, action, false);
+      expect(new URL(page.url()).pathname + new URL(page.url()).hash).toBe(draftPath);
+      expect(await page.$eval(name, (el) => (el as HTMLInputElement).value)).toBe("native hash draft");
+    }
+
+    await confirmAction(page, () => page.evaluate((delta) => history.go(delta), backSteps), true);
+    await page.waitForFunction(() => location.pathname === "/" && !document.querySelector(".add-form"));
+    for (const path of ["/#shell-main", "/monitors", "/monitors/new", ...(draftHash ? [draftPath] : [])]) {
+      await page.evaluate(() => history.forward());
+      await page.waitForFunction((expected) => location.pathname + location.hash === expected, {}, path);
+    }
+    await readyAddForm(page);
+    expect(await page.$eval(name, (el) => (el as HTMLInputElement).value)).toBe("");
+    expect(await cdp.send("Page.getNavigationHistory")).toEqual(before);
+  } finally { await page.close(); }
+});
+
+it("keeps native fragment entries on a dirty form reversible in both directions", async () => {
+  const page = await pageAt("/monitors/new");
+  try {
+    await readyAddForm(page);
+    // Seed a real future route while pristine, then come Back and start a draft.
+    await page.$eval('a[href="/settings"]', (link) => (link as HTMLAnchorElement).click());
+    await page.waitForSelector('input[name="current_password"]');
+    await page.evaluate(() => history.back());
+    await readyAddForm(page);
+    const name = 'input[id$="-name"]';
+    await page.type(name, "forward draft");
+    const cdp = await page.createCDPSession();
+    const before = await cdp.send("Page.getNavigationHistory");
+    await confirmAction(page, () => page.evaluate(() => history.forward()), false);
+    await expect.poll(() => new URL(page.url()).pathname).toBe("/monitors/new");
+    expect(await cdp.send("Page.getNavigationHistory")).toEqual(before);
+    expect(await page.$eval(name, (el) => (el as HTMLInputElement).value)).toBe("forward draft");
+
+    // Real fragment navigation, not pushState with a copied router index.
+    // Adding it intentionally replaces the future Settings entry in the browser.
+    let unexpected = 0;
+    const reject = (dialog: import("puppeteer-core").Dialog) => { unexpected++; void dialog.dismiss(); };
+    page.on("dialog", reject);
+    await page.evaluate(() => { location.hash = "draft"; });
+    await page.waitForFunction(() => location.hash === "#draft");
+    await page.evaluate(() => history.back());
+    await page.waitForFunction(() => location.hash === "");
+    await page.evaluate(() => history.forward());
+    await page.waitForFunction(() => location.hash === "#draft");
+    page.off("dialog", reject);
+    expect(unexpected).toBe(0);
+    expect(await page.$eval(name, (el) => (el as HTMLInputElement).value)).toBe("forward draft");
+    await confirmAction(page, () => page.click(".add-button-quiet"), false);
+    expect(new URL(page.url()).pathname + new URL(page.url()).hash).toBe("/monitors/new#draft");
+    expect(await page.$eval(name, (el) => (el as HTMLInputElement).value)).toBe("forward draft");
+  } finally { await page.close(); }
+});
+
 it.each(["dashboard", "direct"])("protects Escape, close, Cancel, backdrop and history while keeping keyboard focus (%s entry)", async (entry) => {
   const page = await pageAt(entry === "direct" ? "/monitors/new" : "/");
   try {

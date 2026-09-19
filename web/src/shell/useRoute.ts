@@ -34,10 +34,26 @@ export function useRoute(history: History = window.history): UseRoute {
     const syncLocation = () => setRoute(parseRoute(window.location.pathname));
     syncLocation();
     const onPop = () => {
-      if (restoring.current) { restoring.current = false; return; }
-      const nextIndex = entryIndex(history);
+      let nextIndex = entryIndex(history);
+      if (restoring.current) {
+        // Another Back/Forward can arrive before our reversal. Only finish at
+        // the entry we kept mounted, never just at the next popstate.
+        if (nextIndex === current.current.index && window.location.href === current.current.url) {
+          restoring.current = false;
+        } else if (nextIndex !== undefined && nextIndex !== current.current.index) {
+          history.go(current.current.index - nextIndex);
+        }
+        return;
+      }
       const nextRoute = parseRoute(window.location.pathname);
       const previousRoute = parseRoute(new URL(current.current.url).pathname);
+      if (nextIndex === undefined && routePath(nextRoute) === routePath(previousRoute)) {
+        // Native fragment navigation (including the skip link) creates a real
+        // entry with null state. Count it too, or a later multi-entry Back is
+        // reversed by the wrong distance. Tag in place; do not cut off Forward.
+        nextIndex = current.current.index + 1;
+        history.replaceState({ ...history.state, [INDEX]: nextIndex }, "", window.location.href);
+      }
       if (routePath(nextRoute) !== routePath(previousRoute) && !confirmLeave()) {
         if (nextIndex !== undefined && nextIndex !== current.current.index) {
           restoring.current = true;
@@ -59,14 +75,16 @@ export function useRoute(history: History = window.history): UseRoute {
   const navigate = useCallback((next: Route) => {
     if (restoring.current) return;
     const path = routePath(next);
+    // location changes before popstate is handled; it is not necessarily the
+    // screen whose draft we are about to unmount.
+    if (path !== routePath(route) && !confirmLeave()) return;
     if (path !== window.location.pathname) {
-      if (!confirmLeave()) return;
       const index = current.current.index + 1;
       history.pushState({ [INDEX]: index }, "", path);
       current.current = { index, url: window.location.href };
     }
     setRoute(next);
-  }, [history]);
+  }, [history, route]);
 
   return { route, navigate };
 }
