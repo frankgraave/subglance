@@ -49,6 +49,14 @@ export type InventoryMonitor = Monitor & {
   enabled: boolean;
   /** Unix ms, or null when the server sent a timestamp we cannot read. */
   createdAt: number | null;
+  /**
+   * The TLS floor as a label — "1.0" to "1.3" — or `""` for no opinion.
+   *
+   * `""` rather than null or undefined because that is what the select's
+   * empty option carries, and one spelling of "no opinion" is what keeps the
+   * edit form from turning an absent floor into a chosen one.
+   */
+  minTlsVersion: string;
 };
 
 /** One monitor as the inventory reads it. */
@@ -68,6 +76,10 @@ export function inventoryFromApi(api: ApiMonitor & {
     timeoutS: api.type === "push" ? null : api.timeout_s,
     enabled: api.enabled,
     createdAt: toUnixMs(api.created_at),
+    // Absent means the monitor has no floor of its own. It is read as "no
+    // opinion" and never as the current default: substituting "1.2" here
+    // would make the edit form offer to pin a floor nobody set.
+    minTlsVersion: api.min_tls_version ?? "",
   };
 }
 

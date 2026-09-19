@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import type { InventoryMonitor } from "./inventory";
 import type { MonitorPatch } from "./inventoryApi";
 import { tagsToText, textToTags } from "./tags";
+import { TlsFloorField } from "./TlsFloorField";
 
 /**
  * Editing an existing monitor.
@@ -17,6 +18,12 @@ import { tagsToText, textToTags } from "./tags";
  * setting, or guess a default and silently overwrite what is stored. Both are
  * the failure this product exists to avoid, so those fields are not offered
  * here at all. The remaining gap is named in the PR rather than hidden.
+ *
+ * `min_tls_version` is the exception to that paragraph, and it is an exception
+ * on the rule's own terms: the list endpoint *does* carry it, and it carries
+ * absence honestly — the field is omitted rather than filled with the current
+ * default — so the form knows both what is stored and that nothing is. That
+ * is precisely what the other fields could not tell it.
  *
  * **Target and type are read-only here for the same reason plus one more.**
  * Changing a target re-validates against the type and can fail in ways only a
@@ -97,6 +104,14 @@ export function EditMonitorForm({
    */
   const initialTagText = tagsToText(monitor.tags);
   const [tagText, setTagText] = useState(initialTagText);
+  /*
+   * The TLS floor, `""` when the monitor has none.
+   *
+   * Loaded straight from the monitor with no fallback. Defaulting to "1.2"
+   * would mean opening the drawer and pressing Save pinned a floor the user
+   * never chose, which is the one thing the nullable column exists to avoid.
+   */
+  const [minTlsVersion, setMinTlsVersion] = useState(monitor.minTlsVersion);
   const [saving, setSaving] = useState(false);
   /*
    * A rejection, and which control it is about.
@@ -181,6 +196,17 @@ export function EditMonitorForm({
       if (timeout !== monitor.timeoutS) patch.timeout_s = timeout;
     }
     if (tagsToText(tags) !== initialTagText) patch.tags = tags;
+    /*
+     * Sent only when it actually moved, like every other field here.
+     *
+     * When it moved to `""` the empty string is sent deliberately: PATCH reads
+     * that as "take the floor back off", and it is the only way to undo a
+     * floor from this form. Untouched means untouched, so a monitor with no
+     * opinion that is renamed keeps having no opinion.
+     */
+    if (minTlsVersion !== monitor.minTlsVersion) {
+      patch.min_tls_version = minTlsVersion;
+    }
 
     if (Object.keys(patch).length === 0) {
       reject("Nothing changed, so nothing was sent.");
@@ -285,6 +311,22 @@ export function EditMonitorForm({
           removed.
         </p>
       </div>
+
+      {/*
+       * Collapsed, like the add form's, and for the same reason: this is a
+       * setting most monitors never need, and the two forms disagreeing about
+       * where it lives would make it something to hunt for.
+       */}
+      <details className="add-advanced">
+        <summary className="add-summary">Advanced options</summary>
+        <div className="add-grid">
+          <TlsFloorField
+            id={`${ids}-min-tls`}
+            value={minTlsVersion}
+            onChange={setMinTlsVersion}
+          />
+        </div>
+      </details>
 
       <p className="add-help">
         Target and check type are not editable here: changing either can only be

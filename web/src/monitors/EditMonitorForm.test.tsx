@@ -206,6 +206,80 @@ describe("EditMonitorForm", () => {
     expect(screen.getByRole("alert").textContent).toMatch(/nothing changed/i);
   });
 
+  it("does not send a TLS floor when the field was never touched", async () => {
+    /*
+     * The failure this closes: a monitor with no floor, opened to be renamed,
+     * saved with min_tls_version: "1.2" because the select defaulted to the
+     * current default. That silently pins today's floor onto a monitor whose
+     * owner asked for nothing, and the nullable column exists to keep those
+     * two states apart.
+     */
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<EditMonitorForm monitor={make()} onSave={onSave} />);
+    fireEvent.change(screen.getByLabelText("Name"), {
+      target: { value: "auth-eu" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    expect(onSave.mock.calls[0][0]).not.toHaveProperty("min_tls_version");
+  });
+
+  it("loads the stored floor rather than a default, and sends a change", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <EditMonitorForm
+        monitor={make({ min_tls_version: "1.0" })}
+        onSave={onSave}
+      />,
+    );
+    const select = screen.getByLabelText(
+      /minimum tls version/i,
+    ) as HTMLSelectElement;
+    expect(select.value).toBe("1.0");
+    fireEvent.change(select, { target: { value: "1.3" } });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    expect(onSave.mock.calls[0][0]).toEqual({ min_tls_version: "1.3" });
+  });
+
+  it("sends an empty string to take an existing floor back off", async () => {
+    // The only way to undo a floor from this form. PATCH reads "" as "clear
+    // it"; omitting the field would leave the old floor in place.
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <EditMonitorForm
+        monitor={make({ min_tls_version: "1.3" })}
+        onSave={onSave}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText(/minimum tls version/i), {
+      target: { value: "" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    expect(onSave.mock.calls[0][0]).toEqual({ min_tls_version: "" });
+  });
+
+  it("explains both directions of the TLS floor, not just the numbers", () => {
+    /*
+     * The control without the copy is four numbers that read as a client
+     * setting. Both cases have to be on screen: that raising it is an
+     * assertion whose failure is the point, and that lowering it is what
+     * makes an old appliance checkable at all.
+     */
+    render(<EditMonitorForm monitor={make()} onSave={vi.fn()} />);
+    const help =
+      screen
+        .getByLabelText(/minimum tls version/i)
+        .getAttribute("aria-describedby") ?? "";
+    const text = document.getElementById(help.split(" ")[0])?.textContent ?? "";
+    expect(text).toMatch(/assertion/i);
+    expect(text).toMatch(/red/i);
+    expect(text).toMatch(/1\.0/);
+    expect(text).toMatch(/refused handshake/i);
+    expect(text).toMatch(/floor SubGlance dials with/i);
+  });
+
   it("warns that saving tags replaces the whole set", () => {
     render(<EditMonitorForm monitor={make()} onSave={vi.fn()} />);
     expect(screen.getByText(/a tag left out here is a tag removed/i)).toBeTruthy();
