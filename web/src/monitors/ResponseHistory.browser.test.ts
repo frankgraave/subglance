@@ -14,7 +14,7 @@ const root = fileURLToPath(new URL("../../../", import.meta.url));
 let dir: string;
 let child: ChildProcess;
 let browser: Browser;
-let fixture: { url: string; session: string; monitor_id: number };
+let fixture: { url: string; session: string; monitor_id: number; identity_monitor_id: number };
 
 beforeAll(async () => {
   dir = await mkdtemp(join(tmpdir(), "snapshot-browser-"));
@@ -43,6 +43,69 @@ afterAll(async () => {
     await exited;
   }
   if (dir) await rm(dir, { recursive: true, force: true });
+});
+
+it.each(["dark", "light"] as const)("polling preserves disclosed identity, body focus and scroll in %s", async (theme) => {
+  const context = await browser.createBrowserContext();
+  const page = await context.newPage();
+  try {
+    await context.setCookie({ name: "subglance_session", value: fixture.session, domain: new URL(fixture.url).hostname, path: "/", httpOnly: true, sameSite: "Strict" });
+    await page.setViewport({ width: 390, height: 1000 });
+    await page.evaluateOnNewDocument((key, value) => {
+      localStorage.setItem(key, value);
+      // Exercise React Query's real polling callback without a minute's wait.
+      // Network, API, persisted records, reconciliation and layout stay real.
+      const browserWindow: Window = window;
+      const interval = browserWindow.setInterval.bind(browserWindow);
+      browserWindow.setInterval = (handler, delay, ...args) => interval(handler, delay === 60_000 ? 1000 : delay, ...args);
+    }, THEME_STORAGE_KEY, theme);
+    await page.goto(`${fixture.url}/monitors/${fixture.identity_monitor_id}`, { waitUntil: "domcontentloaded" });
+    const summary = await page.waitForSelector(".response-history summary");
+    await page.evaluate(() => document.fonts.ready);
+    const readHistory = () => page.evaluate(async (id) => {
+      const result = await fetch(`/api/v1/monitors/${id}/heartbeats?limit=100`);
+      return await result.json() as { heartbeats: { id: string; ts: string; response: { body: string } }[] };
+    }, fixture.identity_monitor_id);
+    const initial = (await readHistory()).heartbeats;
+    expect(initial.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(initial.map((hb) => hb.id)).size).toBe(initial.length);
+    await summary!.focus();
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Tab");
+    const body = await page.$(".response-history pre");
+    expect(await body!.evaluate((el) => document.activeElement === el)).toBe(true);
+    await page.keyboard.press("End");
+    await page.waitForFunction(() => {
+      const el = document.querySelector(".response-history pre")!;
+      return el.scrollTop > 0 && el.scrollTop + el.clientHeight >= el.scrollHeight;
+    });
+    const scrollTop = await body!.evaluate((el) => el.scrollTop);
+    expect(scrollTop).toBeGreaterThan(0);
+    for (const [index, advance] of [0, 1000].entries()) {
+      const ts = new Date(Date.parse(initial[0].ts) + advance).toISOString();
+      child.stdin!.write(`${JSON.stringify({ ts })}\n`);
+      await page.waitForFunction((count) => document.querySelectorAll(".response-history-beat").length === count, {}, initial.length + index + 1);
+      const state = await body!.evaluate((el, position) => {
+        const disclosures = Array.from(document.querySelectorAll<HTMLDetailsElement>(".response-history details"));
+        return {
+          connected: el.isConnected,
+          sameBody: disclosures[position]?.querySelector("pre") === el,
+          open: disclosures[position]?.open,
+          onlyOriginalOpen: disclosures.filter((d) => d.open).length === 1 && !disclosures[0].open,
+          focused: document.activeElement === el,
+          visible: el.checkVisibility(),
+          scrollTop: el.scrollTop,
+        };
+      }, index + 1);
+      expect(state).toEqual({ connected: true, sameBody: true, open: true, onlyOriginalOpen: true, focused: true, visible: true, scrollTop });
+      const refreshed = (await readHistory()).heartbeats;
+      expect(refreshed[index + 1].id).toBe(initial[0].id);
+      expect(refreshed[0].id).not.toBe(initial[0].id);
+      expect(Date.parse(refreshed[0].ts)).toBe(Date.parse(ts));
+      // Same timestamp and body cannot distinguish distinct persisted checks.
+      expect(refreshed[0].response.body).toBe(initial[0].response.body);
+    }
+  } finally { await context.close(); }
 });
 
 it.each([

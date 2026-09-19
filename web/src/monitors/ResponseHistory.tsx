@@ -26,7 +26,7 @@ export function ResponseHistory({ heartbeats, loading = false, error = null }: R
       {error ? <p role="alert">Could not load failure responses: {error.message}. Previously loaded history may be out of date.</p> : null}
       {!loading && !error && failures.length === 0 ? <p>No failed checks in the recent history.</p> : null}
       {failures.length > 0 ? <ul className="response-history-list">
-        {failures.map((hb, index) => <li className="response-history-beat" key={`${hb.ts}-${index}`}>
+        {failures.map((hb) => <li className="response-history-beat" key={hb.id}>
           <div className="response-history-check">
             <time className="face-mono" dateTime={hb.ts}>{formatMoment(toUnixMs(hb.ts))}</time>
             <span>Failed check</span>

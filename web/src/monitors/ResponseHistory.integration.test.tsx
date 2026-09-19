@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
 import { LiveMonitorDetailRoot } from "../live/LiveMonitorDetail";
 import type { EventSourceLike } from "../live/connection";
+import { responseHistoryQueryKey } from "./responseHistoryApi";
 
 const source = (): EventSourceLike => ({ onopen: null, onerror: null, readyState: 0, addEventListener() {}, close() {} });
 const monitor = {
@@ -12,14 +13,38 @@ const monitor = {
   created_at: "2026-09-19T00:00:00Z", last_check: "2026-09-19T12:00:00Z", heartbeats: [],
 };
 
+it("rejects an old server's unidentified refetch without replacing disclosed history", async () => {
+  let legacy = false;
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => new Response(JSON.stringify(
+    url.includes("/heartbeats?") ? { heartbeats: [{
+      ...(!legacy ? { id: "1" } : {}), ts: "2026-09-19T12:00:00Z", ok: false, response: { body: "diagnostic" },
+    }] } : url.includes("/uptime") ? { windows: [] } : url.includes("/incidents") ? { incidents: [] } : { monitors: [monitor] },
+  ))));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const { container, unmount } = render(<LiveMonitorDetailRoot client={client} id="7" beatWidth={400} createEventSource={source} />);
+  try {
+    fireEvent.click(await screen.findByText("Captured response"));
+    const disclosure = container.querySelector("details")!;
+    const body = container.querySelector("pre")!;
+    body.focus();
+    legacy = true;
+    await act(() => client.invalidateQueries({ queryKey: responseHistoryQueryKey("7") }));
+    expect(await screen.findByText(/Invalid heartbeat history identity/)).toBeTruthy();
+    expect(container.querySelector("details")).toBe(disclosure);
+    expect(disclosure.open).toBe(true);
+    expect(document.activeElement).toBe(body);
+    expect(screen.queryByText("No failed checks in the recent history.")).toBeNull();
+  } finally { unmount(); client.clear(); }
+});
+
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 it("mounts raw captured responses in the actual live detail through the authenticated fetcher", async () => {
   const raw = '<img src=x onerror=alert(1)><script>alert(1)</script>';
   const fetch = vi.fn(async (url: string) => new Response(JSON.stringify(
     url.includes("/heartbeats?") ? { heartbeats: [
-      { ts: "2026-09-19T12:00:00Z", ok: false, response_capture_reason: "flapping" },
-      { ts: "2026-09-19T11:59:00Z", ok: false, response: { body: raw, truncated: true, headers: { "Content-Type": "text/html" } } },
+      { id: "10", ts: "2026-09-19T12:00:00Z", ok: false, response_capture_reason: "flapping" },
+      { id: "9", ts: "2026-09-19T11:59:00Z", ok: false, response: { body: raw, truncated: true, headers: { "Content-Type": "text/html" } } },
     ] } : url.includes("/uptime") ? { windows: [] } : url.includes("/incidents") ? { incidents: [] } : { monitors: [monitor] },
   )));
   vi.stubGlobal("fetch", fetch);
@@ -37,7 +62,7 @@ it("mounts raw captured responses in the actual live detail through the authenti
 
 it("shows capture-off history without a response disclosure", async () => {
   vi.stubGlobal("fetch", vi.fn(async (url: string) => new Response(JSON.stringify(
-    url.includes("/heartbeats?") ? { heartbeats: [{ ts: "2026-09-19T12:00:00Z", ok: false, response_capture_reason: "disabled" }] }
+    url.includes("/heartbeats?") ? { heartbeats: [{ id: "10", ts: "2026-09-19T12:00:00Z", ok: false, response_capture_reason: "disabled" }] }
       : url.includes("/uptime") ? { windows: [] } : url.includes("/incidents") ? { incidents: [] } : { monitors: [{ ...monitor, capture_response: false }] },
   ))));
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

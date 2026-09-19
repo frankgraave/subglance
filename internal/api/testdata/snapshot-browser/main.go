@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -104,10 +105,40 @@ func run() error {
 
 	server := httptest.NewServer(api.New(log, db).WithBus(bus).WithProber(runner).Handler())
 	defer server.Close()
-	// This record travels only through a pipe to the test, never the report.
-	if err := json.NewEncoder(os.Stdout).Encode(map[string]any{"url": server.URL, "session": session, "monitor_id": m.ID}); err != nil {
+	// A separate history for polling identity tests, with truly identical
+	// snapshots and second-resolution timestamps. Only the store IDs differ.
+	identityMonitor, err := db.CreateMonitor(ctx, store.Monitor{Name: "Polling identity", Type: "http", Target: target.URL, Enabled: true})
+	if err != nil {
 		return err
 	}
-	_, err = io.Copy(io.Discard, os.Stdin)
-	return err
+	identityBeat := store.Heartbeat{MonitorID: identityMonitor.ID, TS: time.Unix(1_700_000_000, 0), StatusCode: 503,
+		Response: &store.ResponseSnapshot{Body: strings.Repeat("diagnostic line\n", 100)}}
+	for range 2 {
+		if err := db.RecordHeartbeat(ctx, identityBeat); err != nil {
+			return err
+		}
+	}
+	// This record travels only through a pipe to the test, never the report.
+	if err := json.NewEncoder(os.Stdout).Encode(map[string]any{"url": server.URL, "session": session, "monitor_id": m.ID, "identity_monitor_id": identityMonitor.ID}); err != nil {
+		return err
+	}
+	// The test's private stdin pipe is the only mutation control; no test-only
+	// HTTP routes or unauthenticated write surface are added to the server.
+	commands := bufio.NewScanner(os.Stdin)
+	for commands.Scan() {
+		var command struct {
+			TS time.Time `json:"ts"`
+		}
+		if err := json.Unmarshal(commands.Bytes(), &command); err != nil {
+			return err
+		}
+		identityBeat.TS = command.TS
+		if err := db.RecordHeartbeat(ctx, identityBeat); err != nil {
+			return err
+		}
+		if err := json.NewEncoder(os.Stdout).Encode(map[string]bool{"recorded": true}); err != nil {
+			return err
+		}
+	}
+	return commands.Err()
 }

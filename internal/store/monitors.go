@@ -474,7 +474,7 @@ func (db *DB) listHeartbeats(ctx context.Context, monitorID int64, limit int, wi
 		SELECT `+heartbeatColumns+`
 		FROM heartbeats
 		WHERE monitor_id = ?
-		ORDER BY ts DESC
+		ORDER BY ts DESC, id DESC
 		LIMIT ?`, monitorID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("query heartbeats: %w", err)

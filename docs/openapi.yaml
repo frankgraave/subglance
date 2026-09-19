@@ -906,7 +906,9 @@ paths:
       operationId: listHeartbeats
       summary: List a monitor's recent check results
       description: |
-        Newest first. The detail view uses this raw history to show captured
+        Newest first (timestamp descending, then persisted heartbeat ID
+        descending for checks recorded in the same second). The detail view
+        uses this raw history to show captured
         failure responses and historical capture decisions. The bulk monitor
         listing's beat bars omit this diagnostic data.
 
@@ -935,7 +937,7 @@ paths:
                   heartbeats:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Heartbeat'
+                      $ref: '#/components/schemas/RawHeartbeat'
         '400':
           description: An invalid monitor id, or a limit outside 1–1000.
           content:
@@ -2909,6 +2911,28 @@ components:
         error:
           type: string
           description: Present only on failure.
+    RawHeartbeat:
+      type: object
+      description: |
+        Detail-only recorded check from GET /api/v1/monitors/{id}/heartbeats.
+        Identity and response diagnostics are not added to the bulk monitor
+        listing or SSE heartbeat events.
+      allOf:
+        - $ref: '#/components/schemas/Heartbeat'
+      required: [id]
+      properties:
+        id:
+          type: string
+          pattern: '^[1-9][0-9]*$'
+          example: '9007199254740993'
+          description: |
+            Persisted SQLite heartbeat ID, a positive int64 encoded as a
+            decimal string so browser clients preserve its precision. Present
+            for every raw row, including history without captured responses or
+            capture reasons. Unique within this database and stable across
+            refetches for the lifetime of the record, not a timestamp or page
+            position. Use this identity to reconcile disclosures; distinct
+            checks may have identical second-resolution timestamps and bodies.
         response:
           $ref: '#/components/schemas/ResponseSnapshot'
           description: |

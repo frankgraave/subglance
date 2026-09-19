@@ -17,7 +17,7 @@ it("refreshes response evidence when a recorded check invalidates that monitor's
 afterEach(() => vi.unstubAllGlobals());
 
 it("fetches the real detail-only heartbeat endpoint with session auth and cancellation", async () => {
-  const beats = [{ ts: "2026-09-19T12:00:00Z", ok: false, response: { body: "<script>text</script>" }, response_capture_reason: null }];
+  const beats = [{ id: "9007199254740993", ts: "2026-09-19T12:00:00Z", ok: false, response: { body: "<script>text</script>" }, response_capture_reason: null }];
   const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ heartbeats: beats })));
   vi.stubGlobal("fetch", fetch);
   const signal = new AbortController().signal;
@@ -38,4 +38,12 @@ it("announces a 401 to the existing session handler rather than treating it as e
 it("rejects malformed successful payloads instead of claiming there were no failures", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response('{}')));
   await expect(fetchResponseHistory("7")).rejects.toThrow("Invalid heartbeat history response");
+});
+
+it.each([
+  [undefined], [null], [1], [""], ["0"], ["-1"], ["01"], ["1.5"], ["1", "1"],
+])("rejects absent, invalid or duplicate raw identities: %j", async (...ids) => {
+  const heartbeats = ids.map((id) => ({ id, ts: "2026-09-19T12:00:00Z", ok: false }));
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ heartbeats }))));
+  await expect(fetchResponseHistory("7")).rejects.toThrow("Invalid heartbeat history identity");
 });

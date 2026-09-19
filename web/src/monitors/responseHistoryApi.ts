@@ -14,5 +14,15 @@ export async function fetchResponseHistory(id: string, signal?: AbortSignal): Pr
     { signal },
   );
   if (!Array.isArray(body?.heartbeats)) throw new Error("Invalid heartbeat history response");
+  // Old servers without identity cannot safely reconcile native disclosures.
+  // Reject the page, retaining any previous query data, rather than guessing
+  // from timestamps, positions or potentially sensitive response contents.
+  const ids = new Set<string>();
+  for (const hb of body.heartbeats) {
+    if (typeof hb?.id !== "string" || !/^[1-9]\d*$/.test(hb.id) || ids.has(hb.id)) {
+      throw new Error("Invalid heartbeat history identity; reload after updating the server");
+    }
+    ids.add(hb.id);
+  }
   return body.heartbeats;
 }
