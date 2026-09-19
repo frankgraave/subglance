@@ -723,7 +723,7 @@ function setPaused(row, paused) {
    */
   var word = row.querySelector("[data-statusword]");
   if (word) {
-    var WORDS = { up: "Up", down: "Down", warn: "Warning", idle: "Paused" };
+    var WORDS = { up: "Up", down: "Down", warn: "Warning", idle: "Waiting", off: "Paused" };
     word.textContent = WORDS[paused ? "off" : status] || "Unknown";
   }
   var name = row.querySelector(".row-name");

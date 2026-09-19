@@ -90,13 +90,13 @@ h2 {  font-weight:var(--weight-strong); text-transform:uppercase; letter-spacing
 
 .input, .select, textarea.input {
   width:100%; font-family:inherit;  color:var(--ink);
-  background:var(--surface-2); border:1px solid var(--border-hi);
+  background-color:var(--surface-2); border:1px solid var(--border-hi);
   border-radius:var(--r-sm); padding:var(--space-2) var(--space-2h);
   transition: border-color 140ms var(--ease), background 140ms var(--ease), box-shadow 140ms var(--ease); font-size:var(--type-body); line-height:var(--lead-body); border-color:var(--border-control); min-height:var(--control-h); }
 .input::placeholder { color:var(--ink-4); }
 .input:hover, .select:hover { border-color:var(--ink-4); }
 .input:focus, .select:focus {
-  outline:none;  background:var(--surface);
+  outline:none;  background-color:var(--surface);
   box-shadow:0 0 0 var(--outline-ring-w) var(--accent-ring); border-color:var(--accent-border); }
 .input.mono { font-family:var(--font-mono); font-size:var(--type-body); line-height:var(--lead-body); font-feature-settings:var(--feat-mono); font-variant-ligatures:var(--ligatures-mono); font-variant-numeric:var(--numeric-mono); text-rendering:var(--render-mono); }
 .input.invalid { border-color:var(--down); }
@@ -162,7 +162,7 @@ h2 {  font-weight:var(--weight-strong); text-transform:uppercase; letter-spacing
 .inline-pencil { width:12px; height:12px; stroke:var(--ink-3); fill:none; stroke-width:1.8; opacity:0; transition:opacity 140ms var(--ease); }
 .inline-input { font-family:inherit;  font-weight:inherit; color:inherit; background:var(--surface);
   border:1px solid var(--up); border-radius:var(--r-sm); padding:2px var(--space-1h); margin:-3px calc(-1 * var(--space-1h)); outline:none;
-  box-shadow:0 0 0 var(--outline-ring-w) var(--accent-ring); font-size:inherit; line-height:inherit; border-color:var(--accent-border); }
+  box-shadow:0 0 0 var(--outline-ring-w) var(--accent-ring); border-color:var(--accent-border); }
 
 /* ── TABS ────────────────────────────────────────────────── */
 .tabs { display:flex; gap:2px; border-bottom:1px solid var(--border); margin-bottom:var(--space-5); }

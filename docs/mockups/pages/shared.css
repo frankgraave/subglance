@@ -141,7 +141,7 @@ body {
 .input, select.input, textarea.input {
   height: var(--control-h); padding:0 var(--space-3);
   border: 1px solid var(--border-control); border-radius:var(--r-md);
-  background: var(--surface-2); color: var(--ink); font: inherit;
+  background-color: var(--surface-2); color: var(--ink); font: inherit;
   width: 100%; font-size:var(--type-body); line-height:var(--lead-body); }
 textarea.input { height: auto; padding:var(--space-2) var(--space-3); resize: vertical; }
 .input:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent-border); outline-offset: 2px; }
