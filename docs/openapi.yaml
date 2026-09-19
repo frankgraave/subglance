@@ -717,7 +717,12 @@ paths:
       operationId: getMonitor
       summary: Fetch one monitor with its current state
       description: |
-        Same enrichment as the list endpoint, for a single monitor.
+        Same state enrichment as the list endpoint, plus the stored check
+        settings needed to edit without erasing unseen configuration. Empty
+        strings, empty headers, false and zero are returned explicitly, not
+        replaced with create defaults. Request headers and body may contain
+        credentials; these settings are only on this authenticated detail
+        read, not the list or live stream. Treat the response as sensitive.
 
         The response carries a weak `ETag` derived from the monitor's
         `updated_at`. Hand it back as `If-Match` on a PATCH to make that update
@@ -736,7 +741,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Monitor'
+                $ref: '#/components/schemas/MonitorDetail'
         '400':
           $ref: '#/components/responses/InvalidId'
         '401':
@@ -2395,6 +2400,37 @@ components:
       example:
         env: prod
         customer: acme
+    MonitorDetail:
+      allOf:
+        - $ref: '#/components/schemas/Monitor'
+        - type: object
+          required: [method, expected_status, keyword, keyword_mode, follow_redirects, headers, body, retries, ssl_warn_days]
+          properties:
+            method:
+              type: string
+              description: Stored HTTP method, without read-time defaults.
+            expected_status:
+              type: string
+              description: Stored expected status range.
+            keyword:
+              type: string
+            keyword_mode:
+              type: string
+              enum: [absent_ok, must_contain, must_not_contain]
+            follow_redirects:
+              type: boolean
+            headers:
+              type: object
+              additionalProperties:
+                type: string
+              description: Stored request headers, including credentials. Empty is an object, not null.
+            body:
+              type: string
+              description: Stored request body; may contain secrets.
+            retries:
+              type: integer
+            ssl_warn_days:
+              type: integer
     Monitor:
       type: object
       description: |

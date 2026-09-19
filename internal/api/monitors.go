@@ -91,6 +91,23 @@ type monitorResponse struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// monitorDetailResponse adds raw editable settings to the versioned detail
+// read only. No omitempty: false, zero and empty are meaningful baselines.
+// Keeping this separate prevents new consumers of monitorResponse (including
+// live payloads) from inadvertently disclosing request credentials.
+type monitorDetailResponse struct {
+	monitorResponse
+	Method          string            `json:"method"`
+	ExpectedStatus  string            `json:"expected_status"`
+	Keyword         string            `json:"keyword"`
+	KeywordMode     string            `json:"keyword_mode"`
+	FollowRedirects bool              `json:"follow_redirects"`
+	Headers         map[string]string `json:"headers"`
+	Body            string            `json:"body"`
+	Retries         int               `json:"retries"`
+	SSLWarnDays     int               `json:"ssl_warn_days"`
+}
+
 // heartbeatResponse is the wire shape of one recorded check result. It is
 // shared by the per-monitor heartbeat listing and the optional beats embedded
 // in a monitor listing, so both cannot drift apart.
@@ -616,7 +633,19 @@ func (s *Server) handleGetMonitor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setMonitorETag(w, m)
-	writeJSON(w, http.StatusOK, s.describeMonitor(r, m))
+	// Only the authenticated detail read carries request configuration. Keep
+	// credentials and request bodies out of the bulk/dashboard serializer.
+	headers := m.Headers
+	if headers == nil {
+		headers = map[string]string{}
+	}
+	writeJSON(w, http.StatusOK, monitorDetailResponse{
+		monitorResponse: s.describeMonitor(r, m),
+		Method:          m.Method, ExpectedStatus: m.ExpectedStatus,
+		Keyword: m.Keyword, KeywordMode: m.KeywordMode,
+		FollowRedirects: m.FollowRedirects, Headers: headers, Body: m.Body,
+		Retries: m.Retries, SSLWarnDays: m.SSLWarnDays,
+	})
 }
 
 func (s *Server) handleDeleteMonitor(w http.ResponseWriter, r *http.Request) {
