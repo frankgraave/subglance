@@ -1,22 +1,22 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  fetchResolvedIncidents,
-  HISTORY_MONITOR_LIMIT,
-  INCIDENT_PAGE_LIMIT,
-} from "./api";
+import { fetchResolvedIncidents, HISTORY_PAGE_LIMIT } from "./api";
 
 /**
- * What the history card is allowed to claim.
+ * What the history card is allowed to claim, now that the server answers the
+ * question instead of the browser assembling it.
  *
- * This assembles a month of resolved incidents from one request per monitor,
- * which means it has two ways of being incomplete — the fan-out cap, and a
- * request that simply failed. Both were once invisible in the same way: the
- * failed monitor contributed an empty array, the list came back shorter, and
- * `truncated: false` told the screen it was looking at the whole window.
+ * This used to test a client-side fan-out — one request per monitor, capped at
+ * 24 — and most of what it asserted was about the ways that construction could
+ * be silently short. Two of those ways no longer exist: there is no cap and
+ * there is no per-monitor page to fill. What survives is the rule they all
+ * served, and it is the one this product cannot afford to break: **a list that
+ * is not the whole window must say so.**
  *
- * That is the specific failure this product cannot afford. A monitoring tool
- * that quietly omits an outage is worse than one that admits it does not know,
- * because the omission looks exactly like good news.
+ * The difference is that the answer is now the server's `has_more` rather than
+ * an inference from a full page. A page of exactly fifty and a page of fifty
+ * with more behind it are the same array; only the API can tell them apart,
+ * and these tests pin that the client carries its answer through rather than
+ * re-deriving one.
  */
 
 const T0 = Date.UTC(2026, 8, 16, 12, 0, 0);
@@ -36,15 +36,22 @@ function apiIncident(over: Record<string, unknown> = {}) {
   };
 }
 
+let requested: string[] = [];
+
 function mockFetch(handler: (url: string) => Response | Promise<Response>) {
-  vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
-    const url = typeof input === "string" ? input : String(input);
-    return Promise.resolve(handler(url));
-  }));
+  requested = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : String(input);
+      requested.push(url);
+      return Promise.resolve(handler(url));
+    }),
+  );
 }
 
-const ok = (incidents: unknown[]) =>
-  new Response(JSON.stringify({ incidents }), {
+const ok = (body: unknown) =>
+  new Response(JSON.stringify(body), {
     status: 200,
     headers: { "content-type": "application/json" },
   });
@@ -53,129 +60,98 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe("one instance-wide request, not one per monitor", () => {
+  it("asks the resolved endpoint once, whatever the estate size", async () => {
+    mockFetch(() => ok({ incidents: [apiIncident()], has_more: false }));
+
+    const page = await fetchResolvedIncidents(30);
+
+    expect(requested).toHaveLength(1);
+    expect(requested[0]).toContain("/api/v1/incidents/resolved");
+    expect(page.incidents).toHaveLength(1);
+  });
+
+  it("sends the window and the page size it was asked for", async () => {
+    mockFetch(() => ok({ incidents: [], has_more: false }));
+
+    await fetchResolvedIncidents(90);
+
+    const url = new URL(requested[0], "https://example.test");
+    expect(url.searchParams.get("days")).toBe("90");
+    expect(url.searchParams.get("limit")).toBe(String(HISTORY_PAGE_LIMIT));
+    expect(url.searchParams.has("cursor")).toBe(false);
+  });
+
+  it("passes a cursor through when continuing a page", async () => {
+    mockFetch(() => ok({ incidents: [], has_more: false }));
+
+    await fetchResolvedIncidents(30, "1755432000.1758024000.412");
+
+    const url = new URL(requested[0], "https://example.test");
+    expect(url.searchParams.get("cursor")).toBe("1755432000.1758024000.412");
+  });
+});
+
+describe("completeness is the server's answer, not a guess", () => {
+  it("reports more behind the page when the API says so, with the cursor", async () => {
+    mockFetch(() =>
+      ok({
+        incidents: [apiIncident()],
+        has_more: true,
+        next_cursor: "1755432000.1758024000.412",
+      }),
+    );
+
+    const page = await fetchResolvedIncidents(30);
+
+    expect(page.hasMore).toBe(true);
+    expect(page.nextCursor).toBe("1755432000.1758024000.412");
+  });
+
+  /*
+   * The bug the old client could not avoid, pinned so it cannot return.
+   *
+   * A page that is exactly full used to be treated as evidence of more behind
+   * it, because the per-monitor endpoint gave nothing better to go on — so a
+   * monitor with exactly fifty outages was reported as an incomplete month.
+   * The server now reads one row past the page to answer this, and the client
+   * must believe it rather than re-deriving an answer from the length.
+   */
+  it("does not invent truncation from a page that happens to be full", async () => {
+    const incidents = Array.from({ length: HISTORY_PAGE_LIMIT }, (_, i) =>
+      apiIncident({ id: i + 1, monitor_id: i + 1 }),
+    );
+    mockFetch(() => ok({ incidents, has_more: false }));
+
+    const page = await fetchResolvedIncidents(30);
+
+    expect(page.incidents).toHaveLength(HISTORY_PAGE_LIMIT);
+    expect(page.hasMore).toBe(false);
+    expect(page.nextCursor).toBeNull();
+  });
+
+  it("treats a missing has_more as complete rather than as unknown", async () => {
+    mockFetch(() => ok({ incidents: [apiIncident()] }));
+
+    const page = await fetchResolvedIncidents(30);
+
+    expect(page.hasMore).toBe(false);
+    expect(page.nextCursor).toBeNull();
+  });
+});
+
+/*
+ * A failed request is an error, not a short list.
+ *
+ * Under the fan-out a single monitor's 500 left most of the card usable, so it
+ * was folded into the completeness flag. One request means a failure is total:
+ * returning an empty array with `hasMore: false` would be this function
+ * claiming a quiet month it did not read.
+ */
 describe("a failed request is not an empty month", () => {
-  it("reports the history as incomplete when a monitor's request 500s", async () => {
-    mockFetch((url) =>
-      url.includes("/monitors/2/")
-        ? new Response("boom", { status: 500 })
-        : ok([apiIncident({ id: 11, monitor_id: 1 })]),
-    );
+  it("throws rather than reporting an empty, complete history", async () => {
+    mockFetch(() => new Response("boom", { status: 500 }));
 
-    const history = await fetchResolvedIncidents(["1", "2"], 30, T0);
-
-    // The surviving monitor's incident is still shown — a broken neighbour
-    // must not empty the card.
-    expect(history.incidents).toHaveLength(1);
-    // But the card may not present that as the whole window.
-    expect(history.truncated).toBe(true);
-  });
-
-  it("reports incomplete when a request throws", async () => {
-    mockFetch((url) => {
-      if (url.includes("/monitors/2/")) throw new TypeError("network down");
-      return ok([apiIncident({ id: 11, monitor_id: 1 })]);
-    });
-
-    const history = await fetchResolvedIncidents(["1", "2"], 30, T0);
-    expect(history.truncated).toBe(true);
-  });
-
-  it("says complete when every request succeeded", async () => {
-    mockFetch(() => ok([apiIncident()]));
-    const history = await fetchResolvedIncidents(["1", "2"], 30, T0);
-    expect(history.truncated).toBe(false);
-  });
-
-  it("still reports incomplete when the fan-out cap bites", async () => {
-    mockFetch(() => ok([]));
-    const many = Array.from({ length: HISTORY_MONITOR_LIMIT + 1 }, (_, i) => String(i));
-    const history = await fetchResolvedIncidents(many, 30, T0);
-    expect(history.truncated).toBe(true);
-  });
-
-  it("rethrows an abort instead of calling it incomplete data", async () => {
-    /*
-     * React Query aborts the previous fetch on every refetch. Treating that as
-     * a failure would mark nearly every load incomplete, and the notice would
-     * become noise the reader learns to ignore — which is how a real short
-     * history gets missed.
-     */
-    mockFetch(() => {
-      throw new DOMException("aborted", "AbortError");
-    });
-    await expect(fetchResolvedIncidents(["1"], 30, T0)).rejects.toThrow(
-      /abort/i,
-    );
-  });
-});
-
-describe("the window is about when an outage ended", () => {
-  it("keeps a long outage that started before the cutoff and recovered inside it", async () => {
-    /*
-     * The card asks "what recovered recently". An outage that began five weeks
-     * ago and came back yesterday is the single most interesting row it can
-     * hold, and filtering on the start date is exactly what dropped it.
-     */
-    const started = T0 - 35 * 86_400_000;
-    const resolved = T0 - 86_400_000;
-    mockFetch(() =>
-      ok([
-        apiIncident({
-          id: 99,
-          started_at: new Date(started).toISOString(),
-          resolved_at: new Date(resolved).toISOString(),
-          duration_s: Math.round((resolved - started) / 1000),
-        }),
-      ]),
-    );
-
-    const history = await fetchResolvedIncidents(["1"], 30, T0);
-    expect(history.incidents.map((i) => i.id)).toEqual(["99"]);
-  });
-
-  it("drops an outage that also ended before the cutoff", async () => {
-    const started = T0 - 40 * 86_400_000;
-    const resolved = T0 - 39 * 86_400_000;
-    mockFetch(() =>
-      ok([
-        apiIncident({
-          id: 98,
-          started_at: new Date(started).toISOString(),
-          resolved_at: new Date(resolved).toISOString(),
-        }),
-      ]),
-    );
-
-    const history = await fetchResolvedIncidents(["1"], 30, T0);
-    expect(history.incidents).toHaveLength(0);
-  });
-});
-
-describe("a full page may be hiding older incidents", () => {
-  it("reports incomplete when a monitor fills its page", () => {
-    /*
-     * ListIncidents applies LIMIT 50 and returns no completeness metadata, so
-     * a monitor with 60 outages in the window looks identical to one with
-     * exactly 50. The difference matters and only the client can flag it.
-     */
-    const full = Array.from({ length: INCIDENT_PAGE_LIMIT }, (_, i) =>
-      apiIncident({ id: i + 1 }),
-    );
-    mockFetch(() => ok(full));
-
-    return fetchResolvedIncidents(["1"], 30, T0).then((history) => {
-      expect(history.truncated).toBe(true);
-    });
-  });
-
-  it("stays complete one incident below the cap", () => {
-    const nearly = Array.from({ length: INCIDENT_PAGE_LIMIT - 1 }, (_, i) =>
-      apiIncident({ id: i + 1 }),
-    );
-    mockFetch(() => ok(nearly));
-
-    return fetchResolvedIncidents(["1"], 30, T0).then((history) => {
-      expect(history.truncated).toBe(false);
-    });
+    await expect(fetchResolvedIncidents(30)).rejects.toThrow(/HTTP 500/);
   });
 });

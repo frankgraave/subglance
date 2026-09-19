@@ -528,19 +528,202 @@ const DAY_START = (() => {
     expect(document.body.textContent).toContain("Last 30 days");
   });
 
-  it("admits when the history is incomplete rather than looking complete", () => {
-    // The API has no instance-wide endpoint for resolved incidents, so this
-    // card is assembled per monitor and capped. Showing a partial month as if
-    // it were the whole month is the one thing a monitoring tool must not do.
+  /*
+   * A recovery is filed under the day it recovered.
+   *
+   * The two fixtures straddle a local midnight: one outage began late on the
+   * earlier day and recovered early on the later one, the other began and
+   * ended on the earlier day. Grouping on `startedAt` puts both under the
+   * earlier heading, which answers "what recovered yesterday" with something
+   * that recovered today. One day each, and the long one under the later date.
+   */
+  it("groups a recovery under the day it recovered, not the day it began", () => {
+    const lateNight = (() => {
+      const d = new Date(NOW - 2 * 86_400_000);
+      d.setHours(23, 30, 0, 0);
+      return d.getTime();
+    })();
+
+    render(
+      <IncidentsView
+        incidents={[]}
+        resolved={[
+          incident({
+            id: "crossed",
+            startedAt: lateNight,
+            resolved: true,
+            // 90 minutes later, so the calendar day has turned.
+            resolvedAt: lateNight + 5_400_000,
+            durationS: 5400,
+          }),
+          incident({
+            id: "same-day",
+            startedAt: lateNight - 7_200_000,
+            resolved: true,
+            resolvedAt: lateNight - 3_600_000,
+            durationS: 3600,
+          }),
+        ]}
+        now={NOW}
+        names={{ "7": "api" }}
+      />,
+    );
+
+    const heads = [...document.querySelectorAll(".inc-day-head")];
+    expect(heads.length).toBe(2);
+    // Newest resolution day first, and each day holds exactly one row.
+    for (const head of heads) {
+      expect(head.textContent).toContain("1 incident");
+    }
+  });
+
+  /*
+   * The order on screen is the order the cursor paged in.
+   *
+   * The endpoint sorts by `resolvedAt` descending; a view that re-sorted by
+   * `startedAt` could draw a long outage resolved minutes ago *below* an older
+   * resolution — the screen contradicting the request that filled it.
+   */
+  it("orders resolutions the way the endpoint does", () => {
+    const base = (() => {
+      const d = new Date(NOW - 5 * 86_400_000);
+      d.setHours(12, 0, 0, 0);
+      return d.getTime();
+    })();
+
+    render(
+      <IncidentsView
+        incidents={[]}
+        resolved={[
+          // Started first and recovered LAST: a long outage.
+          incident({
+            id: "long",
+            startedAt: base,
+            resolved: true,
+            resolvedAt: base + 7_200_000,
+            durationS: 7200,
+          }),
+          // Started later and recovered FIRST: a brief blip.
+          incident({
+            id: "blip",
+            startedAt: base + 3_600_000,
+            resolved: true,
+            resolvedAt: base + 3_660_000,
+            durationS: 60,
+          }),
+        ]}
+        now={NOW}
+        names={{ "7": "api" }}
+      />,
+    );
+
+    // One day, both rows, newest resolution at the top.
+    const rows = [...document.querySelectorAll(".inc-day .inc-line")];
+    expect(rows.length).toBe(2);
+    const first = rows[0].textContent ?? "";
+    expect(first).toMatch(/2h|7200|2 h/i);
+  });
+
+  /*
+   * The undated case names the field it actually needs.
+   *
+   * Grouping keys on `resolvedAt`, so an incident missing a *resolution* time
+   * is the ungroupable one. A row with no start but a resolution groups fine
+   * and must not be counted as lost.
+   */
+  it("counts a missing resolution time as the ungroupable case", () => {
+    render(
+      <IncidentsView
+        incidents={[]}
+        resolved={[
+          incident({ id: "no-end", startedAt: T0, resolved: true, resolvedAt: null }),
+        ]}
+        now={NOW}
+        names={{ "7": "api" }}
+      />,
+    );
+    expect(document.body.textContent).toMatch(
+      /could not be placed on a day — no resolution time was recorded/i,
+    );
+  });
+
+  it("groups a row that has a resolution but no start", () => {
+    const noon = (() => {
+      const d = new Date(NOW - 86_400_000);
+      d.setHours(12, 0, 0, 0);
+      return d.getTime();
+    })();
+    render(
+      <IncidentsView
+        incidents={[]}
+        resolved={[
+          incident({
+            id: "no-start",
+            startedAt: null,
+            resolved: true,
+            resolvedAt: noon,
+            durationS: 600,
+          }),
+        ]}
+        now={NOW}
+        names={{ "7": "api" }}
+      />,
+    );
+    expect(document.querySelectorAll(".inc-day-head").length).toBe(1);
+    expect(document.body.textContent).not.toMatch(/could not be placed on a day/i);
+  });
+
+  it("offers the rest rather than only confessing to being short", () => {
+    /*
+     * The card used to say "showing the first monitors only" and stop there,
+     * because the API had no way to ask for the rest. Now that it does, an
+     * incomplete list must come with the control that completes it — a notice
+     * with no way forward was always a stopgap, not the end state.
+     */
+    const onLoadMoreHistory = vi.fn();
     render(
       <IncidentsView
         incidents={[]}
         resolved={resolved}
         now={NOW}
-        historyTruncated
+        historyHasMore
+        onLoadMoreHistory={onLoadMoreHistory}
       />,
     );
-    expect(document.body.textContent).toMatch(/first monitors only/i);
+    expect(document.body.textContent).toMatch(/more resolved incidents/i);
+    fireEvent.click(screen.getByRole("button", { name: /load older/i }));
+    expect(onLoadMoreHistory).toHaveBeenCalledTimes(1);
+  });
+
+  it("never offers a control it cannot honour", () => {
+    /*
+     * SUB-136's rule, applied to the footer as well as the toolbar: a screen
+     * rendered from a fixture has no loader, and a "load older" button that
+     * silently does nothing is a promise with the wiring cut.
+     */
+    render(
+      <IncidentsView incidents={[]} resolved={resolved} now={NOW} historyHasMore />,
+    );
+    expect(screen.queryByRole("button", { name: /load older/i })).toBeNull();
+  });
+
+  it("reports a failed history as an error, not as a quiet month", () => {
+    /*
+     * One request now, so a failure is total. Saying "nothing resolved in the
+     * last 30 days" under a request that never arrived would be the card
+     * asserting exactly the good news it does not have.
+     */
+    render(
+      <IncidentsView
+        incidents={[]}
+        resolved={[]}
+        now={NOW}
+        historyError={new Error("HTTP 500")}
+      />,
+    );
+    const alert = screen.getByRole("alert");
+    expect(alert.textContent).toMatch(/could not load resolved history/i);
+    expect(document.body.textContent).not.toMatch(/nothing resolved in the last/i);
   });
 });
 
@@ -714,12 +897,15 @@ describe("the screen does not claim more than it knows", () => {
      * `days.length === 0` used to remove the card outright, and it took the
      * truncation notice with it. An absent card reads as "nothing happened",
      * which is the one thing this screen may never imply by accident.
+     *
+     * The ungroupable row is one with no *resolution* time, since that is the
+     * key `groupByDay` places rows by.
      */
     render(
       <IncidentsView
         incidents={[incident()]}
         resolved={[
-          incident({ id: "u1", startedAt: null, resolved: true, resolvedAt: T0 }),
+          incident({ id: "u1", startedAt: T0, resolved: true, resolvedAt: null }),
         ]}
         now={NOW}
         names={{ "7": "api" }}
@@ -728,17 +914,74 @@ describe("the screen does not claim more than it knows", () => {
     expect(document.body.textContent).toMatch(/could not be placed on a day/i);
   });
 
-  it("keeps the truncation notice even with nothing groupable", () => {
+  /*
+   * The all-clear waits for BOTH requests.
+   *
+   * The open-incident query and the history are independent, so the open one
+   * can resolve empty while the history is still arriving. Publishing
+   * "Nothing is broken right now" at that moment states a fact about the
+   * instance on half the evidence, and recovered incidents then appear under a
+   * sentence that just said there were none.
+   */
+  it("withholds the all-clear while the history is still loading", () => {
+    render(
+      <IncidentsView
+        incidents={[]}
+        resolved={[]}
+        historyLoading
+        now={NOW}
+        monitorCount={6}
+      />,
+    );
+    expect(document.body.textContent).not.toMatch(/nothing is broken right now/i);
+  });
+
+  /*
+   * A history that failed to load is not an empty history.
+   *
+   * The all-clear counts `resolved.length === 0`, which is equally true of "a
+   * quiet month" and "the request died" — and only one of those licenses the
+   * claim. The error must also survive on screen: the alert is the reader's
+   * only signal that the silence is unmeasured.
+   */
+  it("withholds the all-clear when the history could not be read", () => {
+    render(
+      <IncidentsView
+        incidents={[]}
+        resolved={[]}
+        historyError={new Error("gateway timeout")}
+        now={NOW}
+        monitorCount={6}
+      />,
+    );
+    expect(document.body.textContent).not.toMatch(/nothing is broken right now/i);
+    expect(screen.getByRole("alert").textContent).toMatch(/gateway timeout/i);
+  });
+
+  it("still gives the all-clear once both requests come back empty", () => {
+    render(
+      <IncidentsView
+        incidents={[]}
+        resolved={[]}
+        now={NOW}
+        monitorCount={6}
+      />,
+    );
+    expect(document.body.textContent).toMatch(/nothing is broken right now/i);
+  });
+
+  it("keeps the card, and its way forward, with nothing groupable", () => {
     render(
       <IncidentsView
         incidents={[incident()]}
         resolved={[]}
-        historyTruncated
+        historyHasMore
+        onLoadMoreHistory={() => {}}
         now={NOW}
         names={{ "7": "api" }}
       />,
     );
-    expect(document.body.textContent).toMatch(/first monitors only/i);
+    expect(screen.getByRole("button", { name: /load older/i })).toBeTruthy();
   });
 
   it("labels days against the injected now, not the wall clock", () => {

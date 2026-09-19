@@ -1,5 +1,11 @@
 import { useCallback, useState } from "react";
-import { QueryClientProvider, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  QueryClientProvider,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { createQueryClient } from "../live/queryClient";
 import { useLiveMonitors } from "../live/useLiveMonitors";
@@ -19,12 +25,13 @@ import { detailQueryKey } from "../monitors/detail";
 /**
  * The incidents screen's data owner.
  *
- * Two sources, and they are not the same kind of thing. The incidents come
- * from a polled query, because incidents open and close without an SSE frame
- * that says so — the same reason `LiveMonitorDetail` polls its detail query on
- * a minute. The monitor *names* come from the live list the dashboard already
- * holds, so opening this screen costs one request and not a second copy of
- * every monitor.
+ * Three sources, and they are not the same kind of thing. The open incidents
+ * come from a polled query, because incidents open and close without an SSE
+ * frame that says so — the same reason `LiveMonitorDetail` polls its detail
+ * query on a minute. The resolved history is a second, slower query against
+ * its own endpoint, paged by cursor. The monitor *names* come from the live
+ * list the dashboard already holds, so opening this screen costs two requests
+ * and not a second copy of every monitor.
  *
  * The names matter more than they look: an incident carries `monitor_id` and
  * nothing else, and a screen that says "Monitor 7 is down" has handed the
@@ -73,24 +80,40 @@ export function LiveIncidents({
   });
 
   /*
-   * The 30-day history, assembled from the per-monitor endpoint.
+   * The history, in one paged request rather than one per monitor.
    *
-   * It waits for the monitor list rather than firing on mount, because the ids
-   * are the input — and it polls far more slowly than the open list. History
-   * changes when something recovers, which the open list notices within
-   * fifteen seconds anyway; re-reading a month of incidents on that cadence
-   * would spend one request per monitor every fifteen seconds to redraw a card
-   * that almost never changes.
+   * `GET /api/v1/incidents/resolved` answers the instance-wide question
+   * directly, so this no longer waits for the monitor list, no longer sends a
+   * request per monitor, and no longer stops at 24 of them. It still polls far
+   * more slowly than the open list: history changes when something recovers,
+   * which the open list notices within fifteen seconds anyway.
+   *
+   * `useInfiniteQuery` rather than a page of state, because the cursor is the
+   * API's and the pages have to stay in order across a refetch — React Query
+   * re-walks the cursors it already has, which is precisely what a hand-rolled
+   * "append to an array" would get wrong the first time the window changed.
    */
-  const monitorIds = monitors.map((monitor) => monitor.id);
-  const history = useQuery({
-    queryKey: [...resolvedIncidentsQueryKey(HISTORY_DAYS), monitorIds.join(",")],
-    queryFn: ({ signal }) =>
-      fetchHistory(monitorIds, HISTORY_DAYS, Date.now(), signal),
-    enabled: monitorIds.length > 0,
+  const [historyDays, setHistoryDays] = useState(HISTORY_DAYS);
+  const history = useInfiniteQuery({
+    queryKey: resolvedIncidentsQueryKey(historyDays),
+    queryFn: ({ pageParam, signal }) =>
+      fetchHistory(historyDays, pageParam, signal),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => (last.hasMore ? last.nextCursor : undefined),
     refetchInterval: 5 * 60_000,
     staleTime: 60_000,
   });
+
+  /*
+   * Every page loaded so far, flattened.
+   *
+   * The order is the API's — newest resolution first, and each page continues
+   * where the previous ended — so concatenating pages preserves it without a
+   * re-sort here. Sorting again would be a second opinion about an order the
+   * cursor already guarantees, and the two could disagree when two incidents
+   * resolve in the same second.
+   */
+  const resolved = (history.data?.pages ?? []).flatMap((page) => page.incidents);
 
   /*
    * The row currently being acknowledged, held separately from the mutation.
@@ -163,9 +186,14 @@ export function LiveIncidents({
   return (
     <IncidentsView
       incidents={incidents.data ?? []}
-      resolved={history.data?.incidents ?? []}
-      historyTruncated={history.data?.truncated ?? false}
-      historyDays={HISTORY_DAYS}
+      resolved={resolved}
+      historyDays={historyDays}
+      onHistoryDaysChange={setHistoryDays}
+      historyHasMore={history.hasNextPage}
+      onLoadMoreHistory={() => void history.fetchNextPage()}
+      historyLoadingMore={history.isFetchingNextPage}
+      historyError={history.error instanceof Error ? history.error : null}
+      historyLoading={history.isPending}
       /*
        * The count is only passed once the monitor list is actually known.
        *
