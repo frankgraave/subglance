@@ -30,6 +30,11 @@ run: ## Run locally with a ./tmp data dir
 	@mkdir -p tmp
 	$(GO) run $(CMD) --data-dir ./tmp --log-level debug
 
+.PHONY: seed
+seed: ## Fill ./tmp with a demo estate, then `make run` to look at it
+	@mkdir -p tmp
+	$(GO) run ./cmd/seed --data-dir ./tmp --reset
+
 .PHONY: test
 test: ## Run the hermetic suite with the race detector (what CI runs)
 	$(GO) test -race -short -count=1 ./...
