@@ -16,6 +16,7 @@ import { stat } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ApiHeartbeat, ApiMonitor } from "../../monitors/types";
+import type { ApiIncident } from "../../monitors/detail";
 
 /*
  * `import.meta.url` is .../web/src/layout/harness/server.ts, so the repository
@@ -216,6 +217,28 @@ export interface Server {
   close(): Promise<void>;
 }
 
+// Shared by the open list and per-monitor history. Use the wire type:
+// `ended_at` / `error` used to silently render as unresolved / no error.
+const INCIDENTS: ApiIncident[] = [
+  {
+    id: 42, monitor_id: 1,
+    started_at: new Date(Date.now() - 8 * 60_000).toISOString(),
+    confirmed_at: new Date(Date.now() - 7 * 60_000).toISOString(),
+    confirmed: true, resolved: false, acked: false, duration_s: 480,
+    cause: "connection refused",
+    last_error: "dial tcp 10.0.4.12:443: connect: connection refused",
+  },
+  {
+    id: 41, monitor_id: 1,
+    started_at: new Date(Date.now() - 26 * 3_600_000).toISOString(),
+    confirmed_at: new Date(Date.now() - 26 * 3_600_000 + 60_000).toISOString(),
+    resolved_at: new Date(Date.now() - 25 * 3_600_000).toISOString(),
+    confirmed: true, resolved: true, acked: false, duration_s: 3600,
+    cause: "timeout",
+    last_error: "context deadline exceeded (Client.Timeout exceeded while awaiting headers)",
+  },
+];
+
 export async function serveBuild(): Promise<Server> {
   const http: HttpServer = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
@@ -358,25 +381,18 @@ export async function serveBuild(): Promise<Server> {
       return;
     }
 
-    const incidents = url.pathname.match(/^\/api\/v1\/monitors\/[^/]+\/incidents$/);
+    if (url.pathname === "/api/v1/incidents") {
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ incidents: INCIDENTS.filter((incident) => !incident.resolved) }));
+      return;
+    }
+
+    const incidents = url.pathname.match(/^\/api\/v1\/monitors\/([^/]+)\/incidents$/);
     if (incidents) {
       res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
       res.end(
         JSON.stringify({
-          incidents: [
-            {
-              id: "42",
-              started_at: new Date(Date.now() - 8 * 60_000).toISOString(),
-              ended_at: null,
-              error: "dial tcp 10.0.4.12:443: connect: connection refused",
-            },
-            {
-              id: "41",
-              started_at: new Date(Date.now() - 26 * 3_600_000).toISOString(),
-              ended_at: new Date(Date.now() - 25 * 3_600_000).toISOString(),
-              error: "context deadline exceeded (Client.Timeout exceeded while awaiting headers)",
-            },
-          ],
+          incidents: INCIDENTS.filter((incident) => incident.monitor_id === Number(incidents[1])),
         }),
       );
       return;
