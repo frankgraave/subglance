@@ -85,10 +85,10 @@ describe("one instance-wide request, not one per monitor", () => {
   it("passes a cursor through when continuing a page", async () => {
     mockFetch(() => ok({ incidents: [], has_more: false }));
 
-    await fetchResolvedIncidents(30, "1758024000.412");
+    await fetchResolvedIncidents(30, "1755432000.1758024000.412");
 
     const url = new URL(requested[0], "https://example.test");
-    expect(url.searchParams.get("cursor")).toBe("1758024000.412");
+    expect(url.searchParams.get("cursor")).toBe("1755432000.1758024000.412");
   });
 });
 
@@ -98,14 +98,14 @@ describe("completeness is the server's answer, not a guess", () => {
       ok({
         incidents: [apiIncident()],
         has_more: true,
-        next_cursor: "1758024000.412",
+        next_cursor: "1755432000.1758024000.412",
       }),
     );
 
     const page = await fetchResolvedIncidents(30);
 
     expect(page.hasMore).toBe(true);
-    expect(page.nextCursor).toBe("1758024000.412");
+    expect(page.nextCursor).toBe("1755432000.1758024000.412");
   });
 
   /*

@@ -193,6 +193,7 @@ export function LiveIncidents({
       onLoadMoreHistory={() => void history.fetchNextPage()}
       historyLoadingMore={history.isFetchingNextPage}
       historyError={history.error instanceof Error ? history.error : null}
+      historyLoading={history.isPending}
       /*
        * The count is only passed once the monitor list is actually known.
        *

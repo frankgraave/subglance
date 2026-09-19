@@ -92,6 +92,16 @@ export type IncidentsViewProps = {
   /** Why the history could not be loaded. One request now, so a failure is an
    *  error to report rather than a completeness flag to raise. */
   historyError?: Error | null;
+  /**
+   * True while the FIRST page of history is in flight.
+   *
+   * Separate from `loading`, which is the open-incident query: the two run
+   * independently and the all-clear is a claim about both. Without this the
+   * open query finishing first published "Nothing is broken right now" over a
+   * history that was still arriving, and recovered incidents then appeared
+   * under a sentence that had just said there were none.
+   */
+  historyLoading?: boolean;
   /** Monitor id to display name. A missing id falls back to the id itself. */
   names?: Readonly<Record<string, string>>;
   /** Now, in unix ms, for durations that are still running. */
@@ -126,6 +136,7 @@ export function IncidentsView({
   onLoadMoreHistory,
   historyLoadingMore = false,
   historyError = null,
+  historyLoading = false,
   names = {},
   now,
   monitorCount,
@@ -225,9 +236,21 @@ export function IncidentsView({
    * two rows up. A query that matches nothing gets its own line instead.
    */
   const searching = needle !== "";
+  /*
+   * Both requests must have finished, and both must have succeeded.
+   *
+   * The all-clear is a claim about the whole instance, so it may not be made
+   * from half the evidence: the open-incident query resolving first while the
+   * history is still in flight, or has failed, is not the same fact as
+   * "nothing is broken". `historyError` is included for the same reason the
+   * card below keeps itself on screen for a failed request — an unread history
+   * is not an empty one.
+   */
   const nothingAtAll =
     !loading &&
+    !historyLoading &&
     error === null &&
+    historyError === null &&
     incidents.length === 0 &&
     resolved.length === 0;
   /*
@@ -568,9 +591,9 @@ export function IncidentsView({
                * resolved in the last 30 days" under it would be the card
                * asserting exactly the good news it does not have. The undated
                * case is stated separately rather than silently dropped —
-               * `groupByDay` cannot place an incident with no start date on
-               * any day, and a reader is owed the count rather than a shorter
-               * list.
+               * `groupByDay` cannot place an incident with no resolution time
+               * on any day, and a reader is owed the count rather than a
+               * shorter list.
                */
               <p className="inc-notice" role="status">
                 {shownResolved.length === 0
@@ -579,7 +602,7 @@ export function IncidentsView({
                     }.`
                   : `${shownResolved.length} resolved ${
                       shownResolved.length === 1 ? "incident" : "incidents"
-                    } could not be placed on a day — no start time was recorded.`}
+                    } could not be placed on a day — no resolution time was recorded.`}
               </p>
             ) : null}
             {days.map((day) => (
@@ -659,7 +682,7 @@ type Day = {
 };
 
 /**
- * History grouped by the day it happened, newest day first.
+ * History grouped by the day it recovered, newest day first.
  *
  * Newest first here and oldest first above, and the reversal is deliberate:
  * the open list is a work queue where the longest-running outage is the most
@@ -669,15 +692,27 @@ type Day = {
  * "Today" and "Yesterday" are spelled out rather than dated, because that is
  * how the reader thinks about them — and every other day keeps its date, since
  * "3 days ago" stops being countable almost immediately.
+ *
+ * Keyed on `resolvedAt`, not `startedAt`, because that is the question this
+ * card answers and the order the server already sorted by.
+ *
+ * Grouping on the start instead put a row in two kinds of wrong place at once.
+ * An outage that began Monday night and recovered Tuesday morning was filed
+ * under Monday — under a heading a reader scans to ask "what recovered
+ * yesterday", answering with something that recovered today. And because the
+ * endpoint pages by `resolvedAt` while this re-sorted by `startedAt`, a long
+ * outage resolved minutes ago could be drawn *below* an older resolution: the
+ * screen contradicting the cursor that fetched it. One sort key per list, and
+ * for a list of recoveries it is the recovery.
  */
 function groupByDay(incidents: readonly Incident[], now: number): Day[] {
   const days = new Map<string, Day>();
   const sorted = [...incidents].sort(
-    (a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0),
+    (a, b) => (b.resolvedAt ?? 0) - (a.resolvedAt ?? 0),
   );
   for (const incident of sorted) {
-    if (incident.startedAt === null) continue;
-    const date = new Date(incident.startedAt);
+    if (incident.resolvedAt === null) continue;
+    const date = new Date(incident.resolvedAt);
     const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
     let day = days.get(key);
     if (day === undefined) {

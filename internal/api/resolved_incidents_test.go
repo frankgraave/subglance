@@ -135,6 +135,48 @@ func TestResolvedIncidentsPaginateWithoutGapsOrRepeats(t *testing.T) {
 	}
 }
 
+// The window a walk started with is the window every page of it uses.
+//
+// The lower bound moves — it is "now minus N days" — while paging descends
+// toward it, so a bound recomputed per request rises under the walk. A row
+// just inside the window when page one was served can be below the floor by
+// the time the continuation arrives, and the walk then ends normally, reporting
+// itself complete, one incident short. That is the failure this endpoint
+// exists to remove, and it would have reappeared one level up.
+func TestResolvedIncidentsPinTheWindowAcrossPages(t *testing.T) {
+	srv, db := testServerWithDB(t)
+
+	now := time.Now().Truncate(time.Second)
+
+	// Two rows a day apart, both inside a 2-day window right now. The older
+	// one sits close enough to the edge that a floor recomputed a day later
+	// would exclude it.
+	seedResolved(t, db, "recent", now.Add(-2*time.Hour), now.Add(-time.Hour))
+	seedResolved(t, db, "edge", now.AddDate(0, 0, -2).Add(time.Hour),
+		now.AddDate(0, 0, -2).Add(2*time.Hour))
+
+	first := getResolved(t, srv, url.Values{"days": {"3"}, "limit": {"1"}})
+	if !first.HasMore || first.NextCursor == "" {
+		t.Fatalf("expected a cursor to continue with, got %+v", first)
+	}
+
+	/*
+	 * The cursor carries the bound, so the continuation is asked with a
+	 * *narrower* days than the walk began with. If the handler honoured
+	 * `days` over the cursor, the older row would fall outside and the walk
+	 * would end a row short — which is exactly the assertion.
+	 */
+	second := getResolved(t, srv, url.Values{
+		"days":   {"1"},
+		"limit":  {"1"},
+		"cursor": {first.NextCursor},
+	})
+	if len(second.Incidents) != 1 {
+		t.Fatalf("the walk lost a row when the window was recomputed: got %d incidents",
+			len(second.Incidents))
+	}
+}
+
 // The window is measured on resolution, so a long outage that recovered
 // inside it is kept rather than dropped for having started too long ago.
 func TestResolvedIncidentsKeepLongOutagesThatRecoveredInWindow(t *testing.T) {
@@ -165,7 +207,9 @@ func TestResolvedIncidentsRejectBadParameters(t *testing.T) {
 	for _, q := range []string{
 		"days=0", "days=9999", "days=soon",
 		"limit=0", "limit=201", "limit=lots",
-		"cursor=nonsense", "cursor=1758024000", "cursor=-1.2", "cursor=1758024000.0",
+		"cursor=nonsense", "cursor=1758024000", "cursor=1758024000.412",
+		"cursor=-1.2.3", "cursor=1755432000.1758024000.0",
+		"cursor=0.1758024000.412", "cursor=1.2.3.4",
 	} {
 		rec := httptest.NewRecorder()
 		authedHandler(srv).ServeHTTP(rec,

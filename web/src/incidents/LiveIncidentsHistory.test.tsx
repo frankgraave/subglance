@@ -100,7 +100,7 @@ describe("the history is paged through the API's own cursor", () => {
         ? {
             incidents: [resolvedIncident("a", "1")],
             hasMore: true,
-            nextCursor: "1758024000.412",
+            nextCursor: "1755432000.1758024000.412",
           }
         : {
             incidents: [resolvedIncident("b", "2")],
@@ -114,7 +114,7 @@ describe("the history is paged through the API's own cursor", () => {
     const more = await screen.findByRole("button", { name: /load older/i });
     fireEvent.click(more);
 
-    await waitFor(() => expect(calls).toEqual([null, "1758024000.412"]));
+    await waitFor(() => expect(calls).toEqual([null, "1755432000.1758024000.412"]));
 
     /*
      * Both pages on screen, not the second replacing the first. "Load older"

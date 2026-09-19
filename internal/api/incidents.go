@@ -153,10 +153,27 @@ func (s *Server) handleListResolvedIncidents(w http.ResponseWriter, r *http.Requ
 		cursor = parsed
 	}
 
-	// The window is measured from now, on the server. A client-supplied
-	// absolute range would be the more flexible API and also the one where the
-	// browser's clock decides what "last 30 days" means.
-	since := time.Now().Add(-time.Duration(days) * 24 * time.Hour)
+	/*
+	 * The window's lower bound is pinned on the first request and then
+	 * carried by the cursor, rather than recomputed per request.
+	 *
+	 * Recomputing it looks harmless and is not. Paging walks toward *older*
+	 * incidents while `now - days` walks forward, so the floor rises under a
+	 * walk that is descending toward it: an incident sitting just inside the
+	 * window when page one was served can be below the floor by the time the
+	 * request that would have returned it arrives. The walk then ends normally
+	 * — `has_more` false, no error — having skipped it.
+	 *
+	 * That is the exact failure this endpoint was built to remove, reappearing
+	 * one level up: a history that is quietly short while reporting itself
+	 * complete. A pinned bound makes every page of one walk describe the same
+	 * window, which is what "complete" has to mean for the word to be worth
+	 * anything.
+	 */
+	since := cursor.Since
+	if since.IsZero() {
+		since = time.Now().Add(-time.Duration(days) * 24 * time.Hour)
+	}
 
 	page, err := s.db.ListResolvedIncidents(r.Context(), since, cursor, limit)
 	if err != nil {
@@ -176,36 +193,47 @@ func (s *Server) handleListResolvedIncidents(w http.ResponseWriter, r *http.Requ
 		"days":      days,
 	}
 	if page.HasMore {
-		body["next_cursor"] = formatResolvedCursor(page.Next)
+		next := page.Next
+		next.Since = since
+		body["next_cursor"] = formatResolvedCursor(next)
 	}
 	writeJSON(w, http.StatusOK, body)
 }
 
-// formatResolvedCursor renders a cursor as "<unix>.<id>".
+// formatResolvedCursor renders a cursor as "<since>.<resolved>.<id>".
 //
 // Plain and readable rather than base64: it is a position in a public list,
 // not a secret, and an opaque blob would only mean that the one person
-// debugging a paging bug with curl cannot see what they are asking for. Both
-// halves are needed — see ResolvedIncidentCursor for why the id cannot be
-// dropped.
+// debugging a paging bug with curl cannot see what they are asking for.
+//
+// All three parts are load-bearing. `since` pins the window so a walk cannot
+// have the floor rise under it; `resolved` and `id` together are the sort key,
+// and the id cannot be dropped because resolution times have second
+// granularity — see ResolvedIncidentCursor.
 func formatResolvedCursor(c store.ResolvedIncidentCursor) string {
-	return strconv.FormatInt(c.ResolvedAt.Unix(), 10) + "." + strconv.FormatInt(c.ID, 10)
+	return strconv.FormatInt(c.Since.Unix(), 10) + "." +
+		strconv.FormatInt(c.ResolvedAt.Unix(), 10) + "." +
+		strconv.FormatInt(c.ID, 10)
 }
 
 func parseResolvedCursor(v string) (store.ResolvedIncidentCursor, error) {
-	unix, id, ok := strings.Cut(v, ".")
-	if !ok {
-		return store.ResolvedIncidentCursor{}, errors.New("cursor must be <unix>.<id>")
+	parts := strings.Split(v, ".")
+	if len(parts) != 3 {
+		return store.ResolvedIncidentCursor{}, errors.New("cursor must be <since>.<resolved>.<id>")
 	}
-	seconds, err := strconv.ParseInt(unix, 10, 64)
-	if err != nil || seconds <= 0 {
-		return store.ResolvedIncidentCursor{}, errors.New("cursor timestamp is not a positive integer")
+	nums := make([]int64, len(parts))
+	for i, part := range parts {
+		n, err := strconv.ParseInt(part, 10, 64)
+		if err != nil || n <= 0 {
+			return store.ResolvedIncidentCursor{}, errors.New("every cursor component must be a positive integer")
+		}
+		nums[i] = n
 	}
-	n, err := strconv.ParseInt(id, 10, 64)
-	if err != nil || n <= 0 {
-		return store.ResolvedIncidentCursor{}, errors.New("cursor id is not a positive integer")
-	}
-	return store.ResolvedIncidentCursor{ResolvedAt: time.Unix(seconds, 0).UTC(), ID: n}, nil
+	return store.ResolvedIncidentCursor{
+		Since:      time.Unix(nums[0], 0).UTC(),
+		ResolvedAt: time.Unix(nums[1], 0).UTC(),
+		ID:         nums[2],
+	}, nil
 }
 
 // handleListMonitorIncidents returns the incident history for one monitor.

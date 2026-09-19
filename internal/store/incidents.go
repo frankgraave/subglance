@@ -259,6 +259,19 @@ func (db *DB) ListOpenIncidents(ctx context.Context) ([]Incident, error) {
 type ResolvedIncidentCursor struct {
 	ResolvedAt time.Time
 	ID         int64
+
+	// Since is the window's lower bound, carried so every page of one walk
+	// describes the same window.
+	//
+	// It lives on the cursor rather than being recomputed per request because
+	// paging descends toward older incidents while a "last N days" floor
+	// ascends. Left to drift, the floor can rise past a row between the page
+	// that promised more and the request that would have returned it — and the
+	// walk then finishes cleanly, reporting itself complete, one incident
+	// short. The store does not read this field; it is the transport's, and it
+	// is here because the cursor is the only thing that survives between two
+	// requests of the same walk.
+	Since time.Time
 }
 
 // ResolvedIncidentPage is one page of instance-wide resolved history, plus the
