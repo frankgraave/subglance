@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
 import { LiveMonitorDetailRoot } from "./LiveMonitorDetail";
 import type { EventSourceLike } from "./connection";
@@ -109,7 +109,11 @@ const INCIDENTS = {
 };
 
 /** Routes each URL the screen asks for to its own payload. */
-function renderDetail(options: { monitors?: unknown[]; id?: string } = {}) {
+function renderDetail(options: {
+  monitors?: unknown[]; id?: string;
+  check?: typeof import("../monitors/inventoryApi").checkMonitorNow;
+  canWrite?: boolean;
+} = {}) {
   const { monitors = [apiMonitor()], id = "1" } = options;
   const fetchMock = vi.fn(async (url: string) => {
     const body = url.includes("/uptime")
@@ -123,15 +127,17 @@ function renderDetail(options: { monitors?: unknown[]; id?: string } = {}) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  render(
+  const mounted = render(
     <LiveMonitorDetailRoot
       client={client}
       id={id}
+      check={options.check}
+      canWrite={options.canWrite}
       beatWidth={400}
       createEventSource={() => new FakeSource()}
     />,
   );
-  return { fetchMock };
+  return { fetchMock, client, mounted };
 }
 
 beforeEach(() => {
@@ -145,6 +151,72 @@ afterEach(() => {
 });
 
 describe("LiveMonitorDetail", () => {
+  it("keeps pending results on their monitor across route changes", async () => {
+    const resolvers: Record<string, (value: import("../monitors/inventoryApi").CheckOutcome) => void> = {};
+    const check = vi.fn((id: string) => new Promise<import("../monitors/inventoryApi").CheckOutcome>((done) => { resolvers[id] = done; }));
+    const { client, mounted } = renderDetail({ check, monitors: [apiMonitor(), apiMonitor({ id: 2, name: "cdn" })] });
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    fireEvent.click(await screen.findByRole("button", { name: "Check now" }));
+    await waitFor(() => expect(check).toHaveBeenCalledWith("1"));
+    mounted.rerender(<LiveMonitorDetailRoot client={client} id="2" check={check} createEventSource={() => new FakeSource()} />);
+    await screen.findByRole("heading", { name: "cdn" });
+    fireEvent.click(screen.getByRole("button", { name: "Check now" }));
+    await waitFor(() => expect(check).toHaveBeenCalledWith("2"));
+    await act(async () => resolvers["1"]({ ok: true, latencyMs: 123, recorded: true }));
+    expect(screen.queryByText(/Check passed/)).toBeNull();
+    expect((screen.getByRole("button", { name: "Checking…" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["monitor-detail", "1"] });
+    await act(async () => resolvers["2"]({ ok: false, latencyMs: 9, error: "cdn refused", recorded: false }));
+    expect((await screen.findByText(/Check failed/)).textContent).toContain("cdn refused");
+    expect(screen.queryByText(/123 ms/)).toBeNull();
+  });
+  it("checks once while pending and refreshes recorded results without inventing status", async () => {
+    let resolve!: (value: import("../monitors/inventoryApi").CheckOutcome) => void;
+    const check = vi.fn(() => new Promise<import("../monitors/inventoryApi").CheckOutcome>((done) => { resolve = done; }));
+    const { client } = renderDetail({ check });
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    const button = await screen.findByRole("button", { name: "Check now" });
+    act(() => { button.click(); button.click(); });
+    await waitFor(() => expect(check).toHaveBeenCalledTimes(1));
+    expect(check).toHaveBeenCalledWith("1");
+    expect((screen.getByRole("button", { name: "Checking…" }) as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => resolve({ ok: true, latencyMs: 12, statusCode: 204, recorded: true }));
+    expect(await screen.findByText(/Check passed/)).toBeTruthy();
+    expect(screen.getByText(/Check passed/).textContent).toContain("12 ms · HTTP 204 · Recorded");
+    await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ["monitors"] }));
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["monitor-detail", "1"] });
+  });
+
+  it("shows an unrecorded paused check without changing or refetching dashboard state", async () => {
+    const check = vi.fn(async () => ({ ok: true, latencyMs: 8, recorded: false }));
+    const { client } = renderDetail({ check, monitors: [apiMonitor({ enabled: false })] });
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    fireEvent.click(await screen.findByRole("button", { name: "Check now" }));
+    expect(await screen.findByText(/Check passed/)).toBeTruthy();
+    expect(screen.getByText(/Check passed/).textContent).toContain("Not recorded");
+    expect(document.querySelector(".mon-detail")?.getAttribute("data-status")).toBe("paused");
+    expect(invalidate).not.toHaveBeenCalled();
+  });
+
+  it("reports a rejected check in place and allows a retry", async () => {
+    const check = vi.fn().mockRejectedValueOnce(new Error("please wait five seconds"))
+      .mockResolvedValueOnce({ ok: false, latencyMs: 3, error: "connection refused", recorded: true });
+    renderDetail({ check });
+    fireEvent.click(await screen.findByRole("button", { name: "Check now" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("please wait five seconds");
+    fireEvent.click(screen.getByRole("button", { name: "Check now" }));
+    expect(await screen.findByText(/Check failed/)).toBeTruthy();
+    expect(screen.getByText(/Check failed/).textContent).toContain("connection refused");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(check).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(["push", "viewer"])("does not offer an impossible check: %s", async (kind) => {
+    renderDetail({ monitors: [apiMonitor(kind === "push" ? { type: "push", push_interval_s: 3600 } : {})], canWrite: kind !== "viewer" });
+    await screen.findByText("api");
+    expect(screen.queryByRole("button", { name: "Check now" })).toBeNull();
+  });
+
   it("shows the monitor with its uptime and incident history", async () => {
     renderDetail();
     expect(await screen.findByText("api")).toBeTruthy();
