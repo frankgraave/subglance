@@ -173,6 +173,22 @@ func (s *Server) handleListResolvedIncidents(w http.ResponseWriter, r *http.Requ
 	since := cursor.Since
 	if since.IsZero() {
 		since = time.Now().Add(-time.Duration(days) * 24 * time.Hour)
+	} else if since.Before(time.Now().AddDate(0, 0, -resolvedHistoryMaxDays)) {
+		/*
+		 * A cursor pins the window; it does not get to widen it.
+		 *
+		 * `days` is capped, and moving the bound onto the cursor handed the
+		 * same number back to the client as free text — `cursor=1.1.1` claims
+		 * a lower bound of 1970 and walks the whole table, which is the cap
+		 * removed by the very mechanism that was meant to make paging honest.
+		 *
+		 * Refused rather than clamped. Silently narrowing a fabricated bound
+		 * would answer a different question than the one asked while calling
+		 * it the same walk, and this endpoint's whole point is that a page of
+		 * history means what it says.
+		 */
+		writeError(w, http.StatusBadRequest, "invalid cursor")
+		return
 	}
 
 	page, err := s.db.ListResolvedIncidents(r.Context(), since, cursor, limit)

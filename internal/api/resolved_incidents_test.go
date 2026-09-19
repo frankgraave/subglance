@@ -135,6 +135,33 @@ func TestResolvedIncidentsPaginateWithoutGapsOrRepeats(t *testing.T) {
 	}
 }
 
+// A cursor may pin the window, but it may not widen it past the cap.
+//
+// The bound moved onto the cursor so a walk could not have the floor rise
+// under it — and a cursor is client-supplied text, so that same field is a way
+// to ask for a window `days` would have refused. `days=99999` is rejected;
+// `cursor=1.1.1` claimed a lower bound of 1970 and read the whole table, which
+// is the cap removed by the mechanism that was meant to make paging honest.
+//
+// The fabricated bound is refused rather than clamped: clamping would answer a
+// question nobody asked and call it the same walk.
+func TestResolvedIncidentsRejectCursorsOlderThanTheCap(t *testing.T) {
+	srv, _ := testServerWithDB(t)
+
+	tooOld := time.Now().AddDate(0, 0, -(resolvedHistoryMaxDays + 1)).Unix()
+	cursor := strconv.FormatInt(tooOld, 10) + ".1758024000.412"
+
+	rec := httptest.NewRecorder()
+	authedHandler(srv).ServeHTTP(rec,
+		httptest.NewRequest(http.MethodGet,
+			"/api/v1/incidents/resolved?cursor="+cursor, nil))
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("a cursor claiming a window past the cap was accepted: status = %d, body = %s",
+			rec.Code, rec.Body.String())
+	}
+}
+
 // The window a walk started with is the window every page of it uses.
 //
 // The lower bound moves — it is "now minus N days" — while paging descends

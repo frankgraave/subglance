@@ -1425,6 +1425,11 @@ paths:
             It carries the window's lower bound as well as the position, so
             every page of one walk describes the same window — `days` is
             ignored while a cursor is present.
+
+            The bound is still subject to the same cap as `days`: a cursor
+            claiming a lower bound more than 730 days old is rejected rather
+            than clamped, so the cap cannot be sidestepped by editing the
+            cursor.
           schema:
             type: string
             pattern: '^[1-9][0-9]*\.[1-9][0-9]*\.[1-9][0-9]*$'
