@@ -16,12 +16,15 @@
   color: var(--ink);
   padding: var(--space-2) 0;
 }
-.response-history-disclosure summary:focus-visible {
+.response-history-disclosure summary:focus-visible,
+.response-history-disclosure pre:focus-visible {
   outline: var(--outline-w) solid var(--accent-border);
   outline-offset: var(--outline-offset);
   border-radius: var(--r-sm);
 }
 .response-history-disclosure pre {
+  max-height: var(--size-pane-scroll);
+  overflow: auto;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   color: var(--ink);

@@ -751,9 +751,11 @@ func (s *Server) handleListHeartbeats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	out := make([]heartbeatResponse, 0, len(hbs))
-	for _, hb := range hbs {
-		out = append(out, describeHeartbeat(hb))
+	out, err := s.describeResponseHistory(r.Context(), hbs)
+	if err != nil {
+		s.log.Error("list heartbeat capture reasons", "id", id, "error", err)
+		writeError(w, http.StatusInternalServerError, "could not load heartbeats")
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"heartbeats": out})
 }

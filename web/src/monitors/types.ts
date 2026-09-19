@@ -26,10 +26,9 @@ export type MonitorStatus = "up" | "down" | "pending" | "paused" | "waiting";
 /**
  * The reporting window of a push monitor.
  *
- * Present only for push monitors, and its presence is what marks one: the
- * wire `type` is not carried into the render model because nothing else on
- * this side branches on it, and a second way to ask the same question is a
- * second way for two components to disagree.
+ * Present only for push monitors. Push controls use these settings rather
+ * than branching separately on type; type is also carried for the HTTP-only
+ * response diagnostics panel.
  */
 export type PushWindow = {
   /** How often the job is expected to report in, in seconds. */
@@ -45,6 +44,8 @@ export type PushWindow = {
 
 export type Monitor = {
   id: string;
+  /** The check type; optional only for older in-memory fixtures. */
+  type?: string;
   name: string;
   status: MonitorStatus;
   /** What is being checked — a URL, a host:port. Shown, and searched. */
@@ -239,6 +240,7 @@ export function fromApi(api: ApiMonitor): Monitor {
     // the other silently finds nothing, so every heartbeat would be dropped
     // and the dashboard would sit frozen while claiming to be live.
     id: String(api.id),
+    type: api.type,
     name: api.name,
     target: api.target,
     status: statusFromApi(api, push),

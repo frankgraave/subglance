@@ -8,6 +8,7 @@ import { useLiveMonitors } from "./useLiveMonitors";
 import { useNow } from "./useNow";
 import { MonitorDetail } from "../monitors/MonitorDetail";
 import { detailQueryKey, fetchMonitorDetail } from "../monitors/detail";
+import { fetchResponseHistory, responseHistoryQueryKey } from "../monitors/responseHistoryApi";
 import { ackIncident } from "../incidents/api";
 import { openIncidentsQueryKey } from "../incidents/api";
 import type { LiveOptions } from "./useLiveMonitors";
@@ -18,10 +19,9 @@ import type { LiveOptions } from "./useLiveMonitors";
  * It subscribes to the *same* live list the dashboard uses, and picks its
  * monitor out of it. That is the whole design decision on this screen: the
  * monitor's status, latency and heartbeats keep arriving over the existing
- * SSE stream with no new transport, no second subscription and no chance of
- * the two screens disagreeing. Opening a monitor costs one extra request —
- * for uptime windows and incident history, which the list endpoint does not
- * carry — and nothing else.
+ * SSE stream with no new transport or second subscription. Uptime and
+ * incidents have their own detail reads. HTTP failure diagnostics additionally
+ * use the raw heartbeat endpoint, because bulk beats intentionally omit bodies.
  *
  * The alternative, fetching GET /api/v1/monitors/:id, was rejected: it would
  * return a snapshot that the stream does not update, so the heartbeat bar
@@ -146,6 +146,16 @@ export function LiveMonitorDetail({
     checkMutation.mutate(id);
   };
 
+  const responseHistory = useQuery({
+    queryKey: responseHistoryQueryKey(id),
+    queryFn: ({ signal }) => fetchResponseHistory(id, signal),
+    enabled: monitor?.type === "http",
+    // SSE and bulk beat bars omit response bodies. Keep a separate bounded
+    // raw-history query; never infer historical reasons from today's status.
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
   if (monitor === undefined) {
     /*
      * Three different situations share this branch, and they need three
@@ -178,6 +188,11 @@ export function LiveMonitorDetail({
       monitor={monitor}
       windows={detail.data?.windows ?? []}
       incidents={detail.data?.incidents ?? []}
+      responseHistory={monitor.type === "http" ? {
+        heartbeats: responseHistory.data ?? [],
+        loading: responseHistory.isPending,
+        error: responseHistory.error instanceof Error ? responseHistory.error : null,
+      } : undefined}
       now={now}
       loading={detail.isPending}
       error={detail.error instanceof Error ? detail.error : null}

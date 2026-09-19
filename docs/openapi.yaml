@@ -906,8 +906,9 @@ paths:
       operationId: listHeartbeats
       summary: List a monitor's recent check results
       description: |
-        Newest first. This backs the dashboard's beat bar, which is the single
-        most frequent read in the product.
+        Newest first. The detail view uses this raw history to show captured
+        failure responses and historical capture decisions. The bulk monitor
+        listing's beat bars omit this diagnostic data.
 
         The monitor's existence is confirmed first: an unknown id is a 404, not
         an empty list. "This monitor does not exist" and "this monitor has no
@@ -2911,9 +2912,23 @@ components:
         response:
           $ref: '#/components/schemas/ResponseSnapshot'
           description: |
-            The captured response, present only on a failed HTTP check of a
-            monitor with `capture_response` on, and only for the first few
+            The captured response, present only on a failed HTTP check whose
+            `capture_response` was on at the time, and only for the first few
             failures of a streak. Absent everywhere else.
+        response_capture_reason:
+          type: string
+          enum: [disabled, flapping, budget]
+          description: |
+            Historical reason this failed check did not store a response.
+            Present only on the per-monitor raw heartbeat endpoint, never the
+            bulk beat-bar payload. disabled means capture was switched off for
+            this HTTP check; flapping means the state engine suppressed a
+            captured response; budget means this incident's stored-response
+            allowance was used. The reason is recorded at the actual decision,
+            not derived from current settings or current flapping state.
+            Absent means unknown, including older history and checks that did
+            not produce a capturable response. Absence does not mean the body
+            was empty. Not sent alongside a response snapshot.
     ResponseSnapshot:
       type: object
       description: |

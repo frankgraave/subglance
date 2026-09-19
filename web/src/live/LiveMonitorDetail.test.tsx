@@ -116,7 +116,9 @@ function renderDetail(options: {
 } = {}) {
   const { monitors = [apiMonitor()], id = "1" } = options;
   const fetchMock = vi.fn(async (url: string) => {
-    const body = url.includes("/uptime")
+    const body = url.includes("/heartbeats")
+      ? { heartbeats: [] }
+      : url.includes("/uptime")
       ? UPTIME
       : url.includes("/incidents")
         ? INCIDENTS

@@ -43,7 +43,10 @@ export function ResponseHistory({ heartbeats, loading = false, error = null }: R
                   .map(([name, value]) => <div key={name}><dt>{name}</dt><dd>{value}</dd></div>)}
               </dl>
               {/* Endpoint content stays a React text child. No markup interpreter. */}
-              {hb.response.body === "" ? <p>The captured response body was empty.</p> : <pre className="face-mono">{hb.response.body}</pre>}
+              {hb.response.body === "" ? <p>The captured response body was empty.</p> : (
+                // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- A named scroll region needs keyboard focus so its full text can be read without a pointer.
+                <pre className="face-mono" role="region" aria-label="Captured response body" tabIndex={0}>{hb.response.body}</pre>
+              )}
             </details>
           </> : <p>{captureReasonText(hb.response_capture_reason)}</p>}
         </li>)}
