@@ -52,6 +52,13 @@ describe("detail Check now in Chromium", () => {
           expect(requests).toEqual(["POST"]);
           complete();
           await page.waitForFunction(() => document.querySelector(".mon-detail [role=alert]")?.textContent?.includes("please wait five seconds"));
+          const icon = await page.$eval('.mon-detail [role=alert] svg', (svg) => ({
+            hidden: svg.getAttribute("aria-hidden"),
+            width: svg.getBoundingClientRect().width,
+            rung: parseFloat(getComputedStyle(svg).getPropertyValue("--size-icon-sm")),
+          }));
+          expect(icon.hidden).toBe("true");
+          expect(icon.width).toBe(icon.rung);
           await button?.click();
           await page.waitForFunction(() => document.querySelector<HTMLButtonElement>(".card-head-action button")?.disabled === true);
           // Wait for the second intercepted POST rather than its visual start.

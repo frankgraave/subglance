@@ -271,7 +271,10 @@ export function MonitorDetail({
       >
         <Panel>
           {push === undefined && checkError !== null ? (
-            <p role="alert" className="mon-detail-note">Could not run check: {checkError.message}</p>
+            <p role="alert" className="mon-detail-note mon-detail-check-error">
+              <IconAlert />
+              <span>Could not run check: {checkError.message}</span>
+            </p>
           ) : null}
           {push === undefined && checkResult !== undefined ? (
             <p role="status" className="mon-detail-note">

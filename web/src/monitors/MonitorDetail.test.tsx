@@ -85,7 +85,9 @@ describe("detail Check now", () => {
   it("disables the control while checking and reports failures in place", () => {
     view({ onCheckNow: vi.fn(), checking: true, checkError: new Error("rate limited") });
     expect((screen.getByRole("button", { name: "Checking…" }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByRole("alert").textContent).toContain("rate limited");
+    const alert = screen.getByRole("alert");
+    expect(alert.textContent).toContain("rate limited");
+    expect(alert.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
   });
 
   it.each([true, false])("shows the probe result and its recording status: %s", (recorded) => {
