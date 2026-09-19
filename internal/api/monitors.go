@@ -82,6 +82,9 @@ type monitorResponse struct {
 	// not how it travels.
 	Tags map[string]string `json:"tags,omitempty"`
 
+	// Present on list reads: [] means no attachments; omitted means unknown.
+	Channels *[]monitorChannelResponse `json:"channels,omitempty"`
+
 	// Heartbeats is filled in only when the caller asked for it with the
 	// `heartbeats` query parameter, oldest first. Omitting the field
 	// entirely when it was not requested keeps the default response byte
@@ -89,6 +92,11 @@ type monitorResponse struct {
 	Heartbeats []heartbeatResponse `json:"heartbeats,omitempty"`
 
 	CreatedAt time.Time `json:"created_at"`
+}
+
+type monitorChannelResponse struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
 }
 
 // monitorDetailResponse adds raw editable settings to the versioned detail
@@ -212,9 +220,20 @@ func (s *Server) handleListMonitors(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	channels, channelErr := s.db.MonitorChannelSummaries(ctx)
+	if channelErr != nil {
+		s.log.Error("monitor channel summaries", "error", channelErr)
+	}
 	out := make([]monitorResponse, 0, len(monitors))
 	for _, m := range monitors {
 		resp := s.describeMonitor(r, m)
+		if channelErr == nil {
+			attached := make([]monitorChannelResponse, 0, len(channels[m.ID]))
+			for _, c := range channels[m.ID] {
+				attached = append(attached, monitorChannelResponse{ID: c.ID, Name: c.Name})
+			}
+			resp.Channels = &attached
+		}
 		if perMonitor > 0 {
 			resp.Heartbeats = oldestFirstHeartbeats(beats[m.ID])
 		}

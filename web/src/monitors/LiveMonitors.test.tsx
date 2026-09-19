@@ -43,7 +43,7 @@ function render(ui: React.ReactElement) {
  * read, and that a failed write is attributed to the row it belongs to.
  */
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 function client() {
   return new QueryClient({
@@ -66,10 +66,21 @@ function make(over: Record<string, unknown> = {}) {
   } as Parameters<typeof inventoryFromApi>[0]);
 }
 
-const noChannels = () =>
-  Promise.resolve({ byMonitor: {}, truncated: false });
-
 describe("LiveMonitors", () => {
+  it("renders list attachments beyond forty without client fan-out", async () => {
+    const monitors = Array.from({ length: 45 }, (_, i) => ({
+      id: i + 1, name: `site ${i}`, type: "http", target: "https://example.com",
+      interval_s: 60, timeout_s: 10, enabled: true, status: "up",
+      created_at: "2026-09-01T00:00:00Z", channels: [{ id: 1, name: "Operations" }],
+    }));
+    const request = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) =>
+      new Response(JSON.stringify(String(url) === "/api/v1/monitors" ? { monitors } : { channels: [] })),
+    );
+    render(<LiveMonitorsRoot client={client()} />);
+    await waitFor(() => expect(screen.getAllByText("Operations")).toHaveLength(45));
+    expect(request.mock.calls.map(([url]) => url)).toEqual(["/api/v1/monitors"]);
+    expect(screen.queryByText(/page stopped asking/)).toBeNull();
+  });
   it("refetches after a pause instead of flipping the row locally", async () => {
     /*
      * The optimistic version is tempting and is the one place on this page
@@ -91,7 +102,6 @@ describe("LiveMonitors", () => {
       <LiveMonitorsRoot
         client={client()}
         fetchMonitors={fetchMonitors}
-        fetchChannels={noChannels}
         pause={pause}
       />,
     );
@@ -129,7 +139,6 @@ describe("LiveMonitors", () => {
       <LiveMonitorsRoot
         client={client()}
         fetchMonitors={() => Promise.resolve([make()])}
-        fetchChannels={noChannels}
         patch={patch}
         forEdit={forEdit}
       />,
@@ -171,7 +180,6 @@ describe("LiveMonitors", () => {
         fetchMonitors={() =>
           Promise.resolve([make(), make({ id: 2, name: "cdn" })])
         }
-        fetchChannels={noChannels}
         forEdit={forEdit}
       />,
     );
@@ -213,7 +221,6 @@ describe("LiveMonitors", () => {
         fetchMonitors={() =>
           Promise.resolve([make(), make({ id: 2, name: "cdn" })])
         }
-        fetchChannels={noChannels}
         patch={patch}
         forEdit={(id) =>
           Promise.resolve({
@@ -257,7 +264,6 @@ describe("LiveMonitors", () => {
       <LiveMonitorsRoot
         client={client()}
         fetchMonitors={() => Promise.resolve([make()])}
-        fetchChannels={noChannels}
         forEdit={() => Promise.reject(new Error("monitor not found"))}
       />,
     );
@@ -277,7 +283,6 @@ describe("LiveMonitors", () => {
         fetchMonitors={() =>
           Promise.resolve([make(), make({ id: 2, name: "cdn" })])
         }
-        fetchChannels={noChannels}
         pause={() => Promise.reject(new Error("your role does not allow changes"))}
       />,
     );
@@ -300,7 +305,6 @@ describe("LiveMonitors", () => {
       <LiveMonitorsRoot
         client={client()}
         fetchMonitors={fetchMonitors}
-        fetchChannels={noChannels}
         check={() =>
           Promise.resolve({ ok: true, latencyMs: 9, recorded: false })
         }
@@ -318,7 +322,6 @@ describe("LiveMonitors", () => {
       <LiveMonitorsRoot
         client={client()}
         fetchMonitors={() => Promise.resolve([make()])}
-        fetchChannels={noChannels}
         canWrite={false}
       />,
     );
@@ -335,7 +338,6 @@ describe("LiveMonitors", () => {
       <LiveMonitorsRoot
         client={client()}
         fetchMonitors={() => Promise.reject(new Error("HTTP 500"))}
-        fetchChannels={noChannels}
       />,
     );
     const alert = await screen.findByRole("alert");

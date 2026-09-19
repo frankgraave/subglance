@@ -44,8 +44,6 @@ export type MonitorsViewProps = {
   monitors: readonly InventoryMonitor[];
   /** Per monitor id; a missing id renders as "not loaded", never as "none". */
   channels?: Readonly<Record<string, ChannelState>>;
-  /** True when the channel fan-out was capped or partly failed. */
-  channelsTruncated?: boolean;
   loading?: boolean;
   error?: Error | null;
   /** Opens a monitor's detail view. */
@@ -92,7 +90,6 @@ const NO_MAP = {};
 export function MonitorsView({
   monitors,
   channels = NO_MAP,
-  channelsTruncated = false,
   loading = false,
   error = null,
   onOpen,
@@ -157,22 +154,6 @@ export function MonitorsView({
       {editError !== null && (
         <p className="inc-notice" role="alert">
           {editError}
-        </p>
-      )}
-
-      {/*
-       * The channel column admits when it is short.
-       *
-       * Three rows saying "not loaded" is only meaningful if the reason is on
-       * screen: otherwise the natural reading is that those monitors are
-       * special, rather than that the page stopped asking.
-       */}
-      {channelsTruncated && (
-        <p className="inc-churn" role="status">
-          Channel attachments were not loaded for every monitor. The rows that
-          say <b>not loaded</b> may or may not have a channel — the page stopped
-          asking, it did not find out. Rows that say <b>none</b> genuinely have
-          no channel attached.
         </p>
       )}
 
