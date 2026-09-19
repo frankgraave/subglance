@@ -56,6 +56,10 @@ export function useLiveMonitors(options: LiveOptions = {}): UseLiveMonitors {
   // Survives re-renders without causing one; nothing on screen depends on it.
   const lastResyncRef = useRef(0);
   const { streamUrl = "/api/v1/stream", createEventSource } = options;
+  const [seen, setSeen] = useState<{ monitors: Monitor[]; announcement: string | null }>({
+    monitors: EMPTY,
+    announcement: null,
+  });
 
   const query = useQuery({
     queryKey: monitorsQueryKey,
@@ -79,6 +83,16 @@ export function useLiveMonitors(options: LiveOptions = {}): UseLiveMonitors {
   );
 
   useEffect(() => {
+    // Observe every connection edge, even when React batches offline -> live
+    // into one render. Consume the cache at that edge: an already queued
+    // transition, or a refetch completed while offline, must not replay when
+    // the stream returns. The first new frame after reconnect is still news.
+    const stopAnnouncements = connection.subscribe(() => {
+      setSeen({
+        monitors: queryClient.getQueryData<Monitor[]>(monitorsQueryKey) ?? EMPTY,
+        announcement: null,
+      });
+    });
     const stop = connection.onFrame((frame) => {
       const event = parseEvent(frame.type, frame.data);
       if (event === null) return;
@@ -149,6 +163,7 @@ export function useLiveMonitors(options: LiveOptions = {}): UseLiveMonitors {
 
     connection.start();
     return () => {
+      stopAnnouncements();
       stop();
       connection.stop();
     };
@@ -162,12 +177,13 @@ export function useLiveMonitors(options: LiveOptions = {}): UseLiveMonitors {
   // describes, so a screen reader never hears an announcement that is one
   // render behind what is on screen. An effect would also be a setState inside
   // an effect, which the linter rejects for exactly this reason.
-  const [seen, setSeen] = useState<{ monitors: Monitor[]; announcement: string | null }>({
-    monitors: EMPTY,
-    announcement: null,
-  });
+  // Silence is not a retraction of words a screen reader already spoke.
+  // ConnectionBadge separately announces the loss of trustworthy live data.
   if (seen.monitors !== monitors) {
-    setSeen({ monitors, announcement: describeTransitions(seen.monitors, monitors) });
+    setSeen({
+      monitors,
+      announcement: status === "live" ? describeTransitions(seen.monitors, monitors) : null,
+    });
   }
 
   return {
@@ -176,6 +192,6 @@ export function useLiveMonitors(options: LiveOptions = {}): UseLiveMonitors {
     reconnect: connection.reconnect,
     loading: query.isPending,
     error: query.error instanceof Error ? query.error : null,
-    announcement: seen.announcement,
+    announcement: status === "live" ? seen.announcement : null,
   };
 }

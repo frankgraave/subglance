@@ -205,14 +205,17 @@ export class LiveConnection {
      * this class exists to avoid.
      */
     const current = () => this.source === source;
+    let transportFailed = false;
 
     source.onopen = () => {
       if (!current()) return;
+      transportFailed = false;
       this.markAlive();
     };
 
     source.onerror = () => {
       if (!current()) return;
+      transportFailed = true;
       this.setStatus("offline");
       // readyState CONNECTING (0) means the browser is retrying by itself and
       // a second socket here would be a duplicate subscription. Only a CLOSED
@@ -222,7 +225,11 @@ export class LiveConnection {
 
     for (const type of FRAME_TYPES) {
       source.addEventListener(type, (event: MessageEvent) => {
-        if (!current()) return;
+        // A callback queued before a transport error is not recovery while
+        // that socket is CLOSED or still retrying. An OPEN socket can prove
+        // life with a frame before onopen, including after watchdog expiry.
+        if (!current() || source.readyState === 2 ||
+          (transportFailed && source.readyState === 0)) return;
         // Any frame arriving is proof the stream works, including one that
         // arrives before onopen fired.
         this.markAlive();
