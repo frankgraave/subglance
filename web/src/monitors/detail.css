@@ -210,7 +210,8 @@
 .mon-detail-note {
   font-size: var(--type-helper);
   line-height: var(--lead-prose);
-  color: var(--ink-3);
+  /* Captions still carry information; size, not faint ink, keeps them quiet. */
+  color: var(--ink-2);
 }
 
 .mon-detail-empty {

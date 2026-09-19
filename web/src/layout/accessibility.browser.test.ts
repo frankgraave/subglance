@@ -12,6 +12,7 @@ import { chromium, type Browser, type Page } from "./harness/browser";
 import { serveBuild, type Server } from "./harness/server";
 import { LAYOUT_STORAGE_KEY } from "../shell/preferences";
 import { THEME_STORAGE_KEY } from "../theme/theme";
+import type { ApiIncident } from "../monitors/detail";
 
 type Screen = {
   name: string;
@@ -50,17 +51,17 @@ afterAll(async () => {
   await server?.close();
 });
 
-async function openScreen(page: Page, screen: Screen, theme: string): Promise<void> {
+async function openScreen(page: Page, screen: Screen, theme: string, incidentIdOffset = 0): Promise<void> {
   await page.setViewport({ width: screen.drawer === "navigation" ? 375 : 1440, height: 900 });
   await page.evaluateOnNewDocument((layoutKey, layout, themeKey, chosenTheme) => {
     localStorage.setItem(layoutKey, layout);
     localStorage.setItem(themeKey, chosenTheme);
   }, LAYOUT_STORAGE_KEY, screen.layout ?? "rows", THEME_STORAGE_KEY, theme);
 
-  // Only these two responses differ from the signed-in harness. This reaches
-  // the real session gate and real auth form without a backend or credentials.
+  // Auth cases reach the real session gate and real forms without credentials.
+  // The identity regression below also renumbers the existing incident fixture.
   await page.setRequestInterception(true);
-  page.on("request", (request) => {
+  page.on("request", async (request) => {
     const url = new URL(request.url());
     if (url.origin !== server.url) {
       void request.abort("blockedbyclient");
@@ -68,6 +69,13 @@ async function openScreen(page: Page, screen: Screen, theme: string): Promise<vo
       void request.respond({ status: 401, contentType: "application/json", body: '{"error":"unauthorized"}' });
     } else if (screen.auth && url.pathname === "/api/v1/setup") {
       void request.respond({ status: 200, contentType: "application/json", body: JSON.stringify({ setup_required: screen.auth === "setup" }) });
+    } else if (incidentIdOffset && url.pathname === "/api/v1/monitors/1/incidents") {
+      // Preserve the harness's wire fixture, changing only persisted identity.
+      const response = await fetch(request.url());
+      const body = await response.json() as { incidents: ApiIncident[] };
+      await request.respond({ status: 200, contentType: "application/json", body: JSON.stringify({
+        ...body, incidents: body.incidents.map((incident) => ({ ...incident, id: incident.id + incidentIdOffset })),
+      }) });
     } else {
       void request.continue();
     }
@@ -122,6 +130,16 @@ async function audit(page: Page, scope = "light: login"): Promise<void> {
 }
 
 describe("the accessibility gate itself", () => {
+  it("has no remaining waivers for the repaired secondary text roles", () => {
+    expect(baseline.entries.filter((entry) =>
+      /\.(?:inc-sub|tb-count|mon-detail-note)\b/.test(entry.selector),
+    )).toEqual([]);
+    // Other auth/add-form debt is out of this repair's scope. In particular,
+    // do not turn those exact selectors into wildcard useId exemptions.
+    for (const entry of baseline.entries.filter((entry) => entry.selector.includes("_r_"))) {
+      expect(["#_r_0_-strength", "#_r_3_-target-help", "#_r_3_-name-help"]).toContain(entry.selector);
+    }
+  });
   it("keeps every waiver unique, reasoned and scoped to an audited screen/theme", () => {
     const scopes = new Set(SCREENS.flatMap((screen) => ["light", "dark"].map((theme) => `${theme}: ${screen.name}`)));
     const keys = baseline.entries.map((entry) => `${entry.rule}: ${entry.selector}`);
@@ -151,6 +169,57 @@ describe("the accessibility gate itself", () => {
     }
   });
 
+  it.each(["light", "dark"])("rejects a new incident violation after persisted IDs and useId shift in %s", async (theme) => {
+    const context = await browser.createBrowserContext();
+    const page = await context.newPage();
+    try {
+      const screen = SCREENS.find((screen) => screen.name === "monitor detail")!;
+      const fixture = await (await fetch(`${server.url}/api/v1/monitors/1/incidents`)).json() as { incidents: ApiIncident[] };
+      const received = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/v1/monitors/1/incidents")
+        .then((response) => response.json() as Promise<{ incidents: ApiIncident[] }>);
+      await openScreen(page, screen, theme, 10_000);
+      expect((await received).incidents.map((incident) => incident.id)).toEqual(fixture.incidents.map((incident) => incident.id + 10_000));
+      await page.waitForSelector(".inc-sub", { visible: true });
+      const before = await page.$$eval(".inc-line", (elements) => elements.map((element) => element.getAttribute("aria-controls")));
+      expect(before.length).toBe(fixture.incidents.length);
+      await audit(page, `${theme}: monitor detail`);
+
+      // Remount through real navigation so React itself allocates different
+      // useId values, as inserting another Card does in a combined branch.
+      const back = await page.waitForSelector(".mon-detail-back", { visible: true });
+      await back!.click();
+      const monitor = await page.waitForSelector('[data-testid="monitor-row-1"] .mon-name', { visible: true });
+      await monitor!.click();
+      await page.waitForSelector(".mon-detail-windows", { visible: true });
+      await page.waitForSelector(".inc-sub", { visible: true });
+      const after = await page.$$eval(".inc-line", (elements) => elements.map((element) => element.getAttribute("aria-controls")));
+      expect(after.length).toBe(before.length);
+      for (const id of after) {
+        expect(id).toBeTruthy();
+        expect(before).not.toContain(id);
+      }
+      await audit(page, `${theme}: monitor detail`);
+
+      // A NEW sibling with the same text role must not inherit any exemption
+      // from the old incident, even when axe chooses a different selector.
+      await page.$eval(".inc-sub", (element) => {
+        const broken = element.cloneNode(false) as HTMLElement;
+        broken.textContent = "New incident contrast regression";
+        broken.style.cssText = "color: var(--ink-3); transition: none; animation: none";
+        element.after(broken);
+      });
+      await expect(audit(page, `${theme}: monitor detail`)).rejects.toMatchObject({
+        actual: expect.arrayContaining([expect.objectContaining({
+          id: "color-contrast", html: expect.stringContaining("New incident contrast regression"),
+        })]),
+      });
+      await page.$eval(".inc-sub + .inc-sub", (element) => element.remove());
+      await audit(page, `${theme}: monitor detail`);
+    } finally {
+      await context.close();
+    }
+  });
+
   it.each([
     { tag: "input", rule: "label" },
     { tag: "button", rule: "button-name" },
@@ -174,6 +243,53 @@ describe("the accessibility gate itself", () => {
       await expect(audit(page)).rejects.toThrow(rule);
       await page.evaluate(() => document.getElementById("deliberate-accessibility-regression")!.remove());
       await audit(page);
+    } finally {
+      await context.close();
+    }
+  });
+});
+
+describe.each(["light", "dark"])("readable secondary text in %s", (theme) => {
+  it.each([
+    { screenName: "monitor detail", selector: ".inc-sub" },
+    { screenName: "monitor detail", selector: ".mon-detail-note" },
+    { screenName: "incidents", selector: ".inc-sub" },
+    { screenName: "incidents", selector: ".mon-detail-note" },
+    { screenName: "monitors", selector: ".tb-count" },
+  ])("$selector on $screenName clears AA without a waiver", async ({ screenName, selector }) => {
+    const context = await browser.createBrowserContext();
+    const page = await context.newPage();
+    try {
+      await openScreen(page, SCREENS.find((screen) => screen.name === screenName)!, theme);
+      await page.waitForSelector(selector, { visible: true });
+      await page.addScriptTag({ content: axe.source });
+      const result = await page.evaluate(async (target) => {
+        const result = await (window as typeof window & { axe: typeof axe }).axe.run(
+          { include: [target] }, { runOnly: { type: "rule", values: ["color-contrast"] } },
+        );
+        return {
+          violations: result.violations,
+          incomplete: result.incomplete,
+          checked: result.passes.flatMap((rule) => rule.nodes).length,
+        };
+      }, selector);
+      // This is deliberately independent of the debt baseline: these roles
+      // must be readable even when a new card, row or toolbar changes IDs.
+      expect(result.violations, `${theme}: ${screenName} ${selector}`).toEqual([]);
+      expect(result.incomplete).toEqual([]);
+      expect(result.checked).toBeGreaterThan(0);
+      const colors = await page.$$eval(selector, (elements) => {
+        const probe = document.createElement("span");
+        probe.style.cssText = "color: var(--ink-2); transition: none; animation: none";
+        document.body.append(probe);
+        const expected = getComputedStyle(probe).color;
+        probe.remove();
+        return elements.filter((element) => element.checkVisibility()).map((element) => ({
+          actual: getComputedStyle(element).color, expected,
+        }));
+      });
+      expect(colors.length).toBeGreaterThan(0);
+      for (const { actual, expected } of colors) expect(actual).toBe(expected);
     } finally {
       await context.close();
     }
