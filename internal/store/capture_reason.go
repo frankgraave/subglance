@@ -61,7 +61,7 @@ func (db *DB) HeartbeatCaptureReasons(ctx context.Context, hbs []Heartbeat) (map
 	if err != nil {
 		return nil, fmt.Errorf("query capture reasons: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var id int64
 		var reason CaptureReason

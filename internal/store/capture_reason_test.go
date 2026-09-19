@@ -1,7 +1,6 @@
 package store
 
 import (
-	"fmt"
 	"testing"
 	"time"
 )
@@ -100,7 +99,7 @@ func TestCaptureReasonMigrationLeavesOldRowsUnknown(t *testing.T) {
 		t.Fatal(err)
 	}
 	if reason != nil {
-		t.Fatal(fmt.Sprintf("migration invented historical evidence: %v", reason))
+		t.Fatalf("migration invented historical evidence: %v", reason)
 	}
 	if err := db.Migrate(t.Context()); err != nil {
 		t.Fatalf("migration not idempotent: %v", err)
