@@ -1,8 +1,11 @@
 import { apiJSON } from "../api/http";
 import type { ResponseHeartbeat } from "./responseHistory";
+import { detailQueryKey } from "./detail";
 
 export const RESPONSE_HISTORY_LIMIT = 100;
-export const responseHistoryQueryKey = (id: string) => ["response-history", id, RESPONSE_HISTORY_LIMIT] as const;
+// A recorded on-demand check already invalidates the monitor's detail family.
+// Keep raw diagnostic evidence in that family so it refreshes with the result.
+export const responseHistoryQueryKey = (id: string) => [...detailQueryKey(id), "responses", RESPONSE_HISTORY_LIMIT] as const;
 
 /** The raw endpoint is required: bulk monitor beats intentionally omit bodies. */
 export async function fetchResponseHistory(id: string, signal?: AbortSignal): Promise<ResponseHeartbeat[]> {

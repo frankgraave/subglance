@@ -1,6 +1,18 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { onUnauthorized } from "../api/http";
-import { fetchResponseHistory } from "./responseHistoryApi";
+import { QueryClient } from "@tanstack/react-query";
+import { fetchResponseHistory, responseHistoryQueryKey } from "./responseHistoryApi";
+import { detailQueryKey } from "./detail";
+
+it("refreshes response evidence when a recorded check invalidates that monitor's detail", async () => {
+  const client = new QueryClient();
+  client.setQueryData(responseHistoryQueryKey("7"), []);
+  client.setQueryData(responseHistoryQueryKey("8"), []);
+  await client.invalidateQueries({ queryKey: detailQueryKey("7"), refetchType: "none" });
+  expect(client.getQueryState(responseHistoryQueryKey("7"))?.isInvalidated).toBe(true);
+  expect(client.getQueryState(responseHistoryQueryKey("8"))?.isInvalidated).toBe(false);
+  client.clear();
+});
 
 afterEach(() => vi.unstubAllGlobals());
 
