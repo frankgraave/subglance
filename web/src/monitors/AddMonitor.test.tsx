@@ -342,6 +342,105 @@ describe("AddMonitor", () => {
     expect(sent.target).toBe("https://example.com");
   });
 
+  it("omits the TLS floor entirely when no opinion was expressed", async () => {
+    /*
+     * The distinction the nullable column exists for. Sending "1.2" because
+     * that is the current default would pin every monitor created through the
+     * form to today's floor, and the API rejects "" on create precisely so a
+     * client cannot store a floor nobody chose.
+     */
+    const create = vi.fn().mockResolvedValue({ id: "1" });
+    render(<AddMonitor api={{ preview: vi.fn(), create }} />);
+    setField(/what should be watched/i, "example.com");
+    fireEvent.change(screen.getByLabelText(/check type/i), {
+      target: { value: "http" },
+    });
+    click(/save monitor/i);
+    await waitFor(() => expect(create).toHaveBeenCalled());
+    expect(create.mock.calls[0][0]).not.toHaveProperty("min_tls_version");
+  });
+
+  it("sends the TLS floor that was chosen", async () => {
+    const create = vi.fn().mockResolvedValue({ id: "1" });
+    render(<AddMonitor api={{ preview: vi.fn(), create }} />);
+    setField(/what should be watched/i, "example.com");
+    fireEvent.change(screen.getByLabelText(/check type/i), {
+      target: { value: "http" },
+    });
+    fireEvent.change(screen.getByLabelText(/minimum tls version/i), {
+      target: { value: "1.0" },
+    });
+    click(/save monitor/i);
+    await waitFor(() => expect(create).toHaveBeenCalled());
+    expect(
+      (create.mock.calls[0][0] as { min_tls_version?: string }).min_tls_version,
+    ).toBe("1.0");
+  });
+
+  it("probes with the floor, so Test it answers the question that was asked", async () => {
+    // Lowering the floor is done for a target that cannot be reached without
+    // it. A preview that ignored the setting would report the same refused
+    // handshake and send the user to look at a working appliance.
+    const preview = vi.fn().mockResolvedValue(result());
+    render(<AddMonitor api={{ preview, create: vi.fn() }} />);
+    setField(/what should be watched/i, "appliance.example.com");
+    fireEvent.change(screen.getByLabelText(/minimum tls version/i), {
+      target: { value: "1.0" },
+    });
+    click(/test it/i);
+    await waitFor(() => expect(preview).toHaveBeenCalled());
+    expect(preview.mock.calls[0][0]).toMatchObject({ min_tls_version: "1.0" });
+  });
+
+  it("does not let a preview survive a change to the TLS floor", async () => {
+    // A result is evidence about the handshake that was attempted. Changing
+    // the floor changes which handshake that is.
+    const preview = vi
+      .fn()
+      .mockResolvedValue(result({ type: "http", target: "https://example.com" }));
+    const create = vi.fn().mockResolvedValue({ id: "1" });
+    render(<AddMonitor api={{ preview, create }} />);
+    setField(/what should be watched/i, "example.com");
+    click(/test it/i);
+    await waitFor(() => expect(statusText()).toMatch(/example\.com/));
+
+    fireEvent.change(screen.getByLabelText(/minimum tls version/i), {
+      target: { value: "1.3" },
+    });
+    click(/save monitor/i);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(create).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert").textContent).toMatch(/press Test it/i);
+  });
+
+  it("explains both directions of the TLS floor rather than listing versions", () => {
+    /*
+     * The select on its own reads as a client setting, the way the same words
+     * read in a browser. The copy has to carry both cases: raising it is an
+     * assertion about the server whose failure is the point, and lowering it
+     * is what makes an old appliance checkable at all.
+     */
+    render(
+      <AddMonitorForm
+        onPreview={noop}
+        onSubmit={noop}
+        preview={{ phase: "idle" }}
+      />,
+    );
+    const describedBy =
+      screen
+        .getByLabelText(/minimum tls version/i)
+        .getAttribute("aria-describedby") ?? "";
+    const text =
+      document.getElementById(describedBy.split(" ")[0])?.textContent ?? "";
+    expect(text).toMatch(/assertion/i);
+    expect(text).toMatch(/goes red/i);
+    expect(text).toMatch(/TLS 1\.0/);
+    expect(text).toMatch(/refused handshake/i);
+    // The floor is SubGlance's, not the server's, and a failure names it.
+    expect(text).toMatch(/floor SubGlance dials with/i);
+  });
+
   it("surfaces a save failure as an alert, not as a preview result", async () => {
     const create = vi
       .fn()

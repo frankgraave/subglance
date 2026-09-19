@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { isPush } from "./push";
+import { TlsFloorField } from "./TlsFloorField";
+import { TLS_FLOOR_UNSET } from "./tlsFloor";
 import type { PreviewResult, PreviewState } from "./preview";
 import { describePreview, suggestName } from "./preview";
 
@@ -41,6 +43,12 @@ export type AddMonitorValues = {
   pushIntervalS: number;
   /** Push monitors only: how late that report may be, in seconds. */
   pushGraceS: number;
+  /**
+   * The lowest TLS version this monitor may negotiate, written "1.0" to
+   * "1.3" — or `""` for no opinion, which is the default and is NOT the same
+   * as "1.2". The empty value must reach the caller as an omitted field.
+   */
+  minTlsVersion: string;
 };
 
 /**
@@ -76,6 +84,7 @@ const FIELD_CONTROL: Record<string, string> = {
   keyword_mode: "keyword",
   push_interval_s: "push-interval",
   push_grace_s: "push-grace",
+  min_tls_version: "min-tls",
 };
 
 /**
@@ -88,7 +97,13 @@ const FIELD_CONTROL: Record<string, string> = {
  * is written down once rather than derived from the JSX, because the thing that
  * matters is *which controls are hidden*, and the markup cannot be asked that.
  */
-const ADVANCED_CONTROLS = new Set(["type", "interval", "timeout", "keyword"]);
+const ADVANCED_CONTROLS = new Set([
+  "type",
+  "interval",
+  "timeout",
+  "keyword",
+  "min-tls",
+]);
 
 export type AddMonitorFormProps = {
   /** Runs a preview. The caller reports the outcome back through `preview`. */
@@ -121,6 +136,10 @@ const DEFAULTS: AddMonitorValues = {
   // visible before it is committed: silent grace is how a monitor ends up
   // alerting a minute later than its owner expects.
   pushGraceS: 60,
+  // No opinion, and never the current default spelled out: a form that
+  // pre-selected 1.2 would pin every new monitor to today's floor and quietly
+  // make the nullable column unreachable from the UI.
+  minTlsVersion: TLS_FLOOR_UNSET,
 };
 
 export function AddMonitorForm({
@@ -531,6 +550,25 @@ export function AddMonitorForm({
                   ids={ids}
                 />
               </div>
+
+              <TlsFloorField
+                id={`${ids}-min-tls`}
+                value={values.minTlsVersion}
+                onChange={(minTlsVersion) =>
+                  setValues((v) => ({ ...v, minTlsVersion }))
+                }
+                invalid={badControl === "min-tls"}
+                {...(badControl === "min-tls"
+                  ? { errorId: `${ids}-field-error` }
+                  : {})}
+              >
+                <FieldError
+                  control="min-tls"
+                  badControl={badControl}
+                  rejection={rejection}
+                  ids={ids}
+                />
+              </TlsFloorField>
 
               <div className="add-field add-field-wide">
                 <label className="add-label" htmlFor={`${ids}-keyword`}>
