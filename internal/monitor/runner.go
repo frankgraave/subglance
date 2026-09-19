@@ -624,15 +624,19 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 		FailureThreshold: o.Monitor.Retries,
 	})
 
-	if snap := snapshotToStore(o.Result, tr.SnapshotsSpent, tr.Flapping); snap != nil {
-		hb.Response = snap
+	var captureReason store.CaptureReason
+	hb.Response, captureReason = snapshotToStore(o.Result, tr.SnapshotsSpent, tr.Flapping)
+	if !o.Result.OK && o.Result.Response == nil && o.Monitor.Type == "http" && !o.Monitor.CaptureResponse {
+		// This is the configuration the checker used, not a fresh monitor
+		// lookup that could have changed while the request was in flight.
+		captureReason = store.CaptureDisabled
 	}
 
 	// The error is kept rather than only logged, but the state machine has
 	// already run: the check did happen, and an outage should be reported
 	// even if the database is having a bad moment.
 	var hbErr error
-	if err := r.db.RecordHeartbeat(ctx, hb); err != nil {
+	if err := r.db.RecordHeartbeatWithCaptureReason(ctx, hb, captureReason); err != nil {
 		r.hbFailures.Add(1)
 		r.log.Error("failed to record heartbeat",
 			"monitor_id", o.Monitor.ID, "monitor", o.Monitor.Name, "error", err)
@@ -693,21 +697,21 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 // Flapping is used rather than any new counter because it is state the engine
 // maintains and clears on its own: when the monitor settles, snapshots resume
 // with no timer to expire and nothing to reset.
-func snapshotToStore(res checker.Result, snapshotsSpent int, flapping bool) *store.ResponseSnapshot {
+func snapshotToStore(res checker.Result, snapshotsSpent int, flapping bool) (*store.ResponseSnapshot, store.CaptureReason) {
 	if res.Response == nil || res.OK {
-		return nil
+		return nil, ""
 	}
 	if flapping {
-		return nil
+		return nil, store.CaptureFlapping
 	}
 	if snapshotsSpent >= maxSnapshotsPerIncident {
-		return nil
+		return nil, store.CaptureBudget
 	}
 	return &store.ResponseSnapshot{
 		Body:      res.Response.Body,
 		Headers:   res.Response.Headers,
 		Truncated: res.Response.Truncated,
-	}
+	}, ""
 }
 
 // heartbeatPayload is the wire shape of a single check result.
