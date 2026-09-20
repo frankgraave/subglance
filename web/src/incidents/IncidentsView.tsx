@@ -412,11 +412,13 @@ export function IncidentsView({
         <Card title="Incidents" icon={<IconAlert />} headingLevel={2}>
           <Panel>
             <p className="mon-detail-empty">
-              No incidents match “{query.trim()}”
+              {showResolved && historyHasMore ? "No loaded incidents" : "No incidents"} match “{query.trim()}”
             </p>
             <p className="mon-detail-note">
-              The filter matches monitor names. Clear it to see every incident
-              on this instance.
+              The filter matches monitor names. Clear it to see the loaded
+              incidents{showResolved && historyHasMore
+                ? ", or load older history to search more of the window."
+                : "."}
             </p>
           </Panel>
         </Card>
@@ -603,9 +605,13 @@ export function IncidentsView({
                */
               <p className="inc-notice" role="status">
                 {shownResolved.length === 0
-                  ? `Nothing resolved in the last ${historyDays} ${
-                      historyDays === 1 ? "day" : "days"
-                    }.`
+                  ? resolved.length > 0 || historyHasMore
+                    ? searching
+                      ? "No loaded resolved incidents match this filter."
+                      : "No resolved incidents loaded yet."
+                    : `Nothing resolved in the last ${historyDays} ${
+                        historyDays === 1 ? "day" : "days"
+                      }.`
                   : `${shownResolved.length} resolved ${
                       shownResolved.length === 1 ? "incident" : "incidents"
                     } could not be placed on a day — no resolution time was recorded.`}
