@@ -10,6 +10,22 @@ type LeaveGuard = {
   discard: () => void;
 };
 const guards = new Set<LeaveGuard>();
+const navigationCleanups = new Set<() => void>();
+
+/** Local overlay owners survive same-screen navigation. Close their state,
+ * including pending loads, without remounting the inventory and its filters. */
+export function registerNavigationCleanup(close: () => void): () => void {
+  navigationCleanups.add(close);
+  return () => { navigationCleanups.delete(close); };
+}
+
+/** Approval and owner teardown are one operation. Scoped drawer dismissal
+ * still uses confirmLeave: it must not close an unrelated overlay. */
+export function confirmNavigation(): boolean {
+  if (!confirmLeave()) return false;
+  for (const close of navigationCleanups) close();
+  return true;
+}
 
 export function registerLeaveGuard(guard: LeaveGuard): () => void {
   guards.add(guard);

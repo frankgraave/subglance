@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { confirmLeave } from "./shell/leaveGuard";
+import { confirmLeave, confirmNavigation } from "./shell/leaveGuard";
 import { CommandMenu } from "./commands/CommandMenu";
 import { Settings } from "./settings/Settings";
 import { SessionGate } from "./auth/SessionGate";
@@ -79,7 +79,8 @@ export default function App() {
 
   const openMonitor = useCallback(
     (id: string) => {
-      if (!confirmLeave()) return;
+      if (route.name === "monitor" && route.id === id && !workbenchOpen && !addOpen) return;
+      if (!confirmNavigation()) return;
       setWorkbenchOpen(false);
       setAddOpen(false);
       navigate({ name: "monitor", id });
@@ -88,7 +89,7 @@ export default function App() {
       // halfway down its incident list.
       window.scrollTo(0, 0);
     },
-    [navigate],
+    [navigate, route, workbenchOpen, addOpen],
   );
   const showDashboard = useCallback(
     () => navigate({ name: "dashboard" }),
@@ -105,7 +106,7 @@ export default function App() {
    */
   const goTo = useCallback(
     (name: NavRoute) => {
-      if (!confirmLeave()) return;
+      if (!confirmNavigation()) return;
       setWorkbenchOpen(false);
       setAddOpen(false);
       navigate(
@@ -498,7 +499,11 @@ export default function App() {
     <SessionGate session={session} onSignedIn={onSignedIn} onRetry={refresh}>
       {screen}
       {session.state === "signedIn" && <CommandMenu client={queryClient} open={commandOpen} canWrite={canWrite(session.user)} onClose={() => setCommandOpen(false)} onOpenMonitor={openMonitor}
-        onNavigate={goTo} onThemeChange={setPreference} onAddMonitor={() => { if (confirmLeave()) { setWorkbenchOpen(false); setAddOpen(false); setCreateOpen(true); } }} />}
+        onNavigate={goTo} onThemeChange={setPreference} onAddMonitor={() => {
+          // Already here: keep the mounted draft AND its guard, without a discard.
+          if (route.name === "monitors" && route.create && !workbenchOpen) return;
+          if (confirmNavigation()) { setWorkbenchOpen(false); setAddOpen(false); setCreateOpen(true); }
+        }} />}
     </SessionGate>
   );
 }
