@@ -68,6 +68,9 @@
   outline: var(--outline-ring-w) solid var(--accent-ring);
   outline-offset: calc(-1 * var(--outline-ring-w));
 }
+[data-theme="dark"] .command-menu :is(input, button):focus-visible {
+  outline-color: var(--accent-ring-dark);
+}
 .shell-command-launcher .shell-search-kbd { color: var(--ink-2); border: 0; padding: 0; }
 .shell-command-launcher > svg { display: none; }
 @media (max-width: 640px) {

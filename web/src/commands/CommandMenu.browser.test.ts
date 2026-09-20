@@ -41,6 +41,32 @@ async function search(page: Page, value: string) {
   await page.keyboard.type(value);
 }
 
+it.each(["dark", "light"])("uses the surface-specific focus ring in %s mode", async (theme) => {
+  const page = await open(theme, 1440);
+  try {
+    await launch(page);
+    for (const selector of [".command-menu input", ".command-menu > button"]) {
+      if (selector.endsWith("button")) await page.keyboard.press("Tab");
+      await page.waitForFunction((selector) => !document.querySelector(selector)!.getAnimations().some((animation) => animation.playState === "running"), {}, selector);
+      const ring = await page.$eval(selector, (el, theme) => {
+        const probe = document.createElement("span");
+        probe.style.color = `var(${theme === "dark" ? "--accent-ring-dark" : "--accent-ring"})`;
+        el.parentElement!.append(probe);
+        const expectedColor = getComputedStyle(probe).color;
+        probe.remove();
+        const style = getComputedStyle(el);
+        return { focused: el === document.activeElement && el.matches(":focus-visible"),
+          color: style.outlineColor, expectedColor, width: style.outlineWidth,
+          expectedWidth: style.getPropertyValue("--outline-ring-w").trim(), style: style.outlineStyle };
+      }, theme);
+      expect(ring.focused).toBe(true);
+      expect(ring.color).toBe(ring.expectedColor);
+      expect(ring.width).toBe(ring.expectedWidth);
+      expect(ring.style).toBe("solid");
+    }
+  } finally { await page.close(); }
+});
+
 it("rejects native modified button activation and restores input focus after pointer writes", async () => {
   const page = await open("dark", 390, "/monitors/new");
   try {
