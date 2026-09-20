@@ -25,9 +25,8 @@ function resultText(data: WatchdogState): string {
   }
 }
 
-// The README's documentation section links to the operational watchdog guide.
-// Use its existing anchor rather than inventing a deleted README heading.
-const watchdogReadme = "https://github.com/frankgraave/subglance/blob/develop/README.md#documentation";
+// The dedicated README section explains the limit and links to configuration.
+const watchdogReadme = "https://github.com/frankgraave/subglance/blob/develop/README.md#self-monitoring";
 
 export function WatchdogNotice() {
   const query = useWatchdog();

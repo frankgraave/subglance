@@ -23,8 +23,8 @@ it("renders one quiet dashboard caveat only after explicit disabled data and lin
  expect(screen.getAllByText(/SubGlance cannot report its own outage/)).toHaveLength(1);
  expect(screen.queryByRole("alert")).toBeNull();
  const link = screen.getByRole("link", { name: "Read about self-monitoring" });
- expect(link.getAttribute("href")).toBe("https://github.com/frankgraave/subglance/blob/develop/README.md#documentation");
- expect(readFileSync("../README.md", "utf8")).toContain("## Documentation");
+ expect(link.getAttribute("href")).toBe("https://github.com/frankgraave/subglance/blob/develop/README.md#self-monitoring");
+ expect(readFileSync("../README.md", "utf8")).toContain("## Self-monitoring");
 });
 it.each([
  [null, 200], [{}, 200], [{ configured: false }, 200],
