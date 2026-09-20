@@ -102,12 +102,11 @@ describe("EditMonitorForm", () => {
   });
 
   it("says why target, type and the HTTP settings are not editable here", () => {
-    // Silence would read as a form that forgot them. The reason is that this
-    // screen never received their current values, and a blank input invites
-    // erasing a setting the user cannot see.
+    // The detail endpoint carries these settings, but this form has no
+    // controls for them yet. Saving must leave them unchanged.
     render(<EditMonitorForm monitor={make()} onSave={vi.fn()} />);
     expect(
-      screen.getByText(/never received their current values/),
+      screen.getByText(/headers are not yet editable here/),
     ).toBeTruthy();
   });
 

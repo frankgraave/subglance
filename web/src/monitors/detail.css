@@ -210,7 +210,20 @@
 .mon-detail-note {
   font-size: var(--type-helper);
   line-height: var(--lead-prose);
-  color: var(--ink-3);
+  /* Captions still carry information; size, not faint ink, keeps them quiet. */
+  color: var(--ink-2);
+}
+
+.mon-detail-check-error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1h);
+}
+
+.mon-detail-check-error > svg {
+  flex: none;
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
 }
 
 .mon-detail-empty {

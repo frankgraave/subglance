@@ -723,7 +723,8 @@
 
 .tb-count {
   @apply text-helper;
-  color: var(--ink-3);
+  /* A filtered result count is data, including when the count is zero. */
+  color: var(--ink-2);
   white-space: nowrap;
   margin: 0;
 }

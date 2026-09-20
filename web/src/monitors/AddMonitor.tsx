@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { confirmLeave, registerLeaveGuard } from "../shell/leaveGuard";
 import { AddMonitorForm } from "./AddMonitorForm";
 import { isPush } from "./push";
 import type { AddMonitorValues } from "./AddMonitorForm";
@@ -35,6 +36,14 @@ export type AddMonitorProps = {
 export function AddMonitor({ onCreated, onCancel, api }: AddMonitorProps) {
   const preview = api?.preview ?? previewCheck;
   const create = api?.create ?? createMonitor;
+  const element = useRef<HTMLDivElement>(null);
+  const dirty = useRef(false);
+  const onDirtyChange = useCallback((value: boolean) => { dirty.current = value; }, []);
+  useEffect(() => registerLeaveGuard({
+    element: () => element.current,
+    dirty: () => dirty.current,
+    discard: () => { dirty.current = false; },
+  }), []);
 
   const [state, setState] = useState<PreviewState>({ phase: "idle" });
   const [saving, setSaving] = useState(false);
@@ -61,6 +70,12 @@ export function AddMonitor({ onCreated, onCancel, api }: AddMonitorProps) {
    * pre-save check worse than no check.
    */
   const inFlight = useRef<AbortController | null>(null);
+  const saveInFlight = useRef<AbortController | null>(null);
+  const [formVersion, setFormVersion] = useState(0);
+  useEffect(() => () => {
+    inFlight.current?.abort();
+    saveInFlight.current?.abort();
+  }, []);
 
   const runPreview = useCallback(
     (values: AddMonitorValues) => {
@@ -95,6 +110,7 @@ export function AddMonitor({ onCreated, onCancel, api }: AddMonitorProps) {
 
   const save = useCallback(
     (values: AddMonitorValues) => {
+      if (saveInFlight.current) return;
       setSaving(true);
       setSaveError(null);
       // Inference lives on the server and runs only for a preview, so without
@@ -114,9 +130,16 @@ export function AddMonitor({ onCreated, onCancel, api }: AddMonitorProps) {
         return;
       }
 
+      const controller = new AbortController();
+      saveInFlight.current = controller;
       void (async () => {
         try {
-          const created = await create(bodyFor(values, state));
+          const created = await create(bodyFor(values, state), controller.signal);
+          if (controller.signal.aborted) return;
+          dirty.current = false;
+          inFlight.current?.abort();
+          setState({ phase: "idle" });
+          setFormVersion((version) => version + 1);
           if (created.pushUrl !== undefined) {
             // A push monitor is not finished at "saved": without this URL in
             // somebody's crontab it can never report, so the flow stops here
@@ -130,9 +153,12 @@ export function AddMonitor({ onCreated, onCancel, api }: AddMonitorProps) {
           }
           onCreated?.(created.id);
         } catch (error) {
-          setSaveError(explain(error));
+          if (!controller.signal.aborted) setSaveError(explain(error));
         } finally {
-          setSaving(false);
+          if (!controller.signal.aborted) {
+            saveInFlight.current = null;
+            setSaving(false);
+          }
         }
       })();
     },
@@ -150,14 +176,18 @@ export function AddMonitor({ onCreated, onCancel, api }: AddMonitorProps) {
   }
 
   return (
-    <AddMonitorForm
+    <div ref={element}><AddMonitorForm
+      key={formVersion}
+      onDirtyChange={onDirtyChange}
       onPreview={runPreview}
       onSubmit={save}
       preview={state}
       saving={saving}
       saveError={saveError}
-      onCancel={onCancel}
-    />
+      onCancel={onCancel === undefined ? undefined : () => {
+        if (confirmLeave(element.current)) onCancel();
+      }}
+    /></div>
   );
 }
 

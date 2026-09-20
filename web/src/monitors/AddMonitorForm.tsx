@@ -117,6 +117,8 @@ export type AddMonitorFormProps = {
   /** A save that failed, as the server explained it. */
   saveError?: Rejection | null;
   onCancel?: () => void;
+  /** Reports dirty state only; field values never leave for persistence. */
+  onDirtyChange?: (dirty: boolean) => void;
 };
 
 const DEFAULTS: AddMonitorValues = {
@@ -149,6 +151,7 @@ export function AddMonitorForm({
   saving = false,
   saveError = null,
   onCancel,
+  onDirtyChange,
 }: AddMonitorFormProps) {
   const ids = useId();
   const [values, setValues] = useState<AddMonitorValues>(DEFAULTS);
@@ -167,6 +170,9 @@ export function AddMonitorForm({
    * stale value after a concurrent re-render.
    */
   const [typedName, setTypedName] = useState<string | null>(null);
+  const dirty = (typedName ?? "") !== "" ||
+    Object.keys(DEFAULTS).some((key) => values[key as keyof AddMonitorValues] !== DEFAULTS[key as keyof AddMonitorValues]);
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
 
   const push = isPush(values);
   const targetEmpty = values.target.trim() === "";
@@ -261,6 +267,7 @@ export function AddMonitorForm({
       onSubmit={submit}
       aria-labelledby={`${ids}-heading`}
     >
+      <fieldset disabled={saving} className="contents">
       {/*
        * The heading is visually hidden, not removed (SUB-138).
        *
@@ -610,7 +617,9 @@ export function AddMonitorForm({
           )}
         </div>
       </details>
+      </fieldset>
 
+      {saving && <p className="add-help">A save in progress may still complete if you close this form.</p>}
       <div className="add-actions">
         {/*
          * No "Test it" for a push monitor. The button probes a target, and a
@@ -628,7 +637,7 @@ export function AddMonitorForm({
             // started — locking the button makes the user wait out a request
             // whose answer they already know is useless. The caller aborts the
             // previous probe, so a late answer cannot overwrite a newer one.
-            disabled={targetEmpty}
+            disabled={targetEmpty || saving}
           >
             {/* The label keeps the button's width rather than swapping in a
               spinner that resizes it (§7.1). */}

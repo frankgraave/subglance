@@ -8,24 +8,16 @@ import { TlsFloorField } from "./TlsFloorField";
 /**
  * Editing an existing monitor.
  *
- * **It offers only what PATCH can actually change, and only what the list
- * endpoint gave us the current value of.** `GET /api/v1/monitors` returns name,
- * type, target, interval, timeout, enabled, capture_response, repeat_after_s,
- * tags and created_at — it does not return method, expected status, keyword,
- * headers, body, retries or ssl_warn_days. PATCH accepts all of those, but a
- * form that renders an input for a field whose current value it never received
- * has two bad options: show it blank, which invites the user to blank a real
- * setting, or guess a default and silently overwrite what is stored. Both are
- * the failure this product exists to avoid, so those fields are not offered
- * here at all. The remaining gap is named in the PR rather than hidden.
+ * This form edits name, timing, tags and the TLS floor. The versioned detail
+ * read supplies the other check settings (SUB-129), but adding controls
+ * for them is a separate UI change. Until those values are modelled here,
+ * no blank/default input may overwrite a setting the user has not seen.
+ * The caller pairs the displayed values with the ETag from the same read.
  *
- * `min_tls_version` is the exception to that paragraph, and it is an exception
- * on the rule's own terms: the list endpoint *does* carry it, and it carries
- * absence honestly — the field is omitted rather than filled with the current
- * default — so the form knows both what is stored and that nothing is. That
- * is precisely what the other fields could not tell it.
+ * The TLS floor preserves absence: an omitted value means no opinion, not
+ * today's default. Opening this form must never pin a floor nobody chose.
  *
- * **Target and type are read-only here for the same reason plus one more.**
+ * **Target and type remain read-only.**
  * Changing a target re-validates against the type and can fail in ways only a
  * preview can show; that path already exists, on the add form, with the preview
  * attached to it. An edit box that can silently point a monitor at a different
@@ -331,9 +323,8 @@ export function EditMonitorForm({
       <p className="add-help">
         Target and check type are not editable here: changing either can only be
         verified by probing it, which the add form does with Test it. Method,
-        expected status, keyword and headers are not shown because this screen
-        never received their current values, and an input that starts blank
-        would invite you to erase a setting you cannot see.
+        expected status, keyword and headers are not yet editable here. Saving
+        leaves those settings unchanged.
       </p>
 
       {/* Only what is NOT about a single control lands here. A message that

@@ -177,6 +177,39 @@ func (db *DB) ListMonitorChannels(ctx context.Context, monitorID int64) ([]Chann
 	return out, rows.Err()
 }
 
+// ChannelSummary identifies an attachment without reading its credentials.
+type ChannelSummary struct {
+	ID   int64
+	Name string
+}
+
+// MonitorChannelSummaries reads all attachments in one query. Missing monitor
+// keys mean no attachments only when err is nil; callers must preserve errors
+// as unknown. Disabled channels are still attached and remain in the result.
+func (db *DB) MonitorChannelSummaries(ctx context.Context) (map[int64][]ChannelSummary, error) {
+	rows, err := db.Reader.QueryContext(ctx, `
+		SELECT mc.monitor_id, c.id, c.name
+		FROM monitor_channels mc JOIN notif_channels c ON c.id = mc.channel_id
+		ORDER BY mc.monitor_id, c.id`)
+	if err != nil {
+		return nil, fmt.Errorf("query monitor channel summaries: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := make(map[int64][]ChannelSummary)
+	for rows.Next() {
+		var monitorID int64
+		var c ChannelSummary
+		if err := rows.Scan(&monitorID, &c.ID, &c.Name); err != nil {
+			return nil, err
+		}
+		out[monitorID] = append(out[monitorID], c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SetMonitorChannels replaces a monitor's channel assignments with ids.
 //
 // Replace rather than add: the caller sends the set it wants, which makes the

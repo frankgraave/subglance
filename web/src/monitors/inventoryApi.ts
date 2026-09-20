@@ -10,7 +10,7 @@
 
 import { apiFetch, apiRequest } from "../api/http";
 import { inventoryFromApi, inventoryFromPayload } from "./inventory";
-import type { ChannelState, InventoryMonitor } from "./inventory";
+import type { InventoryMonitor } from "./inventory";
 import type { ApiMonitor } from "./types";
 
 export const inventoryQueryKey = ["monitors", "inventory"] as const;
@@ -45,86 +45,6 @@ export async function fetchInventory(
     );
   }
   return inventoryFromPayload(body);
-}
-
-/**
- * How many monitors the page will ask for channel attachments.
- *
- * **The cap exists because the backend has no endpoint for this question.**
- * Channels are a per-monitor sub-resource (`GET /api/v1/monitors/{id}/channels`),
- * so "which monitors have no channel attached" — the finding this column is
- * for — costs one request per monitor. At 12 monitors that is nothing; at 200
- * it is 200 requests to fill a column.
- *
- * So the fan-out stops, and the rows it did not reach say `not loaded` rather
- * than `none`. The real fix is the list endpoint carrying channel ids, which
- * is a backend ticket rather than something to paper over here.
- */
-export const CHANNEL_FANOUT_LIMIT = 40;
-
-export const channelsQueryKey = (ids: readonly string[]) =>
-  ["monitors", "channels", ids.join(",")] as const;
-
-export type ChannelMap = {
-  /** Per monitor id. A missing id means the request never happened. */
-  byMonitor: Readonly<Record<string, ChannelState>>;
-  /** True when the fan-out was capped or a request failed. */
-  truncated: boolean;
-};
-
-/**
- * Which channels each monitor alerts through.
- *
- * A monitor whose request fails contributes `{ known: false }` rather than an
- * empty list. That distinction is the whole reason this returns a map of
- * states instead of a map of arrays: an empty list is the finding "nobody will
- * hear about this monitor", and a failed request that rendered as one would
- * manufacture that finding out of a 500.
- */
-export async function fetchMonitorChannels(
-  monitorIds: readonly string[],
-  signal?: AbortSignal,
-): Promise<ChannelMap> {
-  const ids = monitorIds.slice(0, CHANNEL_FANOUT_LIMIT);
-  let incomplete = monitorIds.length > ids.length;
-  const byMonitor: Record<string, ChannelState> = {};
-
-  await Promise.all(
-    ids.map(async (id) => {
-      try {
-        const res = await apiFetch(
-          `/api/v1/monitors/${encodeURIComponent(id)}/channels`,
-          { signal },
-        );
-        if (!res.ok) {
-          incomplete = true;
-          byMonitor[id] = { known: false };
-          return;
-        }
-        const body = (await res.json()) as {
-          channels?: { name?: string }[];
-        };
-        byMonitor[id] = {
-          known: true,
-          names: (body.channels ?? []).map(
-            (channel) => channel.name ?? "unnamed",
-          ),
-        };
-      } catch (err) {
-        /*
-         * A cancelled request is not a failure: React Query aborts the
-         * previous fetch on every refetch, so swallowing an abort here would
-         * mark almost every load incomplete. Rethrowing lets the query layer
-         * recognise its own cancellation.
-         */
-        if (err instanceof DOMException && err.name === "AbortError") throw err;
-        incomplete = true;
-        byMonitor[id] = { known: false };
-      }
-    }),
-  );
-
-  return { byMonitor, truncated: incomplete };
 }
 
 /**

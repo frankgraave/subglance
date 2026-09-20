@@ -11,6 +11,11 @@ import {
 } from "./route";
 
 describe("parseRoute", () => {
+  it("reads the real settings route", () => {
+    expect(parseRoute("/settings")).toEqual({ name: "settings" });
+    expect(parseRoute("/settings/")).toEqual({ name: "settings" });
+    expect(parseRoute("/settings/unknown")).toEqual({ name: "dashboard" });
+  });
   it("reads a monitor id out of the path", () => {
     expect(parseRoute("/monitors/42")).toEqual({ name: "monitor", id: "42" });
   });
@@ -125,6 +130,7 @@ describe("routePath", () => {
   it("inverts parseRoute for both routes", () => {
     for (const route of [
       { name: "dashboard" },
+      { name: "settings" },
       { name: "incidents" },
       { name: "monitor", id: "7" },
       { name: "monitors", create: false },

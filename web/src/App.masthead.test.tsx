@@ -151,7 +151,7 @@ describe("the masthead", () => {
     expect(onDashboard).toContain("input:search");
     expect(onDashboard).toContain("button:Status wall");
 
-    for (const destination of ["Incidents", "Monitors", "Notifications"]) {
+    for (const destination of ["Incidents", "Monitors", "Notifications", "Settings"]) {
       fireEvent.click(screen.getByRole("link", { name: destination }));
       await waitFor(() =>
         expect(
@@ -219,7 +219,7 @@ describe("the masthead", () => {
     expect(onDashboard).toContain("Component workbench");
     expect(onDashboard).not.toContain("Add a monitor");
 
-    for (const destination of ["Incidents", "Monitors", "Notifications"]) {
+    for (const destination of ["Incidents", "Monitors", "Notifications", "Settings"]) {
       fireEvent.click(screen.getByRole("link", { name: destination }));
       await waitFor(() =>
         expect(

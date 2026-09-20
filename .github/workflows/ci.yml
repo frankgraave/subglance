@@ -18,8 +18,9 @@ name: CI
 on:
   push:
     branches: [main, develop]
+  # Stacked reviews target feature branches before their parent reaches develop.
+  # They need the same checks; push builds stay limited to integration branches.
   pull_request:
-    branches: [main, develop]
 
 # A new push to the same branch makes the previous run irrelevant.
 concurrency:

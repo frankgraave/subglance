@@ -64,6 +64,44 @@ const view = (props: Partial<Parameters<typeof MonitorDetail>[0]> = {}) =>
     />,
   );
 
+describe("detail Check now", () => {
+  it("offers a check for a probed monitor and not for a push window", () => {
+    const check = vi.fn();
+    const mounted = view({ onCheckNow: check });
+    fireEvent.click(screen.getByRole("button", { name: "Check now" }));
+    expect(check).toHaveBeenCalledTimes(1);
+    mounted.unmount();
+    view({ onCheckNow: check, monitor: monitor("waiting", {
+      push: { intervalS: 3600, graceS: 60, tokenPrefix: "prefix" },
+    }) });
+    expect(screen.queryByRole("button", { name: /check now/i })).toBeNull();
+  });
+
+  it("does not offer a write without a handler", () => {
+    view();
+    expect(screen.queryByRole("button", { name: "Check now" })).toBeNull();
+  });
+
+  it("disables the control while checking and reports failures in place", () => {
+    view({ onCheckNow: vi.fn(), checking: true, checkError: new Error("rate limited") });
+    expect((screen.getByRole("button", { name: "Checking…" }) as HTMLButtonElement).disabled).toBe(true);
+    const alert = screen.getByRole("alert");
+    expect(alert.textContent).toContain("rate limited");
+    expect(alert.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+  });
+
+  it.each([true, false])("shows the probe result and its recording status: %s", (recorded) => {
+    view({ onCheckNow: vi.fn(), checkResult: { ok: false, latencyMs: 0, statusCode: 503,
+      error: "service unavailable", recorded } });
+    const result = screen.getByRole("status");
+    expect(result.textContent).toContain("Check failed");
+    expect(result.textContent).toContain("0 ms");
+    expect(result.textContent).toContain("HTTP 503");
+    expect(result.textContent).toContain("service unavailable");
+    expect(result.textContent).toContain(recorded ? "Recorded" : "Not recorded");
+  });
+});
+
 describe("the status sentence", () => {
   it("says the status in words, not only as a colour", () => {
     view({ monitor: monitor("down", { error: "connection refused" }) });

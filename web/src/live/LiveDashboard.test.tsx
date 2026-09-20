@@ -11,6 +11,9 @@ import {
 import { QueryClient } from "@tanstack/react-query";
 import { LiveDashboardRoot } from "./LiveDashboard";
 import type { EventSourceLike } from "./connection";
+import { DEFAULT_PING_INTERVAL_MS, STALE_AFTER_PINGS } from "./connection";
+import { monitorsQueryKey } from "./api";
+import type { Monitor } from "../monitors/types";
 
 import { ShellSlots } from "../shell/ShellSlots";
 
@@ -73,6 +76,11 @@ class FakeSource implements EventSourceLike {
     this.onerror?.(new Event("error"));
   }
 
+  blip(): void {
+    this.readyState = 0;
+    this.onerror?.(new Event("error"));
+  }
+
   send(type: string, body: unknown): void {
     this.listeners.get(type)?.({
       data: JSON.stringify(body),
@@ -126,6 +134,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -244,6 +253,150 @@ describe("LiveDashboard", () => {
     await waitFor(() =>
       expect(screen.getByText(/1 monitor down: api\./)).toBeTruthy(),
     );
+  });
+
+  it("clears the monitor announcement when the stream fails, leaving the connection warning", async () => {
+    renderLive();
+    await screen.findByText("api");
+    act(() => {
+      FakeSource.last!.open();
+      FakeSource.last!.send("status", {
+        monitor_id: 1,
+        at: "2026-09-11T08:01:00Z",
+        data: { event: "incident_confirmed" },
+      });
+    });
+    await screen.findByText("1 monitor down: api. 0 up.");
+
+    act(() => FakeSource.last!.fail());
+
+    expect(document.querySelector('[role="status"][aria-atomic="true"]')!.textContent).toBe("");
+    expect(screen.getByText(/Connection lost/).closest('[role="status"]')).not.toBeNull();
+  });
+
+  it("does not replay the last monitor announcement after reconnecting", async () => {
+    renderLive();
+    await screen.findByText("api");
+    act(() => {
+      FakeSource.last!.open();
+      FakeSource.last!.send("status", {
+        monitor_id: 1,
+        at: "2026-09-11T08:01:00Z",
+        data: { event: "incident_confirmed" },
+      });
+    });
+    await screen.findByText("1 monitor down: api. 0 up.");
+    act(() => FakeSource.last!.fail());
+    act(() => fireEvent.click(screen.getByRole("button", { name: /Reconnect now/ })));
+    act(() => FakeSource.last!.open());
+
+    expect(document.querySelector('[role="status"][aria-atomic="true"]')!.textContent).toBe("");
+  });
+
+  it("does not replay a transition across an outage hidden by React batching", async () => {
+    renderLive();
+    await screen.findByText("api");
+    act(() => FakeSource.last!.open());
+    // The event updates the query cache synchronously, but its notification
+    // and both connection edges can reach React in one batch. No offline
+    // render is guaranteed; a render-only guard loses this outage entirely.
+    await act(async () => {
+      FakeSource.last!.send("status", {
+        monitor_id: 1,
+        at: "2026-09-11T08:01:00Z",
+        data: { event: "incident_confirmed" },
+      });
+      FakeSource.last!.fail();
+      FakeSource.last!.open();
+    });
+    await waitFor(() => expect(screen.getByText("down", { exact: true })).toBeTruthy());
+    expect(document.querySelector('[role="status"][aria-atomic="true"]')!.textContent).toBe("");
+  });
+
+  describe("monitor announcement boundaries", () => {
+    const region = () => document.querySelector('[role="status"][aria-atomic="true"]')!;
+    const down = (source = FakeSource.last!) => source.send("status", {
+      monitor_id: 1,
+      at: "2026-09-11T08:01:00Z",
+      data: { event: "incident_confirmed" },
+    });
+
+    it("silences an event delivered immediately before the error", async () => {
+      renderLive();
+      await screen.findByText("api");
+      act(() => FakeSource.last!.open());
+      await act(async () => { down(); FakeSource.last!.fail(); });
+      await waitFor(() => expect(screen.getByText("down", { exact: true })).toBeTruthy());
+      expect(region().textContent).toBe("");
+      expect(screen.getByText(/Connection lost/)).toBeTruthy();
+    });
+
+    it.each(["fail", "blip"] as const)("does not treat a failing socket's queued last frame as recovery (%s)", async (failure) => {
+      renderLive();
+      await screen.findByText("api");
+      act(() => FakeSource.last!.open());
+      await act(async () => { FakeSource.last![failure](); down(); });
+      expect(region().textContent).toBe("");
+      expect(screen.getByText(/Connection lost/)).toBeTruthy();
+    });
+
+    it.each(["connecting", "offline"])("consumes cache changes silently while %s", async (state) => {
+      const { client } = renderLive();
+      await screen.findByText("api");
+      if (state === "offline") act(() => { FakeSource.last!.open(); FakeSource.last!.fail(); });
+      await act(async () => {
+        client.setQueryData<Monitor[]>(monitorsQueryKey, (held) => held!.map((m) => ({ ...m, status: "down" })));
+      });
+      await waitFor(() => expect(screen.getByText("down", { exact: true })).toBeTruthy());
+      expect(region().textContent).toBe("");
+      act(() => FakeSource.last!.open());
+      expect(region().textContent).toBe("");
+    });
+
+    it("consumes an offline cache update even when recovery beats its render", async () => {
+      const { client } = renderLive();
+      await screen.findByText("api");
+      act(() => { FakeSource.last!.open(); FakeSource.last!.fail(); });
+      await act(async () => {
+        client.setQueryData<Monitor[]>(monitorsQueryKey, (held) => held!.map((m) => ({ ...m, status: "down" })));
+        FakeSource.last!.open();
+      });
+      await waitFor(() => expect(screen.getByText("down", { exact: true })).toBeTruthy());
+      expect(region().textContent).toBe("");
+    });
+
+    it("clears on watchdog expiry without an error callback", async () => {
+      renderLive();
+      await screen.findByText("api");
+      act(() => { FakeSource.last!.open(); down(); });
+      await screen.findByText("1 monitor down: api. 0 up.");
+      vi.useFakeTimers();
+      // Rearm the real connection watchdog on the fake clock.
+      act(() => FakeSource.last!.send("ping", {}));
+      act(() => vi.advanceTimersByTime(DEFAULT_PING_INTERVAL_MS * STALE_AFTER_PINGS));
+      expect(region().textContent).toBe("");
+      expect(screen.getByText(/Connection lost/)).toBeTruthy();
+    });
+
+    it("ignores the replaced source but announces a fresh transition after recovery", async () => {
+      renderLive();
+      await screen.findByText("api");
+      const old = FakeSource.last!;
+      act(() => { old.open(); old.fail(); });
+      act(() => fireEvent.click(screen.getByRole("button", { name: /Reconnect now/ })));
+      act(() => FakeSource.last!.open());
+      await act(async () => down(old));
+      expect(region().textContent).toBe("");
+      await act(async () => down());
+      await waitFor(() => expect(region().textContent).toBe("1 monitor down: api. 0 up."));
+      // A routine heartbeat changes measurements, not status: it stays silent.
+      await act(async () => FakeSource.last!.send("heartbeat", {
+        monitor_id: 1,
+        at: "2026-09-11T08:02:00Z",
+        data: { ok: false, latency_ms: null },
+      }));
+      await waitFor(() => expect(region().textContent).toBe(""));
+    });
   });
 
   it("shows nothing about the connection while it is healthy", async () => {

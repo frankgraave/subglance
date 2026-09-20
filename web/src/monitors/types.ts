@@ -129,6 +129,8 @@ export type ApiMonitor = {
   push_grace_s?: number;
   push_token_prefix?: string;
   heartbeats?: ApiHeartbeat[];
+  /** List-only attachments; runtime validation preserves unknown vs empty. */
+  channels?: { id: number; name: string }[];
   /**
    * Omitted entirely when the monitor has no tags, which is why this is
    * optional while the render model's `tags` is not.
