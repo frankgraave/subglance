@@ -129,15 +129,6 @@ describe("MonitorsView", () => {
     expect(within(second).getByText("not loaded")).toBeTruthy();
   });
 
-  it("explains a truncated channel fan-out rather than leaving 'not loaded' unexplained", () => {
-    render(
-      <MonitorsView monitors={[make()]} channelsTruncated />,
-    );
-    expect(
-      screen.getByText(/the page stopped\s+asking, it did not find out/i),
-    ).toBeTruthy();
-  });
-
   it("disables Check now for a push monitor and says why", () => {
     render(
       <MonitorsView

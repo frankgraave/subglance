@@ -16,6 +16,7 @@ import { describeChurn } from "../incidents/story";
 import { Led } from "./Led";
 import { Unknown } from "./Unknown";
 import type { Monitor } from "./types";
+import type { CheckOutcome } from "./inventoryApi";
 
 /** Shared empty default: a new Set per render would break memoisation. */
 const EMPTY_ACKING: ReadonlySet<string> = new Set();
@@ -30,9 +31,8 @@ const EMPTY_ACKING: ReadonlySet<string> = new Set();
  * The order down the page is the order the questions get asked, and it is not
  * the order of the API: what is it, is it up and why not, what has it looked
  * like recently, how reliable is it over real windows, and what has already
- * gone wrong. Reference data (interval, type) is deliberately absent — the
- * server does not return it on the list endpoint, and inventing a second fetch
- * for facts nobody opens this page to read would slow down the ones they do.
+ * gone wrong. Reference data (interval, type) stays on the inventory screen;
+ * this screen uses the existing live list rather than a separate settings read.
  *
  * Presentational, like `Dashboard`: it fetches nothing. `MonitorDetailRoute`
  * above it owns the data, which is what lets this render from a fixture.
@@ -94,6 +94,11 @@ export type MonitorDetailProps = {
   ackingIds?: ReadonlySet<string>;
   /** The ack that failed, and why. */
   ackError?: Error | null;
+  /** Absent for read-only users; push monitors never render this action. */
+  onCheckNow?: () => void;
+  checking?: boolean;
+  checkResult?: CheckOutcome;
+  checkError?: Error | null;
 };
 
 export function MonitorDetail({
@@ -109,6 +114,10 @@ export function MonitorDetail({
   onAck,
   ackingIds = EMPTY_ACKING,
   ackError = null,
+  onCheckNow,
+  checking = false,
+  checkResult,
+  checkError = null,
 }: MonitorDetailProps) {
   const {
     name,
@@ -254,8 +263,27 @@ export function MonitorDetail({
         title={push === undefined ? "Recent checks" : "Recent reports"}
         icon={<IconPulse />}
         headingLevel={2}
+        action={push === undefined && onCheckNow !== undefined ? (
+          <button type="button" className="add-button" onClick={onCheckNow} disabled={checking}>
+            {checking ? "Checking…" : "Check now"}
+          </button>
+        ) : undefined}
       >
         <Panel>
+          {push === undefined && checkError !== null ? (
+            <p role="alert" className="mon-detail-note mon-detail-check-error">
+              <IconAlert />
+              <span>Could not run check: {checkError.message}</span>
+            </p>
+          ) : null}
+          {push === undefined && checkResult !== undefined ? (
+            <p role="status" className="mon-detail-note">
+              {checkResult.ok ? "Check passed" : "Check failed"} · {formatLatency(checkResult.latencyMs)}
+              {checkResult.statusCode !== undefined ? ` · HTTP ${checkResult.statusCode}` : ""}
+              {checkResult.error ? ` · ${checkResult.error}` : ""}
+              {checkResult.recorded ? " · Recorded" : " · Not recorded — monitor history and status are unchanged."}
+            </p>
+          ) : null}
           <div className="mon-detail-beats">
             <HeartbeatBar
               beats={beats}

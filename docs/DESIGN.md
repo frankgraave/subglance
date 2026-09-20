@@ -1288,11 +1288,12 @@ Three decisions grouping could not be built without:
   unpersisted state like the status chip, and it falls back to flat when the
   tag disappears from the data.
 
-**The sidebar does not advertise what does not exist (SUB-64).** The four
-unbuilt destinations are rendered as plainly unavailable — dimmed, not pressable,
-each saying "Soon" in words rather than by colour alone — and the mockup's "2
-incidents" badge is gone. A badge claiming open incidents that goes nowhere is
-indistinguishable from a real alert.
+**The sidebar does not advertise what does not exist (SUB-64).** Dashboard,
+Monitors, Incidents, Notifications and Settings now link to working screens.
+Settings currently offers the password card, not placeholders for its remaining
+sections. Future unbuilt destinations must be plainly unavailable — dimmed,
+not pressable, and saying "Soon" in words rather than by colour alone. A badge
+claiming open incidents that goes nowhere is indistinguishable from a real alert.
 
 ---
 

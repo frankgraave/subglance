@@ -9,11 +9,9 @@ import type { QueryClient } from "@tanstack/react-query";
 import { createQueryClient } from "../live/queryClient";
 import { MonitorsView } from "./MonitorsView";
 import {
-  channelsQueryKey,
   checkMonitorNow,
   deleteMonitor,
   fetchInventory,
-  fetchMonitorChannels,
   fetchMonitorForEdit,
   inventoryQueryKey,
   patchMonitor,
@@ -44,7 +42,6 @@ export const INVENTORY_POLL_MS = 60_000;
 export type LiveMonitorsProps = {
   /** Fetcher seams for tests; default to the real endpoints. */
   fetchMonitors?: typeof fetchInventory;
-  fetchChannels?: typeof fetchMonitorChannels;
   pause?: typeof setMonitorPaused;
   remove?: typeof deleteMonitor;
   check?: typeof checkMonitorNow;
@@ -61,7 +58,6 @@ export type LiveMonitorsProps = {
 
 export function LiveMonitors({
   fetchMonitors = fetchInventory,
-  fetchChannels = fetchMonitorChannels,
   pause = setMonitorPaused,
   remove = deleteMonitor,
   check = checkMonitorNow,
@@ -79,17 +75,6 @@ export function LiveMonitors({
     queryFn: ({ signal }) => fetchMonitors(signal),
     refetchInterval: INVENTORY_POLL_MS,
     staleTime: 10_000,
-  });
-
-  const ids = (monitors.data ?? []).map((monitor) => monitor.id);
-  const channels = useQuery({
-    queryKey: channelsQueryKey(ids),
-    queryFn: ({ signal }) => fetchChannels(ids, signal),
-    enabled: ids.length > 0,
-    // Slower still: a monitor's channel attachment changes about as often as
-    // its name, and this query costs one request per monitor.
-    refetchInterval: 5 * 60_000,
-    staleTime: 60_000,
   });
 
   /*
@@ -318,15 +303,7 @@ export function LiveMonitors({
   return (
     <MonitorsView
       monitors={monitors.data ?? []}
-      channels={channels.data?.byMonitor ?? {}}
-      /*
-       * Only claimed once the channel query has actually answered.
-       *
-       * While it is still loading nothing is truncated — it is unfinished —
-       * and a banner saying the page gave up would be wrong for as long as the
-       * requests are still in the air.
-       */
-      channelsTruncated={channels.data?.truncated ?? false}
+      channels={Object.fromEntries((monitors.data ?? []).map((m) => [m.id, m.channels]))}
       loading={monitors.isPending}
       error={monitors.error instanceof Error ? monitors.error : null}
       onOpen={onOpen}

@@ -102,7 +102,19 @@ const budgets = {
    * 122 rather than 121 for the reason the last two raises give: 121 would
    * leave 962 bytes, which this file has twice refused to call a ceiling.
    */
-  js: 122,
+  /*
+   * 122 -> 126 KiB gzip for the monitor/account/diagnostics batch.
+   * The index.html entry measured 122,972 bytes at f0c52fa and 127,325 in
+   * the combined build, including the existing TLS-form and resolved-history
+   * changes: 4,353 bytes for working password settings, dirty-form navigation,
+   * detail checks, stable response disclosures and their API/client plumbing.
+   * Independent branches fit 122, but their combination does not; keeping that
+   * ceiling would make individually green reviews fail as soon as they meet.
+   * 126 KiB leaves 1,699 bytes rather than tracking the measured size exactly.
+   * No new runtime dependency was added: axe remains dev-only. CSS and font
+   * ceilings are unchanged. This is one shared raise, not one per feature.
+   */
+  js: 126,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *

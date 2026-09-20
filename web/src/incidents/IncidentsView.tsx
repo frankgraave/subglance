@@ -550,6 +550,7 @@ export function IncidentsView({
         shownResolved.length === 0 &&
         scope !== "resolved" &&
         !historyHasMore &&
+        !historyLoading &&
         historyError === null) ? null : (
         <Card
           title="Resolved"
@@ -582,7 +583,12 @@ export function IncidentsView({
                 Could not load resolved history: {historyError.message}
               </p>
             ) : null}
-            {days.length === 0 && historyError === null ? (
+            {historyLoading && historyError === null ? (
+              <p className="inc-notice" role="status">
+                Loading resolved history…
+              </p>
+            ) : null}
+            {days.length === 0 && historyError === null && !historyLoading ? (
               /*
                * An explicit empty state, because a card with nothing in it is
                * ambiguous: it could mean "a quiet month" or "we failed to

@@ -8,7 +8,9 @@ import (
 	"net/url"
 	"strconv"
 	"testing"
+	"testing/synctest"
 	"time"
+	_ "time/tzdata"
 
 	"github.com/frankgraave/subglance/internal/store"
 )
@@ -152,7 +154,7 @@ func TestResolvedIncidentsAllowAWalkAtTheMaximumWindow(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 	seedResolved(t, db, "recent", now.Add(-2*time.Hour), now.Add(-time.Hour))
 
-	justPastTheCap := now.AddDate(0, 0, -resolvedHistoryMaxDays).Add(-time.Second)
+	justPastTheCap := now.Add(-resolvedHistoryMaxDays * 24 * time.Hour).Add(-time.Second)
 	cursor := strconv.FormatInt(justPastTheCap.Unix(), 10) + "." +
 		strconv.FormatInt(now.Unix(), 10) + ".999999"
 
@@ -164,6 +166,62 @@ func TestResolvedIncidentsAllowAWalkAtTheMaximumWindow(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("the server refused the continuation of a walk it issued: status = %d, body = %s",
 			rec.Code, rec.Body.String())
+	}
+}
+
+// Exercise issued cursors, not just a fabricated position. The local-time case
+// crosses different DST offsets at the two-year boundary: a calendar-day cap
+// must not consume the grace allowed to an elapsed-day window.
+func TestResolvedIncidentsMaximumWindowIssuedCursor(t *testing.T) {
+	for _, zone := range []string{"UTC", "America/New_York"} {
+		t.Run(zone, func(t *testing.T) {
+			t.Setenv("TZ", zone) // Also prevents this test from running in parallel.
+			location, err := time.LoadLocation(zone)
+			if err != nil {
+				t.Fatal(err)
+			}
+			previous := time.Local
+			time.Local = location
+			t.Cleanup(func() { time.Local = previous })
+
+			synctest.Test(t, func(t *testing.T) {
+				time.Sleep(time.Date(2026, time.March, 9, 12, 0, 0, 0, time.UTC).Sub(time.Now()))
+				srv, db := testServerWithDB(t)
+				now := time.Now().Truncate(time.Second)
+				since := now.Add(-resolvedHistoryMaxDays * 24 * time.Hour)
+				recent := seedResolved(t, db, "recent", now.Add(-2*time.Hour), now.Add(-time.Hour))
+				edge := seedResolved(t, db, "edge", since.Add(-time.Hour), since.Add(time.Second))
+				seedResolved(t, db, "outside", since.Add(-2*time.Hour), since.Add(-time.Second))
+
+				first := getResolved(t, srv, url.Values{"days": {"730"}, "limit": {"1"}})
+				if len(first.Incidents) != 1 || first.Incidents[0].MonitorID != recent.ID ||
+					!first.HasMore || first.NextCursor == "" {
+					t.Fatalf("first page = %+v, want recent incident and a cursor", first)
+				}
+				cursor, err := parseResolvedCursor(first.NextCursor)
+				if err != nil || !cursor.Since.Equal(since) {
+					t.Fatalf("cursor lost the initial window: %+v, %v", cursor, err)
+				}
+
+				// A real continuation after the clock advances; the edge row
+				// would disappear if the floor were recomputed on page two.
+				time.Sleep(30 * time.Minute)
+				second := getResolved(t, srv, url.Values{"limit": {"1"}, "cursor": {first.NextCursor}})
+				if len(second.Incidents) != 1 || second.Incidents[0].MonitorID != edge.ID ||
+					second.HasMore || second.NextCursor != "" {
+					t.Fatalf("second page = %+v, want only the original boundary incident", second)
+				}
+
+				// Expiry remains bounded; the grace must not disable the cap.
+				time.Sleep(31 * time.Minute)
+				rec := httptest.NewRecorder()
+				authedHandler(srv).ServeHTTP(rec, httptest.NewRequest(http.MethodGet,
+					"/api/v1/incidents/resolved?cursor="+first.NextCursor, nil))
+				if rec.Code != http.StatusBadRequest {
+					t.Fatalf("expired maximum-window cursor: status = %d, want 400", rec.Code)
+				}
+			})
+		})
 	}
 }
 

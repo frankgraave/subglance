@@ -38,6 +38,13 @@ type monitorResponse struct {
 	// is alerted about again. 0 means reminders are off for this monitor.
 	RepeatAfterS int `json:"repeat_after_s"`
 
+	// MinTLSVersion is the floor this monitor negotiates with, written the
+	// way a person writes it: "1.0" to "1.3". Omitted when the monitor has
+	// no opinion, which is not the same as reporting the current default —
+	// a monitor that says nothing follows SubGlance if the default moves,
+	// and one that says "1.2" does not.
+	MinTLSVersion string `json:"min_tls_version,omitempty"`
+
 	Status     string     `json:"status"` // up, pending, or down
 	LastCheck  *time.Time `json:"last_check,omitempty"`
 	LatencyMS  int        `json:"latency_ms,omitempty"`
@@ -75,6 +82,9 @@ type monitorResponse struct {
 	// not how it travels.
 	Tags map[string]string `json:"tags,omitempty"`
 
+	// Present on list reads: [] means no attachments; omitted means unknown.
+	Channels *[]monitorChannelResponse `json:"channels,omitempty"`
+
 	// Heartbeats is filled in only when the caller asked for it with the
 	// `heartbeats` query parameter, oldest first. Omitting the field
 	// entirely when it was not requested keeps the default response byte
@@ -82,6 +92,29 @@ type monitorResponse struct {
 	Heartbeats []heartbeatResponse `json:"heartbeats,omitempty"`
 
 	CreatedAt time.Time `json:"created_at"`
+}
+
+type monitorChannelResponse struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+// monitorDetailResponse adds raw editable settings to the versioned detail
+// read only. False, zero and empty are meaningful baselines. Only request
+// secrets may be omitted, for callers who cannot edit the monitor.
+// Keeping this separate prevents new consumers of monitorResponse (including
+// live payloads) from inadvertently disclosing request credentials.
+type monitorDetailResponse struct {
+	monitorResponse
+	Method          string             `json:"method"`
+	ExpectedStatus  string             `json:"expected_status"`
+	Keyword         string             `json:"keyword"`
+	KeywordMode     string             `json:"keyword_mode"`
+	FollowRedirects bool               `json:"follow_redirects"`
+	Headers         *map[string]string `json:"headers,omitempty"`
+	Body            *string            `json:"body,omitempty"`
+	Retries         int                `json:"retries"`
+	SSLWarnDays     int                `json:"ssl_warn_days"`
 }
 
 // heartbeatResponse is the wire shape of one recorded check result. It is
@@ -148,6 +181,7 @@ type createMonitorRequest struct {
 	RepeatAfterS    *int              `json:"repeat_after_s"`
 	Enabled         *bool             `json:"enabled"`
 	CaptureResponse *bool             `json:"capture_response"`
+	MinTLSVersion   *string           `json:"min_tls_version"`
 	Tags            map[string]string `json:"tags"`
 	PushIntervalS   *int              `json:"push_interval_s"`
 	PushGraceS      *int              `json:"push_grace_s"`
@@ -187,9 +221,20 @@ func (s *Server) handleListMonitors(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	channels, channelErr := s.db.MonitorChannelSummaries(ctx)
+	if channelErr != nil {
+		s.log.Error("monitor channel summaries", "error", channelErr)
+	}
 	out := make([]monitorResponse, 0, len(monitors))
 	for _, m := range monitors {
 		resp := s.describeMonitor(r, m)
+		if channelErr == nil {
+			attached := make([]monitorChannelResponse, 0, len(channels[m.ID]))
+			for _, c := range channels[m.ID] {
+				attached = append(attached, monitorChannelResponse{ID: c.ID, Name: c.Name})
+			}
+			resp.Channels = &attached
+		}
 		if perMonitor > 0 {
 			resp.Heartbeats = oldestFirstHeartbeats(beats[m.ID])
 		}
@@ -283,6 +328,11 @@ func (s *Server) handleCreateMonitor(w http.ResponseWriter, r *http.Request) {
 	if req.CaptureResponse != nil {
 		m.CaptureResponse = *req.CaptureResponse
 	}
+	// Validated above, so the second return is discarded: a failure here
+	// would be unreachable.
+	if req.MinTLSVersion != nil {
+		m.MinTLSVersion, _ = checker.ParseTLSVersion(*req.MinTLSVersion)
+	}
 	// Already validated above by validateCreateMonitor; normalising again
 	// here rather than storing the raw map keeps the stored keys canonical
 	// without the validator having to hand a value back.
@@ -359,6 +409,9 @@ func validateCreateMonitor(req createMonitorRequest) problem {
 		return p
 	}
 	if p := validateRepeatAfterS(req.RepeatAfterS); !p.ok() {
+		return p
+	}
+	if p := validateMinTLSVersion(req.MinTLSVersion); !p.ok() {
 		return p
 	}
 	if p := validateTargetForType(req.Type, req.Target); !p.ok() {
@@ -449,6 +502,31 @@ func validateRepeatAfterS(seconds *int) problem {
 			"repeat_after_s must be 0 to disable reminders, or between 60 and 86400")
 	}
 	return problem{}
+}
+
+// validateMinTLSVersion accepts only the labels the checker can dial with.
+//
+// The empty string is rejected rather than read as "use the default". On
+// create there is already a way to say that — leave the field out — so an
+// empty string is a client that computed a value and got nothing, and telling
+// it so at the moment it happens beats storing a floor it did not choose.
+func validateMinTLSVersion(label *string) problem {
+	if label == nil {
+		return problem{}
+	}
+	if _, ok := checker.ParseTLSVersion(*label); !ok {
+		return unknownTLSVersionProblem(*label)
+	}
+	return problem{}
+}
+
+// unknownTLSVersionProblem names the field and lists what would have worked.
+// A rejection that only says "invalid" leaves the caller guessing whether the
+// API wanted "TLSv1.2", "771" or "1.2".
+func unknownTLSVersionProblem(label string) problem {
+	return fieldProblem("min_tls_version",
+		"min_tls_version must be one of "+strings.Join(checker.TLSVersions(), ", ")+
+			"; got "+strconv.Quote(label))
 }
 
 // validateKeywordMode rejects modes the checker cannot act on.
@@ -542,7 +620,7 @@ func validateTargetForType(typ, target string) problem {
 		}
 		// Whitespace inside the host is never a hostname. ParseHostPort only
 		// trims the ends, so "a b.com" survives it and then fails to resolve.
-		if strings.ContainsAny(host, " \t\r\n") {
+		if strings.ContainsAny(host, " 	\r\n") {
 			return bad("a hostname cannot contain spaces")
 		}
 	}
@@ -575,7 +653,28 @@ func (s *Server) handleGetMonitor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setMonitorETag(w, m)
-	writeJSON(w, http.StatusOK, s.describeMonitor(r, m))
+	// Only the authenticated detail read carries request configuration. Keep
+	// credentials and request bodies out of the bulk/dashboard serializer.
+	headers := m.Headers
+	if headers == nil {
+		headers = map[string]string{}
+	}
+	resp := monitorDetailResponse{
+		monitorResponse: s.describeMonitor(r, m),
+		Method:          m.Method, ExpectedStatus: m.ExpectedStatus,
+		Keyword: m.Keyword, KeywordMode: m.KeywordMode,
+		FollowRedirects: m.FollowRedirects,
+		Retries:         m.Retries, SSLWarnDays: m.SSLWarnDays,
+	}
+	// A viewer can inspect check rules but must not gain reusable credentials
+	// merely because edit settings became readable. Never mask secrets into an
+	// editable value: writers receive the exact stored value, viewers no field.
+	if user, ok := UserFromContext(r.Context()); ok && user.Role.CanWrite() {
+		resp.Headers = &headers
+		resp.Body = &m.Body
+	}
+	w.Header().Set("Cache-Control", "private, no-store")
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) handleDeleteMonitor(w http.ResponseWriter, r *http.Request) {
@@ -675,6 +774,7 @@ func (s *Server) describeMonitor(r *http.Request, m store.Monitor) monitorRespon
 
 		CaptureResponse: m.CaptureResponse,
 		RepeatAfterS:    m.RepeatAfterS,
+		MinTLSVersion:   checker.TLSVersionLabel(m.MinTLSVersion),
 
 		Status:    "pending",
 		Tags:      m.Tags,
@@ -807,6 +907,12 @@ type patchMonitorRequest struct {
 	RepeatAfterS    *int               `json:"repeat_after_s"`
 	Enabled         *bool              `json:"enabled"`
 	CaptureResponse *bool              `json:"capture_response"`
+	// MinTLSVersion is "1.0" to "1.3", or "" to go back to having no
+	// opinion. The empty string is accepted here and rejected on create
+	// because on an existing monitor it has a meaning — clear the floor I
+	// set earlier — whereas on create it is indistinguishable from not
+	// sending the field at all.
+	MinTLSVersion *string `json:"min_tls_version"`
 	// Tags replaces the whole set, like Headers. Sending `{}` clears them;
 	// omitting the field leaves them alone.
 	Tags *map[string]string `json:"tags"`
@@ -1045,6 +1151,17 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 	}
 	if req.CaptureResponse != nil {
 		m.CaptureResponse = *req.CaptureResponse
+	}
+	if req.MinTLSVersion != nil {
+		if *req.MinTLSVersion == "" {
+			m.MinTLSVersion = 0
+		} else {
+			v, ok := checker.ParseTLSVersion(*req.MinTLSVersion)
+			if !ok {
+				return unknownTLSVersionProblem(*req.MinTLSVersion)
+			}
+			m.MinTLSVersion = v
+		}
 	}
 	if req.Tags != nil {
 		tags, err := store.NormaliseTags(*req.Tags)

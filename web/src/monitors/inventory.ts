@@ -9,13 +9,8 @@
  * working unchanged; rewriting those for a second screen is how two lists end
  * up disagreeing about what "matches prod" means.
  *
- * **What is not here is the point of the file.** The approved mockup draws a
- * retry count, an HTTP method, a keyword rule and "paused 3 days ago by
- * operator@example.com". `GET /api/v1/monitors` returns none of those — see
- * `monitorResponse` in internal/api/monitors.go — so none of them are modelled
- * and none of them are drawn. A management screen that invents the settings it
- * claims to manage is worse than one that is short, because the whole reason
- * to open it is to find the monitor whose configuration is wrong.
+ * The versioned detail endpoint carries check settings for future editing;
+ * this list model only keeps the columns the inventory currently renders.
  */
 
 import { fromApi, toUnixMs } from "./types";
@@ -49,6 +44,8 @@ export type InventoryMonitor = Monitor & {
   enabled: boolean;
   /** Unix ms, or null when the server sent a timestamp we cannot read. */
   createdAt: number | null;
+  /** Attached channels from the same list read; missing data is unknown. */
+  channels: ChannelState;
 };
 
 /** One monitor as the inventory reads it. */
@@ -68,6 +65,7 @@ export function inventoryFromApi(api: ApiMonitor & {
     timeoutS: api.type === "push" ? null : api.timeout_s,
     enabled: api.enabled,
     createdAt: toUnixMs(api.created_at),
+    channels: channelsFromApi(api.channels),
   };
 }
 
@@ -101,23 +99,22 @@ export function filterByType(
   return monitors.filter((m) => m.type === type);
 }
 
-/**
- * What a monitor's attached channels are, for one row.
- *
- * Three states, not two, and the third is the one that matters. `GET
- * /api/v1/monitors` does not carry channels — they are a per-monitor
- * sub-resource — so the page fetches them separately and some of those
- * requests may not have happened or may have failed. "No channels attached" is
- * a *finding* on this screen: it is the monitor nobody will hear about. If a
- * failed request rendered as `none`, the screen would be inventing exactly the
- * finding it exists to surface, and someone would go looking for a
- * misconfiguration that is not there.
- */
+/** Attachment data can be known empty, known populated, or unavailable. */
 export type ChannelState =
   | { known: false }
   | { known: true; names: readonly string[] };
 
 export const CHANNELS_UNKNOWN: ChannelState = { known: false };
+
+/** Never turn a malformed or missing list into the assertion "none". */
+function channelsFromApi(value: unknown): ChannelState {
+  if (!Array.isArray(value) || !value.every((channel) =>
+    channel !== null && typeof channel === "object" &&
+    Number.isSafeInteger(channel.id) && channel.id > 0 &&
+    typeof channel.name === "string" && channel.name.trim() !== "",
+  )) return CHANNELS_UNKNOWN;
+  return { known: true, names: value.map((channel) => channel.name) };
+}
 
 /**
  * The words the channels cell says.

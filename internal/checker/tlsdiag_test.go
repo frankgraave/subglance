@@ -630,3 +630,47 @@ func TestLeafSignedDirectlyByAnUntrustedRootIsNotToldToFixTheChainAlone(t *testi
 		t.Errorf("message = %q, want the issuer the server did not send", got)
 	}
 }
+
+// The labels are the product's vocabulary for a setting the column stores as
+// a crypto/tls constant, so the two have to agree in both directions. A label
+// that parsed to one constant and rendered back as another would make a
+// monitor's stored floor and its displayed floor disagree without anything
+// failing.
+func TestTLSVersionLabelsRoundTrip(t *testing.T) {
+	for _, label := range TLSVersions() {
+		v, ok := ParseTLSVersion(label)
+		if !ok {
+			t.Errorf("ParseTLSVersion(%q) refused a version TLSVersions advertises", label)
+			continue
+		}
+		if got := TLSVersionLabel(v); got != label {
+			t.Errorf("TLSVersionLabel(ParseTLSVersion(%q)) = %q", label, got)
+		}
+		// The label must also name the same version the failure messages do,
+		// or a rejection would explain itself in different terms than the
+		// setting that caused it.
+		if want := "TLS " + label; tlsVersionName(v) != want {
+			t.Errorf("tlsVersionName(%d) = %q, want %q", v, tlsVersionName(v), want)
+		}
+	}
+}
+
+func TestParseTLSVersionRejectsWhatCannotBeDialled(t *testing.T) {
+	// SSL 3.0 has a name in tlsVersionName because a server may still select
+	// it, but crypto/tls cannot negotiate it, so it must not be offerable as
+	// a floor.
+	for _, label := range []string{"", "3.0", "1.4", "TLSv1.2", "771", " 1.2"} {
+		if _, ok := ParseTLSVersion(label); ok {
+			t.Errorf("ParseTLSVersion(%q) accepted a version no check could complete", label)
+		}
+	}
+}
+
+// Zero is how a monitor with no opinion is stored, and it must render as
+// nothing rather than as the current default: the two are the same dial today
+// and different settings the day the default moves.
+func TestTLSVersionLabelOfZeroIsEmpty(t *testing.T) {
+	if got := TLSVersionLabel(0); got != "" {
+		t.Errorf("TLSVersionLabel(0) = %q, want the empty string", got)
+	}
+}

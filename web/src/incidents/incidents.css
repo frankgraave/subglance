@@ -259,7 +259,8 @@
   @apply face-mono;
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
-  color: var(--ink-3);
+  /* Diagnostic text is secondary, not absent: keep the helper role readable. */
+  color: var(--ink-2);
 }
 
 /*

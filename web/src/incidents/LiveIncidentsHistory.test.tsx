@@ -92,6 +92,30 @@ afterEach(() => {
 });
 
 describe("the history is paged through the API's own cursor", () => {
+  it("keeps pending history visible without claiming an empty window", async () => {
+    let finish!: (page: Awaited<ReturnType<typeof fetchResolvedIncidents>>) => void;
+    renderScreen(() => new Promise((resolve) => { finish = resolve; }));
+
+    await waitFor(() => expect(finish).toBeTypeOf("function"));
+    expect(screen.getByRole("region", { name: "Resolved" }).textContent)
+      .toContain("Loading resolved history…");
+    expect(document.body.textContent).not.toMatch(/nothing resolved|nothing is broken/i);
+
+    fireEvent.change(within(toolbar).getByLabelText("Show"), {
+      target: { value: "resolved" },
+    });
+    expect(document.body.textContent).not.toMatch(/nothing resolved/i);
+    expect(screen.getByRole("region", { name: "Resolved" }).textContent)
+      .toContain("Loading resolved history…");
+
+    finish({ incidents: [], hasMore: false, nextCursor: null });
+    await waitFor(() => {
+      expect(screen.getByRole("region", { name: "Resolved" }).textContent)
+        .toContain("Nothing resolved in the last 30 days.");
+    });
+    expect(document.body.textContent).not.toContain("Loading resolved history…");
+  });
+
   it("asks for the next page with the cursor it was given, and keeps the first", async () => {
     const calls: (string | null)[] = [];
     const fetchHistory = vi.fn(async (_days: number, cursor: string | null = null) => {

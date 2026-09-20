@@ -1,8 +1,9 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createQueryClient } from "./queryClient";
+import { checkMonitorNow, type CheckOutcome } from "../monitors/inventoryApi";
 import { useLiveMonitors } from "./useLiveMonitors";
 import { useNow } from "./useNow";
 import { MonitorDetail } from "../monitors/MonitorDetail";
@@ -34,6 +35,9 @@ export type LiveMonitorDetailProps = LiveOptions & {
   onBack?: () => void;
   /** Ack seam for tests; defaults to the real endpoint. */
   ack?: typeof ackIncident;
+  check?: typeof checkMonitorNow;
+  /** The shell supplies the authenticated user's write permission. */
+  canWrite?: boolean;
 };
 
 export function LiveMonitorDetail({
@@ -41,6 +45,8 @@ export function LiveMonitorDetail({
   beatWidth,
   onBack,
   ack = ackIncident,
+  check = checkMonitorNow,
+  canWrite = true,
   ...live
 }: LiveMonitorDetailProps) {
   const { monitors, status, loading, error } = useLiveMonitors(live);
@@ -108,6 +114,37 @@ export function LiveMonitorDetail({
   );
 
   const monitor = monitors.find((m) => m.id === id);
+  // Key by monitor, not by the most recent click: routing to B while A checks
+  // must not put A's result under B's title. The ref closes the same-tick gap
+  // before React has painted the disabled button.
+  const checksInFlight = useRef(new Set<string>());
+  const [checks, setChecks] = useState<Record<string, {
+    checking: boolean; result?: CheckOutcome; error?: Error;
+  }>>({});
+  const checkMutation = useMutation({
+    mutationFn: (monitorId: string) => check(monitorId),
+    retry: false,
+    onSuccess: (result, monitorId) => {
+      setChecks((current) => ({ ...current, [monitorId]: { checking: false, result } }));
+      // A paused probe is diagnostic only. Do not manufacture a heartbeat or
+      // refetch the dashboard as though the server had recorded one.
+      if (result.recorded) {
+        void queryClient.invalidateQueries({ queryKey: ["monitors"] });
+        void queryClient.invalidateQueries({ queryKey: detailQueryKey(monitorId) });
+        void queryClient.invalidateQueries({ queryKey: openIncidentsQueryKey });
+      }
+    },
+    onError: (error, monitorId) => {
+      setChecks((current) => ({ ...current, [monitorId]: { checking: false, error } }));
+    },
+    onSettled: (_data, _error, monitorId) => { checksInFlight.current.delete(monitorId); },
+  });
+  const onCheckNow = () => {
+    if (!canWrite || monitor === undefined || monitor.push !== undefined || checksInFlight.current.has(id)) return;
+    checksInFlight.current.add(id);
+    setChecks((current) => ({ ...current, [id]: { checking: true } }));
+    checkMutation.mutate(id);
+  };
 
   if (monitor === undefined) {
     /*
@@ -154,6 +191,10 @@ export function LiveMonitorDetail({
        */
       stale={status !== "live"}
       onAck={onAck}
+      onCheckNow={canWrite ? onCheckNow : undefined}
+      checking={checks[id]?.checking ?? false}
+      checkResult={checks[id]?.result}
+      checkError={checks[id]?.error ?? null}
       ackingIds={ackingIds}
       ackError={ackMutation.error instanceof Error ? ackMutation.error : null}
     />

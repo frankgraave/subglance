@@ -7,6 +7,7 @@ dashboard does.
 - [Your first monitor](#your-first-monitor)
 - [Authentication](#authentication)
 - [Check types](#check-types)
+- [Choosing a TLS floor](#choosing-a-tls-floor)
 - [Push monitors](#push-monitors)
 - [How a failure becomes an alert](#how-a-failure-becomes-an-alert)
 - [Repeating an alert nobody answered](#repeating-an-alert-nobody-answered)
@@ -107,6 +108,39 @@ Ping needs either unprivileged ICMP sockets or `CAP_NET_RAW`. SubGlance tries th
 unprivileged socket first and falls back to the raw one; when neither is allowed
 the error names both fixes. If ICMP is blocked entirely on your network, a TCP
 check against a known port answers the same question more reliably.
+
+## Choosing a TLS floor
+
+`min_tls_version` is the lowest TLS version a monitor will negotiate, written
+`1.0`, `1.1`, `1.2` or `1.3`. Leave it out and SubGlance uses TLS 1.2. It
+applies to `http` and `ssl` checks.
+
+```sh
+curl -X PATCH http://localhost:8080/api/v1/monitors/3 \
+  -H 'Content-Type: application/json' \
+  -d '{"min_tls_version":"1.0"}'
+```
+
+It reads like a client setting, and that is the thing worth unlearning, because
+it is used in two opposite ways and only one of them is about being permissive.
+
+**Lowering it makes an old endpoint watchable at all.** The appliance in the
+cupboard that only speaks TLS 1.0 is exactly the sort of thing a self-hoster
+needs to know about, and with the default floor SubGlance cannot complete a
+handshake with it — so it reports a permanent outage that is really a refusal
+to connect. `1.0` there is the difference between monitoring it and not.
+
+**Raising it is an assertion about the server, and making the check fail is the
+entire point.** Set `1.3` on an endpoint that is supposed to have retired
+everything older, and the check goes red the day it starts offering TLS 1.2
+again. That is not the monitor breaking; it is the monitor reporting what you
+asked it to watch for.
+
+Because the floor is ours rather than the server's, a failure names ours: the
+peer refuses a too-low `ClientHello` with a handshake alert rather than telling
+us which versions it would have accepted, so the message says what SubGlance
+insisted on, not what the server offers. Send `""` in a PATCH to take the floor
+back off and return to the default.
 
 ## Push monitors
 
@@ -254,7 +288,22 @@ an enabled monitor the result is recorded like any other check, so the
 dashboard turns green immediately; for a paused monitor it is returned but not
 recorded, because writing into a period the monitor promised not to watch
 would misrepresent it. The response says which happened in its `recorded` field.
-Manual checks are limited to one per monitor per five seconds.
+Manual checks are limited to one per monitor per five seconds. The detail
+view offers **Check now** in the Recent checks card and reports both probe
+results and request failures there. Push monitors have no check control:
+SubGlance receives their reports rather than probing them.
+
+The list includes attached channel IDs and names in `channels`, without
+channel credentials. An empty array means no attachments; an omitted or
+unreadable value means **not loaded**, not **none**. There is no per-monitor
+channel fetch or forty-monitor limit in the inventory.
+
+`GET /api/v1/monitors/{id}` also returns stored check settings for editing,
+paired with the response's `ETag`. Send that validator as `If-Match` with only
+the fields being changed. Request `headers` and `body` are returned only to
+editors and administrators, and are omitted from the list and live stream.
+The existing edit form still offers name, timing and tags; the read contract
+does not add an expanded settings form.
 
 Acknowledging is not resolving: it stops repeat notifications without claiming
 the problem is fixed.

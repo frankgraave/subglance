@@ -45,6 +45,12 @@ type previewRequest struct {
 	Headers         map[string]string `json:"headers"`
 	Body            string            `json:"body"`
 	SSLWarnDays     *int              `json:"ssl_warn_days"`
+	// MinTLSVersion is "1.0" to "1.3". Unlike tags it genuinely changes the
+	// probe, and it is the setting most likely to be the reason a target
+	// cannot be reached — an appliance that only speaks TLS 1.0 is exactly
+	// what someone is previewing when they set it, so a preview that
+	// ignored it would answer a question nobody asked.
+	MinTLSVersion *string `json:"min_tls_version"`
 	// Tags do not affect a probe — nothing is stored and nothing is
 	// grouped. They are accepted and validated anyway so that a form can
 	// preview the draft it holds without stripping fields first: the
@@ -144,6 +150,10 @@ func (s *Server) handlePreviewCheck(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
+	if p := validateMinTLSVersion(req.MinTLSVersion); !p.ok() {
+		writeProblem(w, http.StatusBadRequest, p)
+		return
+	}
 	if p := validateSSLWarnDays(req.SSLWarnDays); !p.ok() {
 		writeProblem(w, http.StatusBadRequest, p)
 		return
@@ -199,6 +209,9 @@ func (s *Server) handlePreviewCheck(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.SSLWarnDays != nil {
 		m.SSLWarnDays = *req.SSLWarnDays
+	}
+	if req.MinTLSVersion != nil {
+		m.MinTLSVersion, _ = checker.ParseTLSVersion(*req.MinTLSVersion)
 	}
 	// The same defaults the monitor would get once saved, so a preview that
 	// passes is evidence about the monitor the user is about to create rather

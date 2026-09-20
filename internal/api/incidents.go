@@ -100,9 +100,10 @@ const resolvedHistoryMaxDays = 730
 // It exists because the cap is measured from `now` on every request while a
 // cursor's bound is fixed when the walk starts: at `days=730` the server's own
 // cursor is a second past the ceiling by the time the client asks for page
-// two. An hour is far more than any walk needs — a page is one indexed query —
-// and against a 730-day window it is a rounding error, so it cannot be used to
-// read meaningfully further back than the cap allows.
+// two. The one-hour grace permits a maximum-window walk to continue for up to
+// an hour; after that the caller must restart without a cursor. The cap uses
+// elapsed 24-hour days like the first page, not local calendar arithmetic:
+// differing DST offsets would otherwise consume the entire grace period.
 const resolvedCursorGrace = time.Hour
 
 const (
@@ -185,7 +186,7 @@ func (s *Server) handleListResolvedIncidents(w http.ResponseWriter, r *http.Requ
 	if since.IsZero() {
 		since = time.Now().Add(-time.Duration(days) * 24 * time.Hour)
 	} else if since.Before(time.Now().
-		AddDate(0, 0, -resolvedHistoryMaxDays).
+		Add(-resolvedHistoryMaxDays * 24 * time.Hour).
 		Add(-resolvedCursorGrace)) {
 		/*
 		 * A cursor pins the window; it does not get to widen it.

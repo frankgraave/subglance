@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -270,4 +271,51 @@ func schemeNames(spec *openAPISpec) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// TestOpenAPIHasNoDuplicateKeys catches the one edit mistake this document is
+// most exposed to: a property pasted in above an existing one, leaving two
+// `$ref` keys under a single name.
+//
+// YAML's answer to that is to keep the last value, so the property that was
+// there before silently loses its type and the new one silently gains the
+// wrong one. Nothing else in this file notices — the other guards read the
+// parsed tree, which by then has already discarded the evidence. The check
+// therefore walks the raw node graph, where both keys are still present.
+func TestOpenAPIHasNoDuplicateKeys(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Clean(specPath))
+	if err != nil {
+		t.Fatalf("read %s: %v", specPath, err)
+	}
+	var root yaml.Node
+	if err := yaml.Unmarshal(raw, &root); err != nil {
+		t.Fatalf("parse %s: %v", specPath, err)
+	}
+
+	var walk func(n *yaml.Node, path string)
+	walk = func(n *yaml.Node, path string) {
+		switch n.Kind {
+		case yaml.MappingNode:
+			seen := make(map[string]int, len(n.Content)/2)
+			for i := 0; i+1 < len(n.Content); i += 2 {
+				key := n.Content[i].Value
+				if prev, dup := seen[key]; dup {
+					t.Errorf("%s: %q appears twice (lines %d and %d); "+
+						"the earlier value is silently discarded",
+						path, key, prev, n.Content[i].Line)
+				}
+				seen[key] = n.Content[i].Line
+				walk(n.Content[i+1], path+"."+key)
+			}
+		case yaml.SequenceNode:
+			for i, child := range n.Content {
+				walk(child, fmt.Sprintf("%s[%d]", path, i))
+			}
+		case yaml.DocumentNode, yaml.AliasNode:
+			for _, child := range n.Content {
+				walk(child, path)
+			}
+		}
+	}
+	walk(&root, "")
 }
