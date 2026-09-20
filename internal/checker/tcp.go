@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // TCPChecker probes whether a port accepts connections.
@@ -113,6 +114,12 @@ func ParseHostPort(target string, defaultPort int) (host string, port int, err e
 	}
 	if target == "" {
 		return "", 0, fmt.Errorf("no host in target")
+	}
+	// Only outer whitespace is a paste artifact. Never remove whitespace
+	// inside the authority: doing so would select a different host. Check
+	// after dropping the URL components that TCP/TLS intentionally ignore.
+	if strings.ContainsFunc(target, unicode.IsSpace) {
+		return "", 0, fmt.Errorf("a hostname cannot contain spaces")
 	}
 
 	// Bracketed IPv6, with or without a port.

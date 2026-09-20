@@ -96,6 +96,15 @@ tokens and revoke one, while minting a new token needs editor or admin.
 | `ssl` | `example.com` (port optional, defaults to 443) | Certificate validity, hostname match, chain of trust, days until expiry |
 | `push` | none — the job reports in | That the job reported inside its window |
 
+Creating or editing a monitor rejects whitespace inside its hostname, including
+Unicode spaces such as a nonbreaking space, with an error on `target`. Internal
+spaces are never removed to turn the input into a different hostname. Ping,
+TCP and SSL accept surrounding whitespace and trim it when parsing the target;
+HTTP parses the input as a URL instead of trimming it: leading whitespace is
+invalid, while spaces in paths and queries are URL data and remain allowed.
+TCP and SSL ignore a pasted URL's credentials, path, query and fragment; ping
+requires a bare hostname or IP address, with no port or URL components.
+
 A TCP check completes the handshake and hangs up without sending a payload —
 speaking a protocol badly is a good way to end up in someone's fail2ban rules.
 

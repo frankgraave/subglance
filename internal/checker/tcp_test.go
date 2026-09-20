@@ -2,11 +2,34 @@ package checker
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestParseHostPortWhitespace(t *testing.T) {
+	for _, space := range []rune{' ', '\t', '\r', '\n', '\v', '\f', '\u0085', '\u00a0', '\u1680', '\u2003', '\u2009', '\u2028', '\u2029', '\u202f', '\u205f', '\u3000'} {
+		t.Run(fmt.Sprintf("U+%04X", space), func(t *testing.T) {
+			for _, target := range []string{
+				"exam" + string(space) + "ple.invalid",
+				"exam" + string(space) + "ple.invalid:443",
+				"https://user:pass@exam" + string(space) + "ple.invalid/path",
+				"[2001:db8::" + string(space) + "1]:443",
+				"2001:db8::" + string(space) + "1",
+			} {
+				if host, port, err := ParseHostPort(target, 443); err == nil {
+					t.Errorf("accepted internal whitespace in %q: host=%q port=%d", target, host, port)
+				}
+			}
+			target := string(space) + "example.invalid:443" + string(space)
+			if host, port, err := ParseHostPort(target, 0); err != nil || host != "example.invalid" || port != 443 {
+				t.Errorf("outer whitespace: host=%q port=%d err=%v", host, port, err)
+			}
+		})
+	}
+}
 
 func TestParseHostPort(t *testing.T) {
 	tests := []struct {

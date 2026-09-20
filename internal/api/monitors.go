@@ -564,6 +564,11 @@ func validateTargetForType(typ, target string) problem {
 		if u.Host == "" {
 			return bad("target has no host")
 		}
+		// net/url accepts Unicode whitespace in hosts, including escaped
+		// forms. Inspect the decoded hostname, leaving path/query text alone.
+		if strings.ContainsFunc(u.Hostname(), unicode.IsSpace) {
+			return bad("a hostname cannot contain spaces")
+		}
 
 	case "tcp":
 		host, port, err := checker.ParseHostPort(target, 0)
@@ -618,11 +623,6 @@ func validateTargetForType(typ, target string) problem {
 		if strings.ContainsAny(target, "/?#@") {
 			return bad("a ping monitor takes a hostname or IP address, nothing after it — " +
 				"use " + host)
-		}
-		// Whitespace inside the host is never a hostname. ParseHostPort only
-		// trims the ends, so "a b.com" survives it and then fails to resolve.
-		if strings.ContainsFunc(host, unicode.IsSpace) {
-			return bad("a hostname cannot contain spaces")
 		}
 	}
 	return problem{}
