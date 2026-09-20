@@ -38,7 +38,11 @@ describe("detail Check now in Chromium", () => {
                 : { ok: true, latency_ms: 12, status_code: 204, recorded: false }) }); };
             } else void request.continue();
           });
+          const historyResponse = page.waitForResponse((response) =>
+            new URL(response.url()).pathname === "/api/v1/monitors/1/heartbeats");
           await page.goto(server.url + "/monitors/1", { waitUntil: "domcontentloaded" });
+          expect((await historyResponse).status()).toBe(200);
+          await page.waitForFunction(() => document.querySelector(".response-history")?.textContent?.includes("No failed checks in the recent history."));
           await page.waitForSelector(".mon-detail-name");
           const button = await page.$(".card-head-action button");
           expect(button, "a probed monitor must offer Check now").not.toBeNull();

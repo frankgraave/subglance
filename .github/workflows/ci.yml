@@ -254,6 +254,13 @@ jobs:
           path="$(npm run --silent test:browser:setup | awk '{print $NF}')"
           echo "PUPPETEER_EXECUTABLE_PATH=$path" >> "$GITHUB_ENV"
 
+      # Response-history browser tests exercise the real Go API, so use the
+      # same pinned toolchain as the embedded-dashboard smoke test below.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
       - name: Browser layout checks
         working-directory: web
         run: npx vitest run --config vitest.browser.config.ts
@@ -263,11 +270,6 @@ jobs:
       # the other half, that a binary built *with* the frontend actually
       # serves it. Without this, a broken embed path would stay green until
       # someone downloaded a release and found an empty page.
-      - uses: actions/setup-go@v7
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-
       - name: Smoke test the embedded dashboard
         run: |
           go build -o /tmp/subglance ./cmd/subglance

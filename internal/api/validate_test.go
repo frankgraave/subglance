@@ -47,6 +47,11 @@ func TestValidateTargetForType(t *testing.T) {
 		{name: "ping whitespace only", typ: "ping", target: " ", wantErr: true, wantMsg: "hostname or IP"},
 		{name: "ping tab only", typ: "ping", target: "\t", wantErr: true, wantMsg: "hostname or IP"},
 		{name: "ping with space in host", typ: "ping", target: "a b.example.com", wantErr: true, wantMsg: "spaces"},
+		{name: "ping with nonbreaking space", typ: "ping", target: "a\u00a0b.example.com", wantErr: true, wantMsg: "spaces"},
+		{name: "ping with em space", typ: "ping", target: "a\u2003b.example.com", wantErr: true, wantMsg: "spaces"},
+		{name: "ping with narrow nonbreaking space", typ: "ping", target: "a\u202fb.example.com", wantErr: true, wantMsg: "spaces"},
+		{name: "ping with ideographic space", typ: "ping", target: "a\u3000b.example.com", wantErr: true, wantMsg: "spaces"},
+		{name: "ping with surrounding Unicode whitespace", typ: "ping", target: "\u00a0example.com\u2003"},
 		// A path, query, fragment or credentials would be silently dropped by
 		// the parser, storing a target that does not say what it does.
 		{name: "ping with path", typ: "ping", target: "example.com/health", wantErr: true, wantMsg: "nothing after it"},

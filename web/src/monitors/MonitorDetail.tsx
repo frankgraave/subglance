@@ -16,6 +16,7 @@ import { describeChurn } from "../incidents/story";
 import { Led } from "./Led";
 import { Unknown } from "./Unknown";
 import type { Monitor } from "./types";
+import { ResponseHistory, type ResponseHistoryProps } from "./ResponseHistory";
 import type { CheckOutcome } from "./inventoryApi";
 
 /** Shared empty default: a new Set per render would break memoisation. */
@@ -58,6 +59,8 @@ export type MonitorDetailProps = {
   monitor: Monitor;
   windows: readonly UptimeWindow[];
   incidents: readonly Incident[];
+  /** Raw diagnostic history, independent of the bulk/live beat bar. */
+  responseHistory?: ResponseHistoryProps;
   /** Now, in unix ms, for relative ages. Passed in so render stays pure. */
   now: number;
   /** True when the extra panels are still loading. */
@@ -105,6 +108,7 @@ export function MonitorDetail({
   monitor,
   windows,
   incidents,
+  responseHistory,
   now,
   loading = false,
   error = null,
@@ -336,6 +340,8 @@ export function MonitorDetail({
           )}
         </Panel>
       </Card>
+
+      {responseHistory ? <ResponseHistory key={monitor.id} {...responseHistory} /> : null}
 
       <Card title="Uptime" icon={<IconGauge />} headingLevel={2}>
         <Panel>
