@@ -110,6 +110,39 @@ for (const theme of ["dark", "light"]) {
       } finally { await page.close(); }
     });
 
+    it("reveals every row action reached by keyboard without hover", async () => {
+      const page = await open("components.html", theme);
+      try {
+        await page.mouse.move(0, 0);
+        const count = await page.$$eval(".demo-row .row-actions button", els => els.length);
+        expect(count).toBe(6);
+        const visited = new Set<string>();
+        for (let tab = 0; tab < 100 && visited.size < count; tab++) {
+          await page.keyboard.press("Tab");
+          const action = await page.evaluate(async () => {
+            const button = document.activeElement;
+            if (!button?.matches(".demo-row .row-actions button")) return null;
+            const actions = button.closest(".row-actions")!;
+            await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+            await Promise.all(actions.getAnimations().map(a => a.finished));
+            return {
+              index: Array.from(document.querySelectorAll(".demo-row .row-actions button")).indexOf(button),
+              title: button.getAttribute("title"),
+              hovered: button.closest(".demo-row")!.matches(":hover"),
+              focused: button.matches(":focus-visible"),
+              opacity: getComputedStyle(actions).opacity,
+            };
+          });
+          if (!action) continue;
+          expect(action.hovered, "keyboard path must not be rescued by hover").toBe(false);
+          expect(action.focused).toBe(true);
+          expect(action.opacity, `focused row action ${action.index}: ${action.title}`).toBe("1");
+          visited.add(String(action.index));
+        }
+        expect(visited.size, "Tab reaches all six actions in both rows").toBe(count);
+      } finally { await page.close(); }
+    });
+
     it.each(["Enter", "Escape", "Tab"] as const)("inline edit preserves the identical name role before/during/after %s", async exit => {
       const page = await open("components.html", theme);
       try {

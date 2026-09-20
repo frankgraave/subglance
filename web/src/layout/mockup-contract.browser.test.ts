@@ -103,6 +103,32 @@ async function statusAlternatives(page: Page) {
   }));
 }
 
+it("keeps resting LEDs finite with default motion and pulse preferences", async () => {
+  // Isolate storage from the reduced-motion/pulse-off helpers above. Do not
+  // override either preference: this is the first-visit, natural default path.
+  const context = await browser.createBrowserContext();
+  try {
+    for (const path of pages) {
+      const page = await context.newPage();
+      try {
+        await page.goto(pathToFileURL(path).href, { waitUntil: "load" });
+        const result = await page.evaluate(() => {
+          const lamps = Array.from(document.querySelectorAll(".led"));
+          const infinite = lamps.flatMap((led, index) =>
+            led.getAnimations({ subtree: true })
+              .filter(a => a.effect?.getComputedTiming().iterations === Infinity)
+              .map(() => index));
+          return { count: lamps.length, infinite, reduced: matchMedia("(prefers-reduced-motion: reduce)").matches, pulse: document.body.dataset.pulse };
+        });
+        expect(result.reduced, relative(dir, path)).toBe(false);
+        if (path.endsWith("dashboard-directions.html")) expect(result.pulse).toBe("on");
+        expect(result.count).toBeGreaterThan(0);
+        expect(result.infinite, `${relative(dir, path)}: resting LEDs must not animate forever`).toEqual([]);
+      } finally { await page.close(); }
+    }
+  } finally { await context.close(); }
+});
+
 for (const theme of ["dark", "light"]) {
   describe(`file:// mockup contract in ${theme}`, () => {
     it.each(pages)("%s resolves the shared system with readable paired type", async path => {
@@ -210,8 +236,10 @@ for (const theme of ["dark", "light"]) {
         expect(await page.$eval('.seg button:nth-child(2)', el => el.getAttribute("aria-pressed"))).toBe("true");
         await page.click('#simulate');
         for (const [state, word] of [["warn", "Warning"], ["down", "Down"], ["up", "Up"]]) {
-          await page.waitForSelector(`.row[data-id="4"] .led[data-state="${state}"]`);
-          expect(await page.$eval('.row[data-id="4"] .led + span', el => el.textContent)).toBe(word);
+          await expect(page.waitForFunction((s: string, w: string) => {
+            const led = document.querySelector('.row[data-id="4"] .led');
+            return led?.getAttribute("data-state") === s && led.nextElementSibling?.textContent === w;
+          }, { timeout: 5000 }, state, word), `outage ${state}: lamp and word must agree in one observation`).resolves.toBeTruthy();
           expect(await statusAlternatives(page), `outage ${state}`).toEqual([]);
         }
         await page.click('.row[data-id="3"]');

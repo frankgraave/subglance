@@ -120,7 +120,7 @@ body {
   transition: border-color var(--dur-hover) var(--ease), background var(--dur-hover) var(--ease); font-size:var(--type-body); line-height:var(--lead-body); }
 .btn:hover { border-color: var(--border-hi); background: var(--surface-hi); }
 .btn--primary { background: var(--accent); border-color: var(--accent-border); color: var(--accent-ink); }
-.btn--primary:hover { background: color-mix(in srgb, var(--accent) 88%, white); }
+.btn--primary:hover { background: color-mix(in srgb, var(--accent) 88%, var(--accent-ink)); }
 /* Destructive is outlined, not filled — a permanent red block becomes wallpaper. */
 .btn--danger { background: none; border-color: color-mix(in srgb, var(--down) 45%, var(--border)); color: var(--down); }
 .btn--danger:hover { background: var(--down-dim); border-color: var(--down); }
