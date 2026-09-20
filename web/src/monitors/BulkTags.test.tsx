@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -13,6 +14,7 @@ import { LiveMonitorsRoot } from "./LiveMonitors";
 import { inventoryFromApi } from "./inventory";
 import { ShellSlots } from "../shell/ShellSlots";
 import { MonitorsView } from "./MonitorsView";
+import { confirmNavigation } from "../shell/leaveGuard";
 
 const monitors = [1, 2, 3].map((id) =>
   inventoryFromApi({
@@ -68,6 +70,23 @@ it("has no management surface for a viewer, and clears selection on permission l
     <LiveMonitorsRoot client={client} fetchMonitors={fetchMonitors} canWrite />,
   );
   expect(screen.getByText("0 selected")).toBeTruthy();
+});
+
+it("closes the actual tag owner on accepted navigation while retaining search and selection", () => {
+  render(<><ShellSlots /><MonitorsView monitors={monitors} onTagChange={vi.fn(async () => counts)} /></>);
+  const search = screen.getByRole("searchbox", { name: "Search monitors" });
+  fireEvent.change(search, { target: { value: "site 2" } });
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select site 2" }));
+  fireEvent.click(screen.getByRole("button", { name: "Manage tags" }));
+  const oldDialog = screen.getByRole("dialog");
+  fireEvent.change(within(oldDialog).getByRole("textbox", { name: "Tag key" }), { target: { value: "discarded" } });
+  act(() => { expect(confirmNavigation()).toBe(true); });
+  expect(oldDialog.isConnected).toBe(false);
+  expect(screen.getByRole("searchbox", { name: "Search monitors" })).toBe(search);
+  expect((search as HTMLInputElement).value).toBe("site 2");
+  expect(screen.getByText("1 selected")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Manage tags" }));
+  expect((within(screen.getByRole("dialog")).getByRole("textbox", { name: "Tag key" }) as HTMLInputElement).value).toBe("");
 });
 
 it("selects only visible rows, preserves hidden selections, and forgets removed rows", () => {

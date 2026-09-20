@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { registerNavigationCleanup } from "../shell/leaveGuard";
 import { Card, Panel } from "../components/Card";
 import { PlusIcon, SearchIcon } from "../shell/icons";
 import { ToolbarTools, TopbarTools } from "../shell/TopbarTools";
@@ -117,6 +118,7 @@ export function MonitorsView({
   const [pausedFilter, setPausedFilter] = useState<string>("");
   const [confirming, setConfirming] = useState<string | null>(null);
   const [tagOpen, setTagOpen] = useState(false);
+  useEffect(() => registerNavigationCleanup(() => setTagOpen(false)), []);
   const [selected, setSelected] = useState<ReadonlySet<string>>(NO_SET);
   const selectedIds = monitors.filter((m) => selected.has(m.id)).map((m) => m.id);
   const selectMonitor = useCallback((id: string, checked: boolean) => {
