@@ -15,12 +15,12 @@ import (
 	"time"
 )
 
-// MaxSnapshotBytes caps how much of a failed response is kept.
+// MaxSnapshotBytes caps how much of a failed response body is kept.
 //
-// 2 KiB is enough for a JSON health report or the readable part of an error
-// page, and small enough that a monitor failing every 60 seconds for a week
-// could not fill a disk even if every one of those failures were stored — and
-// they are not; see the runner, which keeps only the first few of an incident.
+// This is a diagnostic prefix, not a guarantee that the cause fits. The
+// synthetic prefix and SQLite measurements in docs/response-snapshot-sizing.md
+// record the 1/2/4 KiB tradeoff. Headers cost additional bytes; neither this
+// body limit nor the runner's per-outage allowance caps total retained bytes.
 const MaxSnapshotBytes = 2048
 
 // snapshotHeaders is the allowlist of response headers kept with a snapshot.

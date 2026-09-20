@@ -552,9 +552,10 @@ func toCheckerMonitor(m store.Monitor) checker.Monitor {
 //
 // Without a bound, a monitor checked every 60 seconds that stays broken for a
 // week would write ten thousand snapshots of the same 2 KiB error page: 20 MB
-// to say one thing. The first few are where the information is — the first
-// failure, and the next couple in case the symptom changes as the outage
-// develops. After that the streak is repeating itself.
+// to say one thing. Three leaves room for the initial symptom and two early changes;
+// later changes can be missed. The synthetic count/body/disk tradeoffs and the
+// decision to use retention rather than a total-byte cap are recorded in
+// docs/response-snapshot-sizing.md. Separate settled outages get new allowances.
 const maxSnapshotsPerIncident = 3
 
 // maxRestoredFailStreak caps how many failed heartbeats startup counts when
@@ -683,18 +684,18 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 //
 // The first is the budget: the first maxSnapshotsPerIncident stored snapshots
 // of an incident. Only a stored snapshot spends it, so the failures that write
-// nothing leave the allowance for the ones that do. A
-// monitor that has been returning the same 503 for six hours has already said
-// everything it has to say, and every repeat after that is storage spent on a
-// copy of something already on disk.
+// nothing leave the allowance for the ones that do. This keeps an initial
+// prefix, not a deduplicated sample: a later response can contain new diagnostic
+// information even if the status code has not changed. The allowance trades
+// that later detail for lower storage cost.
 //
 // The second is flapping, which the budget cannot see. A monitor that fails,
 // recovers and fails again every minute resolves its incident on each recovery
 // and so starts every failure with an empty budget — permanently inside the
 // budget, writing a snapshot per check, for as long as it oscillates. The
-// engine already knows that monitor is flapping, and a flapping monitor is
-// precisely the case where snapshots are worthless: there are already twenty
-// copies of the same failure on disk. So while it flaps, none are stored.
+// engine already knows when that monitor is flapping. While that flag is set,
+// no responses are stored; this reduces repeated captures without comparing
+// bodies. It is not a total-byte cap: quiet periods can clear the flag.
 //
 // Flapping is used rather than any new counter because it is state the engine
 // maintains and clears on its own: when the monitor settles, snapshots resume

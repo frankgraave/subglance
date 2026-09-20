@@ -51,6 +51,15 @@ database into SQLite's incremental auto-vacuum mode at startup; on an existing
 database that requires one rebuild, which is logged when it happens and skipped
 with a warning if the file is large enough that the pause would hurt.
 
+Failure-response snapshots expire with their raw heartbeats; hourly rollups do
+not retain response bodies or headers. Capture keeps up to three stored responses
+per outage and 2048 body bytes per response, plus allowed headers. **There is no
+per-monitor or global snapshot-byte cap.** Repeated settled outages, unconfirmed
+failures and large headers can cost much more than one outage's allowance.
+See [response snapshot sizing](response-snapshot-sizing.md) for the measured
+synthetic workloads, limit decisions, reproduction harness and storage caveats.
+The monitor's **Failure responses** history explains recorded suppression.
+
 ### Alert grouping
 
 `--alert-group-window` is why twenty monitors failing on one dead uplink send
