@@ -24,6 +24,9 @@ import (
 // This is the shipped command, not an API double or alternate server assembly.
 // SUBGLANCE_TEST_BINARY lets mutation runs exercise an independently built image.
 func TestWatchdogActualBinary(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds and runs the shipped binary; CI runs this in its integration step")
+	}
 	binary := os.Getenv("SUBGLANCE_TEST_BINARY")
 	if binary == "" {
 		binary = filepath.Join(t.TempDir(), "subglance")
