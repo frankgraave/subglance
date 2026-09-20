@@ -23,6 +23,28 @@ function make(over: Record<string, unknown> = {}) {
 }
 
 describe("EditMonitorForm", () => {
+  it.each([0, 60, 731, 86400])("edits the loaded repeat base to %s without a target preview", async (value) => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<EditMonitorForm monitor={make({ repeat_after_s: 173 })} onSave={onSave} />);
+    expect((screen.getByLabelText("Repeat alert base (seconds)") as HTMLInputElement).value).toBe("173");
+    if (value === 0) fireEvent.change(screen.getByLabelText("Repeat alerts"), { target: { value: "off" } });
+    else fireEvent.change(screen.getByLabelText("Repeat alert base (seconds)"), { target: { value: String(value) } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith({ repeat_after_s: value }));
+  });
+
+  it.each(["", "59", "86401", "60.5"])("rejects invalid repeat %s without saving", (value) => {
+    const onSave = vi.fn();
+    render(<EditMonitorForm monitor={make({ repeat_after_s: 0 })} onSave={onSave} />);
+    expect((screen.getByLabelText("Repeat alerts") as HTMLSelectElement).value).toBe("off");
+    fireEvent.change(screen.getByLabelText("Repeat alerts"), { target: { value: "on" } });
+    const field = screen.getByLabelText("Repeat alert base (seconds)");
+    fireEvent.change(field, { target: { value } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert").textContent).toMatch(/repeat.*60.*frequent/i);
+    expect(document.activeElement).toBe(field);
+  });
   it("sends only the fields that changed", async () => {
     /*
      * The whole point of PATCH is that "not sent" and "sent as zero" stay
@@ -101,14 +123,12 @@ describe("EditMonitorForm", () => {
     expect(screen.queryByLabelText(/timeout/i)).toBeNull();
   });
 
-  it("says why target, type and the HTTP settings are not editable here", () => {
-    // Silence would read as a form that forgot them. The reason is that this
-    // screen never received their current values, and a blank input invites
-    // erasing a setting the user cannot see.
+  it("keeps check identity fixed and never supplies defaults for unread settings", () => {
     render(<EditMonitorForm monitor={make()} onSave={vi.fn()} />);
-    expect(
-      screen.getByText(/never received their current values/),
-    ).toBeTruthy();
+    expect(screen.getByText(/check type stays fixed/i)).toBeTruthy();
+    expect(screen.queryByLabelText("HTTP method")).toBeNull();
+    expect(screen.queryByLabelText("Repeat alert base (seconds)")).toBeNull();
+    expect(screen.getByText(/repeat alert settings unavailable/i)).toBeTruthy();
   });
 
   it("lets one tag be edited on a monitor whose other tag holds a comma", async () => {
