@@ -1396,7 +1396,7 @@ paths:
         so a short read is distinguishable from the end of the history — a
         `limit` with no "there is more" signal would only move the guessing
         from the client to the server. The cursor is the sort key
-        (`<since>.<resolved>.<id>`) rather than an offset, because incidents
+        (`<since>.<resolved>.<id>.<days>`) rather than an offset, because incidents
         resolve while somebody is paging and an offset would repeat or skip
         rows. It also pins the window: a floor recomputed per request rises
         while the walk descends toward it, so a row just inside the window at
@@ -1429,7 +1429,7 @@ paths:
           required: false
           description: |
             The `next_cursor` from the previous page. Omit for the first page.
-            It carries the window's lower bound as well as the position, so
+            It carries the window's lower bound, nominal days (1–730), and position, so
             every page of one walk describes the same window — `days` is
             ignored while a cursor is present.
 
@@ -1440,8 +1440,8 @@ paths:
             After that grace expires, restart the walk without a cursor.
           schema:
             type: string
-            pattern: '^[1-9][0-9]*\.[1-9][0-9]*\.[1-9][0-9]*$'
-          example: '1755432000.1758024000.412'
+            pattern: '^[1-9][0-9]*\.[1-9][0-9]*\.[1-9][0-9]*\.[1-9][0-9]*$'
+          example: '1755432000.1758024000.412.30'
       responses:
         '200':
           description: One page of resolved incidents, newest resolution first.
@@ -3356,11 +3356,11 @@ components:
           description: |
             Pass as `cursor` to fetch the next page. Absent when `has_more` is
             false, so a client cannot page past the end.
-          pattern: '^[1-9][0-9]*\.[1-9][0-9]*\.[1-9][0-9]*$'
-          example: '1755432000.1758024000.412'
+          pattern: '^[1-9][0-9]*\.[1-9][0-9]*\.[1-9][0-9]*\.[1-9][0-9]*$'
+          example: '1755432000.1758024000.412.30'
         days:
           type: integer
-          description: The window actually applied, echoed back.
+          description: The nominal window selected on page one, preserved on continuation pages.
           example: 30
     ChannelType:
       type: string
