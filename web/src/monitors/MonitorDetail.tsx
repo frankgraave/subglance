@@ -16,8 +16,8 @@ import { describeChurn } from "../incidents/story";
 import { Led } from "./Led";
 import { Unknown } from "./Unknown";
 import type { Monitor } from "./types";
-import type { CheckOutcome } from "./inventoryApi";
 import { ResponseHistory, type ResponseHistoryProps } from "./ResponseHistory";
+import type { CheckOutcome } from "./inventoryApi";
 
 /** Shared empty default: a new Set per render would break memoisation. */
 const EMPTY_ACKING: ReadonlySet<string> = new Set();

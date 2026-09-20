@@ -114,6 +114,16 @@ export function LiveMonitorDetail({
   );
 
   const monitor = monitors.find((m) => m.id === id);
+  const responseHistory = useQuery({
+    queryKey: responseHistoryQueryKey(id),
+    queryFn: ({ signal }) => fetchResponseHistory(id, signal),
+    enabled: monitor?.type === "http",
+    // SSE and bulk beat bars omit response bodies. Keep a separate bounded
+    // raw-history query; never infer historical reasons from today's status.
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
   // Key by monitor, not by the most recent click: routing to B while A checks
   // must not put A's result under B's title. The ref closes the same-tick gap
   // before React has painted the disabled button.
@@ -145,16 +155,6 @@ export function LiveMonitorDetail({
     setChecks((current) => ({ ...current, [id]: { checking: true } }));
     checkMutation.mutate(id);
   };
-
-  const responseHistory = useQuery({
-    queryKey: responseHistoryQueryKey(id),
-    queryFn: ({ signal }) => fetchResponseHistory(id, signal),
-    enabled: monitor?.type === "http",
-    // SSE and bulk beat bars omit response bodies. Keep a separate bounded
-    // raw-history query; never infer historical reasons from today's status.
-    refetchInterval: 60_000,
-    staleTime: 30_000,
-  });
 
   if (monitor === undefined) {
     /*
