@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 )
@@ -239,6 +240,131 @@ func (db *DB) ListOpenIncidents(ctx context.Context) ([]Incident, error) {
 	defer func() { _ = rows.Close() }()
 
 	return scanIncidents(rows)
+}
+
+// ResolvedIncidentCursor is a position in the resolved-incident history.
+//
+// It is the sort key itself — resolution time plus id — rather than an offset.
+// An offset into a list that grows at the head is wrong by construction here:
+// incidents resolve while somebody is paging, and OFFSET 50 after one new
+// resolution shows a row the reader has already seen while hiding the one
+// behind it. A keyset asks "everything strictly older than this exact row",
+// which stays true no matter what lands above it.
+//
+// The id half is not decoration. Resolution timestamps have second
+// granularity and a recovery sweep can close several incidents in the same
+// second, so a cursor carrying only the timestamp would either repeat that
+// second's rows or skip past them — an outage missing from the history, which
+// is precisely the failure this endpoint was built to end.
+type ResolvedIncidentCursor struct {
+	ResolvedAt time.Time
+	ID         int64
+
+	// Since is the window's lower bound, carried so every page of one walk
+	// describes the same window.
+	//
+	// It lives on the cursor rather than being recomputed per request because
+	// paging descends toward older incidents while a "last N days" floor
+	// ascends. Left to drift, the floor can rise past a row between the page
+	// that promised more and the request that would have returned it — and the
+	// walk then finishes cleanly, reporting itself complete, one incident
+	// short. The store does not read this field; it is the transport's, and it
+	// is here because the cursor is the only thing that survives between two
+	// requests of the same walk.
+	Since time.Time
+}
+
+// ResolvedIncidentPage is one page of instance-wide resolved history, plus the
+// answer to the question the page itself cannot carry: is there more?
+//
+// HasMore is derived by asking for one row beyond the page and discarding it,
+// not by comparing the row count to the limit. A full page and a full page
+// that happens to be the last one are indistinguishable otherwise, which is
+// exactly the ambiguity the client used to paper over by declaring any full
+// page "truncated".
+type ResolvedIncidentPage struct {
+	Incidents []Incident
+	HasMore   bool
+	// Next is the cursor to pass for the following page. Zero when HasMore
+	// is false, so a caller cannot accidentally page past the end.
+	Next ResolvedIncidentCursor
+}
+
+// ListResolvedIncidents returns resolved incidents across every monitor,
+// newest resolution first, one page at a time.
+//
+// Filtered on resolved_at rather than started_at, because the question the
+// screen asks is "what recovered recently". Filtering on the start date drops
+// exactly the long outages a reader most wants to find: an incident that began
+// five weeks ago and came back yesterday is the most interesting row on the
+// card and the first one a started_at filter deletes.
+//
+// The window is a half-open interval [since, cursor): since is inclusive so a
+// "last 30 days" request keeps an incident that resolved exactly on the
+// boundary, and the cursor is exclusive so the row that ended the previous
+// page is not repeated at the top of this one.
+func (db *DB) ListResolvedIncidents(ctx context.Context, since time.Time, cursor ResolvedIncidentCursor, limit int) (ResolvedIncidentPage, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+
+	// The window's lower bound. Zero means "no lower bound", and 0 is the
+	// correct sentinel for that rather than a special case in the SQL: unix
+	// epoch is before every incident this table can hold.
+	var sinceUnix int64
+	if !since.IsZero() {
+		sinceUnix = since.Unix()
+	}
+
+	/*
+	 * The cursor's upper bound, as a sentinel rather than as an optional
+	 * clause.
+	 *
+	 * The obvious shape here is to build the WHERE from a slice of predicates
+	 * and join it, and that is a string-concatenated query — gosec flags it,
+	 * and it is right to: the habit is what makes injection possible even when
+	 * this particular instance is safe. One fixed statement with bounds that
+	 * default to "past the newest row" says the same thing with no assembly,
+	 * and the planner sees the same keyset walk either way.
+	 */
+	cursorUnix, cursorID := int64(math.MaxInt64), int64(math.MaxInt64)
+	if !cursor.ResolvedAt.IsZero() {
+		cursorUnix, cursorID = cursor.ResolvedAt.Unix(), cursor.ID
+	}
+
+	rows, err := db.Reader.QueryContext(ctx,
+		// The tuple comparison is spelled out because SQLite has no row-value
+		// ordering here: strictly older by resolution, or the same second and
+		// a lower id. One expression, so the planner can walk
+		// idx_incidents_resolved rather than filtering after the sort.
+		"SELECT "+incidentColumns+` FROM incidents
+		 WHERE incidents.resolved_at IS NOT NULL
+		   AND incidents.resolved_at >= ?
+		   AND (incidents.resolved_at < ?
+		        OR (incidents.resolved_at = ? AND incidents.id < ?))
+		 ORDER BY incidents.resolved_at DESC, incidents.id DESC
+		 LIMIT ?`,
+		// One row beyond the page, so "there is more" is observed rather than
+		// inferred from a full page.
+		sinceUnix, cursorUnix, cursorUnix, cursorID, limit+1)
+	if err != nil {
+		return ResolvedIncidentPage{}, fmt.Errorf("query resolved incidents: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	found, err := scanIncidents(rows)
+	if err != nil {
+		return ResolvedIncidentPage{}, err
+	}
+
+	page := ResolvedIncidentPage{Incidents: found}
+	if len(found) > limit {
+		last := found[limit-1]
+		page.Incidents = found[:limit]
+		page.HasMore = true
+		page.Next = ResolvedIncidentCursor{ResolvedAt: last.ResolvedAt, ID: last.ID}
+	}
+	return page, nil
 }
 
 // isUniqueViolation reports whether an error came from a UNIQUE constraint.

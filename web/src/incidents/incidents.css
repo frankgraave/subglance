@@ -546,6 +546,26 @@
 
 .inc-day + .inc-day { margin-top: var(--space-4); }
 
+/*
+ * The footer that appears when the window holds more than this page.
+ *
+ * It is a row rather than a bare button because the button alone would be an
+ * invitation without a reason: the sentence beside it is the part that says
+ * the list is short, and the button is only how you fix that. The old card
+ * carried the sentence with no button, which is the state this replaces.
+ *
+ * It declares no button styling of its own — `.add-button` is the worded
+ * action three screens already use, and a fourth dialect of it here is exactly
+ * the drift AGENTS.md is about. Only the row's own layout lives here.
+ */
+.inc-more {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding-top: var(--space-3);
+}
+
 .inc-day-head {
   display: flex;
   align-items: baseline;

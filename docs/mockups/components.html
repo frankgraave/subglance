@@ -3,120 +3,63 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../../web/src/styles/tokens.css">
+<link rel="stylesheet" href="../../web/src/monitors/led.css">
+<link rel="stylesheet" href="common.css">
 <title>SubGlance — components</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-/* Same tokens as the dashboard mockup. When this becomes real code
-   these live in one tokens.css and nowhere else. */
-:root {
-  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Geist Mono", ui-monospace, Menlo, monospace;
-  --r-sm: 6px; --r-md: 10px; --r-lg: 14px;
-  --ease: cubic-bezier(.32,.72,0,1);
-  --dur: 420ms;
-}
-[data-theme="dark"] {
-  --canvas:#08090a; --surface:#0e1011; --surface-2:#141719; --surface-hi:#1a1e20;
-  --border:#1e2224; --border-hi:#2a2f32;
-  --ink:#e8eaec; --ink-2:#9ba1a6; --ink-3:#61686d; --ink-4:#3d4347;
-  --up:#34d399; --up-dim:#10241d; --warn:#fbbf24; --warn-dim:#2a2110;
-  --down:#f43f5e; --down-dim:#2c1017; --idle:#4b5257;
-  --glow-up:0 0 0 1px rgba(52,211,153,.35), 0 0 7px -1px rgba(52,211,153,.6);
-  --glow-warn:0 0 0 1px rgba(251,191,36,.38), 0 0 7px -1px rgba(251,191,36,.62);
-  --glow-down:0 0 0 1px rgba(244,63,94,.4), 0 0 8px -1px rgba(244,63,94,.72);
-  /* Depth ladder (§2.10), mirroring styles/tokens.css. `raised` was 5% black,
-     which measured almost identically to no shadow on a dark ground; these
-     values were fitted against the reference's own shadow profile. */
-  --shadow-flat: none;
-  --shadow-raised: 0 3px 6px -2px rgba(0,0,0,.30), 0 2px 4px -2px rgba(0,0,0,.24);
-  --shadow-float: 0 10px 15px -3px rgba(0,0,0,.12), 0 4px 6px -4px rgba(0,0,0,.1);
-  color-scheme: dark;
-}
-[data-theme="light"] {
-  --canvas:#fbfbfa; --surface:#fff; --surface-2:#f6f6f5; --surface-hi:#f0f0ef;
-  --border:#e6e6e4; --border-hi:#d6d6d3;
-  --ink:#16181a; --ink-2:#5c6165; --ink-3:#8b9196; --ink-4:#b6bbbf;
-  --up:#059669; --up-dim:#d9f5e9; --warn:#b45309; --warn-dim:#fdf0d5;
-  --down:#e11d48; --down-dim:#fde4e9; --idle:#c2c7cb;
-  --glow-up:0 0 0 1px rgba(5,150,105,.28), 0 0 5px -1px rgba(5,150,105,.4);
-  --glow-warn:0 0 0 1px rgba(180,83,9,.28), 0 0 5px -1px rgba(180,83,9,.4);
-  --glow-down:0 0 0 1px rgba(225,29,72,.3), 0 0 6px -1px rgba(225,29,72,.45);
-  --shadow-flat: none;
-  --shadow-raised: 0 4px 6px -1px rgba(16,24,40,.08), 0 2px 4px -2px rgba(16,24,40,.06);
-  --shadow-float: 0 10px 15px -3px rgba(16,24,40,.12), 0 4px 6px -4px rgba(16,24,40,.1);
-  color-scheme: light;
-}
-* { box-sizing: border-box; margin: 0; padding: 0; }
+/* Values come from the live stylesheet linked above, including both themes. */
+* { box-sizing: border-box; margin:0; padding:0; }
 body {
   font-family: var(--font-sans); background: var(--canvas); color: var(--ink);
-  -webkit-font-smoothing: antialiased; padding: 40px clamp(20px,5vw,64px) 80px;
+  -webkit-font-smoothing: antialiased; padding:var(--space-10) clamp(var(--space-5),5vw,var(--space-16)) var(--space-16);
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 
-.led { display:inline-block; width:20px; height:7px; border-radius:2.5px; background:var(--idle); position:relative; flex:none;
-  transition: background var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
-.led::after { content:""; position:absolute; inset:1px 1px 3px; border-radius:1.5px;
-  background:linear-gradient(180deg,rgba(255,255,255,.55),rgba(255,255,255,0)); opacity:.5; }
-.led[data-state="up"]{background:var(--up);box-shadow:var(--glow-up)}
-.led[data-state="warn"]{background:var(--warn);box-shadow:var(--glow-warn)}
-.led[data-state="down"]{background:var(--down);box-shadow:var(--glow-down)}
-/* Off = deliberately not measured (DESIGN.md §3.1). Hollow, not grey-filled. */
-.led[data-state="off"]{background:transparent;box-shadow:inset 0 0 0 1.5px var(--ink-2)}
-.led[data-state="off"]::after{opacity:0}
-
-.page-head { max-width: 1080px; margin: 0 auto 40px; display:flex; align-items:flex-start; gap:16px; }
-.back-link { display:inline-block; font-size:12px; color:var(--ink-3); text-decoration:none; margin-bottom:10px;
-  transition:color 140ms var(--ease); }
+.page-head { max-width: 1080px; margin:0 auto var(--space-10); display:flex; align-items:flex-start; gap:var(--space-4); }
+.back-link { display:inline-block;  color:var(--ink-3); text-decoration:none; margin-bottom:var(--space-2h);
+  transition:color 140ms var(--ease); font-size:var(--type-helper); line-height:var(--lead-helper); }
 .back-link:hover { color:var(--ink); }
-h1 { font-size:22px; font-weight:500; letter-spacing:-.025em; }
-.page-sub { font-size:13px; color:var(--ink-3); margin-top:6px; line-height:1.55; max-width:60ch; }
+h1 {  font-weight:var(--weight-strong); letter-spacing:var(--track-body); font-size:var(--type-page); line-height:var(--lead-page); }
+.page-sub {  color:var(--ink-3); margin-top:var(--space-1h);  max-width:60ch; font-size:var(--type-body); line-height:var(--lead-body); }
 
-section { max-width: 1080px; margin: 0 auto 48px; }
-.sec-head { display:flex; align-items:baseline; gap:12px; padding-bottom:12px; margin-bottom:20px; border-bottom:1px solid var(--border); }
-h2 { font-size:12px; font-weight:500; text-transform:uppercase; letter-spacing:.09em; color:var(--ink-3); }
-.sec-note { font-size:11.5px; color:var(--ink-4); }
+section { max-width: 1080px; margin:0 auto var(--space-12); }
+.sec-head { display:flex; align-items:baseline; gap:var(--space-3); padding-bottom:var(--space-3); margin-bottom:var(--space-5); border-bottom:1px solid var(--border); }
+h2 {  font-weight:var(--weight-strong); text-transform:uppercase; letter-spacing:var(--track-body); color:var(--ink-3); font-size:var(--type-section); line-height:var(--lead-section); }
+.sec-note {  color:var(--ink-4); font-size:var(--type-helper); line-height:var(--lead-helper); }
 
-.card { border:1px solid var(--border); border-radius:var(--r-lg); background:var(--surface); padding:22px; }
+.card { border:1px solid var(--border); border-radius:var(--r-lg); background:var(--surface); padding:var(--space-4); box-shadow:var(--shadow-flat); }
 
 /* ── NESTING: card → panel, and nothing between ──────────────
-   The pattern measured against the reference. A card is padding with an edge;
-   a panel is the surface that rests on it. There is no third box: a wrapper
-   around a list of panels is what made a monitor list step four fills deep
-   (#08090a → #0e1011 → #141719 → #1a1e20) where the reference steps two.
-   The frame below is the real thing at the real values. */
+   A card frames the list. Each row paints its own panel; no intermediary
+   wrapper adds another fill, border or inset. Values come from tokens.css. */
 .frame { border:1px solid var(--border); border-radius:var(--r-lg); background:var(--surface);
-  display:flex; flex-direction:column; gap:6px; padding:6px; }
-.frame-head { display:flex; align-items:center; gap:10px; min-height:46px; padding:8px 8px 6px; }
-.frame-title { font-size:16px; font-weight:500; }
+  display:flex; flex-direction:column; gap:var(--space-1h); padding:var(--space-1h); }
+.frame-head { display:flex; align-items:center; gap:var(--space-2h); min-height:46px; padding:var(--space-2) var(--space-2) var(--space-1h); }
+.frame-title {  font-weight:var(--weight-strong); font-size:var(--type-card); line-height:var(--lead-card); }
 .frame-tile { width:24px; height:24px; flex:none; display:grid; place-items:center;
   border:1px solid var(--border-hi); border-radius:var(--r-sm); background:var(--surface-2); color:var(--ink-2); }
 .frame-tile svg { width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:1.8; }
-/* The panel: one radius step inside the card, its own edge, and the lift.
-   The shadow is not decoration — border and fill alone leave it flat against
-   the card, and flat is what the reference is not. */
-.frame-panel { border:1px solid var(--border-hi); border-radius:var(--r-md);
-  background:var(--surface-2); box-shadow:var(--shadow-raised); padding:12px 16px; }
+/* The panel: one radius step inside the card, its own edge and shared lift. */
+.frame-panel {; padding:var(--space-3) var(--space-4); background:var(--surface-panel); box-shadow:var(--shadow-raised); border:1px solid var(--border); border-radius:var(--r-md); }
 .frame-panel + .frame-panel { margin:0; }
-.frame-row { display:flex; align-items:center; gap:12px; }
-.frame-row-name { font-size:14px; }
-.frame-row-num { margin-left:auto; font-family:var(--font-mono); font-size:12px; color:var(--ink-2); }
-.row-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.frame-row { display:flex; align-items:center; gap:var(--space-3); }
+.frame-row-name {; font-size:var(--type-row); line-height:var(--lead-row); }
+.frame-row-num { margin-left:auto; font-family:var(--font-mono);  color:var(--ink-2); font-size:var(--type-helper); line-height:var(--lead-helper); font-feature-settings:var(--feat-mono); font-variant-ligatures:var(--ligatures-mono); font-variant-numeric:var(--numeric-mono); text-rendering:var(--render-mono); }
+.row-2 { display:grid; grid-template-columns:1fr 1fr; gap:var(--space-4); }
 @media (max-width: 820px) { .row-2 { grid-template-columns:1fr; } }
 
 /* ── BUTTONS ─────────────────────────────────────────────── */
 .btn {
-  font-family:inherit; font-size:13px; font-weight:450; line-height:1;
-  padding:8px 14px; border-radius:var(--r-sm); border:1px solid transparent;
-  cursor:pointer; display:inline-flex; align-items:center; gap:7px;
-  transition: background 140ms var(--ease), border-color 140ms var(--ease), color 140ms var(--ease), transform 80ms var(--ease);
-}
+  font-family:inherit;  font-weight:var(--weight-mid);
+  padding:var(--space-2) var(--space-3); border-radius:var(--r-sm); border:1px solid transparent;
+  cursor:pointer; display:inline-flex; align-items:center; gap:var(--space-1h);
+  transition: background 140ms var(--ease), border-color 140ms var(--ease), color 140ms var(--ease), transform 80ms var(--ease); font-size:var(--type-body); line-height:var(--lead-body); min-height:var(--control-h); border-color:var(--border-control); }
 .btn:active { transform: translateY(.5px); }
 .btn svg { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:1.8; }
-.btn-primary { background:var(--ink); color:var(--canvas); }
+.btn-primary {; background:var(--accent); color:var(--accent-ink); border-color:var(--accent-border); }
 .btn-primary:hover { opacity:.88; }
-.btn-secondary { background:var(--surface-2); color:var(--ink); border-color:var(--border-hi); }
+.btn-secondary { background:var(--surface-2); color:var(--ink); border-color:var(--border-control); }
 .btn-secondary:hover { background:var(--surface-hi); }
 .btn-ghost { background:transparent; color:var(--ink-2); }
 .btn-ghost:hover { background:var(--surface-2); color:var(--ink); }
@@ -126,7 +69,7 @@ h2 { font-size:12px; font-weight:500; text-transform:uppercase; letter-spacing:.
 .btn-danger { background:transparent; color:var(--down); border-color:color-mix(in srgb, var(--down) 30%, var(--border)); }
 .btn-danger:hover { background:var(--down-dim); border-color:var(--down); }
 .btn:disabled { opacity:.4; cursor:not-allowed; }
-.btn-sm { font-size:12px; padding:5px 10px; }
+.btn-sm {  padding:var(--space-1) var(--space-2h); font-size:var(--type-helper); line-height:var(--lead-helper); min-height:var(--size-square-compact); }
 
 /* Loading state — the button keeps its width so the layout does not
    jump the moment you click it. */
@@ -140,191 +83,186 @@ h2 { font-size:12px; font-weight:500; text-transform:uppercase; letter-spacing:.
 @keyframes spin { to { transform:rotate(360deg); } }
 
 /* ── FORM ────────────────────────────────────────────────── */
-.field { margin-bottom:18px; }
-.label { display:block; font-size:12.5px; font-weight:450; margin-bottom:7px; }
-.label .opt { color:var(--ink-4); font-weight:400; }
-.help { font-size:11.5px; color:var(--ink-3); margin-top:6px; line-height:1.5; }
+.field { margin-bottom:var(--space-4); }
+.label { display:block;  font-weight:var(--weight-mid); margin-bottom:var(--space-1h); font-size:var(--type-body); line-height:var(--lead-body); }
+.label .opt { color:var(--ink-4); font-weight:var(--weight-plain); }
+.help {  color:var(--ink-3); margin-top:var(--space-1h); font-size:var(--type-helper); line-height:var(--lead-helper); }
 
 .input, .select, textarea.input {
-  width:100%; font-family:inherit; font-size:13px; color:var(--ink);
-  background:var(--surface-2); border:1px solid var(--border-hi);
-  border-radius:var(--r-sm); padding:9px 11px;
-  transition: border-color 140ms var(--ease), background 140ms var(--ease), box-shadow 140ms var(--ease);
-}
+  width:100%; font-family:inherit;  color:var(--ink);
+  background-color:var(--surface-2); border:1px solid var(--border-hi);
+  border-radius:var(--r-sm); padding:var(--space-2) var(--space-2h);
+  transition: border-color 140ms var(--ease), background 140ms var(--ease), box-shadow 140ms var(--ease); font-size:var(--type-body); line-height:var(--lead-body); border-color:var(--border-control); min-height:var(--control-h); }
 .input::placeholder { color:var(--ink-4); }
 .input:hover, .select:hover { border-color:var(--ink-4); }
 .input:focus, .select:focus {
-  outline:none; border-color:var(--up); background:var(--surface);
-  box-shadow:0 0 0 3px color-mix(in srgb, var(--up) 14%, transparent);
-}
-.input.mono { font-family:var(--font-mono); font-size:12.5px; }
+  outline:none;  background-color:var(--surface);
+  box-shadow:0 0 0 var(--outline-ring-w) var(--accent-ring); border-color:var(--accent-border); }
+.input.mono { font-family:var(--font-mono); font-size:var(--type-body); line-height:var(--lead-body); font-feature-settings:var(--feat-mono); font-variant-ligatures:var(--ligatures-mono); font-variant-numeric:var(--numeric-mono); text-rendering:var(--render-mono); }
 .input.invalid { border-color:var(--down); }
-.input.invalid:focus { box-shadow:0 0 0 3px color-mix(in srgb, var(--down) 14%, transparent); }
-.error-text { font-size:11.5px; color:var(--down); margin-top:6px; display:flex; align-items:center; gap:5px; }
+.input.invalid:focus { box-shadow:0 0 0 var(--outline-ring-w) var(--ring-down); }
+.error-text {  color:var(--down); margin-top:var(--space-1h); display:flex; align-items:center; gap:var(--space-1); font-size:var(--type-helper); line-height:var(--lead-helper); }
 .error-text svg { width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2; flex:none; }
 
 .input-group { display:flex; }
 .input-group .input { border-radius:var(--r-sm) 0 0 var(--r-sm); }
 .input-group .addon {
-  display:flex; align-items:center; padding:0 11px; font-size:12.5px; color:var(--ink-3);
+  display:flex; align-items:center; padding:0 var(--space-2h);  color:var(--ink-3);
   background:var(--surface-hi); border:1px solid var(--border-hi); border-left:0;
-  border-radius:0 var(--r-sm) var(--r-sm) 0; font-family:var(--font-mono);
-}
+  border-radius:0 var(--r-sm) var(--r-sm) 0; font-family:var(--font-mono); font-size:var(--type-body); line-height:var(--lead-body); font-feature-settings:var(--feat-mono); font-variant-ligatures:var(--ligatures-mono); font-variant-numeric:var(--numeric-mono); text-rendering:var(--render-mono); }
 
 .select { appearance:none; cursor:pointer;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2361686d' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat:no-repeat; background-position:right 9px center; background-size:15px; padding-right:32px; }
 
-.row-inline { display:flex; gap:12px; }
+  background-repeat:no-repeat;   padding-right:var(--space-8); background-position:right var(--space-4) center, right var(--space-3) center; background-size:var(--space-1) var(--space-1); }
+
+.row-inline { display:flex; gap:var(--space-3); }
 .row-inline > * { flex:1; }
 
 /* Segmented control for small mutually-exclusive choices — cheaper
    to read than a dropdown when there are three or four options. */
-.seg { display:inline-flex; background:var(--surface-2); border:1px solid var(--border-hi); border-radius:var(--r-sm); padding:2px; gap:1px; }
-.seg button { font-family:inherit; font-size:12px; color:var(--ink-3); background:none; border:0;
-  padding:5px 11px; border-radius:4px; cursor:pointer; transition:all 140ms var(--ease); }
-.seg button[aria-pressed="true"] { background:var(--surface-hi); color:var(--ink); }
+.seg { display:inline-flex; background:var(--surface-2);    gap:1px; border:1px solid var(--border-control); border-radius:var(--r-md); padding:var(--space-0h); }
+.seg button { font-family:inherit;  color:var(--ink-3); background:none;
+    cursor:pointer; transition:all 140ms var(--ease); font-size:var(--type-helper); line-height:var(--lead-helper); min-height:var(--size-square-compact); border:1px solid transparent; border-radius:var(--r-sm); padding:0 var(--space-2h); }
+.seg button[aria-pressed="true"] {; background:var(--accent); color:var(--accent-ink); border-color:var(--accent-border); }
 .seg button:hover:not([aria-pressed="true"]) { color:var(--ink-2); }
 
 /* Switch */
 .switch { position:relative; display:inline-block; flex:none; }
 .switch input { position:absolute; opacity:0; width:100%; height:100%; margin:0; cursor:pointer; z-index:1; }
-.switch-track { display:block; width:30px; height:18px; border-radius:999px; background:var(--surface-hi);
+.switch-track { display:block; width:30px; height:18px; border-radius:var(--r-pill); background:var(--surface-hi);
   border:1px solid var(--border-hi); transition:background 220ms var(--ease), border-color 220ms var(--ease); }
 .switch-track::after { content:""; position:absolute; top:3px; left:3px; width:12px; height:12px; border-radius:50%;
   background:var(--ink-3); transition:transform 220ms var(--ease), background 220ms var(--ease); }
-.switch input:checked + .switch-track { background:var(--up); border-color:var(--up); }
-.switch input:checked + .switch-track::after { transform:translateX(12px); background:#fff; }
-.switch input:focus-visible + .switch-track { outline:2px solid var(--up); outline-offset:2px; }
+.switch input:checked + .switch-track {; background:var(--accent); border-color:var(--accent-border); }
+.switch input:checked + .switch-track::after { transform:translateX(12px); background:var(--accent-ink); }
+.switch input:focus-visible + .switch-track {; outline:var(--outline-w) solid var(--accent-border); outline-offset:var(--outline-offset); }
 
-.switch-row { display:flex; align-items:flex-start; gap:14px; padding:13px 0; border-bottom:1px solid var(--border); cursor:pointer; }
+.switch-row { display:flex; align-items:flex-start; gap:var(--space-3); padding:var(--space-3) 0; border-bottom:1px solid var(--border); cursor:pointer; }
 .switch-row:last-child { border-bottom:0; }
 .switch-row .switch { margin-left:auto; margin-top:1px; }
-.switch-title { font-size:13px; font-weight:450; }
-.switch-desc { font-size:11.5px; color:var(--ink-3); margin-top:3px; line-height:1.5; max-width:52ch; }
+.switch-title {  font-weight:var(--weight-mid); font-size:var(--type-body); line-height:var(--lead-body); }
+.switch-desc {  color:var(--ink-3); margin-top:3px;  max-width:52ch; font-size:var(--type-helper); line-height:var(--lead-helper); }
 
 /* Checkbox */
-.check { display:flex; align-items:center; gap:9px; cursor:pointer; font-size:12.5px; padding:5px 0; }
+.check { display:flex; align-items:center; gap:var(--space-2); cursor:pointer;  padding:var(--space-1) 0; font-size:var(--type-body); line-height:var(--lead-body); }
 .check input { position:absolute; opacity:0; }
-.check-box { width:15px; height:15px; border-radius:4px; border:1px solid var(--border-hi); background:var(--surface-2);
+.check-box { width:15px; height:15px; border-radius:var(--r-sm); border:1px solid var(--border-hi); background:var(--surface-2);
   display:grid; place-items:center; flex:none; transition:all 140ms var(--ease); }
-.check-box svg { width:10px; height:10px; stroke:var(--canvas); fill:none; stroke-width:3; opacity:0; transition:opacity 120ms var(--ease); }
-.check input:checked + .check-box { background:var(--up); border-color:var(--up); }
+.check-box svg { width:10px; height:10px;  fill:none; stroke-width:3; opacity:0; transition:opacity 120ms var(--ease); stroke:var(--accent-ink); }
+.check input:checked + .check-box {; background:var(--accent); border-color:var(--accent-border); }
 .check input:checked + .check-box svg { opacity:1; }
 
 /* ── INLINE EDIT ─────────────────────────────────────────────
    Renaming a monitor should not require a modal. Click the name,
    type, Enter. Escape puts it back. */
-.inline-edit { display:inline-flex; align-items:center; gap:7px; border-radius:var(--r-sm); padding:3px 7px; margin:-3px -7px;
+.inline-edit { display:inline-flex; align-items:center; gap:var(--space-1h); border-radius:var(--r-sm); padding:3px var(--space-1h); margin:-3px calc(-1 * var(--space-1h));
   cursor:text; transition:background 140ms var(--ease); }
 .inline-edit:hover { background:var(--surface-2); }
 .inline-edit:hover .inline-pencil { opacity:.6; }
 .inline-pencil { width:12px; height:12px; stroke:var(--ink-3); fill:none; stroke-width:1.8; opacity:0; transition:opacity 140ms var(--ease); }
-.inline-input { font-family:inherit; font-size:inherit; font-weight:inherit; color:inherit; background:var(--surface);
-  border:1px solid var(--up); border-radius:var(--r-sm); padding:2px 6px; margin:-3px -7px; outline:none;
-  box-shadow:0 0 0 3px color-mix(in srgb, var(--up) 14%, transparent); }
+.inline-input { font-family:inherit;  font-weight:inherit; color:inherit; background:var(--surface);
+  border:1px solid var(--up); border-radius:var(--r-sm); padding:2px var(--space-1h); margin:-3px calc(-1 * var(--space-1h)); outline:none;
+  box-shadow:0 0 0 var(--outline-ring-w) var(--accent-ring); border-color:var(--accent-border); }
 
 /* ── TABS ────────────────────────────────────────────────── */
-.tabs { display:flex; gap:2px; border-bottom:1px solid var(--border); margin-bottom:20px; }
-.tab { font-family:inherit; font-size:13px; color:var(--ink-3); background:none; border:0; padding:9px 13px;
-  cursor:pointer; position:relative; transition:color 140ms var(--ease); }
+.tabs { display:flex; gap:2px; border-bottom:1px solid var(--border); margin-bottom:var(--space-5); }
+.tab { font-family:inherit;  color:var(--ink-3); background:none; border:0; padding:var(--space-2) var(--space-3);
+  cursor:pointer; position:relative; transition:color 140ms var(--ease); font-size:var(--type-body); line-height:var(--lead-body); }
 .tab:hover { color:var(--ink-2); }
 .tab[aria-selected="true"] { color:var(--ink); }
 .tab[aria-selected="true"]::after { content:""; position:absolute; left:0; right:0; bottom:-1px; height:1.5px; background:var(--ink); }
 
 /* ── TABLE ROW ACTIONS ───────────────────────────────────── */
-.demo-row { display:flex; align-items:center; gap:14px; padding:13px 14px; border:1px solid var(--border);
-  border-radius:var(--r-md); background:var(--surface); }
-.demo-row + .demo-row { margin-top:8px; }
-.demo-row:hover .row-actions { opacity:1; }
-.row-actions { margin-left:auto; display:flex; gap:4px; opacity:0; transition:opacity 140ms var(--ease); }
-.icon-btn { width:28px; height:28px; border-radius:var(--r-sm); border:1px solid var(--border);
+.demo-row { display:flex; align-items:center; gap:var(--space-3); padding:var(--space-3) var(--space-4); background:var(--surface-panel); box-shadow:var(--shadow-raised); border:1px solid var(--border); border-radius:var(--r-md); }
+.demo-row + .demo-row { margin-top:var(--space-2); }
+.demo-row:hover .row-actions, .demo-row:focus-within .row-actions { opacity:1; }
+.row-actions { margin-left:auto; display:flex; gap:var(--space-1); opacity:0; transition:opacity 140ms var(--ease); }
+.icon-btn {   border-radius:var(--r-sm);
   background:var(--surface); color:var(--ink-2); cursor:pointer; display:grid; place-items:center;
-  transition:all 140ms var(--ease); }
+  transition:all 140ms var(--ease); width:var(--size-square-compact); height:var(--size-square-compact); border:1px solid var(--border-control); }
 .icon-btn:hover { background:var(--surface-2); color:var(--ink); border-color:var(--border-hi); }
 .icon-btn.danger:hover { color:var(--down); border-color:color-mix(in srgb,var(--down) 40%,var(--border)); background:var(--down-dim); }
 .icon-btn svg { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:1.7; }
 
 /* ── BADGES ──────────────────────────────────────────────── */
-.badge { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:450;
-  padding:3px 8px; border-radius:999px; border:1px solid var(--border-hi); color:var(--ink-2); background:var(--surface-2); }
+.badge { display:inline-flex; align-items:center; gap:var(--space-1);  font-weight:var(--weight-mid);
+  padding:3px var(--space-2); border-radius:var(--r-pill); border:1px solid var(--border-hi); color:var(--ink-2); background:var(--surface-2); font-size:var(--type-helper); line-height:var(--lead-helper); }
 .badge.up { color:var(--up); background:var(--up-dim); border-color:color-mix(in srgb,var(--up) 26%,transparent); }
 .badge.warn { color:var(--warn); background:var(--warn-dim); border-color:color-mix(in srgb,var(--warn) 26%,transparent); }
 .badge.down { color:var(--down); background:var(--down-dim); border-color:color-mix(in srgb,var(--down) 26%,transparent); }
-.badge.mono { font-family:var(--font-mono); font-size:10.5px; }
-/* The inline badge lamp (DESIGN.md 3.2). Smaller than the 20x7 scanned signal
-   because it is punctuation on an 11px line, not the thing being scanned, and
-   a rule rather than an inline style so the size stays changeable in one place.
-   The lens highlight insets less too: at 5px tall the 20x7 inset would leave a
-   one-pixel core and the lamp would read as an empty outline. */
-.badge .led { width:12px; height:5px; border-radius:1.5px; }
-.badge .led::after { inset:1px 1px 2px; border-radius:1px; }
+.badge.mono { font-family:var(--font-mono); font-size:var(--type-helper); line-height:var(--lead-helper); font-feature-settings:var(--feat-mono); font-variant-ligatures:var(--ligatures-mono); font-variant-numeric:var(--numeric-mono); text-rendering:var(--render-mono); }
 
 /* ── EMPTY STATE ─────────────────────────────────────────────
    The empty dashboard is the onboarding. It is the first thing a
    new self-hoster sees, so it gets a real design, not a shrug. */
-.empty { text-align:center; padding:52px 24px; }
-.empty-led { display:flex; justify-content:center; gap:5px; margin-bottom:20px; }
+/* The badge is the documented 12x5 text-scale exception (DESIGN.md §3.2).
+   Keep its dimensions literal: ledSizes.test.ts checks them against that rule;
+   the radius and lens still follow the shared LED stylesheet. */
+.badge .led { width:12px; height:5px; }
+.badge .led::after { inset:1px 1px 2px; }
+.badge .led-label { color:inherit; }
+.empty { text-align:center; padding:var(--space-12) var(--space-6); }
+.empty-led { display:flex; justify-content:center; gap:var(--space-1); margin-bottom:var(--space-5); }
 .empty-led .led { opacity:.28; }
-.empty h3 { font-size:15px; font-weight:500; letter-spacing:-.01em; margin-bottom:7px; }
-.empty p { font-size:12.5px; color:var(--ink-3); line-height:1.6; max-width:42ch; margin:0 auto 20px; }
+.empty h3 {  font-weight:var(--weight-strong); letter-spacing:var(--track-body); margin-bottom:var(--space-1h); font-size:var(--type-card); line-height:var(--lead-card); }
+.empty p {  color:var(--ink-3);  max-width:42ch; margin:0 auto var(--space-5); font-size:var(--type-body); line-height:var(--lead-body); }
 
 /* ── SKELETON ────────────────────────────────────────────────
    No spinners for things that take 50ms. A skeleton keeps the page
    from flashing; a spinner announces a wait that is not happening. */
 @keyframes shimmer { 100% { background-position:-200% 0; } }
 .skel { background:linear-gradient(90deg,var(--surface-2) 25%,var(--surface-hi) 50%,var(--surface-2) 75%);
-  background-size:200% 100%; animation:shimmer 1.4s linear infinite; border-radius:4px; }
-.skel-row { display:flex; align-items:center; gap:14px; padding:14px; border:1px solid var(--border); border-radius:var(--r-md); }
-.skel-row + .skel-row { margin-top:8px; }
+  background-size:200% 100%; animation:shimmer 1.4s linear infinite; border-radius:var(--r-sm); }
+.skel-row { display:flex; align-items:center; gap:var(--space-3); padding:var(--space-3) var(--space-4); background:var(--surface-panel); box-shadow:var(--shadow-raised); border:1px solid var(--border); border-radius:var(--r-md); }
+.skel-row + .skel-row { margin-top:var(--space-2); }
 
 /* ── TOAST ───────────────────────────────────────────────── */
-.toast-wrap { position:fixed; bottom:22px; right:22px; display:flex; flex-direction:column; gap:8px; z-index:80; }
-.toast { display:flex; align-items:flex-start; gap:11px; min-width:280px; max-width:380px;
-  padding:13px 15px; border-radius:var(--r-md); border:1px solid var(--border-hi); background:var(--surface);
-  box-shadow:0 12px 32px rgba(0,0,0,.4); animation:toastIn 320ms var(--ease); }
-[data-theme="light"] .toast { box-shadow:0 12px 30px rgba(16,24,40,.14); }
+.toast-wrap { position:fixed; bottom:22px; right:22px; display:flex; flex-direction:column; gap:var(--space-2); z-index:80; }
+.toast { display:flex; align-items:flex-start; gap:var(--space-2h); min-width:280px; max-width:380px;
+  padding:var(--space-3) var(--space-4); border-radius:var(--r-md); border:1px solid var(--border-hi);
+   animation:toastIn 320ms var(--ease); background:var(--surface-float); box-shadow:var(--shadow-float); }
+[data-theme="light"] .toast { box-shadow:var(--shadow-float); }
 @keyframes toastIn { from { opacity:0; transform:translateY(10px) scale(.97); } }
-.toast-title { font-size:12.5px; font-weight:450; }
-.toast-body { font-size:11.5px; color:var(--ink-3); margin-top:3px; line-height:1.5; }
-.toast-close { margin-left:auto; background:none; border:0; color:var(--ink-4); cursor:pointer; padding:0; line-height:1; }
+.toast-title {  font-weight:var(--weight-mid); font-size:var(--type-body); line-height:var(--lead-body); }
+.toast-body {  color:var(--ink-3); margin-top:3px; font-size:var(--type-helper); line-height:var(--lead-helper); }
+.toast-close { margin-left:auto; background:none; border:0; color:var(--ink-4); cursor:pointer; padding:0; line-height:var(--lead-body); }
 
 /* ── COMMAND PALETTE ─────────────────────────────────────── */
-.cmd-scrim { position:fixed; inset:0; background:rgba(0,0,0,.42); backdrop-filter:blur(3px);
+.cmd-scrim { position:fixed; inset:0; background:var(--scrim); backdrop-filter:blur(3px);
   opacity:0; pointer-events:none; transition:opacity 200ms var(--ease); z-index:90; }
 .cmd-scrim.open { opacity:1; pointer-events:auto; }
 .cmd { position:fixed; top:18vh; left:50%; transform:translateX(-50%) scale(.97); width:min(560px,92vw);
-  background:var(--surface); border:1px solid var(--border-hi); border-radius:var(--r-lg);
-  box-shadow:0 24px 60px rgba(0,0,0,.5); opacity:0; pointer-events:none; z-index:91;
-  transition:opacity 200ms var(--ease), transform 200ms var(--ease); overflow:hidden; }
+   border:1px solid var(--border-hi); border-radius:var(--r-lg);
+   opacity:0; pointer-events:none; z-index:91;
+  transition:opacity 200ms var(--ease), transform 200ms var(--ease); overflow:hidden; background:var(--surface-float); box-shadow:var(--shadow-float); }
 .cmd.open { opacity:1; pointer-events:auto; transform:translateX(-50%) scale(1); }
-.cmd-input { width:100%; font-family:inherit; font-size:14.5px; color:var(--ink); background:none;
-  border:0; border-bottom:1px solid var(--border); padding:16px 18px; outline:none; }
+.cmd-input { width:100%; font-family:inherit;  color:var(--ink); background:none;
+  border:0; border-bottom:1px solid var(--border); padding:var(--space-4) var(--space-4); outline:none; font-size:var(--type-row); line-height:var(--lead-row); }
 .cmd-input::placeholder { color:var(--ink-4); }
-.cmd-list { max-height:340px; overflow-y:auto; padding:6px; }
-.cmd-group { font-size:10px; text-transform:uppercase; letter-spacing:.09em; color:var(--ink-4); padding:9px 12px 5px; }
-.cmd-item { display:flex; align-items:center; gap:11px; padding:8px 12px; border-radius:var(--r-sm);
-  font-size:13px; cursor:pointer; }
+.cmd-list { max-height:340px; overflow-y:auto; padding:var(--space-1h); }
+.cmd-group {  text-transform:uppercase; letter-spacing:var(--track-body); color:var(--ink-4); padding:var(--space-2) var(--space-3) var(--space-1); font-size:var(--type-section); line-height:var(--lead-section); }
+.cmd-item { display:flex; align-items:center; gap:var(--space-2h); padding:var(--space-2) var(--space-3); border-radius:var(--r-sm);
+   cursor:pointer; font-size:var(--type-body); line-height:var(--lead-body); }
 .cmd-item[aria-selected="true"] { background:var(--surface-hi); }
 .cmd-item svg { width:15px; height:15px; stroke:var(--ink-3); fill:none; stroke-width:1.7; flex:none; }
-.kbd { margin-left:auto; font-family:var(--font-mono); font-size:10.5px; color:var(--ink-4);
-  border:1px solid var(--border-hi); border-radius:4px; padding:2px 6px; }
+.kbd { margin-left:auto; font-family:var(--font-mono);  color:var(--ink-4);
+  border:1px solid var(--border-hi); border-radius:var(--r-sm); padding:2px var(--space-1h); font-size:var(--type-helper); line-height:var(--lead-helper); font-feature-settings:var(--feat-mono); font-variant-ligatures:var(--ligatures-mono); font-variant-numeric:var(--numeric-mono); text-rendering:var(--render-mono); }
 
 /* ── CONFIRM DIALOG ──────────────────────────────────────── */
 .dlg { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%) scale(.97); width:min(400px,92vw);
-  background:var(--surface); border:1px solid var(--border-hi); border-radius:var(--r-lg); padding:22px;
-  box-shadow:0 24px 60px rgba(0,0,0,.5); opacity:0; pointer-events:none; z-index:91;
-  transition:opacity 200ms var(--ease), transform 200ms var(--ease); }
+   border:1px solid var(--border-hi); border-radius:var(--r-lg); padding:var(--space-5);
+   opacity:0; pointer-events:none; z-index:91;
+  transition:opacity 200ms var(--ease), transform 200ms var(--ease); background:var(--surface-float); box-shadow:var(--shadow-float); }
 .dlg.open { opacity:1; pointer-events:auto; transform:translate(-50%,-50%) scale(1); }
-.dlg h3 { font-size:15px; font-weight:500; letter-spacing:-.01em; margin-bottom:8px; }
-.dlg p { font-size:12.5px; color:var(--ink-2); line-height:1.6; margin-bottom:20px; }
-.dlg-actions { display:flex; gap:8px; justify-content:flex-end; }
+.dlg h3 {  font-weight:var(--weight-strong); letter-spacing:var(--track-body); margin-bottom:var(--space-2); font-size:var(--type-card); line-height:var(--lead-card); }
+.dlg p {  color:var(--ink-2);  margin-bottom:var(--space-5); font-size:var(--type-body); line-height:var(--lead-body); }
+.dlg-actions { display:flex; gap:var(--space-2); justify-content:flex-end; }
 
 .theme-btn { position:fixed; top:20px; right:20px; z-index:60; }
-.stack { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-.mt { margin-top:18px; }
-code { font-family:var(--font-mono); font-size:11.5px; color:var(--ink-2); background:var(--surface-2);
-  padding:1px 5px; border-radius:4px; }
+.stack { display:flex; flex-wrap:wrap; gap:var(--space-2); align-items:center; }
+.mt { margin-top:var(--space-4); }
+code { font-family:var(--font-mono);  color:var(--ink-2); background:var(--surface-2);
+  padding:1px var(--space-1); border-radius:var(--r-sm); font-size:var(--type-helper); line-height:var(--lead-helper); font-feature-settings:var(--feat-mono); font-variant-ligatures:var(--ligatures-mono); font-variant-numeric:var(--numeric-mono); text-rendering:var(--render-mono); }
 </style>
 </head>
 <body>
@@ -427,21 +365,21 @@ code { font-family:var(--font-mono); font-size:11.5px; color:var(--ink-2); backg
         </div>
         <div class="frame-panel">
           <div class="frame-row">
-            <span class="led" data-state="up"></span>
+            <span class="led-wrap"><span class="led" data-state="up" aria-hidden="true"></span><span class="sr-only">Up</span></span>
             <span class="frame-row-name">axonlawyers.com</span>
             <span class="frame-row-num">115 ms</span>
           </div>
         </div>
         <div class="frame-panel">
           <div class="frame-row">
-            <span class="led" data-state="up"></span>
+            <span class="led-wrap"><span class="led" data-state="up" aria-hidden="true"></span><span class="sr-only">Up</span></span>
             <span class="frame-row-name">gravast.nl</span>
             <span class="frame-row-num">22 ms</span>
           </div>
         </div>
         <div class="frame-panel">
           <div class="frame-row">
-            <span class="led" data-state="down"></span>
+            <span class="led-wrap"><span class="led" data-state="down" aria-hidden="true"></span><span class="sr-only">Down</span></span>
             <span class="frame-row-name">api.internal</span>
             <span class="frame-row-num">refused</span>
           </div>
@@ -455,26 +393,24 @@ code { font-family:var(--font-mono); font-size:11.5px; color:var(--ink-2); backg
     </div>
 
     <div class="card">
-      <div class="label" style="margin-bottom:12px">Why there is no wrapper</div>
+      <div class="label" style="margin-bottom:var(--space-3)">Why there is no wrapper</div>
       <div class="help">
         The tempting shape is a container holding the list, with the panels
-        inside it. It costs a third surface and a second 6px inset, and both are
-        visible: measured against the reference, that structure put the first row
-        <strong style="color:var(--ink)">67px</strong> below the card's edge where
-        the reference puts it at <strong style="color:var(--ink)">61px</strong>,
-        and stepped the fill one rung too light.
+        inside it. It costs a third surface and a second inset. Keep the list
+        wrapper transparent: the rows already supply the panel fill, edge and
+        shadow. The card supplies the frame.
       </div>
       <div class="help mt">
         The rule that falls out of it: <strong style="color:var(--ink)">if a thing
         already has an edge, it does not need a box around it.</strong> A list of
         panels is a list; the card is already the container.
       </div>
-      <div class="label mt" style="margin-bottom:10px">Depth ladder</div>
+      <div class="label mt" style="margin-bottom:var(--space-2h)">Depth ladder</div>
       <div class="help">
         <code>flat</code> is a stated decision, not an absence — it is what a card
-        takes. <code>raised</code> is what a panel takes. It used to be 5% black,
-        which on this canvas is indistinguishable from <code>none</code>; it is
-        now fitted to the reference's own shadow.
+        takes. <code>raised</code> is what a panel takes. Both come directly
+        from the shared shadow ladder, so changing that ladder changes this
+        example and the product together.
       </div>
     </div>
   </div>
@@ -509,13 +445,13 @@ code { font-family:var(--font-mono); font-size:11.5px; color:var(--ink-2); backg
     </div>
 
     <div class="card">
-      <div class="label" style="margin-bottom:12px">Notify on</div>
+      <div class="label" style="margin-bottom:var(--space-3)">Notify on</div>
       <label class="check"><input type="checkbox" checked><span class="check-box"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span> Goes down</label>
       <label class="check"><input type="checkbox" checked><span class="check-box"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span> Recovers</label>
       <label class="check"><input type="checkbox"><span class="check-box"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span> Becomes degraded</label>
       <label class="check"><input type="checkbox" checked><span class="check-box"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span> Certificate expiring</label>
 
-      <div class="label mt" style="margin-bottom:10px">Buttons</div>
+      <div class="label mt" style="margin-bottom:var(--space-2h)">Buttons</div>
       <div class="stack">
         <button class="btn btn-primary btn-sm">Primary</button>
         <button class="btn btn-secondary btn-sm">Secondary</button>
@@ -524,11 +460,11 @@ code { font-family:var(--font-mono); font-size:11.5px; color:var(--ink-2); backg
         <button class="btn btn-secondary btn-sm" disabled>Disabled</button>
       </div>
 
-      <div class="label mt" style="margin-bottom:10px">Badges</div>
+      <div class="label mt" style="margin-bottom:var(--space-2h)">Badges</div>
       <div class="stack">
-        <span class="badge up"><span class="led" data-state="up"></span> Up</span>
-        <span class="badge"><span class="led"></span> No data yet</span>
-        <span class="badge"><span class="led" data-state="off"></span> Paused</span>
+        <span class="badge up"><span class="led-wrap"><span class="led" data-state="up" aria-hidden="true"></span><span class="led-label">Up</span></span></span>
+        <span class="badge"><span class="led-wrap"><span class="led" aria-hidden="true" data-state="idle"></span><span class="led-label">No data yet</span></span></span>
+        <span class="badge"><span class="led-wrap"><span class="led" data-state="off" aria-hidden="true"></span><span class="led-label">Paused</span></span></span>
         <span class="badge warn">Degraded</span>
         <span class="badge down">Down</span>
         <span class="badge">Paused</span>
@@ -545,13 +481,13 @@ code { font-family:var(--font-mono); font-size:11.5px; color:var(--ink-2); backg
     <span class="sec-note">Renaming should not need a modal. Click the name, Enter to save, Esc to cancel.</span>
   </div>
   <div class="demo-row">
-    <span class="led" data-state="up"></span>
+    <span class="led-wrap"><span class="led" data-state="up" aria-hidden="true"></span><span class="sr-only">Up</span></span>
     <div>
       <span class="inline-edit" data-editable>
-        <span style="font-size:13.5px">Marketing site</span>
+        <span style="; font-size:var(--type-row); line-height:var(--lead-row); ">Marketing site</span>
         <svg class="inline-pencil" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
       </span>
-      <div style="font-family:var(--font-mono);font-size:11px;color:var(--ink-3);margin-top:3px">https://acme.co</div>
+      <div style="font-family:var(--font-mono);color:var(--ink-3);margin-top:3px; font-size:var(--type-helper); line-height:var(--lead-helper); ">https://acme.co</div>
     </div>
     <div class="row-actions">
       <button class="icon-btn" title="Check now"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg></button>
@@ -560,11 +496,11 @@ code { font-family:var(--font-mono); font-size:11.5px; color:var(--ink-2); backg
     </div>
   </div>
   <div class="demo-row">
-    <span class="led" data-state="down"></span>
+    <span class="led-wrap"><span class="led" data-state="down" aria-hidden="true"></span><span class="sr-only">Down</span></span>
     <div>
-      <span class="inline-edit" data-editable><span style="font-size:13.5px">Checkout API</span>
+      <span class="inline-edit" data-editable><span style="; font-size:var(--type-row); line-height:var(--lead-row); ">Checkout API</span>
         <svg class="inline-pencil" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></span>
-      <div style="font-family:var(--font-mono);font-size:11px;color:var(--ink-3);margin-top:3px">https://api.acme.co/v2/checkout</div>
+      <div style="font-family:var(--font-mono);color:var(--ink-3);margin-top:3px; font-size:var(--type-helper); line-height:var(--lead-helper); ">https://api.acme.co/v2/checkout</div>
     </div>
     <div class="row-actions">
       <button class="icon-btn" title="Check now"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg></button>
@@ -583,7 +519,7 @@ code { font-family:var(--font-mono); font-size:11.5px; color:var(--ink-2); backg
   <div class="row-2">
     <div class="card empty">
       <div class="empty-led">
-        <span class="led" data-state="off"></span><span class="led" data-state="off"></span><span class="led" data-state="off"></span>
+        <span class="led-wrap"><span class="led" data-state="off" aria-hidden="true"></span><span class="sr-only">Paused</span></span><span class="led-wrap"><span class="led" data-state="off" aria-hidden="true"></span><span class="sr-only">Paused</span></span><span class="led-wrap"><span class="led" data-state="off" aria-hidden="true"></span><span class="sr-only">Paused</span></span>
       </div>
       <h3>Nothing monitored yet</h3>
       <p>Add your first site or API and SubGlance starts checking within a minute.</p>
@@ -592,22 +528,22 @@ code { font-family:var(--font-mono); font-size:11.5px; color:var(--ink-2); backg
 
     <div class="card">
       <div class="skel-row">
-        <div class="skel" style="width:20px;height:7px;border-radius:2.5px"></div>
+        <div class="skel" style="width:20px;height:7px;border-radius:var(--r-2xs)"></div>
         <div style="flex:1">
           <div class="skel" style="width:38%;height:11px"></div>
-          <div class="skel" style="width:58%;height:9px;margin-top:7px"></div>
+          <div class="skel" style="width:58%;height:9px;margin-top:var(--space-1h)"></div>
         </div>
         <div class="skel" style="width:60px;height:11px"></div>
       </div>
       <div class="skel-row">
-        <div class="skel" style="width:20px;height:7px;border-radius:2.5px"></div>
+        <div class="skel" style="width:20px;height:7px;border-radius:var(--r-2xs)"></div>
         <div style="flex:1">
           <div class="skel" style="width:52%;height:11px"></div>
-          <div class="skel" style="width:34%;height:9px;margin-top:7px"></div>
+          <div class="skel" style="width:34%;height:9px;margin-top:var(--space-1h)"></div>
         </div>
         <div class="skel" style="width:60px;height:11px"></div>
       </div>
-      <div class="help" style="margin-top:14px">Skeletons, not spinners. A spinner announces a wait that is not happening.</div>
+      <div class="help" style="margin-top:var(--space-3)">Skeletons, not spinners. A spinner announces a wait that is not happening.</div>
     </div>
   </div>
 </section>
@@ -624,7 +560,7 @@ code { font-family:var(--font-mono); font-size:11.5px; color:var(--ink-2); backg
     </div>
     <div class="stack">
       <button class="btn btn-secondary" id="toastBtn">Show a toast</button>
-      <button class="btn btn-secondary" id="cmdBtn">Command palette <span class="kbd" style="margin-left:4px">⌘K</span></button>
+      <button class="btn btn-secondary" id="cmdBtn">Command palette <span class="kbd" style="margin-left:var(--space-1)">⌘K</span></button>
       <button class="btn btn-danger" id="dlgBtn">Delete monitor…</button>
     </div>
     <div class="help mt">Destructive actions confirm with the name typed back, not a bare “are you sure”. The second is a reflex; the first is a decision.</div>
@@ -638,9 +574,9 @@ code { font-family:var(--font-mono); font-size:11.5px; color:var(--ink-2); backg
   <input class="cmd-input" id="cmdInput" placeholder="Search monitors or run a command…" autocomplete="off">
   <div class="cmd-list">
     <div class="cmd-group">Monitors</div>
-    <div class="cmd-item" aria-selected="true"><span class="led" data-state="down"></span> Checkout API <span class="kbd">↵</span></div>
-    <div class="cmd-item"><span class="led" data-state="up"></span> Marketing site</div>
-    <div class="cmd-item"><span class="led" data-state="warn"></span> Search cluster</div>
+    <div class="cmd-item" aria-selected="true"><span class="led-wrap"><span class="led" data-state="down" aria-hidden="true"></span><span class="sr-only">Down</span></span> Checkout API <span class="kbd">↵</span></div>
+    <div class="cmd-item"><span class="led-wrap"><span class="led" data-state="up" aria-hidden="true"></span><span class="sr-only">Up</span></span> Marketing site</div>
+    <div class="cmd-item"><span class="led-wrap"><span class="led" data-state="warn" aria-hidden="true"></span><span class="sr-only">Warning</span></span> Search cluster</div>
     <div class="cmd-group">Actions</div>
     <div class="cmd-item"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> Add monitor <span class="kbd">N</span></div>
     <div class="cmd-item"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg> Check all now</div>
@@ -697,9 +633,8 @@ document.querySelectorAll("[data-editable]").forEach(el => {
     const original = label.textContent;
 
     const input = document.createElement("input");
-    input.className = "inline-input";
+    input.className = "inline-input mockup-row-text";
     input.value = original;
-    input.style.fontSize = "13.5px";
     el.replaceChildren(input);
     input.focus();
     input.select();
@@ -708,7 +643,7 @@ document.querySelectorAll("[data-editable]").forEach(el => {
       const value = save && input.value.trim() ? input.value.trim() : original;
       el.replaceChildren();
       const s = document.createElement("span");
-      s.style.fontSize = "13.5px";
+      s.className = "mockup-row-text";
       s.textContent = value;
       el.appendChild(s);
       el.insertAdjacentHTML("beforeend",
@@ -738,7 +673,7 @@ document.getElementById("testBtn").addEventListener("click", e => {
 function toast(title, body) {
   const el = document.createElement("div");
   el.className = "toast";
-  el.innerHTML = `<span class="led" data-state="up" style="margin-top:3px"></span>
+  el.innerHTML = `<span class="led-wrap"><span class="led" data-state="up" style="margin-top:3px" aria-hidden="true"></span><span class="sr-only">Up</span></span>
     <div><div class="toast-title">${title}</div><div class="toast-body">${body}</div></div>
     <button class="toast-close">✕</button>`;
   el.querySelector(".toast-close").onclick = () => el.remove();
