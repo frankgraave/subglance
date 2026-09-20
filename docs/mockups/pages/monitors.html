@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Monitors — SubGlance page proposal</title>
+<link rel="stylesheet" href="../../../web/src/styles/tokens.css">
+<link rel="stylesheet" href="../../../web/src/monitors/led.css">
+<link rel="stylesheet" href="../common.css">
 <link rel="stylesheet" href="shared.css">
 <!-- Theme script copied verbatim from _shell.html. Copied, not imported, so the
      file opens standalone from disk with no fetch(). -->
@@ -31,8 +34,8 @@
 /* The management row is denser than a dashboard row: it carries settings,
    not state. Fixed-width metadata columns so the eye can scan DOWN a
    column — the whole point of an inventory. */
-.mrow-meta { display: flex; align-items: center; gap: var(--space-3); flex: none; }
-.mrow-col  { display: flex; flex-direction: column; gap: var(--space-0h); align-items: flex-start; min-width: 0; }
+.mrow-meta { display: flex; align-items: center; gap:var(--space-3); flex: none; }
+.mrow-col  { display: flex; flex-direction: column; gap:var(--space-0h); align-items: flex-start; min-width: 0; }
 .mrow-col--num { align-items: flex-end; text-align: right; }
 .mrow-w-type { width: 4.5rem; }
 .mrow-w-num  { width: 3.5rem; }
@@ -43,8 +46,8 @@
    settings columns — name and target are the only way to identify the row. */
 .row-main { flex: 1 1 12rem; }
 @media (max-width: 1280px) { .mrow-w-tags { display: none; } }
-.mrow-acts { display: flex; gap: var(--space-1h); flex: none; }
-.mrow-chips { display: flex; gap: var(--space-1); flex-wrap: nowrap; overflow: hidden; }
+.mrow-acts { display: flex; gap:var(--space-1h); flex: none; }
+.mrow-chips { display: flex; gap:var(--space-1); flex-wrap: nowrap; overflow: hidden; }
 
 /* A paused monitor is not a failure, so it does not get a failure colour.
    It is dimmed AND carries a PAUSED chip — colour plus a second signal. */
@@ -55,13 +58,13 @@
 .row[data-selected="true"] { border-color: var(--accent-border); box-shadow: 0 0 0 1px var(--accent-ring); }
 
 /* Toolbar: search hard left, view/filter controls hard right. */
-.toolbar { display: flex; align-items: center; gap: var(--space-2); }
-.toolbar-right { margin-left: auto; display: flex; align-items: center; gap: var(--space-2); }
+.toolbar { display: flex; align-items: center; gap:var(--space-2); }
+.toolbar-right { margin-left:auto; display: flex; align-items: center; gap:var(--space-2); }
 .toolbar .input { width: 16rem; }
 
 /* The bulk bar replaces the toolbar in place rather than sliding in over
    the list — no layout jump, no new surface, no covered content. */
-.bulkbar { display: none; align-items: center; gap: var(--space-2); }
+.bulkbar { display: none; align-items: center; gap:var(--space-2); }
 .bulkbar[data-open="true"] { display: flex; }
 .toolbar[data-hidden="true"] { display: none; }
 
@@ -69,31 +72,30 @@
    is exactly why it is a drawer and not an inline panel: it is modal, it
    owns the screen while open, so the budget is spent on IT, not alongside
    the list. */
-.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; z-index: 20; }
+.scrim { position: fixed; inset: 0; background:var(--scrim); display: none; z-index: 20; }
 .scrim[data-open="true"] { display: block; }
 .drawer {
   position: fixed; top: 0; right: 0; bottom: 0; width: min(30rem, 100%);
-  background: var(--surface); border-left: 1px solid var(--border);
-  box-shadow: var(--shadow-float); z-index: 21;
-  display: none; flex-direction: column;
-}
+   border-left: 1px solid var(--border);
+   z-index: 21;
+  display: none; flex-direction: column; background:var(--surface-float); box-shadow:var(--shadow-float); }
 .drawer[data-open="true"] { display: flex; }
-.drawer-head { display: flex; align-items: center; gap: var(--space-2h); padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--border); }
-.drawer-body { padding: var(--space-5); display: flex; flex-direction: column; gap: var(--space-5); overflow: auto; }
-.drawer-foot { margin-top: auto; display: flex; align-items: center; gap: var(--space-2); padding: var(--space-4) var(--space-5); border-top: 1px solid var(--border); }
-.drawer-foot .spacer { margin-left: auto; }
+.drawer-head { display: flex; align-items: center; gap:var(--space-2h); padding:var(--space-4) var(--space-5); border-bottom: 1px solid var(--border); }
+.drawer-body { padding:var(--space-5); display: flex; flex-direction: column; gap:var(--space-5); overflow: auto; }
+.drawer-foot { margin-top:auto; display: flex; align-items: center; gap:var(--space-2); padding:var(--space-4) var(--space-5); border-top: 1px solid var(--border); }
+.drawer-foot .spacer { margin-left:auto; }
 
-.formgrid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+.formgrid { display: grid; grid-template-columns: 1fr 1fr; gap:var(--space-3); }
 /* `display:flex` on .fieldset beats the UA rule for [hidden]; restore it. */
 [hidden] { display: none !important; }
-.fieldset { display: flex; flex-direction: column; gap: var(--space-3); }
-.checkline { display: flex; align-items: center; gap: var(--space-2); font-size: var(--type-helper); color: var(--ink-2); }
-.checkgroup { display: flex; flex-wrap: wrap; gap: var(--space-3); }
-details.adv > summary { cursor: pointer; font-size: var(--type-helper); color: var(--ink-2); list-style: none; display: flex; align-items: center; gap: var(--space-1h); }
+.fieldset { display: flex; flex-direction: column; gap:var(--space-3); }
+.checkline { display: flex; align-items: center; gap:var(--space-2);  color: var(--ink-2); font-size:var(--type-helper); line-height:var(--lead-helper); }
+.checkgroup { display: flex; flex-wrap: wrap; gap:var(--space-3); }
+details.adv > summary { cursor: pointer;  color: var(--ink-2); list-style: none; display: flex; align-items: center; gap:var(--space-1h); font-size:var(--type-helper); line-height:var(--lead-helper); }
 details.adv > summary::-webkit-details-marker { display: none; }
 details.adv > summary::before { content: "▸"; color: var(--ink-3); }
 details.adv[open] > summary::before { content: "▾"; }
-details.adv > .fieldset { padding-top: var(--space-3); }
+details.adv > .fieldset { padding-top:var(--space-3); }
 
 .testresult { display: none; }
 .testresult[data-open="true"] { display: block; }
@@ -103,9 +105,9 @@ details.adv > .fieldset { padding-top: var(--space-3); }
    columns and become a wrapped strip under the name. The toolbar scrolls
    sideways rather than widening the page. */
 @media (max-width: 720px) {
-  .mrow-meta { flex-wrap: wrap; flex: 1 1 100%; gap: var(--space-2) var(--space-3); }
+  .mrow-meta { flex-wrap: wrap; flex: 1 1 100%; gap:var(--space-2) var(--space-3); }
   .mrow-chips { flex-wrap: wrap; overflow: visible; }
-  .toolbar-right { margin-left: 0; width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .toolbar-right { margin-left:0; width: 100%; overflow-x: auto; scrollbar-width: none; }
   .toolbar-right::-webkit-scrollbar { display: none; }
   .toolbar-right > * { flex: none; }
 }
@@ -116,7 +118,7 @@ details.adv > .fieldset { padding-top: var(--space-3); }
 
   <aside class="shell-side">
     <div class="shell-brand">
-      <span class="led" data-state="up" aria-hidden="true"></span>
+      <span class="led-wrap"><span class="led" data-state="up" aria-hidden="true"></span><span class="sr-only">Up</span></span>
       <span class="shell-brand-name">SubGlance</span>
     </div>
 
@@ -237,7 +239,7 @@ details.adv > .fieldset { padding-top: var(--space-3); }
                one row stops being scannable. -->
           <div class="row" data-type="http" data-paused="false" data-status="up">
             <input type="checkbox" aria-label="Select checkout-api-eu-west-1.internal.acme-corporation.example" onchange="onSelect(this)">
-            <span class="led led--sm" data-state="up"></span><span class="sr-only" data-statusword>Up</span>
+            <span class="led-wrap"><span class="led led--sm" data-state="up" aria-hidden="true"></span><span class="sr-only" data-statusword>Up</span></span>
             <div class="row-main">
               <div class="row-name">checkout-api-eu-west-1.internal.acme-corporation.example</div>
               <div class="row-sub">GET https://checkout-api-eu-west-1.internal.acme-corporation.example/healthz</div>
@@ -258,7 +260,7 @@ details.adv > .fieldset { padding-top: var(--space-3); }
 
           <div class="row" data-type="http" data-paused="false" data-status="down">
             <input type="checkbox" aria-label="Select auth.example.com" onchange="onSelect(this)">
-            <span class="led led--sm" data-state="down"></span><span class="sr-only" data-statusword>Down</span>
+            <span class="led-wrap"><span class="led led--sm" data-state="down" aria-hidden="true"></span><span class="sr-only" data-statusword>Down</span></span>
             <div class="row-main">
               <div class="row-name">auth.example.com</div>
               <div class="row-sub">GET https://auth.example.com/login · keyword must_contain "Sign in"</div>
@@ -279,7 +281,7 @@ details.adv > .fieldset { padding-top: var(--space-3); }
 
           <div class="row" data-type="http" data-paused="false" data-status="up">
             <input type="checkbox" aria-label="Select cdn.example.com" onchange="onSelect(this)">
-            <span class="led led--sm" data-state="up"></span><span class="sr-only" data-statusword>Up</span>
+            <span class="led-wrap"><span class="led led--sm" data-state="up" aria-hidden="true"></span><span class="sr-only" data-statusword>Up</span></span>
             <div class="row-main">
               <div class="row-name">cdn.example.com</div>
               <div class="row-sub">HEAD https://cdn.example.com/assets/app.css · expects 200</div>
@@ -302,7 +304,7 @@ details.adv > .fieldset { padding-top: var(--space-3); }
 
           <div class="row" data-type="ssl" data-paused="false" data-status="warn">
             <input type="checkbox" aria-label="Select status.acme.studio" onchange="onSelect(this)">
-            <span class="led led--sm" data-state="warn"></span><span class="sr-only" data-statusword>Warning</span>
+            <span class="led-wrap"><span class="led led--sm" data-state="warn" aria-hidden="true"></span><span class="sr-only" data-statusword>Warning</span></span>
             <div class="row-main">
               <div class="row-name">status.acme.studio</div>
               <div class="row-sub">TLS status.acme.studio:443 · warn 14 days before expiry</div>
@@ -323,7 +325,7 @@ details.adv > .fieldset { padding-top: var(--space-3); }
 
           <div class="row" data-type="tcp" data-paused="false" data-status="up">
             <input type="checkbox" aria-label="Select db.internal.example" onchange="onSelect(this)">
-            <span class="led led--sm" data-state="up"></span><span class="sr-only" data-statusword>Up</span>
+            <span class="led-wrap"><span class="led led--sm" data-state="up" aria-hidden="true"></span><span class="sr-only" data-statusword>Up</span></span>
             <div class="row-main">
               <div class="row-name">db.internal.example</div>
               <div class="row-sub">TCP db.internal.example:5432</div>
@@ -346,7 +348,7 @@ details.adv > .fieldset { padding-top: var(--space-3); }
                "expects a ping" where the others say what they call. -->
           <div class="row" data-type="push" data-paused="false" data-status="up">
             <input type="checkbox" aria-label="Select nightly-database-backup-verification" onchange="onSelect(this)">
-            <span class="led led--sm" data-state="up"></span><span class="sr-only" data-statusword>Up</span>
+            <span class="led-wrap"><span class="led led--sm" data-state="up" aria-hidden="true"></span><span class="sr-only" data-statusword>Up</span></span>
             <div class="row-main">
               <div class="row-name">nightly-database-backup-verification</div>
               <div class="row-sub">PUSH expects a ping every 24h · /api/push/hk3f…9qz1</div>
@@ -370,7 +372,7 @@ details.adv > .fieldset { padding-top: var(--space-3); }
                health state — it is a configuration state. -->
           <div class="row" data-type="ping" data-paused="true" data-status="idle">
             <input type="checkbox" aria-label="Select harbor-goods.app" onchange="onSelect(this)">
-            <span class="led led--sm" data-state="idle"></span><span class="sr-only" data-statusword>Paused</span>
+            <span class="led-wrap"><span class="led led--sm" data-state="off" aria-hidden="true"></span><span class="sr-only" data-statusword>Paused</span></span>
             <div class="row-main">
               <div class="row-name">harbor-goods.app <span class="chip chip--meta">PAUSED</span></div>
               <div class="row-sub">PING harbor-goods.app · paused 3 days ago by operator@example.com</div>
@@ -713,7 +715,7 @@ function setPaused(row, paused) {
   }
   row.setAttribute("data-paused", paused ? "true" : "false");
   row.setAttribute("data-status", status);
-  row.querySelector(".led").setAttribute("data-state", paused ? "idle" : status);
+  row.querySelector(".led").setAttribute("data-state", paused ? "off" : status);
   /*
    * The lamp is colour; this is the same fact in words, for everyone the
    * colour never reaches. It has to move with the state or the two disagree,
@@ -721,8 +723,8 @@ function setPaused(row, paused) {
    */
   var word = row.querySelector("[data-statusword]");
   if (word) {
-    var WORDS = { up: "Up", down: "Down", warn: "Warning", idle: "Paused" };
-    word.textContent = WORDS[paused ? "idle" : status] || "Unknown";
+    var WORDS = { up: "Up", down: "Down", warn: "Warning", idle: "Waiting", off: "Paused" };
+    word.textContent = WORDS[paused ? "off" : status] || "Unknown";
   }
   var name = row.querySelector(".row-name");
   var chip = name.querySelector(".chip");
