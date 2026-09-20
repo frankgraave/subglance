@@ -126,6 +126,66 @@ paths:
                 database: down
                 error: 'context deadline exceeded'
       x-subglance-access: public
+  /api/v1/watchdog:
+    get:
+      tags: [Health]
+      operationId: getWatchdog
+      summary: Read outbound watchdog history
+      description: |
+        Process-local history from the actual outbound watchdog. Requires any
+        authenticated role. Contains no destination URL, payload, response body,
+        monitor data or raw error. Restarting clears all history. This is not
+        proof that the receiver has armed an alarm, nor a liveness probe.
+
+        A configured watchdog waits one full interval before its first ping.
+        Nullable fields remain null until observed. Last attempt is the start
+        of the most recent request; last success is the receipt of 2xx headers
+        (including a clean-shutdown ping). Last result/status describe the most
+        recently completed request, even while a newer request is in flight.
+        Last event belongs to the latest attempt. A suppressed decision retains
+        the preceding request history: it does not count as an attempted ping.
+        Overdue means no decision for an interval plus the 10-second request
+        allowance. A historical success must not be treated as current health
+        when suppressed, overdue, in flight, or the API itself is unavailable.
+      x-subglance-access: read
+      responses:
+        '200':
+          description: Known configuration and history; explicit disabled state is not an error.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: 'private, no-store' }
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [configured, interval_seconds, last_decision_at, last_attempt_at, last_success_at, last_result, last_status_code, last_event, suppressed, in_flight, overdue]
+                properties:
+                  configured: { type: boolean }
+                  interval_seconds:
+                    type: [number, 'null']
+                    description: Null when disabled; otherwise the configured ping interval in seconds.
+                  last_decision_at: { type: [string, 'null'], format: date-time }
+                  last_attempt_at: { type: [string, 'null'], format: date-time }
+                  last_success_at: { type: [string, 'null'], format: date-time }
+                  last_result:
+                    type: [string, 'null']
+                    enum: [succeeded, rejected, transport_error, timeout, canceled, request_error, null]
+                  last_status_code:
+                    type: [integer, 'null']
+                    description: Most recent completed request's HTTP status; null if no response arrived.
+                  last_event:
+                    type: [string, 'null']
+                    enum: [alive, stopped, null]
+                  suppressed:
+                    type: boolean
+                    description: Latest decision withheld a ping because the checking pipeline did not progress.
+                  in_flight: { type: boolean }
+                  overdue: { type: boolean }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          description: Diagnostic source unavailable; must not be interpreted as not configured.
   /metrics:
     get:
       tags: [Health]

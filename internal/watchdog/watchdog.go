@@ -52,11 +52,13 @@ package watchdog
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 )
 
@@ -102,11 +104,14 @@ type Options struct {
 
 // Watchdog pings an external URL on a schedule.
 type Watchdog struct {
-	url      string
-	interval time.Duration
-	liveness func() Liveness
-	log      *slog.Logger
-	client   *http.Client
+	mu        sync.RWMutex
+	history   history
+	createdAt time.Time
+	url       string
+	interval  time.Duration
+	liveness  func() Liveness
+	log       *slog.Logger
+	client    *http.Client
 
 	// last is the liveness reading at the previous ping decision.
 	last Liveness
@@ -149,11 +154,12 @@ func New(opts Options) (*Watchdog, error) {
 	}
 
 	return &Watchdog{
-		url:      opts.URL,
-		interval: interval,
-		liveness: opts.Liveness,
-		log:      log,
-		client:   client,
+		createdAt: time.Now(),
+		url:       opts.URL,
+		interval:  interval,
+		liveness:  opts.Liveness,
+		log:       log,
+		client:    client,
 	}, nil
 }
 
@@ -224,6 +230,10 @@ func (w *Watchdog) tick(ctx context.Context) {
 	w.last = now
 
 	if !progressed && !idle {
+		w.mu.Lock()
+		w.history.decision = time.Now().UTC()
+		w.history.suppressed = true
+		w.mu.Unlock()
 		// Staying silent here is the whole point of the feature: the
 		// process is running but the check pipeline is not, and the
 		// receiving end should treat that exactly like a dead host.
@@ -258,9 +268,11 @@ func (w *Watchdog) pingStopped() {
 // send performs one ping. Failures are logged, never returned: a watchdog that
 // takes the process down with it would be worse than no watchdog.
 func (w *Watchdog) send(ctx context.Context, event, body string) {
+	w.beginAttempt(event)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, w.url, bytes.NewBufferString(body))
 	if err != nil {
 		w.log.Error("watchdog ping could not be built", "error", err)
+		w.finishAttempt("request_error", 0)
 		return
 	}
 	req.Header.Set("Content-Type", "text/plain; charset=utf-8")
@@ -272,6 +284,14 @@ func (w *Watchdog) send(ctx context.Context, event, body string) {
 	resp, err := w.client.Do(req)
 	if err != nil {
 		w.log.Error("watchdog ping failed", "event", event, "error", err)
+		result := "transport_error"
+		var networkError interface{ Timeout() bool }
+		if errors.Is(err, context.Canceled) {
+			result = "canceled"
+		} else if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &networkError) && networkError.Timeout()) {
+			result = "timeout"
+		}
+		w.finishAttempt(result, 0)
 		return
 	}
 	defer func() {
@@ -286,7 +306,9 @@ func (w *Watchdog) send(ctx context.Context, event, body string) {
 		// A 3xx lands here rather than being followed; see the client
 		// setup in New.
 		w.log.Error("watchdog ping rejected", "event", event, "status", resp.StatusCode)
+		w.finishAttempt("rejected", resp.StatusCode)
 		return
 	}
 	w.log.Debug("watchdog ping sent", "event", event)
+	w.finishAttempt("succeeded", resp.StatusCode)
 }
