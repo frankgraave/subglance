@@ -93,7 +93,7 @@ tokens and revoke one, while minting a new token needs editor or admin.
 | `http` | `https://example.com/health` | Status code, response time, keyword present or absent, certificate expiry |
 | `tcp` | `db.example.com:5432` | A TCP handshake completes within the timeout |
 | `ping` | `example.com` or `192.0.2.10` | ICMP echo reply |
-| `ssl` | `example.com` (port optional, defaults to 443) | Certificate validity, hostname match, chain of trust, days until expiry |
+| `ssl` | `example.com` (port optional, defaults to 443) | Certificate validity, hostname match, chain of trust, days until expiry, OCSP revocation when available |
 | `push` | none — the job reports in | That the job reported inside its window |
 
 Creating or editing a monitor rejects whitespace inside its hostname, including
@@ -112,6 +112,41 @@ The SSL check verifies the certificate itself rather than letting the handshake
 fail, so an expired certificate still reports *when* it expired and by how much.
 Set `ssl_warn_days` to fail the check while there is still time to renew, instead
 of at the moment the site breaks.
+
+SSL monitors also check the **leaf certificate's OCSP revocation status** after
+validating its chain. A fresh, authenticated stapled response takes precedence;
+if it is absent, invalid, stale or unknown, SubGlance tries the certificate's
+OCSP responders. An authenticated `revoked` answer fails with the TLS cause
+`certificate revoked (OCSP)`, retaining the certificate expiry date. Response
+signatures, serial and issuer identity, responder authorization and timestamps
+are checked before accepting an answer. These checks follow the acceptance
+requirements in [RFC 6960 §3.2](https://www.rfc-editor.org/rfc/rfc6960.html#section-3.2).
+
+**Revocation is best effort, with a soft-fail policy.** An unreachable or blocked
+responder, an unknown status, an invalid response, or a certificate without an
+OCSP responder does not make an otherwise valid endpoint fail. A passing SSL
+check therefore does **not prove that its certificate is unrevoked**. The result
+does not expose a separate revocation-certainty field. Active lookup has a
+shared two-second budget within the monitor's existing timeout and caller
+context, at most three responder attempts of at most one second each, a 64 KiB
+response-body limit and a 16 KiB response-header limit. Responses expire at
+`nextUpdate` and may be at most seven days old; without `nextUpdate`, at most
+24 hours old. Future timestamps allow five minutes of clock skew.
+
+Responder URLs must use HTTP or HTTPS and cannot include credentials or
+fragments. Redirects and environment proxies are disabled. Resolved addresses
+pass the normal private/reserved-address guard at connection time, **even with
+`--allow-private-targets` enabled**: permission to monitor an internal service
+does not grant a certificate permission to contact arbitrary internal services.
+Internal OCSP responders therefore remain unavailable to active lookup; a valid
+staple still works. HTTPS responders require a normally trusted TLS certificate.
+
+CRL downloads are deliberately omitted: whole revocation lists can be large and
+need their own download, caching and freshness policy. Intermediate CA and
+responder-certificate revocation are not recursively queried, and TLS
+Must-Staple is not enforced. A directly trusted leaf has no separate verified
+issuer to query. HTTP monitors retain their existing TLS checks; use an SSL
+monitor for this OCSP check.
 
 Ping needs either unprivileged ICMP sockets or `CAP_NET_RAW`. SubGlance tries the
 unprivileged socket first and falls back to the raw one; when neither is allowed
