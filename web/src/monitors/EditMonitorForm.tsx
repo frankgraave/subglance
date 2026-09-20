@@ -1,17 +1,22 @@
 import { useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
+import { IconAlert } from "../components/icons";
 import type { InventoryMonitor } from "./inventory";
 import type { MonitorPatch } from "./inventoryApi";
 import { tagsToText, textToTags } from "./tags";
+import { TlsFloorField } from "./TlsFloorField";
 
 /**
  * Editing an existing monitor.
  *
- * This form still edits only name, timing and tags. The versioned detail
- * read now supplies the other check settings (SUB-129), but adding controls
+ * This form edits name, timing, tags and the TLS floor. The versioned detail
+ * read supplies the other check settings (SUB-129), but adding controls
  * for them is a separate UI change. Until those values are modelled here,
  * no blank/default input may overwrite a setting the user has not seen.
  * The caller pairs the displayed values with the ETag from the same read.
+ *
+ * The TLS floor preserves absence: an omitted value means no opinion, not
+ * today's default. Opening this form must never pin a floor nobody chose.
  *
  * **Target and type remain read-only.**
  * Changing a target re-validates against the type and can fail in ways only a
@@ -57,6 +62,7 @@ function FieldError({
   if (problem === null || problem.field !== field) return null;
   return (
     <p className="add-field-error" id={`${ids}-${field}-error`} role="alert">
+      <IconAlert />
       {problem.message}
     </p>
   );
@@ -92,6 +98,14 @@ export function EditMonitorForm({
    */
   const initialTagText = tagsToText(monitor.tags);
   const [tagText, setTagText] = useState(initialTagText);
+  /*
+   * The TLS floor, `""` when the monitor has none.
+   *
+   * Loaded straight from the monitor with no fallback. Defaulting to "1.2"
+   * would mean opening the drawer and pressing Save pinned a floor the user
+   * never chose, which is the one thing the nullable column exists to avoid.
+   */
+  const [minTlsVersion, setMinTlsVersion] = useState(monitor.minTlsVersion);
   const [saving, setSaving] = useState(false);
   /*
    * A rejection, and which control it is about.
@@ -176,6 +190,17 @@ export function EditMonitorForm({
       if (timeout !== monitor.timeoutS) patch.timeout_s = timeout;
     }
     if (tagsToText(tags) !== initialTagText) patch.tags = tags;
+    /*
+     * Sent only when it actually moved, like every other field here.
+     *
+     * When it moved to `""` the empty string is sent deliberately: PATCH reads
+     * that as "take the floor back off", and it is the only way to undo a
+     * floor from this form. Untouched means untouched, so a monitor with no
+     * opinion that is renamed keeps having no opinion.
+     */
+    if (minTlsVersion !== monitor.minTlsVersion) {
+      patch.min_tls_version = minTlsVersion;
+    }
 
     if (Object.keys(patch).length === 0) {
       reject("Nothing changed, so nothing was sent.");
@@ -281,12 +306,29 @@ export function EditMonitorForm({
         </p>
       </div>
 
+      {/*
+       * Collapsed, like the add form's, and for the same reason: this is a
+       * setting most monitors never need, and the two forms disagreeing about
+       * where it lives would make it something to hunt for.
+       */}
+      {monitor.push === undefined && (
+        <details className="add-advanced">
+          <summary className="add-summary">Advanced options</summary>
+          <div className="add-grid">
+            <TlsFloorField
+              id={`${ids}-min-tls`}
+              value={minTlsVersion}
+              onChange={setMinTlsVersion}
+            />
+          </div>
+        </details>
+      )}
+
       <p className="add-help">
         Target and check type are not editable here: changing either can only be
         verified by probing it, which the add form does with Test it. Method,
-        expected status, keyword and headers are not shown because this screen
-        never received their current values, and an input that starts blank
-        would invite you to erase a setting you cannot see.
+        expected status, keyword and headers are not yet editable here. Saving
+        leaves those settings unchanged.
       </p>
 
       {/* Only what is NOT about a single control lands here. A message that

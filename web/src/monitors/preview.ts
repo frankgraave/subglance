@@ -26,6 +26,15 @@ export type PreviewRequest = {
   keyword?: string;
   keyword_mode?: string;
   follow_redirects?: boolean;
+  /**
+   * "1.0" to "1.3". Omitted means the probe uses the SubGlance default.
+   *
+   * Sent because it genuinely changes what is probed: the appliance someone
+   * lowers the floor for is exactly the target they are about to press Test
+   * it on, and a preview that ignored the floor would answer a question they
+   * did not ask.
+   */
+  min_tls_version?: string;
 };
 
 /** POST /api/v1/monitors/preview, as the server returns it. */
@@ -86,6 +95,9 @@ export function fingerprintPreview(req: PreviewRequest): PreviewFingerprint {
     req.keyword ?? "",
     req.keyword_mode ?? "",
     req.follow_redirects ?? null,
+    // Part of the fingerprint because a floor change makes an earlier probe
+    // evidence about a handshake that would no longer be attempted.
+    req.min_tls_version ?? "",
   ]);
 }
 

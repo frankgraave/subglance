@@ -52,10 +52,13 @@ it("does not prompt for pristine controls or a reverted edit", () => {
   expect(screen.queryByRole("dialog")).toBeNull();
 });
 
-it("guards browser unload for advanced-only edits without persisting a draft", () => {
+it.each([
+  ["Give up after", "15"],
+  ["Minimum TLS version", "1.3"],
+])("guards browser unload for an advanced-only %s edit without persisting a draft", (label, value) => {
   const storage = vi.spyOn(Storage.prototype, "setItem");
   render(<Surface />); fireEvent.click(screen.getByRole("button", { name: "Add monitor" }));
-  fireEvent.change(screen.getByLabelText("Give up after"), { target: { value: "15" } });
+  fireEvent.change(screen.getByLabelText(label), { target: { value } });
   const event = new Event("beforeunload", { cancelable: true });
   window.dispatchEvent(event);
   expect(event.defaultPrevented).toBe(true);
