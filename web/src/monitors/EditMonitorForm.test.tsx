@@ -101,6 +101,17 @@ describe("EditMonitorForm", () => {
     expect(screen.queryByLabelText(/timeout/i)).toBeNull();
   });
 
+  it("offers no TLS floor or empty advanced panel for a push monitor", () => {
+    render(
+      <EditMonitorForm
+        monitor={make({ type: "push", target: "", push_interval_s: 3600 })}
+        onSave={vi.fn()}
+      />,
+    );
+    expect(screen.queryByLabelText(/minimum tls version/i)).toBeNull();
+    expect(screen.queryByText("Advanced options")).toBeNull();
+  });
+
   it("says why target, type and the HTTP settings are not editable here", () => {
     // The detail endpoint carries these settings, but this form has no
     // controls for them yet. Saving must leave them unchanged.
@@ -194,6 +205,7 @@ describe("EditMonitorForm", () => {
       /between 20 and 86400/,
     );
     expect(document.activeElement).toBe(interval);
+    expect(screen.getByRole("alert").querySelector('svg[aria-hidden="true"]')).not.toBeNull();
   });
 
   it("leaves a rejection that is about no single field unpinned", () => {

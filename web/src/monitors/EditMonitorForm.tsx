@@ -1,5 +1,6 @@
 import { useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
+import { IconAlert } from "../components/icons";
 import type { InventoryMonitor } from "./inventory";
 import type { MonitorPatch } from "./inventoryApi";
 import { tagsToText, textToTags } from "./tags";
@@ -61,6 +62,7 @@ function FieldError({
   if (problem === null || problem.field !== field) return null;
   return (
     <p className="add-field-error" id={`${ids}-${field}-error`} role="alert">
+      <IconAlert />
       {problem.message}
     </p>
   );
@@ -309,16 +311,18 @@ export function EditMonitorForm({
        * setting most monitors never need, and the two forms disagreeing about
        * where it lives would make it something to hunt for.
        */}
-      <details className="add-advanced">
-        <summary className="add-summary">Advanced options</summary>
-        <div className="add-grid">
-          <TlsFloorField
-            id={`${ids}-min-tls`}
-            value={minTlsVersion}
-            onChange={setMinTlsVersion}
-          />
-        </div>
-      </details>
+      {monitor.push === undefined && (
+        <details className="add-advanced">
+          <summary className="add-summary">Advanced options</summary>
+          <div className="add-grid">
+            <TlsFloorField
+              id={`${ids}-min-tls`}
+              value={minTlsVersion}
+              onChange={setMinTlsVersion}
+            />
+          </div>
+        </details>
+      )}
 
       <p className="add-help">
         Target and check type are not editable here: changing either can only be

@@ -521,6 +521,27 @@ describe("a rejection that names a field", () => {
   const panel = () =>
     document.querySelector("details.add-advanced") as HTMLDetailsElement;
 
+  it.each([
+    ["min_tls_version", /minimum tls version/i],
+    ["target", /what should be watched/i],
+  ])("pairs a %s rejection with a decorative error icon and linked text", (fieldName, label) => {
+    render(
+      <AddMonitorForm
+        onPreview={noop}
+        onSubmit={noop}
+        preview={{ phase: "idle" }}
+        saveError={{ field: fieldName, message: "Choose a supported value." }}
+      />,
+    );
+    const error = screen.getByRole("alert");
+    expect(error.textContent).toBe("Choose a supported value.");
+    expect(error.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    const input = screen.getByLabelText(label);
+    expect(input.getAttribute("aria-describedby")?.split(" ")).toContain(error.id);
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    if (fieldName === "min_tls_version") expect(panel().open).toBe(true);
+  });
+
   it("opens the advanced panel when the rejection is about a control inside it", () => {
     // interval_s lives in the collapsed <details>. Its message was rendered
     // under the input, and both global notices are suppressed once a message

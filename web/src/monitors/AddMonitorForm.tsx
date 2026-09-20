@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
+import { IconAlert } from "../components/icons";
 import { isPush } from "./push";
 import { TlsFloorField } from "./TlsFloorField";
 import { TLS_FLOOR_UNSET } from "./tlsFloor";
@@ -713,6 +714,7 @@ function FieldError({
   if (badControl !== control || rejection === null) return null;
   return (
     <p id={`${ids}-field-error`} role="alert" className="add-field-error">
+      <IconAlert />
       {rejection.message}
     </p>
   );
