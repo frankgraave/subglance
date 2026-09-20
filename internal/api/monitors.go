@@ -82,6 +82,9 @@ type monitorResponse struct {
 	// not how it travels.
 	Tags map[string]string `json:"tags,omitempty"`
 
+	// Present on list reads: [] means no attachments; omitted means unknown.
+	Channels *[]monitorChannelResponse `json:"channels,omitempty"`
+
 	// Heartbeats is filled in only when the caller asked for it with the
 	// `heartbeats` query parameter, oldest first. Omitting the field
 	// entirely when it was not requested keeps the default response byte
@@ -89,6 +92,29 @@ type monitorResponse struct {
 	Heartbeats []heartbeatResponse `json:"heartbeats,omitempty"`
 
 	CreatedAt time.Time `json:"created_at"`
+}
+
+type monitorChannelResponse struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+// monitorDetailResponse adds raw editable settings to the versioned detail
+// read only. False, zero and empty are meaningful baselines. Only request
+// secrets may be omitted, for callers who cannot edit the monitor.
+// Keeping this separate prevents new consumers of monitorResponse (including
+// live payloads) from inadvertently disclosing request credentials.
+type monitorDetailResponse struct {
+	monitorResponse
+	Method          string             `json:"method"`
+	ExpectedStatus  string             `json:"expected_status"`
+	Keyword         string             `json:"keyword"`
+	KeywordMode     string             `json:"keyword_mode"`
+	FollowRedirects bool               `json:"follow_redirects"`
+	Headers         *map[string]string `json:"headers,omitempty"`
+	Body            *string            `json:"body,omitempty"`
+	Retries         int                `json:"retries"`
+	SSLWarnDays     int                `json:"ssl_warn_days"`
 }
 
 // heartbeatResponse is the wire shape of one recorded check result. It is
@@ -195,9 +221,20 @@ func (s *Server) handleListMonitors(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	channels, channelErr := s.db.MonitorChannelSummaries(ctx)
+	if channelErr != nil {
+		s.log.Error("monitor channel summaries", "error", channelErr)
+	}
 	out := make([]monitorResponse, 0, len(monitors))
 	for _, m := range monitors {
 		resp := s.describeMonitor(r, m)
+		if channelErr == nil {
+			attached := make([]monitorChannelResponse, 0, len(channels[m.ID]))
+			for _, c := range channels[m.ID] {
+				attached = append(attached, monitorChannelResponse{ID: c.ID, Name: c.Name})
+			}
+			resp.Channels = &attached
+		}
 		if perMonitor > 0 {
 			resp.Heartbeats = oldestFirstHeartbeats(beats[m.ID])
 		}
@@ -583,7 +620,7 @@ func validateTargetForType(typ, target string) problem {
 		}
 		// Whitespace inside the host is never a hostname. ParseHostPort only
 		// trims the ends, so "a b.com" survives it and then fails to resolve.
-		if strings.ContainsAny(host, " \t\r\n") {
+		if strings.ContainsAny(host, " 	\r\n") {
 			return bad("a hostname cannot contain spaces")
 		}
 	}
@@ -616,7 +653,28 @@ func (s *Server) handleGetMonitor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setMonitorETag(w, m)
-	writeJSON(w, http.StatusOK, s.describeMonitor(r, m))
+	// Only the authenticated detail read carries request configuration. Keep
+	// credentials and request bodies out of the bulk/dashboard serializer.
+	headers := m.Headers
+	if headers == nil {
+		headers = map[string]string{}
+	}
+	resp := monitorDetailResponse{
+		monitorResponse: s.describeMonitor(r, m),
+		Method:          m.Method, ExpectedStatus: m.ExpectedStatus,
+		Keyword: m.Keyword, KeywordMode: m.KeywordMode,
+		FollowRedirects: m.FollowRedirects,
+		Retries:         m.Retries, SSLWarnDays: m.SSLWarnDays,
+	}
+	// A viewer can inspect check rules but must not gain reusable credentials
+	// merely because edit settings became readable. Never mask secrets into an
+	// editable value: writers receive the exact stored value, viewers no field.
+	if user, ok := UserFromContext(r.Context()); ok && user.Role.CanWrite() {
+		resp.Headers = &headers
+		resp.Body = &m.Body
+	}
+	w.Header().Set("Cache-Control", "private, no-store")
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) handleDeleteMonitor(w http.ResponseWriter, r *http.Request) {

@@ -213,6 +213,18 @@
   color: var(--ink-3);
 }
 
+.mon-detail-check-error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1h);
+}
+
+.mon-detail-check-error > svg {
+  flex: none;
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+}
+
 .mon-detail-empty {
   font-size: var(--type-page);
   line-height: var(--lead-page);

@@ -7,18 +7,13 @@ import { tagsToText, textToTags } from "./tags";
 /**
  * Editing an existing monitor.
  *
- * **It offers only what PATCH can actually change, and only what the list
- * endpoint gave us the current value of.** `GET /api/v1/monitors` returns name,
- * type, target, interval, timeout, enabled, capture_response, repeat_after_s,
- * tags and created_at — it does not return method, expected status, keyword,
- * headers, body, retries or ssl_warn_days. PATCH accepts all of those, but a
- * form that renders an input for a field whose current value it never received
- * has two bad options: show it blank, which invites the user to blank a real
- * setting, or guess a default and silently overwrite what is stored. Both are
- * the failure this product exists to avoid, so those fields are not offered
- * here at all. The remaining gap is named in the PR rather than hidden.
+ * This form still edits only name, timing and tags. The versioned detail
+ * read now supplies the other check settings (SUB-129), but adding controls
+ * for them is a separate UI change. Until those values are modelled here,
+ * no blank/default input may overwrite a setting the user has not seen.
+ * The caller pairs the displayed values with the ETag from the same read.
  *
- * **Target and type are read-only here for the same reason plus one more.**
+ * **Target and type remain read-only.**
  * Changing a target re-validates against the type and can fail in ways only a
  * preview can show; that path already exists, on the add form, with the preview
  * attached to it. An edit box that can silently point a monitor at a different
