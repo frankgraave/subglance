@@ -3010,6 +3010,8 @@ components:
         listing or SSE heartbeat events.
       allOf:
         - $ref: '#/components/schemas/Heartbeat'
+      not:
+        required: [response, response_capture_reason]
       required: [id]
       properties:
         id:
