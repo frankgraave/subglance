@@ -424,6 +424,7 @@ export default function App() {
             client={queryClient}
             id={route.id}
             onBack={showDashboard}
+            canWrite={session.state === "signedIn" && canWrite(session.user)}
           />
         ) : (
           <LiveDashboardRoot

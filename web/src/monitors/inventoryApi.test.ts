@@ -1,9 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  CHANNEL_FANOUT_LIMIT,
   checkMonitorNow,
   fetchInventory,
-  fetchMonitorChannels,
   patchMonitor,
   setMonitorPaused,
 } from "./inventoryApi";
@@ -48,47 +46,37 @@ describe("fetchInventory", () => {
   });
 });
 
-describe("fetchMonitorChannels", () => {
-  it("marks a failed request as unknown, never as 'no channels'", async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(((input: string) =>
-      Promise.resolve(
-        input.includes("/2/")
-          ? json({ error: "boom" }, { status: 500 })
-          : json({ channels: [{ name: "slack" }] }),
-      )) as typeof fetch);
-
-    const result = await fetchMonitorChannels(["1", "2"]);
-    expect(result.byMonitor["1"]).toEqual({ known: true, names: ["slack"] });
-    // The distinction this whole module exists for: an empty list is the
-    // finding "nobody hears about this monitor", and a 500 must not be able
-    // to manufacture it.
-    expect(result.byMonitor["2"]).toEqual({ known: false });
-    expect(result.truncated).toBe(true);
+describe("inventory channel attachments", () => {
+  const monitor = (channels: unknown) => ({
+    id: 1, name: "site", type: "http", target: "https://example.com",
+    interval_s: 60, timeout_s: 10, enabled: true, status: "up",
+    created_at: "2026-09-01T00:00:00Z", channels,
   });
 
-  it("reports a genuinely empty attachment as known-and-empty", async () => {
-    // A fresh Response per call, not one shared object: a body can only be
-    // read once, so a reused Response makes the second request throw — which
-    // would set `truncated` and let a test pass for the wrong reason.
-    vi.spyOn(globalThis, "fetch").mockImplementation((() =>
-      Promise.resolve(json({ channels: [] }))) as typeof fetch);
-    const result = await fetchMonitorChannels(["1"]);
-    expect(result.byMonitor["1"]).toEqual({ known: true, names: [] });
-    expect(result.truncated).toBe(false);
+  it("reads every attachment past forty monitors in one request", async () => {
+    const monitors = Array.from({ length: 45 }, (_, i) => ({
+      ...monitor([{ id: i + 1, name: `channel ${i}` }]), id: i + 1,
+    }));
+    const request = vi.spyOn(globalThis, "fetch").mockResolvedValue(json({ monitors }));
+    const result = await fetchInventory();
+    expect(result).toHaveLength(45);
+    for (const [i, row] of result.entries()) {
+      expect(row.channels).toEqual({ known: true, names: [`channel ${i}`] });
+    }
+    expect(request).toHaveBeenCalledTimes(1);
   });
 
-  it("stops at the fan-out cap and says that it stopped", async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation((() =>
-      Promise.resolve(json({ channels: [] }))) as typeof fetch);
-    const ids = Array.from({ length: CHANNEL_FANOUT_LIMIT + 3 }, (_, i) =>
-      String(i),
-    );
-    const result = await fetchMonitorChannels(ids);
-    expect(Object.keys(result.byMonitor)).toHaveLength(CHANNEL_FANOUT_LIMIT);
-    // Every request it did make succeeded, so the only reason to be short is
-    // the cap — which is exactly the claim under test.
-    expect(result.truncated).toBe(true);
+  it("preserves a known empty set", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(json({ monitors: [monitor([])] }));
+    expect((await fetchInventory())[0].channels).toEqual({ known: true, names: [] });
   });
+
+  it.each([undefined, null, {}, "bad", [null], [{}], [{ id: 1 }], [{ id: 1, name: 2 }], [{ id: 1, name: "" }]])(
+    "keeps malformed or unavailable channels unknown: %j", async (channels) => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(json({ monitors: [monitor(channels)] }));
+      expect((await fetchInventory())[0].channels).toEqual({ known: false });
+    },
+  );
 });
 
 describe("setMonitorPaused", () => {

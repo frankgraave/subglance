@@ -288,7 +288,22 @@ an enabled monitor the result is recorded like any other check, so the
 dashboard turns green immediately; for a paused monitor it is returned but not
 recorded, because writing into a period the monitor promised not to watch
 would misrepresent it. The response says which happened in its `recorded` field.
-Manual checks are limited to one per monitor per five seconds.
+Manual checks are limited to one per monitor per five seconds. The detail
+view offers **Check now** in the Recent checks card and reports both probe
+results and request failures there. Push monitors have no check control:
+SubGlance receives their reports rather than probing them.
+
+The list includes attached channel IDs and names in `channels`, without
+channel credentials. An empty array means no attachments; an omitted or
+unreadable value means **not loaded**, not **none**. There is no per-monitor
+channel fetch or forty-monitor limit in the inventory.
+
+`GET /api/v1/monitors/{id}` also returns stored check settings for editing,
+paired with the response's `ETag`. Send that validator as `If-Match` with only
+the fields being changed. Request `headers` and `body` are returned only to
+editors and administrators, and are omitted from the list and live stream.
+The existing edit form still offers name, timing and tags; the read contract
+does not add an expanded settings form.
 
 Acknowledging is not resolving: it stops repeat notifications without claiming
 the problem is fixed.
