@@ -307,6 +307,7 @@ func (s *Server) routes() []route {
 		{http.MethodGet, "/api/v1/monitors/{id}/uptime", accessRead},
 		{http.MethodGet, "/api/v1/monitors/{id}/incidents", accessRead},
 		{http.MethodGet, "/api/v1/incidents", accessRead},
+		{http.MethodGet, "/api/v1/incidents/resolved", accessRead},
 		{http.MethodGet, "/api/v1/monitors/{id}/channels", accessRead},
 
 		// Channel secrets are masked on read (see maskConfig), so a viewer may
@@ -413,6 +414,8 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 		return s.handleListMonitorIncidents
 	case "GET /api/v1/incidents":
 		return s.handleListOpenIncidents
+	case "GET /api/v1/incidents/resolved":
+		return s.handleListResolvedIncidents
 	case "GET /api/v1/monitors/{id}/channels":
 		return s.handleListMonitorChannels
 
