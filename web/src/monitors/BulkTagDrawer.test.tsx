@@ -74,7 +74,7 @@ it("blocks duplicate submissions and dismissal while pending, then shows the fai
   expect(close).not.toHaveBeenCalled();
   fail(new Error("tags changed; preview again"));
   await screen.findByRole("alert");
-  expect(document.activeElement).toBe(screen.getByRole("alert"));
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("alert")));
   expect(screen.getByRole("alert").textContent).toBe(
     "tags changed; preview again",
   );
@@ -105,9 +105,9 @@ it("does not allow committing an empty preview and explains an oversized selecti
     name: "Confirm tag change",
   });
   expect((commit as HTMLButtonElement).disabled).toBe(true);
-  expect(document.activeElement).toBe(
+  await waitFor(() => expect(document.activeElement).toBe(
     screen.getByText("0 monitors will change; 1 unchanged."),
-  );
+  ));
   view.rerender(
     <BulkTagDrawer
       selectedIds={Array.from({ length: 10001 }, (_, i) => String(i + 1))}
@@ -157,9 +157,10 @@ it.each(["remove", "rename_value"] as const)(
         : { action, key: "env", value: "prod", new_value: "Production" },
       undefined,
     ]);
-    expect(document.activeElement).toBe(
+    // DOM presence and React's post-commit focus effect are different states.
+    await waitFor(() => expect(document.activeElement).toBe(
       screen.getByRole("button", { name: "Confirm tag change" }),
-    );
+    ));
     expect(
       screen.getByText(/Only the exact key\/value pair changes/),
     ).toBeTruthy();
