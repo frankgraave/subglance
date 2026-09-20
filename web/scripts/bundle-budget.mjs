@@ -114,7 +114,18 @@ const budgets = {
    * No new runtime dependency was added: axe remains dev-only. CSS and font
    * ceilings are unchanged. This is one shared raise, not one per feature.
    */
-  js: 126,
+  /*
+   * 126 -> 130 KiB gzip for SUB-68 / SUB-91.
+   * The current develop (66052f1) entry measures 126,539 bytes; this combined
+   * build measures 130,107: 3,568 bytes for expanded versioned detail editing,
+   * reusable previews, conflict/reload handling, repeat controls and reminder
+   * status. Both builds include the now-merged TLS and incident-history UI,
+   * so their weight is not attributed to this change. No runtime dependency
+   * was added; editor/drawer/preview controls are shared, not duplicated.
+   * 128 KiB would leave only 965 bytes. 130 leaves 3,013 for ordinary fixes
+   * instead of tracking today's measurement. CSS and font ceilings stay put.
+   */
+  js: 130,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *

@@ -211,6 +211,37 @@ func TestIncidentReminderScheduleSurvivesReloadAndSettingChanges(t *testing.T) {
 	}
 }
 
+func TestResolvedHistoryKeepsReminderIssuanceButNeverSchedulesAgain(t *testing.T) {
+	srv, db := testServerWithDB(t)
+	m, err := db.CreateMonitor(t.Context(), store.Monitor{Name: "resolved reminders", Type: "http", Target: "https://example.com", Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	inc, err := db.OpenIncident(t.Context(), m.ID, now.Add(-time.Hour), "status", "503")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.ConfirmIncident(t.Context(), m.ID, now.Add(-50*time.Minute), "status", "503"); err != nil {
+		t.Fatal(err)
+	}
+	last := now.Add(-20 * time.Minute)
+	if err := db.RecordReminder(t.Context(), inc.ID, last); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ResolveIncident(t.Context(), m.ID, now.Add(-time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	rows := readReminderRows(t, srv, "/api/v1/incidents/resolved?days=1")
+	if len(rows) != 1 {
+		t.Fatalf("resolved rows = %d, want 1", len(rows))
+	}
+	assertReminderJSON(t, rows[0], "reminder_count", 1)
+	assertReminderJSON(t, rows[0], "reminded_at", last)
+	assertReminderJSON(t, rows[0], "next_reminder_at", nil)
+	assertReminderJSON(t, rows[0], "reminder_status", "resolved")
+}
+
 func TestIncidentReminderFirstDueUsesConfirmationAndExplicitZero(t *testing.T) {
 	srv, _, m, _, confirmed := reminderFixture(t)
 	for _, path := range []string{"/api/v1/incidents", "/api/v1/monitors/" + strconv.FormatInt(m.ID, 10) + "/incidents"} {

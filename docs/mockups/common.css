@@ -1,0 +1,55 @@
+/* Disk-openable mockups use the product's tokens and LED stylesheet directly.
+   Only the font URLs need adapting: production fonts.css starts at /fonts,
+   which points at the filesystem root under file://. These are the same files,
+   not copies, and mockups.test.ts checks the descriptors against fonts.css. */
+@font-face {
+  font-family: "InterVariable";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: block;
+  font-feature-settings: "calt" 1, "ccmp" 1, "locl" 1, "kern" 1, "cv01" 1;
+  src: url("../../web/public/fonts/InterVariable-4.1-subset.woff2") format("woff2");
+}
+@font-face {
+  font-family: "CommitMono";
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: block;
+  font-feature-settings: "ss01" 1, "ss02" 1, "ss03" 1, "ss04" 1, "ss05" 1,
+                         "cv01" 1, "cv05" 1, "cv06" 1, "cv11" 1;
+  src: url("../../web/public/fonts/CommitMono-1.143-400-subset.woff2") format("woff2");
+}
+body {
+  font-family: var(--font-sans);
+  font-size: var(--type-body);
+  line-height: var(--lead-body);
+  font-weight: var(--weight-plain);
+  letter-spacing: var(--track-body);
+  font-feature-settings: var(--feat-sans);
+  font-variant-ligatures: var(--ligatures-sans);
+  font-variant-numeric: var(--numeric-sans);
+  text-rendering: var(--render-sans);
+}
+button, input, select, textarea { font: inherit; }
+b, strong { font-weight: var(--weight-strong); }
+/* Native select popups otherwise force normal leading even when the role is
+   paired. Keep the native picker, but draw its closed face on the same grid. */
+select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-2) 50%),
+                    linear-gradient(135deg, var(--ink-2) 50%, transparent 50%);
+  background-position: right var(--space-4) center, right var(--space-3) center;
+  background-size: var(--space-1) var(--space-1);
+  background-repeat: no-repeat;
+}
+option { font-size: var(--type-body); line-height: var(--lead-body); }
+code, kbd, .mono, [style*="var(--font-mono)"] {
+  font-family: var(--font-mono);
+  font-feature-settings: var(--feat-mono);
+  font-variant-ligatures: var(--ligatures-mono);
+  font-variant-numeric: var(--numeric-mono);
+  text-rendering: var(--render-mono);
+}
+/* An inline edit keeps exactly the role of the text it replaces. */
+.mockup-row-text { font-size: var(--type-row); line-height: var(--lead-row); }
+.led-wrap { flex: none; }

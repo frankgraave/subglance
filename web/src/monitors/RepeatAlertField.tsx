@@ -12,6 +12,7 @@ export function RepeatAlertField({ value, onChange, error }: {
   return <div className="add-field repeat-field">
     <label className="add-label" htmlFor={`${id}-mode`}>Repeat alerts</label>
     <select ref={modeRef} id={`${id}-mode`} className="add-input" value={isOff ? "off" : "on"}
+      aria-invalid={error ? true : undefined} aria-describedby={`${id}-help${error ? ` ${id}-error` : ""}`}
       onChange={(event) => onChange(event.target.value === "off" ? "0" : "900")}>
       <option value="on">Repeat while unacknowledged</option>
       <option value="off">Do not repeat</option>

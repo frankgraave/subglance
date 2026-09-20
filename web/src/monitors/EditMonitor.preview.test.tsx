@@ -28,17 +28,45 @@ it("previews the changed target with every stored check setting, then permits sa
   save(); await waitFor(() => expect(onSave).toHaveBeenCalledWith({ target: "https://new.example" }));
 });
 
-it("invalidates completed and in-flight previews when check settings change", async () => {
+it.each(["1.3", ""])("previews the edited TLS floor %j with a new target and preserves explicit PATCH clearing", async (floor) => {
+  const fetch = vi.fn().mockResolvedValue(result()); vi.stubGlobal("fetch", fetch);
+  const onSave = vi.fn().mockResolvedValue(undefined);
+  render(<EditMonitorForm monitor={inventoryFromApi(raw)} onSave={onSave} />);
+  change("Target", "https://new.example");
+  change("Minimum TLS version", floor);
+  change("Repeat alert base (seconds)", "173");
+  save(); expect(onSave).not.toHaveBeenCalled();
+  testTarget(); await screen.findByText(/connection refused/);
+  const request = JSON.parse(fetch.mock.calls[0][1].body);
+  const settings = raw;
+  expect(request).toEqual({
+    type: settings.type, target: "https://new.example", timeout_s: settings.timeout_s,
+    method: settings.method, expected_status: settings.expected_status, keyword: settings.keyword,
+    keyword_mode: settings.keyword_mode, follow_redirects: settings.follow_redirects,
+    headers: settings.headers, body: settings.body, ssl_warn_days: settings.ssl_warn_days,
+    ...(floor ? { min_tls_version: floor } : {}),
+  });
+  save();
+  await waitFor(() => expect(onSave).toHaveBeenCalledWith({
+    target: "https://new.example", min_tls_version: floor, repeat_after_s: 173,
+  }));
+});
+
+it.each([
+  ["Keyword", "changed", "Timeout (seconds)", "20"],
+  ["Minimum TLS version", "1.3", "Minimum TLS version", ""],
+])("invalidates completed and in-flight previews when %s changes", async (first, firstValue, second, secondValue) => {
   let resolve!: (value: Response) => void;
   const fetch = vi.fn().mockImplementationOnce(() => new Promise<Response>((r) => { resolve = r; })).mockResolvedValue(result()); vi.stubGlobal("fetch", fetch);
   const onSave = vi.fn();
   render(<EditMonitorForm monitor={inventoryFromApi(raw)} onSave={onSave} />);
   change("Target", "https://new.example"); testTarget();
-  change("Keyword", "changed");
+  change(first, firstValue);
+  expect(fetch.mock.calls[0][1].signal.aborted).toBe(true);
   await act(async () => resolve(result()));
   expect(screen.queryByText(/connection refused/)).toBeNull(); save(); expect(onSave).not.toHaveBeenCalled();
   testTarget(); await screen.findByText(/connection refused/);
-  change("Timeout (seconds)", "20");
+  change(second, secondValue);
   expect(screen.queryByText(/connection refused/)).toBeNull(); save(); expect(onSave).not.toHaveBeenCalled();
 });
 
@@ -79,6 +107,30 @@ it("places a checkbox API rejection beside its actual control", async () => {
   const checkbox = screen.getByLabelText("Follow redirects");
   expect(checkbox.getAttribute("aria-invalid")).toBe("true");
   expect(document.activeElement).toBe(checkbox);
+});
+
+it.each(["save", "preview"])("opens and focuses a TLS floor rejection from %s with help and error associations", async (source) => {
+  const message = "This TLS floor is not allowed";
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(
+    JSON.stringify({ error: message, field: "min_tls_version" }), { status: 400 },
+  )));
+  const onSave = vi.fn().mockRejectedValue(new ApiError(400, message, null, "min_tls_version"));
+  render(<EditMonitorForm monitor={inventoryFromApi(raw)} onSave={onSave} />);
+  const select = screen.getByLabelText("Minimum TLS version");
+  const panel = select.closest("details")!;
+  expect(panel.open).toBe(false);
+  if (source === "save") { change("Name", "Rename"); save(); }
+  else testTarget();
+  const error = await screen.findByRole("alert");
+  expect(error.textContent).toBe(message);
+  expect(select.getAttribute("aria-invalid")).toBe("true");
+  expect(panel.open).toBe(true);
+  expect(document.activeElement).toBe(select);
+  expect((select.getAttribute("aria-describedby") ?? "").split(" ")
+    .map((id) => document.getElementById(id)?.textContent)).toEqual([
+      expect.stringMatching(/floor SubGlance dials with/i), message,
+    ]);
+  expect(error.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
 });
 
 it("keeps conflict explanation visible while the retained draft is edited", async () => {

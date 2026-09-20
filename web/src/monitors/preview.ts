@@ -29,6 +29,14 @@ export type PreviewRequest = {
   headers?: Record<string, string>;
   body?: string;
   ssl_warn_days?: number;
+  /**
+   * "1.0" to "1.3". Omitted means the probe uses the SubGlance default.
+   *
+   * Sent because it genuinely changes what is probed: the appliance someone
+   * lowers the floor for is exactly the target they are about to press Test
+   * it on, and a preview that ignored the floor would answer a question they
+   * did not ask.
+   */
   min_tls_version?: string;
 };
 
@@ -93,6 +101,8 @@ export function fingerprintPreview(req: PreviewRequest): PreviewFingerprint {
     Object.entries(req.headers ?? {}).sort(([a], [b]) => a.localeCompare(b)),
     req.body ?? "",
     req.ssl_warn_days ?? null,
+    // Part of the fingerprint because a floor change makes an earlier probe
+    // evidence about a handshake that would no longer be attempted.
     req.min_tls_version ?? "",
   ]);
 }

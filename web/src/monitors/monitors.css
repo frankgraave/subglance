@@ -1214,6 +1214,13 @@
 .edit-form .add-field-error,
 .edit-form .add-result,
 .repeat-field .add-field-error { color: var(--ink); }
+.add-field-error > svg {
+  display: inline-block;
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+  margin-right: var(--space-1);
+  vertical-align: middle;
+}
 
 .add-input[aria-invalid="true"] {
   border-color: var(--down);

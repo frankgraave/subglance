@@ -2,7 +2,23 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { AddMonitor } from "./AddMonitor";
+import { RepeatAlertField } from "./RepeatAlertField";
 afterEach(cleanup);
+
+it("associates repeat mode with its help and rejection even when seconds are hidden", () => {
+  const { rerender } = render(<RepeatAlertField value="900" onChange={vi.fn()} />);
+  const mode = screen.getByLabelText("Repeat alerts");
+  const descriptions = () => (mode.getAttribute("aria-describedby") ?? "").split(" ")
+    .map((id) => document.getElementById(id)?.textContent ?? "");
+  expect(descriptions().join(" ")).toMatch(/acknowledging stops repeats/i);
+  expect(mode.getAttribute("aria-invalid")).toBeNull();
+  rerender(<RepeatAlertField value="0" onChange={vi.fn()} error="Repeat setting was refused" />);
+  expect(screen.queryByLabelText("Repeat alert base (seconds)")).toBeNull();
+  expect(descriptions()).toEqual([
+    expect.stringMatching(/acknowledging stops repeats/i), "Repeat setting was refused",
+  ]);
+  expect(mode.getAttribute("aria-invalid")).toBe("true");
+});
 
 it("creates with an arbitrary repeat base and presents off as Do not repeat", async () => {
   const create = vi.fn().mockResolvedValue({ id: "1" });

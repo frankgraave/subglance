@@ -50,6 +50,16 @@ describe("inventoryFromApi", () => {
     expect(m.timeoutS).toBeNull();
   });
 
+  it("reads an absent TLS floor as no opinion, not as the current default", () => {
+    // The server omits the field for a monitor with no floor. Substituting
+    // "1.2" here would make the edit form offer to pin a floor nobody set,
+    // and the monitor would then stop following the default if it moved.
+    expect(inventoryFromApi(api).minTlsVersion).toBe("");
+    expect(
+      inventoryFromApi({ ...api, min_tls_version: "1.0" }).minTlsVersion,
+    ).toBe("1.0");
+  });
+
   it("collapses a disabled monitor into the paused status", () => {
     const m = inventoryFromApi({ ...api, enabled: false });
     expect(m.enabled).toBe(false);

@@ -223,6 +223,13 @@ function bodyFor(
     repeat_after_s: values.repeatAfterS,
     interval_s: values.intervalS,
     timeout_s: values.timeoutS,
+    // Omitted entirely when the user expressed no opinion. The API rejects an
+    // empty string on create precisely so a client cannot store a floor it
+    // never chose, and the nullable column is what lets such a monitor follow
+    // the default if it ever moves.
+    ...(values.minTlsVersion !== ""
+      ? { min_tls_version: values.minTlsVersion }
+      : {}),
     ...(values.keyword !== ""
       ? { keyword: values.keyword, keyword_mode: values.keywordMode }
       : {}),
@@ -235,6 +242,9 @@ function previewRequestFor(values: AddMonitorValues): PreviewRequest {
     target: values.target.trim(),
     ...(values.type !== "" ? { type: values.type } : {}),
     timeout_s: values.timeoutS,
+    ...(values.minTlsVersion !== ""
+      ? { min_tls_version: values.minTlsVersion }
+      : {}),
     ...(values.keyword !== ""
       ? { keyword: values.keyword, keyword_mode: values.keywordMode }
       : {}),

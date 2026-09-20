@@ -398,6 +398,23 @@ export async function serveBuild(): Promise<Server> {
       return;
     }
 
+    // The instance-wide history replaced the per-monitor fan-out. Leaving
+    // this unstubbed makes the real incidents screen settle on a 404 alert.
+    if (url.pathname === "/api/v1/incidents/resolved") {
+      const days = Number(url.searchParams.get("days") ?? 30);
+      const since = Date.now() - days * 86_400_000;
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({
+        incidents: INCIDENTS.filter((incident) =>
+          incident.resolved && incident.resolved_at !== undefined &&
+          Date.parse(incident.resolved_at) >= since,
+        ),
+        has_more: false,
+        days,
+      }));
+      return;
+    }
+
     const incidents = url.pathname.match(/^\/api\/v1\/monitors\/([^/]+)\/incidents$/);
     if (incidents) {
       res.writeHead(200, { "content-type": "application/json; charset=utf-8" });

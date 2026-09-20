@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
+import { IconAlert } from "../components/icons";
 import type { InventoryMonitor } from "./inventory";
 import type { MonitorPatch } from "./inventoryApi";
 import { RepeatAlertField } from "./RepeatAlertField";
@@ -8,6 +9,7 @@ import { tagsToText, textToTags } from "./tags";
 import { ApiError, describePreview, fingerprintPreview, previewCheck } from "./preview";
 import type { PreviewRequest, PreviewState } from "./preview";
 import { confirmLeave, registerLeaveGuard } from "../shell/leaveGuard";
+import { TlsFloorField } from "./TlsFloorField";
 
 export type EditMonitorFormProps = {
   /** Values and validator must come from the same detail response. */
@@ -19,6 +21,8 @@ export type EditMonitorFormProps = {
 };
 
 type Problem = { message: string; field?: string } | null;
+// These edits require a preview to save. TLS-only saves retain the existing
+// contract, but a TLS change must still invalidate any preview already shown.
 const CHECK_FIELDS = new Set(["target", "timeout_s", "method", "expected_status", "keyword", "keyword_mode", "follow_redirects", "headers", "body", "ssl_warn_days"]);
 const LABELS: Record<string, string> = {
   name: "Name", target: "Target", interval_s: "Interval (seconds)", timeout_s: "Timeout (seconds)",
@@ -35,11 +39,14 @@ function valuesFor(monitor: InventoryMonitor): Record<string, string> {
     values.push_interval_s = String(monitor.push.intervalS);
     values.push_grace_s = String(monitor.push.graceS);
   } else {
+    // Absence is no opinion, not a pinned default. Keep it in the draft so
+    // selecting no opinion can deliberately clear a previously stored floor.
+    values.min_tls_version = monitor.minTlsVersion;
     values.target = monitor.target;
     values.interval_s = String(monitor.intervalS);
     if (monitor.timeoutS !== null) values.timeout_s = String(monitor.timeoutS);
     for (const [key, value] of Object.entries(monitor.checkSettings ?? {})) {
-      if (key === "min_tls_version") continue; // Preserved and previewed; its control is a separate feature.
+      if (key === "min_tls_version") continue; // The dedicated floor value also represents absence.
       values[key] = key === "headers" ? JSON.stringify(value, null, 2) : String(value);
     }
   }
@@ -68,9 +75,11 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload }: EditMon
     if (saving || !problem?.field) return;
     const control = problem.field === "repeat_after_s"
       ? form.current?.querySelector<HTMLElement>("[data-repeat-input]")
-      : form.current?.elements.namedItem(problem.field) as HTMLElement | null;
+      : form.current?.elements.namedItem(problem.field === "min_tls_version" ? `${ids}-min-tls` : problem.field) as HTMLElement | null;
+    const panel = control?.closest("details");
+    if (panel) panel.open = true;
     control?.focus();
-  }, [problem, saving]);
+  }, [problem, saving, ids]);
   useEffect(() => {
     alive.current = true;
     const unregister = registerLeaveGuard({ element: () => form.current, dirty: () => dirty.current, discard: () => { dirty.current = false; } });
@@ -80,7 +89,7 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload }: EditMon
   const update = (key: string, value: string) => {
     setValues((old) => ({ ...old, [key]: value }));
     if (!conflict) setProblem(null);
-    if (CHECK_FIELDS.has(key)) {
+    if (CHECK_FIELDS.has(key) || key === "min_tls_version") {
       inFlight.current?.abort();
       setPreview({ phase: "idle" });
     }
@@ -88,7 +97,7 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload }: EditMon
   const reject = (message: string, field?: string) => {
     const control = field === "repeat_after_s"
       ? form.current?.querySelector<HTMLElement>("[data-repeat-input]")
-      : field ? form.current?.elements.namedItem(field) as HTMLElement | null : null;
+      : field ? form.current?.elements.namedItem(field === "min_tls_version" ? `${ids}-min-tls` : field) as HTMLElement | null : null;
     setProblem({ message, ...(control ? { field } : {}) });
     control?.focus();
   };
@@ -136,6 +145,10 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload }: EditMon
     if (tagsToText(tags) === initial.tags) delete patch.tags;
     const request: PreviewRequest = { ...monitor.checkSettings, type: monitor.type, target: values.target?.trim() ?? "" };
     for (const key of CHECK_FIELDS) if (key in parsed) Object.assign(request, { [key]: parsed[key] });
+    // Preview has no stored floor to clear: omission asks for the default.
+    // PATCH, in contrast, keeps the explicit empty string from the draft.
+    if (values.min_tls_version) request.min_tls_version = values.min_tls_version;
+    else delete request.min_tls_version;
     return { patch, request };
   };
 
@@ -180,7 +193,7 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload }: EditMon
     return <div className="add-field" key={key}>
       <label className="add-label" htmlFor={props.id}>{LABELS[key]}</label>
       {multiline ? <textarea {...props} rows={3} spellCheck={false} /> : <input {...props} autoComplete="off" />}
-      {problem?.field === key && <p id={`${ids}-error`} role="alert" className="add-field-error">{problem.message}</p>}
+      {problem?.field === key && <p id={`${ids}-error`} role="alert" className="add-field-error"><IconAlert />{problem.message}</p>}
     </div>;
   };
   return <form ref={form} className="add-form edit-form" onSubmit={submit} noValidate aria-label="Edit monitor settings">
@@ -195,16 +208,27 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload }: EditMon
           <label className="add-help"><input type="checkbox" name="follow_redirects" checked={values.follow_redirects === "true"} onChange={(event) => update("follow_redirects", String(event.target.checked))}
             aria-invalid={problem?.field === "follow_redirects" ? true : undefined}
             aria-describedby={problem?.field === "follow_redirects" ? `${ids}-error` : undefined} /> Follow redirects</label>
-          {problem?.field === "follow_redirects" && <p id={`${ids}-error`} role="alert" className="add-field-error">{problem.message}</p>}
+          {problem?.field === "follow_redirects" && <p id={`${ids}-error`} role="alert" className="add-field-error"><IconAlert />{problem.message}</p>}
         </div>}
         {field("headers", true)}{field("body", true)}{field("ssl_warn_days")}
+        <details className="add-advanced">
+          <summary className="add-summary">Advanced options</summary>
+          <div className="add-grid">
+            <TlsFloorField id={`${ids}-min-tls`} value={values.min_tls_version}
+              onChange={(value) => update("min_tls_version", value)}
+              invalid={problem?.field === "min_tls_version"}
+              errorId={problem?.field === "min_tls_version" ? `${ids}-error` : undefined}>
+              {problem?.field === "min_tls_version" && <p id={`${ids}-error`} role="alert" className="add-field-error"><IconAlert />{problem.message}</p>}
+            </TlsFloorField>
+          </div>
+        </details>
         <p className="add-help">Test it probes these settings without saving, recording history or sending alerts. A failed check can still be saved.</p>
       </>}
       {field("tags", true)}
       <p className="add-help">One key:value per line — a value may contain commas and colons. Saving replaces the whole set, so a tag left out here is a tag removed.</p>
       {"repeat_after_s" in values ? <RepeatAlertField value={values.repeat_after_s} onChange={(value) => update("repeat_after_s", value)} error={problem?.field === "repeat_after_s" ? problem.message : undefined} /> : <p className="add-help">Repeat alert settings unavailable. Reload to read the current value.</p>}
     </fieldset>
-    {problem && !problem.field && <p className="add-field-error" role="alert">{problem.message}</p>}
+    {problem && !problem.field && <p className="add-field-error" role="alert"><IconAlert />{problem.message}</p>}
     <div role="status" aria-live="polite">
       {preview.phase === "checking" && <p className="add-result">Checking…</p>}
       {preview.phase === "done" && <p className={`add-result ${preview.result.ok ? "add-result-good" : "add-result-bad"}`}>{describePreview(preview.result)}</p>}

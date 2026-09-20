@@ -142,6 +142,14 @@ export type MonitorPatch = {
   tags?: Record<string, string>;
   capture_response?: boolean;
   repeat_after_s?: number;
+  /**
+   * "1.0" to "1.3", or `""` to take the floor back off.
+   *
+   * The empty string means something here that it does not mean on create:
+   * on an existing monitor it clears a floor that was set, which is why the
+   * API accepts it on PATCH and rejects it on POST.
+   */
+  min_tls_version?: string;
 };
 
 /**

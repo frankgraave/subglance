@@ -3,42 +3,44 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../../web/src/styles/tokens.css">
+<link rel="stylesheet" href="../../web/src/monitors/led.css">
+<link rel="stylesheet" href="common.css">
 <title>SubGlance — design review</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500&family=Geist+Mono:wght@400&display=swap" rel="stylesheet">
+<script>
+try { document.documentElement.dataset.theme = localStorage.getItem("sg-theme") || "dark"; } catch (e) {}
+function toggleTheme() {
+  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem("sg-theme", next); } catch (e) {}
+}
+</script>
 <style>
-:root { --font-sans:"Geist",ui-sans-serif,system-ui,sans-serif; --font-mono:"Geist Mono",ui-monospace,monospace;
-  --canvas:#08090a; --surface:#0e1011; --surface-2:#141719; --border:#1e2224; --border-hi:#2a2f32;
-  --ink:#e8eaec; --ink-2:#9ba1a6; --ink-3:#61686d; --up:#34d399; --warn:#fbbf24; --down:#f43f5e;
-  --ease:cubic-bezier(.32,.72,0,1); color-scheme:dark; }
+/* Values come from the live stylesheet linked above, including both themes. */
 * { box-sizing:border-box; margin:0; padding:0; }
 body { font-family:var(--font-sans); background:var(--canvas); color:var(--ink);
-  -webkit-font-smoothing:antialiased; min-height:100vh; display:grid; place-items:center; padding:48px 24px; }
+  -webkit-font-smoothing:antialiased; min-height:100vh; display:grid; place-items:center; padding:var(--space-12) var(--space-6); }
 .wrap { width:min(680px,100%); }
-.brand { display:flex; align-items:center; gap:11px; margin-bottom:8px; }
-.led { display:inline-block; width:20px; height:7px; border-radius:2.5px; background:var(--up);
-  box-shadow:0 0 0 1px rgba(52,211,153,.35), 0 0 7px -1px rgba(52,211,153,.6); position:relative; }
-.led::after { content:""; position:absolute; inset:1px 1px 3px; border-radius:1.5px;
-  background:linear-gradient(180deg,rgba(255,255,255,.55),rgba(255,255,255,0)); opacity:.5; }
-h1 { font-size:20px; font-weight:500; letter-spacing:-.02em; }
-.sub { font-size:13px; color:var(--ink-3); line-height:1.6; margin-bottom:32px; max-width:56ch; }
+.brand { display:flex; align-items:center; gap:var(--space-2h); margin-bottom:var(--space-2); }
+h1 {  font-weight:var(--weight-strong); letter-spacing:var(--track-body); font-size:var(--type-page); line-height:var(--lead-page); }
+.sub {  color:var(--ink-3);  margin-bottom:var(--space-8); max-width:56ch; font-size:var(--type-body); line-height:var(--lead-body); }
 a.card { display:block; text-decoration:none; color:inherit; border:1px solid var(--border);
-  border-radius:14px; background:var(--surface); padding:20px 22px; margin-bottom:12px;
-  transition:border-color 160ms var(--ease), background 160ms var(--ease), transform 160ms var(--ease); }
+  border-radius:var(--r-lg); background:var(--surface);  margin-bottom:var(--space-3);
+  transition:border-color 160ms var(--ease), background 160ms var(--ease), transform 160ms var(--ease); padding:var(--space-4); box-shadow:var(--shadow-flat); }
 a.card:hover { border-color:var(--border-hi); background:var(--surface-2); transform:translateY(-1px); }
-.card-top { display:flex; align-items:baseline; gap:10px; margin-bottom:7px; }
-.card-title { font-size:15px; font-weight:500; letter-spacing:-.01em; }
-.card-file { font-family:var(--font-mono); font-size:10.5px; color:var(--ink-3); margin-left:auto; }
-.card-desc { font-size:12.5px; color:var(--ink-2); line-height:1.6; }
-.card-list { font-size:11.5px; color:var(--ink-3); margin-top:11px; line-height:1.7; }
-.note { font-size:11.5px; color:var(--ink-3); margin-top:26px; line-height:1.65; padding-top:18px; border-top:1px solid var(--border); }
-kbd { font-family:var(--font-mono); font-size:10.5px; border:1px solid var(--border-hi); border-radius:4px; padding:1px 5px; color:var(--ink-2); }
+.card-top { display:flex; align-items:baseline; gap:var(--space-2h); margin-bottom:var(--space-1h); }
+.card-title {  font-weight:var(--weight-strong); letter-spacing:var(--track-body); font-size:var(--type-card); line-height:var(--lead-card); }
+.card-file { font-family:var(--font-mono);  color:var(--ink-3); margin-left:auto; font-size:var(--type-helper); line-height:var(--lead-helper); font-feature-settings:var(--feat-mono); font-variant-ligatures:var(--ligatures-mono); font-variant-numeric:var(--numeric-mono); text-rendering:var(--render-mono); }
+.card-desc {  color:var(--ink-2); font-size:var(--type-body); line-height:var(--lead-body); }
+.card-list {  color:var(--ink-3); margin-top:var(--space-2h); font-size:var(--type-helper); line-height:var(--lead-helper); }
+.note {  color:var(--ink-3); margin-top:var(--space-6);  padding-top:var(--space-4); border-top:1px solid var(--border); font-size:var(--type-helper); line-height:var(--lead-helper); }
+kbd { font-family:var(--font-mono);  border:1px solid var(--border-hi); border-radius:var(--r-sm); padding:1px var(--space-1); color:var(--ink-2); font-size:var(--type-helper); line-height:var(--lead-helper); font-feature-settings:var(--feat-mono); font-variant-ligatures:var(--ligatures-mono); font-variant-numeric:var(--numeric-mono); text-rendering:var(--render-mono); }
+.theme-toggle { margin-left:auto; padding:var(--space-1) var(--space-2); border:1px solid var(--border-control); border-radius:var(--r-sm); background:var(--surface-2); color:var(--ink); cursor:pointer; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="brand"><span class="led"></span><h1>SubGlance — design review</h1></div>
+  <div class="brand"><span class="led-wrap"><span class="led" aria-hidden="true" data-state="up"></span><span class="sr-only">Up</span></span><h1>SubGlance — design review</h1><button class="theme-toggle" onclick="toggleTheme()">Theme</button></div>
   <p class="sub">Three clickable sets of mockups. Nothing here is wired to a backend: the data is fixed and the interactions are simulated, so it is safe to click anything.</p>
 
   <a class="card" href="dashboard-directions.html">
@@ -78,7 +80,7 @@ kbd { font-family:var(--font-mono); font-size:10.5px; border:1px solid var(--bor
 
   <p class="note">The dashboard and component mockups remember your theme and layout in localStorage; the page proposals remember your theme. If something looks stale after a <code>git pull</code>, hard-refresh with <kbd>⌘⇧R</kbd>.</p>
 
-  <p class="note" style="border-top:0; padding-top:0; margin-top:14px">
+  <p class="note" style="border-top:0; padding-top:0; margin-top:var(--space-3)">
     The reasoning behind every choice here is written down in
     <code>docs/DESIGN.md</code> — tokens, the LED, layouts, accessibility, and
     the things we deliberately do not do.

@@ -135,11 +135,11 @@ for (const theme of ["dark", "light"]) for (const width of [390, 1440]) describe
       await button(page, "Reload latest settings");
       await page.waitForFunction(() => (document.querySelector('input[name="name"]') as HTMLInputElement)?.value === "Concurrent name");
       expect(await page.$eval('[data-repeat-input]', (node) => (node as HTMLInputElement).value)).toBe("877");
-      await page.select('.add-form select', "off"); await button(page, "Save changes"); await page.waitForSelector('[role="dialog"]', { hidden: true });
+      await page.select('.repeat-field select', "off"); await button(page, "Save changes"); await page.waitForSelector('[role="dialog"]', { hidden: true });
       await page.waitForFunction(() => document.querySelector('.inc-reminders')?.textContent?.includes("Do not repeat"));
       await page.reload({ waitUntil: "domcontentloaded" }); await page.waitForSelector('.inc-reminders');
-      await button(page, "Edit monitor"); await page.waitForSelector('.add-form select');
-      expect(await page.$eval('.add-form select', (node) => (node as HTMLSelectElement).value)).toBe("off");
+      await button(page, "Edit monitor"); await page.waitForSelector('.repeat-field select');
+      expect(await page.$eval('.repeat-field select', (node) => (node as HTMLSelectElement).value)).toBe("off");
       await button(page, "Cancel");
       await page.click('button[aria-label^="Mute repeat alerts for"]');
       await page.waitForFunction(() => document.querySelector('.inc-reminders')?.textContent?.includes("incident acknowledged"));
@@ -162,8 +162,8 @@ it.each([0, 60, 731, 86400])("creates repeat base %s and reads the exact persist
     await button(page, "Save monitor"); await page.waitForSelector('[role="dialog"]', { hidden: true });
     expect(f.creates[0].repeat_after_s).toBe(value);
     await page.goto(`${server.url}/monitors/1`, { waitUntil: "domcontentloaded" }); await page.waitForSelector('.inc-reminders');
-    await button(page, "Edit monitor"); await page.waitForSelector('.add-form select');
-    if (value === 0) expect(await page.$eval('.add-form select', (node) => (node as HTMLSelectElement).value)).toBe("off");
+    await button(page, "Edit monitor"); await page.waitForSelector('.repeat-field select');
+    if (value === 0) expect(await page.$eval('.repeat-field select', (node) => (node as HTMLSelectElement).value)).toBe("off");
     else expect(await page.$eval('[data-repeat-input]', (node) => (node as HTMLInputElement).value)).toBe(String(value));
   } finally { await f.context.close(); }
 });
