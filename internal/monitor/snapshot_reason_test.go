@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/frankgraave/subglance/internal/checker"
 	"github.com/frankgraave/subglance/internal/store"
 )
 
@@ -69,6 +70,43 @@ func TestSnapshotReasonDistinguishesDisabledBudgetAndUnknown(t *testing.T) {
 	got := recordedCaptureReasons(t, db)
 	if fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("capture reasons = %#v, want %#v", got, want)
+	}
+}
+
+func TestSnapshotDisabledReasonRequiresCaptureEligibleFailure(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		kind   checker.FailureKind
+		status int
+		want   string
+	}{
+		{"status", checker.FailStatus, 503, "disabled"},
+		{"keyword", checker.FailKeyword, 200, "disabled"},
+		{"dns", checker.FailDNS, 0, ""},
+		{"tls", checker.FailTLS, 0, ""},
+		{"connection", checker.FailConnection, 0, ""},
+		{"timeout", checker.FailTimeout, 0, ""},
+		{"body read", checker.FailConnection, 200, ""},
+		{"certificate expiry", checker.FailCertExpiry, 200, ""},
+		{"internal", checker.FailInternal, 0, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := testDB(t)
+			r := recordingRunner(t, db)
+			m := captureMonitorRow(t, db)
+			m.CaptureResponse = false
+			outcome := failureWithBody(m, "")
+			outcome.Result.Response = nil
+			outcome.Result.Kind = tc.kind
+			outcome.Result.StatusCode = tc.status
+			if err := r.recordOutcome(outcome); err != nil {
+				t.Fatal(err)
+			}
+			reasons := recordedCaptureReasons(t, db)
+			if len(reasons) != 1 || reasons[0] != tc.want {
+				t.Fatalf("capture reasons = %q, want [%q] for %s failure", reasons, tc.want, tc.name)
+			}
+		})
 	}
 }
 

@@ -1635,8 +1635,10 @@ timestamps — started, confirmed, acked, resolved — and nothing about deliver
 so the timeline never names a channel or claims "Alert sent". Inventing those
 from a confirmation timestamp would be the same class of fiction as the
 sidebar's old "2 incidents" badge: plausible, unverifiable, and on a monitoring
-tool indistinguishable from a fact. For the same reason there is no "Response
-snapshot" panel; the API captures no response body.
+tool indistinguishable from a fact. Response snapshots belong to individual
+failed checks, not to an inferred incident timeline: the HTTP monitor detail
+shows them in the separate **Failure responses** card (§8.7), using raw heartbeat
+history rather than the incident payload.
 
 #### Grouping is additive, and it states a suspicion
 
@@ -1707,6 +1709,37 @@ word but cannot change what it says — so the wording moves in the markup: "Was
 down from …, 12 min when we last heard." The state is never blanked; which
 state we lost an incident in is the most useful thing left on a screen that has
 stopped updating.
+
+---
+
+### 8.7 Failure responses on HTTP monitor details
+
+The **Failure responses** card follows **Recent checks** and precedes **Uptime**.
+It shows failed checks from the latest 100 raw heartbeats, not every failure in
+an incident. The authenticated per-monitor endpoint supplies the evidence;
+dashboard bulk reads and the live stream carry no response bodies. Polling and
+a recorded **Check now** refresh this history without replacing an open
+disclosure: each row is keyed by its persisted heartbeat ID, never its timestamp
+or position, because checks can share a second.
+
+**Captured response** is a native `<details>` / `<summary>` disclosure, closed
+initially and operable with the keyboard. Bodies and allowlisted headers render
+as plain text, never interpreted HTML or Markdown. Truncation is stated outside
+the disclosure; a captured empty body says it was empty. A missing snapshot gets
+no empty disclosure. It instead names the stored decision — capture disabled,
+flapping, or incident allowance spent — and an absent or unknown reason stays
+explicitly unknown. Today's configuration cannot explain yesterday's failure.
+
+The body is a labelled, focusable scroll region in mono, bounded by
+`--size-pane-scroll`, with wrapped text and `overflow: auto`. Keyboard readers
+can Tab into it and scroll to the end instead of losing text below a fixed box.
+It uses `--surface-panel`, `--border`, `--r-sm` and `--space-3`; both the summary
+and body show the `--outline-w` / `--accent-border` focus outline with
+`--outline-offset`. No separate palette or size ladder is introduced.
+
+Loading, no recent failed checks, and a failed history request are distinct
+states. A failed refresh keeps previously loaded rows visible and warns that
+they may be out of date; it does not invent an empty successful history.
 
 ---
 

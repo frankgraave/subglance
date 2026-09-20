@@ -9,6 +9,7 @@ how to take a backup that actually restores.
 - [Metrics](#metrics)
 - [Shutdown](#shutdown)
 - [Watching the watcher](#watching-the-watcher)
+- [Upgrading](#upgrading)
 - [Backup and restore](#backup-and-restore)
 
 ## Configuration
@@ -274,6 +275,22 @@ It is not a complete answer. An instance that is running fine but has lost
 outbound network stops pinging too, and that reads as an outage at the other
 end. Being told about a problem that turns out to be the messenger is still
 better than being told nothing.
+
+## Upgrading
+
+Take a [backup](#backup-and-restore) before starting a newer binary. Migrations
+run during database `Open`, before the service starts serving requests. An
+older binary refuses a database with migration-ledger entries it does not
+recognise; reverting the binary may therefore require restoring the pre-upgrade
+backup rather than reusing the upgraded database.
+
+Migration `0011_heartbeat_capture_reason.sql` adds a `CHECK`-constrained column
+to `heartbeats`. SQLite validates that constraint against the existing rows,
+so the first start after this upgrade scans the raw heartbeat table. A large
+table, especially with a long `--raw-retention`, can delay startup. Allow for
+that pause in the upgrade window and any supervisor startup timeout; subsequent
+starts skip the already-applied migration. Existing rows keep an unknown capture
+reason rather than being classified from today's monitor settings.
 
 ## Backup and restore
 

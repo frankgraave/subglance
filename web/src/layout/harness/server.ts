@@ -381,6 +381,14 @@ export async function serveBuild(): Promise<Server> {
       return;
     }
 
+    // HTTP details also poll raw diagnostics. No captured failures in this
+    // layout fixture; an unstubbed 404 would instead render a history alert.
+    if (/^\/api\/v1\/monitors\/[^/]+\/heartbeats$/.test(url.pathname)) {
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ heartbeats: [] }));
+      return;
+    }
+
     if (url.pathname === "/api/v1/incidents") {
       res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
       res.end(JSON.stringify({ incidents: INCIDENTS.filter((incident) => !incident.resolved) }));

@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/frankgraave/subglance/internal/checker"
 	"github.com/frankgraave/subglance/internal/store"
@@ -620,7 +621,7 @@ func validateTargetForType(typ, target string) problem {
 		}
 		// Whitespace inside the host is never a hostname. ParseHostPort only
 		// trims the ends, so "a b.com" survives it and then fails to resolve.
-		if strings.ContainsAny(host, " 	\r\n") {
+		if strings.ContainsFunc(host, unicode.IsSpace) {
 			return bad("a hostname cannot contain spaces")
 		}
 	}

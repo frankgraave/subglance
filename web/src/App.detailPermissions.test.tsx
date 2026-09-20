@@ -75,6 +75,7 @@ describe("detail check permissions through the real app shell", () => {
             },
             "/api/v1/monitors/1/uptime": { windows: [] },
             "/api/v1/monitors/1/incidents": { incidents: [] },
+            "/api/v1/monitors/1/heartbeats": { heartbeats: [] },
           };
           if (!(path in responses))
             throw new Error(`Unexpected request: ${path}`);
@@ -89,6 +90,8 @@ describe("detail check permissions through the real app shell", () => {
       await waitFor(() =>
         expect(document.querySelector(".mon-detail")).not.toBeNull(),
       );
+      await screen.findByText("No failed checks in the recent history.");
+      expect(screen.queryByRole("alert")).toBeNull();
       expect(screen.queryByRole("button", { name: "Check now" }) !== null).toBe(
         allowed,
       );

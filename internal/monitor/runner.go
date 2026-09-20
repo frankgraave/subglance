@@ -626,7 +626,9 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 
 	var captureReason store.CaptureReason
 	hb.Response, captureReason = snapshotToStore(o.Result, tr.SnapshotsSpent, tr.Flapping)
-	if !o.Result.OK && o.Result.Response == nil && o.Monitor.Type == "http" && !o.Monitor.CaptureResponse {
+	if !o.Result.OK && o.Result.Response == nil &&
+		(o.Result.Kind == checker.FailStatus || o.Result.Kind == checker.FailKeyword) &&
+		o.Monitor.Type == "http" && !o.Monitor.CaptureResponse {
 		// This is the configuration the checker used, not a fresh monitor
 		// lookup that could have changed while the request was in flight.
 		captureReason = store.CaptureDisabled
