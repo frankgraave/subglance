@@ -63,6 +63,10 @@ it("real Go API persists the edit, previews without history, rejects stale ETags
     await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
     await page.goto(`${f.url}${path}`, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".inc-reminders time");
+    // Editing and reminders coexist with the independently shipped history
+    // query; an unhandled endpoint must not hide behind the ready edit button.
+    await page.waitForFunction(() => document.querySelector(".response-history")?.textContent?.includes("Capture was switched off for this check."));
+    expect(await page.$('.response-history [role="alert"]')).toBeNull();
     const initial = await f.api(`${path}/incidents`).then((r) => r.json());
     expect(initial.incidents[0].reminder_count).toBe(2);
     expect(await page.$eval(".inc-reminders time", (node) => node.getAttribute("datetime"))).toBe(initial.incidents[0].next_reminder_at);

@@ -76,6 +76,7 @@ describe("detail check permissions through the real app shell", () => {
             "/api/v1/monitors/1": { id: 1, name: "Latest settings", type: "http", target: "https://api.example.com", interval_s: 20, timeout_s: 5, enabled: true, status: "up", created_at: "2026-09-01T00:00:00Z", repeat_after_s: 731 },
             "/api/v1/monitors/1/uptime": { windows: [] },
             "/api/v1/monitors/1/incidents": { incidents: [] },
+            "/api/v1/monitors/1/heartbeats": { heartbeats: [] },
           };
           if (!(path in responses))
             throw new Error(`Unexpected request: ${path}`);
@@ -90,6 +91,8 @@ describe("detail check permissions through the real app shell", () => {
       await waitFor(() =>
         expect(document.querySelector(".mon-detail")).not.toBeNull(),
       );
+      await screen.findByText("No failed checks in the recent history.");
+      expect(screen.queryByRole("alert")).toBeNull();
       expect(screen.queryByRole("button", { name: "Check now" }) !== null).toBe(
         allowed,
       );
