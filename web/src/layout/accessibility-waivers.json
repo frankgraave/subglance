@@ -3,56 +3,6 @@
   "entries": [
     {
       "rule": "color-contrast",
-      "selector": "span[data-state=\"planned\"] > .shell-nav-text",
-      "scopes": [
-        "light: dashboard rows",
-        "light: dashboard cards",
-        "light: dashboard compact",
-        "light: monitor detail",
-        "light: monitors",
-        "light: incidents",
-        "light: notifications",
-        "light: add monitor",
-        "light: navigation drawer",
-        "dark: dashboard rows",
-        "dark: dashboard cards",
-        "dark: dashboard compact",
-        "dark: monitor detail",
-        "dark: monitors",
-        "dark: incidents",
-        "dark: notifications",
-        "dark: add monitor",
-        "dark: navigation drawer"
-      ],
-      "reason": "Existing contrast debt in shell-nav-text: the shared ink role or muted-state opacity is below the AA text floor. Remediation changes the shared palette/visual hierarchy and is deferred from this gate. This is not a WCAG exemption; only these measured screen/theme/selector combinations are waived, and the waiver must be removed when fixed."
-    },
-    {
-      "rule": "color-contrast",
-      "selector": ".shell-nav-soon",
-      "scopes": [
-        "light: dashboard rows",
-        "light: dashboard cards",
-        "light: dashboard compact",
-        "light: monitor detail",
-        "light: monitors",
-        "light: incidents",
-        "light: notifications",
-        "light: add monitor",
-        "light: navigation drawer",
-        "dark: dashboard rows",
-        "dark: dashboard cards",
-        "dark: dashboard compact",
-        "dark: monitor detail",
-        "dark: monitors",
-        "dark: incidents",
-        "dark: notifications",
-        "dark: add monitor",
-        "dark: navigation drawer"
-      ],
-      "reason": "Existing contrast debt in shell-nav-soon: the shared ink role or muted-state opacity is below the AA text floor. Remediation changes the shared palette/visual hierarchy and is deferred from this gate. This is not a WCAG exemption; only these measured screen/theme/selector combinations are waived, and the waiver must be removed when fixed."
-    },
-    {
-      "rule": "color-contrast",
       "selector": ".shell-account-email",
       "scopes": [
         "light: dashboard rows",
@@ -72,7 +22,11 @@
         "dark: incidents",
         "dark: notifications",
         "dark: add monitor",
-        "dark: navigation drawer"
+        "dark: navigation drawer",
+        "light: settings",
+        "light: settings password error",
+        "dark: settings",
+        "dark: settings password error"
       ],
       "reason": "Existing contrast debt in shell-account-email: the shared ink role or muted-state opacity is below the AA text floor. Remediation changes the shared palette/visual hierarchy and is deferred from this gate. This is not a WCAG exemption; only these measured screen/theme/selector combinations are waived, and the waiver must be removed when fixed."
     },
@@ -658,7 +612,11 @@
       "selector": "div[aria-label=\"Dashboard layout\"] > .segmented-option[type=\"button\"]:nth-child(2)",
       "scopes": [
         "light: add monitor",
-        "dark: add monitor"
+        "dark: add monitor",
+        "light: settings",
+        "light: settings password error",
+        "dark: settings",
+        "dark: settings password error"
       ],
       "reason": "Existing contrast debt in segmented-option: the shared ink role or muted-state opacity is below the AA text floor. Remediation changes the shared palette/visual hierarchy and is deferred from this gate. This is not a WCAG exemption; only these measured screen/theme/selector combinations are waived, and the waiver must be removed when fixed."
     },
@@ -667,7 +625,11 @@
       "selector": "div[aria-label=\"Dashboard layout\"] > .segmented-option[type=\"button\"]:nth-child(3)",
       "scopes": [
         "light: add monitor",
-        "dark: add monitor"
+        "dark: add monitor",
+        "light: settings",
+        "light: settings password error",
+        "dark: settings",
+        "dark: settings password error"
       ],
       "reason": "Existing contrast debt in segmented-option: the shared ink role or muted-state opacity is below the AA text floor. Remediation changes the shared palette/visual hierarchy and is deferred from this gate. This is not a WCAG exemption; only these measured screen/theme/selector combinations are waived, and the waiver must be removed when fixed."
     },
@@ -676,7 +638,11 @@
       "selector": ".segmented-option[type=\"button\"]:nth-child(4)",
       "scopes": [
         "light: add monitor",
-        "dark: add monitor"
+        "dark: add monitor",
+        "light: settings",
+        "light: settings password error",
+        "dark: settings",
+        "dark: settings password error"
       ],
       "reason": "Existing contrast debt in segmented-option: the shared ink role or muted-state opacity is below the AA text floor. Remediation changes the shared palette/visual hierarchy and is deferred from this gate. This is not a WCAG exemption; only these measured screen/theme/selector combinations are waived, and the waiver must be removed when fixed."
     },

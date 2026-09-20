@@ -21,6 +21,7 @@ type Screen = {
   layout?: string;
   auth?: "setup" | "login";
   drawer?: "add" | "navigation";
+  passwordError?: boolean;
 };
 
 const SCREENS: Screen[] = [
@@ -34,6 +35,8 @@ const SCREENS: Screen[] = [
   { name: "notifications", path: "/notifications", ready: ".inv-row" },
   { name: "setup", path: "/", auth: "setup", ready: ".auth-card input[type='password']" },
   { name: "login", path: "/", auth: "login", ready: ".auth-card input[type='password']" },
+  { name: "settings", path: "/settings", ready: 'input[name="current_password"]' },
+  { name: "settings password error", path: "/settings", ready: 'input[name="current_password"]', passwordError: true },
   { name: "add monitor", path: "/monitors", ready: ".inv-list > li", drawer: "add" },
   { name: "navigation drawer", path: "/", ready: "[data-testid^='monitor-card-']", drawer: "navigation" },
 ];
@@ -65,6 +68,8 @@ async function openScreen(page: Page, screen: Screen, theme: string, incidentIdO
     const url = new URL(request.url());
     if (url.origin !== server.url) {
       void request.abort("blockedbyclient");
+    } else if (screen.passwordError && url.pathname === "/api/v1/auth/password") {
+      void request.respond({ status: 401, contentType: "application/json", body: JSON.stringify({ error: "current password is incorrect" }) });
     } else if (screen.auth && url.pathname === "/api/v1/auth/me") {
       void request.respond({ status: 401, contentType: "application/json", body: '{"error":"unauthorized"}' });
     } else if (screen.auth && url.pathname === "/api/v1/setup") {
@@ -82,6 +87,13 @@ async function openScreen(page: Page, screen: Screen, theme: string, incidentIdO
   });
   await page.goto(server.url + screen.path, { waitUntil: "domcontentloaded" });
   await page.waitForSelector(screen.ready, { visible: true, timeout: 15_000 });
+  if (screen.passwordError) {
+    await page.type('input[name="current_password"]', "wrong example password");
+    await page.type('input[name="new_password"]', "new example passphrase");
+    await page.type('input[name="confirmation"]', "new example passphrase");
+    await page.click('form[aria-label="Change password"] button[type="submit"]');
+    await page.waitForSelector('input[name="current_password"][aria-invalid="true"]');
+  }
   if (screen.auth) {
     expect(await page.$eval(".auth-title", (el) => el.textContent)).toBe(
       screen.auth === "setup" ? "Set up this instance" : "Sign in",

@@ -92,6 +92,7 @@
 @import "./shell/shell.css";
 @import "./shell/crash.css";
 @import "./auth/auth.css";
+@import "./auth/password.css";
 @import "./wall/wall.css";
 
 /*
