@@ -2,6 +2,7 @@ package store
 
 import (
 	"encoding/json"
+	"errors"
 	"reflect"
 	"testing"
 	"time"
@@ -60,7 +61,7 @@ func TestTagTransformReadsQueuedCurrentTagsAndPreservesConcurrentConfig(t *testi
 	if after.UpdatedAt.Unix() < before.UpdatedAt.Unix()+2 {
 		t.Fatal("both writes must advance the monitor revision")
 	}
-	if _, err := db.UpdateMonitorIfUnchanged(ctx, before, []time.Time{before.UpdatedAt}); err != ErrVersionConflict {
+	if _, err := db.UpdateMonitorIfUnchanged(ctx, before, []time.Time{before.UpdatedAt}); !errors.Is(err, ErrVersionConflict) {
 		t.Fatalf("stale update = %v, want conflict", err)
 	}
 }

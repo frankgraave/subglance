@@ -132,12 +132,12 @@ func (db *DB) TransformTags(ctx context.Context, raw TagOperation, expected stri
 	if err != nil {
 		return empty, "", fmt.Errorf("read tag operation: %w", err)
 	}
+	defer func() { _ = rows.Close() }()
 	current := []tagOperationRow{}
 	for rows.Next() {
 		var id int64
 		var key, value sql.NullString
 		if err := rows.Scan(&id, &key, &value); err != nil {
-			_ = rows.Close()
 			return empty, "", err
 		}
 		if len(current) == 0 || current[len(current)-1].ID != id {
@@ -148,7 +148,6 @@ func (db *DB) TransformTags(ctx context.Context, raw TagOperation, expected stri
 		}
 	}
 	err = rows.Err()
-	_ = rows.Close()
 	if err != nil {
 		return empty, "", err
 	}
@@ -204,7 +203,7 @@ func (db *DB) TransformTags(ctx context.Context, raw TagOperation, expected stri
 			continue
 		}
 		if _, err := NormaliseTags(next); err != nil {
-			return empty, "", fmt.Errorf("%w: monitor %d: %s", ErrInvalidTagOperation, row.ID, err)
+			return empty, "", fmt.Errorf("%w: monitor %d: %w", ErrInvalidTagOperation, row.ID, err)
 		}
 		changed = append(changed, tagOperationRow{ID: row.ID, Tags: next})
 	}
