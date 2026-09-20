@@ -114,6 +114,16 @@ export type ApiMonitor = {
   target: string;
   interval_s: number;
   timeout_s: number;
+  repeat_after_s?: number;
+  method?: string;
+  expected_status?: string;
+  keyword?: string;
+  keyword_mode?: string;
+  follow_redirects?: boolean;
+  headers?: Record<string, string>;
+  body?: string;
+  ssl_warn_days?: number;
+  min_tls_version?: string;
   enabled: boolean;
   status: "up" | "pending" | "down";
   last_check?: string | null;

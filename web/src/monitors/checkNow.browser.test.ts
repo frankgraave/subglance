@@ -40,14 +40,14 @@ describe("detail Check now in Chromium", () => {
           });
           await page.goto(server.url + "/monitors/1", { waitUntil: "domcontentloaded" });
           await page.waitForSelector(".mon-detail-name");
-          const button = await page.$(".card-head-action button");
+          const button = await page.$(".card-head-action .mon-check-now");
           expect(button, "a probed monitor must offer Check now").not.toBeNull();
           expect(await button?.evaluate((node) => node.textContent)).toBe("Check now");
           await button?.click();
-          await page.waitForFunction(() => document.querySelector<HTMLButtonElement>(".card-head-action button")?.disabled === true);
+          await page.waitForFunction(() => document.querySelector<HTMLButtonElement>(".card-head-action .mon-check-now")?.disabled === true);
           // Programmatic repeated clicks exercise the handler while disabled.
           await button?.evaluate((node) => { (node as HTMLButtonElement).click(); (node as HTMLButtonElement).click(); });
-          await page.waitForFunction(() => document.querySelector(".card-head-action button")?.textContent === "Checking…");
+          await page.waitForFunction(() => document.querySelector(".card-head-action .mon-check-now")?.textContent === "Checking…");
           await expect.poll(() => requests.length).toBe(1);
           expect(requests).toEqual(["POST"]);
           complete();
@@ -60,7 +60,7 @@ describe("detail Check now in Chromium", () => {
           expect(icon.hidden).toBe("true");
           expect(icon.width).toBe(icon.rung);
           await button?.click();
-          await page.waitForFunction(() => document.querySelector<HTMLButtonElement>(".card-head-action button")?.disabled === true);
+          await page.waitForFunction(() => document.querySelector<HTMLButtonElement>(".card-head-action .mon-check-now")?.disabled === true);
           // Wait for the second intercepted POST rather than its visual start.
           await expect.poll(() => requests.length).toBe(2);
           complete();
@@ -92,7 +92,7 @@ describe("detail Check now in Chromium", () => {
       });
       await page.goto(server.url + "/monitors/1", { waitUntil: "domcontentloaded" });
       await page.waitForSelector(".mon-detail-name");
-      expect(await page.$(".card-head-action button")).toBeNull();
+      expect(await page.$(".card-head-action .mon-check-now")).toBeNull();
     } finally { await page.close(); }
   });
 });

@@ -26,6 +26,10 @@ export type PreviewRequest = {
   keyword?: string;
   keyword_mode?: string;
   follow_redirects?: boolean;
+  headers?: Record<string, string>;
+  body?: string;
+  ssl_warn_days?: number;
+  min_tls_version?: string;
 };
 
 /** POST /api/v1/monitors/preview, as the server returns it. */
@@ -86,6 +90,10 @@ export function fingerprintPreview(req: PreviewRequest): PreviewFingerprint {
     req.keyword ?? "",
     req.keyword_mode ?? "",
     req.follow_redirects ?? null,
+    Object.entries(req.headers ?? {}).sort(([a], [b]) => a.localeCompare(b)),
+    req.body ?? "",
+    req.ssl_warn_days ?? null,
+    req.min_tls_version ?? "",
   ]);
 }
 
