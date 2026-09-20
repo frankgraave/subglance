@@ -40,7 +40,9 @@ h2 {  font-weight:var(--weight-strong); text-transform:uppercase; letter-spacing
 .frame-tile { width:24px; height:24px; flex:none; display:grid; place-items:center;
   border:1px solid var(--border-hi); border-radius:var(--r-sm); background:var(--surface-2); color:var(--ink-2); }
 .frame-tile svg { width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:1.8; }
-/* The panel: one radius step inside the card, its own edge and shared lift. */
+/* Panel and PanelList share this nesting material (DESIGN.md §2.6):
+   measured composites 35/35/35 dark and 250/250/249 light on the card.
+   One radius step inside the card, its own edge and shared lift. */
 .frame-panel {; padding:var(--space-3) var(--space-4); background:var(--surface-panel); box-shadow:var(--shadow-raised); border:1px solid var(--border); border-radius:var(--r-md); }
 .frame-panel + .frame-panel { margin:0; }
 .frame-row { display:flex; align-items:center; gap:var(--space-3); }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { confirmLeave } from "./shell/leaveGuard";
+import { CommandMenu } from "./commands/CommandMenu";
 import { Settings } from "./settings/Settings";
 import { SessionGate } from "./auth/SessionGate";
 import { useSession } from "./auth/useSession";
@@ -60,6 +61,7 @@ export default function App() {
   } = useShellPreferences(window.localStorage);
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
   const { route, navigate } = useRoute();
   /*
    * One query client for both screens, created here rather than inside each
@@ -288,6 +290,7 @@ export default function App() {
    * everywhere else.
    */
   useShellShortcuts({
+    onCommand: session.state === "signedIn" ? () => setCommandOpen((open) => !open) : undefined,
     onToggleSidebar: toggleNav,
     onEscape: navOpen
       ? closeNav
@@ -333,6 +336,9 @@ export default function App() {
    * screen looks authoritative while it does.
    */
   const signedIn = session.state === "signedIn";
+  // Reset before committing the anonymous screen, not in an effect that can
+  // leave a previously open menu armed for the next account.
+  if (!signedIn && commandOpen) setCommandOpen(false);
   useEffect(() => {
     if (!signedIn) queryClient.clear();
   }, [signedIn, queryClient]);
@@ -387,6 +393,7 @@ export default function App() {
           onThemeChange={setPreference}
           workbenchOpen={workbenchOpen}
           onToggleWorkbench={toggleWorkbench}
+          onOpenCommands={() => setCommandOpen(true)}
         />
       }
       toolbar={<PageToolbar />}
@@ -490,6 +497,8 @@ export default function App() {
   return (
     <SessionGate session={session} onSignedIn={onSignedIn} onRetry={refresh}>
       {screen}
+      {session.state === "signedIn" && <CommandMenu client={queryClient} open={commandOpen} canWrite={canWrite(session.user)} onClose={() => setCommandOpen(false)} onOpenMonitor={openMonitor}
+        onNavigate={goTo} onThemeChange={setPreference} onAddMonitor={() => { if (confirmLeave()) { setWorkbenchOpen(false); setAddOpen(false); setCreateOpen(true); } }} />}
     </SessionGate>
   );
 }

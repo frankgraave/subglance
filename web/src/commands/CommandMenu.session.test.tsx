@@ -1,0 +1,37 @@
+// @vitest-environment jsdom
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, expect, it, vi } from "vitest";
+import type { Session } from "../auth/session";
+import { QueryClient } from "@tanstack/react-query";
+const state = vi.hoisted(() => ({ session: { state: "unknown" } as Session }));
+vi.mock("../auth/useSession", () => ({ useSession: () => ({ session: state.session, onSignedIn() {}, signOut() {}, refresh() {} }) }));
+const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+vi.mock("../live/queryClient", async (original) => ({ ...await original<typeof import("../live/queryClient")>(), createQueryClient: () => client }));
+import App from "../App";
+afterEach(() => { cleanup(); client.clear(); vi.unstubAllGlobals(); });
+it("removes and resets the palette and cache at session end, with no write commands after a viewer signs in", async () => {
+  window.history.replaceState(null, "", "/settings");
+  vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ monitors: [{ id: 1, name: "Private monitor", target: "https://private.example", enabled: true, status: "up", type: "http" }] }))));
+  HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
+  HTMLDialogElement.prototype.close = function () { this.removeAttribute("open"); };
+  const user = { id: 1, role: "admin" as const, email: "operator@example.com", created_at: "2026-09-01" };
+  state.session = { state: "signedIn", user };
+  const mounted = render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "Open command menu" }));
+  await screen.findByRole("option", { name: /Open Private monitor/ });
+  expect(client.getQueryCache().getAll().length).toBeGreaterThan(0);
+  state.session = { state: "anonymous" };
+  mounted.rerender(<App />);
+  expect(screen.queryByRole("dialog", { name: "Command menu" })).toBeNull();
+  expect(client.getQueryCache().getAll()).toHaveLength(0);
+  fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+  expect(screen.queryByRole("dialog", { name: "Command menu" })).toBeNull();
+  state.session = { state: "signedIn", user: { ...user, id: 2, role: "viewer" } };
+  mounted.rerender(<App />);
+  await act(async () => {});
+  expect(screen.queryByRole("dialog", { name: "Command menu" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Open command menu" }));
+  await screen.findByRole("option", { name: /Open Private monitor/ });
+  expect(screen.queryByRole("option", { name: /Pause|Resume|Add monitor/ })).toBeNull();
+});

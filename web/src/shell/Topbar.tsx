@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { ThemeToggle } from "../components/ThemeToggle";
 import type { ThemePreference } from "../theme/theme";
 import { LayoutSwitcher } from "./LayoutSwitcher";
-import { BeakerIcon, SidebarIcon } from "./icons";
+import { BeakerIcon, SidebarIcon, SearchIcon } from "./icons";
 import { setTopbarSlot } from "./topbarSlot";
 import type { LayoutId } from "./preferences";
 
@@ -60,6 +60,7 @@ export type TopbarProps = {
   onThemeChange: (next: ThemePreference) => void;
   workbenchOpen: boolean;
   onToggleWorkbench: () => void;
+  onOpenCommands?: () => void;
   /** Optional extra controls, e.g. a search field owned by the page. */
   children?: ReactNode;
 };
@@ -76,6 +77,7 @@ export function Topbar({
   onThemeChange,
   workbenchOpen,
   onToggleWorkbench,
+  onOpenCommands,
   children,
 }: TopbarProps) {
   return (
@@ -125,6 +127,7 @@ export function Topbar({
        * space, so a screen without search costs nothing.
        */}
       <div ref={setTopbarSlot} className="shell-topbar-search" />
+      {onOpenCommands && <button type="button" className="shell-icon-btn shell-command-launcher" aria-label="Open command menu" aria-keyshortcuts="Control+K Meta+K" title="Command menu — Ctrl/Cmd + K" onClick={onOpenCommands}><span className="shell-search-kbd" aria-hidden="true">⌘K</span><SearchIcon /></button>}
 
       {/* Anything else a caller wants in the masthead, which is currently
           nothing: kept because `children` is the escape hatch for a control
