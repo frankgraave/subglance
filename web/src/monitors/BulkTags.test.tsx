@@ -55,6 +55,7 @@ it("has no management surface for a viewer, and clears selection on permission l
   );
   fireEvent.click(screen.getByRole("checkbox", { name: "Select site 1" }));
   fireEvent.click(screen.getByRole("button", { name: "Manage tags" }));
+  expect(screen.getByRole("dialog")).toBeTruthy();
   view.rerender(
     <LiveMonitorsRoot
       client={client}
