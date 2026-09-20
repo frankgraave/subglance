@@ -156,7 +156,7 @@ func TestResolvedIncidentsAllowAWalkAtTheMaximumWindow(t *testing.T) {
 
 	justPastTheCap := now.Add(-resolvedHistoryMaxDays * 24 * time.Hour).Add(-time.Second)
 	cursor := strconv.FormatInt(justPastTheCap.Unix(), 10) + "." +
-		strconv.FormatInt(now.Unix(), 10) + ".999999"
+		strconv.FormatInt(now.Unix(), 10) + ".999999.730"
 
 	rec := httptest.NewRecorder()
 	authedHandler(srv).ServeHTTP(rec,
@@ -185,7 +185,7 @@ func TestResolvedIncidentsMaximumWindowIssuedCursor(t *testing.T) {
 			t.Cleanup(func() { time.Local = previous })
 
 			synctest.Test(t, func(t *testing.T) {
-				time.Sleep(time.Date(2026, time.March, 9, 12, 0, 0, 0, time.UTC).Sub(time.Now()))
+				time.Sleep(time.Until(time.Date(2026, time.March, 9, 12, 0, 0, 0, time.UTC)))
 				srv, db := testServerWithDB(t)
 				now := time.Now().Truncate(time.Second)
 				since := now.Add(-resolvedHistoryMaxDays * 24 * time.Hour)
@@ -242,7 +242,7 @@ func TestResolvedIncidentsRejectCursorsOlderThanTheCap(t *testing.T) {
 	srv, _ := testServerWithDB(t)
 
 	tooOld := time.Now().AddDate(0, 0, -(resolvedHistoryMaxDays + 1)).Unix()
-	cursor := strconv.FormatInt(tooOld, 10) + ".1758024000.412"
+	cursor := strconv.FormatInt(tooOld, 10) + ".1758024000.412.730"
 
 	rec := httptest.NewRecorder()
 	authedHandler(srv).ServeHTTP(rec,
@@ -297,6 +297,29 @@ func TestResolvedIncidentsPinTheWindowAcrossPages(t *testing.T) {
 	}
 }
 
+func TestResolvedIncidentsEchoPinnedWindowAcrossPages(t *testing.T) {
+	srv, db := testServerWithDB(t)
+	now := time.Now().Truncate(time.Second)
+	seedResolved(t, db, "recent", now.Add(-2*time.Hour), now.Add(-time.Hour))
+	seedResolved(t, db, "older", now.Add(-81*24*time.Hour), now.Add(-80*24*time.Hour))
+	first := getResolved(t, srv, url.Values{"days": {"90"}, "limit": {"1"}})
+	if !first.HasMore || first.NextCursor == "" {
+		t.Fatalf("expected a continuation: %+v", first)
+	}
+	for _, days := range []string{"", "1", "730", "invalid"} {
+		t.Run("days="+days, func(t *testing.T) {
+			query := url.Values{"cursor": {first.NextCursor}, "limit": {"1"}}
+			if days != "" {
+				query.Set("days", days)
+			}
+			second := getResolved(t, srv, query)
+			if second.Days != 90 || len(second.Incidents) != 1 || second.HasMore {
+				t.Fatalf("continuation = %+v, want the pinned 90-day window and older row", second)
+			}
+		})
+	}
+}
+
 // The window is measured on resolution, so a long outage that recovered
 // inside it is kept rather than dropped for having started too long ago.
 func TestResolvedIncidentsKeepLongOutagesThatRecoveredInWindow(t *testing.T) {
@@ -329,7 +352,9 @@ func TestResolvedIncidentsRejectBadParameters(t *testing.T) {
 		"limit=0", "limit=201", "limit=lots",
 		"cursor=nonsense", "cursor=1758024000", "cursor=1758024000.412",
 		"cursor=-1.2.3", "cursor=1755432000.1758024000.0",
-		"cursor=0.1758024000.412", "cursor=1.2.3.4",
+		"cursor=0.1758024000.412", "cursor=1.2.3.4.5",
+		"cursor=1755432000.1758024000.412.0", "cursor=1755432000.1758024000.412.731",
+		"cursor=1755432000.1758024000.0.30", "cursor=1755432000.1758024000.412.soon",
 	} {
 		rec := httptest.NewRecorder()
 		authedHandler(srv).ServeHTTP(rec,

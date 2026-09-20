@@ -130,7 +130,7 @@ func (s *Server) handleListResolvedIncidents(w http.ResponseWriter, r *http.Requ
 	q := r.URL.Query()
 
 	days := resolvedHistoryDefaultDays
-	if v := q.Get("days"); v != "" {
+	if v := q.Get("days"); v != "" && q.Get("cursor") == "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 1 || n > resolvedHistoryMaxDays {
 			writeError(w, http.StatusBadRequest,
@@ -162,7 +162,8 @@ func (s *Server) handleListResolvedIncidents(w http.ResponseWriter, r *http.Requ
 			writeError(w, http.StatusBadRequest, "invalid cursor")
 			return
 		}
-		cursor = parsed
+		cursor = parsed.ResolvedIncidentCursor
+		days = parsed.Days
 	}
 
 	/*
@@ -233,44 +234,54 @@ func (s *Server) handleListResolvedIncidents(w http.ResponseWriter, r *http.Requ
 	if page.HasMore {
 		next := page.Next
 		next.Since = since
-		body["next_cursor"] = formatResolvedCursor(next)
+		body["next_cursor"] = formatResolvedCursor(next, days)
 	}
 	writeJSON(w, http.StatusOK, body)
 }
 
-// formatResolvedCursor renders a cursor as "<since>.<resolved>.<id>".
+type resolvedPageCursor struct {
+	store.ResolvedIncidentCursor
+	Days int
+}
+
+// formatResolvedCursor renders a cursor as "<since>.<resolved>.<id>.<days>".
 //
 // Plain and readable rather than base64: it is a position in a public list,
 // not a secret, and an opaque blob would only mean that the one person
 // debugging a paging bug with curl cannot see what they are asking for.
 //
-// All three parts are load-bearing. `since` pins the window so a walk cannot
-// have the floor rise under it; `resolved` and `id` together are the sort key,
-// and the id cannot be dropped because resolution times have second
-// granularity — see ResolvedIncidentCursor.
-func formatResolvedCursor(c store.ResolvedIncidentCursor) string {
+// `since` pins the lower bound; `resolved` and `id` together are the sort key.
+// `days` preserves the originally selected window in response metadata, even
+// when a continuation omits or changes its days query parameter.
+func formatResolvedCursor(c store.ResolvedIncidentCursor, days int) string {
 	return strconv.FormatInt(c.Since.Unix(), 10) + "." +
 		strconv.FormatInt(c.ResolvedAt.Unix(), 10) + "." +
-		strconv.FormatInt(c.ID, 10)
+		strconv.FormatInt(c.ID, 10) + "." + strconv.Itoa(days)
 }
 
-func parseResolvedCursor(v string) (store.ResolvedIncidentCursor, error) {
+func parseResolvedCursor(v string) (resolvedPageCursor, error) {
 	parts := strings.Split(v, ".")
-	if len(parts) != 3 {
-		return store.ResolvedIncidentCursor{}, errors.New("cursor must be <since>.<resolved>.<id>")
+	if len(parts) != 4 {
+		return resolvedPageCursor{}, errors.New("cursor must be <since>.<resolved>.<id>.<days>")
 	}
 	nums := make([]int64, len(parts))
 	for i, part := range parts {
 		n, err := strconv.ParseInt(part, 10, 64)
 		if err != nil || n <= 0 {
-			return store.ResolvedIncidentCursor{}, errors.New("every cursor component must be a positive integer")
+			return resolvedPageCursor{}, errors.New("every cursor component must be a positive integer")
 		}
 		nums[i] = n
 	}
-	return store.ResolvedIncidentCursor{
-		Since:      time.Unix(nums[0], 0).UTC(),
-		ResolvedAt: time.Unix(nums[1], 0).UTC(),
-		ID:         nums[2],
+	if nums[3] > resolvedHistoryMaxDays {
+		return resolvedPageCursor{}, errors.New("cursor window exceeds the maximum")
+	}
+	return resolvedPageCursor{
+		ResolvedIncidentCursor: store.ResolvedIncidentCursor{
+			Since:      time.Unix(nums[0], 0).UTC(),
+			ResolvedAt: time.Unix(nums[1], 0).UTC(),
+			ID:         nums[2],
+		},
+		Days: int(nums[3]),
 	}, nil
 }
 
