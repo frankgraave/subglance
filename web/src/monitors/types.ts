@@ -136,6 +136,15 @@ export type ApiMonitor = {
    * optional while the render model's `tags` is not.
    */
   tags?: Record<string, string>;
+  /**
+   * The monitor's TLS floor, "1.0" to "1.3".
+   *
+   * Omitted — never sent as `""` — when the monitor has no opinion, and the
+   * server chose `omitempty` for exactly that reason: reporting the current
+   * default here would make a monitor that follows the default look like one
+   * that pinned it.
+   */
+  min_tls_version?: string;
 };
 
 /**

@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../../../web/src/styles/tokens.css">
+<link rel="stylesheet" href="../../../web/src/monitors/led.css">
+<link rel="stylesheet" href="../common.css">
 <title>Incidents — SubGlance page proposal</title>
 <link rel="stylesheet" href="shared.css">
 <!-- Theme script copied verbatim from _shell.html. Inline on purpose: the file
@@ -32,9 +35,9 @@
 /* [hidden] must beat the display:flex on .row/.stack, or filtering does nothing. */
 [hidden] { display: none !important; }
 
-.inc { flex-wrap: wrap; row-gap: var(--space-3); cursor: pointer; }
-.inc-detail { flex-basis: 100%; display: none; border-top: 1px solid var(--border); padding-top: var(--space-3); }
-.inc[data-open="true"] .inc-detail { display: flex; flex-direction: column; gap: var(--space-3); }
+.inc { flex-wrap: wrap; row-gap:var(--space-3); cursor: pointer; }
+.inc-detail { flex-basis: 100%; display: none; border-top: 1px solid var(--border); padding-top:var(--space-3); }
+.inc[data-open="true"] .inc-detail { display: flex; flex-direction: column; gap:var(--space-3); }
 
 /* Fixed column widths so the numbers line up down the stack. Mono + tabular
    comes from .value; the width is what actually makes a column scannable. */
@@ -47,21 +50,20 @@
 /* The captured response body. An inner element, so one radius step below the
    row: --r-sm. It is not a third surface, it is a code block. */
 .snap {
-  font-family: var(--font-mono); font-size: var(--type-helper); line-height: var(--lead-helper);
-  background: var(--surface-2); border-radius: var(--r-sm); color: var(--ink-2);
-  padding: var(--space-2h) var(--space-3); white-space: pre-wrap; overflow-x: auto; max-height: 180px;
-}
+  font-family: var(--font-mono);
+  background: var(--surface-2); border-radius:var(--r-sm); color: var(--ink-2);
+  padding:var(--space-2h) var(--space-3); white-space: pre-wrap; overflow-x: auto; max-height: 180px; font-size:var(--type-helper); line-height:var(--lead-helper); font-feature-settings:var(--feat-mono); font-variant-ligatures:var(--ligatures-mono); font-variant-numeric:var(--numeric-mono); text-rendering:var(--render-mono); }
 .err { color: var(--down); }
 
 /* Timeline: a left rule with mono timestamps. Deliberately not a component —
    it exists once, on this page. */
-.tl { display: flex; flex-direction: column; gap: var(--space-2); }
-.tl-step { display: flex; gap: var(--space-3); align-items: baseline; }
+.tl { display: flex; flex-direction: column; gap:var(--space-2); }
+.tl-step { display: flex; gap:var(--space-3); align-items: baseline; }
 .tl-step > .value { width: 88px; flex: none; color: var(--ink-3); }
 
 /* History rows are quieter than open rows: no status tint at all, dimmer name. */
 .inc--past .row-name { color: var(--ink-2); }
-.day-head { display: flex; align-items: baseline; gap: var(--space-2h); padding-top: var(--space-1); }
+.day-head { display: flex; align-items: baseline; gap:var(--space-2h); padding-top:var(--space-1); }
 </style>
 </head>
 <body>
@@ -69,7 +71,7 @@
 
   <aside class="shell-side">
     <div class="shell-brand">
-      <span class="led" data-state="up" aria-hidden="true"></span>
+      <span class="led-wrap"><span class="led" data-state="up" aria-hidden="true"></span><span class="sr-only">Up</span></span>
       <span class="shell-brand-name">SubGlance</span>
     </div>
 
@@ -159,7 +161,7 @@
         <div class="stack" id="openStack">
 
           <article class="row inc" data-status="down" data-scope="open" data-mon="checkout" data-open="false" tabindex="0">
-            <span class="led" data-state="down"></span>
+            <span class="led-wrap"><span class="led" data-state="down" aria-hidden="true"></span><span class="sr-only">Down</span></span>
             <div class="row-main">
               <div class="row-name">checkout-api-eu-west-1.internal.acme-corporation.example</div>
               <div class="row-sub">dial tcp 10.0.4.12:443: connect: connection refused</div>
@@ -194,7 +196,7 @@
           </article>
 
           <article class="row inc" data-status="down" data-scope="open" data-mon="harbor" data-open="false" tabindex="0">
-            <span class="led" data-state="down"></span>
+            <span class="led-wrap"><span class="led" data-state="down" aria-hidden="true"></span><span class="sr-only">Down</span></span>
             <div class="row-main">
               <div class="row-name">harbor-goods.app</div>
               <div class="row-sub">status 503, expected 200-299</div>
@@ -236,7 +238,7 @@ x-envoy-upstream-service-time: 30001
           </article>
 
           <article class="row inc" data-status="warn" data-scope="open" data-mon="cdn" data-open="false" tabindex="0">
-            <span class="led" data-state="warn"></span>
+            <span class="led-wrap"><span class="led" data-state="warn" aria-hidden="true"></span><span class="sr-only">Warning</span></span>
             <div class="row-main">
               <div class="row-name">cdn.example.com</div>
               <div class="row-sub">x509: certificate expires in 6 days</div>
@@ -340,7 +342,7 @@ x-envoy-upstream-service-time: 30001
           <div class="day-head" data-day><span class="label">15 Sep 2026</span><span class="helper">2 incidents · 24m total</span></div>
 
           <article class="row inc inc--past" data-scope="resolved" data-mon="auth" data-open="false" tabindex="0">
-            <span class="led led--sm" data-state="up"></span>
+            <span class="led-wrap"><span class="led led--sm" data-state="up" aria-hidden="true"></span><span class="sr-only">Up</span></span>
             <div class="row-main">
               <div class="row-name">auth.example.com</div>
               <div class="row-sub">timeout after 10s (3 consecutive)</div>
@@ -373,7 +375,7 @@ x-envoy-upstream-service-time: 30001
           </article>
 
           <article class="row inc inc--past" data-scope="resolved" data-mon="status" data-open="false" tabindex="0">
-            <span class="led led--sm" data-state="up"></span>
+            <span class="led-wrap"><span class="led led--sm" data-state="up" aria-hidden="true"></span><span class="sr-only">Up</span></span>
             <div class="row-main">
               <div class="row-name">status.acme.studio</div>
               <div class="row-sub">keyword "All systems operational" not found</div>
@@ -412,7 +414,7 @@ content-type: text/html; charset=utf-8
           <div class="day-head" data-day><span class="label">14 Sep 2026</span><span class="helper">2 incidents · 1h 07m total</span></div>
 
           <article class="row inc inc--past" data-scope="resolved" data-mon="backup" data-open="false" tabindex="0">
-            <span class="led led--sm" data-state="up"></span>
+            <span class="led-wrap"><span class="led led--sm" data-state="up" aria-hidden="true"></span><span class="sr-only">Up</span></span>
             <div class="row-main">
               <div class="row-name">nightly-database-backup-verification</div>
               <div class="row-sub">push monitor missed its window (expected by 03:15)</div>
@@ -445,7 +447,7 @@ content-type: text/html; charset=utf-8
           </article>
 
           <article class="row inc inc--past" data-scope="resolved" data-mon="cdn" data-open="false" tabindex="0">
-            <span class="led led--sm" data-state="up"></span>
+            <span class="led-wrap"><span class="led led--sm" data-state="up" aria-hidden="true"></span><span class="sr-only">Up</span></span>
             <div class="row-main">
               <div class="row-name">cdn.example.com</div>
               <div class="row-sub">x509: certificate has expired</div>
@@ -480,7 +482,7 @@ content-type: text/html; charset=utf-8
           <div class="day-head" data-day><span class="label">12 Sep 2026</span><span class="helper">1 incident · 3m total</span></div>
 
           <article class="row inc inc--past" data-scope="resolved" data-mon="harbor" data-open="false" tabindex="0">
-            <span class="led led--sm" data-state="up"></span>
+            <span class="led-wrap"><span class="led led--sm" data-state="up" aria-hidden="true"></span><span class="sr-only">Up</span></span>
             <div class="row-main">
               <div class="row-name">harbor-goods.app</div>
               <div class="row-sub">no such host</div>
@@ -686,7 +688,7 @@ content-type: text/html; charset=utf-8
     el.dataset.open = "false";
     el.tabIndex = 0;
     el.innerHTML =
-      '<span class="led" data-state="down"></span>' +
+      '<span class="led-wrap"><span class="led" data-state="down" aria-hidden="true"></span><span class="sr-only">Down</span></span>' +
       '<div class="row-main"><div class="row-name">' + f.name + '</div>' +
       '<div class="row-sub">' + f.err + '</div></div>' +
       '<span class="col-kind"><span class="chip chip--down">' + f.kind + '</span></span>' +

@@ -14,6 +14,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../../../web/src/styles/tokens.css">
+<link rel="stylesheet" href="../../../web/src/monitors/led.css">
+<link rel="stylesheet" href="../common.css">
 <title>Page proposals — SubGlance</title>
 <link rel="stylesheet" href="shared.css">
 <script>
@@ -31,29 +34,28 @@
 })();
 </script>
 <style>
-  body { display: grid; place-items: start center; padding: var(--space-12) var(--space-6); }
-  .wrap { width: min(820px, 100%); display: flex; flex-direction: column; gap: var(--space-5); }
-  .head { display: flex; align-items: center; gap: var(--space-2h); }
-  .head h1 { font-size: var(--type-page); line-height: var(--lead-page); font-weight: var(--weight-strong); }
-  .head .btn { margin-left: auto; }
+  body { display: grid; place-items: start center; padding:var(--space-12) var(--space-6); }
+  .wrap { width: min(820px, 100%); display: flex; flex-direction: column; gap:var(--space-5); }
+  .head { display: flex; align-items: center; gap:var(--space-2h); }
+  .head h1 {   font-weight: var(--weight-strong); font-size:var(--type-page); line-height:var(--lead-page); }
+  .head .btn { margin-left:auto; }
   a.proposal {
     display: block; text-decoration: none; color: inherit;
-    border: 1px solid var(--border); border-radius: var(--r-lg);
-    background: var(--surface); padding: var(--space-5);
-    transition: border-color var(--dur-hover) var(--ease), background var(--dur-hover) var(--ease);
-  }
+    border: 1px solid var(--border); border-radius:var(--r-lg);
+    background: var(--surface);
+    transition: border-color var(--dur-hover) var(--ease), background var(--dur-hover) var(--ease); padding:var(--space-4); box-shadow:var(--shadow-flat); }
   a.proposal:hover { border-color: var(--border-hi); background: var(--surface-2); }
-  .proposal-top { display: flex; align-items: center; gap: var(--space-2h); margin-bottom: var(--space-2); }
-  .proposal-title { font-size: var(--type-card); line-height: var(--lead-card); font-weight: var(--weight-strong); }
-  .proposal-file { margin-left: auto; font-family: var(--font-mono); font-size: var(--type-section); color: var(--ink-3); }
-  .proposal-try { margin-top: var(--space-3); display: flex; flex-wrap: wrap; gap: var(--space-1h); }
+  .proposal-top { display: flex; align-items: center; gap:var(--space-2h); margin-bottom:var(--space-2); }
+  .proposal-title {   font-weight: var(--weight-strong); font-size:var(--type-card); line-height:var(--lead-card); }
+  .proposal-file { margin-left:auto; font-family: var(--font-mono);  color: var(--ink-3); font-size:var(--type-section); line-height:var(--lead-section); font-feature-settings:var(--feat-mono); font-variant-ligatures:var(--ligatures-mono); font-variant-numeric:var(--numeric-mono); text-rendering:var(--render-mono); }
+  .proposal-try { margin-top:var(--space-3); display: flex; flex-wrap: wrap; gap:var(--space-1h); }
 </style>
 </head>
 <body>
 <div class="wrap">
 
   <div class="head">
-    <span class="led"></span>
+    <span class="led-wrap"><span class="led" aria-hidden="true" data-state="up"></span><span class="sr-only">Up</span></span>
     <h1>Page proposals</h1>
     <button class="btn btn--sm" onclick="__toggleTheme()">Toggle theme</button>
   </div>
