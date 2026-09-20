@@ -371,7 +371,11 @@ export function IncidentsView({
           <p className="tb-count" role="status">
             {loading
               ? "Loading incidents…"
-              : `${shown.length} open · ${shownResolved.length} resolved`}
+              : showResolved && historyLoading
+                ? `${shown.length} open · loading resolved…`
+                : showResolved && historyError !== null
+                  ? `${shown.length} open · resolved unavailable`
+                  : `${shown.length} open · ${shownResolved.length} resolved`}
           </p>
         </div>
       </ToolbarTools>

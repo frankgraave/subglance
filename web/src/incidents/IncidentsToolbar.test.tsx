@@ -226,6 +226,26 @@ describe("the incidents toolbar slot is filled, and everything in it works", () 
     expect(toolbar.textContent).toContain("1 open · 0 resolved");
   });
 
+  it.each([
+    { historyLoading: true, historyError: null, expected: "loading resolved" },
+    { historyLoading: false, historyError: new Error("offline"), expected: "resolved unavailable" },
+  ])("reports $expected instead of a resolved count", ({ historyLoading, historyError, expected }) => {
+    renderWithToolbar(
+      <IncidentsView
+        incidents={[incident()]}
+        resolved={[]}
+        now={NOW}
+        historyLoading={historyLoading}
+        historyError={historyError}
+      />,
+    );
+    expect(toolbar.textContent).not.toContain("0 resolved");
+    expect(toolbar.textContent).toContain(expected);
+    fireEvent.change(within(toolbar).getByLabelText("Show"), { target: { value: "open" } });
+    expect(toolbar.textContent).not.toContain(expected);
+    expect(toolbar.textContent).toContain("1 open · 0 resolved");
+  });
+
   it("does not call a scope-emptied screen a failed search", () => {
     /*
      * "No incidents match" sends the reader to clear a filter. Under a scope
