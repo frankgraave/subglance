@@ -254,10 +254,14 @@ reachable is worse than one that never had the face.
 | Sans | InterVariable | 4.1 | SIL OFL 1.1 | 47 kB, variable, weight axis clipped to 400–600 |
 | Mono | CommitMono | 1.143 | SIL OFL 1.1 | 21 kB, regular only |
 
-Both licences are redistributed beside the files. The subset keeps Latin-1,
-Latin Extended-A, general punctuation and the handful of symbols the interface
-uses; anything outside that falls back to a system face, which is the right
-trade for a dashboard and not for a text editor.
+Both licences are redistributed beside the files. The subset requests Latin-1,
+Latin Extended-A, general punctuation and selected symbols, intersected with
+each upstream character map. Greek/Cyrillic monitor names use system fonts,
+including within mixed-script text. Other scripts and combining sequences also
+depend on local font coverage; the shipped faces do not guarantee their glyphs
+or metrics. The [measured subset decision](font-coverage.md) records upstream
+gaps, byte costs, reproduction commands and executable fallback checks. The
+80 KiB font budget stays unchanged; no italic file has a caller.
 
 The mono ships regular only because nothing that resolves to the mono role asks
 for more than `--weight-strong` (500), and the `@font-face` weight range says

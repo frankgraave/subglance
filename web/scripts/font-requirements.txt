@@ -1,0 +1,3 @@
+# Reproducible subset/measurement toolchain; not needed for normal builds.
+fonttools==4.60.0
+brotli==1.1.0
