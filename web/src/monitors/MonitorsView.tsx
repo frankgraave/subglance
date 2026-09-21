@@ -408,6 +408,7 @@ export function MonitorsView({
                 key={`${editing.id}:${editing.name}`}
                 monitor={editing}
                 onSave={(patch) => onSave(editing.id, patch)}
+                onReload={() => onEdit?.(editing.id)}
                 onCancel={() => onEditClose?.()}
               />
             </Panel>

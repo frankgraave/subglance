@@ -115,6 +115,17 @@ const budgets = {
    * ceilings are unchanged. This is one shared raise, not one per feature.
    */
   /*
+   * 126 -> 130 KiB gzip for SUB-68 / SUB-91.
+   * The current develop (05974de) entry measures 127,401 bytes; this combined
+   * build measures 130,955: 3,554 bytes for expanded versioned detail editing,
+   * reusable previews, conflict/reload handling, repeat controls and reminder
+   * status. Both builds include the merged TLS, incident and response-history
+   * UI, so their weight is not attributed to this change. No runtime dependency
+   * was added; editor/drawer/preview controls are shared, not duplicated.
+   * 128 KiB would leave only 117 bytes. 130 leaves 2,165 for ordinary fixes
+   * instead of tracking today's measurement. CSS and font ceilings stay put.
+   */
+  /*
    * 126 -> 136 KiB JS and 15 -> 16 KiB CSS for SUB-25/84/87/113 together.
    * At pinned develop 05974de the gzip entries measured JS 127,401 / CSS
    * 14,770 bytes. The four-ticket build measures 132,119 / 15,386; alongside

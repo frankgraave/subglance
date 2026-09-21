@@ -124,14 +124,9 @@ describe("patchMonitor", () => {
     expect((init.headers as Record<string, string>)["If-Match"]).toBe('W/"123"');
   });
 
-  it("omits If-Match when there is no version rather than sending an empty one", async () => {
-    // An empty If-Match is a 400 from the server, which would turn "we could
-    // not read the ETag" into "your edit is malformed".
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(json({}));
-    await patchMonitor("7", { name: "new" }, null);
-    const init = fetchMock.mock.calls[0][1] as RequestInit;
-    expect((init.headers as Record<string, string>)["If-Match"]).toBeUndefined();
+  it.each([undefined, null, "", "*", "junk", 'W/""'])("refuses an edit without a usable version %s before fetching", async (version) => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(json({}));
+    await expect(patchMonitor("7", { name: "new" }, version)).rejects.toThrow(/version.*reload/i);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
