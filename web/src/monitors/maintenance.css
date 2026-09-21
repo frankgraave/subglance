@@ -1,0 +1,8 @@
+.maintenance { max-width: var(--size-pane-lg); margin-top: var(--space-4); }
+.maintenance-content { padding: var(--space-3); color: var(--ink-2); overflow-wrap: anywhere; }
+.maintenance-content p { margin: var(--space-2) 0; }
+.maintenance-list { display: grid; gap: var(--space-3); padding: 0; list-style: none; }
+.maintenance-list li { padding: var(--space-3); background: var(--surface-panel); border-radius: var(--r-md); }
+.maintenance-fields { display: grid; gap: var(--space-3); border: 0; padding: 0; min-width: 0; }
+.maintenance-days { display: flex; flex-wrap: wrap; gap: var(--space-3); border: 1px solid var(--border); padding: var(--space-3); }
+.maintenance-days label { display: flex; align-items: center; gap: var(--space-2); min-height: var(--control-h); }

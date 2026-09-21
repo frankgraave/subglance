@@ -239,3 +239,11 @@ situation, get in touch.
 *Know it's up. At a glance.*
 
 </div>
+
+## Scheduled maintenance
+
+Schedule one-off or weekly maintenance for a monitor or tag group from the
+Monitors page. Measurements continue; alerts are suppressed and maintenance
+samples are excluded from uptime. An empty denominator remains unknown. See
+[scheduled maintenance](docs/maintenance.md) for API examples, timezone and DST
+rules, overlap, pause and delivery semantics.

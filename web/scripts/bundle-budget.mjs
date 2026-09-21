@@ -114,7 +114,15 @@ const budgets = {
    * No new runtime dependency was added: axe remains dev-only. CSS and font
    * ceilings are unchanged. This is one shared raise, not one per feature.
    */
-  js: 126,
+  /*
+   * SUB-33: 126 -> 128 KiB. Before: 127,984 bytes gzip; after: 129,747
+   * bytes (entry assets measured with this script's Node gzip). The 1,763
+   * bytes add one-off/weekly maintenance controls, timezone and tag inputs,
+   * cancellation, errors and historical exclusion labels. No runtime dependency
+   * was added; existing forms and cards keep CSS below its unchanged 15 KiB.
+   * 128 KiB leaves 1,325 bytes, rather than setting a ceiling at today's size.
+   */
+  js: 128,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *

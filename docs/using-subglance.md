@@ -366,3 +366,9 @@ an OpenAPI 3.1 document you can feed to a client generator or an editor such as
 Swagger UI. It is checked against the server's own route table on every test
 run, so a route cannot be added, removed or change privilege level without the
 specification following it.
+
+## Scheduled maintenance
+
+Use **Monitors → Scheduled maintenance** to manage one-off or weekly windows
+for one monitor or an exact tag group. Checks continue while alerts and uptime
+contributions are suppressed. See [maintenance](maintenance.md) for details.

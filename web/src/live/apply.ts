@@ -87,6 +87,7 @@ export function applyHeartbeat(monitors: readonly Monitor[], e: HeartbeatEvent):
       ts: e.at,
       ok: e.ok,
       assessment: e.assessment,
+      maintenance: e.maintenance,
       latencyMs: e.latencyMs,
       statusCode: e.statusCode,
       error: e.error,

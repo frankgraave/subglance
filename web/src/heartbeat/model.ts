@@ -9,6 +9,7 @@
 
 /** One stored check, mirroring GET /api/monitors/:id/heartbeats. */
 export type Beat = {
+  maintenance?: boolean;
   /** Unix milliseconds. */
   ts: number;
   ok: boolean;
@@ -36,6 +37,7 @@ export type BeatSlot = {
   assessment?: "up" | "warning" | "down" | "";
   downCount: number;
   warningCount?: number;
+  maintenanceCount?: number;
   /** Slowest measured latency in the bucket; null if none of them timed. */
   latencyMs: number | null;
   statusCode?: number;
@@ -215,6 +217,7 @@ function aggregate(
     to,
     ok: downs.length === 0,
     downCount: downs.length,
+    maintenanceCount: group.filter((b) => b.maintenance).length,
     warningCount: downs.filter((b) => b.assessment === "warning").length,
     assessment: downs.length > 0 && downs.every((b) => b.assessment === "warning") ? "warning" : worst.assessment,
     latencyMs: latencies.length > 0 ? Math.max(...latencies) : null,

@@ -585,24 +585,6 @@
     },
     {
       "rule": "color-contrast",
-      "selector": "#_r_3_-target-help",
-      "scopes": [
-        "light: add monitor",
-        "dark: add monitor"
-      ],
-      "reason": "Existing contrast debt in add-help: the shared ink role or muted-state opacity is below the AA text floor. Remediation changes the shared palette/visual hierarchy and is deferred from this gate. This is not a WCAG exemption; only these measured screen/theme/selector combinations are waived, and the waiver must be removed when fixed."
-    },
-    {
-      "rule": "color-contrast",
-      "selector": "#_r_3_-name-help",
-      "scopes": [
-        "light: add monitor",
-        "dark: add monitor"
-      ],
-      "reason": "Existing contrast debt in add-help: the shared ink role or muted-state opacity is below the AA text floor. Remediation changes the shared palette/visual hierarchy and is deferred from this gate. This is not a WCAG exemption; only these measured screen/theme/selector combinations are waived, and the waiver must be removed when fixed."
-    },
-    {
-      "rule": "color-contrast",
       "selector": ".add-button-quiet",
       "scopes": [
         "light: add monitor",

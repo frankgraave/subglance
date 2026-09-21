@@ -186,6 +186,16 @@ func New(opts Options) *Notifier {
 // What has not changed is the important part: no network call happens here. A
 // broken channel still cannot slow a check down.
 func (n *Notifier) Enqueue(ctx context.Context, m store.Monitor, inc store.Incident, event state.Event, at time.Time) error {
+	muted, err := n.db.InMaintenance(ctx, m.ID, at)
+	if err != nil {
+		return err
+	}
+	if muted {
+		if event == state.EventIncidentConfirmed && inc.ID != 0 {
+			return n.db.SetMaintenancePending(ctx, inc.ID, true)
+		}
+		return nil
+	}
 	channels, err := n.db.ListMonitorChannels(ctx, m.ID)
 	if err != nil {
 		return fmt.Errorf("list channels for monitor %d: %w", m.ID, err)
@@ -360,6 +370,26 @@ func (n *Notifier) attempt(ctx context.Context, d store.Delivery) {
 		return
 	}
 
+	alert, keep, filterErr := n.filterMaintenance(ctx, alert)
+	if filterErr != nil {
+		n.log.Error("could not evaluate maintenance for delivery", "delivery", d.ID, "error", filterErr)
+		return
+	}
+	if !keep {
+		if err := n.db.SuppressDelivery(ctx, d.ID); err != nil {
+			n.log.Error("could not suppress delivery", "error", err)
+		}
+		return
+	}
+	// Persist removed members before attempting a send: they must not return
+	// on a retry after maintenance has ended.
+	payload, err := alert.Encode()
+	if err != nil {
+		return
+	}
+	if err := n.db.UpdateDeliveryPayload(ctx, d.ID, payload); err != nil {
+		return
+	}
 	sendCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()
 

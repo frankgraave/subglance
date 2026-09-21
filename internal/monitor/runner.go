@@ -248,6 +248,10 @@ func (r *Runner) sendDueReminders(ctx context.Context) {
 	now := r.now()
 	for _, c := range candidates {
 		inc := c.Incident
+		maintained, err := r.db.InMaintenance(ctx, inc.MonitorID, now)
+		if err != nil || maintained || inc.MaintenancePending {
+			continue
+		}
 		if !state.ReminderDue(now, inc.ConfirmedAt, inc.RemindedAt, inc.ReminderCount, c.RepeatAfter) {
 			continue
 		}
@@ -613,6 +617,13 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 		hb.TS = time.Now()
 	}
 
+	maintained, maintenanceErr := r.db.InMaintenance(ctx, o.Monitor.ID, hb.TS)
+	if maintenanceErr != nil {
+		r.hbFailures.Add(1)
+		r.log.Error("could not classify heartbeat maintenance", "monitor_id", o.Monitor.ID, "error", maintenanceErr)
+		return fmt.Errorf("record heartbeat: read maintenance: %w", maintenanceErr)
+	}
+	hb.Maintenance = maintained
 	// The state engine runs before the write, not after, because the failure
 	// streak it reports decides whether this result's response snapshot is
 	// worth storing. Observe only touches in-memory state, so moving it ahead
@@ -673,6 +684,7 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 		Payload: heartbeatPayload{
 			OK:          hb.OK,
 			Assessment:  hb.Assessment,
+			Maintenance: hb.Maintenance,
 			FailureKind: hb.FailureKind,
 			LatencyMS:   hb.LatencyMS,
 			StatusCode:  hb.StatusCode,
@@ -680,7 +692,7 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 		},
 	})
 
-	return errors.Join(hbErr, r.applyTransition(ctx, o, tr))
+	return errors.Join(hbErr, r.applyTransition(ctx, o, tr, maintained))
 }
 
 // snapshotToStore decides whether this result's captured response is worth a
@@ -730,6 +742,7 @@ func snapshotToStore(res checker.Result, snapshotsSpent int, flapping bool) (*st
 // monitor ID that the envelope already provides, and pinning the wire format
 // here means a schema change cannot silently alter the public API.
 type heartbeatPayload struct {
+	Maintenance bool   `json:"maintenance"`
 	Assessment  string `json:"assessment"`
 	FailureKind string `json:"failure_kind,omitempty"`
 	OK          bool   `json:"ok"`
@@ -763,7 +776,7 @@ func (r *Runner) publish(e events.Event) {
 // It returns the first persistence failure it hit. Alert delivery problems are
 // logged but not returned: a caller deciding whether to acknowledge a report
 // cares about what was stored, not about who was told.
-func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr state.Transition) error {
+func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr state.Transition, maintained bool) error {
 	var (
 		inc        store.Incident
 		err        error
@@ -844,6 +857,28 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 			"was_confirmed", inc.Confirmed())
 	}
 
+	// Remember a confirmation held by maintenance across restart. Recovery
+	// stays silent until a subsequent failed check outside maintenance announces it.
+	if tr.Event == state.EventIncidentConfirmed && maintained {
+		if err := r.db.SetMaintenancePending(ctx, inc.ID, true); err != nil {
+			return err
+		}
+	}
+	if !maintained && tr.To == state.StatusDown && tr.Event == state.EventNone {
+		pending, err := r.db.OpenIncidentFor(ctx, o.Monitor.ID)
+		if err != nil {
+			return err
+		}
+		if pending.MaintenancePending && !tr.Flapping {
+			inc = pending
+			tr.Event = state.EventIncidentConfirmed
+			tr.Notify = true
+		}
+	}
+	if maintained || (tr.Event == state.EventIncidentResolved && inc.MaintenancePending) {
+		tr.Suppressed = tr.Suppressed || tr.Notify
+		tr.Notify = false
+	}
 	// Flapping is reported alongside the incident lifecycle rather than in
 	// place of it, so this runs after the incident has been persisted.
 	if tr.FlappingChanged {
@@ -877,7 +912,7 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 	}
 
 	if tr.Suppressed {
-		r.log.Debug("notification suppressed while flapping",
+		r.log.Debug("notification suppressed",
 			"monitor", o.Monitor.Name, "event", tr.Event)
 	}
 
@@ -898,6 +933,15 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 		return persistErr
 	}
 
+	if inc.MaintenancePending {
+		claimed, err := r.db.ClaimMaintenanceAlert(ctx, inc.ID)
+		if err != nil {
+			return err
+		}
+		if !claimed {
+			return persistErr
+		}
+	}
 	r.notify(Alert{Monitor: m, Incident: inc, Event: tr.Event, At: tr.At})
 	return persistErr
 }

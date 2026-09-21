@@ -101,7 +101,7 @@ func (db *DB) DueDeliveries(ctx context.Context, now time.Time, limit int) ([]De
 	rows, err := db.Reader.QueryContext(ctx, `
 		SELECT `+deliveryColumns+`
 		  FROM notif_outbox
-		 WHERE status = ? AND next_attempt_at <= ?
+		 WHERE status = ? AND suppressed = 0 AND next_attempt_at <= ?
 		 ORDER BY next_attempt_at, id
 		 LIMIT ?`, OutboxPending, now.Unix(), limit)
 	if err != nil {
@@ -195,7 +195,7 @@ type ChannelHealth struct {
 func (db *DB) ChannelHealthSince(ctx context.Context, since time.Time) (map[int64]ChannelHealth, error) {
 	rows, err := db.Reader.QueryContext(ctx, `
 		SELECT channel_id,
-		       SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END),
+		       SUM(CASE WHEN status = 'pending' AND suppressed = 0 THEN 1 ELSE 0 END),
 		       SUM(CASE WHEN status = 'failed'  THEN 1 ELSE 0 END),
 		       COALESCE(MAX(CASE WHEN status = 'failed' THEN updated_at END), 0)
 		  FROM notif_outbox
@@ -255,15 +255,15 @@ func (db *DB) ChannelHealthSince(ctx context.Context, since time.Time) (map[int6
 	return out, errRows.Err()
 }
 
-// PruneDeliveries removes delivered rows older than before, and reports how
+// PruneDeliveries removes delivered or suppressed rows older than before, and reports how
 // many went.
 //
-// Only delivered rows: a failed one is evidence the operator may not have seen
-// yet, and pending ones are still work.
+// A failed row is evidence the operator may not have seen yet. Unsuppressed
+// pending rows are still work; maintenance-suppressed rows are terminal.
 func (db *DB) PruneDeliveries(ctx context.Context, before time.Time) (int64, error) {
 	res, err := db.Writer.ExecContext(ctx, `
 		DELETE FROM notif_outbox
-		 WHERE status = ? AND updated_at < ?`, OutboxDelivered, before.Unix())
+		 WHERE (status = ? OR suppressed = 1) AND updated_at < ?`, OutboxDelivered, before.Unix())
 	if err != nil {
 		return 0, fmt.Errorf("prune deliveries: %w", err)
 	}

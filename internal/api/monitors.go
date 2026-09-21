@@ -20,10 +20,11 @@ import (
 // It deliberately differs from store.Monitor: the wire format is a contract we
 // have to keep stable, while the storage shape must stay free to change.
 type monitorResponse struct {
-	ID     int64  `json:"id"`
-	Name   string `json:"name"`
-	Type   string `json:"type"`
-	Target string `json:"target"`
+	Maintenance *bool  `json:"maintenance,omitempty"`
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	Target      string `json:"target"`
 
 	IntervalS int  `json:"interval_s"`
 	TimeoutS  int  `json:"timeout_s"`
@@ -122,6 +123,7 @@ type monitorDetailResponse struct {
 // shared by the per-monitor heartbeat listing and the optional beats embedded
 // in a monitor listing, so both cannot drift apart.
 type heartbeatResponse struct {
+	Maintenance bool      `json:"maintenance"`
 	Assessment  string    `json:"assessment"`
 	FailureKind string    `json:"failure_kind,omitempty"`
 	TS          time.Time `json:"ts"`
@@ -153,6 +155,7 @@ func describeHeartbeat(hb store.Heartbeat) heartbeatResponse {
 		TS:          hb.TS,
 		OK:          hb.OK,
 		Assessment:  hb.Assessment,
+		Maintenance: hb.Maintenance,
 		FailureKind: hb.FailureKind,
 		LatencyMS:   hb.LatencyMS,
 		StatusCode:  hb.StatusCode,
@@ -794,6 +797,9 @@ func (s *Server) describeMonitor(r *http.Request, m store.Monitor) monitorRespon
 
 	ctx := r.Context()
 
+	if active, err := s.db.InMaintenance(ctx, m.ID, time.Now()); err == nil {
+		resp.Maintenance = &active
+	}
 	hb, err := s.db.LatestHeartbeat(ctx, m.ID)
 	switch {
 	case err == nil:

@@ -301,6 +301,7 @@ func (s *Server) routes() []route {
 		// hostile one.
 		{http.MethodPost, "/api/v1/auth/logout", accessRead},
 
+		{http.MethodGet, "/api/v1/maintenance", accessRead},
 		{http.MethodGet, "/api/v1/monitors", accessRead},
 		{http.MethodGet, "/api/v1/monitors/{id}", accessRead},
 		{http.MethodGet, "/api/v1/monitors/{id}/heartbeats", accessRead},
@@ -337,6 +338,8 @@ func (s *Server) routes() []route {
 		// is exactly where the two should not be conflated.
 		{http.MethodPost, "/api/v1/tokens", accessWrite},
 
+		{http.MethodPost, "/api/v1/maintenance", accessWrite},
+		{http.MethodDelete, "/api/v1/maintenance/{id}", accessWrite},
 		{http.MethodPost, "/api/v1/monitors", accessWrite},
 		{http.MethodPost, "/api/v1/monitors/preview", accessWrite},
 		{http.MethodPatch, "/api/v1/monitors/{id}", accessWrite},
@@ -402,6 +405,12 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 	case "POST /api/v1/auth/password":
 		return s.handleChangePassword
 
+	case "GET /api/v1/maintenance":
+		return s.handleListMaintenance
+	case "POST /api/v1/maintenance":
+		return s.handleCreateMaintenance
+	case "DELETE /api/v1/maintenance/{id}":
+		return s.handleDeleteMaintenance
 	case "GET /api/v1/monitors":
 		return s.handleListMonitors
 	case "GET /api/v1/monitors/{id}":

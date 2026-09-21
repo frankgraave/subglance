@@ -102,7 +102,7 @@ The part that separates SubGlance from "curl in a loop". It handles:
 - **Confirmation:** N consecutive failures before anything goes down (default 2)
 - **Incident lifecycle:** open → confirmed → resolved, with a cause
 - **Flapping detection:** rapidly toggling status is suppressed, not forwarded
-- **Maintenance windows:** scheduled muting (post-v0.1)
+- **Maintenance windows:** persisted one-off and weekly schedules, evaluated in the runner and before notification delivery; see [maintenance](maintenance.md)
 
 ### Notifier
 An outbox in the database, drained with exponential backoff and jitter, and a

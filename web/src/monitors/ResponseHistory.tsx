@@ -30,6 +30,7 @@ export function ResponseHistory({ heartbeats, loading = false, error = null }: R
           <div className="response-history-check">
             <time className="face-mono" dateTime={hb.ts}>{formatMoment(toUnixMs(hb.ts))}</time>
             <span>{hb.assessment === "warning" ? "Warning — unconfirmed failure; no alert; excluded from uptime" : hb.assessment === "down" ? "Down — confirmed failure" : "Failed check — confirmation not recorded"}</span>
+            {hb.maintenance ? <span>Maintenance — alerts suppressed; excluded from uptime</span> : null}
             {hb.failure_kind ? <span>{hb.failure_kind}</span> : null}
             {hb.status_code ? <span>HTTP {hb.status_code}</span> : null}
           </div>

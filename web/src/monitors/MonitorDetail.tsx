@@ -344,7 +344,8 @@ export function MonitorDetail({
       {responseHistory ? <ResponseHistory key={monitor.id} {...responseHistory} /> : null}
 
       <Card title="Uptime" icon={<IconGauge />} headingLevel={2}>
-        <p className="mon-detail-uptime-note">Only confirmed downtime counts. Warnings and history without a recorded assessment are excluded. This is a sample ratio, not elapsed time.</p>
+        {monitor.maintenance ? <p role="status">Scheduled maintenance — checks continue; alerts suppressed.</p> : null}
+        <p className="mon-detail-uptime-note">Only confirmed downtime counts. Warnings, maintenance checks and history without a recorded assessment are excluded. This is a sample ratio, not elapsed time.</p>
         <Panel>
           {error !== null ? (
             <p
@@ -378,6 +379,7 @@ export function MonitorDetail({
                     {w.total === 0
                       ? "no eligible checks"
                       : `${w.down} of ${w.total} confirmed down`}
+                    {(w.maintenance ?? 0) > 0 ? ` · ${w.maintenance} maintenance checks excluded` : ""}
                     {(w.warning ?? 0) > 0 ? ` · ${w.warning} warnings excluded` : ""}
                     {(w.legacy ?? 0) > 0 ? ` · ${w.legacy} legacy checks excluded` : ""}
                     {w.avgLatencyMs !== null

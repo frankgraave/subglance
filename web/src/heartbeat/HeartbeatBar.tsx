@@ -177,6 +177,7 @@ function tooltipReadout(
       ...(stale ? { status: "Not updating" } : { marker, status }),
     },
   ];
+  if (slot.maintenanceCount) rows.push({ key: "maintenance", label: "Maintenance", value: `${slot.maintenanceCount} excluded from uptime` });
   if (mixed) {
     rows.push({
       key: "failed",
@@ -548,6 +549,7 @@ export function HeartbeatBar({
                         ? "passed"
                         : `failed${slot.error ? `: ${slot.error}` : ""}`}
                       {slot.count > 1 ? ` (${slot.count} checks)` : ""}
+                      {slot.maintenanceCount ? ` · ${slot.maintenanceCount} maintenance checks, excluded from uptime` : ""}
                     </td>
                     <td>{formatLatency(slot.latencyMs)}</td>
                   </tr>

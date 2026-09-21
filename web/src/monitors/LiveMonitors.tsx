@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { createQueryClient } from "../live/queryClient";
+import { Maintenance } from "./Maintenance";
 import { MonitorsView } from "./MonitorsView";
 import {
   checkMonitorNow,
@@ -301,6 +302,7 @@ export function LiveMonitors({
   }, [queryClient]);
 
   return (
+    <>
     <MonitorsView
       monitors={monitors.data ?? []}
       channels={Object.fromEntries((monitors.data ?? []).map((m) => [m.id, m.channels]))}
@@ -323,6 +325,8 @@ export function LiveMonitors({
       createOpen={canWrite && createOpen}
       onCreateOpenChange={canWrite ? onCreateOpenChange : undefined}
     />
+    <Maintenance monitors={monitors.data ?? []} canWrite={canWrite} />
+    </>
   );
 }
 
