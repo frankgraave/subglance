@@ -95,6 +95,7 @@
 @import "./commands/commands.css";
 @import "./auth/auth.css";
 @import "./auth/password.css";
+@import "./watchdog/watchdog.css";
 @import "./wall/wall.css";
 
 /*

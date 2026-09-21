@@ -13,6 +13,7 @@
  * together and a screen that half-loads is worse than one that loads.
  */
 
+import { reminderFromApi, type ReminderInfo } from "../incidents/reminders";
 import { apiFetch } from "../api/http";
 import { toUnixMs } from "./types";
 
@@ -42,6 +43,10 @@ export type ApiIncident = {
   duration_s: number;
   cause?: string;
   last_error?: string;
+  reminder_count?: unknown;
+  reminded_at?: unknown;
+  next_reminder_at?: unknown;
+  reminder_status?: unknown;
 };
 
 export type UptimeWindow = {
@@ -94,6 +99,7 @@ export type Incident = {
   durationS: number;
   cause?: string;
   lastError?: string;
+  reminder?: ReminderInfo | null;
 };
 
 export type MonitorDetail = {
@@ -149,6 +155,7 @@ export function incidentFromApi(api: ApiIncident): Incident {
     durationS: api.duration_s,
     cause: api.cause,
     lastError: api.last_error,
+    reminder: reminderFromApi(api),
   };
 }
 

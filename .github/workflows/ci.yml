@@ -63,6 +63,15 @@ jobs:
       - name: Test with race detector
         run: go test -race -short -count=1 -coverprofile=coverage.out ./...
 
+      # Keep subprocess/real-time integration out of -short without dropping
+      # its production wiring coverage. Dependencies were loaded above; this
+      # step cannot fetch anything and talks only to its loopback receiver.
+      - name: Watchdog binary integration
+        env:
+          GOPROXY: "off"
+          GOTOOLCHAIN: local
+        run: go test -race -count=1 -run '^TestWatchdogActualBinary$' ./cmd/subglance
+
       - name: Coverage summary
         run: |
           go tool cover -func=coverage.out | tail -1
@@ -254,8 +263,8 @@ jobs:
           path="$(npm run --silent test:browser:setup | awk '{print $NF}')"
           echo "PUPPETEER_EXECUTABLE_PATH=$path" >> "$GITHUB_ENV"
 
-      # Response-history browser tests exercise the real Go API, so use the
-      # same pinned toolchain as the embedded-dashboard smoke test below.
+      # Browser integration tests exercise the real Go API, so use the same
+      # pinned toolchain as the embedded-dashboard smoke test below.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: ${{ env.GO_VERSION }}

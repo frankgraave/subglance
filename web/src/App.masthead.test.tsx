@@ -17,6 +17,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { disabledWatchdog } from "./watchdog/fixtures";
 import { setToolbarSlot, setTopbarSlot } from "./shell/topbarSlot";
 
 /** jsdom has neither matchMedia nor EventSource. */
@@ -78,6 +79,7 @@ beforeEach(() => {
     "fetch",
     vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
+      if (url === "/api/v1/watchdog") return Promise.resolve(new Response(JSON.stringify(disabledWatchdog)));
       const body = url.includes("/auth/me") ? USER : { monitors: [MONITOR] };
       return Promise.resolve({
         ok: true,
@@ -160,6 +162,7 @@ describe("the masthead", () => {
             .getAttribute("aria-current"),
         ).toBe("page"),
       );
+      if (destination === "Settings") await screen.findByText("Not configured");
       expect(mastheadShape()).toEqual(onDashboard);
     }
   });

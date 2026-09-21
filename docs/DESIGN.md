@@ -2031,10 +2031,6 @@ The sidebar advertises five destinations; two exist.
   model says a monitor is in a window, so it is not implemented.
 - **Error toasts.** Only the success path is designed. A failed save, a rejected
   form, a check that cannot start — none of those have a visual.
-- **Tags/groups.** Tags exist end to end now — column, API field, frontend type
-  — and the dashboard both filters and groups on them (§7). One piece is still
-  open: there is no screen to create, rename or assign a tag outside the
-  create/edit form, so a typo in a key is fixed one monitor at a time.
 - **Keyboard shortcut help.** The command launcher exposes `⌘K` and its
   accessible shortcut; sidebar controls name `⌘B`. A general `?` help overlay
   remains separate work, not a prerequisite for the command menu.

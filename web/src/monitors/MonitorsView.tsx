@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { registerNavigationCleanup } from "../shell/leaveGuard";
 import { Card, Panel } from "../components/Card";
 import { PlusIcon, SearchIcon } from "../shell/icons";
 import { ToolbarTools, TopbarTools } from "../shell/TopbarTools";
@@ -9,6 +10,7 @@ import { EmptyState } from "./EmptyState";
 import { MonitorInventoryRow } from "./MonitorInventoryRow";
 import { AddMonitor } from "./AddMonitor";
 import { EditMonitorForm } from "./EditMonitorForm";
+import { BulkTagDrawer, type TagChange } from "./BulkTagDrawer";
 import { filterMonitors } from "./model";
 import { describeInventory, filterByType } from "./inventory";
 import type { ChannelState, InventoryMonitor } from "./inventory";
@@ -30,11 +32,8 @@ import type { CheckOutcome, MonitorPatch } from "./inventoryApi";
  * dashboard layout: the two views want opposite defaults, and a settings mode
  * inside a screen people leave open on a wall display invites accidents.
  *
- * **There is no bulk mode.** See the PR for the full argument; the short
- * version is that there is no bulk endpoint, so bulk pause is N requests, and a
- * bulk action that half-succeeds while reporting success is worse than no bulk
- * at all. Per-row actions are unambiguous: each one either worked or says why
- * it did not, on the row it belongs to.
+ * Tag management uses a single atomic endpoint. Other changes stay per-row;
+ * a series of independent writes must never pretend to be one bulk success.
  *
  * Presentational, like `Dashboard` and `IncidentsView`: it fetches nothing, so
  * a test renders it from a fixture. `LiveMonitors` above it owns the data.
@@ -70,6 +69,8 @@ export type MonitorsViewProps = {
   onEditClose?: () => void;
   /** Called after a monitor is created, so the owner can refetch. */
   onCreated?: () => void;
+  /** Atomic tag preview/commit. Absent for viewers. */
+  onTagChange?: TagChange;
   /** Ids with a pause/resume in flight. */
   busyIds?: ReadonlySet<string>;
   /** Ids with a manual check in flight. */
@@ -102,6 +103,7 @@ export function MonitorsView({
   editError = null,
   onEditClose,
   onCreated,
+  onTagChange,
   busyIds = NO_SET,
   checkingIds = NO_SET,
   checkResults = NO_MAP,
@@ -115,6 +117,23 @@ export function MonitorsView({
    *  which is precisely where this page differs from the dashboard. */
   const [pausedFilter, setPausedFilter] = useState<string>("");
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [tagOpen, setTagOpen] = useState(false);
+  useEffect(() => registerNavigationCleanup(() => setTagOpen(false)), []);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(NO_SET);
+  const selectedIds = monitors.filter((m) => selected.has(m.id)).map((m) => m.id);
+  const selectMonitor = useCallback((id: string, checked: boolean) => {
+    setSelected((held) => {
+      const next = new Set(held);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+  // Removal and permission loss discard selection, never retain ghost IDs.
+  if (selected.size !== selectedIds.length || (onTagChange === undefined && selected.size > 0)) {
+    setSelected(onTagChange === undefined ? NO_SET : new Set(selectedIds));
+  }
+  if (onTagChange === undefined && tagOpen) setTagOpen(false);
 
   const visible = useMemo(() => {
     let out = filterByType(filterMonitors(monitors, query), type);
@@ -123,6 +142,8 @@ export function MonitorsView({
     return out;
   }, [monitors, query, type, pausedFilter]);
 
+  const visibleIds = new Set(visible.map((m) => m.id));
+  const hiddenSelectionCount = selectedIds.filter((id) => !visibleIds.has(id)).length;
   const deleteTarget = monitors.find((m) => m.id === confirming) ?? null;
 
   return (
@@ -246,7 +267,9 @@ export function MonitorsView({
          */
         note={describeInventory(monitors)}
         action={
-          onCreateOpenChange === undefined ? undefined : (
+          <div className="bulk-tags-actions">
+          {onTagChange && <button type="button" className="add-button" disabled={loading || error !== null} onClick={() => setTagOpen(true)}>Manage tags</button>}
+          {onCreateOpenChange === undefined ? undefined : (
             <button
               type="button"
               className="add-button add-button-primary"
@@ -268,9 +291,15 @@ export function MonitorsView({
               <PlusIcon aria-hidden="true" />
               Add monitor
             </button>
-          )
+          )}
+          </div>
         }
       >
+        {onTagChange && !loading && error === null && monitors.length > 0 && <div className="bulk-tags-selection">
+          <button type="button" className="add-button" disabled={visible.length === 0} onClick={() => setSelected(new Set([...selected, ...visible.map((m) => m.id)]))}>Select all visible ({visible.length})</button>
+          <button type="button" className="add-button" disabled={selectedIds.length === 0} onClick={() => setSelected(NO_SET)}>Clear selection</button>
+          <p role="status">{selectedIds.length} selected{hiddenSelectionCount > 0 ? ` · ${hiddenSelectionCount} hidden by filters` : ""}</p>
+        </div>}
         {loading || error !== null ? (
           /*
            * Neither loading nor a failed request may reach the empty state.
@@ -306,6 +335,8 @@ export function MonitorsView({
               <MonitorInventoryRow
                 key={monitor.id}
                 monitor={monitor}
+                selected={selected.has(monitor.id)}
+                onSelect={onTagChange === undefined ? undefined : selectMonitor}
                 channels={channels[monitor.id] ?? { known: false }}
                 onOpen={onOpen}
                 onTogglePaused={onTogglePaused}
@@ -321,6 +352,8 @@ export function MonitorsView({
           </ul>
         )}
       </Card>
+
+      {tagOpen && onTagChange && <BulkTagDrawer selectedIds={selectedIds} onChange={onTagChange} onClose={() => setTagOpen(false)} />}
 
       {/*
        * Create, in a drawer over the inventory rather than on its own page.
@@ -375,6 +408,7 @@ export function MonitorsView({
                 key={`${editing.id}:${editing.name}`}
                 monitor={editing}
                 onSave={(patch) => onSave(editing.id, patch)}
+                onReload={() => onEdit?.(editing.id)}
                 onCancel={() => onEditClose?.()}
               />
             </Panel>

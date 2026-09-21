@@ -5,6 +5,7 @@ dashboard does.
 
 - [First run](#first-run)
 - [Your first monitor](#your-first-monitor)
+- [Editing a monitor](#editing-a-monitor)
 - [Authentication](#authentication)
 - [Check types](#check-types)
 - [Choosing a TLS floor](#choosing-a-tls-floor)
@@ -59,6 +60,29 @@ Either way the row is there, grey until the first check lands and then green
 or red. Everything else has a default, and unknown fields are rejected rather
 than ignored, so a typo tells you instead of silently configuring something
 other than what you asked for.
+
+## Editing a monitor
+
+Open a monitor and choose **Edit monitor**, or use its edit action in the
+Monitors list. Editors and administrators can rename it and change its
+settings. The check type stays fixed; a push monitor keeps its identity and
+secret reporting URL, and offers its report interval and grace instead of a
+target to probe.
+
+For an active check, changing its target or request settings requires **Test
+it** before saving. The preview uses the current draft without creating a
+monitor, recording check history or sending alerts. A failed probe is still a
+valid preview: you can intentionally save a service that is currently down.
+Changing the draft invalidates an earlier preview. The TLS floor remains in
+Advanced options; changing only that floor can be saved directly.
+
+The drawer reads settings and their version together. It sends only changed
+fields with that version. If another edit wins first, the stale save is
+refused: your draft stays visible, nothing is overwritten, and **Reload latest
+settings** explicitly replaces the draft with the newer values. The drawer
+also asks before discarding unsaved changes when you close it or navigate
+away. Request headers and bodies remain in the form's memory, not browser
+storage.
 
 ## Authentication
 
@@ -245,6 +269,19 @@ The interval is `repeat_after_s` per monitor. It is the delay before the *first*
 reminder; the gaps after it grow from there. Set it to `0` to switch reminders
 off for a monitor.
 
+Use **Repeat alerts** in the create form or the edit drawer.
+Choose **Do not repeat**, or enter any whole-number base from 60 to 86400
+seconds. The form rejects smaller nonzero values before sending a request:
+under one minute, reminders would become too frequent. The default is 900
+seconds. This is an escalating base, not a fixed repeat interval.
+
+The detail view shows the next reminder's due time and the number already
+issued for each open incident. Those values come from the server's persisted
+clock, not an estimate based on how long the page has been open. “Issued” does
+not promise successful delivery to every notification channel. Paused,
+disabled, unconfirmed, acknowledged and flapping incidents explain why no
+reminder is due; their existing reminder count is retained.
+
 The gaps grow rather than staying flat on purpose. A monitor that repeats at a
 fixed short interval trains its owner to mute it, and a muted monitor misses the
 next outage too.
@@ -302,8 +339,10 @@ channel fetch or forty-monitor limit in the inventory.
 paired with the response's `ETag`. Send that validator as `If-Match` with only
 the fields being changed. Request `headers` and `body` are returned only to
 editors and administrators, and are omitted from the list and live stream.
-The existing edit form still offers name, timing and tags; the read contract
-does not add an expanded settings form.
+The detail and inventory edit drawers use this paired read for target, timing,
+request settings, tags, TLS floor and repeat-alert settings. A 412 response
+requires an explicit reload rather than retrying the same draft with a new
+validator.
 
 Acknowledging is not resolving: it stops repeat notifications without claiming
 the problem is fixed.

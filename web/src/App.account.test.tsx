@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import App from "./App";
+import { disabledWatchdog } from "./watchdog/fixtures";
 import { LAYOUT_STORAGE_KEY } from "./shell/preferences";
 
 const user = { id: 1, email: "operator@example.test", role: "viewer", created_at: "2026-09-01T00:00:00Z" };
@@ -19,6 +20,7 @@ beforeEach(() => {
   vi.stubGlobal("EventSource", Source);
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
+    if (path === "/api/v1/watchdog") return json(disabledWatchdog);
     if (path === "/api/v1/auth/me") return json({ ...user, role });
     if (path === "/api/v1/setup") return json({ setup_required: false });
     if (path === "/api/v1/auth/password" || path === "/api/v1/auth/logout") return new Response(null, { status: 204 });
@@ -51,7 +53,8 @@ it("opens the password card from the sidebar for a viewer and keeps settings out
   expect(screen.getByRole("link", { name: "Settings" }).getAttribute("aria-current")).toBe("page");
   expect(document.title).toMatch(/Settings/);
   expect(document.querySelector(".shell-topbar")).toBeTruthy();
-  expect(screen.getAllByRole("region")).toHaveLength(1);
+  await screen.findByText("Not configured");
+  expect(screen.getAllByRole("region")).toHaveLength(2);
   fireEvent.change(input, { target: { value: "private" } });
   fireEvent.change(screen.getByRole("searchbox", { name: "Search settings" }), { target: { value: "nonexistent" } });
   expect(screen.getByRole("status").textContent).toMatch(/No settings match/);
