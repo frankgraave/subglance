@@ -34,14 +34,17 @@ beforeAll(async () => {
 }, 120_000);
 
 afterAll(async () => {
-  await browser?.close();
-  lines?.close();
-  if (child && child.exitCode === null) {
-    const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
-    child.stdin?.end();
-    await exited;
+  try {
+    await browser?.close();
+  } finally {
+    lines?.close();
+    if (child && child.exitCode === null) {
+      const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
+      child.stdin?.end();
+      await exited;
+    }
+    if (dir) await rm(dir, { recursive: true, force: true });
   }
-  if (dir) await rm(dir, { recursive: true, force: true });
 });
 
 it.each([
