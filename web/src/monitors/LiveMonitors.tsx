@@ -8,6 +8,7 @@ import {
 import type { QueryClient } from "@tanstack/react-query";
 import { createQueryClient } from "../live/queryClient";
 import { MonitorsView } from "./MonitorsView";
+import { changeTags, type TagOperation } from "./bulkTagsApi";
 import {
   checkMonitorNow,
   deleteMonitor,
@@ -303,6 +304,19 @@ export function LiveMonitors({
     [clearError, editing, patch, queryClient],
   );
 
+  const onTagChange = useCallback(async (operation: TagOperation, etag?: string) => {
+    const result = await changeTags(operation, etag);
+    if (etag !== undefined) {
+      // Dashboard (including inactive infinite-stale data) and inventory share
+      // this prefix. Detail has its own key; SSE frames do not carry tags.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["monitors"] }),
+        queryClient.invalidateQueries({ queryKey: ["monitor-detail"] }),
+      ]);
+    }
+    return result;
+  }, [queryClient]);
+
   const onCreated = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: inventoryQueryKey });
   }, [queryClient]);
@@ -323,6 +337,7 @@ export function LiveMonitors({
       editError={editLoadError}
       onEditClose={closeEdit}
       onCreated={onCreated}
+      onTagChange={canWrite ? onTagChange : undefined}
       busyIds={busyIds}
       checkingIds={checkingIds}
       checkResults={checkResults}

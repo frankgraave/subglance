@@ -1188,6 +1188,125 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
       x-subglance-access: write
+  /api/v1/monitors/tags/preview:
+    post:
+      tags: [Monitors]
+      operationId: previewMonitorTags
+      summary: Preview an atomic tag change
+      description: |
+        Validates a tag operation against current stored tags without writing.
+        Returns monitor counts and a strong ETag to confirm the exact operation.
+        Requests are limited to 256 KiB. Explicit selections contain 1–10000
+        unique positive IDs; unknown IDs reject the entire operation. Global
+        renames have no monitor-count cap and ignore no matching monitors.
+        Existing key/value normalisation and the 20-tags-per-monitor limit apply.
+        No tag registry is created.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagOperationRequest'
+      responses:
+        '200':
+          description: Preview only; no monitor or revision changed.
+          headers:
+            ETag:
+              description: Strong validator for this operation, its matching IDs and relevant tag values. Not a monitor ETag.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagOperationResult'
+        '400':
+          description: Invalid, oversized or trailing JSON, invalid operation or resulting tag limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          description: Could not read current tags; never reported as an empty preview.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: write
+  /api/v1/monitors/tags:
+    post:
+      tags: [Monitors]
+      operationId: transformMonitorTags
+      summary: Commit a previewed atomic tag change
+      description: |
+        Send the same body as the preview and its ETag in If-Match. This is a
+        single write transaction over current stored tags, not a series of
+        monitor PATCH requests. Validation, missing IDs or storage failures
+        roll back the whole operation. Unrelated settings and tags are kept.
+        Each changed monitor's revision advances, invalidating stale monitor
+        edits; unchanged monitors keep their revision. The validator protects
+        the affected keys and matching IDs, not unrelated configuration.
+        Changed source/destination values, membership or intent return 412:
+        preview again and review the new counts before confirming. Wildcards,
+        weak validators and lists of validators are refused. Limits and tag
+        validation are identical to the preview endpoint.
+      parameters:
+        - name: If-Match
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: '^"tags-[a-f0-9]{64}"$'
+          description: The exact strong ETag returned by the tag preview.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagOperationRequest'
+      responses:
+        '200':
+          description: Committed counts. No fresh validator is issued for blind retries.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagOperationResult'
+        '400':
+          description: Invalid request or resulting tags, oversized body, or malformed If-Match.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          description: Relevant tags or matching monitors changed since preview. Nothing was written.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '428':
+          description: If-Match is required. Preview before committing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Storage failure; all changes were rolled back.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: write
   /api/v1/monitors/preview:
     post:
       tags: [Monitors]
@@ -2336,6 +2455,104 @@ components:
           example:
             error: invalid monitor id
   schemas:
+    TagOperationRequest:
+      description: |
+        Apply replaces only the selected key's value on selected monitors.
+        Remove deletes only the exact key/value pair on selected monitors.
+        Rename key reaches every monitor with that key; when the destination
+        exists its existing value wins, and the old key is removed. Rename value
+        reaches every monitor with that exact key AND old value, leaving other
+        keys and values untouched. Keys are trimmed/lowercased; values are
+        trimmed and case-sensitive. Global renames reject monitor_ids.
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [action, monitor_ids, key, value]
+          properties:
+            action:
+              type: string
+              enum: [apply]
+            monitor_ids:
+              $ref: '#/components/schemas/TagSelection'
+            key:
+              $ref: '#/components/schemas/TagKey'
+            value:
+              $ref: '#/components/schemas/TagValue'
+        - type: object
+          additionalProperties: false
+          required: [action, monitor_ids, key, value]
+          properties:
+            action:
+              type: string
+              enum: [remove]
+            monitor_ids:
+              $ref: '#/components/schemas/TagSelection'
+            key:
+              $ref: '#/components/schemas/TagKey'
+            value:
+              $ref: '#/components/schemas/TagValue'
+        - type: object
+          additionalProperties: false
+          required: [action, key, new_key]
+          properties:
+            action:
+              type: string
+              enum: [rename_key]
+            key:
+              $ref: '#/components/schemas/TagKey'
+            new_key:
+              $ref: '#/components/schemas/TagKey'
+        - type: object
+          additionalProperties: false
+          required: [action, key, value, new_value]
+          properties:
+            action:
+              type: string
+              enum: [rename_value]
+            key:
+              $ref: '#/components/schemas/TagKey'
+            value:
+              $ref: '#/components/schemas/TagValue'
+            new_value:
+              $ref: '#/components/schemas/TagValue'
+    TagSelection:
+      type: array
+      minItems: 1
+      maxItems: 10000
+      uniqueItems: true
+      items:
+        type: integer
+        format: int64
+        minimum: 1
+    TagKey:
+      type: string
+      description: After trimming and lowercasing, 1–32 letters, digits, dots, dashes or underscores; must start/end with a letter or digit.
+      example: env
+    TagValue:
+      type: string
+      description: After trimming, 1–64 Unicode characters. No line breaks or tabs; colons and commas are preserved.
+      example: prod
+    TagOperationResult:
+      type: object
+      required: [total, changed, unchanged, collisions]
+      additionalProperties: false
+      properties:
+        total:
+          type: integer
+          minimum: 0
+          description: Selected monitor count for apply/remove; matching monitor count for global renames.
+        changed:
+          type: integer
+          minimum: 0
+          description: Monitors whose tags change.
+        unchanged:
+          type: integer
+          minimum: 0
+          description: Total minus changed. Includes selected monitors without the pair to remove.
+        collisions:
+          type: integer
+          minimum: 0
+          description: For apply, differing values replaced. For rename_key, destination values retained while removing the old key (including equal values). Zero for remove/rename_value.
     Error:
       type: object
       description: |
