@@ -427,6 +427,13 @@ describe("maintenance chart denominator", () => {
   it("excludes maintenance from both percentage and eligible count", () => {
     render(<HeartbeatBar beats={beats(2, (i) => ({assessment: i ? "down" : "up", maintenance: !!i, ok: !i}))} label="API" width={WIDTH} framed />);
     expect(screen.getByText("100.00%")).toBeTruthy();
-    expect(screen.getByText("1 eligible checks · 0 confirmed down")).toBeTruthy();
+    expect(screen.getByText("1 eligible check · 0 confirmed down")).toBeTruthy();
   });
+});
+
+it("does not count a warning twice in the accessible summary", () => {
+  render(<HeartbeatBar label="Mixed" width={WIDTH} beats={beats(3, i => ({
+    ok: i === 0, assessment: i === 0 ? "up" : i === 1 ? "warning" : "down",
+  }))} />);
+  expect(screen.getByRole("group").getAttribute("aria-label")).toContain("1 failed, 1 warning");
 });

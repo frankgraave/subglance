@@ -234,7 +234,7 @@ function describe(label: string, slots: Slot[]): string {
     ? ` between ${formatTime(span[0])} and ${formatTime(span[1])}`
     : "";
   const warnings = slots.reduce((n,s) => n + (s.kind === "beat" ? (s.warningCount ?? 0) : 0), 0);
-  const health = warnings > 0 ? `${failed} failed, ${warnings} warning (unconfirmed; excluded from uptime)` : failed === 0 ? "all passed" : `${failed} failed`;
+  const health = warnings > 0 ? `${failed - warnings} failed, ${warnings} warning (unconfirmed; excluded from uptime)` : failed === 0 ? "all passed" : `${failed} failed`;
   return `${label}: ${checks} checks${window}, ${health}. Bar height is latency; a failed check is drawn full height.`;
 }
 
@@ -498,7 +498,7 @@ export function HeartbeatBar({
       breakdown={
         uptime.checks === 0
           ? "no checks yet"
-          : eligible.length === 0 ? "No eligible checks" : `${eligible.length} eligible checks · ${eligible.filter((b) => b.assessment === "down").length} confirmed down`
+          : eligible.length === 0 ? "No eligible checks" : `${eligible.length} eligible check${eligible.length === 1 ? "" : "s"} · ${eligible.filter((b) => b.assessment === "down").length} confirmed down`
       }
       start={uptime.span ? formatCorner(uptime.span[0]) : undefined}
       end={uptime.span ? formatCorner(uptime.span[1]) : undefined}

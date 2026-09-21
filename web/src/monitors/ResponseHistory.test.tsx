@@ -119,3 +119,10 @@ it("keeps a failed response collapsed and renders hostile markup only as text", 
   expect(screen.getByText("<b>request</b>")).toBeTruthy();
   expect(container.querySelector("script, img, a, b")).toBeNull();
 });
+
+it.each([["status", "unexpected status code"], ["dns", "DNS failure"], ["new-kind", "new-kind"]])(
+  "explains failure kind %s in operator language", (kind, words) => {
+    render(<ResponseHistory heartbeats={[{ id: "1", ts: "2026-09-21T00:00:00Z", ok: false, failure_kind: kind }]} />);
+    expect(screen.getByText(words)).toBeTruthy();
+  },
+);

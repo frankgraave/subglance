@@ -92,7 +92,7 @@ func buildHistory(m store.Monitor, p profile, id int64, pl plan, rnd *rand.Rand)
 		rawFrom = start
 	}
 
-	h.buckets = buildBuckets(id, p, start, rawFrom, interval, outages, pl)
+	h.buckets = buildBuckets(id, m, p, start, rawFrom, interval, outages, pl)
 	h.beats = buildBeats(id, m, p, rawFrom, end, interval, outages, pl, rnd)
 	return h
 }
@@ -268,10 +268,12 @@ func buildBeats(
 	captured := map[time.Time]int{}
 
 	for ; t.Before(to); t = t.Add(interval) {
-		hb := store.Heartbeat{MonitorID: id, TS: t, OK: true}
+		hb := store.Heartbeat{MonitorID: id, TS: t, OK: true, Assessment: "up"}
 
 		if o, down := outageAt(outages, t); down {
 			hb.OK = false
+			hb.Assessment = outageAssessment(id, m, o, interval, t)
+			hb.FailureKind = o.cause
 			hb.Error = o.message
 			hb.StatusCode = o.status
 			if o.status > 0 {
@@ -395,7 +397,7 @@ func snapshotFor(o outage) *store.ResponseSnapshot {
 // uptime without a year of rows: one hour of a 30-second monitor is 120
 // heartbeats or one bucket.
 func buildBuckets(
-	id int64, p profile,
+	id int64, m store.Monitor, p profile,
 	from, to time.Time, interval time.Duration,
 	outages []outage, pl plan,
 ) []store.HourlyBucket {
@@ -424,12 +426,17 @@ func buildBuckets(
 			beats = 1
 		}
 
-		down := 0
+		down, assessedDown, warnings := 0, 0, 0
 		var failing outage
 		for i := 0; i < beats; i++ {
 			at := h.Add(time.Duration(i) * (time.Hour / time.Duration(beats)))
 			if o, isDown := outageAt(outages, at); isDown {
 				down++
+				if outageAssessment(id, m, o, interval, at) == "down" {
+					assessedDown++
+				} else {
+					warnings++
+				}
 				failing = o
 			}
 		}
@@ -437,6 +444,7 @@ func buildBuckets(
 		b := store.HourlyBucket{
 			MonitorID: id, Bucket: h,
 			Up: beats - down, Down: down,
+			AssessedUp: beats - down, AssessedDown: assessedDown, Warning: warnings,
 		}
 
 		// Latency is only recorded for beats that were timed, which is the
@@ -456,4 +464,14 @@ func buildBuckets(
 		out = append(out, b)
 	}
 	return out
+}
+
+// Synthetic assessments follow the same confirmation timestamps as the seeded
+// incidents. Earlier failures stay warnings; confirmation never rewrites them.
+func outageAssessment(id int64, m store.Monitor, o outage, interval time.Duration, at time.Time) string {
+	inc := incidentFor(id, o, m, interval)
+	if inc.Confirmed() && !at.Before(inc.ConfirmedAt) {
+		return "down"
+	}
+	return "warning"
 }

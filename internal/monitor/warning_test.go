@@ -3,6 +3,7 @@ package monitor
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/frankgraave/subglance/internal/checker"
 	"github.com/frankgraave/subglance/internal/events"
 	"github.com/frankgraave/subglance/internal/scheduler"
@@ -89,7 +90,7 @@ func TestWarningPauseRestartResetsStreak(t *testing.T) {
 	if err := r.sch.Reload(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.OpenIncidentFor(ctx, m.ID); err != store.ErrNoOpenIncident {
+	if _, err := db.OpenIncidentFor(ctx, m.ID); !errors.Is(err, store.ErrNoOpenIncident) {
 		t.Fatalf("pause did not close warning: %v", err)
 	}
 	r = New(Options{DB: db, Log: quietLogger(), Notify: alerts.record})

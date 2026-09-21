@@ -714,8 +714,11 @@ func (s *Scheduler) SetDown(id int64, down bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, item := range *s.queue {
-		if item.job.Monitor.ID != id || item.job.Down == down {
+		if item.job.Monitor.ID != id {
 			continue
+		}
+		if item.job.Down == down {
+			return
 		}
 		previousCadence := item.job.cadence()
 		item.job.Down = down

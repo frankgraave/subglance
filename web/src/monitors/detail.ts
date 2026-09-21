@@ -130,9 +130,9 @@ export function windowFromApi(api: ApiUptimeWindow): UptimeWindow {
     up: api.up,
     down: api.down,
     uptime: toNumber(api.uptime),
-    warning: api.warning ?? 0,
-    maintenance: api.maintenance ?? 0,
-    legacy: api.legacy ?? 0,
+    warning: toNumber(api.warning) ?? 0,
+    maintenance: toNumber(api.maintenance) ?? 0,
+    legacy: toNumber(api.legacy) ?? 0,
     // Absent means zero measured latency, which for an average over real
     // checks means "no timings", so it collapses to unknown rather than 0.
     avgLatencyMs: toNumber(api.avg_latency_ms),
