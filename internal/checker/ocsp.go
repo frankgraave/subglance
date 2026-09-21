@@ -3,7 +3,7 @@ package checker
 import (
 	"bytes"
 	"context"
-	"crypto/sha1" // OCSP identifies responder keys with SHA-1; not a signature algorithm.
+	"crypto/sha1" // #nosec G505 -- RFC 6960 section 4.2.1 mandates SHA-1 for the responder byKey identifier.
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
@@ -141,7 +141,9 @@ func authenticatedOCSP(der []byte, leaf, issuer *x509.Certificate, now time.Time
 		if !ok {
 			return ocsp.Unknown
 		}
-		hash := sha1.Sum(key)
+		// x/crypto/ocsp parses this identifier but does not authenticate it.
+		// The signer and response signature were independently verified above.
+		hash := sha1.Sum(key) // #nosec G401 -- RFC 6960 byKey identifier, not signature security.
 		if !bytes.Equal(response.ResponderKeyHash, hash[:]) {
 			return ocsp.Unknown
 		}
