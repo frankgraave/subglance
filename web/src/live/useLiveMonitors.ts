@@ -64,9 +64,9 @@ export function useLiveMonitors(options: LiveOptions = {}): UseLiveMonitors {
   const query = useQuery({
     queryKey: monitorsQueryKey,
     queryFn: ({ signal }) => fetchMonitors(signal),
-    // The stream, not a timer, is what keeps this fresh. Polling on top of it
-    // would double the load and reintroduce exactly the lag SSE removes.
-    refetchInterval: false,
+    // SSE updates checks immediately. Maintenance boundaries also affect
+    // paused or infrequently checked monitors, so refresh the read-time state.
+    refetchInterval: 15_000,
     staleTime: Infinity,
   });
 

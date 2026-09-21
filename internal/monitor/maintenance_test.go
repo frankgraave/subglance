@@ -1,6 +1,8 @@
 package monitor
 
 import (
+	"encoding/json"
+	"github.com/frankgraave/subglance/internal/events"
 	"github.com/frankgraave/subglance/internal/state"
 	"github.com/frankgraave/subglance/internal/store"
 	"testing"
@@ -14,6 +16,16 @@ func TestMaintenanceMeasurementsAndAlerts(t *testing.T) {
 			ctx := t.Context()
 			db := testDB(t)
 			alerts := &alertRecorder{}
+			notify := func(a Alert) {
+				// Model a durable accepting callback; a bare in-memory recorder
+				// must no longer consume the runner's persistent retry intent.
+				if a.Incident.MaintenancePending {
+					if _, err := db.EnqueueMaintenanceDeliveries(ctx, a.Incident.ID, nil); err != nil {
+						t.Fatal(err)
+					}
+				}
+				alerts.record(a)
+			}
 			m, err := db.CreateMonitor(ctx, store.Monitor{Name: "deploy", Type: "http", Target: "https://example.invalid", Enabled: true, Retries: 2, RepeatAfterS: 60})
 			if err != nil {
 				t.Fatal(err)
@@ -23,7 +35,7 @@ func TestMaintenanceMeasurementsAndAlerts(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			r := New(Options{DB: db, Log: quietLogger(), Notify: alerts.record})
+			r := New(Options{DB: db, Log: quietLogger(), Notify: notify})
 			r.now = func() time.Time { return now.Add(10 * time.Minute) }
 			for i := 0; i < 2; i++ {
 				o := outcomeFor(m, m.Target, false)
@@ -48,7 +60,7 @@ func TestMaintenanceMeasurementsAndAlerts(t *testing.T) {
 			if err != nil || stats.Total != 0 {
 				t.Fatalf("maintenance entered denominator: %+v %v", stats, err)
 			}
-			r = New(Options{DB: db, Log: quietLogger(), Notify: alerts.record})
+			r = New(Options{DB: db, Log: quietLogger(), Notify: notify})
 			if err := r.restore(ctx); err != nil {
 				t.Fatal(err)
 			}
@@ -172,4 +184,38 @@ func TestMaintenancePushReportsAndWatchdog(t *testing.T) {
 			t.Fatalf("push uptime %+v %v", stats, err)
 		}
 	})
+}
+
+func TestMaintenanceStreamSeparatesSampleAndCurrentWindow(t *testing.T) {
+	ctx := t.Context()
+	db := testDB(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	m, err := db.CreateMonitor(ctx, store.Monitor{Name: "boundary", Type: "http", Target: "https://example.invalid", Enabled: true, Retries: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.CreateMaintenance(ctx, store.MaintenanceWindow{Name: "deploy", MonitorID: m.ID, StartsAt: now, EndsAt: now.Add(time.Minute)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bus := events.NewBus(8)
+	sub := bus.Subscribe()
+	defer sub.Close()
+	r := New(Options{DB: db, Log: quietLogger(), Bus: bus})
+	r.now = func() time.Time { return now.Add(2 * time.Minute) }
+	o := outcomeFor(m, m.Target, false)
+	o.Result.CheckedAt = now
+	r.record(o)
+	event := <-sub.C()
+	data, err := json.Marshal(event.Payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]any
+	if err = json.Unmarshal(data, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["maintenance"] != true || payload["current_maintenance"] != false {
+		t.Fatalf("historical flag confused with current maintenance: %s", data)
+	}
 }

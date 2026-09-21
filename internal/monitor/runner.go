@@ -109,7 +109,9 @@ type Options struct {
 	FlapWindow    time.Duration
 	FlapThreshold int
 
-	// Notify receives alerts. Optional; nil means log only.
+	// Notify receives alerts. Optional; nil means log only. Deferred maintenance
+	// initials are retried until the notifier atomically transfers their stored
+	// intent to outbox deliveries; invoking this callback alone is not acceptance.
 	Notify func(Alert)
 
 	// Bus receives every heartbeat and status change for live streaming.
@@ -675,6 +677,12 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 		}
 	}
 
+	// A long-running check can finish after its maintenance window. Keep the
+	// immutable sample exclusion separate from the current UI state.
+	var currentMaintenance *bool
+	if active, err := r.db.InMaintenance(ctx, o.Monitor.ID, r.now()); err == nil {
+		currentMaintenance = &active
+	}
 	// Publish before applying the transition so the dashboard paints the new
 	// bar immediately, rather than waiting on incident bookkeeping.
 	r.publish(events.Event{
@@ -682,13 +690,14 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 		MonitorID: o.Monitor.ID,
 		At:        hb.TS,
 		Payload: heartbeatPayload{
-			OK:          hb.OK,
-			Assessment:  hb.Assessment,
-			Maintenance: hb.Maintenance,
-			FailureKind: hb.FailureKind,
-			LatencyMS:   hb.LatencyMS,
-			StatusCode:  hb.StatusCode,
-			Error:       hb.Error,
+			OK:                 hb.OK,
+			Assessment:         hb.Assessment,
+			Maintenance:        hb.Maintenance,
+			CurrentMaintenance: currentMaintenance,
+			FailureKind:        hb.FailureKind,
+			LatencyMS:          hb.LatencyMS,
+			StatusCode:         hb.StatusCode,
+			Error:              hb.Error,
 		},
 	})
 
@@ -742,13 +751,14 @@ func snapshotToStore(res checker.Result, snapshotsSpent int, flapping bool) (*st
 // monitor ID that the envelope already provides, and pinning the wire format
 // here means a schema change cannot silently alter the public API.
 type heartbeatPayload struct {
-	Maintenance bool   `json:"maintenance"`
-	Assessment  string `json:"assessment"`
-	FailureKind string `json:"failure_kind,omitempty"`
-	OK          bool   `json:"ok"`
-	LatencyMS   int    `json:"latency_ms"`
-	StatusCode  int    `json:"status_code,omitempty"`
-	Error       string `json:"error,omitempty"`
+	CurrentMaintenance *bool  `json:"current_maintenance,omitempty"`
+	Maintenance        bool   `json:"maintenance"`
+	Assessment         string `json:"assessment"`
+	FailureKind        string `json:"failure_kind,omitempty"`
+	OK                 bool   `json:"ok"`
+	LatencyMS          int    `json:"latency_ms"`
+	StatusCode         int    `json:"status_code,omitempty"`
+	Error              string `json:"error,omitempty"`
 }
 
 // statusPayload describes a monitor changing state.
@@ -869,7 +879,11 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 		if err != nil {
 			return err
 		}
-		if pending.MaintenancePending && !tr.Flapping {
+		channelsPending, err := r.db.HasPendingMaintenanceChannels(ctx, pending.ID)
+		if err != nil {
+			return err
+		}
+		if (pending.MaintenancePending || channelsPending) && !tr.Flapping {
 			inc = pending
 			tr.Event = state.EventIncidentConfirmed
 			tr.Notify = true
@@ -933,15 +947,6 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 		return persistErr
 	}
 
-	if inc.MaintenancePending {
-		claimed, err := r.db.ClaimMaintenanceAlert(ctx, inc.ID)
-		if err != nil {
-			return err
-		}
-		if !claimed {
-			return persistErr
-		}
-	}
 	r.notify(Alert{Monitor: m, Incident: inc, Event: tr.Event, At: tr.At})
 	return persistErr
 }

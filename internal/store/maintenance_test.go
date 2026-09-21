@@ -183,25 +183,6 @@ func TestMaintenanceDeletedMonitorCannotTransferSchedule(t *testing.T) {
 	}
 }
 
-func TestMaintenancePendingAlertClaimedOnce(t *testing.T) {
-	db := openTestDB(t)
-	ctx := t.Context()
-	id := seedMonitor(t, db, "once")
-	inc, err := db.OpenIncident(ctx, id, time.Now(), "status", "failed")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.SetMaintenancePending(ctx, inc.ID, true); err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; i < 2; i++ {
-		claimed, err := db.ClaimMaintenanceAlert(ctx, inc.ID)
-		if err != nil || claimed != (i == 0) {
-			t.Fatalf("claim %d = %v, %v", i, claimed, err)
-		}
-	}
-}
-
 func TestMaintenanceCancellationIDIsNotReused(t *testing.T) {
 	db := openTestDB(t)
 	ctx := t.Context()

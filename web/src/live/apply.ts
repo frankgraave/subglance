@@ -80,6 +80,7 @@ export function applyHeartbeat(monitors: readonly Monitor[], e: HeartbeatEvent):
   return replace(monitors, e.monitorId, (m) => ({
     ...m,
     status: m.status === "paused" ? "paused" : (e.assessment || statusAfterHeartbeat(m.status, e.ok)),
+    maintenance: e.currentMaintenance ?? m.maintenance,
     latencyMs: e.latencyMs,
     lastCheck: e.at,
     error: e.ok ? undefined : e.error,

@@ -204,6 +204,7 @@ function tooltipReadout(
  */
 function useMeasuredWidth(
   ref: React.RefObject<HTMLElement | null>,
+  framed: boolean,
   fallback?: number,
 ): number {
   const [measured, setMeasured] = useState(0);
@@ -217,7 +218,8 @@ function useMeasuredWidth(
     const observer = new ResizeObserver(measure);
     observer.observe(node);
     return () => observer.disconnect();
-  }, [ref]);
+  // The chart wrapper replaces the track node when the first beat arrives.
+  }, [ref, framed]);
 
   // A measured 0 means "no layout here" (jsdom, SSR, a display:none ancestor),
   // never "zero pixels wide", so it is the one case the fallback covers.
@@ -265,7 +267,7 @@ export function HeartbeatBar({
   legend,
 }: HeartbeatBarProps) {
   const trackRef = useRef<HTMLDivElement>(null);
-  const measured = useMeasuredWidth(trackRef, width);
+  const measured = useMeasuredWidth(trackRef, framed, width);
   const [active, setActive] = useState<number | null>(null);
   const [focused, setFocused] = useState(false);
 
@@ -482,7 +484,7 @@ export function HeartbeatBar({
   );
 
   const uptime = summarise(slots);
-  const eligible = beats.filter((b) => b.assessment === "up" || b.assessment === "down");
+  const eligible = beats.filter((b) => !b.maintenance && (b.assessment === "up" || b.assessment === "down"));
   const pct =
     eligible.length === 0
       ? "—"

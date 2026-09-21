@@ -68,11 +68,19 @@ Maintenance suppresses initial alerts, recoveries and reminders. A confirmed
 incident first observed during maintenance remains visible, but an eventual
 recovery stays silent if no initial alert was released. If it is still failing
 after maintenance, the next failed check releases its initial alert, subject to
-flapping suppression. This pending intent survives restart. Reminder schedules
+flapping suppression. This pending intent survives restart. Its release writes all assigned, enabled
+channel deliveries and clears the intent in one SQLite transaction. These
+deferred initials bypass the in-memory grouping window; a failed enqueue leaves
+the intent for the next failed check. Reminder schedules
 are not advanced while maintenance suppresses them.
 
 The notifier checks again immediately before each send attempt. A queued alert
-that meets maintenance is discarded, not postponed until the window ends.
+that meets maintenance is removed from that delivery. A removed initial alert
+keeps durable intent for that channel only. The next failed check after maintenance
+queues it again without repeating the initial alert to channels already informed.
+If the monitor recovers first, the uninformed channel stays silent; other channels
+can receive recovery. Reminders and recoveries removed during maintenance are
+discarded, not replayed when the window ends.
 Groups retain their members, so only maintained monitors are removed; other
 members can still be delivered. Removed members stay removed on retries.
 Suppressed outbox rows retain a suppression flag and reason without being counted
@@ -83,7 +91,11 @@ than guessing which names it covers. A send already in progress cannot be recall
 
 The maintenance overview refreshes every 15 seconds while open. Monitor reads
 report current maintenance separately from health; heartbeat history and SSE
-report the immutable flag for each measurement. A failed schedule read is not
+report the immutable flag for each measurement. SSE also carries
+`current_maintenance` at publish time, so a check finishing across a boundary
+does not confuse historical exclusion with current suppression. Live monitor
+views refresh read-time state every 15 seconds as well, including paused monitors
+that do not emit heartbeats. A failed schedule read is not
 presented as proof that no maintenance exists. If the runner cannot read schedules,
 it reports the persistence error instead of recording an incorrectly classified
 sample; the notifier leaves a queued delivery unsent until it can evaluate it.

@@ -416,3 +416,17 @@ describe("HeartbeatBar, framed", () => {
     expect(document.querySelectorAll(".hb-bar")).toHaveLength(41);
   });
 });
+
+
+describe("maintenance chart denominator", () => {
+  it.each(["up", "down"] as const)("renders unknown for maintenance-only %s", (assessment) => {
+    render(<HeartbeatBar beats={beats(2, () => ({assessment, maintenance: true, ok: assessment === "up"}))} label="API" width={WIDTH} framed />);
+    expect(screen.getByText("No eligible checks")).toBeTruthy();
+    expect(document.querySelector(".chart-headline")?.textContent).toBe("—");
+  });
+  it("excludes maintenance from both percentage and eligible count", () => {
+    render(<HeartbeatBar beats={beats(2, (i) => ({assessment: i ? "down" : "up", maintenance: !!i, ok: !i}))} label="API" width={WIDTH} framed />);
+    expect(screen.getByText("100.00%")).toBeTruthy();
+    expect(screen.getByText("1 eligible checks · 0 confirmed down")).toBeTruthy();
+  });
+});

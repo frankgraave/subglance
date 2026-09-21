@@ -2,13 +2,12 @@ package notifier
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 
 	"github.com/frankgraave/subglance/internal/state"
 )
 
-func (n *Notifier) filterMaintenance(ctx context.Context, a Alert) (Alert, bool, error) {
+func (n *Notifier) filterMaintenance(ctx context.Context, a Alert, channelID int64) (Alert, bool, []int64, error) {
+	var held []int64
 	members := a.Members
 	if len(members) == 0 {
 		// Pre-upgrade groups have names but no member identities. If any window
@@ -16,14 +15,14 @@ func (n *Notifier) filterMaintenance(ctx context.Context, a Alert) (Alert, bool,
 		if a.Grouped() {
 			windows, err := n.db.ListMaintenance(ctx)
 			if err != nil {
-				return a, false, err
+				return a, false, held, err
 			}
 			for _, w := range windows {
 				if w.Active(n.now()) {
-					return a, false, nil
+					return a, false, held, nil
 				}
 			}
-			return a, true, nil
+			return a, true, held, nil
 		}
 		members = []Alert{a}
 	}
@@ -31,32 +30,29 @@ func (n *Notifier) filterMaintenance(ctx context.Context, a Alert) (Alert, bool,
 	for _, member := range members {
 		muted, err := n.db.InMaintenance(ctx, member.MonitorID, n.now())
 		if err != nil {
-			return a, false, err
+			return a, false, held, err
 		}
 		if muted {
 			if state.Event(member.Event) == state.EventIncidentConfirmed && member.IncidentID != 0 {
-				if err := n.db.SetMaintenancePending(ctx, member.IncidentID, true); err != nil {
-					return a, false, err
-				}
+				held = append(held, member.IncidentID)
 			}
 			continue
 		}
 		// A recovery may have been queued before its grouped down alert was
 		// suppressed. Consult the durable intent again at delivery time.
-		if state.Event(member.Event) == state.EventIncidentResolved && member.IncidentID != 0 {
-			var pending bool
-			err := n.db.Reader.QueryRowContext(ctx, `SELECT maintenance_pending FROM incidents WHERE id=?`, member.IncidentID).Scan(&pending)
-			if err != nil && !errors.Is(err, sql.ErrNoRows) {
-				return a, false, err
+		if (state.Event(member.Event) == state.EventIncidentResolved || state.Event(member.Event) == state.EventIncidentReminder) && member.IncidentID != 0 {
+			pending, err := n.db.MaintenanceRecoverySuppressed(ctx, member.IncidentID, channelID)
+			if err != nil {
+				return a, false, held, err
 			}
-			if err == nil && pending {
+			if pending {
 				continue
 			}
 		}
 		kept = append(kept, member)
 	}
 	if len(kept) == 0 {
-		return a, false, nil
+		return a, false, held, nil
 	}
-	return Summarise(kept), true, nil
+	return Summarise(kept), true, held, nil
 }

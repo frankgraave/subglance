@@ -236,18 +236,3 @@ func (db *DB) SuppressDelivery(ctx context.Context, id int64) error {
 	_, err := db.Writer.ExecContext(ctx, `UPDATE notif_outbox SET suppressed=1, last_error='suppressed by scheduled maintenance', updated_at=? WHERE id=?`, time.Now().Unix(), id)
 	return err
 }
-func (db *DB) UpdateDeliveryPayload(ctx context.Context, id int64, payload string) error {
-	_, err := db.Writer.ExecContext(ctx, `UPDATE notif_outbox SET payload_json=? WHERE id=?`, payload, id)
-	return err
-}
-
-// ClaimMaintenanceAlert releases deferred intent once even when an on-demand
-// check and a scheduled check finish together.
-func (db *DB) ClaimMaintenanceAlert(ctx context.Context, id int64) (bool, error) {
-	res, err := db.Writer.ExecContext(ctx, `UPDATE incidents SET maintenance_pending=0 WHERE id=? AND maintenance_pending=1 AND resolved_at IS NULL`, id)
-	if err != nil {
-		return false, err
-	}
-	n, err := res.RowsAffected()
-	return n == 1, err
-}

@@ -311,12 +311,11 @@ export function incidentStory(
     cause === null ? null : `${capitalise(cause)}.`,
     ended === null ? null : `${ended}.`,
     acked === null ? null : `${acked}.`,
-    // The absence is information too: an open incident nobody has acked is
-    // still escalating, and silence about that reads as "handled".
+    // Acknowledgement is known; delivery and maintenance suppression are not.
     state === "open"
       ? stale
         ? "Not acknowledged when we lost contact."
-        : "Not acknowledged — the repeat alerts are still escalating."
+        : "Not acknowledged."
       : null,
   ].filter((part): part is string => part !== null);
 

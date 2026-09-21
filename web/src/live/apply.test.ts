@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MAX_LIVE_BEATS, applyHeartbeat, applyStatus, statusAfterHeartbeat } from "./apply";
 import type { HeartbeatEvent, StatusEvent } from "./events";
+import { parseEvent } from "./events";
 import type { Monitor } from "../monitors/types";
 
 const monitor = (over: Partial<Monitor> = {}): Monitor => ({
@@ -108,4 +109,23 @@ describe("applyStatus", () => {
   it("never un-pauses a monitor", () => {
     expect(applyStatus([monitor({ status: "paused" })], status())[0].status).toBe("paused");
   });
+});
+
+
+it("updates current maintenance at both boundaries without rewriting history", () => {
+  let list = [monitor({ maintenance: false })];
+  list = applyHeartbeat(list, beat({maintenance: true, currentMaintenance: true}));
+  expect(list[0].maintenance).toBe(true);
+  list = applyHeartbeat(list, beat({at: 3_000, maintenance: false, currentMaintenance: false}));
+  expect(list[0].maintenance).toBe(false);
+  expect(list[0].beats.map((b) => b.maintenance)).toEqual([true, false]);
+});
+
+it("keeps current maintenance separate from the sample timestamp", () => {
+ const event = parseEvent("heartbeat", JSON.stringify({monitor_id:1, data:{ok:false, maintenance:true, current_maintenance:false}}));
+ expect(event?.kind).toBe("heartbeat");
+ if(event?.kind !== "heartbeat") throw new Error("missing heartbeat");
+ const [m] = applyHeartbeat([monitor({maintenance:true})], event);
+ expect(m.maintenance).toBe(false);
+ expect(m.beats[0].maintenance).toBe(true);
 });

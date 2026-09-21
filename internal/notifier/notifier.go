@@ -177,13 +177,14 @@ func New(opts Options) *Notifier {
 
 // Enqueue collects one alert for delivery to every assigned channel.
 //
-// It does not write to the outbox directly. Alerts go into a batch keyed on
+// Ordinary alerts go into a batch keyed on
 // channel and direction, and a batch is flushed once its window closes — so a
 // shared outage becomes one message per channel rather than one per monitor.
 // The window is short (see DefaultGroupWindow) and it never delays a batch that
 // has already been flushed, so a lone failure still arrives promptly.
 //
-// What has not changed is the important part: no network call happens here. A
+// Deferred maintenance initials go directly to the durable outbox in the same
+// transaction that consumes their intent. No network call happens here. A
 // broken channel still cannot slow a check down.
 func (n *Notifier) Enqueue(ctx context.Context, m store.Monitor, inc store.Incident, event state.Event, at time.Time) error {
 	muted, err := n.db.InMaintenance(ctx, m.ID, at)
@@ -192,6 +193,10 @@ func (n *Notifier) Enqueue(ctx context.Context, m store.Monitor, inc store.Incid
 	}
 	if muted {
 		if event == state.EventIncidentConfirmed && inc.ID != 0 {
+			pending, err := n.db.HasPendingMaintenanceChannels(ctx, inc.ID)
+			if err != nil || pending {
+				return err
+			}
 			return n.db.SetMaintenancePending(ctx, inc.ID, true)
 		}
 		return nil
@@ -208,6 +213,22 @@ func (n *Notifier) Enqueue(ctx context.Context, m store.Monitor, inc store.Incid
 	}
 
 	alert := AlertFromStore(m, inc, event, at)
+	if event == state.EventIncidentConfirmed && inc.ID != 0 {
+		payload, err := alert.Encode()
+		if err != nil {
+			return err
+		}
+		var deliveries []store.Delivery
+		for _, ch := range channels {
+			if ch.Enabled {
+				deliveries = append(deliveries, store.Delivery{ChannelID: ch.ID, MonitorID: m.ID, IncidentID: inc.ID, Event: string(event), Payload: payload})
+			}
+		}
+		handled, err := n.db.EnqueueMaintenanceDeliveries(ctx, inc.ID, deliveries)
+		if err != nil || handled {
+			return err
+		}
+	}
 
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -370,26 +391,23 @@ func (n *Notifier) attempt(ctx context.Context, d store.Delivery) {
 		return
 	}
 
-	alert, keep, filterErr := n.filterMaintenance(ctx, alert)
+	alert, keep, held, filterErr := n.filterMaintenance(ctx, alert, d.ChannelID)
 	if filterErr != nil {
 		n.log.Error("could not evaluate maintenance for delivery", "delivery", d.ID, "error", filterErr)
 		return
 	}
-	if !keep {
-		if err := n.db.SuppressDelivery(ctx, d.ID); err != nil {
-			n.log.Error("could not suppress delivery", "error", err)
-		}
-		return
-	}
-	// Persist removed members before attempting a send: they must not return
-	// on a retry after maintenance has ended.
 	payload, err := alert.Encode()
 	if err != nil {
 		return
 	}
-	if err := n.db.UpdateDeliveryPayload(ctx, d.ID, payload); err != nil {
+	if err := n.db.FilterMaintenanceDelivery(ctx, d, payload, keep, held); err != nil {
+		n.log.Error("could not persist maintenance delivery decision", "delivery", d.ID, "error", err)
 		return
 	}
+	if !keep {
+		return
+	}
+
 	sendCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()
 

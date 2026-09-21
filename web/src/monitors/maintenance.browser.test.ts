@@ -89,3 +89,55 @@ it.each([["dark",375,0],["light",375,1],["dark",1440,2],["light",1440,3]] as con
   throw error;
  }finally{await context.close();}
 });
+
+it.each([["dark",375,4],["light",375,5],["dark",1440,6],["light",1440,7]] as const)("natural maintenance boundaries update the open detail: %s %ipx", async(theme,width,index)=>{
+ const context=await browser.createBrowserContext();const page=await context.newPage();const id=fixture.ids[index];
+ const check=async(healthy:boolean)=>{const response=readLine();child.stdin!.write(`${JSON.stringify({index,healthy})}\n`);return JSON.parse(await response);};
+ try {
+  await context.setCookie({name:"subglance_session",value:fixture.session,domain:new URL(fixture.url).hostname,path:"/",httpOnly:true,sameSite:"Strict"});
+  await page.setViewport({width,height:1000});
+  await page.evaluateOnNewDocument((key,value)=>localStorage.setItem(key,value),THEME_STORAGE_KEY,theme);
+  await page.goto(`${fixture.url}/monitors/${id}`,{waitUntil:"domcontentloaded"});
+  await page.waitForFunction(()=>document.querySelector('.mon-detail-uptime-note'));
+  const end=await page.evaluate(async(id)=>{
+    const start=Date.now()+1000;const end=start+4000;
+    const res=await fetch('/api/v1/maintenance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Boundary',monitor_id:id,starts_at:new Date(start).toISOString(),ends_at:new Date(end).toISOString()})});
+    if(!res.ok) throw new Error(`schedule ${res.status}`);
+    return {start,end};
+  },id);
+  expect(await page.$$eval('[role="status"]',els=>els.some(el=>el.textContent?.includes('Scheduled maintenance')))).toBe(false);
+  await page.waitForFunction(start=>Date.now()>=start,{},end.start);
+  expect(await check(false)).toMatchObject({added_alerts:0});
+  expect(await check(false)).toMatchObject({added_alerts:0});
+  await page.waitForFunction(()=>Array.from(document.querySelectorAll('[role="status"]')).some(el=>el.textContent?.includes('Scheduled maintenance')));
+  expect(await page.$eval('.chart-breakdown',el=>el.textContent)).toBe('No eligible checks');
+  expect(await page.$eval('.chart-headline',el=>el.textContent)).toBe('—');
+  await page.waitForFunction(end=>Date.now()>=end,{},end.end);
+  expect(await check(true)).toMatchObject({added_alerts:0});
+  await page.waitForFunction(()=>!Array.from(document.querySelectorAll('[role="status"]')).some(el=>el.textContent?.includes('Scheduled maintenance')));
+  expect(await page.$eval('.chart-headline',el=>el.textContent)).toBe('100.00%');
+  expect(await page.$eval('.chart-breakdown',el=>el.textContent)).toBe('1 eligible checks · 0 confirmed down');
+  const history=await page.evaluate(async(id)=>fetch(`/api/v1/monitors/${id}/heartbeats`).then(r=>r.json()),id);
+  expect(history.heartbeats.map((b:{maintenance:boolean})=>b.maintenance)).toEqual([false,true,true]);
+  await page.evaluate(axe.source);
+  const audit=await page.evaluate(async()=> (window as unknown as {axe:typeof axe}).axe.run({include:['.chart','[role="status"]']},{runOnly:{type:'tag',values:['wcag2a','wcag2aa']}}));
+  expect(audit.violations).toEqual([]);
+  // After the empty track gains chart chrome, resizing must measure its new
+  // DOM node. A retained width can accidentally fit until the viewport changes.
+  for (const resizedWidth of [width + 90, width]) {
+   await page.setViewport({width:resizedWidth,height:1000});
+   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+   const difference=await page.$eval('.hb-track',el=>el.getBoundingClientRect().width-el.querySelector('svg')!.getBoundingClientRect().width);
+   expect(difference).toBeGreaterThanOrEqual(0);
+   expect(difference).toBeLessThan(9);
+  }
+  await page.focus('.hb-track');
+  await page.keyboard.press('End');
+  await page.keyboard.press('ArrowLeft');
+  await page.waitForFunction(()=>document.querySelector('.hb-tooltip')?.textContent?.includes('excluded from uptime'));
+  await page.keyboard.press('Escape');
+  const overflow=await page.evaluate(()=>Array.from(document.querySelectorAll('main *')).filter(el=>el.getBoundingClientRect().right>innerWidth+1).map(el=>({tag:el.tagName,cls:el.className,text:el.textContent?.slice(0,160),width:el.getBoundingClientRect().width})).slice(0,15));
+  expect(overflow).toEqual([]);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ } finally {await context.close();}
+});

@@ -3128,7 +3128,7 @@ components:
       additionalProperties: false
     Heartbeat:
       type: object
-      description: One recorded check result. Assessment is immutable even if a later check confirms the incident. SSE heartbeat data carries the same assessment and failure_kind fields (with at in the envelope instead of ts).
+      description: One recorded check result. Assessment is immutable even if a later check confirms the incident. SSE heartbeat data carries the same assessment and failure_kind fields (with at in the envelope instead of ts), plus current_maintenance evaluated at publish time. current_maintenance is omitted when schedule state could not be read; it does not change the historical maintenance exclusion.
       required: [ts, ok, latency_ms, assessment]
       properties:
         maintenance:
