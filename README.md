@@ -73,6 +73,7 @@ A successful ping does not prove that the receiving service will raise an alarm.
 
 | Guide | What is in it |
 |---|---|
+| **[Keyboard commands](docs/keyboard.md)** | Command menu, monitor search and actions, navigation, themes and focus behavior |
 | **[Installing SubGlance](docs/installation.md)** | Docker Compose, Docker, a downloaded binary with signature verification, building from source, running the tests |
 | **[Using SubGlance](docs/using-subglance.md)** | First run, your first monitor, authentication, the five check types, push monitors, how a failure becomes an alert, repeat alerts, the API |
 | **[Managing tags](docs/tags.md)** | Bulk assignment/removal, instance-wide renames, collision policy and conditional API writes |

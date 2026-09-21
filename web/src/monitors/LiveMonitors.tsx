@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { registerNavigationCleanup } from "../shell/leaveGuard";
 import {
   QueryClientProvider,
   useMutation,
@@ -266,6 +267,8 @@ export function LiveMonitors({
     setEditing(null);
     setEditLoadError(null);
   }, []);
+
+  useEffect(() => registerNavigationCleanup(closeEdit), [closeEdit]);
 
   /*
    * Saving sends the validator that came with the values on screen.

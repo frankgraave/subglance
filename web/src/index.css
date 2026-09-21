@@ -92,6 +92,7 @@
 @import "./live/connection.css";
 @import "./shell/shell.css";
 @import "./shell/crash.css";
+@import "./commands/commands.css";
 @import "./auth/auth.css";
 @import "./auth/password.css";
 @import "./watchdog/watchdog.css";

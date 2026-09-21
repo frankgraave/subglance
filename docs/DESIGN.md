@@ -16,8 +16,7 @@ SubGlance answers one question: **is it still working?** Everything in the
 interface earns its place by answering that question faster, or it doesn't
 belong.
 
-The obvious comparisons are Uptime Kuma and Better Stack. My bet isn't more
-features — it's a dashboard you only need to look at for half a second. That's a
+The goal is a dashboard you only need to look at for half a second. That is a
 design claim, so the design has to deliver on it.
 
 ### The five rules
@@ -525,7 +524,7 @@ next hand-chosen tone comes from.
 
 ```css
 --r-2xs: 2px;   /* small marks: the lamp, a dot, a tick */
---r-xs: 4px;    /* legacy step, not in the ladder in use */
+--r-xs: 4px;    /* small annotations and inline focus contours */
 --r-sm: 6px;    /* anything you click: buttons, inputs, nav items */
 --r-md: 8px;    /* panels */
 --r-lg: 12px;   /* the card that frames panels, dialogs, drawer */
@@ -534,11 +533,42 @@ next hand-chosen tone comes from.
 --dur:  420ms;  /* theme transition */
 ```
 
-**The ladder in use is 2 / 6 / 8 / 12.** Four steps, each with a job: a mark, a
-control, a panel, the card that frames panels. `--r-xs` (4px) survives for
-compatibility but nothing should reach for it — at 4px a control reads as a
-mark rather than as something pressable, and the gap from 2 to 6 is what keeps
-those two jobs legible as different.
+**The ladder in use is 2 / 4 / 6 / 8 / 12.** The 4px rung is deliberate, not
+deprecated: a compact annotation or a focus contour around inline text is not
+a boxed control. The measured caller audit keeps `.shell-nav-soon` (annotation),
+`.shell-search-kbd` (keycap inside the 6px command button), and the PanelList
+inline link/button focus contour at 4px in both themes. The mockup's `.note code`
+and `.mono-path` annotations use the same role. There is no longer a direct caller in
+`monitors.css`; the ticket's old location moved into the shell. No dimension is
+added or removed. Standalone controls still use 6px, panels 8px and cards 12px.
+The current concentric segmented pair measures 8px outside, 2px padding and 6px
+inside; retaining 4px does not change that geometry.
+
+**Panel and PanelList share `--surface-panel`.** Side-by-side Chromium
+measurements of the real components on identical Cards showed the row carrying
+a different resting material despite the same 8px radius and raised shadow:
+
+| Nested surface | Dark composite RGB, before → after | Light composite RGB, before → after |
+|---|---|---|
+| Panel | 35/35/35 → 35/35/35 | 250/250/249 → 250/250/249 |
+| PanelList row | 37/37/37 → 35/35/35 | 255/255/255 → 250/250/249 |
+| Nesting reference `.frame-panel` | 35/35/35 → 35/35/35 | 250/250/249 → 250/250/249 |
+
+Values resolve the built CSS through Chromium's sRGB canvas and composite the
+actual ancestor chain, rather than reading alpha tokens as opaque colors. The
+reference already used the chosen fill and needs no repaint. Before/after
+screenshots confirm the light row no longer disappears into its white Card;
+dark loses the unnecessary brighter step. Compact row padding and hover remain
+distinct, because they communicate interaction without redefining nesting.
+The compact failure sentence uses `--ink-2`: its former status ink measures
+4.49:1 on the light panel. The rail and lamp retain status color. Add-form
+helper text also uses `--ink-2`; inserting the palette changed React's IDs and
+exposed its existing contrast debt rather than justifying broader exemptions.
+The repaired keycap, compact-error and two form-help waivers are removed, not
+renamed to follow generated IDs.
+`commands/surfaces.browser.test.ts` guards resolved fill, composite, shadow,
+radius and the nesting reference in both themes; `surfaceRoles.test.ts` checks
+the documented rung and audits its callers.
 
 **One duration for everything interactive: 150ms, on `cubic-bezier(.4, 0, .2,
 1)`.** A hover, a segment change and a menu opening are the same kind of event
@@ -571,8 +601,8 @@ or written into the allow-list in `tokens.test.ts` with a reason.
 rounded thing, the inner radius is the outer radius minus the padding between
 them. Concentric corners stay parallel; equal ones do not, and the gap between a
 control and the panel around it visibly pinches at the corners. A segmented
-control with `--space-1` padding inside an `--r-sm` shell therefore has an inner
-radius of `6 − 4 = 2px`, which is `--r-2xs`. `tokens.test.ts` asserts it wherever
+control with `--space-0h` padding inside an `--r-md` shell therefore has an inner
+radius of `8 − 2 = 6px`, which is `--r-sm`. `tokens.test.ts` asserts it wherever
 a rule states both an outer radius and its padding, because this is the kind of
 rule that is obeyed once and then quietly broken by the next component.
 
@@ -1365,6 +1395,31 @@ This is the difference between finished and nearly finished.
 monitors and actions, because the user doesn't know which of the two they're
 after.
 
+The global masthead launcher promotes the original `⌘K` hint without changing
+the page search: that field still filters its own page. On phones the same
+launcher shows a search glyph. The palette uses an opaque `--surface-float`
+native modal above existing drawers, a bounded scrolling list, and the
+reference's 12px outer / 6px option corners. All matching monitors remain
+reachable; arrows scroll the active option into view without moving input focus.
+
+Open a monitor by name or target, pause/resume it, add a monitor, navigate to
+Dashboard/Monitors/Incidents/Notifications/Settings, or choose light/dark/system
+through the same saved theme preference as the masthead. Write commands are
+absent for read-only accounts. The old mockup's bulk-check and theme-toggle
+examples are not product actions: there are three explicit theme preferences.
+Loading, retryable errors, empty inventory, no matches and pending writes have
+separate messages. Completed writes refetch the shared monitor queries.
+The command owner survives ordinary dismissal until a pending write completes;
+only session teardown aborts it. Closing a palette cannot undo a server commit,
+so dismissal must not skip dashboard/detail reconciliation.
+
+`Cmd/Ctrl+K` works while typing; repeat and composition do not trigger it.
+Arrow keys select, Enter runs, Tab stays inside the modal, and Escape closes
+only the top menu and restores focus. Modified action keys and IME Enter/Escape
+are not commands. Navigation still goes through the existing dirty-form guard;
+dismissing the palette alone never discards an underlying draft. Session end
+removes the menu and clears its shared query cache.
+
 
 ### 7.8 Segmented control
 
@@ -1976,8 +2031,9 @@ The sidebar advertises five destinations; two exist.
   model says a monitor is in a window, so it is not implemented.
 - **Error toasts.** Only the success path is designed. A failed save, a rejected
   form, a check that cannot start — none of those have a visual.
-- **Keyboard shortcuts** exist (`⌘K`, `⌘B`, `Esc`) but are undiscoverable. Needs
-  a `?` overlay.
+- **Keyboard shortcut help.** The command launcher exposes `⌘K` and its
+  accessible shortcut; sidebar controls name `⌘B`. A general `?` help overlay
+  remains separate work, not a prerequisite for the command menu.
 - **Onboarding beyond the empty state.** First run, creating the first user,
   what the very first minute after `docker run` looks like.
 
