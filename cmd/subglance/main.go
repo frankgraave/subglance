@@ -289,6 +289,9 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	// The API reads the same process-local history the send path writes.
+	// Explicit nil reports disabled, not an unavailable diagnostic source.
+	apiSrv.WithWatchdog(dog)
 	watchdogDone := make(chan struct{})
 	go func() {
 		defer close(watchdogDone)

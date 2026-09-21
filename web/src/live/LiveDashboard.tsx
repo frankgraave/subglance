@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { createQueryClient } from "./queryClient";
 import { Dashboard } from "../monitors/Dashboard";
+import { WatchdogNotice } from "../watchdog/Watchdog";
 import { ConnectionBadge } from "./ConnectionBadge";
 import { useLiveMonitors } from "./useLiveMonitors";
 import { useNow } from "./useNow";
@@ -110,6 +111,7 @@ export function LiveDashboard({
   }
 
   return (
+    <>
     <Dashboard
       monitors={monitors}
       query={query}
@@ -130,6 +132,8 @@ export function LiveDashboard({
         />
       }
     />
+    <WatchdogNotice />
+    </>
   );
 }
 

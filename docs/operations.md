@@ -243,7 +243,21 @@ service raises the alarm.
 subglance --watchdog-url https://hc-ping.com/your-uuid --watchdog-interval 5m
 ```
 
-Two details matter:
+The read-only **Settings → Self-monitoring** card shows watchdog history for
+this process. The dashboard explains the limitation once when no watchdog is
+configured. Unknown or unavailable diagnostics do not mean it is switched off.
+Search hides settings sections without discarding an unsaved password form.
+
+`GET /api/v1/watchdog` exposes the same private, non-cacheable diagnostics to any
+authenticated role. Last success records receipt of 2xx headers and survives
+later rejection, network failure or liveness suppression. The snapshot never
+contains the destination URL, outbound payload, response body or raw error.
+History resets on restart; the first ping waits a full interval. Suppressed,
+in-flight and overdue are separate from historical success. An unwired source
+returns 503; a deliberately disabled watchdog reports `configured=false` with
+null history. These observations do not guarantee the receiver will alert.
+
+Three details matter:
 
 - The ping is tied to evidence, not to a timer. It is only sent when at least
   one check has been **recorded** since the previous ping — completed *and*

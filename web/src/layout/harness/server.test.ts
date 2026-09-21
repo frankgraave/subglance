@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { serveBuild } from "./server";
 
+import { disabledWatchdog } from "../../watchdog/fixtures";
+
+it("settles the watchdog query with explicit disabled history, never a hidden 404", async () => {
+  const server = await serveBuild();
+  try {
+    const response = await fetch(`${server.url}/api/v1/watchdog`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(disabledWatchdog);
+  } finally { await server.close(); }
+});
+
 describe("detail history harness fixture", () => {
   it("answers the response-history request without fabricating failures", async () => {
     const server = await serveBuild();

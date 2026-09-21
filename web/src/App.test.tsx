@@ -10,6 +10,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { disabledWatchdog } from "./watchdog/fixtures";
 import { COMPACT_MAX_WIDTH } from "./layout/useMediaQuery";
 import { LAYOUT_STORAGE_KEY } from "./shell/preferences";
 import { setToolbarSlot, setTopbarSlot } from "./shell/topbarSlot";
@@ -79,6 +80,7 @@ beforeEach(() => {
     "fetch",
     vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
+      if (url === "/api/v1/watchdog") return Promise.resolve(new Response(JSON.stringify(disabledWatchdog)));
       const body = url.includes("/auth/me") ? USER : { monitors: [MONITOR] };
       return Promise.resolve({
         ok: true,
