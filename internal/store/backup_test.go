@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 )
@@ -77,57 +76,54 @@ func TestBackupToContainsData(t *testing.T) {
 // A file copy taken while SubGlance is writing can catch a half-applied
 // transaction; VACUUM INTO runs in a read transaction and cannot.
 //
-// Each writer commits two rows in one transaction, with matching keys. If the
-// backup were a naive copy, it could contain the first row of a transaction
-// without the second. Counting pairs proves it never does.
+// Commit one pair, then hold a second transaction open after its first row.
+// The reader must capture the committed pair without exposing the pending half,
+// while the writer connection remains occupied. No scheduler delay decides
+// whether the fixture contains data or has a write transaction in progress.
 func TestBackupIsConsistentUnderWrites(t *testing.T) {
 	db := openTestDB(t)
-	ctx := context.Background()
+	// A deadline bounds a regression that wrongly uses the occupied writer
+	// pool; it is not a warm-up period or part of the successful ordering.
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	now := time.Now().Unix()
+	if _, err := db.Writer.ExecContext(ctx, `
+		INSERT INTO settings (key, value, updated_at) VALUES
+		('pair-000000-a', 'a', ?), ('pair-000000-b', 'b', ?)
+	`, now, now); err != nil {
+		t.Fatalf("commit initial pair: %v", err)
+	}
 
-	stop := make(chan struct{})
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for i := 0; ; i++ {
-			select {
-			case <-stop:
-				return
-			default:
-			}
-			tx, err := db.Writer.BeginTx(ctx, nil)
-			if err != nil {
-				return
-			}
-			_, err1 := tx.ExecContext(ctx,
-				"INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)",
-				fmt.Sprintf("pair-%06d-a", i), "a", time.Now().Unix())
-			_, err2 := tx.ExecContext(ctx,
-				"INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)",
-				fmt.Sprintf("pair-%06d-b", i), "b", time.Now().Unix())
-			if err1 != nil || err2 != nil {
-				_ = tx.Rollback()
-				return
-			}
-			if err := tx.Commit(); err != nil {
-				return
-			}
-			time.Sleep(time.Millisecond)
-		}
-	}()
-
-	// Let a few transactions land so the backup is taken mid-stream rather
-	// than against an empty database.
-	time.Sleep(50 * time.Millisecond)
+	tx, err := db.Writer.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("begin concurrent write: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx,
+		"INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)",
+		"pair-000001-a", "a", now); err != nil {
+		t.Fatalf("write pending half: %v", err)
+	}
 
 	dest := filepath.Join(t.TempDir(), "hot.db")
-	_, err := db.BackupTo(ctx, dest)
-
-	close(stop)
-	wg.Wait()
-
-	if err != nil {
+	if _, err := db.BackupTo(ctx, dest); err != nil {
 		t.Fatalf("BackupTo while writing: %v", err)
+	}
+	if _, err := tx.ExecContext(ctx,
+		"INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)",
+		"pair-000001-b", "b", now); err != nil {
+		t.Fatalf("finish pending pair: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("commit pending pair after backup: %v", err)
+	}
+	var liveRows int
+	if err := db.Reader.QueryRowContext(ctx,
+		"SELECT count(*) FROM settings WHERE key LIKE 'pair-%'").Scan(&liveRows); err != nil {
+		t.Fatalf("count live rows: %v", err)
+	}
+	if liveRows != 4 {
+		t.Fatalf("live database has %d pair rows, want both committed pairs", liveRows)
 	}
 
 	copyDB := openBackupCopy(t, dest)
@@ -147,10 +143,13 @@ func TestBackupIsConsistentUnderWrites(t *testing.T) {
 	}
 
 	if halves == 0 {
-		t.Fatal("backup caught no concurrent writes at all; the test proves nothing")
+		t.Fatal("backup lost the committed pair; the test proves nothing")
 	}
 	if halves != pairs*2 {
 		t.Errorf("backup holds %d rows but only %d complete pairs: a transaction was torn", halves, pairs)
+	}
+	if halves != 2 {
+		t.Errorf("backup holds %d pair rows, want only the pair committed before the snapshot", halves)
 	}
 }
 

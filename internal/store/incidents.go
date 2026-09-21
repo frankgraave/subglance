@@ -18,8 +18,9 @@ import (
 // difference between the two is the confirmation delay the user accepted in
 // exchange for not being woken by a single dropped packet.
 type Incident struct {
-	ID        int64
-	MonitorID int64
+	MaintenancePending bool
+	ID                 int64
+	MonitorID          int64
 
 	StartedAt   time.Time
 	ConfirmedAt time.Time // zero while unconfirmed
@@ -71,7 +72,7 @@ var ErrIncidentAlreadyOpen = errors.New("store: an incident is already open for 
 const incidentColumns = `
 	incidents.id, incidents.monitor_id, incidents.started_at, incidents.confirmed_at,
 	incidents.resolved_at, incidents.acked_at, incidents.cause, incidents.last_error,
-	incidents.reminded_at, incidents.reminder_count`
+	incidents.reminded_at, incidents.reminder_count, incidents.maintenance_pending`
 
 // OpenIncident creates an unconfirmed incident for a monitor.
 //
@@ -414,7 +415,7 @@ func scanIncidentWith(s scanner, extra ...any) (Incident, error) {
 		&inc.ID, &inc.MonitorID, &started,
 		&confirmed, &resolved, &acked,
 		&inc.Cause, &inc.LastError,
-		&reminded, &inc.ReminderCount,
+		&reminded, &inc.ReminderCount, &inc.MaintenancePending,
 	}
 	err := s.Scan(append(dest, extra...)...)
 	if err != nil {

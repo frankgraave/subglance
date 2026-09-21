@@ -30,10 +30,11 @@ import (
 // minutes" that silently becomes "down for 62 minutes" on a retry is a lie,
 // and a monitoring tool that lies is worse than one that stays quiet.
 type Alert struct {
-	MonitorID   int64  `json:"monitor_id"`
-	MonitorName string `json:"monitor_name"`
-	MonitorType string `json:"monitor_type"`
-	Target      string `json:"target"`
+	Members     []Alert `json:"members,omitempty"`
+	MonitorID   int64   `json:"monitor_id"`
+	MonitorName string  `json:"monitor_name"`
+	MonitorType string  `json:"monitor_type"`
+	Target      string  `json:"target"`
 
 	Event string `json:"event"`
 

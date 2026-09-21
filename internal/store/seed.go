@@ -36,6 +36,13 @@ type HourlyBucket struct {
 	Up   int
 	Down int
 
+	// Explicit assessments are optional so imported legacy fixtures remain
+	// unassessed. Never infer confirmed downtime from the raw failure count.
+	AssessedUp   int
+	AssessedDown int
+	Warning      int
+	Maintenance  int
+
 	LatencyMin   int
 	LatencyMax   int
 	LatencyAvg   int
@@ -63,8 +70,8 @@ func (db *DB) SeedHeartbeats(ctx context.Context, hbs []Heartbeat) error {
 	// their values, and re-parsing the same INSERT tens of thousands of
 	// times is most of the cost of a seed run.
 	beat, err := tx.PrepareContext(ctx, `
-		INSERT INTO heartbeats (monitor_id, ts, ok, latency_ms, status_code, error)
-		VALUES (?, ?, ?, ?, ?, ?)`)
+		INSERT INTO heartbeats (monitor_id, ts, ok, latency_ms, status_code, error, assessment, failure_kind, maintenance)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("prepare heartbeat insert: %w", err)
 	}
@@ -81,7 +88,7 @@ func (db *DB) SeedHeartbeats(ctx context.Context, hbs []Heartbeat) error {
 	for _, hb := range hbs {
 		res, err := beat.ExecContext(ctx,
 			hb.MonitorID, hb.TS.Unix(), hb.OK,
-			nullInt(hb.LatencyMS), nullInt(hb.StatusCode), nullString(hb.Error))
+			nullInt(hb.LatencyMS), nullInt(hb.StatusCode), nullString(hb.Error), hb.Assessment, hb.FailureKind, hb.Maintenance)
 		if err != nil {
 			return fmt.Errorf("insert heartbeat for monitor %d: %w", hb.MonitorID, err)
 		}
@@ -132,12 +139,16 @@ func (db *DB) SeedHourlyBuckets(ctx context.Context, buckets []HourlyBucket) err
 
 	stmt, err := tx.PrepareContext(ctx, `
 		INSERT INTO heartbeat_hourly (
-			monitor_id, bucket, up_count, down_count,
+			monitor_id, bucket, up_count, down_count, assessed_up, assessed_down, warning_count, maintenance_count,
 			latency_min, latency_max, latency_avg, latency_count
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (monitor_id, bucket) DO UPDATE SET
 			up_count   = heartbeat_hourly.up_count   + excluded.up_count,
 			down_count = heartbeat_hourly.down_count + excluded.down_count,
+			assessed_up = heartbeat_hourly.assessed_up + excluded.assessed_up,
+			assessed_down = heartbeat_hourly.assessed_down + excluded.assessed_down,
+			warning_count = heartbeat_hourly.warning_count + excluded.warning_count,
+			maintenance_count = heartbeat_hourly.maintenance_count + excluded.maintenance_count,
 			latency_min = min(
 				COALESCE(heartbeat_hourly.latency_min, excluded.latency_min),
 				COALESCE(excluded.latency_min, heartbeat_hourly.latency_min)
@@ -164,6 +175,7 @@ func (db *DB) SeedHourlyBuckets(ctx context.Context, buckets []HourlyBucket) err
 	for _, b := range buckets {
 		if _, err := stmt.ExecContext(ctx,
 			b.MonitorID, b.Bucket.Truncate(bucketSize).Unix(), b.Up, b.Down,
+			b.AssessedUp, b.AssessedDown, b.Warning, b.Maintenance,
 			nullInt(b.LatencyMin), nullInt(b.LatencyMax),
 			nullInt(b.LatencyAvg), b.LatencyCount,
 		); err != nil {

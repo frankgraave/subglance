@@ -13,6 +13,7 @@ import type { Monitor, MonitorStatus } from "./types";
 export const STATUS_LABEL: Record<MonitorStatus, string> = {
   up: "Up",
   down: "Down",
+  warning: "Warning",
   pending: "Pending",
   paused: "Paused",
   waiting: "Waiting",
@@ -41,6 +42,7 @@ export const STATUS_LABEL: Record<MonitorStatus, string> = {
 export const STATUS_LABEL_LAST_KNOWN: Record<MonitorStatus, string> = {
   up: "Was up",
   down: "Was down",
+  warning: "Was warning",
   pending: "Was pending",
   paused: "Was paused",
   waiting: "Was waiting",

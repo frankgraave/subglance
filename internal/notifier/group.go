@@ -109,6 +109,7 @@ func Summarise(alerts []Alert) Alert {
 	}
 
 	out := Alert{
+		Members:    sorted,
 		Event:      first.Event,
 		At:         first.At,
 		StartedAt:  first.StartedAt,

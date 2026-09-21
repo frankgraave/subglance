@@ -371,7 +371,7 @@ describe("HeartbeatBar, framed", () => {
   it("leads with uptime and right-aligns the check breakdown beside it", () => {
     render(
       <HeartbeatBar
-        beats={beats(10, (i) => ({ ok: i !== 3 }))}
+        beats={beats(10, (i) => ({ ok: i !== 3, assessment: i !== 3 ? "up" : "down" }))}
         label="API"
         width={WIDTH}
         framed
@@ -379,7 +379,7 @@ describe("HeartbeatBar, framed", () => {
     );
     expect(screen.getByTestId("chart-headline").textContent).toBe("90.00%");
     expect(screen.getByTestId("chart-breakdown").textContent).toBe(
-      "10 checks · 1 failed",
+      "10 eligible checks · 1 confirmed down",
     );
   });
 
@@ -415,4 +415,63 @@ describe("HeartbeatBar, framed", () => {
     expect(screen.queryByTestId("chart-grid")).toBeNull();
     expect(document.querySelectorAll(".hb-bar")).toHaveLength(41);
   });
+});
+
+
+describe("maintenance chart denominator", () => {
+  it.each(["up", "down"] as const)("renders unknown for maintenance-only %s", (assessment) => {
+    render(<HeartbeatBar beats={beats(2, () => ({assessment, maintenance: true, ok: assessment === "up"}))} label="API" width={WIDTH} framed />);
+    expect(screen.getByText("No eligible checks")).toBeTruthy();
+    expect(document.querySelector(".chart-headline")?.textContent).toBe("—");
+  });
+  it("excludes maintenance from both percentage and eligible count", () => {
+    render(<HeartbeatBar beats={beats(2, (i) => ({assessment: i ? "down" : "up", maintenance: !!i, ok: !i}))} label="API" width={WIDTH} framed />);
+    expect(screen.getByText("100.00%")).toBeTruthy();
+    expect(screen.getByText("1 eligible check · 0 confirmed down")).toBeTruthy();
+  });
+});
+
+it("does not count a warning twice in the accessible summary", () => {
+  render(<HeartbeatBar label="Mixed" width={WIDTH} beats={beats(3, i => ({
+    ok: i === 0, assessment: i === 0 ? "up" : i === 1 ? "warning" : "down",
+  }))} />);
+  expect(screen.getByRole("group").getAttribute("aria-label")).toContain("1 failed, 1 warning");
+});
+
+it.each([false, true])("announces warning assessments truthfully with stale=%s", (stale) => {
+  render(<HeartbeatBar beats={beats(1, () => ({ok:false, assessment:"warning"}))} label="API" width={WIDTH} stale={stale}/>);
+  fireEvent.focus(screen.getByRole("group"));
+  fireEvent.keyDown(screen.getByRole("group"), {key:"End"});
+  const live=document.querySelector('[aria-live="polite"]')!;
+  expect(live.textContent).toContain("Warning — unconfirmed, no alert");
+  expect(live.textContent).not.toContain("failed");
+  expect(live.textContent?.includes("Last known")).toBe(stale);
+  expect(live.textContent?.includes("Not updating")).toBe(stale);
+});
+
+it.each([true, false])("marks a stale %s check announcement as last-known", (ok) => {
+  render(<HeartbeatBar beats={beats(1, () => ({ok}))} label="API" width={WIDTH} stale/>);
+  fireEvent.focus(screen.getByRole("group"));
+  fireEvent.keyDown(screen.getByRole("group"), {key:"End"});
+  const live=document.querySelector('[aria-live="polite"]')!;
+  expect(live.textContent).toContain(`Last known: ${ok ? "passed" : "failed"}`);
+  expect(live.textContent).toContain("Not updating");
+});
+
+it("dismisses the selected check before Escape reaches page navigation", () => {
+  let pageEscapes=0;
+  const onKeyDown=(event:KeyboardEvent)=>{if(event.key==="Escape") pageEscapes++;};
+  window.addEventListener("keydown",onKeyDown);
+  try {
+    render(<HeartbeatBar beats={beats(1)} label="API" width={WIDTH}/>);
+    const track=screen.getByRole("group");
+    fireEvent.focus(track);
+    fireEvent.keyDown(track,{key:"End"});
+    expect(screen.getByTestId("hb-tooltip")).toBeTruthy();
+    fireEvent.keyDown(track,{key:"Escape"});
+    expect(screen.queryByTestId("hb-tooltip")).toBeNull();
+    expect(pageEscapes).toBe(0);
+    fireEvent.keyDown(track,{key:"Escape"});
+    expect(pageEscapes).toBe(1);
+  } finally {window.removeEventListener("keydown",onKeyDown);}
 });

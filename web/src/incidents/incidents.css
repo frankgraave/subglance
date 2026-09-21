@@ -135,6 +135,7 @@
  * every open incident. A background is the honest description anyway: this
  * is a mark drawn inside the row, not an edge the box is made of.
  */
+.inc-row[data-state="warning"]::before,
 .inc-row[data-state="open"]::before,
 .inc-row[data-state="acked"]::before {
   content: "";
@@ -156,6 +157,7 @@
 
 .inc-row[data-state="open"]::before { background: var(--down); }
 .inc-row[data-state="acked"]::before { background: var(--warn); }
+.inc-row[data-state="warning"]::before { background: var(--warn); }
 
 /*
  * The rail drains with everything else once the stream is dead (DESIGN.md §6).
@@ -177,6 +179,7 @@
  * 600ms as the lamps, so the row withdraws as one object rather than in two
  * stages.
  */
+.mon-detail[data-conn="stale"] .inc-row[data-state="warning"]::before,
 .mon-detail[data-conn="stale"] .inc-row[data-state="open"]::before,
 .mon-detail[data-conn="stale"] .inc-row[data-state="acked"]::before {
   filter: saturate(.18);

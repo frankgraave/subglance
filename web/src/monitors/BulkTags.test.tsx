@@ -166,6 +166,7 @@ it("renames globally with explicit merge policy and invalidates dashboard and de
   });
   client.setQueryData(["monitors", 100], [{ tags: { evn: "prod" } }]);
   client.setQueryData(["monitor-detail", "1"], { tags: { evn: "prod" } });
+  client.setQueryData(["incidents", "open"], [{ reminder: { status: "scheduled" } }]);
   const request = vi
     .spyOn(globalThis, "fetch")
     .mockImplementation(
@@ -227,6 +228,7 @@ it("renames globally with explicit merge policy and invalidates dashboard and de
   expect(client.getQueryState(["monitor-detail", "1"])?.isInvalidated).toBe(
     true,
   );
+  expect(client.getQueryState(["incidents", "open"])?.isInvalidated).toBe(true);
   client.clear();
 });
 

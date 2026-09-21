@@ -44,6 +44,7 @@ let browser: Browser;
 const ALL_STATUSES = [
   "up",
   "down",
+  "warning",
   "pending",
   "paused",
   "waiting",
@@ -418,7 +419,7 @@ describe("the status rail stops asserting when the stream dies", () => {
    *   waiting — "no data yet": a fact about our own configuration → holds
    *   paused  — "somebody switched this off": likewise → holds
    */
-  const DRAINING_STATUSES = ["down", "pending"] as const;
+  const DRAINING_STATUSES = ["down", "warning", "pending"] as const;
   const HOLDING_STATUSES = ["up", "waiting", "paused"] as const;
 
   for (const theme of ["dark", "light"] as const) {

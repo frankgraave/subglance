@@ -395,8 +395,8 @@ func TestDeletedMonitorStateIsForgotten(t *testing.T) {
 
 	// Build up some state: one failure leaves a streak and a pending status.
 	r.record(outcomeFor(m, "https://example.com", false))
-	if got := r.engine.Status(m.ID); got != state.StatusPending {
-		t.Fatalf("status = %q, want pending", got)
+	if got := r.engine.Status(m.ID); got != state.StatusWarning {
+		t.Fatalf("status = %q, want warning", got)
 	}
 
 	// Delete the monitor and reload the scheduler, which is what happens in

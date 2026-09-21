@@ -347,6 +347,14 @@ export function MonitorDetail({
       {responseHistory ? <ResponseHistory key={monitor.id} {...responseHistory} /> : null}
 
       <Card title="Uptime" icon={<IconGauge />} headingLevel={2}>
+        {monitor.maintenance ? (
+          <p role="status">
+            {stale
+              ? "Scheduled maintenance when we last heard — checks continued; alerts were suppressed."
+              : "Scheduled maintenance — checks continue; alerts suppressed."}
+          </p>
+        ) : null}
+        <p className="mon-detail-uptime-note">Only confirmed downtime counts. Warnings, maintenance checks and history without a recorded assessment are excluded. This is a sample ratio, not elapsed time.</p>
         <Panel>
           {error !== null ? (
             <p
@@ -378,8 +386,11 @@ export function MonitorDetail({
                   </dd>
                   <dd className="mon-detail-window-detail">
                     {w.total === 0
-                      ? "no checks"
-                      : `${w.down} of ${w.total} failed`}
+                      ? "no eligible checks"
+                      : `${w.down} of ${w.total} confirmed down`}
+                    {(w.maintenance ?? 0) > 0 ? ` · ${w.maintenance} maintenance checks excluded` : ""}
+                    {(w.warning ?? 0) > 0 ? ` · ${w.warning} warnings excluded` : ""}
+                    {(w.legacy ?? 0) > 0 ? ` · ${w.legacy} legacy checks excluded` : ""}
                     {w.avgLatencyMs !== null
                       ? ` · ${formatLatency(w.avgLatencyMs)} avg`
                       : ""}
@@ -464,18 +475,20 @@ export function MonitorDetail({
  * cannot answer the second: ninety columns at 6px do not let anyone tally the
  * red ones. The count is the reason this legend earns its space.
  *
- * Two entries, never more. A `Beat` carries `ok` and nothing else, so a third
- * status here would be a colour the plot never draws — a legend that names
- * marks which are not on screen is worse than none.
+ * Warning assessments have their own mark: an unconfirmed failure must not
+ * be counted again as Failed. Unassessed historical failures retain their
+ * raw result here; the uptime denominator is calculated separately.
  *
  * A status with no occurrences is still listed. "0 failed" is a reading; an
  * absent row is silence, and the difference matters on the one panel someone
  * opens to find out whether anything went wrong.
  */
 function legendItems(beats: Beat[]): LegendItem[] {
-  const failed = beats.reduce((n, beat) => (beat.ok ? n : n + 1), 0);
+  const warnings = beats.filter((beat) => beat.assessment === "warning").length;
+  const failed = beats.filter((beat) => !beat.ok && beat.assessment !== "warning").length;
   return [
-    { key: "up", label: "Passed", marker: "up", value: beats.length - failed },
+    { key: "up", label: "Passed", marker: "up", value: beats.length - failed - warnings },
+    { key: "warning", label: "Warnings (unconfirmed)", marker: "warn", value: warnings },
     { key: "down", label: "Failed", marker: "down", value: failed },
   ];
 }

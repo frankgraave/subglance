@@ -104,7 +104,7 @@ func TestTransitions(t *testing.T) {
 			threshold: 2,
 			steps: []step{
 				{ok: true, wantTo: StatusUp},
-				{ok: false, wantTo: StatusPending, wantEvent: EventIncidentOpened, wantFails: 1},
+				{ok: false, wantTo: StatusWarning, wantEvent: EventIncidentOpened, wantFails: 1},
 				{ok: true, wantTo: StatusUp, wantEvent: EventIncidentResolved, wantNotify: false},
 			},
 		},
@@ -113,7 +113,7 @@ func TestTransitions(t *testing.T) {
 			threshold: 2,
 			steps: []step{
 				{ok: true, wantTo: StatusUp},
-				{ok: false, wantTo: StatusPending, wantEvent: EventIncidentOpened, wantFails: 1},
+				{ok: false, wantTo: StatusWarning, wantEvent: EventIncidentOpened, wantFails: 1},
 				{ok: false, wantTo: StatusDown, wantEvent: EventIncidentConfirmed, wantNotify: true, wantFails: 2},
 			},
 		},
@@ -131,7 +131,7 @@ func TestTransitions(t *testing.T) {
 			name:      "staying down is silent",
 			threshold: 2,
 			steps: []step{
-				{ok: false, wantTo: StatusPending, wantEvent: EventIncidentOpened},
+				{ok: false, wantTo: StatusWarning, wantEvent: EventIncidentOpened},
 				{ok: false, wantTo: StatusDown, wantEvent: EventIncidentConfirmed, wantNotify: true},
 				{ok: false, wantTo: StatusDown, wantEvent: EventNone, wantFails: 3},
 				{ok: false, wantTo: StatusDown, wantEvent: EventNone, wantFails: 4},
@@ -141,7 +141,7 @@ func TestTransitions(t *testing.T) {
 			name:      "recovery from confirmed down notifies",
 			threshold: 2,
 			steps: []step{
-				{ok: false, wantTo: StatusPending, wantEvent: EventIncidentOpened},
+				{ok: false, wantTo: StatusWarning, wantEvent: EventIncidentOpened},
 				{ok: false, wantTo: StatusDown, wantEvent: EventIncidentConfirmed, wantNotify: true},
 				{ok: true, wantTo: StatusUp, wantEvent: EventIncidentResolved, wantNotify: true},
 				{ok: true, wantTo: StatusUp, wantEvent: EventNone},
@@ -154,8 +154,8 @@ func TestTransitions(t *testing.T) {
 			threshold: 3,
 			steps: []step{
 				{ok: true, wantTo: StatusUp},
-				{ok: false, wantTo: StatusPending, wantEvent: EventIncidentOpened, wantFails: 1},
-				{ok: false, wantTo: StatusPending, wantEvent: EventNone, wantFails: 2},
+				{ok: false, wantTo: StatusWarning, wantEvent: EventIncidentOpened, wantFails: 1},
+				{ok: false, wantTo: StatusWarning, wantEvent: EventNone, wantFails: 2},
 				{ok: true, wantTo: StatusUp, wantEvent: EventIncidentResolved, wantNotify: false},
 			},
 		},
@@ -166,11 +166,11 @@ func TestTransitions(t *testing.T) {
 			name:      "failure streak resets on success",
 			threshold: 3,
 			steps: []step{
-				{ok: false, wantTo: StatusPending, wantEvent: EventIncidentOpened, wantFails: 1},
-				{ok: false, wantTo: StatusPending, wantFails: 2},
+				{ok: false, wantTo: StatusWarning, wantEvent: EventIncidentOpened, wantFails: 1},
+				{ok: false, wantTo: StatusWarning, wantFails: 2},
 				{ok: true, wantTo: StatusUp, wantEvent: EventIncidentResolved},
-				{ok: false, wantTo: StatusPending, wantEvent: EventIncidentOpened, wantFails: 1},
-				{ok: false, wantTo: StatusPending, wantFails: 2},
+				{ok: false, wantTo: StatusWarning, wantEvent: EventIncidentOpened, wantFails: 1},
+				{ok: false, wantTo: StatusWarning, wantFails: 2},
 			},
 		},
 		{
@@ -179,7 +179,7 @@ func TestTransitions(t *testing.T) {
 			name:      "first observation failing opens an incident",
 			threshold: 2,
 			steps: []step{
-				{ok: false, wantTo: StatusPending, wantEvent: EventIncidentOpened, wantFails: 1},
+				{ok: false, wantTo: StatusWarning, wantEvent: EventIncidentOpened, wantFails: 1},
 				{ok: false, wantTo: StatusDown, wantEvent: EventIncidentConfirmed, wantNotify: true},
 			},
 		},
@@ -535,9 +535,9 @@ func TestRestoreTransitionMatrix(t *testing.T) {
 			// failures are not known. It starts counting from one and stays
 			// pending, two checks short of confirming.
 			name: "zero seed stays pending",
-			seed: RestoredState{Status: StatusPending, IncidentOpen: true},
+			seed: RestoredState{Status: StatusWarning, IncidentOpen: true},
 
-			wantStatus: StatusPending,
+			wantStatus: StatusWarning,
 			wantEvent:  EventNone,
 			wantFails:  1,
 		},
@@ -546,7 +546,7 @@ func TestRestoreTransitionMatrix(t *testing.T) {
 			// short of the threshold, the next failure has to confirm.
 			name: "pending at threshold minus one confirms on the next failure",
 			seed: RestoredState{
-				Status: StatusPending, IncidentOpen: true,
+				Status: StatusWarning, IncidentOpen: true,
 				ConsecutiveFails: threshold - 1,
 			},
 
@@ -560,11 +560,11 @@ func TestRestoreTransitionMatrix(t *testing.T) {
 			// still pending, and no alert.
 			name: "pending at threshold minus two stays pending",
 			seed: RestoredState{
-				Status: StatusPending, IncidentOpen: true,
+				Status: StatusWarning, IncidentOpen: true,
 				ConsecutiveFails: threshold - 2,
 			},
 
-			wantStatus: StatusPending,
+			wantStatus: StatusWarning,
 			wantEvent:  EventNone,
 			wantFails:  threshold - 1,
 		},
@@ -587,10 +587,10 @@ func TestRestoreTransitionMatrix(t *testing.T) {
 			// threshold from the far side.
 			name: "negative seed floors at zero",
 			seed: RestoredState{
-				Status: StatusPending, IncidentOpen: true, ConsecutiveFails: -5,
+				Status: StatusWarning, IncidentOpen: true, ConsecutiveFails: -5,
 			},
 
-			wantStatus: StatusPending,
+			wantStatus: StatusWarning,
 			wantEvent:  EventNone,
 			wantFails:  1,
 		},

@@ -118,9 +118,11 @@ func (s *Server) handleListOpenIncidents(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	out := make([]incidentResponse, 0, len(incidents))
-	for _, inc := range incidents {
-		out = append(out, s.toIncidentResponse(inc))
+	out, err := s.incidentResponses(r.Context(), incidents, time.Now())
+	if err != nil {
+		s.log.Error("read incident reminder maintenance", "error", err)
+		writeError(w, http.StatusInternalServerError, "could not list incidents")
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"incidents": out})
 }
@@ -356,9 +358,11 @@ func (s *Server) handleListMonitorIncidents(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	out := make([]incidentResponse, 0, len(incidents))
-	for _, inc := range incidents {
-		out = append(out, s.toIncidentResponse(inc))
+	out, err := s.incidentResponses(r.Context(), incidents, time.Now())
+	if err != nil {
+		s.log.Error("read incident reminder maintenance", "error", err)
+		writeError(w, http.StatusInternalServerError, "could not list incidents")
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"incidents": out})
 }

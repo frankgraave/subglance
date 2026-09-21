@@ -109,7 +109,9 @@ type Options struct {
 	FlapWindow    time.Duration
 	FlapThreshold int
 
-	// Notify receives alerts. Optional; nil means log only.
+	// Notify receives alerts. Optional; nil means log only. Deferred maintenance
+	// initials are retried until the notifier atomically transfers their stored
+	// intent to outbox deliveries; invoking this callback alone is not acceptance.
 	Notify func(Alert)
 
 	// Bus receives every heartbeat and status change for live streaming.
@@ -248,6 +250,10 @@ func (r *Runner) sendDueReminders(ctx context.Context) {
 	now := r.now()
 	for _, c := range candidates {
 		inc := c.Incident
+		maintained, err := r.db.InMaintenance(ctx, inc.MonitorID, now)
+		if err != nil || maintained || inc.MaintenancePending {
+			continue
+		}
 		if !state.ReminderDue(now, inc.ConfirmedAt, inc.RemindedAt, inc.ReminderCount, c.RepeatAfter) {
 			continue
 		}
@@ -394,7 +400,7 @@ func (r *Runner) restore(ctx context.Context) error {
 	}
 
 	for _, inc := range incidents {
-		status := state.StatusPending
+		status := state.StatusWarning
 		if inc.Confirmed() {
 			status = state.StatusDown
 		}
@@ -490,6 +496,7 @@ func (r *Runner) jobs(ctx context.Context) ([]scheduler.Job, error) {
 			Monitor:      toCheckerMonitor(m),
 			Interval:     time.Duration(m.IntervalS) * time.Second,
 			NeverChecked: checked != nil && !seen,
+			Down:         r.engine.Status(m.ID) == state.StatusDown,
 		})
 	}
 
@@ -552,9 +559,10 @@ func toCheckerMonitor(m store.Monitor) checker.Monitor {
 //
 // Without a bound, a monitor checked every 60 seconds that stays broken for a
 // week would write ten thousand snapshots of the same 2 KiB error page: 20 MB
-// to say one thing. The first few are where the information is — the first
-// failure, and the next couple in case the symptom changes as the outage
-// develops. After that the streak is repeating itself.
+// to say one thing. Three leaves room for the initial symptom and two early changes;
+// later changes can be missed. The synthetic count/body/disk tradeoffs and the
+// decision to use retention rather than a total-byte cap are recorded in
+// docs/response-snapshot-sizing.md. Separate settled outages get new allowances.
 const maxSnapshotsPerIncident = 3
 
 // maxRestoredFailStreak caps how many failed heartbeats startup counts when
@@ -611,6 +619,13 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 		hb.TS = time.Now()
 	}
 
+	maintained, maintenanceErr := r.db.InMaintenance(ctx, o.Monitor.ID, hb.TS)
+	if maintenanceErr != nil {
+		r.hbFailures.Add(1)
+		r.log.Error("could not classify heartbeat maintenance", "monitor_id", o.Monitor.ID, "error", maintenanceErr)
+		return fmt.Errorf("record heartbeat: read maintenance: %w", maintenanceErr)
+	}
+	hb.Maintenance = maintained
 	// The state engine runs before the write, not after, because the failure
 	// streak it reports decides whether this result's response snapshot is
 	// worth storing. Observe only touches in-memory state, so moving it ahead
@@ -623,6 +638,10 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 		Error:            o.Result.Error,
 		FailureThreshold: o.Monitor.Retries,
 	})
+
+	hb.Assessment = string(tr.To)
+	hb.FailureKind = string(o.Result.Kind)
+	r.sch.SetDown(o.Monitor.ID, tr.To == state.StatusDown)
 
 	var captureReason store.CaptureReason
 	hb.Response, captureReason = snapshotToStore(o.Result, tr.SnapshotsSpent, tr.Flapping)
@@ -658,6 +677,12 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 		}
 	}
 
+	// A long-running check can finish after its maintenance window. Keep the
+	// immutable sample exclusion separate from the current UI state.
+	var currentMaintenance *bool
+	if active, err := r.db.InMaintenance(ctx, o.Monitor.ID, r.now()); err == nil {
+		currentMaintenance = &active
+	}
 	// Publish before applying the transition so the dashboard paints the new
 	// bar immediately, rather than waiting on incident bookkeeping.
 	r.publish(events.Event{
@@ -665,14 +690,18 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 		MonitorID: o.Monitor.ID,
 		At:        hb.TS,
 		Payload: heartbeatPayload{
-			OK:         hb.OK,
-			LatencyMS:  hb.LatencyMS,
-			StatusCode: hb.StatusCode,
-			Error:      hb.Error,
+			OK:                 hb.OK,
+			Assessment:         hb.Assessment,
+			Maintenance:        hb.Maintenance,
+			CurrentMaintenance: currentMaintenance,
+			FailureKind:        hb.FailureKind,
+			LatencyMS:          hb.LatencyMS,
+			StatusCode:         hb.StatusCode,
+			Error:              hb.Error,
 		},
 	})
 
-	return errors.Join(hbErr, r.applyTransition(ctx, o, tr))
+	return errors.Join(hbErr, r.applyTransition(ctx, o, tr, maintained))
 }
 
 // snapshotToStore decides whether this result's captured response is worth a
@@ -683,18 +712,18 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 //
 // The first is the budget: the first maxSnapshotsPerIncident stored snapshots
 // of an incident. Only a stored snapshot spends it, so the failures that write
-// nothing leave the allowance for the ones that do. A
-// monitor that has been returning the same 503 for six hours has already said
-// everything it has to say, and every repeat after that is storage spent on a
-// copy of something already on disk.
+// nothing leave the allowance for the ones that do. This keeps an initial
+// prefix, not a deduplicated sample: a later response can contain new diagnostic
+// information even if the status code has not changed. The allowance trades
+// that later detail for lower storage cost.
 //
 // The second is flapping, which the budget cannot see. A monitor that fails,
 // recovers and fails again every minute resolves its incident on each recovery
 // and so starts every failure with an empty budget — permanently inside the
 // budget, writing a snapshot per check, for as long as it oscillates. The
-// engine already knows that monitor is flapping, and a flapping monitor is
-// precisely the case where snapshots are worthless: there are already twenty
-// copies of the same failure on disk. So while it flaps, none are stored.
+// engine already knows when that monitor is flapping. While that flag is set,
+// no responses are stored; this reduces repeated captures without comparing
+// bodies. It is not a total-byte cap: quiet periods can clear the flag.
 //
 // Flapping is used rather than any new counter because it is state the engine
 // maintains and clears on its own: when the monitor settles, snapshots resume
@@ -722,10 +751,14 @@ func snapshotToStore(res checker.Result, snapshotsSpent int, flapping bool) (*st
 // monitor ID that the envelope already provides, and pinning the wire format
 // here means a schema change cannot silently alter the public API.
 type heartbeatPayload struct {
-	OK         bool   `json:"ok"`
-	LatencyMS  int    `json:"latency_ms"`
-	StatusCode int    `json:"status_code,omitempty"`
-	Error      string `json:"error,omitempty"`
+	CurrentMaintenance *bool  `json:"current_maintenance,omitempty"`
+	Maintenance        bool   `json:"maintenance"`
+	Assessment         string `json:"assessment"`
+	FailureKind        string `json:"failure_kind,omitempty"`
+	OK                 bool   `json:"ok"`
+	LatencyMS          int    `json:"latency_ms"`
+	StatusCode         int    `json:"status_code,omitempty"`
+	Error              string `json:"error,omitempty"`
 }
 
 // statusPayload describes a monitor changing state.
@@ -753,7 +786,7 @@ func (r *Runner) publish(e events.Event) {
 // It returns the first persistence failure it hit. Alert delivery problems are
 // logged but not returned: a caller deciding whether to acknowledge a report
 // cares about what was stored, not about who was told.
-func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr state.Transition) error {
+func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr state.Transition, maintained bool) error {
 	var (
 		inc        store.Incident
 		err        error
@@ -834,6 +867,32 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 			"was_confirmed", inc.Confirmed())
 	}
 
+	// Remember a confirmation held by maintenance across restart. Recovery
+	// stays silent until a subsequent failed check outside maintenance announces it.
+	if tr.Event == state.EventIncidentConfirmed && maintained {
+		if err := r.db.SetMaintenancePending(ctx, inc.ID, true); err != nil {
+			return err
+		}
+	}
+	if !maintained && tr.To == state.StatusDown && tr.Event == state.EventNone {
+		pending, err := r.db.OpenIncidentFor(ctx, o.Monitor.ID)
+		if err != nil {
+			return err
+		}
+		channelsPending, err := r.db.HasPendingMaintenanceChannels(ctx, pending.ID)
+		if err != nil {
+			return err
+		}
+		if (pending.MaintenancePending || channelsPending) && !tr.Flapping {
+			inc = pending
+			tr.Event = state.EventIncidentConfirmed
+			tr.Notify = true
+		}
+	}
+	if maintained || (tr.Event == state.EventIncidentResolved && inc.MaintenancePending) {
+		tr.Suppressed = tr.Suppressed || tr.Notify
+		tr.Notify = false
+	}
 	// Flapping is reported alongside the incident lifecycle rather than in
 	// place of it, so this runs after the incident has been persisted.
 	if tr.FlappingChanged {
@@ -867,7 +926,7 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 	}
 
 	if tr.Suppressed {
-		r.log.Debug("notification suppressed while flapping",
+		r.log.Debug("notification suppressed",
 			"monitor", o.Monitor.Name, "event", tr.Event)
 	}
 

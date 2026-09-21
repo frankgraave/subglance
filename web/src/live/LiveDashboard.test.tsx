@@ -696,3 +696,16 @@ describe("LiveDashboard", () => {
     });
   });
 });
+
+it("refreshes current maintenance even when a paused monitor has no heartbeats", async () => {
+ vi.useFakeTimers();
+ const rows = [apiMonitor({status:"paused", enabled:false, maintenance:false})];
+ const {client} = renderLive(rows);
+ await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+ rows[0] = apiMonitor({status:"paused", enabled:false, maintenance:true});
+ await act(async () => { await vi.advanceTimersByTimeAsync(15_100); });
+ expect(client.getQueryData<Monitor[]>(monitorsQueryKey)?.[0].maintenance).toBe(true);
+ rows[0] = apiMonitor({status:"paused", enabled:false, maintenance:false});
+ await act(async () => { await vi.advanceTimersByTimeAsync(15_100); });
+ expect(client.getQueryData<Monitor[]>(monitorsQueryKey)?.[0].maintenance).toBe(false);
+});

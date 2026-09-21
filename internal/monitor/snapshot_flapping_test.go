@@ -195,8 +195,8 @@ func TestARestartKeepsTheAlertStreakWithoutCapture(t *testing.T) {
 	for range 2 {
 		first.record(outcomeFor(m, m.Target, false))
 	}
-	if got := first.engine.Status(m.ID); got != state.StatusPending {
-		t.Fatalf("precondition: status = %q, want pending", got)
+	if got := first.engine.Status(m.ID); got != state.StatusWarning {
+		t.Fatalf("precondition: status = %q, want warning", got)
 	}
 	if n := storedSnapshots(t, db); n != 0 {
 		t.Fatalf("precondition: stored %d snapshots, want 0 with capture off", n)

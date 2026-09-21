@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -28,7 +29,8 @@ const indexCss = readFileSync(join(here, "..", "index.css"), "utf8");
 const indexHtml = readFileSync(join(webRoot, "index.html"), "utf8");
 const manifest = JSON.parse(
   readFileSync(join(webRoot, "public", "fonts", "MANIFEST.json"), "utf8"),
-) as Array<{ face: string; version: string; source: string; sha256: string; file: string }>;
+) as Array<{ face: string; version: string; source: string; sha256: string; file: string;
+  bytes: number; subset_sha256: string; unicodes: string }>;
 
 /** Every `src: url(...)` in a @font-face rule, in declaration order. */
 function declaredFiles(): string[] {
@@ -36,6 +38,20 @@ function declaredFiles(): string[] {
 }
 
 describe("the faces are self-hosted", () => {
+  it("binds the documented subset boundary to the actual shipped bytes", () => {
+    for (const entry of manifest) {
+      const binary = readFileSync(join(webRoot, "public", "fonts", entry.file));
+      expect(entry.bytes).toBe(binary.length);
+      expect(entry.subset_sha256, `${entry.face}: subset checksum`).toBe(
+        createHash("sha256").update(binary).digest("hex"),
+      );
+      expect(entry.unicodes, `${entry.face}: requested coverage`).toBe(
+        "U+0000-00FF,U+0100-017F,U+0192,U+02BB-02BC,U+02C6,U+02DA,U+02DC," +
+        "U+2000-206F,U+20AC,U+2122,U+2190-2193,U+2212,U+FEFF,U+FFFD",
+      );
+    }
+  });
+
   it("declares a @font-face for the sans and the mono roles", () => {
     const families = [...fontsCss.matchAll(/font-family:\s*"([^"]+)"/g)].map((m) => m[1]);
     expect(families).toContain("InterVariable");

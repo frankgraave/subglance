@@ -1396,7 +1396,7 @@
       <tr>
         <td><code>--font-sans</code></td>
         <td class="sg-value"><code>&quot;InterVariable&quot;, ui-sans-serif, system-ui, -apple-system, sans-serif</code></td>
-        <td class="sg-why">The product ships both faces itself; see styles/fonts.css. The stacks behind them are the fallback for the seconds before the file lands and for an install where it genuinely fails to.</td>
+        <td class="sg-why">The product ships both faces itself; see styles/fonts.css. The stacks behind them cover glyphs outside the shipped Latin subset as well as the seconds before the file lands and an install where it fails to load. <details class="sg-more"><summary>more</summary>Greek/Cyrillic and other scripts depend on local system font coverage; see docs/font-coverage.md for the measured boundary.</details></td>
       </tr>
       <tr>
         <td><code>--font-mono</code></td>
@@ -1417,17 +1417,17 @@
       <tr>
         <td><code>--ligatures-sans</code></td>
         <td class="sg-value"><code>common-ligatures contextual</code></td>
-        <td class="sg-why">A face is a configuration, not a family name. Both faces fall back to a system font on most machines, so anything spelled as an OpenType feature tag would apply to one font and silently do nothing on the next; these are <details class="sg-more"><summary>more</summary>the standard properties, which every face answers. Sans neutralises what is discretionary: it keeps the two ligature kinds that exist to fix letter collisions (common and contextual) and turns off the historical and discretionary sets, so a font update cannot change how the product's text renders without an edit here.</details></td>
+        <td class="sg-why">A face is a configuration, not a family name. Glyphs outside the shipped subset use system fonts, whose OpenType feature tags can differ. These standard properties express the role across the fallback stack too. <details class="sg-more"><summary>more</summary>Sans neutralises what is discretionary: it keeps the two ligature kinds that exist to fix letter collisions (common and contextual) and turns off the historical and discretionary sets, so a font update cannot change how the product's text renders without an edit here.</details></td>
       </tr>
       <tr>
         <td><code>--numeric-sans</code></td>
         <td class="sg-value"><code>normal</code></td>
-        <td class="sg-why">A face is a configuration, not a family name. Both faces fall back to a system font on most machines, so anything spelled as an OpenType feature tag would apply to one font and silently do nothing on the next; these are <details class="sg-more"><summary>more</summary>the standard properties, which every face answers. Sans neutralises what is discretionary: it keeps the two ligature kinds that exist to fix letter collisions (common and contextual) and turns off the historical and discretionary sets, so a font update cannot change how the product's text renders without an edit here.</details></td>
+        <td class="sg-why">A face is a configuration, not a family name. Glyphs outside the shipped subset use system fonts, whose OpenType feature tags can differ. These standard properties express the role across the fallback stack too. <details class="sg-more"><summary>more</summary>Sans neutralises what is discretionary: it keeps the two ligature kinds that exist to fix letter collisions (common and contextual) and turns off the historical and discretionary sets, so a font update cannot change how the product's text renders without an edit here.</details></td>
       </tr>
       <tr>
         <td><code>--render-sans</code></td>
         <td class="sg-value"><code>optimizeLegibility</code></td>
-        <td class="sg-why">A face is a configuration, not a family name. Both faces fall back to a system font on most machines, so anything spelled as an OpenType feature tag would apply to one font and silently do nothing on the next; these are <details class="sg-more"><summary>more</summary>the standard properties, which every face answers. Sans neutralises what is discretionary: it keeps the two ligature kinds that exist to fix letter collisions (common and contextual) and turns off the historical and discretionary sets, so a font update cannot change how the product's text renders without an edit here.</details></td>
+        <td class="sg-why">A face is a configuration, not a family name. Glyphs outside the shipped subset use system fonts, whose OpenType feature tags can differ. These standard properties express the role across the fallback stack too. <details class="sg-more"><summary>more</summary>Sans neutralises what is discretionary: it keeps the two ligature kinds that exist to fix letter collisions (common and contextual) and turns off the historical and discretionary sets, so a font update cannot change how the product's text renders without an edit here.</details></td>
       </tr>
       <tr>
         <td><code>--ligatures-mono</code></td>

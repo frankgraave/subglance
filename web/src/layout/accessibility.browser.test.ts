@@ -146,10 +146,10 @@ describe("the accessibility gate itself", () => {
     expect(baseline.entries.filter((entry) =>
       /\.(?:inc-sub|tb-count|mon-detail-note)\b/.test(entry.selector),
     )).toEqual([]);
-    // Other auth/add-form debt is out of this repair's scope. In particular,
+    // Remaining auth debt is out of this repair's scope. In particular,
     // do not turn those exact selectors into wildcard useId exemptions.
     for (const entry of baseline.entries.filter((entry) => entry.selector.includes("_r_"))) {
-      expect(["#_r_0_-strength", "#_r_3_-target-help", "#_r_3_-name-help"]).toContain(entry.selector);
+      expect(["#_r_0_-strength"]).toContain(entry.selector);
     }
   });
   it("keeps every waiver unique, reasoned and scoped to an audited screen/theme", () => {

@@ -7,8 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"strconv"
 	"time"
+
+	"golang.org/x/crypto/ocsp"
 )
 
 // SSLChecker inspects a TLS certificate: is it valid, and how long until it
@@ -26,7 +29,8 @@ import (
 // implicitly; the result is a verdict *plus* the expiry date, on both the happy
 // and the unhappy path.
 type SSLChecker struct {
-	dialer *net.Dialer
+	dialer     *net.Dialer
+	ocspClient *http.Client
 
 	// now is overridable so tests can reason about expiry without waiting.
 	now func() time.Time
@@ -43,8 +47,9 @@ func NewSSLChecker(guard *Guard) *SSLChecker {
 		guard = NewGuard(false) // fail closed
 	}
 	return &SSLChecker{
-		dialer: &net.Dialer{Control: guard.ControlFunc()},
-		now:    time.Now,
+		dialer:     &net.Dialer{Control: guard.ControlFunc()},
+		now:        time.Now,
+		ocspClient: newOCSPClient(),
 	}
 }
 
@@ -124,11 +129,23 @@ func (c *SSLChecker) Check(ctx context.Context, m Monitor) Result {
 		return res
 	}
 
-	if err := verifyChain(host, certs, now, c.rootsForTest); err != nil {
+	chains, err := verifyChain(host, certs, now, c.rootsForTest)
+	if err != nil {
 		res.OK = false
 		res.Kind = FailTLS
 		res.Error = err.Error()
 		return res
+	}
+
+	if len(chains[0]) > 1 {
+		status := c.revocationStatus(ctx, tlsConn.ConnectionState().OCSPResponse, leaf, chains[0][1])
+		res.Latency = time.Since(start)
+		if status == ocsp.Revoked {
+			res.OK = false
+			res.Kind = FailTLS
+			res.Error = "certificate revoked (OCSP)"
+			return res
+		}
 	}
 
 	// A certificate that is valid but about to expire fails on purpose. A
@@ -152,11 +169,11 @@ func (c *SSLChecker) Check(ctx context.Context, m Monitor) Result {
 //
 // Wording is delegated to describeCertProblem so that a monitor of type ssl
 // and an https monitor of the same host produce the same sentence.
-func verifyChain(host string, certs []*x509.Certificate, now time.Time, roots *x509.CertPool) error {
+func verifyChain(host string, certs []*x509.Certificate, now time.Time, roots *x509.CertPool) ([][]*x509.Certificate, error) {
 	leaf := certs[0]
 
 	if err := leaf.VerifyHostname(host); err != nil {
-		return errors.New(describeCertProblem(host, certs, err, now))
+		return nil, errors.New(describeCertProblem(host, certs, err, now))
 	}
 
 	intermediates := x509.NewCertPool()
@@ -164,16 +181,16 @@ func verifyChain(host string, certs []*x509.Certificate, now time.Time, roots *x
 		intermediates.AddCert(c)
 	}
 
-	_, err := leaf.Verify(x509.VerifyOptions{
+	chains, err := leaf.Verify(x509.VerifyOptions{
 		DNSName:       host,
 		Roots:         roots, // nil means the system trust store
 		Intermediates: intermediates,
 		CurrentTime:   now,
 	})
 	if err != nil {
-		return errors.New(describeCertProblem(host, certs, err, now))
+		return nil, errors.New(describeCertProblem(host, certs, err, now))
 	}
-	return nil
+	return chains, nil
 }
 
 // humanDuration renders a duration the way someone reading an alert at 3am

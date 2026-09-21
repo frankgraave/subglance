@@ -19,6 +19,7 @@ export type LedState = "up" | "down" | "warn" | "idle" | "off";
 export const LED_STATE: Record<MonitorStatus, LedState> = {
   up: "up",
   down: "down",
+  warning: "warn",
   // Pending is amber, not grey: it is a monitor we are waiting on, which is
   // worth a glance.
   pending: "warn",

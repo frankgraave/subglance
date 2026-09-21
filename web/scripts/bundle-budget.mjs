@@ -115,6 +115,14 @@ const budgets = {
    * ceilings are unchanged. This is one shared raise, not one per feature.
    */
   /*
+   * SUB-33: 126 -> 128 KiB. Before: 127,984 bytes gzip; after: 129,747
+   * bytes (entry assets measured with this script's Node gzip). The 1,763
+   * bytes add one-off/weekly maintenance controls, timezone and tag inputs,
+   * cancellation, errors and historical exclusion labels. No runtime dependency
+   * was added; existing forms and cards keep CSS below its unchanged 15 KiB.
+   * 128 KiB leaves 1,325 bytes, rather than setting a ceiling at today's size.
+   */
+  /*
    * 126 -> 130 KiB gzip for SUB-68 / SUB-91.
    * The current develop (05974de) entry measures 127,401 bytes; this combined
    * build measures 130,955: 3,554 bytes for expanded versioned detail editing,
@@ -136,6 +144,17 @@ const budgets = {
    * diagnostics and measured surface consistency, without a runtime dependency.
    * 136/16 KiB leaves 3,994 JS / 940 CSS bytes for fixes in the full combination,
    * not a ceiling nudged to today's exact size. Font ceiling stays unchanged.
+   */
+  /*
+   * Integration of c89a4b0 with SUB-145/44/109/116/115/33 retains the existing
+   * 136/16 KiB ceilings. That historical entry measured 135,989 JS / 15,352 CSS
+   * gzip bytes (Node gzip, index.html assets), versus 127,401 / 14,770 at the
+   * pinned 05974de base. That build included bulk tags, versioned editing/reminders,
+   * watchdog status, warning/history and maintenance with truthful reminder
+   * suppression reads (before command-palette integration). Its headroom was
+   * 3,275 JS / 1,032 CSS bytes; neither a higher ceiling nor feature removal
+   * was needed for that build. Fonts measured 69,412 bytes against the
+   * unchanged 80 KiB ceiling. Run this script for current measurements.
    */
   js: 136,
   /*

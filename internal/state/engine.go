@@ -37,10 +37,10 @@ const (
 	// StatusUp means the last check passed.
 	StatusUp Status = "up"
 
-	// StatusPending means checks are failing but not yet often enough to
+	// StatusWarning means checks are failing but not yet often enough to
 	// count. This state is why the product does not cry wolf: it is visible
-	// in the UI as "degraded" without anyone being alerted.
-	StatusPending Status = "pending"
+	// in the UI as "Warning" without anyone being alerted.
+	StatusWarning Status = "warning"
 
 	// StatusDown means failure is confirmed.
 	StatusDown Status = "down"
@@ -296,8 +296,8 @@ func (e *Engine) observeFailure(ms *monitorState, t *Transition, o Observation) 
 			ms.incidentOpen = true
 			t.Event = EventIncidentOpened
 		}
-		ms.status = StatusPending
-		t.To = StatusPending
+		ms.status = StatusWarning
+		t.To = StatusWarning
 	}
 }
 
@@ -379,9 +379,9 @@ func (e *Engine) applyFlapping(ms *monitorState, t *Transition) {
 		t.Suppressed = false
 
 	case !flappingNow && ms.flapping:
-		// Settled down. Notify so the user knows alerts have resumed.
+		// Settled down. A warning (including its recovery) never alerts.
 		ms.flapping = false
-		t.Notify = true
+		t.Notify = t.Notify || (t.To != StatusWarning && t.From != StatusWarning)
 
 	case flappingNow && ms.flapping:
 		// Still oscillating. Hold the notification back; the incident record

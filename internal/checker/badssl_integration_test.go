@@ -64,6 +64,10 @@ type badsslCase struct {
 	// it. It is written down rather than asserted as correct so the table
 	// cannot be read as a claim that the current answer is right.
 	knownGap string
+
+	// A live OCSP responder may be unavailable. Hermetic fixtures assert both
+	// outcomes; here accept only a pass or the explicit authenticated verdict.
+	ocspSoftFail bool
 }
 
 // badsslCases is the table.
@@ -173,14 +177,12 @@ var badsslCases = []badsslCase{
 		mustNotContain: []string{"cipher", "connection failed"},
 	},
 
-	// --- Finding 3: revocation. Recorded as the wrong answer it is, not
-	// asserted as correct.
+	// HTTP monitors do not query revocation. The SSL loop below applies its
+	// best-effort OCSP policy; deterministic coverage lives in ocsp_test.go.
 	{
 		target:   "revoked.badssl.com",
 		wantKind: FailNone,
-		knownGap: "SUB-44: the certificate is revoked and every browser refuses this site; " +
-			"we have no OCSP or CRL check, so we report it healthy. The expectation below " +
-			"records what we currently do, not what is right.",
+		knownGap: "HTTP monitors validate TLS but do not query OCSP or CRLs; use an SSL monitor for OCSP.",
 	},
 
 	// --- Finding 4: incomplete chain versus an authority that really is
@@ -287,6 +289,11 @@ func checkCase(t *testing.T, c badsslCase, res Result) {
 		t.Logf("KNOWN GAP — %s", c.knownGap)
 	}
 
+	if c.ocspSoftFail && !res.OK {
+		c.wantKind = FailTLS
+		c.wantPhrases = []string{"certificate revoked (OCSP)"}
+	}
+
 	gotKind := res.Kind
 	if res.OK {
 		gotKind = FailNone
@@ -312,6 +319,10 @@ func TestBadSSLSSLChecker(t *testing.T) {
 
 	c := NewSSLChecker(NewGuard(false))
 	for _, tc := range badsslCases {
+		if tc.target == "revoked.badssl.com" {
+			tc.ocspSoftFail = true
+			tc.knownGap = ""
+		}
 		name := tc.target
 		if tc.minTLS != 0 {
 			name += "@" + tlsVersionName(tc.minTLS)

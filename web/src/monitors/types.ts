@@ -21,7 +21,7 @@ export type { Beat };
  * belongs on this side of the boundary — a paused monitor that last checked
  * green is not "up", it is "not being watched".
  */
-export type MonitorStatus = "up" | "down" | "pending" | "paused" | "waiting";
+export type MonitorStatus = "up" | "down" | "warning" | "pending" | "paused" | "waiting";
 
 /**
  * The reporting window of a push monitor.
@@ -43,6 +43,7 @@ export type PushWindow = {
 };
 
 export type Monitor = {
+  maintenance?: boolean;
   id: string;
   /** The check type; optional only for older in-memory fixtures. */
   type?: string;
@@ -93,9 +94,12 @@ export type Monitor = {
 
 /** One heartbeat as GET /api/v1/monitors?heartbeats=N returns it. */
 export type ApiHeartbeat = {
+  maintenance?: boolean;
   /** RFC3339, e.g. "2026-09-11T08:30:00Z". */
   ts: string;
   ok: boolean;
+  assessment?: "up" | "warning" | "down" | "";
+  failure_kind?: string;
   latency_ms?: number | null;
   status_code?: number;
   error?: string;
@@ -103,6 +107,7 @@ export type ApiHeartbeat = {
 
 /** One monitor as the API returns it. Optional fields really are absent. */
 export type ApiMonitor = {
+  maintenance?: boolean;
   /**
    * A JSON number in practice: the server's id is an int64 and encoding/json
    * writes it unquoted. Typed as either because the render model uses strings
@@ -125,7 +130,7 @@ export type ApiMonitor = {
   body?: string;
   ssl_warn_days?: number;
   enabled: boolean;
-  status: "up" | "pending" | "down";
+  status: "up" | "pending" | "warning" | "down";
   last_check?: string | null;
   latency_ms?: number | null;
   status_code?: number;
@@ -184,6 +189,8 @@ function beatFromApi(hb: ApiHeartbeat): Beat {
     // the series rather than dropping a check the user may need to see.
     ts: toUnixMs(hb.ts) ?? 0,
     ok: hb.ok,
+    assessment: hb.assessment,
+    maintenance: hb.maintenance,
     latencyMs: toNumber(hb.latency_ms),
     statusCode: hb.status_code,
     error: hb.error,
@@ -258,6 +265,7 @@ export function fromApi(api: ApiMonitor): Monitor {
     // the other silently finds nothing, so every heartbeat would be dropped
     // and the dashboard would sit frozen while claiming to be live.
     id: String(api.id),
+    maintenance: api.maintenance,
     type: api.type,
     name: api.name,
     target: api.target,

@@ -8,6 +8,8 @@ const REASON: Record<Exclude<ReminderStatus, "scheduled">, string> = {
   paused: "Reminders suspended — monitor is paused.",
   disabled: "Reminders disabled — Do not repeat is selected.",
   flapping: "Reminders suppressed — the server reports flapping.",
+  maintenance: "Reminders suspended — a maintenance window is active.",
+  maintenance_pending: "Reminders suspended — the initial alert is pending after maintenance.",
 };
 export function ReminderSummary({ reminder, stale }: { reminder?: ReminderInfo | null; stale: boolean }) {
   return <div className="inc-reminders">

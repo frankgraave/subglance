@@ -26,7 +26,8 @@
  * a row that reads as finished while the service is still down is precisely
  * the kind of comfortable untruth this product exists to avoid.
  *
- * So there are **three** states here and never two. `acked` is a state of the
+ * Confirmed incidents distinguish open, acknowledged and resolved. An
+ * unconfirmed failure is Warning and never claims downtime or alert delivery. `acked` is a state of the
  * *response*, not of the incident, and its wording keeps the outage in the
  * present tense: "Down since 14:03, 12 min and counting. Acknowledged at
  * 14:10 — still down, repeat alerts paused."
@@ -36,17 +37,18 @@ import { formatDuration, formatMoment } from "../monitors/detail";
 import type { Incident } from "../monitors/detail";
 
 /**
- * The three states an incident row can be in.
+ * The service and response states an incident row can be in.
  *
  * Not a boolean pair. `resolved && acked` is possible on the wire — somebody
  * acked an outage that later recovered — and it is history either way, so it
  * collapses to `resolved`. What must never collapse is `acked` into
  * `resolved`: see the note at the top of the file.
  */
-export type IncidentState = "open" | "acked" | "resolved";
+export type IncidentState = "open" | "acked" | "resolved" | "warning";
 
 export function incidentState(incident: Incident): IncidentState {
   if (incident.resolved) return "resolved";
+  if (!incident.confirmed) return "warning";
   return incident.acked ? "acked" : "open";
 }
 
@@ -69,12 +71,14 @@ export function incidentState(incident: Incident): IncidentState {
  * view states anything in the present tense, and CSS cannot reach a word.
  */
 export const STATE_BADGE: Record<IncidentState, string> = {
+  warning: "Warning",
   open: "Unacked",
   acked: "Acked, still down",
   resolved: "Resolved",
 };
 
 export const STATE_BADGE_LAST_KNOWN: Record<IncidentState, string> = {
+  warning: "Was warning",
   open: "Was unacked",
   acked: "Acked, was still down",
   resolved: "Resolved",
@@ -93,6 +97,7 @@ export const stateBadge = (state: IncidentState, stale = false): string =>
  * last month reads, at a glance, as a wall of current health.
  */
 export const STATE_TONE: Record<IncidentState, "down" | "warn" | "idle"> = {
+  warning: "warn",
   open: "down",
   acked: "warn",
   resolved: "idle",
@@ -224,7 +229,9 @@ export function incidentStory(
   const live = open && !stale;
 
   const startMoment = formatMoment(incident.startedAt);
-  const opening = stale ? "Was down from" : open ? "Down since" : "Down from";
+  const opening = !incident.confirmed
+    ? stale ? "Was warning from" : open ? "Warning since" : "Warning from"
+    : stale ? "Was down from" : open ? "Down since" : "Down from";
   const began =
     startMoment === null
       ? `${opening.replace(/ (since|from)$/, "")}, start time unknown`
@@ -300,21 +307,21 @@ export function incidentStory(
 
   const parts = [
     `${began}, ${lasted}.`,
+    !incident.confirmed ? "Unconfirmed failure. No alert; excluded from uptime." : null,
     cause === null ? null : `${capitalise(cause)}.`,
     ended === null ? null : `${ended}.`,
     acked === null ? null : `${acked}.`,
-    // The absence is information too: an open incident nobody has acked is
-    // still escalating, and silence about that reads as "handled".
+    // Acknowledgement is known; delivery and maintenance suppression are not.
     state === "open"
       ? stale
         ? "Not acknowledged when we lost contact."
-        : "Not acknowledged — the repeat alerts are still escalating."
+        : "Not acknowledged."
       : null,
   ].filter((part): part is string => part !== null);
 
   return {
     state,
-    badge: stateBadge(state, stale),
+    badge: !incident.confirmed && incident.resolved ? "Warning cleared" : stateBadge(state, stale),
     began,
     lasted,
     durationS: measured,
@@ -382,7 +389,7 @@ export function incidentTimeline(
     steps.push({
       key: "confirmed",
       at: incident.confirmedAt,
-      what: "Confirmed — this is when a human was told",
+      what: "Confirmed — eligible for alerting",
     });
   }
   if (incident.acked) {

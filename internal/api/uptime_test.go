@@ -44,10 +44,11 @@ func TestMonitorUptimeReturnsStandardWindows(t *testing.T) {
 	now := time.Now()
 	for i, ok := range []bool{true, true, true, false} {
 		if err := db.RecordHeartbeat(t.Context(), store.Heartbeat{
-			MonitorID: id,
-			TS:        now.Add(-time.Duration(i+1) * time.Minute),
-			OK:        ok,
-			LatencyMS: 100,
+			MonitorID:  id,
+			TS:         now.Add(-time.Duration(i+1) * time.Minute),
+			OK:         ok,
+			Assessment: map[bool]string{true: "up", false: "down"}[ok],
+			LatencyMS:  100,
 		}); err != nil {
 			t.Fatalf("RecordHeartbeat: %v", err)
 		}
@@ -111,7 +112,7 @@ func TestMonitorUptimeDistinguishesNoDataFromZero(t *testing.T) {
 	// The all-failing monitor is the contrast: a real 0%, not an absence.
 	broken := seedUptimeMonitor(t, db)
 	if err := db.RecordHeartbeat(t.Context(), store.Heartbeat{
-		MonitorID: broken, TS: time.Now().Add(-time.Minute), OK: false,
+		MonitorID: broken, TS: time.Now().Add(-time.Minute), OK: false, Assessment: "down",
 	}); err != nil {
 		t.Fatalf("RecordHeartbeat: %v", err)
 	}
@@ -133,13 +134,13 @@ func TestMonitorUptimeHonoursWindowBoundary(t *testing.T) {
 	now := time.Now()
 	// Inside a 1h window.
 	if err := db.RecordHeartbeat(t.Context(), store.Heartbeat{
-		MonitorID: id, TS: now.Add(-10 * time.Minute), OK: true,
+		MonitorID: id, TS: now.Add(-10 * time.Minute), OK: true, Assessment: "up",
 	}); err != nil {
 		t.Fatalf("RecordHeartbeat: %v", err)
 	}
 	// Outside it.
 	if err := db.RecordHeartbeat(t.Context(), store.Heartbeat{
-		MonitorID: id, TS: now.Add(-3 * time.Hour), OK: false,
+		MonitorID: id, TS: now.Add(-3 * time.Hour), OK: false, Assessment: "down",
 	}); err != nil {
 		t.Fatalf("RecordHeartbeat: %v", err)
 	}

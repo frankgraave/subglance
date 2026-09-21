@@ -22,7 +22,7 @@ everything is running, what is broken, and since when.
 > scheduled, checked, confirmed into incidents, streamed to a live dashboard and
 > delivered to a human over five notification channels. The latest build is
 > **`v0.1.0-rc3`**, a signed release candidate with binaries for five platforms.
-> Three things remain before v0.1 itself: see [where it stands](#where-it-stands).
+> Two things remain before v0.1 itself: see [where it stands](#where-it-stands).
 
 ## Quick start
 
@@ -96,7 +96,7 @@ exists for it.
 | Authentication — sessions, API tokens, three roles | ✅ Working |
 | Dashboard, monitor detail, incidents, monitors, notifications screens | ✅ Working |
 | Signed multi-platform release builds | ✅ Working (`v0.1.0-rc3`) |
-| Maintenance windows | ⏳ Planned for v0.1 |
+| Maintenance windows — one-off and weekly, by monitor or tag | ✅ Working |
 | Latency graph on the detail view | ⏳ Planned for v0.1 |
 | Settings — password change and watchdog diagnostics | ✅ Working; remaining sections planned for v0.1 |
 
@@ -156,8 +156,6 @@ exists for it.
 
 ### Not working yet
 
-- **Maintenance windows.** There is no way to tell SubGlance that a target is
-  down on purpose, so a planned deployment alerts like an outage.
 - **A latency graph.** The detail view shows the latest latency as a number and
   the heartbeat as a bar; the trend over time is not drawn anywhere. The chart
   component the heartbeat bar already uses is the piece this needs wiring to.
@@ -209,6 +207,35 @@ before it can be merged. `develop` is protected: direct pushes are rejected.
 Working on the frontend? [AGENTS.md](AGENTS.md) is the short version of the
 house rules, and the [style guide](docs/styleguide/index.html) is the source of
 truth for every colour, size and spacing value.
+
+## Warning and uptime
+
+An unconfirmed failed check is **Warning**: visible in the monitor, heartbeat
+and failure history, with its error and captured response when available. It
+sends no failure or recovery alert. The configured consecutive-failure threshold
+promotes the monitor to Down and confirms its incident.
+
+**Only confirmed downtime counts toward uptime.** The percentage is successful
+assessed samples divided by successful plus confirmed-down samples. Warnings
+are excluded from both counts, including when a later check confirms the
+incident; confirmation never rewrites earlier checks. This is a sample ratio,
+not elapsed time. Checks while Down run every `min(configured interval, 60s)`
+with normal jitter and worker limits, so sampling is more frequent during a
+long-interval monitor's outage. Recovery restores the configured interval.
+
+History recorded before assessment was introduced keeps its raw results and
+rollups, but is excluded as legacy: those records cannot prove confirmation.
+The uptime detail shows warning and legacy counts. With no eligible samples,
+uptime is unknown (`null` in the API), never an invented 0% or 100%. A pending
+monitor has no check result yet; a paused monitor is not being measured.
+
+## Scheduled maintenance
+
+Schedule one-off or weekly maintenance for a monitor or tag group from the
+Monitors page. Measurements continue; alerts are suppressed and maintenance
+samples are excluded from uptime. An empty denominator remains unknown. See
+[scheduled maintenance](docs/maintenance.md) for API examples, timezone and DST
+rules, overlap, pause and delivery semantics.
 
 ## Licence
 

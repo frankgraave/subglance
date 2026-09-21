@@ -20,10 +20,11 @@ import (
 // It deliberately differs from store.Monitor: the wire format is a contract we
 // have to keep stable, while the storage shape must stay free to change.
 type monitorResponse struct {
-	ID     int64  `json:"id"`
-	Name   string `json:"name"`
-	Type   string `json:"type"`
-	Target string `json:"target"`
+	Maintenance *bool  `json:"maintenance,omitempty"`
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	Target      string `json:"target"`
 
 	IntervalS int  `json:"interval_s"`
 	TimeoutS  int  `json:"timeout_s"`
@@ -58,7 +59,7 @@ type monitorResponse struct {
 	IncidentID    int64      `json:"incident_id,omitempty"`
 	IncidentSince *time.Time `json:"incident_since,omitempty"`
 
-	Uptime24h float64 `json:"uptime_24h"`
+	Uptime24h *float64 `json:"uptime_24h"`
 
 	// PushURL is the full, secret URL a job pings. It is present exactly
 	// once, in the response that created the monitor, and never again —
@@ -122,11 +123,14 @@ type monitorDetailResponse struct {
 // shared by the per-monitor heartbeat listing and the optional beats embedded
 // in a monitor listing, so both cannot drift apart.
 type heartbeatResponse struct {
-	TS         time.Time `json:"ts"`
-	OK         bool      `json:"ok"`
-	LatencyMS  int       `json:"latency_ms"`
-	StatusCode int       `json:"status_code,omitempty"`
-	Error      string    `json:"error,omitempty"`
+	Maintenance bool      `json:"maintenance"`
+	Assessment  string    `json:"assessment"`
+	FailureKind string    `json:"failure_kind,omitempty"`
+	TS          time.Time `json:"ts"`
+	OK          bool      `json:"ok"`
+	LatencyMS   int       `json:"latency_ms"`
+	StatusCode  int       `json:"status_code,omitempty"`
+	Error       string    `json:"error,omitempty"`
 
 	// Response is the captured failure response, present only on failures of
 	// a monitor with capture enabled. Omitted otherwise, so every response
@@ -148,11 +152,14 @@ type responseSnapshotResponse struct {
 // describeHeartbeat converts a stored heartbeat to its wire shape.
 func describeHeartbeat(hb store.Heartbeat) heartbeatResponse {
 	out := heartbeatResponse{
-		TS:         hb.TS,
-		OK:         hb.OK,
-		LatencyMS:  hb.LatencyMS,
-		StatusCode: hb.StatusCode,
-		Error:      hb.Error,
+		TS:          hb.TS,
+		OK:          hb.OK,
+		Assessment:  hb.Assessment,
+		Maintenance: hb.Maintenance,
+		FailureKind: hb.FailureKind,
+		LatencyMS:   hb.LatencyMS,
+		StatusCode:  hb.StatusCode,
+		Error:       hb.Error,
 	}
 	if hb.Response != nil {
 		out.Response = &responseSnapshotResponse{
@@ -564,6 +571,11 @@ func validateTargetForType(typ, target string) problem {
 		if u.Host == "" {
 			return bad("target has no host")
 		}
+		// net/url accepts Unicode whitespace in hosts, including escaped
+		// forms. Inspect the decoded hostname, leaving path/query text alone.
+		if strings.ContainsFunc(u.Hostname(), unicode.IsSpace) {
+			return bad("a hostname cannot contain spaces")
+		}
 
 	case "tcp":
 		host, port, err := checker.ParseHostPort(target, 0)
@@ -618,11 +630,6 @@ func validateTargetForType(typ, target string) problem {
 		if strings.ContainsAny(target, "/?#@") {
 			return bad("a ping monitor takes a hostname or IP address, nothing after it — " +
 				"use " + host)
-		}
-		// Whitespace inside the host is never a hostname. ParseHostPort only
-		// trims the ends, so "a b.com" survives it and then fails to resolve.
-		if strings.ContainsFunc(host, unicode.IsSpace) {
-			return bad("a hostname cannot contain spaces")
 		}
 	}
 	return problem{}
@@ -790,6 +797,9 @@ func (s *Server) describeMonitor(r *http.Request, m store.Monitor) monitorRespon
 
 	ctx := r.Context()
 
+	if active, err := s.db.InMaintenance(ctx, m.ID, time.Now()); err == nil {
+		resp.Maintenance = &active
+	}
 	hb, err := s.db.LatestHeartbeat(ctx, m.ID)
 	switch {
 	case err == nil:
@@ -802,7 +812,7 @@ func (s *Server) describeMonitor(r *http.Request, m store.Monitor) monitorRespon
 		// slightly stale.
 		resp.Status = "up"
 		if !hb.OK {
-			resp.Status = "pending"
+			resp.Status = "warning"
 		}
 		ts := hb.TS
 		resp.LastCheck = &ts
@@ -836,7 +846,9 @@ func (s *Server) describeMonitor(r *http.Request, m store.Monitor) monitorRespon
 	}
 
 	if stats, err := s.db.Uptime(ctx, m.ID, 24*time.Hour); err == nil {
-		resp.Uptime24h = stats.Percentage
+		if stats.Total > 0 {
+			resp.Uptime24h = &stats.Percentage
+		}
 	} else {
 		s.log.Error("uptime", "monitor_id", m.ID, "error", err)
 	}

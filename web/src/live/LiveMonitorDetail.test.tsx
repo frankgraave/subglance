@@ -306,6 +306,6 @@ describe("LiveMonitorDetail", () => {
   it("renders an unknown long-window uptime as unknown, not as 0%", async () => {
     renderDetail();
     expect(await screen.findByText("30d")).toBeTruthy();
-    expect(document.body.textContent).toContain("no checks");
+    expect(document.body.textContent).toContain("no eligible checks");
   });
 });

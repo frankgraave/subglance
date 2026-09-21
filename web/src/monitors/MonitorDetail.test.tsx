@@ -179,7 +179,7 @@ describe("uptime windows", () => {
       windows: [window_({ window: "7d", total: 1000, down: 3, uptime: 99.7 })],
     });
     expect(screen.getByText("7d")).toBeTruthy();
-    expect(document.body.textContent).toContain("3 of 1000 failed");
+    expect(document.body.textContent).toContain("3 of 1000 confirmed down");
   });
 
   it("renders an unknown uptime as unknown, never as 0%", () => {
@@ -198,7 +198,7 @@ describe("uptime windows", () => {
     // panel — and the moment that panel gained a chrome reading of "100.00%",
     // an unrelated correct number tripped a test about a different panel.
     expect(windows?.textContent).not.toContain("0%");
-    expect(document.body.textContent).toContain("no checks");
+    expect(document.body.textContent).toContain("no eligible checks");
   });
 
   it("still renders a real 0 percent as a number", () => {
@@ -324,4 +324,27 @@ describe("the stale signal", () => {
       document.querySelector(".mon-detail")?.getAttribute("data-conn"),
     ).toBe("live");
   });
+});
+
+it("withdraws the maintenance claim when the stream goes stale", () => {
+  const maintained = monitor("down", { maintenance: true });
+  const props = { monitor: maintained, windows: [], incidents: [], now: NOW, beatWidth: WIDTH };
+  const { rerender } = render(<MonitorDetail {...props} />);
+  expect(screen.getByText("Scheduled maintenance — checks continue; alerts suppressed.")).toBeTruthy();
+  rerender(<MonitorDetail {...props} stale />);
+  expect(screen.getByText("Scheduled maintenance when we last heard — checks continued; alerts were suppressed.")).toBeTruthy();
+  expect(screen.queryByText(/checks continue;/)).toBeNull();
+});
+
+it("counts warning checks separately in the detail legend", () => {
+  view({monitor:monitor("down", {beats:[
+    {ts:NOW-180_000,ok:true,assessment:"up",latencyMs:100},
+    {ts:NOW-120_000,ok:false,assessment:"warning",latencyMs:100},
+    {ts:NOW-60_000,ok:false,assessment:"down",latencyMs:100},
+  ]})});
+  const items=Array.from(document.querySelectorAll('.legend-item'));
+  const value=(label:string)=>items.find(item=>item.querySelector('dt')?.textContent===label)?.querySelector('dd')?.textContent;
+  expect(value("Passed")).toBe("1");
+  expect(value("Failed")).toBe("1");
+  expect(value("Warnings (unconfirmed)")).toBe("1");
 });

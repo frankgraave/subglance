@@ -106,7 +106,7 @@ func (db *DB) rollupAt(ctx context.Context, now time.Time, retention time.Durati
 	// pass over all the beats would have produced.
 	agg, err := tx.ExecContext(ctx, `
 		INSERT INTO heartbeat_hourly (
-			monitor_id, bucket, up_count, down_count,
+			monitor_id, bucket, up_count, down_count, assessed_up, assessed_down, warning_count, maintenance_count,
 			latency_min, latency_max, latency_avg, latency_count
 		)
 		SELECT
@@ -114,6 +114,7 @@ func (db *DB) rollupAt(ctx context.Context, now time.Time, retention time.Durati
 			ts - (ts % ?),
 			sum(ok),
 			sum(1 - ok),
+			sum(maintenance = 0 AND assessment = 'up'), sum(maintenance = 0 AND assessment = 'down'), sum(maintenance = 0 AND assessment = 'warning'), sum(maintenance),
 			min(latency_ms),
 			max(latency_ms),
 			CAST(avg(latency_ms) AS INTEGER),
@@ -122,6 +123,10 @@ func (db *DB) rollupAt(ctx context.Context, now time.Time, retention time.Durati
 		WHERE ts < ?
 		GROUP BY monitor_id, ts - (ts % ?)
 		ON CONFLICT (monitor_id, bucket) DO UPDATE SET
+			maintenance_count = heartbeat_hourly.maintenance_count + excluded.maintenance_count,
+			assessed_up = heartbeat_hourly.assessed_up + excluded.assessed_up,
+			assessed_down = heartbeat_hourly.assessed_down + excluded.assessed_down,
+			warning_count = heartbeat_hourly.warning_count + excluded.warning_count,
 			up_count   = heartbeat_hourly.up_count   + excluded.up_count,
 			down_count = heartbeat_hourly.down_count + excluded.down_count,
 			latency_min = min(

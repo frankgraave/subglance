@@ -22,7 +22,7 @@ func seedMonitor(t *testing.T, db *DB, name string) int64 {
 func beat(t *testing.T, db *DB, id int64, ts time.Time, ok bool, latency int) {
 	t.Helper()
 	if err := db.RecordHeartbeat(context.Background(), Heartbeat{
-		MonitorID: id, TS: ts, OK: ok, LatencyMS: latency,
+		MonitorID: id, TS: ts, OK: ok, LatencyMS: latency, Assessment: map[bool]string{true: "up", false: "down"}[ok],
 	}); err != nil {
 		t.Fatalf("RecordHeartbeat: %v", err)
 	}

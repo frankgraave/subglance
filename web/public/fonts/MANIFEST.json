@@ -5,7 +5,9 @@
     "source": "https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip",
     "sha256": "9883fdd4a49d4fb66bd8177ba6625ef9a64aa45899767dde3d36aa425756b11e",
     "file": "InterVariable-4.1-subset.woff2",
-    "bytes": 48260
+    "bytes": 48336,
+    "subset_sha256": "054a7178cd36c0a3a886ee807e0062b6c9e688fa025aa934d18f55d482d3a7ed",
+    "unicodes": "U+0000-00FF,U+0100-017F,U+0192,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2190-2193,U+2212,U+FEFF,U+FFFD"
   },
   {
     "face": "CommitMono 400",
@@ -13,6 +15,8 @@
     "source": "https://github.com/eigilnikolajsen/commit-mono/releases/download/v1.143/CommitMono-1.143.zip",
     "sha256": "f7d1f26a7c7554800a996f76f5d706bf0648b936ca2a66b5bc4d46e3a2c49ed0",
     "file": "CommitMono-1.143-400-subset.woff2",
-    "bytes": 21076
+    "bytes": 21076,
+    "subset_sha256": "a6bb05b2426139aa5d3ef00b56a8b569b429e8388baab5df21f400889217fa86",
+    "unicodes": "U+0000-00FF,U+0100-017F,U+0192,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2190-2193,U+2212,U+FEFF,U+FFFD"
   }
 ]

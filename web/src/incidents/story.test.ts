@@ -185,12 +185,11 @@ describe("the sentence a reader is given", () => {
     expect(story.acked!).toMatch(/still down/i);
   });
 
-  it("says out loud that an unacknowledged incident is still escalating", () => {
-    // The absence is information. Silence about it reads as "handled", and
-    // the repeat ladder is running the whole time.
+  it("does not invent delivery status for an open incident during maintenance", () => {
+    // Incident state alone cannot prove a delivery: maintenance can mute it.
     const story = incidentStory(incident(), T0 + 720_000);
     expect(story.sentence).toMatch(/Not acknowledged/i);
-    expect(story.sentence).toMatch(/escalating/i);
+    expect(story.sentence).not.toMatch(/escalating|alerts are/i);
   });
 
   it("says ack mutes the repeats, because SUB-81 made that true", () => {
