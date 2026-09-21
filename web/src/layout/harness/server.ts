@@ -226,6 +226,8 @@ const INCIDENTS: ApiIncident[] = [
     started_at: new Date(Date.now() - 8 * 60_000).toISOString(),
     confirmed_at: new Date(Date.now() - 7 * 60_000).toISOString(),
     confirmed: true, resolved: false, acked: false, duration_s: 480,
+    reminder_count: 2, reminded_at: new Date(Date.now() - 60_000).toISOString(),
+    next_reminder_at: new Date(Date.now() + 15 * 60_000).toISOString(), reminder_status: "scheduled",
     cause: "connection refused",
     last_error: "dial tcp 10.0.4.12:443: connect: connection refused",
   },
@@ -235,6 +237,7 @@ const INCIDENTS: ApiIncident[] = [
     confirmed_at: new Date(Date.now() - 26 * 3_600_000 + 60_000).toISOString(),
     resolved_at: new Date(Date.now() - 25 * 3_600_000).toISOString(),
     confirmed: true, resolved: true, acked: false, duration_s: 3600,
+    reminder_count: 0, reminded_at: null, next_reminder_at: null, reminder_status: "resolved",
     cause: "timeout",
     last_error: "context deadline exceeded (Client.Timeout exceeded while awaiting headers)",
   },
@@ -345,6 +348,14 @@ export async function serveBuild(): Promise<Server> {
       return;
     }
 
+    const settings = url.pathname.match(/^\/api\/v1\/monitors\/(\d+)$/);
+    if (settings && req.method === "GET") {
+      const monitor = MONITORS.find((item) => String(item.id) === settings[1]);
+      res.writeHead(monitor ? 200 : 404, { "content-type": "application/json", ETag: 'W/"1"' });
+      res.end(JSON.stringify(monitor ? { ...monitor, method: "GET", expected_status: "200-299", keyword: "", keyword_mode: "absent_ok", follow_redirects: true, headers: {}, body: "", ssl_warn_days: 14, repeat_after_s: 900, min_tls_version: "1.2" } : { error: "monitor not found" }));
+      return;
+    }
+
     if (url.pathname === "/api/v1/monitors") {
       res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
       res.end(JSON.stringify({ monitors: MONITORS }));
@@ -379,9 +390,9 @@ export async function serveBuild(): Promise<Server> {
       res.end(
         JSON.stringify({
           windows: [
-            { window: "24h", uptime: 97.41, checks: 1440, failures: 37 },
-            { window: "7d", uptime: 99.02, checks: 10080, failures: 99 },
-            { window: "30d", uptime: 99.55, checks: 43200, failures: 194 },
+            { window: "24h", window_s: 86400, uptime: 97.41, total: 1440, up: 1403, down: 37 },
+            { window: "7d", window_s: 604800, uptime: 99.02, total: 10080, up: 9981, down: 99 },
+            { window: "30d", window_s: 2592000, uptime: 99.55, total: 43200, up: 43006, down: 194 },
           ],
         }),
       );

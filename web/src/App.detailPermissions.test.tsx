@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { disabledWatchdog } from "./watchdog/fixtures";
@@ -75,6 +75,7 @@ describe("detail check permissions through the real app shell", () => {
                 },
               ],
             },
+            "/api/v1/monitors/1": { id: 1, name: "Latest settings", type: "http", target: "https://api.example.com", interval_s: 20, timeout_s: 5, enabled: true, status: "up", created_at: "2026-09-01T00:00:00Z", repeat_after_s: 731 },
             "/api/v1/monitors/1/uptime": { windows: [] },
             "/api/v1/monitors/1/incidents": { incidents: [] },
             "/api/v1/monitors/1/heartbeats": { heartbeats: [] },
@@ -83,7 +84,7 @@ describe("detail check permissions through the real app shell", () => {
             throw new Error(`Unexpected request: ${path}`);
           return new Response(JSON.stringify(responses[path]), {
             status: 200,
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ETag: 'W/"1"' },
           });
         }),
       );
@@ -97,6 +98,14 @@ describe("detail check permissions through the real app shell", () => {
       expect(screen.queryByRole("button", { name: "Check now" }) !== null).toBe(
         allowed,
       );
+      await screen.findByText("Nothing has gone wrong yet.");
+      expect(screen.queryByRole("button", { name: "Edit monitor" }) !== null).toBe(allowed);
+      if (allowed) {
+        fireEvent.click(screen.getByRole("button", { name: "Edit monitor" }));
+        expect((await screen.findByLabelText("Name") as HTMLInputElement).value).toBe("Latest settings");
+        expect((screen.getByLabelText("Repeat alert base (seconds)") as HTMLInputElement).value).toBe("731");
+        expect(screen.queryByRole("alert")).toBeNull();
+      }
     },
   );
 });

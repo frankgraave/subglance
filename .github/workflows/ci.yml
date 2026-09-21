@@ -263,8 +263,8 @@ jobs:
           path="$(npm run --silent test:browser:setup | awk '{print $NF}')"
           echo "PUPPETEER_EXECUTABLE_PATH=$path" >> "$GITHUB_ENV"
 
-      # Response-history browser tests exercise the real Go API, so use the
-      # same pinned toolchain as the embedded-dashboard smoke test below.
+      # Browser integration tests exercise the real Go API, so use the same
+      # pinned toolchain as the embedded-dashboard smoke test below.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: ${{ env.GO_VERSION }}

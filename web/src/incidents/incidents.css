@@ -57,6 +57,14 @@
   gap: var(--space-2);
 }
 
+.inc-reminders {
+  flex-basis: 100%;
+  padding: var(--space-2) var(--space-4);
+  color: var(--ink-2);
+  font-size: var(--type-helper);
+  line-height: var(--lead-prose);
+}
+
 .inc-list {
   display: flex;
   flex-direction: column;

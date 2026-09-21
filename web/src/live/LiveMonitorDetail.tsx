@@ -6,6 +6,7 @@ import { createQueryClient } from "./queryClient";
 import { checkMonitorNow, type CheckOutcome } from "../monitors/inventoryApi";
 import { useLiveMonitors } from "./useLiveMonitors";
 import { useNow } from "./useNow";
+import { EditMonitorDrawer } from "../monitors/EditMonitorDrawer";
 import { MonitorDetail } from "../monitors/MonitorDetail";
 import { detailQueryKey, fetchMonitorDetail } from "../monitors/detail";
 import { fetchResponseHistory, responseHistoryQueryKey } from "../monitors/responseHistoryApi";
@@ -52,6 +53,10 @@ export function LiveMonitorDetail({
   const { monitors, status, loading, error } = useLiveMonitors(live);
   const now = useNow();
   const queryClient = useQueryClient();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  // Leaving a monitor ends its edit session, even when the next id is missing.
+  // Clear before children commit so returning cannot reopen or focus a drawer.
+  if (editingId !== null && editingId !== id) setEditingId(null);
 
   const detail = useQuery({
     queryKey: detailQueryKey(id),
@@ -184,6 +189,8 @@ export function LiveMonitorDetail({
   }
 
   return (
+    <>
+    {canWrite && editingId === id && <EditMonitorDrawer key={id} id={id} onClose={() => setEditingId(null)} />}
     <MonitorDetail
       monitor={monitor}
       windows={detail.data?.windows ?? []}
@@ -205,7 +212,8 @@ export function LiveMonitorDetail({
        * truth. Only "live" earns the live colours.
        */
       stale={status !== "live"}
-      onAck={onAck}
+      onAck={canWrite ? onAck : undefined}
+      onEdit={canWrite ? () => setEditingId(id) : undefined}
       onCheckNow={canWrite ? onCheckNow : undefined}
       checking={checks[id]?.checking ?? false}
       checkResult={checks[id]?.result}
@@ -213,6 +221,7 @@ export function LiveMonitorDetail({
       ackingIds={ackingIds}
       ackError={ackMutation.error instanceof Error ? ackMutation.error : null}
     />
+    </>
   );
 }
 

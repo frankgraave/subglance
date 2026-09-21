@@ -3376,7 +3376,7 @@ components:
         the first check failed, `confirmed_at` is when the failure count
         crossed the monitor's threshold and a human was told. Support
         conversations turn on that gap.
-      required: [id, monitor_id, started_at, confirmed, resolved, acked, duration_s]
+      required: [id, monitor_id, started_at, confirmed, resolved, acked, duration_s, reminder_count, reminded_at, next_reminder_at, reminder_status]
       properties:
         id:
           type: integer
@@ -3424,6 +3424,33 @@ components:
         last_error:
           type: string
           description: The most recent failure message seen during the incident.
+        reminder_count:
+          type: integer
+          minimum: 0
+          description: |
+            Reminder issuances recorded for this incident. Zero is explicit.
+            The stamp precedes notifier dispatch; this is not a count of
+            successful channel deliveries.
+        reminded_at:
+          type: [string, 'null']
+          format: date-time
+          description: Last recorded reminder issuance, or null before the first.
+        next_reminder_at:
+          type: [string, 'null']
+          format: date-time
+          description: |
+            Next eligible reminder time according to the same escalating clock
+            used by the runner, using the current monitor configuration and
+            persisted incident count/timestamps. It may already be due; it is
+            not a delivery promise. Null while reminder_status is not scheduled.
+        reminder_status:
+          type: string
+          enum: [scheduled, unconfirmed, acknowledged, resolved, paused, disabled, flapping]
+          description: |
+            Why a next reminder is scheduled or withheld. Resolved, acknowledged,
+            unconfirmed, paused and disabled are checked in that order before
+            live flapping suppression. Reading these fields never advances the
+            clock or queues a notification.
     IncidentList:
       type: object
       required: [incidents]
