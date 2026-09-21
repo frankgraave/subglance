@@ -269,7 +269,7 @@ The interval is `repeat_after_s` per monitor. It is the delay before the *first*
 reminder; the gaps after it grow from there. Set it to `0` to switch reminders
 off for a monitor.
 
-Use **Repeat alerts** in the create form's Advanced options or the edit drawer.
+Use **Repeat alerts** in the create form or the edit drawer.
 Choose **Do not repeat**, or enter any whole-number base from 60 to 86400
 seconds. The form rejects smaller nonzero values before sending a request:
 under one minute, reminders would become too frequent. The default is 900

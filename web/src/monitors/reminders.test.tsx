@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import { incidentFromApi } from "./detail";
+import { formatMoment, incidentFromApi } from "./detail";
 import { MonitorDetail } from "./MonitorDetail";
 import { fromApi } from "./types";
 
@@ -18,6 +18,13 @@ it("shows the server's precise due time even if already due, and counts issued n
   expect(due?.getAttribute("datetime")).toBe(api.next_reminder_at);
   expect(screen.getByText(/not a delivery guarantee/i)).toBeTruthy();
   expect(document.body.textContent).not.toMatch(/delivered/);
+});
+it.each([api.next_reminder_at, "2026-12-31T23:07:43-05:00"])("formats reminder due time with the shared incident timestamp semantics: %s", (nextAt) => {
+  view({ next_reminder_at: nextAt });
+  const due = screen.getByText(/next reminder due/i).querySelector("time");
+  expect(due?.getAttribute("datetime")).toBe(nextAt);
+  expect(due?.textContent).toBe(formatMoment(Date.parse(nextAt)));
+  expect(screen.getByText(/not a delivery guarantee/i)).toBeTruthy();
 });
 it("preserves meaningful zero without inventing an already-issued reminder", () => {
   view({ reminder_count: 0, reminded_at: null });

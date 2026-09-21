@@ -54,6 +54,9 @@ export function LiveMonitorDetail({
   const now = useNow();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Leaving a monitor ends its edit session, even when the next id is missing.
+  // Clear before children commit so returning cannot reopen or focus a drawer.
+  if (editingId !== null && editingId !== id) setEditingId(null);
 
   const detail = useQuery({
     queryKey: detailQueryKey(id),

@@ -99,6 +99,14 @@ for (const theme of ["dark", "light"]) for (const width of [390, 1440]) describe
     try {
       expect(await page.$eval(".mon-detail-windows", (node) => node.textContent)).not.toContain("undefined");
       expect(await page.$eval(".inc-reminders time", (node) => node.getAttribute("datetime"))).toBe("2026-09-20T12:37:17Z");
+      const timestamp = await page.$eval(".inc-reminders time", (node) => ({
+        text: node.textContent,
+        // The shared incident format, in this browser's own locale and zone.
+        expected: new Date(node.getAttribute("datetime")!).toLocaleString(undefined, {
+          year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+        }),
+      }));
+      expect(timestamp.text).toBe(timestamp.expected);
       expect(await page.$eval(".inc-reminders", (node) => node.textContent)).toContain("2 reminders issued");
       await auditNewSurface(page, ".inc-reminders");
       await proof(page, `reminders-${theme}-${width}`);
@@ -152,6 +160,8 @@ it.each([0, 60, 731, 86400])("creates repeat base %s and reads the exact persist
   const f = await session(390, "dark"); const { page } = f;
   try {
     await page.goto(`${server.url}/monitors/new`, { waitUntil: "domcontentloaded" }); await page.waitForSelector('.add-form');
+    expect(await page.$eval('.add-advanced', (node) => (node as HTMLDetailsElement).open)).toBe(false);
+    expect(await page.$eval('.repeat-field', (node) => node.closest('.add-advanced') === null && node.checkVisibility())).toBe(true);
     await fill(page, '.add-form input[placeholder^="example.com"]', "https://created.example");
     await page.click('.add-advanced summary');
     await page.select('.add-advanced select', "http");

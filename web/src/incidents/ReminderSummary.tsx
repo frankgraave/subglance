@@ -1,4 +1,5 @@
 import type { ReminderInfo, ReminderStatus } from "./reminders";
+import { formatMoment } from "../monitors/detail";
 
 const REASON: Record<Exclude<ReminderStatus, "scheduled">, string> = {
   unconfirmed: "Reminders wait for incident confirmation.",
@@ -14,7 +15,7 @@ export function ReminderSummary({ reminder, stale }: { reminder?: ReminderInfo |
       {stale && <p>Last reported reminder schedule — connection is stale.</p>}
       <p>{reminder.count} {reminder.count === 1 ? "reminder" : "reminders"} issued.</p>
       {reminder.status === "scheduled" && reminder.nextAt !== null
-        ? <><p>Next reminder due: <time dateTime={reminder.nextAt}>{new Date(reminder.nextAt).toLocaleString()}</time>.</p><p>This is an eligibility time, not a delivery guarantee.</p></>
+        ? <><p>Next reminder due: <time dateTime={reminder.nextAt}>{formatMoment(Date.parse(reminder.nextAt))}</time>.</p><p>This is an eligibility time, not a delivery guarantee.</p></>
         : <p>{REASON[reminder.status as Exclude<ReminderStatus, "scheduled">]}</p>}
     </>}
   </div>;

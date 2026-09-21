@@ -104,9 +104,9 @@ it("places a checkbox API rejection beside its actual control", async () => {
   render(<EditMonitorForm monitor={inventoryFromApi(raw)} onSave={onSave} />);
   change("Name", "Rename"); save();
   expect((await screen.findByRole("alert")).textContent).toBe("Redirects are not allowed");
-  const checkbox = screen.getByLabelText("Follow redirects");
+  const checkbox = screen.getByLabelText<HTMLInputElement>("Follow redirects");
   expect(checkbox.getAttribute("aria-invalid")).toBe("true");
-  expect(document.activeElement).toBe(checkbox);
+  await waitFor(() => expect(document.activeElement).toBe(checkbox));
 });
 
 it.each(["save", "preview"])("opens and focuses a TLS floor rejection from %s with help and error associations", async (source) => {
@@ -116,7 +116,7 @@ it.each(["save", "preview"])("opens and focuses a TLS floor rejection from %s wi
   )));
   const onSave = vi.fn().mockRejectedValue(new ApiError(400, message, null, "min_tls_version"));
   render(<EditMonitorForm monitor={inventoryFromApi(raw)} onSave={onSave} />);
-  const select = screen.getByLabelText("Minimum TLS version");
+  const select = screen.getByLabelText<HTMLSelectElement>("Minimum TLS version");
   const panel = select.closest("details")!;
   expect(panel.open).toBe(false);
   if (source === "save") { change("Name", "Rename"); save(); }
@@ -124,8 +124,10 @@ it.each(["save", "preview"])("opens and focuses a TLS floor rejection from %s wi
   const error = await screen.findByRole("alert");
   expect(error.textContent).toBe(message);
   expect(select.getAttribute("aria-invalid")).toBe("true");
-  expect(panel.open).toBe(true);
-  expect(document.activeElement).toBe(select);
+  await waitFor(() => {
+    expect(panel.open).toBe(true);
+    expect(document.activeElement).toBe(select);
+  });
   expect((select.getAttribute("aria-describedby") ?? "").split(" ")
     .map((id) => document.getElementById(id)?.textContent)).toEqual([
       expect.stringMatching(/floor SubGlance dials with/i), message,
