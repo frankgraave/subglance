@@ -99,6 +99,7 @@ export type MonitorDetailProps = {
   ackError?: Error | null;
   /** Absent for read-only users; push monitors never render this action. */
   onCheckNow?: () => void;
+  onEdit?: () => void;
   checking?: boolean;
   checkResult?: CheckOutcome;
   checkError?: Error | null;
@@ -119,6 +120,7 @@ export function MonitorDetail({
   ackingIds = EMPTY_ACKING,
   ackError = null,
   onCheckNow,
+  onEdit,
   checking = false,
   checkResult,
   checkError = null,
@@ -267,11 +269,12 @@ export function MonitorDetail({
         title={push === undefined ? "Recent checks" : "Recent reports"}
         icon={<IconPulse />}
         headingLevel={2}
-        action={push === undefined && onCheckNow !== undefined ? (
-          <button type="button" className="add-button" onClick={onCheckNow} disabled={checking}>
+        action={<div className="add-actions">
+          {onEdit && <button type="button" className="add-button" aria-label="Edit monitor" onClick={onEdit}>Edit monitor</button>}
+          {push === undefined && onCheckNow !== undefined && <button type="button" className="add-button mon-check-now" onClick={onCheckNow} disabled={checking}>
             {checking ? "Checking…" : "Check now"}
-          </button>
-        ) : undefined}
+          </button>}
+        </div>}
       >
         <Panel>
           {push === undefined && checkError !== null ? (
@@ -453,6 +456,7 @@ export function MonitorDetail({
                   acking={ackingIds.has(incident.id)}
                   stale={stale}
                   past={incident.resolved}
+                  showReminders
                 />
               ))}
             </ul>

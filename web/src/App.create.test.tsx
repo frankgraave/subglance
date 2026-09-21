@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { disabledWatchdog } from "./watchdog/fixtures";
 
 /**
  * SUB-99, part 1, as the user meets it: adding a monitor is the first thing
@@ -84,6 +85,7 @@ beforeEach(() => {
     "fetch",
     vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
+      if (url === "/api/v1/watchdog") return Promise.resolve(new Response(JSON.stringify(disabledWatchdog)));
       const body = url.includes("/auth/me")
         ? USER
         : { monitors: created ? [ALPHA, BRAVO] : [ALPHA] };

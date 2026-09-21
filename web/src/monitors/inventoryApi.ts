@@ -125,6 +125,17 @@ export async function checkMonitorNow(
 
 /** The fields the edit drawer may change. All optional; omitted is untouched. */
 export type MonitorPatch = {
+  target?: string;
+  method?: string;
+  expected_status?: string;
+  keyword?: string;
+  keyword_mode?: string;
+  follow_redirects?: boolean;
+  headers?: Record<string, string>;
+  body?: string;
+  ssl_warn_days?: number;
+  push_interval_s?: number;
+  push_grace_s?: number;
   name?: string;
   interval_s?: number;
   timeout_s?: number;
@@ -158,6 +169,7 @@ export async function patchMonitor(
   version?: string | null,
   signal?: AbortSignal,
 ): Promise<void> {
+  requireMonitorVersion(version);
   await apiRequest(`/api/v1/monitors/${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: {
@@ -169,6 +181,13 @@ export async function patchMonitor(
     body: JSON.stringify(patch),
     signal,
   });
+}
+
+/** Never use a wildcard or silently downgrade to an unconditional write. */
+export function requireMonitorVersion(version: string | null | undefined): asserts version is string {
+  if (typeof version !== "string" || !/^(?:W\/)?"[^"\s]+"$/.test(version)) {
+    throw new Error("A usable monitor version is unavailable. Reload the latest settings before saving.");
+  }
 }
 
 /** One monitor and the version stamp that was true of it at that moment. */
@@ -196,8 +215,11 @@ export async function fetchMonitorForEdit(
     signal,
   });
   const body = (await res.json()) as ApiMonitor;
+  const etag = res.headers.get("ETag");
+  requireMonitorVersion(etag);
+  if (String(body.id) !== id) throw new Error("The settings response named a different monitor. Reload to try again.");
   return {
     monitor: inventoryFromApi(body as Parameters<typeof inventoryFromApi>[0]),
-    etag: res.headers.get("ETag"),
+    etag,
   };
 }

@@ -209,6 +209,7 @@ function bodyFor(
       type: "push",
       push_interval_s: values.pushIntervalS,
       push_grace_s: values.pushGraceS,
+      repeat_after_s: values.repeatAfterS,
     };
   }
   return {
@@ -219,6 +220,7 @@ function bodyFor(
     // TypeScript, drifting from the Go one.
     type: resolvedType(values, state),
     target: resolvedTarget(values, state),
+    repeat_after_s: values.repeatAfterS,
     interval_s: values.intervalS,
     timeout_s: values.timeoutS,
     // Omitted entirely when the user expressed no opinion. The API rejects an

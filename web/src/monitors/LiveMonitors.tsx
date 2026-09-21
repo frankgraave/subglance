@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { registerNavigationCleanup } from "../shell/leaveGuard";
 import {
   QueryClientProvider,
   useMutation,
@@ -9,6 +10,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { createQueryClient } from "../live/queryClient";
 import { Maintenance } from "./Maintenance";
 import { MonitorsView } from "./MonitorsView";
+import { changeTags, type TagOperation } from "./bulkTagsApi";
 import {
   checkMonitorNow,
   deleteMonitor,
@@ -16,6 +18,7 @@ import {
   fetchMonitorForEdit,
   inventoryQueryKey,
   patchMonitor,
+  requireMonitorVersion,
   setMonitorPaused,
 } from "./inventoryApi";
 import type {
@@ -245,6 +248,7 @@ export function LiveMonitors({
         try {
           const loaded = await forEdit(id);
           if (editSession.current !== session) return;
+          requireMonitorVersion(loaded.etag);
           setEditing(loaded);
         } catch (error) {
           if (editSession.current !== session) return;
@@ -265,6 +269,8 @@ export function LiveMonitors({
     setEditLoadError(null);
   }, []);
 
+  useEffect(() => registerNavigationCleanup(closeEdit), [closeEdit]);
+
   /*
    * Saving sends the validator that came with the values on screen.
    *
@@ -277,8 +283,13 @@ export function LiveMonitors({
     async (id: string, body: MonitorPatch) => {
       clearError(id);
       const session = editSession.current;
-      await patch(id, body, editing?.etag ?? null);
-      await queryClient.invalidateQueries({ queryKey: inventoryQueryKey });
+      requireMonitorVersion(editing?.etag);
+      await patch(id, body, editing.etag);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["monitors"] }),
+        queryClient.invalidateQueries({ queryKey: ["monitor-detail", id] }),
+        queryClient.invalidateQueries({ queryKey: ["incidents", "open"] }),
+      ]);
       /*
        * A successful edit invalidates its own ETag: the write bumped
        * `updated_at`, so the stamp in hand is now stale and reusing it would
@@ -296,6 +307,19 @@ export function LiveMonitors({
     },
     [clearError, editing, patch, queryClient],
   );
+
+  const onTagChange = useCallback(async (operation: TagOperation, etag?: string) => {
+    const result = await changeTags(operation, etag);
+    if (etag !== undefined) {
+      // Dashboard (including inactive infinite-stale data) and inventory share
+      // this prefix. Detail has its own key; SSE frames do not carry tags.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["monitors"] }),
+        queryClient.invalidateQueries({ queryKey: ["monitor-detail"] }),
+      ]);
+    }
+    return result;
+  }, [queryClient]);
 
   const onCreated = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: inventoryQueryKey });
@@ -318,6 +342,7 @@ export function LiveMonitors({
       editError={editLoadError}
       onEditClose={closeEdit}
       onCreated={onCreated}
+      onTagChange={canWrite ? onTagChange : undefined}
       busyIds={busyIds}
       checkingIds={checkingIds}
       checkResults={checkResults}

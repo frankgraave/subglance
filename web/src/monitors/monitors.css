@@ -1110,7 +1110,9 @@
      the token did not exist yet is gone. */
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
-  color: var(--down);
+  /* Down ink on the nested panel measures 4.49:1 in light. The rail/lamp
+     carries color; the failure sentence must remain readable. */
+  color: var(--ink-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1210,6 +1212,13 @@
   color: var(--down);
 }
 
+/* New edit/reminder copy clears AA without changing the status palette. */
+.edit-form .add-help,
+.edit-form .add-button-quiet,
+.repeat-field .add-help { color: var(--ink-2); }
+.edit-form .add-field-error,
+.edit-form .add-result,
+.repeat-field .add-field-error { color: var(--ink); }
 .add-field-error > svg {
   display: inline-block;
   width: var(--size-icon-sm);

@@ -616,7 +616,7 @@ describe("the status rail stops asserting when the stream dies", () => {
           if (!el) return { missing: true };
           const live = window.getComputedStyle(el).color;
           const down = window.getComputedStyle(document.documentElement)
-            .getPropertyValue("--down").trim();
+            .getPropertyValue(${JSON.stringify(layout === "compact" ? "--ink-2" : "--down")}).trim();
           const ink3 = window.getComputedStyle(document.documentElement)
             .getPropertyValue("--ink-3").trim();
           screen.setAttribute("data-conn", "stale");
@@ -643,11 +643,11 @@ describe("the status rail stops asserting when the stream dies", () => {
           drain.missing,
           `no ${selector} in the ${layout} layout; the fixture must have a failing monitor`,
         ).toBe(false);
-        // It starts as the status colour — otherwise there is nothing to drain
-        // and this assertion is about the wrong element.
+        // Compact's nested panel needs ink-2 for AA (DESIGN.md §2.6); the
+        // other layouts keep status ink. All three must still drain to ink-3.
         expect(
           drain.live,
-          `${selector} must print the failure in var(--down) while live`,
+          `${selector} must use its documented live ink role`,
         ).toBe(drain.downRgb);
         expect(
           drain.stale,

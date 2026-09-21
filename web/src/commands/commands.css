@@ -1,0 +1,80 @@
+/* The existing command mockup, on the native modal top layer. */
+.command-menu {
+  width: min(calc(100% - var(--space-8)), calc(var(--size-pane-sm) * 2));
+  max-height: calc(100dvh - var(--space-8));
+  margin: 18dvh auto auto;
+  padding: 0;
+  color: var(--ink);
+  background: var(--surface-float);
+  border: 1px solid var(--border-hi);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-float);
+  overflow: hidden;
+}
+.command-menu[open] { display: flex; flex-direction: column; }
+.command-menu::backdrop { background: var(--scrim); }
+.command-menu input {
+  flex: none;
+  width: 100%;
+  padding: var(--space-4);
+  font-size: var(--type-row);
+  line-height: var(--lead-row);
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--border-control);
+}
+.command-menu input::placeholder { color: var(--ink-2); }
+.command-menu [role="listbox"] {
+  min-height: 0;
+  max-height: min(50dvh, var(--size-pane-md));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-1h);
+}
+.command-menu [role="option"] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--ink);
+  font-size: var(--type-body);
+  line-height: var(--lead-body);
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.command-menu [role="option"] span {
+  color: var(--ink-2);
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+}
+.command-menu [role="option"][aria-selected="true"],
+.command-menu [role="option"]:hover { background: var(--surface-hi); }
+.command-menu [aria-disabled="true"] { cursor: wait; }
+.command-menu p { padding: var(--space-2) var(--space-4); color: var(--ink-2); font-size: var(--type-helper); line-height: var(--lead-helper); }
+.command-menu button:not([role="option"]) {
+  padding: var(--space-2) var(--space-4);
+  color: var(--ink-2);
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  cursor: pointer;
+}
+.command-menu :is(input, button):focus-visible {
+  outline: var(--outline-ring-w) solid var(--accent-ring);
+  outline-offset: calc(-1 * var(--outline-ring-w));
+}
+[data-theme="dark"] .command-menu :is(input, button):focus-visible {
+  outline-color: var(--accent-ring-dark);
+}
+.shell-command-launcher .shell-search-kbd { color: var(--ink-2); border: 0; padding: 0; }
+.shell-command-launcher > svg { display: none; }
+@media (max-width: 640px) {
+  .command-menu { margin-top: var(--space-6); }
+  .command-menu input { font-size: var(--type-nozoom); line-height: var(--lead-nozoom); }
+  .shell-command-launcher > svg { display: block; }
+}

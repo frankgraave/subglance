@@ -528,9 +528,8 @@
 .shell-search-input::placeholder { color: var(--ink-4); }
 
 /*
- * The shortcut hint. It does nothing yet, and that is a decision rather than
- * an oversight: the palette is later work, and this is `aria-hidden` so no
- * screen reader announces a shortcut the product does not honour.
+ * The small keycap inside the global command launcher. The button owns the
+ * accessible name and shortcut; the keycap is its visual annotation.
  */
 .shell-search-kbd {
   @apply face-mono;
