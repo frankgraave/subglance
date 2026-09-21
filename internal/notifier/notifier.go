@@ -454,10 +454,12 @@ func (n *Notifier) attempt(ctx context.Context, d store.Delivery) error {
 }
 
 // retryMaintenance keeps the delivery pending until its prerequisite can be
-// evaluated and persisted. A failed retry write reaches Run so even a database
+// evaluated and persisted, without charging an attempt before Send. Repeated
+// prerequisite failures keep the current delivery backoff. A failed deferral
+// write reaches Run so even a database
 // that cannot write cannot turn the outbox into a busy loop.
 func (n *Notifier) retryMaintenance(ctx context.Context, d store.Delivery, cause error) error {
-	return n.db.MarkRetry(ctx, d.ID, cause.Error(), n.now().Add(backoff(d.Attempts+1)))
+	return n.db.DeferDelivery(ctx, d.ID, cause.Error(), n.now().Add(backoff(d.Attempts+1)))
 }
 
 // fail dead-letters a delivery.

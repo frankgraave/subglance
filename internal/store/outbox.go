@@ -160,6 +160,19 @@ func (db *DB) MarkRetry(ctx context.Context, id int64, cause string, next time.T
 	return nil
 }
 
+// DeferDelivery postpones a pending delivery whose prerequisites could not be
+// evaluated. No send was attempted, so the channel's retry budget is preserved.
+func (db *DB) DeferDelivery(ctx context.Context, id int64, cause string, next time.Time) error {
+	_, err := db.Writer.ExecContext(ctx, `
+  UPDATE notif_outbox
+     SET last_error = ?, next_attempt_at = ?, updated_at = ?
+   WHERE id = ? AND status = ?`, cause, next.Unix(), time.Now().Unix(), id, OutboxPending)
+	if err != nil {
+		return fmt.Errorf("defer delivery %d: %w", id, err)
+	}
+	return nil
+}
+
 // MarkFailed moves a delivery to the dead letter: its attempts ran out.
 func (db *DB) MarkFailed(ctx context.Context, id int64, cause string) error {
 	now := time.Now().Unix()

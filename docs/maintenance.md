@@ -99,3 +99,5 @@ that do not emit heartbeats. A failed schedule read is not
 presented as proof that no maintenance exists. If the runner cannot read schedules,
 it reports the persistence error instead of recording an incorrectly classified
 sample; the notifier leaves a queued delivery unsent until it can evaluate it.
+Evaluation and decision-persistence failures defer delivery with backoff and a
+recorded error; they do not consume the channel's send-attempt budget.
