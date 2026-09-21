@@ -155,12 +155,13 @@ function tooltipReadout(
   slot: Extract<Slot, { kind: "beat" }>,
   stale: boolean,
 ): { rows: TooltipRow[]; unit?: string } {
-  const marker: ChipStatus = slot.ok
+  const warning = slot.assessment === "warning";
+  const marker: ChipStatus = warning ? "warn" : slot.ok
     ? slot.latencyMs === null
       ? "warn"
       : "up"
     : "down";
-  const status = slot.ok
+  const status = warning ? "Warning" : slot.ok
     ? slot.latencyMs === null
       ? "No timing"
       : "Up"
@@ -183,7 +184,7 @@ function tooltipReadout(
       value: `${slot.downCount}`,
       ...(stale
         ? { status: "Not updating" }
-        : { marker: "down" as ChipStatus, status: "Down" }),
+        : { marker, status }),
     });
   }
   return { rows, unit: mixed ? undefined : latencyUnit(slot.latencyMs) };
@@ -229,7 +230,8 @@ function describe(label: string, slots: Slot[]): string {
   const window = span
     ? ` between ${formatTime(span[0])} and ${formatTime(span[1])}`
     : "";
-  const health = failed === 0 ? "all passed" : `${failed} failed`;
+  const warnings = slots.reduce((n,s) => n + (s.kind === "beat" ? (s.warningCount ?? 0) : 0), 0);
+  const health = warnings > 0 ? `${failed} failed, ${warnings} warning (unconfirmed; excluded from uptime)` : failed === 0 ? "all passed" : `${failed} failed`;
   return `${label}: ${checks} checks${window}, ${health}. Bar height is latency; a failed check is drawn full height.`;
 }
 
@@ -479,10 +481,11 @@ export function HeartbeatBar({
   );
 
   const uptime = summarise(slots);
+  const eligible = beats.filter((b) => b.assessment === "up" || b.assessment === "down");
   const pct =
-    uptime.checks === 0
+    eligible.length === 0
       ? "—"
-      : `${(((uptime.checks - uptime.failed) / uptime.checks) * 100).toFixed(2)}%`;
+      : `${((eligible.filter((b) => b.assessment === "up").length / eligible.length) * 100).toFixed(2)}%`;
 
   // The chrome states the window it is drawing, not the clock: a bar showing
   // yesterday's history must not label itself with now.
@@ -492,7 +495,7 @@ export function HeartbeatBar({
       breakdown={
         uptime.checks === 0
           ? "no checks yet"
-          : `${uptime.checks} checks · ${uptime.failed} failed`
+          : eligible.length === 0 ? "No eligible checks" : `${eligible.length} eligible checks · ${eligible.filter((b) => b.assessment === "down").length} confirmed down`
       }
       start={uptime.span ? formatCorner(uptime.span[0]) : undefined}
       end={uptime.span ? formatCorner(uptime.span[1]) : undefined}
@@ -541,7 +544,7 @@ export function HeartbeatBar({
                         : formatTime(slot.to)}
                     </td>
                     <td>
-                      {slot.ok
+                      {slot.assessment === "warning" ? "Warning — unconfirmed, no alert" : slot.ok
                         ? "passed"
                         : `failed${slot.error ? `: ${slot.error}` : ""}`}
                       {slot.count > 1 ? ` (${slot.count} checks)` : ""}

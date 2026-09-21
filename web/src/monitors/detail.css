@@ -144,6 +144,7 @@
    would state the same thing twice in a louder voice. */
 .mon-detail-status[data-status="down"] { border-color: var(--down); }
 .mon-detail-status[data-status="pending"] { border-color: var(--warn); }
+.mon-detail-status[data-status="warning"] { border-color: var(--warn); }
 .mon-detail-status[data-status="waiting"] { border-color: var(--idle); }
 
 /* The lamp sits inside the pill now, so the old baseline nudge is gone: the
@@ -153,7 +154,7 @@
 }
 
 .mon-detail-age {
-  color: var(--ink-3);
+  color: var(--ink-2);
 }
 
 /*
@@ -258,7 +259,7 @@
 .mon-detail-window > dt {
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
-  color: var(--ink-3);
+  color: var(--ink-2);
 }
 
 /* The mono role, so 99.9% and 100% line up their decimal points when the
@@ -274,7 +275,7 @@
 .mon-detail-window-detail {
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
-  color: var(--ink-4);
+  color: var(--ink-2);
 }
 
 /*
@@ -308,4 +309,9 @@
     font-size: var(--type-row);
     line-height: var(--lead-row);
   }
+}
+
+.mon-detail-uptime-note {
+  color: var(--ink-2);
+  margin-bottom: var(--space-4);
 }

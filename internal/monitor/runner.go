@@ -394,7 +394,7 @@ func (r *Runner) restore(ctx context.Context) error {
 	}
 
 	for _, inc := range incidents {
-		status := state.StatusPending
+		status := state.StatusWarning
 		if inc.Confirmed() {
 			status = state.StatusDown
 		}
@@ -490,6 +490,7 @@ func (r *Runner) jobs(ctx context.Context) ([]scheduler.Job, error) {
 			Monitor:      toCheckerMonitor(m),
 			Interval:     time.Duration(m.IntervalS) * time.Second,
 			NeverChecked: checked != nil && !seen,
+			Down:         r.engine.Status(m.ID) == state.StatusDown,
 		})
 	}
 
@@ -625,6 +626,10 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 		FailureThreshold: o.Monitor.Retries,
 	})
 
+	hb.Assessment = string(tr.To)
+	hb.FailureKind = string(o.Result.Kind)
+	r.sch.SetDown(o.Monitor.ID, tr.To == state.StatusDown)
+
 	var captureReason store.CaptureReason
 	hb.Response, captureReason = snapshotToStore(o.Result, tr.SnapshotsSpent, tr.Flapping)
 	if !o.Result.OK && o.Result.Response == nil &&
@@ -666,10 +671,12 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 		MonitorID: o.Monitor.ID,
 		At:        hb.TS,
 		Payload: heartbeatPayload{
-			OK:         hb.OK,
-			LatencyMS:  hb.LatencyMS,
-			StatusCode: hb.StatusCode,
-			Error:      hb.Error,
+			OK:          hb.OK,
+			Assessment:  hb.Assessment,
+			FailureKind: hb.FailureKind,
+			LatencyMS:   hb.LatencyMS,
+			StatusCode:  hb.StatusCode,
+			Error:       hb.Error,
 		},
 	})
 
@@ -723,10 +730,12 @@ func snapshotToStore(res checker.Result, snapshotsSpent int, flapping bool) (*st
 // monitor ID that the envelope already provides, and pinning the wire format
 // here means a schema change cannot silently alter the public API.
 type heartbeatPayload struct {
-	OK         bool   `json:"ok"`
-	LatencyMS  int    `json:"latency_ms"`
-	StatusCode int    `json:"status_code,omitempty"`
-	Error      string `json:"error,omitempty"`
+	Assessment  string `json:"assessment"`
+	FailureKind string `json:"failure_kind,omitempty"`
+	OK          bool   `json:"ok"`
+	LatencyMS   int    `json:"latency_ms"`
+	StatusCode  int    `json:"status_code,omitempty"`
+	Error       string `json:"error,omitempty"`
 }
 
 // statusPayload describes a monitor changing state.

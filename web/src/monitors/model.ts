@@ -396,6 +396,7 @@ export function summarise(monitors: readonly Monitor[]): Summary {
   const summary: Summary = {
     up: 0,
     down: 0,
+    warning: 0,
     pending: 0,
     paused: 0,
     waiting: 0,
@@ -446,7 +447,7 @@ export function describeTransitions(
   });
   if (changed.length === 0) return null;
 
-  const { down, up, pending, paused, total } = summarise(next);
+  const { down, up, warning, pending, paused, total } = summarise(next);
   const downNames = names(next.filter((m) => m.status === "down").sort(byName));
 
   if (down > 0) {
@@ -454,11 +455,13 @@ export function describeTransitions(
       `${plural(down, "monitor")} down: ${downNames}.`,
       `${up} up.`,
     ];
+    if (warning > 0) parts.push(`${warning} warning.`);
     if (pending > 0) parts.push(`${pending} pending.`);
     return parts.join(" ");
   }
   // Everything recovered. Say so explicitly: silence after an outage is
   // indistinguishable from a page that stopped updating.
+  if (warning > 0) return `No monitors down. ${up} up, ${warning} warning.`;
   if (paused > 0 && up === 0) return `All ${plural(total, "monitor")} paused.`;
   if (pending > 0) return `No monitors down. ${up} up, ${pending} pending.`;
   return `All ${plural(up, "monitor")} up.`;

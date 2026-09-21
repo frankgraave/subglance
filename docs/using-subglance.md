@@ -255,12 +255,12 @@ put the instance behind TLS first.
 
 A monitor does not go down because one check failed. Each monitor has a failure
 threshold (`retries`, default 2), and the state engine walks it through four
-states:
+states (`pending` means no check result yet; paused monitors are not measured):
 
 | State | Meaning | Alerts? |
 |---|---|---|
 | `up` | Last check passed | — |
-| `pending` | Failing, threshold not yet reached | No |
+| `warning` | Failing, threshold not yet reached | No |
 | `down` | Threshold reached, incident confirmed | Yes, once |
 | `up` again | Recovered | Only if it was confirmed |
 
@@ -268,6 +268,13 @@ An incident record is opened on the **first** failure, so its start time is when
 the outage actually began — not when the system became sure of it. The gap
 between `started_at` and `confirmed_at` is the confirmation delay, and it is
 visible in the API.
+
+Only confirmed downtime affects uptime: successful assessed checks divided by
+successful plus confirmed-down checks. Warning and unclassified legacy samples
+are excluded; a window with no eligible checks has unknown uptime. See the
+[uptime policy](../README.md#warning-and-uptime) for rollups and sampling details.
+Confirmed Down checks use the shorter of the configured interval and 60 seconds,
+with the existing jitter and worker limits, until recovery.
 
 A blip that recovers before the threshold is recorded but never notified, in
 either direction. A monitor that oscillates rapidly is marked as flapping, and

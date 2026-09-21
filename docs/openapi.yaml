@@ -2456,11 +2456,11 @@ components:
       type: string
       description: |
         The monitor's current state. `up` means the last check succeeded,
-        `down` means a *confirmed* incident is open, and `pending` covers both
-        "never checked yet" and "failing but not yet past the retry threshold".
+        `down` means a *confirmed* incident is open, `warning` means an
+        unconfirmed failure without an alert, and `pending` means never checked yet.
         A single failed check is deliberately not `down`: the dashboard and the
         notifications must agree on what an outage is.
-      enum: [up, pending, down]
+      enum: [up, pending, warning, down]
       example: up
     TagMap:
       type: object
@@ -2644,11 +2644,13 @@ components:
             follows SubGlance's default if that default moves, and one that
             says `1.2` keeps 1.2.
         uptime_24h:
-          type: number
+          type: [number, 'null']
           format: double
           description: |
-            Availability over the last 24 hours as a percentage. 0 when the
-            figure could not be computed.
+            Assessed up samples / (assessed up + confirmed down) over 24 hours.
+            Warnings and legacy samples without an assessment are excluded.
+            Null when there are no eligible samples or computation failed.
+            This is a sample ratio, not an elapsed-time percentage.
           minimum: 0
           maximum: 100
           example: 99.86
@@ -2982,8 +2984,8 @@ components:
       additionalProperties: false
     Heartbeat:
       type: object
-      description: One recorded check result.
-      required: [ts, ok, latency_ms]
+      description: One recorded check result. Assessment is immutable even if a later check confirms the incident. SSE heartbeat data carries the same assessment and failure_kind fields (with at in the envelope instead of ts).
+      required: [ts, ok, latency_ms, assessment]
       properties:
         ts:
           type: string
@@ -2992,6 +2994,12 @@ components:
         ok:
           type: boolean
           example: true
+        assessment:
+          type: string
+          enum: ['', up, warning, down]
+          description: Empty for legacy history; warning is unconfirmed and excluded from uptime.
+        failure_kind:
+          $ref: '#/components/schemas/FailureKind'
         latency_ms:
           type: integer
           example: 143
@@ -3082,7 +3090,7 @@ components:
             text stops rather than ends.
     UptimeWindow:
       type: object
-      required: [window, window_s, total, up, down, uptime]
+      required: [window, window_s, total, up, down, warning, legacy, uptime]
       properties:
         window:
           type: string
@@ -3094,7 +3102,7 @@ components:
           example: 86400
         total:
           type: integer
-          description: Samples in the window.
+          description: Eligible assessed up and confirmed down samples in the window.
           example: 1440
         up:
           type: integer
@@ -3102,11 +3110,19 @@ components:
         down:
           type: integer
           example: 2
+        warning:
+          type: integer
+          description: Unconfirmed failure samples excluded from the denominator.
+        legacy:
+          type: integer
+          description: Samples without a recorded assessment, excluded from the denominator.
         uptime:
           type: [number, 'null']
           format: double
           description: |
-            Percentage up, or null when the window contains no samples at all.
+            Up / (up + confirmed down), or null when there are no eligible samples.
+            Warnings are never retrospectively converted to downtime. Old raw
+            results and rollups remain available but are excluded as legacy.
             "No data yet" and "0% up" are different facts and must not share
             one number.
           minimum: 0
@@ -3114,7 +3130,7 @@ components:
           example: 99.86
         avg_latency_ms:
           type: integer
-          description: Mean latency across successful samples. Omitted when zero.
+          description: Mean latency across all measured samples, including excluded samples. Omitted when zero.
           example: 143
     UptimeResponse:
       type: object

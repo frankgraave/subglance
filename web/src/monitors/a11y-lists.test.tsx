@@ -65,6 +65,7 @@ function monitor(id: string, status: MonitorStatus): Monitor {
 const IDS: Record<MonitorStatus, string> = {
   up: "alpha",
   down: "bravo",
+  warning: "foxtrot",
   pending: "charlie",
   paused: "delta",
   // A push monitor that has never reported. It shares the grey idle lamp with
@@ -72,7 +73,7 @@ const IDS: Record<MonitorStatus, string> = {
   waiting: "echo",
 };
 
-const ALL: MonitorStatus[] = ["up", "down", "pending", "paused", "waiting"];
+const ALL: MonitorStatus[] = ["up", "down", "warning", "pending", "paused", "waiting"];
 
 /** Text a sighted reader can actually see: `sr-only` text is excluded. */
 function visibleText(el: Element): string {

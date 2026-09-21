@@ -25,6 +25,8 @@ export type ApiUptimeWindow = {
   down: number;
   /** Null, not 0, when the window holds no checks at all. */
   uptime: number | null;
+  warning?: number;
+  legacy?: number;
   avg_latency_ms?: number;
 };
 
@@ -53,6 +55,8 @@ export type UptimeWindow = {
   down: number;
   /** Percentage 0-100, or null when nothing was checked in the window. */
   uptime: number | null;
+  warning?: number;
+  legacy?: number;
   avgLatencyMs: number | null;
 };
 
@@ -124,6 +128,8 @@ export function windowFromApi(api: ApiUptimeWindow): UptimeWindow {
     up: api.up,
     down: api.down,
     uptime: toNumber(api.uptime),
+    warning: api.warning ?? 0,
+    legacy: api.legacy ?? 0,
     // Absent means zero measured latency, which for an average over real
     // checks means "no timings", so it collapses to unknown rather than 0.
     avgLatencyMs: toNumber(api.avg_latency_ms),

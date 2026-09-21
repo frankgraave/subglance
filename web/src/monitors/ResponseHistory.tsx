@@ -29,7 +29,8 @@ export function ResponseHistory({ heartbeats, loading = false, error = null }: R
         {failures.map((hb) => <li className="response-history-beat" key={hb.id}>
           <div className="response-history-check">
             <time className="face-mono" dateTime={hb.ts}>{formatMoment(toUnixMs(hb.ts))}</time>
-            <span>Failed check</span>
+            <span>{hb.assessment === "warning" ? "Warning — unconfirmed failure; no alert; excluded from uptime" : hb.assessment === "down" ? "Down — confirmed failure" : "Failed check — confirmation not recorded"}</span>
+            {hb.failure_kind ? <span>{hb.failure_kind}</span> : null}
             {hb.status_code ? <span>HTTP {hb.status_code}</span> : null}
           </div>
           {hb.error ? <p>{hb.error}</p> : null}

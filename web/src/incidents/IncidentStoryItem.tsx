@@ -87,7 +87,7 @@ export function IncidentStoryItem({
    * nothing. It is disabled rather than removed once acked, because a row
    * whose control vanishes gives the reader no evidence their click landed.
    */
-  const ackable = story.state !== "resolved" && onAck !== undefined;
+  const ackable = incident.confirmed && story.state !== "resolved" && onAck !== undefined;
   const timeline = incidentTimeline(incident, stale);
 
   /*
@@ -161,7 +161,7 @@ export function IncidentStoryItem({
            * repeats it would have a screen reader say "down" twice.
            */}
           <Led
-            status={story.state === "resolved" ? "up" : "down"}
+            status={story.state === "resolved" ? "up" : incident.confirmed ? "down" : "warning"}
             labelled={false}
             className="inc-led"
           />

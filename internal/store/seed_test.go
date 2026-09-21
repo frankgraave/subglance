@@ -48,7 +48,7 @@ func TestSeedHeartbeatsWritesSnapshots(t *testing.T) {
 	}
 }
 
-func TestSeedHourlyBucketsCountTowardsUptime(t *testing.T) {
+func TestSeedHourlyBucketsPreserveUnassessedHistory(t *testing.T) {
 	ctx := context.Background()
 	db := openTestDB(t)
 
@@ -72,8 +72,8 @@ func TestSeedHourlyBucketsCountTowardsUptime(t *testing.T) {
 	if err != nil {
 		t.Fatalf("uptime: %v", err)
 	}
-	if stats.Total != 60 || stats.Up != 50 || stats.Down != 10 {
-		t.Fatalf("uptime counts = %+v, want 50 up and 10 down", stats)
+	if stats.Total != 0 || stats.Legacy != 60 {
+		t.Fatalf("uptime counts = %+v, want 60 legacy samples excluded from assessed uptime", stats)
 	}
 	if stats.AvgLatency != 40 {
 		t.Errorf("average latency = %d, want 40", stats.AvgLatency)
@@ -88,8 +88,8 @@ func TestSeedHourlyBucketsCountTowardsUptime(t *testing.T) {
 	if err != nil {
 		t.Fatalf("uptime: %v", err)
 	}
-	if stats.Total != 120 {
-		t.Errorf("total after a second pass = %d, want 120", stats.Total)
+	if stats.Legacy != 120 {
+		t.Errorf("total after a second pass = %d, want 120", stats.Legacy)
 	}
 }
 

@@ -46,7 +46,7 @@ describe("applyHeartbeat", () => {
     // The server calls an outage only once the failure threshold is crossed.
     // A client that goes red sooner disagrees with the alert that never fired.
     const [m] = applyHeartbeat([monitor()], beat({ ok: false, latencyMs: null, error: "timeout" }));
-    expect(m.status).toBe("pending");
+    expect(m.status).toBe("warning");
     expect(m.error).toBe("timeout");
   });
 
@@ -96,8 +96,8 @@ describe("applyStatus", () => {
     expect(m.error).toBeUndefined();
   });
 
-  it("treats an opened but unconfirmed incident as pending", () => {
-    expect(applyStatus([monitor()], status({ event: "incident_opened" }))[0].status).toBe("pending");
+  it("treats an opened but unconfirmed incident as warning", () => {
+    expect(applyStatus([monitor()], status({ event: "incident_opened" }))[0].status).toBe("warning");
   });
 
   it("ignores an event it does not know", () => {

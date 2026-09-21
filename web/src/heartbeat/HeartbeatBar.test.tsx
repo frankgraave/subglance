@@ -371,7 +371,7 @@ describe("HeartbeatBar, framed", () => {
   it("leads with uptime and right-aligns the check breakdown beside it", () => {
     render(
       <HeartbeatBar
-        beats={beats(10, (i) => ({ ok: i !== 3 }))}
+        beats={beats(10, (i) => ({ ok: i !== 3, assessment: i !== 3 ? "up" : "down" }))}
         label="API"
         width={WIDTH}
         framed
@@ -379,7 +379,7 @@ describe("HeartbeatBar, framed", () => {
     );
     expect(screen.getByTestId("chart-headline").textContent).toBe("90.00%");
     expect(screen.getByTestId("chart-breakdown").textContent).toBe(
-      "10 checks · 1 failed",
+      "10 eligible checks · 1 confirmed down",
     );
   });
 

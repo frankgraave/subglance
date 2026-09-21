@@ -26,7 +26,7 @@ export const MAX_LIVE_BEATS = 100;
  * This deliberately mirrors `describeMonitor` in internal/api/monitors.go: a
  * heartbeat says what the last probe saw, it does not say whether the monitor
  * is *down*. Down is a confirmed incident, and only a `status` event reports
- * that. A failed check therefore lowers a green row to `pending`, never
+ * that. A failed check therefore lowers a green row to `warning`, never
  * straight to red — otherwise the live view would call an outage several
  * checks before the server does, and the dashboard and the notifications would
  * disagree about reality.
@@ -37,7 +37,7 @@ export const MAX_LIVE_BEATS = 100;
 export function statusAfterHeartbeat(current: MonitorStatus, ok: boolean): MonitorStatus {
   if (current === "paused") return "paused";
   if (current === "down") return ok ? "up" : "down";
-  return ok ? "up" : "pending";
+  return ok ? "up" : "warning";
 }
 
 /** The status a state-engine event implies, or null when it implies nothing. */
@@ -50,9 +50,9 @@ export function statusAfterEvent(event: string): MonitorStatus | null {
     case "incident_resolved":
       return "up";
     // The first failure of a run. An incident row exists but is unconfirmed,
-    // which is exactly what `pending` means on the API side too.
+    // which is exactly what `warning` means on the API side too.
     case "incident_opened":
-      return "pending";
+      return "warning";
     default:
       return null;
   }
@@ -79,13 +79,14 @@ function replace(
 export function applyHeartbeat(monitors: readonly Monitor[], e: HeartbeatEvent): Monitor[] {
   return replace(monitors, e.monitorId, (m) => ({
     ...m,
-    status: statusAfterHeartbeat(m.status, e.ok),
+    status: m.status === "paused" ? "paused" : (e.assessment || statusAfterHeartbeat(m.status, e.ok)),
     latencyMs: e.latencyMs,
     lastCheck: e.at,
     error: e.ok ? undefined : e.error,
     beats: [...m.beats, {
       ts: e.at,
       ok: e.ok,
+      assessment: e.assessment,
       latencyMs: e.latencyMs,
       statusCode: e.statusCode,
       error: e.error,

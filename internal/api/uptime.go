@@ -24,6 +24,8 @@ const (
 // new monitor look like a total outage, which is exactly the kind of confident
 // lie this product exists to avoid.
 type uptimeWindow struct {
+	Warning      int      `json:"warning"`
+	Legacy       int      `json:"legacy"`
 	Window       string   `json:"window"`
 	WindowS      int      `json:"window_s"`
 	Total        int      `json:"total"`
@@ -66,6 +68,8 @@ func (s *Server) handleMonitorUptime(w http.ResponseWriter, r *http.Request) {
 
 		out := uptimeWindow{
 			Window:       spec,
+			Warning:      stats.Warning,
+			Legacy:       stats.Legacy,
 			WindowS:      int(d.Seconds()),
 			Total:        stats.Total,
 			Up:           stats.Up,

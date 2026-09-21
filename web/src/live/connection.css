@@ -203,6 +203,12 @@
   border-left-color: var(--warn-drained);
   transition: border-left-color 600ms var(--ease);
 }
+.mon-dashboard[data-conn="stale"] .mon-row[data-status="warning"] > :first-child,
+.mon-dashboard[data-conn="stale"] .mon-card[data-status="warning"],
+.mon-dashboard[data-conn="stale"] .mon-line[data-status="warning"] {
+  border-left-color: var(--warn-drained);
+  transition: border-left-color 600ms var(--ease);
+}
 
 /*
  * The detail page's status pill edges in the same colours (detail.css), and it
@@ -224,6 +230,10 @@
 }
 
 .mon-detail[data-conn="stale"] .mon-detail-status[data-status="pending"] {
+  border-color: var(--warn-drained);
+  transition: border-color 600ms var(--ease);
+}
+.mon-detail[data-conn="stale"] .mon-detail-status[data-status="warning"] {
   border-color: var(--warn-drained);
   transition: border-color 600ms var(--ease);
 }

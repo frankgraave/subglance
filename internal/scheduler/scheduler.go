@@ -44,6 +44,8 @@ const firstCheckDelay = 2 * time.Second
 
 // Job is one monitor as the scheduler sees it.
 type Job struct {
+	// Down enables recovery checks without changing the configured interval.
+	Down     bool
 	Monitor  checker.Monitor
 	Interval time.Duration
 
@@ -391,24 +393,25 @@ func (s *Scheduler) dispatchDue(ctx context.Context) {
 		if !skip {
 			s.inFlight[item.job.Monitor.ID] = true
 		}
-		item.next = s.nextRun(now, item.job.Interval)
+		item.next = s.nextRun(now, item.job.cadence())
 		heap.Push(s.queue, item)
+		job := item.job
 		s.mu.Unlock()
 
 		if skip {
 			s.skipped.Add(1)
 			s.log.Warn("skipping check, previous run still active",
-				"monitor_id", item.job.Monitor.ID,
-				"monitor", item.job.Monitor.Name,
-				"interval", item.job.Interval)
+				"monitor_id", job.Monitor.ID,
+				"monitor", job.Monitor.Name,
+				"interval", job.Interval)
 			continue
 		}
 
 		select {
-		case s.tasks <- task{job: item.job}:
+		case s.tasks <- task{job: job}:
 		case <-ctx.Done():
 			s.mu.Lock()
-			delete(s.inFlight, item.job.Monitor.ID)
+			delete(s.inFlight, job.Monitor.ID)
 			s.mu.Unlock()
 			return
 		}
@@ -530,8 +533,8 @@ func (s *Scheduler) reload(ctx context.Context) error {
 			item := &queueItem{job: job, next: old.next}
 			// A shortened interval must take effect now rather than after the
 			// old, longer wait has elapsed.
-			if job.Interval != old.job.Interval {
-				item.next = s.nextRun(now, job.Interval)
+			if job.cadence() != old.job.cadence() {
+				item.next = s.nextRun(now, job.cadence())
 				updated++
 			}
 			*next = append(*next, item)
@@ -546,7 +549,7 @@ func (s *Scheduler) reload(ctx context.Context) error {
 		// short jittered delay instead of a full interval, so someone who just
 		// saved a monitor sees a result while still looking at the screen. The
 		// jitter still applies, so a bulk import stays spread out.
-		first := s.nextRun(now, job.Interval)
+		first := s.nextRun(now, job.cadence())
 		if job.NeverChecked {
 			first = s.nextRun(now, firstCheckDelay)
 		}
@@ -694,4 +697,40 @@ func (h *jobHeap) Pop() any {
 	item.index = -1
 	*h = old[:n-1]
 	return item
+}
+
+// cadence keeps already-fast monitors fast. Recovery uses the same queue,
+// jitter and bounded workers as ordinary checks.
+func (j Job) cadence() time.Duration {
+	if j.Down {
+		return min(j.Interval, time.Minute)
+	}
+	return j.Interval
+}
+
+// SetDown applies a confirmed transition immediately, before the next reload.
+// Repeated results do not postpone an already scheduled check.
+func (s *Scheduler) SetDown(id int64, down bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, item := range *s.queue {
+		if item.job.Monitor.ID != id || item.job.Down == down {
+			continue
+		}
+		previousCadence := item.job.cadence()
+		item.job.Down = down
+		if item.job.cadence() == previousCadence {
+			return // Already-fast monitors keep their existing due time.
+		}
+		next := s.nextRun(s.now(), item.job.cadence())
+		if !down || next.Before(item.next) {
+			item.next = next
+		}
+		heap.Init(s.queue)
+		select {
+		case s.wake <- struct{}{}:
+		default:
+		}
+		return
+	}
 }

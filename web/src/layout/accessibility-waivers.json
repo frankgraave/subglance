@@ -308,75 +308,12 @@
     },
     {
       "rule": "color-contrast",
-      "selector": ".mon-detail-age",
-      "scopes": [
-        "light: monitor detail",
-        "dark: monitor detail"
-      ],
-      "reason": "Existing contrast debt in mon-detail-age: the shared ink role or muted-state opacity is below the AA text floor. Remediation changes the shared palette/visual hierarchy and is deferred from this gate. This is not a WCAG exemption; only these measured screen/theme/selector combinations are waived, and the waiver must be removed when fixed."
-    },
-    {
-      "rule": "color-contrast",
       "selector": ".mon-detail-target",
       "scopes": [
         "light: monitor detail",
         "dark: monitor detail"
       ],
       "reason": "Existing contrast debt in mon-detail-target: the shared ink role or muted-state opacity is below the AA text floor. Remediation changes the shared palette/visual hierarchy and is deferred from this gate. This is not a WCAG exemption; only these measured screen/theme/selector combinations are waived, and the waiver must be removed when fixed."
-    },
-    {
-      "rule": "color-contrast",
-      "selector": ".mon-detail-window:nth-child(1) > dt",
-      "scopes": [
-        "light: monitor detail",
-        "dark: monitor detail"
-      ],
-      "reason": "Existing contrast debt in .mon-detail-window:nth-child(1) > dt: the shared ink role or muted-state opacity is below the AA text floor. Remediation changes the shared palette/visual hierarchy and is deferred from this gate. This is not a WCAG exemption; only these measured screen/theme/selector combinations are waived, and the waiver must be removed when fixed."
-    },
-    {
-      "rule": "color-contrast",
-      "selector": ".mon-detail-window:nth-child(1) > .mon-detail-window-detail",
-      "scopes": [
-        "light: monitor detail",
-        "dark: monitor detail"
-      ],
-      "reason": "Existing contrast debt in mon-detail-window-detail: the shared ink role or muted-state opacity is below the AA text floor. Remediation changes the shared palette/visual hierarchy and is deferred from this gate. This is not a WCAG exemption; only these measured screen/theme/selector combinations are waived, and the waiver must be removed when fixed."
-    },
-    {
-      "rule": "color-contrast",
-      "selector": ".mon-detail-window:nth-child(2) > dt",
-      "scopes": [
-        "light: monitor detail",
-        "dark: monitor detail"
-      ],
-      "reason": "Existing contrast debt in .mon-detail-window:nth-child(2) > dt: the shared ink role or muted-state opacity is below the AA text floor. Remediation changes the shared palette/visual hierarchy and is deferred from this gate. This is not a WCAG exemption; only these measured screen/theme/selector combinations are waived, and the waiver must be removed when fixed."
-    },
-    {
-      "rule": "color-contrast",
-      "selector": ".mon-detail-window:nth-child(2) > .mon-detail-window-detail",
-      "scopes": [
-        "light: monitor detail",
-        "dark: monitor detail"
-      ],
-      "reason": "Existing contrast debt in mon-detail-window-detail: the shared ink role or muted-state opacity is below the AA text floor. Remediation changes the shared palette/visual hierarchy and is deferred from this gate. This is not a WCAG exemption; only these measured screen/theme/selector combinations are waived, and the waiver must be removed when fixed."
-    },
-    {
-      "rule": "color-contrast",
-      "selector": ".mon-detail-window:nth-child(3) > dt",
-      "scopes": [
-        "light: monitor detail",
-        "dark: monitor detail"
-      ],
-      "reason": "Existing contrast debt in .mon-detail-window:nth-child(3) > dt: the shared ink role or muted-state opacity is below the AA text floor. Remediation changes the shared palette/visual hierarchy and is deferred from this gate. This is not a WCAG exemption; only these measured screen/theme/selector combinations are waived, and the waiver must be removed when fixed."
-    },
-    {
-      "rule": "color-contrast",
-      "selector": ".mon-detail-window:nth-child(3) > .mon-detail-window-detail",
-      "scopes": [
-        "light: monitor detail",
-        "dark: monitor detail"
-      ],
-      "reason": "Existing contrast debt in mon-detail-window-detail: the shared ink role or muted-state opacity is below the AA text floor. Remediation changes the shared palette/visual hierarchy and is deferred from this gate. This is not a WCAG exemption; only these measured screen/theme/selector combinations are waived, and the waiver must be removed when fixed."
     },
     {
       "rule": "color-contrast",

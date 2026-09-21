@@ -200,6 +200,27 @@ Working on the frontend? [AGENTS.md](AGENTS.md) is the short version of the
 house rules, and the [style guide](docs/styleguide/index.html) is the source of
 truth for every colour, size and spacing value.
 
+## Warning and uptime
+
+An unconfirmed failed check is **Warning**: visible in the monitor, heartbeat
+and failure history, with its error and captured response when available. It
+sends no failure or recovery alert. The configured consecutive-failure threshold
+promotes the monitor to Down and confirms its incident.
+
+**Only confirmed downtime counts toward uptime.** The percentage is successful
+assessed samples divided by successful plus confirmed-down samples. Warnings
+are excluded from both counts, including when a later check confirms the
+incident; confirmation never rewrites earlier checks. This is a sample ratio,
+not elapsed time. Checks while Down run every `min(configured interval, 60s)`
+with normal jitter and worker limits, so sampling is more frequent during a
+long-interval monitor's outage. Recovery restores the configured interval.
+
+History recorded before assessment was introduced keeps its raw results and
+rollups, but is excluded as legacy: those records cannot prove confirmation.
+The uptime detail shows warning and legacy counts. With no eligible samples,
+uptime is unknown (`null` in the API), never an invented 0% or 100%. A pending
+monitor has no check result yet; a paused monitor is not being measured.
+
 ## Licence
 
 [GNU AGPL-3.0](LICENSE) © Frank Graave

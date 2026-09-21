@@ -21,7 +21,7 @@ export type { Beat };
  * belongs on this side of the boundary — a paused monitor that last checked
  * green is not "up", it is "not being watched".
  */
-export type MonitorStatus = "up" | "down" | "pending" | "paused" | "waiting";
+export type MonitorStatus = "up" | "down" | "warning" | "pending" | "paused" | "waiting";
 
 /**
  * The reporting window of a push monitor.
@@ -96,6 +96,8 @@ export type ApiHeartbeat = {
   /** RFC3339, e.g. "2026-09-11T08:30:00Z". */
   ts: string;
   ok: boolean;
+  assessment?: "up" | "warning" | "down" | "";
+  failure_kind?: string;
   latency_ms?: number | null;
   status_code?: number;
   error?: string;
@@ -116,7 +118,7 @@ export type ApiMonitor = {
   interval_s: number;
   timeout_s: number;
   enabled: boolean;
-  status: "up" | "pending" | "down";
+  status: "up" | "pending" | "warning" | "down";
   last_check?: string | null;
   latency_ms?: number | null;
   status_code?: number;
@@ -175,6 +177,7 @@ function beatFromApi(hb: ApiHeartbeat): Beat {
     // the series rather than dropping a check the user may need to see.
     ts: toUnixMs(hb.ts) ?? 0,
     ok: hb.ok,
+    assessment: hb.assessment,
     latencyMs: toNumber(hb.latency_ms),
     statusCode: hb.status_code,
     error: hb.error,

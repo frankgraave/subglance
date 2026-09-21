@@ -164,6 +164,33 @@ without dashes does the same thing.
 A build made without the release pipeline says `dev` and omits the build date,
 rather than inventing either.
 
+## Warning, confirmation and recovery cadence
+
+Unconfirmed failures are Warning. They retain their raw result, failure kind
+and optional response snapshot, but send no alert, including on recovery.
+Warning/up oscillation does not count as confirmed flapping. Pausing closes any
+open incident without a recovery notification and clears the failure streak;
+resuming starts a new streak. Restarting an active warning restores its streak.
+
+Confirmed Down monitors use `min(interval_s, 60s)` with the existing ±10% jitter
+and worker queue. This also applies on restart. It is a target cadence, not a
+latency guarantee: check duration and worker saturation can delay it. Push
+monitors retain their configured reporting deadline; nothing polls a push job.
+
+Uptime is a sample ratio: assessed up / (assessed up + confirmed down). Warning
+samples are excluded, never backdated into downtime. The first failed sample
+still starts the incident's diagnostic duration, so incident duration and uptime
+measure different things. Missing checks and paused periods supply no samples.
+Latency averages continue to cover all recorded timings, including warnings.
+
+Migration `0012_heartbeat_assessment.sql` preserves old raw results and hourly
+counts. It adds immutable per-check assessment and separate assessed rollup
+counts. Legacy samples remain unclassified and are excluded from the new
+percentage; the API and detail screen report their excluded count. All-legacy
+or all-warning windows return null uptime. Existing assessments survive rollup
+and merging late samples. The migration validates the raw-table CHECK constraint,
+which may scan a large table at first startup; allow for that upgrade pause.
+
 ## Worker sizing
 
 `--check-workers` caps how many checks run at once. Left at `0` it is derived,

@@ -343,13 +343,15 @@ func (db *DB) SetMonitorEnabled(ctx context.Context, id int64, enabled bool) err
 
 // Heartbeat is one recorded check result.
 type Heartbeat struct {
-	ID         int64
-	MonitorID  int64
-	TS         time.Time
-	OK         bool
-	LatencyMS  int
-	StatusCode int
-	Error      string
+	Assessment  string
+	FailureKind string
+	ID          int64
+	MonitorID   int64
+	TS          time.Time
+	OK          bool
+	LatencyMS   int
+	StatusCode  int
+	Error       string
 
 	// Response is the captured failure response, nil when there is none.
 	// ListHeartbeats fills it in; the bulk beat-bar read deliberately does
@@ -384,10 +386,10 @@ func (db *DB) RecordHeartbeat(ctx context.Context, hb Heartbeat) error {
 	defer func() { _ = tx.Rollback() }()
 
 	res, err := tx.ExecContext(ctx, `
-		INSERT INTO heartbeats (monitor_id, ts, ok, latency_ms, status_code, error)
-		VALUES (?, ?, ?, ?, ?, ?)`,
+		INSERT INTO heartbeats (monitor_id, ts, ok, latency_ms, status_code, error, assessment, failure_kind)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		hb.MonitorID, hb.TS.Unix(), hb.OK,
-		nullInt(hb.LatencyMS), nullInt(hb.StatusCode), nullString(hb.Error),
+		nullInt(hb.LatencyMS), nullInt(hb.StatusCode), nullString(hb.Error), hb.Assessment, hb.FailureKind,
 	)
 	if err != nil {
 		return fmt.Errorf("insert heartbeat for monitor %d: %w", hb.MonitorID, err)
@@ -423,7 +425,7 @@ func (db *DB) RecordHeartbeat(ctx context.Context, hb Heartbeat) error {
 
 // heartbeatColumns is the column list every heartbeat scan expects, in the
 // order scanHeartbeat reads them.
-const heartbeatColumns = `id, monitor_id, ts, ok, latency_ms, status_code, error`
+const heartbeatColumns = `id, monitor_id, ts, ok, latency_ms, status_code, error, assessment, failure_kind`
 
 // maxHeartbeatsPerQuery caps how many heartbeats a single read may return per
 // monitor, so a client cannot ask the server to materialise the whole table.
@@ -446,7 +448,7 @@ func scanHeartbeat(s scanner) (Heartbeat, error) {
 		status  sql.NullInt64
 		errText sql.NullString
 	)
-	if err := s.Scan(&hb.ID, &hb.MonitorID, &ts, &hb.OK, &latency, &status, &errText); err != nil {
+	if err := s.Scan(&hb.ID, &hb.MonitorID, &ts, &hb.OK, &latency, &status, &errText, &hb.Assessment, &hb.FailureKind); err != nil {
 		return Heartbeat{}, err
 	}
 	hb.TS = time.Unix(ts, 0).UTC()
@@ -686,6 +688,8 @@ func (db *DB) RecentHeartbeatsForAll(ctx context.Context, perMonitor int) (map[i
 
 // UptimeStats summarises a monitor over a window.
 type UptimeStats struct {
+	Warning    int
+	Legacy     int
 	Total      int
 	Up         int
 	Down       int
@@ -708,37 +712,41 @@ func (db *DB) Uptime(ctx context.Context, monitorID int64, window time.Duration)
 	since := time.Now().Add(-window).Unix()
 
 	var (
-		stats     UptimeStats
-		rawTotal  int
-		rawUp     sql.NullInt64
-		rawLatSum sql.NullFloat64
-		rawLatN   int
+		stats                 UptimeStats
+		rawTotal              int
+		rawWarning, rawLegacy sql.NullInt64
+		rawUp                 sql.NullInt64
+		rawLatSum             sql.NullFloat64
+		rawLatN               int
 	)
 	err := db.Reader.QueryRowContext(ctx, `
-		SELECT count(*), sum(ok), sum(latency_ms), count(latency_ms)
+		SELECT count(CASE WHEN assessment IN ('up','down') THEN 1 END), sum(assessment = 'up'), sum(latency_ms), count(latency_ms), sum(assessment = 'warning'), sum(assessment = '')
 		FROM heartbeats
 		WHERE monitor_id = ? AND ts >= ?`, monitorID, since,
-	).Scan(&rawTotal, &rawUp, &rawLatSum, &rawLatN)
+	).Scan(&rawTotal, &rawUp, &rawLatSum, &rawLatN, &rawWarning, &rawLegacy)
 	if err != nil {
 		return UptimeStats{}, fmt.Errorf("compute uptime for monitor %d: %w", monitorID, err)
 	}
 
 	var (
-		aggUp     sql.NullInt64
-		aggDown   sql.NullInt64
-		aggLatSum sql.NullFloat64
-		aggLatN   sql.NullInt64
+		aggUp                 sql.NullInt64
+		aggWarning, aggLegacy sql.NullInt64
+		aggDown               sql.NullInt64
+		aggLatSum             sql.NullFloat64
+		aggLatN               sql.NullInt64
 	)
 	err = db.Reader.QueryRowContext(ctx, `
-		SELECT sum(up_count), sum(down_count),
-		       sum(COALESCE(latency_avg, 0) * latency_count), sum(latency_count)
+		SELECT sum(assessed_up), sum(assessed_down),
+		       sum(COALESCE(latency_avg, 0) * latency_count), sum(latency_count), sum(warning_count), sum(up_count + down_count - assessed_up - assessed_down - warning_count)
 		FROM heartbeat_hourly
 		WHERE monitor_id = ? AND bucket >= ?`, monitorID, since,
-	).Scan(&aggUp, &aggDown, &aggLatSum, &aggLatN)
+	).Scan(&aggUp, &aggDown, &aggLatSum, &aggLatN, &aggWarning, &aggLegacy)
 	if err != nil {
 		return UptimeStats{}, fmt.Errorf("compute uptime for monitor %d: %w", monitorID, err)
 	}
 
+	stats.Warning = int(rawWarning.Int64 + aggWarning.Int64)
+	stats.Legacy = int(rawLegacy.Int64 + aggLegacy.Int64)
 	stats.Up = int(rawUp.Int64) + int(aggUp.Int64)
 	stats.Down = (rawTotal - int(rawUp.Int64)) + int(aggDown.Int64)
 	stats.Total = stats.Up + stats.Down

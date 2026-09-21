@@ -27,10 +27,10 @@ func (db *DB) RecordHeartbeatWithCaptureReason(ctx context.Context, hb Heartbeat
 		return fmt.Errorf("capture reason requires a failed heartbeat without a snapshot")
 	}
 	_, err := db.Writer.ExecContext(ctx, `
-		INSERT INTO heartbeats (monitor_id, ts, ok, latency_ms, status_code, error, response_capture_reason)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		INSERT INTO heartbeats (monitor_id, ts, ok, latency_ms, status_code, error, response_capture_reason, assessment, failure_kind)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		hb.MonitorID, hb.TS.Unix(), hb.OK, nullInt(hb.LatencyMS),
-		nullInt(hb.StatusCode), nullString(hb.Error), reason)
+		nullInt(hb.StatusCode), nullString(hb.Error), reason, hb.Assessment, hb.FailureKind)
 	if err != nil {
 		return fmt.Errorf("insert heartbeat capture reason for monitor %d: %w", hb.MonitorID, err)
 	}

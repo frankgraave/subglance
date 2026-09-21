@@ -22,6 +22,7 @@
 
 .hb-bar--up { fill: var(--up); }
 .hb-bar--down { fill: var(--down); }
+.hb-bar--warning { fill: var(--warn); }
 .hb-bar--unknown { fill: var(--warn); }
 .hb-bar--empty { fill: var(--idle-dim); }
 

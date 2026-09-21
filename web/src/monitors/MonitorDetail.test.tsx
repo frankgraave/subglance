@@ -179,7 +179,7 @@ describe("uptime windows", () => {
       windows: [window_({ window: "7d", total: 1000, down: 3, uptime: 99.7 })],
     });
     expect(screen.getByText("7d")).toBeTruthy();
-    expect(document.body.textContent).toContain("3 of 1000 failed");
+    expect(document.body.textContent).toContain("3 of 1000 confirmed down");
   });
 
   it("renders an unknown uptime as unknown, never as 0%", () => {
@@ -198,7 +198,7 @@ describe("uptime windows", () => {
     // panel — and the moment that panel gained a chrome reading of "100.00%",
     // an unrelated correct number tripped a test about a different panel.
     expect(windows?.textContent).not.toContain("0%");
-    expect(document.body.textContent).toContain("no checks");
+    expect(document.body.textContent).toContain("no eligible checks");
   });
 
   it("still renders a real 0 percent as a number", () => {

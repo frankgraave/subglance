@@ -12,6 +12,7 @@ export type Beat = {
   /** Unix milliseconds. */
   ts: number;
   ok: boolean;
+  assessment?: "up" | "warning" | "down" | "";
   /** Round-trip time, or null when the probe produced no timing at all. */
   latencyMs: number | null;
   statusCode?: number;
@@ -32,7 +33,9 @@ export type BeatSlot = {
   to: number;
   /** False if *any* check in the bucket failed. Worst wins, never the average. */
   ok: boolean;
+  assessment?: "up" | "warning" | "down" | "";
   downCount: number;
+  warningCount?: number;
   /** Slowest measured latency in the bucket; null if none of them timed. */
   latencyMs: number | null;
   statusCode?: number;
@@ -193,7 +196,10 @@ function aggregate(
     .filter((v): v is number => v !== null && Number.isFinite(v));
   // The bucket's identity is its worst check: that is the fact a monitoring
   // tool must not average away.
-  const worst = downs.length > 0 ? downs[downs.length - 1] : group[group.length - 1];
+  const confirmed = downs.filter((b) => b.assessment === "down");
+  const unclassified = downs.filter((b) => !b.assessment);
+  const failures = confirmed.length ? confirmed : unclassified.length ? unclassified : downs;
+  const worst = failures.length > 0 ? failures[failures.length - 1] : group[group.length - 1];
   const from = group[0].ts;
   const to = group[group.length - 1].ts;
   const expected = expectedChecks(
@@ -209,6 +215,8 @@ function aggregate(
     to,
     ok: downs.length === 0,
     downCount: downs.length,
+    warningCount: downs.filter((b) => b.assessment === "warning").length,
+    assessment: downs.length > 0 && downs.every((b) => b.assessment === "warning") ? "warning" : worst.assessment,
     latencyMs: latencies.length > 0 ? Math.max(...latencies) : null,
     statusCode: worst.statusCode,
     error: downs.length > 0 ? worst.error : undefined,
@@ -313,11 +321,11 @@ export function barHeight(slot: Slot, ceiling: number): number {
   return Math.min(Math.max(scaled, MIN_OK_HEIGHT), MAX_OK_HEIGHT);
 }
 
-export type SlotStatus = "up" | "down" | "unknown" | "empty";
+export type SlotStatus = "up" | "down" | "warning" | "unknown" | "empty";
 
 export function slotStatus(slot: Slot): SlotStatus {
   if (slot.kind === "empty") return "empty";
-  if (!slot.ok) return "down";
+  if (!slot.ok) return slot.assessment === "warning" ? "warning" : "down";
   return slot.latencyMs === null ? "unknown" : "up";
 }
 

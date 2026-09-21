@@ -48,6 +48,7 @@ export type HeartbeatEvent = {
   monitorId: string;
   at: number;
   ok: boolean;
+  assessment?: "up" | "warning" | "down";
   latencyMs: number | null;
   statusCode?: number;
   error?: string;
@@ -125,6 +126,7 @@ export function parseEvent(type: string, data: string): LiveEvent | null {
         monitorId,
         at: toUnixMs(str(body.at)) ?? Date.now(),
         ok: payload.ok === true,
+        ...(payload.assessment === "up" || payload.assessment === "warning" || payload.assessment === "down" ? {assessment: payload.assessment} : {}),
         latencyMs: num(payload.latency_ms),
         statusCode: num(payload.status_code) ?? undefined,
         error: str(payload.error),

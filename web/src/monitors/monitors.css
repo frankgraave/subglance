@@ -440,6 +440,7 @@
  */
 
 .mon-row[data-status="pending"] > :first-child { border-left-color: var(--warn); }
+.mon-row[data-status="warning"] > :first-child { border-left-color: var(--warn); }
 /* Grey, not amber: nothing is in flight for a monitor nobody has pinged. */
 .mon-row[data-status="waiting"] > :first-child { border-left-color: var(--idle); }
 /* Paused is not trouble and not a gap in the data: someone switched it off.
@@ -858,6 +859,7 @@
 }
 
 .mon-card[data-status="pending"] { border-left: var(--size-status-rail) solid var(--warn); }
+.mon-card[data-status="warning"] { border-left: var(--size-status-rail) solid var(--warn); }
 .mon-card[data-status="waiting"] { border-left: var(--size-status-rail) solid var(--idle); }
 .mon-card[data-status="paused"] {
   border-left: var(--size-status-rail) dotted var(--ink-3);
@@ -1060,6 +1062,7 @@
    survive the hover. */
 .mon-line[data-status="down"] { border-left: var(--size-status-rail) solid var(--down); }
 .mon-line[data-status="pending"] { border-left: var(--size-status-rail) solid var(--warn); }
+.mon-line[data-status="warning"] { border-left: var(--size-status-rail) solid var(--warn); }
 .mon-line[data-status="waiting"] { border-left: var(--size-status-rail) solid var(--idle); }
 .mon-line[data-status="paused"] {
   border-left: var(--size-status-rail) dotted var(--ink-3);

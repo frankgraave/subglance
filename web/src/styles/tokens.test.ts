@@ -1952,6 +1952,8 @@ const statusBorders = new Set<string>([
    */
   'web/src/monitors/detail.css | .mon-detail-status[data-status="down"] | border-color: var(--down)',
   'web/src/monitors/detail.css | .mon-detail-status[data-status="pending"] | border-color: var(--warn)',
+  // Warning is an unconfirmed failure: its status rail uses the warning role, draining when stale.
+  'web/src/monitors/detail.css | .mon-detail-status[data-status="warning"] | border-color: var(--warn)',
   'web/src/monitors/detail.css | .mon-detail-status[data-status="waiting"] | border-color: var(--idle)',
   "web/src/live/connection.css | .conn-badge | border: 1px solid var(--warn)",
   /*
@@ -1986,6 +1988,8 @@ const statusBorders = new Set<string>([
    */
   'web/src/monitors/monitors.css | .mon-row[data-status="down"] > :first-child | border-left-color: var(--down)',
   'web/src/monitors/monitors.css | .mon-row[data-status="pending"] > :first-child | border-left-color: var(--warn)',
+  // Warning is an unconfirmed failure: its status rail uses the warning role, draining when stale.
+  'web/src/monitors/monitors.css | .mon-row[data-status="warning"] > :first-child | border-left-color: var(--warn)',
   'web/src/monitors/monitors.css | .mon-row[data-status="paused"] > :first-child | border-left-color: var(--ink-3)',
   'web/src/monitors/monitors.css | .mon-row[data-status="waiting"] > :first-child | border-left-color: var(--idle)',
   /*
@@ -2014,10 +2018,14 @@ const statusBorders = new Set<string>([
   "web/src/monitors/monitors.css | .mon-section-title | border-left: var(--size-status-rail) solid transparent",
   'web/src/monitors/monitors.css | .mon-card[data-status="down"] | border-left: var(--size-status-rail) solid var(--down)',
   'web/src/monitors/monitors.css | .mon-card[data-status="pending"] | border-left: var(--size-status-rail) solid var(--warn)',
+  // Warning is an unconfirmed failure: its status rail uses the warning role, draining when stale.
+  'web/src/monitors/monitors.css | .mon-card[data-status="warning"] | border-left: var(--size-status-rail) solid var(--warn)',
   'web/src/monitors/monitors.css | .mon-card[data-status="paused"] | border-left: var(--size-status-rail) dotted var(--ink-3)',
   'web/src/monitors/monitors.css | .mon-card[data-status="waiting"] | border-left: var(--size-status-rail) solid var(--idle)',
   'web/src/monitors/monitors.css | .mon-line[data-status="down"] | border-left: var(--size-status-rail) solid var(--down)',
   'web/src/monitors/monitors.css | .mon-line[data-status="pending"] | border-left: var(--size-status-rail) solid var(--warn)',
+  // Warning is an unconfirmed failure: its status rail uses the warning role, draining when stale.
+  'web/src/monitors/monitors.css | .mon-line[data-status="warning"] | border-left: var(--size-status-rail) solid var(--warn)',
   'web/src/monitors/monitors.css | .mon-line[data-status="paused"] | border-left: var(--size-status-rail) dotted var(--ink-3)',
   'web/src/monitors/monitors.css | .mon-line[data-status="waiting"] | border-left: var(--size-status-rail) solid var(--idle)',
   "web/src/monitors/monitors.css | .push-reveal-warn | border-left: var(--size-status-rail) solid var(--warn)",
@@ -2027,6 +2035,8 @@ const statusBorders = new Set<string>([
   'web/src/auth/auth.css | .auth-input[aria-invalid="true"]:focus | border-color: var(--down)',
   'web/src/wall/wall.css | .wall-card[data-status="down"] | border-color: color-mix(in srgb, var(--down) 40%, var(--border))',
   'web/src/wall/wall.css | .wall-card[data-status="pending"] | border-color: color-mix(in srgb, var(--warn) 34%, var(--border))',
+  // Warning is an unconfirmed failure: its status rail uses the warning role, draining when stale.
+  'web/src/wall/wall.css | .wall-card[data-status="warning"] | border-color: color-mix(in srgb, var(--warn) 34%, var(--border))',
   /*
    * The same status edges, no longer asserting (SUB-140, DESIGN.md §6).
    *
@@ -2045,8 +2055,12 @@ const statusBorders = new Set<string>([
    */
   'web/src/live/connection.css | .mon-dashboard[data-conn="stale"] .mon-row[data-status="down"] > :first-child, .mon-dashboard[data-conn="stale"] .mon-card[data-status="down"], .mon-dashboard[data-conn="stale"] .mon-line[data-status="down"] | border-left-color: var(--down-drained)',
   'web/src/live/connection.css | .mon-dashboard[data-conn="stale"] .mon-row[data-status="pending"] > :first-child, .mon-dashboard[data-conn="stale"] .mon-card[data-status="pending"], .mon-dashboard[data-conn="stale"] .mon-line[data-status="pending"] | border-left-color: var(--warn-drained)',
+  // Warning is an unconfirmed failure: its status rail uses the warning role, draining when stale.
+  'web/src/live/connection.css | .mon-dashboard[data-conn="stale"] .mon-row[data-status="warning"] > :first-child, .mon-dashboard[data-conn="stale"] .mon-card[data-status="warning"], .mon-dashboard[data-conn="stale"] .mon-line[data-status="warning"] | border-left-color: var(--warn-drained)',
   'web/src/live/connection.css | .mon-detail[data-conn="stale"] .mon-detail-status[data-status="down"] | border-color: var(--down-drained)',
   'web/src/live/connection.css | .mon-detail[data-conn="stale"] .mon-detail-status[data-status="pending"] | border-color: var(--warn-drained)',
+  // Warning is an unconfirmed failure: its status rail uses the warning role, draining when stale.
+  'web/src/live/connection.css | .mon-detail[data-conn="stale"] .mon-detail-status[data-status="warning"] | border-color: var(--warn-drained)',
 ]);
 
 describe("depth comes from the ladder in §2.10", () => {

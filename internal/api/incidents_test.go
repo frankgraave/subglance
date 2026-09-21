@@ -15,7 +15,7 @@ import (
 // A single failed check must not paint the dashboard red. This is the API-side
 // half of product principle 5 — if the UI says "down" before the alerting
 // does, the two disagree and the user trusts neither.
-func TestMonitorStatusPendingUntilConfirmed(t *testing.T) {
+func TestMonitorStatusWarningUntilConfirmed(t *testing.T) {
 	ctx := context.Background()
 	srv, db := testServerWithDB(t)
 
@@ -40,8 +40,8 @@ func TestMonitorStatusPendingUntilConfirmed(t *testing.T) {
 	}
 
 	got := getMonitor(t, srv, m.ID)
-	if got.Status != "pending" {
-		t.Errorf("status after one failure = %q, want pending", got.Status)
+	if got.Status != "warning" {
+		t.Errorf("status after one failure = %q, want warning", got.Status)
 	}
 	if got.IncidentID == 0 {
 		t.Error("expected the open incident to be linked from the monitor")
