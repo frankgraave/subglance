@@ -57,6 +57,8 @@ import type { CheckOutcome } from "./inventoryApi";
 
 export type MonitorInventoryRowProps = {
   monitor: InventoryMonitor;
+  selected?: boolean;
+  onSelect?: (id: string, checked: boolean) => void;
   /** Which channels it alerts through, or that we could not find out. */
   channels: ChannelState;
   /** Opens this monitor's detail view client-side. */
@@ -81,6 +83,8 @@ export type MonitorInventoryRowProps = {
 
 function MonitorInventoryRowImpl({
   monitor,
+  selected = false,
+  onSelect,
   channels,
   onOpen,
   onEdit,
@@ -126,6 +130,7 @@ function MonitorInventoryRowImpl({
 
         <div className="inv-main">
           <span className="inv-name">
+            {onSelect && <input type="checkbox" className="bulk-tags-select" aria-label={`Select ${monitor.name}`} checked={selected} onChange={(e) => onSelect(monitor.id, e.target.checked)} />}
             <MonitorLink id={monitor.id} name={monitor.name} onOpen={onOpen} />
             {paused ? (
               /* A configuration state, not a health state, so it gets no

@@ -1210,6 +1210,13 @@
   color: var(--down);
 }
 
+/* New edit/reminder copy clears AA without changing the status palette. */
+.edit-form .add-help,
+.edit-form .add-button-quiet,
+.repeat-field .add-help { color: var(--ink-2); }
+.edit-form .add-field-error,
+.edit-form .add-result,
+.repeat-field .add-field-error { color: var(--ink); }
 .add-field-error > svg {
   display: inline-block;
   width: var(--size-icon-sm);

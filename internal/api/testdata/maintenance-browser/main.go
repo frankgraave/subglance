@@ -63,7 +63,7 @@ func run() error {
 	runner := monitor.New(monitor.Options{DB: db, Log: log, Bus: bus, AllowPrivateTargets: true, Notify: func(monitor.Alert) { alerts.Add(1) }})
 	ids := []int64{}
 	for i := range 8 {
-		m, err := db.CreateMonitor(ctx, store.Monitor{Name: fmt.Sprintf("Service %d", i), Type: "http", Target: fmt.Sprintf("%s/%d", target.URL, i), Enabled: true, Retries: 2, IntervalS: 300, CaptureResponse: true, Tags: map[string]string{"env": "prod"}})
+		m, err := db.CreateMonitor(ctx, store.Monitor{Name: fmt.Sprintf("Service %d", i), Type: "http", Target: fmt.Sprintf("%s/%d", target.URL, i), Enabled: true, Retries: 2, RepeatAfterS: 900, IntervalS: 300, CaptureResponse: true, Tags: map[string]string{"env": "prod"}})
 		if err != nil {
 			return err
 		}

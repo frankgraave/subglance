@@ -19,6 +19,12 @@
   max-width: var(--size-pane-lg);
 }
 
+/* Editing and checking share this header. Let their group take another line
+   when it cannot fit beside the title, preserving both controls on phones. */
+.mon-detail > .card > .card-head {
+  flex-wrap: wrap;
+}
+
 .mon-detail-nav {
   margin-bottom: calc(var(--space-2) * -1);
 }

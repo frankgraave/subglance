@@ -127,7 +127,7 @@ it.each([
       await page.screenshot({ path: join(process.env.WARNING_BROWSER_PROOF_DIR, `warning-${theme}-${width}.png`), fullPage: true });
     }
     // A real caller confirms the outage. The already-recorded warning remains immutable.
-    await (await page.waitForSelector('.card-head-action button'))!.click();
+    await (await page.waitForSelector('button.mon-check-now'))!.click();
     await page.waitForSelector('.mon-detail[data-status="down"]');
     const confirmed = await read();
     expect(confirmed.uptime.windows[0]).toMatchObject({ total: 1, down: 1, warning: 1, uptime: 0 });

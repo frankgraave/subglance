@@ -17,13 +17,15 @@ import (
 	"github.com/frankgraave/subglance/internal/events"
 	"github.com/frankgraave/subglance/internal/store"
 	"github.com/frankgraave/subglance/internal/trustedproxy"
+	"github.com/frankgraave/subglance/internal/watchdog"
 )
 
 // Server wires the HTTP routes together.
 type Server struct {
-	log       *slog.Logger
-	db        *store.DB
-	startedAt time.Time
+	log              *slog.Logger
+	db               *store.DB
+	startedAt        time.Time
+	watchdogSnapshot func() watchdog.Snapshot
 
 	// bus carries live check results to streaming clients. Nil disables the
 	// stream endpoint rather than crashing it, so the API stays usable in
@@ -287,6 +289,7 @@ func (s *Server) routes() []route {
 		{http.MethodGet, "/metrics", accessRead},
 
 		{http.MethodGet, "/api/v1/auth/me", accessRead},
+		{http.MethodGet, "/api/v1/watchdog", accessRead},
 		{http.MethodPost, "/api/v1/auth/password", accessRead},
 
 		// Logout is authenticated rather than public, which reads oddly for
@@ -342,6 +345,8 @@ func (s *Server) routes() []route {
 		{http.MethodDelete, "/api/v1/maintenance/{id}", accessWrite},
 		{http.MethodPost, "/api/v1/monitors", accessWrite},
 		{http.MethodPost, "/api/v1/monitors/preview", accessWrite},
+		{http.MethodPost, "/api/v1/monitors/tags/preview", accessWrite},
+		{http.MethodPost, "/api/v1/monitors/tags", accessWrite},
 		{http.MethodPatch, "/api/v1/monitors/{id}", accessWrite},
 		{http.MethodDelete, "/api/v1/monitors/{id}", accessWrite},
 		{http.MethodPost, "/api/v1/monitors/{id}/check", accessWrite},
@@ -402,6 +407,8 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 
 	case "GET /api/v1/auth/me":
 		return s.handleMe
+	case "GET /api/v1/watchdog":
+		return s.handleWatchdog
 	case "POST /api/v1/auth/password":
 		return s.handleChangePassword
 
@@ -447,6 +454,10 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 		return s.handleCreateMonitor
 	case "POST /api/v1/monitors/preview":
 		return s.handlePreviewCheck
+	case "POST /api/v1/monitors/tags/preview":
+		return s.handlePreviewTags
+	case "POST /api/v1/monitors/tags":
+		return s.handleTransformTags
 	case "PATCH /api/v1/monitors/{id}":
 		return s.handlePatchMonitor
 	case "DELETE /api/v1/monitors/{id}":

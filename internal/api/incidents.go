@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/frankgraave/subglance/internal/state"
 	"github.com/frankgraave/subglance/internal/store"
 )
 
@@ -36,19 +37,39 @@ type incidentResponse struct {
 
 	Cause     string `json:"cause,omitempty"`
 	LastError string `json:"last_error,omitempty"`
+
+	// These describe reminder issuance, not successful channel delivery.
+	ReminderCount  int        `json:"reminder_count"`
+	RemindedAt     *time.Time `json:"reminded_at"`
+	NextReminderAt *time.Time `json:"next_reminder_at"`
+	ReminderStatus string     `json:"reminder_status"`
 }
 
-func toIncidentResponse(inc store.Incident) incidentResponse {
+// reminderStateSource is the read-only facet of the attached checker pipeline.
+// It exposes the same suppression state the reminder loop consults.
+type reminderStateSource interface {
+	Flapping(monitorID int64) bool
+}
+
+func (s *Server) reminderFlapping(id int64) bool {
+	source, ok := s.prober.(reminderStateSource)
+	return ok && source.Flapping(id)
+}
+
+func (s *Server) toIncidentResponse(detail store.IncidentDetails) incidentResponse {
+	inc := detail.Incident
 	resp := incidentResponse{
-		ID:        inc.ID,
-		MonitorID: inc.MonitorID,
-		StartedAt: inc.StartedAt,
-		Confirmed: inc.Confirmed(),
-		Resolved:  inc.Resolved(),
-		Acked:     !inc.AckedAt.IsZero(),
-		DurationS: int(inc.Duration().Seconds()),
-		Cause:     inc.Cause,
-		LastError: inc.LastError,
+		ID:             inc.ID,
+		MonitorID:      inc.MonitorID,
+		StartedAt:      inc.StartedAt,
+		Confirmed:      inc.Confirmed(),
+		Resolved:       inc.Resolved(),
+		Acked:          !inc.AckedAt.IsZero(),
+		DurationS:      int(inc.Duration().Seconds()),
+		Cause:          inc.Cause,
+		LastError:      inc.LastError,
+		ReminderCount:  inc.ReminderCount,
+		ReminderStatus: "scheduled",
 	}
 
 	if inc.Confirmed() {
@@ -63,13 +84,38 @@ func toIncidentResponse(inc store.Incident) incidentResponse {
 		t := inc.AckedAt
 		resp.AckedAt = &t
 	}
+	if !inc.RemindedAt.IsZero() {
+		t := inc.RemindedAt
+		resp.RemindedAt = &t
+	}
+	switch {
+	case inc.Resolved():
+		resp.ReminderStatus = "resolved"
+	case inc.Acked():
+		resp.ReminderStatus = "acknowledged"
+	case !inc.Confirmed():
+		resp.ReminderStatus = "unconfirmed"
+	case !detail.MonitorEnabled:
+		resp.ReminderStatus = "paused"
+	case !state.ReminderEnabled(time.Duration(detail.RepeatAfterS) * time.Second):
+		resp.ReminderStatus = "disabled"
+	case detail.Maintenance:
+		resp.ReminderStatus = "maintenance"
+	case inc.MaintenancePending:
+		resp.ReminderStatus = "initial_pending"
+	case s.reminderFlapping(inc.MonitorID):
+		resp.ReminderStatus = "flapping"
+	default:
+		next := state.NextReminder(inc.ConfirmedAt, inc.RemindedAt, inc.ReminderCount, time.Duration(detail.RepeatAfterS)*time.Second)
+		resp.NextReminderAt = &next
+	}
 	return resp
 }
 
 // handleListOpenIncidents answers "what is broken right now" — the query the
 // dashboard's landing view is built around.
 func (s *Server) handleListOpenIncidents(w http.ResponseWriter, r *http.Request) {
-	incidents, err := s.db.ListOpenIncidents(r.Context())
+	incidents, err := s.db.ListOpenIncidentDetails(r.Context())
 	if err != nil {
 		s.log.Error("list open incidents", "error", err)
 		writeError(w, http.StatusInternalServerError, "could not list incidents")
@@ -78,7 +124,7 @@ func (s *Server) handleListOpenIncidents(w http.ResponseWriter, r *http.Request)
 
 	out := make([]incidentResponse, 0, len(incidents))
 	for _, inc := range incidents {
-		out = append(out, toIncidentResponse(inc))
+		out = append(out, s.toIncidentResponse(inc))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"incidents": out})
 }
@@ -223,7 +269,9 @@ func (s *Server) handleListResolvedIncidents(w http.ResponseWriter, r *http.Requ
 
 	out := make([]incidentResponse, 0, len(page.Incidents))
 	for _, inc := range page.Incidents {
-		out = append(out, toIncidentResponse(inc))
+		// Resolved rows can never remind again, so their stored history needs
+		// no monitor-settings read. The lifecycle check precedes those settings.
+		out = append(out, s.toIncidentResponse(store.IncidentDetails{Incident: inc}))
 	}
 
 	body := map[string]any{
@@ -305,7 +353,7 @@ func (s *Server) handleListMonitorIncidents(w http.ResponseWriter, r *http.Reque
 		limit = n
 	}
 
-	incidents, err := s.db.ListIncidents(r.Context(), id, limit)
+	incidents, err := s.db.ListIncidentDetails(r.Context(), id, limit)
 	if err != nil {
 		s.log.Error("list incidents", "monitor_id", id, "error", err)
 		writeError(w, http.StatusInternalServerError, "could not list incidents")
@@ -314,7 +362,7 @@ func (s *Server) handleListMonitorIncidents(w http.ResponseWriter, r *http.Reque
 
 	out := make([]incidentResponse, 0, len(incidents))
 	for _, inc := range incidents {
-		out = append(out, toIncidentResponse(inc))
+		out = append(out, s.toIncidentResponse(inc))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"incidents": out})
 }

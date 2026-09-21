@@ -1,0 +1,30 @@
+/* Read-only history uses words, not a green lamp claiming present health. */
+.watchdog-card .panel {
+  display: grid;
+  gap: var(--space-3);
+  color: var(--ink);
+}
+.watchdog-card p { margin: 0; }
+.watchdog-label { font-weight: var(--weight-strong); }
+.watchdog-history {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4) var(--space-8);
+  margin: 0;
+}
+.watchdog-history dt,
+.watchdog-note,
+.watchdog-notice {
+  color: var(--ink-2);
+  font-size: var(--type-helper);
+  line-height: var(--lead-prose);
+}
+.watchdog-history dd { margin: var(--space-1) 0 0; }
+.watchdog-history time { @apply face-mono; }
+.watchdog-notice { margin: var(--space-4) 0 0; }
+.watchdog-notice a {
+  display: inline-block;
+  min-height: var(--size-row-sm);
+  color: inherit;
+  text-decoration: underline;
+}

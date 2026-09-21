@@ -10,6 +10,7 @@ import {
 } from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
 import { LiveDashboardRoot } from "./LiveDashboard";
+import { disabledWatchdog } from "../watchdog/fixtures";
 import type { EventSourceLike } from "./connection";
 import { DEFAULT_PING_INTERVAL_MS, STALE_AFTER_PINGS } from "./connection";
 import { monitorsQueryKey } from "./api";
@@ -26,6 +27,12 @@ import { ShellSlots } from "../shell/ShellSlots";
  * and every assertion about them would pass by not looking.
  */
 function render(ui: React.ReactElement) {
+  // Keep monitor fetch counters scoped to monitors while settling the new read.
+  const monitorFetch = globalThis.fetch;
+  vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) =>
+    String(input) === "/api/v1/watchdog"
+      ? Promise.resolve(new Response(JSON.stringify(disabledWatchdog)))
+      : monitorFetch(input, init));
   return renderBare(
     <>
       <ShellSlots />

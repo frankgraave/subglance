@@ -122,7 +122,40 @@ const budgets = {
    * was added; existing forms and cards keep CSS below its unchanged 15 KiB.
    * 128 KiB leaves 1,325 bytes, rather than setting a ceiling at today's size.
    */
-  js: 128,
+  /*
+   * 126 -> 130 KiB gzip for SUB-68 / SUB-91.
+   * The current develop (05974de) entry measures 127,401 bytes; this combined
+   * build measures 130,955: 3,554 bytes for expanded versioned detail editing,
+   * reusable previews, conflict/reload handling, repeat controls and reminder
+   * status. Both builds include the merged TLS, incident and response-history
+   * UI, so their weight is not attributed to this change. No runtime dependency
+   * was added; editor/drawer/preview controls are shared, not duplicated.
+   * 128 KiB would leave only 117 bytes. 130 leaves 2,165 for ordinary fixes
+   * instead of tracking today's measurement. CSS and font ceilings stay put.
+   */
+  /*
+   * 126 -> 136 KiB JS and 15 -> 16 KiB CSS for SUB-25/84/87/113 together.
+   * At pinned develop 05974de the gzip entries measured JS 127,401 / CSS
+   * 14,770 bytes. The four-ticket build measures 132,119 / 15,386; alongside
+   * the existing edit/reminder PR83 it measures 135,270 / 15,444. Independent
+   * branches fit unevenly (bulk tags alone is 379 JS bytes over); a shared
+   * ceiling keeps merge order from deciding which reviewed feature fails CI.
+   * These bytes buy keyboard commands, atomic bulk-tag workflows, watchdog
+   * diagnostics and measured surface consistency, without a runtime dependency.
+   * 136/16 KiB leaves 3,994 JS / 940 CSS bytes for fixes in the full combination,
+   * not a ceiling nudged to today's exact size. Font ceiling stays unchanged.
+   */
+  /*
+   * Integration of c89a4b0 with SUB-145/44/109/116/115/33 retains the existing
+   * 136/16 KiB ceilings. The combined entry measures 135,989 JS / 15,352 CSS
+   * gzip bytes (Node gzip, index.html assets), versus 127,401 / 14,770 at the
+   * pinned 05974de base. This includes bulk tags, versioned editing/reminders,
+   * watchdog status, warning/history and maintenance with truthful reminder
+   * suppression reads. Remaining headroom is 3,275 JS / 1,032 CSS bytes;
+   * neither a higher ceiling nor feature removal is needed. Fonts remain
+   * 69,412 bytes against the unchanged 80 KiB ceiling.
+   */
+  js: 136,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *
@@ -194,7 +227,7 @@ const budgets = {
    * already declared. A ceiling that holds through two screens and moves for
    * a change to what colour means is a ceiling doing its job.
    */
-  css: 15,
+  css: 16,
   fonts: 80,
 };
 

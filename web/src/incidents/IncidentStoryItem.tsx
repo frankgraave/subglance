@@ -1,3 +1,4 @@
+import { ReminderSummary } from "./ReminderSummary";
 import { useId, useState } from "react";
 import { StatusChip } from "../components/Chip";
 import { IconBellOff } from "../components/icons";
@@ -66,6 +67,7 @@ export type IncidentStoryItemProps = {
   stale?: boolean;
   /** Renders the quieter history treatment: no status rail, dimmer name. */
   past?: boolean;
+  showReminders?: boolean;
 };
 
 export function IncidentStoryItem({
@@ -76,6 +78,7 @@ export function IncidentStoryItem({
   acking = false,
   stale = false,
   past = false,
+  showReminders = false,
 }: IncidentStoryItemProps) {
   const story = incidentStory(incident, now, stale);
   const [open, setOpen] = useState(false);
@@ -281,6 +284,7 @@ export function IncidentStoryItem({
        * its text readable to a screen reader and its controls focusable, which
        * is the usual way this pattern is got wrong.
        */}
+      {showReminders && <ReminderSummary reminder={incident.reminder} stale={stale} />}
       {open ? (
         <div className="inc-detail" id={detailId}>
           <div className="inc-detail-grid">

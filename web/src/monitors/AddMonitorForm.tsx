@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
+import { RepeatAlertField } from "./RepeatAlertField";
+import { validRepeat, REPEAT_ERROR } from "./repeat";
 import { IconAlert } from "../components/icons";
 import { isPush } from "./push";
 import { TlsFloorField } from "./TlsFloorField";
@@ -44,6 +46,7 @@ export type AddMonitorValues = {
   pushIntervalS: number;
   /** Push monitors only: how late that report may be, in seconds. */
   pushGraceS: number;
+  repeatAfterS: number;
   /**
    * The lowest TLS version this monitor may negotiate, written "1.0" to
    * "1.3" — or `""` for no opinion, which is the default and is NOT the same
@@ -85,6 +88,7 @@ const FIELD_CONTROL: Record<string, string> = {
   keyword_mode: "keyword",
   push_interval_s: "push-interval",
   push_grace_s: "push-grace",
+  repeat_after_s: "repeat",
   min_tls_version: "min-tls",
 };
 
@@ -139,6 +143,7 @@ const DEFAULTS: AddMonitorValues = {
   // visible before it is committed: silent grace is how a monitor ends up
   // alerting a minute later than its owner expects.
   pushGraceS: 60,
+  repeatAfterS: 900,
   // No opinion, and never the current default spelled out: a form that
   // pre-selected 1.2 would pin every new monitor to today's floor and quietly
   // make the nullable column unreachable from the UI.
@@ -155,6 +160,9 @@ export function AddMonitorForm({
   onDirtyChange,
 }: AddMonitorFormProps) {
   const ids = useId();
+  const [repeatText, setRepeatText] = useState("900");
+  const [repeatError, setRepeatError] = useState<string>();
+  const formRef = useRef<HTMLFormElement>(null);
   const [values, setValues] = useState<AddMonitorValues>(DEFAULTS);
   /*
    * The name, once someone has typed one.
@@ -171,7 +179,7 @@ export function AddMonitorForm({
    * stale value after a concurrent re-render.
    */
   const [typedName, setTypedName] = useState<string | null>(null);
-  const dirty = (typedName ?? "") !== "" ||
+  const dirty = repeatText !== "900" || (typedName ?? "") !== "" ||
     Object.keys(DEFAULTS).some((key) => values[key as keyof AddMonitorValues] !== DEFAULTS[key as keyof AddMonitorValues]);
   useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
 
@@ -259,12 +267,19 @@ export function AddMonitorForm({
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (incomplete || saving) return;
-    onSubmit(effective);
+    if (!validRepeat(repeatText)) {
+      setRepeatError(REPEAT_ERROR);
+      formRef.current?.querySelector<HTMLInputElement>("[data-repeat-input]")?.focus();
+      return;
+    }
+    setRepeatError(undefined);
+    onSubmit({ ...effective, repeatAfterS: Number(repeatText) });
   };
 
   return (
     <form
       className="add-form"
+      ref={formRef}
       onSubmit={submit}
       aria-labelledby={`${ids}-heading`}
     >
@@ -618,6 +633,7 @@ export function AddMonitorForm({
           )}
         </div>
       </details>
+      <RepeatAlertField value={repeatText} onChange={setRepeatText} error={repeatError ?? (saveError?.field === "repeat_after_s" ? saveError.message : undefined)} />
       </fieldset>
 
       {saving && <p className="add-help">A save in progress may still complete if you close this form.</p>}

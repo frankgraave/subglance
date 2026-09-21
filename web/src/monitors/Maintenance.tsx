@@ -38,6 +38,8 @@ function MaintenanceManager({ monitors, canWrite }: { monitors: readonly Invento
   const refresh = async () => { await Promise.all([
     queryClient.invalidateQueries({ queryKey: KEY }),
     queryClient.invalidateQueries({ queryKey: ["monitors"] }),
+    queryClient.invalidateQueries({ queryKey: ["monitor-detail"] }),
+    queryClient.invalidateQueries({ queryKey: ["incidents", "open"] }),
   ]); };
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

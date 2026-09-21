@@ -14,6 +14,7 @@
  */
 
 import { fromApi, toUnixMs } from "./types";
+import type { PreviewRequest } from "./preview";
 import type { ApiMonitor, Monitor } from "./types";
 
 /**
@@ -54,6 +55,8 @@ export type InventoryMonitor = Monitor & {
   minTlsVersion: string;
   /** Attached channels from the same list read; missing data is unknown. */
   channels: ChannelState;
+  repeatAfterS?: number;
+  checkSettings?: Omit<PreviewRequest, "type" | "target" | "timeout_s">;
 };
 
 /** One monitor as the inventory reads it. */
@@ -78,6 +81,11 @@ export function inventoryFromApi(api: ApiMonitor & {
     // would make the edit form offer to pin a floor nobody set.
     minTlsVersion: api.min_tls_version ?? "",
     channels: channelsFromApi(api.channels),
+    ...(api.repeat_after_s !== undefined ? { repeatAfterS: api.repeat_after_s } : {}),
+    checkSettings: Object.fromEntries(
+      (["method", "expected_status", "keyword", "keyword_mode", "follow_redirects", "headers", "body", "ssl_warn_days", "min_tls_version"] as const)
+        .filter((key) => api[key] !== undefined).map((key) => [key, api[key]]),
+    ),
   };
 }
 

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { afterAll, afterEach, beforeAll, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from "vitest";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -9,10 +9,12 @@ import { promisify } from "node:util";
 import { createInterface, type Interface } from "node:readline";
 import axe from "axe-core";
 import { chromium, type Browser } from "../layout/harness/browser";
+import { maintenanceCleanup } from "../layout/harness/maintenanceCleanup";
 import { THEME_STORAGE_KEY } from "../theme/theme";
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 let dir: string, child: ChildProcess, lines: Interface, browser: Browser;
 let fixture: { url: string; session: string; ids: number[] };
+let cleanup: ReturnType<typeof maintenanceCleanup> | undefined;
 const readLine = () => new Promise<string>((resolve) => lines.once("line", resolve));
 beforeAll(async () => {
  dir=await mkdtemp(join(tmpdir(),"maintenance-browser-"));
@@ -21,22 +23,24 @@ beforeAll(async () => {
  child=spawn(binary,[join(dir,"history.db")],{stdio:["pipe","pipe","pipe"]});
  lines=createInterface({input:child.stdout!});
  fixture=JSON.parse(await Promise.race([readLine(),new Promise<string>((_,reject)=>{child.once("error",reject);child.once("exit",code=>reject(new Error(`fixture exited ${code}`)));})]));
+ cleanup=maintenanceCleanup(fixture.url,fixture.session);
  browser=await chromium();
 },120_000);
-afterEach(async()=>{
- // The real server is shared by this file. A failed UI assertion must not
- // leave a recurring tag window suppressing checks in subsequent cases.
- // Use Node's client so cleanup also works after an offline-browser failure.
- const headers={Cookie:`subglance_session=${fixture.session}`};
- const response=await fetch(`${fixture.url}/api/v1/maintenance`,{headers});
- expect(response.ok).toBe(true);
- const data=await response.json() as {maintenance:{id:number}[]};
- for(const window of data.maintenance){
-  const deleted=await fetch(`${fixture.url}/api/v1/maintenance/${window.id}`,{method:"DELETE",headers});
-  expect(deleted.ok).toBe(true);
- }
+beforeEach(async()=>{
+ // Retry before another case can observe a schedule left by a failed cleanup.
+ expect(await cleanup?.()).toEqual([]);
 });
-afterAll(async()=>{await browser?.close();lines?.close();if(child&&child.exitCode===null){const exited=new Promise<void>(resolve=>child.once("exit",()=>resolve()));child.stdin?.end();await exited;}if(dir)await rm(dir,{recursive:true,force:true});});
+afterEach(async()=>{await cleanup?.();});
+afterAll(async()=>{
+ let failures: string[] = [];
+ try { failures=await cleanup?.() ?? []; }
+ finally {
+  await browser?.close();lines?.close();
+  if(child&&child.exitCode===null){const exited=new Promise<void>(resolve=>child.once("exit",()=>resolve()));child.stdin?.end();await exited;}
+  if(dir)await rm(dir,{recursive:true,force:true});
+ }
+ expect(failures).toEqual([]);
+});
 it.each([["dark",375,0],["light",375,1],["dark",1440,2],["light",1440,3]] as const)("maintenance through real UI/API/checker: %s %ipx",async(theme,width,index)=>{
  const context=await browser.createBrowserContext();const page=await context.newPage();const id=fixture.ids[index];
  page.setDefaultTimeout(5_000);
@@ -83,6 +87,8 @@ it.each([["dark",375,0],["light",375,1],["dark",1440,2],["light",1440,3]] as con
   // A real stream interruption must withdraw the present-tense claim too.
   await page.goto(`${fixture.url}/monitors/${id}`,{waitUntil:"domcontentloaded"});
   await page.waitForFunction(()=>Array.from(document.querySelectorAll('[role="status"]')).some(el=>el.textContent==="Scheduled maintenance — checks continue; alerts suppressed."));
+  await page.waitForFunction(()=>document.querySelector(".inc-reminders")?.textContent?.includes("scheduled maintenance is active"));
+  expect(await page.$(".inc-reminders time")).toBeNull();
   await page.setOfflineMode(true);
   // Network emulation does not close an established loopback SSE socket.
   const disconnected=readLine();child.stdin!.write(`${JSON.stringify({disconnect:true})}\n`);await disconnected;
@@ -108,6 +114,9 @@ it.each([["dark",375,0],["light",375,1],["dark",1440,2],["light",1440,3]] as con
   await weeklyCancel!.evaluate(el=>el.scrollIntoView({block:"center"}));
   await weeklyCancel!.click();
   await page.waitForFunction(()=>document.querySelector('.maintenance')?.textContent?.includes("No maintenance windows scheduled."));
+  await page.goto(`${fixture.url}/monitors/${id}`,{waitUntil:"domcontentloaded"});
+  await page.waitForFunction(()=>document.querySelector(".inc-reminders")?.textContent?.includes("deferred initial alert"));
+  expect(await page.$(".inc-reminders time")).toBeNull();
   expect(await check(true)).toMatchObject({added_alerts:0});
   await page.goto(`${fixture.url}/monitors/${id}`,{waitUntil:"domcontentloaded"});
   await page.waitForFunction(()=>document.querySelector('.response-history')?.textContent?.includes("Maintenance — alerts suppressed; excluded from uptime"));

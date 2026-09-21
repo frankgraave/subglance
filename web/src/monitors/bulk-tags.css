@@ -1,0 +1,35 @@
+/* Management controls share the inventory's existing card and drawer. */
+.bulk-tags-actions,
+.bulk-tags-selection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.bulk-tags-selection {
+  margin-block-end: var(--space-3);
+}
+.bulk-tags-selection p {
+  margin: 0;
+}
+.bulk-tags-select {
+  accent-color: var(--accent);
+  /* Match the inventory's compact action targets, not its smaller glyphs. */
+  width: var(--size-square-compact);
+  height: var(--size-square-compact);
+  margin-inline-end: var(--space-2);
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+.bulk-tags-form p {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.bulk-tags-form button[aria-disabled="true"] {
+  opacity: .45;
+  cursor: default;
+}
+.bulk-tags-preview {
+  border-block-start: 1px solid var(--border);
+  padding-block-start: var(--space-3);
+}
