@@ -326,6 +326,9 @@ export function HeartbeatBar({
     const handler = keys[event.key];
     if (!handler) return;
     event.preventDefault();
+    // Dismiss this readout before the shell interprets Escape as navigation.
+    // A second Escape, with no selected check, can still leave the page.
+    if (event.key === "Escape" && active !== null) event.stopPropagation();
     handler();
   };
 
@@ -564,7 +567,7 @@ export function HeartbeatBar({
       {interactive && (
         <div aria-live="polite" className="hb-sr-only">
           {focused && activeSlot && activeSlot.kind === "beat"
-            ? `${formatTime(activeSlot.to)}, ${activeSlot.ok ? "passed" : "failed"}, ${formatLatency(activeSlot.latencyMs)}`
+            ? `${formatTime(activeSlot.to)}, ${stale ? "Last known: " : ""}${activeSlot.assessment === "warning" ? "Warning — unconfirmed, no alert" : activeSlot.ok ? "passed" : "failed"}, ${formatLatency(activeSlot.latencyMs)}${stale ? ". Not updating" : ""}`
             : ""}
         </div>
       )}

@@ -49,6 +49,7 @@ it.each([
 ] as const)("real warnings, confirmation, history and silent recovery: %s %ipx", async (theme, width, index) => {
   const context = await browser.createBrowserContext();
   const page = await context.newPage();
+  page.setDefaultTimeout(5_000);
   const id = fixture.ids[index];
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(String(error)));
@@ -84,6 +85,14 @@ it.each([
     }
     await page.goto(`${fixture.url}/monitors/${id}`, { waitUntil: "domcontentloaded" });
     await page.waitForSelector('.mon-detail[data-status="warning"] .hb-bar--warning');
+    await page.focus('.hb-track');
+    await page.keyboard.press("End");
+    expect(await page.$eval('.hb-sr-only[aria-live="polite"]', el=>el.textContent)).toContain("Warning — unconfirmed, no alert");
+    const legend=await page.$$eval('.legend-item',items=>items.map(item=>({label:item.querySelector('dt')?.textContent,value:item.querySelector('dd')?.textContent})));
+    expect(legend).toContainEqual({label:"Warnings (unconfirmed)",value:"1"});
+    expect(legend).toContainEqual({label:"Failed",value:"0"});
+    await page.keyboard.press("Escape");
+    expect(new URL(page.url()).pathname).toBe(`/monitors/${id}`);
     await page.waitForFunction(() => document.querySelector(".response-history")?.textContent?.includes("unconfirmed failure; no alert; excluded from uptime"));
     await page.waitForSelector('.inc-row[data-state="warning"]');
     expect(await page.$eval('.inc-row', (el) => el.textContent)).not.toMatch(/Down since|repeat alerts are still escalating/);
@@ -110,7 +119,7 @@ it.each([
     await page.evaluate(axe.source);
     const audit = await page.evaluate(async () => {
       const a = (window as unknown as { axe: typeof axe }).axe;
-      return a.run({ include: [".mon-detail-status", ".response-history", ".mon-detail-windows", ".mon-detail-uptime-note"] }, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa"] } });
+      return a.run({ include: [".mon-detail-status", ".response-history", ".mon-detail-windows", ".mon-detail-uptime-note", ".legend"] }, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa"] } });
     });
     expect(audit.violations).toEqual([]);
     if (process.env.WARNING_BROWSER_PROOF_DIR) {

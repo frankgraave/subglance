@@ -437,3 +437,41 @@ it("does not count a warning twice in the accessible summary", () => {
   }))} />);
   expect(screen.getByRole("group").getAttribute("aria-label")).toContain("1 failed, 1 warning");
 });
+
+it.each([false, true])("announces warning assessments truthfully with stale=%s", (stale) => {
+  render(<HeartbeatBar beats={beats(1, () => ({ok:false, assessment:"warning"}))} label="API" width={WIDTH} stale={stale}/>);
+  fireEvent.focus(screen.getByRole("group"));
+  fireEvent.keyDown(screen.getByRole("group"), {key:"End"});
+  const live=document.querySelector('[aria-live="polite"]')!;
+  expect(live.textContent).toContain("Warning — unconfirmed, no alert");
+  expect(live.textContent).not.toContain("failed");
+  expect(live.textContent?.includes("Last known")).toBe(stale);
+  expect(live.textContent?.includes("Not updating")).toBe(stale);
+});
+
+it.each([true, false])("marks a stale %s check announcement as last-known", (ok) => {
+  render(<HeartbeatBar beats={beats(1, () => ({ok}))} label="API" width={WIDTH} stale/>);
+  fireEvent.focus(screen.getByRole("group"));
+  fireEvent.keyDown(screen.getByRole("group"), {key:"End"});
+  const live=document.querySelector('[aria-live="polite"]')!;
+  expect(live.textContent).toContain(`Last known: ${ok ? "passed" : "failed"}`);
+  expect(live.textContent).toContain("Not updating");
+});
+
+it("dismisses the selected check before Escape reaches page navigation", () => {
+  let pageEscapes=0;
+  const onKeyDown=(event:KeyboardEvent)=>{if(event.key==="Escape") pageEscapes++;};
+  window.addEventListener("keydown",onKeyDown);
+  try {
+    render(<HeartbeatBar beats={beats(1)} label="API" width={WIDTH}/>);
+    const track=screen.getByRole("group");
+    fireEvent.focus(track);
+    fireEvent.keyDown(track,{key:"End"});
+    expect(screen.getByTestId("hb-tooltip")).toBeTruthy();
+    fireEvent.keyDown(track,{key:"Escape"});
+    expect(screen.queryByTestId("hb-tooltip")).toBeNull();
+    expect(pageEscapes).toBe(0);
+    fireEvent.keyDown(track,{key:"Escape"});
+    expect(pageEscapes).toBe(1);
+  } finally {window.removeEventListener("keydown",onKeyDown);}
+});

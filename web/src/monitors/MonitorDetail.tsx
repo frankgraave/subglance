@@ -471,18 +471,20 @@ export function MonitorDetail({
  * cannot answer the second: ninety columns at 6px do not let anyone tally the
  * red ones. The count is the reason this legend earns its space.
  *
- * Two entries, never more. A `Beat` carries `ok` and nothing else, so a third
- * status here would be a colour the plot never draws — a legend that names
- * marks which are not on screen is worse than none.
+ * Warning assessments have their own mark: an unconfirmed failure must not
+ * be counted again as Failed. Unassessed historical failures retain their
+ * raw result here; the uptime denominator is calculated separately.
  *
  * A status with no occurrences is still listed. "0 failed" is a reading; an
  * absent row is silence, and the difference matters on the one panel someone
  * opens to find out whether anything went wrong.
  */
 function legendItems(beats: Beat[]): LegendItem[] {
-  const failed = beats.reduce((n, beat) => (beat.ok ? n : n + 1), 0);
+  const warnings = beats.filter((beat) => beat.assessment === "warning").length;
+  const failed = beats.filter((beat) => !beat.ok && beat.assessment !== "warning").length;
   return [
-    { key: "up", label: "Passed", marker: "up", value: beats.length - failed },
+    { key: "up", label: "Passed", marker: "up", value: beats.length - failed - warnings },
+    { key: "warning", label: "Warnings (unconfirmed)", marker: "warn", value: warnings },
     { key: "down", label: "Failed", marker: "down", value: failed },
   ];
 }

@@ -335,3 +335,16 @@ it("withdraws the maintenance claim when the stream goes stale", () => {
   expect(screen.getByText("Scheduled maintenance when we last heard — checks continued; alerts were suppressed.")).toBeTruthy();
   expect(screen.queryByText(/checks continue;/)).toBeNull();
 });
+
+it("counts warning checks separately in the detail legend", () => {
+  view({monitor:monitor("down", {beats:[
+    {ts:NOW-180_000,ok:true,assessment:"up",latencyMs:100},
+    {ts:NOW-120_000,ok:false,assessment:"warning",latencyMs:100},
+    {ts:NOW-60_000,ok:false,assessment:"down",latencyMs:100},
+  ]})});
+  const items=Array.from(document.querySelectorAll('.legend-item'));
+  const value=(label:string)=>items.find(item=>item.querySelector('dt')?.textContent===label)?.querySelector('dd')?.textContent;
+  expect(value("Passed")).toBe("1");
+  expect(value("Failed")).toBe("1");
+  expect(value("Warnings (unconfirmed)")).toBe("1");
+});
