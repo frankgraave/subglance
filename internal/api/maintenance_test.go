@@ -146,3 +146,14 @@ func TestMaintenanceRejectsCrossOriginSessionWrites(t *testing.T) {
 		}
 	}
 }
+
+func TestMaintenanceInvalidDeleteID(t *testing.T) {
+	s, _ := testServerWithDB(t)
+	for _, id := range []string{"bad", "0", "-1"} {
+		rec := httptest.NewRecorder()
+		authedHandler(s).ServeHTTP(rec, httptest.NewRequest("DELETE", "/api/v1/maintenance/"+id, nil))
+		if rec.Code != 400 || !strings.Contains(rec.Body.String(), "invalid maintenance id") {
+			t.Fatalf("delete %s: %d %s", id, rec.Code, rec.Body)
+		}
+	}
+}

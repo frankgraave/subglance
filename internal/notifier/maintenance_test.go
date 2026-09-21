@@ -23,10 +23,11 @@ func TestMaintenanceFiltersGroupedDelivery(t *testing.T) {
 	}
 	// Persist the group before maintenance is added, then simulate restart.
 	n.flushAll(ctx)
-	_, err := db.CreateMaintenance(ctx, store.MaintenanceWindow{Name: "deploy", MonitorID: a.ID, StartsAt: now, EndsAt: now.Add(time.Hour)})
+	w, err := db.CreateMaintenance(ctx, store.MaintenanceWindow{Name: "deploy", MonitorID: a.ID, StartsAt: now, EndsAt: now.Add(time.Hour)})
 	if err != nil {
 		t.Fatal(err)
 	}
+	now = w.CreatedAt
 	n = New(Options{DB: db, Senders: map[string]Sender{store.ChannelWebhook: sender}, Now: func() time.Time { return now }})
 	if _, err := n.sweep(ctx); err != nil {
 		t.Fatal(err)
@@ -43,10 +44,11 @@ func TestMaintenanceSuppressesEveryEvent(t *testing.T) {
 			db, m, _ := testDB(t)
 			now := time.Now().UTC().Truncate(time.Second)
 			sender := &fakeSender{}
-			_, err := db.CreateMaintenance(ctx, store.MaintenanceWindow{Name: "deploy", MonitorID: m.ID, StartsAt: now, EndsAt: now.Add(time.Hour)})
+			w, err := db.CreateMaintenance(ctx, store.MaintenanceWindow{Name: "deploy", MonitorID: m.ID, StartsAt: now, EndsAt: now.Add(time.Hour)})
 			if err != nil {
 				t.Fatal(err)
 			}
+			now = w.CreatedAt
 			n := New(Options{DB: db, Senders: map[string]Sender{store.ChannelWebhook: sender}, Now: func() time.Time { return now }, GroupWindow: GroupingDisabled})
 			if err := n.Enqueue(ctx, m, store.Incident{}, event, now); err != nil {
 				t.Fatal(err)
@@ -81,6 +83,7 @@ func TestMaintenanceSuppressesQueuedReminderWithoutSilencingRecovery(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
+	now = w.CreatedAt
 	if _, err := n.sweep(ctx); err != nil {
 		t.Fatal(err)
 	}

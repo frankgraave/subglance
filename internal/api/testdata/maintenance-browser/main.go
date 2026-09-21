@@ -80,11 +80,19 @@ func run() error {
 	commands := bufio.NewScanner(os.Stdin)
 	for commands.Scan() {
 		var c struct {
-			Index   int  `json:"index"`
-			Healthy bool `json:"healthy"`
+			Index      int  `json:"index"`
+			Healthy    bool `json:"healthy"`
+			Disconnect bool `json:"disconnect"`
 		}
 		if err := json.Unmarshal(commands.Bytes(), &c); err != nil {
 			return err
+		}
+		if c.Disconnect {
+			server.CloseClientConnections()
+			if err := json.NewEncoder(os.Stdout).Encode(map[string]any{"ready": true}); err != nil {
+				return err
+			}
+			continue
 		}
 		if c.Index < 0 || c.Index >= 8 {
 			return fmt.Errorf("invalid monitor")

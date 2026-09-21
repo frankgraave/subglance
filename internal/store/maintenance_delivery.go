@@ -32,7 +32,7 @@ func (db *DB) FilterMaintenanceDelivery(ctx context.Context, d Delivery, payload
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	for _, id := range held {
 		if _, err = tx.ExecContext(ctx, `INSERT INTO maintenance_channel_alerts(incident_id,channel_id,pending) VALUES(?,?,1) ON CONFLICT(incident_id,channel_id) DO UPDATE SET pending=1`, id, d.ChannelID); err != nil {
 			return err
@@ -52,7 +52,7 @@ func (db *DB) EnqueueMaintenanceDeliveries(ctx context.Context, incidentID int64
 	if err != nil {
 		return false, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var all, known, resolved bool
 	err = tx.QueryRowContext(ctx, `SELECT maintenance_pending, EXISTS(SELECT 1 FROM maintenance_channel_alerts WHERE incident_id=incidents.id), resolved_at IS NOT NULL FROM incidents WHERE id=?`, incidentID).Scan(&all, &known, &resolved)
 	if errors.Is(err, sql.ErrNoRows) {

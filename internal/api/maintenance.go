@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/frankgraave/subglance/internal/store"
@@ -12,6 +13,7 @@ import (
 func (s *Server) handleListMaintenance(w http.ResponseWriter, r *http.Request) {
 	windows, err := s.db.ListMaintenance(r.Context())
 	if err != nil {
+		s.log.Error("list maintenance", "error", err)
 		writeError(w, 500, "could not read maintenance windows")
 		return
 	}
@@ -57,11 +59,12 @@ func (s *Server) handleCreateMaintenance(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, 201, created)
 }
 func (s *Server) handleDeleteMaintenance(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
-	if !ok {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid maintenance id")
 		return
 	}
-	err := s.db.DeleteMaintenance(r.Context(), id)
+	err = s.db.DeleteMaintenance(r.Context(), id)
 	if errors.Is(err, sql.ErrNoRows) {
 		writeError(w, 404, "maintenance window not found")
 		return

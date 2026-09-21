@@ -344,7 +344,13 @@ export function MonitorDetail({
       {responseHistory ? <ResponseHistory key={monitor.id} {...responseHistory} /> : null}
 
       <Card title="Uptime" icon={<IconGauge />} headingLevel={2}>
-        {monitor.maintenance ? <p role="status">Scheduled maintenance — checks continue; alerts suppressed.</p> : null}
+        {monitor.maintenance ? (
+          <p role="status">
+            {stale
+              ? "Scheduled maintenance when we last heard — checks continued; alerts were suppressed."
+              : "Scheduled maintenance — checks continue; alerts suppressed."}
+          </p>
+        ) : null}
         <p className="mon-detail-uptime-note">Only confirmed downtime counts. Warnings, maintenance checks and history without a recorded assessment are excluded. This is a sample ratio, not elapsed time.</p>
         <Panel>
           {error !== null ? (

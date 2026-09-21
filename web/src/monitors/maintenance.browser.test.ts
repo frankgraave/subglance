@@ -67,6 +67,22 @@ it.each([["dark",375,0],["light",375,1],["dark",1440,2],["light",1440,3]] as con
   expect(audit.violations).toEqual([]);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   if(process.env.MAINTENANCE_BROWSER_PROOF_DIR){await mkdir(process.env.MAINTENANCE_BROWSER_PROOF_DIR,{recursive:true});await page.screenshot({path:join(process.env.MAINTENANCE_BROWSER_PROOF_DIR,`maintenance-${theme}-${width}.png`),fullPage:true});}
+  // A real stream interruption must withdraw the present-tense claim too.
+  await page.goto(`${fixture.url}/monitors/${id}`,{waitUntil:"domcontentloaded"});
+  await page.waitForFunction(()=>Array.from(document.querySelectorAll('[role="status"]')).some(el=>el.textContent==="Scheduled maintenance — checks continue; alerts suppressed."));
+  await page.setOfflineMode(true);
+  // Network emulation does not close an established loopback SSE socket.
+  const disconnected=readLine();child.stdin!.write(`${JSON.stringify({disconnect:true})}\n`);await disconnected;
+  await page.waitForFunction(()=>Array.from(document.querySelectorAll('[role="status"]')).some(el=>el.textContent==="Scheduled maintenance when we last heard — checks continued; alerts were suppressed."));
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.evaluate(axe.source);
+  const staleAudit=await page.evaluate(async()=> (window as unknown as {axe:typeof axe}).axe.run({include:['[role="status"]']},{runOnly:{type:"tag",values:["wcag2a","wcag2aa"]}}));
+  expect(staleAudit.violations).toEqual([]);
+  if(process.env.MAINTENANCE_BROWSER_PROOF_DIR) await page.screenshot({path:join(process.env.MAINTENANCE_BROWSER_PROOF_DIR,`maintenance-stale-${theme}-${width}.png`),fullPage:true});
+  await page.setOfflineMode(false);
+  await page.waitForFunction(()=>Array.from(document.querySelectorAll('[role="status"]')).some(el=>el.textContent==="Scheduled maintenance — checks continue; alerts suppressed."));
+  await page.goto(`${fixture.url}/monitors`,{waitUntil:"domcontentloaded"});
+  await (await page.waitForSelector('.maintenance summary'))!.click();
   const cancel=await page.waitForSelector(`[aria-label="Cancel maintenance Deploy ${index}"]:not([disabled])`);
   await cancel!.evaluate(el=>el.scrollIntoView({block:"center"}));
   await cancel!.click();
@@ -92,6 +108,7 @@ it.each([["dark",375,0],["light",375,1],["dark",1440,2],["light",1440,3]] as con
 
 it.each([["dark",375,4],["light",375,5],["dark",1440,6],["light",1440,7]] as const)("natural maintenance boundaries update the open detail: %s %ipx", async(theme,width,index)=>{
  const context=await browser.createBrowserContext();const page=await context.newPage();const id=fixture.ids[index];
+ page.setDefaultTimeout(5_000);
  const check=async(healthy:boolean)=>{const response=readLine();child.stdin!.write(`${JSON.stringify({index,healthy})}\n`);return JSON.parse(await response);};
  try {
   await context.setCookie({name:"subglance_session",value:fixture.session,domain:new URL(fixture.url).hostname,path:"/",httpOnly:true,sameSite:"Strict"});
@@ -100,7 +117,7 @@ it.each([["dark",375,4],["light",375,5],["dark",1440,6],["light",1440,7]] as con
   await page.goto(`${fixture.url}/monitors/${id}`,{waitUntil:"domcontentloaded"});
   await page.waitForFunction(()=>document.querySelector('.mon-detail-uptime-note'));
   const end=await page.evaluate(async(id)=>{
-    const start=Date.now()+1000;const end=start+4000;
+    const start=Date.now()+1000;const end=start+10_000;
     const res=await fetch('/api/v1/maintenance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Boundary',monitor_id:id,starts_at:new Date(start).toISOString(),ends_at:new Date(end).toISOString()})});
     if(!res.ok) throw new Error(`schedule ${res.status}`);
     return {start,end};
@@ -112,11 +129,11 @@ it.each([["dark",375,4],["light",375,5],["dark",1440,6],["light",1440,7]] as con
   await page.waitForFunction(()=>Array.from(document.querySelectorAll('[role="status"]')).some(el=>el.textContent?.includes('Scheduled maintenance')));
   expect(await page.$eval('.chart-breakdown',el=>el.textContent)).toBe('No eligible checks');
   expect(await page.$eval('.chart-headline',el=>el.textContent)).toBe('—');
-  await page.waitForFunction(end=>Date.now()>=end,{},end.end);
+  await page.waitForFunction(end=>Date.now()>=end,{timeout:15_000},end.end);
   expect(await check(true)).toMatchObject({added_alerts:0});
   await page.waitForFunction(()=>!Array.from(document.querySelectorAll('[role="status"]')).some(el=>el.textContent?.includes('Scheduled maintenance')));
   expect(await page.$eval('.chart-headline',el=>el.textContent)).toBe('100.00%');
-  expect(await page.$eval('.chart-breakdown',el=>el.textContent)).toBe('1 eligible checks · 0 confirmed down');
+  expect(await page.$eval('.chart-breakdown',el=>el.textContent)).toBe('1 eligible check · 0 confirmed down');
   const history=await page.evaluate(async(id)=>fetch(`/api/v1/monitors/${id}/heartbeats`).then(r=>r.json()),id);
   expect(history.heartbeats.map((b:{maintenance:boolean})=>b.maintenance)).toEqual([false,true,true]);
   await page.evaluate(axe.source);

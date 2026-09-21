@@ -221,6 +221,14 @@ The uptime detail shows warning and legacy counts. With no eligible samples,
 uptime is unknown (`null` in the API), never an invented 0% or 100%. A pending
 monitor has no check result yet; a paused monitor is not being measured.
 
+## Scheduled maintenance
+
+Schedule one-off or weekly maintenance for a monitor or tag group from the
+Monitors page. Measurements continue; alerts are suppressed and maintenance
+samples are excluded from uptime. An empty denominator remains unknown. See
+[scheduled maintenance](docs/maintenance.md) for API examples, timezone and DST
+rules, overlap, pause and delivery semantics.
+
 ## Licence
 
 [GNU AGPL-3.0](LICENSE) © Frank Graave
@@ -239,11 +247,3 @@ situation, get in touch.
 *Know it's up. At a glance.*
 
 </div>
-
-## Scheduled maintenance
-
-Schedule one-off or weekly maintenance for a monitor or tag group from the
-Monitors page. Measurements continue; alerts are suppressed and maintenance
-samples are excluded from uptime. An empty denominator remains unknown. See
-[scheduled maintenance](docs/maintenance.md) for API examples, timezone and DST
-rules, overlap, pause and delivery semantics.

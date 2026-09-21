@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -127,8 +128,7 @@ func TestMaintenanceChannelIsolation(t *testing.T) {
 			if _, err := r.CheckNow(ctx, m); err != nil {
 				t.Fatal(err)
 			}
-			inc, err := db.OpenIncidentFor(ctx, m.ID)
-			if err != nil {
+			if _, err := db.OpenIncidentFor(ctx, m.ID); err != nil {
 				t.Fatal(err)
 			}
 
@@ -144,8 +144,9 @@ func TestMaintenanceChannelIsolation(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			now = w.CreatedAt
 			n.attempt(ctx, due[1]) // The retry encounters maintenance.
-			inc, err = db.OpenIncidentFor(ctx, m.ID)
+			inc, err := db.OpenIncidentFor(ctx, m.ID)
 			if err != nil || inc.MaintenancePending {
 				t.Fatalf("channel suppression poisoned incident: %+v %v", inc, err)
 			}
@@ -216,11 +217,12 @@ func TestMaintenanceGroupedIntentAndPayloadAreAtomic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	now = w.CreatedAt
 	if _, err = db.Writer.ExecContext(ctx, `CREATE TRIGGER reject_filter BEFORE UPDATE ON notif_outbox BEGIN SELECT RAISE(ABORT,'filter disk failure'); END`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = n.sweep(ctx); err != nil {
-		t.Fatal(err)
+	if _, err = n.sweep(ctx); err == nil || !strings.Contains(err.Error(), "filter disk failure") {
+		t.Fatalf("failed retry write must back off the sweep: %v", err)
 	}
 	if sender.attemptCount() != 0 {
 		t.Fatal("sent before persisting filter")

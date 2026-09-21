@@ -326,7 +326,7 @@ func (n *Notifier) Run(ctx context.Context) {
 		// should drain at the speed of the endpoints, not the speed of
 		// the poll interval.
 		delay := n.interval
-		if sent > 0 {
+		if err == nil && sent > 0 {
 			delay = 0
 		}
 
@@ -359,53 +359,55 @@ func (n *Notifier) sweep(ctx context.Context) (int, error) {
 		if ctx.Err() != nil {
 			return len(due), ctx.Err()
 		}
-		n.attempt(ctx, d)
+		if err := n.attempt(ctx, d); err != nil {
+			return len(due), err
+		}
 	}
 	return len(due), nil
 }
 
 // attempt performs one delivery and records the outcome.
-func (n *Notifier) attempt(ctx context.Context, d store.Delivery) {
+func (n *Notifier) attempt(ctx context.Context, d store.Delivery) error {
 	ch, err := n.db.GetChannel(ctx, d.ChannelID)
 	if err != nil {
 		// The channel was deleted while this was queued. There is
 		// nowhere to send it and never will be.
 		n.fail(ctx, d, fmt.Sprintf("channel %d no longer exists", d.ChannelID))
-		return
+		return nil
 	}
 
 	if !ch.Enabled {
 		n.fail(ctx, d, "channel is disabled")
-		return
+		return nil
 	}
 
 	sender, ok := n.senders[ch.Type]
 	if !ok {
 		n.fail(ctx, d, fmt.Sprintf("no implementation for channel type %q", ch.Type))
-		return
+		return nil
 	}
 
 	alert, err := DecodeAlert(d.Payload)
 	if err != nil {
 		n.fail(ctx, d, "stored alert could not be read: "+err.Error())
-		return
+		return nil
 	}
 
 	alert, keep, held, filterErr := n.filterMaintenance(ctx, alert, d.ChannelID)
 	if filterErr != nil {
 		n.log.Error("could not evaluate maintenance for delivery", "delivery", d.ID, "error", filterErr)
-		return
+		return n.retryMaintenance(ctx, d, filterErr)
 	}
 	payload, err := alert.Encode()
 	if err != nil {
-		return
+		return nil
 	}
 	if err := n.db.FilterMaintenanceDelivery(ctx, d, payload, keep, held); err != nil {
 		n.log.Error("could not persist maintenance delivery decision", "delivery", d.ID, "error", err)
-		return
+		return n.retryMaintenance(ctx, d, err)
 	}
 	if !keep {
-		return
+		return nil
 	}
 
 	sendCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
@@ -418,7 +420,7 @@ func (n *Notifier) attempt(ctx context.Context, d store.Delivery) {
 		}
 		n.log.Info("alert delivered",
 			"monitor", alert.MonitorName, "channel", ch.Name, "event", alert.Event)
-		return
+		return nil
 	}
 
 	var r *Retryable
@@ -427,7 +429,7 @@ func (n *Notifier) attempt(ctx context.Context, d store.Delivery) {
 		n.log.Error("alert rejected",
 			"monitor", alert.MonitorName, "channel", ch.Name, "error", err)
 		n.fail(ctx, d, err.Error())
-		return
+		return nil
 	}
 
 	next := d.Attempts + 1
@@ -436,7 +438,7 @@ func (n *Notifier) attempt(ctx context.Context, d store.Delivery) {
 			"monitor", alert.MonitorName, "channel", ch.Name,
 			"attempts", next, "error", err)
 		n.fail(ctx, d, fmt.Sprintf("gave up after %d attempts: %s", next, err))
-		return
+		return nil
 	}
 
 	delay := backoff(next)
@@ -448,6 +450,14 @@ func (n *Notifier) attempt(ctx context.Context, d store.Delivery) {
 	if err := n.db.MarkRetry(ctx, d.ID, err.Error(), n.now().Add(delay)); err != nil {
 		n.log.Error("could not schedule retry", "delivery", d.ID, "error", err)
 	}
+	return nil
+}
+
+// retryMaintenance keeps the delivery pending until its prerequisite can be
+// evaluated and persisted. A failed retry write reaches Run so even a database
+// that cannot write cannot turn the outbox into a busy loop.
+func (n *Notifier) retryMaintenance(ctx context.Context, d store.Delivery, cause error) error {
+	return n.db.MarkRetry(ctx, d.ID, cause.Error(), n.now().Add(backoff(d.Attempts+1)))
 }
 
 // fail dead-letters a delivery.

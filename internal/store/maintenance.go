@@ -169,7 +169,7 @@ func (db *DB) ListMaintenance(ctx context.Context) ([]MaintenanceWindow, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []MaintenanceWindow{}
 	for rows.Next() {
 		var id int64

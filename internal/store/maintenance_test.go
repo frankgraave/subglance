@@ -100,7 +100,7 @@ func TestMaintenanceScopeOverlapAndPersistence(t *testing.T) {
 	for _, step := range []struct {
 		at   time.Time
 		want bool
-	}{{now.Add(-time.Second), false}, {now, true}, {now.Add(time.Hour), true}, {now.Add(2 * time.Hour), false}} {
+	}{{a.StartsAt.Add(-time.Second), false}, {b.CreatedAt, true}, {a.EndsAt, true}, {b.EndsAt, false}} {
 		v, e := db.InMaintenance(ctx, id, step.at)
 		if e != nil || v != step.want {
 			t.Fatalf("at %s active %v err %v", step.at, v, e)
@@ -109,7 +109,7 @@ func TestMaintenanceScopeOverlapAndPersistence(t *testing.T) {
 	if err := db.DeleteMaintenance(ctx, a.ID); err != nil {
 		t.Fatal(err)
 	}
-	if yes, err := db.InMaintenance(ctx, id, now); err != nil || !yes {
+	if yes, err := db.InMaintenance(ctx, id, b.CreatedAt); err != nil || !yes {
 		t.Fatal("overlap cancellation removed other window")
 	}
 	stored, err := db.ListMaintenance(ctx)
@@ -120,7 +120,7 @@ func TestMaintenanceScopeOverlapAndPersistence(t *testing.T) {
 	if _, err := db.UpdateMonitor(ctx, m); err != nil {
 		t.Fatal(err)
 	}
-	if yes, err := db.InMaintenance(ctx, id, now); err != nil || yes {
+	if yes, err := db.InMaintenance(ctx, id, b.CreatedAt); err != nil || yes {
 		t.Fatal("tag membership was not re-evaluated")
 	}
 }
@@ -155,7 +155,7 @@ func TestMaintenanceSurvivesDatabaseReopen(t *testing.T) {
 		t.Fatalf("lost windows: %+v %v", windows, err)
 	}
 	for _, w := range windows {
-		if !w.Active(now) {
+		if !w.Active(w.CreatedAt) {
 			t.Fatalf("reopened schedule inactive: %+v", w)
 		}
 	}

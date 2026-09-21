@@ -35,6 +35,7 @@ func TestMaintenanceMeasurementsAndAlerts(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			now = w.CreatedAt
 			r := New(Options{DB: db, Log: quietLogger(), Notify: notify})
 			r.now = func() time.Time { return now.Add(10 * time.Minute) }
 			for i := 0; i < 2; i++ {

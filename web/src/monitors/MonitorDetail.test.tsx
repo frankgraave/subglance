@@ -325,3 +325,13 @@ describe("the stale signal", () => {
     ).toBe("live");
   });
 });
+
+it("withdraws the maintenance claim when the stream goes stale", () => {
+  const maintained = monitor("down", { maintenance: true });
+  const props = { monitor: maintained, windows: [], incidents: [], now: NOW, beatWidth: WIDTH };
+  const { rerender } = render(<MonitorDetail {...props} />);
+  expect(screen.getByText("Scheduled maintenance — checks continue; alerts suppressed.")).toBeTruthy();
+  rerender(<MonitorDetail {...props} stale />);
+  expect(screen.getByText("Scheduled maintenance when we last heard — checks continued; alerts were suppressed.")).toBeTruthy();
+  expect(screen.queryByText(/checks continue;/)).toBeNull();
+});
