@@ -80,16 +80,32 @@ func buildHistory(m store.Monitor, p profile, id int64, pl plan, rnd *rand.Rand)
 	}
 
 	interval := beatInterval(m)
-	outages := resolveOutages(p, start, end, interval, rnd)
+	outages := resolveOutages(p, start, end, interval, m.Retries, rnd)
 
 	h := history{}
 	for _, o := range outages {
-		h.incidents = append(h.incidents, incidentFor(id, o, m, interval))
+		inc := incidentFor(id, o, m, interval)
+		// The exclusive history horizon cannot contain a future confirmation
+		// or recovery, even for an outage that extends beyond the last check.
+		if !inc.ConfirmedAt.Before(end) {
+			inc.ConfirmedAt = time.Time{}
+			inc.AckedAt = time.Time{}
+			inc.RemindedAt = time.Time{}
+			inc.ReminderCount = 0
+		}
+		if !inc.ResolvedAt.Before(end) {
+			inc.ResolvedAt = time.Time{}
+		}
+		h.incidents = append(h.incidents, inc)
 	}
 
 	rawFrom := pl.rawSince
 	if rawFrom.Before(start) {
 		rawFrom = start
+	}
+
+	if rawFrom.After(end) {
+		rawFrom = end
 	}
 
 	h.buckets = buildBuckets(id, m, p, start, rawFrom, interval, outages, pl)
@@ -125,10 +141,25 @@ func beatInterval(m store.Monitor) time.Duration {
 // Overlaps are dropped rather than merged. Two open incidents for one monitor
 // is impossible in the schema, and two that merely touch would produce a beat
 // timeline that neither incident explains on its own.
-func resolveOutages(p profile, start, end time.Time, interval time.Duration, rnd *rand.Rand) []outage {
+func resolveOutages(p profile, start, end time.Time, interval time.Duration, retries int, rnd *rand.Rand) []outage {
 	var out []outage
 
 	add := func(o outage) {
+		first := sampleAtOrAfter(o.start, interval)
+		if o.unconfirmed {
+			// A requested warning must recover before its Nth failure, not
+			// override the assessment of a longer streak of failed samples.
+			if retries <= 1 {
+				return
+			}
+			limit := first.Add(time.Duration(retries-1) * interval)
+			if (o.end.IsZero() && limit.Before(end)) || (!o.end.IsZero() && o.end.After(limit)) {
+				o.end = limit
+			}
+		}
+		if !first.Before(end) || (!o.end.IsZero() && !first.Before(o.end)) {
+			return
+		}
 		if o.start.Before(start) || !o.start.Before(end) {
 			return
 		}
@@ -210,21 +241,19 @@ func randomFailure(rnd *rand.Rand) (cause, message string, status int) {
 func incidentFor(monitorID int64, o outage, m store.Monitor, interval time.Duration) store.Incident {
 	inc := store.Incident{
 		MonitorID: monitorID,
-		StartedAt: o.start,
+		StartedAt: sampleAtOrAfter(o.start, interval),
 		Cause:     o.cause,
 		LastError: o.message,
 	}
 	if !o.end.IsZero() {
-		inc.ResolvedAt = o.end
+		inc.ResolvedAt = sampleAtOrAfter(o.end, interval)
 	}
 
-	if !o.unconfirmed {
-		confirmed := o.start.Add(time.Duration(m.Retries) * interval)
-		// An outage that ended before the threshold was reached cannot
-		// have been confirmed, whatever the catalogue asked for.
-		if inc.ResolvedAt.IsZero() || confirmed.Before(inc.ResolvedAt) {
-			inc.ConfirmedAt = confirmed
-		}
+	confirmed := inc.StartedAt.Add(time.Duration(max(1, m.Retries)-1) * interval)
+	// Confirmation belongs to the Nth observed failure, with the first
+	// failure already counting as one. Recovery at that sample prevents it.
+	if inc.ResolvedAt.IsZero() || confirmed.Before(inc.ResolvedAt) {
+		inc.ConfirmedAt = confirmed
 	}
 
 	if o.acked && inc.Confirmed() {
@@ -244,6 +273,15 @@ func incidentFor(monitorID int64, o outage, m store.Monitor, interval time.Durat
 	return inc
 }
 
+// sampleAtOrAfter is the first check on the seed cadence at or after t.
+func sampleAtOrAfter(t time.Time, interval time.Duration) time.Time {
+	at := t.Truncate(interval)
+	if at.Before(t) {
+		at = at.Add(interval)
+	}
+	return at
+}
+
 // buildBeats writes one heartbeat per interval between from and to.
 func buildBeats(
 	id int64, m store.Monitor, p profile,
@@ -256,10 +294,7 @@ func buildBeats(
 
 	// Align to the interval so a beat bar reads as a regular cadence rather
 	// than as whatever second the seeder happened to start at.
-	t := from.Truncate(interval)
-	if t.Before(from) {
-		t = t.Add(interval)
-	}
+	t := sampleAtOrAfter(from, interval)
 
 	out := make([]store.Heartbeat, 0, int(to.Sub(t)/interval)+1)
 	// Response snapshots are capped per outage, exactly as the runner caps
@@ -405,31 +440,20 @@ func buildBuckets(
 		return nil
 	}
 
-	perHour := int(time.Hour / interval)
-	if perHour < 1 {
-		// A monitor checked less often than hourly contributes to some
-		// hours and not others. Counting one beat in every hour would
-		// invent checks that never happened and quietly inflate uptime.
-		perHour = 0
-	}
-
 	var out []store.HourlyBucket
 	for h := from.Truncate(time.Hour); h.Before(to); h = h.Add(time.Hour) {
-		beats := perHour
-		if beats == 0 {
-			// Place the sparse monitor's beats on the hours it would
-			// actually have reported, derived from the same alignment
-			// buildBeats uses.
-			if h.Truncate(interval) != h {
-				continue
-			}
-			beats = 1
+		first := sampleAtOrAfter(h, interval)
+		if first.Before(from) {
+			first = sampleAtOrAfter(from, interval)
 		}
-
-		down, assessedDown, warnings := 0, 0, 0
+		limit := h.Add(time.Hour)
+		if to.Before(limit) {
+			limit = to
+		}
+		beats, down, assessedDown, warnings := 0, 0, 0, 0
 		var failing outage
-		for i := 0; i < beats; i++ {
-			at := h.Add(time.Duration(i) * (time.Hour / time.Duration(beats)))
+		for at := first; at.Before(limit); at = at.Add(interval) {
+			beats++
 			if o, isDown := outageAt(outages, at); isDown {
 				down++
 				if outageAssessment(id, m, o, interval, at) == "down" {
@@ -439,6 +463,10 @@ func buildBuckets(
 				}
 				failing = o
 			}
+		}
+
+		if beats == 0 {
+			continue
 		}
 
 		b := store.HourlyBucket{

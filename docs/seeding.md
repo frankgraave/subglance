@@ -44,7 +44,11 @@ one row.
 - **Explicit assessments** on synthetic heartbeats and hourly rollups: passing
   checks are up, failures before the seeded confirmation time are warnings,
   and failures at or after confirmation are down. Warnings are excluded from
-  the uptime denominator. Existing unassessed history remains excluded; the
+  the uptime denominator. Confirmation occurs on the monitor's Nth consecutive
+  failed sample; incident starts and recoveries use actual sample timestamps.
+  Requested unconfirmed scenarios are shortened to stay below that threshold.
+  Hourly buckets use the same cadence and exclusive time boundaries as raw checks.
+  Existing unassessed history remains excluded; the
   seeder does not relabel it.
 - **Incidents in every state**: resolved, open and confirmed, open but not yet
   confirmed, acknowledged and still broken, and one escalating through repeat

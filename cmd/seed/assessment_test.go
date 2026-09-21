@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"math/rand/v2"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/frankgraave/subglance/internal/state"
 	"github.com/frankgraave/subglance/internal/store"
 )
 
@@ -33,17 +35,13 @@ func TestSeedAssessmentAcrossRollupBoundary(t *testing.T) {
 	pl := plan{now: now, rawSince: from, bucketSince: from}
 	beats := buildBeats(m.ID, m, profile{}, from, from.Add(time.Hour), time.Minute, outages, pl, rand.New(rand.NewPCG(1, 2)))
 	wantUp, wantDown, wantWarning := 0, 0, 0
+	engine := state.New(state.Options{})
 	for _, hb := range beats {
-		want, cause := "up", ""
+		tr := engine.Observe(state.Observation{MonitorID: m.ID, At: hb.TS, OK: hb.OK, FailureThreshold: m.Retries})
+		want, cause := string(tr.To), ""
 		for _, o := range outages {
-			if !o.covers(hb.TS) {
-				continue
-			}
-			cause = o.cause
-			inc := incidentFor(m.ID, o, m, time.Minute)
-			want = "warning"
-			if inc.Confirmed() && !hb.TS.Before(inc.ConfirmedAt) {
-				want = "down"
+			if o.covers(hb.TS) {
+				cause = o.cause
 			}
 		}
 		if hb.Assessment != want || hb.FailureKind != cause {
@@ -105,4 +103,152 @@ func TestSeedAssessmentAcrossRollupBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	check(2)
+}
+
+// Replay the actual sampled checks through the engine, independently of the
+// seed's timestamp arithmetic, including failures between cadence boundaries.
+func TestSeedConfirmationMatchesEngine(t *testing.T) {
+	base := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
+	for _, retries := range []int{1, 2, 3} {
+		for _, offset := range []time.Duration{0, 15 * time.Second} {
+			for _, duration := range []time.Duration{time.Minute, 2 * time.Minute, 5 * time.Minute} {
+				t.Run(fmt.Sprintf("retries=%d/offset=%s/duration=%s", retries, offset, duration), func(t *testing.T) {
+					m := store.Monitor{ID: 1, Retries: retries, IntervalS: 60}
+					o := outage{start: base.Add(offset), end: base.Add(offset + duration)}
+					beats := buildBeats(1, m, profile{}, base, base.Add(10*time.Minute), time.Minute, []outage{o}, plan{}, nil)
+					engine := state.New(state.Options{})
+					var firstFailure, confirmed, recovered time.Time
+					for _, hb := range beats {
+						tr := engine.Observe(state.Observation{MonitorID: 1, At: hb.TS, OK: hb.OK, FailureThreshold: retries})
+						if hb.Assessment != string(tr.To) {
+							t.Errorf("at %s: seed=%s engine=%s", hb.TS, hb.Assessment, tr.To)
+						}
+						if !hb.OK && firstFailure.IsZero() {
+							firstFailure = hb.TS
+						}
+						if tr.Event == state.EventIncidentConfirmed {
+							confirmed = hb.TS
+						}
+						if hb.OK && !firstFailure.IsZero() && recovered.IsZero() {
+							recovered = hb.TS
+						}
+					}
+					inc := incidentFor(1, o, m, time.Minute)
+					if !inc.StartedAt.Equal(firstFailure) || !inc.ConfirmedAt.Equal(confirmed) || !inc.ResolvedAt.Equal(recovered) {
+						t.Errorf("incident=%+v; engine start=%s confirmed=%s recovered=%s", inc, firstFailure, confirmed, recovered)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestSeedCatalogueAssessmentsMatchEngine(t *testing.T) {
+	now := time.Date(2026, 9, 20, 10, 0, 15, 0, time.UTC)
+	from := now.Add(-4 * 24 * time.Hour)
+	for _, spec := range monitors() {
+		t.Run(spec.monitor.Name, func(t *testing.T) {
+			m := spec.monitor
+			store.ApplyMonitorDefaults(&m)
+			m.CreatedAt = now.Add(-spec.createdAgo)
+			h := buildHistory(m, spec.profile, 1, plan{now: now, rawSince: from, bucketSince: from}, rand.New(rand.NewPCG(5, 6)))
+			engine := state.New(state.Options{})
+			confirmations := map[time.Time]bool{}
+			for _, hb := range h.beats {
+				tr := engine.Observe(state.Observation{MonitorID: 1, At: hb.TS, OK: hb.OK, FailureThreshold: m.Retries})
+				if hb.Assessment != string(tr.To) {
+					t.Fatalf("at %s: seed=%s engine=%s", hb.TS, hb.Assessment, tr.To)
+				}
+				if tr.Event == state.EventIncidentConfirmed {
+					confirmations[hb.TS] = true
+				}
+			}
+			for _, inc := range h.incidents {
+				if inc.Confirmed() && !confirmations[inc.ConfirmedAt] {
+					t.Fatalf("confirmation without an engine-confirmed sample: %+v", inc)
+				}
+				delete(confirmations, inc.ConfirmedAt)
+			}
+			if len(confirmations) != 0 {
+				t.Fatalf("missing incidents for confirmed samples: %v", confirmations)
+			}
+		})
+	}
+}
+
+func TestSeedBucketsUseActualSamples(t *testing.T) {
+	from := time.Date(2026, 9, 20, 10, 0, 15, 0, time.UTC)
+	to := from.Add(3*time.Hour + 15*time.Minute)
+	for _, interval := range []time.Duration{time.Minute, 70 * time.Second, 90 * time.Minute} {
+		t.Run(interval.String(), func(t *testing.T) {
+			m := store.Monitor{ID: 1, Retries: 2}
+			outages := []outage{{start: from.Add(time.Minute), end: to.Add(-time.Minute)}}
+			beats := buildBeats(1, m, profile{}, from, to, interval, outages, plan{}, nil)
+			want := map[time.Time][3]int{}
+			engine := state.New(state.Options{})
+			for _, hb := range beats {
+				tr := engine.Observe(state.Observation{MonitorID: 1, At: hb.TS, OK: hb.OK, FailureThreshold: m.Retries})
+				hour := hb.TS.Truncate(time.Hour)
+				counts := want[hour]
+				switch tr.To {
+				case state.StatusUp:
+					counts[0]++
+				case state.StatusDown:
+					counts[1]++
+				case state.StatusWarning:
+					counts[2]++
+				}
+				want[hour] = counts
+			}
+			buckets := buildBuckets(1, m, profile{}, from, to, interval, outages, plan{})
+			for _, b := range buckets {
+				if got := ([3]int{b.AssessedUp, b.AssessedDown, b.Warning}); got != want[b.Bucket] {
+					t.Errorf("%s: bucket %v, samples %v", b.Bucket, got, want[b.Bucket])
+				}
+				delete(want, b.Bucket)
+			}
+			if len(want) > 0 {
+				t.Errorf("missing buckets: %v", want)
+			}
+		})
+	}
+}
+
+func TestSeedDoesNotConfirmBeyondHistory(t *testing.T) {
+	now := time.Date(2026, 9, 20, 10, 0, 15, 0, time.UTC)
+	from := now.Add(-time.Hour)
+	m := store.Monitor{ID: 1, IntervalS: 60, Retries: 3}
+	h := buildHistory(m, profile{outages: []outageSpec{{ago: 30 * time.Second, acked: true, reminders: 2}}}, 1, plan{now: now, rawSince: from, bucketSince: from}, rand.New(rand.NewPCG(1, 2)))
+	if len(h.incidents) != 1 {
+		t.Fatalf("missing sampled incident: %+v", h)
+	}
+	inc := h.incidents[0]
+	if inc.Confirmed() || inc.Acked() || inc.ReminderCount != 0 || !inc.RemindedAt.IsZero() {
+		t.Fatalf("future confirmation leaked lifecycle metadata: %+v", inc)
+	}
+}
+
+func TestSeedUnconfirmedScenarioStaysBelowThreshold(t *testing.T) {
+	now := time.Date(2026, 9, 20, 10, 0, 15, 0, time.UTC)
+	from := now.Add(-time.Hour)
+	for _, retries := range []int{1, 3} {
+		t.Run(fmt.Sprint(retries), func(t *testing.T) {
+			m := store.Monitor{ID: 1, IntervalS: 60, Retries: retries}
+			h := buildHistory(m, profile{outages: []outageSpec{{ago: 30 * time.Minute, dur: 6 * time.Minute, unconfirmed: true}}}, 1, plan{now: now, rawSince: from, bucketSince: from}, rand.New(rand.NewPCG(1, 2)))
+			failures := 0
+			for _, hb := range h.beats {
+				if !hb.OK {
+					failures++
+				}
+			}
+			if failures >= retries || (retries > 1 && failures == 0) {
+				t.Fatalf("unconfirmed scenario has %d failures at threshold %d", failures, retries)
+			}
+			for _, inc := range h.incidents {
+				if inc.Confirmed() {
+					t.Fatalf("unconfirmed scenario confirmed: %+v", inc)
+				}
+			}
+		})
+	}
 }
