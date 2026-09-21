@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, expect, it } from "vitest";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -23,6 +23,19 @@ beforeAll(async () => {
  fixture=JSON.parse(await Promise.race([readLine(),new Promise<string>((_,reject)=>{child.once("error",reject);child.once("exit",code=>reject(new Error(`fixture exited ${code}`)));})]));
  browser=await chromium();
 },120_000);
+afterEach(async()=>{
+ // The real server is shared by this file. A failed UI assertion must not
+ // leave a recurring tag window suppressing checks in subsequent cases.
+ // Use Node's client so cleanup also works after an offline-browser failure.
+ const headers={Cookie:`subglance_session=${fixture.session}`};
+ const response=await fetch(`${fixture.url}/api/v1/maintenance`,{headers});
+ expect(response.ok).toBe(true);
+ const data=await response.json() as {maintenance:{id:number}[]};
+ for(const window of data.maintenance){
+  const deleted=await fetch(`${fixture.url}/api/v1/maintenance/${window.id}`,{method:"DELETE",headers});
+  expect(deleted.ok).toBe(true);
+ }
+});
 afterAll(async()=>{await browser?.close();lines?.close();if(child&&child.exitCode===null){const exited=new Promise<void>(resolve=>child.once("exit",()=>resolve()));child.stdin?.end();await exited;}if(dir)await rm(dir,{recursive:true,force:true});});
 it.each([["dark",375,0],["light",375,1],["dark",1440,2],["light",1440,3]] as const)("maintenance through real UI/API/checker: %s %ipx",async(theme,width,index)=>{
  const context=await browser.createBrowserContext();const page=await context.newPage();const id=fixture.ids[index];
@@ -153,8 +166,48 @@ it.each([["dark",375,4],["light",375,5],["dark",1440,6],["light",1440,7]] as con
   await page.keyboard.press('ArrowLeft');
   await page.waitForFunction(()=>document.querySelector('.hb-tooltip')?.textContent?.includes('excluded from uptime'));
   await page.keyboard.press('Escape');
-  const overflow=await page.evaluate(()=>Array.from(document.querySelectorAll('main *')).filter(el=>el.getBoundingClientRect().right>innerWidth+1).map(el=>({tag:el.tagName,cls:el.className,text:el.textContent?.slice(0,160),width:el.getBoundingClientRect().width})).slice(0,15));
+  await page.waitForFunction(()=>!document.querySelector('.hb-tooltip'));
+  expect(new URL(page.url()).pathname).toBe(`/monitors/${id}`);
+  // Screenreader table cells retain their intrinsic rectangles inside the
+  // clipped caption. Exclude them only while that clipping actually holds.
+  const overflow=await page.evaluate(()=>Array.from(document.querySelectorAll('main *')).filter(el=>{
+   const caption=el.closest('.hb-sr-only');
+   if(caption){
+    const style=getComputedStyle(caption);const rect=caption.getBoundingClientRect();
+    if(style.clipPath==='inset(50%)' && style.overflow==='hidden' && rect.width<=1 && rect.height<=1) return false;
+   }
+   return el.getBoundingClientRect().right>innerWidth+1;
+  }).map(el=>({tag:el.tagName,cls:el.className,text:el.textContent?.slice(0,160),width:el.getBoundingClientRect().width})).slice(0,15));
   expect(overflow).toEqual([]);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ } finally {await context.close();}
+});
+
+it.each([["dark",375],["light",375],["dark",1440],["light",1440]] as const)("maintenance action keeps contrast during hover: %s %ipx", async(theme,width)=>{
+ const context=await browser.createBrowserContext();const page=await context.newPage();
+ page.setDefaultTimeout(5_000);
+ try {
+  await context.setCookie({name:"subglance_session",value:fixture.session,domain:new URL(fixture.url).hostname,path:"/",httpOnly:true,sameSite:"Strict"});
+  await page.setViewport({width,height:1000});
+  await page.evaluateOnNewDocument((key,value)=>localStorage.setItem(key,value),THEME_STORAGE_KEY,theme);
+  await page.goto(`${fixture.url}/monitors`,{waitUntil:"domcontentloaded"});
+  await (await page.waitForSelector('.maintenance summary'))!.click();
+  const button=await page.waitForSelector('.maintenance button[type="submit"]');
+  await button!.evaluate(el=>el.scrollIntoView({block:"center"}));
+  await page.evaluate(axe.source);
+  for (const hovered of [true,false]) {
+   if (hovered) await button!.hover(); else await page.mouse.move(0,0);
+   // Freeze real CSS transitions between the resting and hovered colours.
+   // A settled-state audit misses white ink on the still-light background.
+   await button!.evaluate(el=>{
+    for (const animation of el.getAnimations()) {
+     animation.pause();
+     animation.currentTime=Number(animation.effect!.getTiming().duration)/4;
+    }
+   });
+   const audit=await page.evaluate(async()=> (window as unknown as {axe:typeof axe}).axe.run({include:['.maintenance button[type="submit"]']},{runOnly:{type:"tag",values:["wcag2a","wcag2aa"]}}));
+   expect(audit.violations,`hover=${hovered}`).toEqual([]);
+   await button!.evaluate(el=>el.getAnimations().forEach(animation=>animation.finish()));
+  }
  } finally {await context.close();}
 });

@@ -22,7 +22,7 @@ everything is running, what is broken, and since when.
 > scheduled, checked, confirmed into incidents, streamed to a live dashboard and
 > delivered to a human over five notification channels. The latest build is
 > **`v0.1.0-rc3`**, a signed release candidate with binaries for five platforms.
-> Three things remain before v0.1 itself: see [where it stands](#where-it-stands).
+> Two things remain before v0.1 itself: see [where it stands](#where-it-stands).
 
 ## Quick start
 
@@ -86,7 +86,7 @@ exists for it.
 | Authentication — sessions, API tokens, three roles | ✅ Working |
 | Dashboard, monitor detail, incidents, monitors, notifications screens | ✅ Working |
 | Signed multi-platform release builds | ✅ Working (`v0.1.0-rc3`) |
-| Maintenance windows | ⏳ Planned for v0.1 |
+| Maintenance windows — one-off and weekly, by monitor or tag | ✅ Working |
 | Latency graph on the detail view | ⏳ Planned for v0.1 |
 | Settings — password change | ✅ Working; remaining sections planned for v0.1 |
 
@@ -146,8 +146,6 @@ exists for it.
 
 ### Not working yet
 
-- **Maintenance windows.** There is no way to tell SubGlance that a target is
-  down on purpose, so a planned deployment alerts like an outage.
 - **A latency graph.** The detail view shows the latest latency as a number and
   the heartbeat as a bar; the trend over time is not drawn anywhere. The chart
   component the heartbeat bar already uses is the piece this needs wiring to.

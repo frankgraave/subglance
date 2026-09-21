@@ -1311,7 +1311,12 @@
 
 /* The fill arrives on hover, so a permanently green button on screen does not
    become wallpaper that gets clicked by accident (§7.1). */
-.add-button-primary { border-color: var(--accent-border); }
+.add-button-primary {
+  border-color: var(--accent-border);
+  /* Ink and fill must switch together. Fading from the light surface while
+     the label is already white makes intermediate hover frames unreadable. */
+  transition: border-color var(--dur-hover) var(--ease);
+}
 .add-button-primary:hover:not(:disabled) {
   color: var(--accent-ink);
   background: var(--accent);
