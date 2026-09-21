@@ -316,6 +316,7 @@ export function LiveMonitors({
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["monitors"] }),
         queryClient.invalidateQueries({ queryKey: ["monitor-detail"] }),
+        queryClient.invalidateQueries({ queryKey: ["incidents", "open"] }),
       ]);
     }
     return result;

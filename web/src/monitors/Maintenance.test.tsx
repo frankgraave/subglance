@@ -21,3 +21,22 @@ it("reports an unavailable schedule read without claiming there are no windows",
  expect((await screen.findByRole("alert")).textContent).toContain("database unavailable");
  expect(screen.queryByText("No maintenance windows scheduled.")).toBeNull();
 });
+
+
+it("invalidates cached reminder reads after cancelling maintenance", async () => {
+ const client=new QueryClient({defaultOptions:{queries:{retry:false,staleTime:Infinity}}});
+ client.setQueryData(["monitor-detail","1"],{incidents:[{reminder:{status:"maintenance"}}]});
+ client.setQueryData(["incidents","open"],[{reminder:{status:"maintenance"}}]);
+ let cancelled=false;
+ vi.spyOn(globalThis,"fetch").mockImplementation(async(_url,init)=>{
+  if(init?.method==="DELETE"){cancelled=true;return new Response(null,{status:204});}
+  return Response.json({maintenance:cancelled?[]:[{id:1,name:"Deploy",monitor_id:1,active:true}]});
+ });
+ render(<LiveMonitorsRoot client={client} fetchMonitors={async()=>[]} />);
+ fireEvent.click(await screen.findByText("Manage scheduled maintenance"));
+ fireEvent.click(await screen.findByRole("button",{name:"Cancel maintenance Deploy"}));
+ await screen.findByText("Cancelled Deploy. Recorded history is unchanged.");
+ expect(client.getQueryState(["monitor-detail","1"])?.isInvalidated).toBe(true);
+ expect(client.getQueryState(["incidents","open"])?.isInvalidated).toBe(true);
+ client.clear();
+});

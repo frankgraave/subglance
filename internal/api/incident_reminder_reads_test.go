@@ -56,8 +56,9 @@ func TestIncidentReminderReadsStayBounded(t *testing.T) {
 			count := new(atomic.Int64)
 			windows := new(atomic.Int64)
 			tags := new(atomic.Int64)
+			total := new(atomic.Int64)
 			original := db.Reader
-			db.Reader = sql.OpenDB(incidentReadConnector{driver: original.Driver(), path: path, count: count, windows: windows, tags: tags})
+			db.Reader = sql.OpenDB(incidentReadConnector{driver: original.Driver(), path: path, count: count, windows: windows, tags: tags, total: total})
 			t.Cleanup(func() { _ = original.Close() })
 			rows := readReminderRows(t, srv, "/api/v1/incidents")
 			if len(rows) != size {
@@ -69,6 +70,10 @@ func TestIncidentReminderReadsStayBounded(t *testing.T) {
 			if got := count.Load(); got != 1 {
 				t.Fatalf("incident/monitor reads = %d, want one joined read for %d rows", got, size)
 			}
+			if got := total.Load(); got != 2 {
+				t.Fatalf("total reads=%d, want joined incidents/settings/tags plus one bulk schedule read", got)
+			}
+			total.Store(0)
 			count.Store(0)
 			if got := windows.Swap(0); got != 1 {
 				t.Fatalf("maintenance reads = %d, want one bulk read for %d rows", got, size)
@@ -79,6 +84,9 @@ func TestIncidentReminderReadsStayBounded(t *testing.T) {
 			rows = readReminderRows(t, srv, "/api/v1/monitors/"+strconv.FormatInt(first, 10)+"/incidents?limit="+strconv.Itoa(size))
 			if len(rows) != size {
 				t.Fatalf("history rows = %d, want %d", len(rows), size)
+			}
+			if got := total.Load(); got != 4 {
+				t.Fatalf("history total reads=%d, want monitor/tag existence check plus joined history and bulk schedules", got)
 			}
 			if got := count.Load(); got != 2 {
 				t.Fatalf("history reads = %d, want existence check plus joined history", got)
@@ -99,6 +107,7 @@ type incidentReadConnector struct {
 	count   *atomic.Int64
 	windows *atomic.Int64
 	tags    *atomic.Int64
+	total   *atomic.Int64
 }
 
 func (c incidentReadConnector) Driver() driver.Driver { return c.driver }
@@ -107,7 +116,7 @@ func (c incidentReadConnector) Connect(context.Context) (driver.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return incidentReadConn{Conn: conn, count: c.count, windows: c.windows, tags: c.tags}, nil
+	return incidentReadConn{Conn: conn, count: c.count, windows: c.windows, tags: c.tags, total: c.total}, nil
 }
 
 type incidentReadConn struct {
@@ -115,6 +124,7 @@ type incidentReadConn struct {
 	count   *atomic.Int64
 	windows *atomic.Int64
 	tags    *atomic.Int64
+	total   *atomic.Int64
 }
 
 func (c incidentReadConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
@@ -124,6 +134,9 @@ func (c incidentReadConn) QueryContext(ctx context.Context, query string, args [
 	}
 	if strings.Contains(q, "from monitor_tags") && !strings.Contains(q, "from incidents") && c.tags != nil {
 		c.tags.Add(1)
+	}
+	if c.total != nil && (strings.Contains(q, "from incidents") || strings.Contains(q, "from monitors") || strings.Contains(q, "from monitor_tags") || strings.Contains(q, "from maintenance_windows")) {
+		c.total.Add(1)
 	}
 	if strings.Contains(q, "from incidents") || strings.Contains(q, "from monitors") {
 		c.count.Add(1)

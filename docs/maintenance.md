@@ -71,8 +71,13 @@ after maintenance, the next failed check releases its initial alert, subject to
 flapping suppression. This pending intent survives restart. Its release writes all assigned, enabled
 channel deliveries and clears the intent in one SQLite transaction. These
 deferred initials bypass the in-memory grouping window; a failed enqueue leaves
-the intent for the next failed check. Reminder schedules
-are not advanced while maintenance suppresses them.
+the intent for the next failed check. Reminder schedules are not advanced while
+maintenance suppresses them. Otherwise-eligible incident reads show
+`reminder_status: maintenance` during an active window and `maintenance_pending`
+while the deferred initial alert awaits release afterwards. Both states have
+`next_reminder_at: null`; the read never advances the reminder clock. Resolved,
+acknowledged, unconfirmed, paused, disabled and live flapping states retain
+precedence over maintenance suppression.
 
 The notifier checks again immediately before each send attempt. A queued alert
 that meets maintenance is removed from that delivery. A removed initial alert
