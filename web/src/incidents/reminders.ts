@@ -1,6 +1,6 @@
-export type ReminderStatus = "scheduled" | "unconfirmed" | "acknowledged" | "resolved" | "paused" | "disabled" | "flapping";
+export type ReminderStatus = "scheduled" | "unconfirmed" | "acknowledged" | "resolved" | "paused" | "disabled" | "flapping" | "maintenance" | "maintenance_pending";
 export type ReminderInfo = { count: number; remindedAt: string | null; nextAt: string | null; status: ReminderStatus };
-const STATUSES: readonly string[] = ["scheduled", "unconfirmed", "acknowledged", "resolved", "paused", "disabled", "flapping"];
+const STATUSES: readonly string[] = ["scheduled", "unconfirmed", "acknowledged", "resolved", "paused", "disabled", "flapping", "maintenance", "maintenance_pending"];
 const timestamp = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d\d-\d\dT/.test(value) && Number.isFinite(Date.parse(value));
 
 /** Do not substitute a guessed escalation ladder or zero for an absent read. */

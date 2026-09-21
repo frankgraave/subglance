@@ -22,11 +22,22 @@ func TestIncidentReminderReadsStayBounded(t *testing.T) {
 			srv, db := testServerWithDB(t)
 			var first int64
 			for n := range size {
-				m := seedMonitor(t, db, store.Monitor{Name: strconv.Itoa(n), Type: "http", Target: "https://example.com", Enabled: true, RepeatAfterS: 900})
+				m := seedMonitor(t, db, store.Monitor{Name: strconv.Itoa(n), Type: "http", Target: "https://example.com", Enabled: true, RepeatAfterS: 900, Tags: map[string]string{"env": "prod", "team": "ops"}})
 				if n == 0 {
 					first = m.ID
 				}
 				at := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC).Add(time.Duration(n) * time.Minute)
+				if n == 0 {
+					for h := 1; h < size; h++ {
+						start := at.Add(-time.Duration(h) * time.Hour)
+						if _, err := db.OpenIncident(t.Context(), m.ID, start, "status", "503"); err != nil {
+							t.Fatal(err)
+						}
+						if _, err := db.ResolveIncident(t.Context(), m.ID, start.Add(time.Minute)); err != nil {
+							t.Fatal(err)
+						}
+					}
+				}
 				if _, err := db.OpenIncident(t.Context(), m.ID, at, "status", "HTTP 503"); err != nil {
 					t.Fatal(err)
 				}
@@ -35,36 +46,59 @@ func TestIncidentReminderReadsStayBounded(t *testing.T) {
 				}
 			}
 			var path string
+			now := time.Now()
+			if _, err := db.CreateMaintenance(t.Context(), store.MaintenanceWindow{Name: "all prod", TagKey: "env", TagValue: "prod", StartsAt: now.Add(-time.Hour), EndsAt: now.Add(time.Hour)}); err != nil {
+				t.Fatal(err)
+			}
 			if err := db.Reader.QueryRowContext(t.Context(), "SELECT file FROM pragma_database_list WHERE name = 'main'").Scan(&path); err != nil {
 				t.Fatal(err)
 			}
 			count := new(atomic.Int64)
+			windows := new(atomic.Int64)
+			tags := new(atomic.Int64)
 			original := db.Reader
-			db.Reader = sql.OpenDB(incidentReadConnector{driver: original.Driver(), path: path, count: count})
+			db.Reader = sql.OpenDB(incidentReadConnector{driver: original.Driver(), path: path, count: count, windows: windows, tags: tags})
 			t.Cleanup(func() { _ = original.Close() })
 			rows := readReminderRows(t, srv, "/api/v1/incidents")
 			if len(rows) != size {
 				t.Fatalf("rows = %d, want %d", len(rows), size)
 			}
+			for _, row := range rows {
+				assertReminderJSON(t, row, "reminder_status", "maintenance")
+			}
 			if got := count.Load(); got != 1 {
 				t.Fatalf("incident/monitor reads = %d, want one joined read for %d rows", got, size)
 			}
 			count.Store(0)
-			rows = readReminderRows(t, srv, "/api/v1/monitors/"+strconv.FormatInt(first, 10)+"/incidents?limit=1")
-			if len(rows) != 1 {
-				t.Fatalf("history rows = %d", len(rows))
+			if got := windows.Swap(0); got != 1 {
+				t.Fatalf("maintenance reads = %d, want one bulk read for %d rows", got, size)
+			}
+			if got := tags.Swap(0); got != 0 {
+				t.Fatalf("standalone tag reads = %d, want tags in the existing joined read", got)
+			}
+			rows = readReminderRows(t, srv, "/api/v1/monitors/"+strconv.FormatInt(first, 10)+"/incidents?limit="+strconv.Itoa(size))
+			if len(rows) != size {
+				t.Fatalf("history rows = %d, want %d", len(rows), size)
 			}
 			if got := count.Load(); got != 2 {
 				t.Fatalf("history reads = %d, want existence check plus joined history", got)
+			}
+			if got := windows.Load(); got != 1 {
+				t.Fatalf("history maintenance reads = %d, want one bulk read", got)
+			}
+			if got := tags.Load(); got != 1 {
+				t.Fatalf("history standalone tag reads = %d, want only the existing monitor existence read", got)
 			}
 		})
 	}
 }
 
 type incidentReadConnector struct {
-	driver driver.Driver
-	path   string
-	count  *atomic.Int64
+	driver  driver.Driver
+	path    string
+	count   *atomic.Int64
+	windows *atomic.Int64
+	tags    *atomic.Int64
 }
 
 func (c incidentReadConnector) Driver() driver.Driver { return c.driver }
@@ -73,16 +107,24 @@ func (c incidentReadConnector) Connect(context.Context) (driver.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return incidentReadConn{Conn: conn, count: c.count}, nil
+	return incidentReadConn{Conn: conn, count: c.count, windows: c.windows, tags: c.tags}, nil
 }
 
 type incidentReadConn struct {
 	driver.Conn
-	count *atomic.Int64
+	count   *atomic.Int64
+	windows *atomic.Int64
+	tags    *atomic.Int64
 }
 
 func (c incidentReadConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	q := strings.ToLower(query)
+	if strings.Contains(q, "from maintenance_windows") && c.windows != nil {
+		c.windows.Add(1)
+	}
+	if strings.Contains(q, "from monitor_tags") && !strings.Contains(q, "from incidents") && c.tags != nil {
+		c.tags.Add(1)
+	}
 	if strings.Contains(q, "from incidents") || strings.Contains(q, "from monitors") {
 		c.count.Add(1)
 	}

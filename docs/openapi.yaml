@@ -3829,12 +3829,19 @@ components:
             not a delivery promise. Null while reminder_status is not scheduled.
         reminder_status:
           type: string
-          enum: [scheduled, unconfirmed, acknowledged, resolved, paused, disabled, flapping]
+          enum: [scheduled, unconfirmed, acknowledged, resolved, paused, disabled, flapping, maintenance, maintenance_pending]
           description: |
             Why a next reminder is scheduled or withheld. Resolved, acknowledged,
             unconfirmed, paused and disabled are checked in that order before
-            live flapping suppression. Reading these fields never advances the
-            clock or queues a notification.
+            live flapping suppression. Maintenance is checked next using one
+            server timestamp, current monitor tags and the stored one-off or
+            weekly windows (including their timezone/DST rules). maintenance
+            means a matching window is active; maintenance_pending means no
+            matching window is active but the initial alert is still deferred
+            after maintenance. Both withhold next_reminder_at without changing
+            reminder_count or reminded_at. Failed maintenance reads return an
+            error, never scheduled eligibility. Reading these fields never
+            advances the clock or queues a notification.
     IncidentList:
       type: object
       required: [incidents]
