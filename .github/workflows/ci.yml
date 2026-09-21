@@ -87,7 +87,7 @@ jobs:
           # concluding coverage dropped.
           awk -v t="$total" 'BEGIN { if (t+0 < 65) { print "::error::coverage " t "% is below the 65% floor"; exit 1 } }'
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7.0.1
         if: always()
         with:
           name: coverage
