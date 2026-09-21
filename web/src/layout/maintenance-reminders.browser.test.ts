@@ -6,7 +6,10 @@ import { THEME_STORAGE_KEY } from "../theme/theme";
 let browser: Browser;
 let server: Server;
 beforeAll(async () => { server = await serveBuild(); browser = await chromium(); });
-afterAll(async () => { await browser?.close(); await server?.close(); });
+afterAll(async () => {
+  try { await browser?.close(); }
+  finally { await server?.close(); }
+});
 
 // The HTTP fixture proves the built client/parser/summary seam. Real SQLite
 // endpoint semantics and read failures are covered by incident_maintenance_*.
@@ -14,6 +17,7 @@ for (const theme of ["dark", "light"]) for (const width of [390, 1440]) {
   it(`shows active and pending maintenance without an eligibility time (${theme} ${width})`, async () => {
     const context = await browser.createBrowserContext();
     const page = await context.newPage();
+    page.setDefaultTimeout(5_000);
     try {
       await page.setViewport({ width, height: 1000 });
       await page.evaluateOnNewDocument((key, value) => localStorage.setItem(key, value), THEME_STORAGE_KEY, theme);

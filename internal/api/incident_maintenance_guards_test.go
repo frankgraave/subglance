@@ -94,6 +94,9 @@ func TestIncidentReminderMaintenancePreservesPrecedence(t *testing.T) {
 			for pass := 0; pass < 2; pass++ {
 				for _, path := range paths {
 					rows := readReminderRows(t, srv, path)
+					if len(rows) != 1 {
+						t.Fatalf("%s pass %d: got %d incident rows, want 1", path, pass, len(rows))
+					}
 					assertReminderJSON(t, rows[0], "reminder_status", status)
 					assertReminderJSON(t, rows[0], "next_reminder_at", nil)
 					assertReminderJSON(t, rows[0], "reminder_count", 1)

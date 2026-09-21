@@ -123,7 +123,11 @@ it.each([["dark",375,0],["light",375,1],["dark",1440,2],["light",1440,3]] as con
   expect(await page.$eval('.mon-detail-windows',el=>el.textContent)).toContain("3 maintenance checks excluded");
   expect(errors).toEqual([]);
  }catch(error){
-  console.log(await page.evaluate(()=>({text:document.querySelector('.maintenance')?.textContent,buttons:Array.from(document.querySelectorAll('.maintenance button')).map(el=>{const r=el.getBoundingClientRect();return {name:el.getAttribute('aria-label'),disabled:(el as HTMLButtonElement).disabled,rect:{top:r.top,left:r.left,width:r.width,height:r.height},hit:document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)?.outerHTML}})})));
+  try {
+   console.log(await page.evaluate(()=>({text:document.querySelector('.maintenance')?.textContent,buttons:Array.from(document.querySelectorAll('.maintenance button')).map(el=>{const r=el.getBoundingClientRect();return {name:el.getAttribute('aria-label'),disabled:(el as HTMLButtonElement).disabled,rect:{top:r.top,left:r.left,width:r.width,height:r.height},hit:document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)?.outerHTML}})})));
+  }catch(diagnosticError){
+   console.error("Maintenance diagnostic collection failed:", diagnosticError);
+  }
   throw error;
  }finally{await context.close();}
 });
