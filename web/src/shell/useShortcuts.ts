@@ -19,6 +19,8 @@ function isTyping(target: EventTarget | null): boolean {
 export type Shortcuts = {
   /** Cmd/Ctrl + B. */
   onToggleSidebar: () => void;
+  /** Cmd/Ctrl + K, including while typing. Absent outside a session. */
+  onCommand?: () => void;
   /** Esc, and only while it has somewhere to go. */
   onEscape?: () => void;
 };
@@ -36,10 +38,12 @@ export type Shortcuts = {
  * is not registered at all and Esc keeps its browser meaning (dismissing an
  * autocomplete, cancelling an IME composition) everywhere else.
  */
-export function useShellShortcuts({ onToggleSidebar, onEscape }: Shortcuts): void {
+export function useShellShortcuts({ onToggleSidebar, onEscape, onCommand }: Shortcuts): void {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || event.keyCode === 229) return;
       if (event.key === "Escape") {
+        if (event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
         // Esc is allowed to fire while typing: leaving a full-screen view is
         // more urgent than whatever the focused field would have done, and
         // the wall has no text field anyway.
@@ -49,6 +53,11 @@ export function useShellShortcuts({ onToggleSidebar, onEscape }: Shortcuts): voi
         return;
       }
       const chord = (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey;
+      if (chord && event.key.toLowerCase() === "k" && onCommand) {
+        event.preventDefault();
+        if (!event.repeat) onCommand();
+        return;
+      }
       if (chord && (event.key === "b" || event.key === "B")) {
         if (isTyping(event.target)) return;
         // Claim the chord before the repeat check, so holding the keys never
@@ -64,5 +73,5 @@ export function useShellShortcuts({ onToggleSidebar, onEscape }: Shortcuts): voi
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onToggleSidebar, onEscape]);
+  }, [onToggleSidebar, onEscape, onCommand]);
 }

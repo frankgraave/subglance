@@ -154,6 +154,12 @@ const budgets = {
    * suppression reads. Remaining headroom is 3,275 JS / 1,032 CSS bytes;
    * neither a higher ceiling nor feature removal is needed. Fonts remain
    * 69,412 bytes against the unchanged 80 KiB ceiling.
+   *
+   * Adding develop cec2c4e's command menu and panel surfaces measures 137,947
+   * JS / 15,740 CSS gzip bytes in the combined six-ticket build, up from
+   * 135,989 / 15,352 above. The existing ceilings still leave 1,317 JS / 644
+   * CSS bytes; retain them with all navigation, editing, bulk tags, watchdog,
+   * warning and maintenance behavior. Font bytes and ceiling are unchanged.
    */
   js: 136,
   /*

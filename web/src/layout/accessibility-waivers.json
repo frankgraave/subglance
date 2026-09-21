@@ -30,19 +30,7 @@
       ],
       "reason": "Existing contrast debt in shell-account-email: the shared ink role or muted-state opacity is below the AA text floor. Remediation changes the shared palette/visual hierarchy and is deferred from this gate. This is not a WCAG exemption; only these measured screen/theme/selector combinations are waived, and the waiver must be removed when fixed."
     },
-    {
-      "rule": "color-contrast",
-      "selector": ".shell-search-kbd",
-      "scopes": [
-        "light: dashboard rows",
-        "light: dashboard cards",
-        "light: dashboard compact",
-        "dark: dashboard rows",
-        "dark: dashboard cards",
-        "dark: dashboard compact"
-      ],
-      "reason": "Existing contrast debt in shell-search-kbd: the shared ink role or muted-state opacity is below the AA text floor. Remediation changes the shared palette/visual hierarchy and is deferred from this gate. This is not a WCAG exemption; only these measured screen/theme/selector combinations are waived, and the waiver must be removed when fixed."
-    },
+
     {
       "rule": "color-contrast",
       "selector": "div[aria-label=\"Dashboard layout\"] > .segmented-option:nth-child(2)",
@@ -599,14 +587,6 @@
         "dark: dashboard cards"
       ],
       "reason": "Existing contrast debt in mon-card-error: the shared ink role or muted-state opacity is below the AA text floor. Remediation changes the shared palette/visual hierarchy and is deferred from this gate. This is not a WCAG exemption; only these measured screen/theme/selector combinations are waived, and the waiver must be removed when fixed."
-    },
-    {
-      "rule": "color-contrast",
-      "selector": ".mon-line-error",
-      "scopes": [
-        "dark: dashboard compact"
-      ],
-      "reason": "Existing contrast debt in mon-line-error: the shared ink role or muted-state opacity is below the AA text floor. Remediation changes the shared palette/visual hierarchy and is deferred from this gate. This is not a WCAG exemption; only these measured screen/theme/selector combinations are waived, and the waiver must be removed when fixed."
     }
   ]
 }

@@ -1110,7 +1110,9 @@
      the token did not exist yet is gone. */
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
-  color: var(--down);
+  /* Down ink on the nested panel measures 4.49:1 in light. The rail/lamp
+     carries color; the failure sentence must remain readable. */
+  color: var(--ink-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

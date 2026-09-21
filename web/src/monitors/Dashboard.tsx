@@ -239,19 +239,8 @@ export function Dashboard({
             spellCheck={false}
             onChange={(event) => onQueryChange(event.target.value)}
           />
-          {/*
-           * The shortcut hint, and it does nothing yet.
-           *
-           * Deliberate and agreed: the palette is a later piece of work, and
-           * the hint is here because the field it belongs to is being built
-           * now. `aria-hidden` keeps it out of the accessibility tree — a
-           * screen reader announcing a shortcut that is not wired up would be
-           * a promise the product does not keep. When ⌘K lands this becomes
-           * the button that opens it.
-           */}
-          <span className="shell-search-kbd" aria-hidden="true">
-            ⌘K
-          </span>
+          {/* The shortcut is now the global Topbar launcher. This field
+              still filters this page only; opening commands preserves it. */}
         </label>
       </TopbarTools>
 

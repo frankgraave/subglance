@@ -72,9 +72,8 @@
   --numeric-mono: slashed-zero tabular-nums;
   --render-mono: geometricPrecision;
 
-  /* Shape. Four steps in use, and the gaps between them are deliberate: 2px
-     for a mark, 6px for anything you click, 8px for a panel, 12px for the card
-     that frames panels.
+  /* Shape. Five steps: 2px for a mark, 4px for small annotations and inline focus,
+     6px for a boxed control, 8px for a panel, 12px for the card that frames panels.
 
      `--r-2xs` exists because the lamp drew itself at 2.5px only while the
      ladder stopped at 4px, and a fractional radius is the same defect the type
@@ -82,9 +81,10 @@
      on the device pixel ratio, so the lamp was not the same shape on every
      screen.
 
-     `--r-xs` (4px) is kept for compatibility but is not part of the ladder in
-     use: a control at 4px reads as a mark rather than as something pressable,
-     and the jump from 2 to 6 is what keeps those two jobs apart. */
+     `--r-xs` is an intentional rung: keycaps, compact annotations and a focus
+     contour around inline content, not a standalone button's shape. Boxed
+     controls use 6px. The live concentric pair remains 8px minus 2px = 6px;
+     retaining 4px does not replace that measured geometry. */
   --r-2xs: 2px;
   --r-xs: 4px;
   --r-sm: 6px;
