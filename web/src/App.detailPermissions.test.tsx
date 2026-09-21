@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { disabledWatchdog } from "./watchdog/fixtures";
 import { setToolbarSlot, setTopbarSlot } from "./shell/topbarSlot";
 
 class FakeSource {
@@ -52,6 +53,7 @@ describe("detail check permissions through the real app shell", () => {
         vi.fn(async (input: RequestInfo | URL) => {
           const path = new URL(String(input), window.location.origin).pathname;
           const responses: Record<string, unknown> = {
+            "/api/v1/watchdog": disabledWatchdog,
             "/api/v1/auth/me": {
               id: 1,
               email: "operator@example.com",

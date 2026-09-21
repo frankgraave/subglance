@@ -63,6 +63,15 @@ jobs:
       - name: Test with race detector
         run: go test -race -short -count=1 -coverprofile=coverage.out ./...
 
+      # Keep subprocess/real-time integration out of -short without dropping
+      # its production wiring coverage. Dependencies were loaded above; this
+      # step cannot fetch anything and talks only to its loopback receiver.
+      - name: Watchdog binary integration
+        env:
+          GOPROXY: "off"
+          GOTOOLCHAIN: local
+        run: go test -race -count=1 -run '^TestWatchdogActualBinary$' ./cmd/subglance
+
       - name: Coverage summary
         run: |
           go tool cover -func=coverage.out | tail -1

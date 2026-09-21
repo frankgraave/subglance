@@ -125,7 +125,19 @@ const budgets = {
    * 128 KiB would leave only 117 bytes. 130 leaves 2,165 for ordinary fixes
    * instead of tracking today's measurement. CSS and font ceilings stay put.
    */
-  js: 130,
+  /*
+   * 126 -> 136 KiB JS and 15 -> 16 KiB CSS for SUB-25/84/87/113 together.
+   * At pinned develop 05974de the gzip entries measured JS 127,401 / CSS
+   * 14,770 bytes. The four-ticket build measures 132,119 / 15,386; alongside
+   * the existing edit/reminder PR83 it measures 135,270 / 15,444. Independent
+   * branches fit unevenly (bulk tags alone is 379 JS bytes over); a shared
+   * ceiling keeps merge order from deciding which reviewed feature fails CI.
+   * These bytes buy keyboard commands, atomic bulk-tag workflows, watchdog
+   * diagnostics and measured surface consistency, without a runtime dependency.
+   * 136/16 KiB leaves 3,994 JS / 940 CSS bytes for fixes in the full combination,
+   * not a ceiling nudged to today's exact size. Font ceiling stays unchanged.
+   */
+  js: 136,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *
@@ -197,7 +209,7 @@ const budgets = {
    * already declared. A ceiling that holds through two screens and moves for
    * a change to what colour means is a ceiling doing its job.
    */
-  css: 15,
+  css: 16,
   fonts: 80,
 };
 

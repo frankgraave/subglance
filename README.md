@@ -61,6 +61,14 @@ getting:
 - **Light enough to forget about.** A single static binary with SQLite, not a
   stack of services.
 
+## Self-monitoring
+
+SubGlance cannot report its own outage without an external watchdog. Configure
+[the opt-in outbound watchdog](docs/operations.md#watching-the-watcher) to let
+another service notice when pings stop. **Settings → Self-monitoring** shows
+whether it is configured, the last successful ping and the latest result.
+A successful ping does not prove that the receiving service will raise an alarm.
+
 ## Documentation
 
 | Guide | What is in it |
@@ -88,7 +96,7 @@ exists for it.
 | Signed multi-platform release builds | ✅ Working (`v0.1.0-rc3`) |
 | Maintenance windows | ⏳ Planned for v0.1 |
 | Latency graph on the detail view | ⏳ Planned for v0.1 |
-| Settings — password change | ✅ Working; remaining sections planned for v0.1 |
+| Settings — password change and watchdog diagnostics | ✅ Working; remaining sections planned for v0.1 |
 
 <details>
 <summary><strong>What "working" covers, in detail</strong></summary>
@@ -152,8 +160,8 @@ exists for it.
   the heartbeat as a bar; the trend over time is not drawn anywhere. The chart
   component the heartbeat bar already uses is the piece this needs wiring to.
 - **The remaining settings sections.** Password changes work at `/settings`.
-  User and API-token management, retention and instance diagnostics still have
-  no settings UI.
+  User and API-token management, retention and other instance diagnostics still
+  have no settings UI; read-only watchdog diagnostics are available.
 
 Deliberately **not** in v0.1: status pages, config-as-code, multi-region checks,
 on-call schedules, SSO, mobile app, CLI, Postgres. They are on the roadmap; they
