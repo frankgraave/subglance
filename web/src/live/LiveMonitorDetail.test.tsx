@@ -68,6 +68,17 @@ const apiMonitor = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+const LATENCY = {
+  monitor_id: 1,
+  window: "24h",
+  step_s: 900,
+  from: "2026-09-19T12:00:00Z",
+  to: "2026-09-20T12:00:00Z",
+  points: [
+    { t: "2026-09-20T11:30:00Z", checks: 15, samples: 15, down: 0, avg_ms: 42, min_ms: 30, max_ms: 60 },
+  ],
+};
+
 const UPTIME = {
   monitor_id: 1,
   windows: [
@@ -118,6 +129,8 @@ function renderDetail(options: {
   const fetchMock = vi.fn(async (url: string) => {
     const body = url.includes("/heartbeats")
       ? { heartbeats: [] }
+      : url.includes("/latency")
+      ? LATENCY
       : url.includes("/uptime")
       ? UPTIME
       : url.includes("/incidents")
@@ -222,7 +235,7 @@ describe("LiveMonitorDetail", () => {
   it("shows the monitor with its uptime and incident history", async () => {
     renderDetail();
     expect(await screen.findByText("api")).toBeTruthy();
-    expect(await screen.findByText("24h")).toBeTruthy();
+    expect(await screen.findByText("24h", { selector: "dt" })).toBeTruthy();
     await waitFor(() => {
       // SUB-34 turned the log line into a sentence: "Down from …, 1 h.
       // Recovered at 09:00." The duration and the ending are both asserted,
@@ -305,7 +318,27 @@ describe("LiveMonitorDetail", () => {
 
   it("renders an unknown long-window uptime as unknown, not as 0%", async () => {
     renderDetail();
-    expect(await screen.findByText("30d")).toBeTruthy();
+    expect(await screen.findByText("30d", { selector: "dt" })).toBeTruthy();
     expect(document.body.textContent).toContain("no eligible checks");
+  });
+});
+
+describe("LiveMonitorDetail latency", () => {
+  it("draws the latency series and re-asks for it when the window changes", async () => {
+    const { fetchMock } = renderDetail();
+    expect(await screen.findByTestId("lat-plot")).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Latency window" })).toBeTruthy();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/latency?window=24h"))).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "7d" }));
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/latency?window=7d"))).toBe(true);
+    });
+  });
+
+  it("asks for no latency on a push monitor, which is reported to rather than probed", async () => {
+    const { fetchMock } = renderDetail({ monitors: [apiMonitor({ type: "push", push_interval_s: 3600 })] });
+    await screen.findByText("api");
+    expect(screen.queryByRole("group", { name: "Latency window" })).toBeNull();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/latency"))).toBe(false);
   });
 });

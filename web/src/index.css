@@ -86,6 +86,7 @@
 @import "./monitors/led.css";
 @import "./monitors/monitors.css";
 @import "./monitors/detail.css";
+@import "./monitors/latency.css";
 @import "./monitors/responseHistory.css";
 @import "./monitors/inventory.css";
 @import "./notifications/notifications.css";

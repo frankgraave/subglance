@@ -369,6 +369,15 @@
   --size-sidebar: 232px;
   --size-rail: 56px;      /* the sidebar once collapsed: icons, no labels */
 
+  /* The latency chart's plot height (SUB-23). Its own rung because it is the
+     first plot taller than a heartbeat track: --size-row-xl (58px) squashes a
+     week of latency into a band where a doubling reads as noise, and
+     --size-pane-xs (148px) is a width that means "legible heartbeat", which a
+     height should not borrow. 128px is 16 x 8, on the 8px grid, and about a
+     sixth of the detail page's reading measure: tall enough to read a trend,
+     short enough that the incidents below it stay on a laptop's first screen. */
+  --size-plot: 128px;
+
   /* The status rail: the coloured leading edge that marks a row, card,
      compact line or incident as needing attention (SUB-142).
 

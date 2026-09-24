@@ -10,6 +10,7 @@ import { EditMonitorDrawer } from "../monitors/EditMonitorDrawer";
 import { MonitorDetail } from "../monitors/MonitorDetail";
 import { detailQueryKey, fetchMonitorDetail } from "../monitors/detail";
 import { fetchResponseHistory, responseHistoryQueryKey } from "../monitors/responseHistoryApi";
+import { fetchLatency, latencyQueryKey, type LatencyWindow } from "../monitors/latency";
 import { ackIncident } from "../incidents/api";
 import { openIncidentsQueryKey } from "../incidents/api";
 import type { LiveOptions } from "./useLiveMonitors";
@@ -129,6 +130,25 @@ export function LiveMonitorDetail({
     staleTime: 30_000,
   });
 
+  /*
+   * The latency chart's window, and its series. Push monitors are reported to
+   * rather than probed, so they have no latency and no request is made.
+   *
+   * The placeholder keeps the old window on screen while the new one
+   * loads, but only for the same monitor: the placeholder is dropped when the
+   * id changes, so monitor B never shows A's line under its own title.
+   */
+  const [latencyWindow, setLatencyWindow] = useState<LatencyWindow>("24h");
+  const latency = useQuery({
+    queryKey: latencyQueryKey(id, latencyWindow),
+    queryFn: ({ signal }) => fetchLatency(id, latencyWindow, signal),
+    enabled: monitor !== undefined && monitor.push === undefined,
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === id ? previous : undefined,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
   // Key by monitor, not by the most recent click: routing to B while A checks
   // must not put A's result under B's title. The ref closes the same-tick gap
   // before React has painted the disabled button.
@@ -199,6 +219,15 @@ export function LiveMonitorDetail({
         heartbeats: responseHistory.data ?? [],
         loading: responseHistory.isPending,
         error: responseHistory.error instanceof Error ? responseHistory.error : null,
+      } : undefined}
+      latency={monitor.push === undefined ? {
+        window: latencyWindow,
+        onWindowChange: setLatencyWindow,
+        series: latency.data,
+        loading: latency.isPending,
+        error: latency.error instanceof Error ? latency.error : null,
+        refreshing: latency.isPlaceholderData,
+        width: beatWidth,
       } : undefined}
       now={now}
       loading={detail.isPending}

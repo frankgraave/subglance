@@ -996,6 +996,14 @@
       </tr>
       <tr>
         <td class="sg-cell-swatch">
+          <span class="sg-bar" style="width: var(--size-plot)" data-overflows></span>
+        </td>
+        <td><code>--size-plot</code></td>
+        <td class="sg-value"><code>128px</code></td>
+        <td class="sg-why">The latency chart's plot height (SUB-23). Its own rung because it is the first plot taller than a heartbeat track: --size-row-xl (58px) squashes a week of latency into a band where a doubling reads as noise, and <details class="sg-more"><summary>more</summary>--size-pane-xs (148px) is a width that means &quot;legible heartbeat&quot;, which a height should not borrow. 128px is 16 x 8, on the 8px grid, and about a sixth of the detail page's reading measure: tall enough to read a trend, short enough that the incidents below it stay on a laptop's first screen.</details></td>
+      </tr>
+      <tr>
+        <td class="sg-cell-swatch">
           <span class="sg-bar" style="width: var(--size-status-rail)"></span>
         </td>
         <td><code>--size-status-rail</code></td>
