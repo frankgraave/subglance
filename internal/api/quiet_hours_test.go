@@ -130,3 +130,31 @@ func TestChannelReplaceFailsWhenQuietHoursCannotBeRead(t *testing.T) {
 		t.Fatalf("channel was renamed to %q despite the failed request", got.Name)
 	}
 }
+
+// TestSetMonitorChannelsFailsBeforeWritingWhenQuietHoursCannotBeRead: the
+// assignment replace answers 500 when quiet hours cannot be read, so it must
+// not have stored the new assignments either, or the 500 is a false failure.
+func TestSetMonitorChannelsFailsBeforeWritingWhenQuietHoursCannotBeRead(t *testing.T) {
+	srv, db := testServerWithDB(t)
+	m := seedMonitor(t, db, store.Monitor{
+		Name: "site", Type: "http", Target: "https://example.com",
+		IntervalS: 60, TimeoutS: 10, Enabled: true,
+	})
+	ch := createSlackChannel(t, srv, "phone", "https://hooks.slack.com/services/T/B/secret")
+	if _, err := db.Writer.ExecContext(t.Context(), "ALTER TABLE notif_quiet_hours RENAME TO notif_quiet_hours_gone"); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := doJSON(t, srv, http.MethodPut, fmt.Sprintf("/api/v1/monitors/%d/channels", m.ID),
+		fmt.Sprintf(`{"channel_ids":[%d]}`, ch.ID))
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("assign with unreadable quiet hours: status %d, want 500: %s", rec.Code, rec.Body.String())
+	}
+	got, err := db.ListMonitorChannels(t.Context(), m.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("assignments = %+v stored despite the 500", got)
+	}
+}

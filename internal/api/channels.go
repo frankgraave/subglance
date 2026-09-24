@@ -461,7 +461,16 @@ func (s *Server) handleSetMonitorChannels(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	err := s.db.SetMonitorChannels(r.Context(), id, req.ChannelIDs)
+	// Quiet hours are read before the assignments change: a failed read after
+	// the replace would report a 500 for a write that was in fact stored.
+	quiet, err := s.db.ListQuietHours(r.Context())
+	if err != nil {
+		s.log.Error("list quiet hours", "error", err)
+		writeError(w, http.StatusInternalServerError, "could not list channels")
+		return
+	}
+
+	err = s.db.SetMonitorChannels(r.Context(), id, req.ChannelIDs)
 	if errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "monitor not found")
 		return
@@ -480,13 +489,6 @@ func (s *Server) handleSetMonitorChannels(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		s.log.Error("list monitor channels", "monitor_id", id, "error", err)
 		writeError(w, http.StatusInternalServerError, "could not list the channels")
-		return
-	}
-
-	quiet, err := s.db.ListQuietHours(r.Context())
-	if err != nil {
-		s.log.Error("list quiet hours", "error", err)
-		writeError(w, http.StatusInternalServerError, "could not list channels")
 		return
 	}
 
