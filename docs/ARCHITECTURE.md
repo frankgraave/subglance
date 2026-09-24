@@ -14,7 +14,7 @@
 | Frontend | React 19 + Vite + TypeScript | Richest ecosystem for exactly the UI quality this product needs |
 | Styling | Tailwind CSS v4 | Fast iteration, consistent design tokens |
 | Components | shadcn/ui (base, heavily customized) | A starting point, not an end point — it must not look like stock shadcn |
-| Animation | Motion (formerly Framer Motion) | Layout animations and shared transitions |
+| Animation | CSS transitions + the browser's View Transitions API | No animation library. Opening a monitor morphs its name into the page title through `document.startViewTransition` (`web/src/shell/viewTransition.ts`); browsers without it, and readers who ask for reduced motion, get the instant swap |
 | Charts | Custom SVG components, possibly visx | Off-the-shelf chart libs look generic; the heartbeat bar is the brand icon |
 | State/data | TanStack Query | Caching, polling and optimistic updates |
 | Realtime | Server-Sent Events | Simpler than WebSockets and sufficient: traffic only goes one way |
