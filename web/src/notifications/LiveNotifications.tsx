@@ -151,8 +151,11 @@ export function LiveNotifications({
   const deleteMutation = useMutation({
     mutationFn: (id: string) => remove(id),
     onError: (error, id) => noteError(id, error),
+    // Deleting the default channel changes what the inventory names as the
+    // fallback for monitors without channels of their own.
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: channelsQueryKey });
+      void queryClient.invalidateQueries({ queryKey: inventoryQueryKey });
     },
   });
 

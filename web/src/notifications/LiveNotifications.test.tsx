@@ -42,12 +42,10 @@ function make(over: Record<string, unknown> = {}) {
 
 describe("LiveNotifications", () => {
   it("shows the real failure of a test, in the server's words", async () => {
-    const test = vi
-      .fn()
-      .mockResolvedValue({
-        ok: false,
-        error: "401 unauthorized: bot token revoked",
-      });
+    const test = vi.fn().mockResolvedValue({
+      ok: false,
+      error: "401 unauthorized: bot token revoked",
+    });
     render(
       <LiveNotificationsRoot
         client={client()}
@@ -340,6 +338,35 @@ describe("the default channel", () => {
       name: /monitors with no channels of their own/i,
     });
     fireEvent.change(select, { target: { value: "2" } });
+    await waitFor(() =>
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: ["monitors", "inventory"],
+      }),
+    );
+  });
+
+  it("refreshes the monitor inventory when a channel is deleted", async () => {
+    // The deleted channel may have been the default the inventory names.
+    const qc = client();
+    const invalidate = vi.spyOn(qc, "invalidateQueries");
+    const remove = vi.fn().mockResolvedValue(undefined);
+    render(
+      <LiveNotificationsRoot
+        client={qc}
+        list={async () => [make()]}
+        remove={remove}
+      />,
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: /^Delete Slack/ }),
+    );
+    fireEvent.change(await screen.findByLabelText(/to confirm/i), {
+      target: { value: "On-call Slack" },
+    });
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Delete On-call Slack/ }),
+    );
+    await waitFor(() => expect(remove).toHaveBeenCalledWith("1"));
     await waitFor(() =>
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: ["monitors", "inventory"],
