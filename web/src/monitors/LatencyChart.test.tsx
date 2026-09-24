@@ -48,7 +48,7 @@ describe("LatencyChart", () => {
       <LatencyChart
         window="24h"
         onWindowChange={() => {}}
-        series={makeSeries([point(0, 100), point(1, 120), point(2, null, { down: 60 }), point(3, 110)])}
+        series={makeSeries([point(0, 100), point(1, 120), point(2, null, { down: 1, checks: 1 }), point(3, 110)])}
         width={400}
       />,
     );

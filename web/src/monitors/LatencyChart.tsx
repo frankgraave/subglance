@@ -184,11 +184,11 @@ export function LatencyChart({
 
   let body;
   if (error && !series) {
-    body = <p role="alert" className="mon-detail-empty mon-detail-empty--quiet">Could not load latency: {error.message}</p>;
+    body = <p role="alert" className="mon-detail-note">Could not load latency: {error.message}</p>;
   } else if (loading && !series) {
-    body = <p className="mon-detail-empty mon-detail-empty--quiet">Loading latency…</p>;
+    body = <p className="mon-detail-note">Loading latency…</p>;
   } else if (!series || points.length === 0) {
-    body = <p className="mon-detail-empty mon-detail-empty--quiet">No checks in the last {WINDOW_LABELS[selected]}.</p>;
+    body = <p className="mon-detail-note">No checks in the last {WINDOW_LABELS[selected]}.</p>;
   } else {
     const runs = measuredRuns(series);
     const stepFraction = series.stepMs / (series.to - series.from);
@@ -303,7 +303,7 @@ export function LatencyChart({
             </tbody>
           </table>
         </figcaption>
-        {error ? <p role="alert" className="mon-detail-empty--quiet">Could not refresh latency: {error.message}. Showing the last loaded window.</p> : null}
+        {error ? <p role="alert" className="mon-detail-note">Could not refresh latency: {error.message}. Showing the last loaded window.</p> : null}
       </figure>
     );
   }

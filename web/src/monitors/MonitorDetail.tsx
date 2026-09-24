@@ -353,8 +353,6 @@ export function MonitorDetail({
 
       {responseHistory ? <ResponseHistory key={monitor.id} {...responseHistory} /> : null}
 
-      {latency ? <LatencyChart {...latency} /> : null}
-
       <Card title="Uptime" icon={<IconGauge />} headingLevel={2}>
         {monitor.maintenance ? (
           <p role="status">
@@ -410,6 +408,11 @@ export function MonitorDetail({
           )}
         </Panel>
       </Card>
+
+      {/* After uptime, not before it: uptime answers "is it reliable", which
+          is the question an alert link lands with; the trend answers "is it
+          getting slower", which is the next one. */}
+      {latency ? <LatencyChart {...latency} /> : null}
 
       <Card title="Incidents" icon={<IconAlert />} headingLevel={2}>
         <Panel>

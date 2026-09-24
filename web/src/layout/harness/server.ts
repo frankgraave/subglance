@@ -399,6 +399,32 @@ export async function serveBuild(): Promise<Server> {
       return;
     }
 
+    // The latency chart's series: a day at 15-minute steps with a gap of
+    // nothing measured and one outage step, so the layout under measurement
+    // includes a broken line and a down tick rather than only the easy case.
+    if (/^\/api\/v1\/monitors\/[^/]+\/latency$/.test(url.pathname)) {
+      const step = 900_000;
+      const to = Math.floor(Date.now() / step) * step + step;
+      const from = to - 96 * step;
+      const points = [];
+      for (let i = 0; i < 96; i++) {
+        if (i >= 40 && i < 44) continue;
+        const down = i === 70;
+        const avg = down ? null : Math.round(120 + 40 * Math.sin(i / 6) + (i % 7) * 3);
+        points.push({
+          t: new Date(from + i * step).toISOString(),
+          checks: 15, samples: down ? 0 : 15, down: down ? 15 : 0,
+          avg_ms: avg, min_ms: avg === null ? null : avg - 20, max_ms: avg === null ? null : avg + 35,
+        });
+      }
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({
+        monitor_id: 1, window: url.searchParams.get("window") ?? "24h", step_s: step / 1000,
+        from: new Date(from).toISOString(), to: new Date(to).toISOString(), points,
+      }));
+      return;
+    }
+
     // HTTP details also poll raw diagnostics. No captured failures in this
     // layout fixture; an unstubbed 404 would instead render a history alert.
     if (/^\/api\/v1\/monitors\/[^/]+\/heartbeats$/.test(url.pathname)) {
