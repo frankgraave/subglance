@@ -95,7 +95,7 @@ jobs:
         run: go test -race -short -count=1 ./...
 
       - name: Release
-        uses: goreleaser/goreleaser-action@9c156ee8a17a598857849441385a2041ef570552 # v6.3.0
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           # Exact, not "~> v2". The range resolves to whatever the action
           # finds newest at run time, so two tags built months apart would
@@ -138,7 +138,7 @@ jobs:
       # confusing.
       - name: Upload the dry-run artefacts
         if: github.ref_type != 'tag'
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: snapshot
           path: |
