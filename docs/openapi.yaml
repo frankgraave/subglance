@@ -1156,6 +1156,65 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
       x-subglance-access: read
+  /api/v1/monitors/{id}/latency:
+    parameters:
+      - $ref: '#/components/parameters/MonitorId'
+    get:
+      tags: [Heartbeats]
+      operationId: getMonitorLatency
+      summary: Latency history for a monitor, grouped into steps
+      description: |
+        The series behind the detail view's latency chart. The window is
+        split into at most 200 steps; the step is picked from a fixed ladder
+        (1m, 5m, 15m, 1h, 6h, 1d) as the finest rung that stays under that
+        count, so 24h is drawn at 15m, 7d at 1h and 30d or 90d at 6h and 1d.
+        Every rung divides a day, so steps are aligned to UTC hours and days.
+
+        History older than the raw-heartbeat retention comes from hourly
+        rollups and is merged with raw checks in the same step, each average
+        weighted by its own sample count. A step shorter than an hour cannot
+        split a rolled-up hour, so that hour lands whole in the step where it
+        starts.
+
+        Steps without any check are left out rather than reported as zero:
+        a missing step is a gap in the data, not a fast answer. A step whose
+        checks all failed is present, with `avg_ms`, `min_ms` and `max_ms`
+        null.
+      parameters:
+        - name: window
+          in: query
+          required: false
+          description: How far back to look.
+          schema:
+            type: string
+            enum: ['24h', '7d', '30d', '90d']
+            default: '24h'
+      responses:
+        '200':
+          description: The latency series.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LatencyResponse'
+        '400':
+          description: An invalid monitor id, or a window outside the list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: window must be one of 24h, 7d, 30d or 90d
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          description: The latency history could not be loaded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: read
   /api/v1/monitors/{id}/incidents:
     parameters:
       - $ref: '#/components/parameters/MonitorId'
@@ -3560,6 +3619,62 @@ components:
           type: integer
           description: Mean latency across all measured samples, including excluded samples. Omitted when zero.
           example: 143
+    LatencyResponse:
+      type: object
+      required: [monitor_id, window, step_s, from, to, points]
+      properties:
+        monitor_id:
+          type: integer
+          format: int64
+          example: 1
+        window:
+          type: string
+          example: '24h'
+        step_s:
+          type: integer
+          description: The length of one step, in seconds.
+          example: 900
+        from:
+          type: string
+          format: date-time
+          description: Start of the first step, inclusive.
+        to:
+          type: string
+          format: date-time
+          description: |
+            End of the last step, exclusive. It lies after the request time:
+            the newest step is the one still filling up.
+        points:
+          type: array
+          description: Steps that hold at least one check, oldest first.
+          items:
+            $ref: '#/components/schemas/LatencyPoint'
+    LatencyPoint:
+      type: object
+      required: [t, checks, samples, down, avg_ms, min_ms, max_ms]
+      properties:
+        t:
+          type: string
+          format: date-time
+          description: Start of the step.
+        checks:
+          type: integer
+          description: Every check recorded in the step.
+        samples:
+          type: integer
+          description: |
+            Checks that carried a latency. Failed checks usually carry none,
+            so this can be lower than `checks`.
+        down:
+          type: integer
+          description: Checks assessed as confirmed down, outside maintenance.
+        avg_ms:
+          type: [integer, 'null']
+          description: Mean latency over `samples`; null when there are none.
+        min_ms:
+          type: [integer, 'null']
+        max_ms:
+          type: [integer, 'null']
     UptimeResponse:
       type: object
       required: [monitor_id, windows]

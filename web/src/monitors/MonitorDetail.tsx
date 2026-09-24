@@ -17,6 +17,7 @@ import { Led } from "./Led";
 import { Unknown } from "./Unknown";
 import type { Monitor } from "./types";
 import { ResponseHistory, type ResponseHistoryProps } from "./ResponseHistory";
+import { LatencyChart, type LatencyChartProps } from "./LatencyChart";
 import type { CheckOutcome } from "./inventoryApi";
 
 /** Shared empty default: a new Set per render would break memoisation. */
@@ -61,6 +62,11 @@ export type MonitorDetailProps = {
   incidents: readonly Incident[];
   /** Raw diagnostic history, independent of the bulk/live beat bar. */
   responseHistory?: ResponseHistoryProps;
+  /**
+   * The latency chart over a chosen window. Omitted for push monitors, which
+   * are reported to rather than probed and so have no latency to draw.
+   */
+  latency?: LatencyChartProps;
   /** Now, in unix ms, for relative ages. Passed in so render stays pure. */
   now: number;
   /** True when the extra panels are still loading. */
@@ -110,6 +116,7 @@ export function MonitorDetail({
   windows,
   incidents,
   responseHistory,
+  latency,
   now,
   loading = false,
   error = null,
@@ -401,6 +408,11 @@ export function MonitorDetail({
           )}
         </Panel>
       </Card>
+
+      {/* After uptime, not before it: uptime answers "is it reliable", which
+          is the question an alert link lands with; the trend answers "is it
+          getting slower", which is the next one. */}
+      {latency ? <LatencyChart {...latency} /> : null}
 
       <Card title="Incidents" icon={<IconAlert />} headingLevel={2}>
         <Panel>

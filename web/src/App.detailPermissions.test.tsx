@@ -77,6 +77,7 @@ describe("detail check permissions through the real app shell", () => {
             },
             "/api/v1/monitors/1": { id: 1, name: "Latest settings", type: "http", target: "https://api.example.com", interval_s: 20, timeout_s: 5, enabled: true, status: "up", created_at: "2026-09-01T00:00:00Z", repeat_after_s: 731 },
             "/api/v1/monitors/1/uptime": { windows: [] },
+            "/api/v1/monitors/1/latency": { window: "24h", step_s: 900, from: "2026-09-19T00:00:00Z", to: "2026-09-20T00:00:00Z", points: [] },
             "/api/v1/monitors/1/incidents": { incidents: [] },
             "/api/v1/monitors/1/heartbeats": { heartbeats: [] },
           };

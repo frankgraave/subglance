@@ -1,0 +1,55 @@
+/*
+ * The latency chart (SUB-23). The chrome — headline, breakdown, gridlines,
+ * corner times — is the shared chart component's; this file only styles the
+ * plot inside it.
+ *
+ * The line is ink, not a status colour: latency is a measurement, and a green
+ * line would claim the service is healthy on a day it was merely fast. The
+ * one status colour here is the down tick along the baseline.
+ */
+
+.lat-figure {
+  margin: 0;
+  transition: opacity var(--dur-hover) var(--ease);
+}
+
+/* The previous window, still on screen while the next one loads: dimmed so it
+   does not pass for the new answer, not blanked so the card does not jump. */
+.lat-figure[data-refreshing] {
+  opacity: .55;
+}
+
+.lat-plot {
+  position: relative;
+  height: var(--size-plot);
+  border-radius: var(--r-sm);
+}
+
+.lat-plot:focus-visible {
+  outline: var(--outline-w) solid var(--accent-border);
+  outline-offset: var(--outline-offset);
+}
+
+.lat-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.lat-line {
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.lat-down {
+  fill: var(--down);
+}
+
+.lat-cursor {
+  stroke: var(--ink-4);
+  stroke-width: 1;
+}

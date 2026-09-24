@@ -156,7 +156,17 @@ const budgets = {
    * was needed for that build. Fonts measured 69,412 bytes against the
    * unchanged 80 KiB ceiling. Run this script for current measurements.
    */
-  js: 136,
+  /*
+   * 136 -> 140 KiB gzip for SUB-23 (the latency chart on the detail page).
+   * Develop at 3b94355 measures 134.7 KiB JS; this branch measures 137.2, so
+   * the chart costs about 2.5 KiB (gzip -9 of the entry: 137,483 -> 140,026
+   * bytes). That buys the stepped-series model, the hand-drawn plot with its
+   * keyboard readout and screen-reader table, and the window control, with no
+   * chart library (DESIGN.md §10) and no new runtime dependency. 138 would
+   * leave under 1 KiB for the next fix; 140 leaves about 2.8 KiB, the same
+   * order of headroom the previous raise left. CSS and fonts stay put.
+   */
+  js: 140,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *

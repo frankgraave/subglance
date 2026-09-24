@@ -278,8 +278,12 @@ func (c Config) validate() error {
 	if c.CheckWorkers < 0 {
 		return fmt.Errorf("check-workers must not be negative, got %d", c.CheckWorkers)
 	}
-	if c.RawRetention <= 0 {
-		return fmt.Errorf("raw-retention must be positive, got %s", c.RawRetention)
+	// The shortest chart window is 24h. Raw retention below that lets the
+	// hourly rollup fold away checks inside an ordinary 24h request, and the
+	// bucket that straddles the window's start is not counted, so the chart
+	// would silently drop checks it claims to cover.
+	if c.RawRetention < 24*time.Hour {
+		return fmt.Errorf("raw-retention must be at least 24h, got %s", c.RawRetention)
 	}
 	if c.RollupRetention < 0 {
 		return fmt.Errorf("rollup-retention must not be negative, got %s", c.RollupRetention)

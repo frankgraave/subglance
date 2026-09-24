@@ -67,6 +67,24 @@
     },
     {
       "rule": "color-contrast",
+      "selector": "div[aria-label=\"Latency window\"] > .segmented-option:nth-child(2)",
+      "scopes": [
+        "light: monitor detail",
+        "dark: monitor detail"
+      ],
+      "reason": "The shared segmented-option contrast debt already waived for the dashboard layout switcher, now also measured on the latency chart's window control (SUB-23). Same component, same inactive ink; remediation belongs in the shared control, not in this caller. Remove with the other segmented-option waivers when that is fixed."
+    },
+    {
+      "rule": "color-contrast",
+      "selector": "div[aria-label=\"Latency window\"] > .segmented-option:nth-child(3)",
+      "scopes": [
+        "light: monitor detail",
+        "dark: monitor detail"
+      ],
+      "reason": "The shared segmented-option contrast debt already waived for the dashboard layout switcher, now also measured on the latency chart's window control (SUB-23). Same component, same inactive ink; remediation belongs in the shared control, not in this caller. Remove with the other segmented-option waivers when that is fixed."
+    },
+    {
+      "rule": "color-contrast",
       "selector": ".segmented-option:nth-child(4)",
       "scopes": [
         "light: dashboard rows",

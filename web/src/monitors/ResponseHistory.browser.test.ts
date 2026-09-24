@@ -165,7 +165,7 @@ it.each([
     }));
     expect(metrics.overflow).toBeLessThanOrEqual(1);
     expect(metrics.css).toBe("pre-wrap");
-    expect(metrics.headings.slice(0, 3)).toEqual(["Recent checks", "Failure responses", "Uptime"]);
+    expect(metrics.headings.slice(0, 4)).toEqual(["Recent checks", "Failure responses", "Uptime", "Latency"]);
     expect(errors).toEqual([]);
     if (process.env.SNAPSHOT_BROWSER_PROOF_DIR) {
       await page.$eval(".response-history pre", (el) => { el.scrollTop = 0; });
