@@ -360,6 +360,12 @@ func (s *Server) routes() []route {
 		{http.MethodPut, "/api/v1/channels/{id}", accessWrite},
 		{http.MethodDelete, "/api/v1/channels/{id}", accessWrite},
 
+		// Quiet hours can only delay or, when chosen, drop what a channel
+		// sends. That is a write: a viewer who could set them could silence
+		// the phone everyone else relies on.
+		{http.MethodPut, "/api/v1/channels/{id}/quiet-hours", accessWrite},
+		{http.MethodDelete, "/api/v1/channels/{id}/quiet-hours", accessWrite},
+
 		// Testing a channel sends a real message to a configured
 		// destination, so it needs write access even though it changes
 		// nothing here: a viewer who could trigger it could use the
@@ -478,6 +484,10 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 
 	case "POST /api/v1/channels":
 		return s.handleCreateChannel
+	case "PUT /api/v1/channels/{id}/quiet-hours":
+		return s.handleSetQuietHours
+	case "DELETE /api/v1/channels/{id}/quiet-hours":
+		return s.handleClearQuietHours
 	case "PUT /api/v1/channels/{id}":
 		return s.handleUpdateChannel
 	case "POST /api/v1/channels/{id}/test":

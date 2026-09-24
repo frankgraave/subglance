@@ -22,6 +22,9 @@ type channelResponse struct {
 	Enabled   bool      `json:"enabled"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+
+	// QuietHours is the channel's daily quiet window, nil when it has none.
+	QuietHours *store.QuietHours `json:"quiet_hours"`
 }
 
 func toChannelResponse(c store.Channel) channelResponse {
@@ -150,9 +153,20 @@ func (s *Server) handleListChannels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	quiet, err := s.db.ListQuietHours(r.Context())
+	if err != nil {
+		s.log.Error("list quiet hours", "error", err)
+		writeError(w, http.StatusInternalServerError, "could not list channels")
+		return
+	}
+
 	out := make([]channelResponse, 0, len(channels))
 	for _, c := range channels {
-		out = append(out, toChannelResponse(c))
+		resp := toChannelResponse(c)
+		if q, ok := quiet[c.ID]; ok {
+			resp.QuietHours = &q
+		}
+		out = append(out, resp)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"channels": out})
 }
@@ -173,7 +187,17 @@ func (s *Server) handleGetChannel(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "could not load the channel")
 		return
 	}
-	writeJSON(w, http.StatusOK, toChannelResponse(c))
+	resp := toChannelResponse(c)
+	q, ok, err := s.db.GetQuietHours(r.Context(), id)
+	if err != nil {
+		s.log.Error("get quiet hours", "channel_id", id, "error", err)
+		writeError(w, http.StatusInternalServerError, "could not load the channel")
+		return
+	}
+	if ok {
+		resp.QuietHours = &q
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) handleCreateChannel(w http.ResponseWriter, r *http.Request) {
@@ -293,7 +317,13 @@ func (s *Server) handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.log.Info("channel updated", "channel_id", id)
-	writeJSON(w, http.StatusOK, toChannelResponse(saved))
+	resp := toChannelResponse(saved)
+	// A replace does not touch quiet hours, and the response must not
+	// suggest it removed them.
+	if q, ok, err := s.db.GetQuietHours(r.Context(), id); err == nil && ok {
+		resp.QuietHours = &q
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) handleDeleteChannel(w http.ResponseWriter, r *http.Request) {
@@ -335,9 +365,20 @@ func (s *Server) handleListMonitorChannels(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	quiet, err := s.db.ListQuietHours(r.Context())
+	if err != nil {
+		s.log.Error("list quiet hours", "error", err)
+		writeError(w, http.StatusInternalServerError, "could not list channels")
+		return
+	}
+
 	out := make([]channelResponse, 0, len(channels))
 	for _, c := range channels {
-		out = append(out, toChannelResponse(c))
+		resp := toChannelResponse(c)
+		if q, ok := quiet[c.ID]; ok {
+			resp.QuietHours = &q
+		}
+		out = append(out, resp)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"channels": out})
 }
@@ -381,9 +422,20 @@ func (s *Server) handleSetMonitorChannels(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	quiet, err := s.db.ListQuietHours(r.Context())
+	if err != nil {
+		s.log.Error("list quiet hours", "error", err)
+		writeError(w, http.StatusInternalServerError, "could not list channels")
+		return
+	}
+
 	out := make([]channelResponse, 0, len(channels))
 	for _, c := range channels {
-		out = append(out, toChannelResponse(c))
+		resp := toChannelResponse(c)
+		if q, ok := quiet[c.ID]; ok {
+			resp.QuietHours = &q
+		}
+		out = append(out, resp)
 	}
 	s.log.Info("monitor channels updated", "monitor_id", id, "count", len(out))
 	writeJSON(w, http.StatusOK, map[string]any{"channels": out})
