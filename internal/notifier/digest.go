@@ -62,8 +62,14 @@ func (n *Notifier) foldHeld(ctx context.Context, d store.Delivery, zone string) 
 	var (
 		alerts []Alert
 		folded []int64
+		// self is d as persisted. Maintenance may have trimmed the payload
+		// before this call, so d.Payload can still name members it removed.
+		self = d
 	)
 	for _, h := range held {
+		if h.ID == d.ID {
+			self = h
+		}
 		a, err := DecodeAlert(h.Payload)
 		if err != nil {
 			// Left held: its own attempt dead-letters it with the
@@ -81,7 +87,7 @@ func (n *Notifier) foldHeld(ctx context.Context, d store.Delivery, zone string) 
 	}
 
 	if len(folded) == 0 && len(alerts) <= 1 {
-		return n.db.FoldDigest(ctx, d.ID, d.Event, d.Payload, nil, n.now())
+		return n.db.FoldDigest(ctx, self.ID, self.Event, self.Payload, nil, n.now())
 	}
 
 	digest := BuildDigest(alerts, zone, n.now())

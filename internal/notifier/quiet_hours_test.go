@@ -232,3 +232,47 @@ func TestClearingQuietHoursReleasesWhatTheyHeld(t *testing.T) {
 		t.Fatal("a single held alert should be released as itself, not as a digest of one")
 	}
 }
+
+// TestReleasedHeldAlertKeepsMaintenanceFilter: a held grouped alert whose
+// member entered maintenance is released as a single alert. The release must
+// carry the payload maintenance already trimmed, or the trimmed member comes
+// back once the window ends.
+func TestReleasedHeldAlertKeepsMaintenanceFilter(t *testing.T) {
+	ctx := context.Background()
+	db := groupDB(t)
+	ch := groupChannel(t, db, "ops")
+	a := groupMonitor(t, db, "maintained", ch.ID)
+	b := groupMonitor(t, db, "live", ch.ID)
+	setQuiet(t, db, ch.ID, store.QuietHold)
+
+	clock := nightClock()
+	sender := &fakeSender{}
+	n := New(Options{DB: db, Senders: map[string]Sender{store.ChannelWebhook: sender}, Now: func() time.Time { return clock }, GroupWindow: time.Minute})
+	for _, m := range []store.Monitor{a, b} {
+		if err := n.Enqueue(ctx, m, store.Incident{}, state.EventIncidentConfirmed, clock); err != nil {
+			t.Fatalf("enqueue: %v", err)
+		}
+	}
+	n.flushAll(ctx)
+	sweepN(t, n, 1)
+	if held, err := db.HeldDeliveries(ctx, ch.ID); err != nil || len(held) != 1 {
+		t.Fatalf("expected the grouped alert to be held, got %d (%v)", len(held), err)
+	}
+
+	if _, err := db.CreateMaintenance(ctx, store.MaintenanceWindow{Name: "deploy", MonitorID: a.ID, StartsAt: clock.Add(-time.Hour), EndsAt: clock.Add(time.Hour)}); err != nil {
+		t.Fatalf("create maintenance: %v", err)
+	}
+	if err := db.ClearQuietHours(ctx, ch.ID); err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+	clock = clock.Add(time.Minute)
+	sweepN(t, n, 1)
+
+	// Maintenance is over by the time the released row is sent.
+	clock = clock.Add(2 * time.Hour)
+	sweepN(t, n, 2)
+	sent := sender.delivered()
+	if len(sent) != 1 || sent[0].Grouped() || sent[0].MonitorName != "live" {
+		t.Fatalf("the member maintenance removed came back on release: %+v", sent)
+	}
+}

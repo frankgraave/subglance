@@ -305,6 +305,15 @@ func (s *Server) handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 		updated.Enabled = *req.Enabled
 	}
 
+	// Loaded before the update so a failed lookup cannot turn into a 200
+	// that reports quiet_hours: null, which means "none configured".
+	q, hasQuietHours, err := s.db.GetQuietHours(r.Context(), id)
+	if err != nil {
+		s.log.Error("get quiet hours before channel update", "channel_id", id, "error", err)
+		writeError(w, http.StatusInternalServerError, "could not load the channel")
+		return
+	}
+
 	saved, err := s.db.UpdateChannel(r.Context(), updated)
 	if errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "channel not found")
@@ -320,7 +329,7 @@ func (s *Server) handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 	resp := toChannelResponse(saved)
 	// A replace does not touch quiet hours, and the response must not
 	// suggest it removed them.
-	if q, ok, err := s.db.GetQuietHours(r.Context(), id); err == nil && ok {
+	if hasQuietHours {
 		resp.QuietHours = &q
 	}
 	writeJSON(w, http.StatusOK, resp)

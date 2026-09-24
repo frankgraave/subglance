@@ -106,3 +106,27 @@ func TestQuietHoursRequireAnEditor(t *testing.T) {
 		t.Fatalf("status %d, want 403 for a viewer setting quiet hours", rec.Code)
 	}
 }
+
+// TestChannelReplaceFailsWhenQuietHoursCannotBeRead: a replace must not
+// answer 200 with quiet_hours: null when the lookup failed, since null means
+// none are configured. It must also fail before the channel is changed.
+func TestChannelReplaceFailsWhenQuietHoursCannotBeRead(t *testing.T) {
+	srv, db := testServerWithDB(t)
+	ch := createSlackChannel(t, srv, "phone", "https://hooks.slack.com/services/T/B/secret")
+	if _, err := db.Writer.ExecContext(t.Context(), "ALTER TABLE notif_quiet_hours RENAME TO notif_quiet_hours_gone"); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := doJSON(t, srv, http.MethodPut, fmt.Sprintf("/api/v1/channels/%d", ch.ID),
+		`{"name":"phone 2","type":"slack","config":{"url":"https://hooks.slack.com/services/T/B/secret"}}`)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("replace with unreadable quiet hours: status %d, want 500: %s", rec.Code, rec.Body.String())
+	}
+	got, err := db.GetChannel(t.Context(), ch.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != "phone" {
+		t.Fatalf("channel was renamed to %q despite the failed request", got.Name)
+	}
+}

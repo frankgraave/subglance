@@ -2058,9 +2058,9 @@ paths:
 
         `during` decides what happens to an alert that comes due inside the
         window. `hold` (the default when omitted) keeps it, and when the window
-        ends everything the channel held is sent as one digest. `drop` discards
-        it; the queued row is kept and marked, so the reason nothing was sent
-        stays visible.
+        ends two or more held alerts are sent as one digest; a single held
+        alert is sent as itself. `drop` discards it; the queued row is kept and
+        marked, so the reason nothing was sent stays visible.
 
         The window is evaluated when a delivery is attempted, not when it is
         queued. Replacing the window releases anything the old one was holding,
@@ -2102,8 +2102,8 @@ paths:
       operationId: clearChannelQuietHours
       summary: Remove a channel's quiet hours
       description: |
-        Anything the window was holding becomes due at once and is sent as one
-        digest.
+        Anything the window was holding becomes due at once. Two or more held
+        alerts are sent as one digest; a single held alert is sent as itself.
       responses:
         '204':
           description: The channel no longer has quiet hours.
