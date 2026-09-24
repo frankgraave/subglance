@@ -153,6 +153,15 @@
 
 /* The one sentence under the empty state's headline, which is read before
    anything else on the screen and takes the body size for it. */
+/*
+ * The default-channel sentence (SUB-124). It sits above the delivery caveat
+ * and takes the caveat's own gap, so the two read as a pair of facts about
+ * the instance before the list of channels starts.
+ */
+.nt-default {
+  margin-bottom: var(--space-3);
+}
+
 .nt-note--lede {
   font-size: var(--type-body);
   line-height: var(--lead-body);

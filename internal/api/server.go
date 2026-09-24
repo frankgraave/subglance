@@ -365,6 +365,8 @@ func (s *Server) routes() []route {
 		// nothing here: a viewer who could trigger it could use the
 		// instance to post into someone else's chat room.
 		{http.MethodPost, "/api/v1/channels/{id}/test", accessWrite},
+		{http.MethodPut, "/api/v1/channels/{id}/default", accessWrite},
+		{http.MethodDelete, "/api/v1/channels/{id}/default", accessWrite},
 
 		// Authenticated: admin only.
 		{http.MethodGet, "/api/v1/users", accessAdmin},
@@ -484,6 +486,10 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 		return s.handleTestChannel
 	case "DELETE /api/v1/channels/{id}":
 		return s.handleDeleteChannel
+	case "PUT /api/v1/channels/{id}/default":
+		return s.handleSetDefaultChannel
+	case "DELETE /api/v1/channels/{id}/default":
+		return s.handleClearDefaultChannel
 
 	case "GET /api/v1/users":
 		return s.handleListUsers

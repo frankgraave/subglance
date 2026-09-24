@@ -62,6 +62,48 @@ afterEach(() => {
 });
 
 describe("NotificationsView", () => {
+  it("says plainly when unrouted monitors reach nobody", () => {
+    /*
+     * With no default, a monitor without channels alerts nobody. That is the
+     * failure the default exists to prevent, so the page says it in those
+     * words rather than leaving the reader to infer it from an empty select.
+     */
+    render(<NotificationsView channels={[make()]} />);
+    expect(
+      screen.getByText(/monitors with no channels of their own alert nobody/i),
+    ).toBeTruthy();
+  });
+
+  it("marks the default channel on its row and names it above the list", () => {
+    const { container } = render(
+      <NotificationsView
+        channels={[make({ is_default: true }), make({ id: 2, name: "Pager" })]}
+      />,
+    );
+    const [first, second] = screen.getAllByRole("listitem");
+    expect(within(first).getByText("Default")).toBeTruthy();
+    expect(within(second).queryByText("Default")).toBeNull();
+    expect(first.querySelector(".sr-only")!.textContent).toMatch(
+      /default channel/i,
+    );
+    expect(container.querySelector(".nt-default")!.textContent).toMatch(
+      /alert through On-call Slack/,
+    );
+  });
+
+  it("says a disabled default delivers nothing", () => {
+    // The notifier skips disabled channels, so naming a disabled default as
+    // where alerts go would claim a delivery that never happens.
+    const { container } = render(
+      <NotificationsView
+        channels={[make({ is_default: true, enabled: false })]}
+      />,
+    );
+    expect(container.querySelector(".nt-default")!.textContent).toMatch(
+      /which is disabled: they alert nobody/,
+    );
+  });
+
   it("shows a channel's type and destination", () => {
     render(<NotificationsView channels={[make()]} />);
     const row = screen.getByRole("listitem");
@@ -188,7 +230,9 @@ describe("NotificationsView", () => {
     expect(
       screen.getByRole("button", { name: "Delete Email Ops email" }),
     ).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Edit Slack On-call Slack" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Edit Slack On-call Slack" }),
+    ).toBeTruthy();
   });
 
   it("prints the upstream error verbatim when a test fails", () => {
@@ -204,29 +248,40 @@ describe("NotificationsView", () => {
       screen.getByText(/401 unauthorized: bot token revoked/),
     ).toBeTruthy();
     const row = screen.getByRole("listitem");
-    expect(within(row).getByText("Test failed", { selector: ".chip" })).toBeTruthy();
+    expect(
+      within(row).getByText("Test failed", { selector: ".chip" }),
+    ).toBeTruthy();
   });
 
   it("does not let a passed test claim anything about earlier deliveries", () => {
     render(
-      <NotificationsView channels={[make()]} deliveries={{ "1": { kind: "passed" } }} />,
+      <NotificationsView
+        channels={[make()]}
+        deliveries={{ "1": { kind: "passed" } }}
+      />,
     );
-    expect(screen.getByText(/says nothing about deliveries made before/i)).toBeTruthy();
+    expect(
+      screen.getByText(/says nothing about deliveries made before/i),
+    ).toBeTruthy();
   });
 
   it("states the consequence when there are no channels at all", () => {
     // Not a polite grey murmur: no channel means every alert goes into a void
     // on an install that otherwise looks healthy.
-    render(<NotificationsView channels={[]} onCreateOpenChange={() => {}} onSave={async () => {}} />);
+    render(
+      <NotificationsView
+        channels={[]}
+        onCreateOpenChange={() => {}}
+        onSave={async () => {}}
+      />,
+    );
     expect(screen.getByText("Alerts are going nowhere.")).toBeTruthy();
   });
 
   it("never shows the empty state for a failed load", () => {
     // "Alerts are going nowhere" to somebody with four working channels tells
     // them their alerting is gone when in fact one request 500'd.
-    render(
-      <NotificationsView channels={[]} error={new Error("HTTP 500")} />,
-    );
+    render(<NotificationsView channels={[]} error={new Error("HTTP 500")} />);
     expect(screen.queryByText("Alerts are going nowhere.")).toBeNull();
     expect(screen.getByText("HTTP 500")).toBeTruthy();
   });
@@ -252,7 +307,9 @@ describe("NotificationsView", () => {
      */
     const { container } = render(<NotificationsView channels={[]} loading />);
     expect(screen.getAllByText(/loading channels/i).length).toBeGreaterThan(0);
-    expect(container.querySelector(".card-title")!.textContent).toBe("Channels");
+    expect(container.querySelector(".card-title")!.textContent).toBe(
+      "Channels",
+    );
     expect(container.querySelector(".card-note")).toBeNull();
     expect(screen.queryByText(/no channels configured/i)).toBeNull();
   });
@@ -261,7 +318,9 @@ describe("NotificationsView", () => {
     const { container } = render(
       <NotificationsView channels={[]} error={new Error("HTTP 500")} />,
     );
-    expect(container.querySelector(".card-title")!.textContent).toBe("Channels");
+    expect(container.querySelector(".card-title")!.textContent).toBe(
+      "Channels",
+    );
     expect(container.querySelector(".card-note")).toBeNull();
     expect(screen.queryByText(/no channels configured/i)).toBeNull();
   });
@@ -277,7 +336,9 @@ describe("NotificationsView", () => {
      * are read the same way.
      */
     const { container } = render(
-      <NotificationsView channels={[make(), make({ id: 2, enabled: false })]} />,
+      <NotificationsView
+        channels={[make(), make({ id: 2, enabled: false })]}
+      />,
     );
     expect(container.querySelector(".card-title")!.textContent).toBe(
       "Channels (2)",
@@ -344,7 +405,10 @@ describe("NotificationsView", () => {
      * copy. The chip element is the thing that has to be there.
      */
     const chip = disabledRows[0].querySelector(".inv-paused-chip");
-    expect(chip, "the disabled row lost its visible Disabled chip").not.toBeNull();
+    expect(
+      chip,
+      "the disabled row lost its visible Disabled chip",
+    ).not.toBeNull();
     expect(chip!.textContent).toBe("Disabled");
     const enabledRow = rows.find(
       (row) => row.getAttribute("data-disabled") === "false",
@@ -413,13 +477,21 @@ describe("NotificationsView", () => {
   it("says what a channel is, not only what happens without one", () => {
     // The empty state is the first thing a new self-hoster reads, and it used
     // to assume they already knew what they were being asked to add.
-    render(<NotificationsView channels={[]} onCreateOpenChange={() => {}} onSave={async () => {}} />);
+    render(
+      <NotificationsView
+        channels={[]}
+        onCreateOpenChange={() => {}}
+        onSave={async () => {}}
+      />,
+    );
     expect(
       screen.getByText(/a channel is where SubGlance sends a message/i),
     ).toBeTruthy();
     // The supported types, from CHANNEL_TYPES rather than from a hand-written
     // list that could advertise a type the store's CHECK constraint rejects.
-    expect(screen.getByText(/Email, Slack, Discord, Telegram, Webhook/)).toBeTruthy();
+    expect(
+      screen.getByText(/Email, Slack, Discord, Telegram, Webhook/),
+    ).toBeTruthy();
   });
 
   it("keeps the whole delivery caveat on the page, above the rows it explains", () => {
@@ -519,7 +591,9 @@ describe("NotificationsView", () => {
     // Both surfaces that should be there, still are — and the heading is bare
     // rather than reading "Channels (0)", which is the same count said in the
     // one place the headline below is about to say it better.
-    expect(container.querySelector(".card-title")!.textContent).toBe("Channels");
+    expect(container.querySelector(".card-title")!.textContent).toBe(
+      "Channels",
+    );
     expect(screen.getByText("Alerts are going nowhere.")).toBeTruthy();
   });
 
@@ -545,14 +619,19 @@ describe("NotificationsView", () => {
         onSave={async () => {}}
       />,
     );
-    const del = screen.getByRole("button", { name: "Delete Slack On-call Slack" });
+    const del = screen.getByRole("button", {
+      name: "Delete Slack On-call Slack",
+    });
     expect(del.className).toContain("inv-act--icon");
     expect(del.className).toContain("inv-act--danger");
     // A glyph, not a word: the accessible name carries the verb, the face does not.
     expect((del.textContent ?? "").trim()).toBe("");
     expect(del.querySelector("svg")).not.toBeNull();
     // Edit and the toggle are glyphs on the same class.
-    for (const name of ["Edit Slack On-call Slack", "Disable Slack On-call Slack"]) {
+    for (const name of [
+      "Edit Slack On-call Slack",
+      "Disable Slack On-call Slack",
+    ]) {
       const button = screen.getByRole("button", { name });
       expect(button.className).toContain("inv-act--icon");
       expect((button.textContent ?? "").trim()).toBe("");
@@ -606,7 +685,9 @@ describe("NotificationsView", () => {
     // Nothing is deleted by the first press: the drawer explains that monitors
     // pointing only at this channel will alert nobody.
     expect(onDelete).not.toHaveBeenCalled();
-    expect(screen.getByText(/will go on being checked and will tell nobody/i)).toBeTruthy();
+    expect(
+      screen.getByText(/will go on being checked and will tell nobody/i),
+    ).toBeTruthy();
 
     /*
      * The name has to be retyped (DESIGN.md §7.5). This deletion destroys

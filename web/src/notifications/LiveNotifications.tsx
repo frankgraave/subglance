@@ -8,11 +8,13 @@ import {
 import type { QueryClient } from "@tanstack/react-query";
 import { createQueryClient } from "../live/queryClient";
 import { NotificationsView } from "./NotificationsView";
+import { inventoryQueryKey } from "../monitors/inventoryApi";
 import {
   channelsQueryKey,
   createChannel,
   deleteChannel,
   fetchChannels,
+  setDefaultChannel,
   testChannel,
   updateChannel,
 } from "./channelsApi";
@@ -37,6 +39,7 @@ export type LiveNotificationsProps = {
   update?: typeof updateChannel;
   remove?: typeof deleteChannel;
   test?: typeof testChannel;
+  setDefault?: typeof setDefaultChannel;
   createOpen?: boolean;
   onCreateOpenChange?: (open: boolean) => void;
   /** False for a viewer: every write control disappears rather than failing. */
@@ -49,6 +52,7 @@ export function LiveNotifications({
   update = updateChannel,
   remove = deleteChannel,
   test = testChannel,
+  setDefault = setDefaultChannel,
   createOpen = false,
   onCreateOpenChange,
   canWrite = true,
@@ -147,8 +151,11 @@ export function LiveNotifications({
   const deleteMutation = useMutation({
     mutationFn: (id: string) => remove(id),
     onError: (error, id) => noteError(id, error),
+    // Deleting the default channel changes what the inventory names as the
+    // fallback for monitors without channels of their own.
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: channelsQueryKey });
+      void queryClient.invalidateQueries({ queryKey: inventoryQueryKey });
     },
   });
 
@@ -203,7 +210,13 @@ export function LiveNotifications({
   );
 
   const enableMutation = useMutation({
-    mutationFn: ({ channel, enabled }: { channel: Channel; enabled: boolean }) =>
+    mutationFn: ({
+      channel,
+      enabled,
+    }: {
+      channel: Channel;
+      enabled: boolean;
+    }) =>
       update(channel.id, {
         name: channel.name,
         type: channel.type,
@@ -231,6 +244,38 @@ export function LiveNotifications({
       enableMutation.mutate({ channel, enabled });
     },
     [channels.data, clearError, enableMutation],
+  );
+
+  /*
+   * Moving the default is one request; clearing it names the channel that
+   * holds it now. Either way the list is refetched rather than patched: the
+   * flag moves between two rows, and only the server knows where it landed.
+   */
+  const [defaultError, setDefaultError] = useState<string | null>(null);
+  const defaultMutation = useMutation({
+    mutationFn: async (id: string | null) => {
+      if (id !== null) return setDefault(id, true);
+      const current = (channels.data ?? []).find((c) => c.isDefault);
+      if (current !== undefined) await setDefault(current.id, false);
+    },
+    onMutate: () => setDefaultError(null),
+    onError: (error) =>
+      setDefaultError(
+        error instanceof Error
+          ? error.message
+          : "the default channel could not be changed",
+      ),
+    // The inventory names the default beside monitors with no channels of
+    // their own, so it is stale the moment the default moves.
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: channelsQueryKey }),
+        queryClient.invalidateQueries({ queryKey: inventoryQueryKey }),
+      ]),
+  });
+  const onSetDefault = useCallback(
+    (id: string | null) => defaultMutation.mutate(id),
+    [defaultMutation],
   );
 
   const onSave = useCallback(
@@ -277,6 +322,9 @@ export function LiveNotifications({
       onDelete={canWrite ? onDelete : undefined}
       onSetEnabled={canWrite ? onSetEnabled : undefined}
       togglingIds={togglingIds}
+      onSetDefault={canWrite ? onSetDefault : undefined}
+      savingDefault={defaultMutation.isPending}
+      defaultError={defaultError}
       onSave={canWrite ? onSave : undefined}
       createOpen={canWrite && createOpen}
       onCreateOpenChange={canWrite ? onCreateOpenChange : undefined}

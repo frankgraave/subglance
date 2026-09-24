@@ -43,6 +43,7 @@ export type ApiChannel = {
   type: string;
   config?: Record<string, string> | null;
   enabled?: boolean;
+  is_default?: boolean;
   created_at?: string;
   updated_at?: string;
 };
@@ -59,6 +60,12 @@ export type Channel = {
   /** Config exactly as the API returned it — secrets already masked there. */
   config: Readonly<Record<string, string>>;
   enabled: boolean;
+  /**
+   * The instance default: where a monitor with no channels of its own sends
+   * its alerts. Absent on the wire reads as false — a server that predates the
+   * default has none, and claiming one would promise alerts nobody sends.
+   */
+  isDefault: boolean;
   createdAt: number | null;
 };
 
@@ -69,6 +76,7 @@ export function channelFromApi(api: ApiChannel): Channel {
     type: api.type,
     config: api.config ?? {},
     enabled: api.enabled !== false,
+    isDefault: api.is_default === true,
     createdAt: toUnixMs(api.created_at),
   };
 }

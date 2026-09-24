@@ -184,7 +184,13 @@ function MonitorInventoryRowImpl({
             {!channels.known ? (
               <StateChip>not loaded</StateChip>
             ) : (
-              <Value value={channels.names.length === 0 ? 0 : undefined}>
+              <Value
+                value={
+                  channels.names.length === 0 && channels.fallback === undefined
+                    ? 0
+                    : undefined
+                }
+              >
                 {channelText}
               </Value>
             )}

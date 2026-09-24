@@ -19,7 +19,10 @@ type channelResponse struct {
 	Type   string            `json:"type"`
 	Config map[string]string `json:"config"`
 
-	Enabled   bool      `json:"enabled"`
+	Enabled bool `json:"enabled"`
+	// IsDefault marks the channel that monitors without channels of their
+	// own alert through.
+	IsDefault bool      `json:"is_default"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -29,6 +32,7 @@ func toChannelResponse(c store.Channel) channelResponse {
 		ID: c.ID, Name: c.Name, Type: c.Type,
 		Config:    maskConfig(c.Type, c.Config),
 		Enabled:   c.Enabled,
+		IsDefault: c.IsDefault,
 		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
 	}
 }
@@ -314,6 +318,54 @@ func (s *Server) handleDeleteChannel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.log.Info("channel deleted", "channel_id", id)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleSetDefaultChannel makes a channel the instance-wide default.
+//
+// The default is what keeps a monitor nobody routed from failing in silence:
+// a monitor with no channels of its own alerts through it. Setting one moves
+// the flag, so there is never more than one.
+func (s *Server) handleSetDefaultChannel(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	err := s.db.SetDefaultChannel(r.Context(), id)
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "channel not found")
+		return
+	}
+	if err != nil {
+		s.log.Error("set default channel", "channel_id", id, "error", err)
+		writeError(w, http.StatusInternalServerError, "could not set the default channel")
+		return
+	}
+	s.log.Info("default channel set", "channel_id", id)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleClearDefaultChannel stops a channel being the default.
+//
+// Scoped to the channel in the path rather than "whatever the default is", so
+// a client acting on a stale screen cannot unset a default chosen after that
+// screen was drawn.
+func (s *Server) handleClearDefaultChannel(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	err := s.db.ClearDefaultChannel(r.Context(), id)
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "channel not found")
+		return
+	}
+	if err != nil {
+		s.log.Error("clear default channel", "channel_id", id, "error", err)
+		writeError(w, http.StatusInternalServerError, "could not clear the default channel")
+		return
+	}
+	s.log.Info("default channel cleared", "channel_id", id)
 	w.WriteHeader(http.StatusNoContent)
 }
 

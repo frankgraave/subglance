@@ -60,6 +60,22 @@ describe("inventoryFromApi", () => {
     ).toBe("1.0");
   });
 
+  it("reads the default only where it stands in for an empty channel list", () => {
+    const ops = { id: 3, name: "Ops" };
+    expect(
+      inventoryFromApi({ ...api, channels: [], default_channel: ops }).channels,
+    ).toEqual({ known: true, names: [], fallback: "Ops" });
+    // Beside real attachments the default does not apply, whatever the wire says.
+    expect(
+      inventoryFromApi({ ...api, channels: [{ id: 1, name: "Pager" }], default_channel: ops })
+        .channels,
+    ).toEqual({ known: true, names: ["Pager"] });
+    // With the attachments unknown, nothing is claimed about the default either.
+    expect(inventoryFromApi({ ...api, default_channel: ops }).channels).toEqual({
+      known: false,
+    });
+  });
+
   it("collapses a disabled monitor into the paused status", () => {
     const m = inventoryFromApi({ ...api, enabled: false });
     expect(m.enabled).toBe(false);
@@ -93,6 +109,14 @@ describe("describeChannels", () => {
     // manufacture that finding out of a 500.
     expect(describeChannels({ known: true, names: [] })).toBe("none");
     expect(describeChannels({ known: false })).toBe("not loaded");
+  });
+
+  it("names the default on a monitor that has no channels of its own", () => {
+    // With a default set, an empty list is not the finding "none": somebody
+    // does hear about this monitor, and the cell has to say who.
+    expect(describeChannels({ known: true, names: [], fallback: "Ops" })).toBe(
+      "Ops (default)",
+    );
   });
 
   it("lists the channel names when it knows them", () => {
