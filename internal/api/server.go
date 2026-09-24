@@ -309,6 +309,7 @@ func (s *Server) routes() []route {
 		{http.MethodGet, "/api/v1/monitors/{id}", accessRead},
 		{http.MethodGet, "/api/v1/monitors/{id}/heartbeats", accessRead},
 		{http.MethodGet, "/api/v1/monitors/{id}/uptime", accessRead},
+		{http.MethodGet, "/api/v1/monitors/{id}/latency", accessRead},
 		{http.MethodGet, "/api/v1/monitors/{id}/incidents", accessRead},
 		{http.MethodGet, "/api/v1/incidents", accessRead},
 		{http.MethodGet, "/api/v1/incidents/resolved", accessRead},
@@ -426,6 +427,8 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 		return s.handleListHeartbeats
 	case "GET /api/v1/monitors/{id}/uptime":
 		return s.handleMonitorUptime
+	case "GET /api/v1/monitors/{id}/latency":
+		return s.handleMonitorLatency
 	case "GET /api/v1/monitors/{id}/incidents":
 		return s.handleListMonitorIncidents
 	case "GET /api/v1/incidents":

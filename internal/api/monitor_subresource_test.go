@@ -16,13 +16,14 @@ import (
 // cannot see at all.
 //
 // The list is deliberately exhaustive rather than a spot check: the bug was an
-// inconsistency between endpoints, so the test only has value if adding a fifth
+// inconsistency between endpoints, so the test only has value if adding a sixth
 // sub-resource without a check shows up here.
 func monitorSubresourcePaths(id int64) []string {
 	return []string{
 		fmt.Sprintf("/api/v1/monitors/%d/heartbeats", id),
 		fmt.Sprintf("/api/v1/monitors/%d/incidents", id),
 		fmt.Sprintf("/api/v1/monitors/%d/uptime", id),
+		fmt.Sprintf("/api/v1/monitors/%d/latency", id),
 		fmt.Sprintf("/api/v1/monitors/%d/channels", id),
 	}
 }

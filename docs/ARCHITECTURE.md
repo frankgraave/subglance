@@ -184,6 +184,7 @@ POST   /monitors/{id}/resume
 POST   /monitors/{id}/check     run immediately
 GET    /monitors/{id}/heartbeats?range=24h
 GET    /monitors/{id}/uptime?range=30d
+GET    /monitors/{id}/latency?window=7d  stepped series for the latency chart
 
 GET    /incidents               ?status=open|resolved
 GET    /incidents/{id}
