@@ -99,7 +99,9 @@ func (q QuietHours) Active(at time.Time) bool {
 // Computed from the local calendar date rather than by adding hours, so a
 // window ending at 07:00 ends at 07:00 on the night the clocks change. A
 // wall-clock end that does not exist that night (inside a spring-forward gap)
-// is normalised forward by time.Date, which still releases the alerts.
+// resolves to the first valid instant after the gap. time.Date alone does not
+// guarantee that: it may pick the offset from before the transition and land
+// an hour early, still inside the window, which would hold alerts a day more.
 func (q QuietHours) EndAfter(at time.Time) time.Time {
 	loc, err := time.LoadLocation(q.Timezone)
 	if err != nil {
@@ -111,12 +113,22 @@ func (q QuietHours) EndAfter(at time.Time) time.Time {
 	}
 	local := at.In(loc)
 	for day := 0; day <= 2; day++ {
+		want := time.Date(local.Year(), local.Month(), local.Day()+day, end/60, end%60, 0, 0, time.UTC)
 		t := time.Date(local.Year(), local.Month(), local.Day()+day, end/60, end%60, 0, 0, loc)
+		for wallClock(t.In(loc)).Before(want) {
+			t = t.Add(time.Minute)
+		}
 		if !t.Before(at) {
 			return t
 		}
 	}
 	return at
+}
+
+// wallClock returns t's local date and time to the minute, re-labelled as UTC
+// so two wall-clock readings compare without offsets getting in the way.
+func wallClock(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), 0, 0, time.UTC)
 }
 
 // GetQuietHours returns a channel's quiet hours. The boolean is false when the

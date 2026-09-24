@@ -87,6 +87,23 @@ func TestQuietHoursEndAfterFollowsTheWallClock(t *testing.T) {
 	}
 }
 
+// TestQuietHoursEndAfterSkipsASpringForwardGap: 02:30 does not exist in New
+// York on 10 March 2030. time.Date resolves it to 01:30 EST, which is still
+// inside the window; the release has to fall after the gap instead.
+func TestQuietHoursEndAfterSkipsASpringForwardGap(t *testing.T) {
+	ny, _ := time.LoadLocation("America/New_York")
+	q := QuietHours{Start: "23:00", End: "02:30", Timezone: "America/New_York", During: QuietHold}
+
+	at := time.Date(2030, 3, 10, 0, 0, 0, 0, ny)
+	got := q.EndAfter(at)
+	if want := time.Date(2030, 3, 10, 3, 0, 0, 0, ny); !got.Equal(want) {
+		t.Errorf("EndAfter(%s) = %s, want %s", at, got, want)
+	}
+	if q.Active(got) {
+		t.Errorf("the window is still active at its own end %s", got)
+	}
+}
+
 func TestQuietHoursCRUD(t *testing.T) {
 	ctx := context.Background()
 	db := openTestDB(t)
