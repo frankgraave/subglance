@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"sort"
 	"time"
@@ -78,7 +79,17 @@ func (db *DB) LatencySeries(ctx context.Context, monitorID int64, since, until t
 		return a
 	}
 
-	rows, err := db.Reader.QueryContext(ctx, `
+	// Both sources are read inside one transaction so they come from one
+	// snapshot. A rollup that commits between two separate reads would move
+	// checks from heartbeats into heartbeat_hourly after the first read and
+	// before the second, and the series would count them twice.
+	tx, err := db.Reader.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, fmt.Errorf("latency series for monitor %d: %w", monitorID, err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	rows, err := tx.QueryContext(ctx, `
 		SELECT ts - (ts % ?) AS slot,
 		       count(*),
 		       sum(maintenance = 0 AND assessment = 'down'),
@@ -115,7 +126,7 @@ func (db *DB) LatencySeries(ctx context.Context, monitorID int64, since, until t
 		return nil, fmt.Errorf("latency series for monitor %d: %w", monitorID, err)
 	}
 
-	rows, err = db.Reader.QueryContext(ctx, `
+	rows, err = tx.QueryContext(ctx, `
 		SELECT bucket - (bucket % ?) AS slot,
 		       sum(up_count + down_count),
 		       sum(assessed_down),

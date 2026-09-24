@@ -46,6 +46,8 @@ export type LatencyPoint = {
 };
 
 export type LatencySeries = {
+  /** The window this series answers, as the server named it ("24h", "7d"…). */
+  window: string;
   stepMs: number;
   from: number;
   to: number;
@@ -85,7 +87,7 @@ export function seriesFromApi(api: ApiLatencySeries): LatencySeries {
     });
   }
   points.sort((a, b) => a.t - b.t);
-  return { stepMs: api.step_s * 1000, from, to, points };
+  return { window: api.window, stepMs: api.step_s * 1000, from, to, points };
 }
 
 export async function fetchLatency(

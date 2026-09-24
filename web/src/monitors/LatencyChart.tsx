@@ -109,18 +109,23 @@ export function LatencyChart({
 }: LatencyChartProps) {
   const plotRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
-  const [active, setActive] = useState<number | null>(null);
+  // The active step is held by its start time, not its index: the series is
+  // refetched every minute and its range moves at each step boundary, so an
+  // index would point at a different step (or be dropped) mid-readout.
+  const [activeT, setActiveT] = useState<number | null>(null);
   const [focused, setFocused] = useState(false);
   const [tooltipX, setTooltipX] = useState(0);
-  // The window the active index belongs to: a switch drops the readout
-  // instead of pointing at whatever step now has the same index.
-  const [activeSeries, setActiveSeries] = useState<LatencySeries | undefined>(series);
-  if (activeSeries !== series) {
-    setActiveSeries(series);
-    if (active !== null) setActive(null);
+  // A window switch drops the readout; a refetch of the same window keeps it.
+  const [activeWindow, setActiveWindow] = useState(selected);
+  if (activeWindow !== selected) {
+    setActiveWindow(selected);
+    if (activeT !== null) setActiveT(null);
   }
 
   const points = series?.points ?? [];
+  const found = activeT === null ? -1 : points.findIndex((p) => p.t === activeT);
+  const active = found >= 0 ? found : null;
+  const setActive = (index: number | null) => setActiveT(index === null ? null : (points[index]?.t ?? null));
   const summary = series ? summariseLatency(series) : null;
   const ceiling = summary?.peakMs ?? 0;
   const activePoint = active !== null ? points[active] : undefined;
@@ -153,10 +158,9 @@ export function LatencyChart({
 
   const move = (delta: number) => {
     if (points.length === 0) return;
-    setActive((current) =>
-      current === null
-        ? delta > 0 ? 0 : points.length - 1
-        : Math.min(Math.max(current + delta, 0), points.length - 1));
+    setActive(active === null
+      ? delta > 0 ? 0 : points.length - 1
+      : Math.min(Math.max(active + delta, 0), points.length - 1));
   };
   const onKeyDown = (event: React.KeyboardEvent) => {
     const keys: Record<string, () => void> = {
@@ -188,14 +192,20 @@ export function LatencyChart({
   } else if (loading && !series) {
     body = <p className="mon-detail-note">Loading latency…</p>;
   } else if (!series || points.length === 0) {
-    body = <p className="mon-detail-note">No checks in the last {WINDOW_LABELS[selected]}.</p>;
+    body = (
+      <p className="mon-detail-note">
+        {refreshing ? "Loading latency…" : `No checks in the last ${WINDOW_LABELS[selected]}.`}
+      </p>
+    );
   } else {
     const runs = measuredRuns(series);
     const stepFraction = series.stepMs / (series.to - series.from);
     const breakdown = summary!.peakMs === null
       ? `${summary!.checks} checks · no latency measured`
       : `peak ${formatLatency(summary!.peakMs)} · ${summary!.checks} checks${summary!.downSteps > 0 ? ` · down in ${summary!.downSteps} step${summary!.downSteps === 1 ? "" : "s"}` : ""}`;
-    const description = `Average latency over the last ${WINDOW_LABELS[selected]}, one value per ${formatLatencyStep(series.stepMs)}. The line breaks where nothing was measured.`;
+    // The series on screen may still be the previous window while the next
+    // one loads, so the description names the window the data belongs to.
+    const description = `Average latency over the last ${series.window}, one value per ${formatLatencyStep(series.stepMs)}. The line breaks where nothing was measured.`;
     body = (
       <figure className="lat-figure" data-refreshing={refreshing || undefined} aria-busy={refreshing || undefined}>
         <Chart

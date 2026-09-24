@@ -18,9 +18,9 @@ const point = (i: number, avg: number | null, over: Partial<ApiLatencyPoint> = {
   ...over,
 });
 
-const makeSeries = (points: ApiLatencyPoint[]) =>
+const makeSeries = (points: ApiLatencyPoint[], window = "24h") =>
   seriesFromApi({
-    window: "24h",
+    window,
     step_s: 3600,
     from: new Date(FROM).toISOString(),
     to: new Date(FROM + 24 * HOUR).toISOString(),
@@ -122,5 +122,40 @@ describe("LatencyChart", () => {
     );
     expect(screen.getByTestId("lat-plot")).toBeTruthy();
     expect(screen.getByRole("alert").textContent).toContain("Showing the last loaded window");
+  });
+
+  it("keeps the keyboard readout on its step when the same window is refetched", () => {
+    const { rerender } = render(
+      <LatencyChart window="24h" onWindowChange={() => {}} series={makeSeries([point(0, 100), point(1, 200)])} width={400} />,
+    );
+    const plot = screen.getByTestId("lat-plot");
+    fireEvent.keyDown(plot, { key: "ArrowRight" });
+    fireEvent.keyDown(plot, { key: "ArrowRight" });
+    expect(screen.getByTestId("lat-tooltip").textContent).toContain("200 ms");
+    // A refetch returns a new object with one more step in front.
+    rerender(
+      <LatencyChart
+        window="24h"
+        onWindowChange={() => {}}
+        series={makeSeries([point(-1, 50), point(0, 100), point(1, 200)])}
+        width={400}
+      />,
+    );
+    expect(screen.getByTestId("lat-tooltip").textContent).toContain("200 ms");
+    rerender(
+      <LatencyChart window="7d" onWindowChange={() => {}} series={makeSeries([point(0, 100), point(1, 200)])} width={400} />,
+    );
+    expect(screen.queryByTestId("lat-tooltip")).toBeNull();
+  });
+
+  it("describes the window on screen, not the one still loading", () => {
+    render(
+      <LatencyChart window="7d" onWindowChange={() => {}} series={makeSeries([point(0, 10)], "24h")} refreshing />,
+    );
+    expect(screen.getByTestId("lat-plot").getAttribute("aria-label")).toContain("over the last 24h");
+    cleanup();
+    render(<LatencyChart window="7d" onWindowChange={() => {}} series={makeSeries([], "24h")} refreshing />);
+    expect(screen.getByText("Loading latency…")).toBeTruthy();
+    expect(screen.queryByText("No checks in the last 7d.")).toBeNull();
   });
 });
