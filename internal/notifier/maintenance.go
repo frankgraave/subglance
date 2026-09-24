@@ -54,5 +54,8 @@ func (n *Notifier) filterMaintenance(ctx context.Context, a Alert, channelID int
 	if len(kept) == 0 {
 		return a, false, held, nil
 	}
+	if a.Digest {
+		return BuildDigest(kept, a.DigestZone, a.At), true, held, nil
+	}
 	return Summarise(kept), true, held, nil
 }

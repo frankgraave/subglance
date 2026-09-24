@@ -64,6 +64,13 @@ type Alert struct {
 	// reports the same one. Empty when they disagree: an invented common
 	// cause would be worse than none.
 	GroupedCause string `json:"grouped_cause,omitempty"`
+
+	// Digest marks the one message a channel receives when its quiet hours
+	// end. Members then holds every alert the window kept back, and
+	// DigestZone is the channel's timezone, so the times in the message are
+	// the ones on the reader's own clock.
+	Digest     bool   `json:"digest,omitempty"`
+	DigestZone string `json:"digest_timezone,omitempty"`
 }
 
 // Grouped reports whether this alert covers more than one monitor.
@@ -75,6 +82,11 @@ func (a Alert) Grouped() bool { return len(a.GroupedNames) > 1 }
 // the only good news the state engine produces; everything else is a problem
 // starting, being confirmed, or refusing to go away.
 func (a Alert) Down() bool {
+	if a.Digest {
+		// A digest is bad news only if something in it is still broken;
+		// a night that fixed itself should not arrive in red.
+		return digestStillDown(digestEntries(a)) > 0
+	}
 	return state.Event(a.Event) != state.EventIncidentResolved
 }
 
@@ -84,6 +96,9 @@ func (a Alert) Title() string {
 	// A batch announces its size instead of naming one monitor, and every
 	// channel inherits that by calling Title() — one place to change, five
 	// senders that stay honest.
+	if a.Digest {
+		return DigestTitle(a)
+	}
 	if a.Grouped() {
 		return GroupedTitle(a)
 	}
@@ -104,6 +119,9 @@ func (a Alert) Title() string {
 
 // Body is the human-readable detail under the title.
 func (a Alert) Body() string {
+	if a.Digest {
+		return DigestBody(a)
+	}
 	if a.Grouped() {
 		return GroupedBody(a)
 	}

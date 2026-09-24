@@ -37,13 +37,18 @@ type Delivery struct {
 	Attempts  int
 	LastError string
 
+	// QuietHeld is true while the delivery waits for its channel's quiet
+	// hours to end, rather than for a retry.
+	QuietHeld bool
+
 	NextAttemptAt time.Time
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 }
 
 const deliveryColumns = `id, channel_id, monitor_id, incident_id, event,
-	payload_json, status, attempts, last_error, next_attempt_at, created_at, updated_at`
+	payload_json, status, attempts, last_error, next_attempt_at, created_at, updated_at,
+	quiet_held`
 
 // EnqueueDelivery adds one notification to the outbox, due immediately.
 //
@@ -297,7 +302,7 @@ func scanDelivery(s scanner) (Delivery, error) {
 	)
 	if err := s.Scan(&d.ID, &d.ChannelID, &d.MonitorID, &incidentID, &d.Event,
 		&d.Payload, &d.Status, &d.Attempts, &d.LastError,
-		&next, &created, &updated); err != nil {
+		&next, &created, &updated, &d.QuietHeld); err != nil {
 		return Delivery{}, err
 	}
 
