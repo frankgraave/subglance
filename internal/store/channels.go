@@ -32,6 +32,12 @@ type Channel struct {
 	Config  map[string]string
 	Enabled bool
 
+	// IsDefault marks the instance-wide default: the channel a monitor with
+	// no channels of its own alerts through. At most one channel carries it,
+	// which a partial unique index enforces (migration 0015). Create and
+	// Update leave it alone; SetDefaultChannel is the only writer.
+	IsDefault bool
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -45,7 +51,7 @@ const (
 	ChannelEmail    = "email"
 )
 
-const channelColumns = `id, name, type, config_json, enabled, created_at, updated_at`
+const channelColumns = `id, name, type, config_json, enabled, is_default, created_at, updated_at`
 
 // ListChannels returns every notification channel, oldest first.
 func (db *DB) ListChannels(ctx context.Context) ([]Channel, error) {
@@ -116,20 +122,19 @@ func (db *DB) UpdateChannel(ctx context.Context, c Channel) (Channel, error) {
 	}
 
 	now := time.Now().Unix()
-	res, err := db.Writer.ExecContext(ctx, `
+	// is_default is read back rather than taken from c: Update never writes
+	// the flag, so the caller's copy says nothing about the stored row.
+	err = db.Writer.QueryRowContext(ctx, `
 		UPDATE notif_channels
 		   SET name = ?, type = ?, config_json = ?, enabled = ?, updated_at = ?
-		 WHERE id = ?`,
-		c.Name, c.Type, cfg, c.Enabled, now, c.ID)
-	if err != nil {
-		return Channel{}, fmt.Errorf("update channel %d: %w", c.ID, err)
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return Channel{}, fmt.Errorf("update channel %d: %w", c.ID, err)
-	}
-	if n == 0 {
+		 WHERE id = ?
+		RETURNING is_default`,
+		c.Name, c.Type, cfg, c.Enabled, now, c.ID).Scan(&c.IsDefault)
+	if errors.Is(err, sql.ErrNoRows) {
 		return Channel{}, fmt.Errorf("%w: channel %d", ErrNotFound, c.ID)
+	}
+	if err != nil {
+		return Channel{}, fmt.Errorf("update channel %d: %w", c.ID, err)
 	}
 
 	c.UpdatedAt = time.Unix(now, 0).UTC()
@@ -175,6 +180,103 @@ func (db *DB) ListMonitorChannels(ctx context.Context, monitorID int64) ([]Chann
 		out = append(out, c)
 	}
 	return out, rows.Err()
+}
+
+// AlertChannels returns the channels an alert for this monitor goes to.
+//
+// A monitor's own assignments win outright. Only a monitor with none falls
+// back to the instance default, and usedDefault reports that it did, so a
+// caller can say which rule applied instead of making a reader work it out.
+// The default replaces an empty list rather than joining a populated one: a
+// monitor someone deliberately routed to one channel keeps that routing when
+// a default is added later.
+//
+// Disabled channels are returned like enabled ones. Skipping them is the
+// sender's decision, and a disabled default still counts as "the default
+// applied" — the monitor is routed, the route is switched off.
+func (db *DB) AlertChannels(ctx context.Context, monitorID int64) (channels []Channel, usedDefault bool, err error) {
+	own, err := db.ListMonitorChannels(ctx, monitorID)
+	if err != nil || len(own) > 0 {
+		return own, false, err
+	}
+	def, ok, err := db.DefaultChannel(ctx)
+	if err != nil || !ok {
+		return nil, false, err
+	}
+	return []Channel{def}, true, nil
+}
+
+// DefaultChannel returns the instance-wide default channel, if one is set.
+func (db *DB) DefaultChannel(ctx context.Context) (Channel, bool, error) {
+	row := db.Reader.QueryRowContext(ctx,
+		"SELECT "+channelColumns+" FROM notif_channels WHERE is_default = 1")
+	c, err := db.scanChannel(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Channel{}, false, nil
+	}
+	if err != nil {
+		return Channel{}, false, fmt.Errorf("query default channel: %w", err)
+	}
+	return c, true, nil
+}
+
+// SetDefaultChannel makes id the instance-wide default, replacing any other.
+// It reports ErrNotFound for an id that names no channel, and leaves the
+// previous default in place when it does.
+//
+// Clearing the old default and setting the new one happen in one
+// transaction, so there is no moment in which a concurrent alert finds no
+// default at all.
+func (db *DB) SetDefaultChannel(ctx context.Context, id int64) error {
+	tx, err := db.Writer.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.ExecContext(ctx,
+		"UPDATE notif_channels SET is_default = 0 WHERE is_default = 1 AND id != ?", id); err != nil {
+		return fmt.Errorf("clear default channel: %w", err)
+	}
+	res, err := tx.ExecContext(ctx,
+		"UPDATE notif_channels SET is_default = 1 WHERE id = ?", id)
+	if err != nil {
+		return fmt.Errorf("set default channel %d: %w", id, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("set default channel %d: %w", id, err)
+	}
+	if n == 0 {
+		return fmt.Errorf("%w: channel %d", ErrNotFound, id)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+	return nil
+}
+
+// ClearDefaultChannel stops id being the default. It is not an error for id
+// to be a channel that was not the default: the state asked for already
+// holds. It reports ErrNotFound only when id names no channel at all.
+//
+// It takes the channel rather than clearing whatever the default is, so a
+// client acting on a stale screen cannot unset a default someone else chose
+// after that screen was drawn.
+func (db *DB) ClearDefaultChannel(ctx context.Context, id int64) error {
+	res, err := db.Writer.ExecContext(ctx,
+		"UPDATE notif_channels SET is_default = 0 WHERE id = ?", id)
+	if err != nil {
+		return fmt.Errorf("clear default channel %d: %w", id, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("clear default channel %d: %w", id, err)
+	}
+	if n == 0 {
+		return fmt.Errorf("%w: channel %d", ErrNotFound, id)
+	}
+	return nil
 }
 
 // ChannelSummary identifies an attachment without reading its credentials.
@@ -275,7 +377,7 @@ func (db *DB) scanChannel(s scanner) (Channel, error) {
 		created int64
 		updated int64
 	)
-	if err := s.Scan(&c.ID, &c.Name, &c.Type, &cfg, &c.Enabled, &created, &updated); err != nil {
+	if err := s.Scan(&c.ID, &c.Name, &c.Type, &cfg, &c.Enabled, &c.IsDefault, &created, &updated); err != nil {
 		return Channel{}, err
 	}
 

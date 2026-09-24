@@ -2045,6 +2045,67 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
       x-subglance-access: write
+  /api/v1/channels/{id}/default:
+    parameters:
+      - $ref: '#/components/parameters/ChannelId'
+    put:
+      tags: [Channels]
+      operationId: setDefaultChannel
+      summary: Make a channel the instance-wide default
+      description: |
+        A monitor with no channels of its own alerts through the default, so
+        a monitor nobody remembered to route still reaches somebody. A monitor
+        that has channels of its own keeps them: the default replaces an empty
+        list, it never joins a populated one.
+
+        There is at most one default. Setting one moves the flag from the
+        previous default, in one transaction. Deleting the default channel
+        leaves the instance without a default.
+      responses:
+        '204':
+          description: The channel is now the default.
+        '400':
+          $ref: '#/components/responses/InvalidId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ChannelNotFound'
+        '500':
+          description: The default could not be stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: write
+    delete:
+      tags: [Channels]
+      operationId: clearDefaultChannel
+      summary: Stop a channel being the default
+      description: |
+        Scoped to the channel in the path, not to whatever the default is, so
+        a client acting on a stale screen cannot unset a default chosen after
+        that screen was drawn. Clearing a channel that is not the default
+        succeeds and changes nothing.
+      responses:
+        '204':
+          description: The channel is not the default.
+        '400':
+          $ref: '#/components/responses/InvalidId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ChannelNotFound'
+        '500':
+          description: The default could not be cleared.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: write
   /api/v1/channels/{id}/quiet-hours:
     parameters:
       - $ref: '#/components/parameters/ChannelId'
@@ -3145,6 +3206,14 @@ components:
             Channel configuration and credentials are never included.
           items:
             $ref: '#/components/schemas/MonitorChannel'
+        default_channel:
+          allOf:
+            - $ref: '#/components/schemas/MonitorChannel'
+          description: |
+            List reads only. Present exactly when `channels` is present and
+            empty and an instance default is set: the channel this monitor's
+            alerts go to instead. An empty `channels` without this field means
+            nobody is alerted about this monitor.
         capture_response:
           type: boolean
           description: |
@@ -4090,7 +4159,7 @@ components:
       description: |
         A notification target as returned by the API. Secret-looking config
         values are masked — see `config`.
-      required: [id, name, type, config, enabled, created_at, updated_at]
+      required: [id, name, type, config, enabled, is_default, created_at, updated_at]
       properties:
         id:
           type: integer
@@ -4117,6 +4186,13 @@ components:
         enabled:
           type: boolean
           example: true
+        is_default:
+          type: boolean
+          description: |
+            True for the one channel that monitors without channels of their
+            own alert through. Changed only through
+            `/api/v1/channels/{id}/default`, never by a create or replace.
+          example: false
         created_at:
           type: string
           format: date-time

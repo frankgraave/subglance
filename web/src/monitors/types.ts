@@ -146,6 +146,8 @@ export type ApiMonitor = {
   heartbeats?: ApiHeartbeat[];
   /** List-only attachments; runtime validation preserves unknown vs empty. */
   channels?: { id: number; name: string }[];
+  /** List-only: the instance default, sent when `channels` is known and empty. */
+  default_channel?: { id: number; name: string };
   /**
    * Omitted entirely when the monitor has no tags, which is why this is
    * optional while the render model's `tags` is not.

@@ -80,7 +80,7 @@ export function inventoryFromApi(api: ApiMonitor & {
     // opinion" and never as the current default: substituting "1.2" here
     // would make the edit form offer to pin a floor nobody set.
     minTlsVersion: api.min_tls_version ?? "",
-    channels: channelsFromApi(api.channels),
+    channels: channelsFromApi(api.channels, api.default_channel),
     ...(api.repeat_after_s !== undefined ? { repeatAfterS: api.repeat_after_s } : {}),
     checkSettings: Object.fromEntries(
       (["method", "expected_status", "keyword", "keyword_mode", "follow_redirects", "headers", "body", "ssl_warn_days", "min_tls_version"] as const)
@@ -119,21 +119,36 @@ export function filterByType(
   return monitors.filter((m) => m.type === type);
 }
 
-/** Attachment data can be known empty, known populated, or unavailable. */
+/**
+ * Attachment data can be known empty, known populated, or unavailable.
+ *
+ * `fallback` is the instance default a known-empty list alerts through
+ * instead (SUB-124). It rides on the known branch only: with the attachments
+ * unknown, nothing can be said about whether the default applies.
+ */
 export type ChannelState =
   | { known: false }
-  | { known: true; names: readonly string[] };
+  | { known: true; names: readonly string[]; fallback?: string };
 
 export const CHANNELS_UNKNOWN: ChannelState = { known: false };
 
 /** Never turn a malformed or missing list into the assertion "none". */
-function channelsFromApi(value: unknown): ChannelState {
-  if (!Array.isArray(value) || !value.every((channel) =>
-    channel !== null && typeof channel === "object" &&
-    Number.isSafeInteger(channel.id) && channel.id > 0 &&
-    typeof channel.name === "string" && channel.name.trim() !== "",
-  )) return CHANNELS_UNKNOWN;
-  return { known: true, names: value.map((channel) => channel.name) };
+function channelsFromApi(value: unknown, fallback?: unknown): ChannelState {
+  if (!Array.isArray(value) || !value.every(isChannelRef)) return CHANNELS_UNKNOWN;
+  const names = value.map((channel) => channel.name);
+  // The default only ever stands in for an empty list; a server that sent one
+  // beside real attachments is ignored rather than believed.
+  if (names.length === 0 && isChannelRef(fallback)) {
+    return { known: true, names, fallback: fallback.name };
+  }
+  return { known: true, names };
+}
+
+function isChannelRef(channel: unknown): channel is { id: number; name: string } {
+  if (channel === null || typeof channel !== "object") return false;
+  const { id, name } = channel as { id?: unknown; name?: unknown };
+  return Number.isSafeInteger(id) && (id as number) > 0 &&
+    typeof name === "string" && name.trim() !== "";
 }
 
 /**
@@ -145,7 +160,10 @@ function channelsFromApi(value: unknown): ChannelState {
  */
 export function describeChannels(state: ChannelState): string {
   if (!state.known) return "not loaded";
-  if (state.names.length === 0) return "none";
+  if (state.names.length === 0) {
+    // Someone does hear about it, so it must not read as the finding "none".
+    return state.fallback === undefined ? "none" : `${state.fallback} (default)`;
+  }
   return state.names.join(", ");
 }
 
