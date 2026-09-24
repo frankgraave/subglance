@@ -96,12 +96,17 @@ func (q QuietHours) Active(at time.Time) bool {
 // EndAfter returns the first moment at or after at when the window ends,
 // which is when held deliveries are released.
 //
-// Computed from the local calendar date rather than by adding hours, so a
-// window ending at 07:00 ends at 07:00 on the night the clocks change. A
-// wall-clock end that does not exist that night (inside a spring-forward gap)
-// resolves to the first valid instant after the gap. time.Date alone does not
-// guarantee that: it may pick the offset from before the transition and land
-// an hour early, still inside the window, which would hold alerts a day more.
+// It walks real instants forward a minute at a time and stops at the first
+// one whose local wall clock reads the end, so a window ending at 07:00 ends
+// at 07:00 on the night the clocks change. Two DST cases need the walk rather
+// than time.Date, which picks one offset and can be wrong either way:
+//   - a repeated hour: after the second 01:15 the end 01:30 is fifteen minutes
+//     away, not a day, because 01:30 occurs again;
+//   - a spring-forward gap: an end that does not exist that night resolves to
+//     the first valid instant after the gap, not an hour early (still inside
+//     the window) and not an hour late.
+//
+// The walk is bounded to three days and runs once per held delivery.
 func (q QuietHours) EndAfter(at time.Time) time.Time {
 	loc, err := time.LoadLocation(q.Timezone)
 	if err != nil {
@@ -111,16 +116,30 @@ func (q QuietHours) EndAfter(at time.Time) time.Time {
 	if err != nil {
 		return at
 	}
-	local := at.In(loc)
-	for day := 0; day <= 2; day++ {
-		want := time.Date(local.Year(), local.Month(), local.Day()+day, end/60, end%60, 0, 0, time.UTC)
-		t := time.Date(local.Year(), local.Month(), local.Day()+day, end/60, end%60, 0, 0, loc)
-		for wallClock(t.In(loc)).Before(want) {
-			t = t.Add(time.Minute)
-		}
-		if !t.Before(at) {
+	t := at.Truncate(time.Minute)
+	if t.Before(at) {
+		t = t.Add(time.Minute)
+	}
+	prev := wallClock(t.Add(-time.Minute).In(loc))
+	for i := 0; i < 3*24*60; i++ {
+		cur := wallClock(t.In(loc))
+		if cur.Hour()*60+cur.Minute() == end {
 			return t
 		}
+		if cur.Sub(prev) > time.Minute {
+			// The clocks jumped forward between prev and cur. If the end
+			// fell inside the skipped stretch, this is the first instant
+			// after it.
+			want := time.Date(prev.Year(), prev.Month(), prev.Day(), end/60, end%60, 0, 0, time.UTC)
+			if !want.After(prev) {
+				want = want.AddDate(0, 0, 1)
+			}
+			if want.Before(cur) {
+				return t
+			}
+		}
+		prev = cur
+		t = t.Add(time.Minute)
 	}
 	return at
 }

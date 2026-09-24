@@ -159,3 +159,34 @@ func TestQuietHoursCRUD(t *testing.T) {
 		t.Fatalf("quiet hours outlived their channel: ok=%v err=%v", ok, err)
 	}
 }
+
+// TestQuietHoursEndAfterAcrossDSTEdges pins the two cases time.Date gets
+// wrong: a gap where it resolves past the first valid instant, and a repeated
+// hour where it picks the first occurrence and pushes the end a day out.
+func TestQuietHoursEndAfterAcrossDSTEdges(t *testing.T) {
+	syd, _ := time.LoadLocation("Australia/Sydney")
+	ny, _ := time.LoadLocation("America/New_York")
+
+	// Sydney springs forward from 02:00 to 03:00 on 4 October 2026, so 02:30
+	// does not exist; the window ends at 03:00, the first valid instant.
+	sydney := QuietHours{Start: "23:00", End: "02:30", Timezone: "Australia/Sydney", During: QuietHold}
+	at := time.Date(2026, 10, 4, 0, 0, 0, 0, syd)
+	want := time.Date(2026, 10, 3, 16, 0, 0, 0, time.UTC) // 03:00 AEDT
+	if got := sydney.EndAfter(at); !got.Equal(want) {
+		t.Errorf("Sydney gap: EndAfter(%s) = %s, want %s", at, got.In(syd), want.In(syd))
+	}
+
+	// New York repeats 01:00-02:00 on 1 November 2026. From the second 01:15
+	// (EST) the end 01:30 comes round again in fifteen minutes.
+	newYork := QuietHours{Start: "23:00", End: "01:30", Timezone: "America/New_York", During: QuietHold}
+	secondQuarterPast := time.Date(2026, 11, 1, 6, 15, 0, 0, time.UTC) // 01:15 EST
+	if got := newYork.EndAfter(secondQuarterPast); !got.Equal(secondQuarterPast.Add(15 * time.Minute)) {
+		t.Errorf("New York repeated hour: EndAfter(%s) = %s, want 15 minutes later",
+			secondQuarterPast.In(ny), got.In(ny))
+	}
+	firstQuarterPast := time.Date(2026, 11, 1, 5, 15, 0, 0, time.UTC) // 01:15 EDT
+	if got := newYork.EndAfter(firstQuarterPast); !got.Equal(firstQuarterPast.Add(15 * time.Minute)) {
+		t.Errorf("New York first pass: EndAfter(%s) = %s, want 15 minutes later",
+			firstQuarterPast.In(ny), got.In(ny))
+	}
+}
