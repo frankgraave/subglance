@@ -296,3 +296,76 @@ describe("enabling and disabling through the server", () => {
     expect(await screen.findByText(/channel is locked/i)).toBeTruthy();
   });
 });
+
+describe("the default channel", () => {
+  /*
+   * The default is where a monitor with no channels of its own sends its
+   * alerts (SUB-124). What matters is which request each choice sends: moving
+   * it names the new channel, and clearing it names the channel that holds it
+   * now — never "whatever the default is".
+   */
+  it("moves the default to the chosen channel", async () => {
+    const setDefault = vi.fn().mockResolvedValue(undefined);
+    render(
+      <LiveNotificationsRoot
+        client={client()}
+        list={async () => [make(), make({ id: 2, name: "Pager" })]}
+        setDefault={setDefault}
+      />,
+    );
+    const select = await screen.findByRole("combobox", {
+      name: /monitors with no channels of their own/i,
+    });
+    fireEvent.change(select, { target: { value: "2" } });
+    await waitFor(() => expect(setDefault).toHaveBeenCalledWith("2", true));
+  });
+
+  it("clears the default by naming the channel that holds it", async () => {
+    const setDefault = vi.fn().mockResolvedValue(undefined);
+    render(
+      <LiveNotificationsRoot
+        client={client()}
+        list={async () => [make({ is_default: true }), make({ id: 2, name: "Pager" })]}
+        setDefault={setDefault}
+      />,
+    );
+    const select = await screen.findByRole("combobox", {
+      name: /monitors with no channels of their own/i,
+    });
+    await waitFor(() => expect((select as HTMLSelectElement).value).toBe("1"));
+    fireEvent.change(select, { target: { value: "" } });
+    await waitFor(() => expect(setDefault).toHaveBeenCalledWith("1", false));
+  });
+
+  it("reports a refused change instead of silently reverting", async () => {
+    const setDefault = vi.fn().mockRejectedValue(new Error("channel not found"));
+    render(
+      <LiveNotificationsRoot
+        client={client()}
+        list={async () => [make()]}
+        setDefault={setDefault}
+      />,
+    );
+    fireEvent.change(
+      await screen.findByRole("combobox", {
+        name: /monitors with no channels of their own/i,
+      }),
+      { target: { value: "1" } },
+    );
+    expect(await screen.findByText(/channel not found/i)).toBeTruthy();
+  });
+
+  it("shows a viewer the default as a sentence, with nothing to change", async () => {
+    render(
+      <LiveNotificationsRoot
+        client={client()}
+        list={async () => [make({ is_default: true })]}
+        canWrite={false}
+      />,
+    );
+    expect(
+      await screen.findByText(/monitors with no channels of their own alert through/i),
+    ).toBeTruthy();
+    expect(screen.queryByRole("combobox")).toBeNull();
+  });
+});

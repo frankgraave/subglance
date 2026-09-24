@@ -62,6 +62,33 @@ afterEach(() => {
 });
 
 describe("NotificationsView", () => {
+  it("says plainly when unrouted monitors reach nobody", () => {
+    /*
+     * With no default, a monitor without channels alerts nobody. That is the
+     * failure the default exists to prevent, so the page says it in those
+     * words rather than leaving the reader to infer it from an empty select.
+     */
+    render(<NotificationsView channels={[make()]} />);
+    expect(
+      screen.getByText(/monitors with no channels of their own alert nobody/i),
+    ).toBeTruthy();
+  });
+
+  it("marks the default channel on its row and names it above the list", () => {
+    const { container } = render(
+      <NotificationsView
+        channels={[make({ is_default: true }), make({ id: 2, name: "Pager" })]}
+      />,
+    );
+    const [first, second] = screen.getAllByRole("listitem");
+    expect(within(first).getByText("Default")).toBeTruthy();
+    expect(within(second).queryByText("Default")).toBeNull();
+    expect(first.querySelector(".sr-only")!.textContent).toMatch(/default channel/i);
+    expect(container.querySelector(".nt-default")!.textContent).toMatch(
+      /alert through On-call Slack/,
+    );
+  });
+
   it("shows a channel's type and destination", () => {
     render(<NotificationsView channels={[make()]} />);
     const row = screen.getByRole("listitem");

@@ -93,6 +93,24 @@ export async function deleteChannel(
   });
 }
 
+/**
+ * Makes a channel the default, or stops it being one.
+ *
+ * Clearing names the channel rather than "whatever the default is", which is
+ * what the server offers for a reason: a page drawn before someone else chose
+ * a new default must not be able to unset theirs.
+ */
+export async function setDefaultChannel(
+  id: string,
+  isDefault: boolean,
+  signal?: AbortSignal,
+): Promise<void> {
+  await apiRequest(`/api/v1/channels/${encodeURIComponent(id)}/default`, {
+    method: isDefault ? "PUT" : "DELETE",
+    signal,
+  });
+}
+
 /** What one real test delivery reported. */
 export type TestOutcome = { ok: true } | { ok: false; error: string };
 

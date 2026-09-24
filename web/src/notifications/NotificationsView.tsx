@@ -16,16 +16,16 @@ import type { ChannelInput } from "./channelsApi";
 const EMPTY_TOGGLING: ReadonlySet<string> = new Set();
 
 /**
- * Notifications, part one: can we reach you at all.
+ * Notifications: can SubGlance reach you at all, and who hears about what.
  *
- * The page answers exactly one question — which destinations exist, whether
- * they work, and how to change them. The approved mockup also draws routing,
- * quiet hours, severity floors and a delivery log. None of those have a
- * backend (SUB-124), and a switch that looks like it suppresses alerts at
- * 03:00 while changing nothing is the most dangerous shape of dead UI this
- * product could ship. So they are absent rather than disabled: a disabled
- * control is a feature that looks temporarily unavailable, and these do not
- * exist.
+ * The page answers which destinations exist, whether they work, how to change
+ * them, and — since SUB-124 — where a monitor with no channels of its own
+ * sends its alerts. The approved mockup also draws quiet hours, severity
+ * floors and a delivery log. Those have no backend yet, and a switch that
+ * looks like it suppresses alerts at 03:00 while changing nothing is the most
+ * dangerous shape of dead UI this product could ship. So they are absent
+ * rather than disabled: a disabled control is a feature that looks
+ * temporarily unavailable, and these do not exist.
  *
  * Presentational, like `MonitorsView` and `IncidentsView`: it fetches nothing,
  * so a test drives every state from a fixture. `LiveNotifications` owns the
@@ -49,6 +49,15 @@ export type NotificationsViewProps = {
   onSetEnabled?: (id: string, enabled: boolean) => void;
   /** Channels whose enable/disable write is in flight. */
   togglingIds?: ReadonlySet<string>;
+  /**
+   * Moves the instance default to a channel, or clears it with null. Absent
+   * for a viewer, who is shown the default as a sentence instead.
+   */
+  onSetDefault?: (id: string | null) => void;
+  /** True while a default change is in flight. */
+  savingDefault?: boolean;
+  /** A refused default change, in the server's own words. */
+  defaultError?: string | null;
   /** Saves a new or edited channel. Resolves when the server accepted it. */
   onSave?: (id: string | null, input: ChannelInput) => Promise<void>;
   /** True when the URL asked for the create form: /notifications/new. */
@@ -70,6 +79,9 @@ export function NotificationsView({
   onDelete,
   onSetEnabled,
   togglingIds = EMPTY_TOGGLING,
+  onSetDefault,
+  savingDefault = false,
+  defaultError = null,
   onSave,
   createOpen = false,
   onCreateOpenChange,
@@ -95,6 +107,7 @@ export function NotificationsView({
 
   const editing = channels.find((c) => c.id === editingId) ?? null;
   const deleteTarget = channels.find((c) => c.id === confirming) ?? null;
+  const defaultChannel = channels.find((c) => c.isDefault) ?? null;
   const canWrite = onSave !== undefined;
 
   return (
@@ -298,6 +311,67 @@ export function NotificationsView({
           )
         ) : (
           <>
+            {/*
+             * Where an unrouted monitor's alerts go (SUB-124), as one
+             * sentence above the list rather than a sixth control on every
+             * row.
+             *
+             * It is a fact about the instance, not about a channel: exactly
+             * one channel or none can hold it, and a per-row toggle would
+             * make the reader scan every row to find out which. As a
+             * sentence the answer is read once, and with no default it says
+             * plainly that those monitors reach nobody — the failure the
+             * default exists to prevent, so it is not softened.
+             *
+             * A native select, because the choice is one of N named things
+             * plus "nobody", which is exactly what a select is, and it brings
+             * keyboard and screen-reader behaviour nobody has to rebuild.
+             */}
+            <div className="nt-note nt-default">
+              {onSetDefault === undefined ? (
+                defaultChannel === null ? (
+                  <p>
+                    Monitors with no channels of their own alert nobody: no
+                    default channel is set.
+                  </p>
+                ) : (
+                  <p>
+                    Monitors with no channels of their own alert through{" "}
+                    <strong>{defaultChannel.name}</strong>.
+                  </p>
+                )
+              ) : (
+                <label>
+                  Monitors with no channels of their own alert through{" "}
+                  <select
+                    className="mon-facet-select"
+                    value={defaultChannel?.id ?? ""}
+                    disabled={savingDefault}
+                    aria-busy={savingDefault}
+                    onChange={(event) =>
+                      onSetDefault(
+                        event.target.value === "" ? null : event.target.value,
+                      )
+                    }
+                  >
+                    <option value="">nobody (no default)</option>
+                    {channels.map((channel) => (
+                      <option key={channel.id} value={channel.id}>
+                        {channel.enabled
+                          ? channel.name
+                          : `${channel.name} (disabled)`}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {defaultError !== null && (
+                <p className="inv-result inv-result--bad" role="alert">
+                  {defaultError}
+                </p>
+              )}
+            </div>
+
             {/*
              * The caveat that explains why no row says "delivered", as one
              * line that opens into the whole of it (SUB-138).

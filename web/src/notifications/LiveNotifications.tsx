@@ -13,6 +13,7 @@ import {
   createChannel,
   deleteChannel,
   fetchChannels,
+  setDefaultChannel,
   testChannel,
   updateChannel,
 } from "./channelsApi";
@@ -37,6 +38,7 @@ export type LiveNotificationsProps = {
   update?: typeof updateChannel;
   remove?: typeof deleteChannel;
   test?: typeof testChannel;
+  setDefault?: typeof setDefaultChannel;
   createOpen?: boolean;
   onCreateOpenChange?: (open: boolean) => void;
   /** False for a viewer: every write control disappears rather than failing. */
@@ -49,6 +51,7 @@ export function LiveNotifications({
   update = updateChannel,
   remove = deleteChannel,
   test = testChannel,
+  setDefault = setDefaultChannel,
   createOpen = false,
   onCreateOpenChange,
   canWrite = true,
@@ -233,6 +236,33 @@ export function LiveNotifications({
     [channels.data, clearError, enableMutation],
   );
 
+  /*
+   * Moving the default is one request; clearing it names the channel that
+   * holds it now. Either way the list is refetched rather than patched: the
+   * flag moves between two rows, and only the server knows where it landed.
+   */
+  const [defaultError, setDefaultError] = useState<string | null>(null);
+  const defaultMutation = useMutation({
+    mutationFn: async (id: string | null) => {
+      if (id !== null) return setDefault(id, true);
+      const current = (channels.data ?? []).find((c) => c.isDefault);
+      if (current !== undefined) await setDefault(current.id, false);
+    },
+    onMutate: () => setDefaultError(null),
+    onError: (error) =>
+      setDefaultError(
+        error instanceof Error
+          ? error.message
+          : "the default channel could not be changed",
+      ),
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: channelsQueryKey }),
+  });
+  const onSetDefault = useCallback(
+    (id: string | null) => defaultMutation.mutate(id),
+    [defaultMutation],
+  );
+
   const onSave = useCallback(
     async (id: string | null, input: ChannelInput) => {
       if (id !== null) clearError(id);
@@ -277,6 +307,9 @@ export function LiveNotifications({
       onDelete={canWrite ? onDelete : undefined}
       onSetEnabled={canWrite ? onSetEnabled : undefined}
       togglingIds={togglingIds}
+      onSetDefault={canWrite ? onSetDefault : undefined}
+      savingDefault={defaultMutation.isPending}
+      defaultError={defaultError}
       onSave={canWrite ? onSave : undefined}
       createOpen={canWrite && createOpen}
       onCreateOpenChange={canWrite ? onCreateOpenChange : undefined}

@@ -121,6 +121,14 @@ function ChannelRowImpl({
         <div className="inv-main">
           <span className="inv-name">
             {channel.name}
+            {channel.isDefault && (
+              /* Configuration, like Disabled beside it, so the same dashed
+                 chip. It is on the row as well as in the sentence above the
+                 list because deleting or disabling this row changes where
+                 every unrouted alert goes, and that should be visible at the
+                 place the button is pressed. */
+              <StateChip className="inv-paused-chip">Default</StateChip>
+            )}
             {!channel.enabled && (
               /* A configuration state, not a health state, so no status
                  colour: a dashed chip, which already means "about the data"
@@ -287,6 +295,7 @@ function ChannelRowImpl({
             the eye has the list's legend a few centimetres above and in view,
             and a reader moving item by item through a list does not. */}
         {typeLabel(channel.type)} channel, delivering to {destination}.{" "}
+        {channel.isDefault ? "The default channel. " : ""}
         {channel.enabled ? "Enabled" : "Disabled"}. {deliveryWord}.
       </span>
     </li>
