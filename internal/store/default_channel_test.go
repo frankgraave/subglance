@@ -140,15 +140,15 @@ func TestClearDefaultChannel(t *testing.T) {
 	if err := db.ClearDefaultChannel(t.Context(), b.ID); err != nil {
 		t.Fatalf("ClearDefaultChannel(b): %v", err)
 	}
-	if _, ok, _ := db.DefaultChannel(t.Context()); !ok {
-		t.Fatal("clearing a non-default channel removed the default")
+	if _, ok, err := db.DefaultChannel(t.Context()); err != nil || !ok {
+		t.Fatalf("clearing a non-default channel removed the default: ok = %v, err = %v", ok, err)
 	}
 
 	if err := db.ClearDefaultChannel(t.Context(), a.ID); err != nil {
 		t.Fatalf("ClearDefaultChannel(a): %v", err)
 	}
-	if _, ok, _ := db.DefaultChannel(t.Context()); ok {
-		t.Fatal("the default survived being cleared")
+	if _, ok, err := db.DefaultChannel(t.Context()); err != nil || ok {
+		t.Fatalf("the default survived being cleared: ok = %v, err = %v", ok, err)
 	}
 	if err := db.ClearDefaultChannel(t.Context(), 4242); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
@@ -181,8 +181,14 @@ func TestUpdateChannelLeavesTheDefaultAlone(t *testing.T) {
 	}
 	a.Name = "renamed"
 	a.IsDefault = false
-	if _, err := db.UpdateChannel(t.Context(), a); err != nil {
+	saved, err := db.UpdateChannel(t.Context(), a)
+	if err != nil {
 		t.Fatalf("UpdateChannel: %v", err)
+	}
+	// The returned row is what the API answers a PUT with, so it must carry
+	// the stored flag, not the caller's stale copy.
+	if !saved.IsDefault {
+		t.Fatal("UpdateChannel returned is_default = false for the default channel")
 	}
 	def, ok, err := db.DefaultChannel(t.Context())
 	if err != nil || !ok || def.ID != a.ID || def.Name != "renamed" {

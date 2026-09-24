@@ -8,6 +8,7 @@ import {
 import type { QueryClient } from "@tanstack/react-query";
 import { createQueryClient } from "../live/queryClient";
 import { NotificationsView } from "./NotificationsView";
+import { inventoryQueryKey } from "../monitors/inventoryApi";
 import {
   channelsQueryKey,
   createChannel,
@@ -206,7 +207,13 @@ export function LiveNotifications({
   );
 
   const enableMutation = useMutation({
-    mutationFn: ({ channel, enabled }: { channel: Channel; enabled: boolean }) =>
+    mutationFn: ({
+      channel,
+      enabled,
+    }: {
+      channel: Channel;
+      enabled: boolean;
+    }) =>
       update(channel.id, {
         name: channel.name,
         type: channel.type,
@@ -255,8 +262,13 @@ export function LiveNotifications({
           ? error.message
           : "the default channel could not be changed",
       ),
+    // The inventory names the default beside monitors with no channels of
+    // their own, so it is stale the moment the default moves.
     onSettled: () =>
-      queryClient.invalidateQueries({ queryKey: channelsQueryKey }),
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: channelsQueryKey }),
+        queryClient.invalidateQueries({ queryKey: inventoryQueryKey }),
+      ]),
   });
   const onSetDefault = useCallback(
     (id: string | null) => defaultMutation.mutate(id),

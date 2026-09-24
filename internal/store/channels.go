@@ -122,20 +122,19 @@ func (db *DB) UpdateChannel(ctx context.Context, c Channel) (Channel, error) {
 	}
 
 	now := time.Now().Unix()
-	res, err := db.Writer.ExecContext(ctx, `
+	// is_default is read back rather than taken from c: Update never writes
+	// the flag, so the caller's copy says nothing about the stored row.
+	err = db.Writer.QueryRowContext(ctx, `
 		UPDATE notif_channels
 		   SET name = ?, type = ?, config_json = ?, enabled = ?, updated_at = ?
-		 WHERE id = ?`,
-		c.Name, c.Type, cfg, c.Enabled, now, c.ID)
-	if err != nil {
-		return Channel{}, fmt.Errorf("update channel %d: %w", c.ID, err)
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return Channel{}, fmt.Errorf("update channel %d: %w", c.ID, err)
-	}
-	if n == 0 {
+		 WHERE id = ?
+		RETURNING is_default`,
+		c.Name, c.Type, cfg, c.Enabled, now, c.ID).Scan(&c.IsDefault)
+	if errors.Is(err, sql.ErrNoRows) {
 		return Channel{}, fmt.Errorf("%w: channel %d", ErrNotFound, c.ID)
+	}
+	if err != nil {
+		return Channel{}, fmt.Errorf("update channel %d: %w", c.ID, err)
 	}
 
 	c.UpdatedAt = time.Unix(now, 0).UTC()

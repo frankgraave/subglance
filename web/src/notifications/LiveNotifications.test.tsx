@@ -44,7 +44,10 @@ describe("LiveNotifications", () => {
   it("shows the real failure of a test, in the server's words", async () => {
     const test = vi
       .fn()
-      .mockResolvedValue({ ok: false, error: "401 unauthorized: bot token revoked" });
+      .mockResolvedValue({
+        ok: false,
+        error: "401 unauthorized: bot token revoked",
+      });
     render(
       <LiveNotificationsRoot
         client={client()}
@@ -52,14 +55,14 @@ describe("LiveNotifications", () => {
         test={test}
       />,
     );
-    fireEvent.click(
-      await screen.findByRole("button", { name: /send test/i }),
-    );
+    fireEvent.click(await screen.findByRole("button", { name: /send test/i }));
     expect(
       await screen.findByText(/401 unauthorized: bot token revoked/),
     ).toBeTruthy();
     const row = screen.getByRole("listitem");
-    expect(within(row).getByText("Test failed", { selector: ".chip" })).toBeTruthy();
+    expect(
+      within(row).getByText("Test failed", { selector: ".chip" }),
+    ).toBeTruthy();
   });
 
   it("never turns a failed request into a failed channel", async () => {
@@ -86,7 +89,9 @@ describe("LiveNotifications", () => {
      * thing on every row of every instance. A red "Test failed" here would be
      * the bug; so would a green one.
      */
-    expect(within(row).queryByText("Test failed", { selector: ".chip" })).toBeNull();
+    expect(
+      within(row).queryByText("Test failed", { selector: ".chip" }),
+    ).toBeNull();
     expect(
       within(row).queryByText("Test delivered", { selector: ".chip" }),
     ).toBeNull();
@@ -110,7 +115,9 @@ describe("LiveNotifications", () => {
     expect(await screen.findByText("Test delivered")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /^Edit/ }));
-    fireEvent.click(await screen.findByRole("button", { name: /save changes/i }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /save changes/i }),
+    );
     await waitFor(() => expect(update).toHaveBeenCalled());
     await waitFor(() =>
       expect(screen.queryByText("Test delivered")).toBeNull(),
@@ -154,7 +161,9 @@ describe("LiveNotifications", () => {
       />,
     );
     fireEvent.click(await screen.findByRole("button", { name: /^Edit/ }));
-    fireEvent.click(await screen.findByRole("button", { name: /save changes/i }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /save changes/i }),
+    );
     await waitFor(() => expect(update).toHaveBeenCalled());
     expect(update.mock.calls[0][1].config).toEqual({ url: "****B07F" });
   });
@@ -175,9 +184,7 @@ describe("LiveNotifications", () => {
     fireEvent.change(screen.getByLabelText(/recipient address/i), {
       target: { value: "ops@example.com" },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /^Add channel$/ }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /^Add channel$/ }));
     await waitFor(() => expect(create).toHaveBeenCalled());
     expect(create.mock.calls[0][0]).toEqual({
       name: "Ops email",
@@ -244,9 +251,7 @@ describe("enabling and disabling through the server", () => {
       />,
     );
 
-    fireEvent.click(
-      await screen.findByRole("button", { name: /^Disable / }),
-    );
+    fireEvent.click(await screen.findByRole("button", { name: /^Disable / }));
 
     await waitFor(() => expect(update).toHaveBeenCalled());
     const [id, input] = update.mock.calls[0];
@@ -320,12 +325,37 @@ describe("the default channel", () => {
     await waitFor(() => expect(setDefault).toHaveBeenCalledWith("2", true));
   });
 
+  it("refreshes the monitor inventory, which names the default", async () => {
+    const qc = client();
+    const invalidate = vi.spyOn(qc, "invalidateQueries");
+    const setDefault = vi.fn().mockResolvedValue(undefined);
+    render(
+      <LiveNotificationsRoot
+        client={qc}
+        list={async () => [make(), make({ id: 2, name: "Pager" })]}
+        setDefault={setDefault}
+      />,
+    );
+    const select = await screen.findByRole("combobox", {
+      name: /monitors with no channels of their own/i,
+    });
+    fireEvent.change(select, { target: { value: "2" } });
+    await waitFor(() =>
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: ["monitors", "inventory"],
+      }),
+    );
+  });
+
   it("clears the default by naming the channel that holds it", async () => {
     const setDefault = vi.fn().mockResolvedValue(undefined);
     render(
       <LiveNotificationsRoot
         client={client()}
-        list={async () => [make({ is_default: true }), make({ id: 2, name: "Pager" })]}
+        list={async () => [
+          make({ is_default: true }),
+          make({ id: 2, name: "Pager" }),
+        ]}
         setDefault={setDefault}
       />,
     );
@@ -338,7 +368,9 @@ describe("the default channel", () => {
   });
 
   it("reports a refused change instead of silently reverting", async () => {
-    const setDefault = vi.fn().mockRejectedValue(new Error("channel not found"));
+    const setDefault = vi
+      .fn()
+      .mockRejectedValue(new Error("channel not found"));
     render(
       <LiveNotificationsRoot
         client={client()}
@@ -364,7 +396,9 @@ describe("the default channel", () => {
       />,
     );
     expect(
-      await screen.findByText(/monitors with no channels of their own alert through/i),
+      await screen.findByText(
+        /monitors with no channels of their own alert through/i,
+      ),
     ).toBeTruthy();
     expect(screen.queryByRole("combobox")).toBeNull();
   });

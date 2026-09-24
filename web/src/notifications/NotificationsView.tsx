@@ -306,7 +306,8 @@ export function NotificationsView({
              */
             <p className="nt-note">
               No channel matches {`“${query.trim()}”`}. {channels.length}{" "}
-              {channels.length === 1 ? "channel is" : "channels are"} configured.
+              {channels.length === 1 ? "channel is" : "channels are"}{" "}
+              configured.
             </p>
           )
         ) : (
@@ -337,7 +338,12 @@ export function NotificationsView({
                 ) : (
                   <p>
                     Monitors with no channels of their own alert through{" "}
-                    <strong>{defaultChannel.name}</strong>.
+                    <strong>{defaultChannel.name}</strong>
+                    {/* The notifier skips a disabled channel, so a disabled
+                        default is configured but delivers nothing. */}
+                    {defaultChannel.enabled
+                      ? "."
+                      : ", which is disabled: they alert nobody until it is enabled."}
                   </p>
                 )
               ) : (
@@ -510,9 +516,9 @@ export function NotificationsView({
 
       {!canWrite && !loading && channels.length > 0 && (
         <p className="nt-note">
-          <StateChip>read only</StateChip> This account may see the channels
-          but not change them, and may not send a test — a test is a real
-          message to somebody else's inbox.
+          <StateChip>read only</StateChip> This account may see the channels but
+          not change them, and may not send a test — a test is a real message to
+          somebody else's inbox.
         </p>
       )}
 
