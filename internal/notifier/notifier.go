@@ -201,14 +201,17 @@ func (n *Notifier) Enqueue(ctx context.Context, m store.Monitor, inc store.Incid
 		}
 		return nil
 	}
-	channels, err := n.db.ListMonitorChannels(ctx, m.ID)
+	// A monitor's own channels, or the instance default when it has none.
+	// Without the fallback a monitor nobody remembered to route is a monitor
+	// whose outage nobody hears about.
+	channels, _, err := n.db.AlertChannels(ctx, m.ID)
 	if err != nil {
 		return fmt.Errorf("list channels for monitor %d: %w", m.ID, err)
 	}
 	if len(channels) == 0 {
-		// Not an error. Plenty of monitors are watched on the dashboard
-		// and nowhere else, and saying so at every transition would fill
-		// the log with a non-event.
+		// Not an error. With no default set, plenty of monitors are
+		// watched on the dashboard and nowhere else, and saying so at every
+		// transition would fill the log with a non-event.
 		return nil
 	}
 

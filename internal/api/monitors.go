@@ -87,6 +87,12 @@ type monitorResponse struct {
 	// Present on list reads: [] means no attachments; omitted means unknown.
 	Channels *[]monitorChannelResponse `json:"channels,omitempty"`
 
+	// DefaultChannel is set on list reads exactly when Channels is known and
+	// empty and an instance default exists: the channel this monitor's
+	// alerts go to instead. Without it an empty Channels would read as
+	// "nobody hears about this monitor" when somebody does.
+	DefaultChannel *monitorChannelResponse `json:"default_channel,omitempty"`
+
 	// Heartbeats is filled in only when the caller asked for it with the
 	// `heartbeats` query parameter, oldest first. Omitting the field
 	// entirely when it was not requested keeps the default response byte
@@ -233,6 +239,19 @@ func (s *Server) handleListMonitors(w http.ResponseWriter, r *http.Request) {
 	if channelErr != nil {
 		s.log.Error("monitor channel summaries", "error", channelErr)
 	}
+	var fallback *monitorChannelResponse
+	if channelErr == nil {
+		def, ok, err := s.db.DefaultChannel(ctx)
+		switch {
+		case err != nil:
+			// An unknown default makes every empty list a claim nobody can
+			// check, so the channels go out as unknown rather than as "none".
+			s.log.Error("default channel", "error", err)
+			channelErr = err
+		case ok:
+			fallback = &monitorChannelResponse{ID: def.ID, Name: def.Name}
+		}
+	}
 	out := make([]monitorResponse, 0, len(monitors))
 	for _, m := range monitors {
 		resp := s.describeMonitor(r, m)
@@ -242,6 +261,9 @@ func (s *Server) handleListMonitors(w http.ResponseWriter, r *http.Request) {
 				attached = append(attached, monitorChannelResponse{ID: c.ID, Name: c.Name})
 			}
 			resp.Channels = &attached
+			if len(attached) == 0 {
+				resp.DefaultChannel = fallback
+			}
 		}
 		if perMonitor > 0 {
 			resp.Heartbeats = oldestFirstHeartbeats(beats[m.ID])

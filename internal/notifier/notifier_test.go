@@ -639,3 +639,35 @@ func TestEmailMessageResistsHeaderInjection(t *testing.T) {
 		t.Fatal("a newline in the monitor name injected a header")
 	}
 }
+
+// A monitor with no channels of its own alerts through the instance default.
+// Before the default existed, this alert went nowhere and nothing said so.
+func TestUnroutedMonitorAlertsThroughTheDefault(t *testing.T) {
+	db, _, ch := testDB(t)
+	ctx := context.Background()
+
+	unrouted, err := db.CreateMonitor(ctx, store.Monitor{
+		Name: "unrouted", Type: "http", Target: "https://example.com/other",
+		IntervalS: 60, TimeoutS: 10, Enabled: true,
+	})
+	if err != nil {
+		t.Fatalf("create monitor: %v", err)
+	}
+	if err := db.SetDefaultChannel(ctx, ch.ID); err != nil {
+		t.Fatalf("set default: %v", err)
+	}
+
+	n := newTestNotifier(t, db, &fakeSender{}, time.Now)
+	inc := openIncident(t, db, unrouted.ID, time.Now(), "connection refused")
+	if err := n.Enqueue(ctx, unrouted, inc, state.EventIncidentConfirmed, time.Now()); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+
+	due, err := db.DueDeliveries(ctx, time.Now(), 10)
+	if err != nil {
+		t.Fatalf("due: %v", err)
+	}
+	if len(due) != 1 || due[0].ChannelID != ch.ID {
+		t.Fatalf("queued = %+v, want one delivery to the default channel", due)
+	}
+}
