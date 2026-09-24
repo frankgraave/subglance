@@ -98,9 +98,22 @@ describe("LatencyChart", () => {
   });
 
   it("says an empty window is empty rather than drawing a flat line", () => {
-    render(<LatencyChart window="7d" onWindowChange={() => {}} series={makeSeries([])} />);
+    render(<LatencyChart window="7d" onWindowChange={() => {}} series={makeSeries([], "7d")} />);
     expect(screen.getByText("No checks in the last 7d.")).toBeTruthy();
     expect(screen.queryByTestId("lat-plot")).toBeNull();
+  });
+
+  it("names a failed refresh over an empty window, and the window it belongs to", () => {
+    render(
+      <LatencyChart window="7d" onWindowChange={() => {}} series={makeSeries([], "24h")} error={new Error("HTTP 500")} />,
+    );
+    expect(screen.getByRole("alert").textContent).toBe(
+      "Could not refresh latency: HTTP 500. The last loaded window (24h) had no checks.",
+    );
+    cleanup();
+    render(<LatencyChart window="7d" onWindowChange={() => {}} series={makeSeries([], "24h")} />);
+    expect(screen.getByText("No checks in the last 24h.")).toBeTruthy();
+    expect(screen.queryByText("No checks in the last 7d.")).toBeNull();
   });
 
   it("keeps the previous window on screen, dimmed, while the next one loads", () => {

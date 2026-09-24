@@ -192,9 +192,17 @@ export function LatencyChart({
   } else if (loading && !series) {
     body = <p className="mon-detail-note">Loading latency…</p>;
   } else if (!series || points.length === 0) {
-    body = (
+    // An empty series may still be the previous window, and a failed refresh
+    // must not hide behind "no checks": name the error, and name the window
+    // the empty result actually belongs to.
+    const shown = series ? series.window : WINDOW_LABELS[selected];
+    body = error ? (
+      <p role="alert" className="mon-detail-note">
+        Could not refresh latency: {error.message}. The last loaded window ({shown}) had no checks.
+      </p>
+    ) : (
       <p className="mon-detail-note">
-        {refreshing ? "Loading latency…" : `No checks in the last ${WINDOW_LABELS[selected]}.`}
+        {refreshing ? "Loading latency…" : `No checks in the last ${shown}.`}
       </p>
     );
   } else {

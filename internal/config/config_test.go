@@ -213,6 +213,8 @@ func TestRetentionValidation(t *testing.T) {
 	}{
 		{"raw retention zero", []string{"--raw-retention=0"}},
 		{"raw retention negative", []string{"--raw-retention=-1h"}},
+		// Below a day the rollup can eat into the 24h latency window.
+		{"raw retention under a day", []string{"--raw-retention=23h"}},
 		{"rollup retention negative", []string{"--rollup-retention=-1h"}},
 		// A rollup window inside the raw one would delete buckets whose own
 		// heartbeats are still present, so history would flicker.
