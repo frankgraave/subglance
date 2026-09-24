@@ -25,6 +25,7 @@ import { routePath } from "./shell/route";
 import type { NavRoute } from "./shell/Sidebar";
 import { useDocumentTitle } from "./shell/documentTitle";
 import { useRouteFocus } from "./shell/useRouteFocus";
+import { detailTitle, monitorTitleLink, morphNavigation } from "./shell/viewTransition";
 import { AppShell } from "./shell/AppShell";
 import { PageToolbar } from "./shell/PageToolbar";
 import { Topbar } from "./shell/Topbar";
@@ -76,21 +77,40 @@ export default function App() {
    * makes both directions instant.
    */
   const [queryClient] = useState(createQueryClient);
+  /* The screen region. Declared up here because the navigation callbacks
+     below read the titles out of it for the morph. */
+  const mainRef = useRef<HTMLElement | null>(null);
 
   const openMonitor = useCallback(
     (id: string) => {
       if (route.name === "monitor" && route.id === id && !workbenchOpen && !addOpen) return;
       if (!confirmNavigation()) return;
-      setWorkbenchOpen(false);
-      setAddOpen(false);
-      navigate({ name: "monitor", id });
-      // A new page starts at the top. Without this the browser keeps the
-      // dashboard's scroll offset, so opening a monitor from row 80 lands
-      // halfway down its incident list.
-      window.scrollTo(0, 0);
+      morphNavigation(
+        () => {
+          setWorkbenchOpen(false);
+          setAddOpen(false);
+          navigate({ name: "monitor", id });
+          // A new page starts at the top. Without this the browser keeps the
+          // dashboard's scroll offset, so opening a monitor from row 80 lands
+          // halfway down its incident list. Inside the update, so the
+          // transition captures the page where it will actually rest.
+          window.scrollTo(0, 0);
+        },
+        { from: () => monitorTitleLink(mainRef.current, id), to: () => detailTitle(mainRef.current) },
+      );
     },
     [navigate, route, workbenchOpen, addOpen],
   );
+  /*
+   * The way back does not morph, and neither does browser Back.
+   *
+   * Reversing it would land the page title on the monitor's link in the list,
+   * and an element that is part of a transition is painted by the overlay, not
+   * in place: for the length of the animation a click on that link reaches
+   * the table cell behind it instead (measured in Chromium). Going back and
+   * opening the next monitor is the quickest thing an operator does here, so
+   * the list has to be clickable the moment it is on screen.
+   */
   const showDashboard = useCallback(
     () => navigate({ name: "dashboard" }),
     [navigate],
@@ -180,7 +200,6 @@ export default function App() {
             ? "Notifications"
             : onSettings ? "Settings" : "Dashboard",
   );
-  const mainRef = useRef<HTMLElement | null>(null);
   useRouteFocus(path, mainRef);
 
   /*

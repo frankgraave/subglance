@@ -803,3 +803,55 @@
     padding-block: var(--space-0h);
   }
 }
+
+/*
+ * Opening a monitor, and going back from it (SUB-23).
+ *
+ * `morphNavigation` wraps opening a monitor in a view transition, and the
+ * monitor's name travels from its row to the page title, so the detail page
+ * reads as the row opening up rather than a new page arriving. Going back is
+ * an instant swap; `App.tsx` says why.
+ *
+ * Only the name moves, and the screen under it stays live. Both rules below
+ * are needed for that, and each was measured in Chromium on its own:
+ *
+ * - The root is taken out of the transition, so the rest of the screen swaps
+ *   the way it always has. While the root is captured, the whole page is a
+ *   picture and every click reaches `<html>`.
+ * - The overlay lets the pointer through. By default it catches every click
+ *   for the length of the animation, even over parts of the page it does not
+ *   draw on, so a click on "All monitors" made while the title was still
+ *   moving did nothing.
+ */
+:root {
+  view-transition-name: none;
+}
+
+::view-transition {
+  pointer-events: none;
+}
+
+/*
+ * The interactive duration, not the 420ms attention one. A click is the most
+ * ordinary interactive event there is (§2.6), and an operator opens and
+ * closes monitors in quick succession; a navigation that makes them watch it
+ * is one they start to wait for.
+ */
+::view-transition-group(*),
+::view-transition-old(*),
+::view-transition-new(*) {
+  animation-duration: var(--dur-panel);
+  animation-timing-function: var(--ease);
+}
+
+/*
+ * The script already skips the transition under reduced motion. This is the
+ * second lock, for a preference that changes while one is running.
+ */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none;
+  }
+}
