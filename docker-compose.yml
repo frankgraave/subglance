@@ -38,10 +38,11 @@ services:
       # SUBGLANCE_CHECK_WORKERS: "0"
       # How long raw heartbeats survive before being folded into hourly
       # buckets, and how long those buckets and resolved incidents survive
-      # after that. Shorten the first on a small VPS; set the second to 0 to
-      # keep summarised history forever.
-      # SUBGLANCE_RAW_RETENTION: 168h
-      # SUBGLANCE_ROLLUP_RETENTION: 8760h
+      # after that. Both are normally set on the Settings page (defaults: 30
+      # days, and forever). Setting them here overrides the page and locks
+      # its fields. 0 means forever.
+      # SUBGLANCE_RAW_RETENTION: 720h
+      # SUBGLANCE_ROLLUP_RETENTION: "0"
       # Off by default on purpose: without the guard, a user-supplied URL turns
       # SubGlance into an SSRF proxy into whatever this container can reach.
       # Turn it on only if you mean to monitor services on your own network.

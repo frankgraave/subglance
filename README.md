@@ -164,9 +164,9 @@ exists for it.
 - **A latency graph.** The detail view shows the latest latency as a number and
   the heartbeat as a bar; the trend over time is not drawn anywhere. The chart
   component the heartbeat bar already uses is the piece this needs wiring to.
-- **The remaining settings sections.** Password changes work at `/settings`.
-  User and API-token management, retention and other instance diagnostics still
-  have no settings UI; read-only watchdog diagnostics are available.
+- **The remaining settings sections.** Password changes and retention work at
+  `/settings`. User and API-token management and other instance diagnostics
+  still have no settings UI; read-only watchdog diagnostics are available.
 
 Deliberately **not** in v0.1: status pages, config-as-code, multi-region checks,
 on-call schedules, SSO, mobile app, CLI, Postgres. They are on the roadmap; they

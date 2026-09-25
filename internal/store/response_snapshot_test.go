@@ -146,7 +146,7 @@ func TestRollupTakesSnapshotsWithIt(t *testing.T) {
 	failedBeat(t, db, m.ID, old, &ResponseSnapshot{Body: "an answer from a month ago"})
 	failedBeat(t, db, m.ID, now, &ResponseSnapshot{Body: "an answer from just now"})
 
-	if _, err := db.RollupHeartbeats(ctx, DefaultRawRetention); err != nil {
+	if _, err := db.RollupHeartbeats(ctx, testRawWindow); err != nil {
 		t.Fatalf("RollupHeartbeats: %v", err)
 	}
 

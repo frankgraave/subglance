@@ -120,7 +120,7 @@ monitors     id, name, type, target, interval_s, timeout_s, retries,
              created_at, updated_at
 heartbeats   id, monitor_id, ts, ok, latency_ms, status_code, error
              -- high write frequency; raw rows are rolled up into
-             -- hourly buckets after 7 days
+             -- hourly buckets after 30 days by default
 incidents    id, monitor_id, started_at, confirmed_at, resolved_at,
              cause, last_error
 notif_channels  id, name, type, config_json, enabled
@@ -128,8 +128,9 @@ monitor_channels monitor_id, channel_id
 settings     key, value
 ```
 
-**Retention:** raw heartbeats for 7 days, then hourly aggregates (min/max/avg
-latency, up/down counts) for unlimited history at negligible storage cost. A
+**Retention:** raw heartbeats for 30 days by default, then hourly aggregates
+(min/max/avg latency, up/down counts), kept forever by default at negligible
+storage cost. Both windows are set on the settings page or pinned by flag. A
 background job runs this daily.
 
 **SQLite settings:** WAL mode, `synchronous=NORMAL`, `busy_timeout`. One
