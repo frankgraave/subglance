@@ -61,6 +61,30 @@ it("does not save a shorter window until its preview has answered", async () => 
   expect(screen.getByRole("button", { name: "Save retention" }).matches(":disabled")).toBe(true);
 });
 
+it("waits for a fresh count when returning to a draft it previewed earlier", async () => {
+  let hold = false;
+  let answer: (response: Response) => void = () => {};
+  mount(defaultRetention);
+  vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string) => {
+    if (!url.includes("/preview")) return Promise.resolve(json(defaultRetention));
+    if (hold) return new Promise<Response>((resolve) => { answer = resolve; });
+    return Promise.resolve(json({ heartbeats: 1234, hourly_buckets: 0, incidents: 0 }));
+  }));
+  const raw = await screen.findByLabelText("Keep raw heartbeats, in days");
+  const save = () => screen.getByRole("button", { name: "Save retention" });
+  fireEvent.change(raw, { target: { value: "7" } });
+  await screen.findByText(/fold 1,234 raw heartbeats/);
+  fireEvent.change(raw, { target: { value: "8" } });
+  await waitFor(() => expect(save().matches(":disabled")).toBe(false));
+  hold = true;
+  fireEvent.change(raw, { target: { value: "7" } });
+  expect(await screen.findByText("Counting what this change removes…")).toBeTruthy();
+  expect(save().matches(":disabled")).toBe(true);
+  answer(json({ heartbeats: 99, hourly_buckets: 0, incidents: 0 }));
+  expect(await screen.findByText(/fold 99 raw heartbeats/)).toBeTruthy();
+  expect(save().matches(":disabled")).toBe(false);
+});
+
 it("reports a save the server could not read back as saved", async () => {
   mount(defaultRetention, true, (_url, init) => init?.method === "PUT" ? new Response(null, { status: 204 }) : undefined);
   fireEvent.change(await screen.findByLabelText("Keep raw heartbeats, in days"), { target: { value: "60" } });

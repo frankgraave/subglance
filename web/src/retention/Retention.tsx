@@ -118,8 +118,9 @@ function RetentionForm({ data, canAdmin, saved, setSaved }: {
     retry: false,
   });
   // A shorter window can delete rows on the next pass, so it is not saved
-  // until the page has been able to say how many.
-  const previewReady = !shorter || (!preview.isError && preview.data !== undefined);
+  // until the page has been able to say how many. A cached count for a draft
+  // previewed earlier is being read again, so Save waits for that answer too.
+  const previewReady = !shorter || (preview.isSuccess && !preview.isFetching);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -162,7 +163,7 @@ function RetentionForm({ data, canAdmin, saved, setSaved }: {
       {canAdmin && changed && shorter && (
         <p className="retention-note" role="status">
           {preview.isError ? "Could not count what this change removes."
-            : !impact ? "Counting what this change removes…"
+            : !impact || preview.isFetching ? "Counting what this change removes…"
             : removes ? `The next daily pass will fold ${count.format(impact.heartbeats)} raw heartbeats into hourly summaries and delete ${count.format(impact.hourly_buckets)} hourly summaries and ${count.format(impact.incidents)} resolved incidents.`
             : "Nothing is old enough to be removed by this change yet."}
         </p>
