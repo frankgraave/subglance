@@ -471,7 +471,7 @@
     },
     {
       "rule": "color-contrast",
-      "selector": ".inv-paused-chip",
+      "selector": ".inv-name > .inv-paused-chip.chip.chip--state",
       "scopes": [
         "light: notifications",
         "dark: notifications"

@@ -36,6 +36,27 @@ export const CHANNEL_TYPES: readonly ChannelType[] = [
   "webhook",
 ];
 
+/**
+ * A channel's daily quiet window, as `store.QuietHours` writes it.
+ *
+ * `during` is kept as a string for the same reason `type` is: a server newer
+ * than this build may know a third mode, and narrowing it would make the row
+ * describe a behaviour the channel does not have.
+ */
+export type ApiQuietHours = {
+  start: string;
+  end: string;
+  timezone: string;
+  during: string;
+};
+
+export type QuietHours = {
+  start: string;
+  end: string;
+  timezone: string;
+  during: string;
+};
+
 /** The wire shape of one channel, as `channelResponse` writes it. */
 export type ApiChannel = {
   id: number | string;
@@ -44,6 +65,7 @@ export type ApiChannel = {
   config?: Record<string, string> | null;
   enabled?: boolean;
   is_default?: boolean;
+  quiet_hours?: ApiQuietHours | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -66,6 +88,12 @@ export type Channel = {
    * default has none, and claiming one would promise alerts nobody sends.
    */
   isDefault: boolean;
+  /**
+   * The daily quiet window, or null when there is none. A server that
+   * predates quiet hours sends no field, which reads as none: that server
+   * holds nothing back.
+   */
+  quietHours: QuietHours | null;
   createdAt: number | null;
 };
 
@@ -77,6 +105,7 @@ export function channelFromApi(api: ApiChannel): Channel {
     config: api.config ?? {},
     enabled: api.enabled !== false,
     isDefault: api.is_default === true,
+    quietHours: quietFromApi(api.quiet_hours),
     createdAt: toUnixMs(api.created_at),
   };
 }
@@ -85,6 +114,58 @@ export function channelsFromPayload(
   payload: { channels?: ApiChannel[] } | null | undefined,
 ): Channel[] {
   return (payload?.channels ?? []).map(channelFromApi);
+}
+
+function quietFromApi(
+  api: ApiQuietHours | null | undefined,
+): QuietHours | null {
+  if (api === null || api === undefined || typeof api !== "object") {
+    return null;
+  }
+  return {
+    start: api.start ?? "",
+    end: api.end ?? "",
+    timezone: api.timezone ?? "",
+    during: api.during ?? "",
+  };
+}
+
+/**
+ * One line saying when a channel stays silent and what happens meanwhile.
+ *
+ * The mode is always in the sentence, never implied. "Quiet 23:00–07:00" on
+ * its own reads as "held", which is the safe reading, and a channel set to
+ * drop would then be discarding alerts behind a line that suggested the
+ * opposite. A mode this build does not know is named as unknown rather than
+ * guessed at.
+ */
+export function describeQuietHours(quiet: QuietHours): string {
+  const window = `quiet ${quiet.start}–${quiet.end} ${quiet.timezone}`;
+  switch (quiet.during) {
+    case "hold":
+      return `${window}, alerts held for one digest`;
+    case "drop":
+      return `${window}, alerts dropped`;
+    default:
+      return `${window}, unknown handling "${quiet.during}"`;
+  }
+}
+
+/**
+ * The same fact in chip length: the window and one word for the mode.
+ *
+ * The word stays even though the chip is short. Hold is the answer that cannot
+ * lose an alert, and a chip reading only "Quiet 23:00–07:00" on a channel that
+ * drops would let the dangerous setting pass for the safe one.
+ */
+export function quietChip(quiet: QuietHours): string {
+  const mode =
+    quiet.during === "hold"
+      ? "held"
+      : quiet.during === "drop"
+        ? "dropped"
+        : "unknown";
+  return `Quiet ${quiet.start}–${quiet.end}, ${mode}`;
 }
 
 function toUnixMs(value: string | undefined): number | null {

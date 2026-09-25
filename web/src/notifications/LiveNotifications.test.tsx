@@ -123,6 +123,37 @@ describe("LiveNotifications", () => {
     );
   });
 
+  it("drops a test result even when the edited window is refused", async () => {
+    // The channel update is stored before quiet hours are sent, so the old
+    // result is stale whether or not the second request succeeds.
+    const update = vi.fn().mockResolvedValue(make());
+    const setQuiet = vi
+      .fn()
+      .mockRejectedValue(new Error("unknown IANA timezone"));
+    render(
+      <LiveNotificationsRoot
+        client={client()}
+        list={async () => [make()]}
+        test={async () => ({ ok: true }) as const}
+        update={update}
+        setQuiet={setQuiet}
+      />,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: /send test/i }));
+    expect(await screen.findByText("Test delivered")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Edit/ }));
+    fireEvent.click(
+      await screen.findByRole("checkbox", { name: /hold this channel's alerts/i }),
+    );
+    fireEvent.change(screen.getByLabelText("Timezone"), {
+      target: { value: "Europe/Amsterdam" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    expect(await screen.findByText(/quiet hours were not/)).toBeTruthy();
+    expect(screen.queryByText("Test delivered")).toBeNull();
+  });
+
   it("offers a viewer nothing that would 403", async () => {
     render(
       <LiveNotificationsRoot
@@ -165,6 +196,90 @@ describe("LiveNotifications", () => {
     );
     await waitFor(() => expect(update).toHaveBeenCalled());
     expect(update.mock.calls[0][1].config).toEqual({ url: "****B07F" });
+  });
+
+  it("sends a changed window to the channel it belongs to", async () => {
+    const update = vi.fn().mockResolvedValue(make({ id: 7 }));
+    const setQuiet = vi.fn().mockResolvedValue(undefined);
+    render(
+      <LiveNotificationsRoot
+        client={client()}
+        list={async () => [make({ id: 7 })]}
+        update={update}
+        setQuiet={setQuiet}
+      />,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: /^Edit/ }));
+    fireEvent.click(
+      await screen.findByRole("checkbox", { name: /hold this channel's alerts/i }),
+    );
+    fireEvent.change(screen.getByLabelText("Timezone"), {
+      target: { value: "Europe/Amsterdam" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    await waitFor(() => expect(setQuiet).toHaveBeenCalled());
+    expect(setQuiet.mock.calls[0][0]).toBe("7");
+    expect(setQuiet.mock.calls[0][1]).toMatchObject({
+      timezone: "Europe/Amsterdam",
+      during: "hold",
+    });
+  });
+
+  it("does not touch the window when an edit leaves it alone", async () => {
+    const setQuiet = vi.fn().mockResolvedValue(undefined);
+    const update = vi.fn().mockResolvedValue(make());
+    render(
+      <LiveNotificationsRoot
+        client={client()}
+        list={async () => [make()]}
+        update={update}
+        setQuiet={setQuiet}
+      />,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: /^Edit/ }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /save changes/i }),
+    );
+    await waitFor(() => expect(update).toHaveBeenCalled());
+    expect(setQuiet).not.toHaveBeenCalled();
+  });
+
+  it("says a new channel exists when only its window was refused", async () => {
+    /*
+     * The channel is stored before the window is sent. Reporting this as a
+     * plain failure would invite pressing Add again, and that makes a second
+     * channel.
+     */
+    const create = vi.fn().mockResolvedValue(make({ id: 9 }));
+    const setQuiet = vi
+      .fn()
+      .mockRejectedValue(new Error("unknown IANA timezone"));
+    render(
+      <LiveNotificationsRoot
+        client={client()}
+        list={async () => []}
+        create={create}
+        setQuiet={setQuiet}
+        createOpen
+      />,
+    );
+    fireEvent.change(await screen.findByLabelText("Name"), {
+      target: { value: "Ops email" },
+    });
+    fireEvent.change(screen.getByLabelText(/recipient address/i), {
+      target: { value: "ops@example.com" },
+    });
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /hold this channel's alerts/i }),
+    );
+    fireEvent.change(screen.getByLabelText("Timezone"), {
+      target: { value: "Europe/Amsterdam" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^Add channel$/ }));
+    const alert = await screen.findByText(/quiet hours were not saved/);
+    expect(alert.textContent).toMatch(/unknown IANA timezone/);
+    expect(alert.textContent).toMatch(/would create a second channel/);
+    expect(setQuiet.mock.calls[0][0]).toBe("9");
   });
 
   it("creates a channel through the add drawer", async () => {

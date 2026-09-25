@@ -1,8 +1,10 @@
 import { useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { CHANNEL_TYPES, fieldsFor, hasSecret, typeLabel } from "./channels";
-import type { Channel, ChannelType, FieldSpec } from "./channels";
+import type { Channel, ChannelType, FieldSpec, QuietHours } from "./channels";
 import type { ChannelInput } from "./channelsApi";
+import { QuietHoursField } from "./QuietHoursField";
+import { draftFrom, quietChange, quietProblem } from "./quietHours";
 
 /**
  * Adding or editing one channel.
@@ -28,11 +30,21 @@ import type { ChannelInput } from "./channelsApi";
 export type ChannelFormProps = {
   /** The channel being edited, or null when adding. */
   channel?: Channel | null;
-  onSave: (input: ChannelInput) => Promise<void>;
+  /**
+   * Saves the channel. `quiet` is undefined when the window is unchanged,
+   * null to remove it, or the window to store.
+   */
+  onSave: (
+    input: ChannelInput,
+    quiet?: QuietHours | null,
+  ) => Promise<void>;
   onCancel?: () => void;
 };
 
 type Problem = { message: string; key: string | null } | null;
+
+/** The problem key for the quiet-hours fields, which have no config key. */
+const QUIET = "quiet_hours";
 
 export function ChannelForm({
   channel = null,
@@ -73,6 +85,8 @@ export function ChannelForm({
    * whatever is in it — including an empty string — is what gets sent.
    */
   const [replacing, setReplacing] = useState<Record<string, string>>({});
+  const storedQuiet = channel?.quietHours ?? null;
+  const [quiet, setQuiet] = useState(() => draftFrom(storedQuiet));
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<Problem>(null);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -127,10 +141,23 @@ export function ChannelForm({
       if (value !== "") config[spec.key] = value;
     }
 
+    /*
+     * Only a window that is about to be sent is checked. An unchanged stored
+     * window is not re-sent, and the server judged its timezone against its
+     * own zone data; this browser's Intl data may be older and must not block
+     * a rename. Removal (null) has nothing to check.
+     */
+    const quietNext = quietChange(storedQuiet, quiet);
+    const quietError = quietNext ? quietProblem(quiet) : null;
+    if (quietError !== null) {
+      setProblem({ message: quietError, key: QUIET });
+      return;
+    }
+
     setSaving(true);
     void (async () => {
       try {
-        await onSave({ name: trimmedName, type, config });
+        await onSave({ name: trimmedName, type, config }, quietNext);
       } catch (error) {
         /*
          * The server's own sentence, never pinned to a control.
@@ -381,6 +408,16 @@ export function ChannelForm({
           </div>
         );
       })}
+
+      <QuietHoursField
+        value={quiet}
+        onChange={(next) => {
+          setQuiet(next);
+          if (problem?.key === QUIET) setProblem(null);
+        }}
+        stored={storedQuiet !== null}
+        error={problem?.key === QUIET ? problem.message : null}
+      />
 
       {/*
        * What this form does not offer, and why.

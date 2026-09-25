@@ -165,6 +165,16 @@ const CHANNELS = [
       password: "********",
     },
     enabled: true,
+    /*
+     * Quiet hours on the widest row, so the layout checks measure the extra
+     * chip where it is hardest to fit, and at the two-channel size too.
+     */
+    quiet_hours: {
+      start: "23:00",
+      end: "07:00",
+      timezone: "Europe/Amsterdam",
+      during: "hold",
+    },
     created_at: new Date(Date.now() - 30 * 86_400_000).toISOString(),
     updated_at: new Date(Date.now() - 30 * 86_400_000).toISOString(),
   },

@@ -92,6 +92,30 @@ describe("NotificationsView", () => {
     );
   });
 
+  it("marks a channel's quiet hours on its row, mode included", () => {
+    render(
+      <NotificationsView
+        channels={[
+          make({
+            quiet_hours: {
+              start: "23:00",
+              end: "07:00",
+              timezone: "Europe/Amsterdam",
+              during: "drop",
+            },
+          }),
+          make({ id: 2, name: "Pager" }),
+        ]}
+      />,
+    );
+    const [first, second] = screen.getAllByRole("listitem");
+    expect(within(first).getByText("Quiet 23:00–07:00, dropped")).toBeTruthy();
+    expect(within(second).queryByText(/^Quiet/)).toBeNull();
+    expect(first.querySelector(".sr-only")!.textContent).toMatch(
+      /Quiet 23:00–07:00 Europe\/Amsterdam, alerts dropped/,
+    );
+  });
+
   it("says a disabled default delivers nothing", () => {
     // The notifier skips disabled channels, so naming a disabled default as
     // where alerts go would claim a delivery that never happens.
