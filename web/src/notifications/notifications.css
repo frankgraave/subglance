@@ -419,3 +419,35 @@
 
 .nt-cov + .nt-cov-more { margin-top: var(--space-3); }
 .nt-cov-more > .nt-cov { margin-top: var(--space-2); }
+
+/* ── Quiet hours in the channel form (SUB-124) ─────────────────────────────
+ *
+ * Two fieldsets, because the window and the mode are separate questions and a
+ * screen reader should hear each legend once. Borders and padding are dropped
+ * so the fieldsets group for assistive technology without drawing a third
+ * surface inside the drawer. Choices sit on `--control-h` so the checkbox and
+ * the radios keep a full tap target on a phone.
+ */
+.nt-quiet,
+.nt-quiet-modes {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.nt-quiet-modes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.nt-quiet-grid { margin-top: 0; }
+
+.nt-quiet-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-h);
+  font-size: var(--type-body);
+  line-height: var(--lead-body);
+}

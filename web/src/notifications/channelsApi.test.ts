@@ -3,6 +3,7 @@ import {
   createChannel,
   deleteChannel,
   fetchChannels,
+  setQuietHours,
   testChannel,
   updateChannel,
 } from "./channelsApi";
@@ -40,6 +41,50 @@ describe("fetchChannels", () => {
     );
     const channels = await fetchChannels();
     expect(channels.map((c) => c.name)).toEqual(["ops"]);
+  });
+});
+
+describe("setQuietHours", () => {
+  it("puts the window as JSON on the channel's quiet-hours resource", async () => {
+    const fetch = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(json({ start: "23:00" }));
+    const night = {
+      start: "23:00",
+      end: "07:00",
+      timezone: "Europe/Amsterdam",
+      during: "hold",
+    };
+    await setQuietHours("4", night);
+    const [url, init] = fetch.mock.calls[0];
+    expect(String(url)).toBe("/api/v1/channels/4/quiet-hours");
+    expect(init?.method).toBe("PUT");
+    expect(JSON.parse(String(init?.body))).toEqual(night);
+  });
+
+  it("deletes the window when given null", async () => {
+    const fetch = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    await setQuietHours("4", null);
+    const [url, init] = fetch.mock.calls[0];
+    expect(String(url)).toBe("/api/v1/channels/4/quiet-hours");
+    expect(init?.method).toBe("DELETE");
+    expect(init?.body).toBeUndefined();
+  });
+
+  it("surfaces the server's refusal", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      json({ error: "unknown IANA timezone" }, { status: 400 }),
+    );
+    await expect(
+      setQuietHours("4", {
+        start: "23:00",
+        end: "07:00",
+        timezone: "Mars/Olympus",
+        during: "hold",
+      }),
+    ).rejects.toThrow(/unknown IANA timezone/);
   });
 });
 

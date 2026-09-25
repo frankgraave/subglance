@@ -166,7 +166,17 @@ const budgets = {
    * leave under 1 KiB for the next fix; 140 leaves about 2.8 KiB, the same
    * order of headroom the previous raise left. CSS and fonts stay put.
    */
-  js: 140,
+  /*
+   * 140 -> 142 KiB gzip for SUB-124 (quiet hours in the channel form).
+   * Develop at 13edb6e measures 142,369 bytes of entry JS (Node gzip); this
+   * branch measures 144,014: 1,645 bytes for the quiet-hours fieldset, its
+   * client-side validation, the change detection that keeps an edit from
+   * releasing a held night early, the row chip and the partial-save message.
+   * No runtime dependency: the timezone list comes from the browser's own
+   * `Intl.supportedValuesOf`. 141 would leave 370 bytes; 142 leaves 1,394,
+   * enough for a fix without tracking today's size. CSS and fonts stay put.
+   */
+  js: 142,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *

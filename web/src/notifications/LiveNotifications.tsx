@@ -15,11 +15,12 @@ import {
   deleteChannel,
   fetchChannels,
   setDefaultChannel,
+  setQuietHours,
   testChannel,
   updateChannel,
 } from "./channelsApi";
 import type { ChannelInput } from "./channelsApi";
-import type { Channel, DeliveryState } from "./channels";
+import type { Channel, DeliveryState, QuietHours } from "./channels";
 
 /**
  * The notifications page's data owner.
@@ -40,6 +41,7 @@ export type LiveNotificationsProps = {
   remove?: typeof deleteChannel;
   test?: typeof testChannel;
   setDefault?: typeof setDefaultChannel;
+  setQuiet?: typeof setQuietHours;
   monitors?: typeof fetchInventory;
   createOpen?: boolean;
   onCreateOpenChange?: (open: boolean) => void;
@@ -54,6 +56,7 @@ export function LiveNotifications({
   remove = deleteChannel,
   test = testChannel,
   setDefault = setDefaultChannel,
+  setQuiet = setQuietHours,
   monitors: listMonitors = fetchInventory,
   createOpen = false,
   onCreateOpenChange,
@@ -295,10 +298,39 @@ export function LiveNotifications({
   );
 
   const onSave = useCallback(
-    async (id: string | null, input: ChannelInput) => {
+    async (
+      id: string | null,
+      input: ChannelInput,
+      quiet?: QuietHours | null,
+    ) => {
       if (id !== null) clearError(id);
-      if (id === null) await create(input);
-      else await update(id, input);
+      const saved = id === null ? await create(input) : await update(id, input);
+      /*
+       * Quiet hours are their own resource on the server, so they are a
+       * second request, sent only when the form says the window changed:
+       * replacing a window releases whatever it holds, and an unchanged one
+       * re-sent on every rename would flush a night's held alerts.
+       *
+       * A refusal here comes after the channel itself was stored. For an
+       * edit that is harmless — saving again repeats both. For a new channel
+       * it is not: pressing "Add channel" again would create a second one.
+       * The message says so, and the list is refreshed either way so the
+       * channel that does exist is on screen.
+       */
+      if (quiet !== undefined) {
+        try {
+          await setQuiet(saved.id, quiet);
+        } catch (error) {
+          await queryClient.invalidateQueries({ queryKey: channelsQueryKey });
+          const reason =
+            error instanceof Error ? error.message : "the server refused them";
+          throw new Error(
+            id === null
+              ? `The channel was added, but its quiet hours were not saved: ${reason}. Close this form and set them with Edit; adding it again would create a second channel.`
+              : `The channel was saved, but its quiet hours were not: ${reason}.`,
+          );
+        }
+      }
       await queryClient.invalidateQueries({ queryKey: channelsQueryKey });
       /*
        * An edited channel loses its test result.
@@ -317,7 +349,7 @@ export function LiveNotifications({
         });
       }
     },
-    [clearError, create, queryClient, update],
+    [clearError, create, queryClient, setQuiet, update],
   );
 
   return (

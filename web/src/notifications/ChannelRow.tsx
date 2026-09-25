@@ -11,6 +11,8 @@ import { formatMoment } from "../monitors/detail";
 import {
   describeDelivery,
   describeDestination,
+  describeQuietHours,
+  quietChip,
   typeLabel,
 } from "./channels";
 import type { Channel, DeliveryState } from "./channels";
@@ -128,6 +130,17 @@ function ChannelRowImpl({
                  every unrouted alert goes, and that should be visible at the
                  place the button is pressed. */
               <StateChip className="inv-paused-chip">Default</StateChip>
+            )}
+            {channel.quietHours !== null && (
+              /* Configuration again, so the dashed chip. It is on the row
+                 because it answers "why did nobody hear about this at 03:00"
+                 at the place someone goes to look. The title carries the
+                 timezone the chip has no room for. */
+              <span title={describeQuietHours(channel.quietHours)}>
+                <StateChip className="inv-paused-chip">
+                  {quietChip(channel.quietHours)}
+                </StateChip>
+              </span>
             )}
             {!channel.enabled && (
               /* A configuration state, not a health state, so no status
@@ -296,6 +309,9 @@ function ChannelRowImpl({
             and a reader moving item by item through a list does not. */}
         {typeLabel(channel.type)} channel, delivering to {destination}.{" "}
         {channel.isDefault ? "The default channel. " : ""}
+        {channel.quietHours !== null
+          ? `${describeQuietHours(channel.quietHours).replace(/^q/, "Q")}. `
+          : ""}
         {channel.enabled ? "Enabled" : "Disabled"}. {deliveryWord}.
       </span>
     </li>

@@ -10,7 +10,7 @@
 
 import { apiFetch, apiRequest } from "../api/http";
 import { channelsFromPayload, channelFromApi } from "./channels";
-import type { ApiChannel, Channel } from "./channels";
+import type { ApiChannel, Channel, QuietHours } from "./channels";
 
 export const channelsQueryKey = ["notifications", "channels"] as const;
 
@@ -107,6 +107,30 @@ export async function setDefaultChannel(
 ): Promise<void> {
   await apiRequest(`/api/v1/channels/${encodeURIComponent(id)}/default`, {
     method: isDefault ? "PUT" : "DELETE",
+    signal,
+  });
+}
+
+/**
+ * Sets, replaces or removes a channel's quiet hours.
+ *
+ * A separate resource from the channel on the server, so a separate request
+ * here. Null clears the window, and the server then releases anything it was
+ * holding at once.
+ */
+export async function setQuietHours(
+  id: string,
+  quiet: QuietHours | null,
+  signal?: AbortSignal,
+): Promise<void> {
+  await apiRequest(`/api/v1/channels/${encodeURIComponent(id)}/quiet-hours`, {
+    method: quiet === null ? "DELETE" : "PUT",
+    ...(quiet === null
+      ? {}
+      : {
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(quiet),
+        }),
     signal,
   });
 }

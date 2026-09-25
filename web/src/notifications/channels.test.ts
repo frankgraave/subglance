@@ -4,9 +4,11 @@ import {
   channelsFromPayload,
   describeDelivery,
   describeDestination,
+  describeQuietHours,
   fieldsFor,
   hasSecret,
   isMasked,
+  quietChip,
   typeLabel,
 } from "./channels";
 
@@ -30,6 +32,39 @@ function make(over: Record<string, unknown> = {}) {
     ...over,
   });
 }
+
+describe("quiet hours", () => {
+  const night = {
+    start: "23:00",
+    end: "07:00",
+    timezone: "Europe/Amsterdam",
+    during: "hold",
+  };
+
+  it("reads a channel without the field as having no window", () => {
+    // A server from before quiet hours holds nothing back.
+    expect(make().quietHours).toBeNull();
+    expect(make({ quiet_hours: null }).quietHours).toBeNull();
+    expect(make({ quiet_hours: night }).quietHours).toEqual(night);
+  });
+
+  it("always names the mode, so drop never passes for hold", () => {
+    expect(describeQuietHours(night)).toBe(
+      "quiet 23:00–07:00 Europe/Amsterdam, alerts held for one digest",
+    );
+    expect(describeQuietHours({ ...night, during: "drop" })).toMatch(/dropped$/);
+    expect(quietChip(night)).toBe("Quiet 23:00–07:00, held");
+    expect(quietChip({ ...night, during: "drop" })).toBe(
+      "Quiet 23:00–07:00, dropped",
+    );
+  });
+
+  it("does not guess at a mode it does not know", () => {
+    const later = { ...night, during: "page" };
+    expect(describeQuietHours(later)).toMatch(/unknown handling "page"/);
+    expect(quietChip(later)).toMatch(/unknown$/);
+  });
+});
 
 describe("isMasked", () => {
   it("recognises the shape maskValue produces", () => {

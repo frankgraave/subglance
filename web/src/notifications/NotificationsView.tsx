@@ -13,6 +13,7 @@ import { typeLabel, CHANNEL_TYPES } from "./channels";
 import type { Channel, DeliveryState } from "./channels";
 import { DELIVERY_UNKNOWN } from "./channels";
 import type { ChannelInput } from "./channelsApi";
+import type { QuietHours } from "./channels";
 
 /** Shared empty default: a new Set per render would break memoisation. */
 const EMPTY_TOGGLING: ReadonlySet<string> = new Set();
@@ -22,8 +23,9 @@ const EMPTY_TOGGLING: ReadonlySet<string> = new Set();
  *
  * The page answers which destinations exist, whether they work, how to change
  * them, and — since SUB-124 — where a monitor with no channels of its own
- * sends its alerts. The approved mockup also draws quiet hours, severity
- * floors and a delivery log. Those have no backend yet, and a switch that
+ * sends its alerts, and when each channel stays quiet. The approved mockup
+ * also draws severity floors and a delivery log. Those have no backend yet,
+ * and a switch that
  * looks like it suppresses alerts at 03:00 while changing nothing is the most
  * dangerous shape of dead UI this product could ship. So they are absent
  * rather than disabled: a disabled control is a feature that looks
@@ -60,8 +62,15 @@ export type NotificationsViewProps = {
   savingDefault?: boolean;
   /** A refused default change, in the server's own words. */
   defaultError?: string | null;
-  /** Saves a new or edited channel. Resolves when the server accepted it. */
-  onSave?: (id: string | null, input: ChannelInput) => Promise<void>;
+  /**
+   * Saves a new or edited channel, and its quiet hours when `quiet` is not
+   * undefined. Resolves when the server accepted it.
+   */
+  onSave?: (
+    id: string | null,
+    input: ChannelInput,
+    quiet?: QuietHours | null,
+  ) => Promise<void>;
   /** True when the URL asked for the create form: /notifications/new. */
   createOpen?: boolean;
   onCreateOpenChange?: (open: boolean) => void;
@@ -484,8 +493,8 @@ export function NotificationsView({
       >
         {onSave !== undefined && (
           <ChannelForm
-            onSave={async (input) => {
-              await onSave(null, input);
+            onSave={async (input, quiet) => {
+              await onSave(null, input, quiet);
               onCreateOpenChange?.(false);
             }}
             onCancel={() => onCreateOpenChange?.(false)}
@@ -505,8 +514,8 @@ export function NotificationsView({
                keeping state from the previous open. */
             key={`${editing.id}:${editing.name}`}
             channel={editing}
-            onSave={async (input) => {
-              await onSave(editing.id, input);
+            onSave={async (input, quiet) => {
+              await onSave(editing.id, input, quiet);
               setEditingId(null);
             }}
             onCancel={() => setEditingId(null)}
@@ -563,10 +572,10 @@ export function NotificationsView({
       <aside className="nt-scope" aria-label="Not on this page">
         <p className="nt-scope-legend">Not on this page</p>
         <p className="nt-note">
-          Tag routing rules, quiet hours, severity floors and the delivery log
-          are not here. They have no backend today (SUB-124), and a quiet-hours
-          switch that silently changes nothing is worse than no switch at all.
-          Which monitors use a channel is set on the monitor.
+          Tag routing rules, severity floors and the delivery log are not here.
+          They have no backend today (SUB-124), and a switch that silently
+          changes nothing is worse than no switch at all. Which monitors use a
+          channel is set on the monitor; quiet hours are set on the channel.
         </p>
       </aside>
     </section>
