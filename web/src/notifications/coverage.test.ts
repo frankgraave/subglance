@@ -7,6 +7,7 @@ import {
   coverageOf,
   describeCoverage,
   silentCount,
+  unconfirmedCount,
 } from "./coverage";
 
 /*
@@ -127,5 +128,25 @@ describe("coverageList", () => {
     );
     expect(list.map((c) => c.name)).toEqual(["z-silent", "a-covered", "b-paused"]);
     expect(silentCount(list)).toBe(1);
+  });
+});
+
+describe("unconfirmedCount", () => {
+  it("counts the active monitors that are neither silent nor confirmed to reach anyone", () => {
+    const def = channelFromApi({ id: 3, name: "Ops", type: "email", enabled: true, is_default: true });
+    const list = coverageList(
+      [
+        monitor({ id: 1, name: "covered", channels: [{ id: 3, name: "Ops" }] }),
+        // The two lists disagree on the default: route unknown.
+        monitor({ id: 2, name: "disagree" }),
+        // Attached to a channel the channel list does not know yet.
+        monitor({ id: 3, name: "stale", channels: [{ id: 42, name: "New" }] }),
+        // Unconfirmed too, but paused: pausing is not a gap in coverage.
+        monitor({ id: 4, name: "paused", enabled: false, channels: undefined }),
+      ],
+      [def],
+    );
+    expect(silentCount(list)).toBe(0);
+    expect(unconfirmedCount(list)).toBe(2);
   });
 });

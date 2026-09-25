@@ -104,6 +104,22 @@ export function silentCount(list: readonly Coverage[]): number {
 }
 
 /**
+ * The number of active monitors that are not silent but not confirmed to
+ * reach anyone either: their attachments could not be read, or every channel
+ * they route to is missing from the channel list. "Every active monitor
+ * reaches a channel" is a claim, and these are the monitors it cannot yet be
+ * made for.
+ */
+export function unconfirmedCount(list: readonly Coverage[]): number {
+  return list.filter(
+    (c) =>
+      !c.paused &&
+      !c.silent &&
+      (c.route === "unknown" || !c.recipients.some((r) => r.enabled === true)),
+  ).length;
+}
+
+/**
  * The words in a row's recipient cell.
  *
  * A silent row says why, because "nobody" alone does not tell you what to

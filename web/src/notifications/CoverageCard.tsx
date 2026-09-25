@@ -3,7 +3,12 @@ import { StateChip } from "../components/Chip";
 import { IconBell } from "../components/icons";
 import type { InventoryMonitor } from "../monitors/inventory";
 import type { Channel } from "./channels";
-import { coverageList, describeCoverage, silentCount } from "./coverage";
+import {
+  coverageList,
+  describeCoverage,
+  silentCount,
+  unconfirmedCount,
+} from "./coverage";
 import type { Coverage } from "./coverage";
 
 /**
@@ -51,6 +56,7 @@ export function CoverageCard({
   const silent = list.filter((c) => c.silent && !c.paused);
   const rest = list.filter((c) => !(c.silent && !c.paused));
   const count = silentCount(list);
+  const unconfirmed = unconfirmedCount(list);
 
   return (
     <Card
@@ -63,12 +69,23 @@ export function CoverageCard({
         loading || failed ? "Who hears what" : `Who hears what (${list.length})`
       }
       headingLevel={2}
+      /* A polite live region, so a screen reader hears the finding change
+         when the inventory poll moves the count. Only the sentence: the
+         monitor list below stays out of it, or every poll would read it all
+         out again. */
       note={
-        loading || failed
-          ? undefined
-          : count === 0
-            ? "Every active monitor reaches at least one channel."
-            : `${count} active ${count === 1 ? "monitor alerts" : "monitors alert"} nobody.`
+        loading || failed ? undefined : (
+          <span role="status">
+            {count > 0
+              ? `${count} active ${count === 1 ? "monitor alerts" : "monitors alert"} nobody.`
+              : unconfirmed > 0
+                ? /* Not the all-clear: for these the lists have not settled
+                     enough to say, and "every monitor is covered" is only
+                     worth something when it has been checked. */
+                  `No active monitor is known to alert nobody, but ${unconfirmed} could not be checked yet.`
+                : "Every active monitor reaches at least one channel."}
+          </span>
+        )
       }
     >
       {loading || failed ? (

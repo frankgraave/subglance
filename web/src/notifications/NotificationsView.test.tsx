@@ -869,6 +869,39 @@ describe("who hears what", () => {
     expect(screen.getByText("On-call Slack (default)")).toBeTruthy();
   });
 
+  it("does not give the all-clear while a monitor's coverage is unknown", () => {
+    // The channel list knows a default the inventory does not carry yet, so
+    // this monitor's route is unknown: neither a finding nor confirmed.
+    render(
+      <NotificationsView
+        channels={[make({ is_default: true })]}
+        monitors={[mon(1, "billing")]}
+      />,
+    );
+    expect(
+      screen.queryByText("Every active monitor reaches at least one channel."),
+    ).toBeNull();
+    expect(
+      screen.getByText(
+        "No active monitor is known to alert nobody, but 1 could not be checked yet.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("announces the coverage sentence, not the monitor list", () => {
+    render(
+      <NotificationsView
+        channels={[make({ enabled: false })]}
+        monitors={[mon(1, "billing", { channels: [{ id: 1, name: "On-call Slack" }] })]}
+      />,
+    );
+    const status = screen
+      .getAllByRole("status")
+      .find((el) => el.textContent === "1 active monitor alerts nobody.");
+    expect(status).toBeTruthy();
+    expect(within(status!).queryByText("billing")).toBeNull();
+  });
+
   it("does not turn a failed monitor list into 'nobody hears'", () => {
     render(<NotificationsView channels={[make()]} monitors={null} monitorsFailed />);
     expect(screen.getByText(/could not be loaded, so who hears/i)).toBeTruthy();
