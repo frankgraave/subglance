@@ -105,11 +105,20 @@ with the text:
 I have read the CLA and I agree.
 ```
 
-That comment, made from your account, is the record of your acceptance. It
-covers the version of this agreement that is current at the time, and every
-Contribution you make afterwards. If a later version changes your rights or
-obligations, you will be asked to accept it before your next Contribution is
-merged.
+If you accept on behalf of a legal entity, the comment names that entity and
+states that you are authorised to accept on its behalf:
+
+```
+I have read the CLA and I agree on behalf of <entity name>, which I am
+authorised to bind.
+```
+
+That comment, made from your account, is the record of your acceptance, and of
+the entity's where one is named. It covers the version of this agreement that
+is current at the time, every Contribution you submitted before accepting it,
+and every Contribution you make afterwards. If a later version changes your
+rights or obligations, you will be asked to accept it before your next
+Contribution is merged.
 
 ## 10. Governing law
 
