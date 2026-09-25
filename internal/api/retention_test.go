@@ -54,6 +54,33 @@ func TestRetentionSettingsRoundTrip(t *testing.T) {
 	}
 }
 
+// Once the windows are committed, a failure to measure the tables must not
+// turn the answer into a 500: the client would report a save that happened
+// as one that failed.
+func TestRetentionSaveSurvivesAFailedMeasurement(t *testing.T) {
+	srv, db := testServerWithDB(t)
+	// With the table gone from under its name, measuring fails while the
+	// settings themselves can still be written.
+	if _, err := db.Writer.Exec(`ALTER TABLE heartbeat_responses RENAME TO heartbeat_responses_gone`); err != nil {
+		t.Fatalf("rename table: %v", err)
+	}
+	if rec := doJSON(t, srv, http.MethodGet, "/api/v1/settings/retention", ""); rec.Code != http.StatusInternalServerError {
+		t.Fatalf("GET = %d, want the measurement to fail: %s", rec.Code, rec.Body.String())
+	}
+
+	rec := doJSON(t, srv, http.MethodPut, "/api/v1/settings/retention", `{"raw_seconds":604800}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT = %d: %s", rec.Code, rec.Body.String())
+	}
+	got := decodeRetention(t, rec)
+	if got.Raw.Seconds != 604800 || got.Raw.Source != "database" {
+		t.Errorf("raw = %+v, want the saved 7 days", got.Raw)
+	}
+	if got.Tables == nil || len(got.Tables) != 0 {
+		t.Errorf("tables = %#v, want an empty list", got.Tables)
+	}
+}
+
 func TestRetentionSettingsRefuseInvalidWindows(t *testing.T) {
 	srv, _ := testServerWithDB(t)
 	tests := []struct {

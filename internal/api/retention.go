@@ -61,33 +61,51 @@ func windowJSON(w store.RetentionWindow) retentionWindowJSON {
 // what the tables they govern cost today.
 func (s *Server) handleGetRetention(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, no-store")
-	eff, err := s.db.ResolveRetention(r.Context(), s.retentionPins)
+	resp, err := s.retentionWindows(r)
 	if err != nil {
 		s.log.Error("resolve retention", "error", err)
 		writeError(w, http.StatusInternalServerError, "could not read retention settings")
 		return
 	}
-	tables, err := s.db.RetentionTables(r.Context())
-	if err != nil {
+	if resp.Tables, err = s.retentionTables(r); err != nil {
 		s.log.Error("measure retention tables", "error", err)
 		writeError(w, http.StatusInternalServerError, "could not measure the database")
 		return
 	}
-	resp := retentionResponse{
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// retentionWindows is the policy half of the response: the windows in force
+// and where each came from, with no table measurements yet.
+func (s *Server) retentionWindows(r *http.Request) (retentionResponse, error) {
+	eff, err := s.db.ResolveRetention(r.Context(), s.retentionPins)
+	if err != nil {
+		return retentionResponse{}, err
+	}
+	return retentionResponse{
 		Raw:               windowJSON(eff.Raw),
 		Rollup:            windowJSON(eff.Rollup),
 		MinimumRawSeconds: seconds(store.MinRawRetention),
-		Tables:            make([]retentionTableJSON, 0, len(tables)),
+		Tables:            []retentionTableJSON{},
+	}, nil
+}
+
+// retentionTables measures the tables the windows govern.
+func (s *Server) retentionTables(r *http.Request) ([]retentionTableJSON, error) {
+	tables, err := s.db.RetentionTables(r.Context())
+	if err != nil {
+		return nil, err
 	}
+	out := make([]retentionTableJSON, 0, len(tables))
 	for _, t := range tables {
 		row := retentionTableJSON{Name: t.Name, Rows: t.Rows, RowsPerDay: t.RowsPerDay}
 		if t.Bytes >= 0 {
 			b := t.Bytes
 			row.Bytes = &b
 		}
-		resp.Tables = append(resp.Tables, row)
+		out = append(out, row)
 	}
-	writeJSON(w, http.StatusOK, resp)
+	return out, nil
 }
 
 // retentionRequest is the body of PUT /api/v1/settings/retention. An absent
@@ -141,7 +159,23 @@ func (s *Server) handleSetRetention(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.log.Info("retention settings changed", "raw_seconds", req.RawSeconds, "rollup_seconds", req.RollupSeconds)
-	s.handleGetRetention(w, r)
+
+	// The windows are committed at this point, so nothing below may answer
+	// with an error: a 500 would tell the client the save failed when it did
+	// not. What cannot be read back is left out instead.
+	w.Header().Set("Cache-Control", "private, no-store")
+	resp, err := s.retentionWindows(r)
+	if err != nil {
+		s.log.Error("resolve retention after save", "error", err)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if tables, err := s.retentionTables(r); err != nil {
+		s.log.Error("measure retention tables after save", "error", err)
+	} else {
+		resp.Tables = tables
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // retentionInput checks one window of a PUT. A window set by a flag is a

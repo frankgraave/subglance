@@ -66,12 +66,17 @@ export async function previewRetention(raw: number, rollup: number, signal?: Abo
   return (await res.json()) as RetentionImpact;
 }
 
-/** Saves only the windows that are not pinned; a pinned one would be refused with a 409. */
-export async function saveRetention(body: { raw_seconds?: number; rollup_seconds?: number }): Promise<Retention> {
+/**
+ * Saves only the windows that are not pinned; a pinned one would be refused with a 409.
+ * Resolves to null when the save succeeded but the server could not read the windows
+ * back (204), so the caller refetches instead of reporting a failure.
+ */
+export async function saveRetention(body: { raw_seconds?: number; rollup_seconds?: number }): Promise<Retention | null> {
   const res = await apiRequest("/api/v1/settings/retention", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+  if (res.status === 204) return null;
   return (await res.json()) as Retention;
 }

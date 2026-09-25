@@ -47,6 +47,28 @@ it("says what a shorter window removes before it is saved", async () => {
   expect(fetcher.mock.calls.some(([url]) => String(url).includes("raw_seconds=604800"))).toBe(true);
 });
 
+it("does not save a shorter window until its preview has answered", async () => {
+  let answer: (response: Response) => void = () => {};
+  mount(defaultRetention);
+  vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string) => url.includes("/preview")
+    ? new Promise<Response>((resolve) => { answer = resolve; })
+    : Promise.resolve(json(defaultRetention))));
+  fireEvent.change(await screen.findByLabelText("Keep raw heartbeats, in days"), { target: { value: "7" } });
+  expect(await screen.findByText("Counting what this change removes…")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Save retention" }).matches(":disabled")).toBe(true);
+  answer(json({ error: "unavailable" }, 500));
+  expect(await screen.findByText("Could not count what this change removes.")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Save retention" }).matches(":disabled")).toBe(true);
+});
+
+it("reports a save the server could not read back as saved", async () => {
+  mount(defaultRetention, true, (_url, init) => init?.method === "PUT" ? new Response(null, { status: 204 }) : undefined);
+  fireEvent.change(await screen.findByLabelText("Keep raw heartbeats, in days"), { target: { value: "60" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save retention" }));
+  expect(await screen.findByText(/Saved\. The new windows apply from the next daily pass\./)).toBeTruthy();
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
 it("does not ask what a longer window removes", async () => {
   const fetcher = mount(defaultRetention);
   fireEvent.change(await screen.findByLabelText("Keep raw heartbeats, in days"), { target: { value: "60" } });
@@ -75,6 +97,8 @@ it("places a refusal under the window the server blamed", async () => {
   const forever = await screen.findAllByLabelText("Forever");
   fireEvent.click(forever[1]);
   fireEvent.change(screen.getByLabelText("Keep hourly summaries and resolved incidents, in days"), { target: { value: "7" } });
+  // A shorter window is saved only once its preview has answered.
+  await screen.findByText(/fold 1,234 raw heartbeats/);
   fireEvent.click(screen.getByRole("button", { name: "Save retention" }));
   const alert = await screen.findByRole("alert");
   expect(alert.textContent).toMatch(/at least as long as raw heartbeats/);

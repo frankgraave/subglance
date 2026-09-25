@@ -341,11 +341,17 @@ paths:
                 rollup_seconds: { type: integer, minimum: 0, maximum: 3153600000 }
       responses:
         '200':
-          description: The windows now in force, in the same shape as GET.
+          description: |
+            Saved. The windows now in force, in the same shape as GET. The
+            windows are committed before the tables are measured, so if the
+            measurement fails `tables` is empty rather than the save being
+            reported as failed.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Retention'
+        '204':
+          description: Saved, but the windows now in force could not be read back. Read them again with GET.
         '400':
           description: Malformed JSON, no window given, or a window that breaks a rule above. `field` names the window.
           content:

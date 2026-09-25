@@ -117,10 +117,13 @@ function RetentionForm({ data, canAdmin, saved, setSaved }: {
     enabled: canAdmin && changed && shorter,
     retry: false,
   });
+  // A shorter window can delete rows on the next pass, so it is not saved
+  // until the page has been able to say how many.
+  const previewReady = !shorter || (!preview.isError && preview.data !== undefined);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!valid || saving) return;
+    if (!valid || saving || !previewReady) return;
     const body: { raw_seconds?: number; rollup_seconds?: number } = {};
     if (data.raw.source !== "pinned") body.raw_seconds = rawSeconds;
     if (data.rollup.source !== "pinned") body.rollup_seconds = rollupSeconds;
@@ -128,7 +131,11 @@ function RetentionForm({ data, canAdmin, saved, setSaved }: {
     setRejection(null);
     setSaved(false);
     try {
-      client.setQueryData(retentionKey, await saveRetention(body));
+      const next = await saveRetention(body);
+      if (next) client.setQueryData(retentionKey, next);
+      // The windows are saved either way; the measurements that did not come
+      // back with them are read again rather than shown as an empty table.
+      if (!next || next.tables.length === 0) void client.invalidateQueries({ queryKey: retentionKey });
       setSaved(true);
     } catch (error) {
       setRejection(error instanceof ApiError
@@ -163,7 +170,7 @@ function RetentionForm({ data, canAdmin, saved, setSaved }: {
       {rejection && !rejection.field && <p className="auth-error" role="alert">{rejection.message}</p>}
       {canAdmin && (
         <div>
-          <button className="auth-submit" type="submit" disabled={!changed || !valid || saving}>
+          <button className="auth-submit" type="submit" disabled={!changed || !valid || saving || !previewReady}>
             {saving ? "Saving…" : "Save retention"}
           </button>
         </div>
