@@ -117,8 +117,8 @@ That comment, made from your account, is the record of your acceptance, and of
 the entity's where one is named. It covers the version of this agreement that
 is current at the time, every Contribution you submitted before accepting it,
 and every Contribution you make afterwards. If a later version changes your
-rights or obligations, you will be asked to accept it before your next
-Contribution is merged.
+rights or obligations, the Maintainer will not merge your next Contribution
+until you accept that version.
 
 ## 10. Governing law
 
