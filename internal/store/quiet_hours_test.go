@@ -190,3 +190,35 @@ func TestQuietHoursEndAfterAcrossDSTEdges(t *testing.T) {
 			firstQuarterPast.In(ny), got.In(ny))
 	}
 }
+
+// TestQuietHoursEndAfterHandlesMidnightGap covers a gap that starts at
+// midnight, so the skipped stretch begins on a different day than the last
+// wall-clock reading before it, and a gap that the end does not fall into.
+func TestQuietHoursEndAfterHandlesMidnightGap(t *testing.T) {
+	sp, err := time.LoadLocation("America/Sao_Paulo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	syd, err := time.LoadLocation("Australia/Sydney")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// São Paulo sprang forward from 00:00 to 01:00 on 4 November 2018, so
+	// 00:30 did not exist; the window ends at 01:00, the first valid instant.
+	saoPaulo := QuietHours{Start: "23:00", End: "00:30", Timezone: "America/Sao_Paulo", During: QuietHold}
+	at := time.Date(2018, 11, 3, 23, 30, 0, 0, sp)
+	want := time.Date(2018, 11, 4, 1, 0, 0, 0, sp)
+	if got := saoPaulo.EndAfter(at); !got.Equal(want) {
+		t.Errorf("São Paulo midnight gap: EndAfter(%s) = %s, want %s", at, got, want)
+	}
+
+	// An end earlier in the day than the gap is not inside it: from 01:00 on
+	// Sydney's changeover day, 00:30 next comes round the following night.
+	early := QuietHours{Start: "22:00", End: "00:30", Timezone: "Australia/Sydney", During: QuietHold}
+	at = time.Date(2026, 10, 4, 1, 0, 0, 0, syd)
+	want = time.Date(2026, 10, 5, 0, 30, 0, 0, syd)
+	if got := early.EndAfter(at); !got.Equal(want) {
+		t.Errorf("Sydney gap after the end: EndAfter(%s) = %s, want %s", at, got.In(syd), want)
+	}
+}
