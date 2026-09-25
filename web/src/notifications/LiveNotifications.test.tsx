@@ -462,5 +462,35 @@ describe("who hears what", () => {
       screen.getByText("nobody: no channels of its own and no default"),
     ).toBeTruthy();
     expect(monitors).toHaveBeenCalled();
+    // DESIGN.md §8.3: a card framing a list is titled `Name (N)`.
+    expect(
+      screen.getByRole("heading", { name: "Who hears what (1)" }),
+    ).toBeTruthy();
+  });
+
+  it("marks a paused monitor's row so it can carry the paused edge", async () => {
+    const monitors = vi.fn().mockResolvedValue([
+      inventoryFromApi({
+        id: 6,
+        name: "legacy",
+        type: "http",
+        target: "https://legacy.example.com",
+        interval_s: 60,
+        timeout_s: 10,
+        enabled: false,
+        status: "up",
+        created_at: "2026-09-01T10:00:00Z",
+        channels: [],
+      }),
+    ]);
+    render(
+      <LiveNotificationsRoot
+        client={client()}
+        list={async () => [make()]}
+        monitors={monitors}
+      />,
+    );
+    const name = await screen.findByText("legacy");
+    expect(name.closest("li")?.getAttribute("data-paused")).toBe("true");
   });
 });

@@ -97,6 +97,16 @@ describe("coverageOf", () => {
     expect(c.silent).toBe(false);
   });
 
+  it("claims nothing while the channel list knows a default the inventory does not", () => {
+    // Polled separately: a default set a moment ago is on the channel list
+    // before the inventory carries it, and "nobody" would be a false finding.
+    const def = channelFromApi({ id: 3, name: "Ops", type: "email", enabled: true, is_default: true });
+    const c = coverageOf(monitor(), [def]);
+    expect(c.route).toBe("unknown");
+    expect(c.silent).toBe(false);
+    expect(describeCoverage(c)).toBe("not loaded");
+  });
+
   it("claims nothing when the monitor's attachments could not be read", () => {
     const c = coverageOf(monitor({ channels: undefined }), [ops]);
     expect(c.route).toBe("unknown");

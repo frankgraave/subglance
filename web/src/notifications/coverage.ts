@@ -66,6 +66,13 @@ export function coverageOf(
     route = "default";
     recipients = [lookup(state.fallbackId, state.fallback)];
   } else {
+    // The inventory says there is no default, but the channel list is polled
+    // separately and may already know one was set (or not yet know it was
+    // cleared). Neither list is trustworthy while they disagree, so claim
+    // nothing rather than report a monitor as alerting nobody.
+    if (channels.some((c) => c.isDefault)) {
+      return { ...base, route: "unknown", recipients: [], silent: false };
+    }
     route = "none";
     recipients = [];
   }

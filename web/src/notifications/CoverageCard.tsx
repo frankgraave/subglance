@@ -1,5 +1,6 @@
 import { Card } from "../components/Card";
 import { StateChip } from "../components/Chip";
+import { IconBell } from "../components/icons";
 import type { InventoryMonitor } from "../monitors/inventory";
 import type { Channel } from "./channels";
 import { coverageList, describeCoverage, silentCount } from "./coverage";
@@ -54,7 +55,13 @@ export function CoverageCard({
   return (
     <Card
       className="nt-card"
-      title="Who hears what"
+      icon={<IconBell />}
+      /* `Name (N)` (DESIGN.md §8.3), N being every monitor the card frames.
+         While loading or failed the bare title, so a 0 is never read as a
+         result — the same rule as the Channels card. */
+      title={
+        loading || failed ? "Who hears what" : `Who hears what (${list.length})`
+      }
       headingLevel={2}
       note={
         loading || failed
@@ -105,7 +112,11 @@ export function CoverageCard({
 function CoverageRow({ coverage }: { coverage: Coverage }) {
   const text = describeCoverage(coverage);
   return (
-    <li className="nt-cov-row" data-silent={coverage.silent && !coverage.paused}>
+    <li
+      className="nt-cov-row"
+      data-silent={coverage.silent && !coverage.paused}
+      data-paused={coverage.paused}
+    >
       <span className="nt-cov-name" title={coverage.name}>
         {coverage.name}
       </span>

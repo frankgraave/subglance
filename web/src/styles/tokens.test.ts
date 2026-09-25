@@ -2029,6 +2029,14 @@ const statusBorders = new Set<string>([
   'web/src/monitors/monitors.css | .mon-line[data-status="paused"] | border-left: var(--size-status-rail) dotted var(--ink-3)',
   'web/src/monitors/monitors.css | .mon-line[data-status="waiting"] | border-left: var(--size-status-rail) solid var(--idle)',
   "web/src/monitors/monitors.css | .push-reveal-warn | border-left: var(--size-status-rail) solid var(--warn)",
+  /*
+   * The coverage list on the notifications page marks a paused monitor with
+   * the same dotted --ink-3 rail as the monitor rows, cards and lines
+   * (DESIGN.md §2.3). Every row reserves the rail transparently so the paused
+   * one does not sit two pixels right of its neighbours.
+   */
+  "web/src/notifications/notifications.css | .nt-cov-row | border-left: var(--size-status-rail) solid transparent",
+  'web/src/notifications/notifications.css | .nt-cov-row[data-paused="true"] | border-left-color: var(--ink-3)',
   'web/src/monitors/monitors.css | .add-input[aria-invalid="true"] | border-color: var(--down)',
   'web/src/monitors/monitors.css | .add-input[aria-invalid="true"]:focus | border-color: var(--down)',
   'web/src/auth/auth.css | .auth-input[aria-invalid="true"] | border-color: var(--down)',
