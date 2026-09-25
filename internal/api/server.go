@@ -109,6 +109,11 @@ type Server struct {
 	// default. It exists so a test can assert the ping behaviour in
 	// milliseconds instead of sitting out twenty real seconds.
 	streamPing time.Duration
+
+	// retentionPins are the retention windows fixed by a flag or an
+	// environment variable at startup. The settings page shows them
+	// read-only and refuses to store a value over them.
+	retentionPins store.RetentionPins
 }
 
 // pingInterval is how often the live stream emits a `ping` event.
@@ -290,6 +295,8 @@ func (s *Server) routes() []route {
 
 		{http.MethodGet, "/api/v1/auth/me", accessRead},
 		{http.MethodGet, "/api/v1/watchdog", accessRead},
+		{http.MethodGet, "/api/v1/settings/retention", accessRead},
+		{http.MethodGet, "/api/v1/settings/retention/preview", accessRead},
 		{http.MethodPost, "/api/v1/auth/password", accessRead},
 
 		// Logout is authenticated rather than public, which reads oddly for
@@ -379,6 +386,11 @@ func (s *Server) routes() []route {
 		{http.MethodPost, "/api/v1/users", accessAdmin},
 		{http.MethodDelete, "/api/v1/users/{id}", accessAdmin},
 
+		// Retention decides what history survives, for every user of the
+		// instance at once, and a shorter window deletes rows on the next
+		// pass. That is an administrator's call, not an editor's.
+		{http.MethodPut, "/api/v1/settings/retention", accessAdmin},
+
 		// The embedded dashboard, and the catch-all for everything that
 		// matched no pattern above.
 		//
@@ -418,6 +430,12 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 		return s.handleMe
 	case "GET /api/v1/watchdog":
 		return s.handleWatchdog
+	case "GET /api/v1/settings/retention":
+		return s.handleGetRetention
+	case "GET /api/v1/settings/retention/preview":
+		return s.handlePreviewRetention
+	case "PUT /api/v1/settings/retention":
+		return s.handleSetRetention
 	case "POST /api/v1/auth/password":
 		return s.handleChangePassword
 

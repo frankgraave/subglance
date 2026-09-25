@@ -215,6 +215,9 @@ func run(args []string) error {
 		// The same runner that records checks reports the counters, so
 		// /metrics cannot disagree with what actually happened.
 		WithMetrics(runner).
+		// The same pins the maintenance loop resolves against, so the
+		// settings page shows exactly the windows a pass will apply.
+		WithRetentionPins(cfg.RetentionPins()).
 		// The same guard the notifier delivers through, so the save-time
 		// refusal and the delivery-time refusal cannot disagree about
 		// what --allow-private-targets permits. A channel the operator
@@ -304,10 +307,7 @@ func run(args []string) error {
 
 	// Raw heartbeats are the fastest-growing table in the product. Rolling
 	// them up keeps history unlimited at a bounded cost.
-	go rollupHeartbeats(ctx, db, log, runner, store.RetentionPolicy{
-		Raw:    cfg.RawRetention,
-		Rollup: cfg.RollupRetention,
-	})
+	go rollupHeartbeats(ctx, db, log, runner, cfg.RetentionPins())
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -483,7 +483,10 @@ func displayAddr(addr string) string {
 // instance that is restarted more often than the interval would otherwise
 // never roll up at all, and that is exactly the instance whose database grows
 // without anyone noticing.
-func rollupHeartbeats(ctx context.Context, db *store.DB, log *slog.Logger, runner *monitor.Runner, policy store.RetentionPolicy) {
+//
+// The policy is resolved again on every pass rather than once at startup, so
+// a window changed on the settings page takes effect without a restart.
+func rollupHeartbeats(ctx context.Context, db *store.DB, log *slog.Logger, runner *monitor.Runner, pins store.RetentionPins) {
 	const interval = 24 * time.Hour
 
 	// Space is only actually returned to the filesystem when the database is
@@ -503,7 +506,13 @@ func rollupHeartbeats(ctx context.Context, db *store.DB, log *slog.Logger, runne
 	}
 
 	run := func() {
-		res, err := db.ApplyRetention(ctx, policy)
+		eff, err := db.ResolveRetention(ctx, pins)
+		if err != nil {
+			runner.RecordRollupFailure()
+			log.Error("resolve retention policy", "error", err)
+			return
+		}
+		res, err := db.ApplyRetention(ctx, eff.Policy())
 		if err != nil {
 			// A failed pass costs disk, not correctness: the rows are still
 			// there and the next pass picks them up. It is counted as well as

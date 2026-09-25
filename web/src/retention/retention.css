@@ -1,0 +1,38 @@
+.retention-card .panel {
+  display: grid;
+  gap: var(--space-4);
+  color: var(--ink);
+}
+.retention-card p { margin: 0; }
+.retention-tables {
+  border-collapse: collapse;
+  text-align: right;
+}
+.retention-tables caption { text-align: left; }
+.retention-tables th,
+.retention-tables td { padding: var(--space-1) var(--space-3) var(--space-1) 0; }
+.retention-tables th[scope="row"],
+.retention-tables th:first-child { text-align: left; font-weight: var(--weight-plain); }
+.retention-tables td { @apply face-mono; }
+.retention-field {
+  display: grid;
+  gap: var(--space-2);
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+.retention-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+.retention-days { width: var(--size-col-md); }
+/* --ink-2, not the auth screen's --ink-3: on a card panel --ink-3 measures
+   3.05:1, under the 4.5:1 that helper-size text needs. Same role as
+   .watchdog-note. */
+.retention-note {
+  color: var(--ink-2);
+  font-size: var(--type-helper);
+  line-height: var(--lead-prose);
+}

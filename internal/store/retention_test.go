@@ -19,6 +19,11 @@ func seedMonitor(t *testing.T, db *DB, name string) int64 {
 	return m.ID
 }
 
+// testRawWindow is the raw window the rollup tests age their data against.
+// It is fixed here rather than taken from DefaultRawRetention so that these
+// tests keep proving the rollup mechanics when the default moves.
+const testRawWindow = 7 * 24 * time.Hour
+
 func beat(t *testing.T, db *DB, id int64, ts time.Time, ok bool, latency int) {
 	t.Helper()
 	if err := db.RecordHeartbeat(context.Background(), Heartbeat{
@@ -74,7 +79,7 @@ func TestRollupAggregatesAndDeletesOldBeats(t *testing.T) {
 	// Recent beats must survive untouched.
 	beat(t, db, id, now.Add(-time.Hour), true, 50)
 
-	res, err := db.rollupAt(context.Background(), now, DefaultRawRetention)
+	res, err := db.rollupAt(context.Background(), now, testRawWindow)
 	if err != nil {
 		t.Fatalf("rollup: %v", err)
 	}
@@ -114,14 +119,14 @@ func TestRollupMergesIntoExistingBucket(t *testing.T) {
 	ctx := context.Background()
 
 	beat(t, db, id, oldHour.Add(time.Minute), true, 100)
-	if _, err := db.rollupAt(ctx, now, DefaultRawRetention); err != nil {
+	if _, err := db.rollupAt(ctx, now, testRawWindow); err != nil {
 		t.Fatalf("first rollup: %v", err)
 	}
 
 	// A late beat for the same, already-summarised hour.
 	beat(t, db, id, oldHour.Add(2*time.Minute), false, 0)
 	beat(t, db, id, oldHour.Add(3*time.Minute), true, 400)
-	if _, err := db.rollupAt(ctx, now, DefaultRawRetention); err != nil {
+	if _, err := db.rollupAt(ctx, now, testRawWindow); err != nil {
 		t.Fatalf("second rollup: %v", err)
 	}
 
@@ -183,7 +188,7 @@ func TestRollupIsIdempotentOnEmptyRange(t *testing.T) {
 	beat(t, db, id, now.Add(-time.Minute), true, 10)
 
 	for i := range 2 {
-		res, err := db.rollupAt(context.Background(), now, DefaultRawRetention)
+		res, err := db.rollupAt(context.Background(), now, testRawWindow)
 		if err != nil {
 			t.Fatalf("rollup %d: %v", i, err)
 		}
@@ -224,7 +229,7 @@ func TestUptimeSpansRollupBoundary(t *testing.T) {
 		t.Fatalf("before rollup: total %d up %d, want 20/16", before.Total, before.Up)
 	}
 
-	if _, err := db.RollupHeartbeats(ctx, DefaultRawRetention); err != nil {
+	if _, err := db.RollupHeartbeats(ctx, testRawWindow); err != nil {
 		t.Fatalf("rollup: %v", err)
 	}
 	if countRaw(t, db, id) == 20 {

@@ -175,8 +175,20 @@ const budgets = {
    * No runtime dependency: the timezone list comes from the browser's own
    * `Intl.supportedValuesOf`. 141 would leave 370 bytes; 142 leaves 1,394,
    * enough for a fix without tracking today's size. CSS and fonts stay put.
+   *
+   * 142 -> 144 KiB gzip for SUB-28 (the retention card on /settings).
+   * Develop at ff476c3 measures 144,203 bytes of entry JS (Node gzip); this
+   * branch measures 146,329: 2,126 bytes for a card that reads the windows
+   * in force and the four tables' measured size and growth, a form with a
+   * per-window "forever" switch, the estimate beside each field, the
+   * preview that counts what a shorter window removes before it is saved,
+   * pinned-by-flag read-only states, and a shape check on the response so a
+   * malformed window is never shown (and saved back) as "forever". No new
+   * dependency. 143 would leave 103 bytes; 144 leaves 1,127. CSS measures
+   * 16,283 of 16,384 and stays put, because the card reuses the auth form's
+   * field, label, error and button rules rather than declaring its own.
    */
-  js: 142,
+  js: 144,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *
