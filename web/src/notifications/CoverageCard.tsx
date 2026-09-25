@@ -6,6 +6,7 @@ import type { Channel } from "./channels";
 import {
   coverageList,
   describeCoverage,
+  describeRepeat,
   silentCount,
   unconfirmedCount,
 } from "./coverage";
@@ -120,6 +121,20 @@ export function CoverageCard({
               </ul>
             </details>
           )}
+          {/* One mechanism, stated once (SUB-124 and SUB-81). Repeat alerts
+              are a per-monitor setting. Each one is routed when it is sent,
+              so it follows the monitor's current channels and their quiet
+              hours, not a snapshot of where the first alert went. The page
+              offers no second, per-channel
+              repeat switch: two places for one idea is how a silence stops
+              being explainable. */}
+          <p className="nt-note nt-cov-repeats">
+            Repeat alerts for an unacknowledged incident go to the monitor's
+            current channels and follow those channels' quiet hours.
+            Each monitor sets where its repeats start; every gap is four
+            times the last, at most a day, and acknowledging the incident stops
+            them.
+          </p>
         </>
       )}
     </Card>
@@ -128,6 +143,7 @@ export function CoverageCard({
 
 function CoverageRow({ coverage }: { coverage: Coverage }) {
   const text = describeCoverage(coverage);
+  const repeat = describeRepeat(coverage);
   return (
     <li
       className="nt-cov-row"
@@ -149,6 +165,9 @@ function CoverageRow({ coverage }: { coverage: Coverage }) {
           <StateChip>not loaded</StateChip>
         ) : (
           text
+        )}
+        {repeat !== null && (
+          <span className="nt-cov-repeat"> · {repeat}</span>
         )}
       </span>
     </li>
