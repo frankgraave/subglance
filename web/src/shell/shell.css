@@ -388,6 +388,10 @@
   .shell { grid-template-columns: 1fr; }
   .shell-content { padding: var(--space-4) var(--space-4) var(--space-12); }
   .shell-topbar { padding: var(--space-3) var(--space-4); flex-wrap: wrap; }
+  /* On a phone the group may shrink and wrap inside itself again: at 320px
+     it is wider than the whole bar, and its own wrapping is what the phone
+     layout tests pin. `flex: none` above is for the wider bands only. */
+  .shell-topbar-right { flex: 0 1 auto; }
 }
 
 /* ── Account ───────────────────────────────────────────────────────────── */
