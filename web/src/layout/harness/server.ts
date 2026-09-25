@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
 import type { ApiHeartbeat, ApiMonitor } from "../../monitors/types";
 import type { ApiIncident } from "../../monitors/detail";
 import { disabledWatchdog } from "../../watchdog/fixtures";
+import { steadyDiagnostics } from "../../diagnostics/fixtures";
 
 /*
  * `import.meta.url` is .../web/src/layout/harness/server.ts, so the repository
@@ -268,6 +269,14 @@ export async function serveBuild(): Promise<Server> {
      * than a missing stub. The identity is irrelevant to a layout
      * measurement; that a session resolves at all is not.
      */
+    // The session below is an administrator, so /settings asks for the
+    // instance card too. Unstubbed, axe would audit its loading state.
+    if (url.pathname === "/api/v1/diagnostics") {
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify(steadyDiagnostics));
+      return;
+    }
+
     if (url.pathname === "/api/v1/watchdog") {
       res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
       res.end(JSON.stringify(disabledWatchdog));

@@ -175,8 +175,20 @@ const budgets = {
    * No runtime dependency: the timezone list comes from the browser's own
    * `Intl.supportedValuesOf`. 141 would leave 370 bytes; 142 leaves 1,394,
    * enough for a fix without tracking today's size. CSS and fonts stay put.
+   *
+   * 142 -> 145 KiB gzip for SUB-28 (the instance card on /settings).
+   * Develop at ff476c3 measures 144,203 bytes of entry JS (Node gzip); this
+   * branch measures 145,692: 1,489 bytes for a card showing the build, the
+   * process, the database file and the worker pool, a shape check that
+   * refuses a malformed body instead of drawing it as healthy zeros, and the
+   * copy-to-clipboard summary. No new dependency. 143 is not enough on its
+   * own (228 bytes left); 145 also covers the retention card open beside
+   * this branch, whose own measurement is 146,329 against the same base, so
+   * the two together land near 147,818 of 148,480 rather than failing the
+   * build on whichever merges second. CSS measures 16,213 of 16,384 and stays
+   * put: the card reuses the Value, Panel and add-button rules.
    */
-  js: 142,
+  js: 145,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *
