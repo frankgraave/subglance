@@ -59,6 +59,11 @@ async function open(width: number, route: (typeof ROUTES)[number]): Promise<Page
   await page.setViewport({ width, height: 800, deviceScaleFactor: 1 });
   await page.goto(server.url + route.path, { waitUntil: "domcontentloaded" });
   await page.waitForSelector(route.ready, { timeout: 15_000 });
+  // The bundled face is `font-display: block`, so until it arrives the bar is
+  // laid out with the host fallback, whose width differs per machine. At 641px
+  // the preferences row has 3px to spare, so a wider fallback wraps it there.
+  // Measure the typeface the product ships, not whichever face won the race.
+  await page.evaluate(() => document.fonts.ready.then(() => undefined));
   await page.evaluate(
     () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
   );
