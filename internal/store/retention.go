@@ -9,22 +9,30 @@ import (
 // DefaultRawRetention is how long individual heartbeats are kept before they
 // are rolled up into hourly buckets.
 //
-// Seven days is chosen to match the longest window the dashboard draws from
-// raw beats. Anything shorter would make a recent view lose resolution while
-// the user is still looking at it; anything longer only costs disk, since a
-// monitor checked every 60s produces ~1440 rows a day.
-const DefaultRawRetention = 7 * 24 * time.Hour
+// Thirty days, measured rather than guessed: on the demo database a raw
+// heartbeat costs about 75 bytes, so fifty monitors on a 60-second interval
+// write about 5 MB a day and hold about 160 MB at this window. That is small
+// next to the disk of any machine that runs a container, and it keeps full
+// resolution for the whole of the month an operator is most likely to ask
+// about. Anyone on a smaller disk shortens it on the settings page.
+const DefaultRawRetention = 30 * 24 * time.Hour
 
 // DefaultRollupRetention is how long hourly buckets and resolved incidents are
-// kept after the raw beats behind them are gone.
+// kept after the raw beats behind them are gone. Zero means keep forever, and
+// forever is the default.
 //
-// A year is long enough that every "how did this look last quarter" question
-// can still be answered, and it bounds the one part of the database that would
-// otherwise grow forever: 200 monitors produce ~4800 hourly rows a day, which
-// is tens of megabytes a year that nothing ever reclaimed before.
-//
-// Zero means keep forever, for anyone who wants the old unbounded behaviour.
-const DefaultRollupRetention = 365 * 24 * time.Hour
+// An hourly bucket costs about 24 bytes, so fifty monitors add roughly 10 MB a
+// year. Deleting a year-old outage to save that would throw away exactly the
+// history ("how did this look last spring?") that a self-hosted monitor is for,
+// so nothing is deleted unless the operator asks.
+const DefaultRollupRetention time.Duration = 0
+
+// MinRawRetention is the shortest raw window that still leaves every beat of
+// the shortest chart (24 hours) in raw form. Below it the rollup would fold
+// away checks inside an ordinary 24h request, and the bucket that straddles
+// the window's start is not counted, so the chart would silently drop checks
+// it claims to cover.
+const MinRawRetention = 24 * time.Hour
 
 // bucketSize is the rollup granularity. One hour keeps a year of history for
 // one monitor in 8760 rows, which is small enough that uptime queries over
@@ -34,7 +42,7 @@ const bucketSize = time.Hour
 // RetentionPolicy is the full set of windows a maintenance pass honours.
 type RetentionPolicy struct {
 	// Raw is how long individual heartbeats survive before being rolled up.
-	// Zero or negative falls back to DefaultRawRetention.
+	// Zero means keep them forever, which also means nothing is rolled up.
 	Raw time.Duration
 	// Rollup is how long hourly buckets and resolved incidents survive.
 	// Zero or negative means keep them forever.
@@ -281,10 +289,16 @@ func (db *DB) ApplyRetention(ctx context.Context, p RetentionPolicy) (RetentionR
 func (db *DB) applyRetentionAt(ctx context.Context, now time.Time, p RetentionPolicy) (RetentionResult, error) {
 	var res RetentionResult
 
-	rollup, err := db.rollupAt(ctx, now, p.Raw)
-	res.Rollup = rollup
-	if err != nil {
-		return res, err
+	// Raw heartbeats kept forever are never rolled up. RollupHeartbeats
+	// itself treats zero as "use the default", which is right for a caller
+	// that names no window; a policy is different, because it is what the
+	// operator chose, and "forever" has to mean it.
+	if p.Raw > 0 {
+		rollup, err := db.rollupAt(ctx, now, p.Raw)
+		res.Rollup = rollup
+		if err != nil {
+			return res, err
+		}
 	}
 
 	if p.Rollup > 0 {
