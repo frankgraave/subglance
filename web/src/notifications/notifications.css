@@ -353,3 +353,69 @@
    */
   .nt-card .inv-col--type { width: auto; }
 }
+
+/*
+ * Who hears what (SUB-124): one line per monitor, its name and who an alert
+ * from it reaches. A plain list rather than `.inv-row` cards: this is a
+ * read-out with no actions, and eighty bordered rows would outweigh the
+ * channels card it sits under.
+ */
+.nt-cov {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1h);
+  list-style: none;
+}
+
+.nt-cov-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+  /* Every row carries the rail, transparent, so a paused row's edge does not
+     push its name out of line with the rows around it. */
+  border-left: var(--size-status-rail) solid transparent;
+  padding-left: var(--space-2);
+  font-size: var(--type-helper);
+  line-height: var(--lead-prose);
+  color: var(--ink-2);
+}
+
+.nt-cov-name {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.nt-cov-who {
+  flex: 1 1 0;
+  min-width: 0;
+  @apply face-mono;
+}
+
+/* Weight and wording, not red: see CoverageCard. */
+.nt-cov-row[data-silent="true"] .nt-cov-who {
+  color: var(--ink);
+  font-weight: var(--weight-strong);
+}
+
+/* Paused marks itself the way it does everywhere else (DESIGN.md §2.3): a
+   dotted neutral leading edge, --ink-3 for the 3:1 non-text floor. */
+.nt-cov-row[data-paused="true"] {
+  border-left-style: dotted;
+  border-left-color: var(--ink-3);
+}
+
+/* The disclosure under the silent list borrows the legend's look, not its
+   rule under it: nothing follows it inside the card. */
+.nt-cov-more {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.nt-cov + .nt-cov-more { margin-top: var(--space-3); }
+.nt-cov-more > .nt-cov { margin-top: var(--space-2); }

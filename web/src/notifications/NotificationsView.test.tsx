@@ -12,6 +12,7 @@ import { setToolbarSlot, setTopbarSlot } from "../shell/topbarSlot";
 import { NotificationsView } from "./NotificationsView";
 import { channelFromApi } from "./channels";
 import type { Channel } from "./channels";
+import { inventoryFromApi } from "../monitors/inventory";
 
 /*
  * The notifications screen, rendered from fixtures.
@@ -806,5 +807,117 @@ describe("enabling and disabling a channel", () => {
     render(<NotificationsView channels={[make()]} onSave={async () => {}} />);
     expect(screen.queryByRole("button", { name: /disable/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /enable/i })).toBeNull();
+  });
+});
+
+describe("who hears what", () => {
+  /*
+   * SUB-124: "who hears about this monitor" must be answerable in one glance,
+   * without evaluating default-plus-override and disabled channels in one's
+   * head. The finding is the monitor that alerts nobody, so that is what has
+   * to be on screen without opening anything.
+   */
+  function mon(id: number, name: string, over: Record<string, unknown> = {}) {
+    return inventoryFromApi({
+      id,
+      name,
+      type: "http",
+      target: "https://example.com",
+      interval_s: 60,
+      timeout_s: 10,
+      enabled: true,
+      status: "up",
+      created_at: "2026-09-01T10:00:00Z",
+      channels: [],
+      ...over,
+    } as Parameters<typeof inventoryFromApi>[0]);
+  }
+
+  it("lists a monitor that alerts nobody in the open, with the reason", () => {
+    render(
+      <NotificationsView
+        channels={[make({ enabled: false })]}
+        monitors={[
+          mon(1, "billing", { channels: [{ id: 1, name: "On-call Slack" }] }),
+          mon(2, "cdn", { channels: [{ id: 1, name: "On-call Slack" }] }),
+        ]}
+      />,
+    );
+    expect(screen.getByText("2 active monitors alert nobody.")).toBeTruthy();
+    const silent = screen.getByRole("list", {
+      name: "Monitors that alert nobody",
+    });
+    expect(within(silent).getByText("billing")).toBeTruthy();
+    expect(
+      within(silent).getAllByText("nobody: On-call Slack (disabled)"),
+    ).toHaveLength(2);
+  });
+
+  it("says every monitor is covered when the default reaches them", () => {
+    render(
+      <NotificationsView
+        channels={[make({ is_default: true })]}
+        monitors={[mon(1, "billing", { default_channel: { id: 1, name: "On-call Slack" } })]}
+      />,
+    );
+    expect(
+      screen.getByText("Every active monitor reaches at least one channel."),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("list", { name: "Monitors that alert nobody" }),
+    ).toBeNull();
+    expect(screen.getByText("On-call Slack (default)")).toBeTruthy();
+  });
+
+  it("does not give the all-clear while a monitor's coverage is unknown", () => {
+    // The channel list knows a default the inventory does not carry yet, so
+    // this monitor's route is unknown: neither a finding nor confirmed.
+    render(
+      <NotificationsView
+        channels={[make({ is_default: true })]}
+        monitors={[mon(1, "billing")]}
+      />,
+    );
+    expect(
+      screen.queryByText("Every active monitor reaches at least one channel."),
+    ).toBeNull();
+    expect(
+      screen.getByText(
+        "No active monitor is known to alert nobody, but 1 could not be checked yet.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("announces the coverage sentence, not the monitor list", () => {
+    render(
+      <NotificationsView
+        channels={[make({ enabled: false })]}
+        monitors={[mon(1, "billing", { channels: [{ id: 1, name: "On-call Slack" }] })]}
+      />,
+    );
+    const status = screen
+      .getAllByRole("status")
+      .find((el) => el.textContent === "1 active monitor alerts nobody.");
+    expect(status).toBeTruthy();
+    expect(within(status!).queryByText("billing")).toBeNull();
+  });
+
+  it("does not turn a failed monitor list into 'nobody hears'", () => {
+    render(<NotificationsView channels={[make()]} monitors={null} monitorsFailed />);
+    expect(screen.getByText(/could not be loaded, so who hears/i)).toBeTruthy();
+    expect(screen.queryByText(/active monitors? alerts? nobody/i)).toBeNull();
+  });
+
+  it("waits for the channel list before judging any monitor", () => {
+    // Without the channels a disabled route cannot be told from a live one.
+    render(
+      <NotificationsView
+        channels={[]}
+        loading
+        monitors={[mon(1, "billing")]}
+      />,
+    );
+    expect(screen.getByText("Loading monitors…")).toBeTruthy();
+    expect(screen.queryByText(/active monitors? alerts? nobody/i)).toBeNull();
   });
 });

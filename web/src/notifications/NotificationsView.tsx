@@ -7,6 +7,8 @@ import { ConfirmDelete } from "../components/ConfirmDelete";
 import { StateChip } from "../components/Chip";
 import { ChannelRow } from "./ChannelRow";
 import { ChannelForm } from "./ChannelForm";
+import { CoverageCard } from "./CoverageCard";
+import type { InventoryMonitor } from "../monitors/inventory";
 import { typeLabel, CHANNEL_TYPES } from "./channels";
 import type { Channel, DeliveryState } from "./channels";
 import { DELIVERY_UNKNOWN } from "./channels";
@@ -63,6 +65,12 @@ export type NotificationsViewProps = {
   /** True when the URL asked for the create form: /notifications/new. */
   createOpen?: boolean;
   onCreateOpenChange?: (open: boolean) => void;
+  /**
+   * The monitor list, for the "who hears what" card. Undefined leaves the
+   * card out entirely; null means it has not arrived yet.
+   */
+  monitors?: readonly InventoryMonitor[] | null;
+  monitorsFailed?: boolean;
 };
 
 const NO_SET: ReadonlySet<string> = new Set();
@@ -85,6 +93,8 @@ export function NotificationsView({
   onSave,
   createOpen = false,
   onCreateOpenChange,
+  monitors,
+  monitorsFailed = false,
 }: NotificationsViewProps) {
   const [query, setQuery] = useState("");
   /*
@@ -446,6 +456,20 @@ export function NotificationsView({
       </Card>
 
       {/*
+       * Who hears what, under the channels it is computed from. It waits for
+       * the channel list too: without it a disabled channel cannot be told
+       * from a live one, and the card would name routes that deliver nothing.
+       */}
+      {monitors !== undefined && error === null && (
+        <CoverageCard
+          monitors={monitors}
+          channels={channels}
+          loading={!monitorsFailed && (monitors === null || loading)}
+          failed={monitorsFailed}
+        />
+      )}
+
+      {/*
        * Add, in a drawer over the list rather than on its own page.
        *
        * You add a channel *against* the list — to check the name is not
@@ -539,8 +563,8 @@ export function NotificationsView({
       <aside className="nt-scope" aria-label="Not on this page">
         <p className="nt-scope-legend">Not on this page</p>
         <p className="nt-note">
-          Routing rules, quiet hours, severity floors and the delivery log are
-          not here. They have no backend today (SUB-124), and a quiet-hours
+          Tag routing rules, quiet hours, severity floors and the delivery log
+          are not here. They have no backend today (SUB-124), and a quiet-hours
           switch that silently changes nothing is worse than no switch at all.
           Which monitors use a channel is set on the monitor.
         </p>

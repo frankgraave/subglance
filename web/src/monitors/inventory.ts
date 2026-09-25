@@ -125,10 +125,21 @@ export function filterByType(
  * `fallback` is the instance default a known-empty list alerts through
  * instead (SUB-124). It rides on the known branch only: with the attachments
  * unknown, nothing can be said about whether the default applies.
+ *
+ * `ids` runs parallel to `names`, and `fallbackId` beside `fallback`. The
+ * inventory column only needs names, but the notifications page crosses them
+ * with the channel list to tell a disabled route from a live one, and a name
+ * is not an identity: two channels may share one.
  */
 export type ChannelState =
   | { known: false }
-  | { known: true; names: readonly string[]; fallback?: string };
+  | {
+      known: true;
+      names: readonly string[];
+      ids?: readonly string[];
+      fallback?: string;
+      fallbackId?: string;
+    };
 
 export const CHANNELS_UNKNOWN: ChannelState = { known: false };
 
@@ -136,12 +147,19 @@ export const CHANNELS_UNKNOWN: ChannelState = { known: false };
 function channelsFromApi(value: unknown, fallback?: unknown): ChannelState {
   if (!Array.isArray(value) || !value.every(isChannelRef)) return CHANNELS_UNKNOWN;
   const names = value.map((channel) => channel.name);
+  const ids = value.map((channel) => String(channel.id));
   // The default only ever stands in for an empty list; a server that sent one
   // beside real attachments is ignored rather than believed.
   if (names.length === 0 && isChannelRef(fallback)) {
-    return { known: true, names, fallback: fallback.name };
+    return {
+      known: true,
+      names,
+      ids,
+      fallback: fallback.name,
+      fallbackId: String(fallback.id),
+    };
   }
-  return { known: true, names };
+  return { known: true, names, ids };
 }
 
 function isChannelRef(channel: unknown): channel is { id: number; name: string } {

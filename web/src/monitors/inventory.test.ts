@@ -64,12 +64,12 @@ describe("inventoryFromApi", () => {
     const ops = { id: 3, name: "Ops" };
     expect(
       inventoryFromApi({ ...api, channels: [], default_channel: ops }).channels,
-    ).toEqual({ known: true, names: [], fallback: "Ops" });
+    ).toEqual({ known: true, names: [], ids: [], fallback: "Ops", fallbackId: "3" });
     // Beside real attachments the default does not apply, whatever the wire says.
     expect(
       inventoryFromApi({ ...api, channels: [{ id: 1, name: "Pager" }], default_channel: ops })
         .channels,
-    ).toEqual({ known: true, names: ["Pager"] });
+    ).toEqual({ known: true, names: ["Pager"], ids: ["1"] });
     // With the attachments unknown, nothing is claimed about the default either.
     expect(inventoryFromApi({ ...api, default_channel: ops }).channels).toEqual({
       known: false,
