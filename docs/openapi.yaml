@@ -294,6 +294,8 @@ paths:
         `subglance_checks_skipped_total` and `subglance_check_queue_depth` rise
         when the worker pool cannot keep up, which is what happens during a
         broad outage and is otherwise invisible from outside the process.
+        `subglance_check_workers_busy` beside `subglance_check_workers` is the
+        pool's utilisation at the moment of the scrape.
 
         Unlike `/health` and `/ready`, this endpoint requires authentication:
         it discloses how many monitors an instance watches and when its writes
@@ -2495,6 +2497,115 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
       x-subglance-access: read
+  /api/v1/diagnostics:
+    get:
+      tags: [Health]
+      operationId: getDiagnostics
+      summary: Read instance diagnostics
+      description: |
+        What this process is and whether its check pipeline keeps up: build,
+        runtime, start time, the database file and the worker pool. It backs
+        the instance card on the settings page and is meant to be pasted into
+        a bug report as is, so it contains no secrets and no monitor data.
+
+        Administrators only, because the database path and the runtime
+        describe the host. The pool readings come from the same source as
+        `/metrics`, which stays readable by any role.
+
+        `scheduler` is null when no check pipeline is attached. It is never a
+        block of zeros, because zero busy workers is a healthy reading.
+      x-subglance-access: admin
+      responses:
+        '200':
+          description: The current readings.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: 'private, no-store' }
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [version, commit, go_version, platform, started_at, uptime_seconds, database, scheduler]
+                properties:
+                  version:
+                    type: string
+                    description: The release this binary was built as, or `dev`.
+                  commit:
+                    type: string
+                    description: Seven-character commit, or empty when the build carries none.
+                  go_version: { type: string }
+                  platform:
+                    type: string
+                    description: GOOS/GOARCH, for example `linux/amd64`.
+                  started_at: { type: string, format: date-time }
+                  uptime_seconds: { type: integer, minimum: 0 }
+                  database:
+                    type: object
+                    additionalProperties: false
+                    required: [path, bytes, wal_bytes, journal_mode]
+                    properties:
+                      path: { type: string }
+                      bytes:
+                        type: integer
+                        description: Size of the main database file on disk.
+                      wal_bytes:
+                        type: integer
+                        description: Size of the write-ahead log beside it; zero when there is none.
+                      journal_mode:
+                        type: string
+                        description: What SQLite reports, which differs from `wal` on filesystems that cannot do WAL.
+                  scheduler:
+                    type: [object, 'null']
+                    additionalProperties: false
+                    required: [workers, busy, queue_depth, scheduled, skipped_checks, checks_recorded, heartbeat_write_failures]
+                    properties:
+                      workers: { type: integer, minimum: 0 }
+                      busy:
+                        type: integer
+                        minimum: 0
+                        description: Workers inside a check at the moment of the request.
+                      queue_depth:
+                        type: integer
+                        minimum: 0
+                        description: Dispatched checks waiting for a free worker. Zero is healthy.
+                      scheduled: { type: integer, minimum: 0 }
+                      skipped_checks:
+                        type: integer
+                        minimum: 0
+                        description: Checks dropped since start because the previous run had not finished.
+                      checks_recorded: { type: integer, minimum: 0 }
+                      heartbeat_write_failures: { type: integer, minimum: 0 }
+              example:
+                version: 0.1.0
+                commit: a17f3c9
+                go_version: go1.24.1
+                platform: linux/amd64
+                started_at: '2026-09-25T06:41:00Z'
+                uptime_seconds: 3600
+                database:
+                  path: /var/lib/subglance/subglance.db
+                  bytes: 25165824
+                  wal_bytes: 4194304
+                  journal_mode: wal
+                scheduler:
+                  workers: 16
+                  busy: 2
+                  queue_depth: 0
+                  scheduled: 62
+                  skipped_checks: 0
+                  checks_recorded: 184220
+                  heartbeat_write_failures: 0
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenAdmin'
+        '500':
+          description: The database file could not be read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /api/v1/users:
     get:
       tags: [Users]

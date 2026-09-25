@@ -187,6 +187,49 @@ func TestSkippedChecksAreCounted(t *testing.T) {
 	}
 }
 
+// Busy is the pool's utilisation on the diagnostics card. It has to count a
+// worker that is inside a check and let it go again when the check returns,
+// or a pool that has caught up keeps reading as saturated.
+func TestBusyCountsWorkersInsideACheck(t *testing.T) {
+	gate := &gatedChecker{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+
+	s := New(Options{
+		Registry:       staticRegistry(job(1, 20*time.Millisecond)),
+		Checkers:       map[checker.Type]checker.Checker{checker.TypeHTTP: gate},
+		OnResult:       func(Outcome) {},
+		JitterFraction: -1,
+		Log:            testLogger(),
+	})
+	if got := s.Busy(); got != 0 {
+		t.Fatalf("Busy = %d before anything ran, want 0", got)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		_ = s.Run(ctx)
+		close(done)
+	}()
+
+	<-gate.started
+	waitForOr(t, 5*time.Second, func() bool { return s.Busy() == 1 },
+		"a worker inside a check is not counted as busy")
+
+	close(gate.release)
+	waitForOr(t, 5*time.Second, func() bool { return s.Busy() == 0 },
+		"a worker whose check returned is still counted as busy")
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not return within 5s of cancellation")
+	}
+}
+
 // gatedChecker blocks every check until release is closed, and announces the
 // first one on started. It is local to this file rather than a flag on
 // fakeChecker because only these tests need a check that never finishes on its

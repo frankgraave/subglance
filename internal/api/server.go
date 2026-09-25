@@ -332,6 +332,10 @@ func (s *Server) routes() []route {
 		{http.MethodGet, "/api/v1/tokens", accessRead},
 		{http.MethodDelete, "/api/v1/tokens/{id}", accessRead},
 
+		// Instance diagnostics name the database path and the runtime: facts
+		// about the host, not about the monitors a viewer is there to watch.
+		{http.MethodGet, "/api/v1/diagnostics", accessAdmin},
+
 		// Authenticated: editor or admin.
 		//
 		// Minting a token is a write even though the token itself may only
@@ -460,6 +464,8 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 		return s.handleCreateToken
 	case "DELETE /api/v1/tokens/{id}":
 		return s.handleRevokeToken
+	case "GET /api/v1/diagnostics":
+		return s.handleDiagnostics
 
 	case "POST /api/v1/monitors":
 		return s.handleCreateMonitor
