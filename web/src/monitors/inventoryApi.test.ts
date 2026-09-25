@@ -61,14 +61,14 @@ describe("inventory channel attachments", () => {
     const result = await fetchInventory();
     expect(result).toHaveLength(45);
     for (const [i, row] of result.entries()) {
-      expect(row.channels).toEqual({ known: true, names: [`channel ${i}`] });
+      expect(row.channels).toEqual({ known: true, names: [`channel ${i}`], ids: [String(i + 1)] });
     }
     expect(request).toHaveBeenCalledTimes(1);
   });
 
   it("preserves a known empty set", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(json({ monitors: [monitor([])] }));
-    expect((await fetchInventory())[0].channels).toEqual({ known: true, names: [] });
+    expect((await fetchInventory())[0].channels).toEqual({ known: true, names: [], ids: [] });
   });
 
   it.each([undefined, null, {}, "bad", [null], [{}], [{ id: 1 }], [{ id: 1, name: 2 }], [{ id: 1, name: "" }]])(

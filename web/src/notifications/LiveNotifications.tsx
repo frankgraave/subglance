@@ -8,7 +8,7 @@ import {
 import type { QueryClient } from "@tanstack/react-query";
 import { createQueryClient } from "../live/queryClient";
 import { NotificationsView } from "./NotificationsView";
-import { inventoryQueryKey } from "../monitors/inventoryApi";
+import { fetchInventory, inventoryQueryKey } from "../monitors/inventoryApi";
 import {
   channelsQueryKey,
   createChannel,
@@ -40,6 +40,7 @@ export type LiveNotificationsProps = {
   remove?: typeof deleteChannel;
   test?: typeof testChannel;
   setDefault?: typeof setDefaultChannel;
+  monitors?: typeof fetchInventory;
   createOpen?: boolean;
   onCreateOpenChange?: (open: boolean) => void;
   /** False for a viewer: every write control disappears rather than failing. */
@@ -53,6 +54,7 @@ export function LiveNotifications({
   remove = deleteChannel,
   test = testChannel,
   setDefault = setDefaultChannel,
+  monitors: listMonitors = fetchInventory,
   createOpen = false,
   onCreateOpenChange,
   canWrite = true,
@@ -62,6 +64,20 @@ export function LiveNotifications({
   const channels = useQuery({
     queryKey: channelsQueryKey,
     queryFn: ({ signal }) => list(signal),
+    refetchInterval: CHANNELS_POLL_MS,
+    staleTime: 10_000,
+  });
+
+  /*
+   * The monitor list, for "who hears what". The same query key as the
+   * monitors page, so moving between the two screens reads one cache rather
+   * than fetching the same list twice, and every write here that invalidates
+   * the inventory refreshes this card as well.
+   */
+  const monitors = useQuery({
+    queryKey: inventoryQueryKey,
+    queryFn: ({ signal }) => listMonitors(signal),
+    // The monitors page polls this key at the same minute.
     refetchInterval: CHANNELS_POLL_MS,
     staleTime: 10_000,
   });
@@ -328,6 +344,8 @@ export function LiveNotifications({
       onSave={canWrite ? onSave : undefined}
       createOpen={canWrite && createOpen}
       onCreateOpenChange={canWrite ? onCreateOpenChange : undefined}
+      monitors={monitors.data ?? null}
+      monitorsFailed={monitors.isError}
     />
   );
 }

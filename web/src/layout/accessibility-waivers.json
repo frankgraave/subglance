@@ -471,7 +471,7 @@
     },
     {
       "rule": "color-contrast",
-      "selector": ".chip",
+      "selector": ".inv-paused-chip",
       "scopes": [
         "light: notifications",
         "dark: notifications"

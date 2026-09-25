@@ -1,0 +1,128 @@
+import { Card } from "../components/Card";
+import { StateChip } from "../components/Chip";
+import type { InventoryMonitor } from "../monitors/inventory";
+import type { Channel } from "./channels";
+import { coverageList, describeCoverage, silentCount } from "./coverage";
+import type { Coverage } from "./coverage";
+
+/**
+ * "Who hears about this monitor", answered for every monitor at once
+ * (SUB-124).
+ *
+ * The routing model is a default plus per-monitor overrides, and the notifier
+ * also skips a disabled channel. Each rule is simple; the three together are
+ * something nobody should have to evaluate in their head per monitor. This
+ * card does it and prints the answer, which is what the mockup's coverage
+ * preview was for.
+ *
+ * Silent monitors are listed first and in the open, because they are the
+ * finding. The rest sit behind one disclosure whose summary already states
+ * the fact ("every other active monitor reaches a channel"): on an instance
+ * with eighty monitors, eighty rows confirming that nothing is wrong would
+ * push everything else on the page out of reach.
+ *
+ * Not red. Red means something is failing right now, and a monitor that
+ * would alert nobody has not failed yet — it is the same argument as the
+ * empty state's "Alerts are going nowhere" (DESIGN.md §2.3). The count in the
+ * card's note and the word "nobody" carry it.
+ */
+
+export type CoverageCardProps = {
+  monitors: readonly InventoryMonitor[] | null;
+  channels: readonly Channel[];
+  loading?: boolean;
+  /** True when the monitor list could not be read. */
+  failed?: boolean;
+};
+
+export function CoverageCard({
+  monitors,
+  channels,
+  loading = false,
+  failed = false,
+}: CoverageCardProps) {
+  if (!loading && !failed && (monitors === null || monitors.length === 0)) {
+    // Nothing is watched, so nothing can go unheard. The monitors page has
+    // its own empty state; repeating it here would be a second one.
+    return null;
+  }
+  const list = monitors === null ? [] : coverageList(monitors, channels);
+  const silent = list.filter((c) => c.silent && !c.paused);
+  const rest = list.filter((c) => !(c.silent && !c.paused));
+  const count = silentCount(list);
+
+  return (
+    <Card
+      className="nt-card"
+      title="Who hears what"
+      headingLevel={2}
+      note={
+        loading || failed
+          ? undefined
+          : count === 0
+            ? "Every active monitor reaches at least one channel."
+            : `${count} active ${count === 1 ? "monitor alerts" : "monitors alert"} nobody.`
+      }
+    >
+      {loading || failed ? (
+        /* A failed read is not a finding. Saying "nobody hears about
+           anything" because one request 500'd is the claim this card exists
+           to make only when it is true. */
+        <p className="nt-note">
+          {loading
+            ? "Loading monitors…"
+            : "The monitor list could not be loaded, so who hears about each monitor is unknown."}
+        </p>
+      ) : (
+        <>
+          {silent.length > 0 && (
+            <ul className="nt-cov" aria-label="Monitors that alert nobody">
+              {silent.map((c) => (
+                <CoverageRow key={c.id} coverage={c} />
+              ))}
+            </ul>
+          )}
+          {rest.length > 0 && (
+            <details className="nt-legend nt-cov-more">
+              <summary className="nt-legend-summary">
+                {silent.length === 0
+                  ? `Show all ${rest.length} ${rest.length === 1 ? "monitor" : "monitors"} and their channels`
+                  : `Show the other ${rest.length} ${rest.length === 1 ? "monitor" : "monitors"}`}
+              </summary>
+              <ul className="nt-cov" aria-label="Other monitors">
+                {rest.map((c) => (
+                  <CoverageRow key={c.id} coverage={c} />
+                ))}
+              </ul>
+            </details>
+          )}
+        </>
+      )}
+    </Card>
+  );
+}
+
+function CoverageRow({ coverage }: { coverage: Coverage }) {
+  const text = describeCoverage(coverage);
+  return (
+    <li className="nt-cov-row" data-silent={coverage.silent && !coverage.paused}>
+      <span className="nt-cov-name" title={coverage.name}>
+        {coverage.name}
+      </span>
+      <span className="nt-cov-who">
+        {coverage.paused ? (
+          /* A paused monitor is not checked, so nobody hearing about it is
+             what pausing means rather than a misconfiguration. Its route is
+             still printed: it is what applies the moment it is resumed. */
+          <>
+            <StateChip>paused</StateChip> {text}
+          </>
+        ) : coverage.route === "unknown" ? (
+          <StateChip>not loaded</StateChip>
+        ) : (
+          text
+        )}
+      </span>
+    </li>
+  );
+}
