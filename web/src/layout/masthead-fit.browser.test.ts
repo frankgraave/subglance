@@ -56,17 +56,23 @@ afterAll(async () => {
 
 async function open(width: number, route: (typeof ROUTES)[number]): Promise<Page> {
   const page = await browser.newPage();
-  await page.setViewport({ width, height: 800, deviceScaleFactor: 1 });
-  await page.goto(server.url + route.path, { waitUntil: "domcontentloaded" });
-  await page.waitForSelector(route.ready, { timeout: 15_000 });
-  // The bundled face is `font-display: block`, so until it arrives the bar is
-  // laid out with the host fallback, whose width differs per machine, and at
-  // 641px the preferences row has only a few pixels to spare.
-  // Measure the typeface the product ships, not whichever face won the race.
-  await page.evaluate(() => document.fonts.ready.then(() => undefined));
-  await page.evaluate(
-    () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
-  );
+  try {
+    await page.setViewport({ width, height: 800, deviceScaleFactor: 1 });
+    await page.goto(server.url + route.path, { waitUntil: "domcontentloaded" });
+    await page.waitForSelector(route.ready, { timeout: 15_000 });
+    // The bundled face is `font-display: block`, so until it arrives the bar is
+    // laid out with the host fallback, whose width differs per machine, and at
+    // 641px the preferences row has only a few pixels to spare.
+    // Measure the typeface the product ships, not whichever face won the race.
+    await page.evaluate(() => document.fonts.ready.then(() => undefined));
+    await page.evaluate(
+      () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+    );
+  } catch (err) {
+    // The caller's `finally` only starts once `open` has returned the page.
+    await page.close();
+    throw err;
+  }
   return page;
 }
 
@@ -76,7 +82,7 @@ describe.each(BAR_WIDTHS)("masthead at %ipx", (width) => {
     try {
       const outside = await page.evaluate(() => {
         const vw = document.documentElement.clientWidth;
-        return Array.from(document.querySelectorAll<HTMLElement>(".shell-topbar *"))
+        return Array.from(document.querySelectorAll<HTMLElement>(".shell-topbar, .shell-topbar *"))
           .map((el) => ({ el, r: el.getBoundingClientRect() }))
           .filter(({ r }) => r.width > 0 && (r.left < -1 || r.right > vw + 1))
           .map(({ el, r }) => `${el.tagName.toLowerCase()}.${el.className.toString().slice(0, 40)} ${Math.round(r.left)}-${Math.round(r.right)}`);
