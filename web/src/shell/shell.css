@@ -290,10 +290,12 @@
   /* Measured at 641px, the narrowest width in the band: the preferences row
      has 361px and needs 398px at full size, so it broke once more and the
      theme toggle sat alone on a third row. Tighter segments and a tighter
-     gap between the three controls bring it to 358px. Both stay above the
+     gap between the three controls bring it under 361px. Measured with the
+     bundled Inter loaded, in Chromium 152 and 153: 6px of segment padding
+     still needs 365px, so the padding takes the 4px rung. Both stay above the
      WCAG 2.5.8 target floor; only the air around the labels shrinks. */
   .shell-topbar-right { flex: 1 1 100%; gap: var(--space-1); }
-  .shell-topbar-right .segmented .segmented-option { padding: 0 var(--space-1h); }
+  .shell-topbar-right .segmented .segmented-option { padding: 0 var(--space-1); }
 }
 
 .shell-icon-btn {
