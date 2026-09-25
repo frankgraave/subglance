@@ -118,7 +118,15 @@ the entity's where one is named. It covers the version of this agreement that
 is current at the time, every Contribution you submitted before accepting it,
 and every Contribution you make afterwards. If a later version changes your
 rights or obligations, the Maintainer will not merge your next Contribution
-until you accept that version.
+until you accept that version. You accept it the same way, by posting in that
+pull request a comment that names the version:
+
+```
+I have read version <version> of the CLA and I agree.
+```
+
+When accepting for a legal entity, add the same "on behalf of" wording as
+above.
 
 ## 10. Governing law
 
