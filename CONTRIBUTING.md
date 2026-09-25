@@ -24,6 +24,17 @@ You accept it by confirming in your first pull request:
 I have read the CLA and I agree.
 ```
 
+Contributing on behalf of a company or other legal entity? Use the entity
+wording from section 9 of the CLA, which names the entity and confirms you
+may bind it.
+
+If a later version of the CLA changes your rights or obligations, your next
+pull request asks you to accept it by naming that version:
+
+```
+I have read version <version> of the CLA and I agree.
+```
+
 Without that confirmation a pull request cannot be merged.
 
 ## Getting set up
