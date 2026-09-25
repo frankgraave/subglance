@@ -54,7 +54,8 @@ it("opens the password card from the sidebar for a viewer and keeps settings out
   expect(document.title).toMatch(/Settings/);
   expect(document.querySelector(".shell-topbar")).toBeTruthy();
   await screen.findByText("Not configured");
-  expect(screen.getAllByRole("region")).toHaveLength(2);
+  // Account, self-monitoring and retention.
+  expect(screen.getAllByRole("region")).toHaveLength(3);
   fireEvent.change(input, { target: { value: "private" } });
   fireEvent.change(screen.getByRole("searchbox", { name: "Search settings" }), { target: { value: "nonexistent" } });
   expect(screen.getByRole("status").textContent).toMatch(/No settings match/);

@@ -83,7 +83,10 @@ func parseFlags(args []string, out io.Writer) (options, error) {
 		"random seed; the same seed produces the same estate, so screenshots stay comparable")
 	fs.DurationVar(&o.history, "history", 120*24*time.Hour,
 		"how far back the seeded history reaches")
-	fs.DurationVar(&o.rawWindow, "raw-window", store.DefaultRawRetention,
+	// A week rather than the server's retention default: it keeps the demo
+	// database small enough to reset in seconds, and a week of raw beats is
+	// already more than any chart on the dashboard draws at full resolution.
+	fs.DurationVar(&o.rawWindow, "raw-window", 7*24*time.Hour,
 		"how much of that history is individual heartbeats rather than hourly rollups")
 	fs.StringVar(&o.password, "password", "demo-password-123",
 		"password for the seeded accounts; must meet the ordinary policy")

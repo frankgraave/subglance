@@ -37,16 +37,34 @@ five-minute dead man's switch, or LAN monitoring, and having neither.
 | `--alert-group-window` | `SUBGLANCE_ALERT_GROUP_WINDOW` | `90s` | How long an alert waits for others so one outage sends one message (`0` = send immediately) |
 | `--watchdog-url` | `SUBGLANCE_WATCHDOG_URL` | empty (off) | External dead man's switch to ping while checks are running |
 | `--watchdog-interval` | `SUBGLANCE_WATCHDOG_INTERVAL` | `5m` | How often to ping that URL |
-| `--raw-retention` | `SUBGLANCE_RAW_RETENTION` | `168h` (7d) | How long raw heartbeats are kept before being rolled up into hourly buckets. Minimum `24h` |
-| `--rollup-retention` | `SUBGLANCE_ROLLUP_RETENTION` | `8760h` (1y) | How long hourly buckets and resolved incidents are kept (`0` = forever) |
+| `--raw-retention` | `SUBGLANCE_RAW_RETENTION` | unset: `720h` (30d), or the settings page | How long raw heartbeats are kept before being rolled up into hourly buckets. Minimum `24h`; `0` = forever. Setting it locks the settings page field |
+| `--rollup-retention` | `SUBGLANCE_ROLLUP_RETENTION` | unset: `0` (forever), or the settings page | How long hourly buckets and resolved incidents are kept (`0` = forever). Setting it locks the settings page field |
 | `--secret-key` | `SUBGLANCE_SECRET_KEY` | empty (off) | 32 bytes of key material, or a path to a file holding it, to encrypt notification channel configuration at rest. Empty means **no encryption** |
 | `--secret-key-previous` | `SUBGLANCE_SECRET_KEY_PREVIOUS` | empty | The key the stored configuration is currently under, for one start: rotates to `--secret-key`, or decrypts back to plain text when `--secret-key` is empty |
 
 ### Retention
 
-Retention runs once a day. It folds raw heartbeats older than `--raw-retention`
+Retention runs once a day. It folds raw heartbeats older than the raw window
 into hourly buckets, then drops hourly buckets and resolved incidents older than
-`--rollup-retention`. To make those deletes visible on disk, SubGlance puts the
+the rollup window. By default raw heartbeats are kept 30 days and everything
+summarised is kept forever: on a measured database a raw heartbeat costs about
+75 bytes and an hourly bucket about 24, so fifty monitors on a 60-second interval
+hold about 160 MB of raw history and add about 10 MB of summaries a year.
+
+Both windows are set on the **Settings** page, under *Retention & storage*,
+which shows each table's size and daily growth beside the field and says how
+many rows a shorter window would remove before it is saved. A change applies
+from the next pass, without a restart. Nothing is capped: either window may be
+forever. Two rules protect the data and are enforced — raw heartbeats are kept
+at least a day, because the 24-hour charts read them, and summaries at least as
+long as raw heartbeats.
+
+`--raw-retention` and `--rollup-retention` (or their environment variables)
+still work, and win: a window set that way is read-only on the page, which names
+the flag or variable that set it, so a restart can never silently undo a choice
+made on the page or the other way round. If a pinned window makes the saved
+partner window invalid, the saved one is set aside for the nearest valid value,
+lengthened where possible, and the page says so. To make those deletes visible on disk, SubGlance puts the
 database into SQLite's incremental auto-vacuum mode at startup; on an existing
 database that requires one rebuild, which is logged when it happens and skipped
 with a warning if the file is large enough that the pause would hurt.

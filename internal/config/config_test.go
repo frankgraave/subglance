@@ -206,12 +206,46 @@ func TestRetentionFromEnvironment(t *testing.T) {
 	}
 }
 
+func TestRetentionPinsNameWhatSetThem(t *testing.T) {
+	c, err := Load(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := c.RetentionPins(); p.Raw != nil || p.Rollup != nil {
+		t.Fatalf("nothing set, but pins = %+v; the settings page would be locked for no reason", p)
+	}
+
+	t.Setenv("SUBGLANCE_RAW_RETENTION", "48h")
+	t.Setenv("SUBGLANCE_ROLLUP_RETENTION", "720h")
+	c, err = Load([]string{"--rollup-retention=0"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := c.RetentionPins()
+	if p.Raw == nil || p.Raw.By != "SUBGLANCE_RAW_RETENTION" || p.Raw.Value != 48*time.Hour {
+		t.Errorf("raw pin = %+v, want 48h by SUBGLANCE_RAW_RETENTION", p.Raw)
+	}
+	// The flag overrides the variable, so it is the flag the page names.
+	if p.Rollup == nil || p.Rollup.By != "--rollup-retention" || p.Rollup.Value != 0 {
+		t.Errorf("rollup pin = %+v, want 0 by --rollup-retention", p.Rollup)
+	}
+}
+
+func TestRetentionZeroMeansForever(t *testing.T) {
+	c, err := Load([]string{"--raw-retention=0", "--rollup-retention=0"})
+	if err != nil {
+		t.Fatalf("keeping everything forever was refused: %v", err)
+	}
+	if c.RawRetention != 0 || c.RollupRetention != 0 {
+		t.Errorf("retention = %s/%s, want 0/0", c.RawRetention, c.RollupRetention)
+	}
+}
+
 func TestRetentionValidation(t *testing.T) {
 	tests := []struct {
 		name string
 		args []string
 	}{
-		{"raw retention zero", []string{"--raw-retention=0"}},
 		{"raw retention negative", []string{"--raw-retention=-1h"}},
 		// Below a day the rollup can eat into the 24h latency window.
 		{"raw retention under a day", []string{"--raw-retention=23h"}},
@@ -219,6 +253,10 @@ func TestRetentionValidation(t *testing.T) {
 		// A rollup window inside the raw one would delete buckets whose own
 		// heartbeats are still present, so history would flicker.
 		{"rollup inside raw", []string{"--raw-retention=168h", "--rollup-retention=24h"}},
+		// Raw beats kept forever never become buckets to prune.
+		{"raw forever, rollup bounded", []string{"--raw-retention=0", "--rollup-retention=720h"}},
+		// No raw window is shorter than a day, so this can never be valid.
+		{"rollup under a day", []string{"--rollup-retention=12h"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
