@@ -10,7 +10,8 @@ how to take a backup that actually restores.
 - [Shutdown](#shutdown)
 - [Watching the watcher](#watching-the-watcher)
 - [Upgrading](#upgrading)
-- [Backup and restore](#backup-and-restore)
+- [Backup and restore](#backup-and-restore), including
+  [scheduled backups to S3](#scheduled-backups-to-s3-compatible-storage)
 
 ## Configuration
 
@@ -41,6 +42,14 @@ five-minute dead man's switch, or LAN monitoring, and having neither.
 | `--rollup-retention` | `SUBGLANCE_ROLLUP_RETENTION` | `8760h` (1y) | How long hourly buckets and resolved incidents are kept (`0` = forever) |
 | `--secret-key` | `SUBGLANCE_SECRET_KEY` | empty (off) | 32 bytes of key material, or a path to a file holding it, to encrypt notification channel configuration at rest. Empty means **no encryption** |
 | `--secret-key-previous` | `SUBGLANCE_SECRET_KEY_PREVIOUS` | empty | The key the stored configuration is currently under, for one start: rotates to `--secret-key`, or decrypts back to plain text when `--secret-key` is empty |
+| `--backup-target` | `SUBGLANCE_BACKUP_TARGET` | empty (off) | [Scheduled backups](#scheduled-backups-to-s3-compatible-storage) to `s3://bucket` or `s3://bucket/prefix` |
+| `--backup-endpoint` | `SUBGLANCE_BACKUP_ENDPOINT` | empty (AWS S3) | Service URL for any S3-compatible storage that is not AWS |
+| `--backup-region` | `SUBGLANCE_BACKUP_REGION` | `us-east-1` | Signing region of the bucket |
+| `--backup-interval` | `SUBGLANCE_BACKUP_INTERVAL` | `24h` | Time between backups. Minimum `1h` |
+| `--backup-keep` | `SUBGLANCE_BACKUP_KEEP` | `14` | How many backups stay in the bucket; older ones are deleted after each upload |
+| (environment only) | `SUBGLANCE_BACKUP_ACCESS_KEY_ID` | empty | Access key ID for the bucket |
+| (environment only) | `SUBGLANCE_BACKUP_SECRET_ACCESS_KEY_FILE` | empty | Path to a file holding the secret access key. Preferred over the next row |
+| (environment only) | `SUBGLANCE_BACKUP_SECRET_ACCESS_KEY` | empty | The secret access key itself |
 
 ### Retention
 
@@ -235,6 +244,9 @@ subglance_check_workers                    current worker pool size
 subglance_monitors_scheduled               monitors on the schedule
 ```
 
+With [scheduled backups](#scheduled-backups-to-s3-compatible-storage) on,
+three `subglance_backup_*` series join them.
+
 > [!IMPORTANT]
 > The one to alert on is `subglance_heartbeat_write_failures_total`. When the
 > disk fills, every heartbeat write fails — but `/health` still answers 200
@@ -401,3 +413,108 @@ Two things to check while restoring:
   one that took the backup. An older binary refuses to start against a newer
   schema rather than writing rows against a table shape it does not
   understand; the error names the migration it does not recognise.
+
+### Scheduled backups to S3-compatible storage
+
+A backup on the same disk as the database does not survive the disk. Set a
+bucket and SubGlance takes the same `VACUUM INTO` snapshot on a timer,
+compresses it and uploads it, then deletes the oldest backups beyond
+`--backup-keep`. It works with AWS S3 and with anything that speaks the S3 API:
+Backblaze B2, Cloudflare R2, MinIO, Wasabi.
+
+What it does, and what it deliberately does not:
+
+- **One full, gzip-compressed copy per run**, named
+  `subglance-<UTC time>.db.gz` under the prefix. Pruning only ever touches
+  objects with exactly that name shape, so anything else you keep under the
+  same prefix is left alone.
+- **A failed upload never removes anything.** Old backups are pruned only
+  after the new one is safely in the bucket.
+- **Never two at once.** A run that is still going when the next is due is
+  not doubled up.
+- **The first backup follows the newest one already in the bucket**, not the
+  moment the process started, so an instance that is redeployed every night
+  still backs up once a day rather than never — or on every start.
+- **A failed run is retried within the hour**, and sends one notice to the
+  default channel per failing streak, then again every day it keeps failing.
+  With no default channel set, the failure is only in the log, on `/metrics`
+  and in `GET /api/v1/backup`. During the default channel's quiet hours the
+  notice waits for the next retry after the window.
+- **No client-side encryption.** Use the storage provider's server-side
+  encryption. Channel secrets are only encrypted in the backup if
+  [`--secret-key`](#encrypting-channel-configuration) is set.
+
+The credentials are environment variables only, never flags: a flag is
+visible to every user on the host in `ps`. Prefer
+`SUBGLANCE_BACKUP_SECRET_ACCESS_KEY_FILE` pointing at a mounted secret over
+putting the key itself in the environment, for the same reason as
+`--secret-key`. Give the key only what it needs on that one bucket: list, get,
+put and delete objects.
+
+AWS S3, with the bucket in `eu-west-1`:
+
+```yaml
+    environment:
+      SUBGLANCE_BACKUP_TARGET: s3://my-subglance-backups/prod
+      SUBGLANCE_BACKUP_REGION: eu-west-1
+      SUBGLANCE_BACKUP_ACCESS_KEY_ID: your-access-key-id
+      SUBGLANCE_BACKUP_SECRET_ACCESS_KEY_FILE: /run/secrets/s3.secret
+    volumes:
+      - ./s3.secret:/run/secrets/s3.secret:ro
+```
+
+Backblaze B2, where the endpoint and region come from the bucket's details
+page and the key is an application key limited to that bucket:
+
+```yaml
+      SUBGLANCE_BACKUP_TARGET: s3://my-subglance-backups/prod
+      SUBGLANCE_BACKUP_ENDPOINT: https://s3.eu-central-003.backblazeb2.com
+      SUBGLANCE_BACKUP_REGION: eu-central-003
+```
+
+Cloudflare R2 uses `https://<account id>.r2.cloudflarestorage.com` as the
+endpoint and `auto` as the region. MinIO uses its own URL and accepts any
+region. With a custom endpoint, requests use path-style URLs
+(`endpoint/bucket/key`), which every S3-compatible service accepts.
+
+Whether it is working is visible in three places: the log line
+`backup uploaded` after every run, `GET /api/v1/backup` (administrators), and
+these series on `/metrics`, present only when a target is set:
+
+```
+subglance_backup_last_success_timestamp_seconds   when the last backup reached the bucket
+subglance_backup_last_size_bytes                  its compressed size
+subglance_backup_failures_total                   failed runs since start
+```
+
+Alert on `time() - subglance_backup_last_success_timestamp_seconds` rather
+than on failures: it also catches a backup that stopped being attempted.
+
+### Restoring from S3
+
+`subglance restore` downloads the newest backup from the configured target
+and puts it in place of the database. It reads the same settings as the
+server, so in Compose it is one command with nothing else to type:
+
+```sh
+docker compose stop subglance
+docker compose run --rm subglance restore
+docker compose start subglance
+```
+
+`--from subglance-20260925T030000Z.db.gz` picks an older backup instead; an
+unknown name is refused with the name of the newest one.
+
+It is careful in three ways:
+
+- **It refuses while something answers on `--addr`**, since replacing the
+  file under a running server loses whatever the server writes next. Stop
+  SubGlance first. `--force` exists for when the thing answering is not
+  SubGlance.
+- **It checks the download before touching anything.** A backup that does not
+  decompress or fails SQLite's `quick_check` leaves the current database where
+  it is.
+- **It deletes nothing.** The database it replaces, and its `-wal` and `-shm`
+  files, are renamed with a `.before-restore-<time>` suffix, so restoring the
+  wrong backup can be undone. Remove them once the restored instance looks
+  right.

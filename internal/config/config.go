@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/frankgraave/subglance/internal/backup"
 	"github.com/frankgraave/subglance/internal/notifier"
 	"github.com/frankgraave/subglance/internal/store"
 	"github.com/frankgraave/subglance/internal/trustedproxy"
@@ -130,6 +131,54 @@ type Config struct {
 	// nothing warns about leaving it set — the reconciliation is idempotent,
 	// so a stale value is inert rather than harmful.
 	PreviousSecretKey string
+
+	// BackupTarget turns on scheduled backups to S3-compatible storage, as
+	// s3://bucket or s3://bucket/prefix. Empty means off.
+	//
+	// Off by default for the same reason as the watchdog: it sends data to
+	// a third party, and it needs credentials no default could supply.
+	BackupTarget string
+
+	// BackupEndpoint is the service URL for anything that is not AWS S3:
+	// Backblaze B2, Cloudflare R2, MinIO, Wasabi. Empty means AWS.
+	BackupEndpoint string
+
+	// BackupRegion is the signing region. AWS needs the bucket's real one.
+	BackupRegion string
+
+	// BackupInterval is the time between backups, and BackupKeep how many
+	// stay in the bucket; older ones are deleted after each upload.
+	BackupInterval time.Duration
+	BackupKeep     int
+
+	// The credentials are environment-only, never flags: a flag is visible
+	// to every user on the host in `ps` and lands in shell history. The
+	// secret can also come from a file, which is the form to prefer, for
+	// the reason given at SecretKey.
+	BackupAccessKeyID         string
+	BackupSecretAccessKey     string
+	BackupSecretAccessKeyFile string
+}
+
+// BackupSecret returns the secret access key, reading the file form when that
+// is the one configured.
+func (c Config) BackupSecret() (string, error) {
+	if c.BackupSecretAccessKeyFile == "" {
+		return c.BackupSecretAccessKey, nil
+	}
+	// The path is the operator's own setting, read by the process they
+	// started.
+	raw, err := os.ReadFile(c.BackupSecretAccessKeyFile) //nolint:gosec // operator-supplied secret file path
+	if err != nil {
+		return "", fmt.Errorf("read SUBGLANCE_BACKUP_SECRET_ACCESS_KEY_FILE: %w", err)
+	}
+	return strings.TrimSpace(string(raw)), nil
+}
+
+// BackupTargetParsed returns the parsed backup target. Only meaningful when
+// BackupTarget is set; Load has already validated it.
+func (c Config) BackupTargetParsed() (backup.Target, error) {
+	return backup.ParseTarget(c.BackupTarget, c.BackupEndpoint, c.BackupRegion)
 }
 
 // DBPath returns the full path to the SQLite database file.
@@ -184,6 +233,9 @@ func defaults() Config {
 		TrustedProxies:      "",
 		SecretKey:           "",
 		PreviousSecretKey:   "",
+		BackupRegion:        "us-east-1",
+		BackupInterval:      backup.DefaultInterval,
+		BackupKeep:          backup.DefaultKeep,
 	}
 }
 
@@ -214,6 +266,14 @@ func Load(args []string) (Config, error) {
 	c.TrustedProxies = envStr("SUBGLANCE_TRUSTED_PROXIES", c.TrustedProxies)
 	c.SecretKey = envStr("SUBGLANCE_SECRET_KEY", c.SecretKey)
 	c.PreviousSecretKey = envStr("SUBGLANCE_SECRET_KEY_PREVIOUS", c.PreviousSecretKey)
+	c.BackupTarget = envStr("SUBGLANCE_BACKUP_TARGET", c.BackupTarget)
+	c.BackupEndpoint = envStr("SUBGLANCE_BACKUP_ENDPOINT", c.BackupEndpoint)
+	c.BackupRegion = envStr("SUBGLANCE_BACKUP_REGION", c.BackupRegion)
+	c.BackupInterval = env.dur("SUBGLANCE_BACKUP_INTERVAL", c.BackupInterval)
+	c.BackupKeep = env.int("SUBGLANCE_BACKUP_KEEP", c.BackupKeep)
+	c.BackupAccessKeyID = envStr("SUBGLANCE_BACKUP_ACCESS_KEY_ID", c.BackupAccessKeyID)
+	c.BackupSecretAccessKey = envStr("SUBGLANCE_BACKUP_SECRET_ACCESS_KEY", c.BackupSecretAccessKey)
+	c.BackupSecretAccessKeyFile = envStr("SUBGLANCE_BACKUP_SECRET_ACCESS_KEY_FILE", c.BackupSecretAccessKeyFile)
 	if err := env.err(); err != nil {
 		return Config{}, err
 	}
@@ -245,6 +305,14 @@ func Load(args []string) (Config, error) {
 	fs.StringVar(&c.PreviousSecretKey, "secret-key-previous", c.PreviousSecretKey,
 		"the key the stored configuration is currently under, for one start, to rotate to --secret-key "+
 			"or to decrypt back to plain text when --secret-key is empty")
+	fs.StringVar(&c.BackupTarget, "backup-target", c.BackupTarget,
+		"back up the database on a schedule to s3://bucket/prefix (empty = off); "+
+			"credentials come from SUBGLANCE_BACKUP_ACCESS_KEY_ID and SUBGLANCE_BACKUP_SECRET_ACCESS_KEY[_FILE]")
+	fs.StringVar(&c.BackupEndpoint, "backup-endpoint", c.BackupEndpoint,
+		"S3-compatible service URL for backups, for anything that is not AWS (empty = AWS S3)")
+	fs.StringVar(&c.BackupRegion, "backup-region", c.BackupRegion, "signing region of the backup bucket")
+	fs.DurationVar(&c.BackupInterval, "backup-interval", c.BackupInterval, "time between scheduled backups")
+	fs.IntVar(&c.BackupKeep, "backup-keep", c.BackupKeep, "how many backups to keep in the bucket")
 
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
@@ -319,6 +387,9 @@ func (c Config) validate() error {
 			"secret-key-previous names the key the data is currently under, so pass it only " +
 			"when it differs from the new one")
 	}
+	if err := c.validateBackup(); err != nil {
+		return err
+	}
 	if c.WatchdogURL != "" {
 		if err := watchdog.ValidateURL(c.WatchdogURL); err != nil {
 			return err
@@ -326,6 +397,45 @@ func (c Config) validate() error {
 		if c.WatchdogInterval <= 0 {
 			return fmt.Errorf("watchdog-interval must be positive, got %s", c.WatchdogInterval)
 		}
+	}
+	return nil
+}
+
+// validateBackup checks the backup settings only when backups are on, so an
+// instance that never set a target cannot fail to start over them — with one
+// exception: an endpoint or credentials with no target almost certainly means
+// the target variable was mistyped, and running without backups while
+// believing they are on is the failure this whole feature exists to prevent.
+func (c Config) validateBackup() error {
+	if c.BackupTarget == "" {
+		if c.BackupEndpoint != "" || c.BackupAccessKeyID != "" {
+			return errors.New("backup settings are present but backup-target is empty, so no backups would be taken; " +
+				"set SUBGLANCE_BACKUP_TARGET (or --backup-target) to s3://bucket/prefix")
+		}
+		return nil
+	}
+	if _, err := c.BackupTargetParsed(); err != nil {
+		return err
+	}
+	if c.BackupInterval < backup.MinInterval {
+		return fmt.Errorf("backup-interval must be at least %s, got %s", backup.MinInterval, c.BackupInterval)
+	}
+	if c.BackupKeep < 1 {
+		return fmt.Errorf("backup-keep must be at least 1, got %d", c.BackupKeep)
+	}
+	if c.BackupAccessKeyID == "" {
+		return errors.New("backup-target is set but SUBGLANCE_BACKUP_ACCESS_KEY_ID is empty")
+	}
+	if c.BackupSecretAccessKey != "" && c.BackupSecretAccessKeyFile != "" {
+		return errors.New("set SUBGLANCE_BACKUP_SECRET_ACCESS_KEY or SUBGLANCE_BACKUP_SECRET_ACCESS_KEY_FILE, not both")
+	}
+	secret, err := c.BackupSecret()
+	if err != nil {
+		return err
+	}
+	if secret == "" {
+		return errors.New("backup-target is set but no secret access key is configured; " +
+			"set SUBGLANCE_BACKUP_SECRET_ACCESS_KEY_FILE or SUBGLANCE_BACKUP_SECRET_ACCESS_KEY")
 	}
 	return nil
 }

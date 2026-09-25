@@ -97,6 +97,22 @@ services:
       # SUBGLANCE_SECRET_KEY set to the new key (rotate) or left empty
       # (decrypt back to plain text). Remove it again afterwards.
       # SUBGLANCE_SECRET_KEY_PREVIOUS: /run/secrets/subglance.key.old
+      #
+      # Scheduled backups to AWS S3 or any S3-compatible storage (Backblaze
+      # B2, Cloudflare R2, MinIO, Wasabi). Off unless a target is set. A daily
+      # compressed snapshot, the newest 14 kept, one notice to the default
+      # channel when it fails. Restore with `subglance restore`. The
+      # credentials are environment-only, never flags; prefer the _FILE form
+      # with a mounted secret, as for SUBGLANCE_SECRET_KEY above. See
+      # docs/operations.md for provider examples.
+      # SUBGLANCE_BACKUP_TARGET: s3://my-bucket/subglance
+      # SUBGLANCE_BACKUP_ENDPOINT: https://s3.eu-central-003.backblazeb2.com
+      # SUBGLANCE_BACKUP_REGION: us-east-1
+      # SUBGLANCE_BACKUP_INTERVAL: 24h
+      # SUBGLANCE_BACKUP_KEEP: "14"
+      # SUBGLANCE_BACKUP_ACCESS_KEY_ID: ""
+      # SUBGLANCE_BACKUP_SECRET_ACCESS_KEY_FILE: /run/secrets/s3.secret
+      # SUBGLANCE_BACKUP_SECRET_ACCESS_KEY: ""
 
     # ICMP ping checks need the container to allow unprivileged ICMP for the
     # process GID. Docker's own default already does; some Podman and

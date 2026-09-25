@@ -2,11 +2,12 @@
 //
 //	subglance --addr :8080 --data-dir /data
 //
-// It also answers two subcommands, because the shipped image is distroless and
+// It also answers three subcommands, because the shipped image is distroless and
 // has no shell to run anything else:
 //
 //	subglance healthcheck [--addr :8080]
 //	subglance backup <path> [--data-dir /data]
+//	subglance restore [--from NAME] [--data-dir /data]
 //
 // and it answers --version without loading configuration at all.
 //
@@ -51,10 +52,10 @@ func main() {
 		return
 	}
 
-	// Subcommands, and deliberately only these two: the shipped image is
+	// Subcommands, and deliberately only these three: the shipped image is
 	// distroless with no shell, so a container HEALTHCHECK and an operator
-	// taking a backup have nothing to invoke except this binary. Everything
-	// else stays flags-only.
+	// taking or restoring a backup have nothing to invoke except this binary.
+	// Everything else stays flags-only.
 	if len(args) > 0 {
 		switch args[0] {
 		case "healthcheck":
@@ -62,6 +63,9 @@ func main() {
 			return
 		case "backup":
 			runSubcommand("backup", runBackup, args[1:])
+			return
+		case "restore":
+			runSubcommand("restore", runRestore, args[1:])
 			return
 		}
 	}
@@ -207,6 +211,13 @@ func run(args []string) error {
 		},
 	})
 
+	// Scheduled backups, when a target is configured. Built before the API so
+	// the status endpoint and /metrics read the same runner that uploads.
+	backups, err := newBackups(cfg, db, log)
+	if err != nil {
+		return err
+	}
+
 	// The API is constructed before the server so a bad --trusted-proxies is
 	// a startup error rather than a limiter that quietly trusts nobody.
 	apiSrv, err := api.New(log, db).WithBus(bus).
@@ -292,6 +303,14 @@ func run(args []string) error {
 	// The API reads the same process-local history the send path writes.
 	// Explicit nil reports disabled, not an unavailable diagnostic source.
 	apiSrv.WithWatchdog(dog)
+	if backups != nil {
+		apiSrv.WithBackups(backups)
+		go backups.Run(ctx, backupFailureNotice(ctx, notify, log))
+	} else {
+		// Untyped nil: a nil *backup.Backups in the interface would read as
+		// configured and then panic on Status.
+		apiSrv.WithBackups(nil)
+	}
 	watchdogDone := make(chan struct{})
 	go func() {
 		defer close(watchdogDone)
