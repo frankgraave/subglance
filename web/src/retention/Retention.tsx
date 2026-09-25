@@ -82,7 +82,7 @@ function WindowField({ label, window, draft, onChange, disabled, estimateText, e
         <label><input type="checkbox" checked={draft.forever}
           onChange={(event) => onChange({ days: draft.days || String(window.seconds / DAY || 30), forever: event.target.checked })} /> Forever</label>
       </div>
-      <p className="auth-note" id={`${id}-help`}>
+      <p className="retention-note" id={`${id}-help`}>
         {pinned
           ? `Set by ${window.pinned_by} to ${describeWindow(window.seconds)}; change it there.`
           : estimateText ?? "No growth measured yet."}
@@ -151,9 +151,9 @@ function RetentionForm({ data, canAdmin, saved, setSaved }: {
         onChange={(next) => { setRollup(next); setSaved(false); }}
         estimateText={estimate(rollup.forever ? null : Number(rollup.days) || null, data.tables, ["heartbeat_hourly", "incidents"])}
         error={rejection?.field === "rollup_seconds" ? rejection.message : undefined} />
-      {!canAdmin && <p className="auth-note">Only an administrator can change retention.</p>}
+      {!canAdmin && <p className="retention-note">Only an administrator can change retention.</p>}
       {canAdmin && changed && shorter && (
-        <p className="auth-note" role="status">
+        <p className="retention-note" role="status">
           {preview.isError ? "Could not count what this change removes."
             : !impact ? "Counting what this change removes…"
             : removes ? `The next daily pass will fold ${count.format(impact.heartbeats)} raw heartbeats into hourly summaries and delete ${count.format(impact.hourly_buckets)} hourly summaries and ${count.format(impact.incidents)} resolved incidents.`
