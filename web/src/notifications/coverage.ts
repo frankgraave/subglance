@@ -11,6 +11,7 @@
  * Pure, so every branch is a table test rather than a render.
  */
 
+import { formatDuration } from "../monitors/detail";
 import type { InventoryMonitor } from "../monitors/inventory";
 import type { Channel } from "./channels";
 
@@ -41,13 +42,25 @@ export type Coverage = {
   recipients: readonly Recipient[];
   /** True when an alert from this monitor would reach nobody right now. */
   silent: boolean;
+  /**
+   * The monitor's repeat-alert base in seconds, 0 when it does not repeat,
+   * or null when the inventory did not carry the setting. Repeats are a
+   * per-monitor setting and travel the same routes as the first alert, so
+   * this is the one place the page states them (SUB-124, SUB-81).
+   */
+  repeatAfterS: number | null;
 };
 
 export function coverageOf(
   monitor: InventoryMonitor,
   channels: readonly Channel[],
 ): Coverage {
-  const base = { id: monitor.id, name: monitor.name, paused: !monitor.enabled };
+  const base = {
+    id: monitor.id,
+    name: monitor.name,
+    paused: !monitor.enabled,
+    repeatAfterS: monitor.repeatAfterS ?? null,
+  };
   const state = monitor.channels;
   if (!state.known) {
     return { ...base, route: "unknown", recipients: [], silent: false };
@@ -138,4 +151,24 @@ export function describeCoverage(c: Coverage): string {
       : `${named} (default)`;
   }
   return c.silent ? `nobody: ${named}` : named;
+}
+
+/**
+ * The words for a monitor's repeat alerts, or null when there is nothing
+ * worth saying.
+ *
+ * "from" rather than "every": the base is the first gap, and each later gap
+ * is four times the one before, up to a day (`internal/state/reminder.go`).
+ * "every 15 min" would promise the flat recurrence the schedule exists to
+ * avoid.
+ *
+ * Null for a silent monitor: a reminder that reaches nobody is not a setting
+ * worth reading next to the word "nobody", which is the finding. Null too
+ * when the setting was not loaded, so nothing is claimed about it.
+ */
+export function describeRepeat(c: Coverage): string | null {
+  if (c.repeatAfterS === null || c.route === "unknown") return null;
+  if (c.silent && !c.paused) return null;
+  if (c.repeatAfterS <= 0) return "no repeats";
+  return `repeats from ${formatDuration(c.repeatAfterS)}`;
 }

@@ -418,6 +418,15 @@
 }
 
 .nt-cov + .nt-cov-more { margin-top: var(--space-3); }
+
+/* The repeat setting is secondary to who hears, so it stays plain even on a
+   row whose recipients are set strong. */
+.nt-cov-repeat {
+  font-weight: var(--weight-plain);
+  color: var(--ink-2);
+}
+
+.nt-cov-repeats { margin-top: var(--space-3); }
 .nt-cov-more > .nt-cov { margin-top: var(--space-2); }
 
 /* ── Quiet hours in the channel form (SUB-124) ─────────────────────────────

@@ -926,6 +926,30 @@ describe("who hears what", () => {
     expect(within(status!).queryByText("billing")).toBeNull();
   });
 
+  it("shows each monitor's repeat setting beside who hears, and says where repeats go", () => {
+    render(
+      <NotificationsView
+        channels={[make()]}
+        monitors={[
+          mon(1, "billing", { channels: [{ id: 1, name: "On-call Slack" }], repeat_after_s: 900 }),
+          mon(2, "cdn", { channels: [{ id: 1, name: "On-call Slack" }], repeat_after_s: 0 }),
+        ]}
+      />,
+    );
+    const rows = within(screen.getByRole("list", { name: "Other monitors" }))
+      .getAllByRole("listitem")
+      .map((li) => li.textContent);
+    expect(rows).toEqual([
+      "billingOn-call Slack · repeats from 15 min",
+      "cdnOn-call Slack · no repeats",
+    ]);
+    // One mechanism: the page explains the per-monitor setting and offers no
+    // per-channel repeat control of its own.
+    expect(screen.getByText(/go to the same channels as the first alert/)).toBeTruthy();
+    expect(screen.queryByRole("checkbox", { name: /repeat|re-notify/i })).toBeNull();
+    expect(screen.queryByRole("switch", { name: /repeat|re-notify/i })).toBeNull();
+  });
+
   it("does not turn a failed monitor list into 'nobody hears'", () => {
     render(<NotificationsView channels={[make()]} monitors={null} monitorsFailed />);
     expect(screen.getByText(/could not be loaded, so who hears/i)).toBeTruthy();

@@ -6,6 +6,7 @@ import {
   coverageList,
   coverageOf,
   describeCoverage,
+  describeRepeat,
   silentCount,
   unconfirmedCount,
 } from "./coverage";
@@ -148,5 +149,54 @@ describe("unconfirmedCount", () => {
     );
     expect(silentCount(list)).toBe(0);
     expect(unconfirmedCount(list)).toBe(2);
+  });
+});
+
+describe("describeRepeat", () => {
+  /*
+   * SUB-124 asks that SUB-81's repeat alerts and what this page offers be one
+   * mechanism. The page therefore only reports the per-monitor setting; these
+   * cases pin that it reports it truthfully and never invents one.
+   */
+  const routed = { channels: [{ id: 1, name: "Pager" }] };
+
+  it("states the base as where the escalation starts, not a flat rate", () => {
+    const c = coverageOf(monitor({ ...routed, repeat_after_s: 900 }), [pager]);
+    expect(c.repeatAfterS).toBe(900);
+    expect(describeRepeat(c)).toBe("repeats from 15 min");
+  });
+
+  it("says a monitor with repeats off does not repeat", () => {
+    const c = coverageOf(monitor({ ...routed, repeat_after_s: 0 }), [pager]);
+    expect(describeRepeat(c)).toBe("no repeats");
+  });
+
+  it("claims nothing when the setting was not loaded", () => {
+    const c = coverageOf(monitor(routed), [pager]);
+    expect(c.repeatAfterS).toBeNull();
+    expect(describeRepeat(c)).toBeNull();
+  });
+
+  it("stays quiet on a silent monitor, where nobody is the finding", () => {
+    const c = coverageOf(
+      monitor({ channels: [{ id: 2, name: "Old" }], repeat_after_s: 900 }),
+      [off],
+    );
+    expect(c.silent).toBe(true);
+    expect(describeRepeat(c)).toBeNull();
+  });
+
+  it("still states it for a paused monitor, since it applies on resume", () => {
+    const c = coverageOf(
+      monitor({ ...routed, enabled: false, repeat_after_s: 3600 }),
+      [pager],
+    );
+    expect(describeRepeat(c)).toBe("repeats from 1 h");
+  });
+
+  it("claims nothing while the route is unknown", () => {
+    const c = coverageOf(monitor({ channels: undefined, repeat_after_s: 900 }), [pager]);
+    expect(c.route).toBe("unknown");
+    expect(describeRepeat(c)).toBeNull();
   });
 });
