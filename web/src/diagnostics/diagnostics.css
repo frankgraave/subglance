@@ -14,4 +14,7 @@
 }
 .diag-card dd { margin: var(--space-1) 0 0; overflow-wrap: anywhere; }
 .diag-card p { margin: 0; }
-.diag-note:empty { display: none; }
+/* The clipboard status stays in the accessibility tree while empty, so a
+   screen reader is already watching it when the message arrives. Out of flow
+   rather than display:none, so the empty region adds no gap to the card. */
+.diag-note:empty { position: absolute; }

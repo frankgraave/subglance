@@ -17,10 +17,15 @@ export function formatUptime(seconds: number): string {
  * The text "Copy diagnostics" puts on the clipboard, meant for a public bug
  * report. The database path is left out on purpose: it often carries a home
  * directory or a user name, and nothing in a bug report needs it.
+ *
+ * `staleSince` is the time of the last successful reading when the card is
+ * showing it as stale. The pasted text then says so on its first line, so an
+ * old queue depth cannot read as the current one in a bug report.
  */
-export function diagnosticsText(d: Diagnostics): string {
+export function diagnosticsText(d: Diagnostics, staleSince?: Date): string {
   const s = d.scheduler;
   return [
+    ...(staleSince ? [`stale: last successful reading at ${staleSince.toISOString()}; the latest refresh failed or is overdue`] : []),
     `subglance ${d.version}${d.commit ? ` (${d.commit})` : ""}`,
     `runtime ${d.go_version} ${d.platform}`,
     `uptime ${formatUptime(d.uptime_seconds)} (started ${d.started_at})`,

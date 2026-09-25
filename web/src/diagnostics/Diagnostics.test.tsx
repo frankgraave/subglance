@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
@@ -8,6 +11,9 @@ import { Settings } from "../settings/Settings";
 import { disabledWatchdog } from "../watchdog/fixtures";
 import { diagnosticsText, formatBytes, formatUptime } from "./format";
 import { steadyDiagnostics } from "./fixtures";
+import { diagnosticsKey } from "./api";
+
+const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "diagnostics.css"), "utf8");
 
 const clients: QueryClient[] = [];
 function settings(diagnostics: unknown, { canAdmin = true, status = 200 } = {}) {
@@ -37,6 +43,7 @@ it("shows the pool, the database and the build an administrator asked about", as
   expect(reading("Size").textContent).toBe("24 MiB + 4.0 MiB write-ahead log");
   expect(reading("Journal mode").textContent).toBe("WAL");
   expect(reading("Uptime").textContent).toBe("1 h 0 m");
+  for (const label of ["Uptime", "Started"]) expect(reading(label).querySelector(".value"), label).not.toBeNull();
   expect(reading("Monitors scheduled").textContent).toBe("62");
 });
 
@@ -103,7 +110,30 @@ it("copies a bug-report summary that leaves the database path out", async () => 
   expect(copied).toContain("workers 2/16 busy, queue 0");
   expect(copied).toContain("subglance 0.1.0 (a17f3c9)");
   expect(copied).not.toContain("/var/lib/subglance");
+  expect(copied).not.toContain("stale");
   Reflect.deleteProperty(navigator, "clipboard");
+});
+
+it("marks a copied summary as stale when the card shows the last readings", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  settings(steadyDiagnostics);
+  await screen.findByText("2 / 16 busy");
+  vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 500 })));
+  await clients[0]!.refetchQueries({ queryKey: diagnosticsKey });
+  await screen.findByText("Diagnostics unavailable. Showing the last readings.");
+  Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+  fireEvent.click(screen.getByRole("button", { name: "Copy diagnostics" }));
+  await screen.findByText("Copied. The database path is left out.");
+  expect(writeText.mock.calls[0]![0] as string).toMatch(/^stale: last successful reading at \d{4}-/);
+  Reflect.deleteProperty(navigator, "clipboard");
+});
+
+it("keeps the clipboard status region in the accessibility tree before it has a message", async () => {
+  settings(steadyDiagnostics);
+  await screen.findByText("2 / 16 busy");
+  const note = within(card()).getAllByRole("status").find((n) => n.classList.contains("diag-note"));
+  expect(note).toBeTruthy();
+  expect(css).not.toMatch(/\.diag-note:empty\s*\{[^}]*display:\s*none/);
 });
 
 it("formats the readings the way an operator reads them", () => {

@@ -39,7 +39,7 @@ export function DiagnosticsCard() {
     // navigator.clipboard is absent over plain HTTP on a LAN address, which is
     // how a self-hosted instance is often reached. Say so rather than fail.
     if (navigator.clipboard === undefined) { setCopied("Clipboard unavailable on this connection; select the values instead."); return; }
-    void navigator.clipboard.writeText(diagnosticsText(d)).then(
+    void navigator.clipboard.writeText(diagnosticsText(d, old ? new Date(query.dataUpdatedAt) : undefined)).then(
       () => setCopied("Copied. The database path is left out."),
       () => setCopied("Could not copy; select the values instead."),
     );
@@ -57,8 +57,8 @@ export function DiagnosticsCard() {
           <Row label="Runtime">{d.go_version} {d.platform}</Row>
         </dl></Panel>
         <Panel label="Process"><dl>
-          <Row label="Uptime">{formatUptime(d.uptime_seconds)}</Row>
-          <Row label="Started"><time dateTime={d.started_at}>{new Date(d.started_at).toLocaleString(undefined, { timeZoneName: "short" })}</time></Row>
+          <Row label="Uptime"><Value>{formatUptime(d.uptime_seconds)}</Value></Row>
+          <Row label="Started"><Value><time dateTime={d.started_at}>{new Date(d.started_at).toLocaleString(undefined, { timeZoneName: "short" })}</time></Value></Row>
         </dl></Panel>
         <Panel label="Database"><dl>
           <Row label="Path"><code>{d.database.path}</code></Row>
