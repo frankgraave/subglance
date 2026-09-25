@@ -306,6 +306,26 @@ export function LiveNotifications({
       if (id !== null) clearError(id);
       const saved = id === null ? await create(input) : await update(id, input);
       /*
+       * An edited channel loses its test result.
+       *
+       * The result was about the configuration that was stored a moment ago.
+       * Someone who just replaced a revoked Telegram token would otherwise see
+       * the old red "Test failed" beside the new token, or worse, an old green
+       * tick beside a credential nothing has ever exercised.
+       *
+       * Cleared as soon as the update is stored, before the quiet-hours
+       * request below can fail: that failure throws, and the new
+       * configuration is on the server either way.
+       */
+      if (id !== null) {
+        setDeliveries((current) => {
+          if (!(id in current)) return current;
+          const next = { ...current };
+          delete next[id];
+          return next;
+        });
+      }
+      /*
        * Quiet hours are their own resource on the server, so they are a
        * second request, sent only when the form says the window changed:
        * replacing a window releases whatever it holds, and an unchanged one
@@ -332,22 +352,6 @@ export function LiveNotifications({
         }
       }
       await queryClient.invalidateQueries({ queryKey: channelsQueryKey });
-      /*
-       * An edited channel loses its test result.
-       *
-       * The result was about the configuration that was stored a moment ago.
-       * Someone who just replaced a revoked Telegram token would otherwise see
-       * the old red "Test failed" beside the new token, or worse, an old green
-       * tick beside a credential nothing has ever exercised.
-       */
-      if (id !== null) {
-        setDeliveries((current) => {
-          if (!(id in current)) return current;
-          const next = { ...current };
-          delete next[id];
-          return next;
-        });
-      }
     },
     [clearError, create, queryClient, setQuiet, update],
   );

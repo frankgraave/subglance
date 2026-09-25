@@ -123,6 +123,37 @@ describe("LiveNotifications", () => {
     );
   });
 
+  it("drops a test result even when the edited window is refused", async () => {
+    // The channel update is stored before quiet hours are sent, so the old
+    // result is stale whether or not the second request succeeds.
+    const update = vi.fn().mockResolvedValue(make());
+    const setQuiet = vi
+      .fn()
+      .mockRejectedValue(new Error("unknown IANA timezone"));
+    render(
+      <LiveNotificationsRoot
+        client={client()}
+        list={async () => [make()]}
+        test={async () => ({ ok: true }) as const}
+        update={update}
+        setQuiet={setQuiet}
+      />,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: /send test/i }));
+    expect(await screen.findByText("Test delivered")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Edit/ }));
+    fireEvent.click(
+      await screen.findByRole("checkbox", { name: /hold this channel's alerts/i }),
+    );
+    fireEvent.change(screen.getByLabelText("Timezone"), {
+      target: { value: "Europe/Amsterdam" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    expect(await screen.findByText(/quiet hours were not/)).toBeTruthy();
+    expect(screen.queryByText("Test delivered")).toBeNull();
+  });
+
   it("offers a viewer nothing that would 403", async () => {
     render(
       <LiveNotificationsRoot

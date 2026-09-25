@@ -108,6 +108,7 @@ export function QuietHoursField({
                 value={value.timezone}
                 onChange={(event) => set({ timezone: event.target.value })}
                 aria-describedby={described}
+                {...(error !== null ? { "aria-invalid": true as const } : {})}
                 placeholder="Europe/Amsterdam"
               />
               {zones.length > 0 && (

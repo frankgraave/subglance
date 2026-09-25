@@ -149,5 +149,19 @@ describe("ChannelForm quiet hours", () => {
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
     expect(onSave).not.toHaveBeenCalled();
     expect(screen.getByRole("alert").textContent).toMatch(/named timezone/);
+    expect(screen.getByLabelText("Timezone").getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("does not re-check a stored window that is not being sent", async () => {
+    // The server accepted this zone with its own data; an older browser that
+    // does not know it must not block a rename.
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ChannelForm channel={email({ ...NIGHT, timezone: "Mars/Olympus" })} onSave={onSave} />,
+    );
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Ops list" } });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    expect(onSave.mock.calls[0][1]).toBeUndefined();
   });
 });

@@ -141,12 +141,18 @@ export function ChannelForm({
       if (value !== "") config[spec.key] = value;
     }
 
-    const quietError = quietProblem(quiet);
+    /*
+     * Only a window that is about to be sent is checked. An unchanged stored
+     * window is not re-sent, and the server judged its timezone against its
+     * own zone data; this browser's Intl data may be older and must not block
+     * a rename. Removal (null) has nothing to check.
+     */
+    const quietNext = quietChange(storedQuiet, quiet);
+    const quietError = quietNext ? quietProblem(quiet) : null;
     if (quietError !== null) {
       setProblem({ message: quietError, key: QUIET });
       return;
     }
-    const quietNext = quietChange(storedQuiet, quiet);
 
     setSaving(true);
     void (async () => {
