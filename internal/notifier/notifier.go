@@ -371,6 +371,18 @@ func (n *Notifier) sweep(ctx context.Context) (int, error) {
 
 // attempt performs one delivery and records the outcome.
 func (n *Notifier) attempt(ctx context.Context, d store.Delivery) error {
+	if d.QuietHeld {
+		// Loaded in the same batch as a row that has since folded this
+		// one into a digest: its content is already on its way.
+		held, err := n.db.StillHeld(ctx, d.ID)
+		if err != nil {
+			return err
+		}
+		if !held {
+			return nil
+		}
+	}
+
 	ch, err := n.db.GetChannel(ctx, d.ChannelID)
 	if err != nil {
 		// The channel was deleted while this was queued. There is
@@ -410,6 +422,17 @@ func (n *Notifier) attempt(ctx context.Context, d store.Delivery) error {
 		return n.retryMaintenance(ctx, d, err)
 	}
 	if !keep {
+		return nil
+	}
+
+	// Quiet hours come after maintenance: an alert that maintenance
+	// suppresses should not be held overnight only to be suppressed at 07:00.
+	handled, err := n.applyQuietHours(ctx, d)
+	if err != nil {
+		n.log.Error("could not apply quiet hours to delivery", "delivery", d.ID, "error", err)
+		return n.retryMaintenance(ctx, d, err)
+	}
+	if handled {
 		return nil
 	}
 
@@ -456,7 +479,8 @@ func (n *Notifier) attempt(ctx context.Context, d store.Delivery) error {
 	return nil
 }
 
-// retryMaintenance keeps the delivery pending until its prerequisite can be
+// retryMaintenance keeps the delivery pending until its prerequisite (a
+// maintenance or quiet-hours decision) can be
 // evaluated and persisted, without charging an attempt before Send. Repeated
 // prerequisite failures keep the current delivery backoff. A failed deferral
 // write reaches Run so even a database

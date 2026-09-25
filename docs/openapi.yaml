@@ -2106,6 +2106,87 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
       x-subglance-access: write
+  /api/v1/channels/{id}/quiet-hours:
+    parameters:
+      - $ref: '#/components/parameters/ChannelId'
+    put:
+      tags: [Channels]
+      operationId: setChannelQuietHours
+      summary: Set or replace a channel's quiet hours
+      description: |
+        A daily window, in the channel's own timezone, during which the channel
+        does not deliver. An `end` earlier than `start` runs past midnight.
+
+        `during` decides what happens to an alert that comes due inside the
+        window. `hold` (the default when omitted) keeps it, and when the window
+        ends two or more held alerts are sent as one digest; a single held
+        alert is sent as itself. `drop` discards it; the queued row is kept and
+        marked, so the reason nothing was sent stays visible.
+
+        The window is evaluated when a delivery is attempted, not when it is
+        queued. Replacing the window releases anything the old one was holding,
+        so no alert waits for an end time that is no longer configured.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuietHoursRequest'
+      responses:
+        '200':
+          description: The quiet hours now in force.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuietHours'
+        '400':
+          description: An invalid id, malformed JSON, or a window that fails validation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ChannelNotFound'
+        '500':
+          description: The quiet hours could not be stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: write
+    delete:
+      tags: [Channels]
+      operationId: clearChannelQuietHours
+      summary: Remove a channel's quiet hours
+      description: |
+        Anything the window was holding becomes due at once. Two or more held
+        alerts are sent as one digest; a single held alert is sent as itself.
+      responses:
+        '204':
+          description: The channel no longer has quiet hours.
+        '400':
+          $ref: '#/components/responses/InvalidId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: The channel does not exist or has no quiet hours.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: The quiet hours could not be removed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: write
   /api/v1/channels/{id}/test:
     parameters:
       - $ref: '#/components/parameters/ChannelId'
@@ -4118,6 +4199,14 @@ components:
         updated_at:
           type: string
           format: date-time
+        quiet_hours:
+          description: |
+            The channel's daily quiet window, or null when it has none. Changed
+            only through `/api/v1/channels/{id}/quiet-hours`; the response to a
+            create is always null.
+          oneOf:
+            - $ref: '#/components/schemas/QuietHours'
+            - type: 'null'
     ChannelList:
       type: object
       required: [channels]
@@ -4126,6 +4215,48 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Channel'
+    QuietHours:
+      type: object
+      required: [start, end, timezone, during]
+      properties:
+        start:
+          type: string
+          pattern: '^(?:[01][0-9]|2[0-3]):[0-5][0-9]$'
+          description: Local wall-clock start, inclusive.
+          example: '23:00'
+        end:
+          type: string
+          pattern: '^(?:[01][0-9]|2[0-3]):[0-5][0-9]$'
+          description: Local wall-clock end, exclusive. Earlier than `start` means the window runs past midnight.
+          example: '07:00'
+        timezone:
+          type: string
+          description: An IANA timezone name. `Local` is rejected, because the server's zone is not the reader's.
+          example: Europe/Amsterdam
+        during:
+          type: string
+          enum: [hold, drop]
+          description: What happens to an alert inside the window.
+          example: hold
+    QuietHoursRequest:
+      type: object
+      required: [start, end, timezone]
+      properties:
+        start:
+          type: string
+          pattern: '^(?:[01][0-9]|2[0-3]):[0-5][0-9]$'
+          example: '23:00'
+        end:
+          type: string
+          pattern: '^(?:[01][0-9]|2[0-3]):[0-5][0-9]$'
+          example: '07:00'
+        timezone:
+          type: string
+          example: Europe/Amsterdam
+        during:
+          type: string
+          enum: [hold, drop]
+          description: Defaults to `hold`, the mode that cannot lose an alert.
     ChannelRequest:
       type: object
       description: |
