@@ -79,6 +79,11 @@ func TestBackupThenRestoreGivesBackTheSameData(t *testing.T) {
 	if len(res.SetAside) != 2 {
 		t.Fatalf("set aside %v, want the old database and its -wal", res.SetAside)
 	}
+	// SQLite pairs a database with <name>-wal, so the suffix must follow
+	// the stamp for the set-aside files to open as one database.
+	if want := dbPath + ".before-restore-20260926T080000Z-wal"; res.SetAside[1] != want {
+		t.Errorf("set-aside WAL is %s, want %s", res.SetAside[1], want)
+	}
 	if got := readMarker(t, res.SetAside[0]); got != "the wrong data" {
 		t.Errorf("the database that was replaced was not kept: %q", got)
 	}
@@ -160,5 +165,30 @@ func TestRestoreWithAnEmptyBucket(t *testing.T) {
 	_, err := Restore(context.Background(), restoreOpts(t, srv.URL, filepath.Join(t.TempDir(), "subglance.db")))
 	if err == nil || !strings.Contains(err.Error(), "no backups found") {
 		t.Fatalf("err = %v, want no backups found", err)
+	}
+}
+
+// An empty payload is a valid empty SQLite database and passes quick_check;
+// restoring it would replace the real database with nothing.
+func TestRestoreRefusesAnEmptyDatabase(t *testing.T) {
+	fake, srv := newFakeS3(t, "bucket")
+	var gz bytes.Buffer
+	zw := gzip.NewWriter(&gz)
+	_ = zw.Close()
+	fake.objects["nightly/subglance-20260925T030000Z.db.gz"] = gz.Bytes()
+
+	dbPath := filepath.Join(t.TempDir(), "subglance.db")
+	current, _ := sql.Open("sqlite", dbPath)
+	if _, err := current.Exec(`CREATE TABLE marker (v TEXT); INSERT INTO marker VALUES ('keep me')`); err != nil {
+		t.Fatal(err)
+	}
+	_ = current.Close()
+
+	_, err := Restore(context.Background(), restoreOpts(t, srv.URL, dbPath))
+	if err == nil || !strings.Contains(err.Error(), "no tables") {
+		t.Fatalf("err = %v, want a refusal naming the missing tables", err)
+	}
+	if got := readMarker(t, dbPath); got != "keep me" {
+		t.Errorf("current database changed to %q", got)
 	}
 }

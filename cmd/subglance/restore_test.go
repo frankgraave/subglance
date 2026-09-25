@@ -20,6 +20,9 @@ func TestSplitRestoreFlags(t *testing.T) {
 }
 
 func TestRestoreNeedsATarget(t *testing.T) {
+	// Hermetic even in a shell that exports the backup settings: otherwise
+	// this would dial a real bucket.
+	t.Setenv("SUBGLANCE_BACKUP_TARGET", "")
 	err := runRestore([]string{"--data-dir", t.TempDir()}, &bytes.Buffer{})
 	if err == nil || !strings.Contains(err.Error(), "SUBGLANCE_BACKUP_TARGET") {
 		t.Fatalf("err = %v, want one naming SUBGLANCE_BACKUP_TARGET", err)

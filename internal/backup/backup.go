@@ -313,9 +313,12 @@ func (b *Backups) prune(ctx context.Context) (int, error) {
 	return deleted, nil
 }
 
-// Run takes a backup every interval until ctx is cancelled. onFailure, when
-// not nil, is called once per failed run with the error; the server uses it
-// to send an alert, because a backup that fails silently is not a backup.
+// Run takes a backup every interval until ctx is cancelled. onResult, when
+// not nil, is called once per completed run: with the error when it failed,
+// with nil when it uploaded cleanly. The server uses it to send an alert,
+// because a backup that fails silently is not a backup, and uses the nil to
+// end a failing streak. A run whose upload succeeded but whose pruning failed
+// reports the prune error, so it does not end a streak.
 //
 // The first run is timed from the newest backup already in the bucket, not
 // from process start. Otherwise an instance restarted more often than the
@@ -324,7 +327,8 @@ func (b *Backups) prune(ctx context.Context) (int, error) {
 // When the bucket cannot be read, the first run is taken straight away: it
 // will most likely fail too, and fail loudly, which is what an operator who
 // just set this up needs to see.
-func (b *Backups) Run(ctx context.Context, onFailure func(error)) {
+func (b *Backups) Run(ctx context.Context, onResult func(error)) {
+	b.removeStaleStaging()
 	next := b.firstRun(ctx)
 	b.log.Info("scheduled backups enabled",
 		"target", b.target.String(), "interval", b.interval, "keep", b.keep,
@@ -345,6 +349,9 @@ func (b *Backups) Run(ctx context.Context, onFailure func(error)) {
 		case err == nil:
 			b.log.Info("backup uploaded", "object", res.Object, "bytes", res.Size, "pruned", res.Pruned)
 			next = b.now().Add(b.interval)
+			if onResult != nil {
+				onResult(nil)
+			}
 		case ctx.Err() != nil:
 			return
 		case errors.Is(err, ErrBusy):
@@ -353,16 +360,46 @@ func (b *Backups) Run(ctx context.Context, onFailure func(error)) {
 			b.log.Error("backup uploaded, but old backups could not be removed",
 				"object", res.Object, "error", err)
 			next = b.now().Add(b.interval)
-			if onFailure != nil {
-				onFailure(err)
+			if onResult != nil {
+				onResult(err)
 			}
 		default:
 			retry := min(b.interval, retryAfterFailure)
 			b.log.Error("backup failed", "target", b.target.String(), "error", err, "retry_in", retry)
 			next = b.now().Add(retry)
-			if onFailure != nil {
-				onFailure(err)
+			if onResult != nil {
+				onResult(err)
 			}
+		}
+	}
+}
+
+// stagingPatterns match the files runOnce writes into the staging directory.
+var stagingPatterns = []string{".backup-*.db", ".backup-*.db.gz"}
+
+// removeStaleStaging deletes staging files left by a run that never reached
+// its deferred cleanup: a process killed mid-backup by SIGKILL, the OOM killer
+// or a container stop timeout. Each later run picks a new name, so nothing
+// else would ever remove them, and each is a full copy of the database.
+//
+// It holds the running flag while it does so, so it cannot delete the files
+// of a run that is in progress.
+func (b *Backups) removeStaleStaging() {
+	if !b.running.CompareAndSwap(false, true) {
+		return
+	}
+	defer b.running.Store(false)
+	for _, pattern := range stagingPatterns {
+		matches, err := filepath.Glob(filepath.Join(b.staging, pattern))
+		if err != nil {
+			continue
+		}
+		for _, m := range matches {
+			if err := os.Remove(m); err != nil && !errors.Is(err, os.ErrNotExist) {
+				b.log.Warn("could not remove a leftover backup staging file", "path", m, "error", err)
+				continue
+			}
+			b.log.Info("removed a leftover backup staging file", "path", m)
 		}
 	}
 }

@@ -267,7 +267,7 @@ func TestObjectURLStyles(t *testing.T) {
 }
 
 // Run on a bucket that refuses uploads: the first run happens straight away,
-// the failure reaches onFailure, and cancelling stops the loop.
+// the failure reaches onResult, and cancelling stops the loop.
 func TestRunReportsAFailedBackup(t *testing.T) {
 	db := openStore(t)
 	fake, srv := newFakeS3(t, "bucket")
@@ -289,7 +289,7 @@ func TestRunReportsAFailedBackup(t *testing.T) {
 			t.Errorf("failure = %v, want the upload error", err)
 		}
 	case <-time.After(10 * time.Second):
-		t.Fatal("a failed backup never reached onFailure")
+		t.Fatal("a failed backup never reached onResult")
 	}
 	cancel()
 	select {
@@ -299,5 +299,59 @@ func TestRunReportsAFailedBackup(t *testing.T) {
 	}
 	if st := b.Status(); st.Failures != 1 || st.LastError == "" {
 		t.Errorf("status = %+v", st)
+	}
+}
+
+// A clean run reports nil, which is what ends a failing streak.
+func TestRunReportsACleanBackup(t *testing.T) {
+	db := openStore(t)
+	_, srv := newFakeS3(t, "bucket")
+	clk := &clock{t: time.Date(2026, 9, 25, 3, 0, 0, 0, time.UTC)}
+	b := newBackups(t, db, srv.URL, 3, clk)
+
+	results := make(chan error, 4)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		b.Run(ctx, func(err error) { results <- err })
+	}()
+	defer func() { cancel(); <-done }()
+
+	select {
+	case err := <-results:
+		if err != nil {
+			t.Errorf("result = %v, want nil for a clean backup", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("a clean backup never reached onResult")
+	}
+}
+
+// A process killed mid-backup leaves its staging files behind; the next Run
+// removes them before it does anything else, and leaves other files alone.
+func TestRunRemovesStagingLeftByAKilledRun(t *testing.T) {
+	db := openStore(t)
+	_, srv := newFakeS3(t, "bucket")
+	clk := &clock{t: time.Date(2026, 9, 25, 3, 0, 0, 0, time.UTC)}
+	b := newBackups(t, db, srv.URL, 3, clk)
+
+	stale := []string{".backup-1.db", ".backup-2.db.gz"}
+	for _, name := range append(stale, "subglance.db") {
+		if err := os.WriteFile(filepath.Join(b.staging, name), []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	b.Run(ctx, nil)
+
+	for _, name := range stale {
+		if _, err := os.Stat(filepath.Join(b.staging, name)); !os.IsNotExist(err) {
+			t.Errorf("%s is still in the staging directory", name)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(b.staging, "subglance.db")); err != nil {
+		t.Errorf("a file that is not a staging file was touched: %v", err)
 	}
 }

@@ -106,21 +106,39 @@ func Restore(ctx context.Context, opts RestoreOptions) (RestoreResult, error) {
 	}
 
 	res := RestoreResult{Object: name}
+	// The suffix goes after the stamp, so the set-aside files keep SQLite's
+	// pairing: the WAL of db.before-restore-<stamp> is looked for at
+	// db.before-restore-<stamp>-wal, and a crashed server's WAL can hold
+	// committed transactions the main file does not have yet.
+	var moved []string
 	for _, suffix := range []string{"", "-wal", "-shm"} {
 		path := opts.DBPath + suffix
 		if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
 			continue
 		}
-		aside := path + ".before-restore-" + stamp
+		aside := opts.DBPath + ".before-restore-" + stamp + suffix
 		if err := os.Rename(path, aside); err != nil {
-			return res, fmt.Errorf("move %s aside: %w", path, err)
+			putBack(res.SetAside, moved)
+			return RestoreResult{Object: name}, fmt.Errorf("move %s aside: %w", path, err)
 		}
 		res.SetAside = append(res.SetAside, aside)
+		moved = append(moved, path)
 	}
 	if err := os.Rename(staged, opts.DBPath); err != nil {
-		return res, fmt.Errorf("put the restored database in place: %w", err)
+		putBack(res.SetAside, moved)
+		return RestoreResult{Object: name}, fmt.Errorf("put the restored database in place: %w", err)
 	}
 	return res, nil
+}
+
+// putBack undoes the renames of a restore that failed partway, newest first,
+// so a failure leaves the database where it was instead of leaving no
+// database at all — which the next start would silently replace with an
+// empty one.
+func putBack(aside, original []string) {
+	for i := len(aside) - 1; i >= 0; i-- {
+		_ = os.Rename(aside[i], original[i])
+	}
 }
 
 // Download fetches one backup and writes it, decompressed, to dest. It
@@ -153,6 +171,13 @@ func Download(ctx context.Context, c *client, t Target, name, dest string) error
 		_ = os.Remove(dest)
 		return fmt.Errorf("download %s: %w", name, err)
 	}
+	// On disk before it replaces the database: after a crash, a renamed but
+	// unsynced file can come back empty, with the old database already moved.
+	if err := out.Sync(); err != nil {
+		_ = out.Close()
+		_ = os.Remove(dest)
+		return fmt.Errorf("download %s: %w", name, err)
+	}
 	if err := out.Close(); err != nil {
 		_ = os.Remove(dest)
 		return err
@@ -172,6 +197,16 @@ func quickCheck(ctx context.Context, path string) error {
 	}
 	if !strings.EqualFold(result, "ok") {
 		return errors.New(result)
+	}
+	// SQLite opens a zero-length file as a valid, empty database, and
+	// quick_check passes it. A backup with no tables would replace the real
+	// database with nothing.
+	var tables int
+	if err := db.QueryRowContext(ctx, "SELECT count(*) FROM sqlite_master WHERE type = 'table'").Scan(&tables); err != nil {
+		return err
+	}
+	if tables == 0 {
+		return errors.New("it holds no tables")
 	}
 	return nil
 }

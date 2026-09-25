@@ -303,10 +303,17 @@ func run(args []string) error {
 	// The API reads the same process-local history the send path writes.
 	// Explicit nil reports disabled, not an unavailable diagnostic source.
 	apiSrv.WithWatchdog(dog)
+	// Waited for on shutdown, so a backup cut short by the signal gets to
+	// remove its staging files before the process exits.
+	backupsDone := make(chan struct{})
 	if backups != nil {
 		apiSrv.WithBackups(backups)
-		go backups.Run(ctx, backupFailureNotice(ctx, notify, log))
+		go func() {
+			defer close(backupsDone)
+			backups.Run(ctx, backupFailureNotice(ctx, notify, log))
+		}()
 	} else {
+		close(backupsDone)
 		// Untyped nil: a nil *backup.Backups in the interface would read as
 		// configured and then panic on Status.
 		apiSrv.WithBackups(nil)
@@ -375,6 +382,15 @@ func run(args []string) error {
 	// stop waiting when the budget expires: db.Close() is deferred and runs
 	// the moment this function returns.
 	awaitScheduler(schedulerDone, schedulerBudget, log)
+
+	// A backup in progress sees ctx cancelled and returns promptly; its
+	// deferred cleanup removes the snapshot. Bounded anyway, and whatever
+	// is left is removed on the next start.
+	select {
+	case <-backupsDone:
+	case <-shutdownCtx.Done():
+		log.Warn("backup did not stop within the shutdown timeout; its staging files are removed on the next start")
+	}
 
 	// And for the watchdog's farewell ping, so a planned restart does not
 	// read as a crash at the other end.

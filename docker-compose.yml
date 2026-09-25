@@ -107,7 +107,7 @@ services:
       # docs/operations.md for provider examples.
       # SUBGLANCE_BACKUP_TARGET: s3://my-bucket/subglance
       # SUBGLANCE_BACKUP_ENDPOINT: https://s3.eu-central-003.backblazeb2.com
-      # SUBGLANCE_BACKUP_REGION: us-east-1
+      # SUBGLANCE_BACKUP_REGION: eu-central-003
       # SUBGLANCE_BACKUP_INTERVAL: 24h
       # SUBGLANCE_BACKUP_KEEP: "14"
       # SUBGLANCE_BACKUP_ACCESS_KEY_ID: ""

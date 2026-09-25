@@ -38,12 +38,18 @@ func newBackups(cfg config.Config, db *store.DB, log *slog.Logger) (*backup.Back
 	})
 }
 
-// backupFailureNotice returns the callback the backup runner calls when a run
-// fails. It sends one notice to the default channel per failing streak, and
-// again each day the streak lasts; see backup.AlertGate for why.
+// backupFailureNotice returns the callback the backup runner calls after each
+// run. It sends one notice to the default channel per failing streak, and
+// again each day the streak lasts; see backup.AlertGate for why. A clean run
+// (err == nil) ends the streak, so the next failure is news again even when it
+// comes within the day.
 func backupFailureNotice(ctx context.Context, notify *notifier.Notifier, log *slog.Logger) func(error) {
 	var gate backup.AlertGate
 	return func(err error) {
+		if err == nil {
+			gate.Forget()
+			return
+		}
 		now := time.Now()
 		if !gate.ShouldAlert(now) {
 			return
