@@ -945,7 +945,7 @@ describe("who hears what", () => {
     ]);
     // One mechanism: the page explains the per-monitor setting and offers no
     // per-channel repeat control of its own.
-    expect(screen.getByText(/go to the same channels as the first alert/)).toBeTruthy();
+    expect(screen.getByText(/go to the monitor's current channels/)).toBeTruthy();
     expect(screen.queryByRole("checkbox", { name: /repeat|re-notify/i })).toBeNull();
     expect(screen.queryByRole("switch", { name: /repeat|re-notify/i })).toBeNull();
   });

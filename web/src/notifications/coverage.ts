@@ -45,8 +45,9 @@ export type Coverage = {
   /**
    * The monitor's repeat-alert base in seconds, 0 when it does not repeat,
    * or null when the inventory did not carry the setting. Repeats are a
-   * per-monitor setting and travel the same routes as the first alert, so
-   * this is the one place the page states them (SUB-124, SUB-81).
+   * per-monitor setting and are routed when sent, through the monitor's
+   * current channels, so this is the one place the page states them
+   * (SUB-124, SUB-81).
    */
   repeatAfterS: number | null;
 };
