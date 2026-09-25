@@ -525,10 +525,20 @@ unknown name is refused with the name of the newest one.
 
 It is careful in three ways:
 
-- **It refuses while something answers on `--addr`**, since replacing the
-  file under a running server loses whatever the server writes next. Stop
-  SubGlance first. `--force` exists for when the thing answering is not
-  SubGlance.
+- **It refuses while a server holds the data directory.** Replacing the file
+  under a running server loses whatever the server writes next, so stopping
+  SubGlance first is enforced, not just advised. The server holds an
+  exclusive lock on `subglance.lock` in the data directory for as long as it
+  runs, and the restore takes the same lock and keeps it until the new
+  database is in place. The lock belongs to the operating system (`flock` on
+  Linux and macOS, `LockFileEx` on Windows), so it works across containers
+  sharing one volume, and a server that crashed leaves nothing behind to
+  clean up. The same lock stops a second server from starting on a data
+  directory that is already in use. Leave the file where it is; deleting it
+  does not release a lock that is held.
+- **It also refuses while something answers on `--addr`**, as a second guard.
+  `--force` skips only this check, for when the thing answering is not
+  SubGlance; it never overrides the lock.
 - **It checks the download before touching anything.** A backup that does not
   decompress or fails SQLite's `quick_check` leaves the current database where
   it is.

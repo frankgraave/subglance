@@ -118,6 +118,16 @@ func run(args []string) error {
 		return fmt.Errorf("create data dir %s: %w", cfg.DataDir, err)
 	}
 
+	// Held for the whole life of the process, before the database is
+	// touched: it is what lets `subglance restore` refuse to replace the
+	// database under a running server, including from a container with its
+	// own network namespace, where the address check cannot see this one.
+	lock, err := lockDataDir(cfg.DataDir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = lock.Release() }()
+
 	// Give startup its own bounded context: a database that hangs on open
 	// should fail loudly rather than leave the process wedged before it ever
 	// serves a request.
