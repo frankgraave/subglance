@@ -236,32 +236,16 @@ func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	users, err := s.db.ListUsers(r.Context())
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "could not verify the account")
-		return
-	}
-
-	admins := 0
-	var target *store.User
-	for i, u := range users {
-		if u.Role == store.RoleAdmin {
-			admins++
-		}
-		if u.ID == id {
-			target = &users[i]
-		}
-	}
-	if target == nil {
+	// The last-administrator guard lives in the store statement itself, so
+	// two administrators deleting each other at once cannot both succeed.
+	switch err := s.db.DeleteUser(r.Context(), id); {
+	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, "user not found")
 		return
-	}
-	if target.Role == store.RoleAdmin && admins <= 1 {
+	case errors.Is(err, store.ErrLastAdmin):
 		writeError(w, http.StatusBadRequest, "cannot delete the last administrator")
 		return
-	}
-
-	if err := s.db.DeleteUser(r.Context(), id); err != nil {
+	case err != nil:
 		s.log.Error("delete user", "user_id", id, "error", err)
 		writeError(w, http.StatusInternalServerError, "could not delete the account")
 		return
@@ -269,6 +253,63 @@ func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
 
 	s.log.Info("user deleted", "user_id", id, "by", caller.ID)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+type updateUserRequest struct {
+	Role *string `json:"role"`
+}
+
+// handleUpdateUser changes an account's role. Admin only.
+//
+// The role is the only field: an email address is how the person signs in,
+// and a password is theirs to change, not an administrator's to know.
+func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
+	caller, _ := UserFromContext(r.Context())
+
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+
+	var req updateUserRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	if req.Role == nil {
+		writeProblem(w, http.StatusBadRequest, fieldProblem("role", "role is required"))
+		return
+	}
+	role := store.Role(*req.Role)
+	if !role.Valid() {
+		writeProblem(w, http.StatusBadRequest, fieldProblem("role", "role must be admin, editor or viewer"))
+		return
+	}
+
+	// Changing your own role can only ever lower it, and the administrator
+	// doing that is the one person on the page who could undo it. Another
+	// administrator can still do it for them.
+	if id == caller.ID {
+		writeProblem(w, http.StatusBadRequest, fieldProblem("role", "you cannot change your own role"))
+		return
+	}
+
+	user, err := s.db.SetUserRole(r.Context(), id, role)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		writeError(w, http.StatusNotFound, "user not found")
+		return
+	case errors.Is(err, store.ErrLastAdmin):
+		writeProblem(w, http.StatusBadRequest, fieldProblem("role", "cannot demote the last administrator"))
+		return
+	case err != nil:
+		s.log.Error("set user role", "user_id", id, "error", err)
+		writeError(w, http.StatusInternalServerError, "could not change the role")
+		return
+	}
+
+	s.log.Info("user role changed", "user_id", id, "role", user.Role, "by", caller.ID)
+	writeJSON(w, http.StatusOK, toUserResponse(user))
 }
 
 func containsAt(s string) bool {

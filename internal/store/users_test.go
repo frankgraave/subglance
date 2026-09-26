@@ -182,7 +182,7 @@ func TestDeleteUserCascadesToSessionsAndTokens(t *testing.T) {
 	db := openTestDB(t)
 	ctx := t.Context()
 
-	user, err := db.CreateUser(ctx, "a@example.com", "correct-horse-battery-staple", RoleAdmin)
+	user, err := db.CreateUser(ctx, "a@example.com", "correct-horse-battery-staple", RoleEditor)
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}

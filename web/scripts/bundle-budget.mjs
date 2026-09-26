@@ -200,8 +200,16 @@ const budgets = {
    * fit in; 147 covers both, so neither fails on whichever merges second.
    * CSS measures 16,374 of 16,384 and stays put: the card declares two
    * rules and reuses the auth form, the push-URL reveal and retention notes.
+   *
+   * 147 -> 148 KiB gzip for SUB-28 (the users card on /settings), merged onto
+   * develop 8e21e09, which measures 149,348 bytes of entry JS (Node gzip,
+   * level 6); this branch measures about 150,630: some 1,280 bytes for a card
+   * that lists the accounts with their roles, a role picker per row that saves
+   * only on an explicit button, a two-step removal, an add form with a role and
+   * a password floor, and a shape check that refuses a list with an unknown
+   * role. No new dependency and no new CSS. 148 leaves about 920 bytes.
    */
-  js: 147,
+  js: 148,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *
