@@ -282,6 +282,12 @@ const budgets = {
    * masthead instead of under it. The "you are here" paint is the sidebar's
    * own `[data-state="current"]` rule, reused rather than restated. At 16.5
    * the next card on this page would move it again.
+   *
+   * SUB-149 (list rows that fit the column they are given) spends about 140
+   * bytes more inside the same ceiling: two container queries that replace
+   * two viewport media queries, the container declarations, and the channel
+   * row's own copy of the wrap rules (a container condition cannot be a
+   * variable, so the inventory's block cannot serve a second width).
    */
   css: 17,
   fonts: 80,

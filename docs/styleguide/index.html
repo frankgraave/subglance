@@ -1544,6 +1544,16 @@
         <td><code>--bp-tablet</code></td>
         <td class="sg-value"><code>900px</code></td>
         <td class="sg-why">Breakpoints: named here, and NOT usable as var() in a media query. Verified in Chromium rather than assumed: a custom property inside `@media (max-width: var(--bp-phone))` does not resolve -- the query is evaluated <details class="sg-more"><summary>more</summary>before custom properties are substituted, so the whole block is silently dropped and the rule never applies. The literal form works. This is per CSS spec, not a browser bug, and `@custom-media` is not shipped anywhere. So these tokens document the ladder and give the guard a list to check the literals against; `tokens.test.ts` asserts every `@media` width in the product is one of them. They are not referenced by the stylesheets themselves, which is the one place in this file where a token is documentation rather than a value in use. The `+1` partners exist because `max-width: 640px` and `min-width: 641px` must not both match at exactly 640px.</details></td>
+      </tr>
+      <tr>
+        <td><code>--bp-inventory-row</code></td>
+        <td class="sg-value"><code>836px</code></td>
+        <td class="sg-why">the monitors inventory row fits on one line</td>
+      </tr>
+      <tr>
+        <td><code>--bp-channel-row</code></td>
+        <td class="sg-value"><code>638px</code></td>
+        <td class="sg-why">the notification channel row fits on one line</td>
       </tr></tbody>
     </table>
 </section>

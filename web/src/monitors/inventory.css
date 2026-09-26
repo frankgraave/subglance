@@ -24,6 +24,9 @@
   flex-direction: column;
   gap: var(--space-2);
   list-style: none;
+  /* The list is the query container for the row's two shapes; see the
+     `@container inv-list` rule below for why it is not the viewport. */
+  container: inv-list / inline-size;
 }
 
 .inv-row {
@@ -242,15 +245,40 @@
 }
 
 /*
- * Phone: the settings columns stop pretending to be a table and wrap under the
- * name. The page itself never scrolls sideways — that lesson is already in
- * incidents.css — so nothing here keeps a fixed width that could push the
- * document past the viewport.
+ * Too narrow for one line: the settings columns stop pretending to be a table
+ * and wrap under the name. The page itself never scrolls sideways — that
+ * lesson is already in incidents.css — so nothing here keeps a fixed width
+ * that could push the document past the viewport.
+ *
+ * A container query on the list, not a media query on the viewport
+ * (SUB-149). What decides whether the row fits is the width it is given, and
+ * the viewport does not know that: the expanded sidebar takes 232px of it and
+ * the collapsed rail 56px. Keyed to the viewport at 900px, the one-line row
+ * came back at 901px into a 607px list and scrolled the page 81px sideways.
+ *
+ * 836px is measured, not guessed. The row's fixed parts — lamp, the four
+ * settings columns, the four action squares and the gaps between them — take
+ * 706px, its padding and edges 26px, and the name gets a floor of rung 3
+ * (104px): the name is the only way to identify the row, so it must never be
+ * narrower than the "Timeout" column beside it. 706 + 26 + 104 = 836. Below
+ * that the one-line row would squeeze the name to a sliver before it
+ * overflowed; wrapping gives it the full width instead.
+ *
+ * `min-width: 0` on the wrapped meta row is the other half. Its automatic
+ * minimum is the min-content of its widest column, and the tags column's is
+ * every tag side by side: at 641px beside the sidebar that held the row 67px
+ * past a 321px list, wrapped or not. With it the tags column truncates, as
+ * it already does on one line.
+ *
+ * The literal is deliberate: a `var()` in a container condition never
+ * matches, for the same reason as in a media query (AGENTS.md). It is a rung
+ * on the breakpoint ladder, `--bp-inventory-row`, and the guard in
+ * tokens.test.ts holds it there.
  */
-@media (max-width: 900px) {
+@container inv-list (width < 836px) {
   .inv-line { flex-wrap: wrap; row-gap: var(--space-2); }
   .inv-main { flex: 1 1 100%; }
-  .inv-meta { flex: 1 1 100%; flex-wrap: wrap; }
+  .inv-meta { flex: 1 1 100%; flex-wrap: wrap; min-width: 0; }
   .inv-col--type,
   .inv-col--num,
   .inv-col--chan,

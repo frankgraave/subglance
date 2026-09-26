@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { useCompactViewport, useMediaQuery } from "./useMediaQuery";
+import {
+  SIDEBAR_VETO_MAX_WIDTH,
+  useCompactViewport,
+  useMediaQuery,
+  useSidebarSqueeze,
+} from "./useMediaQuery";
 
 afterEach(() => {
   cleanup();
@@ -67,5 +72,43 @@ describe("useMediaQuery", () => {
     }
     render(<Raw />);
     expect(screen.getByText("no")).toBeTruthy();
+  });
+});
+
+/**
+ * A `matchMedia` that answers `(max-width: N)` against a fixed width, so the
+ * two queries `useSidebarSqueeze` asks get different answers the way a real
+ * viewport gives them.
+ */
+function stubWidth(width: number) {
+  vi.stubGlobal("matchMedia", (query: string) => {
+    const max = /\(max-width:\s*(\d+)px\)/.exec(query);
+    return {
+      media: query,
+      matches: max !== null && width <= Number(max[1]),
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    };
+  });
+}
+
+function SqueezeProbe({ collapsed }: { collapsed: boolean }) {
+  return <span>{useSidebarSqueeze(collapsed) ? "squeezed" : "fits"}</span>;
+}
+
+describe("useSidebarSqueeze (SUB-149)", () => {
+  it.each([
+    // [viewport, sidebar collapsed, expected]
+    [641, false, "squeezed"],
+    [SIDEBAR_VETO_MAX_WIDTH, false, "squeezed"],
+    [SIDEBAR_VETO_MAX_WIDTH + 1, false, "fits"],
+    // The rail leaves the column the row layout was designed into.
+    [641, true, "fits"],
+    // Below the breakpoint the phone veto owns the answer, not this one.
+    [640, false, "fits"],
+  ] as const)("at %ipx, collapsed=%s: %s", (width, collapsed, expected) => {
+    stubWidth(width);
+    render(<SqueezeProbe collapsed={collapsed} />);
+    expect(screen.getByText(expected)).toBeTruthy();
   });
 });
