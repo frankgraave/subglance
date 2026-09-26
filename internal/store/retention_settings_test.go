@@ -76,7 +76,7 @@ func TestResolveRetentionPrecedence(t *testing.T) {
 		t.Fatalf("empty database resolved to %+v, want the defaults", eff)
 	}
 
-	if err := db.SetRetention(ctx, dur(14*day), dur(90*day), RetentionPins{}); err != nil {
+	if _, err := db.SetRetention(ctx, dur(14*day), dur(90*day), RetentionPins{}); err != nil {
 		t.Fatalf("SetRetention: %v", err)
 	}
 	eff, err = db.ResolveRetention(ctx, RetentionPins{})
@@ -106,7 +106,7 @@ func TestResolveRetentionPrecedence(t *testing.T) {
 func TestResolveRetentionLengthensAStoredWindowAPinInvalidates(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
-	if err := db.SetRetention(ctx, dur(7*day), dur(30*day), RetentionPins{}); err != nil {
+	if _, err := db.SetRetention(ctx, dur(7*day), dur(30*day), RetentionPins{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -134,11 +134,11 @@ func TestResolveRetentionLengthensAStoredWindowAPinInvalidates(t *testing.T) {
 func TestSetRetentionRefusesAnInvalidPairAndKeepsTheOldValue(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
-	if err := db.SetRetention(ctx, dur(14*day), nil, RetentionPins{}); err != nil {
+	if _, err := db.SetRetention(ctx, dur(14*day), nil, RetentionPins{}); err != nil {
 		t.Fatal(err)
 	}
 
-	err := db.SetRetention(ctx, nil, dur(7*day), RetentionPins{})
+	_, err := db.SetRetention(ctx, nil, dur(7*day), RetentionPins{})
 	var re *RetentionError
 	if !errors.As(err, &re) || re.Window != "rollup" {
 		t.Fatalf("SetRetention(rollup inside raw) = %v, want a rollup RetentionError", err)
@@ -153,7 +153,7 @@ func TestSetRetentionRefusesAnInvalidPairAndKeepsTheOldValue(t *testing.T) {
 
 	// Checked against the pin, since that is what the stored value has to
 	// live next to.
-	err = db.SetRetention(ctx, nil, dur(10*day), RetentionPins{Raw: &RetentionPin{Value: 20 * day, By: "--raw-retention"}})
+	_, err = db.SetRetention(ctx, nil, dur(10*day), RetentionPins{Raw: &RetentionPin{Value: 20 * day, By: "--raw-retention"}})
 	if !errors.As(err, &re) {
 		t.Fatalf("SetRetention under a longer pinned raw window = %v, want refused", err)
 	}
@@ -253,5 +253,60 @@ func TestPreviewRetentionCountsWithoutDeleting(t *testing.T) {
 	}
 	if impact != (RetentionImpact{}) {
 		t.Errorf("keep-forever preview = %+v, want nothing removed", impact)
+	}
+}
+
+func TestRetentionVersionCountsSaves(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+
+	if v, err := db.RetentionVersion(ctx); err != nil || v != 0 {
+		t.Fatalf("RetentionVersion before any save = %d, %v; want 0", v, err)
+	}
+	v1, err := db.SetRetention(ctx, dur(14*day), nil, RetentionPins{})
+	if err != nil || v1 != 1 {
+		t.Fatalf("first save = %d, %v; want version 1", v1, err)
+	}
+	// A refused save is not a save: the version an editor holds must stay
+	// good after somebody else's invalid attempt.
+	if _, err := db.SetRetention(ctx, nil, dur(7*day), RetentionPins{}); err == nil {
+		t.Fatal("rollup inside raw was accepted")
+	}
+	if v, err := db.RetentionVersion(ctx); err != nil || v != 1 {
+		t.Fatalf("version after a refused save = %d, %v; want 1", v, err)
+	}
+	if v2, err := db.SetRetention(ctx, dur(14*day), nil, RetentionPins{}); err != nil || v2 != 2 {
+		t.Fatalf("an identical save = %d, %v; want version 2", v2, err)
+	}
+}
+
+func TestSetRetentionIfVersionRefusesAStaleEditor(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+
+	// Two editors read version 0. The first saves.
+	v, err := db.SetRetentionIfVersion(ctx, dur(60*day), nil, RetentionPins{}, []int64{0})
+	if err != nil || v != 1 {
+		t.Fatalf("first conditional save = %d, %v; want version 1", v, err)
+	}
+	// The second still holds version 0, so its save describes a policy it
+	// never saw and is refused without writing.
+	if _, err := db.SetRetentionIfVersion(ctx, dur(20*day), nil, RetentionPins{}, []int64{0}); !errors.Is(err, ErrRetentionVersion) {
+		t.Fatalf("stale save = %v, want ErrRetentionVersion", err)
+	}
+	raw, _, err := db.StoredRetention(ctx)
+	if err != nil || raw == nil || *raw != 60*day {
+		t.Fatalf("stored raw after a refused save = %v, %v; want the first editor's 60 days", raw, err)
+	}
+	if v, _ := db.RetentionVersion(ctx); v != 1 {
+		t.Errorf("a refused save moved the version to %d", v)
+	}
+	if _, err := db.SetRetentionIfVersion(ctx, dur(20*day), nil, RetentionPins{}, nil); !errors.Is(err, ErrRetentionVersion) {
+		t.Errorf("an empty version list = %v, want it to match nothing", err)
+	}
+
+	// Having re-read, the second editor can save.
+	if v, err := db.SetRetentionIfVersion(ctx, dur(20*day), nil, RetentionPins{}, []int64{7, 1}); err != nil || v != 2 {
+		t.Fatalf("save with the current version = %d, %v; want version 2", v, err)
 	}
 }

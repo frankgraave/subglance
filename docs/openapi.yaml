@@ -294,6 +294,10 @@ paths:
         last 24 hours of heartbeats will become, incidents resolved per day
         over the last 30 days. `bytes` covers the table and its indexes and is
         null if the page statistics are unavailable.
+
+        The response carries a weak `ETag` versioning the saved windows. Hand
+        it back as `If-Match` on a PUT to make that save conditional on nobody
+        having saved in the meantime.
       x-subglance-access: read
       responses:
         '200':
@@ -301,6 +305,8 @@ paths:
           headers:
             Cache-Control:
               schema: { type: string, const: 'private, no-store' }
+            ETag:
+              $ref: '#/components/headers/RetentionETag'
           content:
             application/json:
               schema:
@@ -327,7 +333,25 @@ paths:
         are kept at least a day, because the 24-hour charts read them, and
         hourly summaries at least as long as raw heartbeats (forever when raw
         heartbeats are kept forever).
+
+        With `If-Match` set to the `ETag` from GET, the save is refused with
+        `412 Precondition Failed` if anyone saved the windows after that read.
+        Without it the save is last-write-wins. The settings page always sends
+        it, because it previews only a change that shortens a window: a save
+        built on a stale read could shorten retention without anyone having
+        seen what that removes. `If-Match: *` is accepted and matches always.
+        A syntactically invalid `If-Match` is a `400`.
       x-subglance-access: admin
+      parameters:
+        - name: If-Match
+          in: header
+          required: false
+          description: |
+            The retention `ETag` from GET, making the save conditional on the
+            windows still having that version. The weakness prefix is ignored.
+          schema:
+            type: string
+          example: W/"3"
       requestBody:
         required: true
         content:
@@ -346,14 +370,20 @@ paths:
             windows are committed before the tables are measured, so if the
             measurement fails `tables` is empty rather than the save being
             reported as failed.
+          headers:
+            ETag:
+              $ref: '#/components/headers/RetentionETag'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Retention'
         '204':
           description: Saved, but the windows now in force could not be read back. Read them again with GET.
+          headers:
+            ETag:
+              $ref: '#/components/headers/RetentionETag'
         '400':
-          description: Malformed JSON, no window given, or a window that breaks a rule above. `field` names the window.
+          description: Malformed JSON or `If-Match`, no window given, or a window that breaks a rule above. `field` names the window.
           content:
             application/json:
               schema:
@@ -364,6 +394,16 @@ paths:
           $ref: '#/components/responses/ForbiddenAdmin'
         '409':
           description: The window is pinned by a flag or environment variable, which the message names.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '412':
+          description: |
+            `If-Match` was sent and the windows were saved by someone else
+            since. Nothing was written. Read them again, re-check what the
+            change removes, and retry with the fresh `ETag`. No `ETag`
+            accompanies this response, so a client cannot blindly retry.
           content:
             application/json:
               schema:
@@ -2683,8 +2723,9 @@ paths:
         understand that the token is gone rather than assume it can be looked
         up later.
 
-        A token inherits the role of the user who created it, so an editor's
-        token cannot administer. Issuing one requires the editor role: a token
+        A token acts with at most the role it is created with, and never more
+        than its owner's current role, so an editor's token cannot administer
+        and an administrator can issue a read-only token for a dashboard. Issuing one requires the editor role: a token
         is a long-lived credential that outlives the session and leaves the
         browser, which is a broader act than reading in the UI. A viewer may
         still list and revoke its own tokens.
@@ -2703,8 +2744,9 @@ paths:
                 $ref: '#/components/schemas/CreateTokenResponse'
         '400':
           description: |
-            Malformed or unknown-field JSON, a missing or over-long name, or an
-            `expires_in` that is unparseable or not positive.
+            Malformed or unknown-field JSON, a missing or over-long name, an
+            `expires_in` that is unparseable or not positive, or an unknown
+            `role`.
           content:
             application/json:
               schema:
@@ -2914,8 +2956,8 @@ components:
         An API token in `Authorization: Bearer <token>`, created via
         `POST /api/v1/tokens`. Intended for scripts and CI.
 
-        A token carries exactly the rights of the user who created it, so the
-        UI has no privileges a script cannot have. When an `Authorization`
+        A token acts with the lower of its own role and the current role of
+        the user who created it. When an `Authorization`
         header is present it is the only credential considered: a malformed one
         is rejected rather than falling back to the session cookie.
   parameters:
@@ -2958,6 +3000,13 @@ components:
       schema:
         type: string
       example: W/"1757606400"
+    RetentionETag:
+      description: |
+        A weak entity tag counting saves of the retention windows. Send it
+        back as `If-Match` to make a subsequent PUT conditional.
+      schema:
+        type: string
+      example: W/"3"
   responses:
     Unauthorized:
       description: No valid credentials were presented.
@@ -4621,7 +4670,7 @@ components:
     ApiToken:
       type: object
       description: An API token's metadata. The token value itself is never returned here.
-      required: [id, name, prefix, created_at]
+      required: [id, name, prefix, role, created_at]
       properties:
         id:
           type: integer
@@ -4638,6 +4687,14 @@ components:
             tell two tokens apart without seeing enough to be useful to a
             thief.
           example: sgp_a1b2
+        role:
+          type: string
+          enum: [admin, editor, viewer]
+          description: |
+            What the token may do today: the lower of the role it was created
+            with and its owner's current role, so demoting a user demotes their
+            tokens too.
+          example: viewer
         created_at:
           type: string
           format: date-time
@@ -4668,6 +4725,13 @@ components:
             A positive Go duration measured from now. Omitted or empty means
             the token never expires.
           example: 720h
+        role:
+          type: string
+          enum: [admin, editor, viewer]
+          description: |
+            The most the token may do. Omitted means the role this request
+            acts with. A role above the caller's own is refused with 403.
+          example: viewer
       additionalProperties: false
     CreateTokenResponse:
       type: object

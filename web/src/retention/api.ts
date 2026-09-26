@@ -1,4 +1,4 @@
-import { apiFetch, apiJSON, apiRequest } from "../api/http";
+import { apiFetch, apiRequest } from "../api/http";
 
 /** One retention window as the server reports it. `seconds: 0` is forever. */
 export interface RetentionWindow {
@@ -20,6 +20,12 @@ export interface Retention {
   rollup: RetentionWindow;
   minimum_raw_seconds: number;
   tables: RetentionTable[];
+  /**
+   * The ETag that came with these windows, sent back as If-Match so a save
+   * cannot overwrite a change it never saw. Client-side only; null when the
+   * response carried none.
+   */
+  etag?: string | null;
 }
 
 export interface RetentionImpact {
@@ -31,11 +37,15 @@ export interface RetentionImpact {
 export const retentionKey = ["retention"] as const;
 
 export async function fetchRetention(signal?: AbortSignal): Promise<Retention> {
-  const data: unknown = await apiJSON<unknown>("/api/v1/settings/retention", { signal, cache: "no-store" });
+  return readRetention(await apiRequest("/api/v1/settings/retention", { signal, cache: "no-store" }));
+}
+
+async function readRetention(res: Response): Promise<Retention> {
+  const data: unknown = await res.json();
   // A window misread as 0 would render as "forever" and could be saved back
   // that way, so anything off-shape is an error rather than a guess.
   if (!validRetention(data)) throw new Error("Retention settings unavailable.");
-  return data;
+  return { ...data, etag: res.headers.get("ETag") };
 }
 
 const count = (value: unknown) => typeof value === "number" && Number.isFinite(value) && value >= 0;
@@ -68,15 +78,16 @@ export async function previewRetention(raw: number, rollup: number, signal?: Abo
 
 /**
  * Saves only the windows that are not pinned; a pinned one would be refused with a 409.
- * Resolves to null when the save succeeded but the server could not read the windows
- * back (204), so the caller refetches instead of reporting a failure.
+ * Conditional on `etag`: if anyone saved since it was read, the server answers 412
+ * (an `ApiError`) and writes nothing. Resolves to null when the save succeeded but
+ * the server could not read the windows back (204), so the caller refetches instead
+ * of reporting a failure.
  */
-export async function saveRetention(body: { raw_seconds?: number; rollup_seconds?: number }): Promise<Retention | null> {
+export async function saveRetention(body: { raw_seconds?: number; rollup_seconds?: number }, etag: string): Promise<Retention | null> {
   const res = await apiRequest("/api/v1/settings/retention", {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "If-Match": etag },
     body: JSON.stringify(body),
   });
-  if (res.status === 204) return null;
-  return (await res.json()) as Retention;
+  return res.status === 204 ? null : readRetention(res);
 }

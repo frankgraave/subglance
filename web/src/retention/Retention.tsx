@@ -93,8 +93,10 @@ function WindowField({ label, window, draft, onChange, disabled, estimateText, e
   );
 }
 
-function RetentionForm({ data, canAdmin, saved, setSaved }: {
-  data: Retention; canAdmin: boolean; saved: boolean; setSaved: (saved: boolean) => void;
+type Outcome = "saved" | "stale" | null;
+
+function RetentionForm({ data, canAdmin, outcome, setOutcome }: {
+  data: Retention; canAdmin: boolean; outcome: Outcome; setOutcome: (outcome: Outcome) => void;
 }) {
   const client = useQueryClient();
   const [raw, setRaw] = useState(() => draftOf(data.raw));
@@ -125,20 +127,35 @@ function RetentionForm({ data, canAdmin, saved, setSaved }: {
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!valid || saving || !previewReady) return;
+    // Without a version the save could only be unconditional, which is the
+    // overwrite the version exists to prevent. Refuse rather than downgrade.
+    if (!data.etag) {
+      setRejection({ message: "Reload the page before saving: the server did not say which version of the settings this is." });
+      return;
+    }
     const body: { raw_seconds?: number; rollup_seconds?: number } = {};
     if (data.raw.source !== "pinned") body.raw_seconds = rawSeconds;
     if (data.rollup.source !== "pinned") body.rollup_seconds = rollupSeconds;
     setSaving(true);
     setRejection(null);
-    setSaved(false);
+    setOutcome(null);
     try {
-      const next = await saveRetention(body);
+      const next = await saveRetention(body, data.etag);
       if (next) client.setQueryData(retentionKey, next);
       // The windows are saved either way; the measurements that did not come
       // back with them are read again rather than shown as an empty table.
       if (!next || next.tables.length === 0) void client.invalidateQueries({ queryKey: retentionKey });
-      setSaved(true);
+      setOutcome("saved");
     } catch (error) {
+      // Someone saved since this page read the windows. The draft was judged
+      // against windows that are no longer in force — a change that looked
+      // longer may now be shorter, and was never previewed — so it is not
+      // retried. The windows are read again and the form restarts from them.
+      if (error instanceof ApiError && error.status === 412) {
+        setOutcome("stale");
+        void client.invalidateQueries({ queryKey: retentionKey });
+        return;
+      }
       setRejection(error instanceof ApiError
         ? { message: error.message, field: error.field ?? undefined }
         : { message: "Could not reach SubGlance. Check your connection and try again." });
@@ -152,11 +169,11 @@ function RetentionForm({ data, canAdmin, saved, setSaved }: {
   return (
     <form className="auth-form" aria-label="Retention" onSubmit={submit}>
       <WindowField label="Keep raw heartbeats" window={data.raw} draft={raw} disabled={!canAdmin || saving}
-        onChange={(next) => { setRaw(next); setSaved(false); }}
+        onChange={(next) => { setRaw(next); setOutcome(null); }}
         estimateText={estimate(raw.forever ? null : Number(raw.days) || null, data.tables, ["heartbeats", "heartbeat_responses"])}
         error={rejection?.field === "raw_seconds" ? rejection.message : undefined} />
       <WindowField label="Keep hourly summaries and resolved incidents" window={data.rollup} draft={rollup} disabled={!canAdmin || saving}
-        onChange={(next) => { setRollup(next); setSaved(false); }}
+        onChange={(next) => { setRollup(next); setOutcome(null); }}
         estimateText={estimate(rollup.forever ? null : Number(rollup.days) || null, data.tables, ["heartbeat_hourly", "incidents"])}
         error={rejection?.field === "rollup_seconds" ? rejection.message : undefined} />
       {!canAdmin && <p className="retention-note">Only an administrator can change retention.</p>}
@@ -176,7 +193,9 @@ function RetentionForm({ data, canAdmin, saved, setSaved }: {
           </button>
         </div>
       )}
-      {saved && <p role="status">Saved. The new windows apply from the next daily pass.</p>}
+      {outcome && <p role={outcome === "stale" ? "alert" : "status"}>{outcome === "stale"
+        ? "Retention was changed by someone else while you were editing. The form now shows what is in force; check it and save again."
+        : "Saved. The new windows apply from the next daily pass."}</p>}
     </form>
   );
 }
@@ -184,9 +203,9 @@ function RetentionForm({ data, canAdmin, saved, setSaved }: {
 /** Retention windows, what each table costs today, and what a change would remove. */
 export function RetentionCard({ canAdmin }: { canAdmin: boolean }) {
   const query = useQuery({ queryKey: retentionKey, queryFn: ({ signal }) => fetchRetention(signal) });
-  // Held here rather than in the form: a save remounts the form (see its
-  // key), and the confirmation has to outlive that.
-  const [saved, setSaved] = useState(false);
+  // Held here rather than in the form: a save, or a reload after a refused
+  // one, remounts the form (see its key), and the message has to outlive it.
+  const [outcome, setOutcome] = useState<Outcome>(null);
   const data = query.data;
   return (
     <Card title="Retention & storage" className="retention-card">
@@ -208,7 +227,7 @@ export function RetentionCard({ canAdmin }: { canAdmin: boolean }) {
           </table>
           {/* Keyed on the windows in force, so a save or a refetch that changes
               them starts the form again from what the server now says. */}
-          <RetentionForm key={`${data.raw.seconds}/${data.rollup.seconds}`} data={data} canAdmin={canAdmin} saved={saved} setSaved={setSaved} />
+          <RetentionForm key={`${data.raw.seconds}/${data.rollup.seconds}`} data={data} canAdmin={canAdmin} outcome={outcome} setOutcome={setOutcome} />
         </>}
       </Panel>
     </Card>

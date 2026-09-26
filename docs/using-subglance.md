@@ -110,6 +110,11 @@ Three roles decide what a credential may do to monitors and incidents:
 listing and revoking are limited to the caller's own: any role may list its
 tokens and revoke one, while minting a new token needs editor or admin.
 
+A token can carry less authority than the account that made it: pass
+`"role":"viewer"` when creating one for a dashboard that only reads. A token
+never acts above its owner's current role, so demoting an account demotes its
+tokens too. Without a role, a token acts with the creator's role.
+
 ## Check types
 
 | Type | Target shape | What it verifies |
