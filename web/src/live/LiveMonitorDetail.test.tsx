@@ -256,6 +256,7 @@ describe("LiveMonitorDetail", () => {
         : ok(url));
     await act(async () => { await client.refetchQueries({ queryKey: ["monitor-detail"] }); });
     await waitFor(() => expect(document.body.textContent).toContain("Could not refresh uptime"));
+    await waitFor(() => expect(document.body.textContent).toContain("Could not refresh incidents"));
     expect(screen.getByText("24h", { selector: "dt" })).toBeTruthy();
     expect(document.body.textContent).toMatch(/Recovered at/);
   });
