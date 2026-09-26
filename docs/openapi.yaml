@@ -2758,8 +2758,10 @@ paths:
       description: |
         What this process is and whether its check pipeline keeps up: build,
         runtime, start time, the database file and the worker pool. It backs
-        the instance card on the settings page and is meant to be pasted into
-        a bug report as is, so it contains no secrets and no monitor data.
+        the instance card on the settings page. The summary its copy button
+        puts on the clipboard is meant for a bug report and leaves out
+        `database.path`; remove that field from a raw response before sharing
+        it. The response contains no secrets and no monitor data.
 
         Administrators only, because the database path and the runtime
         describe the host. The pool readings come from the same source as
