@@ -46,6 +46,8 @@ tags:
     description: API tokens for scripts and CI.
   - name: Users
     description: Account administration.
+  - name: Settings
+    description: Instance-wide settings, such as how long history is kept.
 security:
   - sessionCookie: []
   - bearerToken: []
@@ -270,6 +272,215 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '503':
           description: Diagnostic source unavailable; must not be interpreted as not configured.
+  /api/v1/settings/retention:
+    get:
+      tags: [Settings]
+      operationId: getRetention
+      summary: Read retention windows and table sizes
+      description: |
+        The windows the next maintenance pass will apply, where each one came
+        from, and what the tables they govern cost today. Any authenticated
+        role may read it.
+
+        Precedence, highest first: a flag or environment variable, the value
+        saved here, the built-in default (raw heartbeats 30 days, hourly
+        summaries and resolved incidents forever). A saved value that a
+        pinned partner window makes invalid is set aside for the nearest
+        valid value, lengthened where possible, and reported in
+        `set_aside_seconds`.
+
+        `rows_per_day` is measured, not modelled: raw heartbeats and failure
+        responses over the last 24 hours, hourly summaries as the buckets the
+        last 24 hours of heartbeats will become, incidents resolved per day
+        over the last 30 days. `bytes` covers the table and its indexes and is
+        null if the page statistics are unavailable.
+      x-subglance-access: read
+      responses:
+        '200':
+          description: Windows in force and table usage.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: 'private, no-store' }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Retention'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: The settings or the database size could not be read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      tags: [Settings]
+      operationId: setRetention
+      summary: Change retention windows
+      description: |
+        Administrators only. Stores one or both windows; an absent window is
+        left as it is, and 0 means keep forever. The change applies from the
+        next daily maintenance pass without a restart.
+
+        There is no upper limit beyond what the server can represent (100
+        years). The rules that are enforced protect the data: raw heartbeats
+        are kept at least a day, because the 24-hour charts read them, and
+        hourly summaries at least as long as raw heartbeats (forever when raw
+        heartbeats are kept forever).
+      x-subglance-access: admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                raw_seconds: { type: integer, minimum: 0, maximum: 3153600000 }
+                rollup_seconds: { type: integer, minimum: 0, maximum: 3153600000 }
+      responses:
+        '200':
+          description: |
+            Saved. The windows now in force, in the same shape as GET. The
+            windows are committed before the tables are measured, so if the
+            measurement fails `tables` is empty rather than the save being
+            reported as failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Retention'
+        '204':
+          description: Saved, but the windows now in force could not be read back. Read them again with GET.
+        '400':
+          description: Malformed JSON, no window given, or a window that breaks a rule above. `field` names the window.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenAdmin'
+        '409':
+          description: The window is pinned by a flag or environment variable, which the message names.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: The settings could not be saved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/settings/retention/preview:
+    get:
+      tags: [Settings]
+      operationId: previewRetention
+      summary: Count what a retention change would remove
+      description: |
+        Counts what a maintenance pass under the proposed windows would remove
+        if it ran now, without changing anything. An absent parameter uses the
+        window in force. Raw heartbeats counted here are folded into hourly
+        summaries, not lost, but their per-check detail and stored failure
+        responses go; hourly summaries and incidents are deleted outright.
+      x-subglance-access: read
+      parameters:
+        - name: raw_seconds
+          in: query
+          required: false
+          schema: { type: integer, minimum: 0 }
+        - name: rollup_seconds
+          in: query
+          required: false
+          schema: { type: integer, minimum: 0 }
+      responses:
+        '200':
+          description: Rows the next pass would remove.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: 'private, no-store' }
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [heartbeats, hourly_buckets, incidents]
+                properties:
+                  heartbeats: { type: integer, minimum: 0 }
+                  hourly_buckets: { type: integer, minimum: 0 }
+                  incidents: { type: integer, minimum: 0 }
+        '400':
+          description: A window that is not a number, or that breaks a retention rule.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: The counts could not be read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/backup:
+    get:
+      tags: [Health]
+      operationId: getBackupStatus
+      summary: Read scheduled backup status
+      description: |
+        Status of scheduled backups to S3-compatible storage, for the
+        diagnostics section of the settings page. Administrators only: the
+        target names a bucket and the last error can quote the storage
+        service's reply about it.
+
+        Process-local: restarting clears the history, though not the backups.
+        `configured: false` means no backup target is set. The last success
+        survives a later failure, so a failing streak reads as "last good
+        backup at X, failing since Y". The same numbers are on `/metrics` as
+        `subglance_backup_last_success_timestamp_seconds`,
+        `subglance_backup_last_size_bytes` and `subglance_backup_failures_total`,
+        which are only present when backups are configured.
+      x-subglance-access: admin
+      responses:
+        '200':
+          description: Known configuration and history; not configured is not an error.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: 'private, no-store' }
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [configured, target, last_success_at, last_object, last_size_bytes, last_error, last_error_at, failures]
+                properties:
+                  configured: { type: boolean }
+                  target:
+                    type: [string, 'null']
+                    description: The configured s3://bucket/prefix/, without credentials. Null when not configured.
+                  last_success_at: { type: [string, 'null'], format: date-time }
+                  last_object:
+                    type: [string, 'null']
+                    description: Object name of the last successful backup, relative to the target.
+                  last_size_bytes:
+                    type: [integer, 'null']
+                    description: Compressed size of the last successful backup.
+                  last_error:
+                    type: [string, 'null']
+                    description: The most recent failure, cleared by the next success.
+                  last_error_at: { type: [string, 'null'], format: date-time }
+                  failures:
+                    type: integer
+                    description: Failed runs since the process started.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Administrator role required
+        '503':
+          description: Backup state unavailable; must not be interpreted as not configured.
   /metrics:
     get:
       tags: [Health]
@@ -2949,6 +3160,54 @@ components:
           type: integer
           minimum: 0
           description: For apply, differing values replaced. For rename_key, destination values retained while removing the old key (including equal values). Zero for remove/rename_value.
+    Retention:
+      type: object
+      additionalProperties: false
+      required: [raw, rollup, minimum_raw_seconds, tables]
+      properties:
+        raw:
+          $ref: '#/components/schemas/RetentionWindow'
+        rollup:
+          $ref: '#/components/schemas/RetentionWindow'
+        minimum_raw_seconds:
+          type: integer
+          description: The shortest raw window accepted, other than 0 (forever).
+        tables:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [name, rows, bytes, rows_per_day]
+            properties:
+              name:
+                type: string
+                enum: [heartbeats, heartbeat_responses, heartbeat_hourly, incidents]
+              rows: { type: integer, minimum: 0 }
+              bytes: { type: [integer, 'null'], minimum: 0 }
+              rows_per_day: { type: number, minimum: 0 }
+    RetentionWindow:
+      type: object
+      additionalProperties: false
+      required: [seconds, source, pinned_by, set_aside_seconds]
+      properties:
+        seconds:
+          type: integer
+          minimum: 0
+          description: The window in force, in seconds. 0 means kept forever.
+        source:
+          type: string
+          enum: [default, database, pinned]
+          description: |
+            Where the value comes from. `pinned` means a flag or
+            environment variable set it; the page cannot change it.
+        pinned_by:
+          type: [string, 'null']
+          description: The flag or variable that pinned the window, as the operator would type it.
+        set_aside_seconds:
+          type: [integer, 'null']
+          description: |
+            A stored or default value that a pinned partner window made
+            invalid, and that is therefore not in force. Null normally.
     Error:
       type: object
       description: |

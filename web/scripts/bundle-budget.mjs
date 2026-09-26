@@ -176,19 +176,27 @@ const budgets = {
    * `Intl.supportedValuesOf`. 141 would leave 370 bytes; 142 leaves 1,394,
    * enough for a fix without tracking today's size. CSS and fonts stay put.
    *
-   * 142 -> 145 KiB gzip for SUB-28 (the instance card on /settings).
+   * 142 -> 144 KiB gzip for SUB-28 (the retention card on /settings).
    * Develop at ff476c3 measures 144,203 bytes of entry JS (Node gzip); this
-   * branch measures 145,692: 1,489 bytes for a card showing the build, the
-   * process, the database file and the worker pool, a shape check that
-   * refuses a malformed body instead of drawing it as healthy zeros, and the
-   * copy-to-clipboard summary. No new dependency. 143 is not enough on its
-   * own (228 bytes left); 145 also covers the retention card open beside
-   * this branch, whose own measurement is 146,329 against the same base, so
-   * the two together land near 147,818 of 148,480 rather than failing the
-   * build on whichever merges second. CSS measures 16,213 of 16,384 and stays
-   * put: the card reuses the Value, Panel and add-button rules.
+   * branch measures 146,329: 2,126 bytes for a card that reads the windows
+   * in force and the four tables' measured size and growth, a form with a
+   * per-window "forever" switch, the estimate beside each field, the
+   * preview that counts what a shorter window removes before it is saved,
+   * pinned-by-flag read-only states, and a shape check on the response so a
+   * malformed window is never shown (and saved back) as "forever". No new
+   * dependency. 143 would leave 103 bytes; 144 leaves 1,127. CSS measures
+   * 16,283 of 16,384 and stays put, because the card reuses the auth form's
+   * field, label, error and button rules rather than declaring its own.
+   *
+   * 144 -> 146 KiB gzip for SUB-28 (the instance card on /settings), measured
+   * after merging develop 5fe798a: 147,842 bytes of entry JS (Node gzip)
+   * against develop's retention measurement of 146,329 above, so the card
+   * costs about 1,500 bytes: the build, process, database and worker-pool
+   * readings, a shape check that refuses a malformed body instead of drawing
+   * it as healthy zeros, and the copy-to-clipboard summary. No new
+   * dependency. 145 would leave 638 bytes; 146 leaves 1,662.
    */
-  js: 145,
+  js: 146,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *
@@ -259,8 +267,17 @@ const budgets = {
    * cost 0.4 kB and 37 bytes respectively, because they reused what was
    * already declared. A ceiling that holds through two screens and moves for
    * a change to what colour means is a ceiling doing its job.
+   *
+   * 16 -> 17 kB gzip for SUB-28 (the instance card on /settings). Develop at
+   * 5fe798a sits within about a hundred bytes of 16,384; this branch measures
+   * 16,435, 51 over. The card declares one grid, the helper-text colour on its
+   * labels, and an out-of-flow rule for its empty clipboard status, and
+   * reuses Panel, Value and the add button for everything else. The settings
+   * cards still to come (tokens, users, backups) each need a rule or two of
+   * their own, so a raise to 16.5 would be spent by the next one; 17 leaves
+   * 973 bytes and states the move here rather than letting it happen quietly.
    */
-  css: 16,
+  css: 17,
   fonts: 80,
 };
 

@@ -238,6 +238,64 @@
   margin-left: auto;
   flex-wrap: wrap;
   justify-content: flex-end;
+  /* The right-hand group keeps its width and the search field gives way
+     instead (below). Both used to shrink together, and the group lost: from
+     901px up to about 1040px (sidebar expanded) the layout switcher wrapped
+     onto a second line inside a one-line bar. */
+  flex: none;
+}
+
+/*
+ * The search slot is the one thing in the bar that can give up width.
+ *
+ * `min-width: 0` is the whole fix: without it the slot's minimum is its
+ * content's, and `.shell-search` asks for a fixed `--size-pane-sm`, so the
+ * slot could never be narrower than that and the right-hand group was pushed
+ * past the viewport instead (SUB-148: 117px of sideways scroll at 768px, on
+ * every route). The field's own `max-width: 100%` then lets it follow the
+ * slot down.
+ */
+.shell-topbar-search {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/*
+ * Tablet: two rows, by decision rather than by accident.
+ *
+ * Between the phone and tablet rungs the sidebar is still expanded, which
+ * leaves the bar 361px at 641px and 588px at 820px. The bar's contents need
+ * about 760px on one line, so something has to move. The row that moves is
+ * the display preferences — layout, workbench, theme — because they are
+ * chosen once and then left, while the sidebar toggle, search and command
+ * menu are what the hand reaches for on every visit. Those three keep the
+ * first row, with the field taking the slack; the preferences get a row of
+ * their own, still right-aligned, so they stay where the eye learned them.
+ *
+ * Considered and rejected: icon-only layout segments. Four glyphs save about
+ * 130px, which is not enough at 641px, and "Rows" versus "Compact" is a
+ * difference the words carry and a pair of line drawings does not. Moving the
+ * switcher behind a menu hides the current layout behind a click, which
+ * DESIGN.md §7.2 already declined for this control.
+ *
+ * Scoped to the band, because the phone rules below already reshape this bar
+ * and are pinned by their own browser tests.
+ */
+@media (min-width: 641px) and (max-width: 900px) {
+  .shell-topbar { flex-wrap: wrap; row-gap: var(--space-2); }
+  /* A zero basis, so the first row never breaks between the field and the
+     command launcher; it grows back to no more than the field's own width, so
+     the launcher stays beside the field instead of drifting to the far edge. */
+  .shell-topbar-search { flex: 1 1 0; max-width: var(--size-pane-sm); }
+  /* Measured at 641px, the narrowest width in the band: the preferences row
+     has 361px and needs 398px at full size, so it broke once more and the
+     theme toggle sat alone on a third row. Tighter segments and a tighter
+     gap between the three controls bring it under 361px. Measured with the
+     bundled Inter loaded, in Chromium 152 and 153: 6px of segment padding
+     still needs 365px, so the padding takes the 4px rung. Both stay above the
+     WCAG 2.5.8 target floor; only the air around the labels shrinks. */
+  .shell-topbar-right { flex: 1 1 100%; gap: var(--space-1); }
+  .shell-topbar-right .segmented .segmented-option { padding: 0 var(--space-1); }
 }
 
 .shell-icon-btn {
@@ -332,6 +390,10 @@
   .shell { grid-template-columns: 1fr; }
   .shell-content { padding: var(--space-4) var(--space-4) var(--space-12); }
   .shell-topbar { padding: var(--space-3) var(--space-4); flex-wrap: wrap; }
+  /* On a phone the group may shrink and wrap inside itself again: at 320px
+     it is wider than the whole bar, and its own wrapping is what the phone
+     layout tests pin. `flex: none` above is for the wider bands only. */
+  .shell-topbar-right { flex: 0 1 auto; }
 }
 
 /* ── Account ───────────────────────────────────────────────────────────── */

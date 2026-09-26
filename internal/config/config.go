@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/frankgraave/subglance/internal/backup"
 	"github.com/frankgraave/subglance/internal/notifier"
 	"github.com/frankgraave/subglance/internal/store"
 	"github.com/frankgraave/subglance/internal/trustedproxy"
@@ -60,14 +61,25 @@ type Config struct {
 	AllowPrivateTargets bool
 
 	// RawRetention is how long individual heartbeats are kept before being
-	// folded into hourly buckets. Short windows suit a small VPS; long ones
-	// keep full resolution at the cost of disk.
+	// folded into hourly buckets. Zero means keep them forever.
+	//
+	// Only in force when RawRetentionPinnedBy is set. Otherwise the window
+	// is whatever the settings page stored, or the default, and this field
+	// just holds the default.
 	RawRetention time.Duration
 
+	// RawRetentionPinnedBy names the flag or environment variable that set
+	// RawRetention, or is empty when neither did. A pinned window wins over
+	// the settings page, so that a restart never silently overrides what an
+	// operator configured, and the page shows it read-only.
+	RawRetentionPinnedBy string
+
 	// RollupRetention is how long hourly buckets and resolved incidents are
-	// kept. Zero means keep them forever, which is what SubGlance did before
-	// this option existed.
+	// kept. Zero means keep them forever, which is the default.
 	RollupRetention time.Duration
+
+	// RollupRetentionPinnedBy is RawRetentionPinnedBy for RollupRetention.
+	RollupRetentionPinnedBy string
 
 	// AlertGroupWindow is how long an alert waits for others before it is
 	// sent, so that one outage across many monitors becomes one message
@@ -130,6 +142,54 @@ type Config struct {
 	// nothing warns about leaving it set — the reconciliation is idempotent,
 	// so a stale value is inert rather than harmful.
 	PreviousSecretKey string
+
+	// BackupTarget turns on scheduled backups to S3-compatible storage, as
+	// s3://bucket or s3://bucket/prefix. Empty means off.
+	//
+	// Off by default for the same reason as the watchdog: it sends data to
+	// a third party, and it needs credentials no default could supply.
+	BackupTarget string
+
+	// BackupEndpoint is the service URL for anything that is not AWS S3:
+	// Backblaze B2, Cloudflare R2, MinIO, Wasabi. Empty means AWS.
+	BackupEndpoint string
+
+	// BackupRegion is the signing region. AWS needs the bucket's real one.
+	BackupRegion string
+
+	// BackupInterval is the time between backups, and BackupKeep how many
+	// stay in the bucket; older ones are deleted after each upload.
+	BackupInterval time.Duration
+	BackupKeep     int
+
+	// The credentials are environment-only, never flags: a flag is visible
+	// to every user on the host in `ps` and lands in shell history. The
+	// secret can also come from a file, which is the form to prefer, for
+	// the reason given at SecretKey.
+	BackupAccessKeyID         string
+	BackupSecretAccessKey     string
+	BackupSecretAccessKeyFile string
+}
+
+// BackupSecret returns the secret access key, reading the file form when that
+// is the one configured.
+func (c Config) BackupSecret() (string, error) {
+	if c.BackupSecretAccessKeyFile == "" {
+		return c.BackupSecretAccessKey, nil
+	}
+	// The path is the operator's own setting, read by the process they
+	// started.
+	raw, err := os.ReadFile(c.BackupSecretAccessKeyFile) //nolint:gosec // operator-supplied secret file path
+	if err != nil {
+		return "", fmt.Errorf("read SUBGLANCE_BACKUP_SECRET_ACCESS_KEY_FILE: %w", err)
+	}
+	return strings.TrimSpace(string(raw)), nil
+}
+
+// BackupTargetParsed returns the parsed backup target. Only meaningful when
+// BackupTarget is set; Load has already validated it.
+func (c Config) BackupTargetParsed() (backup.Target, error) {
+	return backup.ParseTarget(c.BackupTarget, c.BackupEndpoint, c.BackupRegion)
 }
 
 // DBPath returns the full path to the SQLite database file.
@@ -184,6 +244,9 @@ func defaults() Config {
 		TrustedProxies:      "",
 		SecretKey:           "",
 		PreviousSecretKey:   "",
+		BackupRegion:        "us-east-1",
+		BackupInterval:      backup.DefaultInterval,
+		BackupKeep:          backup.DefaultKeep,
 	}
 }
 
@@ -209,11 +272,21 @@ func Load(args []string) (Config, error) {
 	c.WatchdogInterval = env.dur("SUBGLANCE_WATCHDOG_INTERVAL", c.WatchdogInterval)
 	c.AllowPrivateTargets = env.bool("SUBGLANCE_ALLOW_PRIVATE_TARGETS", c.AllowPrivateTargets)
 	c.RawRetention = env.dur("SUBGLANCE_RAW_RETENTION", c.RawRetention)
+	c.RawRetentionPinnedBy = envSetBy("SUBGLANCE_RAW_RETENTION")
 	c.RollupRetention = env.dur("SUBGLANCE_ROLLUP_RETENTION", c.RollupRetention)
+	c.RollupRetentionPinnedBy = envSetBy("SUBGLANCE_ROLLUP_RETENTION")
 	c.AlertGroupWindow = env.dur("SUBGLANCE_ALERT_GROUP_WINDOW", c.AlertGroupWindow)
 	c.TrustedProxies = envStr("SUBGLANCE_TRUSTED_PROXIES", c.TrustedProxies)
 	c.SecretKey = envStr("SUBGLANCE_SECRET_KEY", c.SecretKey)
 	c.PreviousSecretKey = envStr("SUBGLANCE_SECRET_KEY_PREVIOUS", c.PreviousSecretKey)
+	c.BackupTarget = envStr("SUBGLANCE_BACKUP_TARGET", c.BackupTarget)
+	c.BackupEndpoint = envStr("SUBGLANCE_BACKUP_ENDPOINT", c.BackupEndpoint)
+	c.BackupRegion = envStr("SUBGLANCE_BACKUP_REGION", c.BackupRegion)
+	c.BackupInterval = env.dur("SUBGLANCE_BACKUP_INTERVAL", c.BackupInterval)
+	c.BackupKeep = env.int("SUBGLANCE_BACKUP_KEEP", c.BackupKeep)
+	c.BackupAccessKeyID = envStr("SUBGLANCE_BACKUP_ACCESS_KEY_ID", c.BackupAccessKeyID)
+	c.BackupSecretAccessKey = envStr("SUBGLANCE_BACKUP_SECRET_ACCESS_KEY", c.BackupSecretAccessKey)
+	c.BackupSecretAccessKeyFile = envStr("SUBGLANCE_BACKUP_SECRET_ACCESS_KEY_FILE", c.BackupSecretAccessKeyFile)
 	if err := env.err(); err != nil {
 		return Config{}, err
 	}
@@ -232,9 +305,11 @@ func Load(args []string) (Config, error) {
 	fs.BoolVar(&c.AllowPrivateTargets, "allow-private-targets", c.AllowPrivateTargets,
 		"allow monitoring private/loopback addresses (SSRF risk, off by default)")
 	fs.DurationVar(&c.RawRetention, "raw-retention", c.RawRetention,
-		"how long raw heartbeats are kept before being rolled up into hourly buckets")
+		"how long raw heartbeats are kept before being rolled up into hourly buckets (0 = forever; "+
+			"setting it here locks the settings page field)")
 	fs.DurationVar(&c.RollupRetention, "rollup-retention", c.RollupRetention,
-		"how long hourly buckets and resolved incidents are kept (0 = forever)")
+		"how long hourly buckets and resolved incidents are kept (0 = forever; "+
+			"setting it here locks the settings page field)")
 	fs.DurationVar(&c.AlertGroupWindow, "alert-group-window", c.AlertGroupWindow,
 		"how long an alert waits for others so one outage sends one message (0 = send immediately)")
 	fs.StringVar(&c.TrustedProxies, "trusted-proxies", c.TrustedProxies,
@@ -245,10 +320,27 @@ func Load(args []string) (Config, error) {
 	fs.StringVar(&c.PreviousSecretKey, "secret-key-previous", c.PreviousSecretKey,
 		"the key the stored configuration is currently under, for one start, to rotate to --secret-key "+
 			"or to decrypt back to plain text when --secret-key is empty")
+	fs.StringVar(&c.BackupTarget, "backup-target", c.BackupTarget,
+		"back up the database on a schedule to s3://bucket/prefix (empty = off); "+
+			"credentials come from SUBGLANCE_BACKUP_ACCESS_KEY_ID and SUBGLANCE_BACKUP_SECRET_ACCESS_KEY[_FILE]")
+	fs.StringVar(&c.BackupEndpoint, "backup-endpoint", c.BackupEndpoint,
+		"S3-compatible service URL for backups, for anything that is not AWS (empty = AWS S3)")
+	fs.StringVar(&c.BackupRegion, "backup-region", c.BackupRegion, "signing region of the backup bucket")
+	fs.DurationVar(&c.BackupInterval, "backup-interval", c.BackupInterval, "time between scheduled backups")
+	fs.IntVar(&c.BackupKeep, "backup-keep", c.BackupKeep, "how many backups to keep in the bucket")
 
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
 	}
+	// A flag beats the variable, so it is also what the page names.
+	fs.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "raw-retention":
+			c.RawRetentionPinnedBy = "--raw-retention"
+		case "rollup-retention":
+			c.RollupRetentionPinnedBy = "--rollup-retention"
+		}
+	})
 	if err := c.validate(); err != nil {
 		return Config{}, err
 	}
@@ -278,24 +370,8 @@ func (c Config) validate() error {
 	if c.CheckWorkers < 0 {
 		return fmt.Errorf("check-workers must not be negative, got %d", c.CheckWorkers)
 	}
-	// The shortest chart window is 24h. Raw retention below that lets the
-	// hourly rollup fold away checks inside an ordinary 24h request, and the
-	// bucket that straddles the window's start is not counted, so the chart
-	// would silently drop checks it claims to cover.
-	if c.RawRetention < 24*time.Hour {
-		return fmt.Errorf("raw-retention must be at least 24h, got %s", c.RawRetention)
-	}
-	if c.RollupRetention < 0 {
-		return fmt.Errorf("rollup-retention must not be negative, got %s", c.RollupRetention)
-	}
-	// Hourly buckets are only worth anything once the raw beats behind them
-	// are gone. A rollup window inside the raw one would delete a bucket that
-	// still has its own heartbeats sitting next to it, so the history would
-	// jump back into existence on the next read and vanish again on the next
-	// rollup.
-	if c.RollupRetention > 0 && c.RollupRetention < c.RawRetention {
-		return fmt.Errorf("rollup-retention (%s) must be at least raw-retention (%s)",
-			c.RollupRetention, c.RawRetention)
+	if err := c.validateRetention(); err != nil {
+		return err
 	}
 	if c.AlertGroupWindow < 0 {
 		return fmt.Errorf("alert-group-window must not be negative, got %s (use 0 to send alerts immediately)", c.AlertGroupWindow)
@@ -319,6 +395,9 @@ func (c Config) validate() error {
 			"secret-key-previous names the key the data is currently under, so pass it only " +
 			"when it differs from the new one")
 	}
+	if err := c.validateBackup(); err != nil {
+		return err
+	}
 	if c.WatchdogURL != "" {
 		if err := watchdog.ValidateURL(c.WatchdogURL); err != nil {
 			return err
@@ -328,6 +407,114 @@ func (c Config) validate() error {
 		}
 	}
 	return nil
+}
+
+// validateBackup checks the backup settings only when backups are on, so an
+// instance that never set a target cannot fail to start over them — with one
+// exception: an endpoint or any credential with no target almost certainly means
+// the target variable was mistyped, and running without backups while
+// believing they are on is the failure this whole feature exists to prevent.
+func (c Config) validateBackup() error {
+	if c.BackupTarget == "" {
+		if c.BackupEndpoint != "" || c.BackupAccessKeyID != "" ||
+			c.BackupSecretAccessKey != "" || c.BackupSecretAccessKeyFile != "" {
+			return errors.New("backup settings are present but backup-target is empty, so no backups would be taken; " +
+				"set SUBGLANCE_BACKUP_TARGET (or --backup-target) to s3://bucket/prefix")
+		}
+		return nil
+	}
+	if _, err := c.BackupTargetParsed(); err != nil {
+		return err
+	}
+	if c.BackupInterval < backup.MinInterval {
+		return fmt.Errorf("backup-interval must be at least %s, got %s", backup.MinInterval, c.BackupInterval)
+	}
+	if c.BackupKeep < 1 {
+		return fmt.Errorf("backup-keep must be at least 1, got %d", c.BackupKeep)
+	}
+	if c.BackupAccessKeyID == "" {
+		return errors.New("backup-target is set but SUBGLANCE_BACKUP_ACCESS_KEY_ID is empty")
+	}
+	if c.BackupSecretAccessKey != "" && c.BackupSecretAccessKeyFile != "" {
+		return errors.New("set SUBGLANCE_BACKUP_SECRET_ACCESS_KEY or SUBGLANCE_BACKUP_SECRET_ACCESS_KEY_FILE, not both")
+	}
+	secret, err := c.BackupSecret()
+	if err != nil {
+		return err
+	}
+	if secret == "" {
+		return errors.New("backup-target is set but no secret access key is configured; " +
+			"set SUBGLANCE_BACKUP_SECRET_ACCESS_KEY_FILE or SUBGLANCE_BACKUP_SECRET_ACCESS_KEY")
+	}
+	return nil
+}
+
+// validateRetention checks the retention windows that were actually pinned.
+//
+// An unpinned window is not validated here: its value comes from the
+// database at run time, and the pair is checked again when it is resolved.
+// What can be refused up front is a pinned window that no stored partner
+// could ever make valid.
+func (c Config) validateRetention() error {
+	raw, rollup := c.RawRetention, c.RollupRetention
+	if c.RawRetentionPinnedBy != "" {
+		if raw < 0 {
+			return fmt.Errorf("raw-retention must not be negative, got %s", raw)
+		}
+		// The shortest chart window is 24h. Raw retention below that lets
+		// the hourly rollup fold away checks inside an ordinary 24h
+		// request, and the bucket that straddles the window's start is not
+		// counted, so the chart would silently drop checks it claims to
+		// cover.
+		if raw > 0 && raw < store.MinRawRetention {
+			return fmt.Errorf("raw-retention must be at least %s, or 0 to keep raw heartbeats forever, got %s",
+				store.MinRawRetention, raw)
+		}
+	}
+	if c.RollupRetentionPinnedBy != "" {
+		if rollup < 0 {
+			return fmt.Errorf("rollup-retention must not be negative, got %s", rollup)
+		}
+		// Raw retention cannot go below a day, and hourly buckets must
+		// outlive the raw beats, so no raw window pairs with less.
+		if rollup > 0 && rollup < store.MinRawRetention {
+			return fmt.Errorf("rollup-retention must be at least %s, or 0 to keep summaries forever, got %s",
+				store.MinRawRetention, rollup)
+		}
+	}
+	if c.RawRetentionPinnedBy != "" && c.RollupRetentionPinnedBy != "" {
+		// Hourly buckets are only worth anything once the raw beats behind
+		// them are gone. A rollup window inside the raw one would delete a
+		// bucket that still has its own heartbeats sitting next to it, so
+		// the history would jump back into existence on the next read and
+		// vanish again on the next rollup.
+		if rollup > 0 && (raw == 0 || rollup < raw) {
+			return fmt.Errorf("rollup-retention (%s) must be at least raw-retention (%s), and 0 when raw heartbeats are kept forever",
+				rollup, raw)
+		}
+	}
+	return nil
+}
+
+// RetentionPins returns the retention windows fixed by a flag or variable.
+func (c Config) RetentionPins() store.RetentionPins {
+	var p store.RetentionPins
+	if c.RawRetentionPinnedBy != "" {
+		p.Raw = &store.RetentionPin{Value: c.RawRetention, By: c.RawRetentionPinnedBy}
+	}
+	if c.RollupRetentionPinnedBy != "" {
+		p.Rollup = &store.RetentionPin{Value: c.RollupRetention, By: c.RollupRetentionPinnedBy}
+	}
+	return p
+}
+
+// envSetBy returns key when the variable is set to something, the same test
+// the readers use to decide whether it overrides the default.
+func envSetBy(key string) string {
+	if v, ok := os.LookupEnv(key); ok && v != "" {
+		return key
+	}
+	return ""
 }
 
 func envStr(key, def string) string {

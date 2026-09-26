@@ -102,6 +102,9 @@ func (a Alert) Title() string {
 	if a.Grouped() {
 		return GroupedTitle(a)
 	}
+	if a.Event == EventBackupFailed {
+		return "SubGlance could not back up its database"
+	}
 
 	switch state.Event(a.Event) {
 	case state.EventIncidentResolved:

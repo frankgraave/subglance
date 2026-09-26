@@ -7,14 +7,16 @@ import { SearchIcon, SettingsIcon } from "../shell/icons";
 import { TopbarTools } from "../shell/TopbarTools";
 import { WatchdogCard } from "../watchdog/Watchdog";
 import { DiagnosticsCard } from "../diagnostics/Diagnostics";
+import { RetentionCard } from "../retention/Retention";
 
-/** Only implemented sections: no user, token or retention controls yet. */
+/** Only implemented sections: no user or token controls yet. */
 export function Settings({ client, canAdmin = false }: { client?: QueryClient; canAdmin?: boolean }) {
   // Like the live pages, Settings owns a provider at its route boundary.
   const [fallback] = useState(createQueryClient);
   const [query, setQuery] = useState("");
   const matches = "account password current new confirm sessions security".includes(query.trim().toLowerCase());
   const watchdogMatches = "self-monitoring watchdog last ping success rejection outage".includes(query.trim().toLowerCase());
+  const retentionMatches = "retention storage database history heartbeats summaries incidents disk size".includes(query.trim().toLowerCase());
   // Administrators only: the card names the database path, and the API refuses anyone else.
   const instanceMatches = canAdmin && "instance diagnostics version build runtime uptime database size wal journal workers pool queue skipped".includes(query.trim().toLowerCase());
   return <>
@@ -35,9 +37,12 @@ export function Settings({ client, canAdmin = false }: { client?: QueryClient; c
     <div id="self-monitoring" hidden={!watchdogMatches} style={{ maxWidth: "var(--size-pane-lg)", marginTop: "var(--space-4)" }}>
       <QueryClientProvider client={client ?? fallback}><WatchdogCard /></QueryClientProvider>
     </div>
+    <div id="retention" hidden={!retentionMatches} style={{ maxWidth: "var(--size-pane-lg)", marginTop: "var(--space-4)" }}>
+      <QueryClientProvider client={client ?? fallback}><RetentionCard canAdmin={canAdmin} /></QueryClientProvider>
+    </div>
     {canAdmin && <div id="instance" hidden={!instanceMatches} style={{ maxWidth: "var(--size-pane-lg)", marginTop: "var(--space-4)" }}>
       <QueryClientProvider client={client ?? fallback}><DiagnosticsCard /></QueryClientProvider>
     </div>}
-    {!matches && !watchdogMatches && !instanceMatches && <p role="status">No settings match “{query}”.</p>}
+    {!matches && !watchdogMatches && !retentionMatches && !instanceMatches && <p role="status">No settings match “{query}”.</p>}
   </>;
 }

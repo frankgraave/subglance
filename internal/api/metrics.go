@@ -78,6 +78,7 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		"Workers running a check at the moment of the scrape.", uint64(max(m.Busy, 0)))
 	gauge(&b, "subglance_monitors_scheduled",
 		"Monitors currently on the schedule.", uint64(m.Scheduled))
+	s.writeBackupMetrics(&b)
 
 	// Not application/json, so writeJSON is the wrong helper here. The
 	// version parameter is what Prometheus itself sends and expects back.
