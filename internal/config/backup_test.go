@@ -62,6 +62,11 @@ func TestBackupMisconfigurationRefusesToStart(t *testing.T) {
 		want     string
 	}{
 		{"credentials but no target", map[string]string{"SUBGLANCE_BACKUP_TARGET": ""}, "backup-target is empty"},
+		{"only a secret but no target", map[string]string{"SUBGLANCE_BACKUP_TARGET": "",
+			"SUBGLANCE_BACKUP_ACCESS_KEY_ID": ""}, "backup-target is empty"},
+		{"only a secret file but no target", map[string]string{"SUBGLANCE_BACKUP_TARGET": "",
+			"SUBGLANCE_BACKUP_ACCESS_KEY_ID": "", "SUBGLANCE_BACKUP_SECRET_ACCESS_KEY": "",
+			"SUBGLANCE_BACKUP_SECRET_ACCESS_KEY_FILE": "/nonexistent/s3.secret"}, "backup-target is empty"},
 		{"not an s3 URL", map[string]string{"SUBGLANCE_BACKUP_TARGET": "https://bucket"}, "want s3://bucket"},
 		{"no access key", map[string]string{"SUBGLANCE_BACKUP_ACCESS_KEY_ID": ""}, "ACCESS_KEY_ID is empty"},
 		{"no secret", map[string]string{"SUBGLANCE_BACKUP_SECRET_ACCESS_KEY": ""}, "no secret access key"},

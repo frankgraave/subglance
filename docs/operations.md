@@ -523,7 +523,7 @@ docker compose start subglance
 `--from subglance-20260925T030000Z.db.gz` picks an older backup instead; an
 unknown name is refused with the name of the newest one.
 
-It is careful in three ways:
+It is careful in four ways:
 
 - **It refuses while a server holds the data directory.** Replacing the file
   under a running server loses whatever the server writes next, so stopping

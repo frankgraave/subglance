@@ -411,12 +411,13 @@ func (c Config) validate() error {
 
 // validateBackup checks the backup settings only when backups are on, so an
 // instance that never set a target cannot fail to start over them — with one
-// exception: an endpoint or credentials with no target almost certainly means
+// exception: an endpoint or any credential with no target almost certainly means
 // the target variable was mistyped, and running without backups while
 // believing they are on is the failure this whole feature exists to prevent.
 func (c Config) validateBackup() error {
 	if c.BackupTarget == "" {
-		if c.BackupEndpoint != "" || c.BackupAccessKeyID != "" {
+		if c.BackupEndpoint != "" || c.BackupAccessKeyID != "" ||
+			c.BackupSecretAccessKey != "" || c.BackupSecretAccessKeyFile != "" {
 			return errors.New("backup settings are present but backup-target is empty, so no backups would be taken; " +
 				"set SUBGLANCE_BACKUP_TARGET (or --backup-target) to s3://bucket/prefix")
 		}

@@ -106,8 +106,9 @@ func TestServerRefusesADataDirAnotherServerHolds(t *testing.T) {
 	defer func() { _ = first.Release() }()
 
 	t.Setenv("SUBGLANCE_BACKUP_TARGET", "")
+	addr := freeAddr(t)
 	done := make(chan error, 1)
-	go func() { done <- run([]string{"--data-dir", dataDir, "--addr", freeAddr(t)}) }()
+	go func() { done <- run([]string{"--data-dir", dataDir, "--addr", addr}) }()
 	select {
 	case err := <-done:
 		if err == nil || !strings.Contains(err.Error(), datalock.Path(dataDir)) {
