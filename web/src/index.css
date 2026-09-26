@@ -100,6 +100,7 @@
 @import "./auth/auth.css";
 @import "./auth/password.css";
 @import "./watchdog/watchdog.css";
+@import "./diagnostics/diagnostics.css";
 @import "./retention/retention.css";
 @import "./wall/wall.css";
 

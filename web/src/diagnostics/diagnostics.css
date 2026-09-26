@@ -1,0 +1,20 @@
+/* Four short panels side by side on a wide card, stacked on a phone. The
+   minimum column is the drawer's natural width: two labels and a reading. */
+.diag-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--size-pane-sm)), 1fr));
+  gap: var(--space-3);
+}
+.diag-card dl { display: grid; gap: var(--space-3); margin: 0; }
+.diag-card dt,
+.diag-note {
+  color: var(--ink-2);
+  font-size: var(--type-helper);
+  line-height: var(--lead-prose);
+}
+.diag-card dd { margin: var(--space-1) 0 0; overflow-wrap: anywhere; }
+.diag-card p { margin: 0; }
+/* The clipboard status stays in the accessibility tree while empty, so a
+   screen reader is already watching it when the message arrives. Out of flow
+   rather than display:none, so the empty region adds no gap to the card. */
+.diag-note:empty { position: absolute; }

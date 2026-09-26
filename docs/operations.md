@@ -242,7 +242,9 @@ a resource limit the scheduler cannot see. The sizing rule if you are picking
 one by hand is `monitors × timeout ÷ interval`: that is how many checks are in
 flight at once when everything you watch is down. Watch
 `subglance_checks_skipped_total` and `subglance_check_queue_depth` on
-`/metrics` to see whether the pool is keeping up.
+`/metrics` to see whether the pool is keeping up. The same readings, plus how
+many workers are busy right now, are on the instance card at
+`/settings#instance` for an administrator.
 
 ## Metrics
 
@@ -259,6 +261,7 @@ subglance_rollup_failures_total            retention passes that failed
 subglance_checks_skipped_total             checks dropped because the previous run was still going
 subglance_check_queue_depth                dispatched checks waiting for a worker
 subglance_check_workers                    current worker pool size
+subglance_check_workers_busy               workers inside a check at the moment of the scrape
 subglance_monitors_scheduled               monitors on the schedule
 ```
 
