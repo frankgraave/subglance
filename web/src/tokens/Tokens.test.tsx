@@ -152,10 +152,17 @@ it("moves a token to expired when its expiry passes while the page is open", asy
     mount("admin", (_url, init) => init?.method ? undefined : json({ tokens: [soon, ...sampleTokens] }));
     await act(async () => { await vi.advanceTimersByTimeAsync(10); });
     expect(screen.getByText("3 active")).toBeTruthy();
-    await act(async () => { await vi.advanceTimersByTimeAsync(59_000); });
+    // The server accepts the token through its whole expiry second, so the
+    // page keeps it live until the first millisecond after it.
+    await act(async () => { await vi.advanceTimersByTimeAsync(59_990); });
     expect(screen.getByText("3 active")).toBeTruthy();
-    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+    expect(screen.getByRole("button", { name: "Revoke short" })).toBeTruthy();
+    await act(async () => { await vi.advanceTimersByTimeAsync(999); });
+    expect(screen.getByText("3 active")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Revoke short" })).toBeTruthy();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
     expect(screen.getByText("2 active")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Revoke short" })).toBeNull();
     const rows = within(screen.getByRole("list", { name: "Your API tokens" })).getAllByRole("listitem");
     expect(within(rows[2]).getByText("expired")).toBeTruthy();
   } finally {

@@ -115,16 +115,24 @@ function CreateForm({ role, onCreated }: { role: string; onCreated: (token: stri
   );
 }
 
+/** The Unix second a token expires in: the server stores and compares whole seconds. */
+const expirySecond = (iso: string) => Math.floor(Date.parse(iso) / 1000);
+
+/** Past its expiry at `now`. The server still accepts a token during its expiry second. */
+function isExpired(token: ApiToken, now: number): boolean {
+  return token.expires_at !== undefined && expirySecond(token.expires_at) < Math.floor(now / 1000);
+}
+
 /** Neither revoked nor past its expiry, measured at `now`. */
 function isLive(token: ApiToken, now: number): boolean {
-  return !token.revoked_at && !(token.expires_at !== undefined && Date.parse(token.expires_at) <= now);
+  return !token.revoked_at && !isExpired(token, now);
 }
 
 function TokenRow({ token, now, onRevoked }: { token: ApiToken; now: number; onRevoked: () => void }) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const expired = token.expires_at !== undefined && Date.parse(token.expires_at) <= now;
+  const expired = isExpired(token, now);
   const live = isLive(token, now);
   const facts = [
     `created ${day(token.created_at)}`,
@@ -181,10 +189,12 @@ export function TokensCard({ role }: { role: string }) {
   const [tick, setTick] = useState(0);
   const now = Math.max(query.dataUpdatedAt, tick);
   // Re-render when the next live token expires, so the count and the order
-  // follow it on a page that stays open.
+  // follow it on a page that stays open. The first millisecond after the
+  // expiry second is when it stops being live; firing earlier would re-arm a
+  // zero-delay timer until then.
   useEffect(() => {
     const next = Math.min(...(query.data ?? []).filter((t) => isLive(t, now) && t.expires_at !== undefined)
-      .map((t) => Date.parse(t.expires_at as string)));
+      .map((t) => (expirySecond(t.expires_at as string) + 1) * 1000));
     if (!Number.isFinite(next)) return;
     const timer = setTimeout(() => setTick(Date.now()), Math.min(Math.max(next - Date.now(), 0), MAX_TIMER_MS));
     return () => clearTimeout(timer);
