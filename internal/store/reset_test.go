@@ -27,7 +27,7 @@ func TestResetInstanceEmptiesMonitoringAndKeepsAccounts(t *testing.T) {
 		t.Fatal(err)
 	}
 	raw := 3 * 24 * time.Hour
-	if err := db.SetRetention(ctx, &raw, nil, RetentionPins{}); err != nil {
+	if _, err := db.SetRetention(ctx, &raw, nil, RetentionPins{}); err != nil {
 		t.Fatal(err)
 	}
 
