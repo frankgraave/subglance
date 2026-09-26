@@ -187,8 +187,21 @@ const budgets = {
    * dependency. 143 would leave 103 bytes; 144 leaves 1,127. CSS measures
    * 16,283 of 16,384 and stays put, because the card reuses the auth form's
    * field, label, error and button rules rather than declaring its own.
+   *
+   * 144 -> 147 KiB gzip for SUB-28 (the API tokens card on /settings).
+   * Develop at 4916aee measures 146,392 bytes of entry JS (Node gzip); this
+   * branch measures 148,372: 1,980 bytes for a card that lists the session's
+   * tokens with role, prefix, last use and expiry, a create form with a role
+   * capped at the account's own and an expiry, the shown-once secret panel
+   * with copy and an explicit dismissal, a two-step revoke, and a shape check
+   * that refuses a malformed list instead of drawing a revoked token as live.
+   * No new dependency. 146 would leave 1,132 bytes, which the instance card
+   * open beside this branch (1,489 bytes by its own measurement) would not
+   * fit in; 147 covers both, so neither fails on whichever merges second.
+   * CSS measures 16,374 of 16,384 and stays put: the card declares two
+   * rules and reuses the auth form, the push-URL reveal and retention notes.
    */
-  js: 144,
+  js: 147,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *
