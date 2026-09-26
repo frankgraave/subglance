@@ -19,7 +19,9 @@ import { chromium, type Browser, type Page } from "./harness/browser";
 import { serveBuild, type Server } from "./harness/server";
 
 const ROUTES = [
-  { name: "dashboard", path: "/", ready: "[data-testid^='monitor-row-']" },
+  // Rows or cards: beside the expanded sidebar the rows preference gives way
+  // to cards up to 816px (SUB-149), and this file walks both sides of that.
+  { name: "dashboard", path: "/", ready: "[data-testid^='monitor-row-'], [data-testid^='monitor-card-']" },
   { name: "monitors", path: "/monitors", ready: ".inv-list > li" },
   { name: "incidents", path: "/incidents", ready: ".inc-line" },
   { name: "notifications", path: "/notifications", ready: ".inv-row" },
@@ -34,12 +36,12 @@ const ROUTES = [
 const BAR_WIDTHS = [641, 768, 900, 901, 1024];
 
 /*
- * Page-level scroll is asserted only where the page content is known to fit.
- * At 641px the dashboard rows and at 901–960px the monitors inventory still
- * overflow on their own (SUB-149); the masthead checks below hold at those
- * widths regardless, which is what this file owns.
+ * Page-level scroll at every masthead width, plus 700 and 960. Those two are
+ * where SUB-149 measured the last few pixels of overflow — 3px of rows table
+ * at 700 and 22px of inventory row at 960 — so a fix that only moved the
+ * failure off the rung widths would show up there.
  */
-const PAGE_WIDTHS = [768, 900, 1024];
+const PAGE_WIDTHS = [641, 700, 768, 900, 901, 960, 1024];
 
 let server: Server;
 let browser: Browser;
@@ -126,6 +128,55 @@ describe.each(PAGE_WIDTHS)("page at %ipx", (width) => {
         clientWidth: document.documentElement.clientWidth,
       }));
       expect(seen).toEqual({ scrollWidth: seen.clientWidth, clientWidth: seen.clientWidth });
+    } finally {
+      await page.close();
+    }
+  });
+});
+
+/*
+ * The sidebar veto must not reach past the sidebar (SUB-149). Beside the rail
+ * the column at 641px is 537px wide and the rows table fits, so rows is what
+ * renders there — cards would be a veto with nothing to protect.
+ */
+describe("beside the collapsed rail at 641px", () => {
+  it("keeps the rows layout and does not scroll sideways", async () => {
+    const page = await browser.newPage();
+    try {
+      await page.evaluateOnNewDocument(() => localStorage.setItem("subglance:sidebar", "collapsed"));
+      await page.setViewport({ width: 641, height: 800, deviceScaleFactor: 1 });
+      await page.goto(server.url + "/", { waitUntil: "domcontentloaded" });
+      await page.waitForSelector("[data-testid^='monitor-row-']", { timeout: 15_000 });
+      await page.evaluate(() => document.fonts.ready.then(() => undefined));
+      const seen = await page.evaluate(() => ({
+        cards: document.querySelectorAll("[data-testid^='monitor-card-']").length,
+        overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      }));
+      expect(seen).toEqual({ cards: 0, overflow: 0 });
+    } finally {
+      await page.close();
+    }
+  });
+});
+
+/*
+ * A row that fits by squeezing its name is not a fix (SUB-149). Before the
+ * rows wrapped by container width, the monitors inventory at 1040px beside
+ * the sidebar drew every name 14px wide: no overflow, and no way to tell the
+ * rows apart. The floor is rung 3 (104px), the same one the container rungs
+ * are built from, so this fails if either rung drifts below its row.
+ */
+const LIST_ROUTES = ROUTES.filter((route) => route.name === "monitors" || route.name === "notifications");
+const NAME_FLOOR = 104;
+
+describe.each([641, 700, 901, 960, 1040, 1100, 1440])("list rows at %ipx", (width) => {
+  it.each(LIST_ROUTES)("keep every name at least rung 3 wide on $name", async (route) => {
+    const page = await open(width, route);
+    try {
+      const narrowest = await page.evaluate(() =>
+        Math.min(...Array.from(document.querySelectorAll<HTMLElement>(".inv-main")).map((el) => el.getBoundingClientRect().width)),
+      );
+      expect(narrowest).toBeGreaterThanOrEqual(NAME_FLOOR);
     } finally {
       await page.close();
     }

@@ -2,7 +2,12 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { COMPACT_MAX_WIDTH } from "./useMediaQuery";
+import {
+  COMPACT_MAX_WIDTH,
+  RAIL_WIDTH,
+  SIDEBAR_VETO_MAX_WIDTH,
+  SIDEBAR_WIDTH,
+} from "./useMediaQuery";
 
 /**
  * Node environment on purpose: under jsdom `import.meta.url` is an http URL
@@ -28,5 +33,16 @@ describe("the breakpoint", () => {
     );
     expect(widths.length).toBeGreaterThan(0);
     for (const width of widths) expect(width).toBe(COMPACT_MAX_WIDTH);
+  });
+
+  // The sidebar veto (SUB-149) is computed from two widths the shell's grid
+  // track takes from tokens.css. A copy in TypeScript that drifted from the
+  // token would move the veto without anyone touching it.
+  it("takes the sidebar and rail widths from the tokens the shell uses", () => {
+    const tokens = readFileSync(join(here, "..", "styles", "tokens.css"), "utf8");
+    const px = (name: string) => Number(new RegExp(`${name}:\\s*(\\d+)px`).exec(tokens)?.[1]);
+    expect(px("--size-sidebar")).toBe(SIDEBAR_WIDTH);
+    expect(px("--size-rail")).toBe(RAIL_WIDTH);
+    expect(SIDEBAR_VETO_MAX_WIDTH).toBe(816);
   });
 });

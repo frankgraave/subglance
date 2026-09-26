@@ -272,8 +272,18 @@ const budgets = {
    * cost 0.4 kB and 37 bytes respectively, because they reused what was
    * already declared. A ceiling that holds through two screens and moves for
    * a change to what colour means is a ceiling doing its job.
+   *
+   * 16 -> 17 kB gzip for SUB-149 (list rows that fit the column they are
+   * given). Develop at 2d2f19c measures 16,374 of 16,384 bytes (Node gzip);
+   * this branch measures 16,514: 140 bytes for two container queries that
+   * replace two viewport media queries, the container declarations, and the
+   * channel row's own copy of the wrap rules (a container condition cannot be
+   * a variable, so the inventory's block cannot serve a second width). Ten
+   * bytes of headroom could not hold any CSS fix at all, which is the case
+   * for a whole kilobyte rather than 16.2: the next layout bug should not
+   * have to argue for a raise of its own.
    */
-  css: 16,
+  css: 17,
   fonts: 80,
 };
 
