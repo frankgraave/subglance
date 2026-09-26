@@ -20,14 +20,13 @@ export function EmptyState({
   /** True when a status or tag filter is on, even with an empty query. */
   filtered?: boolean;
   /**
-   * Opens the add-monitor form, when the screen around this one owns it.
+   * Opens the add-monitor form, when the reader may add one.
    *
-   * Optional, and absent today: the form is shell state, and no caller plumbs
-   * it this far down yet. Without it the next step is still stated, it just
-   * names the control instead of being one — which is the honest fallback. A
-   * hardcoded link would be worse than no button: `/monitors/new` is not a
-   * route this product has, so the one thing this screen exists to offer
-   * would be a dead end.
+   * The dashboard and the inventory both pass it for an editor or an admin:
+   * the form is the route `/monitors/new`, so the button is a real way in from
+   * either screen. Absent means the reader cannot add a monitor (a viewer), or
+   * the caller has no router (the workbench) — then the step is stated as who
+   * can take it and where, rather than as a control this reader does not have.
    */
   onAddMonitor?: () => void;
 }) {
@@ -83,9 +82,12 @@ export function EmptyState({
            */}
           <p className="mon-empty-action">
             {onAddMonitor === undefined ? (
+              /* Names the page and the roles instead of a button: a viewer
+                 has no add control anywhere, and "press Add monitor" pointed
+                 them at one that is not on their screen. */
               <span className="mon-empty-hint">
-                Press <b className="mon-empty-control">Add monitor</b> at the
-                top of the page to start.
+                An editor or an admin adds monitors on the{" "}
+                <b className="mon-empty-control">Monitors</b> page.
               </span>
             ) : (
               <button

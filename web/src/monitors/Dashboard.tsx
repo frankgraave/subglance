@@ -102,6 +102,14 @@ export type DashboardProps = {
    * are still real links — see MonitorLink — they just cost a page load.
    */
   onOpenMonitor?: (id: string) => void;
+  /**
+   * Opens the add-monitor form from the empty dashboard.
+   *
+   * The empty dashboard is the onboarding (DESIGN.md §7.6), so its one next
+   * step should be a control and not directions to one. Passed only for a
+   * reader who may add a monitor; see EmptyState for what a viewer reads.
+   */
+  onAddMonitor?: () => void;
 };
 
 const COUNTED: { status: MonitorStatus; label: string }[] = [
@@ -125,6 +133,7 @@ export function Dashboard({
   banner = null,
   stale = false,
   onOpenMonitor,
+  onAddMonitor,
 }: DashboardProps) {
   const searchId = useId();
   // Hooks cannot be skipped, so the query is always subscribed to and the
@@ -428,6 +437,7 @@ export function Dashboard({
           beatWidth={beatWidth}
           columns={cardColumns}
           onOpen={onOpenMonitor}
+          onAddMonitor={onAddMonitor}
           stale={stale}
         />
       ) : shown === "compact" ? (
@@ -438,6 +448,7 @@ export function Dashboard({
           filtered={narrowed}
           groupKey={liveGroupKey}
           onOpen={onOpenMonitor}
+          onAddMonitor={onAddMonitor}
           stale={stale}
         />
       ) : (
@@ -449,6 +460,7 @@ export function Dashboard({
           groupKey={liveGroupKey}
           beatWidth={beatWidth ?? ROW_BEAT_WIDTH}
           onOpen={onOpenMonitor}
+          onAddMonitor={onAddMonitor}
           stale={stale}
         />
       )}

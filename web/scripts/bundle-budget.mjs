@@ -273,15 +273,21 @@ const budgets = {
    * already declared. A ceiling that holds through two screens and moves for
    * a change to what colour means is a ceiling doing its job.
    *
-   * 16 -> 17 kB gzip for SUB-149 (list rows that fit the column they are
-   * given). Develop at 2d2f19c measures 16,374 of 16,384 bytes (Node gzip);
-   * this branch measures 16,514: 140 bytes for two container queries that
-   * replace two viewport media queries, the container declarations, and the
-   * channel row's own copy of the wrap rules (a container condition cannot be
-   * a variable, so the inventory's block cannot serve a second width). Ten
-   * bytes of headroom could not hold any CSS fix at all, which is the case
-   * for a whole kilobyte rather than 16.2: the next layout bug should not
-   * have to argue for a raise of its own.
+   * 16 -> 17 kB gzip, raised deliberately for SUB-28 (the settings page's
+   * section index). Measured: 16,380 bytes on develop against a ceiling of
+   * 16,384, so four bytes of headroom were left before this change, and
+   * 16,527 after it — 147 bytes. They buy the two-column layout (a sticky
+   * index beside the cards), its single-column form below the tablet rung,
+   * and the `scroll-margin-top` that lands a followed link below the sticky
+   * masthead instead of under it. The "you are here" paint is the sidebar's
+   * own `[data-state="current"]` rule, reused rather than restated. At 16.5
+   * the next card on this page would move it again.
+   *
+   * SUB-149 (list rows that fit the column they are given) spends about 140
+   * bytes more inside the same ceiling: two container queries that replace
+   * two viewport media queries, the container declarations, and the channel
+   * row's own copy of the wrap rules (a container condition cannot be a
+   * variable, so the inventory's block cannot serve a second width).
    */
   css: 17,
   fonts: 80,
