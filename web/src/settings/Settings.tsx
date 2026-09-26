@@ -7,6 +7,7 @@ import { SearchIcon, SettingsIcon } from "../shell/icons";
 import { TopbarTools } from "../shell/TopbarTools";
 import { WatchdogCard } from "../watchdog/Watchdog";
 import { RetentionCard } from "../retention/Retention";
+import { BackupCard } from "../backup/Backup";
 import { TokensCard } from "../tokens/Tokens";
 
 /**
@@ -135,6 +136,9 @@ export function Settings({ client, canAdmin = false, role = canAdmin ? "admin" :
       body: provide(<WatchdogCard />) },
     { id: "retention", label: "Retention & storage", keywords: "retention storage database history heartbeats summaries incidents disk size",
       body: provide(<RetentionCard canAdmin={canAdmin} />) },
+    // The endpoint is admin-only (the target names a bucket), so the card is too.
+    ...(canAdmin ? [{ id: "backups", label: "Backups", keywords: "backups backup restore s3 bucket storage database snapshot",
+      body: provide(<BackupCard />) }] : []),
     { id: "tokens", label: "API tokens", keywords: "api tokens bearer keys scripts ci revoke",
       body: provide(<TokensCard role={role} />) },
   ];
