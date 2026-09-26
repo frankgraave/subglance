@@ -2,6 +2,7 @@
 @import "./styles/tokens.css";
 @import "./styles/fonts.css";
 @import "./monitors/maintenance.css";
+@import "./tokens/tokens.css";
 
 /*
  * The two face roles (DESIGN.md §2.5).

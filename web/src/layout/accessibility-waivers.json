@@ -85,6 +85,28 @@
     },
     {
       "rule": "color-contrast",
+      "selector": "div[aria-label=\"Role\"] > .segmented-option[type=\"button\"]:nth-child(2)",
+      "scopes": [
+        "light: settings",
+        "light: settings password error",
+        "dark: settings",
+        "dark: settings password error"
+      ],
+      "reason": "The shared segmented-option contrast debt already waived for the dashboard layout switcher and the latency window control, now also measured on the API token role control on the settings page (SUB-28). Same component, same inactive ink; remediation belongs in the shared control, not in this caller. Remove with the other segmented-option waivers when that is fixed."
+    },
+    {
+      "rule": "color-contrast",
+      "selector": "div[aria-label=\"Role\"] > .segmented-option[type=\"button\"]:nth-child(3)",
+      "scopes": [
+        "light: settings",
+        "light: settings password error",
+        "dark: settings",
+        "dark: settings password error"
+      ],
+      "reason": "The shared segmented-option contrast debt already waived for the dashboard layout switcher and the latency window control, now also measured on the API token role control on the settings page (SUB-28). Same component, same inactive ink; remediation belongs in the shared control, not in this caller. Remove with the other segmented-option waivers when that is fixed."
+    },
+    {
+      "rule": "color-contrast",
       "selector": ".segmented-option:nth-child(4)",
       "scopes": [
         "light: dashboard rows",

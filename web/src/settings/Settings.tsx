@@ -7,15 +7,17 @@ import { SearchIcon, SettingsIcon } from "../shell/icons";
 import { TopbarTools } from "../shell/TopbarTools";
 import { WatchdogCard } from "../watchdog/Watchdog";
 import { RetentionCard } from "../retention/Retention";
+import { TokensCard } from "../tokens/Tokens";
 
-/** Only implemented sections: no user, token or diagnostics controls yet. */
-export function Settings({ client, canAdmin = false }: { client?: QueryClient; canAdmin?: boolean }) {
+/** Only implemented sections: no user or diagnostics controls yet. */
+export function Settings({ client, canAdmin = false, role = canAdmin ? "admin" : "viewer" }: { client?: QueryClient; canAdmin?: boolean; role?: string }) {
   // Like the live pages, Settings owns a provider at its route boundary.
   const [fallback] = useState(createQueryClient);
   const [query, setQuery] = useState("");
   const matches = "account password current new confirm sessions security".includes(query.trim().toLowerCase());
   const watchdogMatches = "self-monitoring watchdog last ping success rejection outage".includes(query.trim().toLowerCase());
   const retentionMatches = "retention storage database history heartbeats summaries incidents disk size".includes(query.trim().toLowerCase());
+  const tokensMatches = "api tokens bearer keys scripts ci revoke".includes(query.trim().toLowerCase());
   return <>
     <TopbarTools>
       <label className="shell-search">
@@ -37,6 +39,9 @@ export function Settings({ client, canAdmin = false }: { client?: QueryClient; c
     <div id="retention" hidden={!retentionMatches} style={{ maxWidth: "var(--size-pane-lg)", marginTop: "var(--space-4)" }}>
       <QueryClientProvider client={client ?? fallback}><RetentionCard canAdmin={canAdmin} /></QueryClientProvider>
     </div>
-    {!matches && !watchdogMatches && !retentionMatches && <p role="status">No settings match “{query}”.</p>}
+    <div id="tokens" hidden={!tokensMatches} style={{ maxWidth: "var(--size-pane-lg)", marginTop: "var(--space-4)" }}>
+      <QueryClientProvider client={client ?? fallback}><TokensCard role={role} /></QueryClientProvider>
+    </div>
+    {!matches && !watchdogMatches && !retentionMatches && !tokensMatches && <p role="status">No settings match “{query}”.</p>}
   </>;
 }
