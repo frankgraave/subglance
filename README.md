@@ -97,6 +97,7 @@ exists for it.
 | Dashboard, monitor detail, incidents, monitors, notifications screens | ✅ Working |
 | Signed multi-platform release builds | ✅ Working (`v0.1.0-rc3`) |
 | Maintenance windows — one-off and weekly, by monitor or tag | ✅ Working |
+| Scheduled backups to S3-compatible storage, and restore | ✅ Working; not yet shown on the settings page |
 | Latency graph on the detail view | ⏳ Planned for v0.1 |
 | Settings — password change and watchdog diagnostics | ✅ Working; remaining sections planned for v0.1 |
 
@@ -150,6 +151,10 @@ exists for it.
   keyboard shortcuts, and a crash boundary
 - **Tags and pausing**: tags are key/value pairs the dashboard turns into
   filters, and a paused monitor reads differently from one that has no data yet
+- **Backups**: `subglance backup` takes a consistent snapshot on demand, and
+  with a bucket configured a compressed copy goes to AWS S3 or any
+  S3-compatible storage on a schedule, pruned to a set number and restored with
+  `subglance restore`
 - **One binary**: the dashboard is compiled in with `go:embed`
 
 </details>

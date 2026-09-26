@@ -27,6 +27,11 @@ type Server struct {
 	startedAt        time.Time
 	watchdogSnapshot func() watchdog.Snapshot
 
+	// backups reports on scheduled backups; nil with backupsWired set means
+	// they are not configured. See WithBackups.
+	backups      BackupStatusSource
+	backupsWired bool
+
 	// bus carries live check results to streaming clients. Nil disables the
 	// stream endpoint rather than crashing it, so the API stays usable in
 	// tests and in any deployment that runs without a checker pipeline.
@@ -297,6 +302,7 @@ func (s *Server) routes() []route {
 		{http.MethodGet, "/api/v1/watchdog", accessRead},
 		{http.MethodGet, "/api/v1/settings/retention", accessRead},
 		{http.MethodGet, "/api/v1/settings/retention/preview", accessRead},
+		{http.MethodGet, "/api/v1/backup", accessAdmin},
 		{http.MethodPost, "/api/v1/auth/password", accessRead},
 
 		// Logout is authenticated rather than public, which reads oddly for
@@ -441,6 +447,8 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 		return s.handlePreviewRetention
 	case "PUT /api/v1/settings/retention":
 		return s.handleSetRetention
+	case "GET /api/v1/backup":
+		return s.handleBackup
 	case "POST /api/v1/auth/password":
 		return s.handleChangePassword
 
