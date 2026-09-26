@@ -100,8 +100,13 @@ it("follows a hand scroll to the last section at the bottom of the page", async 
   try {
     await page.mouse.move(900, 400);
     for (let i = 0; i < 40; i++) await page.mouse.wheel({ deltaY: 400 });
+    // The last link rather than a name: which card is last depends on the
+    // session's role and on which settings cards exist.
     await page.waitForFunction(
-      () => document.querySelector('.settings-index [aria-current="true"]')?.textContent === "API tokens",
+      () => {
+        const links = document.querySelectorAll(".settings-index a");
+        return links.length > 0 && links[links.length - 1].getAttribute("aria-current") === "true";
+      },
       { timeout: 5_000 },
     );
   } finally {

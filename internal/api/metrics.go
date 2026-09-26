@@ -74,6 +74,8 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		"Dispatched checks waiting for a free worker.", uint64(m.QueueDepth))
 	gauge(&b, "subglance_check_workers",
 		"Size of the check worker pool.", uint64(m.Workers))
+	gauge(&b, "subglance_check_workers_busy",
+		"Workers running a check at the moment of the scrape.", uint64(max(m.Busy, 0)))
 	gauge(&b, "subglance_monitors_scheduled",
 		"Monitors currently on the schedule.", uint64(m.Scheduled))
 	s.writeBackupMetrics(&b)
