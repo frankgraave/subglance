@@ -220,12 +220,66 @@ func (db *DB) UpdatePassword(ctx context.Context, userID int64, newPassword stri
 	return nil
 }
 
+// ErrLastAdmin is returned when a change would leave no administrator.
+var ErrLastAdmin = errors.New("store: this is the last administrator")
+
+// otherAdminExists is true when an administrator other than the row being
+// changed exists. It is part of the statement, not a SELECT before it: this DB
+// has a single writer connection, so the guard is evaluated with the write
+// lock held, and two administrators removing each other at the same moment
+// cannot both pass it.
+const otherAdminExists = "EXISTS (SELECT 1 FROM users AS other WHERE other.role = 'admin' AND other.id != users.id)"
+
 // DeleteUser removes an account and, by cascade, its sessions and tokens.
+//
+// It refuses to remove the last administrator (ErrLastAdmin), because an
+// instance without one has nobody who can manage accounts, and reports an
+// unknown id as ErrNotFound.
 func (db *DB) DeleteUser(ctx context.Context, id int64) error {
-	if _, err := db.Writer.ExecContext(ctx, "DELETE FROM users WHERE id = ?", id); err != nil {
+	res, err := db.Writer.ExecContext(ctx,
+		"DELETE FROM users WHERE id = ? AND (role != 'admin' OR "+otherAdminExists+")", id)
+	if err != nil {
 		return fmt.Errorf("delete user %d: %w", id, err)
 	}
-	return nil
+	return db.explainUnchanged(ctx, res, id)
+}
+
+// SetUserRole changes an account's role.
+//
+// Demoting the last administrator is refused with ErrLastAdmin, for the same
+// reason DeleteUser refuses to remove one. An unknown id is ErrNotFound.
+// Sessions and tokens need no update: both resolve the account on every
+// request, so the new role applies from the next one.
+func (db *DB) SetUserRole(ctx context.Context, id int64, role Role) (User, error) {
+	if !role.Valid() {
+		return User{}, fmt.Errorf("store: invalid role %q", role)
+	}
+	res, err := db.Writer.ExecContext(ctx,
+		"UPDATE users SET role = ?, updated_at = ? WHERE id = ? AND (? = 'admin' OR role != 'admin' OR "+otherAdminExists+")",
+		string(role), time.Now().Unix(), id, string(role))
+	if err != nil {
+		return User{}, fmt.Errorf("set role of user %d: %w", id, err)
+	}
+	if err := db.explainUnchanged(ctx, res, id); err != nil {
+		return User{}, err
+	}
+	return db.GetUser(ctx, id)
+}
+
+// explainUnchanged turns a guarded statement that touched no row into the
+// reason: the account does not exist, or it is the last administrator.
+func (db *DB) explainUnchanged(ctx context.Context, res sql.Result, id int64) error {
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("rows affected: %w", err)
+	}
+	if n > 0 {
+		return nil
+	}
+	if _, err := db.GetUser(ctx, id); err != nil {
+		return err
+	}
+	return ErrLastAdmin
 }
 
 // Session is a browser login.

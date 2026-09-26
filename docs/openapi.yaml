@@ -2730,6 +2730,65 @@ paths:
           format: int64
           minimum: 1
         example: 2
+    patch:
+      tags: [Users]
+      operationId: updateUserRole
+      summary: Change an account's role
+      description: |
+        Administrators only. The role is the only field that can change: an
+        email address is how the person signs in, and a password is theirs to
+        change, not an administrator's to know.
+
+        The new role applies from the account's next request, through its
+        sessions and API tokens alike, because neither caches the role.
+
+        Two lockout guards, as on delete: you cannot change your own role, and
+        you cannot demote the last remaining administrator. Both are refused
+        with a 400 carrying `field: role`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: The account with its new role.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: |
+            Malformed or unknown-field JSON, a missing or unknown role, an
+            attempt to change your own role, or an attempt to demote the last
+            administrator.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: you cannot change your own role
+                field: role
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenAdmin'
+        '404':
+          description: No such account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: user not found
+        '500':
+          description: The role could not be changed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: admin
     delete:
       tags: [Users]
       operationId: deleteUser
@@ -2765,7 +2824,7 @@ paths:
               example:
                 error: user not found
         '500':
-          description: The account could not be verified or deleted.
+          description: The account could not be deleted.
           content:
             application/json:
               schema:
@@ -3177,6 +3236,13 @@ components:
             - $ref: '#/components/schemas/Role'
           description: Defaults to `viewer` when omitted, for least privilege.
           default: viewer
+      additionalProperties: false
+    UpdateUserRequest:
+      type: object
+      required: [role]
+      properties:
+        role:
+          $ref: '#/components/schemas/Role'
       additionalProperties: false
     MonitorType:
       type: string

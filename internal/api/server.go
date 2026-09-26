@@ -384,6 +384,7 @@ func (s *Server) routes() []route {
 		// Authenticated: admin only.
 		{http.MethodGet, "/api/v1/users", accessAdmin},
 		{http.MethodPost, "/api/v1/users", accessAdmin},
+		{http.MethodPatch, "/api/v1/users/{id}", accessAdmin},
 		{http.MethodDelete, "/api/v1/users/{id}", accessAdmin},
 
 		// Retention decides what history survives, for every user of the
@@ -523,6 +524,8 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 		return s.handleListUsers
 	case "POST /api/v1/users":
 		return s.handleCreateUser
+	case "PATCH /api/v1/users/{id}":
+		return s.handleUpdateUser
 	case "DELETE /api/v1/users/{id}":
 		return s.handleDeleteUser
 
