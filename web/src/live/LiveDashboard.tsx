@@ -34,6 +34,8 @@ export type LiveDashboardProps = LiveOptions & {
   onExitWall?: () => void;
   /** Opens one monitor's detail view. Provided by the shell, which routes. */
   onOpenMonitor?: (id: string) => void;
+  /** Opens the add form from the empty dashboard; absent for a viewer. */
+  onAddMonitor?: () => void;
   /** Route-change focus target, forwarded to the wall's own `<main>`. */
   mainRef?: RefObject<HTMLElement | null>;
 };
@@ -46,6 +48,7 @@ export function LiveDashboard({
   instance,
   onExitWall,
   onOpenMonitor,
+  onAddMonitor,
   mainRef,
   ...live
 }: LiveDashboardProps) {
@@ -123,6 +126,7 @@ export function LiveDashboard({
       onCardColumnsChange={onCardColumnsChange}
       stale={status === "offline"}
       onOpenMonitor={onOpenMonitor}
+      onAddMonitor={onAddMonitor}
       banner={
         <ConnectionBadge
           status={status}

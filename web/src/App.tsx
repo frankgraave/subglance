@@ -437,7 +437,8 @@ export default function App() {
         {workbenchOpen ? (
           <Workbench />
         ) : onSettings ? (
-          <Settings canAdmin={session.state === "signedIn" && session.user.role === "admin"} />
+          <Settings canAdmin={session.state === "signedIn" && session.user.role === "admin"}
+            role={session.state === "signedIn" ? session.user.role : "viewer"} />
         ) : onIncidents ? (
           <LiveIncidentsRoot client={queryClient} />
         ) : route.name === "notifications" ? (
@@ -477,6 +478,14 @@ export default function App() {
             cardColumns={cardColumns}
             onCardColumnsChange={setCardColumns}
             onOpenMonitor={openMonitor}
+            /* The empty dashboard's one next step opens the same form the
+               Monitors card does, at its own address. A viewer gets no
+               button: the server would refuse the save. */
+            onAddMonitor={
+              session.state === "signedIn" && canWrite(session.user)
+                ? () => setCreateOpen(true)
+                : undefined
+            }
           />
         )}
       </ErrorBoundary>

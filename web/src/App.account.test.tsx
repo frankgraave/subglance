@@ -54,8 +54,10 @@ it("opens the password card from the sidebar for a viewer and keeps settings out
   expect(document.title).toMatch(/Settings/);
   expect(document.querySelector(".shell-topbar")).toBeTruthy();
   await screen.findByText("Not configured");
-  // Account, self-monitoring and retention.
-  expect(screen.getAllByRole("region")).toHaveLength(3);
+  // Account, self-monitoring, retention and API tokens.
+  expect(screen.getAllByRole("region")).toHaveLength(4);
+  // The session's role reaches the tokens card: a viewer is not offered a create form.
+  expect(screen.getByText(/can list and revoke its own tokens but not create one/)).toBeTruthy();
   fireEvent.change(input, { target: { value: "private" } });
   fireEvent.change(screen.getByRole("searchbox", { name: "Search settings" }), { target: { value: "nonexistent" } });
   expect(screen.getByRole("status").textContent).toMatch(/No settings match/);
