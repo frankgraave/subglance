@@ -1,0 +1,59 @@
+/*
+ * The settings page: section cards in one scrolling column, with an index of
+ * them beside it (SUB-28).
+ *
+ * The index sits on the LEFT: the sections are the subject of the page, so
+ * the list of them is its table of contents, and a table of contents that
+ * comes after the content is not one. It is navigation, never state — nothing
+ * is hidden behind it, and every section is still on the page to scroll to.
+ *
+ * The column takes `--size-col-4`, the smallest rung its widest label
+ * ("Retention & storage", 139px in the product face plus the item's own
+ * padding and edge) fits in. A longer label tomorrow truncates rather than
+ * widening the column.
+ */
+.settings-layout {
+  /* Clear of the sticky masthead (61px: a 36px control, 12px above and
+     below, and its 1px edge), with the same 16px breathing room a card keeps
+     from its neighbour. Used twice: where the index sticks, and where a
+     section lands when its link is followed. */
+  --settings-top: calc(var(--space-16) + var(--space-4));
+  display: grid;
+  grid-template-columns: var(--size-col-4) minmax(0, var(--size-pane-lg));
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.settings-index {
+  position: sticky;
+  top: var(--settings-top);
+}
+.settings-index ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0h);
+}
+.settings-index .shell-nav-item { overflow: hidden; text-overflow: ellipsis; }
+
+.settings-sections {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+/* `min-width: 0`: a grid item's minimum is otherwise its min-content width,
+   and a card's is wider than the column at 320px (measured: 310px against
+   288px), so the whole page would scroll sideways. As plain blocks the cards
+   never had that minimum; the grid must not add it. */
+.settings-section { min-width: 0; scroll-margin-top: var(--settings-top); }
+
+/* One column below the tablet rung, where the page is too narrow for a side
+   column. The index becomes a wrapping row above the cards and stops
+   sticking: pinned there, it would cover the first lines of every card. */
+@media (max-width: 900px) {
+  .settings-layout { grid-template-columns: minmax(0, 1fr); }
+  .settings-index { position: static; }
+  .settings-index ul { flex-direction: row; flex-wrap: wrap; }
+}

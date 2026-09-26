@@ -272,8 +272,18 @@ const budgets = {
    * cost 0.4 kB and 37 bytes respectively, because they reused what was
    * already declared. A ceiling that holds through two screens and moves for
    * a change to what colour means is a ceiling doing its job.
+   *
+   * 16 -> 17 kB gzip, raised deliberately for SUB-28 (the settings page's
+   * section index). Measured: 16,380 bytes on develop against a ceiling of
+   * 16,384, so four bytes of headroom were left before this change, and
+   * 16,527 after it — 147 bytes. They buy the two-column layout (a sticky
+   * index beside the cards), its single-column form below the tablet rung,
+   * and the `scroll-margin-top` that lands a followed link below the sticky
+   * masthead instead of under it. The "you are here" paint is the sidebar's
+   * own `[data-state="current"]` rule, reused rather than restated. At 16.5
+   * the next card on this page would move it again.
    */
-  css: 16,
+  css: 17,
   fonts: 80,
 };
 
