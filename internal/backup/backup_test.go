@@ -334,6 +334,21 @@ func TestRunReportsAStalledUpload(t *testing.T) {
 	}
 }
 
+// Compression stops once the run's context is done, instead of finishing a
+// large snapshot after the deadline has already passed.
+func TestGzipFileStopsWhenTheContextIsDone(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "snapshot.db")
+	if err := os.WriteFile(src, make([]byte, 1<<20), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, _, err := gzipFile(ctx, src, filepath.Join(dir, "snapshot.db.gz")); !errors.Is(err, context.Canceled) {
+		t.Errorf("err = %v, want context.Canceled", err)
+	}
+}
+
 // A clean run reports nil, which is what ends a failing streak.
 func TestRunReportsACleanBackup(t *testing.T) {
 	db := openStore(t)

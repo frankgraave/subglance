@@ -231,7 +231,7 @@ func (b *Backups) runOnce(ctx context.Context) (Result, error) {
 	if _, err := b.db.BackupTo(ctx, snapshot); err != nil {
 		return Result{}, fmt.Errorf("snapshot: %w", err)
 	}
-	size, sum, err := gzipFile(snapshot, compressed)
+	size, sum, err := gzipFile(ctx, snapshot, compressed)
 	if err != nil {
 		return Result{}, fmt.Errorf("compress: %w", err)
 	}
@@ -441,8 +441,10 @@ func (b *Backups) firstRun(ctx context.Context) time.Time {
 }
 
 // gzipFile compresses src into dst and returns the compressed size and its
-// SHA-256, which the upload signature covers.
-func gzipFile(src, dst string) (int64, string, error) {
+// SHA-256, which the upload signature covers. It stops between reads once ctx
+// is done, so a run past its deadline does not keep compressing; a read or
+// write that is already blocked in the filesystem is not interrupted.
+func gzipFile(ctx context.Context, src, dst string) (int64, string, error) {
 	// Both paths are built in runOnce from the configured data directory
 	// and a timestamp; nothing in them comes from a request.
 	in, err := os.Open(src) //nolint:gosec // path built from the data dir
@@ -456,7 +458,11 @@ func gzipFile(src, dst string) (int64, string, error) {
 	}
 	h := sha256.New()
 	zw := gzip.NewWriter(io.MultiWriter(out, h))
-	if _, err := io.Copy(zw, in); err != nil {
+	if _, err := io.Copy(zw, ctxReader{ctx: ctx, r: in}); err != nil {
+		_ = out.Close()
+		return 0, "", err
+	}
+	if err := ctx.Err(); err != nil {
 		_ = out.Close()
 		return 0, "", err
 	}
@@ -473,6 +479,20 @@ func gzipFile(src, dst string) (int64, string, error) {
 		return 0, "", err
 	}
 	return info.Size(), hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// ctxReader ends a copy with the context's error once ctx is done. It checks
+// before each read, so it cannot cut short a read that is already blocked.
+type ctxReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (c ctxReader) Read(p []byte) (int, error) {
+	if err := c.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return c.r.Read(p)
 }
 
 // AlertGate decides when a failing backup is worth a notification.
