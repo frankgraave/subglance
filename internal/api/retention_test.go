@@ -239,6 +239,20 @@ func TestRetentionSaveIsConditionalOnTheVersionRead(t *testing.T) {
 	}
 }
 
+// Header.Get cannot tell an absent If-Match from an empty one. Treating the
+// empty one as absent would turn a conditional save into an unconditional one.
+func TestRetentionSaveEmptyIfMatchIsMalformed(t *testing.T) {
+	srv, _ := testServerWithDB(t)
+	r := httptest.NewRequest(http.MethodPut, "/api/v1/settings/retention", strings.NewReader(`{"raw_seconds":2592000}`))
+	r.Header.Set("Content-Type", "application/json")
+	r.Header["If-Match"] = []string{""}
+	rec := httptest.NewRecorder()
+	authedHandler(srv).ServeHTTP(rec, r)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("empty If-Match = %d, want %d: %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+}
+
 func TestRetentionSaveIfMatchForms(t *testing.T) {
 	tests := []struct {
 		name, ifMatch string

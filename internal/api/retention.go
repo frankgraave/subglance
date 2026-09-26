@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/frankgraave/subglance/internal/store"
@@ -169,12 +170,15 @@ func retentionField(window string) string { return window + "_seconds" }
 // header the save stays last-write-wins, like a monitor PATCH, so a script
 // written against the unconditional endpoint keeps working.
 func (s *Server) handleSetRetention(w http.ResponseWriter, r *http.Request) {
-	ifMatch := r.Header.Get("If-Match")
+	// Presence, not value, decides: an If-Match sent empty is a malformed
+	// precondition, and treating it as absent would save unconditionally.
+	ifMatchValues, hasIfMatch := r.Header["If-Match"]
+	ifMatch := strings.Join(ifMatchValues, ", ")
 	var (
 		wantTags []string
 		wantAny  bool
 	)
-	if ifMatch != "" {
+	if hasIfMatch {
 		var valid bool
 		if wantTags, wantAny, valid = parseIfMatch(ifMatch); !valid {
 			writeError(w, http.StatusBadRequest, "malformed If-Match header")
@@ -208,7 +212,7 @@ func (s *Server) handleSetRetention(w http.ResponseWriter, r *http.Request) {
 		version int64
 		err     error
 	)
-	if ifMatch != "" && !wantAny {
+	if hasIfMatch && !wantAny {
 		version, err = s.db.SetRetentionIfVersion(r.Context(), raw, rollup, s.retentionPins, retentionVersions(wantTags))
 	} else {
 		version, err = s.db.SetRetention(r.Context(), raw, rollup, s.retentionPins)
