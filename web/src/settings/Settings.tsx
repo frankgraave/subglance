@@ -7,6 +7,7 @@ import { SearchIcon, SettingsIcon } from "../shell/icons";
 import { TopbarTools } from "../shell/TopbarTools";
 import { WatchdogCard } from "../watchdog/Watchdog";
 import { RetentionCard } from "../retention/Retention";
+import { ResetInstanceCard } from "../reset/ResetInstance";
 import { TokensCard } from "../tokens/Tokens";
 
 /**
@@ -137,6 +138,11 @@ export function Settings({ client, canAdmin = false, role = canAdmin ? "admin" :
       body: provide(<RetentionCard canAdmin={canAdmin} />) },
     { id: "tokens", label: "API tokens", keywords: "api tokens bearer keys scripts ci revoke",
       body: provide(<TokensCard role={role} />) },
+    // Last on the page: the one action here with no undo. Admin-only, so a
+    // search for "reset" by anyone else finds nothing rather than a card they
+    // could not use.
+    ...(canAdmin ? [{ id: "reset", label: "Reset instance", keywords: "reset danger delete all data erase wipe instance",
+      body: provide(<ResetInstanceCard />) }] : []),
   ];
   const needle = query.trim().toLowerCase();
   const shown = sections.filter((section) => section.keywords.includes(needle));

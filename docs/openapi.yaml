@@ -465,6 +465,63 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/v1/instance/reset:
+    post:
+      tags: [Settings]
+      operationId: resetInstance
+      summary: Delete every monitor, channel and token
+      description: |
+        Administrators only. Deletes every monitor, notification channel,
+        maintenance window and API token, and with them all heartbeats, hourly
+        summaries, incidents, tags, stored failure responses and queued
+        notifications. User accounts, sessions and settings (such as the
+        retention windows) are kept, so the caller stays signed in.
+
+        There is no undo. The request must carry the exact phrase
+        `DELETE ALL DATA` in `confirm` (case and spaces included), the same
+        phrase the settings page asks the operator to type. Everything is
+        deleted in one transaction: a failure leaves the instance unchanged.
+      x-subglance-access: admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [confirm]
+              properties:
+                confirm: { type: string, const: DELETE ALL DATA }
+      responses:
+        '200':
+          description: The instance is empty. Counts of what was deleted directly; rows that went by cascade are not counted.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [monitors, channels, api_tokens, maintenance_windows]
+                properties:
+                  monitors: { type: integer, minimum: 0 }
+                  channels: { type: integer, minimum: 0 }
+                  api_tokens: { type: integer, minimum: 0 }
+                  maintenance_windows: { type: integer, minimum: 0 }
+        '400':
+          description: Malformed JSON, or `confirm` is not exactly the phrase. `field` is `confirm`. Nothing was deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenAdmin'
+        '500':
+          description: The reset failed and was rolled back. Nothing was deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /api/v1/backup:
     get:
       tags: [Health]
