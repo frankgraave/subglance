@@ -425,6 +425,62 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/v1/backup:
+    get:
+      tags: [Health]
+      operationId: getBackupStatus
+      summary: Read scheduled backup status
+      description: |
+        Status of scheduled backups to S3-compatible storage, for the
+        diagnostics section of the settings page. Administrators only: the
+        target names a bucket and the last error can quote the storage
+        service's reply about it.
+
+        Process-local: restarting clears the history, though not the backups.
+        `configured: false` means no backup target is set. The last success
+        survives a later failure, so a failing streak reads as "last good
+        backup at X, failing since Y". The same numbers are on `/metrics` as
+        `subglance_backup_last_success_timestamp_seconds`,
+        `subglance_backup_last_size_bytes` and `subglance_backup_failures_total`,
+        which are only present when backups are configured.
+      x-subglance-access: admin
+      responses:
+        '200':
+          description: Known configuration and history; not configured is not an error.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: 'private, no-store' }
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [configured, target, last_success_at, last_object, last_size_bytes, last_error, last_error_at, failures]
+                properties:
+                  configured: { type: boolean }
+                  target:
+                    type: [string, 'null']
+                    description: The configured s3://bucket/prefix/, without credentials. Null when not configured.
+                  last_success_at: { type: [string, 'null'], format: date-time }
+                  last_object:
+                    type: [string, 'null']
+                    description: Object name of the last successful backup, relative to the target.
+                  last_size_bytes:
+                    type: [integer, 'null']
+                    description: Compressed size of the last successful backup.
+                  last_error:
+                    type: [string, 'null']
+                    description: The most recent failure, cleared by the next success.
+                  last_error_at: { type: [string, 'null'], format: date-time }
+                  failures:
+                    type: integer
+                    description: Failed runs since the process started.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Administrator role required
+        '503':
+          description: Backup state unavailable; must not be interpreted as not configured.
   /metrics:
     get:
       tags: [Health]
