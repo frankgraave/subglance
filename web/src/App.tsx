@@ -437,7 +437,8 @@ export default function App() {
         {workbenchOpen ? (
           <Workbench />
         ) : onSettings ? (
-          <Settings canAdmin={session.state === "signedIn" && session.user.role === "admin"} />
+          <Settings canAdmin={session.state === "signedIn" && session.user.role === "admin"}
+            userId={session.state === "signedIn" ? session.user.id : undefined} />
         ) : onIncidents ? (
           <LiveIncidentsRoot client={queryClient} />
         ) : route.name === "notifications" ? (

@@ -187,8 +187,19 @@ const budgets = {
    * dependency. 143 would leave 103 bytes; 144 leaves 1,127. CSS measures
    * 16,283 of 16,384 and stays put, because the card reuses the auth form's
    * field, label, error and button rules rather than declaring its own.
+   *
+   * 144 -> 149 KiB gzip for SUB-28 (the users card on /settings).
+   * Develop at 4916aee measures 146,392 bytes of entry JS (Node gzip); this
+   * branch measures 147,895: 1,503 bytes for a card that lists the accounts
+   * with their roles, a role picker per row that saves only on an explicit
+   * button, a two-step removal, an add form with a role and a password
+   * floor, and a shape check that refuses a list with an unknown role. No new
+   * dependency and no new CSS. 145 would leave 585 bytes. The instance card
+   * (1,489 bytes) and the tokens card (1,980) are open beside this branch;
+   * with all three the entry measures about 151,364, so 149 (152,576) is the
+   * lowest whole ceiling none of them fails on, whichever merges last.
    */
-  js: 144,
+  js: 149,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *

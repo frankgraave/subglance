@@ -19,6 +19,7 @@ import type { ApiHeartbeat, ApiMonitor } from "../../monitors/types";
 import type { ApiIncident } from "../../monitors/detail";
 import { disabledWatchdog } from "../../watchdog/fixtures";
 import { defaultRetention } from "../../retention/fixtures";
+import { twoUsers } from "../../users/fixtures";
 
 /*
  * `import.meta.url` is .../web/src/layout/harness/server.ts, so the repository
@@ -269,6 +270,12 @@ export async function serveBuild(): Promise<Server> {
      * than a missing stub. The identity is irrelevant to a layout
      * measurement; that a session resolves at all is not.
      */
+    if (url.pathname === "/api/v1/users") {
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ users: twoUsers }));
+      return;
+    }
+
     if (url.pathname === "/api/v1/settings/retention") {
       res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
       res.end(JSON.stringify(defaultRetention));
