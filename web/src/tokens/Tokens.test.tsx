@@ -115,8 +115,26 @@ it("shows the server's reason when a create is refused", async () => {
     ? json({ error: "a token cannot have a higher role than your own", field: "role" }, 403) : undefined);
   fireEvent.change(await screen.findByLabelText("Token name"), { target: { value: "x" } });
   fireEvent.click(screen.getByRole("button", { name: "Create token" }));
-  expect((await screen.findByRole("alert")).textContent).toBe("a token cannot have a higher role than your own");
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toBe("a token cannot have a higher role than your own");
   expect(screen.queryByLabelText(/Token for/)).toBeNull();
+  // A role refusal sits under the role select and is tied to it, once.
+  const select = screen.getByLabelText("Role");
+  expect(alert.parentElement).toBe(select.parentElement);
+  expect(select.getAttribute("aria-invalid")).toBe("true");
+  expect(select.getAttribute("aria-describedby")?.split(" ")).toContain(alert.id);
+  expect(screen.getAllByRole("alert")).toHaveLength(1);
+});
+
+it("sorts an expired token after the live ones", async () => {
+  const expired = { id: 4, name: "old-ci", prefix: "sgp_0ld0ld", role: "editor", created_at: "2020-01-01T00:00:00Z", expires_at: "2020-02-01T00:00:00Z" };
+  mount("admin", (url, init) => String(url) === "/api/v1/tokens" && !init?.method
+    ? json({ tokens: [expired, ...sampleTokens] }) : undefined);
+  const list = await screen.findByRole("list", { name: "Your API tokens" });
+  const names = within(list).getAllByRole("listitem").map((row) => within(row).getByText(/^(grafana|ci-deploy|laptop|old-ci)$/).textContent);
+  expect(names.slice(0, 2).sort()).toEqual(["ci-deploy", "grafana"]);
+  expect(names.slice(2).sort()).toEqual(["laptop", "old-ci"]);
+  expect(screen.getByText("2 active")).toBeTruthy();
 });
 
 it("refuses a malformed list rather than drawing it", async () => {

@@ -59,6 +59,8 @@ function CreateForm({ role, onCreated }: { role: string; onCreated: (token: stri
   const [expiry, setExpiry] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<{ field?: string; message: string } | null>(null);
+  // A role refusal is drawn under the role select, not with the general errors.
+  const roleError = error?.field === "role";
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -88,10 +90,13 @@ function CreateForm({ role, onCreated }: { role: string; onCreated: (token: stri
         </div>
         <div className="auth-field">
           <label className="auth-label" htmlFor={`${id}-role`}>Role</label>
-          <select className="auth-input" id={`${id}-role`} value={scope} aria-describedby={`${id}-role-help`}
+          <select className="auth-input" id={`${id}-role`} value={scope}
+            aria-describedby={roleError ? `${id}-role-help ${id}-error` : `${id}-role-help`}
+            aria-invalid={roleError ? true : undefined}
             onChange={(event) => setScope(event.target.value as TokenRole)}>
             {roles.map((item) => <option key={item} value={item}>{item[0].toUpperCase() + item.slice(1)}</option>)}
           </select>
+          {roleError && <p className="auth-error" role="alert" id={`${id}-error`}>{error.message}</p>}
         </div>
         <div className="auth-field">
           <label className="auth-label" htmlFor={`${id}-expiry`}>Expires</label>
@@ -101,10 +106,15 @@ function CreateForm({ role, onCreated }: { role: string; onCreated: (token: stri
         </div>
       </div>
       <p className="retention-note" id={`${id}-role-help`}>{ROLE_HELP[scope]}</p>
-      {error && <p className="auth-error" role="alert" id={`${id}-error`}>{error.message}</p>}
+      {error && !roleError && <p className="auth-error" role="alert" id={`${id}-error`}>{error.message}</p>}
       <div><button className="auth-submit" type="submit" disabled={!name.trim() || saving}>{saving ? "Creating…" : "Create token"}</button></div>
     </form>
   );
+}
+
+/** Neither revoked nor past its expiry, measured at `now`. */
+function isLive(token: ApiToken, now: number): boolean {
+  return !token.revoked_at && !(token.expires_at !== undefined && Date.parse(token.expires_at) <= now);
 }
 
 function TokenRow({ token, now, onRevoked }: { token: ApiToken; now: number; onRevoked: () => void }) {
@@ -112,7 +122,7 @@ function TokenRow({ token, now, onRevoked }: { token: ApiToken; now: number; onR
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const expired = token.expires_at !== undefined && Date.parse(token.expires_at) <= now;
-  const live = !token.revoked_at && !expired;
+  const live = isLive(token, now);
   const facts = [
     `created ${day(token.created_at)}`,
     token.last_used_at ? `last used ${day(token.last_used_at)}` : "never used",
@@ -166,8 +176,8 @@ export function TokensCard({ role }: { role: string }) {
   // move a token from live to expired between two parts of the same card.
   const now = query.dataUpdatedAt;
   // Live tokens first: the list is where a leaked one gets found and revoked.
-  const ordered = [...tokens].sort((a, b) => Number(!!a.revoked_at) - Number(!!b.revoked_at));
-  const live = tokens.filter((t) => !t.revoked_at && !(t.expires_at && Date.parse(t.expires_at) <= now)).length;
+  const ordered = [...tokens].sort((a, b) => Number(!isLive(a, now)) - Number(!isLive(b, now)));
+  const live = tokens.filter((t) => isLive(t, now)).length;
 
   return (
     <Card title="API tokens" className="retention-card" note={query.data ? `${live} active` : undefined}>
