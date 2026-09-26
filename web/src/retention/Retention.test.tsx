@@ -10,15 +10,18 @@ import type { Retention } from "./api";
 const clients: QueryClient[] = [];
 afterEach(() => { cleanup(); for (const client of clients.splice(0)) client.clear(); vi.unstubAllGlobals(); });
 
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+function json(body: unknown, status = 200, etag?: string) {
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...(etag ? { etag } : {}) } });
 }
+
+/** The retention read as the server sends it: with the version of the windows. */
+const settings = (body: unknown, etag = 'W/"4"') => json(body, 200, etag);
 
 function mount(state: Retention, canAdmin = true, onRequest?: (url: string, init?: RequestInit) => Response | undefined) {
   const fetcher = vi.fn().mockImplementation(async (url: string, init?: RequestInit) =>
     onRequest?.(url, init) ?? (url.includes("/preview")
       ? json({ heartbeats: 1234, hourly_buckets: 0, incidents: 0 })
-      : json(state)));
+      : settings(state)));
   vi.stubGlobal("fetch", fetcher);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(client);
@@ -147,4 +150,52 @@ it("formats sizes in decimal units", () => {
   expect(formatBytes(512)).toBe("512 B");
   expect(formatBytes(5_400_000)).toBe("5.4 MB");
   expect(formatBytes(160_000_000)).toBe("160 MB");
+});
+
+it("makes the save conditional on the version it read", async () => {
+  let ifMatch: string | null = null;
+  mount(defaultRetention, true, (_url, init) => {
+    if (init?.method !== "PUT") return undefined;
+    ifMatch = new Headers(init.headers).get("If-Match");
+    return settings({ ...defaultRetention, raw: { ...defaultRetention.raw, seconds: 60 * 86_400, source: "database" } }, 'W/"5"');
+  });
+  fireEvent.change(await screen.findByLabelText("Keep raw heartbeats, in days"), { target: { value: "60" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save retention" }));
+  expect(await screen.findByText(/Saved\./)).toBeTruthy();
+  expect(ifMatch).toBe('W/"4"');
+});
+
+// Read at 30 days, another administrator saves 90. Sixty now shortens
+// retention, and that was never previewed, so the draft is not retried: the
+// form restarts from what is in force and says why.
+it("reloads the windows instead of retrying when someone else saved first", async () => {
+  let current: Retention = defaultRetention;
+  let puts = 0;
+  mount(defaultRetention, true, (url, init) => {
+    if (init?.method === "PUT") {
+      puts++;
+      current = { ...defaultRetention, raw: { ...defaultRetention.raw, seconds: 90 * 86_400, source: "database" } };
+      return json({ error: "retention was changed by someone else since you read it" }, 412);
+    }
+    return url.includes("/preview") ? undefined : settings(current, 'W/"5"');
+  });
+  const raw = await screen.findByLabelText("Keep raw heartbeats, in days") as HTMLInputElement;
+  fireEvent.change(raw, { target: { value: "60" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save retention" }));
+  expect((await screen.findByRole("alert")).textContent).toMatch(/changed by someone else while you were editing/);
+  await waitFor(() => expect((screen.getByLabelText("Keep raw heartbeats, in days") as HTMLInputElement).value).toBe("90"));
+  expect(screen.getByRole("button", { name: "Save retention" }).matches(":disabled")).toBe(true);
+  expect(puts).toBe(1);
+});
+
+it("does not fall back to an unconditional save when the read carried no version", async () => {
+  let puts = 0;
+  mount(defaultRetention, true, (url, init) => {
+    if (init?.method === "PUT") { puts++; return settings(defaultRetention); }
+    return url.includes("/preview") ? undefined : json(defaultRetention);
+  });
+  fireEvent.change(await screen.findByLabelText("Keep raw heartbeats, in days"), { target: { value: "60" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save retention" }));
+  expect((await screen.findByRole("alert")).textContent).toMatch(/Reload the page before saving/);
+  expect(puts).toBe(0);
 });

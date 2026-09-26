@@ -188,15 +188,28 @@ const budgets = {
    * 16,283 of 16,384 and stays put, because the card reuses the auth form's
    * field, label, error and button rules rather than declaring its own.
    *
-   * 144 -> 146 KiB gzip for SUB-28 (the instance card on /settings), measured
-   * after merging develop 5fe798a: 147,842 bytes of entry JS (Node gzip)
-   * against develop's retention measurement of 146,329 above, so the card
-   * costs about 1,500 bytes: the build, process, database and worker-pool
-   * readings, a shape check that refuses a malformed body instead of drawing
-   * it as healthy zeros, and the copy-to-clipboard summary. No new
-   * dependency. 145 would leave 638 bytes; 146 leaves 1,662.
+   * 144 -> 147 KiB gzip for SUB-28 (the API tokens card on /settings).
+   * Develop at 4916aee measures 146,392 bytes of entry JS (Node gzip); this
+   * branch measures 148,372: 1,980 bytes for a card that lists the session's
+   * tokens with role, prefix, last use and expiry, a create form with a role
+   * capped at the account's own and an expiry, the shown-once secret panel
+   * with copy and an explicit dismissal, a two-step revoke, and a shape check
+   * that refuses a malformed list instead of drawing a revoked token as live.
+   * No new dependency. 146 would leave 1,132 bytes, which the instance card
+   * open beside this branch (1,489 bytes by its own measurement) would not
+   * fit in; 147 covers both, so neither fails on whichever merges second.
+   * CSS measures 16,374 of 16,384 and stays put: the card declares two
+   * rules and reuses the auth form, the push-URL reveal and retention notes.
+   *
+   * 147 -> 148 KiB gzip for SUB-28 (the instance card, merged onto develop
+   * 8e21e09 after the tokens card and the section index). This branch
+   * measures 150,823 bytes of entry JS (Node gzip, level 6), 295 over 147:
+   * the section index took the room the tokens comment above had set aside
+   * for this card. The card itself still costs about 1,500 bytes (build,
+   * process, database and worker-pool readings, a shape check, the
+   * copy-to-clipboard summary). No new dependency. 148 leaves 729 bytes.
    */
-  js: 146,
+  js: 148,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *
@@ -268,14 +281,15 @@ const budgets = {
    * already declared. A ceiling that holds through two screens and moves for
    * a change to what colour means is a ceiling doing its job.
    *
-   * 16 -> 17 kB gzip for SUB-28 (the instance card on /settings). Develop at
-   * 5fe798a sits within about a hundred bytes of 16,384; this branch measures
-   * 16,435, 51 over. The card declares one grid, the helper-text colour on its
-   * labels, and an out-of-flow rule for its empty clipboard status, and
-   * reuses Panel, Value and the add button for everything else. The settings
-   * cards still to come (tokens, users, backups) each need a rule or two of
-   * their own, so a raise to 16.5 would be spent by the next one; 17 leaves
-   * 973 bytes and states the move here rather than letting it happen quietly.
+   * 16 -> 17 kB gzip, raised deliberately for SUB-28 (the settings page's
+   * section index). Measured: 16,380 bytes on develop against a ceiling of
+   * 16,384, so four bytes of headroom were left before this change, and
+   * 16,527 after it — 147 bytes. They buy the two-column layout (a sticky
+   * index beside the cards), its single-column form below the tablet rung,
+   * and the `scroll-margin-top` that lands a followed link below the sticky
+   * masthead instead of under it. The "you are here" paint is the sidebar's
+   * own `[data-state="current"]` rule, reused rather than restated. At 16.5
+   * the next card on this page would move it again.
    */
   css: 17,
   fonts: 80,
