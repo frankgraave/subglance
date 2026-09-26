@@ -200,8 +200,16 @@ const budgets = {
    * fit in; 147 covers both, so neither fails on whichever merges second.
    * CSS measures 16,374 of 16,384 and stays put: the card declares two
    * rules and reuses the auth form, the push-URL reveal and retention notes.
+   *
+   * 147 -> 148 KiB gzip for SUB-28 (the instance card, merged onto develop
+   * 8e21e09 after the tokens card and the section index). This branch
+   * measures 150,823 bytes of entry JS (Node gzip, level 6), 295 over 147:
+   * the section index took the room the tokens comment above had set aside
+   * for this card. The card itself still costs about 1,500 bytes (build,
+   * process, database and worker-pool readings, a shape check, the
+   * copy-to-clipboard summary). No new dependency. 148 leaves 729 bytes.
    */
-  js: 147,
+  js: 148,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *

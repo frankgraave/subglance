@@ -6,6 +6,7 @@ import { ChangePassword } from "../auth/ChangePassword";
 import { SearchIcon, SettingsIcon } from "../shell/icons";
 import { TopbarTools } from "../shell/TopbarTools";
 import { WatchdogCard } from "../watchdog/Watchdog";
+import { DiagnosticsCard } from "../diagnostics/Diagnostics";
 import { RetentionCard } from "../retention/Retention";
 import { TokensCard } from "../tokens/Tokens";
 
@@ -137,6 +138,9 @@ export function Settings({ client, canAdmin = false, role = canAdmin ? "admin" :
       body: provide(<RetentionCard canAdmin={canAdmin} />) },
     { id: "tokens", label: "API tokens", keywords: "api tokens bearer keys scripts ci revoke",
       body: provide(<TokensCard role={role} />) },
+    // Administrators only: the card names the database path, and the API refuses anyone else.
+    ...(canAdmin ? [{ id: "instance", label: "Instance", keywords: "instance diagnostics version build runtime uptime database size wal journal workers pool queue skipped",
+      body: provide(<DiagnosticsCard />) }] : []),
   ];
   const needle = query.trim().toLowerCase();
   const shown = sections.filter((section) => section.keywords.includes(needle));

@@ -28,6 +28,7 @@ func TestMetricsExposesTheOperationalCounters(t *testing.T) {
 		QueueDepth:             16,
 		Workers:                50,
 		Scheduled:              200,
+		Busy:                   31,
 	}})
 
 	rec := httptest.NewRecorder()
@@ -55,6 +56,7 @@ func TestMetricsExposesTheOperationalCounters(t *testing.T) {
 		"subglance_check_queue_depth":              {"gauge", "16"},
 		"subglance_check_workers":                  {"gauge", "50"},
 		"subglance_monitors_scheduled":             {"gauge", "200"},
+		"subglance_check_workers_busy":             {"gauge", "31"},
 	}
 	for name, exp := range want {
 		if !strings.Contains(body, "# HELP "+name+" ") {
