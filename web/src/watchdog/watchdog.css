@@ -22,7 +22,9 @@
 .watchdog-history dd { margin: var(--space-1) 0 0; }
 .watchdog-history time { @apply face-mono; }
 .watchdog-notice { margin: var(--space-4) 0 0; }
-.watchdog-notice a {
+/* Also the backup card, which wears these classes (web/src/backup). */
+.watchdog-notice a,
+.watchdog-card a {
   display: inline-block;
   min-height: var(--size-row-sm);
   color: inherit;
