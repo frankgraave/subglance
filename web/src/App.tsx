@@ -478,6 +478,14 @@ export default function App() {
             cardColumns={cardColumns}
             onCardColumnsChange={setCardColumns}
             onOpenMonitor={openMonitor}
+            /* The empty dashboard's one next step opens the same form the
+               Monitors card does, at its own address. A viewer gets no
+               button: the server would refuse the save. */
+            onAddMonitor={
+              session.state === "signedIn" && canWrite(session.user)
+                ? () => setCreateOpen(true)
+                : undefined
+            }
           />
         )}
       </ErrorBoundary>

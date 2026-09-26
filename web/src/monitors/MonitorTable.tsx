@@ -42,6 +42,8 @@ export type MonitorTableProps = {
   beatWidth?: number;
   /** Opens a monitor's detail view client-side. See MonitorLink. */
   onOpen?: (id: string) => void;
+  /** Opens the add form from the empty state; see EmptyState. */
+  onAddMonitor?: () => void;
   /**
    * True when the live stream is dead. Handed straight to every row, which
    * puts the last known status into the past tense (DESIGN.md §6). The table
@@ -105,12 +107,20 @@ export function MonitorTable({
   filtered = false,
   groupKey = null,
   onOpen,
+  onAddMonitor,
   stale = false,
 }: MonitorTableProps) {
   const total = totalCount ?? monitors.length;
 
   if (monitors.length === 0) {
-    return <EmptyState query={query} totalCount={total} filtered={filtered} />;
+    return (
+      <EmptyState
+        query={query}
+        totalCount={total}
+        filtered={filtered}
+        onAddMonitor={onAddMonitor}
+      />
+    );
   }
 
   const rows = (list: readonly Monitor[]) =>
