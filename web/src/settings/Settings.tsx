@@ -6,6 +6,7 @@ import { ChangePassword } from "../auth/ChangePassword";
 import { SearchIcon, SettingsIcon } from "../shell/icons";
 import { TopbarTools } from "../shell/TopbarTools";
 import { WatchdogCard } from "../watchdog/Watchdog";
+import { DiagnosticsCard } from "../diagnostics/Diagnostics";
 import { RetentionCard } from "../retention/Retention";
 import { ResetInstanceCard } from "../reset/ResetInstance";
 import { TokensCard } from "../tokens/Tokens";
@@ -138,6 +139,9 @@ export function Settings({ client, canAdmin = false, role = canAdmin ? "admin" :
       body: provide(<RetentionCard canAdmin={canAdmin} />) },
     { id: "tokens", label: "API tokens", keywords: "api tokens bearer keys scripts ci revoke",
       body: provide(<TokensCard role={role} />) },
+    // Administrators only: the card names the database path, and the API refuses anyone else.
+    ...(canAdmin ? [{ id: "instance", label: "Instance", keywords: "instance diagnostics version build runtime uptime database size wal journal workers pool queue skipped",
+      body: provide(<DiagnosticsCard />) }] : []),
     // Last on the page: the one action here with no undo. Admin-only, so a
     // search for "reset" by anyone else finds nothing rather than a card they
     // could not use.

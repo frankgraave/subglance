@@ -374,6 +374,11 @@ type Metrics struct {
 	// makes the two above readable.
 	Workers   int
 	Scheduled int
+
+	// Busy is how many of those workers are inside a check at this moment.
+	// Beside Workers it is the pool's utilisation; beside QueueDepth it says
+	// whether a full pool is keeping up or falling behind.
+	Busy int
 }
 
 // Metrics returns the current counters.
@@ -386,6 +391,7 @@ func (r *Runner) Metrics() Metrics {
 		QueueDepth:             r.sch.QueueDepth(),
 		Workers:                r.sch.Workers(),
 		Scheduled:              r.sch.Size(),
+		Busy:                   r.sch.Busy(),
 	}
 }
 
