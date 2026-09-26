@@ -20,6 +20,7 @@ import type { ApiIncident } from "../../monitors/detail";
 import { disabledWatchdog } from "../../watchdog/fixtures";
 import { defaultRetention } from "../../retention/fixtures";
 import { twoUsers } from "../../users/fixtures";
+import { sampleTokens } from "../../tokens/fixtures";
 
 /*
  * `import.meta.url` is .../web/src/layout/harness/server.ts, so the repository
@@ -279,6 +280,14 @@ export async function serveBuild(): Promise<Server> {
     if (url.pathname === "/api/v1/settings/retention") {
       res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
       res.end(JSON.stringify(defaultRetention));
+      return;
+    }
+
+    // /settings lists the session's API tokens; unstubbed, axe would audit
+    // the card's loading state instead of the list.
+    if (url.pathname === "/api/v1/tokens") {
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ tokens: sampleTokens }));
       return;
     }
 

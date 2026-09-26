@@ -1,0 +1,9 @@
+/* A token row wears .retention-inputs (a wrapping flex row); this lets the
+   name and facts take the width so the role and Revoke sit at the end. */
+.tokens-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* The prefix borrows the channel mask's mono face, but not its --ink-3:
+   on a card panel that measures 3.05:1, under the 4.5:1 text needs. */
+.tokens-main .nt-mask { color: var(--ink-2); }

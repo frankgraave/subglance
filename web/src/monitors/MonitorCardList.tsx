@@ -42,6 +42,8 @@ export type MonitorCardListProps = {
   columns?: CardColumns;
   /** Opens a monitor's detail view client-side. See MonitorLink. */
   onOpen?: (id: string) => void;
+  /** Opens the add form from the empty state; see EmptyState. */
+  onAddMonitor?: () => void;
   /**
    * True when the live stream is dead. Forwarded to every card so its status
    * word moves into the past tense (DESIGN.md §6).
@@ -58,6 +60,7 @@ export function MonitorCardList({
   groupKey = null,
   columns = "1",
   onOpen,
+  onAddMonitor,
   stale = false,
 }: MonitorCardListProps) {
   const total = totalCount ?? monitors.length;
@@ -80,7 +83,14 @@ export function MonitorCardList({
   };
 
   if (monitors.length === 0) {
-    return <EmptyState query={query} totalCount={total} filtered={filtered} />;
+    return (
+      <EmptyState
+        query={query}
+        totalCount={total}
+        filtered={filtered}
+        onAddMonitor={onAddMonitor}
+      />
+    );
   }
 
   const cards = (list: readonly Monitor[]) =>

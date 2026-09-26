@@ -188,18 +188,20 @@ const budgets = {
    * 16,283 of 16,384 and stays put, because the card reuses the auth form's
    * field, label, error and button rules rather than declaring its own.
    *
-   * 144 -> 149 KiB gzip for SUB-28 (the users card on /settings).
+   * 144 -> 147 KiB gzip for SUB-28 (the API tokens card on /settings).
    * Develop at 4916aee measures 146,392 bytes of entry JS (Node gzip); this
-   * branch measures 147,895: 1,503 bytes for a card that lists the accounts
-   * with their roles, a role picker per row that saves only on an explicit
-   * button, a two-step removal, an add form with a role and a password
-   * floor, and a shape check that refuses a list with an unknown role. No new
-   * dependency and no new CSS. 145 would leave 585 bytes. The instance card
-   * (1,489 bytes) and the tokens card (1,980) are open beside this branch;
-   * with all three the entry measures about 151,364, so 149 (152,576) is the
-   * lowest whole ceiling none of them fails on, whichever merges last.
+   * branch measures 148,372: 1,980 bytes for a card that lists the session's
+   * tokens with role, prefix, last use and expiry, a create form with a role
+   * capped at the account's own and an expiry, the shown-once secret panel
+   * with copy and an explicit dismissal, a two-step revoke, and a shape check
+   * that refuses a malformed list instead of drawing a revoked token as live.
+   * No new dependency. 146 would leave 1,132 bytes, which the instance card
+   * open beside this branch (1,489 bytes by its own measurement) would not
+   * fit in; 147 covers both, so neither fails on whichever merges second.
+   * CSS measures 16,374 of 16,384 and stays put: the card declares two
+   * rules and reuses the auth form, the push-URL reveal and retention notes.
    */
-  js: 149,
+  js: 147,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *
@@ -270,8 +272,18 @@ const budgets = {
    * cost 0.4 kB and 37 bytes respectively, because they reused what was
    * already declared. A ceiling that holds through two screens and moves for
    * a change to what colour means is a ceiling doing its job.
+   *
+   * 16 -> 17 kB gzip, raised deliberately for SUB-28 (the settings page's
+   * section index). Measured: 16,380 bytes on develop against a ceiling of
+   * 16,384, so four bytes of headroom were left before this change, and
+   * 16,527 after it — 147 bytes. They buy the two-column layout (a sticky
+   * index beside the cards), its single-column form below the tablet rung,
+   * and the `scroll-margin-top` that lands a followed link below the sticky
+   * masthead instead of under it. The "you are here" paint is the sidebar's
+   * own `[data-state="current"]` rule, reused rather than restated. At 16.5
+   * the next card on this page would move it again.
    */
-  css: 16,
+  css: 17,
   fonts: 80,
 };
 

@@ -57,8 +57,10 @@ it("opens the password card from the sidebar for a viewer and keeps settings out
   expect(document.title).toMatch(/Settings/);
   expect(document.querySelector(".shell-topbar")).toBeTruthy();
   await screen.findByText("Not configured");
-  // Account, self-monitoring and retention.
-  expect(screen.getAllByRole("region")).toHaveLength(3);
+  // Account, self-monitoring, retention and API tokens.
+  expect(screen.getAllByRole("region")).toHaveLength(4);
+  // The session's role reaches the tokens card: a viewer is not offered a create form.
+  expect(screen.getByText(/can list and revoke its own tokens but not create one/)).toBeTruthy();
   // The account list is admin-only on the server; a viewer never asks for it.
   expect(document.getElementById("users")).toBeNull();
   expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input) === "/api/v1/users")).toBe(false);

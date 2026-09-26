@@ -38,6 +38,31 @@ func (r Role) CanWrite() bool { return r == RoleAdmin || r == RoleEditor }
 // CanAdmin reports whether the role may manage users and tokens.
 func (r Role) CanAdmin() bool { return r == RoleAdmin }
 
+// rank orders the roles by authority; an unknown role ranks below viewer.
+func (r Role) rank() int {
+	switch r {
+	case RoleAdmin:
+		return 3
+	case RoleEditor:
+		return 2
+	case RoleViewer:
+		return 1
+	}
+	return 0
+}
+
+// Within reports whether r grants no more than ceiling does.
+func (r Role) Within(ceiling Role) bool { return r.rank() <= ceiling.rank() }
+
+// Capped returns the lower of r and ceiling. An empty r means "no cap of its
+// own", which is how a token without a role of its own inherits its owner's.
+func (r Role) Capped(ceiling Role) Role {
+	if r == "" || !r.Within(ceiling) {
+		return ceiling
+	}
+	return r
+}
+
 // User is an account.
 type User struct {
 	ID           int64
@@ -389,10 +414,13 @@ func (db *DB) PurgeExpiredSessions(ctx context.Context) (int64, error) {
 
 // APIToken is a machine credential.
 type APIToken struct {
-	ID         int64
-	Prefix     string
-	Name       string
-	UserID     int64
+	ID     int64
+	Prefix string
+	Name   string
+	UserID int64
+	// Role caps what the token may do; empty means it acts with its owner's
+	// role. The owner's current role always caps it too, see Capped.
+	Role       Role
 	CreatedAt  time.Time
 	ExpiresAt  *time.Time
 	LastUsedAt *time.Time
@@ -402,6 +430,16 @@ type APIToken struct {
 // CreateAPIToken issues a token. The plaintext is returned once and never
 // stored; only its hash and display prefix are kept.
 func (db *DB) CreateAPIToken(ctx context.Context, userID int64, name string, expiresAt *time.Time) (string, APIToken, error) {
+	return db.CreateScopedAPIToken(ctx, userID, name, "", expiresAt)
+}
+
+// CreateScopedAPIToken issues a token that acts with at most role. An empty
+// role inherits the owner's. The caller checks that role is within the
+// owner's own; the lookup caps it again regardless.
+func (db *DB) CreateScopedAPIToken(ctx context.Context, userID int64, name string, role Role, expiresAt *time.Time) (string, APIToken, error) {
+	if role != "" && !role.Valid() {
+		return "", APIToken{}, fmt.Errorf("create api token: unknown role %q", role)
+	}
 	token, prefix, err := auth.GenerateAPIToken()
 	if err != nil {
 		return "", APIToken{}, err
@@ -413,10 +451,15 @@ func (db *DB) CreateAPIToken(ctx context.Context, userID int64, name string, exp
 		expiry = expiresAt.Unix()
 	}
 
+	var scope any
+	if role != "" {
+		scope = string(role)
+	}
+
 	res, err := db.Writer.ExecContext(ctx, `
-		INSERT INTO api_tokens (token_hash, prefix, name, user_id, created_at, expires_at)
-		VALUES (?, ?, ?, ?, ?, ?)`,
-		auth.HashToken(token), prefix, name, userID, now.Unix(), expiry)
+		INSERT INTO api_tokens (token_hash, prefix, name, user_id, role, created_at, expires_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		auth.HashToken(token), prefix, name, userID, scope, now.Unix(), expiry)
 	if err != nil {
 		return "", APIToken{}, fmt.Errorf("insert api token: %w", err)
 	}
@@ -427,13 +470,14 @@ func (db *DB) CreateAPIToken(ctx context.Context, userID int64, name string, exp
 	}
 
 	return token, APIToken{
-		ID: id, Prefix: prefix, Name: name, UserID: userID,
+		ID: id, Prefix: prefix, Name: name, UserID: userID, Role: role,
 		CreatedAt: now.UTC(), ExpiresAt: expiresAt,
 	}, nil
 }
 
 // LookupAPIToken resolves a token to its user, rejecting revoked and expired
-// ones.
+// ones. The returned user's role is the token's: the lower of the token's own
+// role and the owner's current one.
 func (db *DB) LookupAPIToken(ctx context.Context, token string) (User, error) {
 	hash := auth.HashToken(token)
 	now := time.Now()
@@ -443,10 +487,11 @@ func (db *DB) LookupAPIToken(ctx context.Context, token string) (User, error) {
 		userID    int64
 		expiresAt sql.NullInt64
 		revokedAt sql.NullInt64
+		role      sql.NullString
 	)
 	err := db.Reader.QueryRowContext(ctx,
-		"SELECT id, user_id, expires_at, revoked_at FROM api_tokens WHERE token_hash = ?", hash,
-	).Scan(&id, &userID, &expiresAt, &revokedAt)
+		"SELECT id, user_id, expires_at, revoked_at, role FROM api_tokens WHERE token_hash = ?", hash,
+	).Scan(&id, &userID, &expiresAt, &revokedAt, &role)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, ErrNotFound
 	}
@@ -466,14 +511,19 @@ func (db *DB) LookupAPIToken(ctx context.Context, token string) (User, error) {
 	_, _ = db.Writer.ExecContext(ctx,
 		"UPDATE api_tokens SET last_used_at = ? WHERE id = ?", now.Unix(), id)
 
-	return db.GetUser(ctx, userID)
+	user, err := db.GetUser(ctx, userID)
+	if err != nil {
+		return User{}, err
+	}
+	user.Role = Role(role.String).Capped(user.Role)
+	return user, nil
 }
 
 // ListAPITokens returns a user's tokens, newest first. Hashes are never
 // returned.
 func (db *DB) ListAPITokens(ctx context.Context, userID int64) ([]APIToken, error) {
 	rows, err := db.Reader.QueryContext(ctx, `
-		SELECT id, prefix, name, user_id, created_at, expires_at, last_used_at, revoked_at
+		SELECT id, prefix, name, user_id, COALESCE(role, ''), created_at, expires_at, last_used_at, revoked_at
 		FROM api_tokens WHERE user_id = ? ORDER BY id DESC`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("list api tokens: %w", err)
@@ -484,12 +534,14 @@ func (db *DB) ListAPITokens(ctx context.Context, userID int64) ([]APIToken, erro
 	for rows.Next() {
 		var (
 			t                          APIToken
+			role                       string
 			created                    int64
 			expires, lastUsed, revoked sql.NullInt64
 		)
-		if err := rows.Scan(&t.ID, &t.Prefix, &t.Name, &t.UserID, &created, &expires, &lastUsed, &revoked); err != nil {
+		if err := rows.Scan(&t.ID, &t.Prefix, &t.Name, &t.UserID, &role, &created, &expires, &lastUsed, &revoked); err != nil {
 			return nil, err
 		}
+		t.Role = Role(role)
 		t.CreatedAt = time.Unix(created, 0).UTC()
 		t.ExpiresAt = nullTime(expires)
 		t.LastUsedAt = nullTime(lastUsed)

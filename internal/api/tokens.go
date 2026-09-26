@@ -12,15 +12,19 @@ type apiTokenResponse struct {
 	ID         int64      `json:"id"`
 	Name       string     `json:"name"`
 	Prefix     string     `json:"prefix"`
+	Role       string     `json:"role"`
 	CreatedAt  time.Time  `json:"created_at"`
 	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
 	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
 	RevokedAt  *time.Time `json:"revoked_at,omitempty"`
 }
 
-func toTokenResponse(t store.APIToken) apiTokenResponse {
+// toTokenResponse reports the role the token acts with today: its own,
+// capped by the owner's current role, so a demoted owner's token does not
+// claim a role it no longer gets.
+func toTokenResponse(t store.APIToken, owner store.Role) apiTokenResponse {
 	return apiTokenResponse{
-		ID: t.ID, Name: t.Name, Prefix: t.Prefix,
+		ID: t.ID, Name: t.Name, Prefix: t.Prefix, Role: string(t.Role.Capped(owner)),
 		CreatedAt: t.CreatedAt, ExpiresAt: t.ExpiresAt,
 		LastUsedAt: t.LastUsedAt, RevokedAt: t.RevokedAt,
 	}
@@ -29,6 +33,10 @@ func toTokenResponse(t store.APIToken) apiTokenResponse {
 type createTokenRequest struct {
 	Name      string `json:"name"`
 	ExpiresIn string `json:"expires_in"` // Go duration, e.g. "720h"; empty means never
+	// Role caps what the token may do. Empty means the creator's own role
+	// (the one this request acts with), which is what every token did before
+	// tokens had a role.
+	Role string `json:"role"`
 }
 
 // handleListTokens returns the caller's API tokens.
@@ -42,9 +50,18 @@ func (s *Server) handleListTokens(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The owner's stored role, not the caller's: a request made with a
+	// viewer-scoped token must not report the owner's other tokens as viewer.
+	owner, err := s.db.GetUser(r.Context(), user.ID)
+	if err != nil {
+		s.log.Error("list api tokens", "user_id", user.ID, "error", err)
+		writeError(w, http.StatusInternalServerError, "could not list tokens")
+		return
+	}
+
 	out := make([]apiTokenResponse, 0, len(tokens))
 	for _, t := range tokens {
-		out = append(out, toTokenResponse(t))
+		out = append(out, toTokenResponse(t, owner.Role))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"tokens": out})
 }
@@ -72,6 +89,24 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// No role means the caller's own, stored explicitly. user.Role is already
+	// capped when the caller is itself a token, so an editor-scoped token
+	// cannot mint an unscoped one that inherits its owner's admin role.
+	role := user.Role
+	if req.Role != "" {
+		role = store.Role(req.Role)
+	}
+	if !role.Valid() {
+		writeProblem(w, http.StatusBadRequest, fieldProblem("role", "role must be admin, editor or viewer"))
+		return
+	}
+	// A token is a copy of its creator's authority, never more of it: an
+	// editor minting an admin token would be a way round requireRole.
+	if !role.Within(user.Role) {
+		writeProblem(w, http.StatusForbidden, fieldProblem("role", "a token cannot have a higher role than your own"))
+		return
+	}
+
 	var expiresAt *time.Time
 	if req.ExpiresIn != "" {
 		d, err := time.ParseDuration(req.ExpiresIn)
@@ -87,19 +122,20 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 		expiresAt = &t
 	}
 
-	plaintext, token, err := s.db.CreateAPIToken(r.Context(), user.ID, req.Name, expiresAt)
+	plaintext, token, err := s.db.CreateScopedAPIToken(r.Context(), user.ID, req.Name, role, expiresAt)
 	if err != nil {
 		s.log.Error("create api token", "user_id", user.ID, "error", err)
 		writeError(w, http.StatusInternalServerError, "could not create the token")
 		return
 	}
 
-	s.log.Info("api token created", "user_id", user.ID, "token_id", token.ID, "name", token.Name)
+	s.log.Info("api token created", "user_id", user.ID, "token_id", token.ID, "name", token.Name,
+		"role", string(token.Role.Capped(user.Role)))
 
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"token":   plaintext,
 		"warning": "This is the only time the token is shown. Store it now; it cannot be recovered.",
-		"details": toTokenResponse(token),
+		"details": toTokenResponse(token, user.Role),
 	})
 }
 

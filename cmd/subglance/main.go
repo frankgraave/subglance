@@ -2,11 +2,12 @@
 //
 //	subglance --addr :8080 --data-dir /data
 //
-// It also answers two subcommands, because the shipped image is distroless and
+// It also answers three subcommands, because the shipped image is distroless and
 // has no shell to run anything else:
 //
 //	subglance healthcheck [--addr :8080]
 //	subglance backup <path> [--data-dir /data]
+//	subglance restore [--from NAME] [--data-dir /data]
 //
 // and it answers --version without loading configuration at all.
 //
@@ -51,10 +52,10 @@ func main() {
 		return
 	}
 
-	// Subcommands, and deliberately only these two: the shipped image is
+	// Subcommands, and deliberately only these three: the shipped image is
 	// distroless with no shell, so a container HEALTHCHECK and an operator
-	// taking a backup have nothing to invoke except this binary. Everything
-	// else stays flags-only.
+	// taking or restoring a backup have nothing to invoke except this binary.
+	// Everything else stays flags-only.
 	if len(args) > 0 {
 		switch args[0] {
 		case "healthcheck":
@@ -62,6 +63,9 @@ func main() {
 			return
 		case "backup":
 			runSubcommand("backup", runBackup, args[1:])
+			return
+		case "restore":
+			runSubcommand("restore", runRestore, args[1:])
 			return
 		}
 	}
@@ -113,6 +117,16 @@ func run(args []string) error {
 	if err := os.MkdirAll(cfg.DataDir, 0o750); err != nil {
 		return fmt.Errorf("create data dir %s: %w", cfg.DataDir, err)
 	}
+
+	// Held for the whole life of the process, before the database is
+	// touched: it is what lets `subglance restore` refuse to replace the
+	// database under a running server, including from a container with its
+	// own network namespace, where the address check cannot see this one.
+	lock, err := lockDataDir(cfg.DataDir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = lock.Release() }()
 
 	// Give startup its own bounded context: a database that hangs on open
 	// should fail loudly rather than leave the process wedged before it ever
@@ -207,6 +221,13 @@ func run(args []string) error {
 		},
 	})
 
+	// Scheduled backups, when a target is configured. Built before the API so
+	// the status endpoint and /metrics read the same runner that uploads.
+	backups, err := newBackups(cfg, db, log)
+	if err != nil {
+		return err
+	}
+
 	// The API is constructed before the server so a bad --trusted-proxies is
 	// a startup error rather than a limiter that quietly trusts nobody.
 	apiSrv, err := api.New(log, db).WithBus(bus).
@@ -295,6 +316,21 @@ func run(args []string) error {
 	// The API reads the same process-local history the send path writes.
 	// Explicit nil reports disabled, not an unavailable diagnostic source.
 	apiSrv.WithWatchdog(dog)
+	// Waited for on shutdown, so a backup cut short by the signal gets to
+	// remove its staging files before the process exits.
+	backupsDone := make(chan struct{})
+	if backups != nil {
+		apiSrv.WithBackups(backups)
+		go func() {
+			defer close(backupsDone)
+			backups.Run(ctx, backupFailureNotice(ctx, notify, log))
+		}()
+	} else {
+		close(backupsDone)
+		// Untyped nil: a nil *backup.Backups in the interface would read as
+		// configured and then panic on Status.
+		apiSrv.WithBackups(nil)
+	}
 	watchdogDone := make(chan struct{})
 	go func() {
 		defer close(watchdogDone)
@@ -356,6 +392,15 @@ func run(args []string) error {
 	// stop waiting when the budget expires: db.Close() is deferred and runs
 	// the moment this function returns.
 	awaitScheduler(schedulerDone, schedulerBudget, log)
+
+	// A backup in progress sees ctx cancelled and returns promptly; its
+	// deferred cleanup removes the snapshot. Bounded anyway, and whatever
+	// is left is removed on the next start.
+	select {
+	case <-backupsDone:
+	case <-shutdownCtx.Done():
+		log.Warn("backup did not stop within the shutdown timeout; its staging files are removed on the next start")
+	}
 
 	// And for the watchdog's farewell ping, so a planned restart does not
 	// read as a crash at the other end.

@@ -76,6 +76,7 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		"Size of the check worker pool.", uint64(m.Workers))
 	gauge(&b, "subglance_monitors_scheduled",
 		"Monitors currently on the schedule.", uint64(m.Scheduled))
+	s.writeBackupMetrics(&b)
 
 	// Not application/json, so writeJSON is the wrong helper here. The
 	// version parameter is what Prometheus itself sends and expects back.
