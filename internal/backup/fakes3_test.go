@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -31,12 +32,18 @@ type fakeS3 struct {
 	// pageSize caps a listing page, to exercise continuation tokens.
 	pageSize int
 	puts     int
+	// stallPut makes every upload hang without reading its body, like a
+	// peer that keeps the connection open but stops reading. The handler is
+	// released when the client gives up or the test ends.
+	stallPut atomic.Bool
+	release  chan struct{}
 }
 
 func newFakeS3(t *testing.T, bucket string) (*fakeS3, *httptest.Server) {
-	f := &fakeS3{t: t, bucket: bucket, objects: map[string][]byte{}, pageSize: 1000}
+	f := &fakeS3{t: t, bucket: bucket, objects: map[string][]byte{}, pageSize: 1000, release: make(chan struct{})}
 	srv := httptest.NewServer(f)
 	t.Cleanup(srv.Close)
+	t.Cleanup(func() { close(f.release) }) // runs first: unblocks stalled handlers
 	return f, srv
 }
 
@@ -56,6 +63,13 @@ func (f *fakeS3) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !strings.HasPrefix(auth, "AWS4-HMAC-SHA256 Credential=test-key/") ||
 		!strings.Contains(auth, "/test-region/s3/aws4_request,") {
 		f.fail(w, http.StatusForbidden, "AccessDenied", "bad authorization: "+auth)
+		return
+	}
+	if r.Method == http.MethodPut && f.stallPut.Load() {
+		select {
+		case <-r.Context().Done():
+		case <-f.release:
+		}
 		return
 	}
 	path := strings.TrimPrefix(r.URL.Path, "/")

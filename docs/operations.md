@@ -453,6 +453,8 @@ What it does, and what it deliberately does not:
 - **The first backup follows the newest one already in the bucket**, not the
   moment the process started, so an instance that is redeployed every night
   still backs up once a day rather than never — or on every start.
+- **A run is abandoned after an hour** and counted as a failed run, so an
+  upload that stalls without an error cannot stop the schedule.
 - **A failed run is retried within the hour**, and sends one notice to the
   default channel per failing streak, then again every day it keeps failing.
   With no default channel set, the failure is only in the log, on `/metrics`

@@ -54,6 +54,14 @@ const (
 	// again. Waiting a full interval would turn one bad night into two days
 	// without a backup.
 	retryAfterFailure = time.Hour
+
+	// maxRunDuration bounds one scheduled run. The transport bounds each
+	// phase that waits for a reply, but not an upload body the peer stops
+	// reading while it keeps the connection open. Without a deadline such a
+	// run never returns, so it is never recorded, retried or reported. An
+	// hour is far beyond a healthy upload of any database this tool keeps,
+	// and it matches the retry delay, so a stuck run costs at most one slot.
+	maxRunDuration = time.Hour
 )
 
 // ErrBusy is returned when a backup is requested while one is running.
@@ -123,6 +131,9 @@ type Backups struct {
 	log      *slog.Logger
 	now      func() time.Time
 
+	// runTimeout is maxRunDuration; a field so tests can shorten it.
+	runTimeout time.Duration
+
 	running atomic.Bool
 
 	mu     sync.Mutex
@@ -174,6 +185,8 @@ func New(opts Options) (*Backups, error) {
 		log:      opts.Log,
 		now:      opts.Now,
 		status:   Status{Target: opts.Target.String()},
+
+		runTimeout: maxRunDuration,
 	}, nil
 }
 
@@ -318,7 +331,8 @@ func (b *Backups) prune(ctx context.Context) (int, error) {
 // with nil when it uploaded cleanly. The server uses it to send an alert,
 // because a backup that fails silently is not a backup, and uses the nil to
 // end a failing streak. A run whose upload succeeded but whose pruning failed
-// reports the prune error, so it does not end a streak.
+// reports the prune error, so it does not end a streak. Each run is bounded by
+// maxRunDuration; one that exceeds it is reported and retried as a failure.
 //
 // The first run is timed from the newest backup already in the bucket, not
 // from process start. Otherwise an instance restarted more often than the
@@ -344,7 +358,9 @@ func (b *Backups) Run(ctx context.Context, onResult func(error)) {
 		case <-timer.C:
 		}
 
-		res, err := b.RunOnce(ctx)
+		runCtx, cancelRun := context.WithTimeout(ctx, b.runTimeout)
+		res, err := b.RunOnce(runCtx)
+		cancelRun()
 		switch {
 		case err == nil:
 			b.log.Info("backup uploaded", "object", res.Object, "bytes", res.Size, "pruned", res.Pruned)

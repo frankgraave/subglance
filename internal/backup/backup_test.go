@@ -302,6 +302,38 @@ func TestRunReportsAFailedBackup(t *testing.T) {
 	}
 }
 
+// An upload that stalls without ever failing is cut off at the run deadline
+// and reported as a failure, instead of blocking the schedule for good.
+func TestRunReportsAStalledUpload(t *testing.T) {
+	db := openStore(t)
+	fake, srv := newFakeS3(t, "bucket")
+	fake.stallPut.Store(true)
+	clk := &clock{t: time.Date(2026, 9, 25, 3, 0, 0, 0, time.UTC)}
+	b := newBackups(t, db, srv.URL, 3, clk)
+	b.runTimeout = 200 * time.Millisecond
+
+	failures := make(chan error, 4)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		b.Run(ctx, func(err error) { failures <- err })
+	}()
+	defer func() { cancel(); <-done }()
+
+	select {
+	case err := <-failures:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Errorf("failure = %v, want the run deadline", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("a stalled upload never reached onResult")
+	}
+	if st := b.Status(); st.Failures != 1 || st.LastError == "" {
+		t.Errorf("status = %+v", st)
+	}
+}
+
 // A clean run reports nil, which is what ends a failing streak.
 func TestRunReportsACleanBackup(t *testing.T) {
 	db := openStore(t)
