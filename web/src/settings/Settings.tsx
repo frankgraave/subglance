@@ -42,6 +42,11 @@ function fragment(): string {
  * line, so the index said "Retention & storage" on the page it had been asked
  * to show the tokens on. Hand input is wheel, touch or key; a programmatic
  * scroll is none of those.
+ *
+ * `ids` are the sections the search leaves visible. When the current section
+ * is filtered out, its pin is released and the answer is derived again from
+ * what is left, so the index never marks nothing, and clearing the search
+ * does not bring back a section the reader had already left.
  */
 function useCurrentSection(ids: string[]): [string | undefined, (id: string) => void] {
   const [current, setCurrent] = useState<string | undefined>(() => {
@@ -49,6 +54,8 @@ function useCurrentSection(ids: string[]): [string | undefined, (id: string) => 
     return ids.includes(hash) ? hash : ids[0];
   });
   const pinned = useRef(ids.includes(fragment()));
+  const latest = useRef(current);
+  useEffect(() => { latest.current = current; });
   const key = ids.join(" ");
   useEffect(() => {
     const visible = () => key.split(" ").map((id) => document.getElementById(id))
@@ -56,7 +63,10 @@ function useCurrentSection(ids: string[]): [string | undefined, (id: string) => 
     const onScroll = () => {
       if (pinned.current) return;
       const nodes = visible();
-      if (nodes.length === 0) return;
+      if (nodes.length === 0) {
+        setCurrent(undefined);
+        return;
+      }
       const root = document.documentElement;
       if (window.scrollY + window.innerHeight >= root.scrollHeight - 2) {
         setCurrent(nodes[nodes.length - 1].id);
@@ -77,6 +87,10 @@ function useCurrentSection(ids: string[]): [string | undefined, (id: string) => 
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("hashchange", onHash);
     for (const type of ["wheel", "touchstart", "keydown"]) window.addEventListener(type, release, { passive: true });
+    if (latest.current === undefined || !key.split(" ").includes(latest.current)) {
+      pinned.current = false;
+      onScroll();
+    }
     return () => {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("hashchange", onHash);
@@ -126,7 +140,7 @@ export function Settings({ client, canAdmin = false, role = canAdmin ? "admin" :
   ];
   const needle = query.trim().toLowerCase();
   const shown = sections.filter((section) => section.keywords.includes(needle));
-  const [current, setCurrent] = useCurrentSection(sections.map((section) => section.id));
+  const [current, setCurrent] = useCurrentSection(shown.map((section) => section.id));
   useInitialFragment();
   return <>
     <TopbarTools>

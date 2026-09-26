@@ -99,3 +99,17 @@ it("lists only the sections the search leaves visible, and hides the index when 
   expect(screen.queryByRole("navigation", { name: "Settings sections" })).toBeNull();
   expect(screen.getByRole("status").textContent).toMatch(/No settings match/);
 });
+
+it("moves the current section off one the search hides, and does not bring it back", () => {
+  window.history.replaceState(null, "", "/settings");
+  renderSettings();
+  fireEvent.click(within(index()).getByRole("link", { name: "Retention & storage" }));
+  expect(current()).toEqual(["Retention & storage"]);
+  const search = screen.getByRole("searchbox", { name: "Search settings" });
+  fireEvent.change(search, { target: { value: "bearer" } });
+  expect(current()).toEqual(["API tokens"]);
+  fireEvent.change(search, { target: { value: "no such setting" } });
+  fireEvent.change(search, { target: { value: "" } });
+  expect(current()).toHaveLength(1);
+  expect(current()).not.toEqual(["Retention & storage"]);
+});
