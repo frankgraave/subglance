@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
 import { TokensCard } from "./Tokens";
@@ -143,11 +143,22 @@ it("refuses a malformed list rather than drawing it", async () => {
 });
 
 it("moves a token to expired when its expiry passes while the page is open", async () => {
-  const soon = { id: 5, name: "short", prefix: "sgp_5h0r7x", role: "viewer", created_at: "2026-09-01T08:00:00Z",
-    expires_at: new Date(Date.now() + 400).toISOString() };
-  mount("admin", (_url, init) => init?.method ? undefined : json({ tokens: [soon, ...sampleTokens] }));
-  expect(await screen.findByText("3 active")).toBeTruthy();
-  expect(await screen.findByText("2 active", undefined, { timeout: 3000 })).toBeTruthy();
-  const rows = within(screen.getByRole("list", { name: "Your API tokens" })).getAllByRole("listitem");
-  expect(within(rows[2]).getByText("expired")).toBeTruthy();
+  // A fixed clock: on real time a slow render could pass the expiry before
+  // the first count is read.
+  vi.useFakeTimers({ now: new Date("2026-09-26T08:00:00Z") });
+  try {
+    const soon = { id: 5, name: "short", prefix: "sgp_5h0r7x", role: "viewer", created_at: "2026-09-01T08:00:00Z",
+      expires_at: "2026-09-26T08:01:00Z" };
+    mount("admin", (_url, init) => init?.method ? undefined : json({ tokens: [soon, ...sampleTokens] }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(10); });
+    expect(screen.getByText("3 active")).toBeTruthy();
+    await act(async () => { await vi.advanceTimersByTimeAsync(59_000); });
+    expect(screen.getByText("3 active")).toBeTruthy();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+    expect(screen.getByText("2 active")).toBeTruthy();
+    const rows = within(screen.getByRole("list", { name: "Your API tokens" })).getAllByRole("listitem");
+    expect(within(rows[2]).getByText("expired")).toBeTruthy();
+  } finally {
+    vi.useRealTimers();
+  }
 });
