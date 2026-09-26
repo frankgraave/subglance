@@ -186,3 +186,84 @@ func TestRetentionPreviewCountsTheProposedChange(t *testing.T) {
 		t.Fatalf("preview of an invalid window = %d, want 400", rec.Code)
 	}
 }
+
+func putRetention(t *testing.T, srv *Server, body, ifMatch string) *httptest.ResponseRecorder {
+	t.Helper()
+	r := httptest.NewRequest(http.MethodPut, "/api/v1/settings/retention", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	if ifMatch != "" {
+		r.Header.Set("If-Match", ifMatch)
+	}
+	rec := httptest.NewRecorder()
+	authedHandler(srv).ServeHTTP(rec, r)
+	return rec
+}
+
+// The page previews only a change that shortens a window. Two administrators
+// who both read 30 days, one saving 90 and the other 60, would otherwise
+// shorten retention from 90 to 60 without anyone having seen what that
+// removes. The version makes the second save fail instead.
+func TestRetentionSaveIsConditionalOnTheVersionRead(t *testing.T) {
+	srv, _ := testServerWithDB(t)
+
+	get := doJSON(t, srv, http.MethodGet, "/api/v1/settings/retention", "")
+	tag := get.Header().Get("ETag")
+	if tag != `W/"0"` {
+		t.Fatalf("ETag before any save = %q, want W/\"0\"", tag)
+	}
+
+	first := putRetention(t, srv, `{"raw_seconds":7776000}`, tag)
+	if first.Code != http.StatusOK {
+		t.Fatalf("first conditional PUT = %d: %s", first.Code, first.Body.String())
+	}
+	if got := first.Header().Get("ETag"); got != `W/"1"` {
+		t.Errorf("ETag after a save = %q, want W/\"1\"", got)
+	}
+
+	stale := putRetention(t, srv, `{"raw_seconds":5184000}`, tag)
+	if stale.Code != http.StatusPreconditionFailed {
+		t.Fatalf("stale conditional PUT = %d, want 412: %s", stale.Code, stale.Body.String())
+	}
+	if stale.Header().Get("ETag") != "" {
+		t.Error("a 412 hands back a validator the client could blindly retry with")
+	}
+	got := decodeRetention(t, doJSON(t, srv, http.MethodGet, "/api/v1/settings/retention", ""))
+	if got.Raw.Seconds != 7776000 {
+		t.Fatalf("raw = %d after a refused save, want the first administrator's 90 days", got.Raw.Seconds)
+	}
+
+	// Re-read, the second administrator's save goes through.
+	fresh := doJSON(t, srv, http.MethodGet, "/api/v1/settings/retention", "").Header().Get("ETag")
+	if rec := putRetention(t, srv, `{"raw_seconds":5184000}`, fresh); rec.Code != http.StatusOK {
+		t.Fatalf("PUT with the fresh ETag = %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestRetentionSaveIfMatchForms(t *testing.T) {
+	tests := []struct {
+		name, ifMatch string
+		want          int
+	}{
+		// No header: last-write-wins, as before the header existed.
+		{"absent", "", http.StatusOK},
+		{"star", "*", http.StatusOK},
+		{"strong spelling of a current tag", `"1"`, http.StatusOK},
+		{"one of several", `W/"9", W/"1"`, http.StatusOK},
+		{"re-spelled current tag", `W/"01"`, http.StatusPreconditionFailed},
+		{"not a tag this API issues", `W/"abc"`, http.StatusPreconditionFailed},
+		{"malformed", `W/abc`, http.StatusBadRequest},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Each case starts from one earlier save, so version 1 is current.
+			srv, _ := testServerWithDB(t)
+			if rec := putRetention(t, srv, `{"raw_seconds":1209600}`, ""); rec.Code != http.StatusOK {
+				t.Fatalf("setup PUT = %d: %s", rec.Code, rec.Body.String())
+			}
+			rec := putRetention(t, srv, `{"raw_seconds":2592000}`, tt.ifMatch)
+			if rec.Code != tt.want {
+				t.Fatalf("If-Match %q = %d, want %d: %s", tt.ifMatch, rec.Code, tt.want, rec.Body.String())
+			}
+		})
+	}
+}
