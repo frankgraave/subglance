@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import App from "./App";
 import { disabledWatchdog } from "./watchdog/fixtures";
 import { defaultRetention } from "./retention/fixtures";
+import { steadyDiagnostics } from "./diagnostics/fixtures";
 import { LAYOUT_STORAGE_KEY } from "./shell/preferences";
 
 const user = { id: 1, email: "operator@example.test", role: "viewer", created_at: "2026-09-01T00:00:00Z" };
@@ -24,6 +25,7 @@ beforeEach(() => {
     if (path === "/api/v1/watchdog") return json(disabledWatchdog);
     if (path === "/api/v1/users") return json({ users: [{ ...user, role }] });
     if (path === "/api/v1/settings/retention") return json(defaultRetention);
+    if (path === "/api/v1/diagnostics") return json(steadyDiagnostics);
     if (path === "/api/v1/auth/me") return json({ ...user, role });
     if (path === "/api/v1/setup") return json({ setup_required: false });
     if (path === "/api/v1/auth/password" || path === "/api/v1/auth/logout") return new Response(null, { status: 204 });
@@ -75,11 +77,17 @@ it("shows the users card to an administrator, with their own account marked", as
   render(<App />);
   expect(await screen.findByText("you")).toBeTruthy();
   expect(screen.getByRole("heading", { name: "Users" })).toBeTruthy();
-  // Account, users, self-monitoring, retention and API tokens.
-  expect(screen.getAllByRole("region")).toHaveLength(5);
+  // Account, users, self-monitoring, retention, API tokens and instance.
+  expect(screen.getAllByRole("region")).toHaveLength(6);
   fireEvent.change(screen.getByRole("searchbox", { name: "Search settings" }), { target: { value: "roles" } });
   expect(screen.getByRole("heading", { name: "Users" }).closest("[hidden]")).toBeNull();
   expect(screen.getByRole("heading", { name: "Retention & storage", hidden: true }).closest("[hidden]")).toBeTruthy();
+});
+it("shows the instance card to an administrator, from the session's own role", async () => {
+  window.history.replaceState(null, "", "/settings");
+  render(<App />);
+  expect(await screen.findByText("2 / 16 busy")).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Instance" })).toBeTruthy();
 });
 it.each(["sidebar", "Escape", "field Escape", "workbench", "signout"])("guards %s from /monitors/new reached via the dashboard, preserving the URL and input on cancel", async (path) => {
   const input = await openFromDashboard();

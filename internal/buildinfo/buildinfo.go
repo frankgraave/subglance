@@ -16,6 +16,18 @@ var (
 
 // Short returns a one-line version string, e.g. "0.1.0 (a1b2c3d, go1.24.0)".
 func Short() string {
+	commit := ShortCommit()
+	if commit == "" {
+		return fmt.Sprintf("%s (%s)", Version, runtime.Version())
+	}
+	return fmt.Sprintf("%s (%s, %s)", Version, commit, runtime.Version())
+}
+
+// ShortCommit returns the seven-character commit this binary was built from:
+// the stamped one if there is one, otherwise the revision the Go toolchain
+// embedded. Empty when neither is known, which callers must show as unknown
+// rather than filling in.
+func ShortCommit() string {
 	commit := Commit
 	if commit == "" {
 		commit = vcsRevision()
@@ -23,10 +35,7 @@ func Short() string {
 	if len(commit) > 7 {
 		commit = commit[:7]
 	}
-	if commit == "" {
-		return fmt.Sprintf("%s (%s)", Version, runtime.Version())
-	}
-	return fmt.Sprintf("%s (%s, %s)", Version, commit, runtime.Version())
+	return commit
 }
 
 // Full returns the multi-line form a person pastes into a bug report.

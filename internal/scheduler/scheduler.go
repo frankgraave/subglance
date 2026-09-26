@@ -155,6 +155,12 @@ type Scheduler struct {
 	// a log line per skip is invisible at default level, a counter is not.
 	skipped atomic.Uint64
 
+	// busy counts workers currently inside a check. Workers is the pool's
+	// size and QueueDepth its backlog; busy is the third reading that makes
+	// those two legible: a full pool with an empty queue is a pool that is
+	// exactly keeping up, and one with a backlog is a pool that is not.
+	busy atomic.Int64
+
 	mu    sync.Mutex
 	queue *jobHeap
 	// inFlight guards against a slow monitor being scheduled twice. A check
@@ -423,7 +429,9 @@ func (s *Scheduler) worker(ctx context.Context) {
 	defer s.wg.Done()
 
 	for t := range s.tasks {
+		s.busy.Add(1)
 		s.runCheck(ctx, t.job)
+		s.busy.Add(-1)
 	}
 }
 
@@ -624,6 +632,12 @@ func (s *Scheduler) SkippedChecks() uint64 { return s.skipped.Load() }
 // to a blocked worker. A depth that stays high is the pool saturated, and it
 // is the reading that moves before the skip counter does.
 func (s *Scheduler) QueueDepth() int { return len(s.tasks) }
+
+// Busy reports how many workers are running a check right now.
+//
+// runCheck recovers its own panics, so the decrement after it always runs and
+// a crashing checker cannot leave a worker counted as busy forever.
+func (s *Scheduler) Busy() int { return int(s.busy.Load()) }
 
 // MaxCheckTimeout reports the longest per-monitor timeout currently scheduled.
 //

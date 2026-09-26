@@ -201,15 +201,24 @@ const budgets = {
    * CSS measures 16,374 of 16,384 and stays put: the card declares two
    * rules and reuses the auth form, the push-URL reveal and retention notes.
    *
-   * 147 -> 148 KiB gzip for SUB-28 (the users card on /settings), merged onto
-   * develop 8e21e09, which measures 149,348 bytes of entry JS (Node gzip,
-   * level 6); this branch measures about 150,630: some 1,280 bytes for a card
-   * that lists the accounts with their roles, a role picker per row that saves
-   * only on an explicit button, a two-step removal, an add form with a role and
-   * a password floor, and a shape check that refuses a list with an unknown
-   * role. No new dependency and no new CSS. 148 leaves about 920 bytes.
+   * 147 -> 148 KiB gzip for SUB-28 (the instance card, merged onto develop
+   * 8e21e09 after the tokens card and the section index). This branch
+   * measures 150,823 bytes of entry JS (Node gzip, level 6), 295 over 147:
+   * the section index took the room the tokens comment above had set aside
+   * for this card. The card itself still costs about 1,500 bytes (build,
+   * process, database and worker-pool readings, a shape check, the
+   * copy-to-clipboard summary). No new dependency. 148 leaves 729 bytes.
+   *
+   * 148 -> 149 KiB gzip for SUB-28 (the users card on /settings), merged onto
+   * develop 70c7d67 after the instance card, which took the room the 148 above
+   * left. This branch measures 152,076 bytes of entry JS (Node gzip, level 6),
+   * 524 over 148: the card lists the accounts with their roles, a role picker
+   * per row that saves only on an explicit button, a two-step removal, an add
+   * form with a role and a password floor, and a shape check that refuses a
+   * list with an unknown role (about 1,250 bytes). No new dependency and no new
+   * CSS. 149 leaves 500 bytes.
    */
-  js: 148,
+  js: 149,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *
