@@ -232,6 +232,7 @@ export function LiveMonitorDetail({
       now={now}
       loading={detail.isPending}
       error={detail.error instanceof Error ? detail.error : null}
+      loaded={detail.data !== undefined}
       onBack={onBack}
       beatWidth={beatWidth}
       /*

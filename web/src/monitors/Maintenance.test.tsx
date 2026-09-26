@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
 import { LiveMonitorsRoot } from "./LiveMonitors";
 
@@ -20,6 +20,23 @@ it("reports an unavailable schedule read without claiming there are no windows",
  fireEvent.click(await screen.findByText("Manage scheduled maintenance"));
  expect((await screen.findByRole("alert")).textContent).toContain("database unavailable");
  expect(screen.queryByText("No maintenance windows scheduled.")).toBeNull();
+ expect(screen.getByRole("alert").textContent).not.toContain("out of date");
+});
+
+it("keeps the loaded schedules when a refresh fails, and says they may be stale", async () => {
+ const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
+ let failing=false;
+ vi.spyOn(globalThis,"fetch").mockImplementation(async()=>failing
+  ? new Response(JSON.stringify({error:"database unavailable"}),{status:500})
+  : Response.json({maintenance:[{id:1,name:"Deploy",monitor_id:1,active:false}]}));
+ render(<LiveMonitorsRoot client={client} fetchMonitors={async()=>[]} canWrite={false}/>);
+ fireEvent.click(await screen.findByText("Manage scheduled maintenance"));
+ await screen.findByText("Deploy");
+ failing=true;
+ await act(async()=>{ await client.refetchQueries({queryKey:["maintenance"]}); });
+ expect((await screen.findByRole("alert")).textContent).toBe("Could not refresh maintenance: database unavailable. Showing the last loaded schedules, which may be out of date.");
+ expect(screen.getByText("Deploy")).toBeTruthy();
+ client.clear();
 });
 
 
