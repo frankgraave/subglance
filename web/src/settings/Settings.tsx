@@ -7,8 +7,9 @@ import { SearchIcon, SettingsIcon } from "../shell/icons";
 import { TopbarTools } from "../shell/TopbarTools";
 import { WatchdogCard } from "../watchdog/Watchdog";
 import { RetentionCard } from "../retention/Retention";
+import { ResetInstanceCard } from "../reset/ResetInstance";
 
-/** Only implemented sections: no user, token or diagnostics controls yet. */
+/** Only implemented sections: no user, token or diagnostics controls yet. The reset card is admin-only. */
 export function Settings({ client, canAdmin = false }: { client?: QueryClient; canAdmin?: boolean }) {
   // Like the live pages, Settings owns a provider at its route boundary.
   const [fallback] = useState(createQueryClient);
@@ -16,6 +17,9 @@ export function Settings({ client, canAdmin = false }: { client?: QueryClient; c
   const matches = "account password current new confirm sessions security".includes(query.trim().toLowerCase());
   const watchdogMatches = "self-monitoring watchdog last ping success rejection outage".includes(query.trim().toLowerCase());
   const retentionMatches = "retention storage database history heartbeats summaries incidents disk size".includes(query.trim().toLowerCase());
+  // Admin-only, so a search for "reset" by anyone else finds nothing rather
+  // than a card they could not use.
+  const resetMatches = canAdmin && "reset danger delete all data erase wipe instance".includes(query.trim().toLowerCase());
   return <>
     <TopbarTools>
       <label className="shell-search">
@@ -37,6 +41,10 @@ export function Settings({ client, canAdmin = false }: { client?: QueryClient; c
     <div id="retention" hidden={!retentionMatches} style={{ maxWidth: "var(--size-pane-lg)", marginTop: "var(--space-4)" }}>
       <QueryClientProvider client={client ?? fallback}><RetentionCard canAdmin={canAdmin} /></QueryClientProvider>
     </div>
-    {!matches && !watchdogMatches && !retentionMatches && <p role="status">No settings match “{query}”.</p>}
+    {/* Last on the page: the one action here with no undo. */}
+    {canAdmin && <div id="reset" hidden={!resetMatches} style={{ maxWidth: "var(--size-pane-lg)", marginTop: "var(--space-4)" }}>
+      <QueryClientProvider client={client ?? fallback}><ResetInstanceCard /></QueryClientProvider>
+    </div>}
+    {!matches && !watchdogMatches && !retentionMatches && !resetMatches && <p role="status">No settings match “{query}”.</p>}
   </>;
 }
