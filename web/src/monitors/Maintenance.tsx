@@ -67,7 +67,10 @@ function MaintenanceManager({ monitors, canWrite }: { monitors: readonly Invento
   return <div className="maintenance-content">
     <p>Checks continue. Alerts are suppressed and maintenance checks are excluded from uptime. Paused monitors stay paused. Overlapping windows remain active until all have ended.</p>
     {windows.isPending ? <p role="status">Loading maintenance…</p> : null}
-    {windows.error ? <p role="alert">Could not load maintenance. Previously loaded schedules may be out of date. {windows.error.message}</p> : null}
+    {/* A failed first read has nothing to be out of date; only a failed poll does. */}
+    {windows.error ? <p role="alert">{windows.data === undefined
+      ? `Could not load maintenance: ${windows.error.message}`
+      : `Could not refresh maintenance: ${windows.error.message}. Showing the last loaded schedules, which may be out of date.`}</p> : null}
     {windows.data?.length === 0 ? <p>No maintenance windows scheduled.</p> : null}
     <ul className="maintenance-list">{windows.data?.map((window) => <li key={window.id}>
       <strong>{window.name}</strong> — {window.active ? "Active now" : "Not active now"}

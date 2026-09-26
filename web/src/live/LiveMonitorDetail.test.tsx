@@ -246,6 +246,21 @@ describe("LiveMonitorDetail", () => {
     expect(document.body.textContent).toContain("500 Internal Server Error");
   });
 
+  it("keeps the loaded history on screen when a later refresh fails", async () => {
+    const { fetchMock, client } = renderDetail();
+    expect(await screen.findByText("24h", { selector: "dt" })).toBeTruthy();
+    const ok = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string) =>
+      url.includes("/uptime") || url.includes("/incidents")
+        ? ({ ok: false, status: 502, json: async () => ({ error: "bad gateway" }) }) as never
+        : ok(url));
+    await act(async () => { await client.refetchQueries({ queryKey: ["monitor-detail"] }); });
+    await waitFor(() => expect(document.body.textContent).toContain("Could not refresh uptime"));
+    await waitFor(() => expect(document.body.textContent).toContain("Could not refresh incidents"));
+    expect(screen.getByText("24h", { selector: "dt" })).toBeTruthy();
+    expect(document.body.textContent).toMatch(/Recovered at/);
+  });
+
   it("keeps following the stream, so the status is not a frozen snapshot", async () => {
     // The whole reason the monitor is selected out of the live list rather
     // than fetched from /monitors/:id. If this breaks, the page shows a

@@ -299,6 +299,31 @@ describe("loading and failure", () => {
     );
   });
 
+  it("keeps the last figures when a refresh fails, and says so", () => {
+    // The detail read is polled. One failed poll must not replace an answer
+    // that was on screen a minute ago with no answer at all.
+    view({
+      windows: [window_({ window: "7d", total: 1000, down: 3, uptime: 99.7 })],
+      incidents: [incident()],
+      loaded: true,
+      error: new Error("HTTP 502"),
+    });
+    const alerts = [...document.querySelectorAll('[role="alert"]')].map((a) => a.textContent);
+    expect(alerts).toEqual([
+      "Could not refresh uptime: HTTP 502. Showing the last loaded figures.",
+      "Could not refresh incidents: HTTP 502. Showing the last loaded list.",
+    ]);
+    expect(screen.getByText("7d")).toBeTruthy();
+    expect(document.querySelectorAll(".inc-list li")).toHaveLength(1);
+    expect(document.body.textContent).not.toContain("Could not load");
+  });
+
+  it("does not claim old figures on a failed first load", () => {
+    view({ error: new Error("HTTP 502") });
+    expect(document.body.textContent).toContain("Could not load uptime: HTTP 502");
+    expect(document.body.textContent).not.toContain("Showing the last loaded");
+  });
+
   it("still shows the live status when the extra panels failed", () => {
     // The monitor comes from the stream, not from the failed request. Losing
     // incident history must not blank out the answer the page exists to give.
