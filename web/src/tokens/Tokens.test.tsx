@@ -49,7 +49,7 @@ it("lists tokens by name and prefix, with their role and state", async () => {
 it("creates a viewer token by default and shows the secret once, until dismissed", async () => {
   const fetcher = mount();
   fireEvent.change(await screen.findByLabelText("Token name"), { target: { value: "grafana-2" } });
-  expect((screen.getByLabelText("Role") as HTMLSelectElement).value).toBe("viewer");
+  expect(screen.getByRole("button", { name: "Viewer" }).getAttribute("aria-pressed")).toBe("true");
   fireEvent.click(screen.getByRole("button", { name: "Create token" }));
 
   const secret = await screen.findByLabelText("Token for grafana-2") as HTMLInputElement;
@@ -71,7 +71,7 @@ it("creates a viewer token by default and shows the secret once, until dismissed
 it("sends the chosen role and expiry", async () => {
   const fetcher = mount();
   fireEvent.change(await screen.findByLabelText("Token name"), { target: { value: "deploy" } });
-  fireEvent.change(screen.getByLabelText("Role"), { target: { value: "editor" } });
+  fireEvent.click(screen.getByRole("button", { name: "Editor" }));
   fireEvent.change(screen.getByLabelText("Expires"), { target: { value: "2160h" } });
   expect(screen.getByText(/Right for a deploy pipeline/)).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Create token" }));
@@ -89,8 +89,8 @@ it("never offers a role above the account's own", () => {
 
 it("an editor cannot pick admin", async () => {
   mount("editor");
-  const select = await screen.findByLabelText("Role") as HTMLSelectElement;
-  expect([...select.options].map((o) => o.value)).toEqual(["viewer", "editor"]);
+  const group = await screen.findByRole("group", { name: "Role" });
+  expect(within(group).getAllByRole("button").map((b) => b.textContent)).toEqual(["Viewer", "Editor"]);
 });
 
 it("a viewer lists and revokes but is not offered a create form", async () => {
@@ -118,11 +118,10 @@ it("shows the server's reason when a create is refused", async () => {
   const alert = await screen.findByRole("alert");
   expect(alert.textContent).toBe("a token cannot have a higher role than your own");
   expect(screen.queryByLabelText(/Token for/)).toBeNull();
-  // A role refusal sits under the role select and is tied to it, once.
-  const select = screen.getByLabelText("Role");
-  expect(alert.parentElement).toBe(select.parentElement);
-  expect(select.getAttribute("aria-invalid")).toBe("true");
-  expect(select.getAttribute("aria-describedby")?.split(" ")).toContain(alert.id);
+  // A role refusal sits under the role control and is tied to it, once.
+  const group = screen.getByRole("group", { name: "Role" });
+  expect(alert.parentElement).toBe(group.parentElement);
+  expect(group.getAttribute("aria-describedby")?.split(" ")).toContain(alert.id);
   expect(screen.getAllByRole("alert")).toHaveLength(1);
 });
 
@@ -141,4 +140,14 @@ it("refuses a malformed list rather than drawing it", async () => {
   mount("admin", (url, init) => String(url) === "/api/v1/tokens" && !init?.method
     ? json({ tokens: [{ id: 1, name: "x", prefix: "sgp_x", created_at: "2026-01-01T00:00:00Z" }] }) : undefined);
   expect(await screen.findByText("API tokens unavailable.")).toBeTruthy();
+});
+
+it("moves a token to expired when its expiry passes while the page is open", async () => {
+  const soon = { id: 5, name: "short", prefix: "sgp_5h0r7x", role: "viewer", created_at: "2026-09-01T08:00:00Z",
+    expires_at: new Date(Date.now() + 400).toISOString() };
+  mount("admin", (_url, init) => init?.method ? undefined : json({ tokens: [soon, ...sampleTokens] }));
+  expect(await screen.findByText("3 active")).toBeTruthy();
+  expect(await screen.findByText("2 active", undefined, { timeout: 3000 })).toBeTruthy();
+  const rows = within(screen.getByRole("list", { name: "Your API tokens" })).getAllByRole("listitem");
+  expect(within(rows[2]).getByText("expired")).toBeTruthy();
 });

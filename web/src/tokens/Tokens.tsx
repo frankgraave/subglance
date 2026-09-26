@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, Panel } from "../components/Card";
 import { StateChip } from "../components/Chip";
+import { SegmentedControl } from "../components/SegmentedControl";
 import { ApiError } from "../api/http";
 import { createToken, fetchTokens, revokeToken, rolesWithin, tokensKey, type ApiToken, type TokenRole } from "./api";
 
@@ -11,6 +12,10 @@ const ROLE_HELP: Record<TokenRole, string> = {
   editor: "Editor: also creates and changes monitors and acknowledges incidents. Right for a deploy pipeline.",
   admin: "Admin: also manages accounts. Give a script this only when it has to.",
 };
+
+/** setTimeout's ceiling: a longer delay overflows and fires at once. */
+const MAX_TIMER_MS = 2_147_483_647;
+const roleLabel = (role: TokenRole) => role[0].toUpperCase() + role.slice(1);
 
 const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 
@@ -59,7 +64,7 @@ function CreateForm({ role, onCreated }: { role: string; onCreated: (token: stri
   const [expiry, setExpiry] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<{ field?: string; message: string } | null>(null);
-  // A role refusal is drawn under the role select, not with the general errors.
+  // A role refusal is drawn under the role control, not with the general errors.
   const roleError = error?.field === "role";
 
   async function submit(event: FormEvent) {
@@ -89,13 +94,11 @@ function CreateForm({ role, onCreated }: { role: string; onCreated: (token: stri
             aria-invalid={error?.field === "name" ? true : undefined} onChange={(event) => setName(event.target.value)} />
         </div>
         <div className="auth-field">
-          <label className="auth-label" htmlFor={`${id}-role`}>Role</label>
-          <select className="auth-input" id={`${id}-role`} value={scope}
-            aria-describedby={roleError ? `${id}-role-help ${id}-error` : `${id}-role-help`}
-            aria-invalid={roleError ? true : undefined}
-            onChange={(event) => setScope(event.target.value as TokenRole)}>
-            {roles.map((item) => <option key={item} value={item}>{item[0].toUpperCase() + item.slice(1)}</option>)}
-          </select>
+          {/* The group carries the name "Role"; this is its visible caption. */}
+          <span className="auth-label" aria-hidden="true">Role</span>
+          <SegmentedControl label="Role" value={scope} onChange={setScope}
+            options={roles.map((item) => ({ id: item, label: roleLabel(item) }))}
+            describedBy={roleError ? `${id}-role-help ${id}-error` : `${id}-role-help`} />
           {roleError && <p className="auth-error" role="alert" id={`${id}-error`}>{error.message}</p>}
         </div>
         <div className="auth-field">
@@ -172,9 +175,20 @@ export function TokensCard({ role }: { role: string }) {
   const canCreate = role === "admin" || role === "editor";
   const refresh = () => void client.invalidateQueries({ queryKey: tokensKey });
   const tokens = query.data ?? [];
-  // Read when the list arrives, not on every render, so a re-render cannot
-  // move a token from live to expired between two parts of the same card.
-  const now = query.dataUpdatedAt;
+  // One timestamp per render, taken from when the list arrived or the last
+  // expiry timer fired, so a re-render cannot move a token from live to
+  // expired between two parts of the same card.
+  const [tick, setTick] = useState(0);
+  const now = Math.max(query.dataUpdatedAt, tick);
+  // Re-render when the next live token expires, so the count and the order
+  // follow it on a page that stays open.
+  useEffect(() => {
+    const next = Math.min(...(query.data ?? []).filter((t) => isLive(t, now) && t.expires_at !== undefined)
+      .map((t) => Date.parse(t.expires_at as string)));
+    if (!Number.isFinite(next)) return;
+    const timer = setTimeout(() => setTick(Date.now()), Math.min(Math.max(next - Date.now(), 0), MAX_TIMER_MS));
+    return () => clearTimeout(timer);
+  }, [query.data, now]);
   // Live tokens first: the list is where a leaked one gets found and revoked.
   const ordered = [...tokens].sort((a, b) => Number(!isLive(a, now)) - Number(!isLive(b, now)));
   const live = tokens.filter((t) => isLive(t, now)).length;

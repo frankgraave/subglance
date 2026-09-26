@@ -66,6 +66,8 @@ export type SegmentedControlProps<Id extends string> = {
   value: Id;
   onChange: (next: Id) => void;
   className?: string;
+  /** Ids of help or error text for the group, as `aria-describedby`. */
+  describedBy?: string;
 };
 
 export function SegmentedControl<Id extends string>({
@@ -74,12 +76,14 @@ export function SegmentedControl<Id extends string>({
   value,
   onChange,
   className,
+  describedBy,
 }: SegmentedControlProps<Id>) {
   return (
     <div
       className={className ? `segmented ${className}` : "segmented"}
       role="group"
       aria-label={label}
+      aria-describedby={describedBy}
     >
       {options.map((option) => (
         <button
