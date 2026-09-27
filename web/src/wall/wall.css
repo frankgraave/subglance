@@ -67,7 +67,8 @@
    the status colour rather than the full-strength alarm hue. */
 .wall-card[data-status="down"] { border-color: color-mix(in srgb, var(--down) 40%, var(--border)); }
 .wall-card[data-status="pending"] { border-color: color-mix(in srgb, var(--warn) 34%, var(--border)); }
-.wall-card[data-status="warning"] { border-color: color-mix(in srgb, var(--warn) 34%, var(--border)); }
+.wall-card[data-status="warning"],
+.wall-card[data-status="recovering"] { border-color: color-mix(in srgb, var(--warn) 34%, var(--border)); }
 .wall-card[data-status="paused"] .wall-card-name { color: var(--ink-3); }
 /* Paused earns a dashed edge on the wall too. At across-the-room distance the
    hollow lamp is the first signal but not a reliable one, and a wall that
@@ -99,6 +100,7 @@
    right now"; once the stream is stale the only honest claim is that we have
    stopped hearing, which the inset border and the header already make. */
 .wall[data-stale="true"] .wall-card[data-status="warning"],
+.wall[data-stale="true"] .wall-card[data-status="recovering"],
 .wall[data-stale="true"] .wall-card[data-status="down"],
 .wall[data-stale="true"] .wall-card[data-status="pending"] {
   border-color: var(--border);

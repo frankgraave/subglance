@@ -78,11 +78,19 @@ export type Partitioned = {
  * worse than a row in a slightly stale position — and with the attention
  * section on top, the thing you needed to see moved anyway.
  */
+/** Down or recovering: a confirmed incident that has not been closed yet. */
+export const confirmedOutage = (status: MonitorStatus): boolean =>
+  status === "down" || status === "recovering";
+
 export function partition(monitors: readonly Monitor[]): Partitioned {
   const attention: Monitor[] = [];
   const rest: Monitor[] = [];
   for (const monitor of monitors) {
-    (monitor.status === "down" ? attention : rest).push(monitor);
+    // Recovering stays in the attention section. Its incident is still
+    // open, and a half-broken service alternates between down and
+    // recovering: moving it out on every pass would make the row jump
+    // between sections exactly while someone is watching it.
+    (confirmedOutage(monitor.status) ? attention : rest).push(monitor);
   }
   // Both halves sort by the same stable comparator, so the same input always
   // produces the same output — no dependence on the caller's array order.
@@ -396,6 +404,7 @@ export function summarise(monitors: readonly Monitor[]): Summary {
   const summary: Summary = {
     up: 0,
     down: 0,
+    recovering: 0,
     warning: 0,
     pending: 0,
     paused: 0,
@@ -447,7 +456,7 @@ export function describeTransitions(
   });
   if (changed.length === 0) return null;
 
-  const { down, up, warning, pending, paused, total } = summarise(next);
+  const { down, recovering, up, warning, pending, paused, total } = summarise(next);
   const downNames = names(next.filter((m) => m.status === "down").sort(byName));
 
   if (down > 0) {
@@ -455,8 +464,16 @@ export function describeTransitions(
       `${plural(down, "monitor")} down: ${downNames}.`,
       `${up} up.`,
     ];
+    if (recovering > 0) parts.push(`${recovering} recovering.`);
     if (warning > 0) parts.push(`${warning} warning.`);
     if (pending > 0) parts.push(`${pending} pending.`);
+    return parts.join(" ");
+  }
+  // Not down, but not over either: the incident is open until the streak
+  // completes, so "No monitors down" alone would read as an all-clear.
+  if (recovering > 0) {
+    const parts = [`No monitors down. ${recovering} recovering, ${up} up.`];
+    if (warning > 0) parts.push(`${warning} warning.`);
     return parts.join(" ");
   }
   // Everything recovered. Say so explicitly: silence after an outage is

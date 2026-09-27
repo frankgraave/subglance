@@ -717,6 +717,7 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 			LatencyMS:          hb.LatencyMS,
 			StatusCode:         hb.StatusCode,
 			Error:              hb.Error,
+			Recovery:           recoveryFor(tr),
 		},
 	})
 
@@ -791,6 +792,28 @@ type heartbeatPayload struct {
 	LatencyMS          int    `json:"latency_ms"`
 	StatusCode         int    `json:"status_code,omitempty"`
 	Error              string `json:"error,omitempty"`
+
+	// Recovery is present only on a passing check that left a confirmed
+	// incident open because the recovery threshold is not met yet. The
+	// assessment of that check is "up" (it passed, and it is not downtime),
+	// so without this field a live client would read the pass as the end of
+	// the outage and paint the row green before the all-clear went out.
+	Recovery *recoveryPayload `json:"recovery,omitempty"`
+}
+
+// recoveryPayload is a recovering monitor's passing streak.
+type recoveryPayload struct {
+	Passes    int `json:"passes"`
+	Threshold int `json:"threshold"`
+}
+
+// recoveryFor describes the streak a transition left behind, or nil when the
+// monitor is not recovering.
+func recoveryFor(tr state.Transition) *recoveryPayload {
+	if tr.To != state.StatusRecovering {
+		return nil
+	}
+	return &recoveryPayload{Passes: tr.ConsecutiveOKs, Threshold: tr.RecoveryThreshold}
 }
 
 // statusPayload describes a monitor changing state.

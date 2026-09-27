@@ -47,7 +47,7 @@ type monitorResponse struct {
 	// and one that says "1.2" does not.
 	MinTLSVersion string `json:"min_tls_version,omitempty"`
 
-	Status     string     `json:"status"` // up, pending, or down
+	Status     string     `json:"status"` // up, pending, warning, down, or recovering
 	LastCheck  *time.Time `json:"last_check,omitempty"`
 	LatencyMS  int        `json:"latency_ms,omitempty"`
 	StatusCode int        `json:"status_code,omitempty"`
@@ -58,6 +58,11 @@ type monitorResponse struct {
 	// second round trip.
 	IncidentID    int64      `json:"incident_id,omitempty"`
 	IncidentSince *time.Time `json:"incident_since,omitempty"`
+
+	// Recovery is the passing streak of a monitor whose status is
+	// "recovering": the confirmed incident is still open, and closes after
+	// Threshold passes in a row. Omitted for every other status.
+	Recovery *recoveryResponse `json:"recovery,omitempty"`
 
 	Uptime24h *float64 `json:"uptime_24h"`
 
@@ -141,6 +146,34 @@ type monitorDetailResponse struct {
 	// confirmed incident. Push monitors store it but recover on one report.
 	RecoveryThreshold int `json:"recovery_threshold"`
 	SSLWarnDays       int `json:"ssl_warn_days"`
+}
+
+// recoveryResponse is a recovering monitor's passing streak.
+type recoveryResponse struct {
+	Passes    int `json:"passes"`
+	Threshold int `json:"threshold"`
+}
+
+// recoveryStateSource is the read-only facet of the checker pipeline that
+// knows a recovering monitor's passing streak. It lives in memory only (see
+// state.Engine.Restore), so the API asks the running engine rather than the
+// database.
+type recoveryStateSource interface {
+	Recovery(monitorID int64) (passes, threshold int, ok bool)
+}
+
+// recovery describes monitorID's passing streak, or nil when it is not
+// recovering or no checker pipeline is attached.
+func (s *Server) recovery(monitorID int64) *recoveryResponse {
+	source, ok := s.prober.(recoveryStateSource)
+	if !ok {
+		return nil
+	}
+	passes, threshold, recovering := source.Recovery(monitorID)
+	if !recovering {
+		return nil
+	}
+	return &recoveryResponse{Passes: passes, Threshold: threshold}
 }
 
 // heartbeatResponse is the wire shape of one recorded check result. It is
@@ -921,6 +954,13 @@ func (s *Server) describeMonitor(r *http.Request, m store.Monitor) monitorRespon
 		resp.IncidentSince = &inc.StartedAt
 		if inc.Confirmed() {
 			resp.Status = "down"
+			// Recovering is still a confirmed, open incident, so it is
+			// only ever a refinement of down: the engine is asked only
+			// once the incident record already says the outage is real.
+			if rec := s.recovery(m.ID); rec != nil {
+				resp.Status = "recovering"
+				resp.Recovery = rec
+			}
 		}
 		if resp.Error == "" {
 			resp.Error = inc.LastError

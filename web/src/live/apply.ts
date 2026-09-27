@@ -9,6 +9,7 @@
 
 import type { HeartbeatEvent, StatusEvent } from "./events";
 import type { Monitor, MonitorStatus } from "../monitors/types";
+import { confirmedOutage } from "../monitors/model";
 
 /**
  * How many checks a live-updated monitor keeps.
@@ -35,7 +36,9 @@ export const MAX_LIVE_BEATS = 100;
  * outage: the server closes it only after the monitor's recovery threshold of
  * passes in a row, and says so with an `incident_resolved` status event. Until
  * then a red row stays red, so the live view never shows green while the
- * incident is still open and the all-clear has not gone out.
+ * incident is still open and the all-clear has not gone out. A recovering row
+ * stays recovering on a pass and drops back to down on a failure, which is
+ * what the server's state engine does with the same check.
  *
  * A paused monitor keeps its status whatever arrives: pausing is a human
  * decision the stream knows nothing about.
@@ -43,7 +46,25 @@ export const MAX_LIVE_BEATS = 100;
 export function statusAfterHeartbeat(current: MonitorStatus, ok: boolean): MonitorStatus {
   if (current === "paused") return "paused";
   if (current === "down") return "down";
+  if (current === "recovering") return ok ? "recovering" : "down";
   return ok ? "up" : "warning";
+}
+
+/**
+ * The status one heartbeat frame implies for a monitor, and its streak.
+ *
+ * Three sources, in order of authority. A frame that carries `recovery` is the
+ * server saying "recovering, n of m" and wins outright. A passing frame
+ * against an open outage is ignored for status: its assessment is `up`
+ * because the check is not downtime, not because the incident closed — that
+ * news comes as `incident_resolved`. Everything else is the frame's own
+ * assessment, falling back to `statusAfterHeartbeat` for older servers.
+ */
+function heartbeatStatus(m: Monitor, e: HeartbeatEvent): Pick<Monitor, "status" | "recovery"> {
+  if (m.status === "paused") return { status: "paused" };
+  if (e.recovery !== undefined) return { status: "recovering", recovery: e.recovery };
+  if (e.ok && confirmedOutage(m.status)) return { status: m.status, recovery: m.recovery };
+  return { status: e.assessment || statusAfterHeartbeat(m.status, e.ok) };
 }
 
 /** The status a state-engine event implies, or null when it implies nothing. */
@@ -84,8 +105,11 @@ function replace(
 /** Folds one completed check into the list. */
 export function applyHeartbeat(monitors: readonly Monitor[], e: HeartbeatEvent): Monitor[] {
   return replace(monitors, e.monitorId, (m) => ({
+    // The streak is dropped on every frame and put back only by a frame that
+    // leaves the monitor recovering, so it cannot outlive its status.
     ...m,
-    status: m.status === "paused" ? "paused" : (e.assessment || statusAfterHeartbeat(m.status, e.ok)),
+    recovery: undefined,
+    ...heartbeatStatus(m, e),
     maintenance: e.currentMaintenance ?? m.maintenance,
     latencyMs: e.latencyMs,
     lastCheck: e.at,
@@ -114,7 +138,10 @@ export function applyStatus(monitors: readonly Monitor[], e: StatusEvent): Monit
   const status = statusAfterEvent(e.event);
   if (status === null) return monitors as Monitor[];
   return replace(monitors, e.monitorId, (m) => ({
+    // Every status event ends a recovery streak: it either closes the
+    // incident or opens or confirms one.
     ...m,
+    recovery: undefined,
     // A paused monitor is not rescheduled, so an event about one is stale by
     // definition; keeping the pause is the safer of the two wrong answers.
     status: m.status === "paused" ? "paused" : status,

@@ -19,6 +19,11 @@ export type LedState = "up" | "down" | "warn" | "idle" | "off";
 export const LED_STATE: Record<MonitorStatus, LedState> = {
   up: "up",
   down: "down",
+  // Amber, not a new colour: the outage is still open and nobody has been
+  // told it is over, but checks are passing again. The warning style says
+  // "look, but not an alarm", and the word carries the difference from a
+  // plain warning (DESIGN.md §2.3).
+  recovering: "warn",
   warning: "warn",
   // Pending is amber, not grey: it is a monitor we are waiting on, which is
   // worth a glance.

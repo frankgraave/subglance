@@ -1,11 +1,14 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/frankgraave/subglance/internal/checker"
 	"github.com/frankgraave/subglance/internal/store"
 )
 
@@ -139,5 +142,73 @@ func assertProblemField(t *testing.T, rec *httptest.ResponseRecorder, want strin
 	}
 	if body.Field != want {
 		t.Errorf("problem field = %q, want %q", body.Field, want)
+	}
+}
+
+// recoveryProbe stands in for the runner: the streak lives in the engine's
+// memory, so the API asks the attached checker pipeline for it.
+type recoveryProbe struct {
+	streaks map[int64][2]int
+}
+
+func (p *recoveryProbe) Recovery(id int64) (passes, threshold int, ok bool) {
+	s, ok := p.streaks[id]
+	return s[0], s[1], ok
+}
+
+func (*recoveryProbe) CheckNow(context.Context, store.Monitor) (checker.Result, error) {
+	panic("reading a monitor must never perform a check")
+}
+
+// A monitor whose confirmed incident is collecting passes reads as
+// "recovering" with its streak (the list read shares describeMonitor). A
+// monitor without a confirmed incident never does, whatever the engine says:
+// recovering is a refinement of down, not a status of its own.
+func TestRecoveringMonitorReportsItsStreak(t *testing.T) {
+	srv, db := testServerWithDB(t)
+	down := seedMonitor(t, db, store.Monitor{Name: "down", Type: "http", Target: "https://example.com/a", Enabled: true})
+	healthy := seedMonitor(t, db, store.Monitor{Name: "healthy", Type: "http", Target: "https://example.com/b", Enabled: true})
+	started := time.Now().Add(-10 * time.Minute)
+	if _, err := db.OpenIncident(t.Context(), down.ID, started, "status", "HTTP 503"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.ConfirmIncident(t.Context(), down.ID, started.Add(time.Minute), "status", "HTTP 503"); err != nil {
+		t.Fatal(err)
+	}
+	probe := &recoveryProbe{streaks: map[int64][2]int{down.ID: {1, 2}, healthy.ID: {1, 2}}}
+	srv.WithProber(probe)
+
+	for _, id := range []int64{down.ID, healthy.ID} {
+		rec := getMonitorRaw(t, srv, id)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+		}
+		var got map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		if id == healthy.ID {
+			if got["status"] == "recovering" || got["recovery"] != nil {
+				t.Errorf("a monitor without a confirmed incident reads as %v with recovery %v", got["status"], got["recovery"])
+			}
+			continue
+		}
+		if got["status"] != "recovering" {
+			t.Errorf("detail status = %v, want recovering", got["status"])
+		}
+		want := map[string]any{"passes": float64(1), "threshold": float64(2)}
+		if r, ok := got["recovery"].(map[string]any); !ok || r["passes"] != want["passes"] || r["threshold"] != want["threshold"] {
+			t.Errorf("detail recovery = %#v, want %v", got["recovery"], want)
+		}
+	}
+
+	delete(probe.streaks, down.ID)
+	rec := getMonitorRaw(t, srv, down.ID)
+	var got map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["status"] != "down" || got["recovery"] != nil {
+		t.Errorf("once the streak breaks: status %v recovery %v, want down and no recovery", got["status"], got["recovery"])
 	}
 }

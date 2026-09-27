@@ -89,6 +89,7 @@ function CompactLineImpl({ monitor, onOpen, stale = false }: CompactLineProps) {
           status={status}
           hideLabel={status === "up"}
           stale={stale}
+          recovery={monitor.recovery}
           className="mon-line-led"
         />
       }
@@ -135,6 +136,9 @@ const CompactLine = memo(CompactLineImpl, (prev, next) => {
     a.id === b.id &&
     a.name === b.name &&
     a.status === b.status &&
+    // The streak is part of the status word ("Recovering (1 of 2)").
+    a.recovery?.passes === b.recovery?.passes &&
+    a.recovery?.threshold === b.recovery?.threshold &&
     a.target === b.target &&
     a.latencyMs === b.latencyMs &&
     a.uptime24h === b.uptime24h &&

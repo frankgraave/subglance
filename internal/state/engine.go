@@ -142,6 +142,11 @@ type Transition struct {
 	// whenever no confirmed incident is open.
 	ConsecutiveOKs int
 
+	// RecoveryThreshold is the number of passes this observation needed to
+	// close the incident. Set only when To is StatusRecovering, so "1 of 2"
+	// can be said from the transition alone.
+	RecoveryThreshold int
+
 	// RecoveredAt is when the outage ended, set only on
 	// EventIncidentResolved. It is the first passing check of the streak
 	// that met the recovery threshold, not the check that met it: the
@@ -222,6 +227,11 @@ type monitorState struct {
 	// first of them ran. Both are zero outside a confirmed incident.
 	consecutiveOKs  int
 	recoveringSince time.Time
+
+	// recoveryThreshold is the threshold the last recovering pass was
+	// measured against, so a reader can say "1 of 2" without looking the
+	// monitor up again. Meaningful only while status is StatusRecovering.
+	recoveryThreshold int
 
 	// snapshotsSpent is the per-incident response-snapshot budget: how many
 	// snapshots this incident has actually stored. It is not the failure
@@ -379,8 +389,10 @@ func (e *Engine) observeSuccess(ms *monitorState, t *Transition, o Observation) 
 		if ms.consecutiveOKs < o.RecoveryThreshold {
 			// The snapshot budget is left alone: it belongs to the
 			// incident, and the incident is still open.
+			ms.recoveryThreshold = o.RecoveryThreshold
 			ms.status = StatusRecovering
 			t.To = StatusRecovering
+			t.RecoveryThreshold = o.RecoveryThreshold
 			return
 		}
 	}
@@ -490,6 +502,21 @@ func (e *Engine) Status(monitorID int64) Status {
 		return ms.status
 	}
 	return StatusUnknown
+}
+
+// Recovery reports a recovering monitor's passing streak: how many checks in
+// a row have passed and how many the incident needs before it closes. ok is
+// false for every monitor that is not recovering, including one the engine
+// has never seen, so a caller cannot mistake "no streak" for "zero passes".
+func (e *Engine) Recovery(monitorID int64) (passes, threshold int, ok bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	ms := e.state[monitorID]
+	if ms == nil || ms.status != StatusRecovering {
+		return 0, 0, false
+	}
+	return ms.consecutiveOKs, ms.recoveryThreshold, true
 }
 
 // Flapping reports whether a monitor is currently suppressed for oscillation.

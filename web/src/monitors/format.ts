@@ -7,12 +7,13 @@
  */
 
 import { formatDuration } from "./detail";
-import type { Monitor, MonitorStatus } from "./types";
+import type { Monitor, MonitorStatus, Recovery } from "./types";
 
 /** How each status is spoken and written. Colour never stands alone (DESIGN.md §2.3). */
 export const STATUS_LABEL: Record<MonitorStatus, string> = {
   up: "Up",
   down: "Down",
+  recovering: "Recovering",
   warning: "Warning",
   pending: "Pending",
   paused: "Paused",
@@ -42,6 +43,7 @@ export const STATUS_LABEL: Record<MonitorStatus, string> = {
 export const STATUS_LABEL_LAST_KNOWN: Record<MonitorStatus, string> = {
   up: "Was up",
   down: "Was down",
+  recovering: "Was recovering",
   warning: "Was warning",
   pending: "Was pending",
   paused: "Was paused",
@@ -57,8 +59,18 @@ export const STATUS_LABEL_LAST_KNOWN: Record<MonitorStatus, string> = {
  * lies. See `Led`, which routes its text alternative through here for exactly
  * that reason.
  */
-export const statusWord = (status: MonitorStatus, stale = false): string =>
-  stale ? STATUS_LABEL_LAST_KNOWN[status] : STATUS_LABEL[status];
+export const statusWord = (
+  status: MonitorStatus,
+  stale = false,
+  recovery?: Recovery,
+): string => {
+  const word = stale ? STATUS_LABEL_LAST_KNOWN[status] : STATUS_LABEL[status];
+  // The count belongs to the word, not beside it: "Recovering" alone does not
+  // say whether the all-clear is one check away or nine, and that is the
+  // question someone watching a recovery is asking.
+  if (status !== "recovering" || recovery === undefined) return word;
+  return `${word} (${recovery.passes} of ${recovery.threshold})`;
+};
 
 export const formatLatency = (ms: number) =>
   ms >= 1000 ? `${(ms / 1000).toFixed(2)} s` : `${Math.round(ms)} ms`;

@@ -229,9 +229,9 @@ export function MonitorDetail({
           <p className="mon-detail-status" data-status={status}>
             <Led status={status} labelled={false} className="mon-detail-led" />
             {stale ? (
-              <span>{statusWord(status, true)}</span>
+              <span>{statusWord(status, true, monitor.recovery)}</span>
             ) : (
-              <strong>{statusWord(status, false)}</strong>
+              <strong>{statusWord(status, false, monitor.recovery)}</strong>
             )}
             {stale && gap !== null ? (
               // The silence, not the reading's age. The two are the same

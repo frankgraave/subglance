@@ -44,6 +44,7 @@ let browser: Browser;
 const ALL_STATUSES = [
   "up",
   "down",
+  "recovering",
   "warning",
   "pending",
   "paused",
@@ -413,13 +414,15 @@ describe("the status rail stops asserting when the stream dies", () => {
    * a present-tense statement about the monitored service.
    *
    *   down    — "this is failing"          → drains
+   *   recovering — "failing, on its way back" → drains, like the warning
+   *             edge it shares
    *   pending — "a check is in flight"     → drains
    *   up      — carries no coloured edge at all, so there is nothing to
    *             drain; asserted as unchanged so a rule growing one is caught
    *   waiting — "no data yet": a fact about our own configuration → holds
    *   paused  — "somebody switched this off": likewise → holds
    */
-  const DRAINING_STATUSES = ["down", "warning", "pending"] as const;
+  const DRAINING_STATUSES = ["down", "recovering", "warning", "pending"] as const;
   const HOLDING_STATUSES = ["up", "waiting", "paused"] as const;
 
   for (const theme of ["dark", "light"] as const) {

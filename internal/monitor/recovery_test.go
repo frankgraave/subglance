@@ -2,8 +2,11 @@ package monitor
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
+
+	"github.com/frankgraave/subglance/internal/events"
 
 	"github.com/frankgraave/subglance/internal/state"
 	"github.com/frankgraave/subglance/internal/store"
@@ -116,5 +119,57 @@ func TestAPushMonitorRecoversOnOneReport(t *testing.T) {
 	}
 	if _, err := db.OpenIncidentFor(ctx, m.ID); err == nil {
 		t.Error("the incident is still open after one good report")
+	}
+}
+
+// A recovering pass is stored and streamed with assessment "up": it passed,
+// and it is not downtime. The heartbeat frame therefore also carries the
+// streak, or a live client would read the pass as the end of the outage and
+// turn the row green before the all-clear went out.
+func TestARecoveringHeartbeatCarriesTheStreak(t *testing.T) {
+	db := testDB(t)
+	bus := events.NewBus(8)
+	sub := bus.Subscribe()
+	defer sub.Close()
+	r := New(Options{DB: db, Log: quietLogger(), Bus: bus})
+	m := recoveringMonitor(t, db)
+
+	start := time.Now().Add(-time.Hour).Truncate(time.Second)
+	frames := func(ok bool, when time.Time) map[string]any {
+		t.Helper()
+		if err := r.recordOutcome(at(outcomeFor(m, m.Target, ok), when)); err != nil {
+			t.Fatal(err)
+		}
+		for {
+			e := <-sub.C()
+			if e.Kind != events.KindHeartbeat {
+				continue
+			}
+			data, err := json.Marshal(e.Payload)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var payload map[string]any
+			if err := json.Unmarshal(data, &payload); err != nil {
+				t.Fatal(err)
+			}
+			return payload
+		}
+	}
+
+	if got := frames(false, start); got["recovery"] != nil {
+		t.Errorf("a failing check carries recovery %v", got["recovery"])
+	}
+	got := frames(true, start.Add(time.Minute))
+	want := map[string]any{"passes": float64(1), "threshold": float64(2)}
+	rec, ok := got["recovery"].(map[string]any)
+	if !ok || rec["passes"] != want["passes"] || rec["threshold"] != want["threshold"] {
+		t.Errorf("recovering heartbeat recovery = %#v, want %v", got["recovery"], want)
+	}
+	if got["assessment"] != "up" {
+		t.Errorf("recovering heartbeat assessment = %v, want up", got["assessment"])
+	}
+	if got := frames(true, start.Add(2*time.Minute)); got["recovery"] != nil {
+		t.Errorf("the resolving check carries recovery %v", got["recovery"])
 	}
 }

@@ -193,3 +193,48 @@ func TestConfirmedCoversRecovering(t *testing.T) {
 		}
 	}
 }
+
+// Recovery is what the API reads to say "Recovering (1 of 2)". It must report
+// the streak only while the monitor is recovering, so an up or down monitor is
+// never shown with a stale count.
+func TestRecoveryReportsTheStreakOnlyWhileRecovering(t *testing.T) {
+	c := newClock()
+	e := New(Options{Now: c.Now, FlapThreshold: 99})
+
+	if _, _, ok := e.Recovery(1); ok {
+		t.Error("an unseen monitor reports a recovery streak")
+	}
+	observe(e, c, false, 1, 3)
+	if _, _, ok := e.Recovery(1); ok {
+		t.Error("a down monitor reports a recovery streak")
+	}
+
+	tr := observe(e, c, true, 1, 3)
+	if tr.RecoveryThreshold != 3 {
+		t.Errorf("transition recovery threshold = %d, want 3", tr.RecoveryThreshold)
+	}
+	if passes, threshold, ok := e.Recovery(1); !ok || passes != 1 || threshold != 3 {
+		t.Errorf("after one pass: Recovery = %d, %d, %v, want 1, 3, true", passes, threshold, ok)
+	}
+	observe(e, c, true, 1, 3)
+	if passes, _, ok := e.Recovery(1); !ok || passes != 2 {
+		t.Errorf("after two passes: Recovery = %d, %v, want 2, true", passes, ok)
+	}
+
+	observe(e, c, false, 1, 3)
+	if _, _, ok := e.Recovery(1); ok {
+		t.Error("a failure while recovering left a recovery streak behind")
+	}
+	observe(e, c, true, 1, 3)
+	observe(e, c, true, 1, 3)
+	tr = observe(e, c, true, 1, 3)
+	if tr.To != StatusUp {
+		t.Fatalf("status after three passes = %q, want up", tr.To)
+	}
+	if tr.RecoveryThreshold != 0 {
+		t.Errorf("a resolving transition carries recovery threshold %d, want 0", tr.RecoveryThreshold)
+	}
+	if _, _, ok := e.Recovery(1); ok {
+		t.Error("a resolved monitor reports a recovery streak")
+	}
+}
