@@ -160,13 +160,14 @@ describe("summarise", () => {
         monitor("f", "waiting"),
         monitor("g", "warning"),
       ]),
-    ).toEqual({ up: 2, down: 1, warning: 1, pending: 1, paused: 1, waiting: 1, total: 7 });
+    ).toEqual({ up: 2, down: 1, recovering: 0, warning: 1, pending: 1, paused: 1, waiting: 1, total: 7 });
   });
 
   it("returns zeroes for an empty list", () => {
     expect(summarise([])).toEqual({
       up: 0,
       down: 0,
+      recovering: 0,
       warning: 0,
       pending: 0,
       paused: 0,

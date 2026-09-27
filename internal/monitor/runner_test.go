@@ -86,6 +86,10 @@ func TestConfirmationDelaysTheAlert(t *testing.T) {
 	rec := &alertRecorder{}
 
 	m, err := db.CreateMonitor(ctx, store.Monitor{
+		// One pass closes an incident: this test is not about the
+		// recovery threshold, which recovery_test.go covers.
+		RecoveryThreshold: 1,
+
 		Name:      "flaky",
 		Type:      "http",
 		Target:    srv.URL,
@@ -212,6 +216,10 @@ func TestRestartDoesNotReAlert(t *testing.T) {
 	db := testDB(t)
 
 	m, err := db.CreateMonitor(ctx, store.Monitor{
+		// One pass closes an incident: this test is not about the
+		// recovery threshold, which recovery_test.go covers.
+		RecoveryThreshold: 1,
+
 		Name: "persistent", Type: "http", Target: "https://example.com",
 		IntervalS: 20, TimeoutS: 5, Retries: 2, Enabled: true,
 	})

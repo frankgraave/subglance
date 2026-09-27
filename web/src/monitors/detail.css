@@ -150,7 +150,8 @@
    would state the same thing twice in a louder voice. */
 .mon-detail-status[data-status="down"] { border-color: var(--down); }
 .mon-detail-status[data-status="pending"] { border-color: var(--warn); }
-.mon-detail-status[data-status="warning"] { border-color: var(--warn); }
+.mon-detail-status[data-status="warning"],
+.mon-detail-status[data-status="recovering"] { border-color: var(--warn); }
 .mon-detail-status[data-status="waiting"] { border-color: var(--idle); }
 
 /* The lamp sits inside the pill now, so the old baseline nudge is gone: the

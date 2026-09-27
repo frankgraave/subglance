@@ -131,6 +131,32 @@ describe("EditMonitorForm", () => {
     expect(screen.getByText(/repeat alert settings unavailable/i)).toBeTruthy();
   });
 
+  it("edits the loaded recovery threshold without a target preview", async () => {
+    // Not a probe setting: it changes when an incident closes, not what the
+    // check sends, so it must save without Test it.
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<EditMonitorForm monitor={make({ recovery_threshold: 3 })} onSave={onSave} />);
+    const input = screen.getByLabelText("Passing checks to recover") as HTMLInputElement;
+    expect(input.value).toBe("3");
+    fireEvent.change(input, { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith({ recovery_threshold: 1 }));
+  });
+
+  it.each(["0", "11", "", "1.5"])("rejects recovery threshold %j without saving", (value) => {
+    const onSave = vi.fn();
+    render(<EditMonitorForm monitor={make({ recovery_threshold: 2 })} onSave={onSave} />);
+    fireEvent.change(screen.getByLabelText("Passing checks to recover"), { target: { value } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert").textContent).toMatch(/between 1 and 10/);
+  });
+
+  it("never supplies a recovery threshold the server did not send", () => {
+    render(<EditMonitorForm monitor={make()} onSave={vi.fn()} />);
+    expect(screen.queryByLabelText("Passing checks to recover")).toBeNull();
+  });
+
   it("offers no TLS floor or empty advanced panel for a push monitor", () => {
     render(
       <EditMonitorForm

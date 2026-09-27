@@ -266,6 +266,12 @@ func (r *Runner) sendDueReminders(ctx context.Context) {
 			continue
 		}
 
+		// A recovering monitor is passing its checks. "Still down" would be
+		// false, and the incident is at most a few checks from closing.
+		if r.engine.Status(inc.MonitorID) == state.StatusRecovering {
+			continue
+		}
+
 		// The monitor is loaded before the schedule is advanced. The other
 		// way round, a failed read still consumed the reminder: the count
 		// was already incremented, so the next attempt waited the longer
@@ -502,7 +508,7 @@ func (r *Runner) jobs(ctx context.Context) ([]scheduler.Job, error) {
 			Monitor:      toCheckerMonitor(m),
 			Interval:     time.Duration(m.IntervalS) * time.Second,
 			NeverChecked: checked != nil && !seen,
-			Down:         r.engine.Status(m.ID) == state.StatusDown,
+			Down:         r.engine.Status(m.ID).Confirmed(),
 		})
 	}
 
@@ -558,6 +564,8 @@ func toCheckerMonitor(m store.Monitor) checker.Monitor {
 		MinTLSVersion:   m.MinTLSVersion,
 		Retries:         m.Retries,
 		CaptureResponse: m.CaptureResponse,
+
+		RecoveryThreshold: m.RecoveryThreshold,
 	}
 }
 
@@ -643,11 +651,16 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 		Kind:             string(o.Result.Kind),
 		Error:            o.Result.Error,
 		FailureThreshold: o.Monitor.Retries,
+
+		RecoveryThreshold: o.Monitor.RecoveryThreshold,
 	})
 
-	hb.Assessment = string(tr.To)
+	hb.Assessment = heartbeatAssessment(tr.To)
 	hb.FailureKind = string(o.Result.Kind)
-	r.sch.SetDown(o.Monitor.ID, tr.To == state.StatusDown)
+	// A recovering monitor keeps the fast outage cadence: the passes that
+	// close its incident should come at the pace the failures did, not at
+	// the relaxed healthy interval.
+	r.sch.SetDown(o.Monitor.ID, tr.To.Confirmed())
 
 	var captureReason store.CaptureReason
 	hb.Response, captureReason = snapshotToStore(o.Result, tr.SnapshotsSpent, tr.Flapping)
@@ -704,6 +717,7 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 			LatencyMS:          hb.LatencyMS,
 			StatusCode:         hb.StatusCode,
 			Error:              hb.Error,
+			Recovery:           recoveryFor(tr),
 		},
 	})
 
@@ -751,6 +765,19 @@ func snapshotToStore(res checker.Result, snapshotsSpent int, flapping bool) (*st
 	}, ""
 }
 
+// heartbeatAssessment is what a check result is stored as.
+//
+// A recovering check is stored as up. It passed, and the outage ended at the
+// first pass of the streak that closes the incident, so counting it as
+// anything else would charge the confirmation checks to downtime. The
+// recovering state lives on the monitor, not on the sample.
+func heartbeatAssessment(s state.Status) string {
+	if s == state.StatusRecovering {
+		return string(state.StatusUp)
+	}
+	return string(s)
+}
+
 // heartbeatPayload is the wire shape of a single check result.
 //
 // It is deliberately not store.Heartbeat: the stored row carries an ID and a
@@ -765,6 +792,28 @@ type heartbeatPayload struct {
 	LatencyMS          int    `json:"latency_ms"`
 	StatusCode         int    `json:"status_code,omitempty"`
 	Error              string `json:"error,omitempty"`
+
+	// Recovery is present only on a passing check that left a confirmed
+	// incident open because the recovery threshold is not met yet. The
+	// assessment of that check is "up" (it passed, and it is not downtime),
+	// so without this field a live client would read the pass as the end of
+	// the outage and paint the row green before the all-clear went out.
+	Recovery *recoveryPayload `json:"recovery,omitempty"`
+}
+
+// recoveryPayload is a recovering monitor's passing streak.
+type recoveryPayload struct {
+	Passes    int `json:"passes"`
+	Threshold int `json:"threshold"`
+}
+
+// recoveryFor describes the streak a transition left behind, or nil when the
+// monitor is not recovering.
+func recoveryFor(tr state.Transition) *recoveryPayload {
+	if tr.To != state.StatusRecovering {
+		return nil
+	}
+	return &recoveryPayload{Passes: tr.ConsecutiveOKs, Threshold: tr.RecoveryThreshold}
 }
 
 // statusPayload describes a monitor changing state.
@@ -859,7 +908,10 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 			"suppressed", tr.Suppressed)
 
 	case state.EventIncidentResolved:
-		inc, err = r.db.ResolveIncident(ctx, o.Monitor.ID, tr.At)
+		// RecoveredAt, not At: the outage ended at the first pass of the
+		// streak that closed it, and the checks spent confirming that are
+		// not downtime.
+		inc, err = r.db.ResolveIncident(ctx, o.Monitor.ID, tr.RecoveredAt)
 		if errors.Is(err, store.ErrNoOpenIncident) {
 			return nil
 		}

@@ -24,6 +24,10 @@ func TestFlappingDoesNotStrandAnOpenIncident(t *testing.T) {
 	rec := &alertRecorder{}
 
 	m, err := db.CreateMonitor(ctx, store.Monitor{
+		// One pass closes an incident: this test is not about the
+		// recovery threshold, which recovery_test.go covers.
+		RecoveryThreshold: 1,
+
 		Name: "flapper", Type: "http", Target: "https://example.com",
 		IntervalS: 20, TimeoutS: 5, Retries: 1, Enabled: true,
 	})
@@ -79,6 +83,10 @@ func TestFlappingStillRecordsIncidents(t *testing.T) {
 	rec := &alertRecorder{}
 
 	m, err := db.CreateMonitor(ctx, store.Monitor{
+		// One pass closes an incident: this test is not about the
+		// recovery threshold, which recovery_test.go covers.
+		RecoveryThreshold: 1,
+
 		Name: "flapper2", Type: "http", Target: "https://example.com",
 		IntervalS: 20, TimeoutS: 5, Retries: 1, Enabled: true,
 	})
@@ -119,6 +127,10 @@ func TestSuppressedTransitionsStillPersist(t *testing.T) {
 	rec := &alertRecorder{}
 
 	m, err := db.CreateMonitor(ctx, store.Monitor{
+		// One pass closes an incident: this test is not about the
+		// recovery threshold, which recovery_test.go covers.
+		RecoveryThreshold: 1,
+
 		Name: "flapper3", Type: "http", Target: "https://example.com",
 		IntervalS: 20, TimeoutS: 5, Retries: 1, Enabled: true,
 	})

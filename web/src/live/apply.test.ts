@@ -51,10 +51,15 @@ describe("applyHeartbeat", () => {
     expect(m.error).toBe("timeout");
   });
 
-  it("keeps a confirmed outage red until a check succeeds", () => {
+  it("keeps a confirmed outage red until the incident resolves", () => {
+    // One passing check is not a recovery: the server waits for the recovery
+    // threshold and then sends `incident_resolved`. Going green on the pass
+    // would show an all-clear the server has not given.
     const down = monitor({ status: "down" });
     expect(applyHeartbeat([down], beat({ ok: false }))[0].status).toBe("down");
-    expect(applyHeartbeat([down], beat({ ok: true }))[0].status).toBe("up");
+    const [passed] = applyHeartbeat([down], beat({ ok: true }));
+    expect(passed.status).toBe("down");
+    expect(applyStatus([passed], status({ event: "incident_resolved" }))[0].status).toBe("up");
   });
 
   it("leaves a paused monitor paused", () => {

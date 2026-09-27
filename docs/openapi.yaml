@@ -3805,7 +3805,13 @@ components:
         unconfirmed failure without an alert, and `pending` means never checked yet.
         A single failed check is deliberately not `down`: the dashboard and the
         notifications must agree on what an outage is.
-      enum: [up, pending, warning, down]
+
+        `recovering` is a confirmed incident that has started passing checks
+        but has not yet passed `recovery_threshold` of them in a row. The
+        incident is still open and no all-clear has been sent; `recovery`
+        carries the streak. A failure while recovering returns the monitor to
+        `down` within the same incident.
+      enum: [up, pending, warning, down, recovering]
       example: up
     TagMap:
       type: object
@@ -3920,7 +3926,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/Monitor'
         - type: object
-          required: [method, expected_status, keyword, keyword_mode, follow_redirects, retries, ssl_warn_days]
+          required: [method, expected_status, keyword, keyword_mode, follow_redirects, retries, recovery_threshold, ssl_warn_days]
           properties:
             method:
               type: string
@@ -3945,6 +3951,12 @@ components:
               description: Editors/admins only. Stored request body; may contain secrets.
             retries:
               type: integer
+            recovery_threshold:
+              type: integer
+              description: |
+                Consecutive passing checks required before a confirmed
+                incident closes. Push monitors store it but close on one
+                successful report.
             ssl_warn_days:
               type: integer
     MaintenanceWindow:
@@ -4108,6 +4120,24 @@ components:
           type: string
           format: date-time
           description: When the open incident started.
+        recovery:
+          type: object
+          description: |
+            The passing streak of a `recovering` monitor: `passes` checks in a
+            row so far, out of the `threshold` that closes the incident.
+            Omitted for every other status. Held in memory only, so a restart
+            during recovery reports `down` and starts the count again.
+          required: [passes, threshold]
+          properties:
+            passes:
+              type: integer
+              minimum: 1
+              example: 1
+            threshold:
+              type: integer
+              minimum: 2
+              maximum: 10
+              example: 2
         repeat_after_s:
           type: integer
           description: |
@@ -4192,7 +4222,7 @@ components:
       description: |
         Unknown fields are rejected. Omitted optional fields take the schema
         defaults; note that `enabled` and `follow_redirects` default to true
-        and `retries` to 2.
+        and `retries` and `recovery_threshold` to 2.
 
         `target` is required for every type except `push`, and `push_interval_s`
         is required for `push` and rejected for every other type. Both rules are
@@ -4246,6 +4276,17 @@ components:
             Consecutive failures required before an incident is confirmed —
             "no false alarms" in numeric form.
           minimum: 0
+          maximum: 10
+          default: 2
+        recovery_threshold:
+          type: integer
+          description: |
+            Consecutive passing checks required before a confirmed incident
+            closes and "resolved" is sent. 1 closes on the first pass. The
+            recovery time recorded on the incident is still the first pass
+            of the closing streak. 0 is rejected rather than read as unset.
+            Push monitors close on one successful report regardless.
+          minimum: 1
           maximum: 10
           default: 2
         method:
@@ -4394,6 +4435,10 @@ components:
           type: integer
           minimum: 0
           maximum: 10
+        recovery_threshold:
+          type: integer
+          minimum: 1
+          maximum: 10
         method:
           $ref: '#/components/schemas/HttpMethod'
         expected_status:
@@ -4472,7 +4517,7 @@ components:
       additionalProperties: false
     Heartbeat:
       type: object
-      description: One recorded check result. Assessment is immutable even if a later check confirms the incident. SSE heartbeat data carries the same assessment and failure_kind fields (with at in the envelope instead of ts), plus current_maintenance evaluated at publish time. current_maintenance is omitted when schedule state could not be read; it does not change the historical maintenance exclusion.
+      description: One recorded check result. Assessment is immutable even if a later check confirms the incident. SSE heartbeat data carries the same assessment and failure_kind fields (with at in the envelope instead of ts), plus current_maintenance evaluated at publish time. A passing check that leaves a confirmed incident open (the monitor is recovering) is assessed up, since it is not downtime, and its SSE data carries recovery ({passes, threshold}) so a live client does not read it as the end of the outage. current_maintenance is omitted when schedule state could not be read; it does not change the historical maintenance exclusion.
       required: [ts, ok, latency_ms, assessment]
       properties:
         maintenance:

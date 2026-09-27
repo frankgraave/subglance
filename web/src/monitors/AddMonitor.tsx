@@ -223,6 +223,7 @@ function bodyFor(
     repeat_after_s: values.repeatAfterS,
     interval_s: values.intervalS,
     timeout_s: values.timeoutS,
+    recovery_threshold: values.recoveryThreshold,
     // Omitted entirely when the user expressed no opinion. The API rejects an
     // empty string on create precisely so a client cannot store a floor it
     // never chose, and the nullable column is what lets such a monitor follow

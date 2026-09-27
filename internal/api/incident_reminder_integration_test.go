@@ -25,6 +25,10 @@ func TestIncidentReminderRealRunnerSuppressionReachesHTTP(t *testing.T) {
 	m, err := db.CreateMonitor(t.Context(), store.Monitor{
 		Name: "real runner", Type: "http", Target: target.URL,
 		Enabled: true, IntervalS: 86400, TimeoutS: 5, Retries: 1, RepeatAfterS: 900,
+		// One pass closes the incident, so 503-200-503 is three flips. With
+		// the default of two, the pass is only a recovering check and the
+		// monitor never flaps.
+		RecoveryThreshold: 1,
 	})
 	if err != nil {
 		t.Fatal(err)

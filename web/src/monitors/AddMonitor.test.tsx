@@ -378,6 +378,33 @@ describe("AddMonitor", () => {
     ).toBe("1.0");
   });
 
+  it("sends the recovery threshold, defaulting to the server's 2", async () => {
+    // Shown and sent rather than omitted, so the delay before "resolved" is
+    // visible on the form instead of being a rule the user has to know.
+    const create = vi.fn().mockResolvedValue({ id: "1" });
+    render(<AddMonitor api={{ preview: vi.fn(), create }} />);
+    setField(/what should be watched/i, "example.com");
+    fireEvent.change(screen.getByLabelText(/check type/i), {
+      target: { value: "http" },
+    });
+    expect(field(/recover after/i).value).toBe("2");
+    fireEvent.change(field(/recover after/i), { target: { value: "4" } });
+    click(/save monitor/i);
+    await waitFor(() => expect(create).toHaveBeenCalled());
+    expect(
+      (create.mock.calls[0][0] as { recovery_threshold?: number })
+        .recovery_threshold,
+    ).toBe(4);
+  });
+
+  it("offers no recovery threshold for a push monitor, which recovers on one report", () => {
+    render(<AddMonitor api={{ preview: vi.fn(), create: vi.fn() }} />);
+    fireEvent.change(screen.getByLabelText(/check type/i), {
+      target: { value: "push" },
+    });
+    expect(screen.queryByLabelText(/recover after/i)).toBeNull();
+  });
+
   it("probes with the floor, so Test it answers the question that was asked", async () => {
     // Lowering the floor is done for a target that cannot be reached without
     // it. A preview that ignored the setting would report the same refused

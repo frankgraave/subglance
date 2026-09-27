@@ -22,6 +22,11 @@ type Monitor struct {
 	TimeoutS  int
 	Retries   int
 
+	// RecoveryThreshold is how many consecutive passing checks close a
+	// confirmed incident. Zero is filled in as 2 by ApplyMonitorDefaults,
+	// matching the schema; the column does not accept zero.
+	RecoveryThreshold int
+
 	Method          string
 	ExpectedStatus  string
 	Keyword         string
@@ -94,7 +99,7 @@ func (db *DB) ListEnabledMonitors(ctx context.Context) ([]Monitor, error) {
 // that never asks for it cannot leak it into a log line, an error message or a
 // debug dump of a Monitor value.
 const monitorColumns = `
-	id, name, type, target, interval_s, timeout_s, retries,
+	id, name, type, target, interval_s, timeout_s, retries, recovery_threshold,
 	method, expected_status, keyword, keyword_mode, follow_redirects,
 	headers_json, body, ssl_warn_days, enabled, capture_response, repeat_after_s,
 	min_tls_version, push_token_prefix, push_interval_s, push_grace_s,
@@ -181,7 +186,7 @@ func scanMonitor(s scanner) (Monitor, error) {
 
 	err := s.Scan(
 		&m.ID, &m.Name, &m.Type, &m.Target,
-		&m.IntervalS, &m.TimeoutS, &m.Retries,
+		&m.IntervalS, &m.TimeoutS, &m.Retries, &m.RecoveryThreshold,
 		&m.Method, &m.ExpectedStatus, &keyword, &m.KeywordMode, &m.FollowRedirects,
 		&headersJSON, &body, &m.SSLWarnDays, &m.Enabled, &m.CaptureResponse, &m.RepeatAfterS,
 		&minTLS, &pushPrefix, &pushEvery, &pushGrace,
@@ -252,13 +257,13 @@ func (db *DB) CreateMonitor(ctx context.Context, m Monitor) (Monitor, error) {
 
 	res, err := tx.ExecContext(ctx, `
 		INSERT INTO monitors (
-			name, type, target, interval_s, timeout_s, retries,
+			name, type, target, interval_s, timeout_s, retries, recovery_threshold,
 			method, expected_status, keyword, keyword_mode, follow_redirects,
 			headers_json, body, ssl_warn_days, enabled, capture_response, repeat_after_s,
 			min_tls_version, push_token_hash, push_token_prefix, push_interval_s, push_grace_s,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		m.Name, m.Type, m.Target, m.IntervalS, m.TimeoutS, m.Retries,
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		m.Name, m.Type, m.Target, m.IntervalS, m.TimeoutS, m.Retries, m.RecoveryThreshold,
 		m.Method, m.ExpectedStatus, nullString(m.Keyword), m.KeywordMode, m.FollowRedirects,
 		headersJSON, nullString(m.Body), m.SSLWarnDays, m.Enabled, m.CaptureResponse, m.RepeatAfterS,
 		nullTLSVersion(m.MinTLSVersion), tokenHash, nullString(m.PushTokenPrefix),
@@ -300,6 +305,9 @@ func ApplyMonitorDefaults(m *Monitor) {
 	}
 	if m.TimeoutS == 0 {
 		m.TimeoutS = 10
+	}
+	if m.RecoveryThreshold == 0 {
+		m.RecoveryThreshold = 2
 	}
 	if m.Method == "" {
 		m.Method = "GET"
@@ -910,7 +918,7 @@ func (db *DB) updateMonitor(ctx context.Context, m Monitor, expected []int64) (M
 	// by accident — the old URL would stop working the moment it happened,
 	// silently, in whatever script holds it.
 	args := []any{
-		m.Name, m.Type, m.Target, m.IntervalS, m.TimeoutS, m.Retries,
+		m.Name, m.Type, m.Target, m.IntervalS, m.TimeoutS, m.Retries, m.RecoveryThreshold,
 		m.Method, m.ExpectedStatus, nullString(m.Keyword), m.KeywordMode,
 		m.FollowRedirects, headersJSON, nullString(m.Body), m.SSLWarnDays,
 		m.Enabled, m.CaptureResponse, m.RepeatAfterS,
@@ -988,6 +996,7 @@ func (db *DB) updateMonitor(ctx context.Context, m Monitor, expected []int64) (M
 const updateMonitorSetClause = `
 	UPDATE monitors SET
 		name = ?, type = ?, target = ?, interval_s = ?, timeout_s = ?, retries = ?,
+		recovery_threshold = ?,
 		method = ?, expected_status = ?, keyword = ?, keyword_mode = ?,
 		follow_redirects = ?, headers_json = ?, body = ?, ssl_warn_days = ?,
 		enabled = ?, capture_response = ?, repeat_after_s = ?,
