@@ -160,7 +160,7 @@ export const CHANNELS_UNKNOWN: ChannelState = { known: false };
 function channelsFromApi(value: unknown, fallback?: unknown, ruleValue?: unknown): ChannelState {
   if (!Array.isArray(value) || !value.every(isChannelRef)) return CHANNELS_UNKNOWN;
   // Absent means a server from before routing rules, which has none. Present
-  // but malformed is unknown: a rule we cannot read may be the one that
+  // but malformed is unknown: a rule that cannot be read may be the one that
   // routes this monitor, so nothing is claimed.
   const rules = ruleValue === undefined ? [] : rulesFromApi(ruleValue);
   if (rules === null) return CHANNELS_UNKNOWN;
