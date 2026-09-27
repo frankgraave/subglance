@@ -283,14 +283,16 @@ put the instance behind TLS first.
 ## How a failure becomes an alert
 
 A monitor does not go down because one check failed. Each monitor has a failure
-threshold (`retries`, default 2), and the state engine walks it through four
-states (`pending` means no check result yet; paused monitors are not measured):
+threshold (`retries`, default 2), and the state engine walks it through the
+states below (`pending` means no check result yet; paused monitors are not
+measured):
 
 | State | Meaning | Alerts? |
 |---|---|---|
 | `up` | Last check passed | — |
 | `warning` | Failing, threshold not yet reached | No |
 | `down` | Threshold reached, incident confirmed | Yes, once |
+| `recovering` | Confirmed incident, passing checks counting towards the recovery threshold | No |
 | `up` again | Recovered | Only if it was confirmed |
 
 Recovery follows the same rule in the other direction. A confirmed incident
@@ -301,8 +303,9 @@ fails again produces one alert and no false "resolved". A failure during that
 streak starts it over; it is the same incident, and nobody is alerted again.
 The incident's resolution time is the **first** pass of the streak that closed
 it, so the confirmation checks are not counted as downtime. The cost is that
-the "resolved" message arrives one check interval later. A threshold of 1 is the
-old behaviour: the first pass closes the incident.
+the "resolved" message arrives `recovery_threshold` − 1 check intervals after
+the first pass: one interval later at the default of 2, nine at 10. A threshold
+of 1 is the old behaviour: the first pass closes the incident.
 
 The streak is not kept across a restart. A monitor that was part-way through
 recovering starts counting again, so a restart can delay a "resolved" but never

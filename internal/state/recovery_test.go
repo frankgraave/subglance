@@ -1,6 +1,7 @@
 package state
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -236,5 +237,109 @@ func TestRecoveryReportsTheStreakOnlyWhileRecovering(t *testing.T) {
 	}
 	if _, _, ok := e.Recovery(1); ok {
 		t.Error("a resolved monitor reports a recovery streak")
+	}
+}
+
+// Every threshold the API accepts, 1 to 10: a confirmed incident spends
+// threshold-1 passes recovering, silently, and the pass that meets the
+// threshold resolves it, alerts, and dates the recovery to the first pass.
+func TestRecoveryThresholdTable(t *testing.T) {
+	for threshold := 1; threshold <= 10; threshold++ {
+		t.Run(fmt.Sprintf("threshold %d", threshold), func(t *testing.T) {
+			c := newClock()
+			e := New(Options{Now: c.Now, FlapThreshold: 99})
+
+			if tr := observe(e, c, false, 1, threshold); tr.Event != EventIncidentConfirmed {
+				t.Fatalf("first failure: event = %q, want confirmed", tr.Event)
+			}
+
+			var first time.Time
+			for pass := 1; pass < threshold; pass++ {
+				tr := observe(e, c, true, 1, threshold)
+				if pass == 1 {
+					first = tr.At
+				}
+				if tr.To != StatusRecovering || tr.Event != EventNone || tr.Notify {
+					t.Fatalf("pass %d: to=%q event=%q notify=%v, want recovering, no event, silent", pass, tr.To, tr.Event, tr.Notify)
+				}
+				if tr.ConsecutiveOKs != pass || tr.RecoveryThreshold != threshold {
+					t.Errorf("pass %d: oks=%d threshold=%d, want %d, %d", pass, tr.ConsecutiveOKs, tr.RecoveryThreshold, pass, threshold)
+				}
+			}
+
+			tr := observe(e, c, true, 1, threshold)
+			if threshold == 1 {
+				first = tr.At
+			}
+			if tr.To != StatusUp || tr.Event != EventIncidentResolved || !tr.Notify {
+				t.Fatalf("pass %d: to=%q event=%q notify=%v, want up, resolved, notify", threshold, tr.To, tr.Event, tr.Notify)
+			}
+			if !tr.RecoveredAt.Equal(first) {
+				t.Errorf("recovered at %v, want the first pass at %v", tr.RecoveredAt, first)
+			}
+		})
+	}
+}
+
+// Recovery while flapping suppression is active. A recovering pass has no
+// notification to hold back and must not end the suppression; the resolve at
+// the end of the streak is held back like any other flip; and a failure that
+// breaks the streak neither alerts nor counts as a flip.
+func TestRecoveryWhileFlapping(t *testing.T) {
+	type step struct {
+		name                         string
+		ok                           bool
+		to                           Status
+		event                        Event
+		notify, suppressed, flapping bool
+	}
+	cases := []struct {
+		name  string
+		steps []step
+	}{
+		{
+			name: "enter recovery and resolve",
+			steps: []step{
+				{"pass enters recovery", true, StatusRecovering, EventNone, false, false, true},
+				{"pass meets the threshold", true, StatusUp, EventIncidentResolved, false, true, true},
+			},
+		},
+		{
+			name: "enter recovery and fall back",
+			steps: []step{
+				{"pass enters recovery", true, StatusRecovering, EventNone, false, false, true},
+				{"failure leaves recovery", false, StatusDown, EventNone, false, false, true},
+				{"pass starts a new streak", true, StatusRecovering, EventNone, false, false, true},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := newClock()
+			e := New(Options{Now: c.Now, FlapWindow: time.Hour, FlapThreshold: 3})
+
+			// Down, resolved, down again: the third flip trips flapping and
+			// leaves the monitor down with a confirmed incident.
+			observe(e, c, false, 1, 2)
+			observe(e, c, true, 1, 2)
+			observe(e, c, true, 1, 2)
+			if tr := observe(e, c, false, 1, 2); tr.To != StatusDown || !tr.Flapping {
+				t.Fatalf("setup: to=%q flapping=%v, want down and flapping", tr.To, tr.Flapping)
+			}
+			flips := len(e.state[1].changes)
+
+			for _, s := range tc.steps {
+				tr := observe(e, c, s.ok, 1, 2)
+				if tr.To != s.to || tr.Event != s.event || tr.Notify != s.notify || tr.Suppressed != s.suppressed || tr.Flapping != s.flapping {
+					t.Fatalf("%s: to=%q event=%q notify=%v suppressed=%v flapping=%v, want %q, %q, %v, %v, %v",
+						s.name, tr.To, tr.Event, tr.Notify, tr.Suppressed, tr.Flapping, s.to, s.event, s.notify, s.suppressed, s.flapping)
+				}
+				if s.event == EventNone && len(e.state[1].changes) != flips {
+					t.Errorf("%s: flips = %d, want %d: entering or leaving recovery is not a flip", s.name, len(e.state[1].changes), flips)
+				}
+				flips = len(e.state[1].changes)
+			}
+		})
 	}
 }
