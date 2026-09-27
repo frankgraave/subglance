@@ -2,6 +2,7 @@ package checker
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -304,5 +305,86 @@ func TestReturnedHeadersLeaveTheErrorAlone(t *testing.T) {
 	res := testChecker().Check(context.Background(), monitorWithSecrets(home.URL+"/start"))
 	if res.Error != "status 503, expected 200-299" {
 		t.Errorf("error = %q", res.Error)
+	}
+}
+
+// defaultPortChecker is a test checker whose dialer sends example.com:80 to
+// plain and example.com:443 to tlsSrv, so a redirect between the two default
+// ports can run end to end: binding 80 and 443 needs privileges a test run
+// does not have, and example.com is a name the httptest certificate covers.
+func defaultPortChecker(t *testing.T, plain, tlsSrv *httptest.Server) *HTTPChecker {
+	t.Helper()
+	c := testChecker()
+	routes := map[string]string{
+		"example.com:80":  plain.Listener.Addr().String(),
+		"example.com:443": tlsSrv.Listener.Addr().String(),
+	}
+	var d net.Dialer
+	c.transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		to, ok := routes[addr]
+		if !ok {
+			t.Errorf("dial to unexpected address %s", addr)
+			return nil, &net.OpError{Op: "dial", Net: network, Err: net.UnknownNetworkError(addr)}
+		}
+		return d.DialContext(ctx, network, to)
+	}
+	pool := tlsSrv.Client().Transport.(*http.Transport).TLSClientConfig.RootCAs
+	c.transport.TLSClientConfig = c.transport.TLSClientConfig.Clone()
+	c.transport.TLSClientConfig.RootCAs = pool
+	return c
+}
+
+// The one cross-scheme hop allowed to keep the headers, run over real TLS:
+// http://example.com to https://example.com, both on their default ports.
+// TestSameOrigin covers the rule; this covers the rule being applied to a
+// request that actually changed scheme and connection.
+func TestCustomHeadersFollowAnUpgradeToHTTPS(t *testing.T) {
+	var got seen
+	secure := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got.record(r)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer secure.Close()
+	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "https://example.com/end", http.StatusMovedPermanently)
+	}))
+	defer plain.Close()
+
+	res := defaultPortChecker(t, plain, secure).Check(context.Background(), monitorWithSecrets("http://example.com/start"))
+	if !res.OK {
+		t.Fatalf("check failed: %s", res.Error)
+	}
+	for _, h := range secretHeaders {
+		if got.get(h) == "" {
+			t.Errorf("%s was dropped on an http to https upgrade of the same host", h)
+		}
+	}
+	if got.get("Authorization") != "Bearer secret" {
+		t.Errorf("Authorization after the upgrade = %q, want Bearer secret", got.get("Authorization"))
+	}
+}
+
+// The reverse hop, https down to http on the same host, is another origin: the
+// headers would cross the network in clear text.
+func TestCustomHeadersStayOffADowngradeToHTTP(t *testing.T) {
+	var got seen
+	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got.record(r)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer plain.Close()
+	secure := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://example.com/end", http.StatusFound)
+	}))
+	defer secure.Close()
+
+	res := defaultPortChecker(t, plain, secure).Check(context.Background(), monitorWithSecrets("https://example.com/start"))
+	if !res.OK {
+		t.Fatalf("check failed: %s", res.Error)
+	}
+	for _, h := range secretHeaders {
+		if v := got.get(h); v != "" {
+			t.Errorf("%s reached the http origin after a downgrade: %q", h, v)
+		}
 	}
 }
