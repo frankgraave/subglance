@@ -438,6 +438,7 @@ export default function App() {
           <Workbench />
         ) : onSettings ? (
           <Settings canAdmin={session.state === "signedIn" && session.user.role === "admin"}
+            userId={session.state === "signedIn" ? session.user.id : undefined}
             role={session.state === "signedIn" ? session.user.role : "viewer"} />
         ) : onIncidents ? (
           <LiveIncidentsRoot client={queryClient} />
