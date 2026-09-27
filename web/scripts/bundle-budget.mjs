@@ -217,8 +217,18 @@ const budgets = {
    * form with a role and a password floor, and a shape check that refuses a
    * list with an unknown role (about 1,250 bytes). No new dependency and no new
    * CSS. 149 leaves 500 bytes.
+   *
+   * 149 -> 151 KiB gzip for SUB-28 (the reset card and the backup card), both
+   * merged onto develop 6beecaf after the users card took the room the 149
+   * above left. The reset branch measures 152,890 bytes of entry JS (Node gzip,
+   * level 6), 314 over 149; the backup branch 152,974, 398 over. Each card
+   * costs about 850 bytes: reset is a typed-phrase gate, a confirm and a shape
+   * check; backup is a status readout for a scheduled job and a shape check.
+   * No new dependency. Both branches carry this same edit, so whichever merges
+   * second meets an identical change instead of a conflict. Together they come
+   * to about 153,800 bytes; 151 leaves roughly 800.
    */
-  js: 149,
+  js: 151,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *
