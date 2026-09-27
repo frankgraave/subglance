@@ -68,6 +68,10 @@ func run() error {
 	}))
 	defer target.Close()
 	m, err := db.CreateMonitor(ctx, store.Monitor{
+		// One pass closes an incident: this fixture is not about the
+		// recovery threshold, which recovery_test.go covers.
+		RecoveryThreshold: 1,
+
 		Name: "Response diagnostics", Type: "http", Target: target.URL,
 		Enabled: true, CaptureResponse: true, Retries: 1,
 	})
