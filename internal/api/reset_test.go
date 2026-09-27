@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/frankgraave/subglance/internal/store"
 )
@@ -66,6 +67,12 @@ func TestResetInstance(t *testing.T) {
 	})
 
 	t.Run("the exact phrase empties the instance and keeps the session", func(t *testing.T) {
+		// Seed both per-monitor cooldowns, so the reset has something to
+		// forget.
+		now := time.Now()
+		srv.manualChecks.reserve(1, now, time.Minute)
+		srv.pushReports.reserve(1, now, time.Minute)
+
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, sessionRequest(http.MethodPost, "/api/v1/instance/reset", `{"confirm":"DELETE ALL DATA"}`, cookie))
 		if rec.Code != http.StatusOK {
@@ -91,6 +98,12 @@ func TestResetInstance(t *testing.T) {
 		}
 		if len(monitors) != 0 {
 			t.Errorf("%d monitors after a reset, want 0", len(monitors))
+		}
+		if n := len(srv.manualChecks.last); n != 0 {
+			t.Errorf("%d manual-check cooldowns after a reset, want 0", n)
+		}
+		if n := len(srv.pushReports.last); n != 0 {
+			t.Errorf("%d push cooldowns after a reset, want 0", n)
 		}
 	})
 }

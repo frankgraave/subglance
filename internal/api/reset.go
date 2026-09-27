@@ -43,10 +43,12 @@ func (s *Server) handleResetInstance(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "could not reset the instance; nothing was deleted")
 		return
 	}
-	// Every monitor id the cooldown knew is gone. Clearing it keeps a new
-	// monitor that reuses nothing from inheriting a stale entry, and keeps
-	// the map from holding ids that no longer exist.
+	// Every monitor id both per-monitor cooldowns knew is gone. Clearing them
+	// keeps the maps from holding ids that no longer exist, the same as
+	// deleting one monitor does. previewChecks is keyed on users, who survive
+	// a reset, so it stays.
 	s.manualChecks.clear()
+	s.pushReports.clear()
 
 	// Logged at warn with who did it: this is the one line an operator will
 	// go looking for when an instance is unexpectedly empty.

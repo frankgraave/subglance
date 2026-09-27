@@ -62,7 +62,7 @@ it("shows the server's refusal and says nothing was deleted when unreachable", a
   render(<QueryClientProvider client={new QueryClient()}><ResetInstanceCard /></QueryClientProvider>);
   fireEvent.change(field(), { target: { value: "DELETE ALL DATA" } });
   fireEvent.click(button());
-  expect((await screen.findByRole("alert")).textContent).toMatch(/Nothing was deleted/);
+  expect((await screen.findByRole("alert")).textContent).toMatch(/may or may not have happened/);
 });
 
 it("is on the settings page for an administrator only", () => {

@@ -57,7 +57,7 @@ export function ResetInstanceCard() {
     } catch (failure) {
       setError(failure instanceof ApiError
         ? failure.message
-        : "Could not reach SubGlance. Nothing was deleted; check your connection and try again.");
+        : "No answer from SubGlance, so the reset may or may not have happened. Reload the page to see what is left before trying again.");
     } finally {
       setBusy(false);
     }
@@ -87,7 +87,7 @@ export function ResetInstanceCard() {
           </div>
           {error && <p className="auth-error" role="alert">{error}</p>}
           <div>
-            <button className="add-button" type="submit" disabled={!matches || busy}>
+            <button className="add-button inv-act--danger" type="submit" disabled={!matches || busy}>
               {busy ? "Deleting…" : "Delete all data"}
             </button>
           </div>
