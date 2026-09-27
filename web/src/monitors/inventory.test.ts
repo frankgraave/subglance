@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   canCheckNow,
   describeChannels,
+  routesNowhere,
   describeInventory,
   filterByType,
   intervalOf,
@@ -99,6 +100,41 @@ describe("typeLabel", () => {
     // render an unexplained word in a column whose other values are a fixed
     // vocabulary.
     expect(typeLabel("gopher")).toBe("UNKNOWN");
+  });
+});
+
+describe("routing rules on the channel state (SUB-147)", () => {
+  const base = {
+    id: 7, name: "auth", type: "http", target: "https://auth.example.com",
+    interval_s: 60, timeout_s: 10, enabled: true, status: "up",
+    created_at: "2026-09-01T10:00:00Z",
+  };
+  const rule = { rule_id: 1, tag_key: "env", tag_value: "prod", channels: [{ id: 4, name: "Pager" }] };
+
+  it("names each rule-routed channel with its rule, after the monitor's own", () => {
+    const m = inventoryFromApi({ ...base, channels: [{ id: 2, name: "Chat" }], rule_channels: [rule] } as Parameters<typeof inventoryFromApi>[0]);
+    expect(describeChannels(m.channels)).toBe("Chat, Pager via env:prod");
+    expect(routesNowhere(m.channels)).toBe(false);
+  });
+
+  it("does not believe a default sent beside a rule route", () => {
+    const m = inventoryFromApi({ ...base, channels: [], rule_channels: [rule], default_channel: { id: 3, name: "Ops" } } as Parameters<typeof inventoryFromApi>[0]);
+    expect(m.channels).toMatchObject({ known: true, names: [] });
+    expect(m.channels.known && m.channels.fallback).toBeFalsy();
+    expect(describeChannels(m.channels)).toBe("Pager via env:prod");
+  });
+
+  it("claims nothing when the rule list is malformed", () => {
+    for (const bad of [null, [{ tag_key: "env" }], [{ ...rule, channels: [{ id: 0, name: "x" }] }]]) {
+      const m = inventoryFromApi({ ...base, channels: [], rule_channels: bad } as unknown as Parameters<typeof inventoryFromApi>[0]);
+      expect(m.channels).toEqual({ known: false });
+    }
+  });
+
+  it("treats an absent rule list as no rules, so an older server still reads", () => {
+    const m = inventoryFromApi({ ...base, channels: [] } as Parameters<typeof inventoryFromApi>[0]);
+    expect(routesNowhere(m.channels)).toBe(true);
+    expect(describeChannels(m.channels)).toBe("none");
   });
 });
 
