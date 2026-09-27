@@ -177,6 +177,13 @@ func (c *cooldown) reserve(key int64, now time.Time, window time.Duration) (time
 	return 0, true
 }
 
+// clear drops every cooldown, for when every monitor is gone at once.
+func (c *cooldown) clear() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.last = nil
+}
+
 // forget drops a key's cooldown. Used when a monitor is deleted, so the map
 // cannot grow without bound across a long-lived process.
 func (c *cooldown) forget(key int64) {

@@ -894,6 +894,16 @@ const sizeExceptions = new Map<string, string>([
 const BREAKPOINTS = new Set(["640px", "641px", "900px"]);
 
 /**
+ * Container rungs, kept apart from the viewport ladder on purpose.
+ *
+ * An `@container` width is the width of one list, measured from that list's
+ * own row, and means nothing as a window width. One shared set would let
+ * `@media (max-width: 836px)` through as a "ladder" value, which is the drift
+ * this guard exists to stop, arriving through the side door (SUB-149).
+ */
+const CONTAINER_BREAKPOINTS = new Set(["836px", "638px"]);
+
+/**
  * The top-level parenthesised conditions of a media query, balanced.
  *
  * Regex cannot count brackets, and a media condition may legitimately
@@ -939,9 +949,9 @@ function mediaConditions(query: string): string[] {
  * value that nests brackets survives extraction whole and can be compared
  * against the ladder instead of being silently truncated past checking.
  */
-function mediaWidths(css: string): string[] {
+function mediaWidths(css: string, rule: RegExp = /@media[^{]+/g): string[] {
   const found: string[] = [];
-  for (const query of css.matchAll(/@media[^{]+/g)) {
+  for (const query of css.matchAll(rule)) {
     for (const condition of mediaConditions(query[0])) {
       const legacy = condition.match(/^\s*(?:min-|max-)?width\s*:\s*(.+)$/);
       if (legacy) {
@@ -1099,6 +1109,30 @@ describe("tokens.css is the only source of size", () => {
     ]);
   });
 
+  it("uses only container rungs in container queries", () => {
+    // Read by the same parser as the media queries, so the range syntax a
+    // container condition is usually written in (`width < 836px`) is read
+    // whole rather than missed.
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (!file.endsWith(".css")) continue;
+      const css = stripComments(readFileSync(file, "utf8"));
+      for (const value of mediaWidths(css, /@container[^{]+/g)) {
+        if (CONTAINER_BREAKPOINTS.has(value)) continue;
+        offenders.push(`${relative(repoRoot, file)}: @container ... ${value}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("reads a container condition's width, not only its name", () => {
+    const off = (css: string) =>
+      mediaWidths(css, /@container[^{]+/g).filter((v) => !CONTAINER_BREAKPOINTS.has(v));
+    expect(off("@container inv-list (width < 836px) {}")).toEqual([]);
+    expect(off("@container inv-list (width < 835px) {}")).toEqual(["835px"]);
+    expect(off("@container (max-width: 50rem) {}")).toEqual(["50rem"]);
+  });
+
   it("never writes a breakpoint as a custom property, which silently never matches", () => {
     // Not a style preference: the query is dropped entirely, so the guarded
     // layout simply stops existing at that width with nothing to show for it.
@@ -1106,7 +1140,7 @@ describe("tokens.css is the only source of size", () => {
     for (const file of sourceFiles(webSrc)) {
       if (!file.endsWith(".css")) continue;
       const css = stripComments(readFileSync(file, "utf8"));
-      for (const match of css.matchAll(/@media[^{]+/g)) {
+      for (const match of css.matchAll(/@(?:media|container)[^{]+/g)) {
         if (!match[0].includes("var(--")) continue;
         offenders.push(`${relative(repoRoot, file)}: ${match[0].trim()}`);
       }
@@ -1120,7 +1154,7 @@ describe("tokens.css is the only source of size", () => {
         /--bp-[a-z-]+:\s*([^;]+);/g,
       )].map(([, value]) => value.trim()),
     );
-    for (const breakpoint of BREAKPOINTS) {
+    for (const breakpoint of [...BREAKPOINTS, ...CONTAINER_BREAKPOINTS]) {
       expect(declared, `${breakpoint} is enforced but not documented`).toContain(
         breakpoint,
       );
