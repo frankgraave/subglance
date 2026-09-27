@@ -12,6 +12,7 @@ import { BackupCard } from "../backup/Backup";
 import { ResetInstanceCard } from "../reset/ResetInstance";
 import { UsersCard } from "../users/Users";
 import { TokensCard } from "../tokens/Tokens";
+import { DisplayCard, type DisplayPreferences } from "./DisplayCard";
 
 /**
  * One settings section: the anchor it answers to, the name the index shows,
@@ -125,7 +126,11 @@ function useInitialFragment() {
  * The settings page: one card per section, in one column, with an index of
  * the sections beside it. `/settings#<section>` is a real address.
  */
-export function Settings({ client, canAdmin = false, role = canAdmin ? "admin" : "viewer", userId }: { client?: QueryClient; canAdmin?: boolean; role?: string; userId?: number }) {
+export function Settings({ client, canAdmin = false, role = canAdmin ? "admin" : "viewer", userId, display }: {
+  client?: QueryClient; canAdmin?: boolean; role?: string; userId?: number;
+  /** The browser's display preferences. Without them the section is left out. */
+  display?: DisplayPreferences;
+}) {
   // Like the live pages, Settings owns a provider at its route boundary.
   const [fallback] = useState(createQueryClient);
   const [query, setQuery] = useState("");
@@ -135,6 +140,10 @@ export function Settings({ client, canAdmin = false, role = canAdmin ? "admin" :
       body: <Card title="Account" icon={<SettingsIcon />} headingLevel={1}>
         <Panel label="Password"><ChangePassword /></Panel>
       </Card> },
+    // Second, beside the account: both are about the person at this browser,
+    // and every section after them is about the instance.
+    ...(display ? [{ id: "display", label: "Display", keywords: "display appearance theme light dark auto system layout rows cards compact wall columns per row browser preferences",
+      body: <DisplayCard prefs={display} /> }] : []),
     // Only an administrator can list accounts, so nobody else is shown a card
     // that could only ever say "not allowed".
     ...(canAdmin ? [{ id: "users", label: "Users", keywords: "users accounts roles admin editor viewer people access",

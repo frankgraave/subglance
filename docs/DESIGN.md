@@ -1410,8 +1410,7 @@ Three decisions grouping could not be built without:
 
 **The sidebar does not advertise what does not exist (SUB-64).** Dashboard,
 Monitors, Incidents, Notifications and Settings now link to working screens.
-Settings currently offers the password card, not placeholders for its remaining
-sections. Future unbuilt destinations must be plainly unavailable — dimmed,
+Settings has no placeholder sections: every card on it works. Future unbuilt destinations must be plainly unavailable — dimmed,
 not pressable, and saying "Soon" in words rather than by colour alone. A badge
 claiming open incidents that goes nowhere is indistinguishable from a real alert.
 
@@ -2112,7 +2111,9 @@ The sidebar advertises five destinations; two exist.
   have no design; today that would be 20 individual clicks.
 - **Notifications** — channel configuration (Discord, Slack, Telegram, webhook,
   SMTP), a test button, and a per-channel routing rule.
-- **Settings** — users, roles, API keys, retention.
+- **Settings** — built (SUB-28). Display preferences (theme, layout, cards per
+  row) stay in the browser's `localStorage` by decision, and the section says
+  so; they do not follow the account.
 
 ### Smaller, but they will come up
 
