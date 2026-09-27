@@ -161,6 +161,7 @@ export function StatusWall({
                 <Led
                   status={monitor.status}
                   stale={stale}
+                  recovery={monitor.recovery}
                   className="wall-card-led"
                 />
                 <span className="wall-card-name">{monitor.name}</span>

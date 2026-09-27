@@ -21,7 +21,24 @@ export type { Beat };
  * belongs on this side of the boundary — a paused monitor that last checked
  * green is not "up", it is "not being watched".
  */
-export type MonitorStatus = "up" | "down" | "warning" | "pending" | "paused" | "waiting";
+export type MonitorStatus =
+  | "up"
+  | "down"
+  | "recovering"
+  | "warning"
+  | "pending"
+  | "paused"
+  | "waiting";
+
+/**
+ * The passing streak of a recovering monitor: `passes` checks in a row so far,
+ * out of the `threshold` that closes its confirmed incident.
+ *
+ * Recovering is still an open outage — nobody has been told it is over — so
+ * the streak is what separates "down" from "on its way back" without claiming
+ * anything the server has not.
+ */
+export type Recovery = { passes: number; threshold: number };
 
 /**
  * The reporting window of a push monitor.
@@ -68,6 +85,8 @@ export type Monitor = {
   lastCheck: number | null;
   /** Failure reason for the last check, when there was one. */
   error?: string;
+  /** Set only while `status` is `recovering`: how far the streak has got. */
+  recovery?: Recovery;
   /**
    * Set for a push monitor, absent for everything else.
    *
@@ -129,8 +148,12 @@ export type ApiMonitor = {
   headers?: Record<string, string>;
   body?: string;
   ssl_warn_days?: number;
+  /** Passing checks in a row that close a confirmed incident. Detail read only. */
+  recovery_threshold?: number;
   enabled: boolean;
-  status: "up" | "pending" | "warning" | "down";
+  status: "up" | "pending" | "warning" | "down" | "recovering";
+  /** The passing streak; the server sends it only with `recovering`. */
+  recovery?: { passes?: unknown; threshold?: unknown };
   last_check?: string | null;
   latency_ms?: number | null;
   status_code?: number;
@@ -271,6 +294,20 @@ function statusFromApi(
   return api.status;
 }
 
+/**
+ * A recovery streak from the wire, or undefined when it is missing or not a
+ * pair of positive whole numbers. Validated rather than trusted: a lamp that
+ * says "Recovering (NaN of undefined)" is worse than one that says
+ * "Recovering".
+ */
+export function recoveryFromWire(raw: unknown): Recovery | undefined {
+  if (raw === null || typeof raw !== "object") return undefined;
+  const { passes, threshold } = raw as { passes?: unknown; threshold?: unknown };
+  if (!Number.isInteger(passes) || !Number.isInteger(threshold)) return undefined;
+  if ((passes as number) < 1 || (threshold as number) < 1) return undefined;
+  return { passes: passes as number, threshold: threshold as number };
+}
+
 /** Translates one API monitor into the render model. Pure. */
 export function fromApi(api: ApiMonitor): Monitor {
   const push = pushFromApi(api);
@@ -292,6 +329,11 @@ export function fromApi(api: ApiMonitor): Monitor {
     beats: (api.heartbeats ?? []).map(beatFromApi),
     lastCheck: toUnixMs(api.last_check),
     error: api.error,
+    // The streak only for a monitor the server says is recovering.
+    recovery:
+      api.enabled && api.status === "recovering"
+        ? recoveryFromWire(api.recovery)
+        : undefined,
     ...(push !== undefined ? { push } : {}),
     // Absent and empty both mean "no tags", so they collapse to one shape
     // and no consumer needs a null check.

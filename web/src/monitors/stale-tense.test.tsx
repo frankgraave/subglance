@@ -51,7 +51,7 @@ const T0 = 1_700_000_000_000;
 const NOW = T0 + 240_000;
 const WIDTH = 168;
 
-const ALL: MonitorStatus[] = ["up", "down", "warning", "pending", "paused", "waiting"];
+const ALL: MonitorStatus[] = ["up", "down", "recovering", "warning", "pending", "paused", "waiting"];
 
 /**
  * Names and targets that contain no status word.
@@ -64,6 +64,7 @@ const IDS: Record<MonitorStatus, string> = {
   up: "alpha",
   down: "bravo",
   warning: "foxtrot",
+  recovering: "golf",
   pending: "charlie",
   paused: "delta",
   waiting: "echo",

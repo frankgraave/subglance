@@ -52,6 +52,10 @@ func recordingRunner(t *testing.T, db *store.DB) *Runner {
 func captureMonitorRow(t *testing.T, db *store.DB) store.Monitor {
 	t.Helper()
 	m, err := db.CreateMonitor(context.Background(), store.Monitor{
+		// One pass closes an incident: this test is not about the
+		// recovery threshold, which recovery_test.go covers.
+		RecoveryThreshold: 1,
+
 		Name: "captures", Type: "http", Target: "https://example.com/health",
 		Enabled: true, CaptureResponse: true, Retries: 2,
 	})
@@ -243,6 +247,10 @@ func TestOnlyAStoredSnapshotSpendsTheBudget(t *testing.T) {
 				// One retry, so every failure confirms and every recovery
 				// resolves: that is what a flip is.
 				m, err := db.CreateMonitor(context.Background(), store.Monitor{
+					// One pass closes an incident: this test is not about the
+					// recovery threshold, which recovery_test.go covers.
+					RecoveryThreshold: 1,
+
 					Name: "flaps", Type: "http", Target: "https://example.com/health",
 					Enabled: true, CaptureResponse: true, Retries: 1,
 				})

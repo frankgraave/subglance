@@ -1,4 +1,4 @@
-import type { MonitorStatus } from "./types";
+import type { MonitorStatus, Recovery } from "./types";
 import { statusWord } from "./format";
 import { LED_STATE } from "./ledState";
 
@@ -42,6 +42,8 @@ export type LedProps = {
    * the reverse of who DESIGN.md §2.3 exists for.
    */
   stale?: boolean;
+  /** A recovering monitor's streak, spoken as "Recovering (1 of 2)". */
+  recovery?: Recovery;
   className?: string;
 };
 
@@ -50,9 +52,10 @@ export function Led({
   labelled = true,
   hideLabel = true,
   stale = false,
+  recovery,
   className,
 }: LedProps) {
-  const label = statusWord(status, stale);
+  const label = statusWord(status, stale, recovery);
   const lamp = (
     <span
       className="led"

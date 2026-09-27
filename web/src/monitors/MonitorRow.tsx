@@ -78,7 +78,7 @@ function MonitorRowImpl({
        * would be.
        */}
       <td className="mon-cell mon-cell--led">
-        <Led status={status} stale={stale} />
+        <Led status={status} stale={stale} recovery={monitor.recovery} />
       </td>
 
       {/* scope="row" makes the name the row's header, so a screen reader
@@ -159,6 +159,9 @@ export const MonitorRow = memo(MonitorRowImpl, (prev, next) => {
     a.id === b.id &&
     a.name === b.name &&
     a.status === b.status &&
+    // The streak is part of the status word ("Recovering (1 of 2)").
+    a.recovery?.passes === b.recovery?.passes &&
+    a.recovery?.threshold === b.recovery?.threshold &&
     a.target === b.target &&
     a.latencyMs === b.latencyMs &&
     a.uptime24h === b.uptime24h &&

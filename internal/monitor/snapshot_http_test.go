@@ -29,6 +29,10 @@ func TestSnapshotDiagnosticsFromRealHTTPChecks(t *testing.T) {
 	db := testDB(t)
 	r := flappingRunner(t, db)
 	m, err := db.CreateMonitor(t.Context(), store.Monitor{
+		// One pass closes an incident: this test is not about the
+		// recovery threshold, which recovery_test.go covers.
+		RecoveryThreshold: 1,
+
 		Name: "response diagnostics", Type: "http", Target: target.URL,
 		Enabled: true, CaptureResponse: true, Retries: 1,
 	})

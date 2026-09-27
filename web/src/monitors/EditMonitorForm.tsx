@@ -28,6 +28,7 @@ const LABELS: Record<string, string> = {
   name: "Name", target: "Target", interval_s: "Interval (seconds)", timeout_s: "Timeout (seconds)",
   method: "HTTP method", expected_status: "Expected status", keyword: "Keyword", keyword_mode: "Keyword rule",
   headers: "Headers (JSON)", body: "Request body", ssl_warn_days: "Certificate warning (days)",
+  recovery_threshold: "Passing checks to recover",
   tags: "Tags", push_interval_s: "Should report every (seconds)", push_grace_s: "Allow it to be late by (seconds)",
 };
 
@@ -45,6 +46,9 @@ function valuesFor(monitor: InventoryMonitor): Record<string, string> {
     values.target = monitor.target;
     values.interval_s = String(monitor.intervalS);
     if (monitor.timeoutS !== null) values.timeout_s = String(monitor.timeoutS);
+    // Push monitors close on one report whatever is stored, so the field is
+    // only offered where it changes something.
+    if (monitor.recoveryThreshold !== undefined) values.recovery_threshold = String(monitor.recoveryThreshold);
     for (const [key, value] of Object.entries(monitor.checkSettings ?? {})) {
       if (key === "min_tls_version") continue; // The dedicated floor value also represents absence.
       values[key] = key === "headers" ? JSON.stringify(value, null, 2) : String(value);
@@ -116,7 +120,7 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload }: EditMon
     if (tags === null) { reject("Tags are written key:value, one per line — for example env:prod.", "tags"); return null; }
     const parsed: Record<string, unknown> = { ...values, name: values.name.trim(), tags };
     if (!monitor.push) parsed.target = values.target.trim();
-    for (const [key, min, max] of [["interval_s", 20, 86400], ["timeout_s", 1, 120], ["push_interval_s", 60, 2592000], ["push_grace_s", 0, 2592000], ["ssl_warn_days", 1, 365]] as const) {
+    for (const [key, min, max] of [["interval_s", 20, 86400], ["recovery_threshold", 1, 10], ["timeout_s", 1, 120], ["push_interval_s", 60, 2592000], ["push_grace_s", 0, 2592000], ["ssl_warn_days", 1, 365]] as const) {
       if (!(key in values)) continue;
       const number = Number(values[key]);
       if (values[key].trim() === "" || !Number.isInteger(number) || number < min || number > max) {
@@ -201,7 +205,8 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload }: EditMon
       {field("name")}
       <p className="add-help">Check type: {monitor.type.toUpperCase()}. Check type stays fixed to preserve this monitor’s identity and push token.</p>
       {field("target")}
-      <div className="add-grid">{field("interval_s")}{field("timeout_s")}{field("push_interval_s")}{field("push_grace_s")}</div>
+      <div className="add-grid">{field("interval_s")}{field("timeout_s")}{field("recovery_threshold")}{field("push_interval_s")}{field("push_grace_s")}</div>
+      {"recovery_threshold" in values && <p className="add-help">An open incident closes, and “resolved” is sent, only after this many passing checks in a row. 1 closes on the first pass.</p>}
       {!monitor.push && <>
         {field("method")}{field("expected_status")}{field("keyword")}{field("keyword_mode")}
         {"follow_redirects" in values && <div className="add-field">

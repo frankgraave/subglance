@@ -35,6 +35,11 @@ const defaultPushSweep = 15 * time.Second
 // why someone monitors a backup.
 const pushFailureThreshold = 1
 
+// pushRecoveryThreshold is 1 for the same reason. A push is not a sample
+// either: a job reporting success is the job saying it worked, and a nightly
+// job would otherwise need a second good night before its incident closed.
+const pushRecoveryThreshold = 1
+
 // PushReport is one incoming ping on a push URL.
 type PushReport struct {
 	// OK is what the job claims about itself. False when the script
@@ -97,6 +102,7 @@ func (r *Runner) RecordPush(ctx context.Context, m store.Monitor, rep PushReport
 func pushCheckerMonitor(m store.Monitor) checker.Monitor {
 	cm := toCheckerMonitor(m)
 	cm.Retries = pushFailureThreshold
+	cm.RecoveryThreshold = pushRecoveryThreshold
 	return cm
 }
 

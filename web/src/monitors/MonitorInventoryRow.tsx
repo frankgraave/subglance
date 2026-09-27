@@ -127,7 +127,7 @@ function MonitorInventoryRowImpl({
             settings the page is actually for — but it is in the accessible
             name of nothing and in the row's text for everyone using a screen
             reader. */}
-        <Led status={monitor.status} className="inv-led" />
+        <Led status={monitor.status} recovery={monitor.recovery} className="inv-led" />
 
         <div className="inv-main">
           <span className="inv-name">
@@ -354,7 +354,7 @@ function MonitorInventoryRowImpl({
             page as the eye does rather than a run of unlabelled columns. The
             status word is here rather than only in the lamp because this is
             the sentence that is actually read. */}
-        Status: {statusWord(monitor.status)}. Checked every{" "}
+        Status: {statusWord(monitor.status, false, monitor.recovery)}. Checked every{" "}
         {formatDuration(intervalOf(monitor))}. Channels: {channelText}.
       </span>
     </li>

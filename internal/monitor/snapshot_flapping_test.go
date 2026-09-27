@@ -99,6 +99,10 @@ func TestCaptureResumesAfterTheFlappingSettles(t *testing.T) {
 	})
 
 	m, err := db.CreateMonitor(context.Background(), store.Monitor{
+		// One pass closes an incident: this test is not about the
+		// recovery threshold, which recovery_test.go covers.
+		RecoveryThreshold: 1,
+
 		Name: "settles", Type: "http", Target: "https://example.com/health",
 		Enabled: true, CaptureResponse: true, Retries: 1,
 	})

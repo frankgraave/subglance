@@ -14,7 +14,8 @@
  * would silently stop all live updates.
  */
 
-import { toUnixMs } from "../monitors/types";
+import { recoveryFromWire, toUnixMs } from "../monitors/types";
+import type { Recovery } from "../monitors/types";
 
 /** `hello`, the first frame of every stream. */
 export type HelloEvent = {
@@ -54,6 +55,12 @@ export type HeartbeatEvent = {
   latencyMs: number | null;
   statusCode?: number;
   error?: string;
+  /**
+   * Present only on a pass that left a confirmed incident open. The pass is
+   * assessed `up` (it is not downtime), so this is the one thing that stops
+   * a live client reading it as the end of the outage.
+   */
+  recovery?: Recovery;
 };
 
 /** A monitor changing state. Rare, and the only frame worth announcing. */
@@ -134,6 +141,7 @@ export function parseEvent(type: string, data: string): LiveEvent | null {
         latencyMs: num(payload.latency_ms),
         statusCode: num(payload.status_code) ?? undefined,
         error: str(payload.error),
+        recovery: recoveryFromWire(payload.recovery),
       };
     }
     case "status": {

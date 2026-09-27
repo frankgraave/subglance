@@ -205,7 +205,10 @@
 }
 .mon-dashboard[data-conn="stale"] .mon-row[data-status="warning"] > :first-child,
 .mon-dashboard[data-conn="stale"] .mon-card[data-status="warning"],
-.mon-dashboard[data-conn="stale"] .mon-line[data-status="warning"] {
+.mon-dashboard[data-conn="stale"] .mon-line[data-status="warning"],
+.mon-dashboard[data-conn="stale"] .mon-row[data-status="recovering"] > :first-child,
+.mon-dashboard[data-conn="stale"] .mon-card[data-status="recovering"],
+.mon-dashboard[data-conn="stale"] .mon-line[data-status="recovering"] {
   border-left-color: var(--warn-drained);
   transition: border-left-color var(--dur-withdraw) var(--ease);
 }
@@ -233,7 +236,8 @@
   border-color: var(--warn-drained);
   transition: border-color var(--dur-withdraw) var(--ease);
 }
-.mon-detail[data-conn="stale"] .mon-detail-status[data-status="warning"] {
+.mon-detail[data-conn="stale"] .mon-detail-status[data-status="warning"],
+.mon-detail[data-conn="stale"] .mon-detail-status[data-status="recovering"] {
   border-color: var(--warn-drained);
   transition: border-color var(--dur-withdraw) var(--ease);
 }

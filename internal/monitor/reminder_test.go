@@ -35,6 +35,9 @@ func downMonitor(t *testing.T, db *store.DB, r *Runner, repeatAfterS int, clock 
 		Name: "api", Type: "http", Target: "https://example.com",
 		IntervalS: 60, TimeoutS: 5, Retries: 1, Enabled: true,
 		RepeatAfterS: repeatAfterS,
+		// One pass resolves: these tests are about reminders, and the
+		// recovering state has its own in recovery_test.go.
+		RecoveryThreshold: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateMonitor: %v", err)
@@ -194,6 +197,10 @@ func TestFlappingMonitorIsNotReminded(t *testing.T) {
 	r.now = func() time.Time { return clock }
 
 	m, err := db.CreateMonitor(ctx, store.Monitor{
+		// One pass closes an incident: this test is not about the
+		// recovery threshold, which recovery_test.go covers.
+		RecoveryThreshold: 1,
+
 		Name: "flapper", Type: "http", Target: "https://example.com",
 		IntervalS: 60, TimeoutS: 5, Retries: 1, Enabled: true,
 		RepeatAfterS: 900,
