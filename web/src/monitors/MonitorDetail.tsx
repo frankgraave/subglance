@@ -73,6 +73,17 @@ export type MonitorDetailProps = {
   loading?: boolean;
   /** Why the extra panels are missing, if they are. */
   error?: Error | null;
+  /**
+   * True once the extra panels' read has succeeded at least once.
+   *
+   * The read is polled, so an error can arrive on top of figures that were
+   * already on screen. Blanking them for one failed refresh replaces a
+   * slightly old answer with no answer, and the latency chart and failure
+   * responses on the same page already keep theirs. With this set, an error
+   * keeps the last figures and says the refresh failed; without it, an error
+   * is a failed first load and nothing is drawn under it.
+   */
+  loaded?: boolean;
   /** Returns to the dashboard. */
   onBack?: () => void;
   /** Heartbeat width for environments without layout, such as jsdom. */
@@ -120,6 +131,7 @@ export function MonitorDetail({
   now,
   loading = false,
   error = null,
+  loaded = false,
   onBack,
   beatWidth = DETAIL_BEAT_WIDTH,
   stale = false,
@@ -363,7 +375,12 @@ export function MonitorDetail({
         ) : null}
         <p className="mon-detail-uptime-note">Only confirmed downtime counts. Warnings, maintenance checks and history without a recorded assessment are excluded. This is a sample ratio, not elapsed time.</p>
         <Panel>
-          {error !== null ? (
+          {error !== null && loaded ? (
+            <p role="alert" className="mon-detail-note">
+              Could not refresh uptime: {error.message}. Showing the last loaded figures.
+            </p>
+          ) : null}
+          {error !== null && !loaded ? (
             <p
               role="alert"
               className="mon-detail-empty mon-detail-empty--quiet"
@@ -435,7 +452,12 @@ export function MonitorDetail({
               Could not acknowledge: {ackError.message}
             </p>
           ) : null}
-          {error !== null ? (
+          {error !== null && loaded ? (
+            <p role="alert" className="mon-detail-note">
+              Could not refresh incidents: {error.message}. Showing the last loaded list.
+            </p>
+          ) : null}
+          {error !== null && !loaded ? (
             <p
               role="alert"
               className="mon-detail-empty mon-detail-empty--quiet"
