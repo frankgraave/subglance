@@ -144,11 +144,16 @@ const MEASURE = `(() => {
     if (!drawn(el)) continue;
     const s = getComputedStyle(el);
     const state = el.getAttribute("data-state");
-    if (state === "off") {
+    // The paused and unlit lamps are read by their inset ring, not their
+    // fill: the paused lamp has no fill at all, and the unlit one is dim on
+    // purpose (DESIGN.md §3.1). Their fill is still recorded, under its own
+    // key, so the dim fill is visible in a failure diff without being held
+    // to a floor it was never meant to reach.
+    if (state === "off" || state === "idle") {
       const m = s.boxShadow.match(/^((?:rgba?|oklch|color)[(][^)]*[)])/);
       const ring = m && over(el, m[1]);
-      if (ring) note("lamp off ring", ratio(ring, backdrop(el)));
-      continue;
+      if (ring) note("lamp " + state + " ring", ratio(ring, backdrop(el)));
+      if (state === "off") continue;
     }
     const fill = over(el, s.backgroundColor);
     if (fill) note("lamp " + state, ratio(fill, backdrop(el)));
@@ -190,22 +195,21 @@ type Measured = { theme: string | null; worst: Record<string, number> };
  * reason; it says "no data here" by being almost nothing.
  */
 const STATUS_MARKS = [
-  "lamp up", "lamp warn", "lamp down", "lamp off ring",
+  "lamp up", "lamp warn", "lamp down", "lamp idle ring", "lamp off ring",
   "bar up", "bar warning", "bar down",
-  "rail down solid", "rail warning solid", "rail paused dotted",
+  "rail down solid", "rail warning solid", "rail paused dotted", "rail waiting solid",
   "rail incident down",
 ];
 
 /*
- * Known shortfall, pinned rather than hidden. The unlit lamp and the waiting
- * rail are both `--idle`, which measures 1.6-2.1:1 in both themes: the grey is
- * chosen to read as "not lit", and at 3:1 it would read as a fourth status
- * colour. Whether that trade is right is an open question (SUB-159), so
- * the value is held *below* the floor here: the day a change
- * lifts it past 3:1, this fails and the key moves into STATUS_MARKS instead of
- * the improvement going unrecorded.
+ * The unlit lamp's fill, measured but deliberately held to no floor. It is
+ * `--idle`, 1.6-1.9:1, because a grey bright enough for 3:1 would read as a
+ * fourth status colour; the lamp's state is carried by its `--ink-3` ring
+ * ("lamp idle ring" above) instead (SUB-159, DESIGN.md §3.1). It is still
+ * required to be drawn, so the ring cannot pass on a screen where the lamp
+ * never rendered.
  */
-const BELOW_FLOOR = ["lamp idle", "rail waiting solid"];
+const UNFLOORED = ["lamp idle"];
 
 async function measureAll(theme: string): Promise<Record<string, Measured>> {
   const out: Record<string, Measured> = {};
@@ -235,7 +239,7 @@ describe.each(["light", "dark"])("status marks in situ, %s theme", (theme) => {
 
   it("finds every status mark somewhere, so no floor below is vacuous", () => {
     const seen = new Set(Object.values(measured).flatMap((result) => Object.keys(result.worst)));
-    for (const key of [...STATUS_MARKS, ...BELOW_FLOOR]) {
+    for (const key of [...STATUS_MARKS, ...UNFLOORED]) {
       expect(seen.has(key), `${key} was never drawn`).toBe(true);
     }
   });
@@ -249,16 +253,5 @@ describe.each(["light", "dark"])("status marks in situ, %s theme", (theme) => {
       }
     }
     expect(failures).toEqual([]);
-  });
-
-  it("still draws the unlit state below the floor, until that is decided", () => {
-    const lifted: string[] = [];
-    for (const [name, result] of Object.entries(measured)) {
-      for (const key of BELOW_FLOOR) {
-        const ratio = result.worst[key];
-        if (ratio !== undefined && ratio >= 3) lifted.push(`${name}: ${key} ${ratio}:1`);
-      }
-    }
-    expect(lifted, "the unlit state now clears 3:1: move it into STATUS_MARKS").toEqual([]);
   });
 });

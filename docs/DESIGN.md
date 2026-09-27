@@ -120,14 +120,15 @@ marks this product is read by. The worst case per mark, at 1440px:
 | lamp / bar / rail `warn` | 4.8:1 | 9.1:1 |
 | lamp / bar / rail `down` | 4.5:1 | 3.9:1 |
 | paused ring / dotted rail | 6.0:1 / 3.2:1 | 5.9:1 / 3.5:1 |
-| unlit lamp / waiting rail (`--idle`) | 1.6:1 / 1.7:1 | 1.9:1 / 2.1:1 |
+| unlit ring / waiting rail (`--ink-3`) | 3.05:1 / 3.2:1 | 3.2:1 / 3.5:1 |
+| unlit lamp fill (`--idle`, no floor) | 1.6:1 | 1.9:1 |
 
 Every mark that carries a state clears the 3:1 non-text floor in both themes;
 light `up` is the thinnest margin, and the test fails if it slips. The unlit
-lamp does not, in either theme. That is pinned, not waived: the test asserts it
-stays *below* 3:1, so a change that lifts it is noticed and promoted to the
-floor. Whether unlit should clear 3:1 at all is open, because a grey that bright
-starts to read as a fourth status colour.
+lamp's dim fill does not, and is not meant to: the lamp carries its state with
+an `--ink-3` ring, and the waiting rail is `--ink-3` too (§3.1). The fill is
+still measured, so a regression in it shows up in the diff, but it is held to
+no floor.
 
 ### 2.3 Status
 
@@ -979,7 +980,7 @@ The lamp has five states, and only four of them are a colour.
 | `up` | filled `--up` + glow | last check passed |
 | `warn` | filled `--warn` + glow | pending, slow, or a certificate expiring |
 | `down` | filled `--down` + glow | last check failed |
-| `idle` | filled `--idle`, no glow, dim highlight | **there is no reading yet** |
+| `idle` | filled `--idle`, 1.5px `--ink-3` inset ring, no glow, dim highlight | **there is no reading yet** |
 | `off` | transparent, 1.5px `--ink-2` inset ring, no highlight | **nobody is taking a reading, on purpose** |
 
 `idle` and `off` used to be the same grey lamp, which broke rule 4 outright: a
@@ -1003,6 +1004,22 @@ in greyscale, not just in hue.
 
 **The ring is an inset `box-shadow`, never a `border`.** A border would grow the
 20x7 box and break the one-size rule above.
+
+**Why the unlit lamp has a ring too (SUB-159).** Measured in situ on seven
+screens, the dim `--idle` fill reaches only 1.6:1 (light) and 1.9:1 (dark)
+against its backdrop, and the waiting rail in the same grey 1.7:1 and 2.1:1.
+WCAG 1.4.11 asks 3:1 of any graphical object needed to understand state, and
+"this monitor has never reported" is state. Three answers were on the table:
+argue that the status word carries it, brighten `--idle`, or ring the lamp. The
+first leans on text a sighted user scanning a wall of lamps does not read; the
+second spends a colour, because a grey bright enough for 3:1 starts to read as
+a fourth status. So the unlit lamp keeps its dim fill, which is what reads as
+"not lit", and gains a 1.5px `--ink-3` inset ring, which clears 3:1 on every
+surface it was measured on (3.05:1 at its thinnest, light). It is the paused lamp's construction in a quieter ink: filled with a
+ring versus hollow with a ring keeps the two apart, in greyscale as well. The
+waiting rail moves to `--ink-3` for the same reason; the paused rail already
+uses it, and solid versus dotted keeps those two apart. No new colour and no
+new token.
 
 **Paused also gets a second signal per layout**, because a 20x7 lamp is not
 enough on its own once a list is 200 long: rows, cards and compact lines take a
@@ -1135,7 +1152,7 @@ screen half-withdrawn. `waiting` and `paused` keep their edges at full
 strength: "no data yet" and "somebody switched this off" are facts about *our
 own configuration*, not readings of anything, and they are exactly as true
 after the stream dies as before it. Withdrawing them would invent doubt about
-the one thing we still know. Both are already neutral (`--idle`, a dotted
+the one thing still known. Both are already neutral (a solid and a dotted
 `--ink-3`), so there is no colour claim left in them to drain either.
 
 **The rail drains by colour, not by filter, and the mechanism is a decision
