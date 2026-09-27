@@ -134,6 +134,7 @@ export type MonitorPatch = {
   headers?: Record<string, string>;
   body?: string;
   ssl_warn_days?: number;
+  recovery_threshold?: number;
   push_interval_s?: number;
   push_grace_s?: number;
   name?: string;

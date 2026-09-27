@@ -47,6 +47,8 @@ export type AddMonitorValues = {
   /** Push monitors only: how late that report may be, in seconds. */
   pushGraceS: number;
   repeatAfterS: number;
+  /** Passing checks in a row that close a confirmed incident. Not for push. */
+  recoveryThreshold: number;
   /**
    * The lowest TLS version this monitor may negotiate, written "1.0" to
    * "1.3" — or `""` for no opinion, which is the default and is NOT the same
@@ -89,6 +91,7 @@ const FIELD_CONTROL: Record<string, string> = {
   push_interval_s: "push-interval",
   push_grace_s: "push-grace",
   repeat_after_s: "repeat",
+  recovery_threshold: "recovery",
   min_tls_version: "min-tls",
 };
 
@@ -106,6 +109,7 @@ const ADVANCED_CONTROLS = new Set([
   "type",
   "interval",
   "timeout",
+  "recovery",
   "keyword",
   "min-tls",
 ]);
@@ -144,6 +148,8 @@ const DEFAULTS: AddMonitorValues = {
   // alerting a minute later than its owner expects.
   pushGraceS: 60,
   repeatAfterS: 900,
+  // The server default, shown so the delay before "resolved" is visible.
+  recoveryThreshold: 2,
   // No opinion, and never the current default spelled out: a form that
   // pre-selected 1.2 would pin every new monitor to today's floor and quietly
   // make the nullable column unreachable from the UI.
@@ -568,6 +574,42 @@ export function AddMonitorForm({
                 </div>
                 <FieldError
                   control="timeout"
+                  badControl={badControl}
+                  rejection={rejection}
+                  ids={ids}
+                />
+              </div>
+
+              <div className="add-field">
+                <label className="add-label" htmlFor={`${ids}-recovery`}>
+                  Recover after
+                </label>
+                <div className="add-addon">
+                  <input
+                    id={`${ids}-recovery`}
+                    className="add-input"
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={values.recoveryThreshold}
+                    onChange={(event) =>
+                      setValues((v) => ({
+                        ...v,
+                        recoveryThreshold: Number(event.target.value),
+                      }))
+                    }
+                    {...invalidProps("recovery", `${ids}-recovery-help`)}
+                  />
+                  <span className="add-unit" aria-hidden="true">
+                    passes
+                  </span>
+                </div>
+                <p id={`${ids}-recovery-help`} className="add-help">
+                  Passing checks in a row before an incident closes and
+                  “resolved” is sent.
+                </p>
+                <FieldError
+                  control="recovery"
                   badControl={badControl}
                   rejection={rejection}
                   ids={ids}

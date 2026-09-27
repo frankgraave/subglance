@@ -137,7 +137,10 @@ type monitorDetailResponse struct {
 	Headers         *map[string]string `json:"headers,omitempty"`
 	Body            *string            `json:"body,omitempty"`
 	Retries         int                `json:"retries"`
-	SSLWarnDays     int                `json:"ssl_warn_days"`
+	// RecoveryThreshold is how many passing checks in a row close a
+	// confirmed incident. Push monitors store it but recover on one report.
+	RecoveryThreshold int `json:"recovery_threshold"`
+	SSLWarnDays       int `json:"ssl_warn_days"`
 }
 
 // heartbeatResponse is the wire shape of one recorded check result. It is
@@ -193,27 +196,29 @@ func describeHeartbeat(hb store.Heartbeat) heartbeatResponse {
 }
 
 type createMonitorRequest struct {
-	Name            string            `json:"name"`
-	Type            string            `json:"type"`
-	Target          string            `json:"target"`
-	IntervalS       int               `json:"interval_s"`
-	TimeoutS        int               `json:"timeout_s"`
-	Retries         *int              `json:"retries"`
-	Method          string            `json:"method"`
-	ExpectedStatus  string            `json:"expected_status"`
-	Keyword         string            `json:"keyword"`
-	KeywordMode     string            `json:"keyword_mode"`
-	FollowRedirects *bool             `json:"follow_redirects"`
-	Headers         map[string]string `json:"headers"`
-	Body            string            `json:"body"`
-	SSLWarnDays     *int              `json:"ssl_warn_days"`
-	RepeatAfterS    *int              `json:"repeat_after_s"`
-	Enabled         *bool             `json:"enabled"`
-	CaptureResponse *bool             `json:"capture_response"`
-	MinTLSVersion   *string           `json:"min_tls_version"`
-	Tags            map[string]string `json:"tags"`
-	PushIntervalS   *int              `json:"push_interval_s"`
-	PushGraceS      *int              `json:"push_grace_s"`
+	Name      string `json:"name"`
+	Type      string `json:"type"`
+	Target    string `json:"target"`
+	IntervalS int    `json:"interval_s"`
+	TimeoutS  int    `json:"timeout_s"`
+	Retries   *int   `json:"retries"`
+	// RecoveryThreshold is optional; omitted means the schema default of 2.
+	RecoveryThreshold *int              `json:"recovery_threshold"`
+	Method            string            `json:"method"`
+	ExpectedStatus    string            `json:"expected_status"`
+	Keyword           string            `json:"keyword"`
+	KeywordMode       string            `json:"keyword_mode"`
+	FollowRedirects   *bool             `json:"follow_redirects"`
+	Headers           map[string]string `json:"headers"`
+	Body              string            `json:"body"`
+	SSLWarnDays       *int              `json:"ssl_warn_days"`
+	RepeatAfterS      *int              `json:"repeat_after_s"`
+	Enabled           *bool             `json:"enabled"`
+	CaptureResponse   *bool             `json:"capture_response"`
+	MinTLSVersion     *string           `json:"min_tls_version"`
+	Tags              map[string]string `json:"tags"`
+	PushIntervalS     *int              `json:"push_interval_s"`
+	PushGraceS        *int              `json:"push_grace_s"`
 }
 
 func (s *Server) handleListMonitors(w http.ResponseWriter, r *http.Request) {
@@ -379,6 +384,9 @@ func (s *Server) handleCreateMonitor(w http.ResponseWriter, r *http.Request) {
 	if req.SSLWarnDays != nil {
 		m.SSLWarnDays = *req.SSLWarnDays
 	}
+	if req.RecoveryThreshold != nil {
+		m.RecoveryThreshold = *req.RecoveryThreshold
+	}
 	// Unlike the other defaults this one is not in ApplyMonitorDefaults: the
 	// column default is 0, which is a meaningful value ("no reminders"), so a
 	// zero cannot be read as "unset" once the row exists. Only a create
@@ -473,6 +481,9 @@ func validateCreateMonitor(req createMonitorRequest) problem {
 	if p := validateSSLWarnDays(req.SSLWarnDays); !p.ok() {
 		return p
 	}
+	if p := validateRecoveryThreshold(req.RecoveryThreshold); !p.ok() {
+		return p
+	}
 	if p := validateRepeatAfterS(req.RepeatAfterS); !p.ok() {
 		return p
 	}
@@ -536,6 +547,22 @@ func validateSSLWarnDays(days *int) problem {
 	}
 	if *days < 1 || *days > 365 {
 		return fieldProblem("ssl_warn_days", "ssl_warn_days must be between 1 and 365")
+	}
+	return problem{}
+}
+
+// validateRecoveryThreshold applies the range the column allows.
+//
+// 0 is rejected rather than read as "unset": store.ApplyMonitorDefaults would
+// turn it into 2, and the client would be told it had asked for something it
+// did not get. 1 is the smallest meaningful value (close on the first pass);
+// the upper bound matches retries.
+func validateRecoveryThreshold(n *int) problem {
+	if n == nil {
+		return problem{}
+	}
+	if *n < 1 || *n > 10 {
+		return fieldProblem("recovery_threshold", "recovery_threshold must be between 1 and 10")
 	}
 	return problem{}
 }
@@ -728,8 +755,10 @@ func (s *Server) handleGetMonitor(w http.ResponseWriter, r *http.Request) {
 		monitorResponse: s.describeMonitor(r, m),
 		Method:          m.Method, ExpectedStatus: m.ExpectedStatus,
 		Keyword: m.Keyword, KeywordMode: m.KeywordMode,
-		FollowRedirects: m.FollowRedirects,
-		Retries:         m.Retries, SSLWarnDays: m.SSLWarnDays,
+		FollowRedirects:   m.FollowRedirects,
+		Retries:           m.Retries,
+		RecoveryThreshold: m.RecoveryThreshold,
+		SSLWarnDays:       m.SSLWarnDays,
 	}
 	// A viewer can inspect check rules but must not gain reusable credentials
 	// merely because edit settings became readable. Never mask secrets into an
@@ -962,23 +991,24 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 // {"name":"x"} would also read as interval_s=0 and enabled=false, and a rename
 // would silently pause the monitor and reset its schedule.
 type patchMonitorRequest struct {
-	Name            *string            `json:"name"`
-	Type            *string            `json:"type"`
-	Target          *string            `json:"target"`
-	IntervalS       *int               `json:"interval_s"`
-	TimeoutS        *int               `json:"timeout_s"`
-	Retries         *int               `json:"retries"`
-	Method          *string            `json:"method"`
-	ExpectedStatus  *string            `json:"expected_status"`
-	Keyword         *string            `json:"keyword"`
-	KeywordMode     *string            `json:"keyword_mode"`
-	FollowRedirects *bool              `json:"follow_redirects"`
-	Headers         *map[string]string `json:"headers"`
-	Body            *string            `json:"body"`
-	SSLWarnDays     *int               `json:"ssl_warn_days"`
-	RepeatAfterS    *int               `json:"repeat_after_s"`
-	Enabled         *bool              `json:"enabled"`
-	CaptureResponse *bool              `json:"capture_response"`
+	Name              *string            `json:"name"`
+	Type              *string            `json:"type"`
+	Target            *string            `json:"target"`
+	IntervalS         *int               `json:"interval_s"`
+	TimeoutS          *int               `json:"timeout_s"`
+	Retries           *int               `json:"retries"`
+	RecoveryThreshold *int               `json:"recovery_threshold"`
+	Method            *string            `json:"method"`
+	ExpectedStatus    *string            `json:"expected_status"`
+	Keyword           *string            `json:"keyword"`
+	KeywordMode       *string            `json:"keyword_mode"`
+	FollowRedirects   *bool              `json:"follow_redirects"`
+	Headers           *map[string]string `json:"headers"`
+	Body              *string            `json:"body"`
+	SSLWarnDays       *int               `json:"ssl_warn_days"`
+	RepeatAfterS      *int               `json:"repeat_after_s"`
+	Enabled           *bool              `json:"enabled"`
+	CaptureResponse   *bool              `json:"capture_response"`
 	// MinTLSVersion is "1.0" to "1.3", or "" to go back to having no
 	// opinion. The empty string is accepted here and rejected on create
 	// because on an existing monitor it has a meaning — clear the floor I
@@ -1177,6 +1207,12 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 			return fieldProblem("retries", "retries must be between 0 and 10")
 		}
 		m.Retries = *req.Retries
+	}
+	if req.RecoveryThreshold != nil {
+		if p := validateRecoveryThreshold(req.RecoveryThreshold); !p.ok() {
+			return p
+		}
+		m.RecoveryThreshold = *req.RecoveryThreshold
 	}
 	if req.Method != nil {
 		method, p := normaliseMethod(*req.Method)

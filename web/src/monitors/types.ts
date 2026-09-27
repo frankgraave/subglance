@@ -129,6 +129,8 @@ export type ApiMonitor = {
   headers?: Record<string, string>;
   body?: string;
   ssl_warn_days?: number;
+  /** Passing checks in a row that close a confirmed incident. Detail read only. */
+  recovery_threshold?: number;
   enabled: boolean;
   status: "up" | "pending" | "warning" | "down";
   last_check?: string | null;
