@@ -1523,10 +1523,12 @@
   <p class="sg-lead">Documented here, enforced as literals. A custom property inside a
       media query never resolves — verified in Chromium, not assumed — and it
       fails silently, so the block is simply dropped and the layout is quietly
-      wrong at one width. The guard asserts every <code>@media</code> width in
-      the product is one of these, and that none of them is written as
-      <code>var()</code>.</p>
-  <table class="sg-table">
+      wrong at one width. Two separate sets, checked separately: every
+      <code>@media</code> width in the product is one of the viewport widths
+      below, every <code>@container</code> width is one of the container
+      widths, and none of them is written as <code>var()</code>.</p>
+  <p class="sg-lead">Viewport widths: the only values an <code>@media</code> rule may use.</p>
+    <table class="sg-table">
       <colgroup><col class="sg-col-token"><col class="sg-col-value"><col></colgroup>
       <thead><tr><th>Token</th><th>Value</th><th>What it is for</th></tr></thead>
       <tbody>
@@ -1544,7 +1546,13 @@
         <td><code>--bp-tablet</code></td>
         <td class="sg-value"><code>900px</code></td>
         <td class="sg-why">Breakpoints: named here, and NOT usable as var() in a media query. Verified in Chromium rather than assumed: a custom property inside `@media (max-width: var(--bp-phone))` does not resolve -- the query is evaluated <details class="sg-more"><summary>more</summary>before custom properties are substituted, so the whole block is silently dropped and the rule never applies. The literal form works. This is per CSS spec, not a browser bug, and `@custom-media` is not shipped anywhere. So these tokens document the ladder and give the guard a list to check the literals against; `tokens.test.ts` asserts every `@media` width in the product is one of them. They are not referenced by the stylesheets themselves, which is the one place in this file where a token is documentation rather than a value in use. The `+1` partners exist because `max-width: 640px` and `min-width: 641px` must not both match at exactly 640px.</details></td>
-      </tr>
+      </tr></tbody>
+    </table>
+    <p class="sg-lead">Container widths: the width of one list, for <code>@container</code> only. Never use one in an <code>@media</code> rule; the guard rejects it.</p>
+    <table class="sg-table">
+      <colgroup><col class="sg-col-token"><col class="sg-col-value"><col></colgroup>
+      <thead><tr><th>Token</th><th>Value</th><th>What it is for</th></tr></thead>
+      <tbody>
       <tr>
         <td><code>--bp-inventory-row</code></td>
         <td class="sg-value"><code>836px</code></td>

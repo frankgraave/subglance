@@ -173,10 +173,12 @@ describe.each([641, 700, 901, 960, 1040, 1100, 1440])("list rows at %ipx", (widt
   it.each(LIST_ROUTES)("keep every name at least rung 3 wide on $name", async (route) => {
     const page = await open(width, route);
     try {
-      const narrowest = await page.evaluate(() =>
-        Math.min(...Array.from(document.querySelectorAll<HTMLElement>(".inv-main")).map((el) => el.getBoundingClientRect().width)),
+      const widths = await page.evaluate(() =>
+        Array.from(document.querySelectorAll<HTMLElement>(".inv-main")).map((el) => el.getBoundingClientRect().width),
       );
-      expect(narrowest).toBeGreaterThanOrEqual(NAME_FLOOR);
+      // An empty list would make Math.min return Infinity and pass vacuously.
+      expect(widths.length).toBeGreaterThan(0);
+      expect(Math.min(...widths)).toBeGreaterThanOrEqual(NAME_FLOOR);
     } finally {
       await page.close();
     }
