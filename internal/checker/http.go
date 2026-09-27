@@ -145,6 +145,121 @@ func NewHTTPChecker(opts HTTPOptions) *HTTPChecker {
 
 // Check runs one HTTP probe.
 func (c *HTTPChecker) Check(ctx context.Context, m Monitor) Result {
+	scope := &headerScope{headers: m.Headers, ua: c.ua}
+	res := c.check(ctx, m, scope)
+	if !res.OK && scope.withheldFrom != "" && (res.Kind == FailStatus || res.Kind == FailKeyword) {
+		// A 401 on its own sends the reader to their credentials, which are
+		// fine. Say which server went without them, and what to change.
+		res.Error = fmt.Sprintf("%s (custom request headers were not sent to %s, "+
+			"because a redirect left %s; point the monitor at the final URL if that server needs them)",
+			res.Error, scope.withheldFrom, scope.origin)
+	}
+	return res
+}
+
+// headerScope keeps a monitor's own request headers on the origin they were
+// configured for.
+//
+// Following a redirect copies every header to the next hop, and net/http only
+// strips Authorization, Www-Authenticate and Cookie — and only when the host
+// name changes, not the port or the scheme. A monitor carrying an API key in
+// X-Api-Key would hand it to whichever server the target redirected to: an
+// expired domain, a CDN, an identity provider. So every header the monitor
+// set is dropped on a hop to another origin, not just the three the standard
+// library knows are secret.
+type headerScope struct {
+	headers map[string]string
+	ua      string
+
+	// origin is the monitored URL's origin; withheldFrom is the other origin
+	// the latest hop went to, empty while the request is on the monitored
+	// origin. Each Check has its own scope, so these are never shared between
+	// goroutines.
+	origin       string
+	withheldFrom string
+}
+
+// checkRedirect is the CheckRedirect for a monitor that follows redirects.
+func (s *headerScope) checkRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return errors.New("stopped after 10 redirects")
+	}
+	if len(s.headers) == 0 {
+		return nil
+	}
+	if sameOrigin(via[0].URL, req.URL) {
+		// Once a redirect has changed host, net/http strips Authorization and
+		// Cookie from every later hop, including one back to the monitored
+		// origin. Put the monitor's own headers back, and forget the other
+		// origin: this hop is not missing anything.
+		for k, v := range s.headers {
+			req.Header.Set(k, v)
+		}
+		s.withheldFrom = ""
+		return nil
+	}
+	for k := range s.headers {
+		req.Header.Del(k)
+	}
+	// A monitor may override the two headers SubGlance sets itself. Dropping
+	// the override must not leave the hop without them.
+	if hasHeader(s.headers, "User-Agent") {
+		req.Header.Set("User-Agent", s.ua)
+	}
+	if hasHeader(s.headers, "Accept") {
+		req.Header.Set("Accept", "*/*")
+	}
+	// The latest hop is the one whose response a failure describes.
+	s.origin = originOf(via[0].URL)
+	s.withheldFrom = originOf(req.URL)
+	return nil
+}
+
+// hasHeader reports whether headers names key, in any letter case.
+func hasHeader(headers map[string]string, key string) bool {
+	for k := range headers {
+		if strings.EqualFold(k, key) {
+			return true
+		}
+	}
+	return false
+}
+
+// originOf renders scheme://host:port with the default port filled in, so
+// http://example.com and http://example.com:80 are one origin.
+func originOf(u *url.URL) string {
+	scheme := strings.ToLower(u.Scheme)
+	return scheme + "://" + net.JoinHostPort(strings.ToLower(u.Hostname()), defaultPort(scheme, u.Port()))
+}
+
+func defaultPort(scheme, port string) string {
+	if port != "" {
+		return port
+	}
+	if scheme == "https" {
+		return "443"
+	}
+	return "80"
+}
+
+// sameOrigin decides whether a redirect hop may carry the monitor's headers.
+//
+// One step beyond strict origin equality is allowed: http on the default port
+// upgrading to https on the default port of the same host name. It is the
+// most common legitimate redirect there is, and it only makes the connection
+// safer. The reverse, https down to http, is a different origin.
+func sameOrigin(from, to *url.URL) bool {
+	if originOf(from) == originOf(to) {
+		return true
+	}
+	fs, ts := strings.ToLower(from.Scheme), strings.ToLower(to.Scheme)
+	return fs == "http" && ts == "https" &&
+		strings.EqualFold(from.Hostname(), to.Hostname()) &&
+		defaultPort(fs, from.Port()) == "80" && defaultPort(ts, to.Port()) == "443"
+}
+
+// check runs one HTTP probe with its headers confined to scope.
+func (c *HTTPChecker) check(ctx context.Context, m Monitor, scope *headerScope) Result {
 	start := time.Now()
 
 	matcher, err := ParseStatusMatcher(m.ExpectedStatus)
@@ -200,6 +315,11 @@ func (c *HTTPChecker) Check(ctx context.Context, m Monitor) Result {
 			return http.ErrUseLastResponse
 		}
 		client = &noRedirect
+	} else if len(m.Headers) > 0 {
+		// The same copy, for the same reason: the scope belongs to this check.
+		scoped := *client
+		scoped.CheckRedirect = scope.checkRedirect
+		client = &scoped
 	}
 
 	resp, err := client.Do(req)

@@ -134,6 +134,17 @@ invalid, while spaces in paths and queries are URL data and remain allowed.
 TCP and SSL ignore a pasted URL's credentials, path, query and fragment; ping
 requires a bare hostname or IP address, with no port or URL components.
 
+An HTTP monitor's own request headers — an `Authorization` or `X-Api-Key`, for
+instance — are sent only to the origin (scheme, host and port) of its target.
+When a followed redirect leads to another origin, every header the monitor set
+is left off that hop and any after it that stay off the original origin; the
+`User-Agent` and `Accept` SubGlance sends itself remain. Otherwise a redirect to
+an expired domain, a CDN or a login page would hand your key to that server.
+The one exception is the upgrade from `http://host` to `https://host` on the
+default ports, which only makes the connection safer. A check that then fails
+on its status code or keyword says which origin went without the headers. If that server needs them, point
+the monitor at the final URL instead of the one that redirects to it.
+
 A TCP check completes the handshake and hangs up without sending a payload —
 speaking a protocol badly is a good way to end up in someone's fail2ban rules.
 
