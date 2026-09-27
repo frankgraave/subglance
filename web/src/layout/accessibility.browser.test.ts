@@ -35,7 +35,9 @@ const SCREENS: Screen[] = [
   { name: "notifications", path: "/notifications", ready: ".inv-row" },
   { name: "setup", path: "/", auth: "setup", ready: ".auth-card input[type='password']" },
   { name: "login", path: "/", auth: "login", ready: ".auth-card input[type='password']" },
-  { name: "settings", path: "/settings", ready: 'input[name="current_password"]' },
+  // Waits for the users list, which arrives after the password card, so the
+  // audit sees the role pickers and row actions rather than "Loading users…".
+  { name: "settings", path: "/settings", ready: "#users li select" },
   { name: "settings password error", path: "/settings", ready: 'input[name="current_password"]', passwordError: true },
   { name: "add monitor", path: "/monitors", ready: ".inv-list > li", drawer: "add" },
   { name: "navigation drawer", path: "/", ready: "[data-testid^='monitor-card-']", drawer: "navigation" },

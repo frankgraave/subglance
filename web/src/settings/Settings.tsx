@@ -8,6 +8,7 @@ import { TopbarTools } from "../shell/TopbarTools";
 import { WatchdogCard } from "../watchdog/Watchdog";
 import { DiagnosticsCard } from "../diagnostics/Diagnostics";
 import { RetentionCard } from "../retention/Retention";
+import { UsersCard } from "../users/Users";
 import { TokensCard } from "../tokens/Tokens";
 
 /**
@@ -122,7 +123,7 @@ function useInitialFragment() {
  * The settings page: one card per section, in one column, with an index of
  * the sections beside it. `/settings#<section>` is a real address.
  */
-export function Settings({ client, canAdmin = false, role = canAdmin ? "admin" : "viewer" }: { client?: QueryClient; canAdmin?: boolean; role?: string }) {
+export function Settings({ client, canAdmin = false, role = canAdmin ? "admin" : "viewer", userId }: { client?: QueryClient; canAdmin?: boolean; role?: string; userId?: number }) {
   // Like the live pages, Settings owns a provider at its route boundary.
   const [fallback] = useState(createQueryClient);
   const [query, setQuery] = useState("");
@@ -132,6 +133,10 @@ export function Settings({ client, canAdmin = false, role = canAdmin ? "admin" :
       body: <Card title="Account" icon={<SettingsIcon />} headingLevel={1}>
         <Panel label="Password"><ChangePassword /></Panel>
       </Card> },
+    // Only an administrator can list accounts, so nobody else is shown a card
+    // that could only ever say "not allowed".
+    ...(canAdmin ? [{ id: "users", label: "Users", keywords: "users accounts roles admin editor viewer people access",
+      body: provide(<UsersCard userId={userId} />) }] : []),
     { id: "self-monitoring", label: "Self-monitoring", keywords: "self-monitoring watchdog last ping success rejection outage",
       body: provide(<WatchdogCard />) },
     { id: "retention", label: "Retention & storage", keywords: "retention storage database history heartbeats summaries incidents disk size",

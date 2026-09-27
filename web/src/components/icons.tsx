@@ -98,6 +98,18 @@ export function IconGroup() {
   );
 }
 
+/** Accounts: two heads and shoulders, for a card that lists people. */
+export function IconUsers() {
+  return (
+    <svg {...BASE}>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 19.5a6.5 6.5 0 0 1 13 0" />
+      <path d="M15.5 4.8a3.5 3.5 0 0 1 0 6.4" />
+      <path d="M18 14.2a6.5 6.5 0 0 1 3.5 5.3" />
+    </svg>
+  );
+}
+
 /** A clock, for anything about time windows. */
 export function IconClock() {
   return (
