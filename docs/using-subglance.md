@@ -293,6 +293,26 @@ states (`pending` means no check result yet; paused monitors are not measured):
 | `down` | Threshold reached, incident confirmed | Yes, once |
 | `up` again | Recovered | Only if it was confirmed |
 
+Recovery follows the same rule in the other direction. A confirmed incident
+closes only after a streak of passing checks: the recovery threshold, stored per
+monitor as `recovery_threshold` (default 2, range 1 to 10). A single pass in the
+middle of an outage is not a recovery, so a service that fails, passes once and
+fails again produces one alert and no false "resolved". A failure during that
+streak starts it over; it is the same incident, and nobody is alerted again.
+The incident's resolution time is the **first** pass of the streak that closed
+it, so the confirmation checks are not counted as downtime. The cost is that
+the "resolved" message arrives one check interval later. A threshold of 1 is the
+old behaviour: the first pass closes the incident.
+
+The streak is not kept across a restart. A monitor that was part-way through
+recovering starts counting again, so a restart can delay a "resolved" but never
+send one early. Push monitors always recover on one report: a job saying it
+succeeded is not a sample. Reminders stop while a streak is in progress,
+because "still down" would no longer be true.
+
+An unconfirmed incident (`warning`) still closes on the first pass. Nobody was
+told about it, so there is no false all-clear to prevent.
+
 An incident record is opened on the **first** failure, so its start time is when
 the outage actually began — not when the system became sure of it. The gap
 between `started_at` and `confirmed_at` is the confirmation delay, and it is
@@ -303,7 +323,8 @@ successful plus confirmed-down checks. Warning and unclassified legacy samples
 are excluded; a window with no eligible checks has unknown uptime. See the
 [uptime policy](../README.md#warning-and-uptime) for rollups and sampling details.
 Confirmed Down checks use the shorter of the configured interval and 60 seconds,
-with the existing jitter and worker limits, until recovery.
+with the existing jitter and worker limits, until the incident closes — including
+the passing checks that close it.
 
 A blip that recovers before the threshold is recorded but never notified, in
 either direction. A monitor that oscillates rapidly is marked as flapping, and

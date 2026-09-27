@@ -118,6 +118,9 @@ func TestMaintenanceChannelIsolation(t *testing.T) {
 			}))
 			defer target.Close()
 			m.Target, m.Retries = target.URL, 1
+			// One pass closes the incident: this test is about which channel
+			// hears the recovery, not about the recovery threshold.
+			m.RecoveryThreshold = 1
 			sender := &fakeSender{}
 			n := New(Options{DB: db, Senders: map[string]Sender{store.ChannelWebhook: sender}, Now: func() time.Time { return now }, GroupWindow: GroupingDisabled})
 			r := monitor.New(monitor.Options{DB: db, AllowPrivateTargets: true, Notify: func(a monitor.Alert) {

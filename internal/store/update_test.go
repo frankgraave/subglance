@@ -28,6 +28,7 @@ func TestUpdateMonitorWritesEveryMutableColumn(t *testing.T) {
 	m.IntervalS = 300
 	m.TimeoutS = 25
 	m.Retries = 4
+	m.RecoveryThreshold = 5
 	m.Method = "HEAD"
 	m.ExpectedStatus = "200-204"
 	m.Keyword = "ok"

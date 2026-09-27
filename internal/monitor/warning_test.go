@@ -123,7 +123,7 @@ func TestRunnerImmediatelySchedulesRecovery(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		db := testDB(t)
-		m, err := db.CreateMonitor(ctx, store.Monitor{Name: "cadence", Type: "http", Target: "https://example.invalid", Enabled: true, Retries: 1, IntervalS: 300})
+		m, err := db.CreateMonitor(ctx, store.Monitor{Name: "cadence", Type: "http", Target: "https://example.invalid", Enabled: true, Retries: 1, RecoveryThreshold: 1, IntervalS: 300})
 		if err != nil {
 			t.Fatal(err)
 		}

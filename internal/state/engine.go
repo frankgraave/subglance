@@ -44,7 +44,27 @@ const (
 
 	// StatusDown means failure is confirmed.
 	StatusDown Status = "down"
+
+	// StatusRecovering means a confirmed incident has seen passing checks,
+	// but not yet enough of them in a row to close it.
+	//
+	// Confirmation asks for several failures before it alerts; recovery used
+	// to close on the first pass. A half-broken service that fails three
+	// times and then passes once therefore sent a "resolved" that was as
+	// false as any alert the failure threshold exists to prevent, and
+	// someone who reads "resolved" stops looking. This state is the
+	// recovering side of the same rule: the incident stays open and nobody
+	// is told anything until the recovery threshold is met.
+	StatusRecovering Status = "recovering"
 )
+
+// Confirmed reports whether a status belongs to a confirmed, still-open
+// incident: down, or on its way back up but not there yet. Callers that
+// decide how often to check, or whether an outage is still in progress, want
+// this rather than a comparison with StatusDown alone.
+func (s Status) Confirmed() bool {
+	return s == StatusDown || s == StatusRecovering
+}
 
 // Event is what happened at a transition, from the notifier's point of view.
 type Event string
@@ -92,6 +112,17 @@ type Observation struct {
 	//
 	// Zero means 1 — confirm immediately.
 	FailureThreshold int
+
+	// RecoveryThreshold is how many consecutive passing checks close a
+	// confirmed incident. It comes from the monitor's `recovery_threshold`
+	// column, for the same reason FailureThreshold is per monitor.
+	//
+	// It only applies to confirmed incidents. An unconfirmed one was never
+	// announced, so there is no false "resolved" to guard against, and it
+	// closes on the first pass as before.
+	//
+	// Zero means 1 — resolve on the first passing check.
+	RecoveryThreshold int
 }
 
 // Transition describes what the engine decided about one observation.
@@ -105,6 +136,18 @@ type Transition struct {
 	// ConsecutiveFails is the current failure streak, for the UI to show
 	// "2 of 3 failures" while a monitor is pending.
 	ConsecutiveFails int
+
+	// ConsecutiveOKs is the passing streak inside a confirmed incident, for
+	// the UI to show "1 of 2" while a monitor is recovering. It is zero
+	// whenever no confirmed incident is open.
+	ConsecutiveOKs int
+
+	// RecoveredAt is when the outage ended, set only on
+	// EventIncidentResolved. It is the first passing check of the streak
+	// that met the recovery threshold, not the check that met it: the
+	// checks spent confirming a recovery are not downtime, and recording the
+	// later moment would charge them to the uptime figure.
+	RecoveredAt time.Time
 
 	// SnapshotsSpent is how much of this incident's response-snapshot budget
 	// is already on disk, not counting the check being reported. A failure
@@ -174,6 +217,12 @@ type monitorState struct {
 
 	consecutiveFails int
 
+	// consecutiveOKs and recoveringSince track a confirmed incident's
+	// passing streak: how many checks in a row have passed, and when the
+	// first of them ran. Both are zero outside a confirmed incident.
+	consecutiveOKs  int
+	recoveringSince time.Time
+
 	// snapshotsSpent is the per-incident response-snapshot budget: how many
 	// snapshots this incident has actually stored. It is not the failure
 	// streak, because plenty of failures store nothing — a monitor with
@@ -227,6 +276,9 @@ func (e *Engine) Observe(o Observation) Transition {
 	if o.FailureThreshold <= 0 {
 		o.FailureThreshold = 1
 	}
+	if o.RecoveryThreshold <= 0 {
+		o.RecoveryThreshold = 1
+	}
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -248,12 +300,13 @@ func (e *Engine) Observe(o Observation) Transition {
 	}
 
 	if o.OK {
-		e.observeSuccess(ms, &t)
+		e.observeSuccess(ms, &t, o)
 	} else {
 		e.observeFailure(ms, &t, o)
 	}
 
 	t.ConsecutiveFails = ms.consecutiveFails
+	t.ConsecutiveOKs = ms.consecutiveOKs
 	t.SnapshotsSpent = ms.snapshotsSpent
 
 	// Flapping is evaluated after the transition so a monitor that just
@@ -269,6 +322,16 @@ func (e *Engine) observeFailure(ms *monitorState, t *Transition, o Observation) 
 	ms.consecutiveFails++
 
 	switch {
+	case ms.status == StatusRecovering:
+		// A failure while recovering. The passing streak is broken and the
+		// monitor is down again, but this is the same outage: the incident
+		// never closed and the user was never told it had, so there is no
+		// new alert and no flip for the flapping window to count.
+		ms.consecutiveOKs = 0
+		ms.recoveringSince = time.Time{}
+		ms.status = StatusDown
+		t.To = StatusDown
+
 	case ms.status == StatusDown:
 		// Already down. The error text may have changed (a connection error
 		// becoming a 500 is useful detail), but there is nothing to announce.
@@ -301,12 +364,37 @@ func (e *Engine) observeFailure(ms *monitorState, t *Transition, o Observation) 
 	}
 }
 
-// observeSuccess resets the streak and resolves any open incident.
-func (e *Engine) observeSuccess(ms *monitorState, t *Transition) {
+// observeSuccess resets the failure streak and resolves any open incident
+// once the recovery threshold allows it.
+func (e *Engine) observeSuccess(ms *monitorState, t *Transition, o Observation) {
 	ms.consecutiveFails = 0
+
+	if ms.incidentOpen && ms.incidentConfirmed {
+		// A confirmed incident has to earn its all-clear the same way it
+		// earned its alert: with a streak, not one sample.
+		if ms.consecutiveOKs == 0 {
+			ms.recoveringSince = t.At
+		}
+		ms.consecutiveOKs++
+		if ms.consecutiveOKs < o.RecoveryThreshold {
+			// The snapshot budget is left alone: it belongs to the
+			// incident, and the incident is still open.
+			ms.status = StatusRecovering
+			t.To = StatusRecovering
+			return
+		}
+	}
+
+	t.RecoveredAt = t.At
+	if !ms.recoveringSince.IsZero() {
+		t.RecoveredAt = ms.recoveringSince
+	}
+	ms.consecutiveOKs = 0
+	ms.recoveringSince = time.Time{}
 	ms.snapshotsSpent = 0
 
 	if !ms.incidentOpen {
+		t.RecoveredAt = time.Time{}
 		// Steady state: up and staying up, or the very first check.
 		if ms.status != StatusUp {
 			ms.status = StatusUp
@@ -503,6 +591,13 @@ type RestoredState struct {
 // Without this, a restart would re-open an incident that is already open and
 // re-alert for an outage the user was told about ten minutes ago — which is
 // exactly the kind of noise this package exists to prevent.
+//
+// A recovery streak is deliberately not restored. A monitor that was
+// recovering when the process stopped comes back as down with no passing
+// checks counted, and has to meet its recovery threshold again. That can
+// delay a "resolved" by the checks it had already passed, but it can never
+// send one early — and a false "resolved" is the thing the threshold exists
+// to prevent. A caller that restores StatusRecovering gets StatusDown.
 func (e *Engine) Restore(monitorID int64, rs RestoredState) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -512,6 +607,10 @@ func (e *Engine) Restore(monitorID int64, rs RestoredState) {
 	}
 	if rs.SnapshotsSpent < 0 {
 		rs.SnapshotsSpent = 0
+	}
+
+	if rs.Status == StatusRecovering {
+		rs.Status = StatusDown
 	}
 
 	e.state[monitorID] = &monitorState{

@@ -95,6 +95,11 @@ type Monitor struct {
 	// the monitor so the state engine can apply a per-monitor threshold
 	// without a second database lookup on every result.
 	Retries int
+
+	// RecoveryThreshold is how many consecutive passes close a confirmed
+	// incident. Like Retries, it only travels with the monitor for the state
+	// engine's sake.
+	RecoveryThreshold int
 }
 
 // FailureKind classifies why a check failed.

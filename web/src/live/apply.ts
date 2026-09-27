@@ -31,12 +31,18 @@ export const MAX_LIVE_BEATS = 100;
  * checks before the server does, and the dashboard and the notifications would
  * disagree about reality.
  *
+ * The same holds on the way back up. A passing check does not end a confirmed
+ * outage: the server closes it only after the monitor's recovery threshold of
+ * passes in a row, and says so with an `incident_resolved` status event. Until
+ * then a red row stays red, so the live view never shows green while the
+ * incident is still open and the all-clear has not gone out.
+ *
  * A paused monitor keeps its status whatever arrives: pausing is a human
  * decision the stream knows nothing about.
  */
 export function statusAfterHeartbeat(current: MonitorStatus, ok: boolean): MonitorStatus {
   if (current === "paused") return "paused";
-  if (current === "down") return ok ? "up" : "down";
+  if (current === "down") return "down";
   return ok ? "up" : "warning";
 }
 
