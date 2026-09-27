@@ -18,13 +18,19 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { chromium, type Browser, type Page } from "./harness/browser";
 import { serveBuild, type Server } from "./harness/server";
 
+/**
+ * `rests` names the timings a screen must compute, as `element duration`.
+ * Without it the ladder check below passes on a page that computes nothing
+ * at all: every screen carries the hover rung, and the dashboard's lamp is
+ * the one element DESIGN.md §2.6 ties to the attention rung.
+ */
 const SCREENS = [
-  { name: "dashboard", path: "/", ready: ".led" },
-  { name: "monitor detail", path: "/monitors/1", ready: ".mon-detail-windows" },
-  { name: "monitors", path: "/monitors", ready: ".inv-list > li" },
-  { name: "incidents", path: "/incidents", ready: ".inc-line" },
-  { name: "notifications", path: "/notifications", ready: ".inv-row" },
-  { name: "settings", path: "/settings", ready: 'input[name="current_password"]' },
+  { name: "dashboard", path: "/", ready: ".led", rests: ["* 0.15s", "led 0.42s"] },
+  { name: "monitor detail", path: "/monitors/1", ready: ".mon-detail-windows", rests: ["* 0.15s"] },
+  { name: "monitors", path: "/monitors", ready: ".inv-list > li", rests: ["* 0.15s"] },
+  { name: "incidents", path: "/incidents", ready: ".inc-line", rests: ["* 0.15s"] },
+  { name: "notifications", path: "/notifications", ready: ".inv-row", rests: ["* 0.15s"] },
+  { name: "settings", path: "/settings", ready: 'input[name="current_password"]', rests: ["* 0.15s"] },
 ];
 
 /** The rungs a resting screen may compute, in seconds: hover/panel and attention. */
@@ -92,6 +98,12 @@ describe.each(SCREENS)("$name", (screen) => {
       const seen = await timings(page);
       // Printed in full on failure: which element, which property, what value.
       expect(seen.filter((t) => !AT_REST.includes(t.duration) || t.curve !== EASE)).toEqual([]);
+      // And the rungs are really there: an empty page must not pass.
+      const missing = screen.rests.filter((want) => {
+        const [el, duration] = want.split(" ");
+        return !seen.some((t) => (el === "*" || t.el === el) && t.duration === duration);
+      });
+      expect(missing).toEqual([]);
     } finally {
       await page.close();
     }
