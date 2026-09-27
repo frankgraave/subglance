@@ -35,7 +35,7 @@ it("shows the target and the last successful backup", async () => {
   expect(screen.getByText("subglance-20260926T030000Z.db.gz")).toBeTruthy();
   expect(screen.getByText("4.2 MB")).toBeTruthy();
   expect(document.querySelector('time[datetime="2026-09-26T03:00:02Z"]')).toBeTruthy();
-  expect(screen.queryByText(/failed at/)).toBeNull();
+  expect(screen.queryByText(/reported an error/)).toBeNull();
 });
 
 it("keeps the last good backup beside a failing streak", async () => {
@@ -43,7 +43,9 @@ it("keeps the last good backup beside a failing streak", async () => {
   expect(await screen.findByText(/upload: 403 AccessDenied/)).toBeTruthy();
   expect(document.querySelector('time[datetime="2026-09-26T04:00:00Z"]')).toBeTruthy();
   expect(document.querySelector('time[datetime="2026-09-26T03:00:02Z"]')).toBeTruthy();
-  expect(screen.getByText("3")).toBeTruthy();
+  expect(screen.getByText("3").classList.contains("face-mono")).toBe(true);
+  expect(document.querySelector(`time[datetime="2026-09-26T04:00:00Z"]`)?.closest(".face-mono")).toBeTruthy();
+  expect(screen.getByRole("link", { name: "Restoring a backup" }).getAttribute("href")).toContain("operations.md#restoring-from-s3");
 });
 
 it("says a configured target has not produced a backup yet", async () => {
@@ -54,7 +56,7 @@ it("says a configured target has not produced a backup yet", async () => {
 
 it("says plainly when nothing is backed up", async () => {
   mount(unconfiguredBackup);
-  expect(await screen.findByText("Not configured. The database is not copied anywhere on a schedule.")).toBeTruthy();
+  expect(await screen.findByText("Not configured. SubGlance has no scheduled backup target.")).toBeTruthy();
   expect(screen.getByRole("link", { name: "Read about backups" }).getAttribute("href")).toContain("operations.md#scheduled-backups");
 });
 
@@ -71,13 +73,13 @@ it.each([
 ])("rejects a malformed body rather than calling it unconfigured: %j", async (body) => {
   mount(body);
   expect(await screen.findByText("Backup state unavailable.")).toBeTruthy();
-  expect(screen.queryByText(/Not configured\. The database/)).toBeNull();
+  expect(screen.queryByText(/Not configured\. SubGlance has/)).toBeNull();
 });
 
 it("treats a 503 as unknown, not as unconfigured", async () => {
   mount({ error: "backup state unavailable" }, { status: 503 });
   expect(await screen.findByText("Backup state unavailable.")).toBeTruthy();
-  expect(screen.queryByText(/Not configured\. The database/)).toBeNull();
+  expect(screen.queryByText(/Not configured\. SubGlance has/)).toBeNull();
 });
 
 it("keeps the last retrieved history when a refresh fails", async () => {

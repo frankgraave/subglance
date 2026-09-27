@@ -3,8 +3,9 @@ import { Card, Panel } from "../components/Card";
 import { formatBytes } from "../retention/format";
 import { backupKey, fetchBackup } from "./api";
 
-// The setup section, which also documents `subglance restore`.
+// Setup for scheduled backups, and the restore procedure for them.
 const backupDocs = "https://github.com/frankgraave/subglance/blob/develop/docs/operations.md#scheduled-backups-to-s3-compatible-storage";
+const restoreDocs = "https://github.com/frankgraave/subglance/blob/develop/docs/operations.md#restoring-from-s3";
 
 function When({ value }: { value: string }) {
   return <time dateTime={value}>{new Date(value).toLocaleString(undefined, { timeZoneName: "short" })}</time>;
@@ -27,20 +28,20 @@ export function BackupCard() {
       {!data ? <p>{query.isError ? "Backup state unavailable." : "Loading backup state…"}</p> : <>
         {query.isError && <p role="status">Backup state unavailable. Showing the last retrieved history.</p>}
         {!data.configured ? <>
-          <p>Not configured. The database is not copied anywhere on a schedule.</p>
+          <p>Not configured. SubGlance has no scheduled backup target.</p>
           <p className="watchdog-note">Set a backup target to keep copies in S3-compatible storage. <a href={backupDocs}>Read about backups</a>.</p>
         </> : <>
           <p>Target <code>{data.target}</code></p>
           {data.last_error !== null && data.last_error_at !== null
-            ? <p>The last backup failed at <When value={data.last_error_at} />: {data.last_error}</p>
+            ? <p>The last backup run reported an error at <span className="face-mono"><When value={data.last_error_at} /></span>: {data.last_error}</p>
             : data.last_success_at === null && <p>Waiting for the first backup since this process started.</p>}
           <dl className="watchdog-history">
             <div><dt>Last successful backup</dt><dd>{data.last_success_at === null ? "None since this process started" : <When value={data.last_success_at} />}</dd></div>
             {data.last_object !== null && <div><dt>Object</dt><dd><code>{data.last_object}</code></dd></div>}
-            {data.last_size_bytes !== null && <div><dt>Size</dt><dd>{formatBytes(data.last_size_bytes)}</dd></div>}
-            <div><dt>Failed runs</dt><dd>{data.failures}</dd></div>
+            {data.last_size_bytes !== null && <div><dt>Size</dt><dd className="face-mono">{formatBytes(data.last_size_bytes)}</dd></div>}
+            <div><dt>Failed runs</dt><dd className="face-mono">{data.failures}</dd></div>
           </dl>
-          <p className="watchdog-note">History is held only for this process; the backups themselves stay in the bucket. <a href={backupDocs}>Restoring a backup</a> needs the server stopped.</p>
+          <p className="watchdog-note">History is held only for this process; the backups themselves stay in the bucket. <a href={restoreDocs}>Restoring a backup</a> needs the server stopped.</p>
         </>}
       </>}
     </Panel>
