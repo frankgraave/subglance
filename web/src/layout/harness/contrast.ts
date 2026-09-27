@@ -45,10 +45,16 @@ export const TO_RGBA = `(() => {
   return (colour) => {
     if (!colour) return null;
     ctx.clearRect(0, 0, 1, 1);
+    // An unparseable value leaves fillStyle at whatever it was before, so a
+    // single sentinel cannot tell a typo from that sentinel's own colour.
+    // Two different sentinels can: a real colour normalises to the same
+    // string after both, a rejected one reads back as each sentinel in turn.
     ctx.fillStyle = "black";
     ctx.fillStyle = colour;
-    // An unparseable value leaves fillStyle at the previous colour, so a
-    // typo cannot quietly measure black.
+    const afterBlack = ctx.fillStyle;
+    ctx.fillStyle = "white";
+    ctx.fillStyle = colour;
+    if (ctx.fillStyle !== afterBlack) return null;
     ctx.globalCompositeOperation = "copy";
     ctx.fillRect(0, 0, 1, 1);
     ctx.globalCompositeOperation = "source-over";
