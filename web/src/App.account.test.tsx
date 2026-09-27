@@ -76,11 +76,11 @@ it("shows the users card to an administrator, with their own account marked", as
   window.history.replaceState(null, "", "/settings");
   render(<App />);
   expect(await screen.findByText("you")).toBeTruthy();
-  expect(screen.getByRole("heading", { name: "Users" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Users (1)" })).toBeTruthy();
   // Account, users, self-monitoring, retention, API tokens and instance.
   expect(screen.getAllByRole("region")).toHaveLength(6);
   fireEvent.change(screen.getByRole("searchbox", { name: "Search settings" }), { target: { value: "roles" } });
-  expect(screen.getByRole("heading", { name: "Users" }).closest("[hidden]")).toBeNull();
+  expect(screen.getByRole("heading", { name: "Users (1)" }).closest("[hidden]")).toBeNull();
   expect(screen.getByRole("heading", { name: "Retention & storage", hidden: true }).closest("[hidden]")).toBeTruthy();
 });
 it("shows the instance card to an administrator, from the session's own role", async () => {

@@ -2,6 +2,8 @@ import { useId, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, Panel } from "../components/Card";
 import { StateChip } from "../components/Chip";
+import { ConfirmDelete } from "../components/ConfirmDelete";
+import { IconTrash, IconUsers } from "../components/icons";
 import { ApiError, MIN_PASSWORD_LENGTH } from "../auth/api";
 import { ROLES, createUser, deleteUser, fetchUsers, setUserRole, usersKey, type Account, type UserRole } from "./api";
 
@@ -116,8 +118,10 @@ function UserRow({ account, you, onChanged }: { account: Account; you: boolean; 
     return `${account.email} was removed.`;
   });
 
-  // Removing and re-roling are neutral buttons: --down text on a dark panel
-  // measures 3.9:1, under the 4.5:1 a label needs. The second step guards it.
+  // Re-roling is a pair of neutral buttons. Removing is the bin every other
+  // list row uses (monitors, channels): red ink on a glyph, which needs 3:1
+  // as a graphic, where --down on a word measures 3.9:1 on a dark panel and a
+  // label needs 4.5:1. The retyped address in ConfirmDelete guards it.
   return (
     <li className="retention-inputs">
       <div className="inv-main">
@@ -138,25 +142,26 @@ function UserRow({ account, you, onChanged }: { account: Account; you: boolean; 
         {/* A change is saved by a button, not by the select itself: arrowing
             through a closed select fires a change per option on some
             platforms, which would re-role the account at every keypress. */}
-        {role !== account.role && (
+        {role !== account.role ? (
           <span className="add-actions">
             <button type="button" className="add-button add-button-primary" disabled={busy} onClick={() => void saveRole()}
               aria-label={`Save role for ${account.email}`}>Save role</button>
             <button type="button" className="add-button" disabled={busy} onClick={() => setRole(account.role)}>Undo</button>
           </span>
-        )}
-        {role === account.role && (confirming ? (
-          <span className="add-actions">
-            <button type="button" className="add-button" disabled={busy} onClick={() => void remove()}
-              aria-label={`Confirm removing ${account.email}`}>Remove now</button>
-            <button type="button" className="add-button" disabled={busy} onClick={() => setConfirming(false)}>Keep</button>
-          </span>
         ) : (
-          <button type="button" className="add-button" aria-label={`Remove ${account.email}`} onClick={() => setConfirming(true)}>Remove</button>
-        ))}
+          <button type="button" className="inv-act inv-act--icon inv-act--danger" disabled={busy}
+            aria-label={`Remove ${account.email}`} title={`Remove ${account.email}`} onClick={() => setConfirming(true)}>
+            <IconTrash />
+          </button>
+        )}
       </>}
-      {confirming && role === account.role && (
-        <p className="retention-note">Removing signs {account.email} out everywhere and revokes their API tokens.</p>
+      {/* The address is retyped, not clicked through (DESIGN.md §7.5):
+          removal signs the account out and revokes its tokens, and two
+          similar addresses are a real way to remove the wrong one. */}
+      {confirming && (
+        <ConfirmDelete open onClose={() => setConfirming(false)} kind="account" name={account.email}
+          consequence={`${account.email} is removed, signed out everywhere, and its API tokens are revoked. This cannot be undone.`}
+          onConfirm={() => { setConfirming(false); void remove(); }} />
       )}
     </li>
   );
@@ -181,7 +186,9 @@ export function UsersCard({ userId }: { userId?: number }) {
   };
 
   return (
-    <Card title="Users" className="retention-card" note={users ? `${users.length} ${users.length === 1 ? "account" : "accounts"}` : undefined}
+    // Titled with its count like every card that frames a list (DESIGN.md §8.3);
+    // the count is read from the rows it renders, so the two cannot drift.
+    <Card title={users ? `Users (${users.length})` : "Users"} icon={<IconUsers />} className="retention-card"
       action={!adding && <button type="button" className="add-button" onClick={() => { setAdding(true); setMessage(null); }}>Add user</button>}>
       <Panel>
         {adding && <CreateForm onCancel={() => setAdding(false)}

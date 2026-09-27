@@ -52,7 +52,7 @@ const calls = (fetcher: ReturnType<typeof vi.fn>, method: string) =>
 it("lists every account with its role, and marks your own", async () => {
   mount();
   expect(await screen.findByText("oncall@example.com")).toBeTruthy();
-  expect(screen.getByText("2 accounts")).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Users (2)" })).toBeTruthy();
   expect((screen.getByLabelText("Role for oncall@example.com") as HTMLSelectElement).value).toBe("viewer");
   expect(screen.getByText("you")).toBeTruthy();
 });
@@ -98,19 +98,27 @@ it("shows the server's refusal on the row it is about", async () => {
   expect((await screen.findByRole("alert")).textContent).toBe("cannot demote the last administrator");
 });
 
-it("removes an account only after a second, named confirmation", async () => {
+// DESIGN.md §7.5: removal asks for the address to be retyped, not for a
+// second click, because it signs the account out and revokes its tokens.
+it("removes an account only after its address is retyped exactly", async () => {
   const fetcher = mount();
   fireEvent.click(await screen.findByRole("button", { name: "Remove oncall@example.com" }));
+  expect(screen.getByText(/API tokens are revoked/)).toBeTruthy();
+  const confirm = screen.getByRole("button", { name: "Delete oncall@example.com" });
+  expect(confirm.hasAttribute("disabled")).toBe(true);
+  fireEvent.click(confirm);
+  fireEvent.change(screen.getByLabelText(/to confirm/i), { target: { value: "ONCALL@example.com" } });
+  expect(confirm.hasAttribute("disabled")).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "Keep it" }));
   expect(calls(fetcher, "DELETE")).toHaveLength(0);
-  expect(screen.getByText(/revokes their API tokens/)).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "Keep" }));
-  expect(calls(fetcher, "DELETE")).toHaveLength(0);
+  expect(screen.queryByLabelText(/to confirm/i)).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Remove oncall@example.com" }));
-  fireEvent.click(screen.getByRole("button", { name: "Confirm removing oncall@example.com" }));
+  fireEvent.change(screen.getByLabelText(/to confirm/i), { target: { value: "oncall@example.com" } });
+  fireEvent.click(screen.getByRole("button", { name: "Delete oncall@example.com" }));
   expect(await screen.findByText("oncall@example.com was removed.")).toBeTruthy();
   expect(calls(fetcher, "DELETE")[0][0]).toBe("/api/v1/users/2");
   await waitFor(() => expect(screen.queryByText("oncall@example.com")).toBeNull());
-  expect(screen.getByText("1 account")).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Users (1)" })).toBeTruthy();
 });
 
 it("adds a viewer by default, and waits for a password of the minimum length", async () => {
