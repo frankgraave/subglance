@@ -142,7 +142,7 @@ is left off that hop and any after it that stay off the original origin; the
 an expired domain, a CDN or a login page would hand your key to that server.
 The one exception is the upgrade from `http://host` to `https://host` on the
 default ports, which only makes the connection safer. A check that then fails
-says which origin went without the headers. If that server needs them, point
+on its status code or keyword says which origin went without the headers. If that server needs them, point
 the monitor at the final URL instead of the one that redirects to it.
 
 A TCP check completes the handshake and hangs up without sending a payload —

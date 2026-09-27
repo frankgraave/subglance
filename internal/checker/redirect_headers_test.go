@@ -119,9 +119,21 @@ func TestCustomHeadersFollowASameOriginRedirect(t *testing.T) {
 }
 
 // A hop away and back again: the headers return with the original origin.
+// The monitored origin is named localhost and the other one 127.0.0.1, because
+// net/http strips Authorization only when the host name changes, and it keeps
+// stripping it on every later hop.
 func TestCustomHeadersReturnToTheMonitoredOrigin(t *testing.T) {
 	var got seen
-	var away *httptest.Server
+	var homeURL string
+	away := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for _, h := range secretHeaders {
+			if v := r.Header.Get(h); v != "" {
+				t.Errorf("%s reached the other origin: %q", h, v)
+			}
+		}
+		http.Redirect(w, r, homeURL+"/end", http.StatusFound)
+	}))
+	defer away.Close()
 	home := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/start" {
 			http.Redirect(w, r, away.URL, http.StatusFound)
@@ -131,20 +143,19 @@ func TestCustomHeadersReturnToTheMonitoredOrigin(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer home.Close()
-	away = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if v := r.Header.Get("X-Api-Key"); v != "" {
-			t.Errorf("X-Api-Key reached the other origin: %q", v)
-		}
-		http.Redirect(w, r, home.URL+"/end", http.StatusFound)
-	}))
-	defer away.Close()
+	homeURL = hostURL(t, home.URL, "localhost")
 
-	res := testChecker().Check(context.Background(), monitorWithSecrets(home.URL+"/start"))
+	res := testChecker().Check(context.Background(), monitorWithSecrets(homeURL+"/start"))
 	if !res.OK {
 		t.Fatalf("check failed: %s", res.Error)
 	}
-	if got.get("X-Api-Key") != "secret-key" {
-		t.Errorf("X-Api-Key back on the monitored origin = %q, want secret-key", got.get("X-Api-Key"))
+	for _, h := range secretHeaders {
+		if got.get(h) == "" {
+			t.Errorf("%s was not restored on the monitored origin", h)
+		}
+	}
+	if got.get("Authorization") != "Bearer secret" {
+		t.Errorf("Authorization back on the monitored origin = %q, want Bearer secret", got.get("Authorization"))
 	}
 }
 
@@ -245,5 +256,53 @@ func TestSameOrigin(t *testing.T) {
 		if got := sameOrigin(from, to); got != tc.want {
 			t.Errorf("sameOrigin(%s, %s) = %v, want %v", tc.from, tc.to, got, tc.want)
 		}
+	}
+}
+
+// A chain across two other origins names the one whose response failed, not
+// the first it passed through.
+func TestWithheldHeadersNameTheLastOrigin(t *testing.T) {
+	final := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer final.Close()
+	middle := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, final.URL, http.StatusFound)
+	}))
+	defer middle.Close()
+	start := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, middle.URL, http.StatusFound)
+	}))
+	defer start.Close()
+
+	res := testChecker().Check(context.Background(), monitorWithSecrets(start.URL))
+	if res.OK {
+		t.Fatal("check passed, want a failed 401")
+	}
+	if !strings.Contains(res.Error, "not sent to "+final.URL) {
+		t.Errorf("error %q does not name the final origin %s", res.Error, final.URL)
+	}
+}
+
+// A failure back on the monitored origin had its headers, so it carries no
+// explanation about another origin.
+func TestReturnedHeadersLeaveTheErrorAlone(t *testing.T) {
+	var away *httptest.Server
+	home := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/start" {
+			http.Redirect(w, r, away.URL, http.StatusFound)
+			return
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer home.Close()
+	away = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, home.URL+"/end", http.StatusFound)
+	}))
+	defer away.Close()
+
+	res := testChecker().Check(context.Background(), monitorWithSecrets(home.URL+"/start"))
+	if res.Error != "status 503, expected 200-299" {
+		t.Errorf("error = %q", res.Error)
 	}
 }

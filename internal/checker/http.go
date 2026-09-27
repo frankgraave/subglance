@@ -171,9 +171,10 @@ type headerScope struct {
 	headers map[string]string
 	ua      string
 
-	// origin is the monitored URL's origin; withheldFrom is the first other
-	// origin a redirect reached, empty while nothing has been withheld. Each
-	// Check has its own scope, so these are never shared between goroutines.
+	// origin is the monitored URL's origin; withheldFrom is the other origin
+	// the latest hop went to, empty while the request is on the monitored
+	// origin. Each Check has its own scope, so these are never shared between
+	// goroutines.
 	origin       string
 	withheldFrom string
 }
@@ -183,7 +184,18 @@ func (s *headerScope) checkRedirect(req *http.Request, via []*http.Request) erro
 	if len(via) >= 10 {
 		return errors.New("stopped after 10 redirects")
 	}
-	if len(s.headers) == 0 || sameOrigin(via[0].URL, req.URL) {
+	if len(s.headers) == 0 {
+		return nil
+	}
+	if sameOrigin(via[0].URL, req.URL) {
+		// Once a redirect has changed host, net/http strips Authorization and
+		// Cookie from every later hop, including one back to the monitored
+		// origin. Put the monitor's own headers back, and forget the other
+		// origin: this hop is not missing anything.
+		for k, v := range s.headers {
+			req.Header.Set(k, v)
+		}
+		s.withheldFrom = ""
 		return nil
 	}
 	for k := range s.headers {
@@ -197,10 +209,9 @@ func (s *headerScope) checkRedirect(req *http.Request, via []*http.Request) erro
 	if hasHeader(s.headers, "Accept") {
 		req.Header.Set("Accept", "*/*")
 	}
-	if s.withheldFrom == "" {
-		s.origin = originOf(via[0].URL)
-		s.withheldFrom = originOf(req.URL)
-	}
+	// The latest hop is the one whose response a failure describes.
+	s.origin = originOf(via[0].URL)
+	s.withheldFrom = originOf(req.URL)
 	return nil
 }
 
