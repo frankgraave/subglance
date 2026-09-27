@@ -167,6 +167,13 @@ const MEASURE = `(() => {
       note("rail " + el.getAttribute("data-status") + " " + s.borderLeftStyle, ratio(colour, backdrop(edge)));
     }
   }
+  // The open incident's rail is a painted ::before, not a border-left, so the
+  // loop above never sees it. Measure it under its own key, so a rail from
+  // another screen cannot stand in for it.
+  for (const el of document.querySelectorAll('.inc-row[data-state="open"]')) {
+    const colour = over(el, getComputedStyle(el, "::before").backgroundColor);
+    if (colour) note("rail incident down", ratio(colour, backdrop(el)));
+  }
   return { theme: document.documentElement.getAttribute("data-theme"), worst };
 })()`;
 
@@ -186,6 +193,7 @@ const STATUS_MARKS = [
   "lamp up", "lamp warn", "lamp down", "lamp off ring",
   "bar up", "bar warning", "bar down",
   "rail down solid", "rail warning solid", "rail paused dotted",
+  "rail incident down",
 ];
 
 /*
