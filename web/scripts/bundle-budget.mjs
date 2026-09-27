@@ -208,8 +208,27 @@ const budgets = {
    * for this card. The card itself still costs about 1,500 bytes (build,
    * process, database and worker-pool readings, a shape check, the
    * copy-to-clipboard summary). No new dependency. 148 leaves 729 bytes.
+   *
+   * 148 -> 149 KiB gzip for SUB-28 (the users card on /settings), merged onto
+   * develop 70c7d67 after the instance card, which took the room the 148 above
+   * left. This branch measures 152,076 bytes of entry JS (Node gzip, level 6),
+   * 524 over 148: the card lists the accounts with their roles, a role picker
+   * per row that saves only on an explicit button, a two-step removal, an add
+   * form with a role and a password floor, and a shape check that refuses a
+   * list with an unknown role (about 1,250 bytes). No new dependency and no new
+   * CSS. 149 leaves 500 bytes.
+   *
+   * 149 -> 151 KiB gzip for SUB-28 (the reset card and the backup card), both
+   * merged onto develop 6beecaf after the users card took the room the 149
+   * above left. The reset branch measures 152,890 bytes of entry JS (Node gzip,
+   * level 6), 314 over 149; the backup branch 152,974, 398 over. Each card
+   * costs about 850 bytes: reset is a typed-phrase gate, a confirm and a shape
+   * check; backup is a status readout for a scheduled job and a shape check.
+   * No new dependency. Both branches carry this same edit, so whichever merges
+   * second meets an identical change instead of a conflict. Together they come
+   * to about 153,800 bytes; 151 leaves roughly 800.
    */
-  js: 148,
+  js: 151,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *
@@ -290,6 +309,12 @@ const budgets = {
    * masthead instead of under it. The "you are here" paint is the sidebar's
    * own `[data-state="current"]` rule, reused rather than restated. At 16.5
    * the next card on this page would move it again.
+   *
+   * SUB-149 (list rows that fit the column they are given) spends about 140
+   * bytes more inside the same ceiling: two container queries that replace
+   * two viewport media queries, the container declarations, and the channel
+   * row's own copy of the wrap rules (a container condition cannot be a
+   * variable, so the inventory's block cannot serve a second width).
    */
   css: 17,
   fonts: 80,

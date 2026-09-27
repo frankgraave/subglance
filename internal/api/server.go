@@ -394,12 +394,18 @@ func (s *Server) routes() []route {
 		// Authenticated: admin only.
 		{http.MethodGet, "/api/v1/users", accessAdmin},
 		{http.MethodPost, "/api/v1/users", accessAdmin},
+		{http.MethodPatch, "/api/v1/users/{id}", accessAdmin},
 		{http.MethodDelete, "/api/v1/users/{id}", accessAdmin},
 
 		// Retention decides what history survives, for every user of the
 		// instance at once, and a shorter window deletes rows on the next
 		// pass. That is an administrator's call, not an editor's.
 		{http.MethodPut, "/api/v1/settings/retention", accessAdmin},
+
+		// A reset deletes every monitor, channel and token on the instance.
+		// Nothing about it is scoped to the caller, so it is an
+		// administrator's action, and it needs the typed phrase besides.
+		{http.MethodPost, "/api/v1/instance/reset", accessAdmin},
 
 		// The embedded dashboard, and the catch-all for everything that
 		// matched no pattern above.
@@ -537,8 +543,13 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 		return s.handleListUsers
 	case "POST /api/v1/users":
 		return s.handleCreateUser
+	case "PATCH /api/v1/users/{id}":
+		return s.handleUpdateUser
 	case "DELETE /api/v1/users/{id}":
 		return s.handleDeleteUser
+
+	case "POST /api/v1/instance/reset":
+		return s.handleResetInstance
 
 	case " " + webUIPattern:
 		return s.handleWebUI

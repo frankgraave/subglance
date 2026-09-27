@@ -799,6 +799,15 @@ query is evaluated before custom properties are substituted, so the block is
 silently dropped. `tokens.test.ts` asserts every `@media` width is one of the
 three and that none is written as `var()`.
 
+A row whose fit depends on the width it is *given* rather than on the window
+reads a container query instead (SUB-149): the expanded sidebar takes 232px of
+the viewport and the rail 56px, so a viewport rung cannot say whether a list
+row fits beside them. The monitors inventory and the notification channels
+wrap their rows at `@container` widths of 836px and 638px — each the row's
+measured fixed parts plus a 104px floor for the name. Those are documented as
+`--bp-inventory-row` and `--bp-channel-row` and guarded as their own set, so a
+container width can never pass as a viewport rung.
+
 ### 2.14 The column ladder is a proportion
 
 ```css
@@ -1279,6 +1288,12 @@ keeps every fact the row shows; Cards and Status wall are honoured at every
 width. The stored preference is *not* rewritten when this happens — opening the
 dashboard on a phone must not change what the desktop shows tomorrow — and the
 toolbar shows the layout actually on screen rather than the overridden one.
+
+The same veto holds Rows (not Compact) beside the expanded sidebar up to 816px
+(SUB-149): 640 plus the 176px the sidebar takes over the rail, so Rows comes
+back at the first width where its column is as wide as the rail leaves at
+641px. Compact measured flush there and is left alone; with the rail collapsed
+nothing changes.
 
 **The counts are the status filter (SUB-65).** At 200 monitors the question is
 almost never "show me everything", it is "show me the two that are down" — and
