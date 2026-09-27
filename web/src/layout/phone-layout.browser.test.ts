@@ -41,19 +41,27 @@ const WIDTHS = [320, 375, 414];
  * survives narrow viewports. The preference is still seeded per screen,
  * because the point is what a user with that preference sees on a phone.
  *
- * The monitor detail view is deliberately absent, and the reason matters: at
- * the time of writing it fails all three checks on `develop` (a 717px
- * heartbeat SVG pushes a 375px page out to 746px). That is the bug this file
- * was written for, and it is already fixed on the SUB-29 branch. Adding the
- * screen here would make this PR red for a defect it does not own and cannot
- * fix without merging unrelated work. It is added by the SUB-29 PR itself,
- * where the assertion turns red without the fix and green with it — which is
- * the only way to prove these checks bite.
+ * Every other route is walked at the cards preference, because below 640px it
+ * is what they render regardless (SUB-119). Adding them found two real
+ * targets under 24px: the default-channel select on the notifications page
+ * (a bare native select, 17px tall) and the retention "Forever" checkbox on
+ * settings (the browser's 13px default). Both are fixed in their own
+ * stylesheets, not exempted here.
+ *
+ * The monitors inventory is the one route still absent. Below 640px it
+ * scrolls sideways (a 468px meta row at 320px), which SUB-149 fixes in its
+ * own open pull request, and its name links are 19px tall, which is tracked
+ * separately. It joins this list once both are fixed, so that its assertions
+ * turn red without the fix and green with it.
  */
 const SCREENS = [
   { name: "dashboard (cards)", layout: "cards", path: "/", ready: "[data-testid^='monitor-card-']" },
   { name: "dashboard (rows preference)", layout: "rows", path: "/", ready: "[data-testid^='monitor-card-']" },
   { name: "status wall", layout: "wall", path: "/", ready: ".wall-card" },
+  { name: "monitor detail", layout: "cards", path: "/monitors/1", ready: ".mon-detail-windows" },
+  { name: "incidents", layout: "cards", path: "/incidents", ready: ".inc-line" },
+  { name: "notifications", layout: "cards", path: "/notifications", ready: ".inv-row" },
+  { name: "settings", layout: "cards", path: "/settings", ready: 'input[name="current_password"]' },
 ];
 
 let server: Server;

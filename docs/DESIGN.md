@@ -2167,7 +2167,9 @@ green.
 
 So a second, small suite runs the built bundle in headless Chromium at 320, 375
 and 414px — `web/src/layout/phone-layout.browser.test.ts`, behind
-`npm run test:browser`. It asserts three things per screen:
+`npm run test:browser`. It walks the dashboard (cards, the rows preference and
+the wall), a monitor's detail, incidents, notifications and settings, and
+asserts three things per screen:
 
 * the page does not scroll sideways (`scrollWidth` equals `clientWidth`);
 * no element that the user can actually see extends past the viewport;
@@ -2179,13 +2181,27 @@ suite becomes something people re-bless rather than read. A horizontal overflow
 is a number that is either bigger than the viewport or is not; it never needs
 blessing, and when it fails it names the element.
 
-**Two exemptions, both load-bearing.** Content inside a clipping or scrolling
-ancestor does not count as overflow — the heartbeat bar's accessibility table
-is 1370px wide inside a clipped container, read by screen readers and never
-painted, and counting it would fail every screen for something working as
-designed. Visually-hidden inputs are exempt from the target-size rule for the
-same reason: the theme control is `sr-only` radios inside labels, where the
-label is the target and the input's 1x1 box is its clipping rectangle.
+**One exemption, and it is load-bearing.** Content inside a clipping or
+scrolling ancestor does not count as overflow — the heartbeat bar's
+accessibility table is 1370px wide inside a clipped container, read by screen
+readers and never painted, and counting it would fail every screen for
+something working as designed. The target-size rule has no exemption: every
+control is measured by its own box.
+
+**What walking every screen found (SUB-119).** The suite first covered only the
+dashboard. Extending it to the other routes turned up two controls under the
+24px floor that no one had looked at on a phone: the default-channel select on
+the notifications page, a native select with no class that styled it (17px
+tall), and the retention "Forever" checkbox on settings, at the browser's 13px
+default. The select now takes the form field's own class, and the checkbox the
+compact control square the inventory's selection checkbox already used. The
+card and panel structure itself held at all three widths on every one of those
+screens: no sideways scroll and nothing past the viewport.
+
+The monitors inventory is the one route not yet walked. Below 640px its meta
+row is wider than the phone (468px at 320px), and its name links are 19px
+tall. Both are known; it joins the suite when they are fixed, so its
+assertions go red without the fix and green with it.
 
 Keeping these out of `npm test` is deliberate. They need a built bundle and a
 browser download, and a unit suite that depends on either is one that people
