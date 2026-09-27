@@ -2440,6 +2440,235 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
       x-subglance-access: write
+  /api/v1/routing-rules:
+    get:
+      tags: [Channels]
+      operationId: listRoutingRules
+      summary: List routing rules
+      description: |
+        A routing rule sends the alerts of every monitor carrying one tag to a
+        set of channels. Rules add up: an alert goes to the monitor's own
+        channels plus the channels of every rule whose tag it carries, minus
+        the rules it is excluded from. The instance default applies only when
+        that union is empty. A channel reached more than one way is sent one
+        message.
+      responses:
+        '200':
+          description: Every rule, oldest first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoutingRuleList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: The rules could not be read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: read
+    post:
+      tags: [Channels]
+      operationId: createRoutingRule
+      summary: Create a routing rule
+      description: |
+        The tag is normalised like a monitor tag (key trimmed and lowercased,
+        value trimmed), so a rule can only name a tag a monitor could carry.
+        There is one rule per tag pair.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoutingRuleRequest'
+      responses:
+        '201':
+          description: The rule as stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoutingRule'
+        '400':
+          description: Malformed JSON, an invalid tag, or an unknown channel id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: A rule for this tag pair already exists; add the channels to it instead.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: The rule could not be stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: write
+  /api/v1/routing-rules/{id}:
+    parameters:
+      - $ref: '#/components/parameters/RoutingRuleId'
+    put:
+      tags: [Channels]
+      operationId: updateRoutingRule
+      summary: Replace a routing rule's tag and channels
+      description: Exclusions are kept. A refused update changes nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoutingRuleRequest'
+      responses:
+        '200':
+          description: The rule as stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoutingRule'
+        '400':
+          description: An invalid id, malformed JSON, an invalid tag, or an unknown channel id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: No routing rule with that id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Another rule already uses this tag pair.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: The rule could not be stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: write
+    delete:
+      tags: [Channels]
+      operationId: deleteRoutingRule
+      summary: Delete a routing rule
+      description: Its exclusions go with it.
+      responses:
+        '204':
+          description: The rule is gone.
+        '400':
+          description: The path id was not a positive integer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: No routing rule with that id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: The rule could not be deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: write
+  /api/v1/routing-rules/{id}/exclusions/{monitor_id}:
+    parameters:
+      - $ref: '#/components/parameters/RoutingRuleId'
+      - name: monitor_id
+        in: path
+        required: true
+        description: The monitor's numeric id.
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    put:
+      tags: [Channels]
+      operationId: excludeMonitorFromRoutingRule
+      summary: Stop one rule routing one monitor
+      description: |
+        The monitor keeps its own channels and every other rule, including
+        channels this rule shares with them. Idempotent. A monitor that does
+        not carry the rule's tag may be excluded; it then takes effect if the
+        tag is added later.
+      responses:
+        '204':
+          description: The monitor is excluded from the rule.
+        '400':
+          description: A path id was not a positive integer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: The rule or the monitor does not exist; the message says which.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: The exclusion could not be stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: write
+    delete:
+      tags: [Channels]
+      operationId: includeMonitorInRoutingRule
+      summary: Let a rule route a monitor again
+      responses:
+        '204':
+          description: The exclusion is gone.
+        '400':
+          description: A path id was not a positive integer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: The monitor was not excluded from that rule.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: The exclusion could not be removed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: write
   /api/v1/channels/{id}/test:
     parameters:
       - $ref: '#/components/parameters/ChannelId'
@@ -3037,6 +3266,16 @@ components:
         format: int64
         minimum: 1
       example: 1
+    RoutingRuleId:
+      name: id
+      in: path
+      required: true
+      description: The routing rule's numeric id.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+      example: 1
     IfMatch:
       name: If-Match
       in: header
@@ -3479,6 +3718,72 @@ components:
       example:
         env: prod
         customer: acme
+    RoutingRuleRequest:
+      type: object
+      required: [tag_key, tag_value]
+      additionalProperties: false
+      properties:
+        tag_key:
+          type: string
+          example: env
+        tag_value:
+          type: string
+          example: prod
+        channel_ids:
+          type: array
+          description: Channels the rule adds. Duplicates are ignored; an empty list is allowed.
+          items:
+            type: integer
+            format: int64
+    RoutingRule:
+      type: object
+      required: [id, tag_key, tag_value, channel_ids, excluded_monitor_ids, created_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        tag_key:
+          type: string
+        tag_value:
+          type: string
+        channel_ids:
+          type: array
+          description: Sorted ascending. A deleted channel drops out of every rule.
+          items:
+            type: integer
+            format: int64
+        excluded_monitor_ids:
+          type: array
+          description: Monitors this rule does not route, sorted ascending.
+          items:
+            type: integer
+            format: int64
+        created_at:
+          type: string
+          format: date-time
+    RoutingRuleList:
+      type: object
+      required: [rules]
+      properties:
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoutingRule'
+    MonitorRuleRoute:
+      type: object
+      required: [rule_id, tag_key, tag_value, channels]
+      properties:
+        rule_id:
+          type: integer
+          format: int64
+        tag_key:
+          type: string
+        tag_value:
+          type: string
+        channels:
+          type: array
+          items:
+            $ref: '#/components/schemas/MonitorChannel'
     MonitorChannel:
       type: object
       required: [id, name]
@@ -3627,14 +3932,23 @@ components:
             Channel configuration and credentials are never included.
           items:
             $ref: '#/components/schemas/MonitorChannel'
+        rule_channels:
+          type: array
+          description: |
+            List reads only, present exactly when `channels` is. The routing
+            rules that add channels for this monitor, each with the channels it
+            adds; rules the monitor is excluded from are left out. An alert
+            goes to the union of `channels` and every entry here.
+          items:
+            $ref: '#/components/schemas/MonitorRuleRoute'
         default_channel:
           allOf:
             - $ref: '#/components/schemas/MonitorChannel'
           description: |
-            List reads only. Present exactly when `channels` is present and
-            empty and an instance default is set: the channel this monitor's
-            alerts go to instead. An empty `channels` without this field means
-            nobody is alerted about this monitor.
+            List reads only. Present exactly when `channels` and
+            `rule_channels` are present and both empty and an instance default
+            is set: the channel this monitor's alerts go to instead. Empty
+            lists without this field mean nobody is alerted about this monitor.
         capture_response:
           type: boolean
           description: |
