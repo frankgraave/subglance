@@ -16,9 +16,10 @@ import type { Coverage } from "./coverage";
  * "Who hears about this monitor", answered for every monitor at once
  * (SUB-124).
  *
- * The routing model is a default plus per-monitor overrides, and the notifier
- * also skips a disabled channel. Each rule is simple; the three together are
- * something nobody should have to evaluate in their head per monitor. This
+ * The routing model is per-monitor channels plus tag routing rules that add
+ * up (SUB-147), a default for monitors neither reaches, and a notifier that
+ * skips a disabled channel. Each rule is simple; together they are something
+ * nobody should have to evaluate in their head per monitor. This
  * card does it and prints the answer, which is what the mockup's coverage
  * preview was for.
  *

@@ -146,7 +146,20 @@ export type ApiMonitor = {
   heartbeats?: ApiHeartbeat[];
   /** List-only attachments; runtime validation preserves unknown vs empty. */
   channels?: { id: number; name: string }[];
-  /** List-only: the instance default, sent when `channels` is known and empty. */
+  /**
+   * List-only, beside `channels`: the tag routing rules that add channels for
+   * this monitor, each with the channels it adds (SUB-147).
+   */
+  rule_channels?: {
+    rule_id: number;
+    tag_key: string;
+    tag_value: string;
+    channels: { id: number; name: string }[];
+  }[];
+  /**
+   * List-only: the instance default, sent when `channels` and
+   * `rule_channels` are known and both empty.
+   */
   default_channel?: { id: number; name: string };
   /**
    * Omitted entirely when the monitor has no tags, which is why this is

@@ -53,11 +53,41 @@ describe("coverageOf", () => {
     expect(describeCoverage(c)).toBe("Ops (default)");
   });
 
+  it("adds rule-routed channels to the monitor's own, naming the rule", () => {
+    const c = coverageOf(
+      monitor({
+        channels: [{ id: 3, name: "Ops" }],
+        rule_channels: [{ rule_id: 9, tag_key: "env", tag_value: "prod", channels: [{ id: 1, name: "Pager" }] }],
+      }),
+      [pager, ops],
+    );
+    expect(c.route).toBe("own");
+    expect(describeCoverage(c)).toBe("Ops, Pager via env:prod");
+  });
+
+  it("counts a monitor reached only through a rule as covered, not silent", () => {
+    const c = coverageOf(
+      monitor({ rule_channels: [{ rule_id: 9, tag_key: "team", tag_value: "core", channels: [{ id: 1, name: "Pager" }] }] }),
+      [pager, ops],
+    );
+    expect(c.silent).toBe(false);
+    expect(describeCoverage(c)).toBe("Pager via team:core");
+  });
+
+  it("says nobody when the only rule-routed channel is disabled", () => {
+    const c = coverageOf(
+      monitor({ rule_channels: [{ rule_id: 9, tag_key: "env", tag_value: "prod", channels: [{ id: 2, name: "Old" }] }] }),
+      [off, ops],
+    );
+    expect(c.silent).toBe(true);
+    expect(describeCoverage(c)).toBe("nobody: Old via env:prod (disabled)");
+  });
+
   it("says nobody when there is neither an own channel nor a default", () => {
     const c = coverageOf(monitor(), [ops]);
     expect(c.silent).toBe(true);
     expect(describeCoverage(c)).toBe(
-      "nobody: no channels of its own and no default",
+      "nobody: no channels of its own, no matching rule and no default",
     );
   });
 
