@@ -369,7 +369,7 @@ export function NotificationsView({
                 <label>
                   Monitors with no channels of their own alert through{" "}
                   <select
-                    className="mon-facet-select"
+                    className="add-input add-input--fit"
                     value={defaultChannel?.id ?? ""}
                     disabled={savingDefault}
                     aria-busy={savingDefault}

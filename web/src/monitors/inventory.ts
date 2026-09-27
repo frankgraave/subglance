@@ -80,7 +80,7 @@ export function inventoryFromApi(api: ApiMonitor & {
     // opinion" and never as the current default: substituting "1.2" here
     // would make the edit form offer to pin a floor nobody set.
     minTlsVersion: api.min_tls_version ?? "",
-    channels: channelsFromApi(api.channels, api.default_channel),
+    channels: channelsFromApi(api.channels, api.default_channel, api.rule_channels),
     ...(api.repeat_after_s !== undefined ? { repeatAfterS: api.repeat_after_s } : {}),
     checkSettings: Object.fromEntries(
       (["method", "expected_status", "keyword", "keyword_mode", "follow_redirects", "headers", "body", "ssl_warn_days", "min_tls_version"] as const)
@@ -130,6 +130,10 @@ export function filterByType(
  * inventory column only needs names, but the notifications page crosses them
  * with the channel list to tell a disabled route from a live one, and a name
  * is not an identity: two channels may share one.
+ *
+ * `rules` are the tag routing rules that add channels on top of the
+ * monitor's own (SUB-147). Alerts go to the union of both; the default only
+ * stands in when both are empty.
  */
 export type ChannelState =
   | { known: false }
@@ -137,29 +141,54 @@ export type ChannelState =
       known: true;
       names: readonly string[];
       ids?: readonly string[];
+      rules?: readonly RuleRoute[];
       fallback?: string;
       fallbackId?: string;
     };
 
+/** One routing rule's channels for one monitor. */
+export type RuleRoute = {
+  /** How the rule's tag is written for people: `env:prod`. */
+  tag: string;
+  names: readonly string[];
+  ids: readonly string[];
+};
+
 export const CHANNELS_UNKNOWN: ChannelState = { known: false };
 
 /** Never turn a malformed or missing list into the assertion "none". */
-function channelsFromApi(value: unknown, fallback?: unknown): ChannelState {
+function channelsFromApi(value: unknown, fallback?: unknown, ruleValue?: unknown): ChannelState {
   if (!Array.isArray(value) || !value.every(isChannelRef)) return CHANNELS_UNKNOWN;
+  // Absent means a server from before routing rules, which has none. Present
+  // but malformed is unknown: a rule that cannot be read may be the one that
+  // routes this monitor, so nothing is claimed.
+  const rules = ruleValue === undefined ? [] : rulesFromApi(ruleValue);
+  if (rules === null) return CHANNELS_UNKNOWN;
   const names = value.map((channel) => channel.name);
   const ids = value.map((channel) => String(channel.id));
-  // The default only ever stands in for an empty list; a server that sent one
-  // beside real attachments is ignored rather than believed.
-  if (names.length === 0 && isChannelRef(fallback)) {
-    return {
-      known: true,
-      names,
-      ids,
-      fallback: fallback.name,
-      fallbackId: String(fallback.id),
-    };
+  const state = { known: true as const, names, ids, ...(rules.length > 0 ? { rules } : {}) };
+  // The default only ever stands in for an empty union; a server that sent
+  // one beside real routes is ignored rather than believed.
+  if (names.length === 0 && rules.length === 0 && isChannelRef(fallback)) {
+    return { ...state, fallback: fallback.name, fallbackId: String(fallback.id) };
   }
-  return { known: true, names, ids };
+  return state;
+}
+
+function rulesFromApi(value: unknown): RuleRoute[] | null {
+  if (!Array.isArray(value)) return null;
+  const out: RuleRoute[] = [];
+  for (const rule of value) {
+    const { tag_key: key, tag_value: tag, channels } = (rule ?? {}) as Record<string, unknown>;
+    if (typeof key !== "string" || typeof tag !== "string" ||
+      !Array.isArray(channels) || !channels.every(isChannelRef)) return null;
+    out.push({
+      tag: `${key}:${tag}`,
+      names: channels.map((c) => c.name),
+      ids: channels.map((c) => String(c.id)),
+    });
+  }
+  return out;
 }
 
 function isChannelRef(channel: unknown): channel is { id: number; name: string } {
@@ -178,11 +207,22 @@ function isChannelRef(channel: unknown): channel is { id: number; name: string }
  */
 export function describeChannels(state: ChannelState): string {
   if (!state.known) return "not loaded";
-  if (state.names.length === 0) {
+  // A rule-routed channel names its rule, so nobody has to work out why a
+  // channel they never attached is listed.
+  const routed = [
+    ...state.names,
+    ...(state.rules ?? []).flatMap((r) => r.names.map((name) => `${name} via ${r.tag}`)),
+  ];
+  if (routed.length === 0) {
     // Someone does hear about it, so it must not read as the finding "none".
     return state.fallback === undefined ? "none" : `${state.fallback} (default)`;
   }
-  return state.names.join(", ");
+  return routed.join(", ");
+}
+
+/** True when the monitor reaches no channel at all: not its own, no rule, no default. */
+export function routesNowhere(state: ChannelState): boolean {
+  return state.known && state.names.length === 0 && !state.rules?.length && state.fallback === undefined;
 }
 
 /**

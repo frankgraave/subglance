@@ -16,6 +16,7 @@ import {
   canCheckNow,
   describeChannels,
   intervalOf,
+  routesNowhere,
   typeLabel,
 } from "./inventory";
 import type { ChannelState, InventoryMonitor } from "./inventory";
@@ -185,11 +186,7 @@ function MonitorInventoryRowImpl({
               <StateChip>not loaded</StateChip>
             ) : (
               <Value
-                value={
-                  channels.names.length === 0 && channels.fallback === undefined
-                    ? 0
-                    : undefined
-                }
+                value={routesNowhere(channels) ? 0 : undefined}
               >
                 {channelText}
               </Value>
