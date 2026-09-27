@@ -33,6 +33,7 @@ func TestProtectedRoutesRejectAnonymous(t *testing.T) {
 		{http.MethodDelete, "/api/v1/tokens/1"},
 		{http.MethodGet, "/api/v1/users"},
 		{http.MethodPost, "/api/v1/users"},
+		{http.MethodPatch, "/api/v1/users/1"},
 		{http.MethodDelete, "/api/v1/users/1"},
 		{http.MethodGet, "/api/v1/auth/me"},
 		{http.MethodPost, "/api/v1/auth/password"},

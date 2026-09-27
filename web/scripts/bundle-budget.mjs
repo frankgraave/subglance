@@ -208,8 +208,17 @@ const budgets = {
    * for this card. The card itself still costs about 1,500 bytes (build,
    * process, database and worker-pool readings, a shape check, the
    * copy-to-clipboard summary). No new dependency. 148 leaves 729 bytes.
+   *
+   * 148 -> 149 KiB gzip for SUB-28 (the users card on /settings), merged onto
+   * develop 70c7d67 after the instance card, which took the room the 148 above
+   * left. This branch measures 152,076 bytes of entry JS (Node gzip, level 6),
+   * 524 over 148: the card lists the accounts with their roles, a role picker
+   * per row that saves only on an explicit button, a two-step removal, an add
+   * form with a role and a password floor, and a shape check that refuses a
+   * list with an unknown role (about 1,250 bytes). No new dependency and no new
+   * CSS. 149 leaves 500 bytes.
    */
-  js: 148,
+  js: 149,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *
