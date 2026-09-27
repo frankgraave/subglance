@@ -440,6 +440,14 @@
   --bp-phone-up: 641px;
   --bp-tablet: 900px;
 
+  /* Container rungs (SUB-149): widths of a list, not of the window, read by
+     `@container` rather than `@media`. Same rule, same reason: a var() in a
+     container condition never matches, so these document the literals the
+     guard holds. Each is the row's measured fixed parts plus a 104px floor
+     for the name; the arithmetic is beside the rule that uses it. */
+  --bp-inventory-row: 836px; /* the monitors inventory row fits on one line */
+  --bp-channel-row: 638px;   /* the notification channel row fits on one line */
+
   /* The control accent (§2.8). It sits in :root rather than in the two theme
      blocks because it is deliberately the same colour in both: an accent that
      shifts with the theme is a second thing to remember and a second thing to

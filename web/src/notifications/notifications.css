@@ -331,25 +331,42 @@
 .nt-act-test { min-width: var(--size-col-3); }
 
 /*
- * Phone: the settings columns stop pretending to be a table, exactly as the
- * monitors inventory does at the same rung. `inventory.css` releases its own
- * four columns there; this page's fifth is declared here, so it has to be
- * released here too — otherwise a 168px date holds the row wide and the
- * document scrolls sideways, which is the one thing incidents.css already
- * learned not to let happen.
+ * Too narrow for one line: the settings columns stop pretending to be a
+ * table and wrap under the name, as the monitors inventory's rows do.
  *
- * The literal is deliberate: a `var()` inside a media query never matches,
- * because media queries are evaluated before custom properties are
- * substituted, and it fails silently (AGENTS.md).
+ * A container query on the list rather than a media query on the viewport
+ * (SUB-149): what decides whether the row fits is the width the list is
+ * given, which is 232px less than the viewport beside the expanded sidebar
+ * and 56px less beside the rail.
+ *
+ * Its own container name and its own width, because this row is not the
+ * inventory's. It has no action squares and one more column, and measured in
+ * Chromium its fixed parts — lamp, columns, actions, gaps, padding and edges
+ * — take 534px against the inventory's 732. Plus the same name floor (rung 3,
+ * 104px): 638px. Sharing inventory.css's 836 would wrap this row beside a
+ * 272px name that fits; sharing nothing would leave the release of this
+ * page's fifth column (below) keyed to a different width than the wrap it
+ * belongs to.
+ *
+ * The rules are the inventory's, repeated rather than shared: a container
+ * condition cannot be a variable, so one block cannot serve two widths.
  */
-@media (max-width: 900px) {
+.nt-card .inv-list { container-name: nt-list; }
+
+@container nt-list (width < 638px) {
+  .inv-line { flex-wrap: wrap; row-gap: var(--space-2); }
+  .inv-main { flex: 1 1 100%; }
+  .inv-meta { flex: 1 1 100%; flex-wrap: wrap; min-width: 0; }
+  .inv-col--type,
+  .inv-col--num,
+  .inv-col--chan,
+  .inv-col--tags,
   .inv-col--added { width: auto; }
+  .inv-acts { margin-left: auto; }
   /*
-   * And the type column this page widened above. `inventory.css` releases
-   * `.inv-col--type` at this rung, but `.nt-card .inv-col--type` is more
-   * specific and would hold 104px through the release — which is exactly the
-   * sideways scroll the rule above exists to prevent, arrived at from the
-   * other side.
+   * `.nt-card .inv-col--type` is more specific than the release above and
+   * would hold 104px through it — the sideways scroll this block exists to
+   * prevent, arrived at from the other side.
    */
   .nt-card .inv-col--type { width: auto; }
 }

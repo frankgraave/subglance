@@ -471,6 +471,12 @@ const depthTokens = [
 ].filter(([name], i, all) => all.findIndex(([n]) => n === name) === i);
 const motionTokens = group(root, "--dur", "--ease");
 const bpTokens = group(root, "--bp-");
+// Container rungs (SUB-149) are list widths read by `@container`, never by
+// `@media`; every one of them is named for the row it fits, `--bp-*-row`.
+// The guide shows them in their own table so neither set is mistaken for the
+// other.
+const bpContainerTokens = bpTokens.filter(([name]) => name.endsWith("-row"));
+const bpViewportTokens = bpTokens.filter(([name]) => !name.endsWith("-row"));
 const controlTokens = group(root, "--control-");
 
 function specimenBlock(spec) {
@@ -682,13 +688,21 @@ const sections = [
     lead: `Documented here, enforced as literals. A custom property inside a
       media query never resolves — verified in Chromium, not assumed — and it
       fails silently, so the block is simply dropped and the layout is quietly
-      wrong at one width. The guard asserts every <code>@media</code> width in
-      the product is one of these, and that none of them is written as
-      <code>var()</code>.`,
-    html: `<table class="sg-table">
+      wrong at one width. Two separate sets, checked separately: every
+      <code>@media</code> width in the product is one of the viewport widths
+      below, every <code>@container</code> width is one of the container
+      widths, and none of them is written as <code>var()</code>.`,
+    html: `<p class="sg-lead">Viewport widths: the only values an <code>@media</code> rule may use.</p>
+    <table class="sg-table">
       <colgroup><col class="sg-col-token"><col class="sg-col-value"><col></colgroup>
       <thead><tr><th>Token</th><th>Value</th><th>What it is for</th></tr></thead>
-      <tbody>${bpTokens.map(plainRow).join("")}</tbody>
+      <tbody>${bpViewportTokens.map(plainRow).join("")}</tbody>
+    </table>
+    <p class="sg-lead">Container widths: the width of one list, for <code>@container</code> only. Never use one in an <code>@media</code> rule; the guard rejects it.</p>
+    <table class="sg-table">
+      <colgroup><col class="sg-col-token"><col class="sg-col-value"><col></colgroup>
+      <thead><tr><th>Token</th><th>Value</th><th>What it is for</th></tr></thead>
+      <tbody>${bpContainerTokens.map(plainRow).join("")}</tbody>
     </table>`,
   },
 ];

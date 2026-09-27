@@ -127,11 +127,27 @@ export function readStoredCardColumns(
  * (DESIGN.md §13). Rather than hand a phone a horizontally scrolling table we
  * fall back to cards, which keeps every fact the row shows.
  *
+ * `squeezed` is the same veto for a different reason: the viewport is wide
+ * enough but the expanded sidebar leaves the content column too narrow for
+ * the rows table (see `useSidebarSqueeze`).
+ *
  * The stored preference is deliberately *not* rewritten when this happens:
  * opening the dashboard on a phone must not silently change what the desktop
  * shows tomorrow.
  */
-export function effectiveLayout(preference: LayoutId, narrow: boolean): LayoutId {
-  if (!narrow) return preference;
-  return preference === "rows" || preference === "compact" ? "cards" : preference;
+export function effectiveLayout(
+  preference: LayoutId,
+  narrow: boolean,
+  squeezed = false,
+): LayoutId {
+  if (narrow) return preference === "rows" || preference === "compact" ? "cards" : preference;
+  /*
+   * Above the breakpoint, beside the expanded sidebar (SUB-149). Only rows
+   * gives way here: its five fixed columns need 440px and the column beside
+   * the sidebar at 641px is 361px, so the table scrolled the page 62px
+   * sideways. Compact has no fixed-width heartbeat and measured flush at the
+   * same width, so taking it away would be a veto with nothing to protect.
+   */
+  if (squeezed && preference === "rows") return "cards";
+  return preference;
 }
