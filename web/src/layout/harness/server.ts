@@ -20,6 +20,7 @@ import type { ApiIncident } from "../../monitors/detail";
 import { disabledWatchdog } from "../../watchdog/fixtures";
 import { steadyDiagnostics } from "../../diagnostics/fixtures";
 import { defaultRetention } from "../../retention/fixtures";
+import { unconfiguredBackup } from "../../backup/fixtures";
 import { twoUsers } from "../../users/fixtures";
 import { sampleTokens } from "../../tokens/fixtures";
 
@@ -288,6 +289,12 @@ export async function serveBuild(): Promise<Server> {
     if (url.pathname === "/api/v1/diagnostics") {
       res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
       res.end(JSON.stringify(steadyDiagnostics));
+      return;
+    }
+
+    if (url.pathname === "/api/v1/backup") {
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify(unconfiguredBackup));
       return;
     }
 
