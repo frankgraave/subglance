@@ -534,6 +534,10 @@ next hand-chosen tone comes from.
 --r-lg: 12px;   /* the card that frames panels, dialogs, drawer */
 
 --ease: cubic-bezier(.4, 0, .2, 1);
+--dur-hover:     150ms;  /* a pointer response */
+--dur-panel:     150ms;  /* a panel, drawer or view arriving */
+--dur-attention: 420ms;  /* theme switch; a lamp or bar changing status */
+--dur-withdraw:  600ms;  /* a claim draining when the live stream drops */
 --dur:  420ms;  /* theme transition */
 ```
 
@@ -581,6 +585,34 @@ feel assembled from parts rather than designed. 150ms is short enough to feel
 immediate and long enough to read as movement rather than as a jump. The 420ms
 `--dur` is not an exception to that rule — it is the theme transition, which is
 a deliberate, whole-page event rather than a response to a pointer.
+
+**The motion ladder is 150 / 420 / 600ms, and every step answers a different
+question.** 150ms answers a hand (`--dur-hover`, `--dur-panel`). 420ms marks a
+change of state someone should notice (`--dur-attention`: the theme switch, a
+lamp turning red, a new heartbeat bar). 600ms is a withdrawal, not an alarm
+(`--dur-withdraw`): when the live stream drops, lamps, bars, edges and readings
+drain to grey slower than anything else moves, because a fast desaturation
+reads as the monitors themselves changing state. Two durations sit outside the
+ladder on purpose, because they are loops rather than transitions: the busy
+glyph's 900ms linear spin and the reconnecting dot's 2s breathing (§6). A
+constant rotation is linear by definition; every other curve is `--ease`.
+
+`tokens.test.ts` refuses a literal duration or a literal easing curve anywhere
+under `web/src` outside `tokens.css`; the two loops are its only exceptions.
+Before it, the withdrawal was written as a literal `600ms` in eleven rules
+across two stylesheets.
+
+**Measured in Chromium, not assumed** (SUB-119).
+`layout/motion.browser.test.ts` opens the dashboard, a monitor, the inventory,
+incidents, notifications and settings at 1280px and reads every element's
+computed `transition-duration`, `animation-duration` and timing function. At
+rest the product uses exactly two durations — 150ms on buttons, fields, rows,
+the segmented control and the sidebar, and 420ms on the lamp — all on
+`cubic-bezier(.4, 0, .2, 1)`. Nothing animates at rest (rule 2). Under
+`prefers-reduced-motion: reduce` every computed duration on every one of those
+screens is at most 0.01ms. The test asserts both, so a Tailwind default or an
+inline style that sneaks in a duration off the ladder fails in the browser even
+where the source guard cannot see it.
 
 Space moves in steps of 4px; §2.7 states the ladder and how it is enforced.
 
@@ -2182,7 +2214,9 @@ green.
 
 So a second, small suite runs the built bundle in headless Chromium at 320, 375
 and 414px — `web/src/layout/phone-layout.browser.test.ts`, behind
-`npm run test:browser`. It asserts three things per screen:
+`npm run test:browser`. It walks the dashboard (cards, the rows preference and
+the wall), a monitor's detail, incidents, notifications and settings, and
+asserts three things per screen:
 
 * the page does not scroll sideways (`scrollWidth` equals `clientWidth`);
 * no element that the user can actually see extends past the viewport;
@@ -2194,13 +2228,27 @@ suite becomes something people re-bless rather than read. A horizontal overflow
 is a number that is either bigger than the viewport or is not; it never needs
 blessing, and when it fails it names the element.
 
-**Two exemptions, both load-bearing.** Content inside a clipping or scrolling
-ancestor does not count as overflow — the heartbeat bar's accessibility table
-is 1370px wide inside a clipped container, read by screen readers and never
-painted, and counting it would fail every screen for something working as
-designed. Visually-hidden inputs are exempt from the target-size rule for the
-same reason: the theme control is `sr-only` radios inside labels, where the
-label is the target and the input's 1x1 box is its clipping rectangle.
+**One exemption, and it is load-bearing.** Content inside a clipping or
+scrolling ancestor does not count as overflow — the heartbeat bar's
+accessibility table is 1370px wide inside a clipped container, read by screen
+readers and never painted, and counting it would fail every screen for
+something working as designed. The target-size rule has no exemption: every
+control is measured by its own box.
+
+**What walking every screen found (SUB-119).** The suite first covered only the
+dashboard. Extending it to the other routes turned up two controls under the
+24px floor that no one had looked at on a phone: the default-channel select on
+the notifications page, a native select with no class that styled it (17px
+tall), and the retention "Forever" checkbox on settings, at the browser's 13px
+default. The select now takes the form field's own class, and the checkbox the
+compact control square the inventory's selection checkbox already used. The
+card and panel structure itself held at all three widths on every one of those
+screens: no sideways scroll and nothing past the viewport.
+
+The monitors inventory is the one route not yet walked. Below 640px its meta
+row is wider than the phone (468px at 320px), and its name links are 19px
+tall. Both are known; it joins the suite when they are fixed, so its
+assertions go red without the fix and green with it.
 
 Keeping these out of `npm test` is deliberate. They need a built bundle and a
 browser download, and a unit suite that depends on either is one that people

@@ -1233,27 +1233,32 @@
       <tr>
         <td><code>--ease</code></td>
         <td class="sg-value"><code>cubic-bezier(.4, 0, .2, 1)</code></td>
-        <td class="sg-why">Motion. One duration for everything interactive, because a hover, a segment change and a menu opening are the same kind of event to the person watching; giving each its own timing makes the interface feel assembled from <details class="sg-more"><summary>more</summary>parts. 150ms is short enough to feel immediate and long enough to read as movement rather than a jump.</details></td>
+        <td class="sg-why">Motion. One duration for everything interactive, because a hover, a segment change and a menu opening are the same kind of event to the person watching; giving each its own timing makes the interface feel assembled from <details class="sg-more"><summary>more</summary>parts. 150ms is short enough to feel immediate and long enough to read as movement rather than a jump. The ladder is 150 / 420 / 600ms and §2.6 states what each rung is for; tokens.test.ts refuses a literal duration anywhere else.</details></td>
       </tr>
       <tr>
         <td><code>--dur-hover</code></td>
         <td class="sg-value"><code>150ms</code></td>
-        <td class="sg-why">Motion. One duration for everything interactive, because a hover, a segment change and a menu opening are the same kind of event to the person watching; giving each its own timing makes the interface feel assembled from <details class="sg-more"><summary>more</summary>parts. 150ms is short enough to feel immediate and long enough to read as movement rather than a jump.</details></td>
+        <td class="sg-why">Motion. One duration for everything interactive, because a hover, a segment change and a menu opening are the same kind of event to the person watching; giving each its own timing makes the interface feel assembled from <details class="sg-more"><summary>more</summary>parts. 150ms is short enough to feel immediate and long enough to read as movement rather than a jump. The ladder is 150 / 420 / 600ms and §2.6 states what each rung is for; tokens.test.ts refuses a literal duration anywhere else.</details></td>
       </tr>
       <tr>
         <td><code>--dur-panel</code></td>
         <td class="sg-value"><code>150ms</code></td>
-        <td class="sg-why">Motion. One duration for everything interactive, because a hover, a segment change and a menu opening are the same kind of event to the person watching; giving each its own timing makes the interface feel assembled from <details class="sg-more"><summary>more</summary>parts. 150ms is short enough to feel immediate and long enough to read as movement rather than a jump.</details></td>
+        <td class="sg-why">Motion. One duration for everything interactive, because a hover, a segment change and a menu opening are the same kind of event to the person watching; giving each its own timing makes the interface feel assembled from <details class="sg-more"><summary>more</summary>parts. 150ms is short enough to feel immediate and long enough to read as movement rather than a jump. The ladder is 150 / 420 / 600ms and §2.6 states what each rung is for; tokens.test.ts refuses a literal duration anywhere else.</details></td>
       </tr>
       <tr>
         <td><code>--dur-attention</code></td>
         <td class="sg-value"><code>420ms</code></td>
-        <td class="sg-why">Motion. One duration for everything interactive, because a hover, a segment change and a menu opening are the same kind of event to the person watching; giving each its own timing makes the interface feel assembled from <details class="sg-more"><summary>more</summary>parts. 150ms is short enough to feel immediate and long enough to read as movement rather than a jump.</details></td>
+        <td class="sg-why">Motion. One duration for everything interactive, because a hover, a segment change and a menu opening are the same kind of event to the person watching; giving each its own timing makes the interface feel assembled from <details class="sg-more"><summary>more</summary>parts. 150ms is short enough to feel immediate and long enough to read as movement rather than a jump. The ladder is 150 / 420 / 600ms and §2.6 states what each rung is for; tokens.test.ts refuses a literal duration anywhere else.</details></td>
       </tr>
       <tr>
         <td><code>--dur</code></td>
         <td class="sg-value"><code>var(--dur-attention)</code></td>
-        <td class="sg-why">Motion. One duration for everything interactive, because a hover, a segment change and a menu opening are the same kind of event to the person watching; giving each its own timing makes the interface feel assembled from <details class="sg-more"><summary>more</summary>parts. 150ms is short enough to feel immediate and long enough to read as movement rather than a jump.</details></td>
+        <td class="sg-why">Motion. One duration for everything interactive, because a hover, a segment change and a menu opening are the same kind of event to the person watching; giving each its own timing makes the interface feel assembled from <details class="sg-more"><summary>more</summary>parts. 150ms is short enough to feel immediate and long enough to read as movement rather than a jump. The ladder is 150 / 420 / 600ms and §2.6 states what each rung is for; tokens.test.ts refuses a literal duration anywhere else.</details></td>
+      </tr>
+      <tr>
+        <td><code>--dur-withdraw</code></td>
+        <td class="sg-value"><code>600ms</code></td>
+        <td class="sg-why">A claim being withdrawn when the live stream drops: lamps, bars, edges and readings drain to grey. <details class="sg-more"><summary>more</summary>Slower than every other rung on purpose — a fast desaturation reads as the monitors themselves changing state, which is the wrong story. It was written as a literal 600ms in eleven rules across two stylesheets before it had a name.</details></td>
       </tr></tbody>
     </table>
 </section>

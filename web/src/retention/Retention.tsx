@@ -79,7 +79,7 @@ function WindowField({ label, window, draft, onChange, disabled, estimateText, e
           onChange={(event) => onChange({ ...draft, days: event.target.value })}
         />
         <span aria-hidden="true">days</span>
-        <label><input type="checkbox" checked={draft.forever}
+        <label className="retention-forever"><input type="checkbox" checked={draft.forever}
           onChange={(event) => onChange({ days: draft.days || String(window.seconds / DAY || 30), forever: event.target.checked })} /> Forever</label>
       </div>
       <p className="retention-note" id={`${id}-help`}>

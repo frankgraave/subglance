@@ -3321,3 +3321,128 @@ describe("the card pattern is the only way to frame a group of panels", () => {
     }
   });
 });
+
+/**
+ * SUB-119: motion gets the same rule as every other scale.
+ *
+ * The motion tokens existed, and 11 rules still spelled out `600ms` by hand,
+ * because nothing compared them. The rung now exists (`--dur-withdraw`), and
+ * this refuses the next literal the way the colour guard refuses a hex.
+ *
+ * A duration is any number with an `s` or `ms` unit inside a transition or
+ * animation declaration. A curve is `cubic-bezier()`, `steps()` or one of the
+ * keyword easings; `--ease` is the only curve the product uses.
+ */
+const MOTION_PROPERTY =
+  /(?:^|[\s;{])((?:transition|animation)(?:-(?:duration|delay|timing-function))?)\s*:\s*([^;{}]+)/g;
+
+/** Every transition/animation declaration in a stylesheet, as `prop: value`. */
+function motionDeclarations(css: string): string[] {
+  const found: string[] = [];
+  for (const match of css.matchAll(MOTION_PROPERTY)) {
+    found.push(`${match[1]}: ${match[2].trim().replace(/\s+/g, " ")}`);
+  }
+  return found;
+}
+
+/** True when a motion declaration carries a literal duration or curve. */
+function literalMotion(declaration: string): boolean {
+  const value = declaration.slice(declaration.indexOf(":") + 1);
+  return (
+    /(?:^|[\s,(])-?(?:\d+\.?\d*|\.\d+)m?s\b/.test(value) ||
+    /\b(?:cubic-bezier|steps)\(/.test(value) ||
+    /(?:^|[\s,])(?:ease|ease-in|ease-out|ease-in-out|linear|step-start|step-end)(?=$|[\s,;!])/.test(value)
+  );
+}
+
+const motionExceptions = new Map<string, string>([
+  [
+    "web/src/monitors/inventory.css: animation: inv-act-spin 900ms linear infinite",
+    "A loop, not a transition: a busy glyph turning while a check runs. A constant rotation is linear by definition, and its period is a pace rather than a response time, so no rung of the ladder describes it (DESIGN.md §2.6).",
+  ],
+  [
+    "web/src/live/connection.css: animation: conn-pulse 2s var(--ease) infinite",
+    "A loop, not a transition: the reconnecting dot breathing slowly so it reads as 'still trying' rather than an alarm (§6). Its period is a pace, not a response time.",
+  ],
+  [
+    "web/src/index.css: animation-duration: .01ms !important",
+    "The reduced-motion collapse. Imperceptible rather than zero so animationend and transitionend still fire; it is the absence of motion, not a rung.",
+  ],
+  [
+    "web/src/index.css: transition-duration: .01ms !important",
+    "The reduced-motion collapse, as above for transitions.",
+  ],
+]);
+
+describe("tokens.css is the only source of motion", () => {
+  const live = () => {
+    const found: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (!file.endsWith(".css")) continue;
+      const path = relative(repoRoot, file);
+      for (const declaration of motionDeclarations(
+        stripComments(readFileSync(file, "utf8")),
+      )) {
+        found.push(`${path}: ${declaration}`);
+      }
+    }
+    return found;
+  };
+
+  it("finds no literal duration or easing curve anywhere else under web/src", () => {
+    expect(
+      live().filter(
+        (key) => literalMotion(key.slice(key.indexOf(": ") + 2)) && !motionExceptions.has(key),
+      ),
+    ).toEqual([]);
+  });
+
+  it("finds no Tailwind duration, delay or easing utility under web/src", () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (file.endsWith(".css")) continue;
+      for (const match of readFileSync(file, "utf8").matchAll(
+        /\b(?:duration|delay|ease)-(?:\d+|\[[^\]]+\]|linear|in|out|in-out)\b/g,
+      )) {
+        offenders.push(`${relative(repoRoot, file)}: ${match[0]}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps every documented motion exception real, so the allow-list cannot rot", () => {
+    const present = new Set(live());
+    expect([...motionExceptions.keys()].filter((key) => !present.has(key))).toEqual([]);
+  });
+
+  it("uses the duration ladder from §2.6", () => {
+    const root = declarations(
+      tokensCss.slice(tokensCss.indexOf(":root"), tokensCss.indexOf("\n}")),
+    );
+    const ladder = [
+      ...designMd.matchAll(/(--dur-(?:hover|panel|attention|withdraw)):\s*(\S+);/g),
+    ];
+    expect(ladder.length, "expected four duration rungs in §2.6").toBe(4);
+    for (const match of ladder) {
+      expect(root.get(match[1]), match[1]).toBe(match[2].trim());
+    }
+  });
+
+  it("bites on a literal duration, a literal curve and a keyword easing in a fixture", () => {
+    const css = `
+      .a { transition: color 200ms var(--ease); }
+      .b { transition: opacity var(--dur-hover) cubic-bezier(.2, 0, 0, 1); }
+      .c { animation: spin var(--dur-panel) ease-in-out; }
+      .d { transition-delay: .3s; }
+      .e { transition: border-color var(--dur-withdraw) var(--ease); }
+      .f { animation: none; }
+      .g { transition: grid-template-columns var(--dur-panel) var(--ease); }
+    `;
+    expect(motionDeclarations(css).filter(literalMotion)).toEqual([
+      "transition: color 200ms var(--ease)",
+      "transition: opacity var(--dur-hover) cubic-bezier(.2, 0, 0, 1)",
+      "animation: spin var(--dur-panel) ease-in-out",
+      "transition-delay: .3s",
+    ]);
+  });
+});

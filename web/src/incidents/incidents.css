@@ -183,7 +183,7 @@
 .mon-detail[data-conn="stale"] .inc-row[data-state="open"]::before,
 .mon-detail[data-conn="stale"] .inc-row[data-state="acked"]::before {
   filter: saturate(.18);
-  transition: filter 600ms var(--ease);
+  transition: filter var(--dur-withdraw) var(--ease);
 }
 
 /* History is quieter still: the name recedes, because in that card the number
