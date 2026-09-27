@@ -104,12 +104,20 @@
      segment change and a menu opening are the same kind of event to the person
      watching; giving each its own timing makes the interface feel assembled
      from parts. 150ms is short enough to feel immediate and long enough to
-     read as movement rather than a jump. */
+     read as movement rather than a jump. The ladder is 150 / 420 / 600ms and
+     §2.6 states what each rung is for; tokens.test.ts refuses a literal
+     duration anywhere else. */
   --ease: cubic-bezier(.4, 0, .2, 1);
   --dur-hover: 150ms;
   --dur-panel: 150ms;
   --dur-attention: 420ms;
   --dur: var(--dur-attention);
+  /* A claim being withdrawn when the live stream drops: lamps, bars, edges
+     and readings drain to grey. Slower than every other rung on purpose — a
+     fast desaturation reads as the monitors themselves changing state, which
+     is the wrong story. It was written as a literal 600ms in eleven rules
+     across two stylesheets before it had a name. */
+  --dur-withdraw: 600ms;
 
   /* Type. Six roles, one scale — §2.5. A component never spells out a font
      size, for the same reason it never spells out a colour: "make everything

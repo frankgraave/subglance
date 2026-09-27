@@ -534,6 +534,10 @@ next hand-chosen tone comes from.
 --r-lg: 12px;   /* the card that frames panels, dialogs, drawer */
 
 --ease: cubic-bezier(.4, 0, .2, 1);
+--dur-hover:     150ms;  /* a pointer response */
+--dur-panel:     150ms;  /* a panel, drawer or view arriving */
+--dur-attention: 420ms;  /* theme switch; a lamp or bar changing status */
+--dur-withdraw:  600ms;  /* a claim draining when the live stream drops */
 --dur:  420ms;  /* theme transition */
 ```
 
@@ -581,6 +585,34 @@ feel assembled from parts rather than designed. 150ms is short enough to feel
 immediate and long enough to read as movement rather than as a jump. The 420ms
 `--dur` is not an exception to that rule — it is the theme transition, which is
 a deliberate, whole-page event rather than a response to a pointer.
+
+**The motion ladder is 150 / 420 / 600ms, and every step answers a different
+question.** 150ms answers a hand (`--dur-hover`, `--dur-panel`). 420ms marks a
+change of state someone should notice (`--dur-attention`: the theme switch, a
+lamp turning red, a new heartbeat bar). 600ms is a withdrawal, not an alarm
+(`--dur-withdraw`): when the live stream drops, lamps, bars, edges and readings
+drain to grey slower than anything else moves, because a fast desaturation
+reads as the monitors themselves changing state. Two durations sit outside the
+ladder on purpose, because they are loops rather than transitions: the busy
+glyph's 900ms linear spin and the reconnecting dot's 2s breathing (§6). A
+constant rotation is linear by definition; every other curve is `--ease`.
+
+`tokens.test.ts` refuses a literal duration or a literal easing curve anywhere
+under `web/src` outside `tokens.css`; the two loops are its only exceptions.
+Before it, the withdrawal was written as a literal `600ms` in eleven rules
+across two stylesheets.
+
+**Measured in Chromium, not assumed** (SUB-119).
+`layout/motion.browser.test.ts` opens the dashboard, a monitor, the inventory,
+incidents, notifications and settings at 1280px and reads every element's
+computed `transition-duration`, `animation-duration` and timing function. At
+rest the product uses exactly two durations — 150ms on buttons, fields, rows,
+the segmented control and the sidebar, and 420ms on the lamp — all on
+`cubic-bezier(.4, 0, .2, 1)`. Nothing animates at rest (rule 2). Under
+`prefers-reduced-motion: reduce` every computed duration on every one of those
+screens is at most 0.01ms. The test asserts both, so a Tailwind default or an
+inline style that sneaks in a duration off the ladder fails in the browser even
+where the source guard cannot see it.
 
 Space moves in steps of 4px; §2.7 states the ladder and how it is enforced.
 
