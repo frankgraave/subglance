@@ -107,6 +107,28 @@ cards *are* white. That way cards sit in front of the page instead of
 disappearing into it. The status colours are darker and more saturated in light
 mode, because the dark originals are unreadable on white.
 
+**Measured in situ, not only as tokens.** `layout/light-in-situ.browser.test.ts`
+opens seven screens (dashboard rows, cards, compact, the status wall, monitor
+detail, monitors, incidents) in both themes and measures every status mark
+against its own composited backdrop: the lamp, the heartbeat bar and the rail.
+axe covers text; it does not look at a 20x7 lamp or an SVG bar, which are the
+marks this product is read by. The worst case per mark, at 1440px:
+
+| Mark | Light | Dark |
+|---|---|---|
+| lamp / bar `up` | 3.3:1 / 3.6:1 | 6.9:1 / 7.9:1 |
+| lamp / bar / rail `warn` | 4.8:1 | 9.1:1 |
+| lamp / bar / rail `down` | 4.5:1 | 3.9:1 |
+| paused ring / dotted rail | 6.0:1 / 3.2:1 | 5.9:1 / 3.5:1 |
+| unlit lamp / waiting rail (`--idle`) | 1.6:1 / 1.7:1 | 1.9:1 / 2.1:1 |
+
+Every mark that carries a state clears the 3:1 non-text floor in both themes;
+light `up` is the thinnest margin, and the test fails if it slips. The unlit
+lamp does not, in either theme. That is pinned, not waived: the test asserts it
+stays *below* 3:1, so a change that lifts it is noticed and promoted to the
+floor. Whether unlit should clear 3:1 at all is open, because a grey that bright
+starts to read as a fourth status colour.
+
 ### 2.3 Status
 
 | Status | Dark | Light | Meaning |
