@@ -2238,7 +2238,8 @@ green.
 So a second, small suite runs the built bundle in headless Chromium at 320, 375
 and 414px — `web/src/layout/phone-layout.browser.test.ts`, behind
 `npm run test:browser`. It walks the dashboard (cards, the rows preference and
-the wall), a monitor's detail, incidents, notifications and settings, and
+the wall), the monitors inventory, a monitor's detail, incidents, notifications
+and settings, and
 asserts three things per screen:
 
 * the page does not scroll sideways (`scrollWidth` equals `clientWidth`);
@@ -2268,10 +2269,13 @@ compact control square the inventory's selection checkbox already used. The
 card and panel structure itself held at all three widths on every one of those
 screens: no sideways scroll and nothing past the viewport.
 
-The monitors inventory is the one route not yet walked. Below 640px its meta
-row is wider than the phone (468px at 320px), and its name links are 19px
-tall. Both are known; it joins the suite when they are fixed, so its
-assertions go red without the fix and green with it.
+The monitors inventory joined last (SUB-150). Its meta row had been wider than
+the phone (468px at 320px) until the row's wrap moved to a container query on
+the list (SUB-149). Its name links were 19px tall: an inline anchor takes the
+height of its line. They now take the same 24px floor as the card's name link,
+as an `inline-block` that carries its own ellipsis, since the surrounding
+span's `text-overflow` cannot reach inside an atomic box. Without that rule the
+target-size assertion fails at all three widths.
 
 Keeping these out of `npm test` is deliberate. They need a built bundle and a
 browser download, and a unit suite that depends on either is one that people

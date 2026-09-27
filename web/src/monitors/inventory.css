@@ -72,6 +72,27 @@
 
 .inv-name { font-size: var(--type-row); line-height: var(--lead-row); }
 
+/*
+ * The name link is a 24px target (WCAG 2.2 SC 2.5.8), as the card's name link
+ * already is in `monitors.css`. As an inline anchor it took the height of its
+ * line — 19px — and SC 2.5.8's inline exemption covers a link inside a
+ * sentence, not a row's name on its own line.
+ *
+ * `inline-block` makes the anchor an atomic box, so the ellipsis has to move
+ * onto it: the span's own `text-overflow` cannot reach inside an atomic
+ * inline and would clip a long name mid-letter instead. `max-width: 100%`
+ * keeps it inside the column, and `middle` lines it up with the selection
+ * checkbox beside it, which sits the same way.
+ */
+.inv-name > a {
+  display: inline-block;
+  min-height: var(--size-row-sm);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
 .inv-sub {
   @apply face-mono;
   font-size: var(--type-helper);

@@ -48,16 +48,16 @@ const WIDTHS = [320, 375, 414];
  * settings (the browser's 13px default). Both are fixed in their own
  * stylesheets, not exempted here.
  *
- * The monitors inventory is the one route still absent. Below 640px it
- * scrolls sideways (a 468px meta row at 320px), which SUB-149 fixes in its
- * own open pull request, and its name links are 19px tall, which is tracked
- * separately. It joins this list once both are fixed, so that its assertions
- * turn red without the fix and green with it.
+ * The monitors inventory joined last (SUB-150). It used to scroll sideways
+ * below 640px (a 468px meta row at 320px) until the row's wrap moved to a
+ * container query on the list (SUB-149), and its name links were 19px tall
+ * until `inventory.css` gave them the 24px floor the card names already had.
  */
 const SCREENS = [
   { name: "dashboard (cards)", layout: "cards", path: "/", ready: "[data-testid^='monitor-card-']" },
   { name: "dashboard (rows preference)", layout: "rows", path: "/", ready: "[data-testid^='monitor-card-']" },
   { name: "status wall", layout: "wall", path: "/", ready: ".wall-card" },
+  { name: "monitors", layout: "cards", path: "/monitors", ready: ".inv-list > li" },
   { name: "monitor detail", layout: "cards", path: "/monitors/1", ready: ".mon-detail-windows" },
   { name: "incidents", layout: "cards", path: "/incidents", ready: ".inc-line" },
   { name: "notifications", layout: "cards", path: "/notifications", ready: ".inv-row" },
