@@ -446,7 +446,12 @@ export default function App() {
         ) : onSettings ? (
           <Settings canAdmin={session.state === "signedIn" && session.user.role === "admin"}
             userId={session.state === "signedIn" ? session.user.id : undefined}
-            role={session.state === "signedIn" ? session.user.role : "viewer"} />
+            role={session.state === "signedIn" ? session.user.role : "viewer"}
+            display={{
+              theme: preference, onThemeChange: setPreference,
+              layout, effectiveLayout: shown, onLayoutChange: setLayout,
+              cardColumns, onCardColumnsChange: setCardColumns,
+            }} />
         ) : onIncidents ? (
           <LiveIncidentsRoot client={queryClient} />
         ) : route.name === "notifications" ? (

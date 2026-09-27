@@ -57,3 +57,8 @@
   .settings-index { position: static; }
   .settings-index ul { flex-direction: row; flex-wrap: wrap; }
 }
+
+/* A panel stacks its children in a column, which would stretch each
+   segmented control into a full-width tray with its segments bunched at the
+   left. The control keeps its own width, as it does in the masthead. */
+.display-card .segmented { align-self: start; }
