@@ -3954,7 +3954,7 @@ components:
           default: true
         headers:
           type: object
-          description: Extra request headers for `http` monitors.
+          description: Extra request headers for `http` monitors. Sent only to the target's origin (scheme, host, port); a followed redirect to another origin gets none of them, except an http to https upgrade of the same host on the default ports.
           additionalProperties:
             type: string
           example:
