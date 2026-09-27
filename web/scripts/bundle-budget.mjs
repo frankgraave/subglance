@@ -227,8 +227,16 @@ const budgets = {
    * No new dependency. Both branches carry this same edit, so whichever merges
    * second meets an identical change instead of a conflict. Together they come
    * to about 153,800 bytes; 151 leaves roughly 800.
+   *
+   * 151 -> 152 KiB gzip for SUB-28 (the Display section), merged onto develop
+   * 7623e2b. Develop itself measures 154,619 bytes of entry JS (Node gzip,
+   * level 6), 5 under 151: the later merges used up the room the 151 above
+   * left. This branch measures 154,871 bytes, 247 over: the section reuses
+   * the theme, layout and cards-per-row controls the app already draws, so it
+   * costs only the card around them (about 250 bytes). No new dependency.
+   * 152 leaves about 780 bytes.
    */
-  js: 151,
+  js: 152,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *

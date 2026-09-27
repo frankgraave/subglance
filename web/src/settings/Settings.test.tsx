@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ShellSlots } from "../shell/ShellSlots";
 import { setToolbarSlot, setTopbarSlot } from "../shell/topbarSlot";
 import { Settings } from "./Settings";
+import type { DisplayPreferences } from "./DisplayCard";
 
 const clients: QueryClient[] = [];
 function renderSettings() {
@@ -112,4 +113,55 @@ it("moves the current section off one the search hides, and does not bring it ba
   fireEvent.change(search, { target: { value: "" } });
   expect(current()).toHaveLength(1);
   expect(current()).not.toEqual(["Retention & storage"]);
+});
+
+function displayPrefs(): DisplayPreferences {
+  return {
+    theme: "dark", onThemeChange: vi.fn(),
+    layout: "rows", effectiveLayout: "cards", onLayoutChange: vi.fn(),
+    cardColumns: "2", onCardColumnsChange: vi.fn(),
+  };
+}
+
+it("offers the display preferences as a section, saying they belong to this browser", () => {
+  window.history.replaceState(null, "", "/settings#display");
+  vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => new Response("{}", { status: 404 })));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  clients.push(client);
+  const prefs = displayPrefs();
+  render(<QueryClientProvider client={client}><ShellSlots /><Settings client={client} display={prefs} /></QueryClientProvider>);
+  // Second in the index, beside the account: both are about the person at
+  // this browser, everything after them about the instance.
+  expect(within(index()).getAllByRole("link").map((link) => link.textContent).slice(0, 2)).toEqual(["Account", "Display"]);
+  expect(scrolled).toEqual(["display"]);
+  const card = screen.getByRole("region", { name: "Display" });
+  expect(card.textContent).toMatch(/this browser/);
+  // The section shows what is on screen, like the masthead: cards won over a
+  // stored Rows preference, so Cards is the pressed segment.
+  const layout = within(card).getByRole("group", { name: "Dashboard layout" });
+  expect(within(layout).getByRole("button", { name: "Cards" }).getAttribute("aria-pressed")).toBe("true");
+  fireEvent.click(within(layout).getByRole("button", { name: "Compact" }));
+  expect(prefs.onLayoutChange).toHaveBeenCalledWith("compact");
+  const theme = within(card).getByRole("group", { name: "Colour theme" });
+  expect(within(theme).getByRole("button", { name: "Dark" }).getAttribute("aria-pressed")).toBe("true");
+  fireEvent.click(within(theme).getByRole("button", { name: "Light" }));
+  expect(prefs.onThemeChange).toHaveBeenCalledWith("light");
+  // Cards per row is reachable here in every layout, not only while the
+  // dashboard is in Cards.
+  const columns = within(card).getByRole("group", { name: "Cards per row" });
+  fireEvent.click(within(columns).getByRole("button", { name: "Three per row" }));
+  expect(prefs.onCardColumnsChange).toHaveBeenCalledWith("3");
+});
+
+it("finds the display section by what it controls", () => {
+  window.history.replaceState(null, "", "/settings");
+  vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => new Response("{}", { status: 404 })));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  clients.push(client);
+  render(<QueryClientProvider client={client}><ShellSlots /><Settings client={client} display={displayPrefs()} /></QueryClientProvider>);
+  const search = screen.getByRole("searchbox", { name: "Search settings" });
+  for (const word of ["theme", "dark", "layout", "columns"]) {
+    fireEvent.change(search, { target: { value: word } });
+    expect(within(index()).getAllByRole("link").map((link) => link.textContent), word).toEqual(["Display"]);
+  }
 });

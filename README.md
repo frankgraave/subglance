@@ -99,7 +99,7 @@ exists for it.
 | Maintenance windows — one-off and weekly, by monitor or tag | ✅ Working |
 | Scheduled backups to S3-compatible storage, and restore | ✅ Working |
 | Latency chart on the detail view — 24h, 7d and 30d | ✅ Working |
-| Settings — account, users, retention, backups, API tokens, instance diagnostics, reset | ✅ Working |
+| Settings — account, display, users, retention, backups, API tokens, instance diagnostics, reset | ✅ Working |
 
 <details>
 <summary><strong>What "working" covers, in detail</strong></summary>
@@ -162,8 +162,7 @@ exists for it.
 
 ### Not working yet
 
-- **Display preferences.** Theme and layout choices live in the browser, not
-  on the settings page; a Display section is in review.
+Everything planned for v0.1 is listed as working above.
 
 Deliberately **not** in v0.1: status pages, config-as-code, multi-region checks,
 on-call schedules, SSO, mobile app, CLI, Postgres. They are on the roadmap; they

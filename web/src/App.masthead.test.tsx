@@ -14,6 +14,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
@@ -235,4 +236,31 @@ describe("the masthead", () => {
     }
   });
 
+  it("drives the same preferences from the settings page as from the masthead", async () => {
+    /*
+     * The Display section on /settings is a second view of the preferences
+     * App owns, not a second copy of them: a choice made there has to show
+     * in the masthead at once and be what the next visit reads back.
+     */
+    render(<App />);
+    await screen.findByText(USER.email);
+    fireEvent.click(screen.getByRole("link", { name: "Settings" }));
+    const card = await screen.findByRole("region", { name: "Display" });
+    const masthead = document.querySelector<HTMLElement>(".shell-topbar")!;
+    const pressed = (root: HTMLElement, group: string, option: string) =>
+      within(within(root).getByRole("group", { name: group }))
+        .getByRole("button", { name: option })
+        .getAttribute("aria-pressed");
+
+    fireEvent.click(within(within(card).getByRole("group", { name: "Colour theme" })).getByRole("button", { name: "Light" }));
+    expect(pressed(masthead, "Colour theme", "Light")).toBe("true");
+
+    fireEvent.click(within(within(card).getByRole("group", { name: "Dashboard layout" })).getByRole("button", { name: "Compact" }));
+    expect(pressed(masthead, "Dashboard layout", "Compact")).toBe("true");
+    expect(window.localStorage.getItem("subglance:layout")).toBe("compact");
+
+    fireEvent.click(within(within(card).getByRole("group", { name: "Cards per row" })).getByRole("button", { name: "Three per row" }));
+    expect(pressed(card, "Cards per row", "Three per row")).toBe("true");
+    expect(window.localStorage.getItem("subglance:card-columns")).toBe("3");
+  });
 });
