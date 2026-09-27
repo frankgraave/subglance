@@ -85,13 +85,13 @@
   /* 600ms, and slower than every other transition in the product on purpose.
      This is a withdrawal, not an alarm: a fast desaturation reads as a state
      change in the monitors themselves, which is precisely the wrong story. */
-  transition: filter 600ms var(--ease), box-shadow 600ms var(--ease);
+  transition: filter var(--dur-withdraw) var(--ease), box-shadow var(--dur-withdraw) var(--ease);
 }
 
 .mon-dashboard[data-conn="stale"] .hb-bar,
 .mon-detail[data-conn="stale"] .hb-bar {
   filter: saturate(.18);
-  transition: filter 600ms var(--ease);
+  transition: filter var(--dur-withdraw) var(--ease);
 }
 
 /* Live check animations stop. A bar flaring into place while the stream is
@@ -124,7 +124,7 @@
 .mon-detail[data-conn="stale"] .mon-detail-status,
 .mon-detail[data-conn="stale"] .mon-detail-window-value {
   color: var(--ink-3);
-  transition: color 600ms var(--ease);
+  transition: color var(--dur-withdraw) var(--ease);
 }
 
 /*
@@ -194,20 +194,20 @@
 .mon-dashboard[data-conn="stale"] .mon-card[data-status="down"],
 .mon-dashboard[data-conn="stale"] .mon-line[data-status="down"] {
   border-left-color: var(--down-drained);
-  transition: border-left-color 600ms var(--ease);
+  transition: border-left-color var(--dur-withdraw) var(--ease);
 }
 
 .mon-dashboard[data-conn="stale"] .mon-row[data-status="pending"] > :first-child,
 .mon-dashboard[data-conn="stale"] .mon-card[data-status="pending"],
 .mon-dashboard[data-conn="stale"] .mon-line[data-status="pending"] {
   border-left-color: var(--warn-drained);
-  transition: border-left-color 600ms var(--ease);
+  transition: border-left-color var(--dur-withdraw) var(--ease);
 }
 .mon-dashboard[data-conn="stale"] .mon-row[data-status="warning"] > :first-child,
 .mon-dashboard[data-conn="stale"] .mon-card[data-status="warning"],
 .mon-dashboard[data-conn="stale"] .mon-line[data-status="warning"] {
   border-left-color: var(--warn-drained);
-  transition: border-left-color 600ms var(--ease);
+  transition: border-left-color var(--dur-withdraw) var(--ease);
 }
 
 /*
@@ -226,16 +226,16 @@
  */
 .mon-detail[data-conn="stale"] .mon-detail-status[data-status="down"] {
   border-color: var(--down-drained);
-  transition: border-color 600ms var(--ease);
+  transition: border-color var(--dur-withdraw) var(--ease);
 }
 
 .mon-detail[data-conn="stale"] .mon-detail-status[data-status="pending"] {
   border-color: var(--warn-drained);
-  transition: border-color 600ms var(--ease);
+  transition: border-color var(--dur-withdraw) var(--ease);
 }
 .mon-detail[data-conn="stale"] .mon-detail-status[data-status="warning"] {
   border-color: var(--warn-drained);
-  transition: border-color 600ms var(--ease);
+  transition: border-color var(--dur-withdraw) var(--ease);
 }
 
 /*
