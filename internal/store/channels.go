@@ -184,20 +184,40 @@ func (db *DB) ListMonitorChannels(ctx context.Context, monitorID int64) ([]Chann
 
 // AlertChannels returns the channels an alert for this monitor goes to.
 //
-// A monitor's own assignments win outright. Only a monitor with none falls
-// back to the instance default, and usedDefault reports that it did, so a
-// caller can say which rule applied instead of making a reader work it out.
-// The default replaces an empty list rather than joining a populated one: a
-// monitor someone deliberately routed to one channel keeps that routing when
-// a default is added later.
+// That is the union of the monitor's own channels and the channels of every
+// routing rule whose tag it carries, minus the rules it is excluded from
+// (routing_rules.go). Only when that union is empty does the instance default
+// apply, and usedDefault reports that it did, so a caller can say which rule
+// applied instead of making a reader work it out. The default replaces an
+// empty list rather than joining a populated one: a monitor someone
+// deliberately routed keeps that routing when a default is added later.
+//
+// A channel reached two ways (its own and a rule, or two rules) is returned
+// once, so it is sent one message and not two.
 //
 // Disabled channels are returned like enabled ones. Skipping them is the
 // sender's decision, and a disabled default still counts as "the default
 // applied" — the monitor is routed, the route is switched off.
 func (db *DB) AlertChannels(ctx context.Context, monitorID int64) (channels []Channel, usedDefault bool, err error) {
-	own, err := db.ListMonitorChannels(ctx, monitorID)
-	if err != nil || len(own) > 0 {
-		return own, false, err
+	rows, err := db.Reader.QueryContext(ctx, `
+		SELECT `+channelColumns+`
+		  FROM notif_channels
+		 WHERE id IN (SELECT channel_id FROM monitor_channels WHERE monitor_id = ?)
+		    OR id IN (`+ruleChannelsForMonitor+`)
+		 ORDER BY id`, monitorID, monitorID, monitorID)
+	if err != nil {
+		return nil, false, fmt.Errorf("query alert channels: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		c, err := db.scanChannel(rows)
+		if err != nil {
+			return nil, false, err
+		}
+		channels = append(channels, c)
+	}
+	if err := rows.Err(); err != nil || len(channels) > 0 {
+		return channels, false, err
 	}
 	def, ok, err := db.DefaultChannel(ctx)
 	if err != nil || !ok {

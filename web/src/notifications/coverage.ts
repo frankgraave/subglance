@@ -1,12 +1,14 @@
 /**
  * Who hears about each monitor (SUB-124).
  *
- * The notifier's rule, restated for the page: a monitor's own channels win
- * outright, a monitor with none alerts through the instance default, and a
- * disabled channel is skipped at send time (`internal/notifier`). So "who
- * hears" is not the attachment list — it is the attachment list, or the
- * default, minus whatever is switched off. Working that out in one's head for
- * forty monitors is the exact chore the ticket asks the page to remove.
+ * The notifier's rule, restated for the page: an alert goes to the union of a
+ * monitor's own channels and the channels of every tag routing rule it
+ * matches (SUB-147); a monitor with neither alerts through the instance
+ * default; and a disabled channel is skipped at send time
+ * (`internal/notifier`). So "who hears" is not the attachment list — it is
+ * that union, or the default, minus whatever is switched off. Working that out
+ * in one's head for forty monitors is the exact chore the ticket asks the page
+ * to remove.
  *
  * Pure, so every branch is a table test rather than a render.
  */
@@ -18,6 +20,8 @@ import type { Channel } from "./channels";
 /** One destination as a monitor reaches it. */
 export type Recipient = {
   name: string;
+  /** The rule that adds this channel, as `key:value`; absent for own channels and the default. */
+  via?: string;
   /**
    * False when the channel is switched off, so this route delivers nothing.
    * Null when the channel list does not know the id — the two lists are
@@ -34,9 +38,9 @@ export type Coverage = {
   /** A paused monitor is not checked, so it alerts nobody by design. */
   paused: boolean;
   /**
-   * `own`: its own channels. `default`: none of its own, so the default.
-   * `none`: none of its own and no default. `unknown`: its attachments could
-   * not be read, so nothing is claimed.
+   * `own`: its own channels and/or channels from matching routing rules.
+   * `default`: neither, so the default. `none`: neither and no default.
+   * `unknown`: its attachments could not be read, so nothing is claimed.
    */
   route: "own" | "default" | "none" | "unknown";
   recipients: readonly Recipient[];
@@ -66,16 +70,26 @@ export function coverageOf(
   if (!state.known) {
     return { ...base, route: "unknown", recipients: [], silent: false };
   }
-  const lookup = (id: string | undefined, name: string): Recipient => {
+  const lookup = (id: string | undefined, name: string, via?: string): Recipient => {
     const channel =
       id === undefined ? undefined : channels.find((c) => c.id === id);
-    return { name, enabled: channel === undefined ? null : channel.enabled };
+    return {
+      name,
+      enabled: channel === undefined ? null : channel.enabled,
+      ...(via === undefined ? {} : { via }),
+    };
   };
   let route: Coverage["route"];
   let recipients: Recipient[];
-  if (state.names.length > 0) {
+  const viaRules = (state.rules ?? []).flatMap((rule) =>
+    rule.names.map((name, i) => lookup(rule.ids[i], name, rule.tag)),
+  );
+  if (state.names.length > 0 || viaRules.length > 0) {
     route = "own";
-    recipients = state.names.map((name, i) => lookup(state.ids?.[i], name));
+    recipients = [
+      ...state.names.map((name, i) => lookup(state.ids?.[i], name)),
+      ...viaRules,
+    ];
   } else if (state.fallback !== undefined) {
     route = "default";
     recipients = [lookup(state.fallbackId, state.fallback)];
@@ -142,10 +156,15 @@ export function unconfirmedCount(list: readonly Coverage[]): number {
  */
 export function describeCoverage(c: Coverage): string {
   if (c.route === "unknown") return "not loaded";
+  // A rule-routed channel says which rule, so "why does this monitor page
+  // the on-call phone?" is answered on the row instead of by reading rules.
   const named = c.recipients
-    .map((r) => (r.enabled === false ? `${r.name} (disabled)` : r.name))
+    .map((r) => {
+      const label = r.via === undefined ? r.name : `${r.name} via ${r.via}`;
+      return r.enabled === false ? `${label} (disabled)` : label;
+    })
     .join(", ");
-  if (c.route === "none") return "nobody: no channels of its own and no default";
+  if (c.route === "none") return "nobody: no channels of its own, no matching rule and no default";
   if (c.route === "default") {
     return c.silent
       ? `nobody: the default, ${c.recipients[0].name}, is disabled`

@@ -333,6 +333,7 @@ func (s *Server) routes() []route {
 		// to them.
 		{http.MethodGet, "/api/v1/channels", accessRead},
 		{http.MethodGet, "/api/v1/channels/{id}", accessRead},
+		{http.MethodGet, "/api/v1/routing-rules", accessRead},
 
 		// The live stream is a read: a viewer may watch, but watching is all it
 		// does. It sits behind the same auth as everything else — an unguarded
@@ -390,6 +391,14 @@ func (s *Server) routes() []route {
 		{http.MethodPost, "/api/v1/channels/{id}/test", accessWrite},
 		{http.MethodPut, "/api/v1/channels/{id}/default", accessWrite},
 		{http.MethodDelete, "/api/v1/channels/{id}/default", accessWrite},
+
+		// Routing rules decide who hears about an outage, exactly like a
+		// monitor's own channels, so they carry the same permission.
+		{http.MethodPost, "/api/v1/routing-rules", accessWrite},
+		{http.MethodPut, "/api/v1/routing-rules/{id}", accessWrite},
+		{http.MethodDelete, "/api/v1/routing-rules/{id}", accessWrite},
+		{http.MethodPut, "/api/v1/routing-rules/{id}/exclusions/{monitor_id}", accessWrite},
+		{http.MethodDelete, "/api/v1/routing-rules/{id}/exclusions/{monitor_id}", accessWrite},
 
 		// Authenticated: admin only.
 		{http.MethodGet, "/api/v1/users", accessAdmin},
@@ -524,6 +533,18 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 
 	case "POST /api/v1/channels":
 		return s.handleCreateChannel
+	case "GET /api/v1/routing-rules":
+		return s.handleListRoutingRules
+	case "POST /api/v1/routing-rules":
+		return s.handleCreateRoutingRule
+	case "PUT /api/v1/routing-rules/{id}":
+		return s.handleUpdateRoutingRule
+	case "DELETE /api/v1/routing-rules/{id}":
+		return s.handleDeleteRoutingRule
+	case "PUT /api/v1/routing-rules/{id}/exclusions/{monitor_id}":
+		return s.handleExcludeMonitorFromRule
+	case "DELETE /api/v1/routing-rules/{id}/exclusions/{monitor_id}":
+		return s.handleIncludeMonitorInRule
 	case "PUT /api/v1/channels/{id}/quiet-hours":
 		return s.handleSetQuietHours
 	case "DELETE /api/v1/channels/{id}/quiet-hours":

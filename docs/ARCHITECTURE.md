@@ -111,6 +111,12 @@ block the checker loop. Every channel implements the same interface; the
 implementations live in `internal/notifier`. Alerts that land inside one window
 are grouped so a single outage sends a single message per channel.
 
+Who hears an alert is the union of the monitor's own channels and the channels
+of every routing rule whose tag the monitor carries, minus the rules it is
+explicitly excluded from. Rules add up rather than first-match-wins, so an
+over-broad rule cannot swallow alerts meant for a narrower one. The instance
+default channel applies only when that union is empty.
+
 ## 3. Data model (v0.1)
 
 ```
@@ -125,6 +131,7 @@ incidents    id, monitor_id, started_at, confirmed_at, resolved_at,
              cause, last_error
 notif_channels  id, name, type, config_json, enabled
 monitor_channels monitor_id, channel_id
+routing_rules    id, tag_key, tag_value      -- + rule channels, exclusions
 settings     key, value
 ```
 

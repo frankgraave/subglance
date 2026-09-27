@@ -574,7 +574,7 @@ describe("who hears what", () => {
       await screen.findByText("1 active monitor alerts nobody."),
     ).toBeTruthy();
     expect(
-      screen.getByText("nobody: no channels of its own and no default"),
+      screen.getByText("nobody: no channels of its own, no matching rule and no default"),
     ).toBeTruthy();
     expect(monitors).toHaveBeenCalled();
     // DESIGN.md §8.3: a card framing a list is titled `Name (N)`.

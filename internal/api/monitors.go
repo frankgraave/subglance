@@ -87,10 +87,17 @@ type monitorResponse struct {
 	// Present on list reads: [] means no attachments; omitted means unknown.
 	Channels *[]monitorChannelResponse `json:"channels,omitempty"`
 
-	// DefaultChannel is set on list reads exactly when Channels is known and
-	// empty and an instance default exists: the channel this monitor's
-	// alerts go to instead. Without it an empty Channels would read as
-	// "nobody hears about this monitor" when somebody does.
+	// RuleChannels is present on list reads exactly when Channels is: the
+	// routing rules that add channels for this monitor, each with the
+	// channels it adds. [] means no rule routes it. Rules it is excluded from
+	// are left out, because they send it nothing.
+	RuleChannels *[]monitorRuleRouteResponse `json:"rule_channels,omitempty"`
+
+	// DefaultChannel is set on list reads exactly when Channels is known, it
+	// and RuleChannels are both empty, and an instance default exists: the
+	// channel this monitor's alerts go to instead. Without it an empty
+	// Channels would read as "nobody hears about this monitor" when somebody
+	// does.
 	DefaultChannel *monitorChannelResponse `json:"default_channel,omitempty"`
 
 	// Heartbeats is filled in only when the caller asked for it with the
@@ -105,6 +112,14 @@ type monitorResponse struct {
 type monitorChannelResponse struct {
 	ID   int64  `json:"id"`
 	Name string `json:"name"`
+}
+
+// monitorRuleRouteResponse is one routing rule's contribution to a monitor.
+type monitorRuleRouteResponse struct {
+	RuleID   int64                    `json:"rule_id"`
+	TagKey   string                   `json:"tag_key"`
+	TagValue string                   `json:"tag_value"`
+	Channels []monitorChannelResponse `json:"channels"`
 }
 
 // monitorDetailResponse adds raw editable settings to the versioned detail
@@ -239,6 +254,15 @@ func (s *Server) handleListMonitors(w http.ResponseWriter, r *http.Request) {
 	if channelErr != nil {
 		s.log.Error("monitor channel summaries", "error", channelErr)
 	}
+	var ruleRoutes map[int64][]store.RuleRoute
+	if channelErr == nil {
+		// Unknown rule routes make an empty own list a claim nobody can
+		// check, exactly like an unknown default below.
+		ruleRoutes, channelErr = s.db.MonitorRuleRoutes(ctx)
+		if channelErr != nil {
+			s.log.Error("monitor rule routes", "error", channelErr)
+		}
+	}
 	var fallback *monitorChannelResponse
 	if channelErr == nil {
 		def, ok, err := s.db.DefaultChannel(ctx)
@@ -261,7 +285,18 @@ func (s *Server) handleListMonitors(w http.ResponseWriter, r *http.Request) {
 				attached = append(attached, monitorChannelResponse{ID: c.ID, Name: c.Name})
 			}
 			resp.Channels = &attached
-			if len(attached) == 0 {
+			routes := make([]monitorRuleRouteResponse, 0, len(ruleRoutes[m.ID]))
+			for _, rt := range ruleRoutes[m.ID] {
+				via := make([]monitorChannelResponse, 0, len(rt.Channels))
+				for _, c := range rt.Channels {
+					via = append(via, monitorChannelResponse{ID: c.ID, Name: c.Name})
+				}
+				routes = append(routes, monitorRuleRouteResponse{
+					RuleID: rt.RuleID, TagKey: rt.TagKey, TagValue: rt.TagValue, Channels: via,
+				})
+			}
+			resp.RuleChannels = &routes
+			if len(attached) == 0 && len(routes) == 0 {
 				resp.DefaultChannel = fallback
 			}
 		}
