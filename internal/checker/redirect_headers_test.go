@@ -334,18 +334,33 @@ func defaultPortChecker(t *testing.T, plain, tlsSrv *httptest.Server) *HTTPCheck
 	return c
 }
 
+// assertSentOnTheFirstHop checks that the monitored origin itself received the
+// configured headers. Without it the redirect tests could pass with headers
+// that were never sent: checkRedirect restores them on an upgrade and strips
+// them on a downgrade either way.
+func assertSentOnTheFirstHop(t *testing.T, first *seen) {
+	t.Helper()
+	want := monitorWithSecrets("").Headers
+	for _, h := range secretHeaders {
+		if v := first.get(h); v != want[h] {
+			t.Errorf("%s on the first request = %q, want %q", h, v, want[h])
+		}
+	}
+}
+
 // The one cross-scheme hop allowed to keep the headers, run over real TLS:
 // http://example.com to https://example.com, both on their default ports.
 // TestSameOrigin covers the rule; this covers the rule being applied to a
 // request that actually changed scheme and connection.
 func TestCustomHeadersFollowAnUpgradeToHTTPS(t *testing.T) {
-	var got seen
+	var first, got seen
 	secure := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got.record(r)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer secure.Close()
 	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		first.record(r)
 		http.Redirect(w, r, "https://example.com/end", http.StatusMovedPermanently)
 	}))
 	defer plain.Close()
@@ -354,6 +369,7 @@ func TestCustomHeadersFollowAnUpgradeToHTTPS(t *testing.T) {
 	if !res.OK {
 		t.Fatalf("check failed: %s", res.Error)
 	}
+	assertSentOnTheFirstHop(t, &first)
 	for _, h := range secretHeaders {
 		if got.get(h) == "" {
 			t.Errorf("%s was dropped on an http to https upgrade of the same host", h)
@@ -367,13 +383,14 @@ func TestCustomHeadersFollowAnUpgradeToHTTPS(t *testing.T) {
 // The reverse hop, https down to http on the same host, is another origin: the
 // headers would cross the network in clear text.
 func TestCustomHeadersStayOffADowngradeToHTTP(t *testing.T) {
-	var got seen
+	var first, got seen
 	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got.record(r)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer plain.Close()
 	secure := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		first.record(r)
 		http.Redirect(w, r, "http://example.com/end", http.StatusFound)
 	}))
 	defer secure.Close()
@@ -382,6 +399,7 @@ func TestCustomHeadersStayOffADowngradeToHTTP(t *testing.T) {
 	if !res.OK {
 		t.Fatalf("check failed: %s", res.Error)
 	}
+	assertSentOnTheFirstHop(t, &first)
 	for _, h := range secretHeaders {
 		if v := got.get(h); v != "" {
 			t.Errorf("%s reached the http origin after a downgrade: %q", h, v)
