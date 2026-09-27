@@ -217,7 +217,7 @@ export function ChannelForm({
         ) : (
           <select
             id={`${ids}-type`}
-            className="mon-facet-select"
+            className="add-input"
             value={type}
             onChange={(event) => {
               setType(event.target.value as ChannelType);

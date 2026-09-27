@@ -1179,6 +1179,22 @@
 
 .add-input::placeholder { color: var(--ink-4); }
 
+/*
+ * A field that sits inside a sentence rather than in a form column: the
+ * default-channel choice on the notifications page reads "Monitors with no
+ * channels of their own alert through [select]". It keeps the field's height,
+ * border and no-zoom size, and gives up only the full-width track, which in a
+ * sentence would push the select onto a line of its own.
+ *
+ * Before this it was a bare native select with no class that styled it,
+ * measured at 17px tall on a phone: under the 24px target floor (WCAG 2.2
+ * SC 2.5.8) that `phone-layout.browser.test.ts` enforces.
+ */
+.add-input--fit {
+  width: auto;
+  max-width: 100%;
+}
+
 /* The control accent, not the blue browser glow and not status green (§2.8):
    a focused field is a control you are driving, not a healthy monitor. */
 .add-input:focus-visible {
