@@ -21,8 +21,8 @@ everything is running, what is broken, and since when.
 > **Status: early development.** The engine works end to end — monitors are
 > scheduled, checked, confirmed into incidents, streamed to a live dashboard and
 > delivered to a human over five notification channels. The latest build is
-> **`v0.1.0-rc3`**, a signed release candidate with binaries for five platforms.
-> Two things remain before v0.1 itself: see [where it stands](#where-it-stands).
+> **`v0.1.0-rc4`**, a signed release candidate with binaries for five platforms.
+> What remains before v0.1 itself is listed under [where it stands](#where-it-stands).
 
 ## Quick start
 
@@ -95,11 +95,11 @@ exists for it.
 | REST API v1 + OpenAPI 3.1 specification | ✅ Working |
 | Authentication — sessions, API tokens, three roles | ✅ Working |
 | Dashboard, monitor detail, incidents, monitors, notifications screens | ✅ Working |
-| Signed multi-platform release builds | ✅ Working (`v0.1.0-rc3`) |
+| Signed multi-platform release builds | ✅ Working (`v0.1.0-rc4`) |
 | Maintenance windows — one-off and weekly, by monitor or tag | ✅ Working |
-| Scheduled backups to S3-compatible storage, and restore | ✅ Working; not yet shown on the settings page |
-| Latency graph on the detail view | ⏳ Planned for v0.1 |
-| Settings — password change and watchdog diagnostics | ✅ Working; remaining sections planned for v0.1 |
+| Scheduled backups to S3-compatible storage, and restore | ✅ Working |
+| Latency chart on the detail view — 24h, 7d and 30d | ✅ Working |
+| Settings — account, users, retention, backups, API tokens, instance diagnostics, reset | ✅ Working |
 
 <details>
 <summary><strong>What "working" covers, in detail</strong></summary>
@@ -143,7 +143,8 @@ exists for it.
 - **The stale state**: when the stream drops, the LEDs and heartbeat bars drain
   their colour, so the screen stops asserting a status it can no longer verify
 - **Monitor detail view**: heartbeat over a longer window than the row shows,
-  uptime over real windows, and the incident history for that monitor
+  uptime over real windows, a latency chart over 24h, 7d or 30d, and the
+  incident history for that monitor
 - **Incident, monitor and notification screens**: acknowledging an incident,
   managing monitors and configuring channels all have a screen, not only an
   endpoint
@@ -161,12 +162,8 @@ exists for it.
 
 ### Not working yet
 
-- **A latency graph.** The detail view shows the latest latency as a number and
-  the heartbeat as a bar; the trend over time is not drawn anywhere. The chart
-  component the heartbeat bar already uses is the piece this needs wiring to.
-- **The remaining settings sections.** Password changes and retention work at
-  `/settings`. User and API-token management and other instance diagnostics
-  still have no settings UI; read-only watchdog diagnostics are available.
+- **Display preferences.** Theme and layout choices live in the browser, not
+  on the settings page; a Display section is in review.
 
 Deliberately **not** in v0.1: status pages, config-as-code, multi-region checks,
 on-call schedules, SSO, mobile app, CLI, Postgres. They are on the roadmap; they
