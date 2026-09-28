@@ -27,6 +27,16 @@ const DefaultRawRetention = 30 * 24 * time.Hour
 // so nothing is deleted unless the operator asks.
 const DefaultRollupRetention time.Duration = 0
 
+// DeliveryLogRetention is how long a delivered or suppressed notification
+// stays in the outbox after its last update.
+//
+// Those rows are finished work: nothing reads them once they are terminal, and
+// channel health only looks at recent deliveries. Without a window the outbox
+// grows by one row per alert per channel for as long as the instance runs. It
+// is a fixed window rather than a setting because there is no reason to tune
+// it, and failed rows are never pruned by it (see PruneDeliveries).
+const DeliveryLogRetention = 30 * 24 * time.Hour
+
 // MinRawRetention is the shortest raw window that still leaves every beat of
 // the shortest chart (24 hours) in raw form. Below it the rollup would fold
 // away checks inside an ordinary 24h request, and the bucket that straddles
@@ -67,6 +77,9 @@ type RetentionResult struct {
 	HourlyBuckets int64
 	// Incidents is the number of resolved incidents deleted as too old.
 	Incidents int64
+	// Deliveries is the number of delivered or suppressed notifications
+	// removed from the outbox as older than DeliveryLogRetention.
+	Deliveries int64
 	// ReclaimedPages is the number of database pages handed back to the
 	// filesystem by the incremental vacuum step. Zero when the database is
 	// not in incremental auto-vacuum mode.
@@ -324,6 +337,15 @@ func (db *DB) applyRetentionAt(ctx context.Context, now time.Time, p RetentionPo
 		}
 		res.Incidents, _ = inc.RowsAffected()
 	}
+
+	// The delivery log is pruned whatever the windows say. A rollup window of
+	// "forever" is about monitoring history; a sent notification is not
+	// history anyone reads back, and keeping it is only disk.
+	deliveries, err := db.PruneDeliveries(ctx, now.Add(-DeliveryLogRetention))
+	if err != nil {
+		return res, err
+	}
+	res.Deliveries = deliveries
 
 	pages, err := db.incrementalVacuum(ctx)
 	if err != nil {

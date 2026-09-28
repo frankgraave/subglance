@@ -78,6 +78,12 @@ database into SQLite's incremental auto-vacuum mode at startup; on an existing
 database that requires one rebuild, which is logged when it happens and skipped
 with a warning if the file is large enough that the pause would hurt.
 
+The same pass clears the notification delivery log: a notification that was
+delivered, or suppressed by maintenance or folded into a quiet-hours digest, is
+removed 30 days after its last update, whatever the two windows say. Failed
+deliveries are kept, because they may be the only record that an alert never
+arrived.
+
 Failure-response snapshots expire with their raw heartbeats; hourly rollups do
 not retain response bodies or headers. Capture keeps up to three stored responses
 per outage and 2048 body bytes per response, plus allowed headers. **There is no
