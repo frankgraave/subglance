@@ -4,6 +4,8 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -63,6 +65,13 @@ var publicKeys = map[string]bool{
 	"username": true,
 	"host":     true,
 	"port":     true,
+	// Gotify priorities: how loud an alert is, not who may send one.
+	//
+	// ntfy's `topic` is deliberately NOT here. On a server without access
+	// control the topic name is the whole credential: whoever knows it can
+	// subscribe to the alerts and post fake ones.
+	"priority_down": true,
+	"priority_up":   true,
 }
 
 func maskConfig(_ string, cfg map[string]string) map[string]string {
@@ -106,7 +115,15 @@ var requiredConfigKey = map[string]string{
 	store.ChannelSlack:    "url",
 	store.ChannelTelegram: "bot_token",
 	store.ChannelEmail:    "to",
+	// ntfy's server is optional (it defaults to the public ntfy server), so
+	// the field it cannot work without is the topic.
+	store.ChannelNtfy:   "topic",
+	store.ChannelGotify: "url",
 }
+
+// ntfyTopic mirrors the topic shape the ntfy server accepts, so a topic with a
+// space or a slash in it fails on the form rather than as a 404 at 03:00.
+var ntfyTopic = regexp.MustCompile(`^[-_A-Za-z0-9]{1,64}$`)
 
 func validateChannel(req channelRequest) string {
 	if strings.TrimSpace(req.Name) == "" {
@@ -118,7 +135,7 @@ func validateChannel(req channelRequest) string {
 
 	key, ok := requiredConfigKey[req.Type]
 	if !ok {
-		return "type must be one of webhook, discord, slack, telegram, email"
+		return "type must be one of webhook, discord, slack, telegram, email, ntfy, gotify"
 	}
 	if strings.TrimSpace(req.Config[key]) == "" {
 		return "config." + key + " is required for a " + req.Type + " channel"
@@ -128,8 +145,10 @@ func validateChannel(req channelRequest) string {
 	// to be checked here as well as at delivery time. Rejecting a bad scheme
 	// now turns a silent, permanently failing channel into an error at the
 	// moment the mistake is made.
-	if key == "url" {
-		u, err := url.Parse(req.Config[key])
+	// ntfy's server URL is optional but, when given, is fetched exactly like
+	// any other channel URL.
+	if key == "url" || (req.Type == store.ChannelNtfy && strings.TrimSpace(req.Config["url"]) != "") {
+		u, err := url.Parse(req.Config["url"])
 		if err != nil {
 			return "config.url is not a valid URL"
 		}
@@ -139,6 +158,10 @@ func validateChannel(req channelRequest) string {
 		if u.Host == "" {
 			return "config.url must include a host"
 		}
+	}
+
+	if msg := validatePushChannel(req); msg != "" {
+		return msg
 	}
 
 	for k, v := range req.Config {
@@ -502,4 +525,37 @@ func (s *Server) handleSetMonitorChannels(w http.ResponseWriter, r *http.Request
 	}
 	s.log.Info("monitor channels updated", "monitor_id", id, "count", len(out))
 	writeJSON(w, http.StatusOK, map[string]any{"channels": out})
+}
+
+// validatePushChannel checks the settings ntfy and Gotify need beyond their
+// required key. The notifier validates the same things again before every
+// send; checking here as well is what puts the message on the form.
+func validatePushChannel(req channelRequest) string {
+	cfg := req.Config
+	switch req.Type {
+	case store.ChannelNtfy:
+		if !ntfyTopic.MatchString(strings.TrimSpace(cfg["topic"])) {
+			return "config.topic may contain only letters, digits, - and _ (at most 64)"
+		}
+		if cfg["token"] != "" && (cfg["username"] != "" || cfg["password"] != "") {
+			return "config.token cannot be combined with config.username and config.password"
+		}
+		if (cfg["username"] == "") != (cfg["password"] == "") {
+			return "config.username and config.password must be set together"
+		}
+	case store.ChannelGotify:
+		if strings.TrimSpace(cfg["token"]) == "" {
+			return "config.token is required for a gotify channel"
+		}
+		for _, key := range []string{"priority_down", "priority_up"} {
+			raw := strings.TrimSpace(cfg[key])
+			if raw == "" {
+				continue
+			}
+			if n, err := strconv.Atoi(raw); err != nil || n < 0 || n > 10 {
+				return "config." + key + " must be a whole number from 0 to 10"
+			}
+		}
+	}
+	return ""
 }

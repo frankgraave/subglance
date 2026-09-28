@@ -145,6 +145,8 @@ func New(opts Options) *Notifier {
 			store.ChannelSlack:    NewSlackSender(opts.Guard),
 			store.ChannelTelegram: NewTelegramSender(opts.Guard),
 			store.ChannelEmail:    NewEmailSender(opts.Guard),
+			store.ChannelNtfy:     NewNtfySender(opts.Guard),
+			store.ChannelGotify:   NewGotifySender(opts.Guard),
 		}
 	}
 

@@ -62,6 +62,13 @@ const channelTargetLookupTimeout = 3 * time.Second
 //     the guard judges addresses, not ports, and a blocked host is blocked on
 //     every port.
 //
+//   - gotify — `config.url`, the operator's own Gotify server. Same exposure as
+//     a webhook, and the one most likely to be on a private address, which is
+//     what the refusal message's pointer to --allow-private-targets is for.
+//
+//   - ntfy — `config.url` when set. When empty, delivery goes to the public
+//     ntfy server, a constant in the sender, so there is nothing to check.
+//
 //   - telegram — nothing. Telegram is reached at api.telegram.org, a constant
 //     in the sender; the user supplies a bot token and a chat id, neither of
 //     which names an address. There is nothing here for a guard to refuse, and
@@ -73,8 +80,15 @@ const channelTargetLookupTimeout = 3 * time.Second
 // a type with no target would make telegram channels unsavable.
 func channelTarget(req channelRequest) (field, host string) {
 	switch req.Type {
-	case store.ChannelWebhook, store.ChannelDiscord, store.ChannelSlack:
-		u, err := url.Parse(strings.TrimSpace(req.Config["url"]))
+	case store.ChannelWebhook, store.ChannelDiscord, store.ChannelSlack,
+		store.ChannelGotify, store.ChannelNtfy:
+		raw := strings.TrimSpace(req.Config["url"])
+		if raw == "" {
+			// Only ntfy gets here without a URL (validateChannel requires
+			// it for the others), and it then posts to the public server.
+			return "", ""
+		}
+		u, err := url.Parse(raw)
 		if err != nil {
 			// validateChannel has already rejected this; returning no
 			// host here just avoids reporting the same fault twice.
@@ -171,5 +185,6 @@ func (s *Server) checkChannelTarget(ctx context.Context, req channelRequest) str
 	// package: an error that says only "blocked address" leaves a form with
 	// four inputs and no indication of which one to fix.
 	return field + " is not an allowed destination: " + err.Error() +
-		" (start SubGlance with --allow-private-targets to send to internal addresses)"
+		" (start SubGlance with --allow-private-targets or SUBGLANCE_ALLOW_PRIVATE_TARGETS=true" +
+		" to send to internal addresses)"
 }

@@ -2184,7 +2184,11 @@ paths:
       summary: Create a notification channel
       description: |
         Each type has one config field it cannot work without: `url` for
-        webhook, discord and slack; `bot_token` for telegram; `to` for email.
+        webhook, discord, slack and gotify; `bot_token` for telegram; `to` for
+        email; `topic` for ntfy. Gotify also needs `token`, and accepts
+        `priority_down` and `priority_up` (0 to 10). ntfy accepts an optional
+        `url` (default the public ntfy.sh) and either `token` or `username`
+        plus `password`, not both. See docs/channels.md.
         Types are validated in Go rather than left to the database CHECK
         constraint, so an unknown type is a 400 and not a 500.
 
@@ -2194,12 +2198,14 @@ paths:
         moment the mistake is made.
 
         The destination host is also checked against the SSRF guard: `config.url`
-        for webhook, discord and slack, and `config.host` (the SMTP relay) for
-        email. Telegram has no user-supplied destination — the Bot API host is a
-        constant — so nothing is checked for it. A blocked destination is a 400
-        naming the offending field. Start SubGlance with `--allow-private-targets`
-        to permit internal addresses; the same flag governs delivery, so anything
-        deliverable is savable.
+        for webhook, discord, slack, gotify and (when set) ntfy, and
+        `config.host` (the SMTP relay) for email. Telegram and an ntfy channel
+        without `url` have no user-supplied destination — the host is a
+        constant — so nothing is checked for them. A blocked destination is a
+        400 naming the offending field, the refused address and the way out:
+        start SubGlance with `--allow-private-targets`
+        (`SUBGLANCE_ALLOW_PRIVATE_TARGETS=true`) to permit internal addresses;
+        the same flag governs delivery, so anything deliverable is savable.
 
         This save-time check is a usability layer, not the security boundary.
         The boundary is the dial-time check that runs after DNS resolution on
@@ -5053,9 +5059,9 @@ components:
       type: string
       description: |
         The delivery mechanism. Each type has one config key it cannot work
-        without: `url` for webhook, discord and slack; `bot_token` for
-        telegram; `to` for email.
-      enum: [webhook, discord, slack, telegram, email]
+        without: `url` for webhook, discord, slack and gotify; `bot_token`
+        for telegram; `to` for email; `topic` for ntfy.
+      enum: [webhook, discord, slack, telegram, email, ntfy, gotify]
       example: slack
     Channel:
       type: object
@@ -5077,10 +5083,13 @@ components:
         config:
           type: object
           description: |
-            Type-specific settings. The keys `url`, `token`, `password` and
-            `bot_token` are never echoed in full: their values are replaced
-            with `****` followed by the last four characters (or all asterisks
-            when the value is four characters or shorter). Writing a masked
+            Type-specific settings. Only destination and presentation keys
+            (`to`, `from`, `chat_id`, `channel`, `username`, `host`, `port`,
+            `priority_down`, `priority_up`) are echoed in full. Every other
+            value, including `url`, `token`, `password`, `bot_token` and the
+            ntfy `topic`, is replaced with `****` followed by the last four
+            characters (or all asterisks when the value is four characters or
+            shorter). Writing a masked
             value back is understood as "leave this credential unchanged".
           additionalProperties:
             type: string
