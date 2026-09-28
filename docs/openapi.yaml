@@ -48,6 +48,8 @@ tags:
     description: Account administration.
   - name: Settings
     description: Instance-wide settings, such as how long history is kept.
+  - name: Configuration
+    description: Export and import monitors, channels, routing rules and maintenance windows as YAML.
 security:
   - sessionCookie: []
   - bearerToken: []
@@ -3147,6 +3149,128 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/v1/config/export:
+    get:
+      tags: [Configuration]
+      operationId: exportConfig
+      summary: Export the configuration as YAML
+      description: |
+        One YAML document with every monitor, channel, routing rule and
+        maintenance window on the instance. History, users and API tokens are
+        not included, and neither are one-off maintenance windows that have
+        already ended. The format is described in `docs/configuration-files.md`.
+
+        No credential is ever written. Channel settings follow the same
+        allowlist as the masked channel read, and every other value, every
+        request header value and a request body are written as
+        `<fill in after import>`. A push monitor's URL is not written at all.
+
+        Monitors and channels are identified by `key`. An object that has no
+        key yet is given one here, derived from its name, and the key is
+        stored so a later import of this file updates the object instead of
+        copying it. That write is why this read needs an editor.
+      x-subglance-access: write
+      responses:
+        '200':
+          description: The configuration, as a file download.
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: attachment; filename="subglance-config.yaml"
+          content:
+            application/yaml:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          description: The configuration could not be read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/config/import:
+    post:
+      tags: [Configuration]
+      operationId: importConfig
+      summary: Create and update objects from a YAML file
+      description: |
+        Reads a document in the format `GET /api/v1/config/export` writes and
+        creates or updates what it describes. Monitors and channels are
+        matched by `key`, routing rules by their tag pair, and maintenance
+        windows by all of their fields, so importing the same file twice
+        changes nothing the second time.
+
+        It never deletes. An object on the instance that the file does not
+        mention is left alone, and a field the file omits keeps its current
+        value.
+
+        A value written as `<fill in after import>` keeps what the instance
+        already holds for that field. When there is nothing to keep, the
+        object is saved without it and switched off, and `needs_secrets`
+        names the missing fields.
+
+        With `dry_run=true` the same checks run and the report says what would
+        happen, but nothing is written. Without it, nothing is written unless
+        the whole file is valid. The body is limited to 4 MiB.
+      x-subglance-access: write
+      parameters:
+        - name: dry_run
+          in: query
+          required: false
+          description: Report what the import would do without writing anything.
+          schema:
+            type: boolean
+            default: false
+      requestBody:
+        required: true
+        content:
+          application/yaml:
+            schema:
+              type: string
+      responses:
+        '200':
+          description: What the import did, or would do with `dry_run=true`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportReport'
+        '400':
+          description: |
+            The file is not valid: not YAML, an unknown or missing `version`,
+            an unknown field, a duplicate key, a reference to a key that
+            exists neither in the file nor on the instance, or a value the
+            equivalent API request would refuse. `field` points into the file,
+            for example `monitors[2].interval_s`. Nothing was written.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: interval_s must be between 20 and 86400
+                field: monitors[2].interval_s
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          description: The file is larger than 4 MiB.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: |
+            The database failed part way through. The message says so;
+            importing the same file again completes the import, because what
+            was already written is matched by key and left alone.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /api/v1/users:
     get:
       tags: [Users]
@@ -3614,6 +3738,75 @@ components:
           description: |
             A stored or default value that a pinned partner window made
             invalid, and that is therefore not in force. Null normally.
+    ImportReport:
+      type: object
+      required: [dry_run, channels, monitors, routing_rules, maintenance, summary]
+      properties:
+        dry_run:
+          type: boolean
+        channels:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportItem'
+        monitors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportItem'
+        routing_rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportItem'
+        maintenance:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportItem'
+        summary:
+          type: object
+          required: [create, update, unchanged, needs_secrets]
+          properties:
+            create:
+              type: integer
+            update:
+              type: integer
+            unchanged:
+              type: integer
+            needs_secrets:
+              type: integer
+              description: How many objects were saved switched off because a withheld value is missing.
+          additionalProperties: false
+      additionalProperties: false
+    ImportItem:
+      type: object
+      description: What an import does to one object, in the order the file lists them.
+      required: [action]
+      properties:
+        key:
+          type: string
+          description: The monitor or channel key. Absent for routing rules and maintenance windows.
+        name:
+          type: string
+          description: The object's name; `key=value` for a routing rule.
+        action:
+          type: string
+          enum: [create, update, unchanged]
+        changes:
+          type: array
+          items:
+            type: string
+          description: The fields an update changes, by their name in the file.
+        needs_secrets:
+          type: array
+          items:
+            type: string
+          description: |
+            Withheld values the instance has nothing to fill in for, such as
+            `url` or `headers.Authorization`. The object is saved switched off.
+        push_url:
+          type: string
+          description: |
+            The URL of a push monitor this import created. Shown only in this
+            response, like the push URL of a monitor created through the API.
+      additionalProperties: false
     Error:
       type: object
       description: |

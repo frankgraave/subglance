@@ -400,6 +400,11 @@ func (s *Server) routes() []route {
 		{http.MethodPut, "/api/v1/routing-rules/{id}/exclusions/{monitor_id}", accessWrite},
 		{http.MethodDelete, "/api/v1/routing-rules/{id}/exclusions/{monitor_id}", accessWrite},
 
+		// Configuration files. Export is a write because it stores a key for
+		// every object that has none yet; see handleExportConfig.
+		{http.MethodGet, "/api/v1/config/export", accessWrite},
+		{http.MethodPost, "/api/v1/config/import", accessWrite},
+
 		// Authenticated: admin only.
 		{http.MethodGet, "/api/v1/users", accessAdmin},
 		{http.MethodPost, "/api/v1/users", accessAdmin},
@@ -559,6 +564,11 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 		return s.handleSetDefaultChannel
 	case "DELETE /api/v1/channels/{id}/default":
 		return s.handleClearDefaultChannel
+
+	case "GET /api/v1/config/export":
+		return s.handleExportConfig
+	case "POST /api/v1/config/import":
+		return s.handleImportConfig
 
 	case "GET /api/v1/users":
 		return s.handleListUsers
