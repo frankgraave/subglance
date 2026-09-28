@@ -244,8 +244,16 @@ const budgets = {
    * it. The rest is the two mutations and the retyped-name confirmation the
    * inventory already uses. No new dependency and no new CSS. 153 leaves
    * about 650 bytes.
+   *
+   * 153 -> 154 KiB gzip for SUB-152 (the JSON field assertion), merged onto
+   * develop 3d12883. The SUB-119 branch measured 156,026 bytes of entry JS
+   * (Node gzip, level 6) when it merged; this branch measures 157,090, 418
+   * over 153. The roughly 1,060 bytes are the assertion fields on both monitor forms, their
+   * validation, and the refusal of an expected number the browser would round
+   * (0.1234567890123456789 sent as 0.12345678901234568) instead of storing a
+   * value nobody typed. No new dependency. 154 leaves about 600 bytes.
    */
-  js: 153,
+  js: 154,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *

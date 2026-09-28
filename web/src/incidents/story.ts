@@ -123,6 +123,7 @@ const CAUSE_WORDS: Record<string, string> = {
   timeout: "timed out",
   status: "unexpected status code",
   keyword: "keyword missing",
+  assertion: "JSON field did not match",
   cert_expiry: "certificate expiring",
   internal: "internal error",
   push_overdue: "no report received",

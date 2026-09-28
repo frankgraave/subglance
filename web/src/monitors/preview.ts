@@ -8,6 +8,7 @@
  */
 
 import { apiJSON } from "../api/http";
+import type { JsonAssertion } from "./jsonAssertion";
 
 /*
  * `ApiError` is re-exported rather than re-declared: it moved to the shared
@@ -38,6 +39,8 @@ export type PreviewRequest = {
    * did not ask.
    */
   min_tls_version?: string;
+  /** One condition on a field of a JSON body; see jsonAssertion.ts. */
+  json_assertion?: JsonAssertion;
 };
 
 /** POST /api/v1/monitors/preview, as the server returns it. */
@@ -104,6 +107,8 @@ export function fingerprintPreview(req: PreviewRequest): PreviewFingerprint {
     // Part of the fingerprint because a floor change makes an earlier probe
     // evidence about a handshake that would no longer be attempted.
     req.min_tls_version ?? "",
+    // A preview that passed says nothing about a different assertion.
+    req.json_assertion ?? null,
   ]);
 }
 

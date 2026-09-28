@@ -150,6 +150,8 @@ export type ApiMonitor = {
   ssl_warn_days?: number;
   /** Passing checks in a row that close a confirmed incident. Detail read only. */
   recovery_threshold?: number;
+  /** Detail read only: the JSON body assertion, null when there is none. */
+  json_assertion?: { path: string; operator: string; expected?: unknown } | null;
   enabled: boolean;
   status: "up" | "pending" | "warning" | "down" | "recovering";
   /** The passing streak; the server sends it only with `recovering`. */
