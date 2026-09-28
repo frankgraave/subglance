@@ -16,7 +16,7 @@ const pages = entrypoints(dir);
 const selectCounts: Record<string, number> = {
   "components.html": 1, "dashboard-directions.html": 0, "index.html": 0,
   "pages/incidents.html": 1, "pages/index.html": 0, "pages/monitors.html": 4,
-  "pages/notifications.html": 0, "pages/settings.html": 3,
+  "pages/notifications.html": 0, "pages/settings.html": 3, "pages/status.html": 0,
 };
 const evidence = process.env.MOCKUP_REGRESSION_PROOF_DIR;
 const proof: object[] = [];
@@ -66,7 +66,7 @@ async function expectStatus(page: Page, selector: string, state: string, word: s
 for (const theme of ["dark", "light"]) {
   describe(`mockup interaction regressions in ${theme}`, () => {
     it.each(pages)("%s retains every dropdown indicator and paired type at rest and focus", async file => {
-      expect(pages, "all eight disk entrypoints are accounted for").toEqual(Object.keys(selectCounts).sort());
+      expect(pages, "every disk entrypoint is accounted for").toEqual(Object.keys(selectCounts).sort());
       const page = await open(file, theme);
       try {
         const selects = await page.$$("select");
