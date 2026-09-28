@@ -268,5 +268,5 @@ export function describeInventory(monitors: readonly InventoryMonitor[]): string
  * two cannot describe the same act differently.
  */
 export function monitorDeleteConsequence(name: string): string {
-  return `${name} and everything recorded about it — heartbeats, uptime history and past incidents — are removed. This cannot be undone. If you only want it to stop checking, pause it instead: a paused monitor keeps its history.`;
+  return `${name} and everything recorded about it — heartbeats, uptime history and its incidents, open and past — are removed. This cannot be undone. If you only want it to stop checking, pause it instead: a paused monitor keeps its history.`;
 }
