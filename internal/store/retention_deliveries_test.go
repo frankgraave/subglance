@@ -33,9 +33,12 @@ func seedAgedDelivery(t *testing.T, db *DB, monitor, channel int64, state string
 			// The case only means something if both survive MarkFailed.
 			var status string
 			var suppressed int
-			if err = db.Reader.QueryRowContext(ctx,
+			if qerr := db.Reader.QueryRowContext(ctx,
 				"SELECT status, suppressed FROM notif_outbox WHERE id = ?", d.ID).
-				Scan(&status, &suppressed); err == nil && (status != OutboxFailed || suppressed != 1) {
+				Scan(&status, &suppressed); qerr != nil {
+				t.Fatalf("read back suppressed-failed row: %v", qerr)
+			}
+			if status != OutboxFailed || suppressed != 1 {
 				t.Fatalf("suppressed-failed row has status %q, suppressed %d; want %q, 1", status, suppressed, OutboxFailed)
 			}
 		}
