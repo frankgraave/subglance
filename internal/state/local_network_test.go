@@ -88,3 +88,71 @@ func TestWouldConfirm(t *testing.T) {
 		t.Fatal("one failure into a threshold of 2, the next one confirms")
 	}
 }
+
+// Every status a local-network failure can meet, at the thresholds where the
+// boundary sits. Recovering is the edge that matters: Confirmed() is true
+// there, so the canary must not be consulted and the failure must take the
+// ordinary path back to down — the same outage, no new alert.
+func TestLocalNetworkTransitions(t *testing.T) {
+	at := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	fail := func(e *Engine, threshold int, local bool) Transition {
+		at = at.Add(time.Minute)
+		return e.Observe(Observation{MonitorID: 1, At: at, Kind: "connection",
+			FailureThreshold: threshold, RecoveryThreshold: 2, LocalNetwork: local})
+	}
+	pass := func(e *Engine) {
+		at = at.Add(time.Minute)
+		e.Observe(Observation{MonitorID: 1, At: at, OK: true, RecoveryThreshold: 2})
+	}
+
+	tests := []struct {
+		name      string
+		threshold int
+		setup     func(e *Engine, threshold int)
+		// before the local-network failure
+		wantWouldConfirm bool
+		// after it
+		wantTo    Status
+		wantCause string
+		wantFails int
+	}{
+		{"unknown, threshold 0", 0, func(*Engine, int) {}, true, StatusWarning, CauseLocalNetwork, 0},
+		{"unknown, threshold 1", 1, func(*Engine, int) {}, true, StatusWarning, CauseLocalNetwork, 0},
+		{"warning at threshold-1, threshold 0", 0,
+			func(e *Engine, n int) { fail(e, n, true) }, true, StatusWarning, CauseLocalNetwork, 0},
+		{"warning at threshold-1, threshold 1", 1,
+			func(e *Engine, n int) { fail(e, n, true) }, true, StatusWarning, CauseLocalNetwork, 0},
+		{"warning at threshold-1, threshold 2", 2,
+			func(e *Engine, n int) { fail(e, n, false) }, true, StatusWarning, CauseLocalNetwork, 1},
+		{"down, threshold 0", 0,
+			func(e *Engine, n int) { fail(e, n, false) }, false, StatusDown, "connection", 2},
+		{"down, threshold 1", 1,
+			func(e *Engine, n int) { fail(e, n, false) }, false, StatusDown, "connection", 2},
+		{"recovering, threshold 0", 0,
+			func(e *Engine, n int) { fail(e, n, false); pass(e) }, false, StatusDown, "connection", 1},
+		{"recovering, threshold 1", 1,
+			func(e *Engine, n int) { fail(e, n, false); pass(e) }, false, StatusDown, "connection", 1},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			e := New(Options{})
+			tc.setup(e, tc.threshold)
+			if got := e.WouldConfirm(1, tc.threshold); got != tc.wantWouldConfirm {
+				t.Fatalf("WouldConfirm = %v, want %v", got, tc.wantWouldConfirm)
+			}
+			tr := fail(e, tc.threshold, true)
+			if tr.To != tc.wantTo || tr.Cause != tc.wantCause {
+				t.Fatalf("to %s cause %q, want %s %q: %+v", tr.To, tr.Cause, tc.wantTo, tc.wantCause, tr)
+			}
+			if tr.Event != EventNone || tr.Notify {
+				t.Fatalf("a local-network failure announced something: %+v", tr)
+			}
+			if tr.ConsecutiveFails != tc.wantFails {
+				t.Fatalf("streak = %d, want %d", tr.ConsecutiveFails, tc.wantFails)
+			}
+			if tr.ConsecutiveOKs != 0 {
+				t.Fatalf("passing streak survived a failure: %d", tr.ConsecutiveOKs)
+			}
+		})
+	}
+}
