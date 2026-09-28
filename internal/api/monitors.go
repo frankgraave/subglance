@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -146,6 +147,9 @@ type monitorDetailResponse struct {
 	// confirmed incident. Push monitors store it but recover on one report.
 	RecoveryThreshold int `json:"recovery_threshold"`
 	SSLWarnDays       int `json:"ssl_warn_days"`
+	// JSONAssertion is null when the monitor has none, rather than omitted,
+	// so an editor can tell "no assertion" from "an older server".
+	JSONAssertion *jsonAssertionWire `json:"json_assertion"`
 }
 
 // recoveryResponse is a recovering monitor's passing streak.
@@ -252,6 +256,8 @@ type createMonitorRequest struct {
 	Tags              map[string]string `json:"tags"`
 	PushIntervalS     *int              `json:"push_interval_s"`
 	PushGraceS        *int              `json:"push_grace_s"`
+	// JSONAssertion is optional; omitted or null means none.
+	JSONAssertion *jsonAssertionWire `json:"json_assertion"`
 }
 
 func (s *Server) handleListMonitors(w http.ResponseWriter, r *http.Request) {
@@ -443,6 +449,8 @@ func (s *Server) handleCreateMonitor(w http.ResponseWriter, r *http.Request) {
 	// here rather than storing the raw map keeps the stored keys canonical
 	// without the validator having to hand a value back.
 	m.Tags, _ = store.NormaliseTags(req.Tags)
+	// Validated above as well.
+	m.JSONAssertion, _ = jsonAssertionFromWire(req.JSONAssertion)
 
 	if req.Type == store.TypePush {
 		m.PushIntervalS = *req.PushIntervalS
@@ -528,6 +536,14 @@ func validateCreateMonitor(req createMonitorRequest) problem {
 	}
 	if p := validateTags(req.Tags); !p.ok() {
 		return p
+	}
+	if req.JSONAssertion != nil {
+		if p := jsonAssertionTypeProblem(req.Type); !p.ok() {
+			return p
+		}
+		if _, p := jsonAssertionFromWire(req.JSONAssertion); !p.ok() {
+			return p
+		}
 	}
 	return problem{}
 }
@@ -792,6 +808,7 @@ func (s *Server) handleGetMonitor(w http.ResponseWriter, r *http.Request) {
 		Retries:           m.Retries,
 		RecoveryThreshold: m.RecoveryThreshold,
 		SSLWarnDays:       m.SSLWarnDays,
+		JSONAssertion:     jsonAssertionToWire(m.JSONAssertion),
 	}
 	// A viewer can inspect check rules but must not gain reusable credentials
 	// merely because edit settings became readable. Never mask secrets into an
@@ -1065,6 +1082,11 @@ type patchMonitorRequest struct {
 	// The token itself is not patchable; see UpdateMonitor.
 	PushIntervalS *int `json:"push_interval_s"`
 	PushGraceS    *int `json:"push_grace_s"`
+
+	// JSONAssertion replaces the assertion when present; `null` removes it.
+	// Raw, because a pointer cannot tell an omitted key from an explicit
+	// null, and here the two mean "leave it" and "remove it".
+	JSONAssertion json.RawMessage `json:"json_assertion"`
 }
 
 // handlePatchMonitor applies a partial update to an existing monitor.
@@ -1317,6 +1339,27 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 			return fieldProblem("tags", err.Error())
 		}
 		m.Tags = tags
+	}
+	if len(req.JSONAssertion) > 0 {
+		var wire *jsonAssertionWire
+		dec := json.NewDecoder(bytes.NewReader(req.JSONAssertion))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&wire); err != nil {
+			return fieldProblem("json_assertion", "json_assertion must be an object with path, operator and expected, or null: "+err.Error())
+		}
+		a, p := jsonAssertionFromWire(wire)
+		if !p.ok() {
+			return p
+		}
+		m.JSONAssertion = a
+	}
+	// Checked against the merged monitor: an assertion sent alone to a tcp
+	// monitor, and a type change away from http that keeps one, are the
+	// same mistake.
+	if m.JSONAssertion != nil && (len(req.JSONAssertion) > 0 || req.Type != nil) {
+		if p := jsonAssertionTypeProblem(m.Type); !p.ok() {
+			return p
+		}
 	}
 	if req.PushIntervalS != nil || req.PushGraceS != nil {
 		if m.Type != store.TypePush {

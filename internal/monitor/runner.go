@@ -7,6 +7,7 @@ package monitor
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -564,9 +565,23 @@ func toCheckerMonitor(m store.Monitor) checker.Monitor {
 		MinTLSVersion:   m.MinTLSVersion,
 		Retries:         m.Retries,
 		CaptureResponse: m.CaptureResponse,
+		JSONAssertion:   toCheckerAssertion(m.JSONAssertion),
 
 		RecoveryThreshold: m.RecoveryThreshold,
 	}
+}
+
+// toCheckerAssertion carries a stored JSON assertion over to the checker. The
+// expected value is already JSON text, so it travels as is.
+func toCheckerAssertion(a *store.JSONAssertion) *checker.JSONAssertion {
+	if a == nil {
+		return nil
+	}
+	out := &checker.JSONAssertion{Path: a.Path, Operator: checker.JSONOperator(a.Operator)}
+	if a.Expected != "" {
+		out.Expected = json.RawMessage(a.Expected)
+	}
+	return out
 }
 
 // maxSnapshotsPerIncident bounds how many failure responses one outage stores.
@@ -665,7 +680,8 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 	var captureReason store.CaptureReason
 	hb.Response, captureReason = snapshotToStore(o.Result, tr.SnapshotsSpent, tr.Flapping)
 	if !o.Result.OK && o.Result.Response == nil &&
-		(o.Result.Kind == checker.FailStatus || o.Result.Kind == checker.FailKeyword) &&
+		(o.Result.Kind == checker.FailStatus || o.Result.Kind == checker.FailKeyword ||
+			o.Result.Kind == checker.FailAssertion) &&
 		o.Monitor.Type == "http" && !o.Monitor.CaptureResponse {
 		// This is the configuration the checker used, not a fresh monitor
 		// lookup that could have changed while the request was in flight.

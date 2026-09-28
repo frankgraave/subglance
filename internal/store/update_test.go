@@ -36,6 +36,7 @@ func TestUpdateMonitorWritesEveryMutableColumn(t *testing.T) {
 	m.FollowRedirects = false
 	m.Headers = map[string]string{"X-A": "1"}
 	m.Body = "payload"
+	m.JSONAssertion = &JSONAssertion{Path: "checks.db.status", Operator: "equals", Expected: `"up"`}
 	m.SSLWarnDays = 30
 	m.Enabled = false
 

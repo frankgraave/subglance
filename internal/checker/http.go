@@ -45,7 +45,8 @@ var snapshotHeaders = []string{
 	"Cf-Ray",
 }
 
-// maxBodyRead caps how much of a response body is read for keyword matching.
+// maxBodyRead caps how much of a response body is read for keyword matching
+// and JSON assertions.
 //
 // Without a cap, one monitored endpoint streaming an endless body would pin a
 // worker and grow the heap until the process dies. 1 MiB is far more than any
@@ -147,7 +148,7 @@ func NewHTTPChecker(opts HTTPOptions) *HTTPChecker {
 func (c *HTTPChecker) Check(ctx context.Context, m Monitor) Result {
 	scope := &headerScope{headers: m.Headers, ua: c.ua}
 	res := c.check(ctx, m, scope)
-	if !res.OK && scope.withheldFrom != "" && (res.Kind == FailStatus || res.Kind == FailKeyword) {
+	if !res.OK && scope.withheldFrom != "" && (res.Kind == FailStatus || res.Kind == FailKeyword || res.Kind == FailAssertion) {
 		// A 401 on its own sends the reader to their credentials, which are
 		// fine. Say which server went without them, and what to change.
 		res.Error = fmt.Sprintf("%s (custom request headers were not sent to %s, "+
@@ -364,8 +365,17 @@ func (c *HTTPChecker) check(ctx context.Context, m Monitor, scope *headerScope) 
 		return res
 	}
 
-	if m.KeywordMode != "" && m.KeywordMode != KeywordIgnore && m.Keyword != "" {
-		payload, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyRead))
+	wantKeyword := m.KeywordMode != "" && m.KeywordMode != KeywordIgnore && m.Keyword != ""
+	var (
+		payload  []byte
+		oversize bool
+	)
+	if wantKeyword || m.JSONAssertion != nil {
+		// One byte past the cap, so a body that does not fit is known not
+		// to fit. The keyword search keeps its old reach, the first
+		// maxBodyRead bytes; a JSON document cut at the cap is not a
+		// document, so the assertion refuses it instead of parsing half.
+		buf, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyRead+1))
 		if err != nil {
 			res.Latency = time.Since(start)
 			res.OK = false
@@ -373,6 +383,13 @@ func (c *HTTPChecker) check(ctx context.Context, m Monitor, scope *headerScope) 
 			res.Error = fmt.Sprintf("read body: %v", err)
 			return res
 		}
+		if len(buf) > maxBodyRead {
+			buf, oversize = buf[:maxBodyRead], true
+		}
+		payload = buf
+	}
+
+	if wantKeyword {
 		present := strings.Contains(string(payload), m.Keyword)
 
 		switch m.KeywordMode {
@@ -394,6 +411,24 @@ func (c *HTTPChecker) check(ctx context.Context, m Monitor, scope *headerScope) 
 				res.Error = fmt.Sprintf("keyword %q found in response", m.Keyword)
 				return res
 			}
+		}
+	}
+
+	if a := m.JSONAssertion; a != nil {
+		var msg string
+		if oversize {
+			msg = fmt.Sprintf("response body is larger than %d KiB, so %s was not checked; "+
+				"point the monitor at a smaller health endpoint", maxBodyRead>>10, a.Path)
+		} else {
+			msg = evaluateJSONAssertion(*a, payload)
+		}
+		if msg != "" {
+			res.Response = captureResponse(m, resp, payload)
+			res.Latency = time.Since(start)
+			res.OK = false
+			res.Kind = FailAssertion
+			res.Error = msg
+			return res
 		}
 	}
 
