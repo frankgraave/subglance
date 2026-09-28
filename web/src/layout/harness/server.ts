@@ -119,9 +119,10 @@ const MONITORS: ApiMonitor[] = [
   },
   {
     id: 4,
-    name: "cdn",
+    // Two letters on purpose: the shortest name a 24px target has to widen.
+    name: "db",
     type: "http",
-    target: "https://cdn.example.com",
+    target: "https://db.example.com",
     interval_s: 60,
     timeout_s: 10,
     enabled: true,
