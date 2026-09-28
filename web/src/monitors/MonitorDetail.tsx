@@ -1,6 +1,7 @@
 import { Card, Panel } from "../components/Card";
 import { Legend, type LegendItem } from "../components/Legend";
-import { IconAlert, IconGauge, IconPulse } from "../components/icons";
+import { IconAlert, IconGauge, IconPause, IconPlay, IconPulse, IconTrash } from "../components/icons";
+import { Menu, type MenuItem } from "../components/Menu";
 import { HeartbeatBar } from "../heartbeat/HeartbeatBar";
 import type { Beat } from "../heartbeat/model";
 import { describeAge, describeGap } from "../live/age";
@@ -120,7 +121,75 @@ export type MonitorDetailProps = {
   checking?: boolean;
   checkResult?: CheckOutcome;
   checkError?: Error | null;
+  /**
+   * Pauses or resumes this monitor; the argument is the state asked for.
+   *
+   * Offered here for the same reason ack is: the detail screen is where an
+   * alert link lands, and "stop checking this while I fix it" is the first
+   * thing asked there. Absent for read-only users, like every other write.
+   */
+  onTogglePaused?: (paused: boolean) => void;
+  /** True while a pause, resume or delete request is in flight. */
+  busy?: boolean;
+  /**
+   * Asks to delete this monitor. The screen that owns the data confirms it
+   * (retyping the name, DESIGN.md §7.5); this only opens that question.
+   */
+  onDelete?: () => void;
+  /** Why the last pause, resume or delete failed, if it did. */
+  actionError?: Error | null;
 };
+
+/**
+ * The less frequent writes, behind one "More" menu.
+ *
+ * Edit and Check now stay as buttons: they are the two things done on this
+ * screen routinely. Pause and delete are rarer and heavier, and a row of four
+ * equal buttons would give a delete the same weight as a check. The menu is
+ * also what lets each of them say what it does — "stops checks and alerts,
+ * history is kept" — which a bare verb on a button cannot (DESIGN.md §8).
+ */
+function detailMenuItems(
+  paused: boolean,
+  busy: boolean,
+  onTogglePaused: ((paused: boolean) => void) | undefined,
+  onDelete: (() => void) | undefined,
+): MenuItem[] {
+  const items: MenuItem[] = [];
+  if (onTogglePaused !== undefined) {
+    items.push(
+      paused
+        ? {
+            key: "resume",
+            title: "Resume",
+            description: "Starts checking again and alerting on failures.",
+            icon: <IconPlay />,
+            disabled: busy,
+            onSelect: () => onTogglePaused(false),
+          }
+        : {
+            key: "pause",
+            title: "Pause",
+            description: "Stops checks and alerts. History is kept.",
+            icon: <IconPause />,
+            disabled: busy,
+            onSelect: () => onTogglePaused(true),
+          },
+    );
+  }
+  if (onDelete !== undefined) {
+    items.push({
+      key: "delete",
+      title: "Delete",
+      description: "Removes the monitor and everything recorded about it.",
+      icon: <IconTrash />,
+      tone: "danger",
+      disabled: busy,
+      onSelect: onDelete,
+    });
+  }
+  return items;
+}
 
 export function MonitorDetail({
   monitor,
@@ -143,6 +212,10 @@ export function MonitorDetail({
   checking = false,
   checkResult,
   checkError = null,
+  onTogglePaused,
+  busy = false,
+  onDelete,
+  actionError = null,
 }: MonitorDetailProps) {
   const {
     name,
@@ -157,6 +230,7 @@ export function MonitorDetail({
   const gap = describeGap(lastCheck, now);
   const push = monitor.push;
   const churn = describeChurn(incidents, now);
+  const menuItems = detailMenuItems(status === "paused", busy, onTogglePaused, onDelete);
 
   return (
     <article
@@ -293,9 +367,23 @@ export function MonitorDetail({
           {push === undefined && onCheckNow !== undefined && <button type="button" className="add-button mon-check-now" onClick={onCheckNow} disabled={checking}>
             {checking ? "Checking…" : "Check now"}
           </button>}
+          {menuItems.length > 0 && <Menu
+            trigger={<>More <span aria-hidden="true">▾</span></>}
+            triggerLabel="More actions"
+            triggerClassName="add-button"
+            label={`Actions for ${name}`}
+            align="end"
+            items={menuItems}
+          />}
         </div>}
       >
         <Panel>
+          {actionError !== null ? (
+            <p role="alert" className="mon-detail-note mon-detail-check-error">
+              <IconAlert />
+              <span>{actionError.message}</span>
+            </p>
+          ) : null}
           {push === undefined && checkError !== null ? (
             <p role="alert" className="mon-detail-note mon-detail-check-error">
               <IconAlert />

@@ -37,6 +37,14 @@ export type MenuProps = {
   align?: "start" | "end";
   label?: string;
   className?: string;
+  /** Class for the trigger button, so it can wear the screen's button style. */
+  triggerClassName?: string;
+  /**
+   * The trigger's accessible name, when its face is a glyph plus a word.
+   * What a reader makes of an unnamed inline `<svg>` varies, so the name is
+   * stated in the markup rather than left to the text content (AGENTS.md).
+   */
+  triggerLabel?: string;
 };
 
 export function Menu({
@@ -45,6 +53,8 @@ export function Menu({
   align = "start",
   label = "Actions",
   className,
+  triggerClassName,
+  triggerLabel,
 }: MenuProps) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -132,6 +142,8 @@ export function Menu({
       <button
         type="button"
         ref={triggerRef}
+        className={triggerClassName}
+        aria-label={triggerLabel}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
