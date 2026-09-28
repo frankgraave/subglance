@@ -8,6 +8,7 @@ import { TlsFloorField } from "./TlsFloorField";
 import { TLS_FLOOR_UNSET } from "./tlsFloor";
 import type { PreviewResult, PreviewState } from "./preview";
 import { describePreview, suggestName } from "./preview";
+import { JSON_HELP, JSON_OPERATORS } from "./jsonAssertion";
 
 /**
  * Add a monitor in under sixty seconds (DESIGN.md §7.2, product principle 2).
@@ -55,6 +56,10 @@ export type AddMonitorValues = {
    * as "1.2". The empty value must reach the caller as an omitted field.
    */
   minTlsVersion: string;
+  /** JSON body assertion; an empty path means none. See jsonAssertion.ts. */
+  jsonPath: string;
+  jsonOperator: string;
+  jsonExpected: string;
 };
 
 /**
@@ -93,6 +98,10 @@ const FIELD_CONTROL: Record<string, string> = {
   repeat_after_s: "repeat",
   recovery_threshold: "recovery",
   min_tls_version: "min-tls",
+  json_assertion: "json-path",
+  "json_assertion.path": "json-path",
+  "json_assertion.operator": "json-operator",
+  "json_assertion.expected": "json-expected",
 };
 
 /**
@@ -112,6 +121,9 @@ const ADVANCED_CONTROLS = new Set([
   "recovery",
   "keyword",
   "min-tls",
+  "json-path",
+  "json-operator",
+  "json-expected",
 ]);
 
 export type AddMonitorFormProps = {
@@ -154,6 +166,9 @@ const DEFAULTS: AddMonitorValues = {
   // pre-selected 1.2 would pin every new monitor to today's floor and quietly
   // make the nullable column unreachable from the UI.
   minTlsVersion: TLS_FLOOR_UNSET,
+  jsonPath: "",
+  jsonOperator: "equals",
+  jsonExpected: "",
 };
 
 export function AddMonitorForm({
@@ -267,6 +282,36 @@ export function AddMonitorForm({
           "aria-describedby": `${describedBy} ${ids}-field-error`,
         }
       : { "aria-describedby": describedBy };
+
+  /** One of the three assertion controls; without a placeholder it is the operator select. */
+  const jsonControl = (
+    control: string,
+    label: string,
+    key: "jsonPath" | "jsonOperator" | "jsonExpected",
+    placeholder?: string,
+  ) => {
+    const props = {
+      id: `${ids}-${control}`,
+      className: "add-input",
+      value: values[key],
+      onChange: (event: { target: { value: string } }) =>
+        setValues((v) => ({ ...v, [key]: event.target.value })),
+      ...invalidProps(control, `${ids}-json-help`),
+    };
+    return (
+      <div className="add-field">
+        <label className="add-label" htmlFor={props.id}>{label}</label>
+        {placeholder === undefined ? (
+          <select {...props}>
+            {JSON_OPERATORS.map((op) => <option key={op} value={op}>{op.replace("_", " ")}</option>)}
+          </select>
+        ) : (
+          <input {...props} placeholder={placeholder} autoComplete="off" spellCheck={false} />
+        )}
+        <FieldError control={control} badControl={badControl} rejection={rejection} ids={ids} />
+      </div>
+    );
+  };
 
   const setTarget = (target: string) => setValues((v) => ({ ...v, target }));
 
@@ -671,6 +716,23 @@ export function AddMonitorForm({
                   ids={ids}
                 />
               </div>
+
+              {/* Only an HTTP check reads a body; an unset type is inferred and may be one. */}
+              {(values.type === "" || values.type === "http") && <>
+              {/*
+               * One field of a JSON body, for the health endpoint that answers
+               * 200 and says in a field that it is not healthy. Three plain
+               * controls rather than one expression box: the API takes exactly
+               * one path, one operator and one value, and the form should not
+               * suggest it can take more.
+               */}
+              {jsonControl("json-path", "JSON field", "jsonPath", "checks.db.status")}
+              {jsonControl("json-operator", "Must", "jsonOperator")}
+              {values.jsonOperator !== "exists" && jsonControl("json-expected", "Value", "jsonExpected", "up")}
+              <p id={`${ids}-json-help`} className="add-help add-field-wide">
+                {JSON_HELP}
+              </p>
+              </>}
             </>
           )}
         </div>

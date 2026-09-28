@@ -35,6 +35,10 @@ type Monitor struct {
 	Headers         map[string]string
 	Body            string
 
+	// JSONAssertion is the optional condition on one field of an HTTP
+	// response's JSON body. Nil means the monitor has none.
+	JSONAssertion *JSONAssertion
+
 	SSLWarnDays int
 	Enabled     bool
 
@@ -81,6 +85,19 @@ type Monitor struct {
 	UpdatedAt time.Time
 }
 
+// JSONAssertion is a stored JSON body assertion.
+//
+// The store keeps it as text and does not interpret it; parsing the path and
+// comparing values belong to internal/checker, and validating a new one to the
+// API, which calls into the checker.
+type JSONAssertion struct {
+	Path     string
+	Operator string
+	// Expected is the comparison value as compact JSON text: `"up"`, `1`,
+	// `null`. Empty for the exists operator.
+	Expected string
+}
+
 // ListMonitors returns all monitors, newest first.
 func (db *DB) ListMonitors(ctx context.Context) ([]Monitor, error) {
 	return db.queryMonitors(ctx, "")
@@ -103,6 +120,7 @@ const monitorColumns = `
 	method, expected_status, keyword, keyword_mode, follow_redirects,
 	headers_json, body, ssl_warn_days, enabled, capture_response, repeat_after_s,
 	min_tls_version, push_token_prefix, push_interval_s, push_grace_s,
+	json_path, json_operator, json_expected,
 	created_at, updated_at`
 
 // queryMonitors runs a monitor SELECT with a caller-supplied WHERE clause.
@@ -180,6 +198,9 @@ func scanMonitor(s scanner) (Monitor, error) {
 		pushPrefix  sql.NullString
 		pushEvery   sql.NullInt64
 		pushGrace   sql.NullInt64
+		jsonPath    sql.NullString
+		jsonOp      sql.NullString
+		jsonWant    sql.NullString
 		created     int64
 		updated     int64
 	)
@@ -190,6 +211,7 @@ func scanMonitor(s scanner) (Monitor, error) {
 		&m.Method, &m.ExpectedStatus, &keyword, &m.KeywordMode, &m.FollowRedirects,
 		&headersJSON, &body, &m.SSLWarnDays, &m.Enabled, &m.CaptureResponse, &m.RepeatAfterS,
 		&minTLS, &pushPrefix, &pushEvery, &pushGrace,
+		&jsonPath, &jsonOp, &jsonWant,
 		&created, &updated,
 	)
 	if err != nil {
@@ -204,6 +226,9 @@ func scanMonitor(s scanner) (Monitor, error) {
 	m.PushTokenPrefix = pushPrefix.String
 	m.PushIntervalS = int(pushEvery.Int64)
 	m.PushGraceS = int(pushGrace.Int64)
+	if jsonPath.Valid && jsonOp.Valid {
+		m.JSONAssertion = &JSONAssertion{Path: jsonPath.String, Operator: jsonOp.String, Expected: jsonWant.String}
+	}
 	m.CreatedAt = time.Unix(created, 0).UTC()
 	m.UpdatedAt = time.Unix(updated, 0).UTC()
 
@@ -230,6 +255,7 @@ func (db *DB) CreateMonitor(ctx context.Context, m Monitor) (Monitor, error) {
 		}
 		headersJSON = string(b)
 	}
+	jsonPath, jsonOp, jsonWant := jsonAssertionColumns(m.JSONAssertion)
 
 	// Monitor row and tag rows go in together: a monitor that briefly exists
 	// without the tags it was created with would be shown ungrouped on any
@@ -261,13 +287,15 @@ func (db *DB) CreateMonitor(ctx context.Context, m Monitor) (Monitor, error) {
 			method, expected_status, keyword, keyword_mode, follow_redirects,
 			headers_json, body, ssl_warn_days, enabled, capture_response, repeat_after_s,
 			min_tls_version, push_token_hash, push_token_prefix, push_interval_s, push_grace_s,
+			json_path, json_operator, json_expected,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		m.Name, m.Type, m.Target, m.IntervalS, m.TimeoutS, m.Retries, m.RecoveryThreshold,
 		m.Method, m.ExpectedStatus, nullString(m.Keyword), m.KeywordMode, m.FollowRedirects,
 		headersJSON, nullString(m.Body), m.SSLWarnDays, m.Enabled, m.CaptureResponse, m.RepeatAfterS,
 		nullTLSVersion(m.MinTLSVersion), tokenHash, nullString(m.PushTokenPrefix),
 		nullInt(m.PushIntervalS), pushGraceValue(m),
+		jsonPath, jsonOp, jsonWant,
 		now, now,
 	)
 	if err != nil {
@@ -822,6 +850,15 @@ func nullString(s string) any {
 	return s
 }
 
+// jsonAssertionColumns spreads an assertion over its three columns, all NULL
+// when there is none.
+func jsonAssertionColumns(a *JSONAssertion) (path, op, expected any) {
+	if a == nil {
+		return nil, nil, nil
+	}
+	return a.Path, a.Operator, nullString(a.Expected)
+}
+
 func nullInt(i int) any {
 	if i == 0 {
 		return nil
@@ -911,6 +948,7 @@ func (db *DB) updateMonitor(ctx context.Context, m Monitor, expected []int64) (M
 		}
 		headersJSON = string(b)
 	}
+	jsonPath, jsonOp, jsonWant := jsonAssertionColumns(m.JSONAssertion)
 
 	// The token columns are absent on purpose: an update writes everything
 	// mutable, and a push token is not. Rotating one is a separate,
@@ -924,6 +962,7 @@ func (db *DB) updateMonitor(ctx context.Context, m Monitor, expected []int64) (M
 		m.Enabled, m.CaptureResponse, m.RepeatAfterS,
 		nullTLSVersion(m.MinTLSVersion),
 		nullInt(m.PushIntervalS), pushGraceValue(m),
+		jsonPath, jsonOp, jsonWant,
 		next, m.ID,
 	}
 
@@ -1002,6 +1041,7 @@ const updateMonitorSetClause = `
 		enabled = ?, capture_response = ?, repeat_after_s = ?,
 		min_tls_version = ?,
 		push_interval_s = ?, push_grace_s = ?,
+		json_path = ?, json_operator = ?, json_expected = ?,
 		updated_at = MAX(?, updated_at + 1)
 	WHERE id = ?`
 

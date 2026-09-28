@@ -66,6 +66,10 @@ type Monitor struct {
 	Headers         map[string]string
 	Body            string
 
+	// JSONAssertion, when set, fails an HTTP check whose response body does
+	// not satisfy it. Nil means the body is not parsed as JSON at all.
+	JSONAssertion *JSONAssertion
+
 	// SSLWarnDays sets how many days before certificate expiry a check starts
 	// failing. Zero disables the check.
 	SSLWarnDays int
@@ -117,6 +121,12 @@ const (
 	FailTimeout    FailureKind = "timeout"
 	FailStatus     FailureKind = "status"
 	FailKeyword    FailureKind = "keyword"
+	// FailAssertion is a response whose JSON did not satisfy the monitor's
+	// JSON assertion: not JSON at all, a path that does not exist, or a
+	// value that does not match. It is kept apart from FailKeyword because
+	// the fix is different: a keyword failure says the page changed, an
+	// assertion failure usually says the service reported itself unhealthy.
+	FailAssertion  FailureKind = "assertion"
 	FailCertExpiry FailureKind = "cert_expiry"
 	FailInternal   FailureKind = "internal"
 

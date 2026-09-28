@@ -119,7 +119,7 @@ tokens too. Without a role, a token acts with the creator's role.
 
 | Type | Target shape | What it verifies |
 |---|---|---|
-| `http` | `https://example.com/health` | Status code, response time, keyword present or absent, certificate expiry |
+| `http` | `https://example.com/health` | Status code, response time, keyword present or absent, one field of a JSON body, certificate expiry |
 | `tcp` | `db.example.com:5432` | A TCP handshake completes within the timeout |
 | `ping` | `example.com` or `192.0.2.10` | ICMP echo reply |
 | `ssl` | `example.com` (port optional, defaults to 443) | Certificate validity, hostname match, chain of trust, days until expiry, OCSP revocation when available |
@@ -142,8 +142,45 @@ is left off that hop and any after it that stay off the original origin; the
 an expired domain, a CDN or a login page would hand your key to that server.
 The one exception is the upgrade from `http://host` to `https://host` on the
 default ports, which only makes the connection safer. A check that then fails
-on its status code or keyword says which origin went without the headers. If that server needs them, point
+on its status code, keyword or JSON assertion says which origin went without the headers. If that server needs them, point
 the monitor at the final URL instead of the one that redirects to it.
+
+### Checking a field of a JSON response
+
+A health endpoint that answers `200 OK` with `{"status":"degraded","db":"down"}`
+passes a status check, and a keyword check for `"ok"` can match the wrong
+field. An HTTP monitor can instead assert one field of the JSON body:
+
+```json
+"json_assertion": {"path": "checks.db.status", "operator": "equals", "expected": "up"}
+```
+
+- **`path`** is dot notation with array indexes: `checks.db.status`,
+  `items[0].ok`, or `[0].id` when the body is an array. A key that itself
+  contains a dot or a square bracket cannot be addressed in this version.
+- **`operator`** is one of `equals`, `not_equals`, `exists`, `less_than` and
+  `greater_than`.
+- **`expected`** is a JSON value written as itself, and its type counts:
+  `"1"` is a string and `1` a number, so `equals` with `"1"` fails on
+  `{"count": 1}` and the message names both types. Numbers compare by value,
+  so `1` equals `1.0`. `less_than` and `greater_than` take a number. `exists`
+  takes no expected value and passes for any value at the path, `null`
+  included.
+
+A failed assertion fails the check with the cause `assertion`, and the error
+says what was there: `checks.db.status was "down", expected "up"`. A body that
+is not JSON, and a path that does not exist, fail the same way with their own
+message; the missing-path message says which part of the path was missing.
+With response capture on, the body that failed is kept alongside.
+
+The assertion runs after the status and keyword checks, on the same first
+1 MiB of the body. A larger body fails the assertion instead of being parsed
+in part.
+
+There is one assertion per monitor, and no boolean logic across several. If
+an endpoint needs more judgement than one field can carry, a small health
+route that does the judging and answers with one field is the better tool,
+and it keeps the logic next to the service that knows what healthy means.
 
 A TCP check completes the handshake and hangs up without sending a payload —
 speaking a protocol badly is a good way to end up in someone's fail2ban rules.

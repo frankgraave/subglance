@@ -15,6 +15,7 @@
 
 import { fromApi, toUnixMs } from "./types";
 import type { PreviewRequest } from "./preview";
+import type { JsonAssertion } from "./jsonAssertion";
 import type { ApiMonitor, Monitor } from "./types";
 
 /**
@@ -58,6 +59,8 @@ export type InventoryMonitor = Monitor & {
   repeatAfterS?: number;
   /** Present only when the detail read carried it; absent is unknown, not 2. */
   recoveryThreshold?: number;
+  /** Detail read only. Null is "none"; absent is unknown, so not editable. */
+  jsonAssertion?: JsonAssertion | null;
   checkSettings?: Omit<PreviewRequest, "type" | "target" | "timeout_s">;
 };
 
@@ -85,6 +88,7 @@ export function inventoryFromApi(api: ApiMonitor & {
     channels: channelsFromApi(api.channels, api.default_channel, api.rule_channels),
     ...(api.repeat_after_s !== undefined ? { repeatAfterS: api.repeat_after_s } : {}),
     ...(api.recovery_threshold !== undefined ? { recoveryThreshold: api.recovery_threshold } : {}),
+    ...(api.json_assertion !== undefined ? { jsonAssertion: api.json_assertion } : {}),
     checkSettings: Object.fromEntries(
       (["method", "expected_status", "keyword", "keyword_mode", "follow_redirects", "headers", "body", "ssl_warn_days", "min_tls_version"] as const)
         .filter((key) => api[key] !== undefined).map((key) => [key, api[key]]),

@@ -12,6 +12,7 @@ import { apiFetch, apiRequest } from "../api/http";
 import { inventoryFromApi, inventoryFromPayload } from "./inventory";
 import type { InventoryMonitor } from "./inventory";
 import type { ApiMonitor } from "./types";
+import type { JsonAssertion } from "./jsonAssertion";
 
 export const inventoryQueryKey = ["monitors", "inventory"] as const;
 
@@ -151,6 +152,8 @@ export type MonitorPatch = {
    * API accepts it on PATCH and rejects it on POST.
    */
   min_tls_version?: string;
+  /** Replaces the assertion; `null` removes it. */
+  json_assertion?: JsonAssertion | null;
 };
 
 /**
