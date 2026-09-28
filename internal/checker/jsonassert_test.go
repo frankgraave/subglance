@@ -159,12 +159,14 @@ func TestHTTPKeywordDoesNotWaitPastTheCap(t *testing.T) {
 	m := monitor(srv.URL)
 	m.Timeout = 2 * time.Second
 	m.Keyword, m.KeywordMode = "healthy", KeywordMustContain
+	began := time.Now()
 	res := testChecker().Check(context.Background(), m)
+	elapsed := time.Since(began)
 	if !res.OK {
 		t.Fatalf("keyword check failed: %s (kind %q)", res.Error, res.Kind)
 	}
-	if res.Latency >= m.Timeout {
-		t.Errorf("latency = %v, want the verdict reached before the timeout", res.Latency)
+	if res.Latency >= m.Timeout || elapsed >= m.Timeout {
+		t.Errorf("latency %v, Check took %v; want both under the %v timeout", res.Latency, elapsed, m.Timeout)
 	}
 }
 
@@ -302,5 +304,59 @@ func TestValidateJSONAssertion(t *testing.T) {
 				t.Errorf("field = %q, want %q (%v)", field, tt.wantField, err)
 			}
 		})
+	}
+}
+
+// A stream that sends more than the assertion's cap and then holds the
+// connection open is judged on what it sent: the check returns at once, not
+// after draining the rest of the stream until the deadline.
+func TestHTTPJSONAssertionDoesNotDrainAnOpenOversizeStream(t *testing.T) {
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(strings.Repeat("x", maxBodyRead+1)))
+		w.(http.Flusher).Flush()
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+	}))
+	defer srv.Close()
+	defer close(release)
+
+	m := monitor(srv.URL)
+	m.Timeout = 2 * time.Second
+	m.JSONAssertion = assertion("status", JSONEquals, `"up"`)
+	began := time.Now()
+	res := testChecker().Check(context.Background(), m)
+	elapsed := time.Since(began)
+	if res.OK || res.Kind != FailAssertion {
+		t.Fatalf("result = ok %v kind %q, want an assertion failure", res.OK, res.Kind)
+	}
+	if res.Latency >= m.Timeout || elapsed >= m.Timeout {
+		t.Errorf("latency %v, Check took %v; want both under the %v timeout", res.Latency, elapsed, m.Timeout)
+	}
+}
+
+// A JSON body that stalls after its headers is a timeout, not a broken
+// connection.
+func TestHTTPJSONAssertionReportsAStalledBodyAsATimeout(t *testing.T) {
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"status":`))
+		w.(http.Flusher).Flush()
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+	}))
+	defer srv.Close()
+	defer close(release)
+
+	m := monitor(srv.URL)
+	m.Timeout = 300 * time.Millisecond
+	m.JSONAssertion = assertion("status", JSONEquals, `"up"`)
+	res := testChecker().Check(context.Background(), m)
+	if res.OK || res.Kind != FailTimeout {
+		t.Fatalf("result = ok %v kind %q (%s), want a timeout", res.OK, res.Kind, res.Error)
 	}
 }

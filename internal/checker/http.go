@@ -334,10 +334,16 @@ func (c *HTTPChecker) check(ctx context.Context, m Monitor, scope *headerScope) 
 		}
 		return classifyRequestError(start, ctx, err)
 	}
+	// drain is cleared when a bounded body read stops at its limit: the
+	// verdict is already in hand, and draining a stream that is still open
+	// would hold the check until its deadline.
+	drain := true
 	defer func() {
 		// Drain before closing so the connection can be reused; an undrained
 		// body forces a new TCP handshake on every single check.
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxBodyRead))
+		if drain {
+			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxBodyRead))
+		}
 		_ = resp.Body.Close()
 	}()
 
@@ -386,8 +392,18 @@ func (c *HTTPChecker) check(ctx context.Context, m Monitor, scope *headerScope) 
 			res.Latency = time.Since(start)
 			res.OK = false
 			res.Kind = FailConnection
+			// A body that stalls after its headers is a timeout, not a
+			// broken connection, and is reported as one.
+			var netErr net.Error
+			if errors.Is(err, context.DeadlineExceeded) || ctx.Err() == context.DeadlineExceeded ||
+				(errors.As(err, &netErr) && netErr.Timeout()) {
+				res.Kind = FailTimeout
+			}
 			res.Error = fmt.Sprintf("read body: %v", err)
 			return res
+		}
+		if int64(len(buf)) == limit {
+			drain = false
 		}
 		if len(buf) > maxBodyRead {
 			buf, oversize = buf[:maxBodyRead], true
