@@ -112,12 +112,17 @@ Checks during maintenance are excluded, exactly as they are from uptime.
 `down_minutes` is the confirmed incident time that day, rounded up to whole
 minutes, so a visitor can tell a 2-minute blip from a lost afternoon.
 
-In the prototype the bars differ in **height** as well as colour: down days
-draw at full height, degraded at three quarters, up and no-data days at half.
-The same rule as the heartbeat bar (DESIGN.md §4: absence has to be loud), and
-it keeps the history readable without relying on colour. The bars are
-`aria-hidden`; the row states its 90-day uptime in text, and the outage list
-below carries the same facts as words.
+In the prototype every daily state has its own **height** as well as its own
+colour: down days draw at full height, degraded at three quarters, up at half
+and no-data days as a quarter-height stub. The same rule as the heartbeat bar
+(DESIGN.md §4: absence has to be loud), and it keeps all four states apart
+without relying on colour.
+
+The bars are `aria-hidden`, so each row carries the whole history as text for
+assistive technology: the count of up, degraded, down and no-data days over the
+90 days, followed by how many days ago each down and each degraded day was. The
+14-day outage list below adds times and durations for recent outages; it is not
+the only accessible record of older ones.
 
 ---
 
@@ -126,7 +131,7 @@ below carries the same facts as words.
 The prototype is `docs/mockups/pages/status.html`. It opens from disk, links the
 live `tokens.css` and `led.css`, and is covered by the same guards as every
 other mockup (`mockups.test.ts`, `mockup-contract.browser.test.ts`), plus
-`status-page.browser.test.ts` for its own layout.
+`status-page-mockup.browser.test.ts` for its own layout.
 
 Decisions it draws:
 
@@ -184,8 +189,10 @@ point below names the measure the build must carry.
 
 ### 3.3 Caching behind a reverse proxy
 
-- The server keeps **one rendered response per page** for 30 seconds, keyed by
-  slug. Uptime and 90 days of rollups are the expensive part; recomputing
+- The server keeps **one rendered response per page and format** for 30
+  seconds, keyed by slug and format, so the HTML and JSON routes hold separate
+  entries and a JSON request can never be answered with cached HTML or the
+  reverse. Uptime and 90 days of rollups are the expensive part; recomputing
   them per request would make the page the cheapest way to load the instance.
 - Responses carry `Cache-Control: public, max-age=30` and an `ETag`, so a
   proxy or CDN in front can serve them too. `Vary` is not needed: the response

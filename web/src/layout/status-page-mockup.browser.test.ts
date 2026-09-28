@@ -45,9 +45,30 @@ async function measure(width: number, theme: string, scenario: string) {
         // Every lamp on the page carries a visible word, never colour alone.
         wordless: Array.from(document.querySelectorAll(".led")).filter(led =>
           !led.nextElementSibling?.textContent?.trim()).length,
+        // Each daily state draws at its own height, so no two share a colour-only difference.
+        heights: Object.fromEntries(["up", "warn", "down", "none"].map(state => [state,
+          [...new Set(bars.flat().filter(bar => bar.dataset.s === state)
+            .map(bar => bar.getBoundingClientRect().height))]])),
+        // The bars are aria-hidden; the text alternative must account for all 90 days.
+        historyDays: rows.map(row => (row.querySelector(".sp-history")?.textContent ?? "")
+          .match(/^Last 90 days: (\d+) up, (\d+) degraded, (\d+) down, (\d+) no data\./)
+          ?.slice(1).reduce((sum, n) => sum + Number(n), 0) ?? 0),
+        // The review controls, measured against the 24 by 24 CSS-pixel target floor.
+        smallTargets: Array.from(document.querySelectorAll<HTMLElement>(".sp-review button"))
+          .filter(button => button.checkVisibility())
+          .map(button => button.getBoundingClientRect())
+          .filter(box => box.width < 24 || box.height < 24).length,
       };
     });
   } finally { await page.close(); }
+}
+
+/** Each state present on the page draws at one height, and no two states share it. */
+function expectDistinctHeights(heights: Record<string, number[]>) {
+  const present = Object.entries(heights).filter(([, list]) => list.length > 0);
+  for (const [state, list] of present) expect(list, `${state} bars at one height`).toHaveLength(1);
+  const drawn = present.map(([, list]) => list[0]);
+  expect(new Set(drawn).size, `heights per state: ${JSON.stringify(heights)}`).toBe(drawn.length);
 }
 
 for (const theme of ["dark", "light"]) {
@@ -61,6 +82,9 @@ for (const theme of ["dark", "light"]) {
         expect(m.oldestLabel).toEqual(["30 days ago"]);
         expect(m.narrowestBar, "a bar under 2px is no longer a bar").toBeGreaterThanOrEqual(2);
         expect(m.wordless).toBe(0);
+        expect(m.smallTargets, "controls under 24x24 CSS px").toBe(0);
+        expectDistinctHeights(m.heights);
+        expect(m.historyDays).toEqual([90, 90, 90, 90, 90]);
       });
       it.each(WIDER)(`${scenario}: %ipx shows 90 days`, async width => {
         const m = await measure(width, theme, scenario);
@@ -69,6 +93,8 @@ for (const theme of ["dark", "light"]) {
         expect(m.oldestLabel).toEqual(["90 days ago"]);
         expect(m.narrowestBar).toBeGreaterThanOrEqual(2);
         expect(m.wordless).toBe(0);
+        expectDistinctHeights(m.heights);
+        expect(m.historyDays).toEqual([90, 90, 90, 90, 90]);
       });
     }
   });

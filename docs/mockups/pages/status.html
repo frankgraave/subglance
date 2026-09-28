@@ -53,13 +53,13 @@ body { padding:var(--space-6) var(--space-4) var(--space-12); }
 .sp-line .row-name { flex: 1; min-width: 0; font-weight: var(--weight-mid); }
 
 /* Daily history. Height as well as colour: a down day is drawn full height,
-   a degraded one at three quarters, the rest at half, so the picture does not
-   rely on colour alone (DESIGN.md §4). */
+   a degraded one at three quarters, an up day at half and a no-data day as a
+   quarter stub, so no two states rely on colour alone (DESIGN.md §4). */
 .sp-days { display: flex; align-items: flex-end; gap:1px; height: var(--size-row-sm); }
 .sp-days i { flex: 1 1 0; min-width: 0; height: 50%; border-radius:var(--r-2xs); background: var(--up); display: block; }
 .sp-days i[data-s="down"] { height: 100%; background: var(--down); }
 .sp-days i[data-s="warn"] { height: 75%; background: var(--warn); }
-.sp-days i[data-s="none"] { background: var(--idle-dim); }
+.sp-days i[data-s="none"] { height: 25%; background: var(--idle-dim); }
 .sp-axis { display: flex; gap:var(--space-2); color: var(--ink-2); font-size:var(--type-helper); line-height:var(--lead-helper); }
 .sp-axis .sp-uptime { margin:0 auto; color: var(--ink); }
 .sp-axis-phone { display: none; }
@@ -184,7 +184,7 @@ var SCENARIOS = {
       { name: "Web app", state: "up", uptime: "99.95%", days: history([41, 63], []), maint: true },
       { name: "Public API", state: "up", uptime: "99.93%", days: history([9, 41], [22]) },
       { name: "Email delivery", state: "up", uptime: "100.00%", days: history([], [30]) },
-      { name: "Background jobs", state: "off", uptime: "—", days: history([], [], 20) }
+      { name: "Background jobs", state: "off", uptime: "100.00%", days: history([], [], 20) }
     ],
     maintenance: [
       { when: "Now, until 03:00", affects: "Web app", now: true }
@@ -202,6 +202,23 @@ function publicWord(state) {
 }
 function lamp(state, word) {
   return `<span class="led-wrap"><span class="led" data-state="${state}" aria-hidden="true"></span><span class="led-label">${word || publicWord(state)}</span></span>`;
+}
+
+// The bars are aria-hidden; this sentence is the same 90 days as text, so no
+// state and no older outage is visible only as a picture.
+function historyText(days) {
+  var n = { up: 0, warn: 0, down: 0, none: 0 }, ago = { warn: [], down: [] };
+  days.forEach(function (d, i) {
+    n[d]++;
+    if (ago[d]) ago[d].unshift(days.length - 1 - i);
+  });
+  function when(list) {
+    return list.map(function (a) { return a === 0 ? "today" : a === 1 ? "1 day ago" : a + " days ago"; }).join(", ");
+  }
+  var text = "Last 90 days: " + n.up + " up, " + n.warn + " degraded, " + n.down + " down, " + n.none + " no data.";
+  if (ago.down.length) text += " Down " + when(ago.down) + ".";
+  if (ago.warn.length) text += " Degraded " + when(ago.warn) + ".";
+  return text;
 }
 
 function render(name) {
@@ -230,6 +247,7 @@ function render(name) {
     return `<div class="row sp-row"${status}>
       <div class="sp-line"><span class="row-name">${esc(s.name)}</span>${chip}${lamp(s.state)}</div>
       <div class="sp-days" aria-hidden="true">${bars}</div>
+      <p class="sr-only sp-history">${historyText(s.days)}</p>
       <div class="sp-axis"><span class="sp-axis-desk">90 days ago</span><span class="sp-axis-phone">30 days ago</span><span class="sp-uptime mono">${uptime}</span><span>Today</span></div>
     </div>`;
   }).join("");
