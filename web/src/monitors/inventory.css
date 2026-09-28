@@ -87,6 +87,7 @@
 .inv-name > a {
   display: inline-block;
   min-height: var(--size-row-sm);
+  min-width: var(--size-row-sm);
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
