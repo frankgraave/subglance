@@ -265,3 +265,12 @@ export function describeInventory(monitors: readonly InventoryMonitor[]): string
   const configured = `${monitors.length} configured`;
   return paused === 0 ? configured : `${configured}, ${paused} paused`;
 }
+
+/**
+ * What deleting a monitor takes with it, in the sentence the retyping exists
+ * to make someone read. Shared by the inventory and the detail screen so the
+ * two cannot describe the same act differently.
+ */
+export function monitorDeleteConsequence(name: string): string {
+  return `${name} and everything recorded about it — heartbeats, uptime history and its incidents, open and past — are removed. This cannot be undone. If you only want it to stop checking, pause it instead: a paused monitor keeps its history.`;
+}

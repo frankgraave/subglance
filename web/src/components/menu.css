@@ -23,6 +23,12 @@
   top: calc(100% + var(--space-1));
   left: 0;
   min-width: var(--space-16);
+  /* Sized by its items, not by the trigger it hangs from. The panel is
+     positioned against a trigger one word wide, and shrink-to-fit against that
+     box squeezed every description to a word per line. Capped at the drawer's
+     natural width so a description wraps rather than crossing a phone. */
+  width: max-content;
+  max-width: var(--size-pane-sm);
   display: flex;
   flex-direction: column;
   gap: var(--space-1);

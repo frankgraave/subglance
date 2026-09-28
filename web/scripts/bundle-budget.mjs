@@ -236,14 +236,24 @@ const budgets = {
    * costs only the card around them (about 250 bytes). No new dependency.
    * 152 leaves about 780 bytes.
    *
-   * 152 -> 153 KiB gzip for SUB-152 (the JSON field assertion). The branch
-   * before its review fixes measures 155,608 bytes of entry JS (Node gzip,
-   * level 6), 40 under 152; with them 155,902, 254 over. The fix refuses an
-   * expected number the browser would round (0.1234567890123456789 sent as
-   * 0.12345678901234568) on both monitor forms instead of storing a value
-   * nobody typed, about 300 bytes. No new dependency. 153 leaves about 770.
+   * 152 -> 153 KiB gzip for SUB-119 (pause, resume and delete on the monitor
+   * detail screen). Develop at bc6f37c measures 154,845 bytes of entry JS
+   * (Node gzip, level 6); this branch measures 156,026, 378 over 152. Most of
+   * the 1,181 bytes is `Menu` itself: it was built and tested but had no
+   * caller, so the bundler dropped it, and this is the first screen to mount
+   * it. The rest is the two mutations and the retyped-name confirmation the
+   * inventory already uses. No new dependency and no new CSS. 153 leaves
+   * about 650 bytes.
+   *
+   * 153 -> 154 KiB gzip for SUB-152 (the JSON field assertion), merged onto
+   * develop 3d12883. The SUB-119 branch measured 156,026 bytes of entry JS
+   * (Node gzip, level 6) when it merged; this branch measures 157,090, 418
+   * over 153. The roughly 1,060 bytes are the assertion fields on both monitor forms, their
+   * validation, and the refusal of an expected number the browser would round
+   * (0.1234567890123456789 sent as 0.12345678901234568) instead of storing a
+   * value nobody typed. No new dependency. 154 leaves about 600 bytes.
    */
-  js: 153,
+  js: 154,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *

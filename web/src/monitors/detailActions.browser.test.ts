@@ -10,7 +10,7 @@ let server: Server;
 beforeAll(async () => { server = await serveBuild(); browser = await chromium(); });
 afterAll(async () => { await browser?.close(); await server?.close(); });
 
-it.each([["dark", 375], ["light", 375], ["dark", 1440], ["light", 1440]] as const)(
+it.each([["dark", 320], ["dark", 375], ["light", 375], ["dark", 1440], ["light", 1440]] as const)(
   "keeps the detail title clear of both actions: %s %ipx", async (theme, width) => {
     const context = await browser.createBrowserContext();
     const page = await context.newPage();
@@ -29,13 +29,13 @@ it.each([["dark", 375], ["light", 375], ["dark", 1440], ["light", 1440]] as cons
         return [...header.querySelectorAll("button")].map((node) => {
           const r = node.getBoundingClientRect();
           return {
-            label: node.textContent?.trim(),
+            label: node.getAttribute("aria-label") ?? node.textContent?.trim(),
             overlapsTitle: r.left < title.right && r.right > title.left && r.top < title.bottom && r.bottom > title.top,
             insideViewport: r.left >= 0 && r.right <= innerWidth,
           };
         });
       });
-      expect(bounds.map((b) => b.label)).toEqual(["Edit monitor", "Check now"]);
+      expect(bounds.map((b) => b.label)).toEqual(["Edit monitor", "Check now", "More actions"]);
       for (const bound of bounds) {
         expect(bound.overlapsTitle, `${bound.label} overlaps the card title`).toBe(false);
         expect(bound.insideViewport).toBe(true);
@@ -44,6 +44,30 @@ it.each([["dark", 375], ["light", 375], ["dark", 1440], ["light", 1440]] as cons
         await mkdir(process.env.SUBGLANCE_PROOF_DIR, { recursive: true });
         await page.screenshot({ path: join(process.env.SUBGLANCE_PROOF_DIR, `detail-actions-${theme}-${width}.png`), fullPage: true });
       }
+      // The menu hangs from the trigger's end edge, so at a phone width it
+      // must open leftwards into the page rather than off its right side.
+      await page.click('button[aria-label="More actions"]');
+      const menu = await page.waitForSelector('[role="menu"]');
+      const panel = await menu!.evaluate((node) => {
+        const r = node.getBoundingClientRect();
+        const style = getComputedStyle(node);
+        return { left: r.left, right: r.right, width: innerWidth, panelWidth: r.width, bg: style.backgroundColor,
+          items: [...node.querySelectorAll('[role="menuitem"]')].map((item) => item.getBoundingClientRect().height) };
+      });
+      expect(panel.left).toBeGreaterThanOrEqual(0);
+      // Sized by its items: a description squeezed to a word per line would
+      // leave the panel as narrow as the one-word trigger it hangs from.
+      expect(panel.panelWidth).toBeGreaterThan(200);
+      expect(panel.right).toBeLessThanOrEqual(panel.width);
+      // --surface-float is opaque; a translucent panel lets the page read through.
+      // A computed colour with an alpha channel ends in "/ a)" or ", a)".
+      expect(panel.bg).not.toMatch(/(\/|,)\s*0?\.\d+\)$/);
+      for (const height of panel.items) expect(height).toBeGreaterThanOrEqual(24);
+      if (process.env.SUBGLANCE_PROOF_DIR) {
+        await page.screenshot({ path: join(process.env.SUBGLANCE_PROOF_DIR, `detail-menu-${theme}-${width}.png`), fullPage: true });
+      }
+      await page.keyboard.press("Escape");
+      await page.waitForSelector('[role="menu"]', { hidden: true });
       await edit!.click();
       await page.waitForSelector('[role="dialog"] input[name="name"]');
       await page.keyboard.press("Escape");

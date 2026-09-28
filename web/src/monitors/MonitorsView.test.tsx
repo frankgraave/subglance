@@ -212,7 +212,7 @@ describe("MonitorsView", () => {
     expect(onDelete).not.toHaveBeenCalled();
     const dialog = screen.getByRole("dialog");
     expect(
-      within(dialog).getByText(/heartbeats, uptime history and past incidents/),
+      within(dialog).getByText(/heartbeats, uptime history and its incidents, open and past/),
     ).toBeTruthy();
 
     /*
