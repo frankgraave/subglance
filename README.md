@@ -91,7 +91,7 @@ exists for it.
 |---|---|
 | Checks — HTTP(S), TCP, ping, SSL, push | ✅ Working |
 | Scheduler, state engine, flapping suppression | ✅ Working |
-| Notifications — webhook, Discord, Slack, Telegram, email | ✅ Working |
+| Notifications — webhook, Discord, Slack, Telegram, email, ntfy, Gotify | ✅ Working |
 | REST API v1 + OpenAPI 3.1 specification | ✅ Working |
 | Authentication — sessions, API tokens, three roles | ✅ Working |
 | Dashboard, monitor detail, incidents, monitors, notifications screens | ✅ Working |
@@ -124,7 +124,8 @@ exists for it.
 - **REST API v1** with an OpenAPI 3.1 specification, checked against the server's
   own route table on every test run
 - **Authentication**: sessions, API tokens, three roles, first-run setup
-- **Delivering the alert**: webhook, Discord, Slack, Telegram and email, sent
+- **Delivering the alert**: webhook, Discord, Slack, Telegram, email, and the
+  self-hosted push services ntfy and Gotify ([channels](docs/channels.md)), sent
   from an outbox that retries with exponential backoff and jitter and
   dead-letters a delivery that keeps failing, so a Slack outage never blocks the
   checker loop. `POST /api/v1/channels/{id}/test` sends a real message through a

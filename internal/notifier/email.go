@@ -93,7 +93,7 @@ func (s *EmailSender) Send(ctx context.Context, cfg map[string]string, a Alert) 
 		if errors.Is(err, checker.ErrPrivateTarget) {
 			// A refused address stays refused; retrying it five
 			// more times only delays the operator learning why.
-			return fmt.Errorf("delivery blocked: %w", err)
+			return blocked(err)
 		}
 		return retryable("connect to %s: %w", addr, err)
 	}

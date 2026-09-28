@@ -30,7 +30,7 @@ func httpSend(ctx context.Context, client *http.Client, req *http.Request) error
 			// turn a blocked probe into a slow one instead of a
 			// failed one. Report it permanently so the operator
 			// sees the real reason in the outbox.
-			return fmt.Errorf("delivery blocked: %w", err)
+			return blocked(err)
 		}
 		// A transport error is a network that is not working right now:
 		// DNS, connection refused, timeout. All worth another try.
@@ -67,6 +67,21 @@ func httpSend(ctx context.Context, client *http.Client, req *http.Request) error
 		}
 		return fmt.Errorf("endpoint rejected the alert (%d)", resp.StatusCode)
 	}
+}
+
+// PrivateTargetHint is appended to every refusal by the SSRF guard, on
+// delivery and on the test button alike. "Blocked" on its own is a dead end:
+// the typical Gotify or self-hosted ntfy sits on a private address, and the
+// one person who will read this message needs to know which setting lets it
+// through, and that the setting is theirs to choose.
+const PrivateTargetHint = "start SubGlance with --allow-private-targets " +
+	"(SUBGLANCE_ALLOW_PRIVATE_TARGETS=true) to send to internal addresses"
+
+// blocked reports a delivery the guard refused. The wrapped error already
+// names the address and why it is refused (loopback, private, link-local),
+// and stays unwrappable as checker.ErrPrivateTarget.
+func blocked(err error) error {
+	return fmt.Errorf("delivery blocked: %w (%s)", err, PrivateTargetHint)
 }
 
 // readSnippet returns the first line of a response body, for error messages.
