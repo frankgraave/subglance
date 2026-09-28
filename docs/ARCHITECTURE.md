@@ -132,6 +132,9 @@ incidents    id, monitor_id, started_at, confirmed_at, resolved_at,
 notif_channels  id, name, type, config_json, enabled
 monitor_channels monitor_id, channel_id
 routing_rules    id, tag_key, tag_value      -- + rule channels, exclusions
+status_pages     id, slug, title, selection, enabled
+                 -- + entries: monitor_id, public_key, display_name;
+                 -- see docs/design/status-page.md
 settings     key, value
 ```
 
