@@ -2027,7 +2027,7 @@ const statusBorders = new Set<string>([
   // both use the warning role for their status rail, draining when stale.
   'web/src/monitors/monitors.css | .mon-row[data-status="warning"] > :first-child, .mon-row[data-status="recovering"] > :first-child | border-left-color: var(--warn)',
   'web/src/monitors/monitors.css | .mon-row[data-status="paused"] > :first-child | border-left-color: var(--ink-3)',
-  'web/src/monitors/monitors.css | .mon-row[data-status="waiting"] > :first-child | border-left-color: var(--idle)',
+  'web/src/monitors/monitors.css | .mon-row[data-status="waiting"] > :first-child | border-left-color: var(--ink-3)',
   /*
    * The resting edge those four colour in. 2px rather than 1 so the row's
    * contents do not move one pixel right the moment a monitor goes down —
@@ -2058,14 +2058,14 @@ const statusBorders = new Set<string>([
   // both use the warning role for their status rail, draining when stale.
   'web/src/monitors/monitors.css | .mon-card[data-status="warning"], .mon-card[data-status="recovering"] | border-left: var(--size-status-rail) solid var(--warn)',
   'web/src/monitors/monitors.css | .mon-card[data-status="paused"] | border-left: var(--size-status-rail) dotted var(--ink-3)',
-  'web/src/monitors/monitors.css | .mon-card[data-status="waiting"] | border-left: var(--size-status-rail) solid var(--idle)',
+  'web/src/monitors/monitors.css | .mon-card[data-status="waiting"] | border-left: var(--size-status-rail) solid var(--ink-3)',
   'web/src/monitors/monitors.css | .mon-line[data-status="down"] | border-left: var(--size-status-rail) solid var(--down)',
   'web/src/monitors/monitors.css | .mon-line[data-status="pending"] | border-left: var(--size-status-rail) solid var(--warn)',
   // Warning is an unconfirmed failure, and recovering a confirmed one whose checks pass again (SUB-157):
   // both use the warning role for their status rail, draining when stale.
   'web/src/monitors/monitors.css | .mon-line[data-status="warning"], .mon-line[data-status="recovering"] | border-left: var(--size-status-rail) solid var(--warn)',
   'web/src/monitors/monitors.css | .mon-line[data-status="paused"] | border-left: var(--size-status-rail) dotted var(--ink-3)',
-  'web/src/monitors/monitors.css | .mon-line[data-status="waiting"] | border-left: var(--size-status-rail) solid var(--idle)',
+  'web/src/monitors/monitors.css | .mon-line[data-status="waiting"] | border-left: var(--size-status-rail) solid var(--ink-3)',
   "web/src/monitors/monitors.css | .push-reveal-warn | border-left: var(--size-status-rail) solid var(--warn)",
   /*
    * The coverage list on the notifications page marks a paused monitor with
@@ -2187,6 +2187,7 @@ const SHADOW_RUNG =
 const shadowExceptions = new Set<string>([
   "inset 0 0 0 2px var(--warn)",
   "inset 0 0 0 1.5px var(--ink-2)",
+  "inset 0 0 0 1.5px var(--ink-3)",
   "0 0 0 3px var(--accent-ring)",
   "0 0 0 3px var(--ring-down)",
 ]);

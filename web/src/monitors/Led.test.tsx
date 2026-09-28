@@ -89,6 +89,15 @@ describe("led.css draws off as an empty socket", () => {
     expect(rule("off")).toContain("var(--ink-2)");
   });
 
+  it("rings the unlit lamp in --ink-3 and keeps its dim fill (SUB-159)", () => {
+    // The dim --idle fill is what reads as "unlit", and it measures 1.6-1.9:1,
+    // under the 3:1 non-text floor. The ring carries the state instead, in the
+    // same construction as the paused lamp, so filled and hollow stay apart.
+    expect(rule("idle")).toContain("background: var(--idle)");
+    expect(rule("idle")).toContain("box-shadow: inset 0 0 0 1.5px var(--ink-3)");
+    expect(rule("idle")).not.toContain("border:");
+  });
+
   it("rings with an inset shadow, never a border, so the lamp stays 20x7", () => {
     expect(rule("off")).toContain("inset 0 0 0");
     expect(rule("off")).not.toContain("border:");
