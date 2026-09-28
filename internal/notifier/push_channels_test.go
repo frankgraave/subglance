@@ -93,6 +93,19 @@ func TestNtfyPublishesJSONToTheServerRoot(t *testing.T) {
 	}
 }
 
+// TestNtfyTrimsAPaddedToken: a token pasted with surrounding whitespace
+// passes Validate, so Send must not carry that whitespace into the header.
+func TestNtfyTrimsAPaddedToken(t *testing.T) {
+	srv, got := pushServer(t, http.StatusOK)
+	cfg := map[string]string{"url": srv.URL, "topic": "t", "token": " \ttk_secret \n"}
+	if err := NewNtfySender(nil).Send(context.Background(), cfg, downAlert()); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if h := got.header.Get("Authorization"); h != "Bearer tk_secret" {
+		t.Errorf("Authorization = %q, want the trimmed token", h)
+	}
+}
+
 func TestNtfyRecoveryIsDefaultPriority(t *testing.T) {
 	srv, got := pushServer(t, http.StatusOK)
 	cfg := map[string]string{"url": srv.URL, "topic": "t", "username": "me", "password": "pw"}

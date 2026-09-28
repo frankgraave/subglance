@@ -112,9 +112,12 @@ func (s *NtfySender) Send(ctx context.Context, cfg map[string]string, a Alert) e
 	if err != nil {
 		return err
 	}
+	// A pasted token often carries a stray space or newline; the header
+	// keeps any whitespace after "Bearer ", so send the trimmed value.
+	token := strings.TrimSpace(cfg["token"])
 	switch {
-	case strings.TrimSpace(cfg["token"]) != "":
-		req.Header.Set("Authorization", "Bearer "+cfg["token"])
+	case token != "":
+		req.Header.Set("Authorization", "Bearer "+token)
 	case cfg["username"] != "":
 		req.SetBasicAuth(cfg["username"], cfg["password"])
 	}
