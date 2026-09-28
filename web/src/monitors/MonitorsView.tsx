@@ -12,7 +12,7 @@ import { AddMonitor } from "./AddMonitor";
 import { EditMonitorForm } from "./EditMonitorForm";
 import { BulkTagDrawer, type TagChange } from "./BulkTagDrawer";
 import { filterMonitors } from "./model";
-import { describeInventory, filterByType } from "./inventory";
+import { describeInventory, filterByType, monitorDeleteConsequence } from "./inventory";
 import type { ChannelState, InventoryMonitor } from "./inventory";
 import type { CheckOutcome, MonitorPatch } from "./inventoryApi";
 
@@ -433,7 +433,7 @@ export function MonitorsView({
           onClose={() => setConfirming(null)}
           kind="monitor"
           name={deleteTarget.name}
-          consequence={`${deleteTarget.name} and everything recorded about it — heartbeats, uptime history and past incidents — are removed. This cannot be undone. If you only want it to stop checking, pause it instead: a paused monitor keeps its history.`}
+          consequence={monitorDeleteConsequence(deleteTarget.name)}
           onConfirm={() => {
             onDelete?.(deleteTarget.id);
             setConfirming(null);

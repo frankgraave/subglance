@@ -25,6 +25,22 @@
   flex-wrap: wrap;
 }
 
+/* Three controls since the More menu joined them (SUB-119), which is wider
+   than a 320px screen's card. `card.css` holds the action group at its
+   natural width; here it may shrink to its line so its own flex-wrap can take
+   a second row, instead of pushing the page sideways. */
+.mon-detail > .card > .card-head > .card-head-action {
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+/* The menu opens from the trigger's end edge, so the trigger must stay at the
+   end of whichever row it lands on: wrapped to the start of a row, the panel
+   would open off the left of the screen. */
+.mon-detail > .card > .card-head .menu {
+  margin-left: auto;
+}
+
 .mon-detail-nav {
   margin-bottom: calc(var(--space-2) * -1);
 }

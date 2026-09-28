@@ -235,8 +235,17 @@ const budgets = {
    * the theme, layout and cards-per-row controls the app already draws, so it
    * costs only the card around them (about 250 bytes). No new dependency.
    * 152 leaves about 780 bytes.
+   *
+   * 152 -> 153 KiB gzip for SUB-119 (pause, resume and delete on the monitor
+   * detail screen). Develop at bc6f37c measures 154,845 bytes of entry JS
+   * (Node gzip, level 6); this branch measures 156,026, 378 over 152. Most of
+   * the 1,181 bytes is `Menu` itself: it was built and tested but had no
+   * caller, so the bundler dropped it, and this is the first screen to mount
+   * it. The rest is the two mutations and the retyped-name confirmation the
+   * inventory already uses. No new dependency and no new CSS. 153 leaves
+   * about 650 bytes.
    */
-  js: 152,
+  js: 153,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *

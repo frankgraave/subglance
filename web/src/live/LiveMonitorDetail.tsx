@@ -3,7 +3,9 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createQueryClient } from "./queryClient";
-import { checkMonitorNow, type CheckOutcome } from "../monitors/inventoryApi";
+import { checkMonitorNow, deleteMonitor, setMonitorPaused, type CheckOutcome } from "../monitors/inventoryApi";
+import { ConfirmDelete } from "../components/ConfirmDelete";
+import { monitorDeleteConsequence } from "../monitors/inventory";
 import { useLiveMonitors } from "./useLiveMonitors";
 import { useNow } from "./useNow";
 import { EditMonitorDrawer } from "../monitors/EditMonitorDrawer";
@@ -38,6 +40,10 @@ export type LiveMonitorDetailProps = LiveOptions & {
   /** Ack seam for tests; defaults to the real endpoint. */
   ack?: typeof ackIncident;
   check?: typeof checkMonitorNow;
+  /** Pause/resume seam for tests; defaults to the real endpoint. */
+  pause?: typeof setMonitorPaused;
+  /** Delete seam for tests; defaults to the real endpoint. */
+  remove?: typeof deleteMonitor;
   /** The shell supplies the authenticated user's write permission. */
   canWrite?: boolean;
 };
@@ -48,6 +54,8 @@ export function LiveMonitorDetail({
   onBack,
   ack = ackIncident,
   check = checkMonitorNow,
+  pause = setMonitorPaused,
+  remove = deleteMonitor,
   canWrite = true,
   ...live
 }: LiveMonitorDetailProps) {
@@ -181,6 +189,54 @@ export function LiveMonitorDetail({
     checkMutation.mutate(id);
   };
 
+  /*
+   * Pause, resume and delete, from the screen an alert link lands on.
+   *
+   * Refetched, never flipped locally, for the reason the inventory gives:
+   * "paused" claims SubGlance has stopped watching something, and a screen
+   * that says so because the browser assumed a request would succeed is the
+   * product lying about whether anyone is watching. `["monitors"]` is the
+   * prefix of both the live list and the inventory, so the two screens cannot
+   * disagree afterwards.
+   *
+   * The error is keyed by monitor, like the check result above: routing from
+   * A to B must not put A's failure under B's title.
+   */
+  const [actionErrors, setActionErrors] = useState<Record<string, Error>>({});
+  const noteActionError = (monitorId: string, verb: string, error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    setActionErrors((current) => ({ ...current, [monitorId]: new Error(`Could not ${verb}: ${message}`) }));
+  };
+  const clearActionError = (monitorId: string) => {
+    setActionErrors((current) => {
+      if (!(monitorId in current)) return current;
+      const next = { ...current };
+      delete next[monitorId];
+      return next;
+    });
+  };
+  const pauseMutation = useMutation({
+    mutationFn: ({ monitorId, paused }: { monitorId: string; paused: boolean }) => pause(monitorId, paused),
+    retry: false,
+    onError: (error, { monitorId, paused }) => noteActionError(monitorId, paused ? "pause" : "resume", error),
+    onSettled: () => { void queryClient.invalidateQueries({ queryKey: ["monitors"] }); },
+  });
+  const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
+  if (confirmingDelete !== null && confirmingDelete !== id) setConfirmingDelete(null);
+  const deleteMutation = useMutation({
+    mutationFn: (monitorId: string) => remove(monitorId),
+    retry: false,
+    onSuccess: (_data, monitorId) => {
+      void queryClient.invalidateQueries({ queryKey: ["monitors"] });
+      void queryClient.invalidateQueries({ queryKey: openIncidentsQueryKey });
+      // The page is about a monitor that no longer exists. Staying would show
+      // "does not exist" as though something had gone wrong; the dashboard is
+      // where the back control already goes.
+      if (monitorId === id) onBack?.();
+    },
+    onError: (error, monitorId) => noteActionError(monitorId, "delete", error),
+  });
+
   if (monitor === undefined) {
     /*
      * Three different situations share this branch, and they need three
@@ -211,6 +267,20 @@ export function LiveMonitorDetail({
   return (
     <>
     {canWrite && editingId === id && <EditMonitorDrawer key={id} id={id} onClose={() => setEditingId(null)} />}
+    {canWrite && confirmingDelete === id && (
+      <ConfirmDelete
+        open
+        onClose={() => setConfirmingDelete(null)}
+        kind="monitor"
+        name={monitor.name}
+        consequence={monitorDeleteConsequence(monitor.name)}
+        onConfirm={() => {
+          setConfirmingDelete(null);
+          clearActionError(id);
+          deleteMutation.mutate(id);
+        }}
+      />
+    )}
     <MonitorDetail
       monitor={monitor}
       windows={detail.data?.windows ?? []}
@@ -248,6 +318,13 @@ export function LiveMonitorDetail({
       checking={checks[id]?.checking ?? false}
       checkResult={checks[id]?.result}
       checkError={checks[id]?.error ?? null}
+      onTogglePaused={canWrite ? (paused) => {
+        clearActionError(id);
+        pauseMutation.mutate({ monitorId: id, paused });
+      } : undefined}
+      busy={(pauseMutation.isPending && pauseMutation.variables?.monitorId === id) || (deleteMutation.isPending && deleteMutation.variables === id)}
+      onDelete={canWrite ? () => setConfirmingDelete(id) : undefined}
+      actionError={actionErrors[id] ?? null}
       ackingIds={ackingIds}
       ackError={ackMutation.error instanceof Error ? ackMutation.error : null}
     />
