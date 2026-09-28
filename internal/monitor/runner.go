@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/frankgraave/subglance/internal/checker"
+	"github.com/frankgraave/subglance/internal/connectivity"
 	"github.com/frankgraave/subglance/internal/events"
 	"github.com/frankgraave/subglance/internal/scheduler"
 	"github.com/frankgraave/subglance/internal/state"
@@ -79,6 +80,10 @@ type Runner struct {
 	// pushSweep is how often the push watchdog looks for overdue monitors.
 	// Zero means defaultPushSweep.
 	pushSweep time.Duration
+
+	// canary tells a monitor's outage apart from the host's own. Nil means
+	// the check is off and every failure counts against its monitor.
+	canary *connectivity.Canary
 }
 
 // Alert is a state change worth telling someone about.
@@ -127,6 +132,12 @@ type Options struct {
 	// Zero means defaultPushSweep. Tests set it small; nothing else needs
 	// to set it at all.
 	PushSweep time.Duration
+
+	// Connectivity is consulted before an incident is confirmed on a
+	// network error. When every one of its targets is unreachable too, the
+	// failure is recorded as the host's rather than the monitor's; see
+	// localNetworkFailure. Nil turns the check off.
+	Connectivity *connectivity.Canary
 }
 
 // New builds a Runner with the standard set of checkers.
@@ -152,6 +163,7 @@ func New(opts Options) *Runner {
 		reminderInterval: reminderInterval,
 		now:              time.Now,
 		pushSweep:        opts.PushSweep,
+		canary:           opts.Connectivity,
 		engine: state.New(state.Options{
 			FlapWindow:    opts.FlapWindow,
 			FlapThreshold: opts.FlapThreshold,
@@ -206,12 +218,23 @@ func (r *Runner) Run(ctx context.Context) error {
 		r.runPushWatchdog(ctx)
 	}()
 
+	// The canary only probes on its own while the host is offline, to
+	// notice when it comes back; otherwise this loop does nothing.
+	canaryDone := make(chan struct{})
+	go func() {
+		defer close(canaryDone)
+		if r.canary != nil {
+			r.canary.Run(ctx)
+		}
+	}()
+
 	err := r.sch.Run(ctx)
 
 	// Wait for both background loops before returning, for the same reason
 	// the scheduler waits for in-flight checks: a sweep half-way through
 	// writing a heartbeat, or a reminder half-way through a synchronous
 	// notifier, must not be cut off by the process exiting underneath it.
+	<-canaryDone
 	<-watchdogDone
 	<-reminderDone
 	return err
@@ -644,6 +667,7 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 	// streak it reports decides whether this result's response snapshot is
 	// worth storing. Observe only touches in-memory state, so moving it ahead
 	// of the heartbeat write changes nothing about what either one decides.
+	localNetwork := r.localNetworkFailure(ctx, o)
 	tr := r.engine.Observe(state.Observation{
 		MonitorID:        o.Monitor.ID,
 		OK:               o.Result.OK,
@@ -651,12 +675,20 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 		Kind:             string(o.Result.Kind),
 		Error:            o.Result.Error,
 		FailureThreshold: o.Monitor.Retries,
+		LocalNetwork:     localNetwork,
 
 		RecoveryThreshold: o.Monitor.RecoveryThreshold,
 	})
 
 	hb.Assessment = heartbeatAssessment(tr.To)
 	hb.FailureKind = string(o.Result.Kind)
+	if localNetwork {
+		// The bar keeps the checker's error text, which is what actually
+		// happened, but is filed under the cause that explains it.
+		hb.FailureKind = store.FailureKindLocalNetwork
+		r.log.Warn("check failed while this host could not reach any connectivity target; not counted as an outage",
+			"monitor", o.Monitor.Name, "error", o.Result.Error)
+	}
 	// A recovering monitor keeps the fast outage cadence: the passes that
 	// close its incident should come at the pace the failures did, not at
 	// the relaxed healthy interval.
@@ -722,6 +754,37 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 	})
 
 	return errors.Join(hbErr, r.applyTransition(ctx, o, tr, maintained))
+}
+
+// localNetworkFailure reports whether a failed check is explained by the host
+// having lost its own network, and so must not confirm an incident.
+//
+// The canary is only asked when all three hold, in this order so the cheap
+// questions come first:
+//
+//   - the failure is one a dead uplink could cause: DNS, connection or
+//     timeout. A status code, a keyword or a certificate proves the target
+//     answered, so the host's network is not the explanation;
+//   - this failure would confirm an incident. Earlier failures only move the
+//     monitor to warning, which alerts nobody and is not counted in uptime,
+//     so there is nothing to protect yet and no reason to send traffic;
+//   - a canary is configured at all.
+//
+// Only then does it dial, and the answer is shared by every monitor that asks
+// within the canary's cache window.
+func (r *Runner) localNetworkFailure(ctx context.Context, o scheduler.Outcome) bool {
+	if r.canary == nil || o.Result.OK {
+		return false
+	}
+	switch o.Result.Kind {
+	case checker.FailDNS, checker.FailConnection, checker.FailTimeout:
+	default:
+		return false
+	}
+	if !r.engine.WouldConfirm(o.Monitor.ID, o.Monitor.Retries) {
+		return false
+	}
+	return r.canary.Offline(ctx)
 }
 
 // snapshotToStore decides whether this result's captured response is worth a

@@ -38,6 +38,8 @@ five-minute dead man's switch, or LAN monitoring, and having neither.
 | `--alert-group-window` | `SUBGLANCE_ALERT_GROUP_WINDOW` | `90s` | How long an alert waits for others so one outage sends one message (`0` = send immediately) |
 | `--watchdog-url` | `SUBGLANCE_WATCHDOG_URL` | empty (off) | External dead man's switch to ping while checks are running |
 | `--watchdog-interval` | `SUBGLANCE_WATCHDOG_INTERVAL` | `5m` | How often to ping that URL |
+| `--connectivity-check` | `SUBGLANCE_CONNECTIVITY_CHECK` | `true` | Before confirming an outage on a network error, check whether this host can reach anything at all. See [When this host loses its own connection](#when-this-host-loses-its-own-connection) |
+| `--connectivity-targets` | `SUBGLANCE_CONNECTIVITY_TARGETS` | `1.1.1.1:53,9.9.9.9:53` | `host:port` addresses that check dials over TCP; the host counts as offline only when all of them fail |
 | `--raw-retention` | `SUBGLANCE_RAW_RETENTION` | unset: `720h` (30d), or the settings page | How long raw heartbeats are kept before being rolled up into hourly buckets. Minimum `24h`; `0` = forever. Setting it locks the settings page field |
 | `--rollup-retention` | `SUBGLANCE_ROLLUP_RETENTION` | unset: `0` (forever), or the settings page | How long hourly buckets and resolved incidents are kept (`0` = forever). Setting it locks the settings page field |
 | `--secret-key` | `SUBGLANCE_SECRET_KEY` | empty (off) | 32 bytes of key material, or a path to a file holding it, to encrypt notification channel configuration at rest. Empty means **no encryption** |
@@ -173,6 +175,46 @@ and real client addresses reappear in the rate limiter and the session list:
 Getting this wrong fails safe. An unset or too-narrow value means everyone
 behind the proxy shares one bucket, which is inconvenient; a value that is too
 wide hands the limiter back to the attacker.
+
+### When this host loses its own connection
+
+If the machine SubGlance runs on loses its uplink, router or DNS resolver,
+every check fails at once. Without a way to tell that apart from twenty real
+outages, every monitor would confirm an incident, every uptime figure would
+drop, and the alert — arriving once the connection is back — would be false.
+
+So before a failure on a network error (DNS, connection refused, timeout)
+confirms an incident, SubGlance dials the connectivity targets over TCP:
+by default `1.1.1.1:53` and `9.9.9.9:53`, two public resolvers run by
+independent operators, reached by address so a broken local resolver cannot
+decide the answer. **This is outbound traffic you should know about.** It is
+sent only at that moment — never on a timer while everything is healthy — and
+one round is shared by every monitor that asks within 30 seconds. Only a TCP
+handshake is made; nothing is sent over the connection.
+
+When **every** target fails too, the failure is the host's, not the monitor's:
+
+- the check is kept as a heartbeat with its real error, filed under the cause
+  `local_network`, and shown as a warning;
+- no incident is confirmed and no alert is sent;
+- it does not count against the monitor's uptime, the same as any warning.
+
+While the host is offline the targets are re-dialled every 30 seconds, and
+when one answers, one notice goes to the [default channel](channels.md) saying
+how long the host was offline. A monitor whose target is still down once the
+host is back confirms on its next failure, as it would have otherwise.
+
+The check errs towards reporting. A status code, a missing keyword, a failed
+JSON assertion or a certificate problem proves the target answered, and is
+never suppressed. If even one target answers, nothing is suppressed. An
+incident that was already confirmed stays confirmed.
+
+To pick your own targets — your gateway, an address you run elsewhere, or
+anything else this host should always be able to reach — set
+`SUBGLANCE_CONNECTIVITY_TARGETS=gateway:443,other-host:22`. Choose targets
+that do not share a failure with your monitors. To turn the check off, set
+`SUBGLANCE_CONNECTIVITY_CHECK=false`; then an outage of this host is reported
+as an outage of every monitor, as it was before this check existed.
 
 ## Which build is this
 

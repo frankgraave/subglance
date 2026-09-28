@@ -87,6 +87,10 @@ func (a Alert) Down() bool {
 		// a night that fixed itself should not arrive in red.
 		return digestStillDown(digestEntries(a)) > 0
 	}
+	if a.Event == EventLocalNetworkRestored {
+		// The notice arrives when the connection is back: good news.
+		return false
+	}
 	return state.Event(a.Event) != state.EventIncidentResolved
 }
 
@@ -104,6 +108,9 @@ func (a Alert) Title() string {
 	}
 	if a.Event == EventBackupFailed {
 		return "SubGlance could not back up its database"
+	}
+	if a.Event == EventLocalNetworkRestored {
+		return "SubGlance is back online"
 	}
 
 	switch state.Event(a.Event) {
@@ -127,6 +134,12 @@ func (a Alert) Body() string {
 	}
 	if a.Grouped() {
 		return GroupedBody(a)
+	}
+	if a.Event == EventLocalNetworkRestored {
+		return fmt.Sprintf("SubGlance could not reach the internet for %s, from %s to %s.\n"+
+			"Checks that failed on a network error in that time were not counted as outages.",
+			durationWords(a.At.Sub(a.StartedAt)),
+			a.StartedAt.UTC().Format("2006-01-02 15:04 UTC"), a.At.UTC().Format("15:04 UTC"))
 	}
 
 	out := a.Target

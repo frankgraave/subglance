@@ -70,6 +70,14 @@ services:
       # SUBGLANCE_WATCHDOG_URL: ""
       # SUBGLANCE_WATCHDOG_INTERVAL: 5m
       #
+      # Before an outage on a network error is confirmed, SubGlance dials
+      # these addresses over TCP. If none answers, it is this host that is
+      # offline, not the monitored service, and no incident is recorded. Only
+      # sent at that moment, never on a timer. Point it at your own targets,
+      # or set the check to "false" to turn it off. See docs/operations.md.
+      # SUBGLANCE_CONNECTIVITY_CHECK: "true"
+      # SUBGLANCE_CONNECTIVITY_TARGETS: "1.1.1.1:53,9.9.9.9:53"
+      #
       # Notification channel configuration — webhook URLs, bot tokens, SMTP
       # passwords — is stored in SQLite. **Unset, as it is here, means those
       # values are stored in plain text**, readable by anyone who obtains

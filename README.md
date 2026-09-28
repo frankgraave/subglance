@@ -57,7 +57,9 @@ getting:
 - **A UI you don't mind staring at.** This is a screen you leave open all day.
   It should be quiet when things are fine and unambiguous when they are not.
 - **Alerts you can trust.** Confirmation before alarming, flapping suppression,
-  and grouping — a false alert costs more trust than ten missed ones.
+  and grouping — a false alert costs more trust than ten missed ones. When the
+  host itself loses its connection, that is recorded as one outage of the host
+  rather than one of every monitor.
 - **Light enough to forget about.** A single static binary with SQLite, not a
   stack of services.
 
@@ -68,6 +70,12 @@ SubGlance cannot report its own outage without an external watchdog. Configure
 another service notice when pings stop. **Settings → Self-monitoring** shows
 whether it is configured, the last successful ping and the latest result.
 A successful ping does not prove that the receiving service will raise an alarm.
+
+Before it confirms an outage on a network error, SubGlance checks whether the
+host can reach anything at all, by dialling two public DNS resolvers
+(`1.1.1.1:53` and `9.9.9.9:53`) over TCP. That is outbound traffic, sent only at
+that moment; [operations](docs/operations.md#when-this-host-loses-its-own-connection)
+explains it and how to choose other targets or turn it off.
 
 ## Documentation
 
