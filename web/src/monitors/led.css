@@ -51,9 +51,20 @@
 .led[data-state="up"]   { background: var(--up);   box-shadow: var(--glow-up); }
 .led[data-state="warn"] { background: var(--warn); box-shadow: var(--glow-warn); }
 .led[data-state="down"] { background: var(--down); box-shadow: var(--glow-down); }
-/* Filled but unlit: we have no reading for this monitor yet. Dropping most of
-   the highlight is what reads as "unlit" rather than "a different colour". */
-.led[data-state="idle"] { background: var(--idle); box-shadow: none; }
+/* Filled but unlit: there is no reading for this monitor yet. Dropping most of
+   the highlight is what reads as "unlit" rather than "a different colour".
+
+   The dim fill alone measures 1.6:1 (light) and 1.9:1 (dark) against its
+   backdrop, under the 3:1 WCAG 1.4.11 floor, and "this monitor has never
+   reported" is state. So the lamp keeps the dim fill and gains an --ink-3
+   inset ring (3.2-3.4:1 on surfaces), the same construction as the paused
+   lamp's --ink-2 ring. The two stay apart as filled versus hollow, and no
+   colour is spent: brightening --idle itself would start to read as a fourth
+   status. DESIGN.md §3.1 records the decision. */
+.led[data-state="idle"] {
+  background: var(--idle);
+  box-shadow: inset 0 0 0 1.5px var(--ink-3);
+}
 .led[data-state="idle"]::after { opacity: .2; }
 
 /*

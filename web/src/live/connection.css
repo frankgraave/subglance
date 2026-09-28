@@ -183,12 +183,12 @@
  * *our own configuration*, not readings of anything, and they are exactly as
  * true after the stream dies as before it. Draining them would be the
  * opposite of this rule: withdrawing a statement that has not been
- * invalidated, and inventing doubt about the one thing we still know. Both
- * are also already neutral — `--idle` and a dotted `--ink-3` — so there is no
- * colour claim left in them to drain. Verified rather than argued: `--idle`
- * measured under `saturate(.18)` in Chromium shifts by three bytes per
- * channel, which is why no `--idle-drained` rung exists — there would be
- * nothing for it to say.
+ * invalidated, and inventing doubt about the one thing still known. Both
+ * are also already neutral — a solid and a dotted `--ink-3` — so there is no
+ * colour claim left in them to drain. Verified rather than argued: the
+ * neutral greys measured under `saturate(.18)` in Chromium shift by a few
+ * bytes per channel, which is why no `--idle-drained` rung exists — there
+ * would be nothing for it to say.
  */
 .mon-dashboard[data-conn="stale"] .mon-row[data-status="down"] > :first-child,
 .mon-dashboard[data-conn="stale"] .mon-card[data-status="down"],
