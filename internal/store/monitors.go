@@ -634,6 +634,11 @@ func (db *DB) CountSnapshotsSince(ctx context.Context, monitorID int64, since ti
 	return n, nil
 }
 
+// FailureKindLocalNetwork is the failure kind of a heartbeat recorded while
+// the host could reach none of its connectivity targets. It matches
+// state.CauseLocalNetwork; store does not import state, so it is repeated here.
+const FailureKindLocalNetwork = "local_network"
+
 // CountFailedHeartbeatsSince reports how many failed heartbeats a monitor has
 // recorded since a given moment.
 //
@@ -646,6 +651,10 @@ func (db *DB) CountSnapshotsSince(ctx context.Context, monitorID int64, since ti
 // The count is capped by the caller's limit, so a long outage cannot make
 // startup read an unbounded number of rows. Only the distance to the failure
 // threshold is meaningful, and that is a small number.
+//
+// Failures filed under FailureKindLocalNetwork are left out: they happened
+// while the host itself was offline, the state engine did not count them
+// towards the streak, and a restart must not count them either.
 func (db *DB) CountFailedHeartbeatsSince(ctx context.Context, monitorID int64, since time.Time, limit int) (int, error) {
 	if limit <= 0 {
 		return 0, nil
@@ -655,9 +664,9 @@ func (db *DB) CountFailedHeartbeatsSince(ctx context.Context, monitorID int64, s
 		SELECT count(*) FROM (
 			SELECT 1
 			FROM heartbeats
-			WHERE monitor_id = ? AND ts >= ? AND ok = 0
+			WHERE monitor_id = ? AND ts >= ? AND ok = 0 AND failure_kind != ?
 			LIMIT ?
-		)`, monitorID, since.Unix(), limit).Scan(&n)
+		)`, monitorID, since.Unix(), FailureKindLocalNetwork, limit).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("count failed heartbeats for monitor %d: %w", monitorID, err)
 	}

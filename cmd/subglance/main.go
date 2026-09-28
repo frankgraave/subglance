@@ -202,12 +202,18 @@ func run(args []string) error {
 		GroupWindow: cfg.NotifierGroupWindow(),
 	})
 
+	canary, err := newCanary(cfg, notify, log)
+	if err != nil {
+		return err
+	}
+
 	runner := monitor.New(monitor.Options{
 		DB:                  db,
 		Log:                 log,
 		AllowPrivateTargets: cfg.AllowPrivateTargets,
 		Workers:             cfg.CheckWorkers,
 		Bus:                 bus,
+		Connectivity:        canary,
 		Notify: func(a monitor.Alert) {
 			// Enqueue takes a context, but this callback runs on
 			// the check path and must not be cancelled by it: an

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 )
 
 // EventBackupFailed is the event of the notice sent when a scheduled backup
@@ -12,10 +13,33 @@ import (
 // rather than one it will mistake for an outage.
 const EventBackupFailed = "backup_failed"
 
+// EventLocalNetworkRestored is the event of the notice sent when SubGlance
+// regains its own network connection after a spell in which it could reach
+// none of its connectivity targets. StartedAt and At bound that spell.
+//
+// It is sent once, after the fact, because that is the only moment it can be
+// delivered: a host that cannot reach the internet cannot reach a chat
+// service either. Checks that failed on a network error during the spell were
+// not counted as outages of their monitors, and this is where that is said.
+const EventLocalNetworkRestored = "local_network_restored"
+
 // ErrNoticeNotSent means a notice had nowhere to go right now: no default
 // channel, the default channel is disabled, or it is inside its quiet hours.
 // The caller decides whether to try again later.
 var ErrNoticeNotSent = errors.New("notice not sent")
+
+// LocalNetworkNotice builds the notice for a spell without connectivity that
+// ran from from to to.
+func LocalNetworkNotice(from, to time.Time) Alert {
+	return Alert{
+		MonitorName: "SubGlance",
+		Target:      "Outbound connectivity",
+		Event:       EventLocalNetworkRestored,
+		Cause:       "local_network",
+		StartedAt:   from,
+		At:          to,
+	}
+}
 
 // SendNotice delivers a message about SubGlance itself — not about a monitor —
 // to the instance's default channel, straight away.

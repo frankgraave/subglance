@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/frankgraave/subglance/internal/backup"
+	"github.com/frankgraave/subglance/internal/connectivity"
 	"github.com/frankgraave/subglance/internal/notifier"
 	"github.com/frankgraave/subglance/internal/store"
 	"github.com/frankgraave/subglance/internal/trustedproxy"
@@ -169,6 +170,32 @@ type Config struct {
 	BackupAccessKeyID         string
 	BackupSecretAccessKey     string
 	BackupSecretAccessKeyFile string
+
+	// ConnectivityCheck turns on the connectivity canary: before an
+	// incident is confirmed on a DNS, connection or timeout failure,
+	// SubGlance dials ConnectivityTargets, and when none of them answers
+	// either, the failure is recorded as this host's own outage instead of
+	// the monitor's. See package connectivity.
+	//
+	// On by default, unlike the watchdog, because it only sends traffic at
+	// the moment an alert would otherwise go out, and what it prevents is a
+	// false alert for every monitor at once. It is documented as outbound
+	// traffic and can be turned off or pointed elsewhere.
+	ConnectivityCheck bool
+
+	// ConnectivityTargets is a comma-separated list of host:port addresses
+	// dialled over TCP. The host is considered offline only when every one
+	// of them fails.
+	ConnectivityTargets string
+}
+
+// ConnectivityTargetList returns ConnectivityTargets as a list, or nil when
+// the check is off.
+func (c Config) ConnectivityTargetList() []string {
+	if !c.ConnectivityCheck {
+		return nil
+	}
+	return connectivity.ParseTargets(c.ConnectivityTargets)
 }
 
 // BackupSecret returns the secret access key, reading the file form when that
@@ -247,6 +274,8 @@ func defaults() Config {
 		BackupRegion:        "us-east-1",
 		BackupInterval:      backup.DefaultInterval,
 		BackupKeep:          backup.DefaultKeep,
+		ConnectivityCheck:   true,
+		ConnectivityTargets: strings.Join(connectivity.DefaultTargets, ","),
 	}
 }
 
@@ -287,6 +316,8 @@ func Load(args []string) (Config, error) {
 	c.BackupAccessKeyID = envStr("SUBGLANCE_BACKUP_ACCESS_KEY_ID", c.BackupAccessKeyID)
 	c.BackupSecretAccessKey = envStr("SUBGLANCE_BACKUP_SECRET_ACCESS_KEY", c.BackupSecretAccessKey)
 	c.BackupSecretAccessKeyFile = envStr("SUBGLANCE_BACKUP_SECRET_ACCESS_KEY_FILE", c.BackupSecretAccessKeyFile)
+	c.ConnectivityCheck = env.bool("SUBGLANCE_CONNECTIVITY_CHECK", c.ConnectivityCheck)
+	c.ConnectivityTargets = envStr("SUBGLANCE_CONNECTIVITY_TARGETS", c.ConnectivityTargets)
 	if err := env.err(); err != nil {
 		return Config{}, err
 	}
@@ -328,6 +359,11 @@ func Load(args []string) (Config, error) {
 	fs.StringVar(&c.BackupRegion, "backup-region", c.BackupRegion, "signing region of the backup bucket")
 	fs.DurationVar(&c.BackupInterval, "backup-interval", c.BackupInterval, "time between scheduled backups")
 	fs.IntVar(&c.BackupKeep, "backup-keep", c.BackupKeep, "how many backups to keep in the bucket")
+	fs.BoolVar(&c.ConnectivityCheck, "connectivity-check", c.ConnectivityCheck,
+		"before confirming an outage on a network error, check whether this host can reach "+
+			"--connectivity-targets at all, and record the failure as its own if not")
+	fs.StringVar(&c.ConnectivityTargets, "connectivity-targets", c.ConnectivityTargets,
+		"comma-separated host:port addresses the connectivity check dials over TCP")
 
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
@@ -397,6 +433,11 @@ func (c Config) validate() error {
 	}
 	if err := c.validateBackup(); err != nil {
 		return err
+	}
+	if c.ConnectivityCheck {
+		if err := connectivity.ValidateTargets(c.ConnectivityTargetList()); err != nil {
+			return fmt.Errorf("invalid connectivity-targets: %w (or turn the check off with --connectivity-check=false)", err)
+		}
 	}
 	if c.WatchdogURL != "" {
 		if err := watchdog.ValidateURL(c.WatchdogURL); err != nil {

@@ -123,7 +123,28 @@ type Observation struct {
 	//
 	// Zero means 1 — resolve on the first passing check.
 	RecoveryThreshold int
+
+	// LocalNetwork marks a failure that the host's own connectivity
+	// explains: the check failed on a network error, and so did every
+	// connectivity canary. It is ignored when OK.
+	//
+	// Such a failure is not evidence against the monitor. It is recorded as
+	// a warning, it does not advance the failure streak, and it never opens
+	// or confirms an incident, so twenty monitors behind one dead uplink do
+	// not become twenty incidents and twenty dents in their uptime. The
+	// streak is held rather than reset: a target that is still failing when
+	// the host comes back online confirms on its next failure, as it would
+	// have without the interruption.
+	//
+	// A monitor that is already confirmed down stays down. The canary only
+	// speaks to whether a new incident is the host's fault; it does not
+	// retract one that was confirmed while the host could still see out.
+	LocalNetwork bool
 }
+
+// CauseLocalNetwork is the cause recorded for a failure that LocalNetwork
+// explains, in place of the checker's own classification.
+const CauseLocalNetwork = "local_network"
 
 // Transition describes what the engine decided about one observation.
 type Transition struct {
@@ -309,9 +330,12 @@ func (e *Engine) Observe(o Observation) Transition {
 		Error:     o.Error,
 	}
 
-	if o.OK {
+	switch {
+	case o.OK:
 		e.observeSuccess(ms, &t, o)
-	} else {
+	case o.LocalNetwork && !ms.status.Confirmed():
+		observeLocalNetwork(ms, &t)
+	default:
 		e.observeFailure(ms, &t, o)
 	}
 
@@ -372,6 +396,40 @@ func (e *Engine) observeFailure(ms *monitorState, t *Transition, o Observation) 
 		ms.status = StatusWarning
 		t.To = StatusWarning
 	}
+}
+
+// observeLocalNetwork records a failure the host's own connectivity explains.
+// See Observation.LocalNetwork.
+//
+// The monitor shows as a warning — something is failing, nothing is
+// confirmed — and nothing else moves: no streak, no incident, no flip for the
+// flapping window. An incident that was already open and unconfirmed stays
+// open, so its start time survives if the target turns out to be down too.
+func observeLocalNetwork(ms *monitorState, t *Transition) {
+	ms.status = StatusWarning
+	t.To = StatusWarning
+	t.Cause = CauseLocalNetwork
+}
+
+// WouldConfirm reports whether one more failure would confirm an incident for
+// this monitor under the given threshold: it is not already confirmed, and
+// its failure streak is one short of the threshold.
+//
+// The caller asks before observing a failure, so that the cost of finding out
+// whether the host itself is offline is paid only at the moment an alert
+// would go out, not on every failed check.
+func (e *Engine) WouldConfirm(monitorID int64, failureThreshold int) bool {
+	if failureThreshold <= 0 {
+		failureThreshold = 1
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	ms := e.state[monitorID]
+	if ms == nil {
+		return failureThreshold == 1
+	}
+	return !ms.status.Confirmed() && ms.consecutiveFails+1 >= failureThreshold
 }
 
 // observeSuccess resets the failure streak and resolves any open incident
