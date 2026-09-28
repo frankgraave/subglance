@@ -116,6 +116,7 @@ describe("the cause, in words a person would use", () => {
     expect(causeWords("dns")).toBe("DNS failure");
     expect(causeWords("connection")).toBe("connection refused");
     expect(causeWords("push_overdue")).toBe("no report received");
+    expect(causeWords("assertion")).toBe("JSON field did not match");
   });
 
   it("passes an unknown kind through rather than losing it", () => {

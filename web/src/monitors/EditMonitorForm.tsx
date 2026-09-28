@@ -10,6 +10,7 @@ import { ApiError, describePreview, fingerprintPreview, previewCheck } from "./p
 import type { PreviewRequest, PreviewState } from "./preview";
 import { confirmLeave, registerLeaveGuard } from "../shell/leaveGuard";
 import { TlsFloorField } from "./TlsFloorField";
+import { JSON_HELP, JSON_OPERATORS, assertionFrom, expectedText } from "./jsonAssertion";
 
 export type EditMonitorFormProps = {
   /** Values and validator must come from the same detail response. */
@@ -23,12 +24,20 @@ export type EditMonitorFormProps = {
 type Problem = { message: string; field?: string } | null;
 // These edits require a preview to save. TLS-only saves retain the existing
 // contract, but a TLS change must still invalidate any preview already shown.
-const CHECK_FIELDS = new Set(["target", "timeout_s", "method", "expected_status", "keyword", "keyword_mode", "follow_redirects", "headers", "body", "ssl_warn_days"]);
+const CHECK_FIELDS = new Set(["target", "timeout_s", "method", "expected_status", "keyword", "keyword_mode", "follow_redirects", "headers", "body", "ssl_warn_days", "json_assertion"]);
+/**
+ * The control a server problem field belongs to. `json_assertion.expected`
+ * is the `json_expected` control; the bare `json_assertion` (wrong monitor
+ * type, malformed object) points at the path, where the assertion starts.
+ */
+const controlFor = (field: string) =>
+  field.startsWith("json_assertion") ? `json_${field.split(".")[1] ?? "path"}` : field;
 const LABELS: Record<string, string> = {
   name: "Name", target: "Target", interval_s: "Interval (seconds)", timeout_s: "Timeout (seconds)",
   method: "HTTP method", expected_status: "Expected status", keyword: "Keyword", keyword_mode: "Keyword rule",
   headers: "Headers (JSON)", body: "Request body", ssl_warn_days: "Certificate warning (days)",
   recovery_threshold: "Passing checks to recover",
+  json_path: "JSON field", json_operator: "Must", json_expected: "Value",
   tags: "Tags", push_interval_s: "Should report every (seconds)", push_grace_s: "Allow it to be late by (seconds)",
 };
 
@@ -49,6 +58,14 @@ function valuesFor(monitor: InventoryMonitor): Record<string, string> {
     // Push monitors close on one report whatever is stored, so the field is
     // only offered where it changes something.
     if (monitor.recoveryThreshold !== undefined) values.recovery_threshold = String(monitor.recoveryThreshold);
+    // Editable only when the detail read said what is stored, null included:
+    // an unknown assertion shown as empty would be removed by the first save.
+    const assertion = monitor.jsonAssertion;
+    if (monitor.type === "http" && assertion !== undefined) {
+      values.json_path = assertion?.path ?? "";
+      values.json_operator = assertion?.operator ?? "equals";
+      values.json_expected = expectedText(assertion?.expected);
+    }
     for (const [key, value] of Object.entries(monitor.checkSettings ?? {})) {
       if (key === "min_tls_version") continue; // The dedicated floor value also represents absence.
       values[key] = key === "headers" ? JSON.stringify(value, null, 2) : String(value);
@@ -93,7 +110,7 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload }: EditMon
   const update = (key: string, value: string) => {
     setValues((old) => ({ ...old, [key]: value }));
     if (!conflict) setProblem(null);
-    if (CHECK_FIELDS.has(key) || key === "min_tls_version") {
+    if (CHECK_FIELDS.has(key) || key === "min_tls_version" || key.startsWith("json_")) {
       inFlight.current?.abort();
       setPreview({ phase: "idle" });
     }
@@ -105,12 +122,15 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload }: EditMon
     setProblem({ message, ...(control ? { field } : {}) });
     control?.focus();
   };
-  const explain = (error: unknown) => reject(
-    error instanceof ApiError && error.status === 429 && error.retryAfter !== null
-      ? `${error.message} (about ${error.retryAfter}s)`
-      : error instanceof Error ? error.message : "Could not reach SubGlance itself.",
-    error instanceof ApiError ? error.field ?? undefined : undefined,
-  );
+  const explain = (error: unknown) => {
+    const blamed = error instanceof ApiError ? error.field ?? undefined : undefined;
+    reject(
+      error instanceof ApiError && error.status === 429 && error.retryAfter !== null
+        ? `${error.message} (about ${error.retryAfter}s)`
+        : error instanceof Error ? error.message : "Could not reach SubGlance itself.",
+      blamed && controlFor(blamed),
+    );
+  };
 
   const validated = (): { patch: MonitorPatch; request: PreviewRequest } | null => {
     setProblem(null);
@@ -140,15 +160,21 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload }: EditMon
         parsed.headers = headers;
       } catch { reject("Headers must be a JSON object with text values, or {} to clear them.", "headers"); return null; }
     }
+    if ("json_path" in values) parsed.json_assertion = assertionFrom(values.json_path, values.json_operator, values.json_expected);
     const patch: MonitorPatch = {};
     for (const key of Object.keys(values)) {
-      if (values[key] !== initial[key]) Object.assign(patch, { [key]: parsed[key] });
+      // The three json_ controls are one API field: a change to any of them
+      // sends it whole, and a cleared path sends null, which removes it.
+      const wire = key.startsWith("json_") ? "json_assertion" : key;
+      if (values[key] !== initial[key]) Object.assign(patch, { [wire]: parsed[wire] });
     }
     // Normalised no-ops need no write; zero, false and empty remain explicit.
     if (parsed.name === monitor.name) delete patch.name;
     if (tagsToText(tags) === initial.tags) delete patch.tags;
     const request: PreviewRequest = { ...monitor.checkSettings, type: monitor.type, target: values.target?.trim() ?? "" };
     for (const key of CHECK_FIELDS) if (key in parsed) Object.assign(request, { [key]: parsed[key] });
+    // Preview has no stored assertion to clear: absence means none.
+    if (request.json_assertion === null) delete request.json_assertion;
     // Preview has no stored floor to clear: omission asks for the default.
     // PATCH, in contrast, keeps the explicit empty string from the draft.
     if (values.min_tls_version) request.min_tls_version = values.min_tls_version;
@@ -188,7 +214,8 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload }: EditMon
     }).finally(() => { busy.current = false; if (alive.current) setSaving(false); });
   };
 
-  const field = (key: string, multiline = false) => {
+  /** A text input, a textarea, or with `options` a select labelled by its values. */
+  const field = (key: string, multiline = false, options?: readonly string[]) => {
     if (!(key in values)) return null;
     const props = { id: `${ids}-${key}`, name: key, className: "add-input", value: values[key],
       onChange: (event: { target: { value: string } }) => update(key, event.target.value),
@@ -196,7 +223,8 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload }: EditMon
       "aria-describedby": problem?.field === key ? `${ids}-error` : undefined };
     return <div className="add-field" key={key}>
       <label className="add-label" htmlFor={props.id}>{LABELS[key]}</label>
-      {multiline ? <textarea {...props} rows={3} spellCheck={false} /> : <input {...props} autoComplete="off" />}
+      {options ? <select {...props}>{options.map((op) => <option key={op} value={op}>{op.replace("_", " ")}</option>)}</select>
+        : multiline ? <textarea {...props} rows={3} spellCheck={false} /> : <input {...props} autoComplete="off" />}
       {problem?.field === key && <p id={`${ids}-error`} role="alert" className="add-field-error"><IconAlert />{problem.message}</p>}
     </div>;
   };
@@ -216,6 +244,13 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload }: EditMon
           {problem?.field === "follow_redirects" && <p id={`${ids}-error`} role="alert" className="add-field-error"><IconAlert />{problem.message}</p>}
         </div>}
         {field("headers", true)}{field("body", true)}{field("ssl_warn_days")}
+        {"json_path" in values && <>
+          <div className="add-grid">
+            {field("json_path")}{field("json_operator", false, JSON_OPERATORS)}
+            {values.json_operator !== "exists" && field("json_expected")}
+          </div>
+          <p className="add-help">{JSON_HELP}</p>
+        </>}
         <details className="add-advanced">
           <summary className="add-summary">Advanced options</summary>
           <div className="add-grid">

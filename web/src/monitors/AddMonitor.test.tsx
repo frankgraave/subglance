@@ -710,6 +710,99 @@ describe("a rejection that names a field", () => {
     );
   });
 
+  it("sends a JSON assertion with a typed value, and previews it", async () => {
+    const preview = vi.fn().mockResolvedValue(result());
+    const create = vi.fn().mockResolvedValue({ id: "9" });
+    render(<AddMonitor api={{ preview, create }} />);
+
+    setField(/what should be watched/i, "example.com/health");
+    setField(/^json field$/i, "checks.db.status");
+    setField(/^value$/i, "up");
+    click(/test it/i);
+    await waitFor(() => expect(statusText()).toMatch(/answered/i));
+    expect(preview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        json_assertion: { path: "checks.db.status", operator: "equals", expected: "up" },
+      }),
+      expect.anything(),
+    );
+
+    // A number typed as one is sent as one, and a changed assertion needs a
+    // new preview rather than riding on the old one.
+    fireEvent.change(screen.getByLabelText(/^must$/i), { target: { value: "less_than" } });
+    setField(/^value$/i, "30");
+    click(/save monitor/i);
+    await waitFor(() =>
+      expect(field(/what should be watched/i).getAttribute("aria-invalid")).toBe("true"),
+    );
+    expect(create).not.toHaveBeenCalled();
+
+    click(/test it/i);
+    await waitFor(() => expect(preview).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(statusText()).toMatch(/answered/i));
+    click(/save monitor/i);
+    await waitFor(() => expect(create).toHaveBeenCalled());
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        json_assertion: { path: "checks.db.status", operator: "less_than", expected: 30 },
+      }),
+      expect.any(AbortSignal),
+    );
+  });
+
+  it("sends no assertion without a path, and none for exists-less values", async () => {
+    const create = vi.fn().mockResolvedValue({ id: "9" });
+    render(<AddMonitor api={{ preview: vi.fn(), create }} />);
+    setField(/what should be watched/i, "example.com");
+    setField(/^value$/i, "up");
+    fireEvent.change(screen.getByLabelText(/check type/i), { target: { value: "http" } });
+    click(/save monitor/i);
+    await waitFor(() => expect(create).toHaveBeenCalled());
+    expect(create.mock.calls[0][0]).not.toHaveProperty("json_assertion");
+  });
+
+  it("offers no value box for exists, and sends no value", async () => {
+    const create = vi.fn().mockResolvedValue({ id: "9" });
+    render(<AddMonitor api={{ preview: vi.fn(), create }} />);
+    setField(/what should be watched/i, "example.com");
+    setField(/^json field$/i, "items[0].id");
+    fireEvent.change(screen.getByLabelText(/^must$/i), { target: { value: "exists" } });
+    expect(screen.queryByLabelText(/^value$/i)).toBeNull();
+    fireEvent.change(screen.getByLabelText(/check type/i), { target: { value: "http" } });
+    click(/save monitor/i);
+    await waitFor(() => expect(create).toHaveBeenCalled());
+    expect(create.mock.calls[0][0]).toMatchObject({
+      json_assertion: { path: "items[0].id", operator: "exists" },
+    });
+    expect(create.mock.calls[0][0].json_assertion).not.toHaveProperty("expected");
+  });
+
+  it("hides the assertion for a TCP check and drops what was typed", async () => {
+    const create = vi.fn().mockResolvedValue({ id: "9" });
+    render(<AddMonitor api={{ preview: vi.fn(), create }} />);
+    setField(/what should be watched/i, "db.example.com:5432");
+    setField(/^json field$/i, "status");
+    fireEvent.change(screen.getByLabelText(/check type/i), { target: { value: "tcp" } });
+    expect(screen.queryByLabelText(/^json field$/i)).toBeNull();
+    click(/save monitor/i);
+    await waitFor(() => expect(create).toHaveBeenCalled());
+    expect(create.mock.calls[0][0]).not.toHaveProperty("json_assertion");
+  });
+
+  it("puts an assertion rejection under the control it names", async () => {
+    const create = vi.fn().mockRejectedValue(
+      new ApiError(400, "invalid path", null, "json_assertion.path"),
+    );
+    render(<AddMonitor api={{ preview: vi.fn(), create }} />);
+    setField(/what should be watched/i, "example.com");
+    setField(/^json field$/i, "a..b");
+    fireEvent.change(screen.getByLabelText(/check type/i), { target: { value: "http" } });
+    click(/save monitor/i);
+    await waitFor(() =>
+      expect(field(/^json field$/i).getAttribute("aria-invalid")).toBe("true"),
+    );
+  });
+
   it("puts a save rejection under the field the server blamed", async () => {
     const create = vi
       .fn()

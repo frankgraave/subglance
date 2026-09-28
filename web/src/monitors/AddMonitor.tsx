@@ -4,6 +4,8 @@ import { AddMonitorForm } from "./AddMonitorForm";
 import { isPush } from "./push";
 import type { AddMonitorValues } from "./AddMonitorForm";
 import { PushUrlReveal } from "./PushUrlReveal";
+import { assertionFrom } from "./jsonAssertion";
+import type { JsonAssertion } from "./jsonAssertion";
 import {
   ApiError,
   createMonitor,
@@ -234,7 +236,21 @@ function bodyFor(
     ...(values.keyword !== ""
       ? { keyword: values.keyword, keyword_mode: values.keywordMode }
       : {}),
+    ...jsonAssertionField(values),
   };
+}
+
+/**
+ * The assertion as a request field, or nothing when there is none.
+ *
+ * Dropped for an explicitly chosen non-HTTP type, where the form hides the
+ * fields: a value typed before switching to TCP must not come back as a
+ * rejection about a control that is no longer on screen.
+ */
+function jsonAssertionField(values: AddMonitorValues): { json_assertion?: JsonAssertion } {
+  if (values.type !== "" && values.type !== "http") return {};
+  const assertion = assertionFrom(values.jsonPath, values.jsonOperator, values.jsonExpected);
+  return assertion === null ? {} : { json_assertion: assertion };
 }
 
 /** The preview request a given set of form values would send. */
@@ -249,6 +265,7 @@ function previewRequestFor(values: AddMonitorValues): PreviewRequest {
     ...(values.keyword !== ""
       ? { keyword: values.keyword, keyword_mode: values.keywordMode }
       : {}),
+    ...jsonAssertionField(values),
   };
 }
 
