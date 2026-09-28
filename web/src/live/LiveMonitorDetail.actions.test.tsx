@@ -89,7 +89,9 @@ describe("LiveMonitorDetail actions", () => {
 
   it("deletes only after the name is retyped, then leaves the page", async () => {
     const onBack = vi.fn();
-    const { remove } = renderDetail({ onBack });
+    const { client, remove } = renderDetail({ onBack });
+    // A resolved-history page cached by the incidents screen before the delete.
+    client.setQueryData(["incidents", "resolved", 7], { incidents: [{ id: 9, monitor_id: 1 }] });
     await openMore();
     fireEvent.click(screen.getByRole("menuitem", { name: /Delete/ }));
     const dialog = await screen.findByRole("dialog");
@@ -101,6 +103,8 @@ describe("LiveMonitorDetail actions", () => {
     await act(async () => { fireEvent.click(confirm); });
     await waitFor(() => expect(remove).toHaveBeenCalledWith("1"));
     await waitFor(() => expect(onBack).toHaveBeenCalledTimes(1));
+    // Returning to the incidents page must not show the deleted monitor's history.
+    expect(client.getQueryData(["incidents", "resolved", 7])).toBeUndefined();
   });
 
   it("stays on the page and says why when a delete fails", async () => {

@@ -53,8 +53,11 @@ export const HISTORY_WINDOWS = [
   { days: 90, label: "90 days" },
 ] as const;
 
+/** Matches every cached resolved-history window, whatever its day range. */
+export const resolvedIncidentsQueryPrefix = ["incidents", "resolved"] as const;
+
 export const resolvedIncidentsQueryKey = (days: number) =>
-  ["incidents", "resolved", days] as const;
+  [...resolvedIncidentsQueryPrefix, days] as const;
 
 /** Every incident that has not resolved, newest first. */
 export async function fetchOpenIncidents(

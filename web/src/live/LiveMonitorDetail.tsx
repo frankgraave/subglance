@@ -14,7 +14,7 @@ import { detailQueryKey, fetchMonitorDetail } from "../monitors/detail";
 import { fetchResponseHistory, responseHistoryQueryKey } from "../monitors/responseHistoryApi";
 import { fetchLatency, latencyQueryKey, type LatencyWindow } from "../monitors/latency";
 import { ackIncident } from "../incidents/api";
-import { openIncidentsQueryKey } from "../incidents/api";
+import { openIncidentsQueryKey, resolvedIncidentsQueryPrefix } from "../incidents/api";
 import type { LiveOptions } from "./useLiveMonitors";
 
 /**
@@ -229,6 +229,9 @@ export function LiveMonitorDetail({
     onSuccess: (_data, monitorId) => {
       void queryClient.invalidateQueries({ queryKey: ["monitors"] });
       void queryClient.invalidateQueries({ queryKey: openIncidentsQueryKey });
+      // The incidents page renders its cached resolved pages; left in place they
+      // would list incidents for a monitor that no longer exists.
+      queryClient.removeQueries({ queryKey: resolvedIncidentsQueryPrefix });
       // The page is about a monitor that no longer exists. Staying would show
       // "does not exist" as though something had gone wrong; the dashboard is
       // where the back control already goes.
