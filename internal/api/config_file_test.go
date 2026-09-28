@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -47,8 +49,17 @@ func seedConfig(t *testing.T, db *store.DB) (pushToken string) {
 		Method: "POST", Keyword: "ok", KeywordMode: "must_contain", FollowRedirects: true,
 		Headers: map[string]string{"Authorization": secretAuthValue}, Body: secretBody,
 		MinTLSVersion: 0x0303, RepeatAfterS: 900, CaptureResponse: true,
-		Tags: map[string]string{"env": "prod", "team": "core"}})
+		JSONAssertion: &store.JSONAssertion{Path: "checks.db.status", Operator: "equals", Expected: `"up"`},
+		Tags:          map[string]string{"env": "prod", "team": "core"}})
 	must(t, err)
+	// The string "1" and the number 1 are different conditions, and a
+	// file that turned one into the other would change what the check does.
+	for name, want := range map[string]string{"Count as number": `1`, "Count as string": `"1"`} {
+		_, err = db.CreateMonitor(ctx, store.Monitor{Name: name, Type: "http",
+			Target: "https://api.example.com/" + strings.ReplaceAll(name, " ", "-"), Enabled: true,
+			JSONAssertion: &store.JSONAssertion{Path: "count", Operator: "equals", Expected: want}})
+		must(t, err)
+	}
 	db1, err := db.CreateMonitor(ctx, store.Monitor{Name: "Database", Type: "tcp",
 		Target: "db.example.com:5432", Enabled: true, Tags: map[string]string{"env": "prod"}})
 	must(t, err)
@@ -167,9 +178,9 @@ func TestExportImportRoundTrip(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("import = %d: %s", code, body)
 	}
-	// 3 channels, 3 monitors, 1 routing rule, 2 maintenance windows.
-	if rep.Summary.Create != 9 || rep.Summary.Update != 0 || rep.Summary.NeedsSecrets != 0 {
-		t.Errorf("summary = %+v, want 9 creates and nothing else", rep.Summary)
+	// 3 channels, 5 monitors, 1 routing rule, 2 maintenance windows.
+	if rep.Summary.Create != 11 || rep.Summary.Update != 0 || rep.Summary.NeedsSecrets != 0 {
+		t.Errorf("summary = %+v, want 11 creates and nothing else", rep.Summary)
 	}
 	for _, m := range rep.Monitors {
 		if m.Key == "nightly-backup" && !strings.Contains(m.PushURL, "/api/v1/push/") {
@@ -192,9 +203,19 @@ func TestExportImportRoundTrip(t *testing.T) {
 	}
 	mons, err := dstDB.ListMonitors(ctx)
 	must(t, err)
+	assertions := map[string]string{}
 	for _, m := range mons {
-		if m.Type == "http" && (m.Headers["Authorization"] != secretAuthValue || m.Body != secretBody) {
+		if m.Name == "API (prod)" && (m.Headers["Authorization"] != secretAuthValue || m.Body != secretBody) {
 			t.Errorf("http monitor headers/body = %v / %q", m.Headers, m.Body)
+		}
+		if m.JSONAssertion != nil {
+			assertions[m.Name] = m.JSONAssertion.Path + " " + m.JSONAssertion.Operator + " " + m.JSONAssertion.Expected
+		}
+	}
+	for name, want := range map[string]string{"API (prod)": `checks.db.status equals "up"`,
+		"Count as number": `count equals 1`, "Count as string": `count equals "1"`} {
+		if assertions[name] != want {
+			t.Errorf("%s assertion = %q, want %q", name, assertions[name], want)
 		}
 	}
 
@@ -286,7 +307,7 @@ func TestImportWithoutSecretsDisablesAndReports(t *testing.T) {
 	mons, err := dstDB.ListMonitors(ctx)
 	must(t, err)
 	for _, m := range mons {
-		if m.Type == "http" {
+		if m.Name == "API (prod)" {
 			if m.Enabled || len(m.Headers) != 0 || m.Body != "" {
 				t.Errorf("http monitor without its secrets: enabled=%v headers=%v body=%q",
 					m.Enabled, m.Headers, m.Body)
@@ -307,8 +328,8 @@ func TestImportDryRunWritesNothing(t *testing.T) {
 	if code != http.StatusOK || !rep.DryRun {
 		t.Fatalf("dry run = %d: %s", code, body)
 	}
-	if rep.Summary.Create != 9 {
-		t.Errorf("dry run summary = %+v, want 9 creates", rep.Summary)
+	if rep.Summary.Create != 11 {
+		t.Errorf("dry run summary = %+v, want 11 creates", rep.Summary)
 	}
 	ctx := context.Background()
 	mons, _ := dstDB.ListMonitors(ctx)
@@ -442,5 +463,61 @@ func TestExportKeysSurviveRenames(t *testing.T) {
 	must(t, err)
 	if out := exportYAML(t, srv); !strings.Contains(out, "key: shop\n") {
 		t.Errorf("a renamed monitor got a new key:\n%s", out)
+	}
+}
+
+func TestImportRemovesAnAssertionWithAnExplicitNull(t *testing.T) {
+	srv, db := testServerWithDB(t)
+	seedConfig(t, db)
+	exportYAML(t, srv)
+
+	code, rep, body := importYAML(t, srv, "version: 1\nmonitors:\n  - key: api-prod\n    json_assertion: null\n", false)
+	if code != http.StatusOK {
+		t.Fatalf("import = %d: %s", code, body)
+	}
+	if got := strings.Join(rep.Monitors[0].Changes, ","); got != "json_assertion" {
+		t.Errorf("changes = %q, want json_assertion", got)
+	}
+	mons, err := db.ListMonitors(context.Background())
+	must(t, err)
+	for _, m := range mons {
+		if m.Name == "API (prod)" && m.JSONAssertion != nil {
+			t.Errorf("assertion survived an explicit null: %+v", m.JSONAssertion)
+		}
+	}
+}
+
+func TestImportRejectsABadAssertion(t *testing.T) {
+	srv, _ := testServerWithDB(t)
+	doc := "version: 1\nmonitors:\n  - key: a\n    name: A\n    type: tcp\n    target: db" + "\x2e" +
+		"example" + "\x2e" + "com:5432\n    json_assertion:\n      path: status\n      operator: equals\n      expected: up\n"
+	code, _, body := importYAML(t, srv, doc, true)
+	if code != http.StatusBadRequest || !strings.Contains(body, `"field":"monitors[0].json_assertion"`) {
+		t.Errorf("assertion on a tcp monitor = %d %s, want 400 at monitors[0].json_assertion", code, body)
+	}
+}
+
+// TestConfigFileDocExampleImports keeps the example in the user guide honest:
+// it has to parse and pass a dry run on an empty instance.
+func TestConfigFileDocExampleImports(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "configuration-files.md"))
+	must(t, err)
+	_, rest, ok := strings.Cut(string(raw), "## The format")
+	if !ok {
+		t.Fatal("docs/configuration-files.md has no \"The format\" section")
+	}
+	_, rest, ok = strings.Cut(rest, "```yaml\n")
+	example, _, ok2 := strings.Cut(rest, "```")
+	if !ok || !ok2 {
+		t.Fatal("no yaml block under \"The format\"")
+	}
+
+	srv, _ := testServerWithDB(t)
+	code, rep, body := importYAML(t, srv, example, true)
+	if code != http.StatusOK {
+		t.Fatalf("the documented example does not import: %d %s", code, body)
+	}
+	if rep.Summary.Create == 0 || rep.Summary.NeedsSecrets != 3 {
+		t.Errorf("summary = %+v, want creates and three objects needing secrets", rep.Summary)
 	}
 }

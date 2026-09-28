@@ -10,6 +10,7 @@ import (
 	"github.com/frankgraave/subglance/internal/checker"
 	"github.com/frankgraave/subglance/internal/configfile"
 	"github.com/frankgraave/subglance/internal/store"
+	"gopkg.in/yaml.v3"
 )
 
 // exportConfig renders the instance's configuration as a configfile.Document.
@@ -161,6 +162,7 @@ func exportMonitor(m store.Monitor) configfile.Monitor {
 		if m.Body != "" {
 			out.Body = ptr(configfile.Placeholder)
 		}
+		out.JSONAssertion = exportAssertion(m.JSONAssertion)
 		out.SSLWarnDays = ptr(m.SSLWarnDays)
 		out.MinTLSVersion = ptr(checker.TLSVersionLabel(m.MinTLSVersion))
 	case "ssl":
@@ -171,6 +173,23 @@ func exportMonitor(m store.Monitor) configfile.Monitor {
 		out.PushGraceS = ptr(m.PushGraceS)
 	}
 	return out
+}
+
+// exportAssertion writes a monitor's JSON assertion, or an explicit null.
+//
+// The stored expected value was validated as JSON when it was saved, so
+// AssertionNode cannot fail on it. Were it to, the field is left out rather
+// than guessed at: on import an absent field keeps what the monitor has.
+func exportAssertion(a *store.JSONAssertion) yaml.Node {
+	var in *configfile.JSONAssertion
+	if a != nil {
+		in = &configfile.JSONAssertion{Path: a.Path, Operator: a.Operator, Expected: a.Expected}
+	}
+	n, err := configfile.AssertionNode(in)
+	if err != nil {
+		return yaml.Node{}
+	}
+	return n
 }
 
 func exportMaintenance(w store.MaintenanceWindow, monitorKeys map[int64]string) configfile.Maintenance {

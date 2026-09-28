@@ -20,7 +20,11 @@
 //     is left alone, never deleted.
 package configfile
 
-import "time"
+import (
+	"time"
+
+	"gopkg.in/yaml.v3"
+)
 
 // Version is the only document version this build reads and writes.
 //
@@ -80,6 +84,10 @@ type Monitor struct {
 	CaptureResponse *bool             `yaml:"capture_response,omitempty"`
 	Headers         map[string]string `yaml:"headers,omitempty"`
 	Body            *string           `yaml:"body,omitempty"`
+
+	// JSONAssertion is read through Assertion; see there for why it is a
+	// node. Export writes it for every HTTP monitor, null when there is none.
+	JSONAssertion yaml.Node `yaml:"json_assertion,omitempty"`
 
 	// HTTP and SSL.
 	SSLWarnDays   *int    `yaml:"ssl_warn_days,omitempty"`

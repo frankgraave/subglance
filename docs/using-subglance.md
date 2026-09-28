@@ -475,6 +475,10 @@ validator.
 Acknowledging is not resolving: it stops repeat notifications without claiming
 the problem is fixed.
 
+To move monitors and channels between instances or keep them in a repository,
+use [configuration files](configuration-files.md) rather than scripting these
+calls.
+
 That listing is the monitor and incident surface only. The complete API —
 authentication, users, API tokens, notification channels, uptime windows and
 the live event stream — is specified in [`openapi.yaml`](openapi.yaml),

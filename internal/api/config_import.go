@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -450,6 +451,11 @@ func planMonitor(p *importPlan, ex existingConfig, path string, m configfile.Mon
 			CaptureResponse: m.CaptureResponse, MinTLSVersion: tls, Tags: m.Tags,
 			PushIntervalS: m.PushIntervalS, PushGraceS: m.PushGraceS,
 		}
+		if a, set, err := m.Assertion(sub(path, "json_assertion")); err != nil {
+			return err
+		} else if set {
+			create.JSONAssertion = assertionWire(a)
+		}
 		if pr := validateCreateMonitor(create); !pr.ok() {
 			return monitorProblem(path, pr)
 		}
@@ -463,7 +469,19 @@ func planMonitor(p *importPlan, ex existingConfig, path string, m configfile.Mon
 		}
 		store.ApplyMonitorDefaults(&next)
 	}
-	if pr := applyMonitorPatch(&next, monitorPatch(m)); !pr.ok() {
+	patch := monitorPatch(m)
+	a, set, err := m.Assertion(sub(path, "json_assertion"))
+	if err != nil {
+		return err
+	}
+	if set {
+		raw, err := json.Marshal(assertionWire(a))
+		if err != nil {
+			return err
+		}
+		patch.JSONAssertion = raw
+	}
+	if pr := applyMonitorPatch(&next, patch); !pr.ok() {
 		return monitorProblem(path, pr)
 	}
 
@@ -693,6 +711,19 @@ func sameWindow(a, b store.MaintenanceWindow) bool {
 		a.TagValue == b.TagValue && a.StartsAt.Equal(b.StartsAt) && a.EndsAt.Equal(b.EndsAt) &&
 		a.Timezone == b.Timezone && slices.Equal(wa, wb) && a.LocalTime == b.LocalTime &&
 		a.DurationMinutes == b.DurationMinutes
+}
+
+// assertionWire converts a file's assertion into the API's request shape, so
+// it is validated by the same code a form submission is.
+func assertionWire(a *configfile.JSONAssertion) *jsonAssertionWire {
+	if a == nil {
+		return nil
+	}
+	w := &jsonAssertionWire{Path: a.Path, Operator: a.Operator}
+	if a.Expected != "" {
+		w.Expected = json.RawMessage(a.Expected)
+	}
+	return w
 }
 
 func deref[T any](p *T) T {
