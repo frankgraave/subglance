@@ -34,6 +34,8 @@ tag that puts an emoji in front of the title. An outage is sent at priority 4
 - **ntfy.sh**: set only `topic`. Subscribe to the same topic in the ntfy app.
 - **Self-hosted**: set `url` to the server's base URL, and `token` (an access
   token, `tk_...`) or `username` + `password` if the server requires login.
+  The URL is the server root only: a topic path such as
+  `https://ntfy.example/alerts` is refused, because the topic goes in `topic`.
   Setting both a token and a password is refused, since only one of them
   would be used.
 

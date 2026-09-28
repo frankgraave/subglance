@@ -537,6 +537,14 @@ func validatePushChannel(req channelRequest) string {
 		if !ntfyTopic.MatchString(strings.TrimSpace(cfg["topic"])) {
 			return "config.topic may contain only letters, digits, - and _ (at most 64)"
 		}
+		if raw := strings.TrimSpace(cfg["url"]); raw != "" {
+			if u, err := url.Parse(raw); err == nil && (u.Path != "" && u.Path != "/" || u.RawQuery != "" || u.Fragment != "") {
+				return "config.url must name the ntfy server, not a topic or other path"
+			}
+		}
+		if cfg["token"] != "" && strings.TrimSpace(cfg["token"]) == "" {
+			return "config.token must not be only whitespace"
+		}
 		if cfg["token"] != "" && (cfg["username"] != "" || cfg["password"] != "") {
 			return "config.token cannot be combined with config.username and config.password"
 		}

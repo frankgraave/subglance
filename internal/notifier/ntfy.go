@@ -3,6 +3,7 @@ package notifier
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 
@@ -50,10 +51,21 @@ func (s *NtfySender) Validate(cfg map[string]string) error {
 	if !ntfyTopicPattern.MatchString(topic) {
 		return &configError{"topic may contain only letters, digits, - and _ (at most 64)"}
 	}
-	if strings.TrimSpace(cfg["url"]) != "" {
-		if err := validateHTTPSURL(cfg["url"], "url"); err != nil {
+	if server := strings.TrimSpace(cfg["url"]); server != "" {
+		if err := validateHTTPSURL(server, "url"); err != nil {
 			return err
 		}
+		// The JSON form is published to the server root and names the topic
+		// in the body. A URL with a path would post to that path instead,
+		// and ntfy does not support being served from a sub-path at all.
+		if u, err := url.Parse(server); err != nil || !ntfyServerRoot(u) {
+			return &configError{"url must name the ntfy server, not a topic or other path"}
+		}
+	}
+	// A token of only whitespace would go out as an empty bearer token and
+	// be refused at the first outage rather than here.
+	if cfg["token"] != "" && strings.TrimSpace(cfg["token"]) == "" {
+		return &configError{"token must not be only whitespace"}
 	}
 	// A token and a username/password pair are two ways to say the same
 	// thing. Accepting both would mean silently ignoring one of them, and the
@@ -65,6 +77,12 @@ func (s *NtfySender) Validate(cfg map[string]string) error {
 		return &configError{"username and password must be set together"}
 	}
 	return nil
+}
+
+// ntfyServerRoot reports whether u names a server root: no path beyond a
+// single trailing slash, and no query or fragment to carry one either.
+func ntfyServerRoot(u *url.URL) bool {
+	return (u.Path == "" || u.Path == "/") && u.RawQuery == "" && u.Fragment == ""
 }
 
 // Send publishes the alert.
@@ -95,7 +113,7 @@ func (s *NtfySender) Send(ctx context.Context, cfg map[string]string, a Alert) e
 		return err
 	}
 	switch {
-	case cfg["token"] != "":
+	case strings.TrimSpace(cfg["token"]) != "":
 		req.Header.Set("Authorization", "Bearer "+cfg["token"])
 	case cfg["username"] != "":
 		req.SetBasicAuth(cfg["username"], cfg["password"])

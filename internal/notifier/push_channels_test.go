@@ -120,6 +120,9 @@ func TestNtfyValidate(t *testing.T) {
 		"non-http server":       {"topic": "t", "url": "ftp://push.example"},
 		"token and basic auth":  {"topic": "t", "token": "x", "username": "u", "password": "p"},
 		"username, no password": {"topic": "t", "username": "u"},
+		"whitespace token":      {"topic": "t", "token": "  \t"},
+		"topic path in server":  {"topic": "t", "url": "https://push.example/alerts"},
+		"query on server":       {"topic": "t", "url": "https://push.example/?x=1"},
 	}
 	for name, cfg := range bad {
 		if err := s.Validate(cfg); err == nil {
@@ -129,6 +132,16 @@ func TestNtfyValidate(t *testing.T) {
 	// The server is optional: the public ntfy server is the default.
 	if err := s.Validate(map[string]string{"topic": "alerts_1"}); err != nil {
 		t.Errorf("topic alone rejected: %v", err)
+	}
+	// The server root is accepted with or without its trailing slash.
+	for _, server := range []string{"https://push.example", "https://push.example/"} {
+		if err := s.Validate(map[string]string{"topic": "t", "url": server}); err != nil {
+			t.Errorf("server %q rejected: %v", server, err)
+		}
+	}
+	// Whitespace inside credentials is left alone: ntfy passwords may hold it.
+	if err := s.Validate(map[string]string{"topic": "t", "username": "u", "password": " p w "}); err != nil {
+		t.Errorf("password with spaces rejected: %v", err)
 	}
 }
 

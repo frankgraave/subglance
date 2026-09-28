@@ -74,6 +74,8 @@ func TestCreatePushChannelRejectsBadInput(t *testing.T) {
 		{"ntfy token and password", channelBody("x", "ntfy",
 			`{"topic":"t","token":"a","username":"u","password":"p"}`), "config.token"},
 		{"ntfy user without password", channelBody("x", "ntfy", `{"topic":"t","username":"u"}`), "config.username"},
+		{"ntfy whitespace token", channelBody("x", "ntfy", `{"topic":"t","token":"   "}`), "config.token"},
+		{"ntfy topic path in server", channelBody("x", "ntfy", `{"topic":"t","url":"https://ntfy.example/alerts"}`), "config.url"},
 		{"gotify without url", channelBody("x", "gotify", `{"token":"t"}`), "config.url"},
 		{"gotify without token", channelBody("x", "gotify", `{"url":"https://gotify.example"}`), "config.token"},
 		{"gotify priority out of range", channelBody("x", "gotify",

@@ -2187,7 +2187,8 @@ paths:
         webhook, discord, slack and gotify; `bot_token` for telegram; `to` for
         email; `topic` for ntfy. Gotify also needs `token`, and accepts
         `priority_down` and `priority_up` (0 to 10). ntfy accepts an optional
-        `url` (default the public ntfy.sh) and either `token` or `username`
+        `url` (the server root without a path, default the public ntfy.sh)
+        and either `token` or `username`
         plus `password`, not both. See docs/channels.md.
         Types are validated in Go rather than left to the database CHECK
         constraint, so an unknown type is a 400 and not a 500.
