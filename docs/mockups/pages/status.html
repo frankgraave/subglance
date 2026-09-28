@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../../../web/src/styles/tokens.css">
+<link rel="stylesheet" href="../../../web/src/monitors/led.css">
+<link rel="stylesheet" href="../common.css">
+<link rel="stylesheet" href="shared.css">
+<title>Status page — SubGlance page proposal</title>
+<!-- The theme toggle is for review only: the real page follows the visitor's
+     prefers-color-scheme and has no control for it (docs/design/status-page.md §2). -->
+<script>
+(function () {
+  var KEY = "subglance:mockup-theme";
+  var saved = null;
+  try { saved = localStorage.getItem(KEY); } catch (e) {}
+  var t = saved || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+  document.documentElement.setAttribute("data-theme", t);
+  window.__toggleTheme = function () {
+    var next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem(KEY, next); } catch (e) {}
+  };
+})();
+</script>
+<script src="../status.js"></script>
+<style>
+/* Page-specific rules only. The card, row, chip and segmented control come
+   from shared.css; every value is a token. The reasoning is in
+   docs/design/status-page.md. */
+[hidden] { display: none !important; }
+
+body { padding:var(--space-6) var(--space-4) var(--space-12); }
+.sp { width: min(var(--size-pane-lg), 100%); margin:0 auto; display: flex; flex-direction: column; gap:var(--space-5); }
+
+/* Review controls sit above the page and are not part of the product. */
+.sp-review { display: flex; flex-wrap: wrap; align-items: center; gap:var(--space-2); padding-bottom:var(--space-4); border-bottom: 1px dashed var(--border); }
+.sp-review .helper { color: var(--ink-2); }
+.sp-review .btn { margin-left:auto; }
+
+.sp-head { display: flex; flex-direction: column; gap:var(--space-1h); padding-top:var(--space-2); }
+.sp-head h1 { font-weight: var(--weight-strong); font-size:var(--type-page); line-height:var(--lead-page); }
+
+/* The summary states a count, not an adjective. */
+.sp-summary { flex-direction: row; align-items: center; gap:var(--space-3); }
+.sp-summary h2 { font-weight: var(--weight-strong); font-size:var(--type-card); line-height:var(--lead-card); }
+.sp-summary .helper { margin-left:auto; color: var(--ink-2); white-space: nowrap; }
+
+/* A service row: name and status word on one line, the history under it. */
+.sp-row { flex-direction: column; align-items: stretch; gap:var(--space-2); }
+.sp-line { display: flex; align-items: center; gap:var(--space-2h); min-width: 0; flex-wrap: wrap; }
+.sp-line .row-name { flex: 1; min-width: 0; font-weight: var(--weight-mid); }
+
+/* Daily history. Height as well as colour: a down day is drawn full height,
+   a degraded one at three quarters, the rest at half, so the picture does not
+   rely on colour alone (DESIGN.md §4). */
+.sp-days { display: flex; align-items: flex-end; gap:1px; height: var(--size-row-sm); }
+.sp-days i { flex: 1 1 0; min-width: 0; height: 50%; border-radius:var(--r-2xs); background: var(--up); display: block; }
+.sp-days i[data-s="down"] { height: 100%; background: var(--down); }
+.sp-days i[data-s="warn"] { height: 75%; background: var(--warn); }
+.sp-days i[data-s="none"] { background: var(--idle-dim); }
+.sp-axis { display: flex; gap:var(--space-2); color: var(--ink-2); font-size:var(--type-helper); line-height:var(--lead-helper); }
+.sp-axis .sp-uptime { margin:0 auto; color: var(--ink); }
+.sp-axis-phone { display: none; }
+
+.sp-outage .row-name { font-weight: var(--weight-mid); }
+.sp-outage .helper { color: var(--ink-2); }
+.sp-outage { flex-wrap: wrap; row-gap:var(--space-1); }
+
+.sp-foot { color: var(--ink-2); text-align: center; font-size:var(--type-helper); line-height:var(--lead-helper); }
+
+/* Phone: 90 bars in a 320px column come out under 2px wide, which is no
+   longer a bar. Show the last 30 days and say so. */
+@media (max-width: 640px) {
+  body { padding:var(--space-4) var(--space-3) var(--space-10); }
+  .sp-days i:nth-child(-n+60) { display: none; }
+  .sp-axis-desk { display: none; }
+  .sp-axis-phone { display: inline; }
+  .sp-summary { flex-wrap: wrap; }
+  .sp-summary .helper { margin-left:0; width: 100%; }
+}
+</style>
+</head>
+<body>
+<div class="sp">
+
+  <div class="sp-review">
+    <span class="helper">Prototype — scenario:</span>
+    <div class="segmented" role="group" aria-label="Scenario">
+      <button type="button" aria-pressed="true" data-scenario="outage">Outage</button>
+      <button type="button" aria-pressed="false" data-scenario="allup">All up</button>
+      <button type="button" aria-pressed="false" data-scenario="maintenance">Maintenance</button>
+    </div>
+    <button class="btn btn--sm" type="button" onclick="__toggleTheme()">Theme</button>
+  </div>
+
+  <header class="sp-head">
+    <h1>Example Co status</h1>
+    <p class="prose">Live status of the services Example Co runs for its customers.</p>
+  </header>
+
+  <section class="card sp-summary" aria-live="polite">
+    <span class="led-wrap"><span class="led" id="sumLed" data-state="down" aria-hidden="true"></span><span class="sr-only" id="sumWord">Down</span></span>
+    <h2 id="sumText">1 of 5 services is down</h2>
+    <span class="helper mono" id="sumTime">Updated 14:32</span>
+  </section>
+
+  <section class="card" id="maint" aria-labelledby="maintTitle">
+    <div class="card-head"><h2 class="card-title" id="maintTitle">Maintenance</h2></div>
+    <div class="stack" id="maintList"></div>
+  </section>
+
+  <section class="card" aria-labelledby="svcTitle">
+    <div class="card-head"><h2 class="card-title" id="svcTitle">Services (5)</h2></div>
+    <div class="stack" id="services"></div>
+  </section>
+
+  <section class="card" aria-labelledby="outTitle">
+    <div class="card-head"><h2 class="card-title" id="outTitle">Past 14 days</h2></div>
+    <div class="stack" id="outages"></div>
+  </section>
+
+  <p class="sp-foot">Times in Europe/Amsterdam · Monitored with SubGlance</p>
+
+  <div class="note">
+    <b>What this page never shows.</b> Internal monitor names, targets, check types, failure bodies,
+    response headers, error text, latency, tags and the names of maintenance windows. Every name here
+    is a public display name set per page. The full allowlist and the threat model are in
+    <code>docs/design/status-page.md</code>.
+  </div>
+
+</div>
+
+<script>
+// Fixed data: a prototype, not an API client. Days are oldest first; the last is today.
+var DAYS = 90;
+function history(downDays, warnDays, noDataBefore) {
+  var out = [];
+  for (var i = 0; i < DAYS; i++) {
+    var ago = DAYS - 1 - i;
+    var s = ago >= (noDataBefore || DAYS) ? "none" : downDays.indexOf(ago) >= 0 ? "down" : warnDays.indexOf(ago) >= 0 ? "warn" : "up";
+    out.push(s);
+  }
+  return out;
+}
+
+var SCENARIOS = {
+  outage: {
+    time: "Updated 14:32",
+    services: [
+      { name: "Website", state: "up", uptime: "99.98%", days: history([41], [12]) },
+      { name: "Web app", state: "up", uptime: "99.95%", days: history([41, 63], []) },
+      { name: "Public API", state: "down", uptime: "99.71%", days: history([0, 9, 41], [22]) },
+      { name: "Email delivery", state: "warn", uptime: "99.90%", days: history([], [0, 1, 30]) },
+      { name: "Background jobs", state: "up", uptime: "100.00%", days: history([], []) }
+    ],
+    maintenance: [
+      { when: "Tomorrow, 02:00–03:00", affects: "Web app", now: false }
+    ],
+    outages: [
+      { name: "Public API", ongoing: true, text: "Down since 09:41 today · 4 h 51 min so far" },
+      { name: "Public API", ongoing: false, text: "Down 23 min · Fri 19 Sep, 14:02–14:25" }
+    ]
+  },
+  allup: {
+    time: "Updated 14:32",
+    services: [
+      { name: "Website", state: "up", uptime: "99.98%", days: history([41], [12]) },
+      { name: "Web app", state: "up", uptime: "99.95%", days: history([41, 63], []) },
+      { name: "Public API", state: "up", uptime: "99.93%", days: history([9, 41], [22]) },
+      { name: "Email delivery", state: "up", uptime: "100.00%", days: history([], [30]) },
+      { name: "Background jobs", state: "up", uptime: "100.00%", days: history([], []) }
+    ],
+    maintenance: [],
+    outages: [
+      { name: "Public API", ongoing: false, text: "Down 23 min · Fri 19 Sep, 14:02–14:25" }
+    ]
+  },
+  maintenance: {
+    time: "Updated 02:14",
+    services: [
+      { name: "Website", state: "up", uptime: "99.98%", days: history([41], [12]) },
+      { name: "Web app", state: "up", uptime: "99.95%", days: history([41, 63], []), maint: true },
+      { name: "Public API", state: "up", uptime: "99.93%", days: history([9, 41], [22]) },
+      { name: "Email delivery", state: "up", uptime: "100.00%", days: history([], [30]) },
+      { name: "Background jobs", state: "off", uptime: "—", days: history([], [], 20) }
+    ],
+    maintenance: [
+      { when: "Now, until 03:00", affects: "Web app", now: true }
+    ],
+    outages: []
+  }
+};
+
+function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+// The public words (docs/design/status-page.md §1.3). Always a visible word
+// beside the hidden lamp, as in the product's list layouts.
+function publicWord(state) {
+  return state === "warn" ? "Degraded" : state === "off" ? "Not monitored" : state === "idle" ? "No data yet" : mockupStatusWord(state);
+}
+function lamp(state, word) {
+  return `<span class="led-wrap"><span class="led" data-state="${state}" aria-hidden="true"></span><span class="led-label">${word || publicWord(state)}</span></span>`;
+}
+
+function render(name) {
+  var sc = SCENARIOS[name];
+  var total = sc.services.length;
+  var down = sc.services.filter(function (s) { return s.state === "down"; }).length;
+  var warn = sc.services.filter(function (s) { return s.state === "warn"; }).length;
+  var off = sc.services.filter(function (s) { return s.state === "off"; }).length;
+  var up = total - down - warn - off;
+  var sumState = down ? "down" : warn ? "warn" : "up";
+  var text = down ? down + " of " + total + (down === 1 ? " service is down" : " services are down")
+    : warn ? warn + " of " + total + (warn === 1 ? " service is degraded" : " services are degraded")
+    : off ? up + " of " + total + " services are up · " + off + " not monitored"
+    : "All " + total + " services are up";
+  var sumLed = document.getElementById("sumLed");
+  sumLed.dataset.state = sumState;
+  document.getElementById("sumWord").textContent = publicWord(sumState);
+  document.getElementById("sumText").textContent = text;
+  document.getElementById("sumTime").textContent = sc.time;
+
+  document.getElementById("services").innerHTML = sc.services.map(function (s) {
+    var status = s.state === "down" || s.state === "warn" ? ` data-status="${s.state}"` : "";
+    var bars = s.days.map(function (d) { return `<i data-s="${d}"></i>`; }).join("");
+    var chip = s.maint ? `<span class="chip">Maintenance</span>` : "";
+    var uptime = s.uptime === "—" ? "No uptime while not monitored" : `${s.uptime} uptime, 90 days`;
+    return `<div class="row sp-row"${status}>
+      <div class="sp-line"><span class="row-name">${esc(s.name)}</span>${chip}${lamp(s.state)}</div>
+      <div class="sp-days" aria-hidden="true">${bars}</div>
+      <div class="sp-axis"><span class="sp-axis-desk">90 days ago</span><span class="sp-axis-phone">30 days ago</span><span class="sp-uptime mono">${uptime}</span><span>Today</span></div>
+    </div>`;
+  }).join("");
+
+  var maint = document.getElementById("maint");
+  maint.hidden = sc.maintenance.length === 0;
+  document.getElementById("maintList").innerHTML = sc.maintenance.map(function (m) {
+    return `<div class="row sp-outage"><span class="row-name">${m.now ? "In progress" : "Scheduled"}</span><span class="helper mono">${esc(m.when)}</span><span class="helper">Affects ${esc(m.affects)}</span></div>`;
+  }).join("");
+
+  document.getElementById("outages").innerHTML = sc.outages.length ? sc.outages.map(function (o) {
+    return `<div class="row sp-outage"${o.ongoing ? ' data-status="down"' : ""}>${o.ongoing ? lamp("down") : lamp("up", "Recovered")}<span class="row-name">${esc(o.name)}</span><span class="helper mono">${esc(o.text)}</span></div>`;
+  }).join("") : `<p class="helper">No outages in the past 14 days.</p>`;
+
+  document.querySelectorAll(".sp-review [data-scenario]").forEach(function (b) {
+    b.setAttribute("aria-pressed", String(b.dataset.scenario === name));
+  });
+}
+
+document.querySelectorAll(".sp-review [data-scenario]").forEach(function (b) {
+  b.addEventListener("click", function () { render(b.dataset.scenario); });
+});
+render("outage");
+</script>
+</body>
+</html>
