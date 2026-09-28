@@ -47,7 +47,7 @@ afterAll(async () => {
  */
 function widen(monitors: ApiMonitor[]): ApiMonitor[] {
   const out = monitors.map((monitor): ApiMonitor => {
-    if (monitor.name !== "cdn") return monitor;
+    if (monitor.name !== "db") return monitor;
     return {
       ...monitor,
       status: "warning",

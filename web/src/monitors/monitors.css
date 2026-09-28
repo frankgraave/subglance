@@ -1459,11 +1459,13 @@
  * the target's box out past the text and start reading as a button, and the
  * affordance here is the name itself. `line-height` stays where the type scale
  * put it, so nothing moves — the extra pixels sit under the text, inside a box
- * that was previously only as tall as the glyphs.
+ * that was previously only as tall as the glyphs. `min-width` does the same
+ * sideways: a two-letter name like "db" is only 19px wide.
  */
 .mon-card-name > a {
   display: inline-block;
   min-height: var(--size-row-sm);
+  min-width: var(--size-row-sm);
 }
 
 .mon-name:hover,
