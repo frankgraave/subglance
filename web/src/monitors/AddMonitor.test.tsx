@@ -789,6 +789,23 @@ describe("a rejection that names a field", () => {
     expect(create.mock.calls[0][0]).not.toHaveProperty("json_assertion");
   });
 
+  it("refuses a number the browser would round, before anything is sent", async () => {
+    const preview = vi.fn().mockResolvedValue(result());
+    const create = vi.fn().mockResolvedValue({ id: "9" });
+    render(<AddMonitor api={{ preview, create }} />);
+    setField(/what should be watched/i, "example.com/health");
+    setField(/^json field$/i, "ratio");
+    setField(/^value$/i, "0.1234567890123456789");
+    click(/test it/i);
+    await waitFor(() => expect(field(/^value$/i).getAttribute("aria-invalid")).toBe("true"));
+    expect(preview).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText(/check type/i), { target: { value: "http" } });
+    click(/save monitor/i);
+    await screen.findByText(/more digits than a browser can hold/i);
+    expect(field(/^value$/i).getAttribute("aria-invalid")).toBe("true");
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it("puts an assertion rejection under the control it names", async () => {
     const create = vi.fn().mockRejectedValue(
       new ApiError(400, "invalid path", null, "json_assertion.path"),

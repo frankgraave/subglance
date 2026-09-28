@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func assertion(path string, op JSONOperator, expected string) *JSONAssertion {
@@ -134,6 +135,36 @@ func TestHTTPKeywordStillSearchesAnOversizeBody(t *testing.T) {
 	m.Keyword, m.KeywordMode = "healthy", KeywordMustContain
 	if res := testChecker().Check(context.Background(), m); !res.OK {
 		t.Errorf("keyword check failed: %s", res.Error)
+	}
+}
+
+// A keyword-only check reads the cap and stops: a stream that has sent
+// exactly maxBodyRead bytes and then holds the connection open is judged on
+// what it sent, not failed as a connection error when the timeout cuts the
+// read short.
+func TestHTTPKeywordDoesNotWaitPastTheCap(t *testing.T) {
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("healthy "))
+		_, _ = w.Write([]byte(strings.Repeat("x", maxBodyRead-len("healthy "))))
+		w.(http.Flusher).Flush()
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+	}))
+	defer srv.Close()
+	defer close(release)
+
+	m := monitor(srv.URL)
+	m.Timeout = 2 * time.Second
+	m.Keyword, m.KeywordMode = "healthy", KeywordMustContain
+	res := testChecker().Check(context.Background(), m)
+	if !res.OK {
+		t.Fatalf("keyword check failed: %s (kind %q)", res.Error, res.Kind)
+	}
+	if res.Latency >= m.Timeout {
+		t.Errorf("latency = %v, want the verdict reached before the timeout", res.Latency)
 	}
 }
 

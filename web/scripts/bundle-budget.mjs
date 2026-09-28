@@ -235,8 +235,15 @@ const budgets = {
    * the theme, layout and cards-per-row controls the app already draws, so it
    * costs only the card around them (about 250 bytes). No new dependency.
    * 152 leaves about 780 bytes.
+   *
+   * 152 -> 153 KiB gzip for SUB-152 (the JSON field assertion). The branch
+   * before its review fixes measures 155,608 bytes of entry JS (Node gzip,
+   * level 6), 40 under 152; with them 155,902, 254 over. The fix refuses an
+   * expected number the browser would round (0.1234567890123456789 sent as
+   * 0.12345678901234568) on both monitor forms instead of storing a value
+   * nobody typed, about 300 bytes. No new dependency. 153 leaves about 770.
    */
-  js: 152,
+  js: 153,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *

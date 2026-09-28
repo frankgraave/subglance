@@ -84,3 +84,16 @@ it("puts a rejection of the assertion under the control the server named", async
   await waitFor(() => expect(screen.getByLabelText("Value").getAttribute("aria-invalid")).toBe("true"));
   expect(screen.getByRole("alert").textContent).toMatch(/compares numbers/);
 });
+
+it("refuses a number the browser would round instead of saving the rounded one", async () => {
+  const fetch = vi.fn().mockResolvedValue(passed()); vi.stubGlobal("fetch", fetch);
+  const onSave = vi.fn().mockResolvedValue(undefined);
+  render(<EditMonitorForm monitor={inventoryFromApi({ ...raw, json_assertion: null })} onSave={onSave} />);
+  change("JSON field", "id"); change("Value", "9007199254740993");
+  testIt();
+  await waitFor(() => expect(screen.getByLabelText("Value").getAttribute("aria-invalid")).toBe("true"));
+  expect(screen.getByRole("alert").textContent).toMatch(/more digits than a browser can hold/);
+  expect(fetch).not.toHaveBeenCalled();
+  save();
+  expect(onSave).not.toHaveBeenCalled();
+});

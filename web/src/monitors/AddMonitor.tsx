@@ -4,7 +4,7 @@ import { AddMonitorForm } from "./AddMonitorForm";
 import { isPush } from "./push";
 import type { AddMonitorValues } from "./AddMonitorForm";
 import { PushUrlReveal } from "./PushUrlReveal";
-import { assertionFrom } from "./jsonAssertion";
+import { assertionFrom, expectedProblem } from "./jsonAssertion";
 import type { JsonAssertion } from "./jsonAssertion";
 import {
   ApiError,
@@ -86,6 +86,11 @@ export function AddMonitor({ onCreated, onCancel, api }: AddMonitorProps) {
       inFlight.current = controller;
       setState({ phase: "checking" });
 
+      const unsendable = assertionProblem(values);
+      if (unsendable !== null) {
+        setState({ phase: "rejected", ...unsendable });
+        return;
+      }
       const request = previewRequestFor(values);
 
       void (async () => {
@@ -115,6 +120,14 @@ export function AddMonitor({ onCreated, onCancel, api }: AddMonitorProps) {
       if (saveInFlight.current) return;
       setSaving(true);
       setSaveError(null);
+      // Before the preview check: a value that cannot be sent as typed is the
+      // thing to fix, and Test it would refuse it the same way.
+      const unsendable = assertionProblem(values);
+      if (unsendable !== null) {
+        setSaving(false);
+        setSaveError(unsendable);
+        return;
+      }
       // Inference lives on the server and runs only for a preview, so without
       // a matching one there is nothing to infer from: the old `http` fallback
       // sent a bare hostname to an endpoint that requires a scheme, and the
@@ -251,6 +264,19 @@ function jsonAssertionField(values: AddMonitorValues): { json_assertion?: JsonAs
   if (values.type !== "" && values.type !== "http") return {};
   const assertion = assertionFrom(values.jsonPath, values.jsonOperator, values.jsonExpected);
   return assertion === null ? {} : { json_assertion: assertion };
+}
+
+/**
+ * A value in the assertion that would reach the API changed, or `null`.
+ *
+ * Caught here because the rounding happens before the request is built: the
+ * server would accept the rounded number and never know it was not typed.
+ */
+function assertionProblem(values: AddMonitorValues): Rejection | null {
+  if (values.type !== "" && values.type !== "http") return null;
+  if (values.jsonPath.trim() === "" || values.jsonOperator === "exists") return null;
+  const message = expectedProblem(values.jsonExpected);
+  return message === null ? null : { field: "json_assertion.expected", message };
 }
 
 /** The preview request a given set of form values would send. */

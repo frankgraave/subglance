@@ -10,7 +10,7 @@ import { ApiError, describePreview, fingerprintPreview, previewCheck } from "./p
 import type { PreviewRequest, PreviewState } from "./preview";
 import { confirmLeave, registerLeaveGuard } from "../shell/leaveGuard";
 import { TlsFloorField } from "./TlsFloorField";
-import { JSON_HELP, JSON_OPERATORS, assertionFrom, expectedText } from "./jsonAssertion";
+import { JSON_HELP, JSON_OPERATORS, assertionFrom, expectedProblem, expectedText } from "./jsonAssertion";
 
 export type EditMonitorFormProps = {
   /** Values and validator must come from the same detail response. */
@@ -160,7 +160,11 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload }: EditMon
         parsed.headers = headers;
       } catch { reject("Headers must be a JSON object with text values, or {} to clear them.", "headers"); return null; }
     }
-    if ("json_path" in values) parsed.json_assertion = assertionFrom(values.json_path, values.json_operator, values.json_expected);
+    if ("json_path" in values) {
+      const unsendable = values.json_path.trim() !== "" && values.json_operator !== "exists" ? expectedProblem(values.json_expected) : null;
+      if (unsendable !== null) { reject(unsendable, "json_expected"); return null; }
+      parsed.json_assertion = assertionFrom(values.json_path, values.json_operator, values.json_expected);
+    }
     const patch: MonitorPatch = {};
     for (const key of Object.keys(values)) {
       // The three json_ controls are one API field: a change to any of them

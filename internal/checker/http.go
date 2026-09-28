@@ -371,11 +371,17 @@ func (c *HTTPChecker) check(ctx context.Context, m Monitor, scope *headerScope) 
 		oversize bool
 	)
 	if wantKeyword || m.JSONAssertion != nil {
-		// One byte past the cap, so a body that does not fit is known not
-		// to fit. The keyword search keeps its old reach, the first
-		// maxBodyRead bytes; a JSON document cut at the cap is not a
-		// document, so the assertion refuses it instead of parsing half.
-		buf, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyRead+1))
+		// The keyword search keeps its old reach, the first maxBodyRead
+		// bytes, and stops there: asking for one byte more would leave a
+		// keyword-only check waiting on a stream that has sent exactly the
+		// cap. The assertion does read one byte past the cap, so a body
+		// that does not fit is known not to fit; a JSON document cut at the
+		// cap is not a document, so it is refused instead of parsed half.
+		limit := int64(maxBodyRead)
+		if m.JSONAssertion != nil {
+			limit++
+		}
+		buf, err := io.ReadAll(io.LimitReader(resp.Body, limit))
 		if err != nil {
 			res.Latency = time.Since(start)
 			res.OK = false
