@@ -23,6 +23,12 @@ func seedAgedDelivery(t *testing.T, db *DB, monitor, channel int64, state string
 		err = db.MarkFailed(ctx, d.ID, "boom")
 	case "suppressed":
 		err = db.SuppressDelivery(ctx, d.ID)
+	case "suppressed-failed":
+		// A delivery can still fail after maintenance flagged it: the
+		// flag and the status are written independently.
+		if err = db.SuppressDelivery(ctx, d.ID); err == nil {
+			err = db.MarkFailed(ctx, d.ID, "boom")
+		}
 	case "pending":
 	default:
 		t.Fatalf("unknown state %q", state)
@@ -72,6 +78,7 @@ func TestApplyRetentionPrunesTheDeliveryLog(t *testing.T) {
 	oldSuppressed := seedAgedDelivery(t, db, monitor, channel, "suppressed", old)
 	oldFailed := seedAgedDelivery(t, db, monitor, channel, "failed", old)
 	oldPending := seedAgedDelivery(t, db, monitor, channel, "pending", old)
+	oldSuppressedFailed := seedAgedDelivery(t, db, monitor, channel, "suppressed-failed", old)
 	recentDelivered := seedAgedDelivery(t, db, monitor, channel, "delivered", recent)
 
 	// Both windows at "forever": the delivery log is pruned regardless,
@@ -94,9 +101,10 @@ func TestApplyRetentionPrunesTheDeliveryLog(t *testing.T) {
 		}
 	}
 	for id, why := range map[int64]string{
-		oldFailed:       "a failed row is evidence the operator may not have seen",
-		oldPending:      "a pending row is still work",
-		recentDelivered: "it is inside the window",
+		oldFailed:           "a failed row is evidence the operator may not have seen",
+		oldPending:          "a pending row is still work",
+		oldSuppressedFailed: "a failure is kept even under the maintenance flag",
+		recentDelivered:     "it is inside the window",
 	} {
 		if !left[id] {
 			t.Errorf("delivery %d was pruned, but %s", id, why)
