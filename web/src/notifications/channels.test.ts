@@ -106,6 +106,28 @@ describe("describeDestination", () => {
     expect(text).not.toContain("hooks.slack.com");
   });
 
+  it("names an ntfy topic only by its masked tail, and which server", () => {
+    // The API masks the topic: on an open ntfy server it is the credential.
+    expect(
+      describeDestination(
+        make({ type: "ntfy", config: { topic: "****erts" } }),
+      ),
+    ).toBe("ntfy.sh, topic ending ****erts");
+    expect(
+      describeDestination(
+        make({
+          type: "ntfy",
+          config: { topic: "****erts", url: "****5:80" },
+        }),
+      ),
+    ).toBe("own server, topic ending ****erts");
+    expect(
+      describeDestination(
+        make({ type: "gotify", config: { url: "****.lan" } }),
+      ),
+    ).toBe("endpoint ending ****.lan");
+  });
+
   it("says so when a channel type this build does not know arrives", () => {
     expect(describeDestination(make({ type: "pagerduty" }))).toMatch(
       /does not know/,
@@ -155,6 +177,8 @@ describe("fieldsFor", () => {
     expect(secretKeys("telegram")).toEqual(["bot_token"]);
     expect(secretKeys("email")).toEqual(["password"]);
     expect(secretKeys("webhook")).toEqual(["url", "headers"]);
+    expect(secretKeys("ntfy")).toEqual(["topic", "url", "token", "password"]);
+    expect(secretKeys("gotify")).toEqual(["url", "token"]);
     // chat_id, to, from, host, port and username are on the allowlist.
     expect(
       fieldsFor("email")

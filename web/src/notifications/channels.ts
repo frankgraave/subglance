@@ -20,19 +20,23 @@
  * and it is exactly what "assume healthy until told otherwise" produces.
  */
 
-/** The five types `store` accepts, mirroring its CHECK constraint. */
+/** The seven types `store` accepts, mirroring its CHECK constraint. */
 export type ChannelType =
   | "webhook"
   | "discord"
   | "slack"
   | "telegram"
-  | "email";
+  | "email"
+  | "ntfy"
+  | "gotify";
 
 export const CHANNEL_TYPES: readonly ChannelType[] = [
   "email",
   "slack",
   "discord",
   "telegram",
+  "ntfy",
+  "gotify",
   "webhook",
 ];
 
@@ -185,6 +189,10 @@ export function typeLabel(type: string): string {
       return "Discord";
     case "telegram":
       return "Telegram";
+    case "ntfy":
+      return "ntfy";
+    case "gotify":
+      return "Gotify";
     case "webhook":
       return "Webhook";
     default:
@@ -288,6 +296,65 @@ export const FIELDS: Readonly<Record<ChannelType, readonly FieldSpec[]>> = {
       help: "Not a secret: it names a destination but grants nothing, so it is shown in full.",
     },
   ],
+  ntfy: [
+    {
+      key: "topic",
+      label: "Topic",
+      secret: true,
+      required: true,
+      help: "Letters, digits, - and _. On a server without login the topic is the password, so it is stored write-only.",
+    },
+    {
+      key: "url",
+      label: "Server URL",
+      secret: true,
+      required: false,
+      help: "Leave empty for ntfy.sh. A server on your own network needs --allow-private-targets.",
+      placeholder: "https://ntfy.sh",
+    },
+    {
+      key: "token",
+      label: "Access token",
+      secret: true,
+      required: false,
+      help: "Or a username and password below, not both.",
+      placeholder: "tk_…",
+    },
+    { key: "username", label: "Username", secret: false, required: false },
+    { key: "password", label: "Password", secret: true, required: false },
+  ],
+  gotify: [
+    {
+      key: "url",
+      label: "Server URL",
+      secret: true,
+      required: true,
+      help: "Include any sub-path. A server on your own network needs --allow-private-targets.",
+      placeholder: "https://gotify.example.com",
+    },
+    {
+      key: "token",
+      label: "Application token",
+      secret: true,
+      required: true,
+      help: "From the Apps page in Gotify. Stored write-only.",
+    },
+    {
+      key: "priority_down",
+      label: "Priority when down",
+      secret: false,
+      required: false,
+      help: "0 to 10. Gotify's app plays a sound from 4 and pops up from 8.",
+      placeholder: "8",
+    },
+    {
+      key: "priority_up",
+      label: "Priority when back up",
+      secret: false,
+      required: false,
+      placeholder: "4",
+    },
+  ],
   webhook: [
     {
       key: "url",
@@ -352,8 +419,19 @@ export function describeDestination(channel: Channel): string {
       const chat = cfg.chat_id ?? "";
       return chat === "" ? "no chat configured" : `chat ${chat}`;
     }
+    case "ntfy": {
+      /*
+       * The topic is masked by the API (it is the credential on an open
+       * server), and an empty server URL means the public default.
+       */
+      const topic = cfg.topic ?? "";
+      if (topic === "") return "no topic configured";
+      const server = (cfg.url ?? "") === "" ? "ntfy.sh" : "own server";
+      return `${server}, topic ending ${topic}`;
+    }
     case "slack":
     case "discord":
+    case "gotify":
     case "webhook": {
       const url = cfg.url ?? "";
       if (url === "") return "no endpoint configured";
