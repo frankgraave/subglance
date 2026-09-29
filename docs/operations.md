@@ -43,6 +43,7 @@ five-minute dead man's switch, or LAN monitoring, and having neither.
 | `--raw-retention` | `SUBGLANCE_RAW_RETENTION` | unset: `720h` (30d), or the settings page | How long raw heartbeats are kept before being rolled up into hourly buckets. Minimum `24h`; `0` = forever. Setting it locks the settings page field |
 | `--rollup-retention` | `SUBGLANCE_ROLLUP_RETENTION` | unset: `0` (forever), or the settings page | How long hourly buckets and resolved incidents are kept (`0` = forever). Setting it locks the settings page field |
 | `--retention-run-at` | `SUBGLANCE_RETENTION_RUN_AT` | unset: `03:30`, or the settings page | Time of day, `HH:MM` in the server's time zone, at which the daily retention pass runs. A pass missed while the server was down runs at the next start. Setting it locks the settings page field |
+| `--max-database-size` | `SUBGLANCE_MAX_DATABASE_SIZE` | unset: no limit, or the settings page | Size the database may reach, such as `2GB` or `500MiB` (minimum `32MiB`; `0` = no limit), before the daily pass removes history beyond the two windows to stay under it. See [A size limit](#a-size-limit). Setting it locks the settings page field |
 | `--secret-key` | `SUBGLANCE_SECRET_KEY` | empty (off) | 32 bytes of key material, or a path to a file holding it, to encrypt notification channel configuration at rest. Empty means **no encryption** |
 | `--secret-key-previous` | `SUBGLANCE_SECRET_KEY_PREVIOUS` | empty | The key the stored configuration is currently under, for one start: rotates to `--secret-key`, or decrypts back to plain text when `--secret-key` is empty |
 | `--backup-target` | `SUBGLANCE_BACKUP_TARGET` | empty (off) | [Scheduled backups](#scheduled-backups-to-s3-compatible-storage) to `s3://bucket` or `s3://bucket/prefix` |
@@ -90,6 +91,40 @@ Each pass is recorded in the database — when it started, how long it took, wha
 it removed per table, how much space it freed, and the error if it failed — so
 the record survives a restart. The server's time zone is the container's `TZ`
 variable; without one it is UTC.
+
+#### A size limit
+
+The windows are measured in time, but a small disk runs out in bytes. With
+`--max-database-size` set, the daily pass checks the size of the data after the
+windows have done their work, and if it is still over the limit it keeps going,
+in the order that costs least:
+
+1. It folds the oldest raw heartbeats into hourly buckets, oldest first, as
+   the raw window does. Per-check detail and stored failure responses go; the
+   history does not, because the hourly buckets keep the counts and latencies.
+   It never folds the last 24 hours, which the 24-hour charts read.
+2. Only once raw heartbeats are down to that last day does it delete hourly
+   buckets, oldest first, and never the ones for the last day.
+3. It never deletes an incident. They are small, and they are what anyone
+   comes back to look for.
+
+A limit it cannot meet without breaking those rules stops at them rather than
+removing anything else. Either way it is not silent: a pass that went past the
+windows logs a warning that says what it removed and from when, adds one to
+`subglance_size_limit_passes_total` on `/metrics`, and is recorded with the
+pass. One that stopped at the floor says so in its warning and sets
+`subglance_size_limit_unmet` to 1 until a pass meets the limit again.
+
+The size measured is the space the data occupies, not the file. With
+incremental auto-vacuum on (the default, see above) the file shrinks to match in
+the same pass. On a database too large to have been switched over at startup,
+the freed space is reused instead, so the file stops growing at the limit
+rather than shrinking to it.
+
+No limit is set by default, because removing history the windows would have
+kept should be a choice. The minimum is `32MiB`: a smaller limit is almost
+certainly a unit left off, and it would fold nearly everything on the first
+pass. A number without a unit is refused for the same reason.
 
 The same pass clears the notification delivery log: a notification that was
 delivered, or suppressed by maintenance or folded into a quiet-hours digest, is
@@ -320,6 +355,8 @@ and a live signal of when the operator is least able to notice anything.
 subglance_checks_recorded_total            checks whose heartbeat reached the database
 subglance_heartbeat_write_failures_total   heartbeats that could not be written
 subglance_rollup_failures_total            retention passes that failed
+subglance_size_limit_passes_total          retention passes that removed history beyond the windows to stay under --max-database-size
+subglance_size_limit_unmet                 1 when the last pass ended over that limit with nothing left it may remove
 subglance_checks_skipped_total             checks dropped because the previous run was still going
 subglance_check_queue_depth                dispatched checks waiting for a worker
 subglance_check_workers                    current worker pool size

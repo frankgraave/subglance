@@ -39,6 +39,7 @@ type Store interface {
 	ResolveRetention(ctx context.Context, pins store.RetentionPins) (store.EffectiveRetention, error)
 	ApplyRetention(ctx context.Context, p store.RetentionPolicy) (store.RetentionResult, error)
 	ResolveRetentionRunAt(ctx context.Context, pin *store.RetentionRunAtPin) (store.RetentionRunAt, error)
+	ResolveMaxDatabaseSize(ctx context.Context, pin *store.MaxDatabaseSizePin) (store.MaxDatabaseSize, error)
 	LastRetentionPass(ctx context.Context) (*store.RetentionPass, error)
 	SaveRetentionPass(ctx context.Context, p store.RetentionPass) error
 }
@@ -50,12 +51,18 @@ type Options struct {
 	Pins store.RetentionPins
 	// RunAtPin is the time of day fixed by a flag or variable, or nil.
 	RunAtPin *store.RetentionRunAtPin
+	// MaxSizePin is the database size limit fixed by a flag or variable,
+	// or nil.
+	MaxSizePin *store.MaxDatabaseSizePin
 	// Location is the time zone the time of day is read in. Nil means the
 	// server's local zone.
 	Location *time.Location
 	Log      *slog.Logger
 	// OnFailure is called once for every pass that fails, for /metrics.
 	OnFailure func()
+	// OnSizeLimit is called with what the database size limit did, once
+	// for every pass that ran with a limit set, for /metrics.
+	OnSizeLimit func(store.SizeCapResult)
 
 	// Now and Wait are the clock, injectable for tests. Wait returns false
 	// when ctx ended before d elapsed.
@@ -79,6 +86,9 @@ func New(opts Options) *Retention {
 	}
 	if opts.OnFailure == nil {
 		opts.OnFailure = func() {}
+	}
+	if opts.OnSizeLimit == nil {
+		opts.OnSizeLimit = func(store.SizeCapResult) {}
 	}
 	if opts.Now == nil {
 		opts.Now = time.Now
@@ -128,6 +138,13 @@ func (r *Retention) Run(ctx context.Context, trigger string) (store.RetentionPas
 	pass.Incidents = res.Incidents
 	pass.Deliveries = res.Deliveries
 	pass.FreedBytes = res.ReclaimedBytes
+	pass.SizeCap = res.SizeCap
+	if c := res.SizeCap; c != nil {
+		r.opts.OnSizeLimit(*c)
+		if c.Intervened() || c.AtFloor {
+			r.reportSizeLimit(trigger, *c)
+		}
+	}
 	if err != nil {
 		// A failed pass costs disk, not correctness: the rows are still
 		// there and the next pass picks them up. It is counted as well as
@@ -164,7 +181,43 @@ func (r *Retention) apply(ctx context.Context) (store.RetentionResult, error) {
 	if err != nil {
 		return store.RetentionResult{}, err
 	}
-	return r.opts.Store.ApplyRetention(ctx, eff.Policy())
+	policy := eff.Policy()
+	// A limit that cannot be read fails the pass rather than running it
+	// without one: on a small disk the limit is the part that matters, and
+	// a failed pass is counted and retried, where a silently unlimited one
+	// is neither.
+	limit, err := r.opts.Store.ResolveMaxDatabaseSize(ctx, r.opts.MaxSizePin)
+	if err != nil {
+		return store.RetentionResult{}, err
+	}
+	policy.MaxBytes = limit.Value
+	return r.opts.Store.ApplyRetention(ctx, policy)
+}
+
+// reportSizeLimit makes a pass that went past the windows visible. Removing
+// history the operator's windows would have kept is only acceptable if it is
+// said out loud, so it is a warning, not an info line, and it is counted.
+func (r *Retention) reportSizeLimit(trigger string, c store.SizeCapResult) {
+	args := []any{
+		"trigger", trigger,
+		"limit", store.FormatByteSize(c.Limit),
+		"before", store.FormatByteSize(c.Before),
+		"after", store.FormatByteSize(c.After),
+		"heartbeats_rolled_up", c.Heartbeats,
+		"hourly_buckets_deleted", c.HourlyBuckets,
+	}
+	if !c.RawSince.IsZero() {
+		args = append(args, "raw_since", c.RawSince)
+	}
+	if !c.HourlySince.IsZero() {
+		args = append(args, "hourly_since", c.HourlySince)
+	}
+	if c.AtFloor {
+		r.opts.Log.Warn("the database is still over its size limit: raw heartbeats are down to the last day, "+
+			"no older summaries are left, and incidents are never removed to meet it", args...)
+		return
+	}
+	r.opts.Log.Warn("removed history beyond the retention windows to keep the database under its size limit", args...)
 }
 
 // runAt resolves the configured time of day, falling back to the default

@@ -550,11 +550,13 @@ func rollupHeartbeats(ctx context.Context, db *store.DB, log *slog.Logger, runne
 	}
 
 	housekeeping.New(housekeeping.Options{
-		Store:     db,
-		Pins:      cfg.RetentionPins(),
-		RunAtPin:  cfg.RetentionRunAtPin(),
-		Log:       log,
-		OnFailure: runner.RecordRollupFailure,
+		Store:       db,
+		Pins:        cfg.RetentionPins(),
+		RunAtPin:    cfg.RetentionRunAtPin(),
+		MaxSizePin:  cfg.MaxDatabaseSizePin(),
+		Log:         log,
+		OnFailure:   runner.RecordRollupFailure,
+		OnSizeLimit: runner.RecordSizeLimit,
 	}).Start(ctx)
 }
 

@@ -65,6 +65,13 @@ type Runner struct {
 	// rather than two.
 	rollupFailures atomic.Uint64
 
+	// sizeLimitPasses counts retention passes in which the database size
+	// limit removed history the windows would have kept, and sizeLimitUnmet
+	// is whether the last pass ended over the limit with nothing left that
+	// it may remove. Held here for the same reason as rollupFailures.
+	sizeLimitPasses atomic.Uint64
+	sizeLimitUnmet  atomic.Bool
+
 	// bus fans check results out to live listeners (the SSE endpoint). Nil
 	// means nobody is watching, which is the normal case in tests.
 	bus *events.Bus
@@ -365,6 +372,16 @@ func (r *Runner) ChecksCompleted() uint64 { return r.checks.Load() }
 // report it. cmd/subglance drives retention and calls this.
 func (r *Runner) RecordRollupFailure() { r.rollupFailures.Add(1) }
 
+// RecordSizeLimit notes what the database size limit did on a retention
+// pass, so /metrics can report it. cmd/subglance calls it for every pass that
+// ran with a limit set.
+func (r *Runner) RecordSizeLimit(c store.SizeCapResult) {
+	if c.Intervened() {
+		r.sizeLimitPasses.Add(1)
+	}
+	r.sizeLimitUnmet.Store(c.AtFloor)
+}
+
 // MaxCheckTimeout reports the longest per-monitor timeout currently scheduled.
 // See scheduler.Scheduler.MaxCheckTimeout; shutdown uses it to size how long
 // the check pipeline is given to finish.
@@ -392,6 +409,16 @@ type Metrics struct {
 	// would have freed the space.
 	RollupFailures uint64
 
+	// SizeLimitPasses counts retention passes that removed history beyond
+	// the windows to keep the database under its size limit. Every one is
+	// also a WARN line; this is the number to alert on instead of the log.
+	SizeLimitPasses uint64
+
+	// SizeLimitUnmet is set when the last pass ended over the size limit
+	// with nothing left that the limit may remove: the limit is too small
+	// for the monitors this instance runs.
+	SizeLimitUnmet bool
+
 	// SkippedChecks counts checks dropped because the previous run of that
 	// monitor had not finished. Rising means the pool is behind.
 	SkippedChecks uint64
@@ -417,6 +444,8 @@ func (r *Runner) Metrics() Metrics {
 		ChecksRecorded:         r.checks.Load(),
 		HeartbeatWriteFailures: r.hbFailures.Load(),
 		RollupFailures:         r.rollupFailures.Load(),
+		SizeLimitPasses:        r.sizeLimitPasses.Load(),
+		SizeLimitUnmet:         r.sizeLimitUnmet.Load(),
 		SkippedChecks:          r.sch.SkippedChecks(),
 		QueueDepth:             r.sch.QueueDepth(),
 		Workers:                r.sch.Workers(),
