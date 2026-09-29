@@ -36,7 +36,7 @@ Per page:
 | `timezone` | `status_pages.timezone` | Chosen for the audience, not the server's |
 | `summary` | counted from the entries | `{ "up": 4, "degraded": 0, "down": 1, "unmonitored": 0 }` |
 
-Per entry (one per monitor on the page):
+Per entry, in the page's `entries` list (one per monitor on the page):
 
 | Field | Source | Notes |
 |---|---|---|
@@ -51,7 +51,7 @@ Page-level lists:
 
 | List | Fields | Window |
 |---|---|---|
-| `maintenance` | `starts_at`, `ends_at`, the `key`s it covers | Running now, or starting within 7 days |
+| `maintenance` | `starts_at`, `ends_at`, `keys` (the entries it covers) | Running now, or starting within 7 days |
 | `outages` | `key`, `started_at`, `resolved_at` (or `null`), `duration_s` | Confirmed incidents in the last 14 days |
 
 ### 1.2 What never appears
@@ -83,7 +83,6 @@ states than the dashboard, and only **confirmed** facts:
 |---|---|---|---|
 | up | `up` | up | Up |
 | pending (a check failed, not yet confirmed) | `up` | up | Up |
-| warning | `degraded` | warn | Degraded |
 | recovering (passing, incident still open) | `degraded` | warn | Degraded |
 | down (confirmed incident) | `down` | down | Down |
 | waiting (never checked) | `no_data` | idle | No data yet |
@@ -94,6 +93,15 @@ the operator can look early; a public page that did the same would announce
 every blip that the retry setting exists to absorb. The public page follows the
 state engine's confirmed state, which is the same rule the notifications
 follow.
+
+*The rows are named by meaning, not by the API's status field.* The API
+reports a failed check that is not yet confirmed as `warning`, and a monitor
+that was never checked as `pending`. The build maps by meaning: the first is
+the "pending" row above and shows as up, the second is the "waiting" row. No
+live state today is amber without a failure, so a live monitor is `degraded`
+only while it is recovering. The daily history is different on purpose: a day
+with unconfirmed failures is `degraded` (§1.4), because a day is looked back
+on, and a blip that is over is a fact rather than an alarm.
 
 *Recovering shows as degraded, not up.* Until the recovery threshold is met the
 outage is not over, and the page must not say so before the operator's own
