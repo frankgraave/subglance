@@ -82,6 +82,15 @@ type Config struct {
 	// RollupRetentionPinnedBy is RawRetentionPinnedBy for RollupRetention.
 	RollupRetentionPinnedBy string
 
+	// RetentionRunAt is the time of day, "HH:MM" in the server's time zone,
+	// at which the daily retention pass runs. Empty unless a flag or
+	// variable set it; the settings page, or the 03:30 default, decides
+	// otherwise.
+	RetentionRunAt string
+
+	// RetentionRunAtPinnedBy is RawRetentionPinnedBy for RetentionRunAt.
+	RetentionRunAtPinnedBy string
+
 	// AlertGroupWindow is how long an alert waits for others before it is
 	// sent, so that one outage across many monitors becomes one message
 	// instead of one per monitor.
@@ -304,6 +313,8 @@ func Load(args []string) (Config, error) {
 	c.RawRetentionPinnedBy = envSetBy("SUBGLANCE_RAW_RETENTION")
 	c.RollupRetention = env.dur("SUBGLANCE_ROLLUP_RETENTION", c.RollupRetention)
 	c.RollupRetentionPinnedBy = envSetBy("SUBGLANCE_ROLLUP_RETENTION")
+	c.RetentionRunAt = envStr("SUBGLANCE_RETENTION_RUN_AT", c.RetentionRunAt)
+	c.RetentionRunAtPinnedBy = envSetBy("SUBGLANCE_RETENTION_RUN_AT")
 	c.AlertGroupWindow = env.dur("SUBGLANCE_ALERT_GROUP_WINDOW", c.AlertGroupWindow)
 	c.TrustedProxies = envStr("SUBGLANCE_TRUSTED_PROXIES", c.TrustedProxies)
 	c.SecretKey = envStr("SUBGLANCE_SECRET_KEY", c.SecretKey)
@@ -341,6 +352,9 @@ func Load(args []string) (Config, error) {
 	fs.DurationVar(&c.RollupRetention, "rollup-retention", c.RollupRetention,
 		"how long hourly buckets and resolved incidents are kept (0 = forever; "+
 			"setting it here locks the settings page field)")
+	fs.StringVar(&c.RetentionRunAt, "retention-run-at", c.RetentionRunAt,
+		"time of day, HH:MM in the server's time zone, for the daily retention pass (default 03:30; "+
+			"setting it here locks the settings page field)")
 	fs.DurationVar(&c.AlertGroupWindow, "alert-group-window", c.AlertGroupWindow,
 		"how long an alert waits for others so one outage sends one message (0 = send immediately)")
 	fs.StringVar(&c.TrustedProxies, "trusted-proxies", c.TrustedProxies,
@@ -375,6 +389,8 @@ func Load(args []string) (Config, error) {
 			c.RawRetentionPinnedBy = "--raw-retention"
 		case "rollup-retention":
 			c.RollupRetentionPinnedBy = "--rollup-retention"
+		case "retention-run-at":
+			c.RetentionRunAtPinnedBy = "--retention-run-at"
 		}
 	})
 	if err := c.validate(); err != nil {
@@ -523,6 +539,11 @@ func (c Config) validateRetention() error {
 				store.MinRawRetention, rollup)
 		}
 	}
+	if c.RetentionRunAtPinnedBy != "" {
+		if _, err := store.ParseClockTime(c.RetentionRunAt); err != nil {
+			return fmt.Errorf("retention-run-at: %w", err)
+		}
+	}
 	if c.RawRetentionPinnedBy != "" && c.RollupRetentionPinnedBy != "" {
 		// Hourly buckets are only worth anything once the raw beats behind
 		// them are gone. A rollup window inside the raw one would delete a
@@ -547,6 +568,19 @@ func (c Config) RetentionPins() store.RetentionPins {
 		p.Rollup = &store.RetentionPin{Value: c.RollupRetention, By: c.RollupRetentionPinnedBy}
 	}
 	return p
+}
+
+// RetentionRunAtPin returns the time of day fixed by a flag or variable, or
+// nil when the settings page decides. Load has already validated it.
+func (c Config) RetentionRunAtPin() *store.RetentionRunAtPin {
+	if c.RetentionRunAtPinnedBy == "" {
+		return nil
+	}
+	at, err := store.ParseClockTime(c.RetentionRunAt)
+	if err != nil {
+		return nil
+	}
+	return &store.RetentionRunAtPin{Value: at, By: c.RetentionRunAtPinnedBy}
 }
 
 // envSetBy returns key when the variable is set to something, the same test

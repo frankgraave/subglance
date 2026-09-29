@@ -43,6 +43,10 @@ services:
       # its fields. 0 means forever.
       # SUBGLANCE_RAW_RETENTION: 720h
       # SUBGLANCE_ROLLUP_RETENTION: "0"
+      # When that daily pass runs, as HH:MM in the container's time zone (set
+      # TZ to change it; UTC otherwise). Defaults to 03:30. Setting it here
+      # locks the settings page field.
+      # SUBGLANCE_RETENTION_RUN_AT: "03:30"
       # Off by default on purpose: without the guard, a user-supplied URL turns
       # SubGlance into an SSRF proxy into whatever this container can reach.
       # Turn it on only if you mean to monitor services on your own network.
