@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -395,6 +396,9 @@ func (db *DB) SetStatusPageEntries(ctx context.Context, pageID int64, entries []
 		return nil, fmt.Errorf("look up status page %d: %w", pageID, err)
 	}
 
+	if err := checkMonitorsExist(ctx, tx, entries); err != nil {
+		return nil, err
+	}
 	keys, err := existingEntryKeys(ctx, tx, pageID)
 	if err != nil {
 		return nil, err
@@ -403,13 +407,6 @@ func (db *DB) SetStatusPageEntries(ctx context.Context, pageID int64, entries []
 		return nil, fmt.Errorf("clear status page entries: %w", err)
 	}
 	for pos, e := range entries {
-		err := tx.QueryRowContext(ctx, "SELECT 1 FROM monitors WHERE id = ?", e.MonitorID).Scan(&found)
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("%w: %d", ErrUnknownMonitor, e.MonitorID)
-		}
-		if err != nil {
-			return nil, fmt.Errorf("look up monitor %d: %w", e.MonitorID, err)
-		}
 		key, kept := keys[e.MonitorID]
 		if !kept {
 			if key, err = newStatusPageKey(); err != nil {
@@ -430,6 +427,47 @@ func (db *DB) SetStatusPageEntries(ctx context.Context, pageID int64, entries []
 		return nil, fmt.Errorf("commit: %w", err)
 	}
 	return db.ListStatusPageEntries(ctx, pageID)
+}
+
+// checkMonitorsExist looks every entry's monitor up in one query, so a full
+// page costs one round trip on the writer connection instead of one per entry.
+// It reports ErrUnknownMonitor for the first entry, in page order, whose
+// monitor does not exist. The IDs travel as one JSON array parameter.
+func checkMonitorsExist(ctx context.Context, tx *sql.Tx, entries []StatusPageEntryInput) error {
+	if len(entries) == 0 {
+		return nil
+	}
+	ids := make([]int64, len(entries))
+	for i, e := range entries {
+		ids[i] = e.MonitorID
+	}
+	encoded, err := json.Marshal(ids)
+	if err != nil {
+		return fmt.Errorf("encode monitor ids: %w", err)
+	}
+	rows, err := tx.QueryContext(ctx,
+		"SELECT id FROM monitors WHERE id IN (SELECT value FROM json_each(?))", string(encoded))
+	if err != nil {
+		return fmt.Errorf("look up monitors: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	exists := make(map[int64]bool, len(entries))
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return fmt.Errorf("scan monitor id: %w", err)
+		}
+		exists[id] = true
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("look up monitors: %w", err)
+	}
+	for _, e := range entries {
+		if !exists[e.MonitorID] {
+			return fmt.Errorf("%w: %d", ErrUnknownMonitor, e.MonitorID)
+		}
+	}
+	return nil
 }
 
 func existingEntryKeys(ctx context.Context, tx *sql.Tx, pageID int64) (map[int64]string, error) {
