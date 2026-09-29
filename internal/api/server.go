@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/frankgraave/subglance/internal/buildinfo"
+	"github.com/frankgraave/subglance/internal/connectivity"
 	"github.com/frankgraave/subglance/internal/events"
 	"github.com/frankgraave/subglance/internal/store"
 	"github.com/frankgraave/subglance/internal/trustedproxy"
@@ -26,6 +27,12 @@ type Server struct {
 	db               *store.DB
 	startedAt        time.Time
 	watchdogSnapshot func() watchdog.Snapshot
+
+	// connectivity reports whether this host can reach its canary targets;
+	// nil with connectivityWired set means the check is turned off. See
+	// WithConnectivity.
+	connectivity      *connectivity.Canary
+	connectivityWired bool
 
 	// backups reports on scheduled backups; nil with backupsWired set means
 	// they are not configured. See WithBackups.
@@ -300,6 +307,7 @@ func (s *Server) routes() []route {
 
 		{http.MethodGet, "/api/v1/auth/me", accessRead},
 		{http.MethodGet, "/api/v1/watchdog", accessRead},
+		{http.MethodGet, "/api/v1/connectivity", accessRead},
 		{http.MethodGet, "/api/v1/settings/retention", accessRead},
 		{http.MethodGet, "/api/v1/settings/retention/preview", accessRead},
 		{http.MethodGet, "/api/v1/backup", accessAdmin},
@@ -471,6 +479,8 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 		return s.handleMe
 	case "GET /api/v1/watchdog":
 		return s.handleWatchdog
+	case "GET /api/v1/connectivity":
+		return s.handleConnectivity
 	case "GET /api/v1/settings/retention":
 		return s.handleGetRetention
 	case "GET /api/v1/settings/retention/preview":

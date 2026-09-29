@@ -224,6 +224,14 @@ when one answers, one notice goes to the [default channel](channels.md) saying
 how long the host was offline. A monitor whose target is still down once the
 host is back confirms on its next failure, as it would have otherwise.
 
+While the host is offline the dashboard says so once, above the list — "No
+outbound connection since 03:12" — and the status wall adds the same words to
+its header line. The monitors themselves stay as they are, amber with their
+real error, so nothing on screen claims they are fine. The same state is
+available to scripts as `GET /api/v1/connectivity` (any signed-in role; see
+the [API reference](openapi.yaml)). Reading it never dials anything: it
+reports what the last round found.
+
 The check errs towards reporting. A status code, a missing keyword, a failed
 JSON assertion or a certificate problem proves the target answered, and is
 never suppressed. If even one target answers, nothing is suppressed. An

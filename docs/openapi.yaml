@@ -276,6 +276,59 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '503':
           description: Diagnostic source unavailable; must not be interpreted as not configured.
+  /api/v1/connectivity:
+    get:
+      tags: [Health]
+      operationId: getConnectivity
+      summary: Read whether this host can reach its connectivity targets
+      description: |
+        Before a failure on a network error (DNS, connection, timeout)
+        confirms an incident, SubGlance dials its connectivity targets. When
+        every one of them fails, the failure is this host's own: the check is
+        kept as a warning with the cause `local_network`, and no incident is
+        confirmed. This endpoint reports that state, so a client can say "no
+        outbound connection since 03:12" once instead of showing every
+        affected monitor as its own problem.
+
+        Requires any authenticated role. Reading it never dials anything: it
+        reports what the most recent round found. Rounds run only when a
+        check is about to confirm on a network error, and every 30 seconds
+        while the host is offline, so during an episode the answer is at most
+        that old. The targets themselves are not included; they are
+        configured with `--connectivity-targets` and may name hosts on the
+        operator's own network.
+      x-subglance-access: read
+      responses:
+        '200':
+          description: The check's current state; a disabled check is not an error.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: 'private, no-store' }
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [enabled, offline, offline_since]
+                properties:
+                  enabled:
+                    type: boolean
+                    description: False when the check is turned off with `--connectivity-check=false`; offline is then always false.
+                  offline:
+                    type: boolean
+                    description: True when every target failed in the most recent round.
+                  offline_since:
+                    type: [string, 'null']
+                    format: date-time
+                    description: When the first failing round of the current episode ran, in UTC; null while online.
+              example:
+                enabled: true
+                offline: true
+                offline_since: '2026-09-29T01:12:04Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          description: Connectivity state unavailable; must not be interpreted as disabled or online.
   /api/v1/settings/retention:
     get:
       tags: [Settings]

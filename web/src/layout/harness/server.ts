@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
 import type { ApiHeartbeat, ApiMonitor } from "../../monitors/types";
 import type { ApiIncident } from "../../monitors/detail";
 import { disabledWatchdog } from "../../watchdog/fixtures";
+import { onlineConnectivity } from "../../connectivity/fixtures";
 import { steadyDiagnostics } from "../../diagnostics/fixtures";
 import { defaultRetention } from "../../retention/fixtures";
 import { unconfiguredBackup } from "../../backup/fixtures";
@@ -296,6 +297,14 @@ export async function serveBuild(): Promise<Server> {
     if (url.pathname === "/api/v1/backup") {
       res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
       res.end(JSON.stringify(unconfiguredBackup));
+      return;
+    }
+
+    // Every dashboard asks whether the server can see out (SUB-151). Online
+    // renders nothing, which keeps the layout fixtures what they were.
+    if (url.pathname === "/api/v1/connectivity") {
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify(onlineConnectivity));
       return;
     }
 
