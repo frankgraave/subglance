@@ -91,6 +91,16 @@ type Config struct {
 	// RetentionRunAtPinnedBy is RawRetentionPinnedBy for RetentionRunAt.
 	RetentionRunAtPinnedBy string
 
+	// MaxDatabaseSize is the size the database may reach before the daily
+	// pass removes history beyond the retention windows, as a number and a
+	// unit ("2GB", "500MiB") or "0" for no limit. Empty unless a flag or
+	// variable set it; the settings page decides otherwise, and by default
+	// there is no limit.
+	MaxDatabaseSize string
+
+	// MaxDatabaseSizePinnedBy is RawRetentionPinnedBy for MaxDatabaseSize.
+	MaxDatabaseSizePinnedBy string
+
 	// AlertGroupWindow is how long an alert waits for others before it is
 	// sent, so that one outage across many monitors becomes one message
 	// instead of one per monitor.
@@ -315,6 +325,8 @@ func Load(args []string) (Config, error) {
 	c.RollupRetentionPinnedBy = envSetBy("SUBGLANCE_ROLLUP_RETENTION")
 	c.RetentionRunAt = envStr("SUBGLANCE_RETENTION_RUN_AT", c.RetentionRunAt)
 	c.RetentionRunAtPinnedBy = envSetBy("SUBGLANCE_RETENTION_RUN_AT")
+	c.MaxDatabaseSize = envStr("SUBGLANCE_MAX_DATABASE_SIZE", c.MaxDatabaseSize)
+	c.MaxDatabaseSizePinnedBy = envSetBy("SUBGLANCE_MAX_DATABASE_SIZE")
 	c.AlertGroupWindow = env.dur("SUBGLANCE_ALERT_GROUP_WINDOW", c.AlertGroupWindow)
 	c.TrustedProxies = envStr("SUBGLANCE_TRUSTED_PROXIES", c.TrustedProxies)
 	c.SecretKey = envStr("SUBGLANCE_SECRET_KEY", c.SecretKey)
@@ -355,6 +367,10 @@ func Load(args []string) (Config, error) {
 	fs.StringVar(&c.RetentionRunAt, "retention-run-at", c.RetentionRunAt,
 		"time of day, HH:MM in the server's time zone, for the daily retention pass (default 03:30; "+
 			"setting it here locks the settings page field)")
+	fs.StringVar(&c.MaxDatabaseSize, "max-database-size", c.MaxDatabaseSize,
+		"size the database may reach, such as 2GB or 500MiB, before the daily pass folds raw heartbeats "+
+			"and then deletes the oldest summaries beyond the retention windows to stay under it "+
+			"(default none; 0 = none; setting it here locks the settings page field)")
 	fs.DurationVar(&c.AlertGroupWindow, "alert-group-window", c.AlertGroupWindow,
 		"how long an alert waits for others so one outage sends one message (0 = send immediately)")
 	fs.StringVar(&c.TrustedProxies, "trusted-proxies", c.TrustedProxies,
@@ -391,6 +407,8 @@ func Load(args []string) (Config, error) {
 			c.RollupRetentionPinnedBy = "--rollup-retention"
 		case "retention-run-at":
 			c.RetentionRunAtPinnedBy = "--retention-run-at"
+		case "max-database-size":
+			c.MaxDatabaseSizePinnedBy = "--max-database-size"
 		}
 	})
 	if err := c.validate(); err != nil {
@@ -544,6 +562,15 @@ func (c Config) validateRetention() error {
 			return fmt.Errorf("retention-run-at: %w", err)
 		}
 	}
+	if c.MaxDatabaseSizePinnedBy != "" {
+		n, err := store.ParseByteSize(c.MaxDatabaseSize)
+		if err == nil {
+			err = store.ValidateMaxDatabaseSize(n)
+		}
+		if err != nil {
+			return fmt.Errorf("max-database-size: %w", err)
+		}
+	}
 	if c.RawRetentionPinnedBy != "" && c.RollupRetentionPinnedBy != "" {
 		// Hourly buckets are only worth anything once the raw beats behind
 		// them are gone. A rollup window inside the raw one would delete a
@@ -581,6 +608,19 @@ func (c Config) RetentionRunAtPin() *store.RetentionRunAtPin {
 		return nil
 	}
 	return &store.RetentionRunAtPin{Value: at, By: c.RetentionRunAtPinnedBy}
+}
+
+// MaxDatabaseSizePin returns the size limit fixed by a flag or variable, or
+// nil when the settings page decides. Load has already validated it.
+func (c Config) MaxDatabaseSizePin() *store.MaxDatabaseSizePin {
+	if c.MaxDatabaseSizePinnedBy == "" {
+		return nil
+	}
+	n, err := store.ParseByteSize(c.MaxDatabaseSize)
+	if err != nil {
+		return nil
+	}
+	return &store.MaxDatabaseSizePin{Value: n, By: c.MaxDatabaseSizePinnedBy}
 }
 
 // envSetBy returns key when the variable is set to something, the same test

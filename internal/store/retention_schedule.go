@@ -188,6 +188,9 @@ type RetentionPass struct {
 	Deliveries    int64 `json:"deliveries"`
 	// FreedBytes is the disk space handed back to the filesystem.
 	FreedBytes int64 `json:"freed_bytes"`
+	// SizeCap is what the database size limit did, or nil when no limit
+	// was set. Its rows are not included in the counts above.
+	SizeCap *SizeCapResult `json:"size_cap,omitempty"`
 	// Error is the reason the pass failed, or empty when it succeeded.
 	Error string `json:"error,omitempty"`
 }

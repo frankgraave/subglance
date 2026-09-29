@@ -47,6 +47,11 @@ services:
       # TZ to change it; UTC otherwise). Defaults to 03:30. Setting it here
       # locks the settings page field.
       # SUBGLANCE_RETENTION_RUN_AT: "03:30"
+      # The size the database may reach before that pass removes history the
+      # windows would have kept: first raw detail (folded into hourly
+      # summaries), then the oldest summaries, never incidents and never the
+      # last day. Off by default. A number and a unit, minimum 32MiB.
+      # SUBGLANCE_MAX_DATABASE_SIZE: 2GB
       # Off by default on purpose: without the guard, a user-supplied URL turns
       # SubGlance into an SSRF proxy into whatever this container can reach.
       # Turn it on only if you mean to monitor services on your own network.

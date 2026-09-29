@@ -57,6 +57,10 @@ type RetentionPolicy struct {
 	// Rollup is how long hourly buckets and resolved incidents survive.
 	// Zero or negative means keep them forever.
 	Rollup time.Duration
+	// MaxBytes is the size the database's data may reach before the pass
+	// removes more than the windows ask for; see enforceSizeCapAt. Zero or
+	// negative means no limit, which is the default.
+	MaxBytes int64
 }
 
 // RollupResult reports what a rollup pass did.
@@ -89,6 +93,10 @@ type RetentionResult struct {
 	// RollupCutoff is the timestamp before which hourly buckets and resolved
 	// incidents were deleted. Zero when rollup retention is off.
 	RollupCutoff time.Time
+	// SizeCap is what the size limit did, or nil when no limit is set.
+	// Rows it removed are counted here and not in the fields above, which
+	// report the windows alone.
+	SizeCap *SizeCapResult
 }
 
 // RollupHeartbeats folds raw heartbeats older than retention into hourly
@@ -113,7 +121,13 @@ func (db *DB) rollupAt(ctx context.Context, now time.Time, retention time.Durati
 	if retention <= 0 {
 		retention = DefaultRawRetention
 	}
-	cutoff := now.Add(-retention).Truncate(bucketSize)
+	return db.rollupBefore(ctx, now.Add(-retention).Truncate(bucketSize))
+}
+
+// rollupBefore folds every raw heartbeat older than cutoff into its hourly
+// bucket and deletes it. cutoff must lie on an hour boundary; see
+// RollupHeartbeats for why.
+func (db *DB) rollupBefore(ctx context.Context, cutoff time.Time) (RollupResult, error) {
 	res := RollupResult{Cutoff: cutoff}
 
 	tx, err := db.Writer.BeginTx(ctx, nil)
@@ -348,6 +362,16 @@ func (db *DB) applyRetentionAt(ctx context.Context, now time.Time, p RetentionPo
 		return res, err
 	}
 	res.Deliveries = deliveries
+
+	// The limit goes last, so it only ever removes what the windows left:
+	// a pass that is already under it after the windows does nothing more.
+	if p.MaxBytes > 0 {
+		capped, err := db.enforceSizeCapAt(ctx, now, p.MaxBytes)
+		res.SizeCap = &capped
+		if err != nil {
+			return res, err
+		}
+	}
 
 	pages, err := db.incrementalVacuum(ctx)
 	if err != nil {

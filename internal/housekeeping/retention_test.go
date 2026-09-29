@@ -3,6 +3,8 @@ package housekeeping
 import (
 	"context"
 	"errors"
+	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -17,6 +19,13 @@ type fakeStore struct {
 	last    *store.RetentionPass
 	applied int
 	fail    error
+	// maxSize is the size limit ResolveMaxDatabaseSize reports, sizeErr
+	// its error, and sizeCap what ApplyRetention says the limit did.
+	maxSize int64
+	sizeErr error
+	sizeCap *store.SizeCapResult
+	// policy is the last policy ApplyRetention was handed.
+	policy store.RetentionPolicy
 	// block, when set, holds ApplyRetention until it is closed.
 	block   chan struct{}
 	entered chan struct{}
@@ -26,7 +35,14 @@ func (f *fakeStore) ResolveRetention(context.Context, store.RetentionPins) (stor
 	return store.EffectiveRetention{}, nil
 }
 
-func (f *fakeStore) ApplyRetention(context.Context, store.RetentionPolicy) (store.RetentionResult, error) {
+func (f *fakeStore) ResolveMaxDatabaseSize(_ context.Context, pin *store.MaxDatabaseSizePin) (store.MaxDatabaseSize, error) {
+	if pin != nil {
+		return store.MaxDatabaseSize{Value: pin.Value, Source: store.RetentionSourcePinned, PinnedBy: pin.By}, nil
+	}
+	return store.MaxDatabaseSize{Value: f.maxSize}, f.sizeErr
+}
+
+func (f *fakeStore) ApplyRetention(_ context.Context, p store.RetentionPolicy) (store.RetentionResult, error) {
 	if f.entered != nil {
 		f.entered <- struct{}{}
 	}
@@ -36,7 +52,8 @@ func (f *fakeStore) ApplyRetention(context.Context, store.RetentionPolicy) (stor
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.applied++
-	return store.RetentionResult{Deliveries: 3, ReclaimedBytes: 4096}, f.fail
+	f.policy = p
+	return store.RetentionResult{Deliveries: 3, ReclaimedBytes: 4096, SizeCap: f.sizeCap}, f.fail
 }
 
 func (f *fakeStore) ResolveRetentionRunAt(context.Context, *store.RetentionRunAtPin) (store.RetentionRunAt, error) {
@@ -269,5 +286,113 @@ func TestStartRunsAgainstARealStore(t *testing.T) {
 	}
 	if !last.Succeeded() || last.Trigger != TriggerStartup || !last.StartedAt.Equal(start) {
 		t.Errorf("recorded %+v", last)
+	}
+}
+
+// logLines collects what a scheduler logs, by level.
+type logLines struct {
+	mu    sync.Mutex
+	lines []string
+}
+
+func (l *logLines) Enabled(context.Context, slog.Level) bool { return true }
+func (l *logLines) Handle(_ context.Context, r slog.Record) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.lines = append(l.lines, r.Level.String()+" "+r.Message)
+	return nil
+}
+func (l *logLines) WithAttrs([]slog.Attr) slog.Handler { return l }
+func (l *logLines) WithGroup(string) slog.Handler      { return l }
+
+func (l *logLines) warnings() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	var out []string
+	for _, line := range l.lines {
+		if strings.HasPrefix(line, "WARN ") {
+			out = append(out, line)
+		}
+	}
+	return out
+}
+
+func TestRunAppliesTheSizeLimitAndSaysWhenItIntervenes(t *testing.T) {
+	cases := []struct {
+		name      string
+		cap       *store.SizeCapResult
+		warn      string
+		counted   int
+		recording bool
+	}{
+		{"no limit", nil, "", 0, false},
+		{"under the limit", &store.SizeCapResult{Limit: 1 << 30, Before: 1 << 20, After: 1 << 20}, "", 0, true},
+		{"folded raw heartbeats", &store.SizeCapResult{Limit: 1 << 30, Before: 2 << 30, After: 1 << 30, Heartbeats: 5000},
+			"removed history beyond the retention windows", 1, true},
+		{"stopped at the floor", &store.SizeCapResult{Limit: 1 << 30, Before: 3 << 30, After: 2 << 30, Heartbeats: 5000, HourlyBuckets: 90, AtFloor: true},
+			"still over its size limit", 1, true},
+		// An earlier pass already took everything it may: nothing is
+		// removed, but the limit is still not met, and that is news too.
+		{"still at the floor", &store.SizeCapResult{Limit: 1 << 30, Before: 2 << 30, After: 2 << 30, AtFloor: true},
+			"still over its size limit", 0, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeStore{maxSize: 1 << 30, sizeCap: tc.cap}
+			logs := &logLines{}
+			counted := 0
+			s := New(Options{Store: f, Log: slog.New(logs), OnSizeLimit: func(c store.SizeCapResult) {
+				if c.Intervened() {
+					counted++
+				}
+			}})
+
+			pass, err := s.Run(context.Background(), TriggerManual)
+			if err != nil {
+				t.Fatalf("Run: %v", err)
+			}
+			if f.policy.MaxBytes != 1<<30 {
+				t.Errorf("policy.MaxBytes = %d, want the resolved limit", f.policy.MaxBytes)
+			}
+			if counted != tc.counted {
+				t.Errorf("counted %d interventions, want %d", counted, tc.counted)
+			}
+			warns := logs.warnings()
+			switch {
+			case tc.warn == "" && len(warns) != 0:
+				t.Errorf("warned %q, want nothing", warns)
+			case tc.warn != "" && (len(warns) != 1 || !strings.Contains(warns[0], tc.warn)):
+				t.Errorf("warnings = %q, want one containing %q", warns, tc.warn)
+			}
+			// The record the settings card reads carries it too, so the
+			// card can say it after a restart.
+			if (f.last.SizeCap != nil) != tc.recording || (tc.cap != nil && *f.last.SizeCap != *tc.cap) || pass.SizeCap != f.last.SizeCap {
+				t.Errorf("recorded size limit = %+v, want %+v", f.last.SizeCap, tc.cap)
+			}
+		})
+	}
+}
+
+func TestRunPrefersThePinnedSizeLimit(t *testing.T) {
+	f := &fakeStore{maxSize: 1 << 30}
+	s := New(Options{Store: f, MaxSizePin: &store.MaxDatabaseSizePin{Value: 2 << 30, By: "--max-database-size"}})
+	if _, err := s.Run(context.Background(), TriggerManual); err != nil {
+		t.Fatal(err)
+	}
+	if f.policy.MaxBytes != 2<<30 {
+		t.Errorf("policy.MaxBytes = %d, want the pinned 2 GiB", f.policy.MaxBytes)
+	}
+}
+
+func TestRunFailsWhenTheSizeLimitCannotBeRead(t *testing.T) {
+	f := &fakeStore{sizeErr: errors.New("setting retention.max_database_bytes: invalid")}
+	failures := 0
+	s := New(Options{Store: f, OnFailure: func() { failures++ }})
+	pass, err := s.Run(context.Background(), TriggerManual)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if pass.Succeeded() || failures != 1 || f.passes() != 0 {
+		t.Errorf("pass = %+v, failures %d, applied %d; want a failed pass that removed nothing", pass, failures, f.passes())
 	}
 }

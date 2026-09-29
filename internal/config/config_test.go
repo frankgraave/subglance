@@ -301,3 +301,39 @@ func TestRetentionValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestMaxDatabaseSize(t *testing.T) {
+	c, err := Load(nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if pin := c.MaxDatabaseSizePin(); pin != nil {
+		t.Errorf("unset: pin = %+v, want nil so the settings page decides", pin)
+	}
+
+	c, err = Load([]string{"--max-database-size=2GB"})
+	if err != nil {
+		t.Fatalf("Load with --max-database-size: %v", err)
+	}
+	if pin := c.MaxDatabaseSizePin(); pin == nil || pin.Value != 2_000_000_000 || pin.By != "--max-database-size" {
+		t.Errorf("flag: pin = %+v, want 2GB by --max-database-size", pin)
+	}
+
+	// Zero pins "no limit": it locks the page field as much as a size does.
+	t.Setenv("SUBGLANCE_MAX_DATABASE_SIZE", "0")
+	c, err = Load(nil)
+	if err != nil {
+		t.Fatalf("Load with SUBGLANCE_MAX_DATABASE_SIZE=0: %v", err)
+	}
+	if pin := c.MaxDatabaseSizePin(); pin == nil || pin.Value != 0 || pin.By != "SUBGLANCE_MAX_DATABASE_SIZE" {
+		t.Errorf("env: pin = %+v, want 0 by SUBGLANCE_MAX_DATABASE_SIZE", pin)
+	}
+
+	// A bare number is most likely a unit left off, and a tiny limit would
+	// delete history on the first pass: both stop the start.
+	for _, bad := range []string{"2048", "1MB", "2 zettabytes", "-5GB"} {
+		if _, err := Load([]string{"--max-database-size=" + bad}); err == nil {
+			t.Errorf("Load accepted --max-database-size=%s", bad)
+		}
+	}
+}

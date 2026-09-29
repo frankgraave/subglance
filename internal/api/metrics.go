@@ -67,6 +67,12 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		m.HeartbeatWriteFailures)
 	counter(&b, "subglance_rollup_failures_total",
 		"Retention passes that failed.", m.RollupFailures)
+	counter(&b, "subglance_size_limit_passes_total",
+		"Retention passes that removed history beyond the retention windows to stay under the database size limit.",
+		m.SizeLimitPasses)
+	gauge(&b, "subglance_size_limit_unmet",
+		"1 when the last retention pass ended over the database size limit with nothing left it may remove.",
+		boolGauge(m.SizeLimitUnmet))
 	counter(&b, "subglance_checks_skipped_total",
 		"Checks skipped because the previous run of that monitor had not finished.",
 		m.SkippedChecks)
@@ -97,6 +103,13 @@ func counter(b *strings.Builder, name, help string, v uint64) {
 
 func gauge(b *strings.Builder, name, help string, v uint64) {
 	writeMetric(b, name, help, "gauge", v)
+}
+
+func boolGauge(v bool) uint64 {
+	if v {
+		return 1
+	}
+	return 0
 }
 
 func writeMetric(b *strings.Builder, name, help, kind string, v uint64) {
