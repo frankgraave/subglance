@@ -111,6 +111,11 @@ type CompactResult struct {
 	Duration time.Duration
 	// AutoVacuum is the mode the database is in afterwards.
 	AutoVacuum string
+	// ShrinkPending is true when a reader still held a snapshot from before
+	// the rewrite, so the checkpoint could not empty the write-ahead log. The
+	// rewrite itself is done and AfterBytes is what the file will be, but it
+	// keeps its old length until the next checkpoint gets through.
+	ShrinkPending bool
 }
 
 // pageState is what the pragmas say about the file.
@@ -194,9 +199,12 @@ func (db *DB) Compact(ctx context.Context) (CompactResult, error) {
 	}
 	// In WAL mode the rewritten pages land in the write-ahead log first, so
 	// the database file keeps its old length until a checkpoint. The
-	// TRUNCATE checkpoint shortens it now and empties the log as well; a
-	// reader still holding an old snapshot only postpones that to the next
-	// automatic checkpoint, so "busy" is reported but is not an error.
+	// TRUNCATE checkpoint shortens it now and empties the log as well. A
+	// reader still holding an old snapshot blocks that, and SQLite reports
+	// "busy" in the row rather than as an error. The rewrite has happened by
+	// then, so failing here would send the operator to run it again for
+	// nothing; the result says the shrink is pending instead, and the next
+	// automatic checkpoint finishes it.
 	var busy, logFrames, done int64
 	if err := db.Writer.QueryRowContext(ctx, "PRAGMA wal_checkpoint(TRUNCATE)").
 		Scan(&busy, &logFrames, &done); err != nil {
@@ -209,10 +217,11 @@ func (db *DB) Compact(ctx context.Context) (CompactResult, error) {
 		return CompactResult{}, err
 	}
 	return CompactResult{
-		BeforeBytes: plan.SizeBytes,
-		AfterBytes:  after.pages * after.pageSize,
-		Duration:    elapsed,
-		AutoVacuum:  autoVacuumName(after.mode),
+		BeforeBytes:   plan.SizeBytes,
+		AfterBytes:    after.pages * after.pageSize,
+		Duration:      elapsed,
+		AutoVacuum:    autoVacuumName(after.mode),
+		ShrinkPending: busy != 0,
 	}, nil
 }
 

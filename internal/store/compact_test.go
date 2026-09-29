@@ -101,6 +101,9 @@ func TestCompactShrinksADatabaseTooLargeForTheStartupRebuild(t *testing.T) {
 	if res.AutoVacuum != "incremental" || autoVacuumMode(t, db) != 2 {
 		t.Errorf("auto_vacuum after compacting = %q, want incremental", res.AutoVacuum)
 	}
+	if res.ShrinkPending {
+		t.Error("ShrinkPending = true with no reader open")
+	}
 
 	// The file on disk, not only the page count, must have shrunk: that is
 	// what the checkpoint after the VACUUM is for.
@@ -124,6 +127,68 @@ func TestCompactShrinksADatabaseTooLargeForTheStartupRebuild(t *testing.T) {
 	}
 	if after, err := db.PlanCompact(ctx); err != nil || after.Recommended {
 		t.Errorf("plan after compacting = %+v, %v; want nothing left to recommend", after, err)
+	}
+}
+
+// A reader holding a snapshot from before the rewrite stops the checkpoint
+// from emptying the write-ahead log. SQLite reports that in the result row,
+// not as an error, so Compact has to read the row: the rewrite is done, but
+// the file has not shrunk yet, and the result must say so instead of claiming
+// the space is back.
+func TestCompactReportsAShrinkAReaderHeldBack(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	bloat(t, db, 20000)
+
+	// The checkpoint waits busy_timeout for the reader to let go; a short one
+	// lets the test see it give up without waiting five seconds.
+	if _, err := db.Writer.ExecContext(ctx, "PRAGMA busy_timeout = 50"); err != nil {
+		t.Fatalf("set busy_timeout: %v", err)
+	}
+	tx, err := db.Reader.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("begin read: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	var n int
+	if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM heartbeat_hourly").Scan(&n); err != nil {
+		t.Fatalf("read inside the snapshot: %v", err)
+	}
+
+	res, err := db.Compact(ctx)
+	if err != nil {
+		t.Fatalf("Compact with a reader open: %v", err)
+	}
+	if !res.ShrinkPending {
+		t.Error("ShrinkPending = false while a reader held the old snapshot")
+	}
+	fi, err := os.Stat(db.Path())
+	if err != nil {
+		t.Fatalf("stat database: %v", err)
+	}
+	if fi.Size() <= res.AfterBytes {
+		t.Fatalf("database file is already %d bytes (AfterBytes %d): the reader did not hold the checkpoint back",
+			fi.Size(), res.AfterBytes)
+	}
+
+	// Once the reader lets go, an ordinary checkpoint, the kind SQLite runs
+	// on its own, finishes the shrink that was reported as pending.
+	if err := tx.Rollback(); err != nil {
+		t.Fatalf("end read: %v", err)
+	}
+	var busy, logFrames, done int64
+	if err := db.Writer.QueryRowContext(ctx, "PRAGMA wal_checkpoint(PASSIVE)").
+		Scan(&busy, &logFrames, &done); err != nil {
+		t.Fatalf("checkpoint: %v", err)
+	}
+	if busy != 0 || done != logFrames {
+		t.Fatalf("checkpoint after the reader closed: busy %d, %d of %d frames", busy, done, logFrames)
+	}
+	if fi, err = os.Stat(db.Path()); err != nil {
+		t.Fatalf("stat database: %v", err)
+	}
+	if fi.Size() != res.AfterBytes {
+		t.Errorf("database file is %d bytes after the checkpoint, want the reported %d", fi.Size(), res.AfterBytes)
 	}
 }
 
