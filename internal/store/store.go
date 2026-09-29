@@ -24,6 +24,7 @@ import (
 	"io/fs"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	_ "modernc.org/sqlite" // pure-Go driver: no cgo, so cross-compiling stays trivial
@@ -47,6 +48,10 @@ type DB struct {
 	cipher *configCipher
 
 	cryptoReport ChannelEncryptionReport
+
+	// compactMu keeps two compactions from queueing behind each other: the
+	// second would rewrite a file that has just been rewritten.
+	compactMu sync.Mutex
 }
 
 // Options configures Open.
