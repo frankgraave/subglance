@@ -169,15 +169,22 @@ func (db *DB) capTable(ctx context.Context, res *SizeCapResult, s capStep) (int6
 	var since time.Time
 	atFloor := false
 	perRow := max(s.perRow, 1)
+	measure := func() (sql.NullInt64, int64, error) {
+		var oldest sql.NullInt64
+		var rows int64
+		if err := db.Writer.QueryRowContext(ctx, s.measure, s.floor.Unix()).Scan(&oldest, &rows); err != nil {
+			return oldest, 0, fmt.Errorf("measure %s for the size limit: %w", s.table, err)
+		}
+		return oldest, rows, nil
+	}
 	for range sizeCapRounds {
 		excess := res.After - res.Limit
 		if excess <= 0 {
 			break
 		}
-		var oldest sql.NullInt64
-		var rows int64
-		if err := db.Writer.QueryRowContext(ctx, s.measure, s.floor.Unix()).Scan(&oldest, &rows); err != nil {
-			return removed, since, false, fmt.Errorf("measure %s for the size limit: %w", s.table, err)
+		oldest, rows, err := measure()
+		if err != nil {
+			return removed, since, false, err
 		}
 		if rows == 0 || !oldest.Valid {
 			atFloor = true
@@ -222,6 +229,17 @@ func (db *DB) capTable(ctx context.Context, res *SizeCapResult, s capStep) (int6
 			perRow /= 2
 		}
 		perRow = max(perRow, 1)
+	}
+	// On sparse data the last round's cut can take every row below the
+	// floor with a cutoff short of it. Rounds that ran out with the limit
+	// still unmet measure once more, so a table with nothing left below its
+	// floor is reported as at it and the next step may run.
+	if !atFloor && res.After > res.Limit {
+		oldest, rows, err := measure()
+		if err != nil {
+			return removed, since, false, err
+		}
+		atFloor = rows == 0 || !oldest.Valid
 	}
 	return removed, since, atFloor, nil
 }

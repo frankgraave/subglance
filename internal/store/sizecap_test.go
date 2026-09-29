@@ -306,6 +306,52 @@ func TestSizeLimitReportsOnlyACompletedCut(t *testing.T) {
 	}
 }
 
+// TestSizeLimitSeesATableEmptiedShortOfItsFloor gives the last round a cut
+// that takes every row below the floor while its cutoff stays short of it:
+// the older rows sit in one half hour two months back, and the even-spread
+// estimate places the cutoff about a month later. Nothing below the floor is
+// left, so the step must say it is at its floor, or the summaries step after
+// it never runs.
+func TestSizeLimitSeesATableEmptiedShortOfItsFloor(t *testing.T) {
+	db := openTestDB(t)
+	id := seedMonitor(t, db, "sparse")
+
+	prev := sizeCapRounds
+	sizeCapRounds = 1
+	t.Cleanup(func() { sizeCapRounds = prev })
+
+	stray := capNow.Add(-60 * 24 * time.Hour)
+	n := fillRaw(t, db, id, stray, stray.Add(30*time.Minute), time.Minute)
+	fillRaw(t, db, id, capFloor, capNow, time.Minute)
+
+	step := capStep{
+		table: "heartbeats", floor: capFloor,
+		measure: `SELECT min(ts), count(*) FROM heartbeats WHERE ts < ?`,
+		perRow:  rawRowBytes,
+		cut: func(ctx context.Context, cutoff time.Time) (int64, error) {
+			r, err := db.rollupBefore(ctx, cutoff)
+			return r.Heartbeats, err
+		},
+	}
+	// Half the older rows' worth of excess makes the estimate cut halfway
+	// to the floor, past every one of them. A one-byte limit stays out of
+	// reach, so the round ends with it unmet.
+	res := SizeCapResult{Limit: 1, After: 1 + n*rawRowBytes/2}
+	removed, since, atFloor, err := db.capTable(context.Background(), &res, step)
+	if err != nil {
+		t.Fatalf("capTable: %v", err)
+	}
+	if removed != n {
+		t.Fatalf("removed %d rows, want all %d older than the floor", removed, n)
+	}
+	if !since.Before(capFloor) {
+		t.Fatalf("cutoff %s reached the floor %s: the test proves nothing", since, capFloor)
+	}
+	if !atFloor {
+		t.Error("at floor is false, but no rows older than the floor are left")
+	}
+}
+
 func TestApplyRetentionEnforcesTheSizeLimitAfterTheWindows(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
