@@ -125,6 +125,25 @@ func TestUptimeCountsConfirmedChecksOnly(t *testing.T) {
 	}
 }
 
+// TestOutagesDoNotPublishTheFuture pins that a span stamped after now is
+// never reported as a fact: an outage that has not started is left out, and
+// one whose end lies ahead stays open with a duration measured up to now.
+func TestOutagesDoNotPublishTheFuture(t *testing.T) {
+	future := store.IncidentSpan{Start: now.Add(time.Hour)}
+	endsAhead := store.IncidentSpan{Start: now.Add(-10 * time.Minute), End: now.Add(time.Hour)}
+
+	got := Outages("abc", []store.IncidentSpan{future, endsAhead}, now)
+	if len(got) != 1 {
+		t.Fatalf("got %d outages, want 1: %+v", len(got), got)
+	}
+	if got[0].ResolvedAt != nil {
+		t.Errorf("ResolvedAt = %v, want nil for an end that has not happened", got[0].ResolvedAt)
+	}
+	if got[0].DurationS != 600 {
+		t.Errorf("DurationS = %d, want 600", got[0].DurationS)
+	}
+}
+
 func TestOutagesKeepTheLastFourteenDaysNewestFirst(t *testing.T) {
 	old := store.IncidentSpan{Start: now.Add(-20 * 24 * time.Hour), End: now.Add(-15 * 24 * time.Hour)}
 	straddling := store.IncidentSpan{Start: now.Add(-15 * 24 * time.Hour), End: now.Add(-13 * 24 * time.Hour)}

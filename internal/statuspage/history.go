@@ -138,14 +138,23 @@ func Outages(key string, incidents []store.IncidentSpan, now time.Time) []Outage
 		if !inc.End.IsZero() && inc.End.Before(from) {
 			continue
 		}
+		// A span stamped after now (a push report or a clock step can do
+		// that) is not published as a fact yet: an outage that has not
+		// started is left out, and an end that has not happened leaves the
+		// outage open.
+		if inc.Start.After(now) {
+			continue
+		}
 		o := Outage{Key: key, StartedAt: inc.Start.UTC()}
 		end := now
-		if !inc.End.IsZero() {
+		if !inc.End.IsZero() && !inc.End.After(now) {
 			resolved := inc.End.UTC()
 			o.ResolvedAt = &resolved
 			end = inc.End
 		}
-		o.DurationS = int64(end.Sub(inc.Start) / time.Second)
+		if d := end.Sub(inc.Start); d > 0 {
+			o.DurationS = int64(d / time.Second)
+		}
 		out = append(out, o)
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].StartedAt.After(out[j].StartedAt) })

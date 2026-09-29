@@ -83,7 +83,6 @@ states than the dashboard, and only **confirmed** facts:
 |---|---|---|---|
 | up | `up` | up | Up |
 | pending (a check failed, not yet confirmed) | `up` | up | Up |
-| warning | `degraded` | warn | Degraded |
 | recovering (passing, incident still open) | `degraded` | warn | Degraded |
 | down (confirmed incident) | `down` | down | Down |
 | waiting (never checked) | `no_data` | idle | No data yet |
