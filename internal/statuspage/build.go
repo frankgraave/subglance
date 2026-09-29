@@ -126,8 +126,13 @@ func (b Builder) entry(ctx context.Context, m store.Monitor, se store.StatusPage
 		if !covers(w, m) {
 			continue
 		}
-		inMaintenance = inMaintenance || w.Active(now)
 		for _, s := range spans[i] {
+			// The spans cover a range that contains now, so being inside one
+			// is the answer w.Active(now) gives, without resolving the
+			// recurrence and its time zone again for every entry.
+			if !now.Before(s.Start) && now.Before(s.End) {
+				inMaintenance = true
+			}
 			if s.Start.Before(now) {
 				past = append(past, Span{Start: s.Start, End: s.End})
 			}

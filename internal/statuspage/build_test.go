@@ -231,8 +231,10 @@ func TestBuildHistoryAndOutages(t *testing.T) {
 	ctx := t.Context()
 	f := seed(t, now)
 
-	// A resolved confirmed outage three days ago, 30 minutes long.
-	start := now.Add(-72 * time.Hour)
+	// A resolved confirmed outage three days ago, 30 minutes long. It starts
+	// at noon so it never straddles midnight: each day rounds its down
+	// minutes up, and a split outage would count 31.
+	start := time.Date(now.Year(), now.Month(), now.Day()-3, 12, 0, 0, 0, time.UTC)
 	if _, err := f.db.OpenIncident(ctx, f.monitor.ID, start, "", ""); err != nil {
 		t.Fatal(err)
 	}
