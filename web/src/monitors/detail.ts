@@ -15,6 +15,7 @@
 
 import { reminderFromApi, type ReminderInfo } from "../incidents/reminders";
 import { apiFetch } from "../api/http";
+import { PARTIAL_COVERAGE } from "../heartbeat/model";
 import { toUnixMs } from "./types";
 
 /** One uptime window as GET /api/v1/monitors/:id/uptime returns it. */
@@ -220,6 +221,41 @@ export function formatDuration(seconds: number): string {
   const days = Math.floor(hours / 24);
   const rest = hours % 24;
   return rest === 0 ? `${days} d` : `${days} d ${rest} h`;
+}
+
+/**
+ * The caveat on an uptime window that is longer than the monitor has existed,
+ * or undefined when the figure covers its whole window.
+ *
+ * This is what a warning value means on a monitor screen: the number is true,
+ * but it is about less than its label claims. "100%" under "30d" for a
+ * monitor added two days ago is two days of evidence presented as a month,
+ * which reads as a record the monitor does not have. A threshold breach (slow
+ * responses, a certificate close to expiry) is not a caveat of this kind: it
+ * already fails the check and shows up as the monitor's status.
+ *
+ * The cut-off is the heartbeat bar's partial-column rule (DESIGN.md §8.5): a
+ * window counts as covered from 90% of its span. Below that the caveat
+ * appears; a monitor added 23 hours ago does not get one on its 24h figure,
+ * because the missing hour cannot move the reading enough to mislead.
+ *
+ * Age, not a count of checks against the interval: the interval can have
+ * changed during the window, and the stored history is what the figure is
+ * computed from. Gaps from pausing are therefore not caught here.
+ */
+export function windowCoverageCaveat(
+  w: Pick<UptimeWindow, "windowS" | "uptime">,
+  createdAt: number | null | undefined,
+  now: number,
+): string | undefined {
+  if (w.uptime === null) return undefined;
+  if (createdAt === null || createdAt === undefined) return undefined;
+  if (!Number.isFinite(w.windowS) || w.windowS <= 0) return undefined;
+  const ageS = (now - createdAt) / 1000;
+  if (!Number.isFinite(ageS) || ageS < 0) return undefined;
+  if (ageS >= w.windowS * PARTIAL_COVERAGE) return undefined;
+  const age = formatDuration(ageS);
+  return `the monitor was added ${age} ago, so this covers ${age}, not the whole window`;
 }
 
 /**

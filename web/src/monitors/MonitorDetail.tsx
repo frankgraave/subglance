@@ -11,7 +11,8 @@ import {
   formatUptime,
   statusWord,
 } from "./format";
-import type { Incident, UptimeWindow } from "./detail";
+import { windowCoverageCaveat, type Incident, type UptimeWindow } from "./detail";
+import { Value } from "../components/Value";
 import { IncidentStoryItem } from "../incidents/IncidentStoryItem";
 import { describeChurn } from "../incidents/story";
 import { Led } from "./Led";
@@ -493,7 +494,18 @@ export function MonitorDetail({
                     {w.uptime === null ? (
                       <Unknown what="uptime" />
                     ) : (
-                      formatUptime(w.uptime)
+                      // A window longer than the monitor's life is the one
+                      // place this screen has a true number that claims more
+                      // than it knows, so it carries the warning-value
+                      // treatment (dotted underline plus glyph).
+                      // No `value` prop: Value dims a zero as a reading that
+                      // steps back, and 0% uptime is the opposite of that.
+                      <Value
+                        className="mon-detail-window-reading"
+                        warning={windowCoverageCaveat(w, monitor.createdAt, now)}
+                      >
+                        {formatUptime(w.uptime)}
+                      </Value>
                     )}
                   </dd>
                   <dd className="mon-detail-window-detail">

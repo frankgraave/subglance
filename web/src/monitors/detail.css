@@ -295,6 +295,15 @@
   color: var(--ink);
 }
 
+/* The reading inside the value cell keeps the cell's card size: `Value`
+   defaults to the body size for columns of readings, and these three figures
+   are the card's headline numbers. Left-aligned like the label above it. */
+.mon-detail-window-reading {
+  font-size: var(--type-card);
+  line-height: var(--lead-card);
+  justify-content: flex-start;
+}
+
 .mon-detail-window-detail {
   font-size: var(--type-helper);
   line-height: var(--lead-helper);

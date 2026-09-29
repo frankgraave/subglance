@@ -36,6 +36,11 @@ describe("toUnixMs", () => {
 });
 
 describe("fromApi", () => {
+  it("carries the creation time, so a window can say it predates the monitor", () => {
+    expect(fromApi(api()).createdAt).toBe(Date.UTC(2026, 7, 1));
+    expect(fromApi(api({ created_at: "garbage" })).createdAt).toBeNull();
+  });
+
   it("maps the wire format onto the render model", () => {
     const monitor = fromApi(api());
     expect(monitor).toMatchObject({

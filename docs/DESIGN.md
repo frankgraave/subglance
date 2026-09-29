@@ -1885,6 +1885,28 @@ Loading, no recent failed checks, and a failed history request are distinct
 states. A failed refresh keeps previously loaded rows visible and warns that
 they may be out of date; it does not invent an empty successful history.
 
+### 8.8 A warning value is a true number that claims too much
+
+`Value` draws a caveat as a dotted underline plus an amber glyph with an
+accessible name; the tint comes last. The treatment is for a reading that is
+correct but about less than its label says, not for a reading that is bad.
+
+A bad reading already has a home. A slow response, a certificate inside its
+warning window or a failed assertion fails the check, and the monitor's status
+says so in the lamp, the rail and the heartbeat bar. Putting the same fact on
+the number as well would give one event two vocabularies.
+
+On the monitor detail page that leaves one case: an **uptime window longer
+than the monitor has existed**. `100%` under `30d` for a monitor added two days
+ago is two days of evidence presented as a month. The window keeps its figure
+and gains the caveat (`the monitor was added 2 d ago, so this covers 2 d, not
+the whole window`) until the monitor has lived through 90% of it, the same
+cut-off as a partial heartbeat column (§8.5). The age comes from the monitor's
+creation time rather than from counting checks against the interval, because
+the interval can have changed inside the window; gaps from pausing are not
+caught. The Diagnostics card uses the same treatment for its queue, skipped
+and failed-write counts and a non-WAL journal.
+
 ---
 
 ## 9. Accessibility

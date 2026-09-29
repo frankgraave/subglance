@@ -201,6 +201,37 @@ describe("uptime windows", () => {
     expect(document.body.textContent).toContain("no eligible checks");
   });
 
+  it("marks a window longer than the monitor's life as a warning value", () => {
+    // Added two days before NOW: the 24h figure is whole, the 30d one is not.
+    view({
+      monitor: monitor("up", { createdAt: NOW - 2 * 86_400_000 }),
+      windows: [
+        window_({ window: "24h", windowS: 86400, uptime: 100 }),
+        window_({ window: "30d", windowS: 30 * 86400, uptime: 100 }),
+      ],
+    });
+    const cells = [...document.querySelectorAll(".mon-detail-window")];
+    const reading = (label: string) =>
+      cells
+        .find((c) => c.querySelector("dt")?.textContent === label)
+        ?.querySelector(".value");
+    expect(reading("24h")?.getAttribute("data-warn")).toBeNull();
+    const month = reading("30d");
+    expect(month?.getAttribute("data-warn")).toBe("true");
+    // The caveat is information, so it has an accessible name, not only a tint.
+    expect(
+      screen.getByRole("img", { name: /added 2 d ago, so this covers 2 d/ }),
+    ).toBeTruthy();
+  });
+
+  it("puts no caveat on a monitor whose age is unknown", () => {
+    view({
+      monitor: monitor("up", { createdAt: null }),
+      windows: [window_({ window: "30d", windowS: 30 * 86400, uptime: 100 })],
+    });
+    expect(document.querySelector("[data-warn]")).toBeNull();
+  });
+
   it("still renders a real 0 percent as a number", () => {
     view({ windows: [window_({ total: 10, up: 0, down: 10, uptime: 0 })] });
     expect(screen.getByText("0%")).toBeTruthy();

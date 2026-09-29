@@ -3,6 +3,7 @@ import {
   formatDuration,
   formatMoment,
   incidentFromApi,
+  windowCoverageCaveat,
   windowFromApi,
 } from "./detail";
 
@@ -44,6 +45,42 @@ describe("windowFromApi", () => {
       uptime: 100,
     });
     expect(w.avgLatencyMs).toBeNull();
+  });
+});
+
+describe("windowCoverageCaveat", () => {
+  const NOW = 1_700_000_000_000;
+  const DAY = 86_400_000;
+  const w30 = { windowS: 30 * 86400, uptime: 100 };
+
+  it("flags a window longer than the monitor has existed", () => {
+    // Two days of evidence under a 30d label reads as a month-long record.
+    const caveat = windowCoverageCaveat(w30, NOW - 2 * DAY, NOW);
+    expect(caveat).toBe("the monitor was added 2 d ago, so this covers 2 d, not the whole window");
+  });
+
+  it("stays quiet once the monitor has lived through 90% of the window", () => {
+    // Same cut-off as a partial heartbeat column: 27 of 30 days is covered.
+    expect(windowCoverageCaveat(w30, NOW - 27 * DAY, NOW)).toBeUndefined();
+    expect(windowCoverageCaveat(w30, NOW - 26 * DAY, NOW)).toBeDefined();
+    expect(windowCoverageCaveat({ windowS: 86400, uptime: 99 }, NOW - 23 * 3_600_000, NOW)).toBeUndefined();
+  });
+
+  it("says nothing when there is no figure to qualify", () => {
+    // A null uptime is already drawn as unknown; a caveat on it would be noise.
+    expect(windowCoverageCaveat({ windowS: 30 * 86400, uptime: null }, NOW - DAY, NOW)).toBeUndefined();
+  });
+
+  it("says nothing when the monitor's age is unknown or impossible", () => {
+    expect(windowCoverageCaveat(w30, null, NOW)).toBeUndefined();
+    expect(windowCoverageCaveat(w30, undefined, NOW)).toBeUndefined();
+    // A clock skewed behind the server's must not produce "added -3 min ago".
+    expect(windowCoverageCaveat(w30, NOW + 180_000, NOW)).toBeUndefined();
+    expect(windowCoverageCaveat({ windowS: 0, uptime: 100 }, NOW - DAY, NOW)).toBeUndefined();
+  });
+
+  it("qualifies a real 0% as well, not only a flattering figure", () => {
+    expect(windowCoverageCaveat({ windowS: 7 * 86400, uptime: 0 }, NOW - DAY, NOW)).toBeDefined();
   });
 });
 

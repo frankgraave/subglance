@@ -98,6 +98,15 @@ export type Monitor = {
    */
   push?: PushWindow;
   /**
+   * Unix milliseconds of when the monitor was created, or null when unknown.
+   *
+   * Carried because an uptime window longer than the monitor's life is a
+   * figure about less time than its label says: "100% over 30d" for a monitor
+   * added yesterday is one day of evidence. The detail page uses it to put a
+   * caveat on that reading. Optional only for older in-memory fixtures.
+   */
+  createdAt?: number | null;
+  /**
    * Key/value labels: `{ env: "prod", customer: "acme" }`.
    *
    * Always an object here, never undefined, so a component that groups or
@@ -330,6 +339,7 @@ export function fromApi(api: ApiMonitor): Monitor {
     // array both render as "no history", so they collapse to the same thing.
     beats: (api.heartbeats ?? []).map(beatFromApi),
     lastCheck: toUnixMs(api.last_check),
+    createdAt: toUnixMs(api.created_at),
     error: api.error,
     // The streak only for a monitor the server says is recovering.
     recovery:
