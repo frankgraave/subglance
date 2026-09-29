@@ -416,6 +416,17 @@ func (s *Server) routes() []route {
 		// pass. That is an administrator's call, not an editor's.
 		{http.MethodPut, "/api/v1/settings/retention", accessAdmin},
 
+		// Status pages publish monitors to people without an account, under
+		// names chosen for them. Deciding what the outside world sees about
+		// the instance is an administrator's call, like retention. Pages are
+		// addressed by slug; GET /api/v1/status-pages/{slug} is reserved for
+		// the public JSON (docs/design/status-page.md).
+		{http.MethodGet, "/api/v1/status-pages", accessAdmin},
+		{http.MethodPost, "/api/v1/status-pages", accessAdmin},
+		{http.MethodPut, "/api/v1/status-pages/{slug}", accessAdmin},
+		{http.MethodDelete, "/api/v1/status-pages/{slug}", accessAdmin},
+		{http.MethodPut, "/api/v1/status-pages/{slug}/entries", accessAdmin},
+
 		// A reset deletes every monitor, channel and token on the instance.
 		// Nothing about it is scoped to the caller, so it is an
 		// administrator's action, and it needs the typed phrase besides.
@@ -578,6 +589,17 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 		return s.handleUpdateUser
 	case "DELETE /api/v1/users/{id}":
 		return s.handleDeleteUser
+
+	case "GET /api/v1/status-pages":
+		return s.handleListStatusPages
+	case "POST /api/v1/status-pages":
+		return s.handleCreateStatusPage
+	case "PUT /api/v1/status-pages/{slug}":
+		return s.handleUpdateStatusPage
+	case "DELETE /api/v1/status-pages/{slug}":
+		return s.handleDeleteStatusPage
+	case "PUT /api/v1/status-pages/{slug}/entries":
+		return s.handleSetStatusPageEntries
 
 	case "POST /api/v1/instance/reset":
 		return s.handleResetInstance

@@ -56,8 +56,9 @@ var reservedStatusPageSlugs = map[string]bool{"api": true, "assets": true, "font
 // ErrStatusPageSlugTaken is returned when another page already uses the slug.
 var ErrStatusPageSlugTaken = errors.New("store: a status page with this slug already exists")
 
-// ErrInvalidStatusPage wraps every validation failure, so the API can answer
-// 422 for all of them without matching on message text.
+// ErrInvalidStatusPage matches every validation failure, so the API can
+// refuse all of them the same way without matching on message text. The
+// concrete error is a *StatusPageError, which names the field.
 var ErrInvalidStatusPage = errors.New("invalid status page")
 
 // ErrUnknownMonitor is returned when an entry names a monitor that does not
@@ -111,8 +112,24 @@ type StatusPageEntryInput struct {
 	DisplayName string
 }
 
-func invalidStatusPage(format string, args ...any) error {
-	return fmt.Errorf("%w: %s", ErrInvalidStatusPage, fmt.Sprintf(format, args...))
+// StatusPageError is one refused page or entry list. It matches
+// ErrInvalidStatusPage under errors.Is.
+//
+// Field names the setting at fault in the spelling the API uses ("slug",
+// "tag_value", "entries"), so a form can put the message beside the input
+// that caused it instead of matching on the wording.
+type StatusPageError struct {
+	Field string
+	Msg   string
+}
+
+func (e *StatusPageError) Error() string { return ErrInvalidStatusPage.Error() + ": " + e.Msg }
+
+// Is makes errors.Is(err, ErrInvalidStatusPage) hold for every refusal.
+func (e *StatusPageError) Is(target error) bool { return target == ErrInvalidStatusPage }
+
+func invalidStatusPage(field, format string, args ...any) error {
+	return &StatusPageError{Field: field, Msg: fmt.Sprintf(format, args...)}
 }
 
 // NormaliseStatusPage trims and checks a page before it is stored, filling in
@@ -125,23 +142,23 @@ func invalidStatusPage(format string, args ...any) error {
 func NormaliseStatusPage(p StatusPage) (StatusPage, error) {
 	p.Slug = strings.ToLower(strings.TrimSpace(p.Slug))
 	if !statusPageSlug.MatchString(p.Slug) {
-		return p, invalidStatusPage("slug must be 1-63 lowercase letters, digits or dashes, starting with a letter or digit")
+		return p, invalidStatusPage("slug", "slug must be 1-63 lowercase letters, digits or dashes, starting with a letter or digit")
 	}
 	if reservedStatusPageSlugs[p.Slug] {
-		return p, invalidStatusPage("slug %q is reserved", p.Slug)
+		return p, invalidStatusPage("slug", "slug %q is reserved", p.Slug)
 	}
 
 	p.Title = strings.TrimSpace(p.Title)
 	if n := utf8.RuneCountInString(p.Title); n == 0 || n > maxStatusPageTitle {
-		return p, invalidStatusPage("title must be 1-%d characters", maxStatusPageTitle)
+		return p, invalidStatusPage("title", "title must be 1-%d characters", maxStatusPageTitle)
 	}
 	if strings.ContainsAny(p.Title, "\n\r\t") {
-		return p, invalidStatusPage("title must not contain line breaks or tabs")
+		return p, invalidStatusPage("title", "title must not contain line breaks or tabs")
 	}
 
 	p.Description = strings.TrimSpace(p.Description)
 	if utf8.RuneCountInString(p.Description) > maxStatusPageDescription {
-		return p, invalidStatusPage("description must be at most %d characters", maxStatusPageDescription)
+		return p, invalidStatusPage("description", "description must be at most %d characters", maxStatusPageDescription)
 	}
 
 	p.Timezone = strings.TrimSpace(p.Timezone)
@@ -151,27 +168,41 @@ func NormaliseStatusPage(p StatusPage) (StatusPage, error) {
 	if p.Timezone == "Local" {
 		// "Local" is whatever zone the server runs in, which is exactly
 		// what the page's zone exists to avoid.
-		return p, invalidStatusPage("use an explicit IANA timezone")
+		return p, invalidStatusPage("timezone", "use an explicit IANA timezone")
 	}
 	if _, err := time.LoadLocation(p.Timezone); err != nil {
-		return p, invalidStatusPage("unknown IANA timezone %q", p.Timezone)
+		return p, invalidStatusPage("timezone", "unknown IANA timezone %q", p.Timezone)
 	}
 
 	switch p.Selection {
 	case StatusPageSelectMonitors:
 		if p.TagKey != "" || p.TagValue != "" {
-			return p, invalidStatusPage("a page that selects monitors takes no tag")
+			return p, invalidStatusPage(tagField(p.TagKey), "a page that selects monitors takes no tag")
 		}
 	case StatusPageSelectTag:
+		// The key is checked on its own first, with a stand-in value, so
+		// a refusal can name the input that is actually wrong.
+		if _, _, err := NormaliseRoutingTag(p.TagKey, "-"); err != nil {
+			return p, invalidStatusPage("tag_key", "%s", err.Error())
+		}
 		key, value, err := NormaliseRoutingTag(p.TagKey, p.TagValue)
 		if err != nil {
-			return p, invalidStatusPage("%s", err.Error())
+			return p, invalidStatusPage("tag_value", "%s", err.Error())
 		}
 		p.TagKey, p.TagValue = key, value
 	default:
-		return p, invalidStatusPage("selection must be %q or %q", StatusPageSelectMonitors, StatusPageSelectTag)
+		return p, invalidStatusPage("selection", "selection must be %q or %q", StatusPageSelectMonitors, StatusPageSelectTag)
 	}
 	return p, nil
+}
+
+// tagField blames the tag input that was filled in on a page that takes no
+// tag: the key when there is one, otherwise the value.
+func tagField(key string) string {
+	if key != "" {
+		return "tag_key"
+	}
+	return "tag_value"
 }
 
 const statusPageColumns = `id, slug, title, description, timezone, selection, tag_key, tag_value,
@@ -363,19 +394,19 @@ func (db *DB) ListStatusPageEntries(ctx context.Context, pageID int64) ([]Status
 // listed twice, and changes nothing when it does.
 func (db *DB) SetStatusPageEntries(ctx context.Context, pageID int64, entries []StatusPageEntryInput) ([]StatusPageEntry, error) {
 	if len(entries) > MaxStatusPageEntries {
-		return nil, invalidStatusPage("at most %d monitors per page", MaxStatusPageEntries)
+		return nil, invalidStatusPage("entries", "at most %d monitors per page", MaxStatusPageEntries)
 	}
 	seen := make(map[int64]bool, len(entries))
 	for i := range entries {
 		name := strings.TrimSpace(entries[i].DisplayName)
 		if n := utf8.RuneCountInString(name); n == 0 || n > maxStatusPageDisplayName {
-			return nil, invalidStatusPage("display name of monitor %d must be 1-%d characters", entries[i].MonitorID, maxStatusPageDisplayName)
+			return nil, invalidStatusPage("entries", "display name of monitor %d must be 1-%d characters", entries[i].MonitorID, maxStatusPageDisplayName)
 		}
 		if strings.ContainsAny(name, "\n\r\t") {
-			return nil, invalidStatusPage("display name of monitor %d must not contain line breaks or tabs", entries[i].MonitorID)
+			return nil, invalidStatusPage("entries", "display name of monitor %d must not contain line breaks or tabs", entries[i].MonitorID)
 		}
 		if seen[entries[i].MonitorID] {
-			return nil, invalidStatusPage("monitor %d is listed twice", entries[i].MonitorID)
+			return nil, invalidStatusPage("entries", "monitor %d is listed twice", entries[i].MonitorID)
 		}
 		seen[entries[i].MonitorID] = true
 		entries[i].DisplayName = name
