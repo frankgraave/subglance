@@ -132,10 +132,11 @@ const CAUSE_WORDS: Record<string, string> = {
   push_reported: "the job reported a failure",
   // Not a checker kind: the runner files a network failure under this one
   // when SubGlance could reach none of its connectivity targets either. The
-  // words name SubGlance rather than "this host", because the reader is
-  // looking at a browser on some other machine, and "this host" would point
-  // at theirs.
-  local_network: "SubGlance itself was offline",
+  // words say what was measured: an unreachable target does not prove the
+  // host was offline (an outbound firewall rule does the same). They name
+  // SubGlance rather than "this host", because the reader is looking at a
+  // browser on some other machine, and "this host" would point at theirs.
+  local_network: "SubGlance could not reach its connectivity targets",
 };
 
 export function causeWords(cause: string | undefined): string | null {

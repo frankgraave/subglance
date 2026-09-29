@@ -122,11 +122,13 @@ describe("the cause, in words a person would use", () => {
     expect(causeWords("assertion")).toBe("JSON field did not match");
   });
 
-  it("names a failure SubGlance filed under its own lost connection", () => {
+  it("names what SubGlance measured when it filed local_network", () => {
     // The runner files a network failure under local_network when every
     // connectivity target failed too. Passed through, it read as a raw key
     // under a warning the reader was meant to be reassured by.
-    expect(causeWords("local_network")).toBe("SubGlance itself was offline");
+    expect(causeWords("local_network")).toBe(
+      "SubGlance could not reach its connectivity targets",
+    );
   });
 
   it("has words for every kind the server can store", () => {
