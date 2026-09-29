@@ -250,7 +250,7 @@ func (db *DB) EnsureIncrementalVacuum(ctx context.Context) (VacuumMode, error) {
 	if err != nil {
 		return "", err
 	}
-	if size > autoVacuumRebuildLimit {
+	if size > rebuildLimit {
 		return VacuumNeedsRebuild, nil
 	}
 
