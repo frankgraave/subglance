@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { createQueryClient } from "../live/queryClient";
 import { Card, Panel } from "../components/Card";
@@ -13,6 +13,14 @@ import { ResetInstanceCard } from "../reset/ResetInstance";
 import { UsersCard } from "../users/Users";
 import { TokensCard } from "../tokens/Tokens";
 import { DisplayCard, type DisplayPreferences } from "./DisplayCard";
+
+/*
+ * The status page editor loads when an administrator opens Settings, not with
+ * the app. Nobody else ever sees it, and most administrator sessions never
+ * change a page, so shipping it in the entry chunk would make every visitor
+ * download two forms and a drawer for someone else's once-a-month task.
+ */
+const StatusPagesCard = lazy(() => import("../statuspages/StatusPages").then((module) => ({ default: module.StatusPagesCard })));
 
 /**
  * One settings section: the anchor it answers to, the name the index shows,
@@ -148,6 +156,12 @@ export function Settings({ client, canAdmin = false, role = canAdmin ? "admin" :
     // that could only ever say "not allowed".
     ...(canAdmin ? [{ id: "users", label: "Users", keywords: "users accounts roles admin editor viewer people access",
       body: provide(<UsersCard userId={userId} />) }] : []),
+    // Admin-only like the API: a page decides what the instance tells people
+    // without an account. Beside Users, the other card about who sees what.
+    ...(canAdmin ? [{ id: "status-pages", label: "Status pages", keywords: "status pages public page visitors customers share publish slug address",
+      body: provide(<Suspense fallback={<Card title="Status pages"><Panel><p>Loading status pages…</p></Panel></Card>}>
+        <StatusPagesCard />
+      </Suspense>) }] : []),
     { id: "self-monitoring", label: "Self-monitoring", keywords: "self-monitoring watchdog last ping success rejection outage",
       body: provide(<WatchdogCard />) },
     { id: "retention", label: "Retention & storage", keywords: "retention storage database history heartbeats summaries incidents disk size",

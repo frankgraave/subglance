@@ -165,3 +165,23 @@ it("finds the display section by what it controls", () => {
     expect(within(index()).getAllByRole("link").map((link) => link.textContent), word).toEqual(["Display"]);
   }
 });
+
+// Only an administrator can manage status pages, so nobody else is offered a
+// section that could only answer "not allowed".
+it("offers status pages to an administrator only, beside Users", async () => {
+  window.history.replaceState(null, "", "/settings");
+  vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => new Response("{}", { status: 404 })));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  clients.push(client);
+  const { unmount } = render(<QueryClientProvider client={client}><ShellSlots /><Settings client={client} /></QueryClientProvider>);
+  expect(within(index()).queryByRole("link", { name: "Status pages" })).toBeNull();
+  unmount();
+  render(<QueryClientProvider client={client}><ShellSlots /><Settings client={client} canAdmin /></QueryClientProvider>);
+  const links = within(index()).getAllByRole("link").map((link) => link.textContent);
+  expect(links.indexOf("Status pages")).toBe(links.indexOf("Users") + 1);
+  // The editor arrives as its own chunk; the unavailable list is its answer to the 404.
+  expect(await screen.findByText("Status pages unavailable.")).toBeTruthy();
+  const search = screen.getByRole("searchbox", { name: "Search settings" });
+  fireEvent.change(search, { target: { value: "public" } });
+  expect(within(index()).getAllByRole("link").map((link) => link.textContent)).toEqual(["Status pages"]);
+});

@@ -8,6 +8,8 @@ type LeaveGuard = {
   element: () => HTMLElement | null;
   dirty: () => boolean;
   discard: () => void;
+  /** What the unsaved draft is, for the question; "monitor" when omitted. */
+  what?: string;
 };
 const guards = new Set<LeaveGuard>();
 const navigationCleanups = new Set<() => void>();
@@ -46,7 +48,7 @@ export function confirmLeave(root?: HTMLElement | null): boolean {
   if (dirty.length === 0) return true;
   // Native confirm preserves the drawer's keyboard/focus handling and avoids
   // nesting a second custom modal. It deliberately has browser-owned styling.
-  if (!window.confirm("Discard this unsaved monitor? Your changes will be lost.")) return false;
+  if (!window.confirm(`Discard this unsaved ${dirty[0].what ?? "monitor"}? Your changes will be lost.`)) return false;
   for (const guard of dirty) guard.discard();
   return true;
 }
