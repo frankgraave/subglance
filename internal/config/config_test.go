@@ -241,6 +241,41 @@ func TestRetentionZeroMeansForever(t *testing.T) {
 	}
 }
 
+func TestRetentionRunAt(t *testing.T) {
+	c, err := Load(nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if pin := c.RetentionRunAtPin(); pin != nil {
+		t.Errorf("unset: pin = %+v, want nil so the settings page decides", pin)
+	}
+
+	c, err = Load([]string{"--retention-run-at=01:45"})
+	if err != nil {
+		t.Fatalf("Load with --retention-run-at: %v", err)
+	}
+	pin := c.RetentionRunAtPin()
+	if pin == nil || pin.Value != (store.ClockTime{Hour: 1, Minute: 45}) || pin.By != "--retention-run-at" {
+		t.Errorf("flag: pin = %+v, want 01:45 by --retention-run-at", pin)
+	}
+
+	t.Setenv("SUBGLANCE_RETENTION_RUN_AT", "22:00")
+	c, err = Load(nil)
+	if err != nil {
+		t.Fatalf("Load with SUBGLANCE_RETENTION_RUN_AT: %v", err)
+	}
+	pin = c.RetentionRunAtPin()
+	if pin == nil || pin.Value != (store.ClockTime{Hour: 22}) || pin.By != "SUBGLANCE_RETENTION_RUN_AT" {
+		t.Errorf("env: pin = %+v, want 22:00 by SUBGLANCE_RETENTION_RUN_AT", pin)
+	}
+
+	for _, bad := range []string{"25:00", "3:30", "noon"} {
+		if _, err := Load([]string{"--retention-run-at=" + bad}); err == nil {
+			t.Errorf("Load accepted --retention-run-at=%s", bad)
+		}
+	}
+}
+
 func TestRetentionValidation(t *testing.T) {
 	tests := []struct {
 		name string

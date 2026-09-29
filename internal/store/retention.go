@@ -84,6 +84,8 @@ type RetentionResult struct {
 	// filesystem by the incremental vacuum step. Zero when the database is
 	// not in incremental auto-vacuum mode.
 	ReclaimedPages int64
+	// ReclaimedBytes is ReclaimedPages in bytes, at the database's page size.
+	ReclaimedBytes int64
 	// RollupCutoff is the timestamp before which hourly buckets and resolved
 	// incidents were deleted. Zero when rollup retention is off.
 	RollupCutoff time.Time
@@ -352,6 +354,13 @@ func (db *DB) applyRetentionAt(ctx context.Context, now time.Time, p RetentionPo
 		return res, err
 	}
 	res.ReclaimedPages = pages
+	if pages > 0 {
+		var pageSize int64
+		if err := db.Writer.QueryRowContext(ctx, "PRAGMA page_size").Scan(&pageSize); err != nil {
+			return res, fmt.Errorf("read page_size: %w", err)
+		}
+		res.ReclaimedBytes = pages * pageSize
+	}
 	return res, nil
 }
 

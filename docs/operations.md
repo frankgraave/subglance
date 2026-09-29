@@ -42,6 +42,7 @@ five-minute dead man's switch, or LAN monitoring, and having neither.
 | `--connectivity-targets` | `SUBGLANCE_CONNECTIVITY_TARGETS` | `1.1.1.1:53,9.9.9.9:53` | `host:port` addresses that check dials over TCP; the host counts as offline only when all of them fail |
 | `--raw-retention` | `SUBGLANCE_RAW_RETENTION` | unset: `720h` (30d), or the settings page | How long raw heartbeats are kept before being rolled up into hourly buckets. Minimum `24h`; `0` = forever. Setting it locks the settings page field |
 | `--rollup-retention` | `SUBGLANCE_ROLLUP_RETENTION` | unset: `0` (forever), or the settings page | How long hourly buckets and resolved incidents are kept (`0` = forever). Setting it locks the settings page field |
+| `--retention-run-at` | `SUBGLANCE_RETENTION_RUN_AT` | unset: `03:30`, or the settings page | Time of day, `HH:MM` in the server's time zone, at which the daily retention pass runs. A pass missed while the server was down runs at the next start. Setting it locks the settings page field |
 | `--secret-key` | `SUBGLANCE_SECRET_KEY` | empty (off) | 32 bytes of key material, or a path to a file holding it, to encrypt notification channel configuration at rest. Empty means **no encryption** |
 | `--secret-key-previous` | `SUBGLANCE_SECRET_KEY_PREVIOUS` | empty | The key the stored configuration is currently under, for one start: rotates to `--secret-key`, or decrypts back to plain text when `--secret-key` is empty |
 | `--backup-target` | `SUBGLANCE_BACKUP_TARGET` | empty (off) | [Scheduled backups](#scheduled-backups-to-s3-compatible-storage) to `s3://bucket` or `s3://bucket/prefix` |
@@ -55,7 +56,8 @@ five-minute dead man's switch, or LAN monitoring, and having neither.
 
 ### Retention
 
-Retention runs once a day. It folds raw heartbeats older than the raw window
+Retention runs once a day, at 03:30 in the server's time zone unless
+`--retention-run-at` says otherwise. It folds raw heartbeats older than the raw window
 into hourly buckets, then drops hourly buckets and resolved incidents older than
 the rollup window. By default raw heartbeats are kept 30 days and everything
 summarised is kept forever: on a measured database a raw heartbeat costs about
@@ -79,6 +81,15 @@ lengthened where possible, and the page says so. To make those deletes visible o
 database into SQLite's incremental auto-vacuum mode at startup; on an existing
 database that requires one rebuild, which is logged when it happens and skipped
 with a warning if the file is large enough that the pause would hurt.
+
+A pass that was due while the server was down, or that failed, runs as soon as
+the server starts again, so an instance that is restarted every night still
+gets its housekeeping. Two passes never run at once. Changing the time does not
+start a pass by itself: the next one runs when the new time next comes round.
+Each pass is recorded in the database — when it started, how long it took, what
+it removed per table, how much space it freed, and the error if it failed — so
+the record survives a restart. The server's time zone is the container's `TZ`
+variable; without one it is UTC.
 
 The same pass clears the notification delivery log: a notification that was
 delivered, or suppressed by maintenance or folded into a quiet-hours digest, is

@@ -33,6 +33,7 @@ import (
 	"github.com/frankgraave/subglance/internal/checker"
 	"github.com/frankgraave/subglance/internal/config"
 	"github.com/frankgraave/subglance/internal/events"
+	"github.com/frankgraave/subglance/internal/housekeeping"
 	"github.com/frankgraave/subglance/internal/logging"
 	"github.com/frankgraave/subglance/internal/monitor"
 	"github.com/frankgraave/subglance/internal/notifier"
@@ -349,7 +350,7 @@ func run(args []string) error {
 
 	// Raw heartbeats are the fastest-growing table in the product. Rolling
 	// them up keeps history unlimited at a bounded cost.
-	go rollupHeartbeats(ctx, db, log, runner, cfg.RetentionPins())
+	go rollupHeartbeats(ctx, db, log, runner, cfg)
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -523,23 +524,15 @@ func displayAddr(addr string) string {
 	return addr
 }
 
-// reapExpired periodically clears expired sessions and old login attempts.
+// rollupHeartbeats runs the daily retention pass: raw heartbeats older than
+// the raw window are folded into hourly buckets, older buckets, incidents and
+// delivery-log rows are dropped, and the freed pages go back to the disk.
 //
-// Neither is urgent, so failures are logged and retried on the next tick
-// rather than treated as fatal.
-// rollupHeartbeats folds raw heartbeats older than the retention window into
-// hourly buckets, once a day.
-//
-// It runs once at startup rather than waiting out the first interval: an
-// instance that is restarted more often than the interval would otherwise
-// never roll up at all, and that is exactly the instance whose database grows
-// without anyone noticing.
-//
-// The policy is resolved again on every pass rather than once at startup, so
-// a window changed on the settings page takes effect without a restart.
-func rollupHeartbeats(ctx context.Context, db *store.DB, log *slog.Logger, runner *monitor.Runner, pins store.RetentionPins) {
-	const interval = 24 * time.Hour
-
+// When it runs is housekeeping's business: at the configured time of day, and
+// at startup when the last scheduled pass was missed. See housekeeping.Start.
+// The policy is resolved again on every pass, so a window changed on the
+// settings page takes effect without a restart.
+func rollupHeartbeats(ctx context.Context, db *store.DB, log *slog.Logger, runner *monitor.Runner, cfg config.Config) {
 	// Space is only actually returned to the filesystem when the database is
 	// in incremental auto-vacuum mode, and that mode can only be turned on by
 	// rewriting the file. Doing it here, once, means an existing installation
@@ -556,50 +549,19 @@ func rollupHeartbeats(ctx context.Context, db *store.DB, log *slog.Logger, runne
 			"run VACUUM manually once, at a moment when a pause is acceptable")
 	}
 
-	run := func() {
-		eff, err := db.ResolveRetention(ctx, pins)
-		if err != nil {
-			runner.RecordRollupFailure()
-			log.Error("resolve retention policy", "error", err)
-			return
-		}
-		res, err := db.ApplyRetention(ctx, eff.Policy())
-		if err != nil {
-			// A failed pass costs disk, not correctness: the rows are still
-			// there and the next pass picks them up. It is counted as well as
-			// logged because the pass that fails on a full disk is the one
-			// that would have freed the space, and a daily error line is not
-			// something anyone is watching for.
-			runner.RecordRollupFailure()
-			log.Error("heartbeat rollup", "error", err)
-			return
-		}
-		if res.Rollup.Heartbeats > 0 || res.HourlyBuckets > 0 || res.Incidents > 0 || res.Deliveries > 0 {
-			log.Info("applied retention",
-				"heartbeats", res.Rollup.Heartbeats,
-				"buckets", res.Rollup.Buckets,
-				"cutoff", res.Rollup.Cutoff,
-				"pruned_buckets", res.HourlyBuckets,
-				"pruned_incidents", res.Incidents,
-				"pruned_deliveries", res.Deliveries,
-				"reclaimed_pages", res.ReclaimedPages)
-		}
-	}
-
-	run()
-
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			run()
-		}
-	}
+	housekeeping.New(housekeeping.Options{
+		Store:     db,
+		Pins:      cfg.RetentionPins(),
+		RunAtPin:  cfg.RetentionRunAtPin(),
+		Log:       log,
+		OnFailure: runner.RecordRollupFailure,
+	}).Start(ctx)
 }
 
+// reapExpired periodically clears expired sessions and old login attempts.
+//
+// Neither is urgent, so failures are logged and retried on the next tick
+// rather than treated as fatal.
 func reapExpired(ctx context.Context, db *store.DB, log *slog.Logger) {
 	ticker := time.NewTicker(time.Hour)
 	defer ticker.Stop()
