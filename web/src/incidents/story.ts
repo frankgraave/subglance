@@ -107,7 +107,9 @@ export const STATE_TONE: Record<IncidentState, "down" | "warn" | "idle"> = {
  * A failure kind as a person would say it.
  *
  * The server stores the checker's `FailureKind` — `dns`, `cert_expiry`,
- * `push_overdue` — which is a good key and a poor sentence. The ticket's
+ * `push_overdue` — or the runner's `local_network`, which is a good key and a
+ * poor sentence. `story.test.ts` reads both Go sources and fails when a kind
+ * has no entry here. The ticket's
  * example says "DNS error", not "dns", and that difference is the whole point
  * of the ticket.
  *
@@ -128,6 +130,13 @@ const CAUSE_WORDS: Record<string, string> = {
   internal: "internal error",
   push_overdue: "no report received",
   push_reported: "the job reported a failure",
+  // Not a checker kind: the runner files a network failure under this one
+  // when SubGlance could reach none of its connectivity targets either. The
+  // words say what was measured: an unreachable target does not prove the
+  // host was offline (an outbound firewall rule does the same). They name
+  // SubGlance rather than "this host", because the reader is looking at a
+  // browser on some other machine, and "this host" would point at theirs.
+  local_network: "SubGlance could not reach its connectivity targets",
 };
 
 export function causeWords(cause: string | undefined): string | null {

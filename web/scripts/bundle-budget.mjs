@@ -252,8 +252,18 @@ const budgets = {
    * validation, and the refusal of an expected number the browser would round
    * (0.1234567890123456789 sent as 0.12345678901234568) instead of storing a
    * value nobody typed. No new dependency. 154 leaves about 600 bytes.
+   *
+   * 154 -> 155 KiB gzip because develop itself crossed 154 at da70d81.
+   * Develop at f271381 (the YAML export and import, SUB-154) measures
+   * 157,565 bytes of entry JS (Node gzip, level 6), 131 under 154; the flag
+   * for uptime windows longer than the monitor's life (SUB-119) adds 139 and
+   * puts develop at 157,704, 8 over, so the Frontend job has failed on
+   * develop since that merge. Each change fit on the base it was measured
+   * on; together they spent the room the 154 above left. The status-page
+   * admin API branch that carries this edit changes no frontend file and
+   * measures the same 157,704. No new dependency. 155 leaves 1,016 bytes.
    */
-  js: 154,
+  js: 155,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *

@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   CHURN_THRESHOLD,
@@ -117,6 +120,31 @@ describe("the cause, in words a person would use", () => {
     expect(causeWords("connection")).toBe("connection refused");
     expect(causeWords("push_overdue")).toBe("no report received");
     expect(causeWords("assertion")).toBe("JSON field did not match");
+  });
+
+  it("names what SubGlance measured when it filed local_network", () => {
+    // The runner files a network failure under local_network when every
+    // connectivity target failed too. Passed through, it read as a raw key
+    // under a warning the reader was meant to be reassured by.
+    expect(causeWords("local_network")).toBe(
+      "SubGlance could not reach its connectivity targets",
+    );
+  });
+
+  it("has words for every kind the server can store", () => {
+    // Read from the Go sources rather than copied, so a kind added there
+    // fails here instead of reaching the UI as a snake_case key.
+    const repoRoot = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "..");
+    const go = (path: string) => readFileSync(join(repoRoot, path), "utf8");
+    const checker = go("internal/checker/checker.go");
+    const kinds = [...checker.matchAll(/\bFailureKind = "([a-z_]+)"/g)].map((m) => m[1]);
+    const local = /FailureKindLocalNetwork = "([a-z_]+)"/.exec(go("internal/store/monitors.go"));
+    expect(kinds.length, "no FailureKind constants found in checker.go").toBeGreaterThan(5);
+    expect(local, "FailureKindLocalNetwork not found in store/monitors.go").not.toBeNull();
+    for (const kind of [...kinds, local![1]]) {
+      const words = causeWords(kind);
+      expect(words === kind ? null : words, `no words for failure kind "${kind}"`).not.toBeNull();
+    }
   });
 
   it("passes an unknown kind through rather than losing it", () => {
