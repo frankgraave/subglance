@@ -436,4 +436,34 @@ for (const [kind, budget] of Object.entries(budgets)) {
   }
 }
 
+/*
+ * The public status page's stylesheet, the build's second entry.
+ *
+ * It is not linked from index.html, so the loop above never sees it, and it is
+ * the one stylesheet whose size is paid on every request: internal/statuspage
+ * inlines it into each page it renders, and a page is cached for 30 seconds,
+ * not forever like a hashed asset. At its introduction it measured 4.4 kB gzip
+ * (16.7 kB raw): the tokens for both themes, the two @font-face rules, the
+ * card, the chips, the lamp and the page's own rules. 6 kB leaves room for a
+ * rule or two, not for someone importing index.css into it.
+ */
+const statusPageBudget = 6;
+{
+  let bytes;
+  try {
+    bytes = readFileSync(join(dist, "status-page.css"));
+  } catch {
+    console.error("::error::status-page.css is missing from the build — see vite.config.ts");
+    process.exit(1);
+  }
+  const kb = gzipSync(bytes).byteLength / 1024;
+  const line = `status page css: ${kb.toFixed(1)} kB gzip (${(bytes.byteLength / 1024).toFixed(1)} kB raw), budget ${statusPageBudget} kB`;
+  if (kb > statusPageBudget) {
+    console.error(`::error::${line} — over budget`);
+    failed = true;
+  } else {
+    console.log(`${line} — ok`);
+  }
+}
+
 process.exit(failed ? 1 : 0);

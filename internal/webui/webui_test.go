@@ -298,3 +298,16 @@ func TestNonReadMethodsOnPagesAreRejected(t *testing.T) {
 		}
 	}
 }
+
+// The status page's stylesheet is found by its fixed name, and its absence
+// (a binary built without the frontend) is nil rather than an error, so the
+// caller can say why the page is unstyled.
+func TestStatusPageCSS(t *testing.T) {
+	built := fstest.MapFS{"status-page.css": {Data: []byte(".sp{}")}}
+	if got := string(statusPageCSS(built)); got != ".sp{}" {
+		t.Errorf("statusPageCSS = %q", got)
+	}
+	if got := statusPageCSS(builtFS()); got != nil {
+		t.Errorf("without the file: %q, want nil", got)
+	}
+}

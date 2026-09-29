@@ -1,0 +1,176 @@
+/*
+ * The public status page's own rules. Everything else it wears (card, chip,
+ * lamp) is the product's component CSS, imported by page.css.
+ *
+ * The layout decisions are drawn in docs/mockups/pages/status.html and argued
+ * in docs/design/status-page.md §2; this file is that prototype's page-level
+ * CSS, moved onto the product's classes.
+ */
+
+/* The base the dashboard gets from index.css's base layer. The page has no
+   shell, so it sets its own. */
+body {
+  background-color: var(--canvas);
+  color: var(--ink);
+  @apply face-sans;
+  font-size: var(--type-body);
+  line-height: var(--lead-body);
+  letter-spacing: var(--track-body);
+  -webkit-font-smoothing: antialiased;
+  padding: var(--space-6) var(--space-4) var(--space-12);
+}
+
+/* One centred column at the detail page's reading measure. */
+.sp {
+  width: min(var(--size-pane-lg), 100%);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.sp-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1h);
+  padding-top: var(--space-2);
+}
+.sp-head h1 {
+  font-size: var(--type-page);
+  line-height: var(--lead-page);
+  font-weight: var(--weight-strong);
+}
+.sp-prose {
+  color: var(--ink-2);
+  max-width: 68ch;
+}
+
+/* The summary states a count, not an adjective. */
+.sp-summary {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+.sp-summary h2 {
+  font-size: var(--type-card);
+  line-height: var(--lead-card);
+  font-weight: var(--weight-strong);
+}
+
+.sp-helper {
+  color: var(--ink-2);
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+}
+.sp-summary .sp-helper {
+  margin-left: auto;
+  white-space: nowrap;
+}
+.sp-mono {
+  @apply face-mono;
+}
+
+.sp-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1h);
+}
+
+/* A row is a panel on the card, like the product's list rows, but without
+   their hover: nothing on this page is clickable, and a row that lights up
+   under the pointer promises an action that is not there. */
+.sp-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  /* The rail's two pixels are reserved at rest and only their colour is a
+     state, as on the dashboard's rows, so a row going down does not shift
+     its contents one pixel right. */
+  border-left: var(--size-status-rail) solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-panel);
+  box-shadow: var(--shadow-raised);
+}
+.sp-row[data-status="down"] { border-left: var(--size-status-rail) solid var(--down); }
+.sp-row[data-status="warn"] { border-left: var(--size-status-rail) solid var(--warn); }
+.sp-row .sp-name {
+  font-size: var(--type-row);
+  line-height: var(--lead-row);
+  font-weight: var(--weight-mid);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A service: name and status word on one line, the history under it. */
+.sp-service {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+.sp-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2h);
+  min-width: 0;
+}
+.sp-line .sp-name { flex: 1; }
+
+/* Daily history. Height as well as colour: a down day is drawn full height,
+   a degraded one at three quarters, an up day at half and a no-data day as a
+   quarter stub, so no two states rely on colour alone (DESIGN.md §4). */
+.sp-days {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: var(--size-row-sm);
+}
+.sp-days i {
+  display: block;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 50%;
+  border-radius: var(--r-2xs);
+  background: var(--up);
+}
+.sp-days i[data-s="down"] { height: 100%; background: var(--down); }
+.sp-days i[data-s="warn"] { height: 75%; background: var(--warn); }
+.sp-days i[data-s="none"] { height: 25%; background: var(--idle-dim); }
+
+.sp-axis {
+  display: flex;
+  gap: var(--space-2);
+  color: var(--ink-2);
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+}
+.sp-axis .sp-uptime {
+  margin: 0 auto;
+  color: var(--ink);
+}
+.sp-axis-phone { display: none; }
+
+.sp-foot {
+  color: var(--ink-2);
+  text-align: center;
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+}
+
+/* Phone: 90 bars in a 320px column come out under 2px wide, which is no
+   longer a bar. Show the last 30 days and say so. */
+@media (max-width: 640px) {
+  body { padding: var(--space-4) var(--space-3) var(--space-10); }
+  .sp-days i:nth-child(-n+60) { display: none; }
+  .sp-axis-desk { display: none; }
+  .sp-axis-phone { display: inline; }
+  .sp-summary { flex-wrap: wrap; }
+  .sp-summary .sp-helper { margin-left: 0; width: 100%; }
+}

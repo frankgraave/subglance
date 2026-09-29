@@ -64,6 +64,25 @@ func FS() fs.FS {
 	return sub
 }
 
+// statusPageCSSPath is the public status page's stylesheet, a second entry
+// of the frontend build (web/vite.config.ts). It has a fixed name rather than
+// a hashed one because it is never linked: internal/statuspage inlines it.
+const statusPageCSSPath = "status-page.css"
+
+// StatusPageCSS returns the public status page's stylesheet, or nil when the
+// frontend was not built into this binary.
+func StatusPageCSS() []byte {
+	return statusPageCSS(FS())
+}
+
+func statusPageCSS(files fs.FS) []byte {
+	b, err := fs.ReadFile(files, statusPageCSSPath)
+	if err != nil {
+		return nil
+	}
+	return b
+}
+
 // Available reports whether a real frontend build is embedded.
 //
 // False means the binary was built without building the frontend first. That

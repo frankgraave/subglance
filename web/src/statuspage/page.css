@@ -1,0 +1,26 @@
+/*
+ * The stylesheet of the public status page (docs/design/status-page.md §2).
+ *
+ * A second entrypoint beside index.css, built by vite.config.ts into
+ * internal/webui/dist/status-page.css. The Go side inlines it into every
+ * status page it renders (internal/statuspage/render.go), so the page is one
+ * response with no asset paths, which is what lets it be proxied to a
+ * subdomain without extra configuration (design §3.3).
+ *
+ * It carries only what the page draws: the tokens, the faces, the card, the
+ * chip, the lamp, and the page's own rules. The dashboard's stylesheet would
+ * work too, but a visitor would then download every screen of the product to
+ * read five rows.
+ *
+ * `@reference` makes the role utilities from index.css (`face-sans`,
+ * `caps-legend`) available to `@apply` without emitting anything else from
+ * that file.
+ */
+@reference "../index.css";
+@import "tailwindcss/preflight";
+@import "../styles/tokens.css";
+@import "../styles/fonts.css";
+@import "../components/card.css";
+@import "../components/chips.css";
+@import "../monitors/led.css";
+@import "./statuspage.css";
