@@ -50,7 +50,9 @@ func (r SizeCapResult) Intervened() bool { return r.Heartbeats > 0 || r.HourlyBu
 // cut is sized from an estimate, and a round that falls short learns the real
 // cost per row from what it freed, so two or three rounds are the norm; the
 // bound is for a database whose rows free no whole pages at all.
-const sizeCapRounds = 12
+//
+// A variable only so a test can make the bound bite.
+var sizeCapRounds = 12
 
 // Fallback sizes, in bytes on disk per row including indexes, for when the
 // dbstat table is unavailable. Measured on the demo database; see
@@ -98,10 +100,16 @@ func (db *DB) enforceSizeCapAt(ctx context.Context, now time.Time, limit int64) 
 			return r.Heartbeats, err
 		},
 	}
-	if res.Heartbeats, res.RawSince, err = db.capTable(ctx, &res, raw); err != nil {
+	var rawAtFloor bool
+	if res.Heartbeats, res.RawSince, rawAtFloor, err = db.capTable(ctx, &res, raw); err != nil {
 		return res, err
 	}
-	if res.After <= limit {
+	// Summaries only go once raw heartbeats are at their floor. A raw step
+	// that ran out of rounds first still has raw detail older than the
+	// floor, and deleting summaries now would leave hours whose raw beats
+	// remain while the hours before them are gone. The next pass carries on
+	// from where this one stopped.
+	if res.After <= limit || !rawAtFloor {
 		return res, nil
 	}
 
@@ -123,10 +131,11 @@ func (db *DB) enforceSizeCapAt(ctx context.Context, now time.Time, limit int64) 
 			return n, nil
 		},
 	}
-	if res.HourlyBuckets, res.HourlySince, err = db.capTable(ctx, &res, hourly); err != nil {
+	var hourlyAtFloor bool
+	if res.HourlyBuckets, res.HourlySince, hourlyAtFloor, err = db.capTable(ctx, &res, hourly); err != nil {
 		return res, err
 	}
-	res.AtFloor = res.After > limit
+	res.AtFloor = res.After > limit && hourlyAtFloor
 	return res, nil
 }
 
@@ -145,17 +154,20 @@ type capStep struct {
 }
 
 // capTable cuts into one table until the data is under res.Limit or the
-// table has nothing older than its floor. It returns the rows removed and the
-// last cutoff, and keeps res.After current.
+// table has nothing older than its floor. It returns the rows removed, the
+// last cutoff that completed, and whether the table is down to its floor, and
+// keeps res.After current. It stops short of the floor, and says so, when the
+// rounds run out first.
 //
 // The cut is placed by assuming rows are spread evenly in time, which a
 // monitor writing on a fixed interval nearly does. That needs a count and a
 // minimum, not a sort, so it costs no temporary space on the disk that is
 // running out. Where the assumption is off, the next round measures what the
 // last one actually freed per row and corrects.
-func (db *DB) capTable(ctx context.Context, res *SizeCapResult, s capStep) (int64, time.Time, error) {
+func (db *DB) capTable(ctx context.Context, res *SizeCapResult, s capStep) (int64, time.Time, bool, error) {
 	var removed int64
 	var since time.Time
+	atFloor := false
 	perRow := max(s.perRow, 1)
 	for range sizeCapRounds {
 		excess := res.After - res.Limit
@@ -165,9 +177,10 @@ func (db *DB) capTable(ctx context.Context, res *SizeCapResult, s capStep) (int6
 		var oldest sql.NullInt64
 		var rows int64
 		if err := db.Writer.QueryRowContext(ctx, s.measure, s.floor.Unix()).Scan(&oldest, &rows); err != nil {
-			return removed, since, fmt.Errorf("measure %s for the size limit: %w", s.table, err)
+			return removed, since, false, fmt.Errorf("measure %s for the size limit: %w", s.table, err)
 		}
 		if rows == 0 || !oldest.Valid {
+			atFloor = true
 			break
 		}
 
@@ -187,13 +200,16 @@ func (db *DB) capTable(ctx context.Context, res *SizeCapResult, s capStep) (int6
 
 		n, err := s.cut(ctx, cutoff)
 		removed += n
-		since = cutoff
 		if err != nil {
-			return removed, since, err
+			// since stays at the last cut that completed: a failed one
+			// may have removed nothing.
+			return removed, since, false, err
 		}
+		since = cutoff
+		atFloor = cutoff.Equal(s.floor)
 		used, err := db.usedBytes(ctx)
 		if err != nil {
-			return removed, since, err
+			return removed, since, atFloor, err
 		}
 		freed := res.After - used
 		res.After = used
@@ -207,7 +223,7 @@ func (db *DB) capTable(ctx context.Context, res *SizeCapResult, s capStep) (int6
 		}
 		perRow = max(perRow, 1)
 	}
-	return removed, since, nil
+	return removed, since, atFloor, nil
 }
 
 // countRows are the row counts rowCost divides by, one fixed query per table

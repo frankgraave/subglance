@@ -239,6 +239,73 @@ func TestSizeLimitDoesNothingUnderTheLimit(t *testing.T) {
 	}
 }
 
+// TestSizeLimitKeepsSummariesWhileRawDetailRemains runs the raw step out of
+// rounds before it reaches its floor. One stray heartbeat two months back
+// makes the even-spread estimate cut far too little in the first round, and
+// with one round allowed, raw heartbeats older than the floor are still there
+// when the pass ends. Summaries must not go while they are.
+func TestSizeLimitKeepsSummariesWhileRawDetailRemains(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	id := seedMonitor(t, db, "busy")
+	old := seedMonitor(t, db, "history")
+
+	prev := sizeCapRounds
+	sizeCapRounds = 1
+	t.Cleanup(func() { sizeCapRounds = prev })
+
+	fillRaw(t, db, id, capNow.Add(-60*24*time.Hour), capNow.Add(-60*24*time.Hour+time.Second), time.Minute)
+	fillRaw(t, db, id, capNow.Add(-3*24*time.Hour), capNow, time.Minute)
+	fillHourly(t, db, old, capNow.Add(-90*24*time.Hour), capNow.Add(-61*24*time.Hour))
+	summaries := countHourly(t, db, old)
+
+	olderRaw := countWhere(t, db, `SELECT count(*) FROM heartbeats WHERE ts < ?`, capFloor.Unix())
+	limit := used(t, db) - olderRaw*rawRowBytes/2
+
+	res, err := db.enforceSizeCapAt(ctx, capNow, limit)
+	if err != nil {
+		t.Fatalf("enforceSizeCapAt: %v", err)
+	}
+	if res.After <= limit {
+		t.Fatalf("after = %d, under the limit %d: the test needs a raw step that runs out of rounds", res.After, limit)
+	}
+	if got := countWhere(t, db, `SELECT count(*) FROM heartbeats WHERE ts < ?`, capFloor.Unix()); got == 0 {
+		t.Fatal("raw heartbeats reached the floor in one round: the test proves nothing")
+	}
+	if res.HourlyBuckets != 0 || countHourly(t, db, old) != summaries {
+		t.Errorf("deleted %d hourly buckets while raw heartbeats older than the floor remain", res.HourlyBuckets)
+	}
+	if res.AtFloor {
+		t.Error("AtFloor is set, but raw heartbeats older than the floor remain")
+	}
+}
+
+// TestSizeLimitReportsOnlyACompletedCut makes the cut fail and checks the
+// step does not report the cutoff it attempted as one it reached.
+func TestSizeLimitReportsOnlyACompletedCut(t *testing.T) {
+	db := openTestDB(t)
+	id := seedMonitor(t, db, "busy")
+	fillRaw(t, db, id, capNow.Add(-3*24*time.Hour), capNow, time.Minute)
+
+	failed := errors.New("cut failed")
+	step := capStep{
+		table: "heartbeats", floor: capFloor,
+		measure: `SELECT min(ts), count(*) FROM heartbeats WHERE ts < ?`,
+		perRow:  rawRowBytes,
+		cut: func(context.Context, time.Time) (int64, error) {
+			return 0, failed
+		},
+	}
+	res := SizeCapResult{Limit: 1, After: 1 << 30}
+	removed, since, atFloor, err := db.capTable(context.Background(), &res, step)
+	if !errors.Is(err, failed) {
+		t.Fatalf("err = %v, want the cut's error", err)
+	}
+	if removed != 0 || !since.IsZero() || atFloor {
+		t.Errorf("removed %d, since %s, at floor %v; want nothing reported for a cut that failed", removed, since, atFloor)
+	}
+}
+
 func TestApplyRetentionEnforcesTheSizeLimitAfterTheWindows(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
