@@ -409,6 +409,8 @@ func TestImportRejectsInvalidFilesAndWritesNothing(t *testing.T) {
 		"unknown type":  {"version: 1\nmonitors:\n  - key: a\n    name: A\n    type: gopher\n    target: x\n", "monitors[0].type"},
 		"bad channel":   {"version: 1\nchannels:\n  - key: c\n    name: C\n    type: fax\n", "channels[0]"},
 		"future format": {"version: 9\n", "version"},
+		"duplicate rule": {"version: 1\nrouting_rules:\n  - tag_key: env\n    tag_value: prod\n" +
+			"  - tag_key: env\n    tag_value: prod\n", "routing_rules[1]"},
 		"bad window": {"version: 1\nmaintenance:\n  - name: W\n    tag_key: env\n    tag_value: prod\n" +
 			"    timezone: Local\n", "maintenance[0]"},
 	}
@@ -519,5 +521,76 @@ func TestConfigFileDocExampleImports(t *testing.T) {
 	}
 	if rep.Summary.Create == 0 || rep.Summary.NeedsSecrets != 3 {
 		t.Errorf("summary = %+v, want creates and three objects needing secrets", rep.Summary)
+	}
+}
+
+func TestExportWritesAnEmptyExcludeSoImportClearsIt(t *testing.T) {
+	ctx := context.Background()
+	src, srcDB := testServerWithDB(t)
+	_, err := srcDB.CreateMonitor(ctx, store.Monitor{Name: "Database", Type: "tcp",
+		Target: "db.example.com:5432", Enabled: true, Tags: map[string]string{"env": "prod"}})
+	must(t, err)
+	_, err = srcDB.CreateRoutingRule(ctx, store.RoutingRule{TagKey: "env", TagValue: "prod", ChannelIDs: []int64{}})
+	must(t, err)
+	exported := exportYAML(t, src)
+	if !strings.Contains(exported, "exclude: []") {
+		t.Fatalf("a rule without exclusions exports no empty exclude:\n%s", exported)
+	}
+
+	// The destination's rule excludes the same monitor; importing the source
+	// must clear that, or the monitor stays silent on the destination.
+	dst, dstDB := testServerWithDB(t)
+	seedConfig(t, dstDB)
+	_ = exportYAML(t, dst) // assigns the destination's keys
+	code, _, body := importYAML(t, dst, exported, false)
+	if code != http.StatusOK {
+		t.Fatalf("import = %d: %s", code, body)
+	}
+	rules, err := dstDB.ListRoutingRules(ctx)
+	must(t, err)
+	for _, r := range rules {
+		if r.TagKey == "env" && r.TagValue == "prod" && len(r.ExcludedMonitorIDs) != 0 {
+			t.Errorf("exclusions after import = %v, want none", r.ExcludedMonitorIDs)
+		}
+	}
+}
+
+func TestImportRemovesAnObjectWhoseKeyCannotBeStored(t *testing.T) {
+	ctx := context.Background()
+	srv, db := testServerWithDB(t)
+	doc, err := configfile.Parse([]byte("version: 1\nchannels:\n  - key: ops\n    name: Ops\n    type: webhook\n" +
+		"    config:\n      url: https://hook.example.com/x\nmonitors:\n  - key: a\n    name: A\n    type: tcp\n" +
+		"    target: a.example.com:1\n"))
+	must(t, err)
+	plan, err := srv.planImport(ctx, doc)
+	must(t, err)
+
+	// Something else takes both keys between planning and writing.
+	other, err := db.CreateMonitor(ctx, store.Monitor{Name: "Other", Type: "tcp", Target: "o.example.com:1", Enabled: true})
+	must(t, err)
+	must(t, db.SetMonitorConfigKey(ctx, other.ID, "a"))
+	otherChan, err := db.CreateChannel(ctx, store.Channel{Name: "Other", Type: store.ChannelWebhook,
+		Enabled: true, Config: map[string]string{"url": "https://hook.example.com/y"}})
+	must(t, err)
+	must(t, db.SetChannelConfigKey(ctx, otherChan.ID, "ops"))
+
+	if err := srv.applyImport(ctx, &plan, func(string) string { return "" }); err == nil {
+		t.Fatal("applyImport succeeded although the channel key was taken")
+	}
+	chans, err := db.ListChannels(ctx)
+	must(t, err)
+	if len(chans) != 1 {
+		t.Errorf("channels after a failed key write = %d, want only the one that was there", len(chans))
+	}
+
+	// Same for a monitor, once the channel key is free again.
+	must(t, db.DeleteChannel(ctx, otherChan.ID))
+	if err := srv.applyImport(ctx, &plan, func(string) string { return "" }); err == nil {
+		t.Fatal("applyImport succeeded although the monitor key was taken")
+	}
+	mons, err := db.ListMonitors(ctx)
+	must(t, err)
+	if len(mons) != 1 {
+		t.Errorf("monitors after a failed key write = %d, want only the one that was there", len(mons))
 	}
 }

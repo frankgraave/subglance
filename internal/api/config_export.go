@@ -82,7 +82,8 @@ func (s *Server) exportConfig(ctx context.Context, now time.Time) (configfile.Do
 		return doc, fmt.Errorf("list routing rules: %w", err)
 	}
 	for _, r := range rules {
-		out := configfile.RoutingRule{TagKey: r.TagKey, TagValue: r.TagValue, Channels: []string{}}
+		out := configfile.RoutingRule{TagKey: r.TagKey, TagValue: r.TagValue,
+			Channels: []string{}, Exclude: []string{}}
 		for _, id := range r.ChannelIDs {
 			out.Channels = append(out.Channels, channelKeys[id])
 		}

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -26,8 +27,13 @@ var importMu sync.Mutex
 // Editors and administrators only, although nothing in the file is secret: the
 // export assigns and stores a key for every object that does not have one yet,
 // which is a write, and a viewer does not write.
+//
+// It takes importMu because assigning keys is a write that an import running
+// at the same time could collide with.
 func (s *Server) handleExportConfig(w http.ResponseWriter, r *http.Request) {
+	importMu.Lock()
 	doc, err := s.exportConfig(r.Context(), time.Now())
+	importMu.Unlock()
 	if err != nil {
 		s.log.Error("export configuration", "error", err)
 		writeError(w, http.StatusInternalServerError, "could not export the configuration")
@@ -95,7 +101,9 @@ func (s *Server) handleImportConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.applyImport(ctx, &plan, func(token string) string { return pushURL(r, token) }); err != nil {
+	// A client that disconnects halfway must not stop the writes between an
+	// object and its key.
+	if err := s.applyImport(context.WithoutCancel(ctx), &plan, func(token string) string { return pushURL(r, token) }); err != nil {
 		s.log.Error("apply configuration import", "error", err)
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

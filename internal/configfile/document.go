@@ -147,8 +147,9 @@ type RoutingRule struct {
 	// export always writes it.
 	Channels []string `yaml:"channels"`
 	// Exclude lists monitor keys the rule leaves out. Omitted keeps the
-	// rule's current exclusions; `[]` clears them.
-	Exclude []string `yaml:"exclude,omitempty"`
+	// rule's current exclusions; `[]` clears them. Export always writes it,
+	// so importing an export also clears exclusions the source rule lacks.
+	Exclude []string `yaml:"exclude"`
 }
 
 // Maintenance is a maintenance window. It targets one monitor, by key, or one

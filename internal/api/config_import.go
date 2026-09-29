@@ -624,6 +624,11 @@ func planRule(p *importPlan, ex existingConfig, path string, r configfile.Routin
 	if err != nil {
 		return problemAt(sub(path, "tag_key"), "%s", err.Error())
 	}
+	for _, planned := range p.rules {
+		if planned.rule.TagKey == key && planned.rule.TagValue == value {
+			return problemAt(path, "the tag pair %s=%s is listed twice", key, value)
+		}
+	}
 	item := importItem{Name: key + "=" + value, Action: actionCreate}
 	step := ruleStep{rule: store.RoutingRule{TagKey: key, TagValue: value},
 		channels: r.Channels, exclude: r.Exclude}
@@ -788,6 +793,11 @@ func (s *Server) applyImport(ctx context.Context, p *importPlan, pushURL func(to
 		}
 		if st.setKey {
 			if err := s.db.SetMonitorConfigKey(ctx, id, st.key); err != nil {
+				if st.id == 0 {
+					// Without its key the next import would not find this
+					// monitor and would create it a second time.
+					err = errors.Join(err, s.db.DeleteMonitor(ctx, id))
+				}
 				return err
 			}
 		}
@@ -838,6 +848,11 @@ func (s *Server) applyChannel(ctx context.Context, st channelStep) (int64, error
 	}
 	if st.setKey {
 		if err := s.db.SetChannelConfigKey(ctx, id, st.key); err != nil {
+			if st.id == 0 {
+				// As for monitors: a created channel without its key would
+				// be created again by the next import.
+				err = errors.Join(err, s.db.DeleteChannel(ctx, id))
+			}
 			return 0, err
 		}
 	}
