@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { confirmLeave, confirmNavigation } from "./shell/leaveGuard";
 import { CommandMenu } from "./commands/CommandMenu";
 import { Settings } from "./settings/Settings";
@@ -6,9 +6,6 @@ import { SessionGate } from "./auth/SessionGate";
 import { useSession } from "./auth/useSession";
 import { canWrite } from "./auth/permissions";
 import { useTheme } from "./theme/useTheme";
-import { TokenSheet } from "./components/TokenSheet";
-import { HeartbeatGallery } from "./heartbeat/Gallery";
-import { DashboardWorkbench } from "./monitors/Workbench";
 import { AddMonitor } from "./monitors/AddMonitor";
 import { Drawer } from "./components/Drawer";
 import { Panel } from "./components/Card";
@@ -549,6 +546,20 @@ export default function App() {
   );
 }
 
+/*
+ * The workbench's galleries load on first open, not with the app.
+ *
+ * They are fixtures for judging components and are only reachable through
+ * the workbench button, so shipping them in the entry chunk made every
+ * visitor download a developer tool. Split out, the entry keeps roughly 3 kB
+ * gzip of room under its ceiling for screens people actually use.
+ *
+ * A chunk that fails to load (an old tab still open across an upgrade asks
+ * for a file the new binary does not have) throws into the ErrorBoundary
+ * around the screen, whose "Reload the page" fetches the current build.
+ */
+const WorkbenchGalleries = lazy(() => import("./WorkbenchGalleries"));
+
 /** The side track: every component, every state, both themes. */
 function Workbench() {
   return (
@@ -557,9 +568,11 @@ function Workbench() {
         Component workbench — fixtures, not live data. Press Esc to go back to
         the dashboard.
       </p>
-      <DashboardWorkbench />
-      <HeartbeatGallery />
-      <TokenSheet />
+      <Suspense
+        fallback={<p className="text-helper text-ink-3">Loading the fixtures…</p>}
+      >
+        <WorkbenchGalleries />
+      </Suspense>
     </div>
   );
 }
