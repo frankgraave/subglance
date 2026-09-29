@@ -276,6 +276,9 @@ describe("the app shell", () => {
     fireEvent.click(workbench);
     await waitFor(() => expect(gallery()).toBeTruthy());
     expect(workbench.getAttribute("aria-pressed")).toBe("true");
+    // The galleries are split out of the entry chunk and arrive through
+    // Suspense (SUB-165): the heading above is not proof they rendered.
+    expect(await screen.findByRole("heading", { name: "Sizes" })).toBeTruthy();
 
     fireEvent.click(workbench);
     await waitFor(() => expect(gallery()).toBeNull());
