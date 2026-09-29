@@ -59,13 +59,12 @@ func (c ClockTime) String() string {
 //
 // Days are counted on the calendar, not in 24-hour steps, so the pass keeps
 // its time of day across a daylight-saving change. A time that does not
-// exist on a given day (inside a spring-forward gap) is normalised by
-// time.Date to the moment the clock actually passes it, which is the moment
-// an operator watching the clock would expect.
+// exist on a given day (inside a spring-forward gap) resolves to the end of
+// the gap, the first instant the clock reads c or later; see on.
 func (c ClockTime) Next(now time.Time, loc *time.Location) time.Time {
 	local := now.In(loc)
 	for day := 0; ; day++ {
-		t := time.Date(local.Year(), local.Month(), local.Day()+day, c.Hour, c.Minute, 0, 0, loc)
+		t := c.on(local.Year(), local.Month(), local.Day()+day, loc)
 		if t.After(now) {
 			return t
 		}
@@ -77,11 +76,40 @@ func (c ClockTime) Next(now time.Time, loc *time.Location) time.Time {
 func (c ClockTime) Previous(now time.Time, loc *time.Location) time.Time {
 	local := now.In(loc)
 	for day := 0; ; day-- {
-		t := time.Date(local.Year(), local.Month(), local.Day()+day, c.Hour, c.Minute, 0, 0, loc)
+		t := c.on(local.Year(), local.Month(), local.Day()+day, loc)
 		if !t.After(now) {
 			return t
 		}
 	}
+}
+
+// on is the moment the wall clock in loc reads c on the given calendar day.
+// The day may be out of range; it is normalised as time.Date does.
+//
+// When c falls inside a spring-forward gap it never appears on the clock
+// that day, and time.Date resolves it with either offset, which the Go
+// documentation leaves unspecified: in America/New_York 02:30 comes back as
+// 01:30 EST, an hour before the configured time, and in Europe/Amsterdam as
+// 03:30 CEST. Neither is the moment an operator watching the clock would
+// pick, so the gap resolves to its end, the transition itself: the first
+// instant at which the clock reads c or later.
+func (c ClockTime) on(year int, month time.Month, day int, loc *time.Location) time.Time {
+	t := time.Date(year, month, day, c.Hour, c.Minute, 0, 0, loc)
+	if t.Hour() == c.Hour && t.Minute() == c.Minute {
+		return t
+	}
+	// Compare wall-clock readings as if they were UTC, so a gap at midnight
+	// that pushed t onto the neighbouring date still orders correctly.
+	want := time.Date(year, month, day, c.Hour, c.Minute, 0, 0, time.UTC)
+	read := time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), 0, 0, time.UTC)
+	start, end := t.ZoneBounds()
+	if read.Before(want) {
+		// Resolved with the offset from before the gap: the gap ends where
+		// that offset stops applying.
+		return end
+	}
+	// Resolved with the offset from after the gap, which starts at its end.
+	return start
 }
 
 // settingRetentionRunAt holds the time of day chosen on the settings page,

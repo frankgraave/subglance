@@ -116,6 +116,9 @@ func TestStartCatchesUpAMissedPass(t *testing.T) {
 		{"last pass before today's time", &store.RetentionPass{StartedAt: start.Add(-8 * time.Hour)}, 1},
 		{"last pass failed", &store.RetentionPass{StartedAt: start.Add(-time.Hour), Error: "boom"}, 1},
 		{"ran after today's time", &store.RetentionPass{StartedAt: start.Add(-6 * time.Hour)}, 0},
+		// Started a minute before 03:30 and finished after it: the work
+		// due at 03:30 is done.
+		{"finished after today's time", &store.RetentionPass{StartedAt: start.Add(-6*time.Hour - 31*time.Minute), Duration: 2 * time.Minute}, 0},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -231,11 +231,15 @@ func (r *Retention) Start(ctx context.Context) {
 }
 
 // missed reports whether no pass has completed since due.
+//
+// A pass counts by when it finished, not when it started: one that began a
+// minute before due and ended after it has done the work due asked for, and
+// running it again on the next start would only repeat it.
 func (r *Retention) missed(ctx context.Context, due time.Time) bool {
 	last, err := r.opts.Store.LastRetentionPass(ctx)
 	if err != nil {
 		r.opts.Log.Error("read the last retention pass", "error", err)
 		return true
 	}
-	return last == nil || !last.Succeeded() || last.StartedAt.Before(due)
+	return last == nil || !last.Succeeded() || last.StartedAt.Add(last.Duration).Before(due)
 }

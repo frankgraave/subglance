@@ -70,12 +70,52 @@ func TestClockTimeNextAndPrevious(t *testing.T) {
 	}
 
 	// 02:30 does not exist on the spring change in this zone. The pass
-	// still runs that day, when the clock passes it.
+	// still runs that day, when the clock jumps past it.
 	gap := ClockTime{Hour: 2, Minute: 30}
 	now := time.Date(2026, 3, 29, 0, 0, 0, 0, loc)
-	next := gap.Next(now, loc)
-	if next.Day() != 29 || !next.After(now) || next.Sub(now) > 4*time.Hour {
-		t.Errorf("Next across the spring gap = %v, want a moment early on 29 March", next)
+	want := time.Date(2026, 3, 29, 1, 0, 0, 0, time.UTC) // 03:00 CEST
+	if next := gap.Next(now, loc); !next.Equal(want) {
+		t.Errorf("Next across the spring gap = %v, want %v", next, want)
+	}
+}
+
+// A time inside a spring-forward gap resolves to the end of the gap in
+// every zone, whichever offset time.Date happens to pick for it, and in
+// both directions: Previous is what the startup catch-up and the due check
+// compare against.
+func TestClockTimeInsideASpringGap(t *testing.T) {
+	cases := []struct {
+		zone string
+		at   ClockTime
+		day  time.Time // midnight UTC on the day of the change
+		end  time.Time // the transition, in UTC
+	}{
+		// time.Date resolves 02:30 to 01:30 EST here, an hour early.
+		{"America/New_York", ClockTime{2, 30}, time.Date(2026, 3, 8, 0, 0, 0, 0, time.UTC), time.Date(2026, 3, 8, 7, 0, 0, 0, time.UTC)},
+		// ... and to 03:30 CEST here, half an hour late.
+		{"Europe/Amsterdam", ClockTime{2, 30}, time.Date(2026, 3, 29, 0, 0, 0, 0, time.UTC), time.Date(2026, 3, 29, 1, 0, 0, 0, time.UTC)},
+		// Midnight itself is skipped here, so the wrong offset lands on
+		// the day before.
+		{"America/Santiago", ClockTime{0, 30}, time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC), time.Date(2026, 9, 6, 4, 0, 0, 0, time.UTC)},
+	}
+	for _, c := range cases {
+		loc, err := time.LoadLocation(c.zone)
+		if err != nil {
+			t.Fatal(err)
+		}
+		before := c.end.Add(-3 * time.Hour)
+		if got := c.at.Next(before, loc); !got.Equal(c.end) {
+			t.Errorf("%s: Next(%v) = %v, want the end of the gap %v", c.zone, before, got.UTC(), c.end)
+		}
+		after := c.end.Add(time.Minute)
+		if got := c.at.Previous(after, loc); !got.Equal(c.end) {
+			t.Errorf("%s: Previous(%v) = %v, want the end of the gap %v", c.zone, after, got.UTC(), c.end)
+		}
+		// A minute before the gap ends the time is not yet due that day.
+		early := c.end.Add(-time.Minute)
+		if got := c.at.Previous(early, loc); !got.Before(c.day.Add(-12 * time.Hour)) {
+			t.Errorf("%s: Previous(%v) = %v, want the day before", c.zone, early, got.UTC())
+		}
 	}
 }
 
