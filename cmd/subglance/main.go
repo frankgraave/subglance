@@ -574,13 +574,14 @@ func rollupHeartbeats(ctx context.Context, db *store.DB, log *slog.Logger, runne
 			log.Error("heartbeat rollup", "error", err)
 			return
 		}
-		if res.Rollup.Heartbeats > 0 || res.HourlyBuckets > 0 || res.Incidents > 0 {
+		if res.Rollup.Heartbeats > 0 || res.HourlyBuckets > 0 || res.Incidents > 0 || res.Deliveries > 0 {
 			log.Info("applied retention",
 				"heartbeats", res.Rollup.Heartbeats,
 				"buckets", res.Rollup.Buckets,
 				"cutoff", res.Rollup.Cutoff,
 				"pruned_buckets", res.HourlyBuckets,
 				"pruned_incidents", res.Incidents,
+				"pruned_deliveries", res.Deliveries,
 				"reclaimed_pages", res.ReclaimedPages)
 		}
 	}

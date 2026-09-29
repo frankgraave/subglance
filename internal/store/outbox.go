@@ -276,12 +276,16 @@ func (db *DB) ChannelHealthSince(ctx context.Context, since time.Time) (map[int6
 // PruneDeliveries removes delivered or suppressed rows older than before, and reports how
 // many went.
 //
-// A failed row is evidence the operator may not have seen yet. Unsuppressed
-// pending rows are still work; maintenance-suppressed rows are terminal.
+// A failed row is evidence the operator may not have seen yet, and it stays
+// even when it also carries the maintenance flag: a delivery can fail after it
+// was suppressed, and the failure is the part worth keeping. Unsuppressed
+// pending rows are still work; other maintenance-suppressed rows are terminal.
 func (db *DB) PruneDeliveries(ctx context.Context, before time.Time) (int64, error) {
 	res, err := db.Writer.ExecContext(ctx, `
 		DELETE FROM notif_outbox
-		 WHERE (status = ? OR suppressed = 1) AND updated_at < ?`, OutboxDelivered, before.Unix())
+		 WHERE (status = ? OR suppressed = 1)
+		   AND status <> ?
+		   AND updated_at < ?`, OutboxDelivered, OutboxFailed, before.Unix())
 	if err != nil {
 		return 0, fmt.Errorf("prune deliveries: %w", err)
 	}
