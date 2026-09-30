@@ -17,6 +17,13 @@ import {
 } from "./channels";
 import type { Channel, DeliveryState } from "./channels";
 
+/*
+ * The test button's in-flight label. Also the width the button reserves at
+ * rest (`data-reserve`, notifications.css), so starting a test does not move
+ * the row's other actions.
+ */
+const TEST_BUSY_WORD = "Sending test…";
+
 /**
  * One channel as one row.
  *
@@ -104,7 +111,7 @@ function ChannelRowImpl({
 }: ChannelRowProps) {
   const destination = describeDestination(channel);
   const deliveryWord = describeDelivery(delivery);
-  const testWord = testing ? "Sending test…" : "Send test";
+  const testWord = testing ? TEST_BUSY_WORD : "Send test";
   const label = `${typeLabel(channel.type)} ${channel.name}`;
   /*
    * The state it moves to, not the state it is in. "Disable" on an enabled
@@ -213,6 +220,7 @@ function ChannelRowImpl({
             <button
               type="button"
               className="add-button inv-act nt-act-test"
+              data-reserve={TEST_BUSY_WORD}
               onClick={() => onTest(channel.id)}
               disabled={testing}
               aria-busy={testing}

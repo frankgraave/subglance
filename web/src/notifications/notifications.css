@@ -301,34 +301,39 @@
 /*
  * Reserved width for the test button, whose label changes (SUB-138).
  *
- * Measured in Chromium rather than guessed. The button swings from "Send test"
- * (76.1px) to "Sending test…" (103.8px), and that width is load-bearing for
- * something other than the button: every row's action cluster is right-
- * aligned, so a button that grows pushes its neighbours left — the cluster
- * jumped 28px sideways at the exact moment the pointer was over it, and
- * Edit/Delete moved out from under the cursor mid-click.
+ * The button swings from "Send test" to "Sending test…", and that width is
+ * load-bearing for something other than the button: every row's action
+ * cluster is right-aligned, so a button that grows pushes its neighbours left
+ * — the cluster jumped 28px sideways at the exact moment the pointer was over
+ * it, and Edit/Delete moved out from under the cursor mid-click.
  *
- * Rung 3 (104px) off the column ladder, which clears the wider of the two
- * labels by 0.2px. It replaces `var(--size-col-lg)`, which was wrong twice
- * over: the ladder marks `--size-col-sm/md/lg` as style-guide chrome and
- * explicitly off-ladder, and at 116px it also over-reserved by twelve pixels.
+ * The reservation is the longer label itself, not a width. It used to be
+ * rung 3 (104px), measured to clear "Sending test…" by 0.2px at 12px; the
+ * type scale moved helper text to 13px (SUB-167) and the label outgrew the
+ * rung by 8px. A width measured against one type size is a width that breaks
+ * the next time the size changes. So the button lays its label and an
+ * invisible copy of the longer one in a column: the copy has no height, so
+ * the button is exactly as tall as before, and the button is always as wide
+ * as the longer label, at whatever size and in whatever face it renders.
+ * `data-reserve` carries the string, so it lives beside the label in the
+ * markup rather than in the stylesheet. The copy is `visibility: hidden`, so
+ * it is not in the accessibility tree; the button is named by aria-label.
  *
- * The toggle's reservation is gone rather than retokenised. It read
- * `var(--size-col-sm-alt)`, a name the column-ladder commit had already
- * renamed to `--size-col-gutter` — so on this branch the declaration resolved
- * to nothing at all and silently reintroduced the 4.7px misalignment it was
- * added to fix. An undefined custom property fails with no build error and no
- * test failure, which is exactly how it survived. It needs no replacement:
- * the toggle is a glyph now, in a square the same size whichever bell it
- * draws, so "Enable" (60.1px) and "Disable" (64.8px) no longer exist as
- * widths and there is nothing left to reserve. The browser test that asserts
- * the rows line up is unchanged and still bites — it is the reason this is a
- * deletion rather than a rename.
- *
- * `min-width` rather than `width`, so a translation longer than either label
- * still gets the room it needs instead of being clipped.
+ * The toggle's old reservation is gone rather than retokenised: the toggle is
+ * a glyph in a square the same size whichever bell it draws, so there is no
+ * width to reserve. The browser test that asserts the rows line up is the
+ * reason this is a deletion rather than a rename.
  */
-.nt-act-test { min-width: var(--size-col-3); }
+.nt-act-test {
+  flex-direction: column;
+  row-gap: 0;
+}
+.nt-act-test::after {
+  content: attr(data-reserve);
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+}
 
 /*
  * Too narrow for one line: the settings columns stop pretending to be a
