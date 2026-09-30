@@ -72,6 +72,14 @@ it("lists every page with its address, state and what it shows", async () => {
   expect(rows[1].textContent).toContain("off");
 });
 
+it("links to a published page, and not to one that is off", async () => {
+  mount();
+  const list = await screen.findByRole("list", { name: "Status pages" });
+  const [published, off] = within(list).getAllByRole("listitem");
+  expect(within(published).getByRole("link", { name: "Open Acme services" }).getAttribute("href")).toBe("/status/status");
+  expect(within(off).queryByRole("link")).toBeNull();
+});
+
 it("suggests the address from the title until it is typed by hand, and creates the page off", async () => {
   const fetcher = mount([]);
   expect(await screen.findByText("No status pages yet.")).toBeTruthy();

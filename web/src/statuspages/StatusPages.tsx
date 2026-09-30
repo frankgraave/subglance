@@ -332,6 +332,10 @@ function PageRow({ page, onEdit, onServices, onDeleted }: {
     </div>
     <StateChip>{page.enabled ? "published" : "off"}</StateChip>
     <span className="add-actions">
+      {/* Only a published page has anything to open: one that is off answers
+          404, exactly like an address that never existed. A plain link, so
+          the page loads as the visitor gets it, without the dashboard. */}
+      {page.enabled && <a className="add-button" href={address(page.slug)} aria-label={`Open ${page.title}`}>Open</a>}
       <button type="button" className="add-button" disabled={busy} aria-label={`Settings for ${page.title}`} onClick={onEdit}>Settings</button>
       <button type="button" className="add-button" disabled={busy} aria-label={`Services on ${page.title}`} onClick={onServices}>Services</button>
     </span>

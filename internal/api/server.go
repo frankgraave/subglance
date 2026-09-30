@@ -16,6 +16,7 @@ import (
 	"github.com/frankgraave/subglance/internal/buildinfo"
 	"github.com/frankgraave/subglance/internal/connectivity"
 	"github.com/frankgraave/subglance/internal/events"
+	"github.com/frankgraave/subglance/internal/statuspage"
 	"github.com/frankgraave/subglance/internal/store"
 	"github.com/frankgraave/subglance/internal/trustedproxy"
 	"github.com/frankgraave/subglance/internal/watchdog"
@@ -126,6 +127,14 @@ type Server struct {
 	// environment variable at startup. The settings page shows them
 	// read-only and refuses to store a value over them.
 	retentionPins store.RetentionPins
+
+	// publicPages holds the public status page routes' rate limits and
+	// their 30-second cache. See servePublicStatusPage.
+	publicPages publicPages
+
+	// statusPageRecovery lets a public page call a recovering monitor
+	// degraded. Nil shows a confirmed incident as down until it closes.
+	statusPageRecovery statuspage.RecoverySource
 }
 
 // pingInterval is how often the live stream emits a `ping` event.
@@ -235,7 +244,29 @@ type route struct {
 // access check — but docs/openapi.yaml describes an API for programs, and an
 // entry saying "GET / returns an HTML page" would only add noise to every
 // generated client. TestOpenAPIMatchesRoutes skips undocumented routes.
-func (rt route) documented() bool { return rt.Pattern != webUIPattern }
+func (rt route) documented() bool {
+	switch rt.Pattern {
+	case webUIPattern, statusPageSlashPattern, statusPageFontPattern, statusPageNestedFontPattern:
+		// The status page's font files and its trailing-slash alias are
+		// files and a second address for a documented page, for the
+		// browser and the reverse proxy rather than for a client.
+		return false
+	}
+	return true
+}
+
+// The public status page's extra addresses, beside GET /status/{slug}.
+//
+// The page asks for its fonts relative to itself (statuspage.FontPath), so
+// they have to be found beside it at both the addresses it is served from:
+// /status/acme resolves them under /status/fonts/, and /status/acme/ — what
+// a proxy that maps status.example.com to the page sends — under
+// /status/acme/fonts/.
+const (
+	statusPageSlashPattern      = "/status/{slug}/{$}"
+	statusPageFontPattern       = "/status/fonts/{file}"
+	statusPageNestedFontPattern = "/status/{slug}/fonts/{file}"
+)
 
 // webUIPattern is the catch-all path that serves the dashboard. It is also
 // where every request that matched no other pattern lands.
@@ -279,6 +310,17 @@ func (s *Server) routes() []route {
 		// issue a GET.
 		{http.MethodGet, "/api/v1/push/{token}", accessPublic},
 		{http.MethodPost, "/api/v1/push/{token}", accessPublic},
+
+		// Public status pages. Public because that is what they are for: a
+		// page an operator switched on is published to people without an
+		// account. What they can learn is bounded by the page's own public
+		// types (internal/statuspage), not by a login. A page that is off
+		// answers exactly like one that does not exist.
+		{http.MethodGet, "/status/{slug}", accessPublic},
+		{http.MethodGet, statusPageSlashPattern, accessPublic},
+		{http.MethodGet, statusPageFontPattern, accessPublic},
+		{http.MethodGet, statusPageNestedFontPattern, accessPublic},
+		{http.MethodGet, "/api/v1/status-pages/{slug}", accessPublic},
 
 		// Authenticated: any role.
 		//
@@ -427,8 +469,8 @@ func (s *Server) routes() []route {
 		// Status pages publish monitors to people without an account, under
 		// names chosen for them. Deciding what the outside world sees about
 		// the instance is an administrator's call, like retention. Pages are
-		// addressed by slug; GET /api/v1/status-pages/{slug} is reserved for
-		// the public JSON (docs/design/status-page.md).
+		// addressed by slug; GET /api/v1/status-pages/{slug} is the public
+		// JSON, listed with the public routes above.
 		{http.MethodGet, "/api/v1/status-pages", accessAdmin},
 		{http.MethodPost, "/api/v1/status-pages", accessAdmin},
 		{http.MethodPut, "/api/v1/status-pages/{slug}", accessAdmin},
@@ -474,6 +516,12 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 		return s.handleLogout
 	case "GET /api/v1/push/{token}", "POST /api/v1/push/{token}":
 		return s.handlePush
+	case "GET /status/{slug}", "GET " + statusPageSlashPattern:
+		return s.handlePublicStatusPageHTML
+	case "GET " + statusPageFontPattern, "GET " + statusPageNestedFontPattern:
+		return s.handleStatusPageFont
+	case "GET /api/v1/status-pages/{slug}":
+		return s.handlePublicStatusPageJSON
 
 	case "GET /api/v1/auth/me":
 		return s.handleMe

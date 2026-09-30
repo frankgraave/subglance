@@ -311,3 +311,26 @@ func TestStatusPageCSS(t *testing.T) {
 		t.Errorf("without the file: %q, want nil", got)
 	}
 }
+
+// A status page loads its typefaces from beside itself, so ServeFont is
+// handed a bare file name taken from a URL. It must serve exactly the files
+// in the font directory and refuse anything that would reach elsewhere.
+func TestServeFontServesOnlyFontFiles(t *testing.T) {
+	serve := func(file string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		serveFont(builtFS(), rec, httptest.NewRequest(http.MethodGet, "/status/fonts/x", nil), file)
+		return rec
+	}
+	rec := serve("Face-1.0-subset.woff2")
+	if rec.Code != http.StatusOK || rec.Body.String() != "wOF2" {
+		t.Fatalf("font: status %d body %q, want 200 wOF2", rec.Code, rec.Body.String())
+	}
+	if cc := rec.Header().Get("Cache-Control"); cc != "no-cache" {
+		t.Errorf("font Cache-Control = %q, want no-cache (the name carries no content hash)", cc)
+	}
+	for _, file := range []string{"", ".", "..", "../index.html", "..\\index.html", "sub/Face-1.0-subset.woff2", "missing.woff2"} {
+		if rec := serve(file); rec.Code != http.StatusNotFound {
+			t.Errorf("file %q: status %d, want 404", file, rec.Code)
+		}
+	}
+}

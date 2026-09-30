@@ -207,6 +207,7 @@ func (s *Server) handleUpdateStatusPage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	s.log.Info("status page updated", "page_id", updated.ID, "slug", updated.Slug, "enabled", updated.Enabled)
+	s.publicPages.forget()
 	s.writeStatusPage(w, r, http.StatusOK, updated)
 }
 
@@ -219,6 +220,7 @@ func (s *Server) handleDeleteStatusPage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	s.log.Info("status page deleted", "page_id", p.ID, "slug", p.Slug)
+	s.publicPages.forget()
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -248,6 +250,7 @@ func (s *Server) handleSetStatusPageEntries(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	s.log.Info("status page entries set", "page_id", p.ID, "slug", p.Slug, "entries", len(in))
+	s.publicPages.forget()
 	// Read the page again: setting entries moves its updated_at.
 	fresh, err := s.db.GetStatusPage(r.Context(), p.ID)
 	if s.writeStatusPageError(w, err, "read", p.ID) {

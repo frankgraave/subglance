@@ -83,6 +83,35 @@ func statusPageCSS(files fs.FS) []byte {
 	return b
 }
 
+// ServeFont serves one of the embedded typefaces by file name, for pages that
+// load them from somewhere other than /fonts/: the public status page asks
+// for them beside itself so it works behind a path prefix. A name that is not
+// a plain file in the font directory is a 404, never a path to walk.
+func ServeFont(w http.ResponseWriter, r *http.Request, file string) {
+	serveFont(FS(), w, r, file)
+}
+
+func serveFont(files fs.FS, w http.ResponseWriter, r *http.Request, file string) {
+	if file == "" || file == "." || file == ".." || strings.ContainsAny(file, "/\\") {
+		http.NotFound(w, r)
+		return
+	}
+	f, err := files.Open(fontPrefix + file)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer func() { _ = f.Close() }()
+	info, err := f.Stat()
+	rs, ok := f.(io.ReadSeeker)
+	if err != nil || info.IsDir() || !ok {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-cache")
+	http.ServeContent(w, r, info.Name(), info.ModTime(), rs)
+}
+
 // Available reports whether a real frontend build is embedded.
 //
 // False means the binary was built without building the frontend first. That
