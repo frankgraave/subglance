@@ -93,6 +93,12 @@ and never `accent-color`: `tokens.test.ts` refuses both outside that component
 and its `choice.css`. Pass the label as children. The reasoning is in
 DESIGN.md §8.9.
 
+Every row of a list is one height. In the monitors inventory each settings
+column is a legend over a fixed `--size-row-sm` value slot, a value is one line
+that ends in an ellipsis rather than wrapping, and a wrapped row puts its
+columns on equal grid tracks. `layout/inventory-rows.browser.test.ts` fails on
+two rows of different height. The reasoning is in DESIGN.md §8.10.
+
 A button that is a glyph plus a word needs an explicit `aria-label`. What a
 screen reader makes of an unnamed inline `<svg>` is not fixed — some skip it,
 some announce "graphic" — so leaving the name to text content makes it depend

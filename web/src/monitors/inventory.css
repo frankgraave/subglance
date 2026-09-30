@@ -62,8 +62,18 @@
    columns: name and target are the only way to identify the row. */
 .inv-main { flex: 1 1 12rem; min-width: 0; }
 
+/*
+ * The channels cell is one line too, and a list that does not fit ends in an
+ * ellipsis (SUB-167). It used to wrap: three channels and a routing rule in
+ * 104px made a row five lines tall beside rows of one, and the column stopped
+ * being something the eye could run down. What the column is for is finding
+ * the monitor nobody hears about, and that answer is "none", which always
+ * fits. The whole list is in the cell's title for a pointer, in the row's
+ * sentence for a screen reader, and on the monitor's own page for everyone.
+ */
 .inv-name,
-.inv-sub {
+.inv-sub,
+.inv-col--chan .value-text {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -108,13 +118,39 @@
   flex: none;
 }
 
+/*
+ * A settings column: its legend over one value slot of a fixed height.
+ *
+ * The slot is what keeps every row one height (SUB-167). The values it holds
+ * are not: a type is 16px of helper text, a reading is 20px of body, and the
+ * "not loaded" chip is 22px. Each column was as tall as its own value and
+ * centred on the line, so a row whose channels were unknown stood 2px taller
+ * than its neighbours and its legends rode 2px higher than the ones beside
+ * them. The slot is the one-line row floor, 24px, which holds the tallest of
+ * the three with room to centre it, so the legend band and the value band sit
+ * on the same two lines whatever fills them.
+ *
+ * A grid rather than a flex column because the slot is a track: a height for
+ * the second row that does not depend on what is in it. `justify-items:
+ * start` keeps a chip at its own width instead of stretching it across the
+ * column, and `max-width` on the children holds a long value inside the
+ * column, where it is clipped, rather than letting it wrap into a taller row.
+ */
 .inv-col {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto var(--size-row-sm);
+  align-items: center;
+  justify-items: start;
   gap: var(--space-0h);
   min-width: 0;
   overflow: hidden;
 }
+
+/* `min-width: 0` lets the channels text shrink inside its `Value`, a flex
+   container that would otherwise hold it at its full length. */
+.inv-col > *,
+.inv-col--chan .value-text { max-width: 100%; min-width: 0; }
 
 /* Fixed widths are what make the column readable downward. A settings column
    that shifts by two pixels per row is not a column at all.
@@ -131,7 +167,7 @@
    tags take rung 3 (104): 83, 87 and — tags being data — the rung that holds
    the longest label rather than the longest value, which truncates. */
 .inv-col--type { width: var(--size-col-2); }
-.inv-col--num { width: var(--size-col-3); align-items: flex-end; text-align: right; }
+.inv-col--num { width: var(--size-col-3); justify-items: end; }
 .inv-col--chan { width: var(--size-col-3); }
 .inv-col--tags { width: var(--size-col-3); }
 
@@ -220,7 +256,10 @@
 
 .inv-result--bad { color: var(--down); }
 
-.inv-paused-chip { margin-left: var(--space-2); }
+/* Centred on the name line like the checkbox and the link beside it. On the
+   text baseline it hung 0.1px below the link's box and made a paused row
+   that much taller than the rest. */
+.inv-paused-chip { margin-left: var(--space-2); vertical-align: middle; }
 
 /*
  * The page's tools, as they sit in the shell's toolbar (SUB-134).
@@ -300,11 +339,33 @@
 @container inv-list (width < 836px) {
   .inv-line { flex-wrap: wrap; row-gap: var(--space-2); }
   .inv-main { flex: 1 1 100%; }
-  .inv-meta { flex: 1 1 100%; flex-wrap: wrap; min-width: 0; }
+  /*
+   * Wrapped, the columns go on a grid of equal tracks rather than a flex
+   * wrap (SUB-167).
+   *
+   * A flex wrap breaks where each row's content runs out, so a monitor with
+   * three tags wrapped onto three lines and its neighbour with none onto two:
+   * rows of 151, 193 and 259px on one screen, and columns that no longer
+   * lined up from one row to the next. The tracks depend on the list's width
+   * and nothing else, so every row breaks at the same column and each column
+   * sits at the same place in every row. Rung 3 is the track floor because
+   * it is the widest fixed column on one line; longer values are clipped
+   * there as they already are.
+   */
+  .inv-meta {
+    flex: 1 1 100%;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--size-col-3), 1fr));
+    gap: var(--space-2) var(--space-3);
+    min-width: 0;
+  }
   .inv-col--type,
   .inv-col--num,
   .inv-col--chan,
   .inv-col--tags { width: auto; }
+  /* A track is not a column of numbers to compare down; start-aligned like
+     the cells around it. */
+  .inv-col--num { justify-items: start; }
   .inv-acts { margin-left: auto; }
 }
 

@@ -175,7 +175,14 @@ function MonitorInventoryRowImpl({
             )}
           </span>
 
-          <span className="inv-col inv-col--chan">
+          {/* The cell is one line and a long list ends in an ellipsis, so the
+              whole of it is the title a pointer can read. Only a known list:
+              "not loaded" always fits, and a title that repeats it adds
+              nothing. */}
+          <span
+            className="inv-col inv-col--chan"
+            title={channels.known ? channelText : undefined}
+          >
             <span className="inv-label">Channels</span>
             {/* `none` is a finding and renders in the dim zero ink; `not
                 loaded` is an admission and renders as a dashed state chip, so
