@@ -211,6 +211,40 @@ describe("the checkbox", () => {
     }
   }, 60_000);
 
+  it("keeps the chosen edge under the pointer", async () => {
+    const page = await monitors("dark");
+    try {
+      const edge = (selector: string) =>
+        page.$eval(selector, (el) => getComputedStyle(el, "::before").boxShadow);
+      const away = async () => {
+        await page.mouse.move(0, 0);
+        await settle(page);
+      };
+      const over = async (selector: string) => {
+        await page.hover(selector);
+        await settle(page);
+      };
+
+      // Hover does reach an empty box, so the two checks below are not
+      // comparing a rule that never applied.
+      await away();
+      const empty = await edge(ROW_BOX);
+      await over(ROW_BOX);
+      expect(await edge(ROW_BOX), "unchecked edge under the pointer").not.toBe(empty);
+
+      // Checked, and the group box mixed: the pointer leaves the accent edge.
+      await page.click(ROW_BOX);
+      for (const selector of [ROW_BOX, GROUP_BOX]) {
+        await away();
+        const chosen = await edge(selector);
+        await over(selector);
+        expect(await edge(selector), `${selector} edge under the pointer`).toBe(chosen);
+      }
+    } finally {
+      await page.close();
+    }
+  }, 60_000);
+
   it("moves the keyboard outline to the drawn box", async () => {
     const page = await monitors("dark");
     try {
