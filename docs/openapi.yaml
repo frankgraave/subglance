@@ -2246,7 +2246,15 @@ paths:
         `priority_down` and `priority_up` (0 to 10). ntfy accepts an optional
         `url` (the server root without a path, default the public ntfy.sh)
         and either `token` or `username`
-        plus `password`, not both. See docs/channels.md.
+        plus `password`, not both. `sms` needs `numbers` (up to 10, separated
+        by commas or new lines; `+31 6 1234 5678`, `0031...`, or a national
+        number when `country_code` is set) and a `provider`:
+        `android-gateway` with `url`, `username` and `password`, or `twilio`
+        with `account_sid`, `auth_token` and `from` (a number, or a sender
+        name of up to 11 letters and digits). Optional for sms:
+        `hourly_limit` (1 to 100, default 10), `recoveries` (`false` sends
+        outages only) and `timezone` (IANA, for the times in a message).
+        See docs/channels.md.
         Types are validated in Go rather than left to the database CHECK
         constraint, so an unknown type is a 400 and not a 500.
 
@@ -2256,9 +2264,10 @@ paths:
         moment the mistake is made.
 
         The destination host is also checked against the SSRF guard: `config.url`
-        for webhook, discord, slack, gotify and (when set) ntfy, and
-        `config.host` (the SMTP relay) for email. Telegram and an ntfy channel
-        without `url` have no user-supplied destination — the host is a
+        for webhook, discord, slack, gotify, (when set) ntfy and an sms
+        channel through `android-gateway`, and
+        `config.host` (the SMTP relay) for email. Telegram, Twilio and an ntfy
+        channel without `url` have no user-supplied destination — the host is a
         constant — so nothing is checked for them. A blocked destination is a
         400 naming the offending field, the refused address and the way out:
         start SubGlance with `--allow-private-targets`
@@ -5754,8 +5763,8 @@ components:
       description: |
         The delivery mechanism. Each type has one config key it cannot work
         without: `url` for webhook, discord, slack and gotify; `bot_token`
-        for telegram; `to` for email; `topic` for ntfy.
-      enum: [webhook, discord, slack, telegram, email, ntfy, gotify]
+        for telegram; `to` for email; `topic` for ntfy; `numbers` for sms.
+      enum: [webhook, discord, slack, telegram, email, ntfy, gotify, sms]
       example: slack
     Channel:
       type: object
@@ -5779,12 +5788,17 @@ components:
           description: |
             Type-specific settings. Only destination and presentation keys
             (`to`, `from`, `chat_id`, `channel`, `username`, `host`, `port`,
-            `priority_down`, `priority_up`) are echoed in full. Every other
-            value, including `url`, `token`, `password`, `bot_token` and the
+            `priority_down`, `priority_up`, and for sms `provider`,
+            `account_sid`, `country_code`, `hourly_limit`, `recoveries`,
+            `timezone`) are echoed in full. Every other
+            value, including `url`, `token`, `password`, `bot_token`,
+            `auth_token` and the
             ntfy `topic`, is replaced with `****` followed by the last four
             characters (or all asterisks when the value is four characters or
-            shorter). Writing a masked
-            value back is understood as "leave this credential unchanged".
+            shorter). An sms channel's `numbers` are personal data: an
+            administrator reads them as stored, an editor or viewer reads each
+            one masked, as `+31 6 •••• 5678`. Writing a masked
+            value back is understood as "leave this unchanged".
           additionalProperties:
             type: string
           example:

@@ -147,6 +147,7 @@ func New(opts Options) *Notifier {
 			store.ChannelEmail:    NewEmailSender(opts.Guard),
 			store.ChannelNtfy:     NewNtfySender(opts.Guard),
 			store.ChannelGotify:   NewGotifySender(opts.Guard),
+			store.ChannelSMS:      NewSMSSender(opts.Guard),
 		}
 	}
 
@@ -438,6 +439,21 @@ func (n *Notifier) attempt(ctx context.Context, d store.Delivery) error {
 		return nil
 	}
 
+	// Last, a channel may decline the alert on grounds of its own, such as
+	// an SMS channel's hourly limit. It comes after quiet hours so that an
+	// alert held overnight is judged when it would actually go out.
+	if w, ok := sender.(Withholder); ok {
+		if reason := w.Withhold(ch.Config, alert, n.now()); reason != "" {
+			if err := n.db.WithholdDelivery(ctx, d.ID, reason); err != nil {
+				n.log.Error("could not record withheld delivery", "delivery", d.ID, "error", err)
+				return n.retryMaintenance(ctx, d, err)
+			}
+			n.log.Info("alert withheld by channel",
+				"monitor", alert.MonitorName, "channel", ch.Name, "event", alert.Event, "reason", reason)
+			return nil
+		}
+	}
+
 	sendCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()
 
@@ -522,7 +538,7 @@ func (n *Notifier) Test(ctx context.Context, ch store.Channel) error {
 	}
 
 	alert := Alert{
-		MonitorName: "SubGlance test",
+		MonitorName: testAlertName,
 		MonitorType: "http",
 		Target:      "This is a test alert. No monitor is down.",
 		Event:       string(state.EventIncidentResolved),

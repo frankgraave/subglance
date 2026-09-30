@@ -8,8 +8,11 @@ import {
   fieldsFor,
   hasSecret,
   isMasked,
+  isMaskedList,
+  listEntries,
   quietChip,
   typeLabel,
+  visibleFields,
 } from "./channels";
 
 /*
@@ -179,6 +182,9 @@ describe("fieldsFor", () => {
     expect(secretKeys("webhook")).toEqual(["url", "headers"]);
     expect(secretKeys("ntfy")).toEqual(["topic", "url", "token", "password"]);
     expect(secretKeys("gotify")).toEqual(["url", "token"]);
+    // The gateway URL, its password and the Twilio auth token; the account
+    // SID is on the allowlist, and the numbers have a mask of their own.
+    expect(secretKeys("sms")).toEqual(["url", "password", "auth_token"]);
     // chat_id, to, from, host, port and username are on the allowlist.
     expect(
       fieldsFor("email")
@@ -187,8 +193,67 @@ describe("fieldsFor", () => {
     ).toEqual(["to", "from", "host", "port", "username"]);
   });
 
+  it("offers an SMS provider's fields only while that provider is chosen", () => {
+    // Hidden fields are not sent, so a channel switched to Twilio does not
+    // keep a gateway password nothing reads.
+    const keys = (values: Record<string, string>) =>
+      visibleFields("sms", values).map((f) => f.key);
+    const shared = ["provider", "numbers", "country_code"];
+    const tail = ["hourly_limit", "recoveries", "timezone"];
+    // Nothing chosen reads as the first option, which is what the select shows.
+    expect(keys({})).toEqual([...shared, "url", "username", "password", ...tail]);
+    expect(keys({ provider: "twilio" })).toEqual([
+      ...shared,
+      "account_sid",
+      "auth_token",
+      "from",
+      ...tail,
+    ]);
+    // A provider this build does not know gets no credentials to fill in.
+    expect(keys({ provider: "vonage" })).toEqual([...shared, ...tail]);
+  });
+
   it("returns nothing for a type it has no field set for", () => {
     expect(fieldsFor("pagerduty")).toEqual([]);
+  });
+});
+
+describe("SMS numbers", () => {
+  it("splits a list the way the server does", () => {
+    // notifier.smsRecipients splits on commas, semicolons and line breaks.
+    expect(listEntries("+31612345678, 06 1234 5678;\r\n\n+44 7700 900123 ")).toEqual([
+      "+31612345678",
+      "06 1234 5678",
+      "+44 7700 900123",
+    ]);
+    expect(listEntries(" \n ")).toEqual([]);
+  });
+
+  it("recognises the masked form an editor is sent", () => {
+    expect(isMaskedList("+31 6 \u2022\u2022\u2022\u2022 5678, \u2022\u2022\u2022\u2022")).toBe(true);
+    expect(isMaskedList("+31612345678")).toBe(false);
+  });
+
+  it("describes an SMS channel by count and provider, never by number", () => {
+    // An administrator's answer carries the numbers in full; this line is in
+    // a list that gets screen-shared.
+    const text = describeDestination(
+      make({
+        type: "sms",
+        config: { provider: "twilio", numbers: "+31612345678, +31687654321" },
+      }),
+    );
+    expect(text).toBe("2 phone numbers through Twilio");
+    expect(text).not.toMatch(/\d{4}/);
+    expect(
+      describeDestination(
+        make({ type: "sms", config: { provider: "android-gateway", numbers: "+31612345678" } }),
+      ),
+    ).toBe("1 phone number through SMS Gateway for Android");
+    expect(describeDestination(make({ type: "sms", config: {} }))).toBe(
+      "no phone numbers configured",
+    );
+    expect(typeLabel("sms")).toBe("SMS");
   });
 });
 

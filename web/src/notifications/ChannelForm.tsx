@@ -1,6 +1,15 @@
 import { useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { CHANNEL_TYPES, fieldsFor, hasSecret, typeLabel } from "./channels";
+import {
+  CHANNEL_TYPES,
+  fieldValue,
+  fieldsFor,
+  hasSecret,
+  isMaskedList,
+  listEntries,
+  typeLabel,
+  visibleFields,
+} from "./channels";
 import type { Channel, ChannelType, FieldSpec, QuietHours } from "./channels";
 import type { ChannelInput } from "./channelsApi";
 import { QuietHoursField } from "./QuietHoursField";
@@ -22,6 +31,12 @@ import { draftFrom, quietChange, quietProblem } from "./quietHours";
  * credential alone. Sending an empty string would wipe it; omitting the key
  * would fail validation for Slack, Discord, Telegram and webhook, whose only
  * required field *is* the secret.
+ *
+ * **Masked phone numbers get the same treatment as a secret.** An SMS
+ * channel's numbers reach an editor or viewer as `+31 6 •••• 5678`. They are
+ * not a credential, but the rule that protects a credential applies unchanged:
+ * shown as they arrived, echoed back on save (the API reads its own mask as
+ * "unchanged"), and changed only by replacing the whole list.
  *
  * Presentational: it owns its field values, the caller owns the network, so a
  * test drives saving and rejection without a fetch.
@@ -46,6 +61,31 @@ type Problem = { message: string; key: string | null } | null;
 /** The problem key for the quiet-hours fields, which have no config key. */
 const QUIET = "quiet_hours";
 
+/**
+ * What quiet hours cost on a type, where that is worth saying before the box
+ * is ticked. Only SMS today: it is chosen because it wakes someone, and a
+ * window that holds it until morning undoes that choice.
+ */
+const QUIET_CAVEAT: Partial<Record<ChannelType, string>> = {
+  sms: "On an SMS channel, think twice: a text held until morning usually defeats the reason for choosing SMS.",
+};
+
+type FieldControl = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+
+/** Seeds the form from a stored config: a list reads one entry per line. */
+function seedValues(channel: Channel | null): Record<string, string> {
+  const seeded: Record<string, string> = {};
+  const specs = fieldsFor(channel?.type ?? "");
+  for (const [key, value] of Object.entries(channel?.config ?? {})) {
+    const spec = specs.find((candidate) => candidate.key === key);
+    seeded[key] =
+      spec?.control === "list" && !isMaskedList(value)
+        ? listEntries(value).join("\n")
+        : value;
+  }
+  return seeded;
+}
+
 export function ChannelForm({
   channel = null,
   onSave,
@@ -65,18 +105,15 @@ export function ChannelForm({
   /*
    * Values for the non-secret fields, seeded from the channel being edited.
    *
-   * Keyed by config key rather than held per type, so switching type on a new
-   * channel does not silently carry a Slack URL into an e-mail address — the
-   * keys simply do not overlap, and the ones that do (nothing today) would be
-   * the same setting by the same name.
+   * Keyed by config key, and emptied when the type of a new channel changes.
+   * Keys do overlap between types (`url` is a Gotify server, an ntfy server
+   * and an SMS gateway; `from` is an e-mail sender and a Twilio sender), and
+   * carrying one type's value into another's field would offer a setting that
+   * was typed for something else.
    */
-  const [values, setValues] = useState<Record<string, string>>(() => {
-    const seeded: Record<string, string> = {};
-    for (const [key, value] of Object.entries(channel?.config ?? {})) {
-      seeded[key] = value;
-    }
-    return seeded;
-  });
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    seedValues(channel),
+  );
   /*
    * Which secrets the user chose to replace, and what they typed.
    *
@@ -90,9 +127,12 @@ export function ChannelForm({
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<Problem>(null);
   const nameRef = useRef<HTMLInputElement>(null);
-  const fieldRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const fieldRefs = useRef<Record<string, FieldControl | null>>({});
 
-  const specs = fieldsFor(type);
+  const allSpecs = fieldsFor(type);
+  // Fields tied to another field's value (an SMS provider's credentials) are
+  // left out, and so neither checked nor sent, while that value is not chosen.
+  const specs = visibleFields(type, values);
 
   const reject = (message: string, key: string | null = null) => {
     setProblem({ message, key });
@@ -102,11 +142,29 @@ export function ChannelForm({
 
   /** Whether this field currently accepts typing. */
   const accepting = (spec: FieldSpec) =>
-    !spec.secret || spec.key in replacing || !storedSecret(spec);
+    spec.key in replacing || !storedSecret(spec);
 
-  /** Whether the channel already holds a secret for this field. */
-  const storedSecret = (spec: FieldSpec) =>
-    editing && channel !== null && spec.secret && hasSecret(channel, spec.key);
+  /**
+   * Whether the channel holds a value this page was not shown: a stored
+   * secret, or personal data the API masked for this reader.
+   */
+  const storedSecret = (spec: FieldSpec) => {
+    if (!editing || channel === null) return false;
+    if (spec.secret) return hasSecret(channel, spec.key);
+    return spec.personal === true && isMaskedList(channel.config[spec.key] ?? "");
+  };
+
+  /** What a control shows: what was typed over a replaced value, or the value. */
+  const shown = (spec: FieldSpec) =>
+    spec.key in replacing ? replacing[spec.key] : (values[spec.key] ?? "");
+
+  const edit = (spec: FieldSpec, next: string) => {
+    if (spec.secret || spec.key in replacing) {
+      setReplacing((current) => ({ ...current, [spec.key]: next }));
+    } else {
+      setValues((current) => ({ ...current, [spec.key]: next }));
+    }
+  };
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -120,7 +178,18 @@ export function ChannelForm({
 
     const config: Record<string, string> = {};
     for (const spec of specs) {
-      if (spec.secret && storedSecret(spec) && !(spec.key in replacing)) {
+      if (spec.control === "checkbox") {
+        // Always sent, so the stored setting says what the box showed.
+        config[spec.key] = values[spec.key] === "false" ? "false" : "true";
+        continue;
+      }
+      if (spec.control === "select") {
+        // A select shows its first option until another is picked, and
+        // saving sends what it shows.
+        config[spec.key] = fieldValue(allSpecs, values, spec.key);
+        continue;
+      }
+      if (storedSecret(spec) && !(spec.key in replacing)) {
         /*
          * Untouched: echo the mask back. The server restores the stored value
          * when it sees a config entry that still equals its own mask, so this
@@ -130,12 +199,17 @@ export function ChannelForm({
         config[spec.key] = channel?.config[spec.key] ?? "";
         continue;
       }
-      const raw = spec.secret
-        ? (replacing[spec.key] ?? values[spec.key] ?? "")
-        : (values[spec.key] ?? "");
-      const value = spec.key === "headers" ? raw : raw.trim();
+      const raw = shown(spec);
+      const value =
+        spec.key === "headers"
+          ? raw
+          : spec.control === "list"
+            ? listEntries(raw).join(", ")
+            : raw.trim();
       if (spec.required && value === "") {
-        reject(`${spec.label} is required for a ${typeLabel(type)} channel.`, spec.key);
+        const label = typeLabel(type);
+        const article = /^(SMS|[AEIOU])/.test(label) ? "an" : "a";
+        reject(`${spec.label} is required for ${article} ${label} channel.`, spec.key);
         return;
       }
       if (value !== "") config[spec.key] = value;
@@ -181,6 +255,75 @@ export function ChannelForm({
     })();
   };
 
+  /** The control that takes a field's value, by the kind the spec names. */
+  const renderControl = (spec: FieldSpec, inputId: string, invalid: boolean) => {
+    const common = {
+      id: inputId,
+      className: "add-input",
+      ref: (node: FieldControl | null) => {
+        fieldRefs.current[spec.key] = node;
+      },
+      ...(invalid
+        ? {
+            "aria-invalid": true as const,
+            "aria-describedby": `${inputId}-error`,
+          }
+        : {}),
+    };
+    if (spec.control === "select") {
+      return (
+        <select
+          {...common}
+          value={fieldValue(allSpecs, values, spec.key)}
+          onChange={(event) => {
+            edit(spec, event.target.value);
+            setProblem(null);
+          }}
+        >
+          {(spec.options ?? []).map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      );
+    }
+    if (spec.control === "list") {
+      return (
+        <textarea
+          {...common}
+          rows={3}
+          spellCheck={false}
+          autoComplete="off"
+          value={shown(spec)}
+          onChange={(event) => edit(spec, event.target.value)}
+          {...(spec.placeholder !== undefined
+            ? { placeholder: spec.placeholder }
+            : {})}
+        />
+      );
+    }
+    return (
+      <input
+        {...common}
+        /*
+         * A control that is accepting a secret is a password field for as
+         * long as it accepts one. Not because the value is unreadable to the
+         * person typing it — they pasted it — but because this page is opened
+         * during screen shares and over shoulders, and the value stays on
+         * screen until save.
+         */
+        type={spec.secret ? "password" : "text"}
+        autoComplete={spec.secret ? "new-password" : "off"}
+        value={shown(spec)}
+        onChange={(event) => edit(spec, event.target.value)}
+        {...(spec.placeholder !== undefined
+          ? { placeholder: spec.placeholder }
+          : {})}
+      />
+    );
+  };
+
   return (
     <form className="add-form" onSubmit={submit}>
       {/*
@@ -221,6 +364,8 @@ export function ChannelForm({
             value={type}
             onChange={(event) => {
               setType(event.target.value as ChannelType);
+              setValues({});
+              setReplacing({});
               setProblem(null);
             }}
           >
@@ -264,6 +409,35 @@ export function ChannelForm({
         const inputId = `${ids}-${spec.key}`;
         const invalid = problem?.key === spec.key;
         const showingStored = stored && !open;
+        if (spec.control === "checkbox") {
+          /*
+           * A setting that is on or off, written as the sentence it turns on,
+           * with the label around the box so the whole line is the target.
+           * Absent means on: the sender's default for every such setting.
+           */
+          return (
+            <div className="add-field" key={spec.key}>
+              <label className="nt-check">
+                <input
+                  type="checkbox"
+                  checked={values[spec.key] !== "false"}
+                  onChange={(event) =>
+                    edit(spec, event.target.checked ? "true" : "false")
+                  }
+                  {...(spec.help !== undefined
+                    ? { "aria-describedby": `${inputId}-help` }
+                    : {})}
+                />
+                {spec.label}
+              </label>
+              {spec.help !== undefined && (
+                <p className="add-help" id={`${inputId}-help`}>
+                  {spec.help}
+                </p>
+              )}
+            </div>
+          );
+        }
         return (
           <div className="add-field" key={spec.key}>
             {/*
@@ -300,8 +474,9 @@ export function ChannelForm({
                */
               <>
                 <p className="add-help" id={`${inputId}-state`}>
-                  A value is stored. It is never sent back to this page, so it
-                  cannot be shown or copied — only replaced.{" "}
+                  {spec.secret
+                    ? "A value is stored. It is never sent back to this page, so it cannot be shown or copied — only replaced."
+                    : "Only an administrator reads these in full. Saving keeps them as they are; replacing them means typing the whole list again."}{" "}
                   {channel !== null && (
                     <span className="nt-mask">{channel.config[spec.key]}</span>
                   )}
@@ -329,50 +504,7 @@ export function ChannelForm({
               </>
             ) : (
               <>
-                <input
-                  id={inputId}
-                  ref={(node) => {
-                    fieldRefs.current[spec.key] = node;
-                  }}
-                  className="add-input"
-                  /*
-                   * A control that is accepting a secret is a password field
-                   * for as long as it accepts one. Not because the value is
-                   * unreadable to the person typing it — they pasted it — but
-                   * because this page is opened during screen shares and over
-                   * shoulders, and the value stays on screen until save.
-                   */
-                  type={spec.secret ? "password" : "text"}
-                  autoComplete={spec.secret ? "new-password" : "off"}
-                  value={
-                    spec.secret
-                      ? (replacing[spec.key] ?? values[spec.key] ?? "")
-                      : (values[spec.key] ?? "")
-                  }
-                  onChange={(event) => {
-                    const next = event.target.value;
-                    if (spec.secret) {
-                      setReplacing((current) => ({
-                        ...current,
-                        [spec.key]: next,
-                      }));
-                    } else {
-                      setValues((current) => ({
-                        ...current,
-                        [spec.key]: next,
-                      }));
-                    }
-                  }}
-                  {...(spec.placeholder !== undefined
-                    ? { placeholder: spec.placeholder }
-                    : {})}
-                  {...(invalid
-                    ? {
-                        "aria-invalid": true as const,
-                        "aria-describedby": `${inputId}-error`,
-                      }
-                    : {})}
-                />
+                {renderControl(spec, inputId, invalid)}
                 {invalid && (
                   <p
                     className="add-field-error"
@@ -410,6 +542,9 @@ export function ChannelForm({
       })}
 
       <QuietHoursField
+        {...(QUIET_CAVEAT[type] !== undefined
+          ? { caveat: QUIET_CAVEAT[type] }
+          : {})}
         value={quiet}
         onChange={(next) => {
           setQuiet(next);

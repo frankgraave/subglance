@@ -350,3 +350,30 @@ func TestChannelTargetFieldForType(t *testing.T) {
 		})
 	}
 }
+
+// TestSMSGatewayTargetIsGuarded: the Android gateway's address is checked like
+// any channel URL, and a Twilio channel, reached at a constant, is not.
+func TestSMSGatewayTargetIsGuarded(t *testing.T) {
+	srv := guardedServer(t, false)
+	rec := doJSON(t, srv, http.MethodPost, "/api/v1/channels",
+		channelBody("phone", "sms", `{"provider":"android-gateway","url":"http://192.168.1.50:8080",`+
+			`"username":"sms","password":"p","numbers":"+31612345678"}`))
+	if rec.Code != http.StatusBadRequest ||
+		!strings.Contains(rec.Body.String(), "config.url") ||
+		!strings.Contains(rec.Body.String(), "--allow-private-targets") {
+		t.Fatalf("status = %d, want 400 naming config.url and the setting: %s", rec.Code, rec.Body.String())
+	}
+
+	g := &recordingGuard{}
+	srv2, _ := testServerWithDB(t)
+	srv2 = srv2.WithTargetGuard(g)
+	rec = doJSON(t, srv2, http.MethodPost, "/api/v1/channels",
+		channelBody("twilio", "sms", `{"provider":"twilio","account_sid":"`+testTwilioSID+`",`+
+			`"auth_token":"t","from":"SubGlance","numbers":"+31612345678"}`))
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("twilio channel: status = %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(g.hosts) != 0 {
+		t.Errorf("guard consulted for a Twilio channel: %v", g.hosts)
+	}
+}

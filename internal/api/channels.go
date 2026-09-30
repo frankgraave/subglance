@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/frankgraave/subglance/internal/notifier"
 	"github.com/frankgraave/subglance/internal/store"
 )
 
@@ -32,10 +33,10 @@ type channelResponse struct {
 	QuietHours *store.QuietHours `json:"quiet_hours"`
 }
 
-func toChannelResponse(c store.Channel) channelResponse {
+func toChannelResponse(c store.Channel, admin bool) channelResponse {
 	return channelResponse{
 		ID: c.ID, Name: c.Name, Type: c.Type,
-		Config:    maskConfig(c.Type, c.Config),
+		Config:    maskConfig(c.Type, c.Config, admin),
 		Enabled:   c.Enabled,
 		IsDefault: c.IsDefault,
 		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
@@ -72,18 +73,56 @@ var publicKeys = map[string]bool{
 	// subscribe to the alerts and post fake ones.
 	"priority_down": true,
 	"priority_up":   true,
+	// SMS: which provider, how numbers without a country code are read,
+	// the hourly limit, whether recoveries are sent, and the zone the times
+	// in a message are written in. A Twilio account SID names the account,
+	// like a username; the auth token is what proves the right to use it,
+	// and stays masked. The numbers are masked by role, see smsNumbersView.
+	"provider":     true,
+	"country_code": true,
+	"hourly_limit": true,
+	"recoveries":   true,
+	"timezone":     true,
+	"account_sid":  true,
 }
 
-func maskConfig(_ string, cfg map[string]string) map[string]string {
+func maskConfig(typ string, cfg map[string]string, admin bool) map[string]string {
 	out := make(map[string]string, len(cfg))
 	for k, v := range cfg {
-		if !publicKeys[k] && v != "" {
+		switch {
+		case typ == store.ChannelSMS && k == smsNumbersKey && v != "":
+			out[k] = smsNumbersView(cfg, admin)
+		case !publicKeys[k] && v != "":
 			out[k] = maskValue(v)
-			continue
+		default:
+			out[k] = v
 		}
-		out[k] = v
 	}
 	return out
+}
+
+// smsNumbersKey is the SMS channel setting that holds its phone numbers.
+const smsNumbersKey = "numbers"
+
+// smsNumbersView is an SMS channel's numbers as the reader may see them.
+//
+// A phone number is personal data rather than a credential, so it gets a mask
+// of its own instead of "****5678": an administrator, who manages the people
+// on call, reads the numbers in full; an editor or viewer reads each one as
+// "+31 6 •••• 5678", which is enough to tell whose phone a channel rings and
+// no more.
+func smsNumbersView(cfg map[string]string, admin bool) string {
+	if admin {
+		return cfg[smsNumbersKey]
+	}
+	return notifier.MaskSMSNumbers(cfg[smsNumbersKey], cfg["country_code"])
+}
+
+// readerIsAdmin reports whether the caller may read personal data in channel
+// settings, today only an SMS channel's phone numbers.
+func readerIsAdmin(r *http.Request) bool {
+	u, ok := UserFromContext(r.Context())
+	return ok && u.Role.CanAdmin()
 }
 
 // maskValue keeps enough of a value to recognise it without revealing it.
@@ -119,6 +158,7 @@ var requiredConfigKey = map[string]string{
 	// the field it cannot work without is the topic.
 	store.ChannelNtfy:   "topic",
 	store.ChannelGotify: "url",
+	store.ChannelSMS:    smsNumbersKey,
 }
 
 // ntfyTopic mirrors the topic shape the ntfy server accepts, so a topic with a
@@ -135,7 +175,7 @@ func validateChannel(req channelRequest) string {
 
 	key, ok := requiredConfigKey[req.Type]
 	if !ok {
-		return "type must be one of webhook, discord, slack, telegram, email, ntfy, gotify"
+		return "type must be one of webhook, discord, slack, telegram, email, ntfy, gotify, sms"
 	}
 	if strings.TrimSpace(req.Config[key]) == "" {
 		return "config." + key + " is required for a " + req.Type + " channel"
@@ -189,7 +229,7 @@ func (s *Server) handleListChannels(w http.ResponseWriter, r *http.Request) {
 
 	out := make([]channelResponse, 0, len(channels))
 	for _, c := range channels {
-		resp := toChannelResponse(c)
+		resp := toChannelResponse(c, readerIsAdmin(r))
 		if q, ok := quiet[c.ID]; ok {
 			resp.QuietHours = &q
 		}
@@ -214,7 +254,7 @@ func (s *Server) handleGetChannel(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "could not load the channel")
 		return
 	}
-	resp := toChannelResponse(c)
+	resp := toChannelResponse(c, readerIsAdmin(r))
 	q, ok, err := s.db.GetQuietHours(r.Context(), id)
 	if err != nil {
 		s.log.Error("get quiet hours", "channel_id", id, "error", err)
@@ -260,7 +300,7 @@ func (s *Server) handleCreateChannel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.log.Info("channel created", "channel_id", created.ID, "type", created.Type)
-	writeJSON(w, http.StatusCreated, toChannelResponse(created))
+	writeJSON(w, http.StatusCreated, toChannelResponse(created, readerIsAdmin(r)))
 }
 
 // handleUpdateChannel replaces a channel definition.
@@ -305,6 +345,18 @@ func (s *Server) handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 			if !publicKeys[k] && v == maskValue(existing.Config[k]) && existing.Config[k] != "" {
 				req.Config[k] = existing.Config[k]
 			}
+		}
+		// The same for phone numbers, which have a mask of their own: an
+		// editor who changes an SMS channel's limit sends back the masked
+		// numbers it was shown, and that means "unchanged".
+		// Not under a new country code, though: a stored national number
+		// is another phone under another code, one the editor never saw.
+		// Then the numbers have to be typed again.
+		if existing.Type == store.ChannelSMS && req.Type == store.ChannelSMS &&
+			existing.Config[smsNumbersKey] != "" &&
+			strings.TrimSpace(req.Config["country_code"]) == strings.TrimSpace(existing.Config["country_code"]) &&
+			req.Config[smsNumbersKey] == smsNumbersView(existing.Config, false) {
+			req.Config[smsNumbersKey] = existing.Config[smsNumbersKey]
 		}
 	}
 
@@ -353,7 +405,7 @@ func (s *Server) handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.log.Info("channel updated", "channel_id", id)
-	resp := toChannelResponse(saved)
+	resp := toChannelResponse(saved, readerIsAdmin(r))
 	// A replace does not touch quiet hours, and the response must not
 	// suggest it removed them.
 	if hasQuietHours {
@@ -458,7 +510,7 @@ func (s *Server) handleListMonitorChannels(w http.ResponseWriter, r *http.Reques
 
 	out := make([]channelResponse, 0, len(channels))
 	for _, c := range channels {
-		resp := toChannelResponse(c)
+		resp := toChannelResponse(c, readerIsAdmin(r))
 		if q, ok := quiet[c.ID]; ok {
 			resp.QuietHours = &q
 		}
@@ -517,7 +569,7 @@ func (s *Server) handleSetMonitorChannels(w http.ResponseWriter, r *http.Request
 
 	out := make([]channelResponse, 0, len(channels))
 	for _, c := range channels {
-		resp := toChannelResponse(c)
+		resp := toChannelResponse(c, readerIsAdmin(r))
 		if q, ok := quiet[c.ID]; ok {
 			resp.QuietHours = &q
 		}
@@ -527,7 +579,7 @@ func (s *Server) handleSetMonitorChannels(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]any{"channels": out})
 }
 
-// validatePushChannel checks the settings ntfy and Gotify need beyond their
+// validatePushChannel checks the settings ntfy, Gotify and SMS need beyond their
 // required key. The notifier validates the same things again before every
 // send; checking here as well is what puts the message on the form.
 func validatePushChannel(req channelRequest) string {
@@ -550,6 +602,12 @@ func validatePushChannel(req channelRequest) string {
 		}
 		if (cfg["username"] == "") != (cfg["password"] == "") {
 			return "config.username and config.password must be set together"
+		}
+	case store.ChannelSMS:
+		// One rule set, shared with the sender, so the form and the
+		// delivery cannot disagree about what a valid number is.
+		if err := notifier.ValidateSMSConfig(cfg); err != nil {
+			return "config." + err.Error()
 		}
 	case store.ChannelGotify:
 		if strings.TrimSpace(cfg["token"]) == "" {

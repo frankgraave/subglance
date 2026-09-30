@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/frankgraave/subglance/internal/checker"
+	"github.com/frankgraave/subglance/internal/notifier"
 	"github.com/frankgraave/subglance/internal/store"
 )
 
@@ -92,6 +93,20 @@ func channelTarget(req channelRequest) (field, host string) {
 		if err != nil {
 			// validateChannel has already rejected this; returning no
 			// host here just avoids reporting the same fault twice.
+			return "", ""
+		}
+		return "config.url", u.Hostname()
+
+	case store.ChannelSMS:
+		// Only the Android gateway has an address the operator typed; it
+		// is a phone on the local network nearly every time, which is
+		// what the refusal's pointer to --allow-private-targets is for.
+		// Twilio is reached at a constant, like Telegram.
+		if strings.TrimSpace(req.Config["provider"]) != notifier.SMSProviderAndroidGateway {
+			return "", ""
+		}
+		u, err := url.Parse(strings.TrimSpace(req.Config["url"]))
+		if err != nil {
 			return "", ""
 		}
 		return "config.url", u.Hostname()

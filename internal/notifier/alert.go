@@ -207,6 +207,21 @@ type Sender interface {
 	Validate(cfg map[string]string) error
 }
 
+// Withholder is a Sender that can decline an alert before it is attempted.
+//
+// A non-empty reason means the alert is not sent on this channel at all: the
+// delivery is recorded as not sent, with the reason, and is not retried. That
+// is different from a failure, which is retried and then shown as an error.
+// The SMS channel uses it for its hourly limit and its outages-only setting.
+type Withholder interface {
+	Withhold(cfg map[string]string, a Alert, now time.Time) string
+}
+
+// testAlertName is the monitor name of the alert the Send test button
+// delivers. No monitor is involved; a channel that words its messages itself
+// can recognise it by this name and a zero MonitorID.
+const testAlertName = "SubGlance test"
+
 // Retryable marks an error worth trying again.
 //
 // The distinction matters: a 500 from Slack is a bad minute, while a 404 on a
