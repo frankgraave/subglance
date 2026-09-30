@@ -11,6 +11,8 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/frankgraave/subglance/internal/buildinfo"
@@ -127,6 +129,25 @@ type Server struct {
 	// environment variable at startup. The settings page shows them
 	// read-only and refuses to store a value over them.
 	retentionPins store.RetentionPins
+
+	// passes starts a retention pass on request, and background bounds the
+	// passes and compactions the settings page starts: they outlive the
+	// request that asked for them, but not the server. Both nil means the
+	// instance runs without housekeeping; see WithHousekeeping.
+	passes     RetentionPasses
+	background context.Context
+
+	// compacting is set while a compaction started here is in progress, so
+	// a second request is refused before it plans anything and the settings
+	// page can say one is running.
+	compacting atomic.Bool
+	// compactStore plans and runs compactions. Nil means the database;
+	// tests put a fake here to reach a full disk without filling one.
+	compactStore compactor
+	// lastCompact is the outcome of the most recent compaction started
+	// here, kept for as long as the process runs. Guarded by compactMu.
+	compactMu   sync.Mutex
+	lastCompact *compactOutcomeJSON
 
 	// publicPages holds the public status page routes' rate limits and
 	// their 30-second cache. See servePublicStatusPage.
@@ -465,6 +486,11 @@ func (s *Server) routes() []route {
 		// instance at once, and a shorter window deletes rows on the next
 		// pass. That is an administrator's call, not an editor's.
 		{http.MethodPut, "/api/v1/settings/retention", accessAdmin},
+		// Starting a pass or a compaction now is the same call as changing
+		// when they happen: a pass under a size limit removes history, and
+		// a compaction makes every write wait.
+		{http.MethodPost, "/api/v1/settings/retention/run", accessAdmin},
+		{http.MethodPost, "/api/v1/settings/retention/compact", accessAdmin},
 
 		// Status pages publish monitors to people without an account, under
 		// names chosen for them. Deciding what the outside world sees about
@@ -535,6 +561,10 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 		return s.handlePreviewRetention
 	case "PUT /api/v1/settings/retention":
 		return s.handleSetRetention
+	case "POST /api/v1/settings/retention/run":
+		return s.handleRunRetention
+	case "POST /api/v1/settings/retention/compact":
+		return s.handleCompact
 	case "GET /api/v1/backup":
 		return s.handleBackup
 	case "POST /api/v1/auth/password":

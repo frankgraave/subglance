@@ -128,6 +128,27 @@ kept should be a choice. The minimum is `32MiB`: a smaller limit is almost
 certainly a unit left off, and it would fold nearly everything on the first
 pass. A number without a unit is refused for the same reason.
 
+#### Running a pass now, and compacting
+
+An administrator can start the pass without waiting for its time of day with
+`POST /api/v1/settings/retention/run`. It runs in the background with the
+settings in force and is recorded like a scheduled pass, with trigger
+`manual`; `GET /api/v1/settings/retention` shows `running` while it works and
+the outcome as `last_pass` afterwards, along with the time of day and the size
+limit, which a `PUT` to the same address changes. A pass that is already
+running, scheduled or not, makes the request fail with `409`.
+
+A database too large to be switched to incremental auto-vacuum at startup never
+shrinks, however much a pass deletes. `POST /api/v1/settings/retention/compact`
+rewrites it once with a full `VACUUM` and leaves it in incremental mode, so the
+file shrinks now and later passes keep it that way. The shipped image has no
+`sqlite3` binary, so this is the way to do it without stopping the server. While
+it runs, every write waits for it: checks keep running and their results are
+recorded when it finishes. `compact` in the settings response says whether it
+would help, roughly how long it takes and whether the disk has room; the copy
+it writes can need up to twice the database size, and without that much free
+space it is refused (`507`) before anything is written.
+
 The same pass clears the notification delivery log: a notification that was
 delivered, or suppressed by maintenance or folded into a quiet-hours digest, is
 removed 30 days after its last update, whatever the two windows say. Failed

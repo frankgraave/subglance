@@ -123,9 +123,9 @@ type pageState struct {
 	mode, pages, free, pageSize int64
 }
 
-func (db *DB) pageState(ctx context.Context) (pageState, error) {
+func pageStateOf(ctx context.Context, q rowQuerier) (pageState, error) {
 	var s pageState
-	for _, q := range []struct {
+	for _, p := range []struct {
 		name string
 		dst  *int64
 	}{
@@ -134,8 +134,8 @@ func (db *DB) pageState(ctx context.Context) (pageState, error) {
 		{"freelist_count", &s.free},
 		{"page_size", &s.pageSize},
 	} {
-		if err := db.Writer.QueryRowContext(ctx, "PRAGMA "+q.name).Scan(q.dst); err != nil {
-			return pageState{}, fmt.Errorf("read %s: %w", q.name, err)
+		if err := q.QueryRowContext(ctx, "PRAGMA "+p.name).Scan(p.dst); err != nil {
+			return pageState{}, fmt.Errorf("read %s: %w", p.name, err)
 		}
 	}
 	return s, nil
@@ -143,8 +143,29 @@ func (db *DB) pageState(ctx context.Context) (pageState, error) {
 
 // PlanCompact reports whether a compaction is worth running, how long it is
 // expected to take, and whether the disk has room for it. It changes nothing.
+//
+// It reads through the reader pool, so the settings page can ask while a
+// retention pass or a compaction holds the writer instead of waiting for it.
 func (db *DB) PlanCompact(ctx context.Context) (CompactPlan, error) {
-	s, err := db.pageState(ctx)
+	tx, err := db.Reader.BeginTx(ctx, nil)
+	if err != nil {
+		return CompactPlan{}, fmt.Errorf("begin compaction plan: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	// A pooled connection answers PRAGMA auto_vacuum from the header it read
+	// when its last transaction began, which can predate a compaction that
+	// switched the mode. Reading the schema first starts a transaction, and
+	// with it a fresh read of the header, on the connection the pragmas
+	// then run on.
+	var tables int
+	if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM sqlite_schema").Scan(&tables); err != nil {
+		return CompactPlan{}, fmt.Errorf("start compaction plan: %w", err)
+	}
+	return db.planCompact(ctx, tx)
+}
+
+func (db *DB) planCompact(ctx context.Context, q rowQuerier) (CompactPlan, error) {
+	s, err := pageStateOf(ctx, q)
 	if err != nil {
 		return CompactPlan{}, err
 	}
@@ -177,7 +198,9 @@ func (db *DB) Compact(ctx context.Context) (CompactResult, error) {
 	}
 	defer db.compactMu.Unlock()
 
-	plan, err := db.PlanCompact(ctx)
+	// Planned on the writer, which the rewrite is about to hold: the size
+	// the disk check is made against is then the size that gets copied.
+	plan, err := db.planCompact(ctx, db.Writer)
 	if err != nil {
 		return CompactResult{}, err
 	}
@@ -212,7 +235,7 @@ func (db *DB) Compact(ctx context.Context) (CompactResult, error) {
 	}
 	elapsed := time.Since(start)
 
-	after, err := db.pageState(ctx)
+	after, err := pageStateOf(ctx, db.Writer)
 	if err != nil {
 		return CompactResult{}, err
 	}
