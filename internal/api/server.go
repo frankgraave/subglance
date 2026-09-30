@@ -36,6 +36,12 @@ type Server struct {
 	// WithConnectivity.
 	connectivity      *connectivity.Canary
 	connectivityWired bool
+	// connectivityPins are the connectivity settings fixed by a flag or an
+	// environment variable, which the settings API refuses to change.
+	connectivityPins store.ConnectivityPins
+	// connectivityMu serialises saves of the connectivity settings with
+	// applying them to the canary. See handleSetConnectivitySettings.
+	connectivityMu sync.Mutex
 
 	// backups reports on scheduled backups; nil with backupsWired set means
 	// they are not configured. See WithBackups.
@@ -492,6 +498,13 @@ func (s *Server) routes() []route {
 		{http.MethodPost, "/api/v1/settings/retention/run", accessAdmin},
 		{http.MethodPost, "/api/v1/settings/retention/compact", accessAdmin},
 
+		// The connectivity check decides whether a failure is blamed on
+		// the monitor or on this host, for every monitor at once, and its
+		// targets can name hosts on the operator's network. Reading them
+		// is as much an administrator's business as changing them.
+		{http.MethodGet, "/api/v1/settings/connectivity", accessAdmin},
+		{http.MethodPut, "/api/v1/settings/connectivity", accessAdmin},
+
 		// Status pages publish monitors to people without an account, under
 		// names chosen for them. Deciding what the outside world sees about
 		// the instance is an administrator's call, like retention. Pages are
@@ -557,6 +570,10 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 		return s.handleConnectivity
 	case "GET /api/v1/settings/retention":
 		return s.handleGetRetention
+	case "GET /api/v1/settings/connectivity":
+		return s.handleGetConnectivitySettings
+	case "PUT /api/v1/settings/connectivity":
+		return s.handleSetConnectivitySettings
 	case "GET /api/v1/settings/retention/preview":
 		return s.handlePreviewRetention
 	case "PUT /api/v1/settings/retention":

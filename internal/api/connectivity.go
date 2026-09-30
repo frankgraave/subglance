@@ -29,8 +29,9 @@ func (s *Server) WithConnectivity(c *connectivity.Canary) *Server {
 // a viewer's dashboard can explain a wall of warnings. The watchdog endpoint
 // withholds its receiver for the same reason.
 type connectivityResponse struct {
-	// Enabled is false when the connectivity check is turned off. Offline is
-	// then always false: nothing is measuring it.
+	// Enabled is false when the connectivity check is turned off, by a flag
+	// or through the settings API. Offline is then always false: nothing is
+	// measuring it.
 	Enabled bool `json:"enabled"`
 	// Offline is true when every target failed in the most recent round.
 	// The canary re-dials every 30 seconds while it holds, so the answer is
@@ -58,8 +59,8 @@ func (s *Server) handleConnectivity(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "connectivity state unavailable")
 		return
 	}
-	resp := connectivityResponse{Enabled: s.connectivity != nil}
-	if s.connectivity != nil {
+	resp := connectivityResponse{Enabled: s.connectivity != nil && s.connectivity.Enabled()}
+	if resp.Enabled {
 		if since, offline := s.connectivity.OfflineSince(); offline {
 			at := since.UTC()
 			resp.Offline = true
