@@ -60,9 +60,11 @@ it.each([
         inside: box.left >= 0 && box.right <= innerWidth,
         above: first !== null && box.bottom <= first.getBoundingClientRect().top,
         role: line.getAttribute("role"),
+        // Up for as long as the host is offline, so the dot must not breathe.
+        dotAnimation: getComputedStyle(line.querySelector(".conn-badge-dot")!).animationName,
       };
     });
-    expect(layout).toEqual({ scrolls: false, inside: true, above: true, role: "status" });
+    expect(layout).toEqual({ scrolls: false, inside: true, above: true, role: "status", dotAnimation: "none" });
 
     await page.evaluate(axe.source);
     const audit = await page.evaluate(async () => {

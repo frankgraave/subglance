@@ -16,8 +16,9 @@ import { hostOfflineText } from "./offlineState";
  *    monitor, and both are `--warn`, never `--down`: a server that cannot see
  *    out is not an outage of the things it watches. Reusing `.conn-badge`
  *    also costs no stylesheet, and the stylesheet budget has no room.
- *    The breathing dot is honest here too: the server is re-dialling every
- *    30 seconds and will clear this line itself.
+ *    The dot is held still, though (connection.css): the reconnecting badge
+ *    is transient, while this line can stay up for hours, and a dot that
+ *    breathes for hours is animation at rest (DESIGN.md rule 2).
  * 3. **`role="status"`, polite, and always mounted.** A live region only
  *    announces changes to a region that already existed, so the empty one is
  *    rendered while online, the same as ConnectionBadge.
