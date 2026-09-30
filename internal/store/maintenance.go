@@ -91,45 +91,115 @@ func (w MaintenanceWindow) Active(at time.Time) bool {
 	if w.Timezone == "" {
 		return !at.Before(w.StartsAt) && at.Before(w.EndsAt)
 	}
-	loc, err := time.LoadLocation(w.Timezone)
-	if err != nil {
-		return false
-	}
-	clock, err := time.Parse("15:04", w.LocalTime)
-	if err != nil {
+	loc, clock, ok := w.recurrence()
+	if !ok {
 		return false
 	}
 	local := at.In(loc)
 	// A 24-hour elapsed window can reach two civil dates back at spring DST.
 	for delta := -2; delta <= 0; delta++ {
-		day := time.Date(local.Year(), local.Month(), local.Day()+delta, 12, 0, 0, 0, loc)
-		selected := false
-		for _, d := range w.Weekdays {
-			selected = selected || int(day.Weekday()) == d
-		}
-		if !selected {
-			continue
-		}
-		start := time.Date(day.Year(), day.Month(), day.Day(), clock.Hour(), clock.Minute(), 0, 0, loc)
-		matches := func(t time.Time) bool {
-			v := t.In(loc)
-			return v.Year() == day.Year() && v.YearDay() == day.YearDay() && v.Hour() == clock.Hour() && v.Minute() == clock.Minute()
-		}
-		// Enumerate the offsets on either side of a transition, not a presumed
-		// one-hour shift (Lord Howe changes by thirty minutes).
-		_, base := start.Zone()
-		for _, near := range []time.Time{start.Add(-24 * time.Hour), start.Add(24 * time.Hour)} {
-			_, offset := near.Zone()
-			candidate := start.Add(time.Duration(base-offset) * time.Second)
-			if matches(candidate) && (!matches(start) || candidate.Before(start)) {
-				start = candidate
-			}
-		}
-		if matches(start) && !at.Before(start) && at.Before(start.Add(time.Duration(w.DurationMinutes)*time.Minute)) {
+		start, ok := w.startOn(local.Year(), local.Month(), local.Day()+delta, loc, clock)
+		if ok && !at.Before(start) && at.Before(start.Add(time.Duration(w.DurationMinutes)*time.Minute)) {
 			return true
 		}
 	}
 	return false
+}
+
+// MaintenanceSpan is one stretch of time a window is active: [Start, End).
+type MaintenanceSpan struct {
+	Start time.Time
+	End   time.Time
+}
+
+// Occurrences returns the stretches of this window that overlap [from, to),
+// oldest first. It follows Active exactly: an instant is inside a returned
+// span if and only if Active reports true for it. So a span starts no
+// earlier than the window was created, and a weekly start time that does
+// not exist on a DST day produces no span that day. Spans are not cut to
+// from and to: an occurrence already running at from is returned whole, so
+// a caller can say when it began.
+func (w MaintenanceWindow) Occurrences(from, to time.Time) []MaintenanceSpan {
+	out := []MaintenanceSpan{}
+	add := func(start, end time.Time) {
+		if !w.CreatedAt.IsZero() && start.Before(w.CreatedAt) {
+			start = w.CreatedAt
+		}
+		if start.Before(end) && start.Before(to) && end.After(from) {
+			out = append(out, MaintenanceSpan{Start: start, End: end})
+		}
+	}
+	if w.Timezone == "" {
+		add(w.StartsAt, w.EndsAt)
+		return out
+	}
+	loc, clock, ok := w.recurrence()
+	if !ok || !from.Before(to) {
+		return out
+	}
+	duration := time.Duration(w.DurationMinutes) * time.Minute
+	first := from.In(loc)
+	last := to.In(loc)
+	lastDay := time.Date(last.Year(), last.Month(), last.Day(), 12, 0, 0, 0, loc)
+	// Start two civil dates early for the same reason Active looks back two:
+	// an occurrence that began then can still be running at from.
+	for offset := -2; ; offset++ {
+		day := time.Date(first.Year(), first.Month(), first.Day()+offset, 12, 0, 0, 0, loc)
+		if day.After(lastDay) {
+			break
+		}
+		if start, ok := w.startOn(day.Year(), day.Month(), day.Day(), loc, clock); ok {
+			add(start, start.Add(duration))
+		}
+	}
+	return out
+}
+
+// recurrence returns a weekly window's zone and start time of day.
+func (w MaintenanceWindow) recurrence() (*time.Location, time.Time, bool) {
+	loc, err := time.LoadLocation(w.Timezone)
+	if err != nil {
+		return nil, time.Time{}, false
+	}
+	clock, err := time.Parse("15:04", w.LocalTime)
+	if err != nil {
+		return nil, time.Time{}, false
+	}
+	return loc, clock, true
+}
+
+// startOn returns when a weekly window starts on the civil date y-m-d in loc
+// (d may be out of range; it is normalised like time.Date does). It reports
+// false when that date is not one of the window's weekdays, or when the start
+// time does not exist that day because the clocks jump over it.
+func (w MaintenanceWindow) startOn(y int, m time.Month, d int, loc *time.Location, clock time.Time) (time.Time, bool) {
+	day := time.Date(y, m, d, 12, 0, 0, 0, loc)
+	selected := false
+	for _, wd := range w.Weekdays {
+		selected = selected || int(day.Weekday()) == wd
+	}
+	if !selected {
+		return time.Time{}, false
+	}
+	start := time.Date(day.Year(), day.Month(), day.Day(), clock.Hour(), clock.Minute(), 0, 0, loc)
+	matches := func(t time.Time) bool {
+		v := t.In(loc)
+		return v.Year() == day.Year() && v.YearDay() == day.YearDay() && v.Hour() == clock.Hour() && v.Minute() == clock.Minute()
+	}
+	// Enumerate the offsets on either side of a transition, not a presumed
+	// one-hour shift (Lord Howe changes by thirty minutes).
+	_, base := start.Zone()
+	for _, near := range []time.Time{start.Add(-24 * time.Hour), start.Add(24 * time.Hour)} {
+		_, offset := near.Zone()
+		candidate := start.Add(time.Duration(base-offset) * time.Second)
+		if matches(candidate) && (!matches(start) || candidate.Before(start)) {
+			start = candidate
+		}
+	}
+	if !matches(start) {
+		return time.Time{}, false
+	}
+	return start, true
 }
 
 func (db *DB) CreateMaintenance(ctx context.Context, w MaintenanceWindow) (MaintenanceWindow, error) {
