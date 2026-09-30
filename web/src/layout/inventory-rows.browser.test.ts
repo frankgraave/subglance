@@ -128,6 +128,8 @@ type RowMeasure = {
   wrapped: boolean;
   /** Each column legend's top, in page coordinates. */
   labelTops: number[];
+  /** The tallest legend's height: two legends closer than this share a line. */
+  labelHeight: number;
   /** Each column legend's position relative to its own row's corner. */
   labelOffsets: string[];
 };
@@ -137,20 +139,82 @@ function measureRows(page: Page): Promise<RowMeasure[]> {
     [...document.querySelectorAll<HTMLElement>(".inv-row")].map((row) => {
       const main = row.querySelector<HTMLElement>(".inv-main")!.getBoundingClientRect();
       const meta = row.querySelector<HTMLElement>(".inv-meta")!.getBoundingClientRect();
+      const labels = [...row.querySelectorAll<HTMLElement>(".inv-label")];
       return {
         name: (row.querySelector(".inv-name a")?.textContent ?? "").trim(),
         height: Math.round(row.getBoundingClientRect().height * 10) / 10,
         // The meta row sits under the name once the container is too narrow.
         wrapped: meta.top >= main.bottom - 1,
-        labelTops: [...row.querySelectorAll<HTMLElement>(".inv-label")].map(
-          (label) => Math.round(label.getBoundingClientRect().top * 10) / 10,
-        ),
-        labelOffsets: [...row.querySelectorAll<HTMLElement>(".inv-label")].map((label) => {
+        labelTops: labels.map((label) => Math.round(label.getBoundingClientRect().top * 10) / 10),
+        labelHeight: Math.max(...labels.map((label) => label.getBoundingClientRect().height)),
+        labelOffsets: labels.map((label) => {
           const box = label.getBoundingClientRect();
           const corner = row.getBoundingClientRect();
           return `${Math.round(box.left - corner.left)},${Math.round(box.top - corner.top)}`;
         }),
       };
+    }),
+  );
+}
+
+/**
+ * Every settings value that breaks its slot: a value box outside the slot
+ * track on either axis, text that runs onto a second line, or content that
+ * overflows a box which does not clip it. An ellipsis passes: its text is one
+ * line and the element that overflows is the one that clips it.
+ */
+function valuesOutOfSlot(page: Page): Promise<string[]> {
+  return page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>(".inv-col")].flatMap((col) => {
+      const value = col.lastElementChild as HTMLElement;
+      const label = `${col.className}: ${(value.textContent ?? "").trim()}`;
+      const problems: string[] = [];
+
+      // The slot is the column's second grid track, not the whole column:
+      // the column also holds the legend and the gap above the value.
+      const style = getComputedStyle(col);
+      const tracks = style.gridTemplateRows.split(" ").map(parseFloat);
+      const colBox = col.getBoundingClientRect();
+      const left = colBox.left + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft);
+      const right = colBox.right - parseFloat(style.borderRightWidth) - parseFloat(style.paddingRight);
+      const top =
+        colBox.top +
+        parseFloat(style.borderTopWidth) +
+        parseFloat(style.paddingTop) +
+        tracks[0]! +
+        (parseFloat(style.rowGap) || 0);
+      const bottom = top + tracks[1]!;
+      const box = value.getBoundingClientRect();
+      if (
+        box.left < left - 0.5 ||
+        box.right > right + 0.5 ||
+        box.top < top - 0.5 ||
+        box.bottom > bottom + 0.5
+      ) {
+        problems.push("outside its slot");
+      }
+
+      // One line: every run of text inside the value lays out as one line box.
+      const walker = document.createTreeWalker(value, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (!(node.textContent ?? "").trim()) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        const lines = new Set([...range.getClientRects()].map((rect) => Math.round(rect.top)));
+        if (lines.size > 1) problems.push(`"${(node.textContent ?? "").trim()}" wraps`);
+      }
+
+      // No visible overflow: whatever is wider than its box is clipped there.
+      for (const element of [value, ...value.querySelectorAll<HTMLElement>("*")]) {
+        if (
+          element.scrollWidth > element.clientWidth + 1 &&
+          getComputedStyle(element).overflowX === "visible"
+        ) {
+          problems.push(`${element.className || element.tagName} overflows visibly`);
+        }
+      }
+
+      return problems.length === 0 ? [] : [`${label}: ${problems.join(", ")}`];
     }),
   );
 }
@@ -164,10 +228,20 @@ const WIDTHS = [1440, 1100, 901, 700, 390];
 describe("the monitors inventory rows", () => {
   for (const role of ["admin", "viewer"] as const) {
     for (const width of WIDTHS) {
-      it(`are all one height at ${width}px for ${role === "admin" ? "an admin" : "a viewer"}`, async () => {
-        const page = await openInventory(width, role);
-        try {
-          const rows = await measureRows(page);
+      describe(`at ${width}px for ${role === "admin" ? "an admin" : "a viewer"}`, () => {
+        let page: Page;
+        let rows: RowMeasure[];
+
+        beforeAll(async () => {
+          page = await openInventory(width, role);
+          rows = await measureRows(page);
+        }, 30_000);
+
+        afterAll(async () => {
+          await page?.close();
+        });
+
+        it("are all one height", () => {
           expect(rows.length, "the fixture did not render four rows").toBe(4);
           const heights = Object.fromEntries(rows.map((row) => [row.name, row.height]));
           expect(
@@ -176,9 +250,54 @@ describe("the monitors inventory rows", () => {
           ).toBe(1);
           // The rows agree on their shape, too: all one line or all wrapped.
           expect(new Set(rows.map((row) => row.wrapped)).size).toBe(1);
-        } finally {
-          await page.close();
-        }
+        });
+
+        it("put the column legends on shared lines", () => {
+          /*
+           * The settings columns are read downward, and across a row they are
+           * read as one band of legends over one band of values. A value that
+           * is a chip is taller than a value that is a word; when the columns
+           * centred on that height, the legend over the chip rode a few pixels
+           * higher than its neighbours and the band stepped.
+           *
+           * On a one-line row that is one band. Wrapped, the columns sit on
+           * several lines, and two legends are then either on the same line,
+           * at exactly the same top, or on different lines, at least a legend
+           * apart: never a few pixels out.
+           */
+          for (const row of rows) {
+            const tops = [...new Set(row.labelTops)].sort((a, b) => a - b);
+            const context = `${row.name}: legend tops ${JSON.stringify(row.labelTops)}`;
+            if (!row.wrapped) expect(tops.length, context).toBe(1);
+            for (let i = 1; i < tops.length; i++) {
+              expect(tops[i]! - tops[i - 1]!, context).toBeGreaterThanOrEqual(row.labelHeight - 0.5);
+            }
+          }
+        });
+
+        it("show each value whole inside its slot, on one line", async () => {
+          /*
+           * The slot holds the row's height, so a value that wraps no longer
+           * makes the row taller; it overflows the slot instead and is cut
+           * through the middle of a line, which the height checks cannot see.
+           * A value either fits its slot or ends in an ellipsis on one line.
+           */
+          expect(await valuesOutOfSlot(page)).toEqual([]);
+        });
+
+        it("put each column at the same place in every row", () => {
+          /*
+           * Equal heights are half of reading down a column; the other half is
+           * that the column is where the eye left it in the row above. Wrapped,
+           * the columns used to break wherever each row's content ran out, so
+           * Tags sat on the second line of one row and the third of the next.
+           */
+          const shapes = Object.fromEntries(rows.map((row) => [row.name, row.labelOffsets.join(" ")]));
+          expect(
+            new Set(Object.values(shapes)).size,
+            `legend positions differ between rows: ${JSON.stringify(shapes)}`,
+          ).toBe(1);
+        });
       });
     }
   }
@@ -196,73 +315,4 @@ describe("the monitors inventory rows", () => {
       }
     }
   });
-
-  it("puts the column legends on one line across a one-line row", async () => {
-    /*
-     * The settings columns are read downward, and across a row they are read
-     * as one band of legends over one band of values. A value that is a chip
-     * is taller than a value that is a word; when the columns centred on that
-     * height, the legend over the chip rode a few pixels higher than its
-     * neighbours and the band stepped.
-     */
-    const page = await openInventory(1440, "admin");
-    try {
-      for (const row of await measureRows(page)) {
-        expect(
-          new Set(row.labelTops).size,
-          `${row.name}: legend tops ${JSON.stringify(row.labelTops)}`,
-        ).toBe(1);
-      }
-    } finally {
-      await page.close();
-    }
-  });
-
-  it("shows each value whole inside its slot, on one line", async () => {
-    /*
-     * The slot holds the row's height, so a value that wraps no longer makes
-     * the row taller; it overflows the slot instead and is cut through the
-     * middle of a line, which the height checks above cannot see. A value
-     * either fits its slot or ends in an ellipsis on one line.
-     */
-    for (const width of [1440, 390]) {
-      const page = await openInventory(width, "admin");
-      try {
-        const overflowing = await page.evaluate(() =>
-          [...document.querySelectorAll<HTMLElement>(".inv-col")].flatMap((col) => {
-            const value = col.lastElementChild as HTMLElement;
-            const slot = col.getBoundingClientRect();
-            const box = value.getBoundingClientRect();
-            const inside = box.top >= slot.top - 0.5 && box.bottom <= slot.bottom + 0.5;
-            return inside ? [] : [`${col.className}: ${(value.textContent ?? "").trim()}`];
-          }),
-        );
-        expect(overflowing, `at ${width}px`).toEqual([]);
-      } finally {
-        await page.close();
-      }
-    }
-  });
-
-  for (const width of [1440, 700, 390]) {
-    it(`puts each column at the same place in every row at ${width}px`, async () => {
-      /*
-       * Equal heights are half of reading down a column; the other half is
-       * that the column is where the eye left it in the row above. Wrapped,
-       * the columns used to break wherever each row's content ran out, so
-       * Tags sat on the second line of one row and the third of the next.
-       */
-      const page = await openInventory(width, "admin");
-      try {
-        const rows = await measureRows(page);
-        const shapes = Object.fromEntries(rows.map((row) => [row.name, row.labelOffsets.join(" ")]));
-        expect(
-          new Set(Object.values(shapes)).size,
-          `legend positions differ between rows: ${JSON.stringify(shapes)}`,
-        ).toBe(1);
-      } finally {
-        await page.close();
-      }
-    });
-  }
 });
