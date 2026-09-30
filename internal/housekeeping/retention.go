@@ -126,7 +126,30 @@ func (r *Retention) Run(ctx context.Context, trigger string) (store.RetentionPas
 		return store.RetentionPass{}, ErrPassRunning
 	}
 	defer r.running.Store(false)
+	return r.pass(ctx, trigger), nil
+}
 
+// Begin starts a pass in the background and returns as soon as it has been
+// claimed, or ErrPassRunning when another pass has not finished yet. It is
+// what "run now" on the settings page calls: a pass over a large table takes
+// longer than a request should, and the outcome is recorded like any other
+// pass, so the caller reads it back from LastRetentionPass.
+//
+// The pass is claimed before Begin returns, so Running is true from then on
+// and a second Begin or Run is refused rather than queued.
+func (r *Retention) Begin(ctx context.Context, trigger string) error {
+	if !r.running.CompareAndSwap(false, true) {
+		return ErrPassRunning
+	}
+	go func() {
+		defer r.running.Store(false)
+		r.pass(ctx, trigger)
+	}()
+	return nil
+}
+
+// pass performs one claimed pass and records it.
+func (r *Retention) pass(ctx context.Context, trigger string) store.RetentionPass {
 	log := r.opts.Log
 	started := r.opts.Now()
 	pass := store.RetentionPass{StartedAt: started, Trigger: trigger}
@@ -173,7 +196,7 @@ func (r *Retention) Run(ctx context.Context, trigger string) (store.RetentionPas
 	if err := r.opts.Store.SaveRetentionPass(saveCtx, pass); err != nil {
 		log.Error("record retention pass", "error", err)
 	}
-	return pass, nil
+	return pass
 }
 
 func (r *Retention) apply(ctx context.Context) (store.RetentionResult, error) {

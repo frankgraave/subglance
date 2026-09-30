@@ -333,11 +333,12 @@ paths:
     get:
       tags: [Settings]
       operationId: getRetention
-      summary: Read retention windows and table sizes
+      summary: Read retention settings, table sizes and the last pass
       description: |
-        The windows the next maintenance pass will apply, where each one came
-        from, and what the tables they govern cost today. Any authenticated
-        role may read it.
+        The windows, time of day and database size limit the next maintenance
+        pass will apply, where each one came from, what the tables they govern
+        cost today, what the last pass did, and whether compacting the
+        database would help. Any authenticated role may read it.
 
         Precedence, highest first: a flag or environment variable, the value
         saved here, the built-in default (raw heartbeats 30 days, hourly
@@ -352,7 +353,13 @@ paths:
         over the last 30 days. `bytes` covers the table and its indexes and is
         null if the page statistics are unavailable.
 
-        The response carries a weak `ETag` versioning the saved windows. Hand
+        `last_pass` is the most recent pass, scheduled, caught up at startup
+        or started with POST /api/v1/settings/retention/run. It is stored in
+        the database, so it survives a restart. `running` is true while a
+        pass is in progress. `last_pass` and `compact` are null when they
+        cannot be read, rather than failing the request.
+
+        The response carries a weak `ETag` versioning the saved settings. Hand
         it back as `If-Match` on a PUT to make that save conditional on nobody
         having saved in the meantime.
       x-subglance-access: read
@@ -379,17 +386,22 @@ paths:
     put:
       tags: [Settings]
       operationId: setRetention
-      summary: Change retention windows
+      summary: Change retention settings
       description: |
-        Administrators only. Stores one or both windows; an absent window is
-        left as it is, and 0 means keep forever. The change applies from the
-        next daily maintenance pass without a restart.
+        Administrators only. Stores any of the two windows, the time of day
+        the daily pass runs and the database size limit; an absent field is
+        left as it is. A window of 0 means keep forever, a size limit of 0
+        means none. Everything sent is saved together or not at all. The
+        change applies from the next daily maintenance pass without a
+        restart; a new time of day never starts a pass by itself.
 
         There is no upper limit beyond what the server can represent (100
         years). The rules that are enforced protect the data: raw heartbeats
         are kept at least a day, because the 24-hour charts read them, and
         hourly summaries at least as long as raw heartbeats (forever when raw
-        heartbeats are kept forever).
+        heartbeats are kept forever). A size limit is at least 32 MiB, because
+        a smaller one is almost certainly a unit left off and would remove
+        nearly all history on the next pass.
 
         With `If-Match` set to the `ETag` from GET, the save is refused with
         `412 Precondition Failed` if anyone saved the windows after that read.
@@ -420,6 +432,15 @@ paths:
               properties:
                 raw_seconds: { type: integer, minimum: 0, maximum: 3153600000 }
                 rollup_seconds: { type: integer, minimum: 0, maximum: 3153600000 }
+                run_at:
+                  type: string
+                  pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+                  description: Time of day, 24-hour `HH:MM`, in the server's time zone.
+                  example: '03:30'
+                max_database_bytes:
+                  type: integer
+                  minimum: 0
+                  description: Size limit in bytes; 0 for none, otherwise at least 33554432 (32 MiB).
       responses:
         '200':
           description: |
@@ -440,7 +461,7 @@ paths:
             ETag:
               $ref: '#/components/headers/RetentionETag'
         '400':
-          description: Malformed JSON or `If-Match`, no window given, or a window that breaks a rule above. `field` names the window.
+          description: Malformed JSON or `If-Match`, no field given, or a value that breaks a rule above. `field` names it.
           content:
             application/json:
               schema:
@@ -450,7 +471,7 @@ paths:
         '403':
           $ref: '#/components/responses/ForbiddenAdmin'
         '409':
-          description: The window is pinned by a flag or environment variable, which the message names.
+          description: The field is pinned by a flag or environment variable, which the message names.
           content:
             application/json:
               schema:
@@ -518,6 +539,101 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '500':
           description: The counts could not be read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/settings/retention/run:
+    post:
+      tags: [Settings]
+      operationId: runRetention
+      summary: Start a retention pass now
+      description: |
+        Administrators only. Starts the daily maintenance pass now, with the
+        settings in force, instead of waiting for its time of day. The pass
+        runs in the background, because on a large database it takes longer
+        than a request should; poll GET /api/v1/settings/retention, where
+        `running` goes back to false and `last_pass` shows the outcome, with
+        `trigger: manual`.
+
+        What the windows remove can be counted beforehand with GET
+        /api/v1/settings/retention/preview. What a size limit removes beyond
+        that cannot, because it depends on how much space the windows free.
+      x-subglance-access: admin
+      responses:
+        '202':
+          description: The pass has started.
+          headers:
+            Location:
+              description: Where its outcome appears.
+              schema: { type: string, const: /api/v1/settings/retention }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionActionStarted'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenAdmin'
+        '409':
+          description: A pass is already running, scheduled or manual. Its outcome appears as `last_pass` when it finishes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: The server runs without its maintenance scheduler.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/settings/retention/compact:
+    post:
+      tags: [Settings]
+      operationId: compactDatabase
+      summary: Compact the database
+      description: |
+        Administrators only. Rewrites the database with a full `VACUUM` and
+        leaves it in incremental auto-vacuum mode, so the file shrinks to its
+        contents now and later passes keep it that way. This is the way to
+        shrink a database that was too large to be switched over at startup.
+
+        While it runs every write waits for it: checks keep running and their
+        results are recorded when it finishes. `estimate_seconds` says roughly
+        how long that is. It is refused before anything is written when the
+        disk cannot hold the copy it makes (up to twice the database size).
+        It runs in the background; `compact.running` and `compact.last` on
+        GET /api/v1/settings/retention report it.
+      x-subglance-access: admin
+      responses:
+        '202':
+          description: The compaction has started.
+          headers:
+            Location:
+              description: Where its outcome appears.
+              schema: { type: string, const: /api/v1/settings/retention }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionActionStarted'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenAdmin'
+        '409':
+          description: A compaction is already running.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: The database could not be inspected.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '507':
+          description: Not enough free disk space for the copy; the message names the directory, the bytes needed and the bytes free.
           content:
             application/json:
               schema:
@@ -3974,7 +4090,7 @@ components:
       example: public, max-age=30
     RetentionETag:
       description: |
-        A weak entity tag counting saves of the retention windows. Send it
+        A weak entity tag counting saves of the retention settings. Send it
         back as `If-Match` to make a subsequent PUT conditional.
       schema:
         type: string
@@ -4153,7 +4269,7 @@ components:
     Retention:
       type: object
       additionalProperties: false
-      required: [raw, rollup, minimum_raw_seconds, tables]
+      required: [raw, rollup, minimum_raw_seconds, run_at, max_database_size, tables, last_pass, running, compact]
       properties:
         raw:
           $ref: '#/components/schemas/RetentionWindow'
@@ -4162,6 +4278,42 @@ components:
         minimum_raw_seconds:
           type: integer
           description: The shortest raw window accepted, other than 0 (forever).
+        run_at:
+          type: object
+          additionalProperties: false
+          required: [value, source, pinned_by]
+          properties:
+            value:
+              type: string
+              description: Time of day of the daily pass, `HH:MM`, in the server's time zone.
+              example: '03:30'
+            source: { type: string, enum: [default, database, pinned] }
+            pinned_by: { type: [string, 'null'] }
+        max_database_size:
+          type: object
+          additionalProperties: false
+          required: [bytes, source, pinned_by, minimum_bytes]
+          properties:
+            bytes:
+              type: integer
+              minimum: 0
+              description: The size limit in bytes; 0 means none.
+            source: { type: string, enum: [default, database, pinned] }
+            pinned_by: { type: [string, 'null'] }
+            minimum_bytes:
+              type: integer
+              description: The smallest limit accepted, other than 0.
+        running:
+          type: boolean
+          description: A retention pass is in progress.
+        last_pass:
+          oneOf:
+            - $ref: '#/components/schemas/RetentionPass'
+            - type: 'null'
+        compact:
+          oneOf:
+            - $ref: '#/components/schemas/CompactPlan'
+            - type: 'null'
         tables:
           type: array
           items:
@@ -4175,6 +4327,113 @@ components:
               rows: { type: integer, minimum: 0 }
               bytes: { type: [integer, 'null'], minimum: 0 }
               rows_per_day: { type: number, minimum: 0 }
+    RetentionPass:
+      type: object
+      additionalProperties: false
+      description: |
+        One maintenance pass. The row counts are what the windows removed;
+        `size_cap` is what the size limit removed beyond that, and is null
+        when no limit was set. Raw heartbeats are folded into hourly
+        summaries, not lost; the rest are deleted.
+      required: [started_at, duration_ms, trigger, heartbeats, hourly_buckets, incidents, deliveries, freed_bytes, size_cap, error]
+      properties:
+        started_at: { type: string, format: date-time }
+        duration_ms: { type: integer, minimum: 0 }
+        trigger:
+          type: string
+          enum: [schedule, startup, manual]
+          description: '`startup` is a pass that was missed while the server was down and ran when it came back.'
+        heartbeats: { type: integer, minimum: 0 }
+        hourly_buckets: { type: integer, minimum: 0 }
+        incidents: { type: integer, minimum: 0 }
+        deliveries: { type: integer, minimum: 0 }
+        freed_bytes:
+          type: integer
+          minimum: 0
+          description: Disk space handed back to the filesystem.
+        size_cap:
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required: [limit_bytes, before_bytes, after_bytes, heartbeats, hourly_buckets, raw_since, hourly_since, at_floor]
+              properties:
+                limit_bytes: { type: integer }
+                before_bytes: { type: integer }
+                after_bytes: { type: integer }
+                heartbeats:
+                  type: integer
+                  description: Raw heartbeats folded into hourly summaries beyond the raw window.
+                hourly_buckets:
+                  type: integer
+                  description: Hourly summaries deleted beyond the rollup window.
+                raw_since:
+                  type: [string, 'null']
+                  format: date-time
+                  description: Where raw heartbeats now start, when the limit moved it.
+                hourly_since:
+                  type: [string, 'null']
+                  format: date-time
+                  description: Where hourly summaries now start, when the limit moved it.
+                at_floor:
+                  type: boolean
+                  description: Still over the limit with nothing left the limit may remove.
+            - type: 'null'
+        error:
+          type: [string, 'null']
+          description: Why the pass failed; null when it succeeded.
+    CompactPlan:
+      type: object
+      additionalProperties: false
+      required: [size_bytes, free_bytes, auto_vacuum, recommended, estimate_seconds, disk_shortfall, running, last]
+      properties:
+        size_bytes: { type: integer, minimum: 0 }
+        free_bytes:
+          type: integer
+          minimum: 0
+          description: The part of the file held by empty pages.
+        auto_vacuum: { type: string, enum: [none, full, incremental] }
+        recommended:
+          type: boolean
+          description: Auto-vacuum is off, so the file never shrinks, or more than a quarter of it is empty.
+        estimate_seconds:
+          type: integer
+          minimum: 1
+          description: Roughly how long writes would wait for the rewrite.
+        disk_shortfall:
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required: [need_bytes, free_bytes]
+              properties:
+                need_bytes: { type: integer }
+                free_bytes: { type: integer }
+            - type: 'null'
+        running: { type: boolean }
+        last:
+          description: The most recent compaction started since the server started; null before the first.
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required: [finished_at, duration_ms, before_bytes, after_bytes, shrink_pending, error]
+              properties:
+                finished_at: { type: string, format: date-time }
+                duration_ms: { type: integer, minimum: 0 }
+                before_bytes: { type: integer }
+                after_bytes: { type: integer }
+                shrink_pending:
+                  type: boolean
+                  description: A reader kept the file at its old length for now; the next checkpoint shrinks it.
+                error: { type: [string, 'null'] }
+            - type: 'null'
+    RetentionActionStarted:
+      type: object
+      additionalProperties: false
+      required: [running]
+      properties:
+        running: { type: boolean, const: true }
+        estimate_seconds:
+          type: integer
+          description: For a compaction, roughly how long writes will wait for it.
     RetentionWindow:
       type: object
       additionalProperties: false

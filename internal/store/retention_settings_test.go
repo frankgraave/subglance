@@ -310,3 +310,58 @@ func TestSetRetentionIfVersionRefusesAStaleEditor(t *testing.T) {
 		t.Fatalf("save with the current version = %d, %v; want version 2", v, err)
 	}
 }
+
+func TestSaveRetentionSettingsStoresEverythingUnderOneVersion(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+
+	at := ClockTime{Hour: 1, Minute: 15}
+	limit := int64(2 << 30)
+	v, err := db.SaveRetentionSettings(ctx, RetentionChange{RunAt: &at, MaxBytes: &limit}, RetentionPins{})
+	if err != nil || v != 1 {
+		t.Fatalf("save = %d, %v; want version 1", v, err)
+	}
+	gotAt, err := db.ResolveRetentionRunAt(ctx, nil)
+	if err != nil || gotAt.Value != at || gotAt.Source != RetentionSourceDatabase {
+		t.Errorf("run at = %+v, %v; want 01:15 from the database", gotAt, err)
+	}
+	gotLimit, err := db.ResolveMaxDatabaseSize(ctx, nil)
+	if err != nil || gotLimit.Value != limit {
+		t.Errorf("limit = %+v, %v; want 2 GiB", gotLimit, err)
+	}
+
+	// A stale editor is refused for the limit as for a window: a lower
+	// limit removes history just as a shorter window does.
+	lower := int64(64 << 20)
+	if _, err := db.SaveRetentionSettingsIfVersion(ctx, RetentionChange{MaxBytes: &lower}, RetentionPins{}, []int64{0}); !errors.Is(err, ErrRetentionVersion) {
+		t.Fatalf("stale save of the limit = %v, want ErrRetentionVersion", err)
+	}
+	if got, _ := db.ResolveMaxDatabaseSize(ctx, nil); got.Value != limit {
+		t.Errorf("limit after a refused save = %d, want it unchanged", got.Value)
+	}
+}
+
+func TestSaveRetentionSettingsWritesNothingWhenOneFieldIsRefused(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+
+	at := ClockTime{Hour: 5}
+	tiny := int64(1024)
+	if _, err := db.SaveRetentionSettings(ctx, RetentionChange{Raw: dur(7 * day), RunAt: &at, MaxBytes: &tiny}, RetentionPins{}); !errors.Is(err, ErrMaxDatabaseSize) {
+		t.Fatalf("save with a 1 KiB limit = %v, want ErrMaxDatabaseSize", err)
+	}
+	// The rollup window breaks a rule only the transaction can check.
+	if _, err := db.SaveRetentionSettings(ctx, RetentionChange{Rollup: dur(day), RunAt: &at}, RetentionPins{}); !errors.Is(err, ErrRetentionPolicy) {
+		t.Fatalf("save with rollup inside raw = %v, want ErrRetentionPolicy", err)
+	}
+	raw, _, err := db.StoredRetention(ctx)
+	if err != nil || raw != nil {
+		t.Errorf("raw after refused saves = %v, %v; want nothing stored", raw, err)
+	}
+	if got, _ := db.ResolveRetentionRunAt(ctx, nil); got.Source != RetentionSourceDefault {
+		t.Errorf("run at after refused saves = %+v, want the default", got)
+	}
+	if v, _ := db.RetentionVersion(ctx); v != 0 {
+		t.Errorf("version after refused saves = %d, want 0", v)
+	}
+}

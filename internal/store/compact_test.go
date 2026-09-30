@@ -202,7 +202,7 @@ func TestCompactRefusesWhenTheDiskCannotHoldTheCopy(t *testing.T) {
 		func(string, string) bool { return true },
 		nil)
 
-	before, err := db.pageState(ctx)
+	before, err := pageStateOf(ctx, db.Writer)
 	if err != nil {
 		t.Fatalf("pageState: %v", err)
 	}
@@ -221,7 +221,7 @@ func TestCompactRefusesWhenTheDiskCannotHoldTheCopy(t *testing.T) {
 			disk, 2*size, db.dataDir())
 	}
 
-	after, err := db.pageState(ctx)
+	after, err := pageStateOf(ctx, db.Writer)
 	if err != nil {
 		t.Fatalf("pageState: %v", err)
 	}
@@ -245,7 +245,7 @@ func TestCompactCountsATemporaryDirectoryOnAnotherFilesystemSeparately(t *testin
 	db := openTestDB(t)
 	ctx := context.Background()
 	bloat(t, db, 2000)
-	s, err := db.pageState(ctx)
+	s, err := pageStateOf(ctx, db.Writer)
 	if err != nil {
 		t.Fatalf("pageState: %v", err)
 	}

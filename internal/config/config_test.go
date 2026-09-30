@@ -211,7 +211,7 @@ func TestRetentionPinsNameWhatSetThem(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p := c.RetentionPins(); p.Raw != nil || p.Rollup != nil {
+	if p := c.RetentionPins(); p.Raw != nil || p.Rollup != nil || p.RunAt != nil || p.MaxSize != nil {
 		t.Fatalf("nothing set, but pins = %+v; the settings page would be locked for no reason", p)
 	}
 
@@ -228,6 +228,17 @@ func TestRetentionPinsNameWhatSetThem(t *testing.T) {
 	// The flag overrides the variable, so it is the flag the page names.
 	if p.Rollup == nil || p.Rollup.By != "--rollup-retention" || p.Rollup.Value != 0 {
 		t.Errorf("rollup pin = %+v, want 0 by --rollup-retention", p.Rollup)
+	}
+
+	// The time of day and the size limit travel with the windows, so the
+	// settings endpoints can lock those fields too.
+	c, err = Load([]string{"--retention-run-at=02:00", "--max-database-size=2GB"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p = c.RetentionPins()
+	if p.RunAt == nil || p.RunAt.By != "--retention-run-at" || p.MaxSize == nil || p.MaxSize.By != "--max-database-size" {
+		t.Errorf("pins = run at %+v, size %+v; want both pinned by their flags", p.RunAt, p.MaxSize)
 	}
 }
 

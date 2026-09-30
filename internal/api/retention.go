@@ -40,10 +40,133 @@ type retentionResponse struct {
 	Raw               retentionWindowJSON  `json:"raw"`
 	Rollup            retentionWindowJSON  `json:"rollup"`
 	MinimumRawSeconds int64                `json:"minimum_raw_seconds"`
+	RunAt             retentionRunAtJSON   `json:"run_at"`
+	MaxDatabaseSize   maxDatabaseSizeJSON  `json:"max_database_size"`
 	Tables            []retentionTableJSON `json:"tables"`
+	// LastPass is the most recent recorded pass, or null when none has
+	// been recorded or the record cannot be read.
+	LastPass *retentionPassJSON `json:"last_pass"`
+	// Running is true while a pass is in progress.
+	Running bool `json:"running"`
+	// Compact is what compacting the database would do, or null when that
+	// cannot be worked out (the platform's free disk space is unknown).
+	Compact *compactPlanJSON `json:"compact"`
+}
+
+// retentionRunAtJSON is the time of day the daily pass runs.
+type retentionRunAtJSON struct {
+	Value    string  `json:"value"`
+	Source   string  `json:"source"`
+	PinnedBy *string `json:"pinned_by"`
+}
+
+// maxDatabaseSizeJSON is the database size limit. Bytes of zero means none.
+type maxDatabaseSizeJSON struct {
+	Bytes        int64   `json:"bytes"`
+	Source       string  `json:"source"`
+	PinnedBy     *string `json:"pinned_by"`
+	MinimumBytes int64   `json:"minimum_bytes"`
+}
+
+// retentionPassJSON is the record of one pass on the wire. The rows each
+// step removed are what the windows did; SizeCap is what the size limit did
+// beyond that, and is null when no limit was set.
+type retentionPassJSON struct {
+	StartedAt     time.Time    `json:"started_at"`
+	DurationMS    int64        `json:"duration_ms"`
+	Trigger       string       `json:"trigger"`
+	Heartbeats    int64        `json:"heartbeats"`
+	HourlyBuckets int64        `json:"hourly_buckets"`
+	Incidents     int64        `json:"incidents"`
+	Deliveries    int64        `json:"deliveries"`
+	FreedBytes    int64        `json:"freed_bytes"`
+	SizeCap       *sizeCapJSON `json:"size_cap"`
+	Error         *string      `json:"error"`
+}
+
+// sizeCapJSON is what the size limit did on one pass. The two "since"
+// times are null when the limit did not move that boundary.
+type sizeCapJSON struct {
+	LimitBytes    int64      `json:"limit_bytes"`
+	BeforeBytes   int64      `json:"before_bytes"`
+	AfterBytes    int64      `json:"after_bytes"`
+	Heartbeats    int64      `json:"heartbeats"`
+	HourlyBuckets int64      `json:"hourly_buckets"`
+	RawSince      *time.Time `json:"raw_since"`
+	HourlySince   *time.Time `json:"hourly_since"`
+	AtFloor       bool       `json:"at_floor"`
+}
+
+// compactPlanJSON is what the settings page needs to offer a compaction:
+// whether it is worth it, how long writes wait for it, and whether the disk
+// can hold it.
+type compactPlanJSON struct {
+	SizeBytes       int64  `json:"size_bytes"`
+	FreeBytes       int64  `json:"free_bytes"`
+	AutoVacuum      string `json:"auto_vacuum"`
+	Recommended     bool   `json:"recommended"`
+	EstimateSeconds int64  `json:"estimate_seconds"`
+	// DiskShortfall is null when the disk has room. The directory is left
+	// out: this response is readable by every role, and a path on the
+	// server is not something a viewer needs. The refusal an administrator
+	// gets when starting a compaction names it.
+	DiskShortfall *diskShortfallJSON `json:"disk_shortfall"`
+	Running       bool               `json:"running"`
+	// Last is how the most recent compaction started from the settings
+	// page went, since the server started; null before the first.
+	Last *compactOutcomeJSON `json:"last"`
+}
+
+type diskShortfallJSON struct {
+	NeedBytes int64 `json:"need_bytes"`
+	FreeBytes int64 `json:"free_bytes"`
 }
 
 func seconds(d time.Duration) int64 { return int64(d / time.Second) }
+
+func pinnedBy(by string) *string {
+	if by == "" {
+		return nil
+	}
+	return &by
+}
+
+func passJSON(p *store.RetentionPass) *retentionPassJSON {
+	if p == nil {
+		return nil
+	}
+	out := &retentionPassJSON{
+		StartedAt:     p.StartedAt.UTC(),
+		DurationMS:    p.Duration.Milliseconds(),
+		Trigger:       p.Trigger,
+		Heartbeats:    p.Heartbeats,
+		HourlyBuckets: p.HourlyBuckets,
+		Incidents:     p.Incidents,
+		Deliveries:    p.Deliveries,
+		FreedBytes:    p.FreedBytes,
+	}
+	if p.Error != "" {
+		msg := p.Error
+		out.Error = &msg
+	}
+	if c := p.SizeCap; c != nil {
+		out.SizeCap = &sizeCapJSON{
+			LimitBytes: c.Limit, BeforeBytes: c.Before, AfterBytes: c.After,
+			Heartbeats: c.Heartbeats, HourlyBuckets: c.HourlyBuckets,
+			RawSince: optionalTime(c.RawSince), HourlySince: optionalTime(c.HourlySince),
+			AtFloor: c.AtFloor,
+		}
+	}
+	return out
+}
+
+func optionalTime(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	u := t.UTC()
+	return &u
+}
 
 func windowJSON(w store.RetentionWindow) retentionWindowJSON {
 	out := retentionWindowJSON{Seconds: seconds(w.Value), Source: w.Source}
@@ -111,19 +234,62 @@ func retentionVersions(tags []string) []int64 {
 	return versions
 }
 
-// retentionWindows is the policy half of the response: the windows in force
-// and where each came from, with no table measurements yet.
+// retentionWindows is the policy half of the response: the settings in force
+// and where each came from, what the last pass did and whether one is
+// running, with no table measurements yet.
+//
+// Only the settings the page edits fail the call. The last pass and the
+// compaction plan are reports about the database, and one that cannot be read
+// is left out (and logged) rather than locking an administrator out of the
+// settings it sits next to.
 func (s *Server) retentionWindows(r *http.Request) (retentionResponse, error) {
-	eff, err := s.db.ResolveRetention(r.Context(), s.retentionPins)
+	ctx := r.Context()
+	eff, err := s.db.ResolveRetention(ctx, s.retentionPins)
 	if err != nil {
 		return retentionResponse{}, err
 	}
-	return retentionResponse{
+	runAt, err := s.db.ResolveRetentionRunAt(ctx, s.retentionPins.RunAt)
+	if err != nil {
+		return retentionResponse{}, err
+	}
+	limit, err := s.db.ResolveMaxDatabaseSize(ctx, s.retentionPins.MaxSize)
+	if err != nil {
+		return retentionResponse{}, err
+	}
+	resp := retentionResponse{
 		Raw:               windowJSON(eff.Raw),
 		Rollup:            windowJSON(eff.Rollup),
 		MinimumRawSeconds: seconds(store.MinRawRetention),
-		Tables:            []retentionTableJSON{},
-	}, nil
+		RunAt: retentionRunAtJSON{
+			Value: runAt.Value.String(), Source: runAt.Source, PinnedBy: pinnedBy(runAt.PinnedBy),
+		},
+		MaxDatabaseSize: maxDatabaseSizeJSON{
+			Bytes: limit.Value, Source: limit.Source, PinnedBy: pinnedBy(limit.PinnedBy),
+			MinimumBytes: store.MinMaxDatabaseSize,
+		},
+		Tables: []retentionTableJSON{},
+	}
+	if s.passes != nil {
+		resp.Running = s.passes.Running()
+	}
+	if last, err := s.db.LastRetentionPass(ctx); err != nil {
+		s.log.Error("read the last retention pass", "error", err)
+	} else {
+		resp.LastPass = passJSON(last)
+	}
+	if plan, err := s.compactor().PlanCompact(ctx); err != nil {
+		s.log.Warn("plan database compaction", "error", err)
+	} else {
+		resp.Compact = &compactPlanJSON{
+			SizeBytes: plan.SizeBytes, FreeBytes: plan.FreeBytes, AutoVacuum: plan.AutoVacuum,
+			Recommended: plan.Recommended, EstimateSeconds: seconds(plan.Estimate),
+			Running: s.compacting.Load(), Last: s.lastCompaction(),
+		}
+		if d := plan.Disk; d != nil {
+			resp.Compact.DiskShortfall = &diskShortfallJSON{NeedBytes: d.NeedBytes, FreeBytes: d.FreeBytes}
+		}
+	}
+	return resp, nil
 }
 
 // retentionTables measures the tables the windows govern.
@@ -145,10 +311,13 @@ func (s *Server) retentionTables(r *http.Request) ([]retentionTableJSON, error) 
 }
 
 // retentionRequest is the body of PUT /api/v1/settings/retention. An absent
-// window is left as it is; zero means forever.
+// field is left as it is. A window of zero means forever, a size limit of
+// zero means none.
 type retentionRequest struct {
-	RawSeconds    *int64 `json:"raw_seconds"`
-	RollupSeconds *int64 `json:"rollup_seconds"`
+	RawSeconds       *int64  `json:"raw_seconds"`
+	RollupSeconds    *int64  `json:"rollup_seconds"`
+	RunAt            *string `json:"run_at"`
+	MaxDatabaseBytes *int64  `json:"max_database_bytes"`
 }
 
 // maxRetentionSeconds keeps a window inside what time.Duration can hold. It
@@ -191,8 +360,9 @@ func (s *Server) handleSetRetention(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
-	if req.RawSeconds == nil && req.RollupSeconds == nil {
-		writeProblem(w, http.StatusBadRequest, bodyProblem("send raw_seconds, rollup_seconds, or both"))
+	if req.RawSeconds == nil && req.RollupSeconds == nil && req.RunAt == nil && req.MaxDatabaseBytes == nil {
+		writeProblem(w, http.StatusBadRequest,
+			bodyProblem("send at least one of raw_seconds, rollup_seconds, run_at and max_database_bytes"))
 		return
 	}
 
@@ -206,6 +376,17 @@ func (s *Server) handleSetRetention(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, status, p)
 		return
 	}
+	runAt, status, p := runAtInput(req.RunAt, s.retentionPins.RunAt)
+	if !p.ok() {
+		writeProblem(w, status, p)
+		return
+	}
+	maxBytes, status, p := maxDatabaseSizeInput(req.MaxDatabaseBytes, s.retentionPins.MaxSize)
+	if !p.ok() {
+		writeProblem(w, status, p)
+		return
+	}
+	change := store.RetentionChange{Raw: raw, Rollup: rollup, RunAt: runAt, MaxBytes: maxBytes}
 
 	// `*` asks only that the settings exist, and they always do.
 	var (
@@ -213,9 +394,9 @@ func (s *Server) handleSetRetention(w http.ResponseWriter, r *http.Request) {
 		err     error
 	)
 	if hasIfMatch && !wantAny {
-		version, err = s.db.SetRetentionIfVersion(r.Context(), raw, rollup, s.retentionPins, retentionVersions(wantTags))
+		version, err = s.db.SaveRetentionSettingsIfVersion(r.Context(), change, s.retentionPins, retentionVersions(wantTags))
 	} else {
-		version, err = s.db.SetRetention(r.Context(), raw, rollup, s.retentionPins)
+		version, err = s.db.SaveRetentionSettings(r.Context(), change, s.retentionPins)
 	}
 	if errors.Is(err, store.ErrRetentionVersion) {
 		// No fresh ETag: the caller has to look at what the other
@@ -236,7 +417,8 @@ func (s *Server) handleSetRetention(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "could not save retention settings")
 		return
 	}
-	s.log.Info("retention settings changed", "raw_seconds", req.RawSeconds, "rollup_seconds", req.RollupSeconds)
+	s.log.Info("retention settings changed", "raw_seconds", req.RawSeconds, "rollup_seconds", req.RollupSeconds,
+		"run_at", req.RunAt, "max_database_bytes", req.MaxDatabaseBytes)
 
 	// The windows are committed at this point, so nothing below may answer
 	// with an error: a 500 would tell the client the save failed when it did
@@ -282,6 +464,39 @@ func retentionInput(window string, v *int64, pin *store.RetentionPin) (*time.Dur
 	}
 	d := time.Duration(*v) * time.Second
 	return &d, 0, problem{}
+}
+
+// runAtInput checks the time of day in a PUT.
+func runAtInput(v *string, pin *store.RetentionRunAtPin) (*store.ClockTime, int, problem) {
+	if v == nil {
+		return nil, 0, problem{}
+	}
+	if pin != nil {
+		return nil, http.StatusConflict, fieldProblem("run_at",
+			"the time of day is set by "+pin.By+" and can only be changed there")
+	}
+	c, err := store.ParseClockTime(*v)
+	if err != nil {
+		return nil, http.StatusBadRequest, fieldProblem("run_at",
+			"run_at must be a 24-hour time of day written HH:MM, such as 03:30")
+	}
+	return &c, 0, problem{}
+}
+
+// maxDatabaseSizeInput checks the size limit in a PUT.
+func maxDatabaseSizeInput(v *int64, pin *store.MaxDatabaseSizePin) (*int64, int, problem) {
+	if v == nil {
+		return nil, 0, problem{}
+	}
+	if pin != nil {
+		return nil, http.StatusConflict, fieldProblem("max_database_bytes",
+			"the database size limit is set by "+pin.By+" and can only be changed there")
+	}
+	if *v != 0 && *v < store.MinMaxDatabaseSize {
+		return nil, http.StatusBadRequest, fieldProblem("max_database_bytes",
+			"the database size limit must be 0 (no limit) or at least "+store.FormatByteSize(store.MinMaxDatabaseSize))
+	}
+	return v, 0, problem{}
 }
 
 type retentionPreviewResponse struct {

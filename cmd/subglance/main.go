@@ -356,8 +356,20 @@ func run(args []string) error {
 	go reapExpired(ctx, db, log)
 
 	// Raw heartbeats are the fastest-growing table in the product. Rolling
-	// them up keeps history unlimited at a bounded cost.
-	go rollupHeartbeats(ctx, db, log, runner, cfg)
+	// them up keeps history unlimited at a bounded cost. The settings page
+	// starts passes through the same scheduler, so a pass started by hand
+	// and a scheduled one can never run at once.
+	retention := housekeeping.New(housekeeping.Options{
+		Store:       db,
+		Pins:        cfg.RetentionPins(),
+		RunAtPin:    cfg.RetentionRunAtPin(),
+		MaxSizePin:  cfg.MaxDatabaseSizePin(),
+		Log:         log,
+		OnFailure:   runner.RecordRollupFailure,
+		OnSizeLimit: runner.RecordSizeLimit,
+	})
+	apiSrv.WithHousekeeping(ctx, retention)
+	go rollupHeartbeats(ctx, db, log, retention)
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -539,7 +551,7 @@ func displayAddr(addr string) string {
 // at startup when the last scheduled pass was missed. See housekeeping.Start.
 // The policy is resolved again on every pass, so a window changed on the
 // settings page takes effect without a restart.
-func rollupHeartbeats(ctx context.Context, db *store.DB, log *slog.Logger, runner *monitor.Runner, cfg config.Config) {
+func rollupHeartbeats(ctx context.Context, db *store.DB, log *slog.Logger, retention *housekeeping.Retention) {
 	// Space is only actually returned to the filesystem when the database is
 	// in incremental auto-vacuum mode, and that mode can only be turned on by
 	// rewriting the file. Doing it here, once, means an existing installation
@@ -553,18 +565,10 @@ func rollupHeartbeats(ctx context.Context, db *store.DB, log *slog.Logger, runne
 		log.Info("rebuilt the database with incremental auto-vacuum enabled, so retention now returns disk space")
 	case mode == store.VacuumNeedsRebuild:
 		log.Warn("this database is too large to rebuild at startup, so deleted rows will not shrink the file; " +
-			"run VACUUM manually once, at a moment when a pause is acceptable")
+			"compact it once with POST /api/v1/settings/retention/compact, at a moment when a pause is acceptable")
 	}
 
-	housekeeping.New(housekeeping.Options{
-		Store:       db,
-		Pins:        cfg.RetentionPins(),
-		RunAtPin:    cfg.RetentionRunAtPin(),
-		MaxSizePin:  cfg.MaxDatabaseSizePin(),
-		Log:         log,
-		OnFailure:   runner.RecordRollupFailure,
-		OnSizeLimit: runner.RecordSizeLimit,
-	}).Start(ctx)
+	retention.Start(ctx)
 }
 
 // reapExpired periodically clears expired sessions and old login attempts.

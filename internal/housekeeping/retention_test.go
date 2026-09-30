@@ -396,3 +396,39 @@ func TestRunFailsWhenTheSizeLimitCannotBeRead(t *testing.T) {
 		t.Errorf("pass = %+v, failures %d, applied %d; want a failed pass that removed nothing", pass, failures, f.passes())
 	}
 }
+
+func TestBeginClaimsThePassBeforeReturning(t *testing.T) {
+	f := &fakeStore{block: make(chan struct{}), entered: make(chan struct{}, 1)}
+	s := New(Options{Store: f})
+
+	if err := s.Begin(context.Background(), TriggerManual); err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	// Claimed synchronously: the settings page's 409 and the scheduler's
+	// skip both rely on a second request seeing it at once.
+	// Fatal, not Error: the Run below blocks on the held pass if it is not
+	// refused, and a hang says less than a failure.
+	if !s.Running() {
+		t.Fatal("Running() = false right after Begin returned")
+	}
+	if err := s.Begin(context.Background(), TriggerManual); !errors.Is(err, ErrPassRunning) {
+		t.Fatalf("second Begin = %v, want ErrPassRunning", err)
+	}
+	if _, err := s.Run(context.Background(), TriggerSchedule); !errors.Is(err, ErrPassRunning) {
+		t.Errorf("Run during Begin's pass = %v, want ErrPassRunning", err)
+	}
+	<-f.entered
+	close(f.block)
+
+	deadline := time.Now().Add(5 * time.Second)
+	for s.Running() {
+		if time.Now().After(deadline) {
+			t.Fatal("the pass Begin started never finished")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	last, _ := f.LastRetentionPass(context.Background())
+	if last == nil || last.Trigger != TriggerManual || f.passes() != 1 {
+		t.Errorf("recorded %+v after %d passes, want one manual pass", last, f.passes())
+	}
+}

@@ -106,11 +106,16 @@ type RetentionPin struct {
 	By string
 }
 
-// RetentionPins holds the windows pinned at startup. A nil pin leaves that
-// window to the settings page.
+// RetentionPins holds what was pinned at startup. A nil pin leaves that
+// setting to the settings page.
 type RetentionPins struct {
 	Raw    *RetentionPin
 	Rollup *RetentionPin
+	// RunAt and MaxSize are the time of day and the size limit. Only the
+	// settings endpoints read them here; the pass resolves them through
+	// housekeeping's own options.
+	RunAt   *RetentionRunAtPin
+	MaxSize *MaxDatabaseSizePin
 }
 
 // Where a window's effective value came from.
@@ -281,6 +286,17 @@ func lift(w *RetentionWindow, to time.Duration) {
 	w.Value = to
 }
 
+// RetentionChange is one save from the settings page. A nil field is left as
+// it was.
+type RetentionChange struct {
+	// Raw and Rollup are the windows; zero means forever.
+	Raw, Rollup *time.Duration
+	// RunAt is the time of day the daily pass runs.
+	RunAt *ClockTime
+	// MaxBytes is the database size limit; zero removes it.
+	MaxBytes *int64
+}
+
 // SetRetention stores the windows chosen on the settings page, whatever was
 // saved in the meantime, and returns the new version. A nil window is left as
 // it was.
@@ -289,7 +305,7 @@ func lift(w *RetentionWindow, to time.Duration) {
 // matters for windows that are not pinned and the pinned ones are what it
 // has to coexist with.
 func (db *DB) SetRetention(ctx context.Context, raw, rollup *time.Duration, pins RetentionPins) (int64, error) {
-	return db.setRetention(ctx, raw, rollup, pins, false, nil)
+	return db.saveRetention(ctx, RetentionChange{Raw: raw, Rollup: rollup}, pins, false, nil)
 }
 
 // SetRetentionIfVersion is SetRetention on condition that the stored version
@@ -302,10 +318,41 @@ func (db *DB) SetRetention(ctx context.Context, raw, rollup *time.Duration, pins
 // that lands in between slip through — exactly the overwrite this exists to
 // refuse.
 func (db *DB) SetRetentionIfVersion(ctx context.Context, raw, rollup *time.Duration, pins RetentionPins, versions []int64) (int64, error) {
-	return db.setRetention(ctx, raw, rollup, pins, true, versions)
+	return db.saveRetention(ctx, RetentionChange{Raw: raw, Rollup: rollup}, pins, true, versions)
 }
 
-func (db *DB) setRetention(ctx context.Context, raw, rollup *time.Duration, pins RetentionPins, conditional bool, versions []int64) (int64, error) {
+// SaveRetentionSettings is SetRetention for every field the settings page
+// edits: the windows, the time of day and the size limit, in one transaction
+// and under one version.
+//
+// One version rather than one per field, because a lower size limit deletes
+// history just as a shorter window does, and the page previews both from the
+// same read: a save built on a stale limit is the same overwrite as one built
+// on a stale window.
+func (db *DB) SaveRetentionSettings(ctx context.Context, c RetentionChange, pins RetentionPins) (int64, error) {
+	return db.saveRetention(ctx, c, pins, false, nil)
+}
+
+// SaveRetentionSettingsIfVersion is SaveRetentionSettings on the condition
+// SetRetentionIfVersion describes.
+func (db *DB) SaveRetentionSettingsIfVersion(ctx context.Context, c RetentionChange, pins RetentionPins, versions []int64) (int64, error) {
+	return db.saveRetention(ctx, c, pins, true, versions)
+}
+
+func (db *DB) saveRetention(ctx context.Context, c RetentionChange, pins RetentionPins, conditional bool, versions []int64) (int64, error) {
+	// Checked before the transaction: neither depends on what is stored, and
+	// a value this code would refuse to read back must never be written.
+	if c.RunAt != nil {
+		if _, err := ParseClockTime(c.RunAt.String()); err != nil {
+			return 0, err
+		}
+	}
+	if c.MaxBytes != nil {
+		if err := ValidateMaxDatabaseSize(*c.MaxBytes); err != nil {
+			return 0, err
+		}
+	}
+
 	tx, err := db.Writer.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, fmt.Errorf("begin retention update: %w", err)
@@ -323,11 +370,11 @@ func (db *DB) setRetention(ctx context.Context, raw, rollup *time.Duration, pins
 	if err != nil {
 		return 0, err
 	}
-	if raw != nil {
-		storedRaw = raw
+	if c.Raw != nil {
+		storedRaw = c.Raw
 	}
-	if rollup != nil {
-		storedRollup = rollup
+	if c.Rollup != nil {
+		storedRollup = c.Rollup
 	}
 	next := RetentionPolicy{
 		Raw:    resolveWindow(pins.Raw, storedRaw, DefaultRawRetention).Value,
@@ -338,17 +385,23 @@ func (db *DB) setRetention(ctx context.Context, raw, rollup *time.Duration, pins
 	}
 
 	now := time.Now().Unix()
-	values := map[string]*int64{settingRetentionVersion: new(version + 1)}
-	for key, v := range map[string]*time.Duration{settingRawRetention: raw, settingRollupRetention: rollup} {
+	values := map[string]string{settingRetentionVersion: strconv.FormatInt(version+1, 10)}
+	for key, v := range map[string]*time.Duration{settingRawRetention: c.Raw, settingRollupRetention: c.Rollup} {
 		if v != nil {
-			values[key] = new(int64(*v / time.Second))
+			values[key] = strconv.FormatInt(int64(*v/time.Second), 10)
 		}
+	}
+	if c.RunAt != nil {
+		values[settingRetentionRunAt] = c.RunAt.String()
+	}
+	if c.MaxBytes != nil {
+		values[settingMaxDatabaseSize] = strconv.FormatInt(*c.MaxBytes, 10)
 	}
 	for key, v := range values {
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
 			ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-			key, strconv.FormatInt(*v, 10), now); err != nil {
+			key, v, now); err != nil {
 			return 0, fmt.Errorf("save %s: %w", key, err)
 		}
 	}

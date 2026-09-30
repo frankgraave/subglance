@@ -585,7 +585,7 @@ func (c Config) validateRetention() error {
 	return nil
 }
 
-// RetentionPins returns the retention windows fixed by a flag or variable.
+// RetentionPins returns the retention settings fixed by a flag or variable.
 func (c Config) RetentionPins() store.RetentionPins {
 	var p store.RetentionPins
 	if c.RawRetentionPinnedBy != "" {
@@ -594,6 +594,8 @@ func (c Config) RetentionPins() store.RetentionPins {
 	if c.RollupRetentionPinnedBy != "" {
 		p.Rollup = &store.RetentionPin{Value: c.RollupRetention, By: c.RollupRetentionPinnedBy}
 	}
+	p.RunAt = c.RetentionRunAtPin()
+	p.MaxSize = c.MaxDatabaseSizePin()
 	return p
 }
 
