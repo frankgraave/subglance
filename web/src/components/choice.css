@@ -1,0 +1,134 @@
+/*
+ * The checkbox and the radio (DESIGN.md §8.9), drawn from tokens.
+ *
+ * `appearance: none` takes the browser's drawing away; the two pseudo-elements
+ * put one back. The element underneath is still a native input, so its role,
+ * states, keyboard and form value stay the browser's.
+ *
+ * Two sizes, on purpose. The input is the 26px compact square, because that is
+ * its target (WCAG 2.2 SC 2.5.8 asks 24px, measured on the control's own box)
+ * and the size of the other dense controls in a list row. The box drawn inside
+ * it is 16px, the size of a glyph in a control. A 26px box is what the native
+ * checkbox was stretched to, and it read as a button beside 15px text.
+ */
+.choice {
+  appearance: none;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: var(--size-square-compact);
+  height: var(--size-square-compact);
+  margin: 0;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+/* The box and the mark share one 16px square and its 4px corner, the
+   keycap-sized rung (tokens.css): at 16px the 6px of a boxed control reads
+   as a circle half-drawn. */
+.choice::before, .choice::after {
+  content: "";
+  grid-area: 1 / 1;
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+  border-radius: var(--r-xs);
+}
+
+/*
+ * The box. Its edge is an inset ring in `--ink-3`, not a border in a border
+ * role: an unchecked box is nothing but its edge, so the edge owes the 3:1
+ * that WCAG 1.4.11 asks of a control's boundary, and `--border-control` is a
+ * quiet frame measured well under that. The ring is the lamp's construction
+ * (§3), which solved the same problem for the same reason.
+ *
+ * Unfilled, so the ring measures against one colour rather than two. With a
+ * `--surface` fill the dark theme's box was 3% lighter inside than out, and
+ * the ring cleared 3:1 against the row (3.2) but not against its own inside
+ * (2.94, measured in `choice.browser.test.ts`).
+ */
+.choice::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--ink-3);
+  transition: background-color var(--dur-hover) var(--ease),
+              box-shadow var(--dur-hover) var(--ease);
+}
+.choice[type="radio"]::before,
+.choice[type="radio"]::after { border-radius: var(--r-pill); }
+
+.choice:hover:not(:disabled)::before {
+  box-shadow: inset 0 0 0 1.5px var(--ink-2);
+}
+
+/*
+ * Chosen takes the accent (§2.8): this is a control being driven, not a
+ * status. The ring moves to `--accent-border` because `--accent` alone
+ * measures under 3:1 on the dark canvas. `:indeterminate` is scoped to the
+ * checkbox, because a radio group with nothing chosen matches it too.
+ */
+.choice:checked::before,
+.choice[type="checkbox"]:indeterminate::before {
+  background: var(--accent);
+  box-shadow: inset 0 0 0 1.5px var(--accent-border);
+}
+
+/* The mark: `--accent-ink` on `--accent`, 5.25:1, cut to shape. */
+.choice::after {
+  background: var(--accent-ink);
+  transform: scale(0);
+  transition: transform var(--dur-hover) var(--ease);
+}
+.choice[type="checkbox"]::after {
+  /* moderncss.dev's tick, fitted into the middle 62% of the box. */
+  clip-path: polygon(27.7% 46.3%, 19% 59.3%, 50% 81%, 81% 28.9%, 68.6% 19%, 45.7% 57.4%);
+}
+/* Mixed is a dash, listed after the tick so a box that is both — the
+   platform allows it — shows what a screen reader announces. */
+.choice[type="checkbox"]:indeterminate::after { clip-path: inset(43.75% 25%); }
+.choice[type="radio"]::after { clip-path: circle(25%); }
+.choice:checked::after,
+.choice[type="checkbox"]:indeterminate::after { transform: scale(1); }
+
+/* The product's focus outline, moved from the 26px target to the box you can
+   see; around the target it floats five pixels off the mark it belongs to. */
+.choice:focus-visible { outline: none; }
+.choice:focus-visible::before {
+  outline: var(--outline-w) solid var(--accent-border);
+  outline-offset: var(--outline-offset);
+}
+
+.choice:disabled { opacity: .45; cursor: default; }
+
+/*
+ * A choice that is its own sentence: box, then words, centred on each other,
+ * the whole line the target. Body text, because it is what the control says,
+ * not help about it. The gap is the small step because the input already
+ * carries five pixels of target around its box.
+ */
+.choice-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--control-h);
+  font-size: var(--type-body);
+  line-height: var(--lead-body);
+  cursor: pointer;
+}
+
+/* The drawn box, not the target around it, lines up with the column: the
+   target's five spare pixels hang into the gutter, so a box under a field
+   starts where the field's edge does. */
+.choice-label > .choice {
+  margin-inline-start: calc((var(--size-icon-md) - var(--size-square-compact)) / 2);
+}
+
+/*
+ * Forced colours (Windows High Contrast) drop the fills and rings, which
+ * would leave "checked" and "unchecked" drawn the same. There the platform's
+ * own control, in the palette the user chose, is the honest answer.
+ */
+@media (forced-colors: active) {
+  .choice { appearance: auto; }
+  .choice::before,
+  .choice::after { content: none; }
+  .choice:focus-visible { outline: var(--outline-w) solid var(--accent-border); }
+}

@@ -2274,6 +2274,10 @@ const shadowExceptions = new Set<string>([
   "inset 0 0 0 2px var(--warn)",
   "inset 0 0 0 1.5px var(--ink-2)",
   "inset 0 0 0 1.5px var(--ink-3)",
+  // The checked checkbox's edge (choice.css): the same inset ring as the
+  // unchecked one, in the accent's border colour, because `--accent` alone
+  // measures under 3:1 against the dark canvas.
+  "inset 0 0 0 1.5px var(--accent-border)",
   "0 0 0 3px var(--accent-ring)",
   "0 0 0 3px var(--ring-down)",
 ]);
@@ -3545,5 +3549,92 @@ describe("tokens.css is the only source of motion", () => {
       "animation: spin var(--dur-panel) ease-in-out",
       "transition-delay: .3s",
     ]);
+  });
+});
+
+/**
+ * SUB-167: one checkbox, one radio.
+ *
+ * There were eight in six files: six native boxes tinted with `accent-color`
+ * and stretched to the compact square by three stylesheets that each said
+ * "every checkbox in the product is one size", and two left at the browser's
+ * 13px by files that had not read the other three. `Checkbox` and `Radio` in
+ * `components/Choice.tsx` are the only place an `<input>` of either type is
+ * written now, and `choice.css` the only place one is styled.
+ */
+describe("a checkbox or radio is Choice, never a loose input", () => {
+  /** JSX that writes the input itself, in either quoting. */
+  const LOOSE_INPUT = /\btype\s*=\s*\{?\s*["'`](checkbox|radio)["'`]/g;
+  /** A stylesheet reaching the native control past the component. */
+  const LOOSE_STYLE =
+    /\[type\s*=\s*["']?(?:checkbox|radio)["']?\]|:checked|:indeterminate|accent-color\s*:/g;
+  const OWNER_TSX = join(webSrc, "components", "Choice.tsx");
+  const OWNER_CSS = join(webSrc, "components", "choice.css");
+
+  function looseInputs(source: string): string[] {
+    return [...stripComments(source).matchAll(LOOSE_INPUT)].map((m) => m[0]);
+  }
+  function looseStyles(source: string): string[] {
+    return [...stripComments(source).matchAll(LOOSE_STYLE)].map((m) => m[0]);
+  }
+
+  it("writes a checkbox or radio input only in Choice.tsx", () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (!/\.tsx?$/.test(file) || file === OWNER_TSX) continue;
+      for (const hit of looseInputs(readFileSync(file, "utf8"))) {
+        offenders.push(`${relative(repoRoot, file)}: ${hit}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("styles the native control only in choice.css", () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (!file.endsWith(".css") || file === OWNER_CSS) continue;
+      for (const hit of looseStyles(readFileSync(file, "utf8"))) {
+        offenders.push(`${relative(repoRoot, file)}: ${hit}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("has an owner that really is the only writer", () => {
+    // Guards that pass because the scan found nothing to look at are the
+    // failure mode of every allow-list: prove the owner is where it is said
+    // to be and does what the exemption lets it do.
+    expect(looseInputs(readFileSync(OWNER_TSX, "utf8"))).toEqual([
+      'type="checkbox"',
+      'type="radio"',
+    ]);
+    expect(looseStyles(readFileSync(OWNER_CSS, "utf8"))).toContain(":checked");
+  });
+
+  it("bites on each loose form in a fixture", () => {
+    expect(
+      looseInputs(`
+        <input type="checkbox" />
+        <input type='radio' />
+        <input type={"checkbox"} />
+        <input type={\`radio\`} />
+        <input type="text" />
+        {/* <input type="checkbox" /> */}
+      `),
+    ).toEqual([
+      'type="checkbox"',
+      "type='radio'",
+      'type={"checkbox"',
+      "type={`radio`",
+    ]);
+    expect(
+      looseStyles(`
+        .a input[type="checkbox"] { width: 1px; }
+        .b input[type=radio] { width: 1px; }
+        .c:checked { color: red; }
+        .d { accent-color: var(--accent); }
+        .e { color: var(--ink); }
+      `),
+    ).toEqual(['[type="checkbox"]', "[type=radio]", ":checked", "accent-color:"]);
   });
 });

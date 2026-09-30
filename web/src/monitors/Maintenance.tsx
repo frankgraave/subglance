@@ -2,6 +2,7 @@ import { useId, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiJSON, apiPost, apiRequest } from "../api/http";
 import { Card } from "../components/Card";
+import { Checkbox } from "../components/Choice";
 import { IconClock } from "../components/icons";
 import type { InventoryMonitor } from "./inventory";
 
@@ -89,7 +90,7 @@ function MaintenanceManager({ monitors, canWrite }: { monitors: readonly Invento
         <label className="add-field">Schedule<select className="add-input" name="schedule" value={weekly ? "weekly" : "once"} onChange={(e) => setWeekly(e.target.value === "weekly")}><option value="once">One-off</option><option value="weekly">Weekly</option></select></label>
         {weekly ? <>
           <label className="add-field">Timezone<input className="add-input" name="timezone" required defaultValue="UTC" aria-describedby={`${id}-dst`} placeholder="Europe/Amsterdam"/></label>
-          <fieldset className="maintenance-days"><legend>Weekdays</legend>{DAYS.map((day, index) => <label key={day}><input type="checkbox" name="weekdays" value={index} defaultChecked={index === 0}/>{day}</label>)}</fieldset>
+          <fieldset className="maintenance-days"><legend>Weekdays</legend>{DAYS.map((day, index) => <Checkbox key={day} name="weekdays" value={index} defaultChecked={index === 0}>{day}</Checkbox>)}</fieldset>
           <div className="add-grid"><label className="add-field">Local start time<input className="add-input" type="time" name="local_time" required defaultValue="02:00"/></label><label className="add-field">Duration (minutes)<input className="add-input" type="number" name="duration_minutes" min={1} max={1440} required defaultValue={60}/></label></div>
           <p id={`${id}-dst`}>Use an IANA timezone. A missing daylight-saving time is skipped; a repeated time starts once, at the earlier occurrence. Duration is elapsed minutes.</p>
         </> : <div className="add-grid"><label className="add-field">Start (UTC)<input className="add-input" type="datetime-local" name="starts_at" required/></label><label className="add-field">End (UTC)<input className="add-input" type="datetime-local" name="ends_at" required/></label></div>}

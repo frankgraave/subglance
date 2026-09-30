@@ -1,5 +1,6 @@
 import { useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
+import { Checkbox } from "../components/Choice";
 import {
   CHANNEL_TYPES,
   fieldValue,
@@ -417,19 +418,17 @@ export function ChannelForm({
            */
           return (
             <div className="add-field" key={spec.key}>
-              <label className="nt-check">
-                <input
-                  type="checkbox"
-                  checked={values[spec.key] !== "false"}
-                  onChange={(event) =>
-                    edit(spec, event.target.checked ? "true" : "false")
-                  }
-                  {...(spec.help !== undefined
-                    ? { "aria-describedby": `${inputId}-help` }
-                    : {})}
-                />
+              <Checkbox
+                checked={values[spec.key] !== "false"}
+                onChange={(event) =>
+                  edit(spec, event.target.checked ? "true" : "false")
+                }
+                {...(spec.help !== undefined
+                  ? { "aria-describedby": `${inputId}-help` }
+                  : {})}
+              >
                 {spec.label}
-              </label>
+              </Checkbox>
               {spec.help !== undefined && (
                 <p className="add-help" id={`${inputId}-help`}>
                   {spec.help}

@@ -101,7 +101,7 @@ it("selects only visible rows, preserves hidden selections, and forgets removed 
     target: { value: "site 2" },
   });
   fireEvent.click(
-    screen.getByRole("button", { name: "Select all visible (1)" }),
+    screen.getByRole("checkbox", { name: "Select all visible (1)" }),
   );
   expect(screen.getByText("1 selected")).toBeTruthy();
   fireEvent.change(screen.getByRole("searchbox", { name: "Search monitors" }), {
@@ -142,7 +142,7 @@ it("selects only visible rows, preserves hidden selections, and forgets removed 
     ).checked,
   ).toBe(false);
   fireEvent.click(
-    screen.getByRole("button", { name: "Select all visible (3)" }),
+    screen.getByRole("checkbox", { name: "Select all visible (3)" }),
   );
   fireEvent.click(screen.getByRole("checkbox", { name: "Select site 2" }));
   expect(screen.getByText("2 selected")).toBeTruthy();

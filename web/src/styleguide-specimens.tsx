@@ -24,6 +24,7 @@ import {
 import { IconPause, IconPencil, IconPulse, IconRefresh, IconTrash } from "./components/icons";
 import { PlusIcon, SearchIcon, SidebarIcon } from "./shell/icons";
 import { IconTile } from "./components/IconTile";
+import { Checkbox, Radio } from "./components/Choice";
 import { PanelList, PanelRow } from "./components/PanelList";
 import { SegmentedControl } from "./components/SegmentedControl";
 import { Value } from "./components/Value";
@@ -169,6 +170,20 @@ export const specimens: Specimen[] = [
           { id: "7d", label: "7d" },
         ]}
       />
+    ),
+  },
+  {
+    id: "choice",
+    title: "Checkbox and radio",
+    source: "web/src/components/Choice.tsx",
+    rule:
+      "Native inputs drawn from tokens: a 16px box in a 26px target, an --ink-3 ring that clears 3:1, the accent when chosen. Mixed (a dash) is a DOM property, so this static page cannot show it; the monitors page does. Never a hand-written checkbox or accent-color; the token guard refuses both.",
+    node: row(
+      <Checkbox key="off" readOnly>Off</Checkbox>,
+      <Checkbox key="on" checked readOnly>On</Checkbox>,
+      <Checkbox key="disabled" disabled readOnly>Disabled</Checkbox>,
+      <Radio key="radio-on" name="sg-radio" checked readOnly>Chosen</Radio>,
+      <Radio key="radio-off" name="sg-radio" readOnly>Not chosen</Radio>,
     ),
   },
   {

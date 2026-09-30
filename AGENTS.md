@@ -78,6 +78,21 @@ does not compile until you give it a glyph from `web/src/components/icons.tsx`
 different subject on the same screen uses. A `Suspense` fallback for a lazy card takes the same
 glyph as the card it stands in for. The reasoning is in DESIGN.md §8.2.
 
+Every piece of visible text sits on one of the six type roles (page 24, card
+18, row 15, body 14, helper 13, section 12), each strictly larger than the one
+below it. Text with no rule of its own inherits body from the base layer, so a
+new element does not fall back to the browser's 16px. `tokens.test.ts` fails
+when two roles share a size, and `layout/type-roles.browser.test.ts` fails on
+any rendered text whose size and leading are not a pair from the scale. Pick
+the role by what the text is, not by how big it should look. The reasoning is
+in DESIGN.md §2.5.
+
+A checkbox or radio is `Checkbox` or `Radio` from
+`web/src/components/Choice.tsx`, never a hand-written `<input type="checkbox">`
+and never `accent-color`: `tokens.test.ts` refuses both outside that component
+and its `choice.css`. Pass the label as children. The reasoning is in
+DESIGN.md §8.9.
+
 A button that is a glyph plus a word needs an explicit `aria-label`. What a
 screen reader makes of an unnamed inline `<svg>` is not fixed — some skip it,
 some announce "graphic" — so leaving the name to text content makes it depend

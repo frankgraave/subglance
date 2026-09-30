@@ -1,4 +1,5 @@
 import { useId } from "react";
+import { Checkbox, Radio } from "../components/Choice";
 import { knownTimezones } from "./quietHours";
 import type { QuietDraft } from "./quietHours";
 
@@ -56,15 +57,13 @@ export function QuietHoursField({
   return (
     <fieldset className="add-field nt-quiet">
       <legend className="add-label">Quiet hours</legend>
-      <label className="nt-quiet-toggle">
-        <input
-          type="checkbox"
-          checked={value.enabled}
-          onChange={(event) => set({ enabled: event.target.checked })}
-          aria-describedby={`${ids}-help`}
-        />
+      <Checkbox
+        checked={value.enabled}
+        onChange={(event) => set({ enabled: event.target.checked })}
+        aria-describedby={`${ids}-help`}
+      >
         Hold this channel's alerts during a daily window
-      </label>
+      </Checkbox>
 
       {value.enabled && (
         <>
@@ -132,26 +131,22 @@ export function QuietHoursField({
 
           <fieldset className="nt-quiet-modes">
             <legend className="add-label">During the window</legend>
-            <label className="nt-quiet-toggle">
-              <input
-                type="radio"
-                name={`${ids}-during`}
-                value="hold"
-                checked={value.during === "hold"}
-                onChange={() => set({ during: "hold" })}
-              />
+            <Radio
+              name={`${ids}-during`}
+              value="hold"
+              checked={value.during === "hold"}
+              onChange={() => set({ during: "hold" })}
+            >
               Hold, then send one digest when the window ends
-            </label>
-            <label className="nt-quiet-toggle">
-              <input
-                type="radio"
-                name={`${ids}-during`}
-                value="drop"
-                checked={value.during === "drop"}
-                onChange={() => set({ during: "drop" })}
-              />
+            </Radio>
+            <Radio
+              name={`${ids}-during`}
+              value="drop"
+              checked={value.during === "drop"}
+              onChange={() => set({ during: "drop" })}
+            >
               Drop — nobody is told, not even afterwards
-            </label>
+            </Radio>
           </fieldset>
         </>
       )}

@@ -31,24 +31,6 @@
 /* A time box sized by its own contents: its width depends on the locale's
    format and the browser's picker glyph, so no rung would fit them all. */
 .retention-time { width: auto; align-self: flex-start; }
-/*
- * The "Forever" switch, drawn at the compact control square rather than the
- * browser's 13px default. 13px is under the 24px target floor (WCAG 2.2
- * SC 2.5.8) that `phone-layout.browser.test.ts` measures, and this is the
- * same square the inventory's selection checkbox uses (`bulk-tags.css`), so
- * the two checkboxes in the product are one size.
- */
-.retention-forever {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-.retention-forever input {
-  accent-color: var(--accent);
-  width: var(--size-square-compact);
-  height: var(--size-square-compact);
-  margin: 0;
-}
 /* --ink-2, not the auth screen's --ink-3: on a card panel --ink-3 measures
    3.05:1, under the 4.5:1 that helper-size text needs. Same role as
    .watchdog-note. */

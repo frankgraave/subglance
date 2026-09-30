@@ -1,9 +1,11 @@
 # Managing tags across monitors
 
 In **Monitors**, select monitors and choose **Manage tags** on the Configured
-monitors card. **Select all visible** adds only the monitors shown by current
-filters. Earlier selections remain selected when hidden; the count says how
-many are hidden. Clear the selection when you want to start again.
+monitors card. The **Select all visible** box adds only the monitors shown by
+current filters, and clearing it removes only those; it shows a dash when some
+but not all of them are selected. Earlier selections remain selected when
+hidden; the count says how many are hidden. Clear the selection when you want
+to start again.
 
 **Apply** adds or replaces one key/value on selected monitors. **Remove** deletes
 only that exact key/value pair. Preview the counts, then confirm the atomic
