@@ -4,8 +4,9 @@ import { Card, Panel } from "../components/Card";
 import { ApiError } from "../api/http";
 import {
   fetchRetention, previewRetention, retentionKey, saveRetention,
-  type Retention, type RetentionTable, type RetentionWindow,
+  type Retention, type RetentionChange, type RetentionTable, type RetentionWindow,
 } from "./api";
+import { Maintenance } from "./Maintenance";
 import { formatBytes } from "./format";
 
 const DAY = 86_400;
@@ -49,51 +50,120 @@ function estimate(windowDays: number | null, tables: RetentionTable[], names: Re
     : `About ${formatBytes(perDay * windowDays)} once full, at today's rate.`;
 }
 
-type Draft = { days: string; forever: boolean };
+/** An amount in a number box, or its switched-off state ("Forever", "No limit"). */
+type Draft = { value: string; off: boolean };
 
 function draftOf(window: RetentionWindow): Draft {
-  return window.seconds === 0 ? { days: "", forever: true } : { days: String(window.seconds / DAY), forever: false };
+  return window.seconds === 0 ? { value: "", off: true } : { value: String(window.seconds / DAY), off: false };
 }
 
 function secondsOf(draft: Draft): number | null {
-  if (draft.forever) return 0;
-  const days = Number(draft.days);
-  return draft.days.trim() !== "" && Number.isFinite(days) && days > 0 ? Math.round(days * DAY) : null;
+  if (draft.off) return 0;
+  const days = Number(draft.value);
+  return draft.value.trim() !== "" && Number.isFinite(days) && days > 0 ? Math.round(days * DAY) : null;
 }
 
-function WindowField({ label, window, draft, onChange, disabled, estimateText, error }: {
-  label: string; window: RetentionWindow; draft: Draft; onChange: (draft: Draft) => void;
-  disabled: boolean; estimateText: string | null; error?: string;
+/*
+ * The size limit is typed in decimal megabytes, the unit the rest of the card
+ * reports sizes in (`formatBytes`), so the number typed is the number read
+ * beside it. The server's minimum is 32 MiB, which is 33.6 MB: the field asks
+ * for the next whole megabyte rather than a fraction nobody would type.
+ */
+const MB = 1_000_000;
+
+function sizeDraftOf(bytes: number): Draft {
+  return bytes === 0 ? { value: "", off: true } : { value: String(Math.round(bytes / MB)), off: false };
+}
+
+function bytesOf(draft: Draft, minimum: number): number | null {
+  if (draft.off) return 0;
+  const mb = Number(draft.value);
+  const bytes = Math.round(mb * MB);
+  return draft.value.trim() !== "" && Number.isFinite(mb) && bytes >= minimum ? bytes : null;
+}
+
+/** A number box with a unit and a switch that turns the amount off, as one fieldset. */
+function AmountField({ label, unit, offLabel, restore, draft, onChange, disabled, locked, note, error, min }: {
+  label: string; unit: string; offLabel: string; restore: string; draft: Draft; onChange: (draft: Draft) => void;
+  disabled: boolean; locked: boolean; note: string; error?: string; min: number;
 }) {
   const id = useId();
-  const pinned = window.source === "pinned";
   const help = [`${id}-help`, error ? `${id}-error` : ""].filter(Boolean).join(" ");
   return (
-    <fieldset className="retention-field" disabled={disabled || pinned}>
+    <fieldset className="retention-field" disabled={disabled || locked}>
       <legend className="auth-label">{label}</legend>
       <div className="retention-inputs">
         <input
-          className="auth-input retention-days" id={`${id}-days`} type="number" min="1" step="1" inputMode="numeric"
-          aria-label={`${label}, in days`} aria-describedby={help} aria-invalid={error ? true : undefined}
-          value={draft.forever ? "" : draft.days} disabled={draft.forever}
-          onChange={(event) => onChange({ ...draft, days: event.target.value })}
+          className="auth-input retention-days" type="number" min={min} step="1" inputMode="numeric"
+          aria-label={`${label}, in ${unit}`} aria-describedby={help} aria-invalid={error ? true : undefined}
+          value={draft.off ? "" : draft.value} disabled={draft.off}
+          onChange={(event) => onChange({ ...draft, value: event.target.value })}
         />
-        <span aria-hidden="true">days</span>
-        <label className="retention-forever"><input type="checkbox" checked={draft.forever}
-          onChange={(event) => onChange({ days: draft.days || String(window.seconds / DAY || 30), forever: event.target.checked })} /> Forever</label>
+        <span aria-hidden="true">{unit}</span>
+        <label className="retention-forever"><input type="checkbox" checked={draft.off}
+          onChange={(event) => onChange({ value: draft.value || restore, off: event.target.checked })} /> {offLabel}</label>
       </div>
-      <p className="retention-note" id={`${id}-help`}>
-        {pinned
-          ? `Set by ${window.pinned_by} to ${describeWindow(window.seconds)}; change it there.`
-          : estimateText ?? "No growth measured yet."}
-        {window.set_aside_seconds !== null && ` The saved ${describeWindow(window.set_aside_seconds)} is set aside because it conflicts with the pinned window.`}
-      </p>
+      <p className="retention-note" id={`${id}-help`}>{note}</p>
       {error && <p className="auth-error" id={`${id}-error`} role="alert">{error}</p>}
     </fieldset>
   );
 }
 
+function windowNote(window: RetentionWindow, estimateText: string | null): string {
+  const base = window.source === "pinned"
+    ? `Set by ${window.pinned_by} to ${describeWindow(window.seconds)}; change it there.`
+    : estimateText ?? "No growth measured yet.";
+  return window.set_aside_seconds === null ? base
+    : `${base} The saved ${describeWindow(window.set_aside_seconds)} is set aside because it conflicts with the pinned window.`;
+}
+
+/**
+ * What a new or lower size limit does, from what the data occupies today.
+ * Unlike a window it cannot be counted in advance: how much it removes
+ * depends on how much the windows free first.
+ */
+function limitNote(limit: number, data: Retention): string {
+  const plan = data.compact;
+  const used = plan ? plan.size_bytes - plan.free_bytes : null;
+  const order = "raw detail first, then the oldest hourly summaries, never incidents or the last day";
+  if (used !== null && used <= limit) return `The data takes ${formatBytes(used)} today, so this removes nothing yet. Past it, the daily pass removes ${order}.`;
+  return `${used === null ? "Over this limit" : `The data takes ${formatBytes(used)} today, so`} the next daily pass removes history beyond the windows until it is under: ${order}. How much cannot be counted in advance.`;
+}
+
+/**
+ * What the size field offers when "No limit" is switched off: twice what the
+ * data takes today, rounded up to 100 MB, so switching the limit on removes
+ * nothing until the database has doubled. A number that deleted history the
+ * moment it was saved would be a trap in a default.
+ */
+function suggestedLimitMB(data: Retention, minimumMB: number): number {
+  if (data.max_database_size.bytes > 0) return Math.round(data.max_database_size.bytes / MB);
+  const used = data.compact ? data.compact.size_bytes - data.compact.free_bytes : 0;
+  return Math.max(minimumMB, Math.ceil((2 * used) / (100 * MB)) * 100);
+}
+
 type Outcome = "saved" | "stale" | null;
+
+/** The server's time-of-day setting, read-only when a flag pinned it. */
+function RunAtField({ data, value, onChange, disabled, error }: {
+  data: Retention; value: string; onChange: (value: string) => void; disabled: boolean; error?: string;
+}) {
+  const id = useId();
+  const pin = data.run_at;
+  return (
+    <div className="auth-field">
+      <label className="auth-label" htmlFor={id}>Run the daily pass at</label>
+      <input className="auth-input retention-time" id={id} type="time" step="60" required value={value}
+        disabled={disabled || pin.source === "pinned"} aria-invalid={error ? true : undefined}
+        aria-describedby={`${id}-help${error ? ` ${id}-error` : ""}`} onChange={(event) => onChange(event.target.value)} />
+      <p className="retention-note" id={`${id}-help`}>
+        {pin.source === "pinned" ? `Set by ${pin.pinned_by} to ${pin.value}; change it there.`
+          : "In the server's time zone (its TZ variable, UTC without one). A new time never starts a pass by itself."}
+      </p>
+      {error && <p className="auth-error" id={`${id}-error`} role="alert">{error}</p>}
+    </div>
+  );
+}
 
 function RetentionForm({ data, canAdmin, outcome, setOutcome }: {
   data: Retention; canAdmin: boolean; outcome: Outcome; setOutcome: (outcome: Outcome) => void;
@@ -101,28 +171,42 @@ function RetentionForm({ data, canAdmin, outcome, setOutcome }: {
   const client = useQueryClient();
   const [raw, setRaw] = useState(() => draftOf(data.raw));
   const [rollup, setRollup] = useState(() => draftOf(data.rollup));
+  const [limit, setLimit] = useState(() => sizeDraftOf(data.max_database_size.bytes));
+  const [runAt, setRunAt] = useState(data.run_at.value);
   const [saving, setSaving] = useState(false);
   const [rejection, setRejection] = useState<{ field?: string; message: string } | null>(null);
 
   const rawSeconds = secondsOf(raw);
   const rollupSeconds = secondsOf(rollup);
-  const changed = rawSeconds !== data.raw.seconds || rollupSeconds !== data.rollup.seconds;
-  const valid = rawSeconds !== null && rollupSeconds !== null;
-  const shorter = valid && (
+  const size = data.max_database_size;
+  // The box holds whole megabytes, so a limit set in MiB by a flag or the API
+  // reads back rounded. Untouched, it stands for the exact value in force,
+  // or the form would count the rounding as a change and save it.
+  const limitBytes = limit.off === (size.bytes === 0) && limit.value === sizeDraftOf(size.bytes).value
+    ? size.bytes : bytesOf(limit, size.minimum_bytes);
+  const runAtValid = /^([01]\d|2[0-3]):[0-5]\d$/.test(runAt);
+  const windowsChanged = rawSeconds !== data.raw.seconds || rollupSeconds !== data.rollup.seconds;
+  const changed = windowsChanged || limitBytes !== size.bytes || runAt !== data.run_at.value;
+  const valid = rawSeconds !== null && rollupSeconds !== null && limitBytes !== null && runAtValid;
+  const shorter = rawSeconds !== null && rollupSeconds !== null && (
     (rawSeconds !== 0 && (data.raw.seconds === 0 || rawSeconds < data.raw.seconds)) ||
     (rollupSeconds !== 0 && (data.rollup.seconds === 0 || rollupSeconds < data.rollup.seconds)));
+  // A new or lower limit is the size-limit counterpart of a shorter window:
+  // it can remove history on the next pass, so the page says what it does.
+  const tighter = limitBytes !== null && limitBytes !== 0 && (size.bytes === 0 || limitBytes < size.bytes);
   // Asked only for a shorter window, which is the one change that removes
   // anything, so the page says what it costs before it is saved.
   const preview = useQuery({
     queryKey: ["retention-preview", rawSeconds, rollupSeconds],
     queryFn: ({ signal }) => previewRetention(rawSeconds ?? 0, rollupSeconds ?? 0, signal),
-    enabled: canAdmin && changed && shorter,
+    enabled: canAdmin && windowsChanged && shorter,
     retry: false,
   });
   // A shorter window can delete rows on the next pass, so it is not saved
   // until the page has been able to say how many. A cached count for a draft
   // previewed earlier is being read again, so Save waits for that answer too.
   const previewReady = !shorter || (preview.isSuccess && !preview.isFetching);
+  const edit = <T,>(set: (value: T) => void) => (value: T) => { set(value); setOutcome(null); };
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -133,24 +217,27 @@ function RetentionForm({ data, canAdmin, outcome, setOutcome }: {
       setRejection({ message: "Reload the page before saving: the server did not say which version of the settings this is." });
       return;
     }
-    const body: { raw_seconds?: number; rollup_seconds?: number } = {};
+    // Only what is not pinned: a pinned field would be refused with a 409.
+    const body: RetentionChange = {};
     if (data.raw.source !== "pinned") body.raw_seconds = rawSeconds;
     if (data.rollup.source !== "pinned") body.rollup_seconds = rollupSeconds;
+    if (data.run_at.source !== "pinned") body.run_at = runAt;
+    if (size.source !== "pinned") body.max_database_bytes = limitBytes;
     setSaving(true);
     setRejection(null);
     setOutcome(null);
     try {
       const next = await saveRetention(body, data.etag);
       if (next) client.setQueryData(retentionKey, next);
-      // The windows are saved either way; the measurements that did not come
+      // The settings are saved either way; the measurements that did not come
       // back with them are read again rather than shown as an empty table.
       if (!next || next.tables.length === 0) void client.invalidateQueries({ queryKey: retentionKey });
       setOutcome("saved");
     } catch (error) {
-      // Someone saved since this page read the windows. The draft was judged
-      // against windows that are no longer in force — a change that looked
+      // Someone saved since this page read the settings. The draft was judged
+      // against settings that are no longer in force — a change that looked
       // longer may now be shorter, and was never previewed — so it is not
-      // retried. The windows are read again and the form restarts from them.
+      // retried. The settings are read again and the form restarts from them.
       if (error instanceof ApiError && error.status === 412) {
         setOutcome("stale");
         void client.invalidateQueries({ queryKey: retentionKey });
@@ -166,18 +253,29 @@ function RetentionForm({ data, canAdmin, outcome, setOutcome }: {
 
   const impact = preview.data;
   const removes = impact && (impact.heartbeats > 0 || impact.hourly_buckets > 0 || impact.incidents > 0);
+  const locked = !canAdmin || saving;
+  const minimumMB = Math.ceil(size.minimum_bytes / MB);
   return (
     <form className="auth-form" aria-label="Retention" onSubmit={submit}>
-      <WindowField label="Keep raw heartbeats" window={data.raw} draft={raw} disabled={!canAdmin || saving}
-        onChange={(next) => { setRaw(next); setOutcome(null); }}
-        estimateText={estimate(raw.forever ? null : Number(raw.days) || null, data.tables, ["heartbeats", "heartbeat_responses"])}
+      <AmountField label="Keep raw heartbeats" unit="days" offLabel="Forever" restore={String(data.raw.seconds / DAY || 30)}
+        draft={raw} onChange={edit(setRaw)} disabled={locked} locked={data.raw.source === "pinned"} min={1}
+        note={windowNote(data.raw, estimate(raw.off ? null : Number(raw.value) || null, data.tables, ["heartbeats", "heartbeat_responses"]))}
         error={rejection?.field === "raw_seconds" ? rejection.message : undefined} />
-      <WindowField label="Keep hourly summaries and resolved incidents" window={data.rollup} draft={rollup} disabled={!canAdmin || saving}
-        onChange={(next) => { setRollup(next); setOutcome(null); }}
-        estimateText={estimate(rollup.forever ? null : Number(rollup.days) || null, data.tables, ["heartbeat_hourly", "incidents"])}
+      <AmountField label="Keep hourly summaries and resolved incidents" unit="days" offLabel="Forever" restore={String(data.rollup.seconds / DAY || 30)}
+        draft={rollup} onChange={edit(setRollup)} disabled={locked} locked={data.rollup.source === "pinned"} min={1}
+        note={windowNote(data.rollup, estimate(rollup.off ? null : Number(rollup.value) || null, data.tables, ["heartbeat_hourly", "incidents"]))}
         error={rejection?.field === "rollup_seconds" ? rejection.message : undefined} />
+      <AmountField label="Limit the database to" unit="MB" offLabel="No limit" restore={String(suggestedLimitMB(data, minimumMB))}
+        draft={limit} onChange={edit(setLimit)} disabled={locked} locked={size.source === "pinned"} min={minimumMB}
+        note={size.source === "pinned" ? `Set by ${size.pinned_by} to ${size.bytes === 0 ? "no limit" : formatBytes(size.bytes)}; change it there.`
+          : limitBytes === null ? `At least ${minimumMB} MB, or no limit.`
+          : tighter ? limitNote(limitBytes, data)
+          : "Off by default: removing history the windows would keep is a choice. The windows above always apply."}
+        error={rejection?.field === "max_database_bytes" ? rejection.message : undefined} />
+      <RunAtField data={data} value={runAt} onChange={edit(setRunAt)} disabled={locked}
+        error={rejection?.field === "run_at" ? rejection.message : undefined} />
       {!canAdmin && <p className="retention-note">Only an administrator can change retention.</p>}
-      {canAdmin && changed && shorter && (
+      {canAdmin && windowsChanged && shorter && (
         <p className="retention-note" role="status">
           {preview.isError ? "Could not count what this change removes."
             : !impact || preview.isFetching ? "Counting what this change removes…"
@@ -195,14 +293,23 @@ function RetentionForm({ data, canAdmin, outcome, setOutcome }: {
       )}
       {outcome && <p role={outcome === "stale" ? "alert" : "status"}>{outcome === "stale"
         ? "Retention was changed by someone else while you were editing. The form now shows what is in force; check it and save again."
-        : "Saved. The new windows apply from the next daily pass."}</p>}
+        : "Saved. The new settings apply from the next daily pass."}</p>}
     </form>
   );
 }
 
-/** Retention windows, what each table costs today, and what a change would remove. */
+/**
+ * Retention: what each table costs today, the windows, size limit and time
+ * of day the daily pass applies, what a change would remove, the last pass,
+ * and the two things an administrator can start by hand.
+ */
 export function RetentionCard({ canAdmin }: { canAdmin: boolean }) {
-  const query = useQuery({ queryKey: retentionKey, queryFn: ({ signal }) => fetchRetention(signal) });
+  const query = useQuery({
+    queryKey: retentionKey, queryFn: ({ signal }) => fetchRetention(signal),
+    // A pass or a compaction runs in the background; its outcome is read
+    // back from here, so the card follows it until it is done.
+    refetchInterval: (current) => current.state.data?.running || current.state.data?.compact?.running ? 2_000 : false,
+  });
   // Held here rather than in the form: a save, or a reload after a refused
   // one, remounts the form (see its key), and the message has to outlive it.
   const [outcome, setOutcome] = useState<Outcome>(null);
@@ -225,11 +332,13 @@ export function RetentionCard({ canAdmin }: { canAdmin: boolean }) {
               ))}
             </tbody>
           </table>
-          {/* Keyed on the windows in force, so a save or a refetch that changes
+          {/* Keyed on the settings in force, so a save or a refetch that changes
               them starts the form again from what the server now says. */}
-          <RetentionForm key={`${data.raw.seconds}/${data.rollup.seconds}`} data={data} canAdmin={canAdmin} outcome={outcome} setOutcome={setOutcome} />
+          <RetentionForm key={[data.raw.seconds, data.rollup.seconds, data.max_database_size.bytes, data.run_at.value].join("/")}
+            data={data} canAdmin={canAdmin} outcome={outcome} setOutcome={setOutcome} />
         </>}
       </Panel>
+      {data && <Maintenance data={data} canAdmin={canAdmin} />}
     </Card>
   );
 }

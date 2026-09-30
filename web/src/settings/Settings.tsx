@@ -7,7 +7,6 @@ import { SearchIcon, SettingsIcon } from "../shell/icons";
 import { TopbarTools } from "../shell/TopbarTools";
 import { WatchdogCard } from "../watchdog/Watchdog";
 import { DiagnosticsCard } from "../diagnostics/Diagnostics";
-import { RetentionCard } from "../retention/Retention";
 import { BackupCard } from "../backup/Backup";
 import { ResetInstanceCard } from "../reset/ResetInstance";
 import { UsersCard } from "../users/Users";
@@ -26,6 +25,14 @@ const StatusPagesCard = lazy(() => import("../statuspages/StatusPages").then((mo
  * with a report renderer nobody else needs in the entry chunk.
  */
 const ConfigFilesCard = lazy(() => import("../configfile/ConfigFiles").then((module) => ({ default: module.ConfigFilesCard })));
+/*
+ * And for retention: every role can read it, but nobody reads it on every
+ * visit. With the daily pass's record, "Run now" and compaction it is about
+ * 6 kB of script, all of it for a card at the bottom of a page most sessions
+ * never open, so it follows the two above out of the entry chunk rather than
+ * raising the budget for everyone.
+ */
+const RetentionCard = lazy(() => import("../retention/Retention").then((module) => ({ default: module.RetentionCard })));
 
 /**
  * One settings section: the anchor it answers to, the name the index shows,
@@ -170,7 +177,9 @@ export function Settings({ client, canAdmin = false, role = canAdmin ? "admin" :
     { id: "self-monitoring", label: "Self-monitoring", keywords: "self-monitoring watchdog last ping success rejection outage",
       body: provide(<WatchdogCard />) },
     { id: "retention", label: "Retention & storage", keywords: "retention storage database history heartbeats summaries incidents disk size",
-      body: provide(<RetentionCard canAdmin={canAdmin} />) },
+      body: provide(<Suspense fallback={<Card title="Retention & storage"><Panel><p>Loading retention settings…</p></Panel></Card>}>
+        <RetentionCard canAdmin={canAdmin} />
+      </Suspense>) },
     // The endpoint is admin-only (the target names a bucket), so the card is too.
     ...(canAdmin ? [{ id: "backups", label: "Backups", keywords: "backups backup restore s3 bucket storage database snapshot",
       body: provide(<BackupCard />) }] : []),

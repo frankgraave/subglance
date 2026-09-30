@@ -130,8 +130,18 @@ pass. A number without a unit is refused for the same reason.
 
 #### Running a pass now, and compacting
 
-An administrator can start the pass without waiting for its time of day with
-`POST /api/v1/settings/retention/run`. It runs in the background with the
+The time of day and the size limit are set on the **Settings** page too, in the
+same *Retention & storage* card as the windows and saved together with them.
+Below the form the card shows the last pass: when it ran, how long it took, what
+it removed, the space it freed, and, when the size limit went past the windows,
+how far it shortened raw data ("Shortened to 12 days of raw data to stay under
+2.0 GB") or that it could not get under. The size is typed in megabytes (MB,
+1,000,000 bytes); a limit set in MiB by a flag or the API is shown rounded and
+kept exact unless it is edited.
+
+An administrator can start the pass without waiting for its time of day, with
+**Run now** on that card, which first counts what the windows in force would
+remove, or with `POST /api/v1/settings/retention/run`. It runs in the background with the
 settings in force and is recorded like a scheduled pass, with trigger
 `manual`; `GET /api/v1/settings/retention` shows `running` while it works and
 the outcome as `last_pass` afterwards, along with the time of day and the size
@@ -147,7 +157,9 @@ it runs, every write waits for it: checks keep running and their results are
 recorded when it finishes. `compact` in the settings response says whether it
 would help, roughly how long it takes and whether the disk has room; the copy
 it writes can need up to twice the database size, and without that much free
-space it is refused (`507`) before anything is written.
+space it is refused (`507`) before anything is written. The card offers
+**Compact database** only when it would help, says how long writes will wait,
+and disables the button when the disk cannot hold the copy.
 
 The same pass clears the notification delivery log: a notification that was
 delivered, or suppressed by maintenance or folded into a quiet-hours digest, is
