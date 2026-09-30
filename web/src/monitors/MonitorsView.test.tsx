@@ -129,6 +129,35 @@ describe("MonitorsView", () => {
     expect(within(second).getByText("not loaded")).toBeTruthy();
   });
 
+  it("puts the whole channel list in the cell's title", () => {
+    // The cell is one line and a long list is clipped with an ellipsis, so
+    // the title is where a pointer reads the rest of it.
+    render(
+      <MonitorsView
+        monitors={[make()]}
+        channels={{
+          "1": {
+            known: true,
+            names: ["ops-pager", "payments-oncall-email"],
+            rules: [{ tag: "team:payments", names: ["payments-slack"], ids: ["3"] }],
+          },
+        }}
+      />,
+    );
+    const cell = screen.getByRole("listitem").querySelector(".inv-col--chan") as HTMLElement;
+    expect(cell.getAttribute("title")).toBe(
+      "ops-pager, payments-oncall-email, payments-slack via team:payments",
+    );
+  });
+
+  it("gives an unknown channel list no title", () => {
+    // "not loaded" is never clipped, so there is nothing for a title to add.
+    render(<MonitorsView monitors={[make()]} />);
+    const cell = screen.getByRole("listitem").querySelector(".inv-col--chan") as HTMLElement;
+    expect(within(cell).getByText("not loaded")).toBeTruthy();
+    expect(cell.hasAttribute("title")).toBe(false);
+  });
+
   it("disables Check now for a push monitor and says why", () => {
     render(
       <MonitorsView

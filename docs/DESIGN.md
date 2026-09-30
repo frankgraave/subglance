@@ -1988,6 +1988,35 @@ in the product was one size, and two left at the browser's 13px (SUB-167).
 `Choice.tsx`, and `[type=checkbox]`, `:checked` or `accent-color` in any
 stylesheet but `choice.css`.
 
+### 8.10 Every row of a list is one height
+
+The monitors inventory is read down its columns, so a row that is taller than
+its neighbours breaks the run the page exists for. Rows were 60 to 172px on one
+screen (SUB-167), for three reasons, and each has its own rule now:
+
+- **A column is a legend over a fixed value slot.** The slot is
+  `--size-row-sm` (24px) tall, which holds every value a column shows: helper
+  text (16px), a reading (20px) and a state chip (22px). A column used to be as
+  tall as its value, so an unknown channel list, drawn as a chip, stood the row
+  2px taller and lifted its legend out of line with the others.
+- **A value is one line.** The channel list wrapped in its 104px column, so
+  three channels and a routing rule made a five-line row. It now ends in an
+  ellipsis, and the whole list is in the cell's title, in the row's
+  screen-reader sentence and on the monitor's page. The column is there to find
+  the monitor nobody hears about, and that answer, "none", always fits.
+- **Wrapped, the columns sit on a grid of equal tracks.** Under the container
+  width where the row wraps (§2.13), the columns used to flex-wrap wherever
+  each row's content ran out, so one row broke onto three lines and the next
+  onto two. The tracks (`minmax(--size-col-3, 1fr)`) depend on the list's
+  width alone, so every row breaks at the same column.
+
+`layout/inventory-rows.browser.test.ts` measures the rows with every cell
+shape the row can take (attached, rule-routed, default, none, not loaded,
+paused, push, no tags) at five widths on either side of the wrap, for an admin
+and for a viewer. It fails when two rows differ in height, when a column's
+legend is at a different place in two rows, or when a value spills out of its
+slot.
+
 ---
 
 ## 9. Accessibility
