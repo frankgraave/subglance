@@ -368,6 +368,9 @@ export function StatusPagesCard() {
   const store = (page: StatusPage) => client.setQueryData<StatusPage[]>(statusPagesKey,
     (old) => old?.some((item) => item.id === page.id) ? old.map((item) => item.id === page.id ? page : item) : [...(old ?? []), page]);
   const close = () => setEditing(null);
+  // An existing page that a refetch no longer lists (deleted elsewhere) must not
+  // fall back to the new-page form: saving that would create a duplicate.
+  const settingsOpen = editing?.kind === "settings" && (editing.pageId === null || current !== null);
 
   return <><Card title={pages ? `Status pages (${pages.length})` : "Status pages"} className="retention-card"
     action={<button type="button" className="add-button" onClick={() => { setEditing({ kind: "settings", pageId: null }); setMessage(null); }}>New page</button>}>
@@ -389,9 +392,9 @@ export function StatusPagesCard() {
   </Card>
     {/* Beside the card rather than inside it, so no card rule can ever
         become the drawer's containing block. */}
-    <Drawer open={editing?.kind === "settings"} onClose={close} title={current ? `Settings for ${current.title}` : "New status page"}>
+    <Drawer open={settingsOpen} onClose={close} title={current ? `Settings for ${current.title}` : "New status page"}>
       <Panel>
-        {editing?.kind === "settings" && <SettingsForm key={editing.pageId ?? "new"} page={current} onCancel={close}
+        {settingsOpen && <SettingsForm key={editing.pageId ?? "new"} page={current} onCancel={close}
           onSaved={(page) => {
             store(page);
             if (editing.pageId === null) {

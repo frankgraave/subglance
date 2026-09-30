@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
 import { StatusPagesCard } from "./StatusPages";
-import { slugFrom, type StatusPage } from "./api";
+import { slugFrom, statusPagesKey, type StatusPage } from "./api";
 import { pageMonitors, samplePages } from "./fixtures";
 
 const clients: QueryClient[] = [];
@@ -226,6 +226,21 @@ it("deletes a page only after its address is retyped", async () => {
   expect(await screen.findByText("Acme services was deleted.")).toBeTruthy();
   expect(calls(fetcher, "DELETE")[0][0]).toBe("/api/v1/status-pages/status");
   await waitFor(() => expect(screen.getByRole("heading", { name: "Status pages (1)" })).toBeTruthy());
+});
+
+// A page deleted elsewhere must not leave its settings open as a new-page
+// form: saving that would quietly create a duplicate.
+it("closes a page's settings when a refetch no longer lists that page", async () => {
+  let gone = false;
+  const fetcher = mount(samplePages, (url, init) =>
+    gone && url === "/api/v1/status-pages" && !init?.method ? json({ pages: samplePages.slice(1) }) : undefined);
+  fireEvent.click(await screen.findByRole("button", { name: "Settings for Acme services" }));
+  expect(screen.getByRole("form", { name: "Settings for Acme services" })).toBeTruthy();
+  gone = true;
+  await act(() => clients[0].invalidateQueries({ queryKey: statusPagesKey }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(screen.queryByRole("form", { name: "New status page" })).toBeNull();
+  expect(calls(fetcher, "POST")).toHaveLength(0);
 });
 
 // A page misread as off would be offered back that way and saved.
