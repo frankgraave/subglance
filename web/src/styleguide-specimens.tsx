@@ -21,7 +21,7 @@ import {
   StateChip,
   StatusChip,
 } from "./components/Chip";
-import { IconPause, IconPencil, IconRefresh, IconTrash } from "./components/icons";
+import { IconPause, IconPencil, IconPulse, IconRefresh, IconTrash } from "./components/icons";
 import { PlusIcon, SearchIcon, SidebarIcon } from "./shell/icons";
 import { IconTile } from "./components/IconTile";
 import { PanelList, PanelRow } from "./components/PanelList";
@@ -175,7 +175,7 @@ export const specimens: Specimen[] = [
     id: "icontile",
     title: "Icon tile",
     source: "web/src/components/IconTile.tsx",
-    rule: "The 24px tile beside a card title. Its border adds optical weight, which is why the gap to the title is a half-step wider than the grid would give.",
+    rule: "The 24px tile beside a card title, on every card: Card's icon prop is required, so a card without one does not compile. The glyph names the card's subject, never an action. Its border adds optical weight, which is why the gap to the title is a half-step wider than the grid would give.",
     node: row(
       <IconTile key="a">
         <IconRefresh />
@@ -240,7 +240,7 @@ export const specimens: Specimen[] = [
     rule:
       "Two surfaces, never three. A card frames a group; a panel row sits on it, and a panel is the quieter fill for a block that sits on a card. A row carries its status as a lamp plus a word, never as colour alone.",
     node: (
-      <Card title="Checks" headingLevel={3}>
+      <Card title="Checks" icon={<IconPulse />} headingLevel={3}>
         <PanelList label="Recent checks">
           <PanelRow status="up" icon={<Led status="up" />}>
             api.example.com <Value value={88}>88 ms</Value>

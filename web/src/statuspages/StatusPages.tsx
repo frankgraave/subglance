@@ -4,7 +4,7 @@ import { Card, Panel } from "../components/Card";
 import { StateChip } from "../components/Chip";
 import { ConfirmDelete } from "../components/ConfirmDelete";
 import { Drawer } from "../components/Drawer";
-import { IconTrash } from "../components/icons";
+import { IconGlobe, IconTrash } from "../components/icons";
 import { ApiError } from "../api/http";
 import { registerLeaveGuard } from "../shell/leaveGuard";
 import { browserTimezone, knownTimezones } from "../notifications/quietHours";
@@ -376,7 +376,7 @@ export function StatusPagesCard() {
   // fall back to the new-page form: saving that would create a duplicate.
   const settingsOpen = editing?.kind === "settings" && (editing.pageId === null || current !== null);
 
-  return <><Card title={pages ? `Status pages (${pages.length})` : "Status pages"} className="retention-card"
+  return <><Card title={pages ? `Status pages (${pages.length})` : "Status pages"} icon={<IconGlobe />} className="retention-card"
     action={<button type="button" className="add-button" onClick={() => { setEditing({ kind: "settings", pageId: null }); setMessage(null); }}>New page</button>}>
     <Panel>
       <p className="retention-note">

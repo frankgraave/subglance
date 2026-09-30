@@ -4,6 +4,7 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 import { mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { Card, Panel } from "../components/Card";
+import { IconList } from "../components/icons";
 import { PanelList, PanelRow } from "../components/PanelList";
 import { chromium, type Browser, type Page } from "../layout/harness/browser";
 import { serveBuild, type Server } from "../layout/harness/server";
@@ -42,8 +43,8 @@ it.each(["dark", "light"])("measures real Panel and PanelList on a Card alongsid
     await page.goto(server.url, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".shell-topbar");
     const markup = renderToStaticMarkup(h("main", { style: { padding: "var(--space-8)", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-8)" } },
-      h(Card, { title: "Panel on a Card", children: h(Panel, { children: "Panel content" }) }),
-      h(Card, { title: "PanelList on a Card", children: h(PanelList, { label: "Panels", children: h(PanelRow, { children: h("a", { href: "#" }, "Panel row link") }) }) }),
+      h(Card, { title: "Panel on a Card", icon: h(IconList), children: h(Panel, { children: "Panel content" }) }),
+      h(Card, { title: "PanelList on a Card", icon: h(IconList), children: h(PanelList, { label: "Panels", children: h(PanelRow, { children: h("a", { href: "#" }, "Panel row link") }) }) }),
       h("span", { className: "shell-nav-soon" }, "Soon"),
       h("span", { className: "shell-search-kbd" }, "⌘K"),
       h("div", { className: "segmented" }, h("button", { className: "segmented-option" }, "Segment")),

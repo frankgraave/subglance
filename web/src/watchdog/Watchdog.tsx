@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, Panel } from "../components/Card";
+import { IconPulse } from "../components/icons";
 import { useNow } from "../live/useNow";
 import { fetchWatchdog, watchdogKey, type WatchdogState } from "./api";
 
@@ -39,7 +40,7 @@ export function WatchdogNotice() {
 export function WatchdogCard() {
   const query = useWatchdog();
   const data = query.data;
-  return <Card title="Self-monitoring" className="watchdog-card">
+  return <Card title="Self-monitoring" icon={<IconPulse />} className="watchdog-card">
     <Panel>
       <p className="watchdog-label">Watchdog</p>
       {!data ? <p>{query.isError ? "Watchdog state unavailable." : "Loading watchdog state…"}</p> : <>

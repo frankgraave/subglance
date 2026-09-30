@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "rea
 import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { createQueryClient } from "../live/queryClient";
 import { Card, Panel } from "../components/Card";
+import { IconDatabase, IconGlobe, IconTransfer } from "../components/icons";
 import { ChangePassword } from "../auth/ChangePassword";
 import { SearchIcon, SettingsIcon } from "../shell/icons";
 import { TopbarTools } from "../shell/TopbarTools";
@@ -171,13 +172,13 @@ export function Settings({ client, canAdmin = false, role = canAdmin ? "admin" :
     // Admin-only like the API: a page decides what the instance tells people
     // without an account. Beside Users, the other card about who sees what.
     ...(canAdmin ? [{ id: "status-pages", label: "Status pages", keywords: "status pages public page visitors customers share publish slug address",
-      body: provide(<Suspense fallback={<Card title="Status pages"><Panel><p>Loading status pages…</p></Panel></Card>}>
+      body: provide(<Suspense fallback={<Card title="Status pages" icon={<IconGlobe />}><Panel><p>Loading status pages…</p></Panel></Card>}>
         <StatusPagesCard />
       </Suspense>) }] : []),
     { id: "self-monitoring", label: "Self-monitoring", keywords: "self-monitoring watchdog last ping success rejection outage",
       body: provide(<WatchdogCard />) },
     { id: "retention", label: "Retention & storage", keywords: "retention storage database history heartbeats summaries incidents disk size",
-      body: provide(<Suspense fallback={<Card title="Retention & storage"><Panel><p>Loading retention settings…</p></Panel></Card>}>
+      body: provide(<Suspense fallback={<Card title="Retention & storage" icon={<IconDatabase />}><Panel><p>Loading retention settings…</p></Panel></Card>}>
         <RetentionCard canAdmin={canAdmin} />
       </Suspense>) },
     // The endpoint is admin-only (the target names a bucket), so the card is too.
@@ -188,7 +189,7 @@ export function Settings({ client, canAdmin = false, role = canAdmin ? "admin" :
     // other card about moving an instance's contents, and saying how it differs.
     ...(role === "admin" || role === "editor" ? [{ id: "configuration", label: "Import & export",
       keywords: "configuration files export import yaml download upload dry run migrate move copy instance monitors channels",
-      body: provide(<Suspense fallback={<Card title="Import & export"><Panel><p>Loading import and export…</p></Panel></Card>}>
+      body: provide(<Suspense fallback={<Card title="Import & export" icon={<IconTransfer />}><Panel><p>Loading import and export…</p></Panel></Card>}>
         <ConfigFilesCard />
       </Suspense>) }] : []),
     { id: "tokens", label: "API tokens", keywords: "api tokens bearer keys scripts ci revoke",

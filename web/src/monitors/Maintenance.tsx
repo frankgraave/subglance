@@ -2,6 +2,7 @@ import { useId, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiJSON, apiPost, apiRequest } from "../api/http";
 import { Card } from "../components/Card";
+import { IconClock } from "../components/icons";
 import type { InventoryMonitor } from "./inventory";
 
 type Window = {
@@ -14,7 +15,7 @@ const KEY = ["maintenance"];
 
 export function Maintenance({ monitors, canWrite }: { monitors: readonly InventoryMonitor[]; canWrite: boolean }) {
   const [open, setOpen] = useState(false);
-  return <Card title="Scheduled maintenance" className="maintenance">
+  return <Card title="Scheduled maintenance" icon={<IconClock />} className="maintenance">
     <details onToggle={(event) => setOpen(event.currentTarget.open)}>
       <summary className="add-summary">Manage scheduled maintenance</summary>
       {open ? <MaintenanceManager monitors={monitors} canWrite={canWrite} /> : null}

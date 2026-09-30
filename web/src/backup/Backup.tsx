@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, Panel } from "../components/Card";
+import { IconArchive } from "../components/icons";
 import { formatBytes } from "../retention/format";
 import { backupKey, fetchBackup } from "./api";
 
@@ -22,7 +23,7 @@ function When({ value }: { value: string }) {
 export function BackupCard() {
   const query = useQuery({ queryKey: backupKey, queryFn: ({ signal }) => fetchBackup(signal), refetchInterval: 60_000 });
   const data = query.data;
-  return <Card title="Backups" className="watchdog-card">
+  return <Card title="Backups" icon={<IconArchive />} className="watchdog-card">
     <Panel>
       <p className="watchdog-label">Scheduled backups</p>
       {!data ? <p>{query.isError ? "Backup state unavailable." : "Loading backup state…"}</p> : <>

@@ -72,6 +72,12 @@ delete what the heading was carrying. When the Monitors title went, its "4
 configured, 1 paused" moved to the card's `note` prop, which is what `Card`
 grew that prop for.
 
+Every card has an icon tile. `Card`'s `icon` prop is required, so a new card
+does not compile until you give it a glyph from `web/src/components/icons.tsx`
+— one that names the card's subject, not an action, and that no card about a
+different subject on the same screen uses. A `Suspense` fallback for a lazy card takes the same
+glyph as the card it stands in for. The reasoning is in DESIGN.md §8.2.
+
 A button that is a glyph plus a word needs an explicit `aria-label`. What a
 screen reader makes of an unnamed inline `<svg>` is not fixed — some skip it,
 some announce "graphic" — so leaving the name to text content makes it depend

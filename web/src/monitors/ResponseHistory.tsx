@@ -1,6 +1,6 @@
 import { causeWords } from "../incidents/story";
 import { Card } from "../components/Card";
-import { IconAlert } from "../components/icons";
+import { IconResponse } from "../components/icons";
 import { formatMoment } from "./detail";
 import { toUnixMs } from "./types";
 import type { ResponseHeartbeat } from "./responseHistory";
@@ -21,7 +21,7 @@ const HEADERS = new Set([
 /** Historical diagnostics only: current monitor state cannot explain old rows. */
 export function ResponseHistory({ heartbeats, loading = false, error = null }: ResponseHistoryProps) {
   const failures = heartbeats.filter((hb) => !hb.ok);
-  return <Card title="Failure responses" icon={<IconAlert />} headingLevel={2}>
+  return <Card title="Failure responses" icon={<IconResponse />} headingLevel={2}>
     <div className="response-history">
       {loading ? <p role="status">Loading failure responses…</p> : null}
       {error ? <p role="alert">Could not load failure responses: {error.message}. Previously loaded history may be out of date.</p> : null}

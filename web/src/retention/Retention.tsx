@@ -1,6 +1,7 @@
 import { useId, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, Panel } from "../components/Card";
+import { IconDatabase } from "../components/icons";
 import { ApiError } from "../api/http";
 import {
   fetchRetention, previewRetention, retentionKey, saveRetention,
@@ -315,7 +316,7 @@ export function RetentionCard({ canAdmin }: { canAdmin: boolean }) {
   const [outcome, setOutcome] = useState<Outcome>(null);
   const data = query.data;
   return (
-    <Card title="Retention & storage" className="retention-card">
+    <Card title="Retention & storage" icon={<IconDatabase />} className="retention-card">
       <Panel>
         {!data ? <p>{query.isError ? "Retention settings unavailable." : "Loading retention settings…"}</p> : <>
           <table className="retention-tables">
