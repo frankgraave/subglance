@@ -21,6 +21,11 @@ import { DisplayCard, type DisplayPreferences } from "./DisplayCard";
  * download two forms and a drawer for someone else's once-a-month task.
  */
 const StatusPagesCard = lazy(() => import("../statuspages/StatusPages").then((module) => ({ default: module.StatusPagesCard })));
+/*
+ * The same for configuration files: an editor's occasional migration task,
+ * with a report renderer nobody else needs in the entry chunk.
+ */
+const ConfigFilesCard = lazy(() => import("../configfile/ConfigFiles").then((module) => ({ default: module.ConfigFilesCard })));
 
 /**
  * One settings section: the anchor it answers to, the name the index shows,
@@ -169,6 +174,14 @@ export function Settings({ client, canAdmin = false, role = canAdmin ? "admin" :
     // The endpoint is admin-only (the target names a bucket), so the card is too.
     ...(canAdmin ? [{ id: "backups", label: "Backups", keywords: "backups backup restore s3 bucket storage database snapshot",
       body: provide(<BackupCard />) }] : []),
+    // Editors and administrators, like the endpoints: an export stores a key
+    // on every object that lacks one, which is a write. Beside backups, the
+    // other card about moving an instance's contents, and saying how it differs.
+    ...(role === "admin" || role === "editor" ? [{ id: "configuration", label: "Import & export",
+      keywords: "configuration files export import yaml download upload dry run migrate move copy instance monitors channels",
+      body: provide(<Suspense fallback={<Card title="Import & export"><Panel><p>Loading import and export…</p></Panel></Card>}>
+        <ConfigFilesCard />
+      </Suspense>) }] : []),
     { id: "tokens", label: "API tokens", keywords: "api tokens bearer keys scripts ci revoke",
       body: provide(<TokensCard role={role} />) },
     // Administrators only: the card names the database path, and the API refuses anyone else.
