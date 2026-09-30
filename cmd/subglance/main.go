@@ -323,6 +323,10 @@ func run(args []string) error {
 	// The API reads the same process-local history the send path writes.
 	// Explicit nil reports disabled, not an unavailable diagnostic source.
 	apiSrv.WithWatchdog(dog)
+	// The same canary the runner consults, so the dashboard's "no outbound
+	// connection" line and the warnings it explains come from one answer.
+	// Nil when the check is off, which the endpoint reports as disabled.
+	apiSrv.WithConnectivity(canary)
 	// Waited for on shutdown, so a backup cut short by the signal gets to
 	// remove its staging files before the process exits.
 	backupsDone := make(chan struct{})

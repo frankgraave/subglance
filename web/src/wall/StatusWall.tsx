@@ -44,6 +44,12 @@ export type StatusWallProps = {
    * worst thing a wall display can become.
    */
   notice?: string;
+  /**
+   * "No outbound connection since 03:12", while the server cannot reach its
+   * connectivity targets (SUB-151). It rides the meta line, like the stale
+   * suffix and for the same reason: there is no chrome to hold a banner.
+   */
+  hostOffline?: string;
   /** Injected in tests, which must not depend on the machine's clock. */
   now?: number;
   /**
@@ -60,6 +66,7 @@ export function StatusWall({
   monitors,
   instance,
   stale = false,
+  hostOffline,
   onExit,
   now,
   notice,
@@ -127,6 +134,13 @@ export function StatusWall({
                 {" "}
                 · connection lost, not updating
               </span>
+            )}
+            {/*
+             * Not while stale: the stream is gone, so the server's own state
+             * is not known either, and "connection lost" already says so.
+             */}
+            {!stale && hostOffline !== undefined && (
+              <span className="wall-meta-stale"> · {hostOffline}</span>
             )}
           </p>
           <p className="wall-clock" aria-hidden="true">

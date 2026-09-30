@@ -37,6 +37,14 @@
   50%      { opacity: .35; }
 }
 
+/* The host-offline line (SUB-151) wears this badge but holds its dot still.
+   The reconnecting badge is transient; this line can stay up for a whole
+   offline episode, hours if need be, and a dot that breathes for hours is
+   animation at rest (DESIGN.md §1, rule 2). The text carries the meaning. */
+.conn-badge[data-state="host-offline"] .conn-badge-dot {
+  animation: none;
+}
+
 .conn-badge-age {
   color: var(--ink-2);
 }

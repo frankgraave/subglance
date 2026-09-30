@@ -10,6 +10,7 @@ import {
 } from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
 import { LiveDashboardRoot } from "./LiveDashboard";
+import { onlineConnectivity } from "../connectivity/fixtures";
 import { disabledWatchdog } from "../watchdog/fixtures";
 import type { EventSourceLike } from "./connection";
 import { DEFAULT_PING_INTERVAL_MS, STALE_AFTER_PINGS } from "./connection";
@@ -32,7 +33,9 @@ function render(ui: React.ReactElement) {
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) =>
     String(input) === "/api/v1/watchdog"
       ? Promise.resolve(new Response(JSON.stringify(disabledWatchdog)))
-      : monitorFetch(input, init));
+      : String(input) === "/api/v1/connectivity"
+        ? Promise.resolve(new Response(JSON.stringify(onlineConnectivity)))
+        : monitorFetch(input, init));
   return renderBare(
     <>
       <ShellSlots />

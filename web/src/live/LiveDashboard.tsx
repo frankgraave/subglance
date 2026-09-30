@@ -5,6 +5,8 @@ import type { QueryClient } from "@tanstack/react-query";
 import { createQueryClient } from "./queryClient";
 import { Dashboard } from "../monitors/Dashboard";
 import { WatchdogNotice } from "../watchdog/Watchdog";
+import { HostOfflineNotice } from "../connectivity/HostOffline";
+import { hostOfflineText, useHostOfflineSince } from "../connectivity/offlineState";
 import { ConnectionBadge } from "./ConnectionBadge";
 import { useLiveMonitors } from "./useLiveMonitors";
 import { useNow } from "./useNow";
@@ -56,6 +58,14 @@ export function LiveDashboard({
   const { monitors, status, loading, error, announcement, reconnect } =
     useLiveMonitors(live);
   const now = useNow();
+  // The server's own uplink, as opposed to this browser's link to the server
+  // (`status`). Two different failures with two different sentences: one
+  // freezes the screen, the other explains why it has turned amber.
+  //
+  // Withheld while the stream is down: then this browser cannot vouch for
+  // anything the server says, and "connection lost" is the whole story.
+  const hostOnlineState = useHostOfflineSince();
+  const hostOfflineSince = status === "offline" ? null : hostOnlineState;
 
   const newest = monitors.reduce<number | null>(
     (max, m) =>
@@ -93,6 +103,11 @@ export function LiveDashboard({
         monitors={monitors}
         instance={instance}
         stale={status === "offline"}
+        hostOffline={
+          hostOfflineSince === null
+            ? undefined
+            : hostOfflineText(hostOfflineSince, now)
+        }
         onExit={onExitWall}
         notice={notice}
         mainRef={mainRef}
@@ -128,12 +143,15 @@ export function LiveDashboard({
       onOpenMonitor={onOpenMonitor}
       onAddMonitor={onAddMonitor}
       banner={
-        <ConnectionBadge
-          status={status}
-          since={newest}
-          now={now}
-          onReconnect={reconnect}
-        />
+        <>
+          <ConnectionBadge
+            status={status}
+            since={newest}
+            now={now}
+            onReconnect={reconnect}
+          />
+          <HostOfflineNotice since={hostOfflineSince} />
+        </>
       }
     />
     <WatchdogNotice />
