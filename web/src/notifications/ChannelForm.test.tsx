@@ -197,3 +197,154 @@ describe("ChannelForm", () => {
     expect(screen.queryByLabelText(/channel label/i)).toBeNull();
   });
 });
+
+function sms(numbers: string, over: Record<string, string> = {}) {
+  return channelFromApi({
+    id: 2,
+    name: "On-call phones",
+    type: "sms",
+    config: {
+      provider: "android-gateway",
+      numbers,
+      url: "****8080",
+      username: "sms",
+      password: "****word",
+      recoveries: "false",
+      ...over,
+    },
+    enabled: true,
+  });
+}
+
+describe("ChannelForm, SMS", () => {
+  const MASKED = "+31 6 \u2022\u2022\u2022\u2022 5678, +31 6 \u2022\u2022\u2022\u2022 4321";
+
+  it("sends only the chosen provider's fields, numbers as one list", async () => {
+    // A hidden field is not sent: a channel set up for Twilio must not also
+    // store the gateway fields that were on screen before the switch.
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<ChannelForm onSave={onSave} />);
+    fireEvent.change(screen.getByLabelText("Type"), { target: { value: "sms" } });
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Phones" } });
+    expect(screen.getByLabelText("Gateway address")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Gateway username"), {
+      target: { value: "sms" },
+    });
+    fireEvent.change(screen.getByLabelText("Sent through"), {
+      target: { value: "twilio" },
+    });
+    expect(screen.queryByLabelText("Gateway address")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Phone numbers"), {
+      target: { value: "06 1234 5678\n\n+44 7700 900123\n" },
+    });
+    fireEvent.change(screen.getByLabelText(/^Country code/), {
+      target: { value: "+31" },
+    });
+    fireEvent.change(screen.getByLabelText("Account SID"), {
+      target: { value: "AC123" },
+    });
+    fireEvent.change(screen.getByLabelText("Auth token"), {
+      target: { value: "tok" },
+    });
+    fireEvent.change(screen.getByLabelText("Sender"), {
+      target: { value: "SubGlance" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /add channel/i }));
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    expect(onSave.mock.calls[0][0]).toEqual({
+      name: "Phones",
+      type: "sms",
+      config: {
+        provider: "twilio",
+        numbers: "06 1234 5678, +44 7700 900123",
+        country_code: "+31",
+        account_sid: "AC123",
+        auth_token: "tok",
+        from: "SubGlance",
+        recoveries: "true",
+      },
+    });
+  });
+
+  it("asks for the numbers before anything is sent", () => {
+    const onSave = vi.fn();
+    render(<ChannelForm onSave={onSave} />);
+    fireEvent.change(screen.getByLabelText("Type"), { target: { value: "sms" } });
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Phones" } });
+    fireEvent.change(screen.getByLabelText("Phone numbers"), {
+      target: { value: " \n " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /add channel/i }));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert").textContent).toBe(
+      "Phone numbers is required for an SMS channel.",
+    );
+  });
+
+  it("does not carry a value typed for one type into another", () => {
+    // `url` is an ntfy server and an SMS gateway: the same key, not the
+    // same setting.
+    render(<ChannelForm onSave={async () => {}} />);
+    fireEvent.change(screen.getByLabelText("Type"), { target: { value: "sms" } });
+    fireEvent.change(screen.getByLabelText("Gateway username"), {
+      target: { value: "gateway-user" },
+    });
+    fireEvent.change(screen.getByLabelText("Type"), { target: { value: "ntfy" } });
+    expect((screen.getByLabelText(/^Username/) as HTMLInputElement).value).toBe("");
+  });
+
+  it("gives an administrator the numbers one per line, and the stored switch", () => {
+    render(
+      <ChannelForm channel={sms("+31612345678, +31687654321")} onSave={async () => {}} />,
+    );
+    const numbers = screen.getByLabelText("Phone numbers") as HTMLTextAreaElement;
+    expect(numbers.tagName).toBe("TEXTAREA");
+    expect(numbers.value).toBe("+31612345678\n+31687654321");
+    const back = screen.getByRole("checkbox", { name: /back up/i }) as HTMLInputElement;
+    expect(back.checked).toBe(false);
+  });
+
+  it("sends masked numbers back unchanged, and never offers them for editing", async () => {
+    // An editor is sent the masked list. Put in a text box, it would be
+    // saved as literal bullets; echoed back, the API reads it as unchanged.
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<ChannelForm channel={sms(MASKED)} onSave={onSave} />);
+    for (const box of screen.queryAllByRole("textbox")) {
+      expect((box as HTMLInputElement).value).not.toContain("\u2022");
+    }
+    expect(screen.getByText(/only an administrator reads these/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    expect(onSave.mock.calls[0][0].config).toEqual({
+      provider: "android-gateway",
+      numbers: MASKED,
+      url: "****8080",
+      username: "sms",
+      password: "****word",
+      recoveries: "false",
+    });
+  });
+
+  it("replaces masked numbers only as a whole new list", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<ChannelForm channel={sms(MASKED)} onSave={onSave} />);
+    fireEvent.click(screen.getByRole("button", { name: /replace phone numbers/i }));
+    const numbers = screen.getByLabelText("Phone numbers") as HTMLTextAreaElement;
+    expect(numbers.value).toBe("");
+    fireEvent.change(numbers, { target: { value: "+31611112222" } });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    expect(onSave.mock.calls[0][0].config.numbers).toBe("+31611112222");
+  });
+
+  it("warns about quiet hours on an SMS channel only", () => {
+    const { unmount } = render(<ChannelForm channel={sms("+31612345678")} onSave={async () => {}} />);
+    const box = screen.getByRole("checkbox", { name: /hold this channel/i });
+    expect(box.getAttribute("aria-describedby")).toBeTruthy();
+    const help = document.getElementById(box.getAttribute("aria-describedby") ?? "");
+    expect(help?.textContent).toMatch(/defeats the reason for choosing SMS/);
+    unmount();
+    render(<ChannelForm channel={slack()} onSave={async () => {}} />);
+    expect(screen.queryByText(/defeats the reason/)).toBeNull();
+  });
+});

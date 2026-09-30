@@ -33,6 +33,12 @@ export type QuietHoursFieldProps = {
   stored: boolean;
   /** A problem with these fields, shown beneath them. */
   error?: string | null;
+  /**
+   * A sentence about what a window costs on this kind of channel. It joins
+   * the help text, which the checkbox is described by, so it is read out at
+   * the moment someone is about to turn the window on.
+   */
+  caveat?: string;
 };
 
 export function QuietHoursField({
@@ -40,6 +46,7 @@ export function QuietHoursField({
   onChange,
   stored,
   error = null,
+  caveat,
 }: QuietHoursFieldProps) {
   const ids = useId();
   const set = (patch: Partial<QuietDraft>) => onChange({ ...value, ...patch });
@@ -155,6 +162,7 @@ export function QuietHoursField({
           : "Off: this channel delivers at any hour."}
         {stored &&
           " Changing or removing the window sends whatever it is holding right away."}
+        {caveat !== undefined && ` ${caveat}`}
       </p>
 
       {error !== null && (

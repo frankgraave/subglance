@@ -515,7 +515,7 @@ describe("NotificationsView", () => {
     // The supported types, from CHANNEL_TYPES rather than from a hand-written
     // list that could advertise a type the store's CHECK constraint rejects.
     expect(
-      screen.getByText(/Email, Slack, Discord, Telegram, ntfy, Gotify, Webhook/),
+      screen.getByText(/Email, Slack, Discord, Telegram, ntfy, Gotify, SMS, Webhook/),
     ).toBeTruthy();
   });
 

@@ -20,7 +20,7 @@
  * and it is exactly what "assume healthy until told otherwise" produces.
  */
 
-/** The seven types `store` accepts, mirroring its CHECK constraint. */
+/** The eight types `store` accepts, mirroring its CHECK constraint. */
 export type ChannelType =
   | "webhook"
   | "discord"
@@ -28,7 +28,8 @@ export type ChannelType =
   | "telegram"
   | "email"
   | "ntfy"
-  | "gotify";
+  | "gotify"
+  | "sms";
 
 export const CHANNEL_TYPES: readonly ChannelType[] = [
   "email",
@@ -37,6 +38,7 @@ export const CHANNEL_TYPES: readonly ChannelType[] = [
   "telegram",
   "ntfy",
   "gotify",
+  "sms",
   "webhook",
 ];
 
@@ -193,6 +195,8 @@ export function typeLabel(type: string): string {
       return "ntfy";
     case "gotify":
       return "Gotify";
+    case "sms":
+      return "SMS";
     case "webhook":
       return "Webhook";
     default:
@@ -219,6 +223,28 @@ export type FieldSpec = {
   required: boolean;
   help?: string;
   placeholder?: string;
+  /**
+   * The control that takes the value. Text by default. Every kind still
+   * stores a string, because that is all a channel's config holds: a
+   * checkbox writes "true" or "false", a list writes one entry per line.
+   */
+  control?: "select" | "checkbox" | "list";
+  /** The choices of a select; the first is the default. */
+  options?: readonly { value: string; label: string }[];
+  /**
+   * Shown, validated and sent only while another field holds this value. A
+   * hidden field is not sent at all, so switching an SMS channel from one
+   * provider to the other drops the first provider's credentials instead of
+   * storing them where nothing reads them.
+   */
+  when?: { key: string; value: string };
+  /**
+   * The API may send this value back masked for readers who are not
+   * administrators (an SMS channel's phone numbers). Masked, it is treated
+   * like a stored secret: shown as it arrived, sent back unchanged, and only
+   * replaceable as a whole.
+   */
+  personal?: boolean;
 };
 
 /**
@@ -355,6 +381,116 @@ export const FIELDS: Readonly<Record<ChannelType, readonly FieldSpec[]>> = {
       placeholder: "4",
     },
   ],
+  /*
+   * One type with a provider choice, as `notifier.SMSSender` reads it. The
+   * gateway URL, its password and the Twilio auth token are masked by the API;
+   * the account SID names an account like a username does and is public.
+   */
+  sms: [
+    {
+      key: "provider",
+      label: "Sent through",
+      secret: false,
+      required: true,
+      control: "select",
+      options: [
+        { value: "android-gateway", label: "SMS Gateway for Android" },
+        { value: "twilio", label: "Twilio" },
+      ],
+      help: "SMS Gateway for Android turns a phone with a SIM card into the sender: no account, no charge per message. Twilio bills every message.",
+    },
+    {
+      key: "numbers",
+      label: "Phone numbers",
+      secret: false,
+      required: true,
+      control: "list",
+      personal: true,
+      help: "One per line, up to 10. A number without + or 00 in front uses the country code below.",
+      placeholder: "+31 6 1234 5678",
+    },
+    {
+      key: "country_code",
+      label: "Country code for numbers without +",
+      secret: false,
+      required: false,
+      help: "With +31 here, 06 1234 5678 is read as a Dutch mobile number.",
+      placeholder: "+31",
+    },
+    {
+      key: "url",
+      label: "Gateway address",
+      secret: true,
+      required: true,
+      when: { key: "provider", value: "android-gateway" },
+      help: "The address the app shows under Local Server. A phone on your own network needs --allow-private-targets. Stored write-only.",
+      placeholder: "http://192.168.1.50:8080",
+    },
+    {
+      key: "username",
+      label: "Gateway username",
+      secret: false,
+      required: true,
+      when: { key: "provider", value: "android-gateway" },
+    },
+    {
+      key: "password",
+      label: "Gateway password",
+      secret: true,
+      required: true,
+      when: { key: "provider", value: "android-gateway" },
+      help: "Stored write-only. It is never sent back to this page.",
+    },
+    {
+      key: "account_sid",
+      label: "Account SID",
+      secret: false,
+      required: true,
+      when: { key: "provider", value: "twilio" },
+      placeholder: "AC…",
+    },
+    {
+      key: "auth_token",
+      label: "Auth token",
+      secret: true,
+      required: true,
+      when: { key: "provider", value: "twilio" },
+      help: "Stored write-only. It is never sent back to this page.",
+    },
+    {
+      key: "from",
+      label: "Sender",
+      secret: false,
+      required: true,
+      when: { key: "provider", value: "twilio" },
+      help: "Your Twilio number, or a name of up to 11 letters and digits. Not every country accepts a name; Twilio's refusal is shown if yours does not.",
+      placeholder: "+14155550100",
+    },
+    {
+      key: "hourly_limit",
+      label: "Messages per hour, at most",
+      secret: false,
+      required: false,
+      help: "1 to 100, 10 when empty. Alerts over the limit are not sent by SMS; the next message says how many were held back. A test message counts toward it.",
+      placeholder: "10",
+    },
+    {
+      key: "recoveries",
+      label: "Also send a message when a monitor is back up",
+      secret: false,
+      required: false,
+      control: "checkbox",
+      help: "Off means outages only: one message per incident instead of two.",
+    },
+    {
+      key: "timezone",
+      label: "Time zone for times in a message",
+      secret: false,
+      required: false,
+      help: "Empty uses the server's zone and names it after each time.",
+      placeholder: "Europe/Amsterdam",
+    },
+  ],
   webhook: [
     {
       key: "url",
@@ -376,6 +512,55 @@ export const FIELDS: Readonly<Record<ChannelType, readonly FieldSpec[]>> = {
 
 export function fieldsFor(type: string): readonly FieldSpec[] {
   return isKnownType(type) ? FIELDS[type] : [];
+}
+
+/**
+ * The fields of a type that apply with these values: a field tied to another
+ * field's value (`when`) is left out unless that value is chosen. A select
+ * with nothing chosen yet counts as holding its first option, which is what
+ * it shows.
+ */
+export function visibleFields(
+  type: string,
+  values: Readonly<Record<string, string>>,
+): readonly FieldSpec[] {
+  const specs = fieldsFor(type);
+  return specs.filter((spec) => {
+    if (spec.when === undefined) return true;
+    const { key, value } = spec.when;
+    return fieldValue(specs, values, key) === value;
+  });
+}
+
+/** A field's value, or a select's first option when none is set. */
+export function fieldValue(
+  specs: readonly FieldSpec[],
+  values: Readonly<Record<string, string>>,
+  key: string,
+): string {
+  const value = values[key];
+  if (value !== undefined && value !== "") return value;
+  const spec = specs.find((candidate) => candidate.key === key);
+  return spec?.control === "select" ? (spec.options?.[0]?.value ?? "") : "";
+}
+
+/** Splits a list setting the way the server does: commas, semicolons, lines. */
+export function listEntries(value: string): string[] {
+  return value
+    .split(/[,;\r\n]+/)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry !== "");
+}
+
+/**
+ * Whether a phone-number list arrived in the API's masked form.
+ *
+ * `notifier.MaskSMSNumbers` writes each number as `+31 6 •••• 5678`, and a
+ * part it cannot read as `••••`. No real number contains a bullet, so one
+ * bullet is enough to know this reader was not shown the numbers.
+ */
+export function isMaskedList(value: string): boolean {
+  return value.includes("\u2022");
 }
 
 /**
@@ -428,6 +613,22 @@ export function describeDestination(channel: Channel): string {
       if (topic === "") return "no topic configured";
       const server = (cfg.url ?? "") === "" ? "ntfy.sh" : "own server";
       return `${server}, topic ending ${topic}`;
+    }
+    case "sms": {
+      /*
+       * A count and a provider, never the numbers. An administrator's API
+       * answer carries them in full, and this line sits in a list that is
+       * shown on screen shares; which phones a channel rings is in its form.
+       */
+      const count = listEntries(cfg.numbers ?? "").length;
+      if (count === 0) return "no phone numbers configured";
+      const via =
+        cfg.provider === "twilio"
+          ? "Twilio"
+          : cfg.provider === "android-gateway"
+            ? "SMS Gateway for Android"
+            : "an unknown provider";
+      return `${count} phone ${count === 1 ? "number" : "numbers"} through ${via}`;
     }
     case "slack":
     case "discord":

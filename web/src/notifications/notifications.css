@@ -469,11 +469,28 @@
 
 .nt-quiet-grid { margin-top: 0; }
 
-.nt-quiet-toggle {
+/* Also the one checkbox a channel type has (SMS "back up" messages). */
+.nt-quiet-toggle,
+.nt-check {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   min-height: var(--control-h);
   font-size: var(--type-body);
   line-height: var(--lead-body);
+}
+
+/*
+ * The box itself at the compact control square, not the browser's 13px. The
+ * label around it is a larger target, but WCAG 2.2 SC 2.5.8 is measured on
+ * the control, and this is the square the retention and inventory
+ * checkboxes use, so every checkbox in the product is one size.
+ */
+.nt-quiet-toggle input,
+.nt-check input {
+  accent-color: var(--accent);
+  width: var(--size-square-compact);
+  height: var(--size-square-compact);
+  margin: 0;
+  flex-shrink: 0;
 }

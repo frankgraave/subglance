@@ -68,6 +68,11 @@ Phone numbers are personal data. An administrator reads them back as saved;
 an editor or viewer reads each one as `+31 6 •••• 5678`. Logs and the
 delivery log only ever show that masked form.
 
+On the Notifications screen the numbers are a list, one per line. An editor
+sees the masked list there; saving other changes keeps the numbers as they
+are, and changing them means replacing the whole list. The channel list
+itself only says how many numbers a channel sends to, never which.
+
 ### One message, 160 characters
 
 Every alert is one SMS part: at most 160 characters in the GSM 7-bit
