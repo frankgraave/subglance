@@ -123,25 +123,33 @@
      size, for the same reason it never spells out a colour: "make everything
      a step larger" has to be one edit, not sixty, and sixty hand-tuned sizes
      drift out of proportion the first time one of them is touched.
-     Nothing here is below 12px; smaller than that stops being readable at a
-     glance, which is the entire product.
+     Every role is strictly larger than the one below it (tokens.test.ts), so
+     no two roles can collapse onto one size again. Nothing is below 12px;
+     smaller than that stops being readable at a glance, which is the entire
+     product.
      Every size is a whole number of pixels: a fractional size puts the
      engine's glyph rounding on the text, and it was the 12.5px helper — the
      most used role in the product — that carried it. */
   --type-page: 24px;
-  /* 16px, not 18. A card title sits beside a 24px icon tile and above a panel
-     of 14px text; at 18px it competes with the page title two levels up
-     instead of sitting between it and the body. Measured against the reference
-     style, its card headings are 16px/500 — the same size as body copy, doing
-     its work through weight and position rather than through size. */
-  --type-card: 16px;
+  /* 18px, a full heading step (1.2x) above a row. At 16px a card title sat
+     one pixel above the 15px rows inside it, so on the screens with no page
+     title — most of them, since the card names the page — nothing on screen
+     read as a heading. 24px stays above it for the one page that has a title
+     of its own. */
+  --type-card: 18px;
   /* A row's primary text: one step above body so a list scans. */
   --type-row: 15px;
-  /* Body copy and the default for anything unstated. */
+  /* Body copy, and the size of anything that states none: the base layer
+     sets it on `body`, so unstyled text lands on the scale instead of on the
+     browser's 16px. */
   --type-body: 14px;
-  /* Secondary text under a value or beside a control. Never below 12. */
-  --type-helper: 12px;
-  /* The caps legend that heads a section; same size as helper, set in caps. */
+  /* Secondary text under a value or beside a control. 13px, not 12: at 12 it
+     shared a size with the section legend, and it is the most used role in
+     the product — the explanations on every settings card sat on the
+     smallest rung. */
+  --type-helper: 13px;
+  /* The caps legend that heads a section: the smallest rung, and the only
+     role set in mono capitals. */
   --type-section: 12px;
 
   /* iOS Safari zooms the page in when a focused input renders below 16px and
@@ -254,7 +262,7 @@
   --space-1h: 6px;
   /* The base step. The gap between items inside a control. */
   --space-2: 8px;
-  /* The second half-step. The gap between a 24px tile and the 16px title
+  /* The second half-step. The gap between a 24px tile and the card title
      beside it: 8px reads tight because the tile's border adds optical weight,
      12px lets them drift apart. */
   --space-2h: 10px;

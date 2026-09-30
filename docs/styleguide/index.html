@@ -544,15 +544,15 @@
         </td>
         <td><code>--type-page</code></td>
         <td class="sg-value"><code>24px</code> / <code>32px</code></td>
-        <td class="sg-why">Type. Six roles, one scale — §2.5. A component never spells out a font size, for the same reason it never spells out a colour: &quot;make everything a step larger&quot; has to be one edit, not sixty, and sixty hand-tuned sizes <details class="sg-more"><summary>more</summary>drift out of proportion the first time one of them is touched. Nothing here is below 12px; smaller than that stops being readable at a glance, which is the entire product. Every size is a whole number of pixels: a fractional size puts the engine's glyph rounding on the text, and it was the 12.5px helper — the most used role in the product — that carried it.</details></td>
+        <td class="sg-why">Type. Six roles, one scale — §2.5. A component never spells out a font size, for the same reason it never spells out a colour: &quot;make everything a step larger&quot; has to be one edit, not sixty, and sixty hand-tuned sizes <details class="sg-more"><summary>more</summary>drift out of proportion the first time one of them is touched. Every role is strictly larger than the one below it (tokens.test.ts), so no two roles can collapse onto one size again. Nothing is below 12px; smaller than that stops being readable at a glance, which is the entire product. Every size is a whole number of pixels: a fractional size puts the engine's glyph rounding on the text, and it was the 12.5px helper — the most used role in the product — that carried it.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-specimen">
           <span style="font-size: var(--type-card); line-height: var(--lead-card)">Ag</span>
         </td>
         <td><code>--type-card</code></td>
-        <td class="sg-value"><code>16px</code> / <code>24px</code></td>
-        <td class="sg-why">16px, not 18. A card title sits beside a 24px icon tile and above a panel of 14px text; at 18px it competes with the page title two levels up instead of sitting between it and the body. <details class="sg-more"><summary>more</summary>Measured against the reference style, its card headings are 16px/500 — the same size as body copy, doing its work through weight and position rather than through size.</details></td>
+        <td class="sg-value"><code>18px</code> / <code>24px</code></td>
+        <td class="sg-why">18px, a full heading step (1.2x) above a row. At 16px a card title sat one pixel above the 15px rows inside it, so on the screens with no page title — most of them, since the card names the page — nothing on screen read <details class="sg-more"><summary>more</summary>as a heading. 24px stays above it for the one page that has a title of its own.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-specimen">
@@ -568,15 +568,15 @@
         </td>
         <td><code>--type-body</code></td>
         <td class="sg-value"><code>14px</code> / <code>20px</code></td>
-        <td class="sg-why">Body copy and the default for anything unstated.</td>
+        <td class="sg-why">Body copy, and the size of anything that states none: the base layer sets it on `body`, so unstyled text lands on the scale instead of on the browser's 16px.</td>
       </tr>
       <tr>
         <td class="sg-cell-specimen">
           <span style="font-size: var(--type-helper); line-height: var(--lead-helper)">Ag</span>
         </td>
         <td><code>--type-helper</code></td>
-        <td class="sg-value"><code>12px</code> / <code>16px</code></td>
-        <td class="sg-why">Secondary text under a value or beside a control. Never below 12.</td>
+        <td class="sg-value"><code>13px</code> / <code>16px</code></td>
+        <td class="sg-why">Secondary text under a value or beside a control. 13px, not 12: at 12 it shared a size with the section legend, and it is the most used role in the product — the explanations on every settings card sat on the smallest <details class="sg-more"><summary>more</summary>rung.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-specimen">
@@ -584,7 +584,7 @@
         </td>
         <td><code>--type-section</code></td>
         <td class="sg-value"><code>12px</code> / <code>12px</code></td>
-        <td class="sg-why">The caps legend that heads a section; same size as helper, set in caps.</td>
+        <td class="sg-why">The caps legend that heads a section: the smallest rung, and the only role set in mono capitals.</td>
       </tr>
       <tr>
         <td class="sg-cell-specimen">
@@ -690,7 +690,7 @@
         </td>
         <td><code>--space-2h</code></td>
         <td class="sg-value"><code>10px</code></td>
-        <td class="sg-why">The second half-step. The gap between a 24px tile and the 16px title beside it: 8px reads tight because the tile's border adds optical weight, 12px lets them drift apart.</td>
+        <td class="sg-why">The second half-step. The gap between a 24px tile and the card title beside it: 8px reads tight because the tile's border adds optical weight, 12px lets them drift apart.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">

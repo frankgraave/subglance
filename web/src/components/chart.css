@@ -77,11 +77,12 @@
 
 /* The x-axis, reduced to its two useful labels. Mono for the slashed zero and
    the tabular figures; --ink-2 rather than a fainter rung because this is text
-   and owes 4.5:1, and the section size already makes it quiet. */
+   and owes 4.5:1. Helper size: a date is read, and the section size is kept
+   for the caps legend (§2.5). */
 .chart-time {
   @apply face-mono;
-  font-size: var(--type-section);
-  line-height: var(--lead-section);
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
   color: var(--ink-2);
 }
 

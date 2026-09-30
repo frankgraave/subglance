@@ -339,22 +339,41 @@ control need.
 | Role | Token | Size | Leading | Weight |
 |---|---|---|---|---|
 | Page title | `--type-page` | `24px` | `--lead-page` `32px` | `--weight-strong` |
-| Card title | `--type-card` | `16px` | `--lead-card` `24px` | `--weight-mid` |
+| Card title | `--type-card` | `18px` | `--lead-card` `24px` | `--weight-mid` |
 | Row title | `--type-row` | `15px` | `--lead-row` `20px` | `--weight-mid` |
 | Body / label | `--type-body` | `14px` | `--lead-body` `20px` | `--weight-plain` |
-| Helper text | `--type-helper` | `12px` | `--lead-helper` `16px` | `--weight-plain` |
+| Helper text | `--type-helper` | `13px` | `--lead-helper` `16px` | `--weight-plain` |
 | Section heading | `--type-section` | `12px` | `--lead-section` `12px` | `--weight-strong`, uppercase, mono |
 
-**Helper and section share a size, and separate by face and casing.** An earlier
-pass kept helper at 13px specifically to avoid colliding with section, on the
-reasoning that two roles at one size would be indistinguishable. Measured
-against the reference style that argument does not survive: it puts 39 of 93
-elements on 12px and tells those roles apart by face, casing and weight
-instead. Section is uppercase, mono and `--weight-strong`; helper is sentence
-case, sans and `--weight-plain`. Those are further apart on the page than one
-pixel of size ever was, and it takes the scale from four roles inside 3px down
-to three — which is the crowding the scale was accused of, removed rather than
-argued with.
+**Every role is strictly larger than the one below it.** Page 24, card 18, row
+15, body 14, helper 13, section 12. `tokens.test.ts` reads the table above in
+order and fails when two roles collapse onto one size, because that is the
+defect this scale has had twice (SUB-167):
+
+- **Card title at 16px** sat one pixel above the 15px rows inside the card.
+  Most screens have no page title — the card names the page — so on those
+  screens nothing read as a heading. 18px is a 1.2x step over the row, the
+  smallest ratio that still reads as a level rather than as a variation; the
+  gap to the 24px page title stays a clear step above it.
+- **Helper at 12px** shared a size with the section legend and was the most
+  used role in the product: the explanation on every settings card, the
+  captions on every chart, sat on the smallest rung. At 13px it is readable
+  running text and separate from the legend on size as well as on face and
+  casing. The legend keeps 12px and is the only role there — it is short,
+  uppercase and mono, and it is read once per column, not per line.
+
+An earlier pass had put helper on 12px on the argument that face and casing
+alone separate it from the legend. They do separate the two roles; what they
+cannot do is make 12px running text comfortable to read, and 12px was where
+the product's explanations lived.
+
+**Text that states no size is body text.** The base layer in `index.css` sets
+`--type-body` and `--lead-body` on `body`. Before it did, anything without a
+rule of its own — a card's note, a table cell, a settings value — took the
+browser's 16px/24px, which is the card title's size, and a screen could put a
+footnote at heading size. `layout/type-roles.browser.test.ts` walks every route
+and fails on any visible text whose size and leading are not a pair from the
+table above.
 
 The leadings stay different on purpose: helper sits on 16px because it is read
 as running text, section on 12px because it is a single line whose leading
@@ -367,19 +386,13 @@ One leading is opted into rather than inherited:
 | Prose | `--lead-prose` | `20px` | helper-size text that wraps: empty states, error text, field help |
 
 That is the helper role's running-text partner, not a general ratio. Body size
-and up already sit on 20px, so only helper text needs the wider option; five
-rules use it and each one wraps to several lines. A sixth token per size would be
+and up already sit on 20px, so only helper text needs the wider option, and
+only on rules whose text wraps to several lines. A sixth token per size would be
 the old drift wearing new names.
 
-**Why the helper size changed.** `--type-helper` was `12.5px` — the only
+**Why the helper size is whole.** `--type-helper` was once `12.5px` — the only
 fractional size in the system and the most used role in the product, which put
 the engine's glyph rounding on exactly the text with the least room to absorb it.
-It is now `13px` rather than `12px`: `--type-section` is already 12px, and
-collapsing the two documented roles onto one size to gain a round number trades a
-visible distinction for an invisible one. Rounding down would also have shrunk
-the most-used text in a product where SUB-67 exists because everything was judged
-too small. Page and card titles moved with it (22 to 24, 17 to 18) to keep whole
-sizes without flattening the steps between the roles.
 
 `tokens.test.ts` reads the table above and fails when the stylesheet disagrees,
 when any size or leading is fractional, when a leading is not a multiple of 4,
@@ -398,7 +411,15 @@ search input and selects on phone widths: iOS Safari zooms the page in when a
 focused input renders below 16px and never zooms back out (§13). That is a
 platform workaround, not a typographic role, which is why it sits outside the
 scale — but it is paired like everything else, because an input that inherits
-its leading has the same defect as a label that does.
+its leading has the same defect as a label that does. Because body text is now
+14px, the base layer also puts every `input`, `select` and `textarea` on it
+below the phone breakpoint, so a field that inherits its size does not start
+zooming.
+
+**Emphasis is `--weight-strong`, not the browser's bold.** `b`, `strong` and
+`th` default to 700, a weight neither face ships (the sans stops at 600, the
+mono at 500), so the engine synthesised it. The base layer sets them to the
+strong step.
 
 **The scale grew; the density did not.** Row height stays at 58px and the header
 row at 34px, so a laptop still shows the same number of monitors without

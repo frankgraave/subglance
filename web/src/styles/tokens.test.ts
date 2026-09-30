@@ -110,6 +110,18 @@ function sourceFiles(dir: string): string[] {
 const darkTokens = declarations(themeBlock("dark"));
 const lightTokens = declarations(themeBlock("light"));
 
+/** Each adjacent pair of roles, larger first, that fails to step down. */
+function stepViolations(rows: { size: string; sizeValue: string }[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i + 1 < rows.length; i += 1) {
+    const [a, b] = [rows[i], rows[i + 1]];
+    if (Number.parseFloat(a.sizeValue) <= Number.parseFloat(b.sizeValue)) {
+      out.push(`${a.size} (${a.sizeValue}) is not larger than ${b.size} (${b.sizeValue})`);
+    }
+  }
+  return out;
+}
+
 /**
  * The §2.5 role table, as the document states it: one row per role carrying
  * both the size token and its paired leading token. Reading the table rather
@@ -340,6 +352,38 @@ describe("tokens.css matches docs/DESIGN.md", () => {
         `${name} is below the 12px floor`,
       ).toBeGreaterThanOrEqual(12);
     }
+  });
+
+  it("steps every type role above the one below it, page to section", () => {
+    // SUB-167: the scale collapsed twice. A 16px card title sat one pixel
+    // above the 15px row inside it, so no screen without a page title had a
+    // heading, and helper text shared 12px with the section legend. Read in
+    // the §2.5 table's order, each role must be strictly larger than the
+    // next; a table that reorders its rows fails the name check first.
+    const rows = typeRoleRows();
+    expect(rows.map((r) => r.size)).toEqual([
+      "--type-page",
+      "--type-card",
+      "--type-row",
+      "--type-body",
+      "--type-helper",
+      "--type-section",
+    ]);
+    expect(stepViolations(rows)).toEqual([]);
+  });
+
+  it("names a collapsed step in a fixture", () => {
+    // Guards the guard: equal sizes are the failure, not only inversions.
+    const rows = [
+      { size: "--type-card", sizeValue: "16px" },
+      { size: "--type-row", sizeValue: "16px" },
+      { size: "--type-body", sizeValue: "14px" },
+      { size: "--type-helper", sizeValue: "15px" },
+    ];
+    expect(stepViolations(rows)).toEqual([
+      "--type-card (16px) is not larger than --type-row (16px)",
+      "--type-body (14px) is not larger than --type-helper (15px)",
+    ]);
   });
 
   it("keeps the zero tone between a real reading and an absent one", () => {
@@ -690,6 +734,39 @@ describe("tracking is decided once, on the body", () => {
     const body = indexCss.slice(indexCss.indexOf("  body {"));
     expect(body.slice(0, body.indexOf("\n  }"))).toContain(
       "letter-spacing: var(--track-body);",
+    );
+  });
+});
+
+describe("unstyled text lands on the scale", () => {
+  const indexCss = readFileSync(join(webSrc, "index.css"), "utf8");
+  const block = (open: string) => {
+    const from = indexCss.indexOf(open);
+    expect(from, `missing ${open.trim()} in index.css`).toBeGreaterThan(-1);
+    return indexCss.slice(from, indexCss.indexOf("\n  }", from));
+  };
+
+  it("gives body the body role, so text without a rule is not 16px", () => {
+    // SUB-167: with no size on body, a card's note, a table cell and a
+    // settings value took the browser's 16px/24px — the card title's size.
+    const body = block("  body {");
+    expect(body).toContain("font-size: var(--type-body);");
+    expect(body).toContain("line-height: var(--lead-body);");
+  });
+
+  it("keeps inherited form fields at the no-zoom size on a phone", () => {
+    // The cost of a 14px body: iOS Safari zooms into a focused field below
+    // 16px (§13). Only the fields that inherit need this; the rest set their
+    // own size.
+    const media = indexCss.slice(indexCss.indexOf("@media (max-width: 640px)"));
+    expect(media.slice(0, media.indexOf("\n  }\n"))).toMatch(
+      /input,\s*select,\s*textarea\s*\{\s*font-size: var\(--type-nozoom\);\s*line-height: var\(--lead-nozoom\);/,
+    );
+  });
+
+  it("sets emphasis on the weight scale rather than a synthesised 700", () => {
+    expect(indexCss).toMatch(
+      /b,\s*strong,\s*th\s*\{\s*font-weight: var\(--weight-strong\);/,
     );
   });
 });

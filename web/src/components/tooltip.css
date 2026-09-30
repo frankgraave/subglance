@@ -32,11 +32,12 @@
 }
 
 /* Mono: a timestamp is measurable, so it takes the mono role and its tabular
-   figures — the header must not change width as the seconds tick. */
+   figures — the header must not change width as the seconds tick. Helper
+   size, like the readings under it: it is the first thing the tooltip says. */
 .tooltip-time {
   @apply face-mono;
-  font-size: var(--type-section);
-  line-height: var(--lead-section);
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
   color: var(--ink);
 }
 

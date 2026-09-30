@@ -21,7 +21,7 @@ import { IconTile } from "./IconTile";
  *    already 6px from the card's edge, so an 8px gap under the title would
  *    read as more space than the one beside it.
  *
- * 3. The title is sans at 16px/500, sentence case. Not mono, not uppercase.
+ * 3. The title is sans at the card size, sentence case. Not mono, not uppercase.
  *    Mono-caps is the register for labels *inside* a panel; a card title is a
  *    heading and takes the text face. Using one role for both is what made our
  *    headers read as a row of shouted abbreviations.
