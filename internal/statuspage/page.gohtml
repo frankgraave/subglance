@@ -40,7 +40,7 @@
 <div class="card-head"><h2 class="card-title" id="sp-maintenance">Maintenance</h2></div>
 <div class="sp-list">
 {{- range .Maintenance}}
-<div class="sp-row"><span class="sp-name">{{.Label}}</span><span class="sp-helper sp-mono">{{.When}}</span><span class="sp-helper">Affects {{.Affects}}</span></div>
+<div class="sp-row"><span class="sp-name">{{.Label}}</span><span class="sp-helper sp-mono">{{.When}}</span>{{with .Affects}}<span class="sp-helper">Affects {{.}}</span>{{end}}</div>
 {{- end}}
 </div>
 </section>

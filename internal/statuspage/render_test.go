@@ -194,6 +194,20 @@ func TestMaintenanceCardOnlyWhenThereIsMaintenance(t *testing.T) {
 	}
 }
 
+// A window whose services are none of this page's still shows its time, but
+// names nothing: "Affects" followed by nothing reads as a broken page.
+func TestMaintenanceWithNoServiceOnThePageNamesNone(t *testing.T) {
+	p := previewPage(t, "outage")
+	p.Maintenance[0].Keys = []string{"not-on-this-page"}
+	html := render(t, p)
+	if !strings.Contains(html, "Tomorrow, 02:00–03:00") {
+		t.Error("the window itself must still be listed")
+	}
+	if strings.Contains(html, "Affects") {
+		t.Error(`a window that affects no listed service must not print "Affects"`)
+	}
+}
+
 func TestSummaryStatesACount(t *testing.T) {
 	e := func(s ...Status) []Entry {
 		out := make([]Entry, len(s))
