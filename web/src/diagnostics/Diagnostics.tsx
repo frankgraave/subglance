@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, Panel } from "../components/Card";
+import { IconServer } from "../components/icons";
 import { Value } from "../components/Value";
 import { useNow } from "../live/useNow";
 import { diagnosticsKey, fetchDiagnostics } from "./api";
@@ -46,7 +47,7 @@ export function DiagnosticsCard() {
   };
 
   const s = d?.scheduler;
-  return <Card title="Instance" className="diag-card"
+  return <Card title="Instance" icon={<IconServer />} className="diag-card"
     action={d && <button type="button" className="add-button" onClick={copy}>Copy diagnostics</button>}>
     {!d ? <Panel><p>{query.isError ? "Diagnostics unavailable." : "Loading diagnostics…"}</p></Panel> : <>
       {old && <p role="status">Diagnostics unavailable. Showing the last readings.</p>}

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Card } from "../components/Card";
+import { IconSend } from "../components/icons";
 import { PlusIcon, SearchIcon } from "../shell/icons";
 import { TopbarTools } from "../shell/TopbarTools";
 import { Drawer } from "../components/Drawer";
@@ -164,6 +165,7 @@ export function NotificationsView({
 
       <Card
         className="nt-card"
+        icon={<IconSend />}
         /*
          * `Channels (2)`, not "Channels" over "2 channels, 1 disabled".
          *

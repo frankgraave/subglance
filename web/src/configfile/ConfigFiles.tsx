@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type ChangeEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, Panel } from "../components/Card";
+import { IconTransfer } from "../components/icons";
 import { StateChip } from "../components/Chip";
 import { ApiError } from "../api/http";
 import { PushUrlReveal } from "../monitors/PushUrlReveal";
@@ -242,7 +243,7 @@ function ImportPanel() {
 export function ConfigFilesCard() {
   // The backup card's frame: `.watchdog-card` draws its links at the 24px
   // target floor, where an inline link in helper text is one line box tall.
-  return <Card title="Import & export" className="watchdog-card">
+  return <Card title="Import & export" icon={<IconTransfer />} className="watchdog-card">
     <ExportPanel />
     <ImportPanel />
   </Card>;

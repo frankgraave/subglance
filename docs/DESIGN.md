@@ -1570,9 +1570,27 @@ in each instead of parsing punctuation.
 
 ### 8.2 The icon tile
 
-32x32, radius `--r-sm`, filled neutral, **no border**. It anchors the left of a
-card header. The border is omitted deliberately: the tile is a background for a
-glyph, and an edge around it competes with the card's own edge two pixels away.
+24x24 (`--space-6`), radius `--r-sm`, a 1px `--border-control` edge and a
+`--surface-2` fill, holding a 12px glyph. It anchors the left of a card header.
+It is a miniature of the card it sits in rather than a flat plane, which is why
+it has the card's edge one size down; `web/src/components/icontile.css` carries
+the measurement.
+
+**Every card carries one.** `Card`'s `icon` prop is required and typed as an
+element, so a card without a tile does not compile, and `Card.test.tsx` fails
+the build if that ever stops being true. When the prop was optional, 9 of 34
+cards set it and Settings alternated tiled and untiled cards down one column —
+the tile is the anchor the eye finds first when scanning cards, so a card
+without one read as belonging to something else (SUB-167). This includes a
+`Suspense` fallback that stands in for a lazy card: it takes the same glyph as
+the card it replaces, so the header does not shift when the card arrives.
+
+The glyph names the card's subject, never an action: the tile is a mark you
+read, and a verb-shaped glyph there looks like a button. Two cards about
+different subjects on one screen do not share a glyph, because side by side
+they read as one subject twice; the sections of one list (the dashboard's tag
+groups, say) do share one, because they are one subject. The glyphs live in
+`web/src/components/icons.tsx`.
 
 The glyph inside is hidden from assistive technology unless it is the only
 thing saying what the row is. A tile beside a monitor's name that announces

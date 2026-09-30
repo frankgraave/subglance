@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from "react";
+import { useId, type ReactElement, type ReactNode } from "react";
 import { IconTile } from "./IconTile";
 
 /**
@@ -25,13 +25,25 @@ import { IconTile } from "./IconTile";
  *    Mono-caps is the register for labels *inside* a panel; a card title is a
  *    heading and takes the text face. Using one role for both is what made our
  *    headers read as a row of shouted abbreviations.
+ *
+ * And one rule decided rather than measured (SUB-167): **every card carries an
+ * icon tile.** The prop is required, so a card without one does not compile.
+ * When it was optional, 9 of 34 cards set it, and Settings put a tiled card
+ * between two untiled ones. The tile is what the eye finds first when scanning
+ * down a column of cards, so a missing one reads as a card that belongs to
+ * something else. Requiring it costs one glyph per new card; leaving it to
+ * convention is what produced the 9 of 34.
  */
 
 export type CardProps = {
   /** The heading. Sentence case; it is a title, not a label. */
   title: ReactNode;
-  /** Optional glyph for the tile that anchors the header's left. */
-  icon?: ReactNode;
+  /**
+   * The glyph for the tile that anchors the header's left. Required, and an
+   * element rather than any node, so `null` or a stray string cannot stand in
+   * for it: every card has a tile (see rule 4 above).
+   */
+  icon: ReactElement;
   /** Optional control on the header's right: a link, a button, a menu. */
   action?: ReactNode;
   /**
@@ -78,7 +90,7 @@ export function Card({
     >
       <div className="card-head">
         <div className="card-head-lead">
-          {icon ? <IconTile>{icon}</IconTile> : null}
+          <IconTile>{icon}</IconTile>
           <div className="card-head-text">
             <Heading id={headingId} className="card-title">
               {title}

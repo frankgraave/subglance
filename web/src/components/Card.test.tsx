@@ -36,7 +36,7 @@ const rule = (selector: string): string => {
 describe("Card", () => {
   it("renders the title as a real heading at the level it is given", () => {
     render(
-      <Card title="Uptime" headingLevel={3}>
+      <Card title="Uptime" icon={<svg />} headingLevel={3}>
         <Panel>body</Panel>
       </Card>,
     );
@@ -50,7 +50,7 @@ describe("Card", () => {
     // every page into one shape and quietly breaks the outline on any page
     // that nests cards.
     render(
-      <Card title="Incidents">
+      <Card title="Incidents" icon={<svg />}>
         <Panel>body</Panel>
       </Card>,
     );
@@ -72,7 +72,7 @@ describe("Card", () => {
 
   it("puts the action in the header, not in the body", () => {
     render(
-      <Card title="Uptime" action={<button type="button">Refresh</button>}>
+      <Card title="Uptime" icon={<svg />} action={<button type="button">Refresh</button>}>
         <Panel>body</Panel>
       </Card>,
     );
@@ -80,16 +80,46 @@ describe("Card", () => {
     expect(within(head as HTMLElement).getByRole("button")).toBeTruthy();
   });
 
-  it("omits the tile and the action slot entirely when unused", () => {
-    // An empty flex child still takes its gap, so a card with no icon would
-    // sit 10px further right than its neighbours.
+  it("omits the action slot entirely when unused", () => {
+    // An empty flex child still takes its gap, so an empty action wrapper
+    // would push the header's right edge in on a card that has no action.
     render(
-      <Card title="Plain">
+      <Card title="Plain" icon={<svg />}>
         <Panel>body</Panel>
       </Card>,
     );
-    expect(document.querySelector(".icon-tile")).toBeNull();
     expect(document.querySelector(".card-head-action")).toBeNull();
+  });
+
+  it("always draws the icon tile, as the first thing in the header", () => {
+    // SUB-167: every card has a tile, so the eye scanning down a column of
+    // cards finds the same anchor on each. The tile leads the header, before
+    // the title, and holds the glyph it was given.
+    render(
+      <Card title="Backups" icon={<svg data-testid="glyph" />}>
+        <Panel>body</Panel>
+      </Card>,
+    );
+    const lead = document.querySelector(".card-head-lead");
+    expect(lead?.firstElementChild?.classList.contains("icon-tile")).toBe(true);
+    expect(lead?.firstElementChild?.contains(screen.getByTestId("glyph"))).toBe(true);
+  });
+
+  it("does not compile without an icon", () => {
+    // The rule is enforced by the type, not by review. `tsc -b` (part of
+    // `npm run build`) checks this file, and `@ts-expect-error` fails the
+    // build if the line below ever compiles, so making `icon` optional again
+    // breaks CI rather than quietly letting untiled cards back in.
+    const untiled = (
+      // @ts-expect-error `icon` is required on every card (SUB-167).
+      <Card title="No tile">
+        <Panel>body</Panel>
+      </Card>
+    );
+    // Nor does `null` stand in for it: the prop is an element, not a node.
+    // @ts-expect-error `null` is not an icon.
+    const nulled = <Card title="Null tile" icon={null}><Panel>body</Panel></Card>;
+    expect([untiled, nulled]).toHaveLength(2);
   });
 });
 

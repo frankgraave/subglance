@@ -1,4 +1,5 @@
 import { Card, Panel } from "../components/Card";
+import { IconDisplay } from "../components/icons";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { CardColumnsSwitcher } from "../shell/CardColumnsSwitcher";
 import { LayoutSwitcher } from "../shell/LayoutSwitcher";
@@ -46,6 +47,7 @@ export function DisplayCard({ prefs }: { prefs: DisplayPreferences }) {
   return (
     <Card
       title="Display"
+      icon={<IconDisplay />}
       className="display-card"
       note="Saved in this browser, not with your account."
     >

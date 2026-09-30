@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, Panel } from "../components/Card";
+import { IconKey } from "../components/icons";
 import { StateChip } from "../components/Chip";
 import { SegmentedControl } from "../components/SegmentedControl";
 import { ApiError } from "../api/http";
@@ -204,7 +205,7 @@ export function TokensCard({ role }: { role: string }) {
   const live = tokens.filter((t) => isLive(t, now)).length;
 
   return (
-    <Card title="API tokens" className="retention-card" note={query.data ? `${live} active` : undefined}>
+    <Card title="API tokens" icon={<IconKey />} className="retention-card" note={query.data ? `${live} active` : undefined}>
       <Panel>
         <p className="retention-note">
           For scripts and CI, sent as <code>Authorization: Bearer</code>. A token acts with its own role, never more than your account&apos;s.

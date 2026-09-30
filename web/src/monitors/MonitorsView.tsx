@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { registerNavigationCleanup } from "../shell/leaveGuard";
 import { Card, Panel } from "../components/Card";
 import { PlusIcon, SearchIcon } from "../shell/icons";
+import { IconList, IconPulse } from "../components/icons";
 import { ToolbarTools, TopbarTools } from "../shell/TopbarTools";
 import { Drawer } from "../components/Drawer";
 import { ConfirmDelete } from "../components/ConfirmDelete";
@@ -259,6 +260,7 @@ export function MonitorsView({
 
       <Card
         title="Configured monitors"
+        icon={<IconList />}
         headingLevel={1}
         /*
          * `h1`, because this card's title is now the page's heading (SUB-138).
@@ -399,7 +401,7 @@ export function MonitorsView({
         title={editing === null ? "Edit monitor" : `Edit ${editing.name}`}
       >
         {editing !== null && onSave !== undefined && (
-          <Card title={editing.name} headingLevel={3}>
+          <Card title={editing.name} icon={<IconPulse />} headingLevel={3}>
             <Panel>
               <EditMonitorForm
               /* Keyed on the id AND the name, so re-opening a monitor that

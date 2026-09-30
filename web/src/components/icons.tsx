@@ -121,6 +121,121 @@ export function IconClock() {
 }
 
 /**
+ * One glyph per settings card and per remaining screen card (SUB-167).
+ *
+ * Every card carries an icon tile, so every card needs a glyph that says what
+ * it is about. Each is drawn on the same 24-unit grid and 1.5 stroke as the
+ * ones above. They name the subject, not an action: the tile is a mark you
+ * read, and a verb-shaped glyph there would look like a button.
+ */
+
+/** Display: a screen on a stand, for how this browser shows the app. */
+export function IconDisplay() {
+  return (
+    <svg {...BASE}>
+      <rect x="3" y="4.5" width="18" height="12" rx="1.5" />
+      <path d="M9 20.5h6M12 16.5v4" />
+    </svg>
+  );
+}
+
+/** Status pages: a globe, for what the instance tells people without an account. */
+export function IconGlobe() {
+  return (
+    <svg {...BASE}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M3.5 12h17" />
+      <path d="M12 3.5c2.3 2.4 3.5 5.3 3.5 8.5s-1.2 6.1-3.5 8.5c-2.3-2.4-3.5-5.3-3.5-8.5s1.2-6.1 3.5-8.5Z" />
+    </svg>
+  );
+}
+
+/** Retention and storage: a database drum. */
+export function IconDatabase() {
+  return (
+    <svg {...BASE}>
+      <ellipse cx="12" cy="6" rx="7.5" ry="2.5" />
+      <path d="M4.5 6v12c0 1.4 3.4 2.5 7.5 2.5s7.5-1.1 7.5-2.5V6" />
+      <path d="M4.5 12c0 1.4 3.4 2.5 7.5 2.5s7.5-1.1 7.5-2.5" />
+    </svg>
+  );
+}
+
+/** Backups: an archive box, for a copy kept somewhere else. */
+export function IconArchive() {
+  return (
+    <svg {...BASE}>
+      <rect x="3.5" y="4" width="17" height="4.5" rx="1" />
+      <path d="M5 8.5V19a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8.5" />
+      <path d="M10 12.5h4" />
+    </svg>
+  );
+}
+
+/** Import and export: one arrow out, one arrow in. */
+export function IconTransfer() {
+  return (
+    <svg {...BASE}>
+      <path d="M8 19.5v-15M4 8.5l4-4 4 4" />
+      <path d="M16 4.5v15M12 15.5l4 4 4-4" />
+    </svg>
+  );
+}
+
+/** API tokens: a key. */
+export function IconKey() {
+  return (
+    <svg {...BASE}>
+      <circle cx="8" cy="15.5" r="4.5" />
+      <path d="M11.2 12.3 20 3.5" />
+      <path d="M16.5 7l2.5 2.5M14 9.5l2 2" />
+    </svg>
+  );
+}
+
+/** The instance itself: two stacked server units. */
+export function IconServer() {
+  return (
+    <svg {...BASE}>
+      <rect x="3.5" y="4" width="17" height="7" rx="1.5" />
+      <rect x="3.5" y="13" width="17" height="7" rx="1.5" />
+      <path d="M7.5 7.5h.01M7.5 16.5h.01" />
+    </svg>
+  );
+}
+
+/**
+ * Failure responses: a page of text, for the bodies a failing check returned.
+ *
+ * Not the warning triangle, which heads Incidents on the same monitor screen:
+ * the responses are evidence about a failure, and the card holds documents.
+ */
+export function IconResponse() {
+  return (
+    <svg {...BASE}>
+      <path d="M14 3.5H6.5a1 1 0 0 0-1 1v15a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V8Z" />
+      <path d="M14 3.5V8h4.5" />
+      <path d="M9 12.5h6M9 16h6" />
+    </svg>
+  );
+}
+
+/**
+ * Channels: a paper plane, for where an alert is sent.
+ *
+ * Not the bell: the bell already heads "Who hears what" on the same screen,
+ * and two cards with one glyph side by side read as one subject twice.
+ */
+export function IconSend() {
+  return (
+    <svg {...BASE}>
+      <path d="M20.5 3.5 10.5 13.5" />
+      <path d="M20.5 3.5 14 20.5l-3.5-7-7-3.5 17-6.5Z" />
+    </svg>
+  );
+}
+
+/**
  * The three row actions that become glyphs on the inventory (SUB-134).
  *
  * Drawn on the same 24-unit grid at the same stroke as the header icons above,
