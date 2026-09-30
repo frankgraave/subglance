@@ -23,6 +23,7 @@ import { defaultRetention } from "../../retention/fixtures";
 import { unconfiguredBackup } from "../../backup/fixtures";
 import { twoUsers } from "../../users/fixtures";
 import { sampleTokens } from "../../tokens/fixtures";
+import { samplePages } from "../../statuspages/fixtures";
 
 /*
  * `import.meta.url` is .../web/src/layout/harness/server.ts, so the repository
@@ -304,6 +305,14 @@ export async function serveBuild(): Promise<Server> {
     if (url.pathname === "/api/v1/tokens") {
       res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
       res.end(JSON.stringify({ tokens: sampleTokens }));
+      return;
+    }
+
+    // An administrator's /settings lists the status pages; unstubbed, axe
+    // would audit the card's loading state instead of its rows.
+    if (url.pathname === "/api/v1/status-pages") {
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ pages: samplePages }));
       return;
     }
 

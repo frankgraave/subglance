@@ -77,9 +77,9 @@ it("shows the users card to an administrator, with their own account marked", as
   render(<App />);
   expect(await screen.findByText("you")).toBeTruthy();
   expect(screen.getByRole("heading", { name: "Users (1)" })).toBeTruthy();
-  // Account, display, users, self-monitoring, retention, backups, API tokens,
-  // instance and reset.
-  expect(screen.getAllByRole("region")).toHaveLength(9);
+  // Account, display, users, status pages, self-monitoring, retention,
+  // backups, API tokens, instance and reset.
+  expect(screen.getAllByRole("region")).toHaveLength(10);
   fireEvent.change(screen.getByRole("searchbox", { name: "Search settings" }), { target: { value: "roles" } });
   expect(screen.getByRole("heading", { name: "Users (1)" }).closest("[hidden]")).toBeNull();
   expect(screen.getByRole("heading", { name: "Retention & storage", hidden: true }).closest("[hidden]")).toBeTruthy();
