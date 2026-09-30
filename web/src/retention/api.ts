@@ -123,16 +123,21 @@ function validPass(value: unknown): value is RetentionPass {
   return !!p && typeof p.started_at === "string" && ["schedule", "startup", "manual"].includes(p.trigger as string) &&
     ["duration_ms", "heartbeats", "hourly_buckets", "incidents", "deliveries", "freed_bytes"].every((key) => count(p[key])) &&
     text(p.error) && (p.size_cap === null ||
-      (!!cap && count(cap.limit_bytes) && count(cap.heartbeats) && count(cap.hourly_buckets) && text(cap.raw_since) && text(cap.hourly_since)));
+      (!!cap && ["limit_bytes", "before_bytes", "after_bytes", "heartbeats", "hourly_buckets"].every((key) => count(cap[key])) &&
+        typeof cap.at_floor === "boolean" && text(cap.raw_since) && text(cap.hourly_since)));
 }
 
 function validPlan(value: unknown): value is CompactPlan {
   const c = record(value);
+  const short = c && record(c.disk_shortfall);
   const last = c && record(c.last);
   return !!c && count(c.size_bytes) && count(c.free_bytes) && count(c.estimate_seconds) &&
+    ["none", "full", "incremental"].includes(c.auto_vacuum as string) &&
     typeof c.recommended === "boolean" && typeof c.running === "boolean" &&
-    (c.disk_shortfall === null || (!!record(c.disk_shortfall))) &&
-    (c.last === null || (!!last && typeof last.finished_at === "string" && count(last.before_bytes) && count(last.after_bytes) && text(last.error)));
+    (c.disk_shortfall === null || (!!short && count(short.need_bytes) && count(short.free_bytes))) &&
+    (c.last === null || (!!last && typeof last.finished_at === "string" &&
+      ["duration_ms", "before_bytes", "after_bytes"].every((key) => count(last[key])) &&
+      typeof last.shrink_pending === "boolean" && text(last.error)));
 }
 
 function validRetention(value: unknown): value is Retention {

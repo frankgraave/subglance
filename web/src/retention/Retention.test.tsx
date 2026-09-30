@@ -316,6 +316,30 @@ it("keeps the settings usable when a report cannot be read", async () => {
   expect(screen.getByRole("button", { name: "Save retention" })).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Compact database" })).toBeNull();
 });
+it("leaves out a report that lacks a field the card reads", async () => {
+  const pass = defaultRetention.last_pass!;
+  const cap = { limit_bytes: 2 * GB, before_bytes: 2.4 * GB, after_bytes: 2.1 * GB, heartbeats: 900_000, hourly_buckets: 0,
+    raw_since: null, hourly_since: null, at_floor: true };
+  // Recommended, so a plan the page accepted would show its panel and button.
+  const plan = { ...defaultRetention.compact!, auto_vacuum: "none", recommended: true };
+  const last = { finished_at: "2026-09-30T10:00:00Z", duration_ms: 12_000, before_bytes: 400 * MiB, after_bytes: 280 * MiB,
+    shrink_pending: false, error: null };
+  const caps = [{ ...cap, after_bytes: undefined }, { ...cap, before_bytes: -1 }, { ...cap, at_floor: "yes" }];
+  const plans = [{ ...plan, auto_vacuum: "sometimes" }, { ...plan, disk_shortfall: {} }, { ...plan, disk_shortfall: { need_bytes: 800 * MiB } },
+    { ...plan, last: { ...last, duration_ms: undefined } }, { ...plan, last: { ...last, shrink_pending: undefined } }];
+  for (const size_cap of caps) {
+    mount({ ...defaultRetention, last_pass: { ...pass, size_cap } } as unknown as Retention);
+    expect(await screen.findByText(/No pass recorded yet\./)).toBeTruthy();
+    cleanup();
+  }
+  for (const compact of plans) {
+    mount({ ...defaultRetention, compact } as unknown as Retention);
+    await screen.findByRole("button", { name: "Save retention" });
+    expect(screen.queryByText("Database file")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Compact database" })).toBeNull();
+    cleanup();
+  }
+});
 
 it("counts what a pass would remove before starting one by hand", async () => {
   const posts: string[] = [];
