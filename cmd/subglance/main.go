@@ -252,6 +252,9 @@ func run(args []string) error {
 		// is allowed to deliver to must be a channel they are allowed
 		// to save.
 		WithTargetGuard(guard).
+		// The engine that holds recovery streaks, so a public status
+		// page says degraded exactly when the dashboard says recovering.
+		WithStatusPageRecovery(runner).
 		WithTrustedProxies(cfg.TrustedProxies)
 	if err != nil {
 		return err

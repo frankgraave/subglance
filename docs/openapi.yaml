@@ -3522,6 +3522,72 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
       x-subglance-access: admin
+  /status/{slug}:
+    parameters:
+      - $ref: '#/components/parameters/StatusPageSlug'
+    get:
+      tags: [Status pages]
+      operationId: getPublicStatusPageHtml
+      summary: Show a published status page (public HTML)
+      description: |
+        The page a visitor opens: one self-contained HTML document with its
+        stylesheet inline and no JavaScript beyond a one-line theme choice.
+        It is built from exactly the fields `GET /api/v1/status-pages/{slug}`
+        returns, so it can show no more than the JSON does. Rate limits,
+        caching, `ETag`, `X-Robots-Tag` and the identical `404` work as on
+        that route. Its `Content-Security-Policy` allows the inline
+        stylesheet and script by hash only.
+
+        The page also answers at `/status/{slug}/`, and loads its two fonts
+        relative to itself, so a proxy can serve it at the root of its own
+        domain; see docs/operations.md.
+      security: []
+      parameters:
+        - name: If-None-Match
+          in: header
+          required: false
+          description: An `ETag` from an earlier answer. A match returns `304`.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The page.
+          headers:
+            ETag:
+              $ref: '#/components/headers/PublicStatusPageETag'
+            Cache-Control:
+              $ref: '#/components/headers/PublicStatusPageCacheControl'
+          content:
+            text/html:
+              schema:
+                type: string
+        '304':
+          description: The caller's copy, named by `If-None-Match`, is current.
+        '404':
+          description: |
+            No published page at this address; the same document whether the
+            slug is unknown or the page is switched off.
+          content:
+            text/html:
+              schema:
+                type: string
+        '429':
+          description: Too many requests; `Retry-After` says when to try again.
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+          content:
+            text/html:
+              schema:
+                type: string
+        '503':
+          description: The page could not be built. The body is fixed.
+          content:
+            text/html:
+              schema:
+                type: string
+      x-subglance-access: public
   /api/v1/status-pages:
     get:
       tags: [Status pages]
@@ -3608,6 +3674,65 @@ paths:
   /api/v1/status-pages/{slug}:
     parameters:
       - $ref: '#/components/parameters/StatusPageSlug'
+    get:
+      tags: [Status pages]
+      operationId: getPublicStatusPage
+      summary: Read a published status page (public)
+      description: |
+        What a visitor sees, as JSON: the same answer the HTML page at
+        `GET /status/{slug}` is drawn from. No credentials are needed or
+        read. Monitors appear under their public names and random keys only;
+        internal names, ids, targets, tags, check results and incident causes
+        never do.
+
+        A slug that names no page and a page that is switched off get the
+        same `404`, byte for byte, so the answer does not reveal which slugs
+        exist.
+
+        Rate limited per client address (5 per second, bursts of 20) and in
+        total (50 per second), before the page is looked up; behind a proxy
+        the address comes from `--trusted-proxies`. The answer is rendered at
+        most once per 30 seconds and carries `Cache-Control: public` with the
+        seconds left, and an `ETag` for `If-None-Match`. A request served
+        from that cache is not counted against the limits. Switching a page
+        off therefore shows within 30 seconds, not instantly.
+
+        `X-Robots-Tag: noindex` is sent unless the page allows indexing.
+      security: []
+      parameters:
+        - name: If-None-Match
+          in: header
+          required: false
+          description: An `ETag` from an earlier answer. A match returns `304`.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The page.
+          headers:
+            ETag:
+              $ref: '#/components/headers/PublicStatusPageETag'
+            Cache-Control:
+              $ref: '#/components/headers/PublicStatusPageCacheControl'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicStatusPage'
+        '304':
+          description: The caller's copy, named by `If-None-Match`, is current.
+        '404':
+          $ref: '#/components/responses/StatusPageNotFound'
+        '429':
+          $ref: '#/components/responses/PublicStatusPageLimited'
+        '503':
+          description: |
+            The page could not be built. The body is fixed; the cause is in
+            the server log.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: public
     put:
       tags: [Status pages]
       operationId: updateStatusPage
@@ -3835,6 +3960,18 @@ components:
       schema:
         type: string
       example: W/"1757606400"
+    PublicStatusPageETag:
+      description: |
+        A strong entity tag for this exact answer. Send it back as
+        `If-None-Match` to be told `304` while it is current.
+      schema:
+        type: string
+      example: '"3q2-7wEAAAAAAAAAAAAAAAAA"'
+    PublicStatusPageCacheControl:
+      description: '`public, max-age=N`, N being the seconds left of the 30-second render cache.'
+      schema:
+        type: string
+      example: public, max-age=30
     RetentionETag:
       description: |
         A weak entity tag counting saves of the retention windows. Send it
@@ -3891,6 +4028,21 @@ components:
             $ref: '#/components/schemas/Error'
           example:
             error: status page not found
+    PublicStatusPageLimited:
+      description: |
+        Too many requests from this address, or in total. `Retry-After`
+        says when to try again.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          example: 1
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: too many requests; try again in a moment
     InvalidId:
       description: The path id was not a positive integer.
       content:
@@ -4521,6 +4673,114 @@ components:
           items:
             type: integer
             format: int64
+    PublicStatusPage:
+      type: object
+      description: |
+        A status page as its visitors see it (docs/design/status-page.md
+        section 1.1). Times are UTC; `timezone` is the zone the HTML page
+        shows them in.
+      required: [title, description, generated_at, timezone, summary, entries, maintenance, outages]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        generated_at:
+          type: string
+          format: date-time
+          description: When this answer was built; it is reused for up to 30 seconds.
+        timezone:
+          type: string
+          example: Europe/Amsterdam
+        summary:
+          type: object
+          required: [up, degraded, down, unmonitored]
+          properties:
+            up:
+              type: integer
+            degraded:
+              type: integer
+            down:
+              type: integer
+            unmonitored:
+              type: integer
+              description: Entries with no data yet or not monitored.
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicStatusPageEntry'
+        maintenance:
+          type: array
+          description: Maintenance running now or starting within 7 days.
+          items:
+            type: object
+            required: [starts_at, ends_at, keys]
+            properties:
+              starts_at:
+                type: string
+                format: date-time
+              ends_at:
+                type: string
+                format: date-time
+              keys:
+                type: array
+                description: The `key` of every entry the window covers.
+                items:
+                  type: string
+        outages:
+          type: array
+          description: Confirmed outages in the last 14 days, newest first.
+          items:
+            type: object
+            required: [key, started_at, resolved_at, duration_s]
+            properties:
+              key:
+                type: string
+              started_at:
+                type: string
+                format: date-time
+              resolved_at:
+                type: [string, 'null']
+                format: date-time
+              duration_s:
+                type: integer
+                format: int64
+    PublicStatusPageEntry:
+      type: object
+      required: [key, name, status, in_maintenance, uptime_90d, days]
+      properties:
+        key:
+          type: string
+          description: A random key for this entry, stable while the monitor stays on the page. Not the monitor id.
+        name:
+          type: string
+          description: The public name the administrator gave it.
+        status:
+          type: string
+          enum: [up, degraded, down, no_data, not_monitored]
+          description: |
+            Confirmed state only: a failed check that is not yet confirmed
+            shows as `up`, and a monitor that is recovering as `degraded`.
+        in_maintenance:
+          type: boolean
+        uptime_90d:
+          type: [number, 'null']
+          description: Percentage over 90 days, maintenance excluded; `null` without data.
+        days:
+          type: array
+          description: One per day, oldest first, in the page's time zone.
+          items:
+            type: object
+            required: [date, state, down_minutes]
+            properties:
+              date:
+                type: string
+                format: date
+              state:
+                type: string
+                enum: [up, degraded, down, no_data]
+              down_minutes:
+                type: integer
     StatusPageList:
       type: object
       required: [pages]

@@ -12,6 +12,8 @@ how to take a backup that actually restores.
 - [Upgrading](#upgrading)
 - [Backup and restore](#backup-and-restore), including
   [scheduled backups to S3](#scheduled-backups-to-s3-compatible-storage)
+- [Public status pages](#public-status-pages), including
+  [a page on its own subdomain](#a-page-on-its-own-subdomain)
 
 ## Configuration
 
@@ -658,3 +660,97 @@ It is careful in four ways:
   files, are renamed with a `.before-restore-<time>` suffix, so restoring the
   wrong backup can be undone. Remove them once the restored instance looks
   right.
+
+## Public status pages
+
+An administrator creates status pages under **Settings → Status pages**. A
+page is off until it is switched on; once on, anyone who can reach the server
+can open it, without an account:
+
+- `/status/<slug>` is the page itself: one HTML document, its stylesheet
+  inline, no JavaScript beyond a one-line theme choice.
+- `/api/v1/status-pages/<slug>` is the same answer as JSON.
+
+A visitor sees the public names given to the monitors on the page, their
+state, 90 days of history and uptime, announced maintenance and recent
+outages. Internal names, targets, tags, error text and incident causes are
+never part of either answer.
+
+What to expect once a page is public:
+
+- **Unknown and switched-off pages look the same.** Both are the same 404, so
+  a page that is off does not confirm that its address exists. A slug is not a
+  secret, though: anyone who guesses it can read an enabled page. There is no
+  password or private-link mode.
+- **Answers are reused for 30 seconds.** A page is built at most once per 30
+  seconds and sent with `Cache-Control: public` and an `ETag`, so a proxy or
+  CDN in front can serve it too. A change, including switching a page off,
+  can take that long to show to visitors: this server forgets its copy when
+  the page is saved, but a cache in front keeps its own until it expires.
+- **Rate limits.** 5 requests a second per client address (bursts of 20) and
+  50 a second in total, checked before the database is read; past them the
+  answer is `429` with `Retry-After`. Answers served from the 30-second cache
+  do not count, so a page shared widely during an outage keeps answering.
+  Behind a reverse proxy, set [`--trusted-proxies`](#trusted-proxies), or
+  every visitor shares the proxy's single allowance.
+- **Search engines are asked not to index a page** (`X-Robots-Tag: noindex`)
+  unless its settings allow it.
+- **No cookies.** The routes never read or set one, so a shared cache cannot
+  hand one visitor's session to another, and a signed-in operator sees exactly
+  what the public sees.
+- **The page cannot be framed** by another site.
+
+### A page on its own subdomain
+
+A page loads nothing but its two fonts, and asks for them relative to itself,
+so a reverse proxy can serve it at the root of a domain of its own. Map `/` to
+`/status/<slug>/` (with the trailing slash) and `/fonts/` to `/status/fonts/`.
+Everything else on that domain can stay unanswered: the dashboard and the rest
+of the API do not need to be reachable there.
+
+Caddy, for a page with the slug `acme` and SubGlance on port 8080:
+
+```
+status.example.com {
+	handle / {
+		rewrite * /status/acme/
+		reverse_proxy 127.0.0.1:8080
+	}
+	handle /fonts/* {
+		rewrite * /status{path}
+		reverse_proxy 127.0.0.1:8080
+	}
+	handle {
+		respond 404
+	}
+}
+```
+
+nginx, the same mapping:
+
+```
+server {
+    server_name status.example.com;
+    # listen and TLS settings as for any other site
+
+    proxy_set_header Host $host;
+    # Replace the header rather than append to it: SubGlance reads the
+    # first address in it, and an appended list starts with whatever the
+    # visitor sent.
+    proxy_set_header X-Forwarded-For $remote_addr;
+
+    location = / {
+        proxy_pass http://127.0.0.1:8080/status/acme/;
+    }
+    location /fonts/ {
+        proxy_pass http://127.0.0.1:8080/status/fonts/;
+    }
+    location / {
+        return 404;
+    }
+}
+```
+
+Name the proxy in `--trusted-proxies` so the rate limit sees each visitor's
+own address. Caddy replaces `X-Forwarded-For` by default; nginx needs the line
+above.
