@@ -17,10 +17,13 @@
   box-shadow: var(--shadow-raised);
 }
 
+/* The heading of the one panel on the page, so it takes the card title's
+   role. It sat on the section size — the smallest rung, meant for caps
+   legends — which made the headline of a failure the quietest text in it. */
 .crash-title {
-  font-size: var(--type-section);
-  line-height: var(--lead-section);
-  font-weight: var(--weight-strong);
+  font-size: var(--type-card);
+  line-height: var(--lead-card);
+  font-weight: var(--weight-mid);
   color: var(--ink);
 }
 

@@ -167,3 +167,66 @@ describe("a monitor row uses the ink ladder", () => {
     expect(target).not.toBe(name);
   });
 });
+
+/**
+ * Every visible line of text sits on a pair from the §2.5 table (SUB-167).
+ *
+ * `tokens.test.ts` proves that every rule which sets a size also sets its
+ * leading. It cannot see text that has no rule at all, and that was the
+ * defect: with no size on `body`, a card's note, a table cell and a settings
+ * value took the browser's 16px/24px, which is the card title's size, so a
+ * footnote could be as loud as the heading above it. Only the computed style
+ * of what is on screen can answer that.
+ *
+ * The allowed pairs are read from the page's own tokens rather than written
+ * here, so re-tuning the scale does not mean editing this file; a pair that is
+ * not a role is the failure, whatever its numbers.
+ */
+describe("every line of text is on the type scale", () => {
+  it.each(["/", "/monitors", "/monitors/1", "/incidents", "/notifications", "/settings"])(
+    "on %s",
+    async (path) => {
+      const probe = await browser.newPage();
+      try {
+        await probe.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
+        // `domcontentloaded`: the dashboard holds an SSE stream open.
+        await probe.goto(server.url + path, { waitUntil: "domcontentloaded" });
+        await probe.waitForSelector(".card", { timeout: 15_000 });
+        // Lazy cards and fetches arrive after the first card: wait until no
+        // loading line is left, then read.
+        await probe.waitForFunction(() => !/Loading [a-z ]+…/.test(document.body.innerText), { timeout: 15_000 });
+        const off = await probe.evaluate(() => {
+          const root = getComputedStyle(document.documentElement);
+          const token = (name: string) => root.getPropertyValue(name).trim();
+          const pairs = new Set(
+            [
+              ...["page", "card", "row", "body", "helper", "section"].map((r) => [`--type-${r}`, `--lead-${r}`]),
+              ["--type-helper", "--lead-prose"],
+              ["--type-nozoom", "--lead-nozoom"],
+            ].map(([size, lead]) => `${token(size)}/${token(lead)}`),
+          );
+          const found = new Map<string, string>();
+          const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+          for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            const text = node.textContent?.trim();
+            const el = node.parentElement;
+            if (!text || !el || !el.checkVisibility()) continue;
+            // Visually hidden text (sr-only) is clipped to a pixel: it has a
+            // size but no line anyone reads.
+            const box = el.getBoundingClientRect();
+            if (box.width <= 1 || box.height <= 1) continue;
+            const s = getComputedStyle(el);
+            const pair = `${s.fontSize}/${s.lineHeight}`;
+            if (pairs.has(pair)) continue;
+            const name = `${el.tagName.toLowerCase()}${el.classList.length ? "." + [...el.classList].join(".") : ""}`;
+            if (!found.has(name)) found.set(name, `${pair}: ${text.slice(0, 40)}`);
+          }
+          return [...found].map(([name, what]) => `${name} ${what}`);
+        });
+        expect(off).toEqual([]);
+      } finally {
+        await probe.close();
+      }
+    },
+  );
+});

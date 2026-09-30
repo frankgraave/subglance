@@ -44,7 +44,7 @@
 .card-head-lead {
   display: flex;
   align-items: center;
-  /* 10px, not 8 or 12: the tile is a 24px square and the title is 16px text,
+  /* 10px, not 8 or 12: the tile is a 24px square and the title is 18px text,
      so the optical gap between them is smaller than the geometric one. */
   gap: var(--space-2h);
   min-width: 0;
@@ -58,7 +58,8 @@
 }
 
 /*
- * The title takes the text face, at 16px/500, in sentence case.
+ * The title takes the text face, at the card size and the middle weight, in
+ * sentence case.
  *
  * Not `caps-legend`. A card title is a heading; mono-caps is the register for
  * labels *inside* a panel, where a short uppercase word marks a column or a
@@ -77,6 +78,27 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The title and its note share a column. `min-width: 0` lets that column
+   shrink below the title's width, which is what allows the title's ellipsis
+   to engage; without it a long title pushes the header past the card. */
+.card-head-text {
+  min-width: 0;
+}
+
+/*
+ * The line under a card title: "4 configured, 1 paused", or where a setting is
+ * stored. Helper size, --ink-2, because it qualifies the heading above it.
+ *
+ * It had no rule, so it inherited the browser's 16px and sat at the size of
+ * the title it belongs to.
+ */
+.card-note {
+  margin: 0;
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  color: var(--ink-2);
 }
 
 /*

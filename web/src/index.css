@@ -120,7 +120,35 @@
     /* The one optical correction the sans face needs, set once so every
        element inherits it (§2.5). Faces it is wrong for override it. */
     letter-spacing: var(--track-body);
+    /* Text that states no size is body text (§2.5). Without this it took the
+       browser's 16px/24px: a card's note, a table cell or a settings value sat
+       at the size of the card title above it, and louder than the 15px rows
+       beside it. */
+    font-size: var(--type-body);
+    line-height: var(--lead-body);
     -webkit-font-smoothing: antialiased;
+  }
+
+  /* Emphasis is the strong step of the weight scale, not the browser's 700.
+     The sans ships 400-600 and the mono 400-500, so 700 is a bold the engine
+     synthesises from glyphs that were never drawn that heavy. */
+  b,
+  strong,
+  th {
+    font-weight: var(--weight-strong);
+  }
+
+  /* The body size is below the 16px at which iOS Safari zooms into a focused
+     field (§13). A field that states its own size already handles its phone
+     width; one that inherits must not start zooming because body text got
+     its size. */
+  @media (max-width: 640px) {
+    input,
+    select,
+    textarea {
+      font-size: var(--type-nozoom);
+      line-height: var(--lead-nozoom);
+    }
   }
 
   /* Theme switches are the one place a page-wide transition is justified:
