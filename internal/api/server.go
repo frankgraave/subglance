@@ -40,7 +40,8 @@ type Server struct {
 	// environment variable, which the settings API refuses to change.
 	connectivityPins store.ConnectivityPins
 	// connectivityMu serialises saves of the connectivity settings with
-	// applying them to the canary. See handleSetConnectivitySettings.
+	// applying them to the canary, and with reading them back. See
+	// handleSetConnectivitySettings and handleGetConnectivitySettings.
 	connectivityMu sync.Mutex
 
 	// backups reports on scheduled backups; nil with backupsWired set means

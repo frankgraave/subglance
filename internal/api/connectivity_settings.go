@@ -75,6 +75,12 @@ func (s *Server) handleGetConnectivitySettings(w http.ResponseWriter, r *http.Re
 	if !s.connectivityReady(w) {
 		return
 	}
+	// Held while reading, so the version and the settings come from the
+	// same save: a PUT committing between the two reads would otherwise
+	// hand out the old ETag with the new body, and that ETag would then be
+	// refused in If-Match although the caller holds the latest settings.
+	s.connectivityMu.Lock()
+	defer s.connectivityMu.Unlock()
 	version, err := s.db.ConnectivityVersion(r.Context())
 	if err != nil {
 		s.log.Error("read connectivity settings version", "error", err)

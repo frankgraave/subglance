@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -235,6 +236,58 @@ func TestConnectivitySettingsWithoutACanary(t *testing.T) {
 		rec := doJSON(t, srv, method, "/api/v1/settings/connectivity", `{"enabled":true}`)
 		if rec.Code != http.StatusServiceUnavailable {
 			t.Fatalf("%s without a canary = %d", method, rec.Code)
+		}
+	}
+}
+
+// A GET's ETag and body describe the same save, so a client that sends the
+// ETag back in If-Match is refused only when someone really saved since.
+// Every save below writes a target naming the version it creates; a body
+// read at one version under an ETag read at another cannot pass.
+func TestConnectivitySettingsGetIsOneVersion(t *testing.T) {
+	srv, _, _, _ := connectivitySettingsServer(t)
+	const saves = 200
+	stop, done := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 1; i <= saves; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			body := fmt.Sprintf("{\"targets\":[\"h%d:443\"]}", i)
+			if rec := doJSON(t, srv, http.MethodPut, "/api/v1/settings/connectivity", body); rec.Code != http.StatusOK {
+				t.Errorf("save %d = %d: %s", i, rec.Code, rec.Body.String())
+				return
+			}
+		}
+	}()
+	// The saver stops before the database is closed under it.
+	defer func() { close(stop); <-done }()
+	for reads := 0; ; reads++ {
+		select {
+		case <-done:
+			if reads == 0 {
+				t.Fatal("no GET overlapped the saves")
+			}
+			return
+		default:
+		}
+		rec := doJSON(t, srv, http.MethodGet, "/api/v1/settings/connectivity", "")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET = %d: %s", rec.Code, rec.Body.String())
+		}
+		var version int
+		if _, err := fmt.Sscanf(rec.Header().Get("ETag"), "W/\"%d\"", &version); err != nil {
+			t.Fatalf("ETag %q: %v", rec.Header().Get("ETag"), err)
+		}
+		want := connectivity.DefaultTargets
+		if version > 0 {
+			want = []string{fmt.Sprintf("h%d:443", version)}
+		}
+		if got := decodeConnectivitySettings(t, rec).Targets.Value; !reflect.DeepEqual(got, want) {
+			t.Fatalf("ETag W/\"%d\" came with targets %v, want %v", version, got, want)
 		}
 	}
 }
