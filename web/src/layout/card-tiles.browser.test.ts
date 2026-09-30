@@ -61,7 +61,19 @@ async function census(path: string, layout?: string): Promise<Census> {
     return await page.$$eval(".card", (cards) => ({
       cards: cards.length,
       untiled: cards
-        .filter((card) => card.querySelector(":scope > .card-head .icon-tile svg") === null)
+        .filter((card) => {
+          // Present is not enough: a CSS rule can hide the tile or collapse
+          // the glyph to nothing, and the markup would still pass.
+          const tile = card.querySelector(":scope > .card-head .icon-tile");
+          const svg = tile?.querySelector("svg");
+          if (!tile || !svg) return true;
+          const shown = (el: Element) => {
+            const style = getComputedStyle(el);
+            const box = el.getBoundingClientRect();
+            return style.display !== "none" && style.visibility !== "hidden" && box.width > 0 && box.height > 0;
+          };
+          return !shown(tile) || !shown(svg);
+        })
         .map((card) => card.querySelector(".card-title")?.textContent ?? "(untitled)"),
     }));
   } finally {
