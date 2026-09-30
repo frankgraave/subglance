@@ -18,6 +18,9 @@ neither are credentials. For a full copy of an instance, see
 
 ## Exporting
 
+On **Settings → Import & export**, *Download configuration* saves the file as
+`subglance-config.yaml`. From a script:
+
 ```sh
 curl -H "Authorization: Bearer $TOKEN" \
   http://localhost:8080/api/v1/config/export > subglance.yaml
@@ -29,7 +32,13 @@ have already ended are left out: they are history, not configuration.
 
 ## Importing
 
-Look first. A dry run reports what the import would do and writes nothing:
+On **Settings → Import & export**, choosing a file runs the dry run below and
+shows its report: what each object would become, which fields an update
+changes, and which objects need a value filled in after the import. A refused
+file shows the error at its place in the file. Nothing is written until you
+confirm the import.
+
+From a script, look first. A dry run reports what the import would do and writes nothing:
 
 ```sh
 curl -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/yaml' \

@@ -59,8 +59,10 @@ it("opens the password card from the sidebar for a viewer and keeps settings out
   expect(document.title).toMatch(/Settings/);
   expect(document.querySelector(".shell-topbar")).toBeTruthy();
   await screen.findByText("Not configured");
-  // Account, display, self-monitoring, retention and API tokens.
+  // Account, display, self-monitoring, retention and API tokens. Not import
+  // and export: the endpoints refuse a viewer.
   expect(screen.getAllByRole("region")).toHaveLength(5);
+  expect(document.getElementById("configuration")).toBeNull();
   // The session's role reaches the tokens card: a viewer is not offered a create form.
   expect(screen.getByText(/can list and revoke its own tokens but not create one/)).toBeTruthy();
   // The account list is admin-only on the server; a viewer never asks for it.
@@ -78,8 +80,8 @@ it("shows the users card to an administrator, with their own account marked", as
   expect(await screen.findByText("you")).toBeTruthy();
   expect(screen.getByRole("heading", { name: "Users (1)" })).toBeTruthy();
   // Account, display, users, status pages, self-monitoring, retention,
-  // backups, API tokens, instance and reset.
-  expect(screen.getAllByRole("region")).toHaveLength(10);
+  // backups, import & export, API tokens, instance and reset.
+  expect(screen.getAllByRole("region")).toHaveLength(11);
   fireEvent.change(screen.getByRole("searchbox", { name: "Search settings" }), { target: { value: "roles" } });
   expect(screen.getByRole("heading", { name: "Users (1)" }).closest("[hidden]")).toBeNull();
   expect(screen.getByRole("heading", { name: "Retention & storage", hidden: true }).closest("[hidden]")).toBeTruthy();

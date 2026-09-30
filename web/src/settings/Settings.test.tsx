@@ -185,3 +185,29 @@ it("offers status pages to an administrator only, beside Users", async () => {
   fireEvent.change(search, { target: { value: "public" } });
   expect(within(index()).getAllByRole("link").map((link) => link.textContent)).toEqual(["Status pages"]);
 });
+
+// The configuration endpoints answer editors and administrators; a viewer
+// would only ever be told "not allowed", so the section is not offered.
+// `role` is the session's account role, passed as a spread because the
+// accessibility lint reads a literal `role` attribute as an ARIA role.
+it("offers import and export to editors and administrators, beside Backups", async () => {
+  window.history.replaceState(null, "", "/settings");
+  vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => new Response("{}", { status: 404 })));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  clients.push(client);
+  const { unmount } = render(<QueryClientProvider client={client}><ShellSlots /><Settings client={client} {...{ role: "viewer" }} /></QueryClientProvider>);
+  expect(within(index()).queryByRole("link", { name: "Import & export" })).toBeNull();
+  expect(document.getElementById("configuration")).toBeNull();
+  unmount();
+  const second = render(<QueryClientProvider client={client}><ShellSlots /><Settings client={client} {...{ role: "editor" }} /></QueryClientProvider>);
+  let links = within(index()).getAllByRole("link").map((link) => link.textContent);
+  expect(links.indexOf("Import & export")).toBe(links.indexOf("API tokens") - 1);
+  // The card arrives as its own chunk.
+  expect(await screen.findByRole("button", { name: "Download configuration" })).toBeTruthy();
+  second.unmount();
+  render(<QueryClientProvider client={client}><ShellSlots /><Settings client={client} canAdmin /></QueryClientProvider>);
+  links = within(index()).getAllByRole("link").map((link) => link.textContent);
+  expect(links.indexOf("Import & export")).toBe(links.indexOf("Backups") + 1);
+  fireEvent.change(screen.getByRole("searchbox", { name: "Search settings" }), { target: { value: "yaml" } });
+  expect(within(index()).getAllByRole("link").map((link) => link.textContent)).toEqual(["Import & export"]);
+});
