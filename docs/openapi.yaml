@@ -294,9 +294,9 @@ paths:
         reports what the most recent round found. Rounds run only when a
         check is about to confirm on a network error, and every 30 seconds
         while the host is offline, so during an episode the answer is at most
-        that old. The targets themselves are not included; they are
-        configured with `--connectivity-targets` and may name hosts on the
-        operator's own network.
+        that old. The targets themselves are not included; they may name
+        hosts on the operator's own network, and administrators read them from
+        GET /api/v1/settings/connectivity.
       x-subglance-access: read
       responses:
         '200':
@@ -313,7 +313,7 @@ paths:
                 properties:
                   enabled:
                     type: boolean
-                    description: False when the check is turned off with `--connectivity-check=false`; offline is then always false.
+                    description: False when the check is turned off, by `--connectivity-check=false` or through PUT /api/v1/settings/connectivity; offline is then always false.
                   offline:
                     type: boolean
                     description: True when every target failed in the most recent round.
@@ -329,6 +329,153 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '503':
           description: Connectivity state unavailable; must not be interpreted as disabled or online.
+  /api/v1/settings/connectivity:
+    get:
+      tags: [Settings]
+      operationId: getConnectivitySettings
+      summary: Read the connectivity check's switch and targets
+      description: |
+        Administrators only. Whether the connectivity check is on, which
+        `host:port` addresses it dials, and where each value came from.
+        Precedence, highest first: a flag or environment variable
+        (`--connectivity-check`, `--connectivity-targets` and their
+        `SUBGLANCE_` variables), the value saved with PUT, the built-in
+        default (on, dialling `default_targets`).
+
+        Unlike GET /api/v1/connectivity this names the targets, which may be
+        hosts on the operator's own network; that is why it is not readable
+        by every role.
+
+        The response carries a weak `ETag` counting saves. Hand it back as
+        `If-Match` on a PUT to make that save conditional.
+      x-subglance-access: admin
+      responses:
+        '200':
+          description: The settings in force.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: 'private, no-store' }
+            ETag:
+              $ref: '#/components/headers/ConnectivityETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectivitySettings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenAdmin'
+        '500':
+          description: The saved settings could not be read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: This server runs without a connectivity check to configure.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      tags: [Settings]
+      operationId: setConnectivitySettings
+      summary: Turn the connectivity check on or off, or change its targets
+      description: |
+        Administrators only. Stores either field or both; an absent field is
+        left as it is. The change applies to the running check at once,
+        without a restart, and is read again on the next start. A change
+        forgets what the previous targets said: an ongoing "no outbound
+        connection" episode ends without a notice, and the next suspected
+        outage is judged against the new targets.
+
+        Targets are `host:port` addresses dialled over TCP; leading and
+        trailing spaces are removed. At least one and at most `max_targets`
+        are required, including when the check is turned off, so it can never
+        be turned back on with a list it would refuse. Addresses on private
+        networks are allowed: the check only completes a TCP handshake, and
+        the operator's own gateway is a sensible target.
+
+        A field set by a flag or environment variable cannot be changed here
+        (`409`). With `If-Match` set to the `ETag` from GET, the save is
+        refused with `412` if anyone saved after that read; without it the
+        save is last-write-wins. `If-Match: *` matches always.
+      x-subglance-access: admin
+      parameters:
+        - name: If-Match
+          in: header
+          required: false
+          description: The `ETag` from GET, making the save conditional. The weakness prefix is ignored.
+          schema:
+            type: string
+          example: W/"2"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                enabled:
+                  type: boolean
+                targets:
+                  type: array
+                  minItems: 1
+                  maxItems: 16
+                  items:
+                    type: string
+                    description: '`host:port`; an IPv6 host is bracketed.'
+                    example: 'gateway:443'
+      responses:
+        '200':
+          description: Saved and applied. The settings now in force, in the same shape as GET.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConnectivityETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectivitySettings'
+        '400':
+          description: Malformed JSON or `If-Match`, no field given, or a target list that breaks a rule above. `field` names it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenAdmin'
+        '409':
+          description: The field is set by a flag or environment variable, which the message names.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '412':
+          description: |
+            `If-Match` was sent and the settings were saved by someone else
+            since. Nothing was written. No `ETag` accompanies this response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: |
+            The settings could not be saved, or were saved but could not be
+            applied to the running check; the message says which.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: This server runs without a connectivity check to configure.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /api/v1/settings/retention:
     get:
       tags: [Settings]
@@ -4088,6 +4235,13 @@ components:
       schema:
         type: string
       example: public, max-age=30
+    ConnectivityETag:
+      description: |
+        A weak entity tag counting saves of the connectivity settings. Send it
+        back as `If-Match` to make a subsequent PUT conditional.
+      schema:
+        type: string
+      example: W/"2"
     RetentionETag:
       description: |
         A weak entity tag counting saves of the retention settings. Send it
@@ -4266,6 +4420,39 @@ components:
           type: integer
           minimum: 0
           description: For apply, differing values replaced. For rename_key, destination values retained while removing the old key (including equal values). Zero for remove/rename_value.
+    ConnectivitySettings:
+      type: object
+      additionalProperties: false
+      required: [enabled, targets, default_targets, max_targets]
+      properties:
+        enabled:
+          type: object
+          additionalProperties: false
+          required: [value, source, pinned_by]
+          properties:
+            value: { type: boolean }
+            source: { type: string, enum: [default, database, pinned] }
+            pinned_by:
+              type: [string, 'null']
+              description: The flag or environment variable that set it, when `source` is `pinned`.
+        targets:
+          type: object
+          additionalProperties: false
+          required: [value, source, pinned_by]
+          properties:
+            value:
+              type: array
+              items: { type: string }
+              example: ['1.1.1.1:53', '9.9.9.9:53']
+            source: { type: string, enum: [default, database, pinned] }
+            pinned_by: { type: [string, 'null'] }
+        default_targets:
+          type: array
+          items: { type: string }
+          description: What the check dials when nothing else is set.
+        max_targets:
+          type: integer
+          description: The longest target list accepted.
     Retention:
       type: object
       additionalProperties: false

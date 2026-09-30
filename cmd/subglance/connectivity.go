@@ -3,24 +3,43 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/frankgraave/subglance/internal/config"
 	"github.com/frankgraave/subglance/internal/connectivity"
 	"github.com/frankgraave/subglance/internal/notifier"
+	"github.com/frankgraave/subglance/internal/store"
 )
 
-// newCanary builds the connectivity canary, or returns nil when the check is
-// turned off. The notice it sends on reconnecting goes to the default
-// channel, like every other notice about the instance itself.
-func newCanary(cfg config.Config, notify *notifier.Notifier, log *slog.Logger) (*connectivity.Canary, error) {
-	if !cfg.ConnectivityCheck {
-		log.Info("connectivity check is off: a failure of this host's own network will count against every monitor")
-		return nil, nil
+// newCanary builds the connectivity canary from the flags, the environment
+// and what was saved through the settings API, in that order of precedence.
+// The notice it sends on reconnecting goes to the default channel, like every
+// other notice about the instance itself.
+//
+// It is built even when the check is off, so the settings API can turn it on
+// without a restart; switched off, it never dials and never holds a failure
+// back.
+func newCanary(ctx context.Context, cfg config.Config, db *store.DB, notify *notifier.Notifier, log *slog.Logger) (*connectivity.Canary, error) {
+	resolved, err := db.ResolveConnectivity(ctx, cfg.ConnectivityPins())
+	if err != nil {
+		return nil, fmt.Errorf("connectivity settings: %w", err)
+	}
+	targets := resolved.Targets.Value
+	if !resolved.Enabled.Value && connectivity.ValidateTargets(targets) != nil {
+		// Only reachable with the check turned off by a flag or variable,
+		// which is the one case Load does not judge the targets: they are
+		// never dialled, and the pin keeps the API from turning it on.
+		targets = connectivity.DefaultTargets
+	}
+	if !resolved.Enabled.Value {
+		log.Info("connectivity check is off: a failure of this host's own network will count against every monitor",
+			"source", resolved.Enabled.Source)
 	}
 	return connectivity.New(connectivity.Options{
-		Targets:    cfg.ConnectivityTargetList(),
+		Targets:    targets,
+		Disabled:   !resolved.Enabled.Value,
 		OnRestored: localNetworkNotice(notify, log),
 	})
 }

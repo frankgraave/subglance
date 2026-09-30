@@ -79,3 +79,48 @@ func TestConnectivityTargetsAreValidated(t *testing.T) {
 		t.Fatalf("targets were validated with the check off: %v", err)
 	}
 }
+
+// A flag or variable pins its setting, so the settings API shows it as fixed
+// and refuses to store a value underneath it; left alone, the API decides.
+func TestConnectivityPinsNameWhatSetThem(t *testing.T) {
+	c, err := Load(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := c.ConnectivityPins(); p.Enabled != nil || p.Targets != nil {
+		t.Fatalf("defaults pinned something: %+v", p)
+	}
+
+	t.Setenv("SUBGLANCE_CONNECTIVITY_TARGETS", "router-a:443")
+	c, err = Load([]string{"--connectivity-check=true"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := c.ConnectivityPins()
+	if p.Enabled == nil || !p.Enabled.Value || p.Enabled.By != "--connectivity-check" {
+		t.Fatalf("enabled pin = %+v, want on by --connectivity-check", p.Enabled)
+	}
+	if p.Targets == nil || !reflect.DeepEqual(p.Targets.Value, []string{"router-a:443"}) ||
+		p.Targets.By != "SUBGLANCE_CONNECTIVITY_TARGETS" {
+		t.Fatalf("targets pin = %+v", p.Targets)
+	}
+
+	t.Setenv("SUBGLANCE_CONNECTIVITY_CHECK", "false")
+	c, err = Load(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := c.ConnectivityPins(); p.Enabled == nil || p.Enabled.Value || p.Enabled.By != "SUBGLANCE_CONNECTIVITY_CHECK" {
+		t.Fatalf("enabled pin = %+v, want off by SUBGLANCE_CONNECTIVITY_CHECK", p.Enabled)
+	}
+
+	// The flag beats the variable, so it is what the page names.
+	c, err = Load([]string{"--connectivity-targets=router-b:80"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := c.ConnectivityPins(); p.Targets == nil || p.Targets.By != "--connectivity-targets" ||
+		!reflect.DeepEqual(p.Targets.Value, []string{"router-b:80"}) {
+		t.Fatalf("targets pin = %+v, want router-b:80 by --connectivity-targets", p.Targets)
+	}
+}

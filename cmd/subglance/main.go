@@ -203,7 +203,7 @@ func run(args []string) error {
 		GroupWindow: cfg.NotifierGroupWindow(),
 	})
 
-	canary, err := newCanary(cfg, notify, log)
+	canary, err := newCanary(openCtx, cfg, db, notify, log)
 	if err != nil {
 		return err
 	}
@@ -327,9 +327,9 @@ func run(args []string) error {
 	// Explicit nil reports disabled, not an unavailable diagnostic source.
 	apiSrv.WithWatchdog(dog)
 	// The same canary the runner consults, so the dashboard's "no outbound
-	// connection" line and the warnings it explains come from one answer.
-	// Nil when the check is off, which the endpoint reports as disabled.
-	apiSrv.WithConnectivity(canary)
+	// connection" line and the warnings it explains come from one answer,
+	// and a change saved through the settings API reaches both at once.
+	apiSrv.WithConnectivity(canary).WithConnectivityPins(cfg.ConnectivityPins())
 	// Waited for on shutdown, so a backup cut short by the signal gets to
 	// remove its staging files before the process exits.
 	backupsDone := make(chan struct{})

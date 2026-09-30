@@ -36,6 +36,15 @@
 // failures that a dead uplink could explain: DNS, connection and timeout.
 // A status code or a missing keyword proves the target answered, and is never
 // suppressed.
+//
+// # Changing it while it runs
+//
+// The targets and the on/off switch can be changed at run time (Configure),
+// from the settings API. A change forgets what the previous targets said: a
+// round against addresses that are no longer configured says nothing about
+// the ones that are, and a round still in flight when the change lands is
+// discarded rather than recorded. Discarding errs the safe way: a discarded
+// round reports the host online, so the alert goes out.
 package connectivity
 
 import (
@@ -43,10 +52,12 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 // DefaultTargets are two independent public resolvers, dialled over TCP by
@@ -64,6 +75,11 @@ const (
 	// resolver takes tens of milliseconds; three seconds is generous
 	// without holding a check worker for long.
 	DefaultTimeout = 3 * time.Second
+
+	// MaxTargets bounds the list. Every round dials all of them at once,
+	// and the list can be set over the API; a handful of independent
+	// addresses is all the check needs.
+	MaxTargets = 16
 )
 
 // DialFunc opens a connection. A net.Dialer's DialContext satisfies it; tests
@@ -75,6 +91,10 @@ type Options struct {
 	// Targets are host:port addresses dialled over TCP. At least one is
 	// required.
 	Targets []string
+
+	// Disabled builds a canary that never dials and never reports the host
+	// offline until Configure turns it on. The zero value is on.
+	Disabled bool
 
 	// CacheFor, Timeout: zero means the defaults above.
 	CacheFor time.Duration
@@ -91,10 +111,18 @@ type Options struct {
 	Now  func() time.Time
 }
 
+// Settings are the parts of a Canary that can change while it runs.
+type Settings struct {
+	// Enabled false means the canary never dials and never reports the
+	// host offline, so every failure counts against its monitor.
+	Enabled bool
+	// Targets are the host:port addresses a round dials.
+	Targets []string
+}
+
 // Canary probes the configured targets and remembers the answer briefly.
 // It is safe for concurrent use.
 type Canary struct {
-	targets    []string
 	cacheFor   time.Duration
 	timeout    time.Duration
 	onRestored func(from, to time.Time)
@@ -105,7 +133,12 @@ type Canary struct {
 	// in flight and read its answer instead of starting their own.
 	probeMu sync.Mutex
 
-	mu           sync.Mutex
+	mu      sync.Mutex
+	targets []string
+	enabled bool
+	// generation changes on every Configure. A round records the one it
+	// started under and is discarded if it no longer matches.
+	generation   uint64
 	checkedAt    time.Time
 	offline      bool
 	offlineSince time.Time
@@ -120,6 +153,7 @@ func New(opts Options) (*Canary, error) {
 	}
 	c := &Canary{
 		targets:    append([]string(nil), opts.Targets...),
+		enabled:    !opts.Disabled,
 		cacheFor:   opts.CacheFor,
 		timeout:    opts.Timeout,
 		onRestored: opts.OnRestored,
@@ -157,6 +191,9 @@ func ValidateTargets(targets []string) error {
 	if len(targets) == 0 {
 		return errors.New("no connectivity targets are set")
 	}
+	if len(targets) > MaxTargets {
+		return fmt.Errorf("%d connectivity targets are set; at most %d are allowed", len(targets), MaxTargets)
+	}
 	for _, t := range targets {
 		host, port, err := net.SplitHostPort(t)
 		if err != nil {
@@ -164,6 +201,12 @@ func ValidateTargets(targets []string) error {
 		}
 		if host == "" {
 			return fmt.Errorf("connectivity target %q: the host is empty", t)
+		}
+		// A comma would split the target in two when the list is stored
+		// and read back, and no host name or address contains one or a
+		// space.
+		if strings.ContainsFunc(host, func(r rune) bool { return r == ',' || unicode.IsSpace(r) }) {
+			return fmt.Errorf("connectivity target %q: the host contains a comma or a space", t)
 		}
 		if n, err := strconv.Atoi(port); err != nil || n < 1 || n > 65535 {
 			return fmt.Errorf("connectivity target %q: port must be a number from 1 to 65535", t)
@@ -173,11 +216,61 @@ func ValidateTargets(targets []string) error {
 }
 
 // Targets returns the configured addresses.
-func (c *Canary) Targets() []string { return append([]string(nil), c.targets...) }
+func (c *Canary) Targets() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.targets...)
+}
+
+// Enabled reports whether the canary is switched on.
+func (c *Canary) Enabled() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.enabled
+}
+
+// Settings returns what Configure last set, or what New was given.
+func (c *Canary) Settings() Settings {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return Settings{Enabled: c.enabled, Targets: append([]string(nil), c.targets...)}
+}
+
+// Configure replaces the targets and the switch. The targets are validated
+// even when the canary is being turned off, so it can never be turned back on
+// with a list it would refuse.
+//
+// Any change forgets the current answer and ends an offline episode without
+// the restored callback: nothing was reached, so there is nothing to report,
+// and a round against the old targets must not stand for the new ones. A
+// round in flight is discarded when it finishes. Configuring the same
+// settings again changes nothing, so an unrelated save cannot cut an episode
+// short.
+func (c *Canary) Configure(s Settings) error {
+	if err := ValidateTargets(s.Targets); err != nil {
+		return err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if s.Enabled == c.enabled && slices.Equal(s.Targets, c.targets) {
+		return nil
+	}
+	c.enabled = s.Enabled
+	c.targets = append([]string(nil), s.Targets...)
+	c.generation++
+	c.checkedAt = time.Time{}
+	c.offline = false
+	c.offlineSince = time.Time{}
+	return nil
+}
 
 // Offline reports whether every target failed in the most recent round,
-// running a round first if the last one is older than CacheFor.
+// running a round first if the last one is older than CacheFor. A disabled
+// canary answers false without dialling.
 func (c *Canary) Offline(ctx context.Context) bool {
+	if !c.Enabled() {
+		return false
+	}
 	if offline, fresh := c.cached(); fresh {
 		return offline
 	}
@@ -238,7 +331,14 @@ func (c *Canary) cached() (offline, fresh bool) {
 // round dials every target concurrently and records the answer. The caller
 // holds probeMu.
 func (c *Canary) round(ctx context.Context) bool {
-	reached := c.anyReachable(ctx)
+	c.mu.Lock()
+	targets, generation, enabled := c.targets, c.generation, c.enabled
+	c.mu.Unlock()
+	if !enabled {
+		return false
+	}
+
+	reached := c.anyReachable(ctx, targets)
 	// A round cut short by shutdown says nothing about the network, and
 	// must not start or end an episode.
 	if ctx.Err() != nil {
@@ -247,6 +347,12 @@ func (c *Canary) round(ctx context.Context) bool {
 
 	at := c.now()
 	c.mu.Lock()
+	if c.generation != generation {
+		// Configure ran while this round dialled: its answer is about
+		// targets that are no longer the ones configured.
+		c.mu.Unlock()
+		return false
+	}
 	wasOffline, since := c.offline, c.offlineSince
 	c.checkedAt = at
 	c.offline = !reached
@@ -264,12 +370,12 @@ func (c *Canary) round(ctx context.Context) bool {
 	return !reached
 }
 
-func (c *Canary) anyReachable(ctx context.Context) bool {
+func (c *Canary) anyReachable(ctx context.Context, targets []string) bool {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
-	results := make(chan bool, len(c.targets))
-	for _, target := range c.targets {
+	results := make(chan bool, len(targets))
+	for _, target := range targets {
 		go func() {
 			conn, err := c.dial(ctx, "tcp", target)
 			if err == nil {
@@ -279,7 +385,7 @@ func (c *Canary) anyReachable(ctx context.Context) bool {
 		}()
 	}
 	reached := false
-	for range c.targets {
+	for range targets {
 		if <-results {
 			reached = true
 		}

@@ -206,6 +206,29 @@ type Config struct {
 	// dialled over TCP. The host is considered offline only when every one
 	// of them fails.
 	ConnectivityTargets string
+
+	// ConnectivityCheckPinnedBy and ConnectivityTargetsPinnedBy name the
+	// flag or environment variable that set the field above them, or are
+	// empty when neither did. A pinned value wins over the one saved
+	// through the settings API, which then refuses to change it; an
+	// unpinned one is only the default the API starts from.
+	ConnectivityCheckPinnedBy   string
+	ConnectivityTargetsPinnedBy string
+}
+
+// ConnectivityPins returns the connectivity settings fixed by a flag or
+// variable. Load has already validated them.
+func (c Config) ConnectivityPins() store.ConnectivityPins {
+	var p store.ConnectivityPins
+	if c.ConnectivityCheckPinnedBy != "" {
+		p.Enabled = &store.ConnectivityEnabledPin{Value: c.ConnectivityCheck, By: c.ConnectivityCheckPinnedBy}
+	}
+	if c.ConnectivityTargetsPinnedBy != "" {
+		p.Targets = &store.ConnectivityTargetsPin{
+			Value: connectivity.ParseTargets(c.ConnectivityTargets), By: c.ConnectivityTargetsPinnedBy,
+		}
+	}
+	return p
 }
 
 // ConnectivityTargetList returns ConnectivityTargets as a list, or nil when
@@ -340,7 +363,9 @@ func Load(args []string) (Config, error) {
 	c.BackupSecretAccessKey = envStr("SUBGLANCE_BACKUP_SECRET_ACCESS_KEY", c.BackupSecretAccessKey)
 	c.BackupSecretAccessKeyFile = envStr("SUBGLANCE_BACKUP_SECRET_ACCESS_KEY_FILE", c.BackupSecretAccessKeyFile)
 	c.ConnectivityCheck = env.bool("SUBGLANCE_CONNECTIVITY_CHECK", c.ConnectivityCheck)
+	c.ConnectivityCheckPinnedBy = envSetBy("SUBGLANCE_CONNECTIVITY_CHECK")
 	c.ConnectivityTargets = envStr("SUBGLANCE_CONNECTIVITY_TARGETS", c.ConnectivityTargets)
+	c.ConnectivityTargetsPinnedBy = envSetBy("SUBGLANCE_CONNECTIVITY_TARGETS")
 	if err := env.err(); err != nil {
 		return Config{}, err
 	}
@@ -409,6 +434,10 @@ func Load(args []string) (Config, error) {
 			c.RetentionRunAtPinnedBy = "--retention-run-at"
 		case "max-database-size":
 			c.MaxDatabaseSizePinnedBy = "--max-database-size"
+		case "connectivity-check":
+			c.ConnectivityCheckPinnedBy = "--connectivity-check"
+		case "connectivity-targets":
+			c.ConnectivityTargetsPinnedBy = "--connectivity-targets"
 		}
 	})
 	if err := c.validate(); err != nil {
@@ -468,8 +497,11 @@ func (c Config) validate() error {
 	if err := c.validateBackup(); err != nil {
 		return err
 	}
+	// Checked unless the check is turned off by a flag or variable, which
+	// is the only way ConnectivityCheck is false here. Left unpinned, the
+	// settings API can turn it on at run time with exactly these targets.
 	if c.ConnectivityCheck {
-		if err := connectivity.ValidateTargets(c.ConnectivityTargetList()); err != nil {
+		if err := connectivity.ValidateTargets(connectivity.ParseTargets(c.ConnectivityTargets)); err != nil {
 			return fmt.Errorf("invalid connectivity-targets: %w (or turn the check off with --connectivity-check=false)", err)
 		}
 	}
