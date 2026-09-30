@@ -1,0 +1,76 @@
+{{- /*
+  The public status page. The markup follows the prototype in
+  docs/mockups/pages/status.html, on the product's own component classes;
+  every value in it comes from the view that render.go builds out of Page,
+  and from nothing else.
+
+  There is no style attribute anywhere, and exactly one script: the theme
+  line in <head>. Both the stylesheet and that script are inline and allowed
+  by their hashes (Renderer.ContentSecurityPolicy), so the document is one
+  response with no asset paths of its own.
+*/ -}}
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>{{.Title}}</title>
+{{- if .Description}}
+<meta name="description" content="{{.Description}}">
+{{- end}}
+<script>{{.ThemeScript}}</script>
+<style>{{.CSS}}</style>
+</head>
+<body>
+<main class="sp">
+<header class="sp-head">
+<h1>{{.Title}}</h1>
+{{- if .Description}}
+<p class="sp-prose">{{.Description}}</p>
+{{- end}}
+</header>
+<section class="card sp-summary" aria-labelledby="sp-summary">
+<span class="led-wrap"><span class="led" data-state="{{.Summary.Lamp}}" aria-hidden="true"></span><span class="sr-only">{{.Summary.Word}}</span></span>
+<h2 id="sp-summary">{{.Summary.Text}}</h2>
+<span class="sp-helper sp-mono">Updated <time datetime="{{.UpdatedISO}}">{{.Updated}}</time></span>
+</section>
+{{- if .Maintenance}}
+<section class="card" aria-labelledby="sp-maintenance">
+<div class="card-head"><h2 class="card-title" id="sp-maintenance">Maintenance</h2></div>
+<div class="sp-list">
+{{- range .Maintenance}}
+<div class="sp-row"><span class="sp-name">{{.Label}}</span><span class="sp-helper sp-mono">{{.When}}</span>{{with .Affects}}<span class="sp-helper">Affects {{.}}</span>{{end}}</div>
+{{- end}}
+</div>
+</section>
+{{- end}}
+{{- if .Services}}
+<section class="card" aria-labelledby="sp-services">
+<div class="card-head"><h2 class="card-title" id="sp-services">Services ({{len .Services}})</h2></div>
+<div class="sp-list">
+{{- range .Services}}
+<div class="sp-row sp-service"{{with .Rail}} data-status="{{.}}"{{end}}>
+<div class="sp-line"><span class="sp-name">{{.Name}}</span>{{if .InMaintenance}}<span class="chip chip--state">Maintenance</span>{{end}}<span class="led-wrap"><span class="led" data-state="{{.Lamp}}" aria-hidden="true"></span><span class="led-label">{{.Word}}</span></span></div>
+<div class="sp-days" aria-hidden="true">{{range .Days}}<i data-s="{{.}}"></i>{{end}}</div>
+<p class="sr-only sp-history">{{.History}}</p>
+<div class="sp-axis"><span class="sp-axis-desk">{{.Oldest}}</span><span class="sp-axis-phone">{{.OldestPhone}}</span><span class="sp-uptime sp-mono">{{.Uptime}}</span><span>Today</span></div>
+</div>
+{{- end}}
+</div>
+</section>
+<section class="card" aria-labelledby="sp-outages">
+<div class="card-head"><h2 class="card-title" id="sp-outages">Past 14 days</h2></div>
+<div class="sp-list">
+{{- range .Outages}}
+<div class="sp-row"{{if .Ongoing}} data-status="down"{{end}}><span class="led-wrap"><span class="led" data-state="{{if .Ongoing}}down{{else}}up{{end}}" aria-hidden="true"></span><span class="led-label">{{if .Ongoing}}Down{{else}}Recovered{{end}}</span></span><span class="sp-name">{{.Name}}</span><span class="sp-helper sp-mono">{{.Text}}</span></div>
+{{- else}}
+<p class="sp-helper">No outages in the past 14 days.</p>
+{{- end}}
+</div>
+</section>
+{{- end}}
+<p class="sp-foot">Times in {{.Timezone}} · Monitored with SubGlance</p>
+</main>
+</body>
+</html>

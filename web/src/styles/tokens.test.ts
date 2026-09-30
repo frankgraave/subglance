@@ -2110,6 +2110,15 @@ const statusBorders = new Set<string>([
   // Warning is an unconfirmed failure, and recovering a confirmed one whose checks pass again (SUB-157):
   // both use the warning role for their status rail, draining when stale.
   'web/src/live/connection.css | .mon-detail[data-conn="stale"] .mon-detail-status[data-status="warning"], .mon-detail[data-conn="stale"] .mon-detail-status[data-status="recovering"] | border-color: var(--warn-drained)',
+  /*
+   * The public status page's rows (docs/design/status-page.md §2). The same
+   * rail as the dashboard's rows and cards, for the same reason: trouble
+   * warms the row's leading edge, and the lamp and word beside it say which.
+   * The page has no stale state, so there are no drained tones here.
+   */
+  "web/src/statuspage/statuspage.css | .sp-row | border-left: var(--size-status-rail) solid var(--border)",
+  'web/src/statuspage/statuspage.css | .sp-row[data-status="down"] | border-left: var(--size-status-rail) solid var(--down)',
+  'web/src/statuspage/statuspage.css | .sp-row[data-status="warn"] | border-left: var(--size-status-rail) solid var(--warn)',
 ]);
 
 describe("depth comes from the ladder in §2.10", () => {
@@ -3026,6 +3035,13 @@ describe("a dashed edge means the chip is about the data (§8.1)", () => {
       }
     };
     walk(join(webSrc, "index.css"));
+    // The public status page is the second CSS entrypoint (vite.config.ts),
+    // inlined by the Go side into every page it renders. Walked from its own
+    // root, and only while the build still names it, so this cannot become a
+    // way to excuse a stylesheet nothing loads.
+    const viteConfig = readFileSync(join(webSrc, "..", "vite.config.ts"), "utf8");
+    expect(viteConfig).toContain('"src/statuspage/page.css"');
+    walk(join(webSrc, "statuspage", "page.css"));
 
     const orphans: string[] = [];
     for (const file of sourceFiles(webSrc)) {
