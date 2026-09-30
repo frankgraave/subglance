@@ -1,6 +1,7 @@
 import { useId, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, Panel } from "../components/Card";
+import { Checkbox } from "../components/Choice";
 import { IconDatabase } from "../components/icons";
 import { ApiError } from "../api/http";
 import {
@@ -101,8 +102,8 @@ function AmountField({ label, unit, offLabel, restore, draft, onChange, disabled
           onChange={(event) => onChange({ ...draft, value: event.target.value })}
         />
         <span aria-hidden="true">{unit}</span>
-        <label className="retention-forever"><input type="checkbox" checked={draft.off}
-          onChange={(event) => onChange({ value: draft.value || restore, off: event.target.checked })} /> {offLabel}</label>
+        <Checkbox checked={draft.off}
+          onChange={(event) => onChange({ value: draft.value || restore, off: event.target.checked })}>{offLabel}</Checkbox>
       </div>
       <p className="retention-note" id={`${id}-help`}>{note}</p>
       {error && <p className="auth-error" id={`${id}-error`} role="alert">{error}</p>}

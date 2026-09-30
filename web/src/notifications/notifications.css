@@ -456,8 +456,8 @@
  * Two fieldsets, because the window and the mode are separate questions and a
  * screen reader should hear each legend once. Borders and padding are dropped
  * so the fieldsets group for assistive technology without drawing a third
- * surface inside the drawer. Choices sit on `--control-h` so the checkbox and
- * the radios keep a full tap target on a phone.
+ * surface inside the drawer. The checkbox and the radios are `Checkbox` and
+ * `Radio` (choice.css), whose labels sit on `--control-h`.
  */
 .nt-quiet,
 .nt-quiet-modes {
@@ -474,28 +474,3 @@
 
 .nt-quiet-grid { margin-top: 0; }
 
-/* Also the one checkbox a channel type has (SMS "back up" messages). */
-.nt-quiet-toggle,
-.nt-check {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: var(--control-h);
-  font-size: var(--type-body);
-  line-height: var(--lead-body);
-}
-
-/*
- * The box itself at the compact control square, not the browser's 13px. The
- * label around it is a larger target, but WCAG 2.2 SC 2.5.8 is measured on
- * the control, and this is the square the retention and inventory
- * checkboxes use, so every checkbox in the product is one size.
- */
-.nt-quiet-toggle input,
-.nt-check input {
-  accent-color: var(--accent);
-  width: var(--size-square-compact);
-  height: var(--size-square-compact);
-  margin: 0;
-  flex-shrink: 0;
-}

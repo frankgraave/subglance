@@ -7,6 +7,7 @@ import { ToolbarTools, TopbarTools } from "../shell/TopbarTools";
 import { Drawer } from "../components/Drawer";
 import { ConfirmDelete } from "../components/ConfirmDelete";
 import { StateChip } from "../components/Chip";
+import { Checkbox } from "../components/Choice";
 import { EmptyState } from "./EmptyState";
 import { MonitorInventoryRow } from "./MonitorInventoryRow";
 import { AddMonitor } from "./AddMonitor";
@@ -145,6 +146,9 @@ export function MonitorsView({
 
   const visibleIds = new Set(visible.map((m) => m.id));
   const hiddenSelectionCount = selectedIds.filter((id) => !visibleIds.has(id)).length;
+  const visibleSelectedCount = selectedIds.length - hiddenSelectionCount;
+  const allVisibleSelected = visible.length > 0 && visibleSelectedCount === visible.length;
+  const someVisibleSelected = visibleSelectedCount > 0 && !allVisibleSelected;
   const deleteTarget = monitors.find((m) => m.id === confirming) ?? null;
 
   return (
@@ -298,7 +302,14 @@ export function MonitorsView({
         }
       >
         {onTagChange && !loading && error === null && monitors.length > 0 && <div className="bulk-tags-selection">
-          <button type="button" className="add-button" disabled={visible.length === 0} onClick={() => setSelected(new Set([...selected, ...visible.map((m) => m.id)]))}>Select all visible ({visible.length})</button>
+          {/* One box for the visible rows, in the three states a group box
+              has: all of them, none, or some (a dash, announced as "mixed").
+              Checking it adds the visible rows; unchecking it removes only
+              them, so a selection hidden by a filter survives both. */}
+          <Checkbox checked={allVisibleSelected} indeterminate={someVisibleSelected} disabled={visible.length === 0}
+            onChange={() => setSelected(allVisibleSelected ? new Set([...selected].filter((id) => !visibleIds.has(id))) : new Set([...selected, ...visible.map((m) => m.id)]))}>
+            Select all visible ({visible.length})
+          </Checkbox>
           <button type="button" className="add-button" disabled={selectedIds.length === 0} onClick={() => setSelected(NO_SET)}>Clear selection</button>
           <p role="status">{selectedIds.length} selected{hiddenSelectionCount > 0 ? ` · ${hiddenSelectionCount} hidden by filters` : ""}</p>
         </div>}

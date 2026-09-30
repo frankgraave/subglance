@@ -1946,6 +1946,48 @@ the interval can have changed inside the window; gaps from pausing are not
 caught. The Diagnostics card uses the same treatment for its queue, skipped
 and failed-write counts and a non-WAL journal.
 
+
+### 8.9 A checkbox or radio is `Checkbox` or `Radio`
+
+Both live in `web/src/components/Choice.tsx` and are real `<input>` elements
+with the platform's drawing taken away (`appearance: none`) and one painted
+back from tokens in `choice.css`. The role, the checked and mixed states,
+Space and the arrow keys, a click on the label and the value in `FormData`
+all stay the browser's; only the picture changes.
+
+- **Two sizes.** The input is the 26px compact square, because that is its
+  target (WCAG 2.2 SC 2.5.8 measures the control's own box) and the size of the
+  other dense controls in a row. The box drawn inside it is 16px, a glyph in a
+  control. A 26px box is what the native checkbox used to be stretched to, and
+  beside 15px text it read as a button.
+- **The edge is an inset `--ink-3` ring, not a border role.** An unchecked box
+  is nothing but its edge, so the edge owes the 3:1 WCAG 1.4.11 asks of a
+  control's boundary. `--border-control` is a quiet frame round a field whose
+  contents already say what it is, and measures well under that. The ring is
+  the lamp's construction (§3) for the same reason.
+- **Chosen takes the accent** (§2.8) with an `--accent-ink` mark: a tick, a dash
+  for mixed, a dot for a radio. The ring moves to `--accent-border`, because
+  `--accent` alone falls under 3:1 on the dark canvas.
+- **Focus draws round the 16px box**, not the 26px target, so the outline sits
+  where the eye already is.
+- **Forced colours hand the control back to the platform.** Windows High
+  Contrast drops the fills and rings this draws with, which would leave
+  checked and unchecked identical.
+- **The label is the component's children.** Pass words and the input is
+  wrapped in a `<label>` on `--control-h`, so the whole sentence toggles it; a
+  row's selection box, named by the row, takes an `aria-label` instead.
+
+A group box (the monitors page's *Select all visible*) uses `indeterminate` for
+"some of these": a dash on screen, "mixed" to a screen reader. Checking it adds
+the visible rows; clearing it removes only those.
+
+There used to be eight of these in six files: six native boxes tinted with
+`accent-color` and sized by three stylesheets that each claimed every checkbox
+in the product was one size, and two left at the browser's 13px (SUB-167).
+`tokens.test.ts` now refuses a checkbox or radio input written outside
+`Choice.tsx`, and `[type=checkbox]`, `:checked` or `accent-color` in any
+stylesheet but `choice.css`.
+
 ---
 
 ## 9. Accessibility

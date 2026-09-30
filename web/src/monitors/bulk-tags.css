@@ -12,14 +12,11 @@
 .bulk-tags-selection p {
   margin: 0;
 }
+/* The box is drawn by `Checkbox` (choice.css); this only spaces it from the
+   name. The target already carries five pixels either side of the drawn box,
+   so the small step reads as the same gap the name has elsewhere. */
 .bulk-tags-select {
-  accent-color: var(--accent);
-  /* Match the inventory's compact action targets, not its smaller glyphs. */
-  width: var(--size-square-compact);
-  height: var(--size-square-compact);
-  margin-inline-end: var(--space-2);
-  vertical-align: middle;
-  flex-shrink: 0;
+  margin-inline-end: var(--space-1);
 }
 .bulk-tags-form p {
   color: var(--ink);

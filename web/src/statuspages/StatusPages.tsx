@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } fr
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, Panel } from "../components/Card";
 import { StateChip } from "../components/Chip";
+import { Checkbox } from "../components/Choice";
 import { ConfirmDelete } from "../components/ConfirmDelete";
 import { Drawer } from "../components/Drawer";
 import { IconGlobe, IconTrash } from "../components/icons";
@@ -154,18 +155,16 @@ function SettingsForm({ page, onSaved, onCancel }: {
           onChange={(event) => set("tag_value", event.target.value)} />
       </Field>
     </div>}
-    <label className="retention-forever">
-      <input type="checkbox" checked={draft.enabled} aria-describedby={`${id}-enabled-help`}
-        onChange={(event) => set("enabled", event.target.checked)} />
+    <Checkbox checked={draft.enabled} aria-describedby={`${id}-enabled-help`}
+      onChange={(event) => set("enabled", event.target.checked)}>
       Published
-    </label>
+    </Checkbox>
     <p className="retention-note" id={`${id}-enabled-help`}>
       {draft.enabled ? "Anyone with the address can open the page." : "Off: the address answers as if there were no page."}
     </p>
-    <label className="retention-forever">
-      <input type="checkbox" checked={draft.indexable} onChange={(event) => set("indexable", event.target.checked)} />
+    <Checkbox checked={draft.indexable} onChange={(event) => set("indexable", event.target.checked)}>
       Let search engines list it
-    </label>
+    </Checkbox>
     {general && error && <p className="auth-error" role="alert">{error.message}</p>}
     <div className="add-actions">
       <button className="auth-submit" type="submit" disabled={!ready || saving}>

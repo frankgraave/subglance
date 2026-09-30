@@ -223,6 +223,11 @@
       <p class="sg-why">An 8px shell around 6px segments, concentric. The selected segment takes the accent. The group carries a label for assistive technology even when every segment is a word. <code>web/src/components/SegmentedControl.tsx</code></p>
       <div class="sg-stage"><div class="segmented" role="group" aria-label="Range"><button type="button" class="segmented-option" aria-pressed="false">1h</button><button type="button" class="segmented-option" aria-pressed="true">24h</button><button type="button" class="segmented-option" aria-pressed="false">7d</button></div></div>
     </article>
+    <article class="sg-specimen" id="c-choice">
+      <h3>Checkbox and radio</h3>
+      <p class="sg-why">Native inputs drawn from tokens: a 16px box in a 26px target, an --ink-3 ring that clears 3:1, the accent when chosen. Mixed (a dash) is a DOM property, so this static page cannot show it; the monitors page does. Never a hand-written checkbox or accent-color; the token guard refuses both. <code>web/src/components/Choice.tsx</code></p>
+      <div class="sg-stage"><div class="sg-specimen-row"><label class="choice-label"><input readOnly="" type="checkbox" class="choice"/>Off</label><label class="choice-label"><input readOnly="" type="checkbox" class="choice" checked=""/>On</label><label class="choice-label"><input disabled="" readOnly="" type="checkbox" class="choice"/>Disabled</label><label class="choice-label"><input readOnly="" type="radio" class="choice" name="sg-radio" checked=""/>Chosen</label><label class="choice-label"><input readOnly="" type="radio" class="choice" name="sg-radio"/>Not chosen</label></div></div>
+    </article>
     <article class="sg-specimen" id="c-icontile">
       <h3>Icon tile</h3>
       <p class="sg-why">The 24px tile beside a card title, on every card: Card's icon prop is required, so a card without one does not compile. The glyph names the card's subject, never an action. Its border adds optical weight, which is why the gap to the title is a half-step wider than the grid would give. <code>web/src/components/IconTile.tsx</code></p>
@@ -1109,7 +1114,7 @@
         </td>
         <td><code>--r-2xs</code></td>
         <td class="sg-value"><code>2px</code></td>
-        <td class="sg-why">Shape. Five steps: 2px for a mark, 4px for small annotations and inline focus, 6px for a boxed control, 8px for a panel, 12px for the card that frames panels. <details class="sg-more"><summary>more</summary>`--r-2xs` exists because the lamp drew itself at 2.5px only while the ladder stopped at 4px, and a fractional radius is the same defect the type scale already rejected: what the engine does with the half pixel depends on the device pixel ratio, so the lamp was not the same shape on every screen. `--r-xs` is an intentional rung: keycaps, compact annotations and a focus contour around inline content, not a standalone button's shape. Boxed controls use 6px. The live concentric pair remains 8px minus 2px = 6px; retaining 4px does not replace that measured geometry.</details></td>
+        <td class="sg-why">Shape. Five steps: 2px for a mark, 4px for small annotations and inline focus, 6px for a boxed control, 8px for a panel, 12px for the card that frames panels. <details class="sg-more"><summary>more</summary>`--r-2xs` exists because the lamp drew itself at 2.5px only while the ladder stopped at 4px, and a fractional radius is the same defect the type scale already rejected: what the engine does with the half pixel depends on the device pixel ratio, so the lamp was not the same shape on every screen. `--r-xs` is an intentional rung: keycaps, compact annotations, the 16px box a checkbox draws and a focus contour around inline content, not a standalone button's shape. Boxed controls use 6px. The live concentric pair remains 8px minus 2px = 6px; retaining 4px does not replace that measured geometry.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -1117,7 +1122,7 @@
         </td>
         <td><code>--r-xs</code></td>
         <td class="sg-value"><code>4px</code></td>
-        <td class="sg-why">Shape. Five steps: 2px for a mark, 4px for small annotations and inline focus, 6px for a boxed control, 8px for a panel, 12px for the card that frames panels. <details class="sg-more"><summary>more</summary>`--r-2xs` exists because the lamp drew itself at 2.5px only while the ladder stopped at 4px, and a fractional radius is the same defect the type scale already rejected: what the engine does with the half pixel depends on the device pixel ratio, so the lamp was not the same shape on every screen. `--r-xs` is an intentional rung: keycaps, compact annotations and a focus contour around inline content, not a standalone button's shape. Boxed controls use 6px. The live concentric pair remains 8px minus 2px = 6px; retaining 4px does not replace that measured geometry.</details></td>
+        <td class="sg-why">Shape. Five steps: 2px for a mark, 4px for small annotations and inline focus, 6px for a boxed control, 8px for a panel, 12px for the card that frames panels. <details class="sg-more"><summary>more</summary>`--r-2xs` exists because the lamp drew itself at 2.5px only while the ladder stopped at 4px, and a fractional radius is the same defect the type scale already rejected: what the engine does with the half pixel depends on the device pixel ratio, so the lamp was not the same shape on every screen. `--r-xs` is an intentional rung: keycaps, compact annotations, the 16px box a checkbox draws and a focus contour around inline content, not a standalone button's shape. Boxed controls use 6px. The live concentric pair remains 8px minus 2px = 6px; retaining 4px does not replace that measured geometry.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -1125,7 +1130,7 @@
         </td>
         <td><code>--r-sm</code></td>
         <td class="sg-value"><code>6px</code></td>
-        <td class="sg-why">Shape. Five steps: 2px for a mark, 4px for small annotations and inline focus, 6px for a boxed control, 8px for a panel, 12px for the card that frames panels. <details class="sg-more"><summary>more</summary>`--r-2xs` exists because the lamp drew itself at 2.5px only while the ladder stopped at 4px, and a fractional radius is the same defect the type scale already rejected: what the engine does with the half pixel depends on the device pixel ratio, so the lamp was not the same shape on every screen. `--r-xs` is an intentional rung: keycaps, compact annotations and a focus contour around inline content, not a standalone button's shape. Boxed controls use 6px. The live concentric pair remains 8px minus 2px = 6px; retaining 4px does not replace that measured geometry.</details></td>
+        <td class="sg-why">Shape. Five steps: 2px for a mark, 4px for small annotations and inline focus, 6px for a boxed control, 8px for a panel, 12px for the card that frames panels. <details class="sg-more"><summary>more</summary>`--r-2xs` exists because the lamp drew itself at 2.5px only while the ladder stopped at 4px, and a fractional radius is the same defect the type scale already rejected: what the engine does with the half pixel depends on the device pixel ratio, so the lamp was not the same shape on every screen. `--r-xs` is an intentional rung: keycaps, compact annotations, the 16px box a checkbox draws and a focus contour around inline content, not a standalone button's shape. Boxed controls use 6px. The live concentric pair remains 8px minus 2px = 6px; retaining 4px does not replace that measured geometry.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -1133,7 +1138,7 @@
         </td>
         <td><code>--r-md</code></td>
         <td class="sg-value"><code>8px</code></td>
-        <td class="sg-why">Shape. Five steps: 2px for a mark, 4px for small annotations and inline focus, 6px for a boxed control, 8px for a panel, 12px for the card that frames panels. <details class="sg-more"><summary>more</summary>`--r-2xs` exists because the lamp drew itself at 2.5px only while the ladder stopped at 4px, and a fractional radius is the same defect the type scale already rejected: what the engine does with the half pixel depends on the device pixel ratio, so the lamp was not the same shape on every screen. `--r-xs` is an intentional rung: keycaps, compact annotations and a focus contour around inline content, not a standalone button's shape. Boxed controls use 6px. The live concentric pair remains 8px minus 2px = 6px; retaining 4px does not replace that measured geometry.</details></td>
+        <td class="sg-why">Shape. Five steps: 2px for a mark, 4px for small annotations and inline focus, 6px for a boxed control, 8px for a panel, 12px for the card that frames panels. <details class="sg-more"><summary>more</summary>`--r-2xs` exists because the lamp drew itself at 2.5px only while the ladder stopped at 4px, and a fractional radius is the same defect the type scale already rejected: what the engine does with the half pixel depends on the device pixel ratio, so the lamp was not the same shape on every screen. `--r-xs` is an intentional rung: keycaps, compact annotations, the 16px box a checkbox draws and a focus contour around inline content, not a standalone button's shape. Boxed controls use 6px. The live concentric pair remains 8px minus 2px = 6px; retaining 4px does not replace that measured geometry.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -1141,7 +1146,7 @@
         </td>
         <td><code>--r-lg</code></td>
         <td class="sg-value"><code>12px</code></td>
-        <td class="sg-why">Shape. Five steps: 2px for a mark, 4px for small annotations and inline focus, 6px for a boxed control, 8px for a panel, 12px for the card that frames panels. <details class="sg-more"><summary>more</summary>`--r-2xs` exists because the lamp drew itself at 2.5px only while the ladder stopped at 4px, and a fractional radius is the same defect the type scale already rejected: what the engine does with the half pixel depends on the device pixel ratio, so the lamp was not the same shape on every screen. `--r-xs` is an intentional rung: keycaps, compact annotations and a focus contour around inline content, not a standalone button's shape. Boxed controls use 6px. The live concentric pair remains 8px minus 2px = 6px; retaining 4px does not replace that measured geometry.</details></td>
+        <td class="sg-why">Shape. Five steps: 2px for a mark, 4px for small annotations and inline focus, 6px for a boxed control, 8px for a panel, 12px for the card that frames panels. <details class="sg-more"><summary>more</summary>`--r-2xs` exists because the lamp drew itself at 2.5px only while the ladder stopped at 4px, and a fractional radius is the same defect the type scale already rejected: what the engine does with the half pixel depends on the device pixel ratio, so the lamp was not the same shape on every screen. `--r-xs` is an intentional rung: keycaps, compact annotations, the 16px box a checkbox draws and a focus contour around inline content, not a standalone button's shape. Boxed controls use 6px. The live concentric pair remains 8px minus 2px = 6px; retaining 4px does not replace that measured geometry.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">

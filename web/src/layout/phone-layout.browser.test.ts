@@ -45,8 +45,9 @@ const WIDTHS = [320, 375, 414];
  * is what they render regardless (SUB-119). Adding them found two real
  * targets under 24px: the default-channel select on the notifications page
  * (a bare native select, 17px tall) and the retention "Forever" checkbox on
- * settings (the browser's 13px default). Both are fixed in their own
- * stylesheets, not exempted here.
+ * settings (the browser's 13px default). Both are fixed at the source, not
+ * exempted here: the select in its stylesheet, and every checkbox since by
+ * `Checkbox` (components/choice.css), which keeps a 26px target.
  *
  * The monitors inventory joined last (SUB-150). It used to scroll sideways
  * below 640px (a 468px meta row at 320px) until the row's wrap moved to a

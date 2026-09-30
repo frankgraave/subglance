@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { IconAlert } from "../components/icons";
+import { Checkbox } from "../components/Choice";
 import type { InventoryMonitor } from "./inventory";
 import type { MonitorPatch } from "./inventoryApi";
 import { RepeatAlertField } from "./RepeatAlertField";
@@ -242,9 +243,9 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload }: EditMon
       {!monitor.push && <>
         {field("method")}{field("expected_status")}{field("keyword")}{field("keyword_mode")}
         {"follow_redirects" in values && <div className="add-field">
-          <label className="add-help"><input type="checkbox" name="follow_redirects" checked={values.follow_redirects === "true"} onChange={(event) => update("follow_redirects", String(event.target.checked))}
+          <Checkbox name="follow_redirects" checked={values.follow_redirects === "true"} onChange={(event) => update("follow_redirects", String(event.target.checked))}
             aria-invalid={problem?.field === "follow_redirects" ? true : undefined}
-            aria-describedby={problem?.field === "follow_redirects" ? `${ids}-error` : undefined} /> Follow redirects</label>
+            aria-describedby={problem?.field === "follow_redirects" ? `${ids}-error` : undefined}>Follow redirects</Checkbox>
           {problem?.field === "follow_redirects" && <p id={`${ids}-error`} role="alert" className="add-field-error"><IconAlert />{problem.message}</p>}
         </div>}
         {field("headers", true)}{field("body", true)}{field("ssl_warn_days")}

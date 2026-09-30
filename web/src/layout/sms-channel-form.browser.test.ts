@@ -114,7 +114,7 @@ describe("the SMS channel form", () => {
         // The recovery checkbox's whole sentence is its target: the label
         // wraps the box, so a click on the words toggles it.
         const toggled = await page.evaluate(() => {
-          const label = document.querySelector<HTMLLabelElement>(".drawer-panel .nt-check");
+          const label = document.querySelector<HTMLLabelElement>(".drawer-panel .choice-label");
           const box = label?.querySelector<HTMLInputElement>("input[type=checkbox]");
           if (!label || !box) return null;
           const before = box.checked;

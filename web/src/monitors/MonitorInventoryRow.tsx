@@ -3,6 +3,7 @@ import { Led } from "./Led";
 import { MonitorLink } from "./MonitorLink";
 import { Value } from "../components/Value";
 import { StateChip } from "../components/Chip";
+import { Checkbox } from "../components/Choice";
 import {
   IconPause,
   IconPencil,
@@ -131,7 +132,7 @@ function MonitorInventoryRowImpl({
 
         <div className="inv-main">
           <span className="inv-name">
-            {onSelect && <input type="checkbox" className="bulk-tags-select" aria-label={`Select ${monitor.name}`} checked={selected} onChange={(e) => onSelect(monitor.id, e.target.checked)} />}
+            {onSelect && <Checkbox className="bulk-tags-select" aria-label={`Select ${monitor.name}`} checked={selected} onChange={(e) => onSelect(monitor.id, e.target.checked)} />}
             <MonitorLink id={monitor.id} name={monitor.name} onOpen={onOpen} />
             {paused ? (
               /* A configuration state, not a health state, so it gets no

@@ -81,8 +81,9 @@
      on the device pixel ratio, so the lamp was not the same shape on every
      screen.
 
-     `--r-xs` is an intentional rung: keycaps, compact annotations and a focus
-     contour around inline content, not a standalone button's shape. Boxed
+     `--r-xs` is an intentional rung: keycaps, compact annotations, the 16px
+     box a checkbox draws and a focus contour around inline content, not a
+     standalone button's shape. Boxed
      controls use 6px. The live concentric pair remains 8px minus 2px = 6px;
      retaining 4px does not replace that measured geometry. */
   --r-2xs: 2px;
