@@ -349,8 +349,12 @@ func (s *Server) handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 		// The same for phone numbers, which have a mask of their own: an
 		// editor who changes an SMS channel's limit sends back the masked
 		// numbers it was shown, and that means "unchanged".
+		// Not under a new country code, though: a stored national number
+		// is another phone under another code, one the editor never saw.
+		// Then the numbers have to be typed again.
 		if existing.Type == store.ChannelSMS && req.Type == store.ChannelSMS &&
 			existing.Config[smsNumbersKey] != "" &&
+			strings.TrimSpace(req.Config["country_code"]) == strings.TrimSpace(existing.Config["country_code"]) &&
 			req.Config[smsNumbersKey] == smsNumbersView(existing.Config, false) {
 			req.Config[smsNumbersKey] = existing.Config[smsNumbersKey]
 		}

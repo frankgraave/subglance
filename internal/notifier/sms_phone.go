@@ -150,13 +150,7 @@ func maskPhone(n string) string {
 		return smsMaskDots
 	}
 	digits := n[1:]
-	cc := 3
-	switch {
-	case digits[0] == '1' || digits[0] == '7':
-		cc = 1
-	case twoDigitCountryCodes[digits[:2]]:
-		cc = 2
-	}
+	cc := countryCodeLen(digits)
 	rest := digits[cc:]
 	if len(rest) < 8 {
 		// A short national number would be shown almost whole by the
@@ -197,12 +191,62 @@ func MaskSMSNumbers(raw, countryCode string) string {
 // scrubPhones replaces every listed number in s with its masked form. A
 // provider's error text often quotes the number it refused, and that text is
 // stored and shown; the number must not travel with it.
+//
+// Providers do not agree on the form they quote, so each number is looked
+// for as E.164, without the plus, and in its national forms with and without
+// the trunk zero. Only complete runs of digits are replaced: a provider's
+// error code that happens to sit inside a number, or a number inside a
+// longer one, is left as it is.
 func scrubPhones(s string, numbers []string) string {
 	for _, n := range numbers {
+		if !e164.MatchString(n) {
+			continue
+		}
 		m := maskPhone(n)
-		s = strings.ReplaceAll(s, n, m)
-		// Without the plus, as some providers echo it.
-		s = strings.ReplaceAll(s, n[1:], m)
+		digits := n[1:]
+		significant := digits[countryCodeLen(digits):]
+		for _, form := range []string{n, digits, "0" + significant, significant} {
+			s = replaceDigitToken(s, form, m)
+		}
 	}
 	return s
+}
+
+// countryCodeLen is how many of an E.164 number's digits, after the plus,
+// are its country code.
+func countryCodeLen(digits string) int {
+	switch {
+	case digits[0] == '1' || digits[0] == '7':
+		return 1
+	case twoDigitCountryCodes[digits[:2]]:
+		return 2
+	}
+	return 3
+}
+
+// replaceDigitToken replaces each occurrence of token in s that is not part
+// of a longer run of digits. The characters around a match are looked at,
+// not consumed, so two occurrences with one space between them are both
+// replaced.
+func replaceDigitToken(s, token, replacement string) string {
+	isDigit := func(b byte) bool { return b >= '0' && b <= '9' }
+	var out strings.Builder
+	start := 0
+	for {
+		rel := strings.Index(s[start:], token)
+		if rel < 0 {
+			break
+		}
+		i := start + rel
+		end := i + len(token)
+		out.WriteString(s[start:i])
+		if (i == 0 || !isDigit(s[i-1])) && (end == len(s) || !isDigit(s[end])) {
+			out.WriteString(replacement)
+		} else {
+			out.WriteString(s[i:end])
+		}
+		start = end
+	}
+	out.WriteString(s[start:])
+	return out.String()
 }

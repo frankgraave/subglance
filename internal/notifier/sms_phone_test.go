@@ -123,3 +123,25 @@ func TestScrubPhones(t *testing.T) {
 		t.Errorf("scrubbed = %q, still has the number", got)
 	}
 }
+
+// TestScrubPhonesNationalForms: a provider may quote the number the way it is
+// dialled at home, with or without the trunk zero, and more than once. Every
+// one goes; an error code that is not the number stays.
+func TestScrubPhonesNationalForms(t *testing.T) {
+	in := "error 21211: 0612345678 0612345678 unreachable, tried 612345678"
+	got := scrubPhones(in, []string{"+31612345678"})
+	if strings.Contains(got, "12345678") {
+		t.Errorf("scrubbed = %q, still has the number", got)
+	}
+	if strings.Count(got, "+31 6 •••• 5678") != 3 {
+		t.Errorf("scrubbed = %q, want each of the three occurrences masked", got)
+	}
+	if !strings.Contains(got, "error 21211:") {
+		t.Errorf("scrubbed = %q, lost the provider's error code", got)
+	}
+
+	// A longer run of digits that merely contains the number is not it.
+	if got := scrubPhones("reference 90612345678", []string{"+31612345678"}); got != "reference 90612345678" {
+		t.Errorf("scrubbed = %q, want a longer digit run left alone", got)
+	}
+}

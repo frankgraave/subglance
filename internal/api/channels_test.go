@@ -430,6 +430,43 @@ func TestSMSMaskedNumbersRoundTrip(t *testing.T) {
 	}
 }
 
+// TestSMSMaskedNumbersNotRestoredUnderANewCountryCode: a stored national
+// number means another phone under another country code. An editor who
+// changes country_code and sends back the masked list has not seen those
+// numbers, so they are not restored: the numbers must be typed again.
+func TestSMSMaskedNumbersNotRestoredUnderANewCountryCode(t *testing.T) {
+	srv, db := testServerWithDB(t)
+	rec := doJSON(t, srv, http.MethodPost, "/api/v1/channels", smsChannelBody(`06 1234 5678`))
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body.String())
+	}
+	var created channelResponse
+	_ = json.Unmarshal(rec.Body.Bytes(), &created)
+
+	editor := seedUser(t, srv, db, "editor@example.com", store.RoleEditor)
+	seen := getChannelAs(t, srv, editor, created.ID)
+	seen.Config["country_code"] = "+32"
+	body, _ := json.Marshal(map[string]any{"name": seen.Name, "type": seen.Type, "config": seen.Config})
+
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/channels/"+strconv.FormatInt(created.ID, 10),
+		strings.NewReader(string(body)))
+	req.Header.Set("Authorization", "Bearer "+editor)
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "masked") {
+		t.Fatalf("update = %d %s, want 400 asking for the numbers in full", rec.Code, rec.Body.String())
+	}
+
+	stored, err := db.GetChannel(t.Context(), created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Config["country_code"] != "+31" || stored.Config["numbers"] != "06 1234 5678" {
+		t.Errorf("stored config = %v, want it unchanged", stored.Config)
+	}
+}
+
 func TestSMSChannelValidationReachesTheForm(t *testing.T) {
 	srv, _ := testServerWithDB(t)
 	tests := map[string]struct{ body, want string }{

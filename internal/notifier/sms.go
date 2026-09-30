@@ -79,12 +79,19 @@ type SMSSender struct {
 	progress map[string]*smsProgress
 	// windows is the recent sends and the withheld count per destination.
 	windows map[string]*smsWindowState
+	// reserved is, per delivery that Withhold admitted, when it took
+	// its slot; Send uses that slot instead of taking another.
+	reserved map[string]time.Time
 }
 
 type smsProgress struct {
 	text    string
 	reached map[string]bool
 	started time.Time
+	// slot is when the delivery's slot in the hourly limit was taken.
+	slot time.Time
+	// held is the count of held-back alerts that the text reports.
+	held int
 }
 
 type smsWindowState struct {
@@ -104,6 +111,7 @@ func NewSMSSender(guard *checker.Guard) *SMSSender {
 		now:        time.Now,
 		progress:   map[string]*smsProgress{},
 		windows:    map[string]*smsWindowState{},
+		reserved:   map[string]time.Time{},
 	}
 }
 
@@ -204,37 +212,68 @@ func (s *SMSSender) Withhold(cfg map[string]string, a Alert, now time.Time) stri
 	if strings.TrimSpace(cfg["recoveries"]) == "false" && !a.Down() {
 		return "not sent: this SMS channel sends outages only"
 	}
-	numbers, err := smsRecipients(cfg)
-	if err != nil {
+	if ValidateSMSConfig(cfg) != nil {
 		// Send will refuse it with the real reason; that is where it
-		// belongs, in the delivery log as a failure.
+		// belongs, in the delivery log as a failure. No slot is taken
+		// for a message that cannot go out.
 		return ""
 	}
-	limit, err := smsHourlyLimit(cfg)
-	if err != nil {
-		return ""
-	}
+	numbers, _ := smsRecipients(cfg)
+	limit, _ := smsHourlyLimit(cfg)
 
 	dest := smsDestination(cfg, numbers)
 	encoded, err := a.Encode()
 	if err != nil {
 		return ""
 	}
+	key := dest + "|" + encoded
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, retrying := s.progress[dest+"|"+encoded]; retrying {
+	if _, retrying := s.progress[key]; retrying {
 		// A retry of a delivery that already reached some numbers is
 		// the same message, already counted. Withholding it now would
 		// leave the numbers that failed without it.
 		return ""
 	}
-	w := s.window(dest, now)
-	if len(w.sent) < limit {
+	if _, reserved := s.reserved[key]; reserved {
 		return ""
 	}
-	w.withheld++
+	if s.takeSlot(dest, limit, now) {
+		// The slot is taken here, not once the message is out, so a
+		// notice or a test message sent in between cannot take it as
+		// well. Send uses this reservation instead of taking its own.
+		s.reserved[key] = now
+		return ""
+	}
+	s.window(dest, now).withheld++
 	return fmt.Sprintf("not sent: SMS limit of %d per hour reached; the next message says how many were held back", limit)
+}
+
+// takeSlot counts one message against the destination's hourly limit, if the
+// limit allows it. The caller holds s.mu.
+func (s *SMSSender) takeSlot(dest string, limit int, now time.Time) bool {
+	w := s.window(dest, now)
+	if len(w.sent) >= limit {
+		return false
+	}
+	w.sent = append(w.sent, now)
+	return true
+}
+
+// releaseSlot gives back the slot taken at the given time. The caller holds
+// s.mu.
+func (s *SMSSender) releaseSlot(dest string, at time.Time) {
+	w, ok := s.windows[dest]
+	if !ok {
+		return
+	}
+	for i, t := range w.sent {
+		if t.Equal(at) {
+			w.sent = append(w.sent[:i], w.sent[i+1:]...)
+			return
+		}
+	}
 }
 
 // window returns the destination's state with sends older than an hour
@@ -266,6 +305,7 @@ func (s *SMSSender) Send(ctx context.Context, cfg map[string]string, a Alert) er
 		return err
 	}
 	numbers, _ := smsRecipients(cfg)
+	limit, _ := smsHourlyLimit(cfg)
 	dest := smsDestination(cfg, numbers)
 	now := s.now()
 
@@ -281,8 +321,28 @@ func (s *SMSSender) Send(ctx context.Context, cfg map[string]string, a Alert) er
 			delete(s.progress, k)
 		}
 	}
+	for k, at := range s.reserved {
+		if now.Sub(at) >= smsWindow {
+			// Withhold admitted it, but it never came to Send.
+			delete(s.reserved, k)
+		}
+	}
 	p, retry := s.progress[key]
 	if !retry {
+		// Every message is counted when it is admitted, whichever way
+		// it comes: through Withhold, which reserved the slot, or
+		// straight here, as a notice or a test message does. A retry
+		// keeps the slot its first attempt took.
+		slot, reserved := s.reserved[key]
+		switch {
+		case reserved:
+			delete(s.reserved, key)
+		case s.takeSlot(dest, limit, now):
+			slot = now
+		default:
+			s.mu.Unlock()
+			return fmt.Errorf("not sent: SMS limit of %d per hour reached", limit)
+		}
 		// The count of held-back alerts is taken when the text is first
 		// rendered, and the text is kept: a retry to the numbers that
 		// failed repeats the message the others already have.
@@ -291,6 +351,8 @@ func (s *SMSSender) Send(ctx context.Context, cfg map[string]string, a Alert) er
 			text:    smsMessage(a, strings.TrimSpace(cfg["timezone"]), w.withheld),
 			reached: map[string]bool{},
 			started: now,
+			slot:    slot,
+			held:    w.withheld,
 		}
 		w.withheld = 0
 	}
@@ -301,7 +363,6 @@ func (s *SMSSender) Send(ctx context.Context, cfg map[string]string, a Alert) er
 		causes   []error
 	)
 	allPermanent := true
-	reachedNow := 0
 	for _, n := range numbers {
 		if p.reached[n] {
 			continue
@@ -309,7 +370,6 @@ func (s *SMSSender) Send(ctx context.Context, cfg map[string]string, a Alert) er
 		err := s.sendOne(ctx, cfg, n, p.text)
 		if err == nil {
 			p.reached[n] = true
-			reachedNow++
 			continue
 		}
 		var r *Retryable
@@ -322,15 +382,20 @@ func (s *SMSSender) Send(ctx context.Context, cfg map[string]string, a Alert) er
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if reachedNow > 0 {
-		w := s.window(dest, now)
-		w.sent = append(w.sent, now)
-	}
 	if len(failures) == 0 {
 		delete(s.progress, key)
 		return nil
 	}
-	s.progress[key] = p
+	if len(p.reached) == 0 {
+		// Nobody got this message, so it has cost nothing: the slot
+		// goes back, the held-back count goes back for the next message
+		// to report, and a retry is admitted by the limit afresh.
+		s.releaseSlot(dest, p.slot)
+		s.window(dest, now).withheld += p.held
+		delete(s.progress, key)
+	} else {
+		s.progress[key] = p
+	}
 
 	failed := &smsDeliveryError{
 		msg: fmt.Sprintf("sent to %d of %d numbers; %s",

@@ -386,6 +386,98 @@ func TestSMSHourlyLimitIsPerChannelSetting(t *testing.T) {
 	}
 }
 
+// TestSMSLimitCountsMessagesSentDirectly: a notice or a test message calls
+// Send without Withhold. It still counts against the hourly limit, and it
+// cannot take a slot that Withhold has already given to an alert.
+func TestSMSLimitCountsMessagesSentDirectly(t *testing.T) {
+	f := &fakeSMSProvider{}
+	s, cfg := twilioSender(t, f)
+	cfg["hourly_limit"] = "1"
+	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	s.now = func() time.Time { return now }
+
+	a := smsAlert(state.EventIncidentConfirmed)
+	if reason := s.Withhold(cfg, a, now); reason != "" {
+		t.Fatalf("first alert withheld: %s", reason)
+	}
+	notice := LocalNetworkNotice(now.Add(-time.Hour), now)
+	if err := s.Send(context.Background(), cfg, notice); err == nil || !strings.Contains(err.Error(), "limit of 1 per hour") {
+		t.Fatalf("notice while the only slot is reserved: err = %v, want the limit", err)
+	}
+	if err := s.Send(context.Background(), cfg, a); err != nil {
+		t.Fatalf("the admitted alert: %v", err)
+	}
+	if n := len(f.requests()); n != 1 {
+		t.Errorf("messages sent = %d, want 1 with hourly_limit 1", n)
+	}
+}
+
+// TestSMSPartialRetryUsesOneSlot: a delivery that reached one number and is
+// retried for the other is one message against the limit, not two.
+func TestSMSPartialRetryUsesOneSlot(t *testing.T) {
+	var failSecond = true
+	var mu sync.Mutex
+	f := &fakeSMSProvider{answer: func(r smsRequest) (int, string) {
+		mu.Lock()
+		defer mu.Unlock()
+		if r.form.Get("To") == "+31687654321" && failSecond {
+			return http.StatusServiceUnavailable, `{"code":20500,"message":"Internal Server Error"}`
+		}
+		return 0, ""
+	}}
+	s, cfg := twilioSender(t, f)
+	cfg["numbers"] = "+31612345678, +31687654321"
+	cfg["hourly_limit"] = "2"
+	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	s.now = func() time.Time { return now }
+
+	a := smsAlert(state.EventIncidentConfirmed)
+	if reason := s.Withhold(cfg, a, now); reason != "" {
+		t.Fatalf("alert withheld: %s", reason)
+	}
+	if err := s.Send(context.Background(), cfg, a); err == nil {
+		t.Fatal("first attempt succeeded, want a partial failure")
+	}
+	mu.Lock()
+	failSecond = false
+	mu.Unlock()
+	if reason := s.Withhold(cfg, a, now); reason != "" {
+		t.Fatalf("retry withheld: %s", reason)
+	}
+	if err := s.Send(context.Background(), cfg, a); err != nil {
+		t.Fatalf("retry: %v", err)
+	}
+
+	b := smsAlert(state.EventIncidentResolved)
+	if reason := s.Withhold(cfg, b, now); reason != "" {
+		t.Errorf("second alert withheld with hourly_limit 2 after one message: %s", reason)
+	}
+}
+
+// TestSMSDeliveryThatReachesNobodyGivesTheSlotBack: a message no number got
+// has cost nothing and does not use up the hour.
+func TestSMSDeliveryThatReachesNobodyGivesTheSlotBack(t *testing.T) {
+	f := &fakeSMSProvider{answer: func(smsRequest) (int, string) {
+		return http.StatusServiceUnavailable, `{"code":20500,"message":"Internal Server Error"}`
+	}}
+	s, cfg := twilioSender(t, f)
+	cfg["hourly_limit"] = "1"
+	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	s.now = func() time.Time { return now }
+
+	a := smsAlert(state.EventIncidentConfirmed)
+	if reason := s.Withhold(cfg, a, now); reason != "" {
+		t.Fatalf("alert withheld: %s", reason)
+	}
+	if err := s.Send(context.Background(), cfg, a); err == nil {
+		t.Fatal("send succeeded against a failing provider")
+	}
+	b := smsAlert(state.EventIncidentResolved)
+	if reason := s.Withhold(cfg, b, now); reason != "" {
+		t.Errorf("next alert withheld after a message nobody got: %s", reason)
+	}
+}
+
 func TestSMSOutagesOnly(t *testing.T) {
 	s := NewSMSSender(nil)
 	cfg := map[string]string{"recoveries": "false", "numbers": "+31612345678"}
