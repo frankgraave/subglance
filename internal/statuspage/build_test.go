@@ -227,7 +227,7 @@ func TestBuildStatesFollowTheDesign(t *testing.T) {
 }
 
 func TestBuildHistoryAndOutages(t *testing.T) {
-	now := time.Now().UTC().Truncate(time.Second)
+	now := time.Date(2026, 9, 29, 15, 0, 0, 0, time.UTC)
 	ctx := t.Context()
 	f := seed(t, now)
 
