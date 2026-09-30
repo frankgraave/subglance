@@ -327,3 +327,135 @@ func TestChannelWritesRequireAnEditor(t *testing.T) {
 		t.Fatalf("status = %d, want 200 for a viewer listing channels: %s", rec.Code, rec.Body.String())
 	}
 }
+
+// testTwilioSID has the shape of a Twilio account SID, assembled at run time so
+// that no SID-shaped literal sits in the source for a secret scanner to report.
+var testTwilioSID = "AC" + strings.Repeat("0123456789abcdef", 2)
+
+// smsChannelBody is a valid SMS channel through the Android gateway.
+func smsChannelBody(numbers string) string {
+	return `{"name":"On call","type":"sms","config":{"provider":"android-gateway",` +
+		`"url":"http://phone.example:8080","username":"sms","password":"phone-pass",` +
+		`"country_code":"+31","numbers":"` + numbers + `"}}`
+}
+
+func getChannelAs(t *testing.T, srv *Server, token string, id int64) channelResponse {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/channels/"+strconv.FormatInt(id, 10), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("get channel: status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var got channelResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+
+// TestSMSNumbersAreMaskedByRole: phone numbers are personal data. An
+// administrator reads them in full; an editor or viewer reads each one masked,
+// and neither ever sees the gateway password.
+func TestSMSNumbersAreMaskedByRole(t *testing.T) {
+	srv, db := testServerWithDB(t)
+	rec := doJSON(t, srv, http.MethodPost, "/api/v1/channels", smsChannelBody(`06 1234 5678, +44 7700 900123`))
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body.String())
+	}
+	var created channelResponse
+	_ = json.Unmarshal(rec.Body.Bytes(), &created)
+	if created.Config["numbers"] != "06 1234 5678, +44 7700 900123" {
+		t.Errorf("admin sees numbers = %q, want them in full", created.Config["numbers"])
+	}
+	if created.Config["password"] == "phone-pass" {
+		t.Error("the gateway password was returned in full")
+	}
+	if created.Config["provider"] != "android-gateway" || created.Config["country_code"] != "+31" {
+		t.Errorf("public settings masked: %v", created.Config)
+	}
+
+	for _, role := range []store.Role{store.RoleEditor, store.RoleViewer} {
+		token := seedUser(t, srv, db, string(role)+"@example.com", role)
+		got := getChannelAs(t, srv, token, created.ID)
+		if got.Config["numbers"] != "+31 6 •••• 5678, +44 7 •••• 0123" {
+			t.Errorf("%s sees numbers = %q, want each masked", role, got.Config["numbers"])
+		}
+		body, _ := json.Marshal(got)
+		for _, secret := range []string{"12345678", "900123", "phone-pass"} {
+			if strings.Contains(string(body), secret) {
+				t.Errorf("%s response contains %q: %s", role, secret, body)
+			}
+		}
+	}
+}
+
+// TestSMSMaskedNumbersRoundTrip: an editor who changes the limit sends back the
+// masked numbers it was shown, and that must keep the stored numbers rather
+// than be refused or saved as dots.
+func TestSMSMaskedNumbersRoundTrip(t *testing.T) {
+	srv, db := testServerWithDB(t)
+	rec := doJSON(t, srv, http.MethodPost, "/api/v1/channels", smsChannelBody(`06 1234 5678`))
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body.String())
+	}
+	var created channelResponse
+	_ = json.Unmarshal(rec.Body.Bytes(), &created)
+
+	editor := seedUser(t, srv, db, "editor@example.com", store.RoleEditor)
+	seen := getChannelAs(t, srv, editor, created.ID)
+	seen.Config["hourly_limit"] = "5"
+	body, _ := json.Marshal(map[string]any{"name": seen.Name, "type": seen.Type, "config": seen.Config})
+
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/channels/"+strconv.FormatInt(created.ID, 10),
+		strings.NewReader(string(body)))
+	req.Header.Set("Authorization", "Bearer "+editor)
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update with masked values: %d %s", rec.Code, rec.Body.String())
+	}
+
+	stored, err := db.GetChannel(t.Context(), created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Config["numbers"] != "06 1234 5678" || stored.Config["password"] != "phone-pass" {
+		t.Errorf("stored config = %v, want the numbers and password unchanged", stored.Config)
+	}
+	if stored.Config["hourly_limit"] != "5" {
+		t.Errorf("hourly_limit = %q, want the change saved", stored.Config["hourly_limit"])
+	}
+}
+
+func TestSMSChannelValidationReachesTheForm(t *testing.T) {
+	srv, _ := testServerWithDB(t)
+	tests := map[string]struct{ body, want string }{
+		"national number without code": {
+			`{"name":"x","type":"sms","config":{"provider":"twilio","account_sid":"` + testTwilioSID + `",` +
+				`"auth_token":"t","from":"SubGlance","numbers":"06 1234 5678"}}`,
+			`06 1234 5678`,
+		},
+		"no numbers": {
+			`{"name":"x","type":"sms","config":{"provider":"twilio"}}`,
+			"config.numbers is required",
+		},
+		"unknown provider": {
+			`{"name":"x","type":"sms","config":{"provider":"bird","numbers":"+31612345678"}}`,
+			"android-gateway or twilio",
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			rec := doJSON(t, srv, http.MethodPost, "/api/v1/channels", tc.body)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400: %s", rec.Code, rec.Body.String())
+			}
+			if !strings.Contains(rec.Body.String(), tc.want) {
+				t.Errorf("body = %s, want it to contain %q", rec.Body.String(), tc.want)
+			}
+		})
+	}
+}

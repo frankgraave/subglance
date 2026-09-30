@@ -133,8 +133,11 @@ exists for it.
 - **REST API v1** with an OpenAPI 3.1 specification, checked against the server's
   own route table on every test run
 - **Authentication**: sessions, API tokens, three roles, first-run setup
-- **Delivering the alert**: webhook, Discord, Slack, Telegram, email, and the
-  self-hosted push services ntfy and Gotify ([channels](docs/channels.md)), sent
+- **Delivering the alert**: webhook, Discord, Slack, Telegram, email, the
+  self-hosted push services ntfy and Gotify, and SMS through an Android phone
+  or Twilio, one 160-character message per alert with an hourly limit
+  ([channels](docs/channels.md); SMS is set up through the API until the
+  Notifications screen offers it), sent
   from an outbox that retries with exponential backoff and jitter and
   dead-letters a delivery that keeps failing, so a Slack outage never blocks the
   checker loop. `POST /api/v1/channels/{id}/test` sends a real message through a

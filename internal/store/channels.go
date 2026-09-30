@@ -42,7 +42,7 @@ type Channel struct {
 	UpdatedAt time.Time
 }
 
-// Channel types, mirroring the CHECK constraint in migration 0021.
+// Channel types, mirroring the CHECK constraint in migration 0024.
 const (
 	ChannelWebhook  = "webhook"
 	ChannelDiscord  = "discord"
@@ -51,6 +51,7 @@ const (
 	ChannelEmail    = "email"
 	ChannelNtfy     = "ntfy"
 	ChannelGotify   = "gotify"
+	ChannelSMS      = "sms"
 )
 
 const channelColumns = `id, name, type, config_json, enabled, is_default, created_at, updated_at`

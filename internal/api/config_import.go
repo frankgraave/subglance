@@ -285,6 +285,11 @@ func checkRefs(path string, keys []string, known map[string]bool, what string) e
 var withheldStandIn = map[string]string{
 	"url":       "https://withheld.invalid/",
 	"bot_token": "0:withheld",
+	// An SMS channel's numbers, password and auth token are all withheld on
+	// export, and the SMS rules require each of them.
+	"numbers":    "+10000000000",
+	"password":   "withheld",
+	"auth_token": "withheld",
 }
 
 func (s *Server) planChannel(ctx context.Context, p *importPlan, ex existingConfig, path string, c configfile.Channel) error {

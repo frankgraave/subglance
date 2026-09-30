@@ -163,8 +163,8 @@ belong to the same event. Raise it if your checks run less often than that.
 monitor, and without that guard SubGlance would happily act as an SSRF proxy into
 the host network. Turn it on only if you intend to monitor internal services.
 
-The same setting governs notification channels. A self-hosted ntfy or Gotify
-on the local network needs it; see [channels](channels.md#servers-on-a-private-address).
+The same setting governs notification channels. A self-hosted ntfy or Gotify,
+or a phone running SMS Gateway for Android, on the local network needs it; see [channels](channels.md#servers-on-a-private-address).
 
 ### Encrypting channel configuration
 

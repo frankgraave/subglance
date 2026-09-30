@@ -178,6 +178,21 @@ func (db *DB) DeferDelivery(ctx context.Context, id int64, cause string, next ti
 	return nil
 }
 
+// WithholdDelivery ends a pending delivery that its channel declined to send,
+// such as an SMS over the channel's hourly limit. Like a delivery dropped in
+// quiet hours, the row stays, marked, with the reason, so the delivery log can
+// say what was not sent and why; it is not retried and not counted as pending.
+func (db *DB) WithholdDelivery(ctx context.Context, id int64, reason string) error {
+	_, err := db.Writer.ExecContext(ctx, `
+		UPDATE notif_outbox
+		   SET suppressed = 1, last_error = ?, updated_at = ?
+		 WHERE id = ? AND status = ?`, reason, time.Now().Unix(), id, OutboxPending)
+	if err != nil {
+		return fmt.Errorf("withhold delivery %d: %w", id, err)
+	}
+	return nil
+}
+
 // MarkFailed moves a delivery to the dead letter: its attempts ran out.
 func (db *DB) MarkFailed(ctx context.Context, id int64, cause string) error {
 	now := time.Now().Unix()
