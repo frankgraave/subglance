@@ -18,7 +18,6 @@ afterAll(async () => { await browser?.close(); await server?.close(); });
 const inventoryDelayMs = 250;
 async function open(theme: string, width: number, path = "/", deferWrite?: (complete: () => void) => void) {
   const page = await browser.newPage();
-  await page.emulateCPUThrottling(4);
   await page.setViewport({ width, height: 1000 });
   await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
   await page.evaluateOnNewDocument((theme) => localStorage.setItem("subglance:theme", theme), theme);
