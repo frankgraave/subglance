@@ -46,7 +46,7 @@ function Field({ id, label, help, error, children }: {
   return <div className="auth-field">
     <label className="auth-label" htmlFor={id}>{label}</label>
     {children}
-    {help && <p className="retention-note" id={`${id}-help`}>{help}</p>}
+    {help && <p className="panel-note" id={`${id}-help`}>{help}</p>}
     {error && <p className="auth-error" role="alert" id={`${id}-error`}>{error}</p>}
   </div>;
 }
@@ -124,7 +124,7 @@ function SettingsForm({ page, onSaved, onCancel }: {
       <input {...input("slug", true)} value={draft.slug} maxLength={63} autoComplete="off" spellCheck={false}
         onChange={(event) => { setSlugTouched(true); set("slug", event.target.value); }} />
     </Field>
-    {renamed && page && <p className="retention-note" role="status">Links already shared to {address(page.slug)} stop working when you save.</p>}
+    {renamed && page && <p className="panel-note" role="status">Links already shared to {address(page.slug)} stop working when you save.</p>}
     <Field id={`${id}-description`} label="Description (optional)" help="Plain text under the title." error={fieldError("description")}>
       <textarea {...input("description", true)} rows={2} value={draft.description} maxLength={500}
         onChange={(event) => set("description", event.target.value)} />
@@ -145,7 +145,7 @@ function SettingsForm({ page, onSaved, onCancel }: {
         <option value="tag">Monitors with a tag</option>
       </select>
     </Field>
-    {draft.selection === "tag" && <div className="retention-inputs">
+    {draft.selection === "tag" && <div className="control-row">
       <Field id={`${id}-tag_key`} label="Tag key" error={fieldError("tag_key")}>
         <input {...input("tag_key")} value={draft.tag_key} placeholder="customer" autoComplete="off" spellCheck={false}
           onChange={(event) => set("tag_key", event.target.value)} />
@@ -159,7 +159,7 @@ function SettingsForm({ page, onSaved, onCancel }: {
       onChange={(event) => set("enabled", event.target.checked)}>
       Published
     </Checkbox>
-    <p className="retention-note" id={`${id}-enabled-help`}>
+    <p className="panel-note" id={`${id}-enabled-help`}>
       {draft.enabled ? "Anyone with the address can open the page." : "Off: the address answers as if there were no page."}
     </p>
     <Checkbox checked={draft.indexable} onChange={(event) => set("indexable", event.target.checked)}>
@@ -246,20 +246,20 @@ function ServicesForm({ page, monitors, onSaved, onCancel }: {
   }
 
   return <form ref={form} className="auth-form" aria-label={`Services on ${page.title}`} onSubmit={submit}>
-    <p className="retention-note">
+    <p className="panel-note">
       Visitors see only the public name, the state and the history. The monitor&apos;s own name, address and errors never
       appear on the page.
       {page.selection === "tag" && <> This page shows monitors tagged <code>{page.tag_key}:{page.tag_value}</code>.</>}
     </p>
-    {unnamed.length > 0 && <p className="retention-note" role="status">
+    {unnamed.length > 0 && <p className="panel-note" role="status">
       Not shown until named: {unnamed.map(nameOf).join(", ")}.
     </p>}
-    {draft.length === 0 ? <p className="retention-note">No services on this page yet.</p>
+    {draft.length === 0 ? <p className="panel-note">No services on this page yet.</p>
       : <ol className="auth-form" aria-label="Services, in page order">
         {draft.map((entry, index) => {
           const monitor = nameOf(entry.monitor_id);
           const invalid = blank === entry.monitor_id;
-          return <li key={entry.monitor_id} className="retention-inputs">
+          return <li key={entry.monitor_id} className="control-row">
             <div className="auth-field inv-main">
               <label className="auth-label" htmlFor={`${id}-${entry.monitor_id}`}>Public name for {monitor}</label>
               <input className="auth-input" id={`${id}-${entry.monitor_id}`} value={entry.display_name} maxLength={80}
@@ -267,7 +267,7 @@ function ServicesForm({ page, monitors, onSaved, onCancel }: {
                 aria-invalid={invalid ? true : undefined} aria-describedby={invalid ? `${id}-error` : undefined}
                 onChange={(event) => change(draft.map((item) => item.monitor_id === entry.monitor_id
                   ? { ...item, display_name: event.target.value } : item))} />
-              {!tagged(entry.monitor_id) && <p className="retention-note">Not shown: this monitor no longer has the tag.</p>}
+              {!tagged(entry.monitor_id) && <p className="panel-note">Not shown: this monitor no longer has the tag.</p>}
             </div>
             <span className="add-actions">
               <button type="button" className="add-button" disabled={index === 0} aria-label={`Move ${monitor} up`}
@@ -280,7 +280,7 @@ function ServicesForm({ page, monitors, onSaved, onCancel }: {
           </li>;
         })}
       </ol>}
-    {candidates.length > 0 && <div className="retention-inputs">
+    {candidates.length > 0 && <div className="control-row">
       <div className="auth-field inv-main">
         <label className="auth-label" htmlFor={`${id}-add`}>Add a monitor</label>
         <select className="auth-input" id={`${id}-add`} value={adding} onChange={(event) => setAdding(event.target.value)}>
@@ -323,10 +323,10 @@ function PageRow({ page, onEdit, onServices, onDeleted }: {
     }
   }
 
-  return <li className="retention-inputs">
+  return <li className="control-row">
     <div className="inv-main">
       <p><strong>{page.title}</strong></p>
-      <p className="retention-note">{facts.join(" · ")}</p>
+      <p className="panel-note">{facts.join(" · ")}</p>
       {error && <p className="auth-error" role="alert">{error}</p>}
     </div>
     <StateChip>{page.enabled ? "published" : "off"}</StateChip>
@@ -375,16 +375,16 @@ export function StatusPagesCard() {
   // fall back to the new-page form: saving that would create a duplicate.
   const settingsOpen = editing?.kind === "settings" && (editing.pageId === null || current !== null);
 
-  return <><Card title={pages ? `Status pages (${pages.length})` : "Status pages"} icon={<IconGlobe />} className="retention-card"
+  return <><Card title={pages ? `Status pages (${pages.length})` : "Status pages"} icon={<IconGlobe />}
     action={<button type="button" className="add-button" onClick={() => { setEditing({ kind: "settings", pageId: null }); setMessage(null); }}>New page</button>}>
-    <Panel>
-      <p className="retention-note">
+    <Panel spacing="form">
+      <p className="panel-note">
         A public page for people without an account: chosen monitors under public names, their state and 90 days of
         history. A new page is off until you publish it.
       </p>
       <div role="status" aria-live="polite" className="add-result-region">{message && <p className="add-result">{message}</p>}</div>
       {!pages ? <p>{query.isError ? "Status pages unavailable." : "Loading status pages…"}</p>
-        : pages.length === 0 ? <p className="retention-note">No status pages yet.</p>
+        : pages.length === 0 ? <p className="panel-note">No status pages yet.</p>
         : <ul className="auth-form" aria-label="Status pages">
           {pages.map((page) => <PageRow key={page.id} page={page}
             onEdit={() => { setEditing({ kind: "settings", pageId: page.id }); setMessage(null); }}

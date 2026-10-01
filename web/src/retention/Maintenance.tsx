@@ -63,7 +63,7 @@ function LastPass({ pass }: { pass: RetentionPass }) {
       ? <p className="push-reveal-warn">The last pass failed: {pass.error}</p>
       : <p>{removed(pass)}</p>}
     {notice && <p>{notice}</p>}
-    <dl className="watchdog-history">
+    <dl className="panel-facts">
       <div><dt>Started</dt><dd><When value={pass.started_at} /></dd></div>
       <div><dt>Took</dt><dd className="face-mono">{formatDuration(pass.duration_ms)}</dd></div>
       <div><dt>Freed</dt><dd className="face-mono">{formatBytes(pass.freed_bytes)}</dd></div>
@@ -124,14 +124,14 @@ function RunNow({ data }: { data: Retention }) {
 
   if (data.running) return null;
   return <>
-    {asked && <p className="retention-note" role="status">
+    {asked && <p className="panel-note" role="status">
       {preview.isError ? "Could not count what a pass would remove. It can still be started."
         : !ready || !impact ? "Counting what a pass would remove now…"
         : `A pass now would fold ${plural(impact.heartbeats, "raw heartbeat", "raw heartbeats")} into hourly summaries and delete ${plural(impact.hourly_buckets, "hourly summary", "hourly summaries")} and ${plural(impact.incidents, "resolved incident", "resolved incidents")}.`}
       {data.max_database_size.bytes > 0 && ` The ${formatBytes(data.max_database_size.bytes)} size limit may remove more; that depends on what the windows free, so it cannot be counted in advance.`}
     </p>}
     {error && <p className="push-reveal-warn" role="alert">{error}</p>}
-    <div className="retention-inputs">
+    <div className="control-row">
       {asked
         ? <>
           <button className="add-button" type="button" disabled={busy || !(ready || preview.isError)} onClick={() => void start()}>
@@ -178,7 +178,7 @@ function Compact({ plan, canAdmin }: { plan: CompactPlan; canAdmin: boolean }) {
   const why = plan.auto_vacuum === "incremental"
     ? `${formatBytes(plan.free_bytes)} of the ${formatBytes(plan.size_bytes)} file is empty space.`
     : `The ${formatBytes(plan.size_bytes)} file never shrinks by itself (${formatBytes(plan.free_bytes)} of it is empty now): it predates the mode that hands deleted space back to the disk.`;
-  return <Panel label="Database file">
+  return <Panel label="Database file" spacing="form">
     {last && (last.error !== null
       ? <p className="push-reveal-warn">The last compaction failed: {last.error}</p>
       : <p>Compacted <When value={last.finished_at} /> in {formatDuration(last.duration_ms)}: {formatBytes(last.before_bytes)} to {formatBytes(last.after_bytes)}.
@@ -187,7 +187,7 @@ function Compact({ plan, canAdmin }: { plan: CompactPlan; canAdmin: boolean }) {
       : plan.recommended && <>
         <p>{why} Compacting rewrites it at its contents' size and keeps it that way.</p>
         {canAdmin && <>
-          <p className="retention-note">
+          <p className="panel-note">
             While it runs, which takes about {describeSeconds(plan.estimate_seconds)}, results wait and are recorded when it finishes.
             {plan.disk_shortfall && ` It needs ${formatBytes(plan.disk_shortfall.need_bytes)} free for the copy and the disk has ${formatBytes(plan.disk_shortfall.free_bytes)}, so it cannot run.`}
           </p>
@@ -206,7 +206,7 @@ function Compact({ plan, canAdmin }: { plan: CompactPlan; canAdmin: boolean }) {
 export function Maintenance({ data, canAdmin }: { data: Retention; canAdmin: boolean }) {
   const plan = data.compact;
   return <>
-    <Panel label="Daily pass">
+    <Panel label="Daily pass" spacing="form">
       {data.running && <p role="status">A pass is running. Its outcome appears here when it finishes.</p>}
       {data.last_pass ? <LastPass pass={data.last_pass} />
         : !data.running && <p>No pass recorded yet. The next runs at {data.run_at.value}{canAdmin ? ", or when started here" : ""}.</p>}

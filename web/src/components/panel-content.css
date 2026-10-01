@@ -1,0 +1,51 @@
+/*
+ * What goes inside a panel on the settings screen: a lead line, helper text,
+ * a list of facts, a wrapping row of controls (SUB-171).
+ *
+ * These rules used to live in the self-monitoring and retention cards'
+ * stylesheets, and six other cards wore those cards' class names to get them.
+ * A change to one card's own layout then moved cards that only borrowed it,
+ * and nothing in the markup said so. A class that more than one card uses
+ * lives here, under a name that belongs to no card.
+ */
+
+/* The panel's subject, when it has one line of prose rather than a mono-caps
+   label: "Watchdog", "Scheduled backups". */
+.panel-lead { font-weight: var(--weight-strong); }
+
+/* --ink-2, not --ink-3: on a card panel --ink-3 measures 3.05:1, under the
+   4.5:1 that helper-size text needs. */
+.panel-note,
+.panel-facts dt {
+  color: var(--ink-2);
+  font-size: var(--type-helper);
+  line-height: var(--lead-prose);
+}
+
+/* An inline link in helper text is one line box tall, under the 24px target
+   floor; the box is raised to it without moving the text. */
+.panel-note a {
+  display: inline-block;
+  min-height: var(--size-row-sm);
+  color: inherit;
+  text-decoration: underline;
+}
+
+/* Label over value, side by side while they fit. */
+.panel-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4) var(--space-8);
+  margin: 0;
+}
+.panel-facts dd { margin: var(--space-1) 0 0; }
+.panel-facts time { @apply face-mono; }
+
+/* Controls and the words beside them on one line, wrapping when they do not
+   fit: an input with its unit, a list row with its actions. */
+.control-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}

@@ -55,7 +55,7 @@ function CreateForm({ onCreated, onCancel }: { onCreated: (account: Account) => 
 
   return (
     <form className="auth-form" aria-label="Add user" onSubmit={submit}>
-      <div className="retention-inputs">
+      <div className="control-row">
         <div className="auth-field">
           <label className="auth-label" htmlFor={`${id}-email`}>Email</label>
           <input className="auth-input" id={`${id}-email`} type="email" value={email} autoComplete="off" spellCheck={false}
@@ -79,10 +79,10 @@ function CreateForm({ onCreated, onCancel }: { onCreated: (account: Account) => 
           </select>
         </div>
       </div>
-      <p className="retention-note" id={`${id}-password-help`}>
+      <p className="panel-note" id={`${id}-password-help`}>
         At least {MIN_PASSWORD_LENGTH} characters. Hand it over yourself; the new user can change it under Account.
       </p>
-      <p className="retention-note" id={`${id}-role-help`}>{ROLE_HELP[role]}</p>
+      <p className="panel-note" id={`${id}-role-help`}>{ROLE_HELP[role]}</p>
       {error && <p className="auth-error" role="alert" id={`${id}-error`}>{error.message}</p>}
       <div className="add-actions">
         <button className="auth-submit" type="submit" disabled={!ready || saving}>{saving ? "Adding…" : "Add user"}</button>
@@ -123,10 +123,10 @@ function UserRow({ account, you, onChanged }: { account: Account; you: boolean; 
   // as a graphic, where --down on a word measures 3.9:1 on a dark panel and a
   // label needs 4.5:1. The retyped address in ConfirmDelete guards it.
   return (
-    <li className="retention-inputs">
+    <li className="control-row">
       <div className="inv-main">
         <p><strong>{account.email}</strong></p>
-        <p className="retention-note">created {day(account.created_at)}</p>
+        <p className="panel-note">created {day(account.created_at)}</p>
         {error && <p className="auth-error" role="alert">{error}</p>}
       </div>
       {you ? <>
@@ -188,9 +188,9 @@ export function UsersCard({ userId }: { userId?: number }) {
   return (
     // Titled with its count like every card that frames a list (DESIGN.md §8.3);
     // the count is read from the rows it renders, so the two cannot drift.
-    <Card title={users ? `Users (${users.length})` : "Users"} icon={<IconUsers />} className="retention-card"
+    <Card title={users ? `Users (${users.length})` : "Users"} icon={<IconUsers />}
       action={!adding && <button type="button" className="add-button" onClick={() => { setAdding(true); setMessage(null); }}>Add user</button>}>
-      <Panel>
+      <Panel spacing="form">
         {adding && <CreateForm onCancel={() => setAdding(false)}
           onCreated={(account) => { setAdding(false); done(`${account.email} was added as ${withArticle(account.role)}.`); }} />}
         <div role="status" aria-live="polite" className="add-result-region">{message && <p className="add-result">{message}</p>}</div>

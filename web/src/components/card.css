@@ -144,6 +144,14 @@
   gap: 0;
 }
 
+/* A panel that holds a form takes the form's own field gap (.auth-form), so
+   a lead paragraph, the fields and the list under them keep one rhythm. Set
+   through Panel's `spacing` prop rather than by a card's class reaching into
+   its panels, which is how one card's layout used to move others (SUB-171). */
+.panel--form {
+  gap: var(--space-4);
+}
+
 /*
  * A label inside a panel: mono, uppercase, 12px, and — the part that is easy
  * to miss — leading equal to its size. A one-line label needs no leading, and

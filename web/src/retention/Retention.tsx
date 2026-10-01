@@ -94,7 +94,7 @@ function AmountField({ label, unit, offLabel, restore, draft, onChange, disabled
   return (
     <fieldset className="retention-field" disabled={disabled || locked}>
       <legend className="auth-label">{label}</legend>
-      <div className="retention-inputs">
+      <div className="control-row">
         <input
           className="auth-input retention-days" type="number" min={min} step="1" inputMode="numeric"
           aria-label={`${label}, in ${unit}`} aria-describedby={help} aria-invalid={error ? true : undefined}
@@ -105,7 +105,7 @@ function AmountField({ label, unit, offLabel, restore, draft, onChange, disabled
         <Checkbox checked={draft.off}
           onChange={(event) => onChange({ value: draft.value || restore, off: event.target.checked })}>{offLabel}</Checkbox>
       </div>
-      <p className="retention-note" id={`${id}-help`}>{note}</p>
+      <p className="panel-note" id={`${id}-help`}>{note}</p>
       {error && <p className="auth-error" id={`${id}-error`} role="alert">{error}</p>}
     </fieldset>
   );
@@ -158,7 +158,7 @@ function RunAtField({ data, value, onChange, disabled, error }: {
       <input className="auth-input retention-time" id={id} type="time" step="60" required value={value}
         disabled={disabled || pin.source === "pinned"} aria-invalid={error ? true : undefined}
         aria-describedby={`${id}-help${error ? ` ${id}-error` : ""}`} onChange={(event) => onChange(event.target.value)} />
-      <p className="retention-note" id={`${id}-help`}>
+      <p className="panel-note" id={`${id}-help`}>
         {pin.source === "pinned" ? `Set by ${pin.pinned_by} to ${pin.value}; change it there.`
           : "In the server's time zone (its TZ variable, UTC without one). A new time never starts a pass by itself."}
       </p>
@@ -276,9 +276,9 @@ function RetentionForm({ data, canAdmin, outcome, setOutcome }: {
         error={rejection?.field === "max_database_bytes" ? rejection.message : undefined} />
       <RunAtField data={data} value={runAt} onChange={edit(setRunAt)} disabled={locked}
         error={rejection?.field === "run_at" ? rejection.message : undefined} />
-      {!canAdmin && <p className="retention-note">Only an administrator can change retention.</p>}
+      {!canAdmin && <p className="panel-note">Only an administrator can change retention.</p>}
       {canAdmin && windowsChanged && shorter && (
-        <p className="retention-note" role="status">
+        <p className="panel-note" role="status">
           {preview.isError ? "Could not count what this change removes."
             : !impact || preview.isFetching ? "Counting what this change removes…"
             : removes ? `The next daily pass will fold ${count.format(impact.heartbeats)} raw heartbeats into hourly summaries and delete ${count.format(impact.hourly_buckets)} hourly summaries and ${count.format(impact.incidents)} resolved incidents.`
@@ -317,8 +317,8 @@ export function RetentionCard({ canAdmin }: { canAdmin: boolean }) {
   const [outcome, setOutcome] = useState<Outcome>(null);
   const data = query.data;
   return (
-    <Card title="Retention & storage" icon={<IconDatabase />} className="retention-card">
-      <Panel>
+    <Card title="Retention & storage" icon={<IconDatabase />}>
+      <Panel spacing="form">
         {!data ? <p>{query.isError ? "Retention settings unavailable." : "Loading retention settings…"}</p> : <>
           <table className="retention-tables">
             <caption className="auth-label">Database today</caption>

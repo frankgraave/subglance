@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, within } from "@testing-library/react";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { Card, Panel } from "./Card";
@@ -19,6 +19,11 @@ const css = readFileSync(
   "utf8",
 );
 
+const authCss = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "..", "auth", "auth.css"),
+  "utf8",
+);
+
 /**
  * The body of one rule, by selector.
  *
@@ -26,9 +31,9 @@ const css = readFileSync(
  * every call site to pre-escape — a pre-escaped argument gets escaped twice
  * and silently matches nothing, which is a test that cannot fail.
  */
-const rule = (selector: string): string => {
+const rule = (selector: string, sheet = css): string => {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = new RegExp(`${escaped}\\s*\\{([^}]*)\\}`).exec(css);
+  const match = new RegExp(`${escaped}\\s*\\{([^}]*)\\}`).exec(sheet);
   expect(match, `missing the ${selector} rule`).not.toBeNull();
   return match?.[1] ?? "";
 };
@@ -222,5 +227,128 @@ describe("the nesting pattern", () => {
   it("keeps the label role mono-caps, inside the panel where it belongs", () => {
     const label = rule(".panel-label");
     expect(label).toMatch(/@apply caps-legend/);
+  });
+});
+
+/**
+ * Every file under web/src with the given extension, tests excluded: a guard
+ * quotes the patterns it refuses.
+ */
+function sources(dir: string, extension: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) out.push(...sources(full, extension));
+    else if (entry.endsWith(extension) && !entry.includes(".test.")) out.push(full);
+  }
+  return out;
+}
+
+const webSrc = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+/**
+ * The attributes of every `<Card` tag in a source file, with the JSX inside
+ * them blanked out.
+ *
+ * Read with a small scanner rather than a regular expression: the tag holds
+ * JSX of its own (`icon={<IconKey />}`, an action button with its own class),
+ * so a pattern either ends inside the icon or picks up the button's class as
+ * the card's.
+ */
+function cardTags(source: string): string[] {
+  const tags: string[] = [];
+  for (const start of source.matchAll(/<Card\b/g)) {
+    let depth = 0;
+    let quote = "";
+    let own = "";
+    for (let i = start.index + 1; i < source.length; i++) {
+      const c = source[i];
+      if (quote) { if (c === quote) quote = ""; own += c; continue; }
+      if (depth === 0 && c === '"') { quote = c; own += c; continue; }
+      if (c === "{") depth++;
+      else if (c === "}") depth--;
+      else if (c === ">" && depth === 0) { tags.push(own); break; }
+      own += depth === 0 && c !== "}" ? c : " ";
+    }
+  }
+  return tags;
+}
+
+/** Each class a stylesheet defines, with the directory that stylesheet sits in. */
+function classHomes(): Map<string, Set<string>> {
+  const homes = new Map<string, Set<string>>();
+  for (const file of sources(webSrc, ".css")) {
+    const body = readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    for (const [, selector] of body.matchAll(/([^{}]+)\{/g)) {
+      for (const [, name] of selector.matchAll(/\.([a-zA-Z][\w-]*)/g)) {
+        const dirs = homes.get(name) ?? new Set<string>();
+        dirs.add(dirname(file));
+        homes.set(name, dirs);
+      }
+    }
+  }
+  return homes;
+}
+
+describe("Panel spacing", () => {
+  it("gives a form panel the form's own field gap, and leaves every other panel alone", () => {
+    const { container } = render(<><Panel spacing="form">form</Panel><Panel>prose</Panel></>);
+    const [form, prose] = container.querySelectorAll(".panel");
+    expect(form.className).toBe("panel panel--form");
+    expect(prose.className).toBe("panel");
+    // The same rung as .auth-form, the form such a panel holds.
+    expect(rule(".panel--form")).toMatch(/gap:\s*var\(--space-4\)/);
+    expect(rule(".auth-form", authCss)).toMatch(/gap:\s*var\(--space-4\)/);
+  });
+});
+
+describe("a card's own class (SUB-171)", () => {
+  // Six settings cards used to wear the self-monitoring or retention card's
+  // class to get its panel spacing and helper text. A change to either card's
+  // layout then moved cards that only borrowed it, and nothing in the markup
+  // said so. What cards share lives in Panel's props and in
+  // panel-content.css, under names that belong to no card.
+
+  it("is styled beside the card that wears it", () => {
+    const homes = classHomes();
+    const borrowed: string[] = [];
+    let cards = 0;
+    let named = 0;
+    for (const file of sources(webSrc, ".tsx")) {
+      for (const tag of cardTags(readFileSync(file, "utf8"))) {
+        cards++;
+        const names = /\bclassName="([^"]*)"/.exec(tag)?.[1].split(/\s+/).filter(Boolean) ?? [];
+        for (const name of names) {
+          named++;
+          // A class no stylesheet defines is a hook for a test, not a style
+          // borrowed from anywhere.
+          const dirs = homes.get(name);
+          if (dirs && !dirs.has(dirname(file))) {
+            borrowed.push(`${relative(webSrc, file)} wears .${name}, styled in ${[...dirs].map((d) => relative(webSrc, d)).join(", ")}`);
+          }
+        }
+      }
+    }
+    // A scanner that stops finding cards, or their classes, would pass this
+    // test vacuously.
+    expect(cards).toBeGreaterThanOrEqual(30);
+    expect(named).toBeGreaterThanOrEqual(5);
+    expect(borrowed).toEqual([]);
+  });
+
+  it("does not reach into the panels it holds", () => {
+    // A card that sets its panels' display or gap through `.its-card .panel`
+    // makes those panels differ from every other panel, and invites the next
+    // card to borrow the class for the same effect. Panel's props are the
+    // way to vary a panel; card.css is the only stylesheet that styles one.
+    const offenders: string[] = [];
+    for (const file of sources(webSrc, ".css")) {
+      if (file.endsWith(join("components", "card.css"))) continue;
+      const body = readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+      for (const [, selector] of body.matchAll(/([^{}]+)\{/g)) {
+        if (/\.panel(?![\w-])/.test(selector)) offenders.push(`${relative(webSrc, file)}: ${selector.trim()}`);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });

@@ -54,8 +54,8 @@ function Item({ item }: { item: ImportItem }) {
       {item.key && item.name && <> <span className="face-mono">{item.key}</span></>}
       {item.needs_secrets && item.needs_secrets.length > 0 && <> <StateChip>switched off</StateChip></>}
     </p>
-    {item.changes && item.changes.length > 0 && <p className="retention-note">Changes {words(item.changes)}</p>}
-    {item.needs_secrets && item.needs_secrets.length > 0 && <p className="retention-note">
+    {item.changes && item.changes.length > 0 && <p className="panel-note">Changes {words(item.changes)}</p>}
+    {item.needs_secrets && item.needs_secrets.length > 0 && <p className="panel-note">
       Saved switched off: this instance has no value for {words(item.needs_secrets)}. Fill {item.needs_secrets.length === 1 ? "it" : "them"} in after the import, then switch it on.
     </p>}
   </li>;
@@ -95,7 +95,7 @@ function Refusal({ problem, applied }: { problem: Problem; applied: boolean }) {
   return <div role="alert" className="push-reveal-warn auth-field">
     {problem.path && <p>In the file at <code>{problem.path}</code></p>}
     <p>{problem.message}</p>
-    <p className="retention-note">
+    <p className="panel-note">
       {applied ? "Importing the same file again completes the import: what was already written is matched by key and left alone."
         : "Nothing was imported. Fix the file and choose it again."}
     </p>
@@ -117,7 +117,7 @@ function ExportPanel() {
     }
   }
   return <Panel label="Export">
-    <p className="retention-note">
+    <p className="panel-note">
       Monitors, notification channels, routing rules and maintenance windows as one YAML file. History, users, API tokens and credentials
       are not in it, so it is not a backup. <a href={docs}>Read about configuration files</a>.
     </p>
@@ -125,7 +125,7 @@ function ExportPanel() {
       {state === "busy" ? "Exporting…" : "Download configuration"}
     </button></div>
     <div role="status" aria-live="polite" className="add-result-region">
-      {state === "done" && <p className="retention-note">Downloaded as subglance-config.yaml.</p>}
+      {state === "done" && <p className="panel-note">Downloaded as subglance-config.yaml.</p>}
     </div>
     {error && <p className="push-reveal-warn" role="alert">{error}</p>}
   </Panel>;
@@ -204,7 +204,7 @@ function ImportPanel() {
   // The dry run stays on screen while its file is applied.
   const shown = state.phase === "checked" || state.phase === "applied" || state.phase === "applying" ? state.report : undefined;
   return <Panel label="Import">
-    <p className="retention-note">
+    <p className="panel-note">
       An import creates and updates what the file describes and never deletes anything. The file is checked first; nothing is written until
       you confirm.
     </p>
@@ -214,9 +214,9 @@ function ImportPanel() {
         accept=".yaml,.yml,application/yaml,text/yaml" disabled={busy} onChange={(event) => void check(event)} />
     </div>
     <div role="status" aria-live="polite" className="add-result-region">
-      {state.phase === "checking" && <p className="retention-note">Checking {state.file.name}…</p>}
-      {state.phase === "applying" && <p className="retention-note">Importing {state.file.name}…</p>}
-      {state.phase === "applied" && <p className="retention-note">Imported.</p>}
+      {state.phase === "checking" && <p className="panel-note">Checking {state.file.name}…</p>}
+      {state.phase === "applying" && <p className="panel-note">Importing {state.file.name}…</p>}
+      {state.phase === "applied" && <p className="panel-note">Imported.</p>}
     </div>
     {state.phase === "refused" && <Refusal problem={state.problem} applied={state.applied} />}
     {shown && <Report report={shown} />}
@@ -241,9 +241,7 @@ function ImportPanel() {
  * to objects that have none, which is a write.
  */
 export function ConfigFilesCard() {
-  // The backup card's frame: `.watchdog-card` draws its links at the 24px
-  // target floor, where an inline link in helper text is one line box tall.
-  return <Card title="Import & export" icon={<IconTransfer />} className="watchdog-card">
+  return <Card title="Import & export" icon={<IconTransfer />}>
     <ExportPanel />
     <ImportPanel />
   </Card>;

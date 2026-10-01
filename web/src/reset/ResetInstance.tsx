@@ -67,7 +67,7 @@ export function ResetInstanceCard() {
     <Card title="Reset this instance" icon={<IconAlert />}>
       <Panel>
         <form className="auth-form" aria-label="Reset this instance" onSubmit={submit}>
-          <p className="retention-note">
+          <p className="panel-note">
             Deletes every monitor, heartbeat, incident, notification channel, maintenance window and API token.
             User accounts, sessions and settings such as retention are kept, so you stay signed in.
             This cannot be undone, and there is no copy unless you made a backup.
@@ -80,7 +80,7 @@ export function ResetInstanceCard() {
               aria-describedby={`${id}-state`}
               onChange={(event) => { setTyped(event.target.value); setDone(null); setError(null); }}
             />
-            <p className="retention-note" id={`${id}-state`}>
+            <p className="panel-note" id={`${id}-state`}>
               {matches ? "The phrase matches. Resetting cannot be undone."
                 : "The button stays disabled until the phrase matches exactly, including case."}
             </p>

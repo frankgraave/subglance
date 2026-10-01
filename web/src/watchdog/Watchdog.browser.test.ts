@@ -107,7 +107,8 @@ it.each([["dark", 390], ["light", 390], ["dark", 1440], ["light", 1440]] as cons
   const { page, context } = await pageAt(configured, "/settings", theme, width);
   try {
     await page.waitForFunction(() => document.querySelector("#self-monitoring")?.textContent?.includes("Last ping succeeded (HTTP 204)."));
-    expect(await page.$eval(".watchdog-card .panel", (el) => getComputedStyle(el).display)).toBe("grid");
+    // The history is laid out by the shared panel stylesheet, not left to the browser's block flow.
+    expect(await page.$eval("#self-monitoring .panel-facts", (el) => getComputedStyle(el).display)).toBe("flex");
     const state = await page.evaluate(async () => {
       const response = await fetch("/api/v1/watchdog");
       return { cache: response.headers.get("Cache-Control"), data: await response.json() as WatchdogState };
