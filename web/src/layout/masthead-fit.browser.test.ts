@@ -59,6 +59,10 @@ afterAll(async () => {
 async function open(width: number, route: (typeof ROUTES)[number]): Promise<Page> {
   const page = await browser.newPage();
   try {
+    // Pages share the default context's localStorage, and the rail case below
+    // stores the sidebar collapsed. Start every page beside the expanded
+    // sidebar so a case measures the layout it names, whatever ran before it.
+    await page.evaluateOnNewDocument(() => localStorage.setItem("subglance:sidebar", "expanded"));
     await page.setViewport({ width, height: 800, deviceScaleFactor: 1 });
     await page.goto(server.url + route.path, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(route.ready, { timeout: 15_000 });
