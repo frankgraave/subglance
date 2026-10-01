@@ -2017,6 +2017,25 @@ and for a viewer. It fails when two rows differ in height, when a column's
 legend is at a different place in two rows, or when a value spills out of its
 slot.
 
+The same test holds two more relationships of the row, both found walking the
+page at every width:
+
+- **The lamp stays on the name's line.** Wrapped, the name used to take a line
+  of its own and leave the lamp alone above it, a line away from the monitor
+  it describes. The name now fills what the lamp leaves; only the columns take
+  a new line.
+- **Selection boxes are a column, under the box that selects them all.** The
+  row's box leads the row, before the lamp, and the group box above the list
+  starts at the same edge. Inside the name cell the row boxes sat 45px right
+  of the group box.
+
+Around the list, the selection count is drawn like the toolbar's "n of m
+shown" (helper size, `--ink-2`): both are counts about the list, not
+sentences. *Manage tags* is disabled when there is no monitor to tag. The
+empty state that replaces the list is an `h2` under the card's `h1`, and inside
+a card it takes the panel radius (`--r-md`), since the card radius 6px inside
+a card corner of the same radius pinched at all four corners.
+
 ---
 
 ## 9. Accessibility

@@ -274,7 +274,10 @@ export function MonitorsView({
         note={describeInventory(monitors)}
         action={
           <div className="bulk-tags-actions">
-          {onTagChange && <button type="button" className="add-button" disabled={loading || error !== null} onClick={() => setTagOpen(true)}>Manage tags</button>}
+          {/* Disabled, not hidden, with nothing to tag: the header keeps its
+              shape while the list loads, and an empty inventory says why
+              right below it. */}
+          {onTagChange && <button type="button" className="add-button" disabled={loading || error !== null || monitors.length === 0} onClick={() => setTagOpen(true)}>Manage tags</button>}
           {onCreateOpenChange === undefined ? undefined : (
             <button
               type="button"
@@ -311,7 +314,10 @@ export function MonitorsView({
             Select all visible ({visible.length})
           </Checkbox>
           <button type="button" className="add-button" disabled={selectedIds.length === 0} onClick={() => setSelected(NO_SET)}>Clear selection</button>
-          <p role="status">{selectedIds.length} selected{hiddenSelectionCount > 0 ? ` · ${hiddenSelectionCount} hidden by filters` : ""}</p>
+          {/* The same count as the toolbar's "n of m shown", and drawn the
+              same: a count about the list is helper text, not a sentence in
+              body ink beside the controls it counts for. */}
+          <p className="tb-count" role="status">{selectedIds.length} selected{hiddenSelectionCount > 0 ? ` · ${hiddenSelectionCount} hidden by filters` : ""}</p>
         </div>}
         {loading || error !== null ? (
           /*

@@ -35,6 +35,9 @@ export function EmptyState({
   // tells a self-hoster their install is empty when in fact they pressed a
   // chip. Any active narrowing counts, not just a typed query.
   const narrowed = (needle !== "" || filtered) && totalCount > 0;
+  // An h2, one level under the page's h1 on both screens that show it: the
+  // dashboard's (visually hidden) and the inventory card's title. It was an
+  // h3 that skipped a level wherever it replaced the list (SUB-167).
   return (
     <div className="mon-empty">
       {/* Three empty sockets, not three grey lamps. Decorative and
@@ -48,11 +51,11 @@ export function EmptyState({
       </div>
       {narrowed ? (
         <>
-          <h3 className="mon-empty-title">
+          <h2 className="mon-empty-title">
             {needle === ""
               ? "No monitors match this filter"
               : `No monitors match \u201C${needle}\u201D`}
-          </h3>
+          </h2>
           <p className="mon-empty-body">
             {needle === ""
               ? `Clear the status or tag filter to see all ${totalCount} monitors.`
@@ -63,9 +66,9 @@ export function EmptyState({
         </>
       ) : (
         <>
-          <h3 className="mon-empty-title mon-empty-title--first">
+          <h2 className="mon-empty-title mon-empty-title--first">
             Nothing is being watched yet
-          </h3>
+          </h2>
           <p className="mon-empty-body mon-empty-body--first">
             Point SubGlance at the first thing you care about — a URL, a host
             and port, or a cron job that should check in. Probing starts

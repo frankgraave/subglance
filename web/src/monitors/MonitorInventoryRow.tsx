@@ -128,11 +128,15 @@ function MonitorInventoryRowImpl({
             settings the page is actually for — but it is in the accessible
             name of nothing and in the row's text for everyone using a screen
             reader. */}
+        {/* The selection box leads the row, before the lamp, so the boxes of
+            every row make one column under the "Select all visible" box
+            (SUB-167). Inside the name cell it sat after the lamp, 45px right
+            of the box that selects them all. */}
+        {onSelect && <Checkbox className="bulk-tags-select" aria-label={`Select ${monitor.name}`} checked={selected} onChange={(e) => onSelect(monitor.id, e.target.checked)} />}
         <Led status={monitor.status} recovery={monitor.recovery} className="inv-led" />
 
         <div className="inv-main">
           <span className="inv-name">
-            {onSelect && <Checkbox className="bulk-tags-select" aria-label={`Select ${monitor.name}`} checked={selected} onChange={(e) => onSelect(monitor.id, e.target.checked)} />}
             <MonitorLink id={monitor.id} name={monitor.name} onOpen={onOpen} />
             {paused ? (
               /* A configuration state, not a health state, so it gets no

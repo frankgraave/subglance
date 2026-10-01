@@ -173,8 +173,20 @@ describe.each([641, 700, 901, 960, 1040, 1100, 1440])("list rows at %ipx", (widt
   it.each(LIST_ROUTES)("keep every name at least rung 3 wide on $name", async (route) => {
     const page = await open(width, route);
     try {
+      /*
+       * The name cell plus the row's selection box, when it has one. Until
+       * SUB-167 the box sat inside `.inv-main`, so this floor always counted
+       * it; the box now leads the row as its own item, and the floor still
+       * counts it, so the check asks what it asked before. What that leaves
+       * the name link itself for an admin (76px at the 836px wrap, 86px at
+       * the widest list) is a separate question, SUB-170, rather than one
+       * this check quietly answers.
+       */
       const widths = await page.evaluate(() =>
-        Array.from(document.querySelectorAll<HTMLElement>(".inv-main")).map((el) => el.getBoundingClientRect().width),
+        Array.from(document.querySelectorAll<HTMLElement>(".inv-main")).map((el) => {
+          const box = el.parentElement?.querySelector<HTMLElement>(":scope > .choice");
+          return el.getBoundingClientRect().width + (box ? box.getBoundingClientRect().width : 0);
+        }),
       );
       // An empty list would make Math.min return Infinity and pass vacuously.
       expect(widths.length).toBeGreaterThan(0);
