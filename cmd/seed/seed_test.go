@@ -409,3 +409,83 @@ func TestSeedWithSecretKey(t *testing.T) {
 		}
 	}
 }
+
+// TestSeededDeliveriesSurviveTheFirstRetentionPass is the demo's delivery
+// column: the rows the seeder writes are the rows the notifications screen
+// reads, rather than rows the server deletes the moment it starts (SUB-180).
+func TestSeededDeliveriesSurviveTheFirstRetentionPass(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.Open(ctx, store.Options{Path: filepath.Join(t.TempDir(), "seed.db")})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	chans, err := seedChannels(ctx, db)
+	if err != nil {
+		t.Fatalf("seed channels: %v", err)
+	}
+	m, err := db.CreateMonitor(ctx, store.Monitor{Name: "api", Type: "http", Target: "https://example.com"})
+	if err != nil {
+		t.Fatalf("create monitor: %v", err)
+	}
+
+	now := time.Now().Truncate(time.Second)
+	names := []string{"Ops Slack", "Pager relay"}
+	written := 0
+	// One incident well outside the delivery log's window, one inside it,
+	// and one still open whose reminder count runs past now: its alerts are
+	// the newest the screen shows, and none of them may be dated later than
+	// the moment the demo starts.
+	for _, ago := range []time.Duration{60 * 24 * time.Hour, 2 * 24 * time.Hour, 5 * time.Minute} {
+		start := now.Add(-ago)
+		inc := store.Incident{
+			MonitorID: m.ID, StartedAt: start, ConfirmedAt: start.Add(time.Minute),
+			ResolvedAt: start.Add(time.Hour), Cause: "timeout",
+		}
+		if ago < time.Hour {
+			inc.ResolvedAt, inc.ReminderCount = time.Time{}, 3
+		}
+		inc, err := db.SeedIncident(ctx, inc)
+		if err != nil {
+			t.Fatalf("seed incident: %v", err)
+		}
+		n, err := seedDeliveries(ctx, db, m, inc, names, chans, now)
+		if err != nil {
+			t.Fatalf("seed deliveries: %v", err)
+		}
+		written += n
+	}
+	if written == 0 {
+		t.Fatal("nothing was seeded; the test proves nothing")
+	}
+
+	var future int
+	if err := db.Reader.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM notif_outbox WHERE created_at > ? OR updated_at > ?",
+		now.Unix(), now.Unix()).Scan(&future); err != nil {
+		t.Fatalf("count future deliveries: %v", err)
+	}
+	if future != 0 {
+		t.Errorf("%d seeded deliveries are dated after the seed ran", future)
+	}
+
+	pruned, err := db.PruneDeliveries(ctx, now.Add(-store.DeliveryLogRetention))
+	if err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if pruned != 0 {
+		t.Errorf("the first retention pass deleted %d seeded deliveries", pruned)
+	}
+
+	health, err := db.ChannelHealthSince(ctx, now.Add(-store.DeliveryLogRetention))
+	if err != nil {
+		t.Fatalf("health: %v", err)
+	}
+	if h := health[chans["Ops Slack"].ID]; h.LastDeliveredAt.IsZero() {
+		t.Error("the healthy channel shows no delivery inside the window")
+	}
+	if h := health[chans["Pager relay"].ID]; h.Failed == 0 {
+		t.Error("the broken channel shows no failure inside the window")
+	}
+}

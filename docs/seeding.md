@@ -57,8 +57,9 @@ one row.
   failing, one with a backlog, and one switched off, so the channel health
   badges have something other than a row of green to show.
 - **Outbox rows** for every alert those incidents produced — delivered, failed
-  and pending — which is where the notifications screen gets its per-channel
-  health from.
+  and pending — which is where the notifications screen's Delivery column
+  reads from. A delivered alert older than the delivery log's 30 days is not
+  written, because the server's first retention pass would delete it.
 - **Users and API tokens** in the states the token list renders: live,
   expiring, and revoked.
 - **Tags** on every monitor: `env`, `team`, `tier`, `customer`, `region`,

@@ -16,8 +16,10 @@
  * The fixture is a channel of every type this build knows plus one it does
  * not, pushed to every shape a row can take: the default, disabled, quiet
  * hours (held and dropped), two chips at once, a name that ends in an
- * ellipsis, and a channel the server sent no creation date for. Routing rules
- * are not a shape: this page does not draw them on a channel row.
+ * ellipsis, and every delivery history the Delivery column can draw (SUB-180):
+ * delivered, failed, retrying with the widest count beside it, none in the
+ * window, and a record the server did not send. Routing rules are not a
+ * shape: this page does not draw them on a channel row.
  *
  * A viewer gets the same page without the actions, so both roles are
  * measured.
@@ -47,6 +49,17 @@ afterAll(async () => {
 const DAY = 86_400_000;
 const ago = (days: number) => new Date(Date.now() - days * DAY).toISOString();
 
+const none = { state: "none", window_days: 30, failed: 0, pending: 0, retrying: 0, last_error: "" };
+const delivered = { ...none, state: "delivered", last_delivered_at: ago(1) };
+const failed = {
+  ...none,
+  state: "failed",
+  last_failed_at: ago(0),
+  failed: 11,
+  last_error: "gave up after 5 attempts: endpoint rejected the alert (404)",
+};
+const retrying = { ...none, state: "retrying", pending: 128, retrying: 128, last_error: "endpoint returned 503" };
+
 /** One channel per row shape, masked the way the API masks them. */
 const CHANNELS: ApiChannel[] = [
   // The default, with quiet hours: two chips on one name line.
@@ -60,6 +73,7 @@ const CHANNELS: ApiChannel[] = [
       host: "smtp.acme-corporation.example",
       port: "587",
     },
+    delivery: delivered,
     enabled: true,
     is_default: true,
     quiet_hours: { start: "23:00", end: "07:00", timezone: "Europe/Amsterdam", during: "hold" },
@@ -71,27 +85,30 @@ const CHANNELS: ApiChannel[] = [
     name: "platform-oncall-primary-escalation-for-the-payments-and-billing-services",
     type: "slack",
     config: { url: "****0f3a" },
+    delivery: failed,
     enabled: true,
     created_at: ago(30),
   },
   // Disabled: the dashed row and the Disabled chip.
-  { id: 3, name: "Release announcements", type: "discord", config: { url: "****d1sc" }, enabled: false, created_at: ago(20) },
+  { id: 3, name: "Release announcements", type: "discord", config: { url: "****d1sc" }, enabled: false, created_at: ago(20), delivery: none },
   // Disabled with quiet hours that drop: two chips again, on a dimmed row.
   {
     id: 4,
     name: "Weekend pager",
     type: "telegram",
     config: { bot_token: "****9xQ2", chat_id: "-1001234567890" },
+    delivery: none,
     enabled: false,
     quiet_hours: { start: "22:00", end: "06:30", timezone: "UTC", during: "drop" },
     created_at: ago(5),
   },
-  { id: 5, name: "Phone push", type: "ntfy", config: { url: "https://ntfy.example", topic: "****opic" }, enabled: true, created_at: ago(4) },
-  // No creation date: the Added cell is an empty Value.
-  { id: 6, name: "Home server", type: "gotify", config: { url: "****otfy" }, enabled: true },
-  { id: 7, name: "On-call phones", type: "sms", config: { provider: "twilio", numbers: "+31600000001\n+31600000002\n+31600000003" }, enabled: true, created_at: ago(2) },
-  { id: 8, name: "Status page webhook", type: "webhook", config: { url: "****hook" }, enabled: true, created_at: ago(1) },
+  { id: 5, name: "Phone push", type: "ntfy", config: { url: "https://ntfy.example", topic: "****opic" }, enabled: true, created_at: ago(4), delivery: retrying },
+  // No creation date, and a delivered history.
+  { id: 6, name: "Home server", type: "gotify", config: { url: "****otfy" }, enabled: true, delivery: delivered },
+  { id: 7, name: "On-call phones", type: "sms", config: { provider: "twilio", numbers: "+31600000001\n+31600000002\n+31600000003" }, enabled: true, created_at: ago(2), delivery: failed },
+  { id: 8, name: "Status page webhook", type: "webhook", config: { url: "****hook" }, enabled: true, created_at: ago(1), delivery: delivered },
   // A type this build does not know: "Unknown type", the widest type label.
+  // No delivery record either, as an older server sends: the cell is empty.
   { id: 9, name: "PagerDuty escalation", type: "pagerduty", config: { routing_key: "****ab19" }, enabled: true, created_at: ago(0) },
 ];
 
@@ -180,12 +197,21 @@ function measureRows(page: Page): Promise<{ list: number; rows: RowMeasure[] }> 
 }
 
 /**
- * Every column value that does not fit: text that runs onto a second line, or
- * a value wider than its column, which clips it mid-character.
+ * Every column value that does not fit: text that runs onto a second line, a
+ * value whose pieces stack taller than its slot, or a value wider than its
+ * column, which clips it mid-character.
+ *
+ * Lines are counted per text node. The Delivery cell (SUB-180) is a chip and
+ * a moment side by side, and a range over the whole value reports the chip's
+ * box and the text inside it at different tops although both sit on one
+ * line; counting those as lines flagged a lone chip, which cannot wrap, as
+ * wrapping. A text node that breaks still reports one rect per line, and
+ * pieces that wrap under each other make the value taller than the slot.
  */
 function valuesOutOfColumn(page: Page): Promise<string[]> {
-  return page.evaluate(() =>
-    [...document.querySelectorAll<HTMLElement>(".nt-card .inv-col")].flatMap((col) => {
+  return page.evaluate(() => {
+    const slot = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--size-row-sm"));
+    return [...document.querySelectorAll<HTMLElement>(".nt-card .inv-col")].flatMap((col) => {
       const value = col.lastElementChild as HTMLElement;
       const label = `${col.className}: ${(value.textContent ?? "").trim()}`;
       const problems: string[] = [];
@@ -196,11 +222,19 @@ function valuesOutOfColumn(page: Page): Promise<string[]> {
       if (text.width > 0 && (text.left < box.left - 0.5 || text.right > box.right + 0.5)) {
         problems.push(`text ${Math.round(text.width)}px in a ${Math.round(box.width)}px column`);
       }
-      const lines = new Set([...range.getClientRects()].map((rect) => Math.round(rect.top)));
-      if (lines.size > 1) problems.push("wraps");
+      const walker = document.createTreeWalker(value, NodeFilter.SHOW_TEXT);
+      let broken = false;
+      for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+        if ((node.textContent ?? "").trim() === "") continue;
+        const piece = document.createRange();
+        piece.selectNodeContents(node);
+        const lines = new Set([...piece.getClientRects()].map((rect) => Math.round(rect.top)));
+        if (lines.size > 1) broken = true;
+      }
+      if (broken || value.getBoundingClientRect().height > slot + 0.5) problems.push("wraps");
       return problems.length === 0 ? [] : [`${label}: ${problems.join(", ")}`];
-    }),
-  );
+    });
+  });
 }
 
 /*

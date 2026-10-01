@@ -489,6 +489,12 @@ func seedDeliveries(
 		}
 
 		for _, moment := range moments {
+			if moment.at.After(now) {
+				// A reminder the incident's own count places after now
+				// has not been sent; a delivery for it would be dated
+				// in the future on the notifications screen.
+				continue
+			}
 			alert := notifier.AlertFromStore(m, inc, moment.event, moment.at)
 			payload, err := json.Marshal(alert)
 			if err != nil {
@@ -504,6 +510,14 @@ func seedDeliveries(
 				CreatedAt:  moment.at,
 			}
 			applyDeliveryHealth(&d, deliveryHealthOf(name), moment.at, now)
+			if d.UpdatedAt.After(now) {
+				// A delivery that gives up eleven minutes after a recent
+				// alert has not given up yet; it finishes no later than now.
+				d.UpdatedAt = now
+			}
+			if prunedOnStart(d, now) {
+				continue
+			}
 
 			if _, err := db.SeedDelivery(ctx, d); err != nil {
 				return 0, err
@@ -512,6 +526,19 @@ func seedDeliveries(
 		}
 	}
 	return written, nil
+}
+
+// prunedOnStart reports whether the server's first retention pass would
+// delete a seeded delivery: one that arrived longer ago than the delivery
+// log is kept.
+//
+// Writing those rows only for the server to delete them at startup was
+// worse than wasted: the demo's notifications screen then read an outbox the
+// seeder had not written, and the summary counted rows nobody would see.
+// Failed and pending rows are kept whatever their age, as the pass keeps
+// them.
+func prunedOnStart(d store.Delivery, now time.Time) bool {
+	return d.Status == store.OutboxDelivered && d.UpdatedAt.Before(now.Add(-store.DeliveryLogRetention))
 }
 
 // deliveryHealthOf looks up how a named channel has been behaving.

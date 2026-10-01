@@ -94,8 +94,8 @@ describe("LiveNotifications", () => {
     expect(
       within(row).queryByText("Test delivered", { selector: ".chip" }),
     ).toBeNull();
-    // And the page still says, once, why nothing here is known to work.
-    expect(screen.getByText(/carries no delivery history/i)).toBeTruthy();
+    // And the page still says, once, what the Delivery column covers.
+    expect(screen.getByText(/real alerts/i)).toBeTruthy();
   });
 
   it("drops a test result when the channel is edited", async () => {

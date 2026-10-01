@@ -12,7 +12,7 @@ import { CoverageCard } from "./CoverageCard";
 import type { InventoryMonitor } from "../monitors/inventory";
 import { typeLabel, CHANNEL_TYPES } from "./channels";
 import type { Channel, DeliveryState } from "./channels";
-import { DELIVERY_UNKNOWN } from "./channels";
+import { DELIVERY_UNKNOWN, HISTORY_UNKNOWN } from "./channels";
 import type { ChannelInput } from "./channelsApi";
 import type { QuietHours } from "./channels";
 
@@ -36,6 +36,18 @@ const EMPTY_TOGGLING: ReadonlySet<string> = new Set();
  * so a test drives every state from a fixture. `LiveNotifications` owns the
  * data.
  */
+
+/**
+ * The window the Delivery column covers, as the server's own records state
+ * it. A server that sent none falls back to its retention default, which is
+ * what every server that does send one also says.
+ */
+function historyWindowDays(channels: readonly Channel[]): number {
+  return (
+    channels.find((channel) => channel.history.state !== "unknown")?.history
+      .windowDays ?? HISTORY_UNKNOWN.windowDays
+  );
+}
 
 export type NotificationsViewProps = {
   channels: readonly Channel[];
@@ -400,49 +412,34 @@ export function NotificationsView({
             </div>
 
             {/*
-             * The caveat that explains why no row says "delivered", as one
-             * line that opens into the whole of it (SUB-138).
+             * What the Delivery column means, as one line that opens into the
+             * whole of it (SUB-138, rewritten for SUB-180).
              *
-             * It was rejected as a six-line block of prose sitting above two
-             * rows on a real instance — physically larger than the list it
-             * qualifies, so you had to read an explanation of the Delivery
-             * column before you ever reached the Delivery column. The previous
-             * pass had been asked to make it *more legible* and made it bigger
-             * and earlier instead, which is not the same thing.
+             * A disclosure because the previous caveat was rejected as a
+             * six-line block above a two-row list. The summary states the
+             * fact rather than teasing it, so a reader who never opens it has
+             * still been told what the column covers; the body is the reason,
+             * worth reading once.
              *
-             * Nothing is cut. Every clause is in the DOM, in the same words,
-             * and the summary is not a teaser — it states the fact itself, so
-             * a reader who never opens the disclosure has still been told the
-             * thing they most need to know. What the disclosure removes is
-             * six lines of weight above a two-line list, not the content: the
-             * detail is the *reason*, which is worth reading once and worth
-             * nobody's eye a second time.
-             *
-             * Open by default would be the same block again. Closed by
-             * default, above the list, and the one sentence is short enough to
-             * be read on the way past.
-             *
-             * The summary states the absence of history rather than claiming
-             * that nothing below works. It used to say "No channel below is
-             * known to be working", and a row that has just passed a test says
-             * "Test delivered" and that the channel can deliver right now — so
-             * the two contradicted each other on the same screen the moment
-             * anyone pressed Send test. The caveat SUB-55 requires is the
-             * missing history, and that is what survives here; the row result
-             * is a separate, narrower claim about one moment and is left to
-             * make it.
+             * It used to say "SubGlance keeps no delivery history", which was
+             * true of the API and is not any more: the column below is read
+             * from the outbox. The caveat that survives is the one that is
+             * still true and still the dangerous one to forget — a channel
+             * with nothing in its window has proved nothing, and only a test
+             * shows it works before an outage does.
              */}
             <details className="nt-legend">
               <summary className="nt-legend-summary">
-                SubGlance keeps no delivery history — no record of any alert
-                arriving.
+                Delivery shows how real alerts went in the last{" "}
+                {historyWindowDays(channels)} days.
               </summary>
               <p className="nt-legend-body">
-                The channel API carries no delivery history, so a channel that
-                has failed every delivery for three days looks exactly the same
-                here as one that has never been needed. Sending a test is the
-                only thing that tells you which you have, and it proves only
-                that the channel worked at the moment you pressed it.
+                Failed means the newest alert gave up after its retries;
+                Retrying means one is queued after a failed attempt. A channel
+                with no alerts in that time has proved nothing either way, so
+                it says so rather than looking healthy. Sending a test is the
+                only way to know a quiet channel works before an outage needs
+                it, and it proves only that it worked at that moment.
               </p>
             </details>
 

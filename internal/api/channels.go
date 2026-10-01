@@ -31,6 +31,10 @@ type channelResponse struct {
 
 	// QuietHours is the channel's daily quiet window, nil when it has none.
 	QuietHours *store.QuietHours `json:"quiet_hours"`
+
+	// Delivery is how the channel's recent alerts went, nil only when the
+	// outbox could not be read.
+	Delivery *channelDelivery `json:"delivery"`
 }
 
 func toChannelResponse(c store.Channel, admin bool) channelResponse {
@@ -227,12 +231,15 @@ func (s *Server) handleListChannels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	health := s.channelDeliveries(r.Context())
+
 	out := make([]channelResponse, 0, len(channels))
 	for _, c := range channels {
 		resp := toChannelResponse(c, readerIsAdmin(r))
 		if q, ok := quiet[c.ID]; ok {
 			resp.QuietHours = &q
 		}
+		withDelivery(&resp, c, health)
 		out = append(out, resp)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"channels": out})
@@ -264,6 +271,7 @@ func (s *Server) handleGetChannel(w http.ResponseWriter, r *http.Request) {
 	if ok {
 		resp.QuietHours = &q
 	}
+	withDelivery(&resp, c, s.channelDeliveries(r.Context()))
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -300,7 +308,11 @@ func (s *Server) handleCreateChannel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.log.Info("channel created", "channel_id", created.ID, "type", created.Type)
-	writeJSON(w, http.StatusCreated, toChannelResponse(created, readerIsAdmin(r)))
+	resp := toChannelResponse(created, readerIsAdmin(r))
+	// A channel created a moment ago has sent nothing, which is a fact and
+	// not a read that could fail: no outbox query for it.
+	resp.Delivery = toChannelDelivery(store.ChannelHealth{}, created)
+	writeJSON(w, http.StatusCreated, resp)
 }
 
 // handleUpdateChannel replaces a channel definition.
@@ -407,10 +419,13 @@ func (s *Server) handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 	s.log.Info("channel updated", "channel_id", id)
 	resp := toChannelResponse(saved, readerIsAdmin(r))
 	// A replace does not touch quiet hours, and the response must not
-	// suggest it removed them.
+	// suggest it removed them. Nor does it touch the delivery record: an edit
+	// does not make past failures disappear, and a response without the
+	// record would draw the row as if they had.
 	if hasQuietHours {
 		resp.QuietHours = &q
 	}
+	withDelivery(&resp, saved, s.channelDeliveries(r.Context()))
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -508,12 +523,15 @@ func (s *Server) handleListMonitorChannels(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	health := s.channelDeliveries(r.Context())
+
 	out := make([]channelResponse, 0, len(channels))
 	for _, c := range channels {
 		resp := toChannelResponse(c, readerIsAdmin(r))
 		if q, ok := quiet[c.ID]; ok {
 			resp.QuietHours = &q
 		}
+		withDelivery(&resp, c, health)
 		out = append(out, resp)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"channels": out})
@@ -567,12 +585,15 @@ func (s *Server) handleSetMonitorChannels(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	health := s.channelDeliveries(r.Context())
+
 	out := make([]channelResponse, 0, len(channels))
 	for _, c := range channels {
 		resp := toChannelResponse(c, readerIsAdmin(r))
 		if q, ok := quiet[c.ID]; ok {
 			resp.QuietHours = &q
 		}
+		withDelivery(&resp, c, health)
 		out = append(out, resp)
 	}
 	s.log.Info("monitor channels updated", "monitor_id", id, "count", len(out))

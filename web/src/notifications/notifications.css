@@ -150,26 +150,21 @@
 }
 
 /*
- * The "Added" column, and the one width this page declares for itself.
+ * The Delivery column, and the one width this page declares for itself.
  *
- * Rung 4 (168px) off the column ladder. Its content is a localised absolute
- * timestamp — "17 Sept 2026, 14:20" measures about 150px in the mono face,
- * and the widths either side of it on the ladder are both wrong: rung 3 (104)
- * truncates the date on every row, and rung 5 (272) is wider than the name
- * column beside it, which would make the date the loudest thing in the row
- * rather than the name.
- *
- * Set at the helper size rather than `Value`'s default body size. `Value` is
- * built for a reading you compare down a column — "1 min", "10 s" — where the
- * digits are the subject. A date is context, not a measurement to scan, and
- * at body size it out-shouted the channel name it sits beside.
+ * Rung 4 (168px) off the column ladder, the width the Added column it
+ * replaced (SUB-180) was measured at, so the row's wrap at 638px holds. Its
+ * widest content is a "None in 30 days" chip, about 126px in the mono face,
+ * or a Retrying chip and "12 queued" beside it, about 150. Rung 3 (104)
+ * clips both; rung 5 (272) is wider than the name column beside it.
  */
-.inv-col--added { width: var(--size-col-4); }
+.inv-col--delivery { width: var(--size-col-4); }
 
-.inv-col--added .value {
-  font-size: var(--type-helper);
-  line-height: var(--lead-helper);
-  justify-content: flex-start;
+/* The chip and the moment it is about, on the slot's one line. */
+.nt-history {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 /*

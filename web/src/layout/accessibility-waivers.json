@@ -503,7 +503,7 @@
     },
     {
       "rule": "color-contrast",
-      "selector": ".inv-name > .inv-paused-chip.chip.chip--state",
+      "selector": ".inv-name > .inv-paused-chip.chip--state.chip",
       "scopes": [
         "light: notifications",
         "dark: notifications"
@@ -539,7 +539,7 @@
     },
     {
       "rule": "color-contrast",
-      "selector": "li[data-disabled=\"true\"] > .inv-line > .inv-meta > .inv-col--added.inv-col > .inv-label",
+      "selector": "li[data-disabled=\"true\"] > .inv-line > .inv-meta > .inv-col--delivery.inv-col > .inv-label",
       "scopes": [
         "light: notifications",
         "dark: notifications"

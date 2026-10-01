@@ -4,6 +4,9 @@ import {
   channelsFromPayload,
   describeDelivery,
   describeDestination,
+  describeHistory,
+  historyChip,
+  historyFromApi,
   describeQuietHours,
   fieldsFor,
   hasSecret,
@@ -141,9 +144,9 @@ describe("describeDestination", () => {
 
 describe("describeDelivery", () => {
   it("calls an untested channel not verified, never ok", () => {
-    // The API carries no delivery history at all, so "healthy" is a claim
-    // nothing behind this page supports. A channel that has failed every
-    // delivery for three days is in exactly this state.
+    // No test has run from this browser, so "healthy" is a claim nothing
+    // behind this word supports. The channel's real history is a separate
+    // record (historyFromApi), and says its own thing.
     expect(describeDelivery({ kind: "unknown" })).toBe("Not verified");
     expect(describeDelivery({ kind: "unknown" })).not.toMatch(/deliver|ok/i);
   });
@@ -276,5 +279,47 @@ describe("channelsFromPayload", () => {
       channels: [{ id: 1, name: "a", type: "email" }],
     });
     expect(channel.enabled).toBe(true);
+  });
+});
+
+describe("historyFromApi (SUB-180)", () => {
+  it("reads a missing or unrecognised record as unknown, never healthy", () => {
+    // An older server sends no record; a newer one may name a state this
+    // build has no word for. Either way the page has been told nothing.
+    expect(historyFromApi(undefined).state).toBe("unknown");
+    expect(historyFromApi(null).state).toBe("unknown");
+    expect(historyFromApi({ state: "degraded" }).state).toBe("unknown");
+    expect(historyChip(historyFromApi(undefined))).toBeNull();
+    expect(describeHistory(historyFromApi(undefined))).toMatch(/Not verified/);
+  });
+
+  it("keeps the counts, the moments and the error the server sent", () => {
+    const h = historyFromApi({
+      state: "failed",
+      window_days: 30,
+      last_failed_at: "2026-09-30T09:00:00Z",
+      last_delivered_at: null,
+      failed: 1,
+      pending: 0,
+      retrying: 0,
+      last_error: "no such host",
+    });
+    expect(h.state).toBe("failed");
+    expect(h.lastFailedAt).toBe(Date.parse("2026-09-30T09:00:00Z"));
+    expect(h.lastDeliveredAt).toBeNull();
+    expect(describeHistory(h)).toMatch(/^1 alert gave up in the last 30 days, the newest .*: no such host$/);
+  });
+
+  it("gives each state its own word and never shares a colour", () => {
+    const words = ["delivered", "failed", "retrying", "none"].map((state) =>
+      historyChip(historyFromApi({ state, window_days: 30 })),
+    );
+    expect(words.map((w) => w?.word)).toEqual([
+      "Delivered",
+      "Failed",
+      "Retrying",
+      "None in 30 days",
+    ]);
+    expect(words.map((w) => w?.status)).toEqual(["up", "down", "warn", null]);
   });
 });

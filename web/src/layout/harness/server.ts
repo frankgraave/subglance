@@ -145,7 +145,9 @@ const MONITORS: ApiMonitor[] = [
  * measure a row this product never renders.
  *
  * The set is chosen for width and for state, not for tidiness: five types, one
- * disabled, one with the longest realistic email recipient list, and one whose
+ * disabled, one with the longest realistic email recipient list, every
+ * delivery history state (SUB-180), the widest being Retrying beside "12
+ * queued", and one whose
  * type this build does not know — because "Unknown type" and "this build does
  * not know this channel type" are strings the layout has to hold, and nothing
  * else in the fixture produces them.
@@ -157,6 +159,7 @@ const CHANNELS = [
     type: "slack",
     config: { url: "****0f3a" },
     enabled: true,
+    delivery: { state: "delivered", window_days: 30, last_delivered_at: new Date(Date.now() - 3 * 3_600_000).toISOString(), last_failed_at: null, failed: 0, pending: 0, retrying: 0, last_error: "" },
     created_at: new Date(Date.now() - 40 * 86_400_000).toISOString(),
     updated_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
   },
@@ -183,6 +186,7 @@ const CHANNELS = [
       timezone: "Europe/Amsterdam",
       during: "hold",
     },
+    delivery: { state: "none", window_days: 30, last_delivered_at: null, last_failed_at: null, failed: 0, pending: 0, retrying: 0, last_error: "" },
     created_at: new Date(Date.now() - 30 * 86_400_000).toISOString(),
     updated_at: new Date(Date.now() - 30 * 86_400_000).toISOString(),
   },
@@ -192,6 +196,7 @@ const CHANNELS = [
     type: "webhook",
     config: { url: "****hook", headers: "****4f21" },
     enabled: true,
+    delivery: { state: "retrying", window_days: 30, last_delivered_at: null, last_failed_at: null, failed: 0, pending: 12, retrying: 12, last_error: "endpoint returned 503" },
     created_at: new Date(Date.now() - 12 * 86_400_000).toISOString(),
     updated_at: new Date(Date.now() - 12 * 86_400_000).toISOString(),
   },
@@ -201,6 +206,7 @@ const CHANNELS = [
     type: "telegram",
     config: { bot_token: "****9xQ2", chat_id: "-1001234567890" },
     enabled: false,
+    delivery: { state: "none", window_days: 30, last_delivered_at: null, last_failed_at: null, failed: 0, pending: 0, retrying: 0, last_error: "" },
     created_at: new Date(Date.now() - 5 * 86_400_000).toISOString(),
     updated_at: new Date(Date.now() - 86_400_000).toISOString(),
   },
@@ -226,6 +232,7 @@ const CHANNELS = [
     type: "pagerduty",
     config: { routing_key: "****ab19" },
     enabled: true,
+    delivery: { state: "failed", window_days: 30, last_delivered_at: null, last_failed_at: new Date(Date.now() - 2 * 3_600_000).toISOString(), failed: 11, pending: 0, retrying: 0, last_error: "gave up after 5 attempts: Post \"https://events.example/…\": dial tcp: lookup events.example: no such host" },
     created_at: new Date(Date.now() - 86_400_000).toISOString(),
     updated_at: new Date(Date.now() - 86_400_000).toISOString(),
   },
