@@ -297,6 +297,11 @@
    .button or an .icon-button alike. */
 .button--danger { color: var(--down); }
 
+/* `.icon-button:hover` sets the neutral ink and outranks the line above, so a
+   destructive icon button turned grey at the one moment the pointer was on
+   it. The edge and the surface still answer the hover; the ink stays red. */
+.icon-button.button--danger:hover:not(:disabled) { color: var(--down); }
+
 /*
  * The one loud button: a form whose whole job is one action — sign in, save
  * this card. Elsewhere the primary action fills only on hover
