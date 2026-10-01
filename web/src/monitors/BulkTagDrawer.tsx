@@ -121,7 +121,7 @@ export function BulkTagDrawer({
       className="bulk-tags-drawer"
     >
       <Panel>
-        <form className="add-form bulk-tags-form" onSubmit={submit}>
+        <form className="form-column bulk-tags-form" onSubmit={submit}>
           <p>
             {global
               ? "Every matching monitor in this instance, not just the selection or visible list."
@@ -129,10 +129,10 @@ export function BulkTagDrawer({
           </p>
           <fieldset className="add-fieldset" disabled={pending}>
             <legend className="add-legend">Tag change</legend>
-            <label className="add-field">
-              <span className="add-label">Action</span>
+            <label className="field">
+              <span className="field-label">Action</span>
               <select
-                className="add-input"
+                className="input"
                 value={action}
                 onChange={(e) => {
                   reset();
@@ -147,10 +147,10 @@ export function BulkTagDrawer({
                 </option>
               </select>
             </label>
-            <label className="add-field">
-              <span className="add-label">Tag key</span>
+            <label className="field">
+              <span className="field-label">Tag key</span>
               <input
-                className="add-input"
+                className="input"
                 value={key}
                 required
                 maxLength={32}
@@ -161,10 +161,10 @@ export function BulkTagDrawer({
               />
             </label>
             {action !== "rename_key" && (
-              <label className="add-field">
-                <span className="add-label">Tag value</span>
+              <label className="field">
+                <span className="field-label">Tag value</span>
                 <input
-                  className="add-input"
+                  className="input"
                   value={value}
                   required
                   onChange={(e) => {
@@ -175,10 +175,10 @@ export function BulkTagDrawer({
               </label>
             )}
             {action === "rename_key" && (
-              <label className="add-field">
-                <span className="add-label">New key</span>
+              <label className="field">
+                <span className="field-label">New key</span>
                 <input
-                  className="add-input"
+                  className="input"
                   value={newKey}
                   required
                   maxLength={32}
@@ -190,10 +190,10 @@ export function BulkTagDrawer({
               </label>
             )}
             {action === "rename_value" && (
-              <label className="add-field">
-                <span className="add-label">New value</span>
+              <label className="field">
+                <span className="field-label">New value</span>
                 <input
-                  className="add-input"
+                  className="input"
                   value={newValue}
                   required
                   onChange={(e) => {
@@ -224,7 +224,7 @@ export function BulkTagDrawer({
             )}
             <button
               type="submit"
-              className="add-button"
+              className="button"
               disabled={
                 !global &&
                 (selectedIds.length === 0 || selectedIds.length > 10000)
@@ -259,7 +259,7 @@ export function BulkTagDrawer({
               <button
                 ref={confirmRef}
                 type="button"
-                className="add-button add-button-primary"
+                className="button button--primary"
                 disabled={pending || currentPreview.changed === 0}
                 onClick={() => void run(true)}
               >
@@ -274,7 +274,7 @@ export function BulkTagDrawer({
           )}
           <button
             type="button"
-            className="add-button"
+            className="button"
             // Keep a final tab stop while the fieldset is disabled. This lets
             // the existing Drawer trap contain Tab from the progress message.
             // aria-disabled keeps the unavailable action announced; the guard

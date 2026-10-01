@@ -267,7 +267,7 @@ export function IncidentStoryItem({
            */}
           <button
             type="button"
-            className={open ? "add-button inv-act" : "inv-act inv-act--icon"}
+            className={open ? "button button--compact" : "icon-button"}
             onClick={() => onAck?.(incident.id)}
             disabled={acking || incident.acked}
             aria-busy={acking}

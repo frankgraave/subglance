@@ -333,7 +333,7 @@ s = s.replace(old, "        {true && (")
 mutate "edit form stops explaining what it omits" "$EDIT" '
 old = "        Target and check type are not editable here"
 assert old in s
-i = s.index("      <p className=\"add-help\">\n        Target and check type")
+i = s.index("      <p className=\"field-help\">\n        Target and check type")
 j = s.index("</p>", i) + len("</p>\n")
 s = s[:i] + s[j:]
 ' $SRC/EditMonitorForm.test.tsx

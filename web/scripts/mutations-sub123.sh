@@ -261,7 +261,7 @@ s = s.replace(old, "        {loading ? (")
 mutate "missing delivery history left unexplained" "$VIEW" '
 i = s.index("        SubGlance cannot yet tell you whether")
 j = s.index("</p>", i) + len("</p>")
-k = s.rindex("<p className=\"add-help\">", 0, i)
+k = s.rindex("<p className=\"field-help\">", 0, i)
 s = s[:k] + s[j:]
 ' $VIEW_T
 
@@ -425,9 +425,9 @@ s = s.replace(old, "  const matches = typed.trim().toLowerCase() === name.trim()
 # A label pointing at an element that does not exist: the screen reader reads
 # the field name as loose text and the click target does nothing.
 mutate "label points at a missing control" "$FORM" '
-old = "            {showingStored ? (\n              <p className=\"add-label\" id={`${inputId}-name`}>"
+old = "            {showingStored ? (\n              <p className=\"field-label\" id={`${inputId}-name`}>"
 assert old in s
-s = s.replace(old, "            {false ? (\n              <p className=\"add-label\" id={`${inputId}-name`}>")
+s = s.replace(old, "            {false ? (\n              <p className=\"field-label\" id={`${inputId}-name`}>")
 ' $SRC/ChannelForm.test.tsx
 
 # A disabled channel with no way back: visible but unchangeable.

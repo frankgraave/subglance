@@ -222,68 +222,68 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload }: EditMon
   /** A text input, a textarea, or with `options` a select labelled by its values. */
   const field = (key: string, multiline = false, options?: readonly string[]) => {
     if (!(key in values)) return null;
-    const props = { id: `${ids}-${key}`, name: key, className: "add-input", value: values[key],
+    const props = { id: `${ids}-${key}`, name: key, className: "input", value: values[key],
       onChange: (event: { target: { value: string } }) => update(key, event.target.value),
       "aria-invalid": problem?.field === key ? true as const : undefined,
       "aria-describedby": problem?.field === key ? `${ids}-error` : undefined };
-    return <div className="add-field" key={key}>
-      <label className="add-label" htmlFor={props.id}>{LABELS[key]}</label>
+    return <div className="field" key={key}>
+      <label className="field-label" htmlFor={props.id}>{LABELS[key]}</label>
       {options ? <select {...props}>{options.map((op) => <option key={op} value={op}>{op.replace("_", " ")}</option>)}</select>
         : multiline ? <textarea {...props} rows={3} spellCheck={false} /> : <input {...props} autoComplete="off" />}
-      {problem?.field === key && <p id={`${ids}-error`} role="alert" className="add-field-error"><IconAlert />{problem.message}</p>}
+      {problem?.field === key && <p id={`${ids}-error`} role="alert" className="field-error"><IconAlert />{problem.message}</p>}
     </div>;
   };
-  return <form ref={form} className="add-form edit-form" onSubmit={submit} noValidate aria-label="Edit monitor settings">
+  return <form ref={form} className="form-column edit-form" onSubmit={submit} noValidate aria-label="Edit monitor settings">
     <fieldset className="contents" disabled={saving}>
       {field("name")}
-      <p className="add-help">Check type: {monitor.type.toUpperCase()}. Check type stays fixed to preserve this monitor’s identity and push token.</p>
+      <p className="field-help">Check type: {monitor.type.toUpperCase()}. Check type stays fixed to preserve this monitor’s identity and push token.</p>
       {field("target")}
-      <div className="add-grid">{field("interval_s")}{field("timeout_s")}{field("recovery_threshold")}{field("push_interval_s")}{field("push_grace_s")}</div>
-      {"recovery_threshold" in values && <p className="add-help">An open incident closes, and “resolved” is sent, only after this many passing checks in a row. 1 closes on the first pass.</p>}
+      <div className="field-grid">{field("interval_s")}{field("timeout_s")}{field("recovery_threshold")}{field("push_interval_s")}{field("push_grace_s")}</div>
+      {"recovery_threshold" in values && <p className="field-help">An open incident closes, and “resolved” is sent, only after this many passing checks in a row. 1 closes on the first pass.</p>}
       {!monitor.push && <>
         {field("method")}{field("expected_status")}{field("keyword")}{field("keyword_mode")}
-        {"follow_redirects" in values && <div className="add-field">
+        {"follow_redirects" in values && <div className="field">
           <Checkbox name="follow_redirects" checked={values.follow_redirects === "true"} onChange={(event) => update("follow_redirects", String(event.target.checked))}
             aria-invalid={problem?.field === "follow_redirects" ? true : undefined}
             aria-describedby={problem?.field === "follow_redirects" ? `${ids}-error` : undefined}>Follow redirects</Checkbox>
-          {problem?.field === "follow_redirects" && <p id={`${ids}-error`} role="alert" className="add-field-error"><IconAlert />{problem.message}</p>}
+          {problem?.field === "follow_redirects" && <p id={`${ids}-error`} role="alert" className="field-error"><IconAlert />{problem.message}</p>}
         </div>}
         {field("headers", true)}{field("body", true)}{field("ssl_warn_days")}
         {"json_path" in values && <>
-          <div className="add-grid">
+          <div className="field-grid">
             {field("json_path")}{field("json_operator", false, JSON_OPERATORS)}
             {values.json_operator !== "exists" && field("json_expected")}
           </div>
-          <p className="add-help">{JSON_HELP}</p>
+          <p className="field-help">{JSON_HELP}</p>
         </>}
         <details className="add-advanced">
           <summary className="add-summary">Advanced options</summary>
-          <div className="add-grid">
+          <div className="field-grid">
             <TlsFloorField id={`${ids}-min-tls`} value={values.min_tls_version}
               onChange={(value) => update("min_tls_version", value)}
               invalid={problem?.field === "min_tls_version"}
               errorId={problem?.field === "min_tls_version" ? `${ids}-error` : undefined}>
-              {problem?.field === "min_tls_version" && <p id={`${ids}-error`} role="alert" className="add-field-error"><IconAlert />{problem.message}</p>}
+              {problem?.field === "min_tls_version" && <p id={`${ids}-error`} role="alert" className="field-error"><IconAlert />{problem.message}</p>}
             </TlsFloorField>
           </div>
         </details>
-        <p className="add-help">Test it probes these settings without saving, recording history or sending alerts. A failed check can still be saved.</p>
+        <p className="field-help">Test it probes these settings without saving, recording history or sending alerts. A failed check can still be saved.</p>
       </>}
       {field("tags", true)}
-      <p className="add-help">One key:value per line — a value may contain commas and colons. Saving replaces the whole set, so a tag left out here is a tag removed.</p>
-      {"repeat_after_s" in values ? <RepeatAlertField value={values.repeat_after_s} onChange={(value) => update("repeat_after_s", value)} error={problem?.field === "repeat_after_s" ? problem.message : undefined} /> : <p className="add-help">Repeat alert settings unavailable. Reload to read the current value.</p>}
+      <p className="field-help">One key:value per line — a value may contain commas and colons. Saving replaces the whole set, so a tag left out here is a tag removed.</p>
+      {"repeat_after_s" in values ? <RepeatAlertField value={values.repeat_after_s} onChange={(value) => update("repeat_after_s", value)} error={problem?.field === "repeat_after_s" ? problem.message : undefined} /> : <p className="field-help">Repeat alert settings unavailable. Reload to read the current value.</p>}
     </fieldset>
-    {problem && !problem.field && <p className="add-field-error" role="alert"><IconAlert />{problem.message}</p>}
+    {problem && !problem.field && <p className="field-error" role="alert"><IconAlert />{problem.message}</p>}
     <div role="status" aria-live="polite">
-      {preview.phase === "checking" && <p className="add-result">Checking…</p>}
-      {preview.phase === "done" && <p className={`add-result ${preview.result.ok ? "add-result-good" : "add-result-bad"}`}>{describePreview(preview.result)}</p>}
+      {preview.phase === "checking" && <p className="result">Checking…</p>}
+      {preview.phase === "done" && <p className={`result ${preview.result.ok ? "result--good" : "result--bad"}`}>{describePreview(preview.result)}</p>}
     </div>
-    {saving && <p className="add-help">A save in progress may still complete if you close this form.</p>}
-    <div className="add-actions">
-      {!monitor.push && <button className="add-button" type="button" onClick={runPreview} disabled={saving || conflict}>{preview.phase === "checking" ? "Testing…" : "Test it"}</button>}
-      <button className="add-button add-button-primary" type="submit" disabled={saving || conflict}>{saving ? "Saving…" : "Save changes"}</button>
-      {conflict && onReload && <button className="add-button" type="button" onClick={onReload}>Reload latest settings</button>}
-      {onCancel && <button className="add-button add-button-quiet" type="button" onClick={() => { if (confirmLeave(form.current)) onCancel(); }}>Cancel</button>}
+    {saving && <p className="field-help">A save in progress may still complete if you close this form.</p>}
+    <div className="button-row">
+      {!monitor.push && <button className="button" type="button" onClick={runPreview} disabled={saving || conflict}>{preview.phase === "checking" ? "Testing…" : "Test it"}</button>}
+      <button className="button button--primary" type="submit" disabled={saving || conflict}>{saving ? "Saving…" : "Save changes"}</button>
+      {conflict && onReload && <button className="button" type="button" onClick={onReload}>Reload latest settings</button>}
+      {onCancel && <button className="button button--quiet" type="button" onClick={() => { if (confirmLeave(form.current)) onCancel(); }}>Cancel</button>}
     </div>
   </form>;
 }

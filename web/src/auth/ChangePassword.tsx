@@ -13,7 +13,7 @@ const FIELDS = [
 ] as const;
 
 function PasswordError({ id, children }: { id?: string; children: ReactNode }) {
-  return <p className="auth-error auth-password-error" role="alert" id={id}>
+  return <p className="field-error auth-password-error" role="alert" id={id}>
     <IconAlert /><span>{children}</span>
   </p>;
 }
@@ -62,13 +62,13 @@ export function ChangePassword() {
   }
 
   return (
-    <form className="auth-form" aria-label="Change password" onSubmit={submit}>
+    <form className="stack" aria-label="Change password" onSubmit={submit}>
       <p className="auth-intro">Changing your password signs out every other session.</p>
       {FIELDS.map(([field, label]) => (
-        <div className="auth-field" key={field}>
-          <label className="auth-label" htmlFor={`${id}-${field}`}>{label}</label>
+        <div className="field" key={field}>
+          <label className="field-label" htmlFor={`${id}-${field}`}>{label}</label>
           <input
-            className="auth-input" id={`${id}-${field}`} name={field} type="password"
+            className="input input--inset" id={`${id}-${field}`} name={field} type="password"
             value={values[field]} required disabled={saving}
             autoComplete={field === "current_password" ? "current-password" : "new-password"}
             onChange={(event) => {
@@ -94,7 +94,7 @@ export function ChangePassword() {
         <PasswordError>{rejection.message}</PasswordError>
       )}
       <div>
-        <button className="auth-submit" disabled={saving || incomplete} type="submit">
+        <button className="button-solid" disabled={saving || incomplete} type="submit">
           {saving ? "Changing password…" : "Change password"}
         </button>
       </div>

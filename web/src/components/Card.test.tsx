@@ -19,8 +19,8 @@ const css = readFileSync(
   "utf8",
 );
 
-const authCss = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), "..", "auth", "auth.css"),
+const controlsCss = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "controls.css"),
   "utf8",
 );
 
@@ -296,9 +296,9 @@ describe("Panel spacing", () => {
     const [form, prose] = container.querySelectorAll(".panel");
     expect(form.className).toBe("panel panel--form");
     expect(prose.className).toBe("panel");
-    // The same rung as .auth-form, the form such a panel holds.
+    // The same rung as .stack, the form such a panel holds.
     expect(rule(".panel--form")).toMatch(/gap:\s*var\(--space-4\)/);
-    expect(rule(".auth-form", authCss)).toMatch(/gap:\s*var\(--space-4\)/);
+    expect(rule(".stack", controlsCss)).toMatch(/gap:\s*var\(--space-4\)/);
   });
 });
 

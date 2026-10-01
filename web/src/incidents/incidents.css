@@ -371,9 +371,9 @@
    hover reveal would have saved the same 46px and made the button unfindable
    on the one device somebody is holding at 03:00.
 
-   It declares nothing of its own. Closed it wears `.inv-act--icon`, the square
+   It declares nothing of its own. Closed it wears `.icon-button`, the square
    the monitors rows and the channel rows already use for a per-row action, and
-   open it wears `.add-button .inv-act` — the same pairing the channels screen's
+   open it wears `.button .button--compact` — the same pairing the channels screen's
    worded row action takes. Three screens, one vocabulary, and a rule here would
    only be a fourth dialect of it. */
 
@@ -565,7 +565,7 @@
  * the list is short, and the button is only how you fix that. The old card
  * carried the sentence with no button, which is the state this replaces.
  *
- * It declares no button styling of its own — `.add-button` is the worded
+ * It declares no button styling of its own — `.button` is the worded
  * action three screens already use, and a fourth dialect of it here is exactly
  * the drift AGENTS.md is about. Only the row's own layout lives here.
  */

@@ -34,8 +34,8 @@ export function EditMonitorDrawer({ id, onClose }: { id: string; onClose: () => 
   }, []);
   return <Drawer open onClose={onClose} title={loaded ? `Edit ${loaded.monitor.name}` : "Edit monitor"}>
     <Panel>
-      {error ? <><p role="alert" className="add-field-error">{error}</p><button type="button" className="add-button" onClick={reload}>Reload latest settings</button></>
-        : loaded === null ? <p className="add-help">Loading current settings…</p>
+      {error ? <><p role="alert" className="field-error">{error}</p><button type="button" className="button" onClick={reload}>Reload latest settings</button></>
+        : loaded === null ? <p className="field-help">Loading current settings…</p>
         : <EditMonitorForm key={revision} monitor={loaded.monitor} onReload={reload} onCancel={onClose} onSave={async (patch) => {
           const controller = saveController.current!;
           await patchMonitor(id, patch, loaded.etag, controller.signal);

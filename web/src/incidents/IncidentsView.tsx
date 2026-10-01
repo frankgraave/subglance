@@ -672,7 +672,7 @@ export function IncidentsView({
               <p className="inc-more">
                 <button
                   type="button"
-                  className="add-button"
+                  className="button"
                   onClick={onLoadMoreHistory}
                   disabled={historyLoadingMore}
                 >

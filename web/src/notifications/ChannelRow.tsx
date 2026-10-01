@@ -41,7 +41,7 @@ const TEST_BUSY_WORD = "Sending test…";
  * glyphs. Four bordered rectangles per row is a wall at five channels and the
  * loudest thing on a screen whose subject is the two lines of text to their
  * left. Edit, disable and delete are now glyphs on the inventory's own
- * `.inv-act--icon`, borrowed rather than re-specified so the two lists cannot
+ * `.icon-button`, borrowed rather than re-specified so the two lists cannot
  * drift apart again.
  *
  * **Send test stays a word, and that is the one deliberate departure.** It is
@@ -219,7 +219,7 @@ function ChannelRowImpl({
           {onTest !== undefined && (
             <button
               type="button"
-              className="add-button inv-act nt-act-test"
+              className="button button--compact nt-act-test"
               data-reserve={TEST_BUSY_WORD}
               onClick={() => onTest(channel.id)}
               disabled={testing}
@@ -233,7 +233,7 @@ function ChannelRowImpl({
           {onSetEnabled !== undefined && (
             <button
               type="button"
-              className="inv-act inv-act--icon nt-act-toggle"
+              className="icon-button nt-act-toggle"
               onClick={() => onSetEnabled(channel.id, !channel.enabled)}
               disabled={toggling}
               aria-busy={toggling}
@@ -252,7 +252,7 @@ function ChannelRowImpl({
           {onEdit !== undefined && (
             <button
               type="button"
-              className="inv-act inv-act--icon"
+              className="icon-button"
               onClick={() => onEdit(channel.id)}
               aria-label={`Edit ${label}`}
               title={`Edit ${label}`}
@@ -264,7 +264,7 @@ function ChannelRowImpl({
           {onDelete !== undefined && (
             <button
               type="button"
-              className="inv-act inv-act--icon inv-act--danger"
+              className="icon-button button--danger"
               onClick={() => onDelete(channel.id)}
               aria-label={`Delete ${label}`}
               title={`Delete ${label}`}

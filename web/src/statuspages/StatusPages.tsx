@@ -43,11 +43,11 @@ function useDraftGuard(what: string, dirty: boolean) {
 function Field({ id, label, help, error, children }: {
   id: string; label: string; help?: ReactNode; error?: string; children: ReactNode;
 }) {
-  return <div className="auth-field">
-    <label className="auth-label" htmlFor={id}>{label}</label>
+  return <div className="field">
+    <label className="field-label" htmlFor={id}>{label}</label>
     {children}
     {help && <p className="panel-note" id={`${id}-help`}>{help}</p>}
-    {error && <p className="auth-error" role="alert" id={`${id}-error`}>{error}</p>}
+    {error && <p className="field-error" role="alert" id={`${id}-error`}>{error}</p>}
   </div>;
 }
 
@@ -87,7 +87,7 @@ function SettingsForm({ page, onSaved, onCancel }: {
   const described = (field: string, help = false) => [help ? `${id}-${field}-help` : "", fieldError(field) ? `${id}-${field}-error` : ""]
     .filter(Boolean).join(" ") || undefined;
   const input = (field: keyof StatusPageSettings, help = false) => ({
-    id: `${id}-${field}`, className: "auth-input", "aria-describedby": described(field, help),
+    id: `${id}-${field}`, className: "input input--inset", "aria-describedby": described(field, help),
     "aria-invalid": fieldError(field) ? true : undefined,
   });
   const ready = draft.title.trim() !== "" && draft.slug.trim() !== "" &&
@@ -113,7 +113,7 @@ function SettingsForm({ page, onSaved, onCancel }: {
   const placed = ["slug", "title", "description", "timezone", "selection", "tag_key", "tag_value"];
   const general = error && !(error.field && placed.includes(error.field) && (draft.selection === "tag" || !error.field.startsWith("tag_")));
 
-  return <form ref={form} className="auth-form" aria-label={page ? `Settings for ${page.title}` : "New status page"} onSubmit={submit}>
+  return <form ref={form} className="stack" aria-label={page ? `Settings for ${page.title}` : "New status page"} onSubmit={submit}>
     <Field id={`${id}-title`} label="Title" help="The heading visitors see." error={fieldError("title")}>
       <input {...input("title", true)} value={draft.title} maxLength={120} autoComplete="off"
         onChange={(event) => set("title", event.target.value)} />
@@ -165,12 +165,12 @@ function SettingsForm({ page, onSaved, onCancel }: {
     <Checkbox checked={draft.indexable} onChange={(event) => set("indexable", event.target.checked)}>
       Let search engines list it
     </Checkbox>
-    {general && error && <p className="auth-error" role="alert">{error.message}</p>}
-    <div className="add-actions">
-      <button className="auth-submit" type="submit" disabled={!ready || saving}>
+    {general && error && <p className="field-error" role="alert">{error.message}</p>}
+    <div className="button-row">
+      <button className="button-solid" type="submit" disabled={!ready || saving}>
         {saving ? "Saving…" : page ? "Save settings" : "Create page"}
       </button>
-      <button className="add-button" type="button" onClick={onCancel}>Cancel</button>
+      <button className="button" type="button" onClick={onCancel}>Cancel</button>
     </div>
   </form>;
 }
@@ -245,7 +245,7 @@ function ServicesForm({ page, monitors, onSaved, onCancel }: {
     }
   }
 
-  return <form ref={form} className="auth-form" aria-label={`Services on ${page.title}`} onSubmit={submit}>
+  return <form ref={form} className="stack" aria-label={`Services on ${page.title}`} onSubmit={submit}>
     <p className="panel-note">
       Visitors see only the public name, the state and the history. The monitor&apos;s own name, address and errors never
       appear on the page.
@@ -255,45 +255,45 @@ function ServicesForm({ page, monitors, onSaved, onCancel }: {
       Not shown until named: {unnamed.map(nameOf).join(", ")}.
     </p>}
     {draft.length === 0 ? <p className="panel-note">No services on this page yet.</p>
-      : <ol className="auth-form" aria-label="Services, in page order">
+      : <ol className="stack" aria-label="Services, in page order">
         {draft.map((entry, index) => {
           const monitor = nameOf(entry.monitor_id);
           const invalid = blank === entry.monitor_id;
           return <li key={entry.monitor_id} className="control-row">
-            <div className="auth-field inv-main">
-              <label className="auth-label" htmlFor={`${id}-${entry.monitor_id}`}>Public name for {monitor}</label>
-              <input className="auth-input" id={`${id}-${entry.monitor_id}`} value={entry.display_name} maxLength={80}
+            <div className="field control-row-main">
+              <label className="field-label" htmlFor={`${id}-${entry.monitor_id}`}>Public name for {monitor}</label>
+              <input className="input input--inset" id={`${id}-${entry.monitor_id}`} value={entry.display_name} maxLength={80}
                 autoComplete="off" ref={(node) => { if (node) inputs.current.set(entry.monitor_id, node); else inputs.current.delete(entry.monitor_id); }}
                 aria-invalid={invalid ? true : undefined} aria-describedby={invalid ? `${id}-error` : undefined}
                 onChange={(event) => change(draft.map((item) => item.monitor_id === entry.monitor_id
                   ? { ...item, display_name: event.target.value } : item))} />
               {!tagged(entry.monitor_id) && <p className="panel-note">Not shown: this monitor no longer has the tag.</p>}
             </div>
-            <span className="add-actions">
-              <button type="button" className="add-button" disabled={index === 0} aria-label={`Move ${monitor} up`}
+            <span className="button-row">
+              <button type="button" className="button" disabled={index === 0} aria-label={`Move ${monitor} up`}
                 onClick={() => move(index, -1)}>Up</button>
-              <button type="button" className="add-button" disabled={index === draft.length - 1}
+              <button type="button" className="button" disabled={index === draft.length - 1}
                 aria-label={`Move ${monitor} down`} onClick={() => move(index, 1)}>Down</button>
-              <button type="button" className="add-button" aria-label={`Remove ${monitor} from the page`}
+              <button type="button" className="button" aria-label={`Remove ${monitor} from the page`}
                 onClick={() => change(draft.filter((item) => item.monitor_id !== entry.monitor_id))}>Remove</button>
             </span>
           </li>;
         })}
       </ol>}
     {candidates.length > 0 && <div className="control-row">
-      <div className="auth-field inv-main">
-        <label className="auth-label" htmlFor={`${id}-add`}>Add a monitor</label>
-        <select className="auth-input" id={`${id}-add`} value={adding} onChange={(event) => setAdding(event.target.value)}>
+      <div className="field control-row-main">
+        <label className="field-label" htmlFor={`${id}-add`}>Add a monitor</label>
+        <select className="input input--inset" id={`${id}-add`} value={adding} onChange={(event) => setAdding(event.target.value)}>
           <option value="">Choose a monitor</option>
           {candidates.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
         </select>
       </div>
-      <button type="button" className="add-button" disabled={adding === ""} onClick={() => add(Number(adding))}>Add</button>
+      <button type="button" className="button" disabled={adding === ""} onClick={() => add(Number(adding))}>Add</button>
     </div>}
-    {error && <p className="auth-error" role="alert" id={`${id}-error`}>{error}</p>}
-    <div className="add-actions">
-      <button className="auth-submit" type="submit" disabled={saving || !dirty}>{saving ? "Saving…" : "Save services"}</button>
-      <button className="add-button" type="button" onClick={onCancel}>Cancel</button>
+    {error && <p className="field-error" role="alert" id={`${id}-error`}>{error}</p>}
+    <div className="button-row">
+      <button className="button-solid" type="submit" disabled={saving || !dirty}>{saving ? "Saving…" : "Save services"}</button>
+      <button className="button" type="button" onClick={onCancel}>Cancel</button>
     </div>
   </form>;
 }
@@ -324,21 +324,21 @@ function PageRow({ page, onEdit, onServices, onDeleted }: {
   }
 
   return <li className="control-row">
-    <div className="inv-main">
+    <div className="control-row-main">
       <p><strong>{page.title}</strong></p>
       <p className="panel-note">{facts.join(" · ")}</p>
-      {error && <p className="auth-error" role="alert">{error}</p>}
+      {error && <p className="field-error" role="alert">{error}</p>}
     </div>
     <StateChip>{page.enabled ? "published" : "off"}</StateChip>
-    <span className="add-actions">
+    <span className="button-row">
       {/* Only a published page has anything to open: one that is off answers
           404, exactly like an address that never existed. A plain link, so
           the page loads as the visitor gets it, without the dashboard. */}
-      {page.enabled && <a className="add-button" href={address(page.slug)} aria-label={`Open ${page.title}`}>Open</a>}
-      <button type="button" className="add-button" disabled={busy} aria-label={`Settings for ${page.title}`} onClick={onEdit}>Settings</button>
-      <button type="button" className="add-button" disabled={busy} aria-label={`Services on ${page.title}`} onClick={onServices}>Services</button>
+      {page.enabled && <a className="button" href={address(page.slug)} aria-label={`Open ${page.title}`}>Open</a>}
+      <button type="button" className="button" disabled={busy} aria-label={`Settings for ${page.title}`} onClick={onEdit}>Settings</button>
+      <button type="button" className="button" disabled={busy} aria-label={`Services on ${page.title}`} onClick={onServices}>Services</button>
     </span>
-    <button type="button" className="inv-act inv-act--icon inv-act--danger" disabled={busy}
+    <button type="button" className="icon-button button--danger" disabled={busy}
       aria-label={`Delete ${page.title}`} title={`Delete ${page.title}`} onClick={() => setConfirming(true)}>
       <IconTrash />
     </button>
@@ -376,16 +376,16 @@ export function StatusPagesCard() {
   const settingsOpen = editing?.kind === "settings" && (editing.pageId === null || current !== null);
 
   return <><Card title={pages ? `Status pages (${pages.length})` : "Status pages"} icon={<IconGlobe />}
-    action={<button type="button" className="add-button" onClick={() => { setEditing({ kind: "settings", pageId: null }); setMessage(null); }}>New page</button>}>
+    action={<button type="button" className="button" onClick={() => { setEditing({ kind: "settings", pageId: null }); setMessage(null); }}>New page</button>}>
     <Panel spacing="form">
       <p className="panel-note">
         A public page for people without an account: chosen monitors under public names, their state and 90 days of
         history. A new page is off until you publish it.
       </p>
-      <div role="status" aria-live="polite" className="add-result-region">{message && <p className="add-result">{message}</p>}</div>
+      <div role="status" aria-live="polite" className="result-region">{message && <p className="result">{message}</p>}</div>
       {!pages ? <p>{query.isError ? "Status pages unavailable." : "Loading status pages…"}</p>
         : pages.length === 0 ? <p className="panel-note">No status pages yet.</p>
-        : <ul className="auth-form" aria-label="Status pages">
+        : <ul className="stack" aria-label="Status pages">
           {pages.map((page) => <PageRow key={page.id} page={page}
             onEdit={() => { setEditing({ kind: "settings", pageId: page.id }); setMessage(null); }}
             onServices={() => { setEditing({ kind: "services", pageId: page.id }); setMessage(null); }}

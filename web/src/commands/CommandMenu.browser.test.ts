@@ -85,7 +85,7 @@ it.each(["dark", "light"])("uses the surface-specific focus ring in %s mode", as
 it("rejects native modified button activation and restores input focus after pointer writes", async () => {
   const page = await open("dark", 390, "/monitors/new");
   try {
-    await page.waitForSelector(".add-form");
+    await page.waitForSelector(".form-column");
     await page.type('input[id$="-name"]', "button draft");
     await launch(page);
     await page.focus(".command-menu > button");
@@ -177,7 +177,7 @@ it.each([ ["dark", 390], ["light", 390], ["dark", 1440], ["light", 1440] ] as co
 it.each(["dark", "light"])("Escape only closes the top menu over a dirty drawer; navigation asks exactly once (%s)", async (theme) => {
   const page = await open(theme, 390, "/monitors/new");
   try {
-    await page.waitForSelector(".add-form");
+    await page.waitForSelector(".form-column");
     await page.type('input[id$="-name"]', "keep this draft");
     let prompts = 0, accept = false;
     page.on("dialog", async (dialog) => { prompts++; expect(dialog.type()).toBe("confirm"); if (accept) await dialog.accept(); else await dialog.dismiss(); });
@@ -197,6 +197,6 @@ it.each(["dark", "light"])("Escape only closes the top menu over a dirty drawer;
     await launch(page); await search(page, "Go to Settings"); await page.keyboard.press("Enter");
     await page.waitForFunction(() => location.pathname === "/settings");
     expect(prompts).toBe(3);
-    expect(await page.$(".add-form")).toBeNull();
+    expect(await page.$(".form-column")).toBeNull();
   } finally { await page.close(); }
 });

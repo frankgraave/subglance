@@ -207,7 +207,7 @@ export function MonitorsView({
           <input
             type="search"
             /* `shell-search-input` pins the 16px minimum at every width.
-               `.add-input` drops to 14px above 640px, which is fine for a
+               `.input` drops to 14px above 640px, which is fine for a
                form nobody types into on a phone in landscape and wrong for a
                search box: iOS Safari zooms the page on focus below 16px and
                leaves the reader scrolled sideways (DESIGN.md §13). */
@@ -277,11 +277,11 @@ export function MonitorsView({
           {/* Disabled, not hidden, with nothing to tag: the header keeps its
               shape while the list loads, and an empty inventory says why
               right below it. */}
-          {onTagChange && <button type="button" className="add-button" disabled={loading || error !== null || monitors.length === 0} onClick={() => setTagOpen(true)}>Manage tags</button>}
+          {onTagChange && <button type="button" className="button" disabled={loading || error !== null || monitors.length === 0} onClick={() => setTagOpen(true)}>Manage tags</button>}
           {onCreateOpenChange === undefined ? undefined : (
             <button
               type="button"
-              className="add-button add-button-primary"
+              className="button button--primary"
               /*
                * Named explicitly rather than left to its text content. The
                * button is a glyph plus a word, and what a screen reader makes
@@ -313,7 +313,7 @@ export function MonitorsView({
             onChange={() => setSelected(allVisibleSelected ? new Set([...selected].filter((id) => !visibleIds.has(id))) : new Set([...selected, ...visible.map((m) => m.id)]))}>
             Select all visible ({visible.length})
           </Checkbox>
-          <button type="button" className="add-button" disabled={selectedIds.length === 0} onClick={() => setSelected(NO_SET)}>Clear selection</button>
+          <button type="button" className="button" disabled={selectedIds.length === 0} onClick={() => setSelected(NO_SET)}>Clear selection</button>
           {/* The same count as the toolbar's "n of m shown", and drawn the
               same: a count about the list is helper text, not a sentence in
               body ink beside the controls it counts for. */}
@@ -329,7 +329,7 @@ export function MonitorsView({
            * request 500'd. The error is stated above, and this space stays
            * quiet rather than filling it with a claim we cannot support.
            */
-          <p className="add-help">
+          <p className="field-help">
             {loading ? "Loading monitors…" : "The list could not be loaded."}
           </p>
         ) : monitors.length === 0 ? (
@@ -461,7 +461,7 @@ export function MonitorsView({
       )}
 
       {onTogglePaused === undefined && !loading && monitors.length > 0 && (
-        <p className="add-help">
+        <p className="field-help">
           <StateChip>read only</StateChip> This account may read the inventory
           but not change it.
         </p>

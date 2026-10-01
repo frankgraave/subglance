@@ -48,7 +48,7 @@ export function DiagnosticsCard() {
 
   const s = d?.scheduler;
   return <Card title="Instance" icon={<IconServer />} className="diag-card"
-    action={d && <button type="button" className="add-button" onClick={copy}>Copy diagnostics</button>}>
+    action={d && <button type="button" className="button" onClick={copy}>Copy diagnostics</button>}>
     {!d ? <Panel><p>{query.isError ? "Diagnostics unavailable." : "Loading diagnostics…"}</p></Panel> : <>
       {old && <p role="status">Diagnostics unavailable. Showing the last readings.</p>}
       <p role="status" className="diag-note">{copied}</p>

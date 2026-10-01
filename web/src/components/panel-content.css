@@ -49,3 +49,7 @@
   align-items: center;
   gap: var(--space-2) var(--space-3);
 }
+
+/* The part of a .control-row that says what the row is: it takes the width,
+   so the row's controls sit at its end. */
+.control-row-main { flex: 1 1 12rem; min-width: 0; }

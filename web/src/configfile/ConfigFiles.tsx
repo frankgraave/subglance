@@ -47,9 +47,9 @@ const words = (list: string[]) => list.map((word, index) => <span key={word}>{in
 
 function Item({ item }: { item: ImportItem }) {
   const title = item.name || item.key;
-  return <li className="auth-field">
+  return <li className="field">
     <p>
-      <span className="auth-label">{item.action === "create" ? "Create" : "Update"}</span>{" "}
+      <span className="field-label">{item.action === "create" ? "Create" : "Update"}</span>{" "}
       <strong>{title}</strong>
       {item.key && item.name && <> <span className="face-mono">{item.key}</span></>}
       {item.needs_secrets && item.needs_secrets.length > 0 && <> <StateChip>switched off</StateChip></>}
@@ -69,18 +69,18 @@ function Item({ item }: { item: ImportItem }) {
 function Report({ report }: { report: ImportReport }) {
   const id = useId();
   const secrets = report.summary.needs_secrets;
-  return <div className="auth-form" aria-labelledby={id} role="group">
-    <p className="auth-label" id={id}>{report.dry_run ? "What this file would change" : "What was imported"}</p>
+  return <div className="stack" aria-labelledby={id} role="group">
+    <p className="field-label" id={id}>{report.dry_run ? "What this file would change" : "What was imported"}</p>
     <p>{summary(report)}</p>
-    {secrets > 0 && <p className="push-reveal-warn">
+    {secrets > 0 && <p className="warn-note">
       {secrets === 1 ? "One object is" : `${secrets} objects are`} {report.dry_run ? "saved" : "now"} switched off: the file withholds a
       value this instance has nothing to fill in for. They are marked below.
     </p>}
     {GROUPS.map(([group, label]) => {
       const items = changing(report[group]);
-      return items.length > 0 && <div key={group} className="auth-field">
-        <p className="auth-label" id={`${id}-${group}`}>{label}</p>
-        <ul className="auth-form" aria-labelledby={`${id}-${group}`}>
+      return items.length > 0 && <div key={group} className="field">
+        <p className="field-label" id={`${id}-${group}`}>{label}</p>
+        <ul className="stack" aria-labelledby={`${id}-${group}`}>
           {items.map((item, index) => <Item key={`${item.key ?? ""}${item.name ?? ""}${index}`} item={item} />)}
         </ul>
       </div>;
@@ -89,10 +89,10 @@ function Report({ report }: { report: ImportReport }) {
 }
 
 function Refusal({ problem, applied }: { problem: Problem; applied: boolean }) {
-  // The push reveal's caveat box, not `.auth-error`: --down text on a card
+  // The push reveal's caveat box, not `.field-error`: --down text on a card
   // panel measures under 4.5:1 in both themes, and this sentence is the whole
   // answer, so it is set in full ink behind a rail instead.
-  return <div role="alert" className="push-reveal-warn auth-field">
+  return <div role="alert" className="warn-note field">
     {problem.path && <p>In the file at <code>{problem.path}</code></p>}
     <p>{problem.message}</p>
     <p className="panel-note">
@@ -121,13 +121,13 @@ function ExportPanel() {
       Monitors, notification channels, routing rules and maintenance windows as one YAML file. History, users, API tokens and credentials
       are not in it, so it is not a backup. <a href={docs}>Read about configuration files</a>.
     </p>
-    <div><button type="button" className="add-button" disabled={state === "busy"} onClick={() => void run()}>
+    <div><button type="button" className="button" disabled={state === "busy"} onClick={() => void run()}>
       {state === "busy" ? "Exporting…" : "Download configuration"}
     </button></div>
-    <div role="status" aria-live="polite" className="add-result-region">
+    <div role="status" aria-live="polite" className="result-region">
       {state === "done" && <p className="panel-note">Downloaded as subglance-config.yaml.</p>}
     </div>
-    {error && <p className="push-reveal-warn" role="alert">{error}</p>}
+    {error && <p className="warn-note" role="alert">{error}</p>}
   </Panel>;
 }
 
@@ -208,24 +208,24 @@ function ImportPanel() {
       An import creates and updates what the file describes and never deletes anything. The file is checked first; nothing is written until
       you confirm.
     </p>
-    <div className="auth-field">
-      <label className="auth-label" htmlFor={`${id}-file`}>Configuration file</label>
-      <input key={inputVersion} id={`${id}-file`} type="file" className="add-input"
+    <div className="field">
+      <label className="field-label" htmlFor={`${id}-file`}>Configuration file</label>
+      <input key={inputVersion} id={`${id}-file`} type="file" className="input"
         accept=".yaml,.yml,application/yaml,text/yaml" disabled={busy} onChange={(event) => void check(event)} />
     </div>
-    <div role="status" aria-live="polite" className="add-result-region">
+    <div role="status" aria-live="polite" className="result-region">
       {state.phase === "checking" && <p className="panel-note">Checking {state.file.name}…</p>}
       {state.phase === "applying" && <p className="panel-note">Importing {state.file.name}…</p>}
       {state.phase === "applied" && <p className="panel-note">Imported.</p>}
     </div>
     {state.phase === "refused" && <Refusal problem={state.problem} applied={state.applied} />}
     {shown && <Report report={shown} />}
-    {state.phase === "checked" && <div className="add-actions">
+    {state.phase === "checked" && <div className="button-row">
       {state.report.summary.create + state.report.summary.update > 0 &&
-        <button type="button" className="add-button add-button-primary" onClick={() => void apply(state.file, state.text, state.report)}>
+        <button type="button" className="button button--primary" onClick={() => void apply(state.file, state.text, state.report)}>
           Import {state.file.name}
         </button>}
-      <button type="button" className="add-button" onClick={discard}>
+      <button type="button" className="button" onClick={discard}>
         {state.report.summary.create + state.report.summary.update > 0 ? "Cancel" : "Choose another file"}
       </button>
     </div>}

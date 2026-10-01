@@ -2143,7 +2143,7 @@ const statusBorders = new Set<string>([
   'web/src/monitors/monitors.css | .mon-line[data-status="warning"], .mon-line[data-status="recovering"] | border-left: var(--size-status-rail) solid var(--warn)',
   'web/src/monitors/monitors.css | .mon-line[data-status="paused"] | border-left: var(--size-status-rail) dotted var(--ink-3)',
   'web/src/monitors/monitors.css | .mon-line[data-status="waiting"] | border-left: var(--size-status-rail) solid var(--ink-3)',
-  "web/src/monitors/monitors.css | .push-reveal-warn | border-left: var(--size-status-rail) solid var(--warn)",
+  "web/src/components/controls.css | .warn-note | border-left: var(--size-status-rail) solid var(--warn)",
   /*
    * The coverage list on the notifications page marks a paused monitor with
    * the same dotted --ink-3 rail as the monitor rows, cards and lines
@@ -2152,10 +2152,8 @@ const statusBorders = new Set<string>([
    */
   "web/src/notifications/notifications.css | .nt-cov-row | border-left: var(--size-status-rail) solid transparent",
   'web/src/notifications/notifications.css | .nt-cov-row[data-paused="true"] | border-left-color: var(--ink-3)',
-  'web/src/monitors/monitors.css | .add-input[aria-invalid="true"] | border-color: var(--down)',
-  'web/src/monitors/monitors.css | .add-input[aria-invalid="true"]:focus | border-color: var(--down)',
-  'web/src/auth/auth.css | .auth-input[aria-invalid="true"] | border-color: var(--down)',
-  'web/src/auth/auth.css | .auth-input[aria-invalid="true"]:focus | border-color: var(--down)',
+  'web/src/components/controls.css | .input[aria-invalid="true"] | border-color: var(--down)',
+  'web/src/components/controls.css | .input[aria-invalid="true"]:focus | border-color: var(--down)',
   'web/src/wall/wall.css | .wall-card[data-status="down"] | border-color: color-mix(in srgb, var(--down) 40%, var(--border))',
   'web/src/wall/wall.css | .wall-card[data-status="pending"] | border-color: color-mix(in srgb, var(--warn) 34%, var(--border))',
   // Warning is an unconfirmed failure, and recovering a confirmed one whose checks pass again (SUB-157):
@@ -3462,7 +3460,7 @@ function literalMotion(declaration: string): boolean {
 
 const motionExceptions = new Map<string, string>([
   [
-    "web/src/monitors/inventory.css: animation: inv-act-spin 900ms linear infinite",
+    "web/src/components/controls.css: animation: icon-button-spin 900ms linear infinite",
     "A loop, not a transition: a busy glyph turning while a check runs. A constant rotation is linear by definition, and its period is a pace rather than a response time, so no rung of the ladder describes it (DESIGN.md §2.6).",
   ],
   [

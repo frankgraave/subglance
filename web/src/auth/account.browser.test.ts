@@ -20,7 +20,7 @@ async function fill(page: Page, selector: string, value: string) {
   await page.type(selector, value);
 }
 async function readyAddForm(page: Page): Promise<void> {
-  await page.waitForSelector(".add-form");
+  await page.waitForSelector(".form-column");
   // Finding the form is not enough: the close button starts outside the
   // viewport while its parent drawer slides in. Wait for that real animation,
   // not a fixed delay or a retry of the click after it missed.
@@ -134,7 +134,7 @@ it.each([[false, false], [true, false], [false, true]])("restores the exact draf
     expect(await page.$eval(name, (el) => (el as HTMLInputElement).value)).toBe("native hash draft");
     expect(await cdp.send("Page.getNavigationHistory")).toEqual(before);
     for (const action of [
-      () => page.click(".add-button-quiet"),
+      () => page.click(".button--quiet"),
       () => page.evaluate(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))),
     ]) {
       await confirmAction(page, action, false);
@@ -143,7 +143,7 @@ it.each([[false, false], [true, false], [false, true]])("restores the exact draf
     }
 
     await confirmAction(page, () => page.evaluate((delta) => history.go(delta), backSteps), true);
-    await page.waitForFunction(() => location.pathname === "/" && !document.querySelector(".add-form"));
+    await page.waitForFunction(() => location.pathname === "/" && !document.querySelector(".form-column"));
     for (const path of ["/#shell-main", "/monitors", "/monitors/new", ...(draftHash ? [draftPath] : [])]) {
       await page.evaluate(() => history.forward());
       await page.waitForFunction((expected) => location.pathname + location.hash === expected, {}, path);
@@ -186,7 +186,7 @@ it("keeps native fragment entries on a dirty form reversible in both directions"
     page.off("dialog", reject);
     expect(unexpected).toBe(0);
     expect(await page.$eval(name, (el) => (el as HTMLInputElement).value)).toBe("forward draft");
-    await confirmAction(page, () => page.click(".add-button-quiet"), false);
+    await confirmAction(page, () => page.click(".button--quiet"), false);
     expect(new URL(page.url()).pathname + new URL(page.url()).hash).toBe("/monitors/new#draft");
     expect(await page.$eval(name, (el) => (el as HTMLInputElement).value)).toBe("forward draft");
   } finally { await page.close(); }
@@ -205,7 +205,7 @@ it.each(["dashboard", "direct"])("protects Escape, close, Cancel, backdrop and h
     for (const [label, action] of [
       ["Escape", () => page.keyboard.press("Escape")],
       ["close", () => page.click('.drawer-close')],
-      ["Cancel", () => page.click('.add-button-quiet')],
+      ["Cancel", () => page.click('.button--quiet')],
       ["backdrop", () => page.click('.drawer-scrim', { offset: { x: 2, y: 100 } })],
     ] as const) {
       await page.focus(name);
@@ -226,7 +226,7 @@ it.each(["dashboard", "direct"])("protects Escape, close, Cancel, backdrop and h
     expect(unloaded).toBe(true);
     expect(await page.$eval(name, (el) => (el as HTMLInputElement).value)).toBe("browser draft");
     // The existing focus trap still wraps the last control back to Close.
-    await page.focus('.add-button-quiet'); await page.keyboard.press("Tab");
+    await page.focus('.button--quiet'); await page.keyboard.press("Tab");
     expect(await page.evaluate(() => document.activeElement?.className)).toBe("drawer-close");
     if (entry === "dashboard") {
       await confirmAction(page, () => page.evaluate(() => history.back()), false);
@@ -234,7 +234,7 @@ it.each(["dashboard", "direct"])("protects Escape, close, Cancel, backdrop and h
       expect(await page.$eval(name, (el) => (el as HTMLInputElement).value)).toBe("browser draft");
     }
     await confirmAction(page, () => page.keyboard.press("Escape"), true);
-    await page.waitForFunction(() => !document.querySelector(".add-form"));
+    await page.waitForFunction(() => !document.querySelector(".form-column"));
     await (await page.waitForSelector('button[aria-label="Add monitor"]'))!.click();
     await readyAddForm(page);
     expect(await page.$eval(name, (el) => (el as HTMLInputElement).value)).toBe("");
@@ -242,6 +242,6 @@ it.each(["dashboard", "direct"])("protects Escape, close, Cancel, backdrop and h
     page.on("dialog", (dialog) => { unexpected++; void dialog.dismiss(); });
     await page.keyboard.press("Escape");
     expect(unexpected).toBe(0);
-    expect(await page.$(".add-form")).toBeNull();
+    expect(await page.$(".form-column")).toBeNull();
   } finally { await page.close(); }
 });

@@ -46,13 +46,13 @@ export function TlsFloorField({
 }: TlsFloorFieldProps) {
   const helpId = `${id}-help`;
   return (
-    <div className="add-field add-field-wide">
-      <label className="add-label" htmlFor={id}>
+    <div className="field field-wide">
+      <label className="field-label" htmlFor={id}>
         Minimum TLS version
       </label>
       <select
         id={id}
-        className="add-input"
+        className="input"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         aria-invalid={invalid ? true : undefined}
@@ -70,7 +70,7 @@ export function TlsFloorField({
         ))}
       </select>
       {children}
-      <p id={helpId} className="add-help">
+      <p id={helpId} className="field-help">
         This is the floor SubGlance dials with, not a description of what the
         server offers. Raising it is an assertion: set 1.3 and the check goes
         red the day the server starts offering 1.2 again, which is the monitor

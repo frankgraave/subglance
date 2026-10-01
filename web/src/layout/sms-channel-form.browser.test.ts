@@ -57,7 +57,7 @@ async function openSmsForm(width: number): Promise<Page> {
   const add = await page.waitForSelector('button[aria-label="Add channel"]', { visible: true });
   if (!add) throw new Error("no Add channel button");
   await add.click();
-  await page.waitForSelector(".drawer-panel .add-form", { visible: true });
+  await page.waitForSelector(".drawer-panel .form-column", { visible: true });
   await choose(page, 0, "sms");
   await page.waitForSelector(".drawer-panel textarea", { visible: true });
   await page.evaluate(async () => {
@@ -133,7 +133,7 @@ describe("the SMS channel form", () => {
     try {
       const labels = () =>
         page.evaluate(() =>
-          [...document.querySelectorAll(".drawer-panel .add-form .add-label")].map(
+          [...document.querySelectorAll(".drawer-panel .form-column .field-label")].map(
             (el) => el.textContent?.trim() ?? "",
           ),
         );

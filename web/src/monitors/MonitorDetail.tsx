@@ -363,15 +363,15 @@ export function MonitorDetail({
         title={push === undefined ? "Recent checks" : "Recent reports"}
         icon={<IconPulse />}
         headingLevel={2}
-        action={<div className="add-actions">
-          {onEdit && <button type="button" className="add-button" aria-label="Edit monitor" onClick={onEdit}>Edit monitor</button>}
-          {push === undefined && onCheckNow !== undefined && <button type="button" className="add-button mon-check-now" onClick={onCheckNow} disabled={checking}>
+        action={<div className="button-row">
+          {onEdit && <button type="button" className="button" aria-label="Edit monitor" onClick={onEdit}>Edit monitor</button>}
+          {push === undefined && onCheckNow !== undefined && <button type="button" className="button mon-check-now" onClick={onCheckNow} disabled={checking}>
             {checking ? "Checking…" : "Check now"}
           </button>}
           {menuItems.length > 0 && <Menu
             trigger={<>More <span aria-hidden="true">▾</span></>}
             triggerLabel="More actions"
-            triggerClassName="add-button"
+            triggerClassName="button"
             label={`Actions for ${name}`}
             align="end"
             items={menuItems}

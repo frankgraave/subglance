@@ -292,15 +292,15 @@ export function AddMonitorForm({
   ) => {
     const props = {
       id: `${ids}-${control}`,
-      className: "add-input",
+      className: "input",
       value: values[key],
       onChange: (event: { target: { value: string } }) =>
         setValues((v) => ({ ...v, [key]: event.target.value })),
       ...invalidProps(control, `${ids}-json-help`),
     };
     return (
-      <div className="add-field">
-        <label className="add-label" htmlFor={props.id}>{label}</label>
+      <div className="field">
+        <label className="field-label" htmlFor={props.id}>{label}</label>
         {placeholder === undefined ? (
           <select {...props}>
             {JSON_OPERATORS.map((op) => <option key={op} value={op}>{op.replace("_", " ")}</option>)}
@@ -329,7 +329,7 @@ export function AddMonitorForm({
 
   return (
     <form
-      className="add-form"
+      className="form-column"
       ref={formRef}
       onSubmit={submit}
       aria-labelledby={`${ids}-heading`}
@@ -362,13 +362,13 @@ export function AddMonitorForm({
        * to ask for.
        */}
       {!push && (
-        <div className="add-field">
-          <label className="add-label" htmlFor={`${ids}-target`}>
+        <div className="field">
+          <label className="field-label" htmlFor={`${ids}-target`}>
             What should be watched
           </label>
           <input
             id={`${ids}-target`}
-            className="add-input"
+            className="input"
             value={values.target}
             onChange={(event) => setTarget(event.target.value)}
             placeholder="example.com, https://example.com/health, or db.example.com:5432"
@@ -377,7 +377,7 @@ export function AddMonitorForm({
             required
             {...invalidProps("target", `${ids}-target-help`)}
           />
-          <p id={`${ids}-target-help`} className="add-help">
+          <p id={`${ids}-target-help`} className="field-help">
             A URL, a hostname, or a host and port. A bare hostname is checked
             over HTTPS.
           </p>
@@ -390,13 +390,13 @@ export function AddMonitorForm({
         </div>
       )}
 
-      <div className="add-field">
-        <label className="add-label" htmlFor={`${ids}-name`}>
+      <div className="field">
+        <label className="field-label" htmlFor={`${ids}-name`}>
           Name
         </label>
         <input
           id={`${ids}-name`}
-          className="add-input"
+          className="input"
           value={name}
           onChange={(event) => setTypedName(event.target.value)}
           placeholder={push ? "Nightly backup" : "Taken from the address"}
@@ -410,7 +410,7 @@ export function AddMonitorForm({
           rejection={rejection}
           ids={ids}
         />
-        <p id={`${ids}-name-help`} className="add-help">
+        <p id={`${ids}-name-help`} className="field-help">
           {push
             ? "Required: there is no address to fall back on. Name it after the job."
             : "Optional. Left alone, it follows the address."}
@@ -424,15 +424,15 @@ export function AddMonitorForm({
        * form that rejects on save for a reason the user cannot see.
        */}
       {push && (
-        <div className="add-grid">
-          <div className="add-field">
-            <label className="add-label" htmlFor={`${ids}-push-interval`}>
+        <div className="field-grid">
+          <div className="field">
+            <label className="field-label" htmlFor={`${ids}-push-interval`}>
               Should report every
             </label>
             <div className="add-addon">
               <input
                 id={`${ids}-push-interval`}
-                className="add-input"
+                className="input"
                 type="number"
                 min={60}
                 max={2592000}
@@ -449,7 +449,7 @@ export function AddMonitorForm({
                 sec
               </span>
             </div>
-            <p id={`${ids}-push-interval-help`} className="add-help">
+            <p id={`${ids}-push-interval-help`} className="field-help">
               How often the job runs. 3600 is hourly, 86400 is daily.
             </p>
             <FieldError
@@ -460,14 +460,14 @@ export function AddMonitorForm({
             />
           </div>
 
-          <div className="add-field">
-            <label className="add-label" htmlFor={`${ids}-push-grace`}>
+          <div className="field">
+            <label className="field-label" htmlFor={`${ids}-push-grace`}>
               Allow it to be late by
             </label>
             <div className="add-addon">
               <input
                 id={`${ids}-push-grace`}
-                className="add-input"
+                className="input"
                 type="number"
                 min={0}
                 max={2592000}
@@ -484,7 +484,7 @@ export function AddMonitorForm({
                 sec
               </span>
             </div>
-            <p id={`${ids}-push-grace-help`} className="add-help">
+            <p id={`${ids}-push-grace-help`} className="field-help">
               Silence past the interval plus this is a failure. A backup that
               usually takes a few minutes longer needs room here.
             </p>
@@ -516,14 +516,14 @@ export function AddMonitorForm({
       >
         <summary className="add-summary">Advanced options</summary>
 
-        <div className="add-grid">
-          <div className="add-field">
-            <label className="add-label" htmlFor={`${ids}-type`}>
+        <div className="field-grid">
+          <div className="field">
+            <label className="field-label" htmlFor={`${ids}-type`}>
               Check type
             </label>
             <select
               id={`${ids}-type`}
-              className="add-input"
+              className="input"
               value={values.type}
               onChange={(event) =>
                 setValues((v) => ({ ...v, type: event.target.value }))
@@ -550,14 +550,14 @@ export function AddMonitorForm({
 
           {!push && (
             <>
-              <div className="add-field">
-                <label className="add-label" htmlFor={`${ids}-interval`}>
+              <div className="field">
+                <label className="field-label" htmlFor={`${ids}-interval`}>
                   Check every
                 </label>
                 <div className="add-addon">
                   <input
                     id={`${ids}-interval`}
-                    className="add-input"
+                    className="input"
                     type="number"
                     min={20}
                     max={86400}
@@ -588,14 +588,14 @@ export function AddMonitorForm({
                 />
               </div>
 
-              <div className="add-field">
-                <label className="add-label" htmlFor={`${ids}-timeout`}>
+              <div className="field">
+                <label className="field-label" htmlFor={`${ids}-timeout`}>
                   Give up after
                 </label>
                 <div className="add-addon">
                   <input
                     id={`${ids}-timeout`}
-                    className="add-input"
+                    className="input"
                     type="number"
                     min={1}
                     max={120}
@@ -625,14 +625,14 @@ export function AddMonitorForm({
                 />
               </div>
 
-              <div className="add-field">
-                <label className="add-label" htmlFor={`${ids}-recovery`}>
+              <div className="field">
+                <label className="field-label" htmlFor={`${ids}-recovery`}>
                   Recover after
                 </label>
                 <div className="add-addon">
                   <input
                     id={`${ids}-recovery`}
-                    className="add-input"
+                    className="input"
                     type="number"
                     min={1}
                     max={10}
@@ -649,7 +649,7 @@ export function AddMonitorForm({
                     passes
                   </span>
                 </div>
-                <p id={`${ids}-recovery-help`} className="add-help">
+                <p id={`${ids}-recovery-help`} className="field-help">
                   Passing checks in a row before an incident closes and
                   “resolved” is sent.
                 </p>
@@ -680,13 +680,13 @@ export function AddMonitorForm({
                 />
               </TlsFloorField>
 
-              <div className="add-field add-field-wide">
-                <label className="add-label" htmlFor={`${ids}-keyword`}>
+              <div className="field field-wide">
+                <label className="field-label" htmlFor={`${ids}-keyword`}>
                   Body must contain
                 </label>
                 <input
                   id={`${ids}-keyword`}
-                  className="add-input"
+                  className="input"
                   value={values.keyword}
                   onChange={(event) =>
                     setValues((v) => ({
@@ -729,7 +729,7 @@ export function AddMonitorForm({
               {jsonControl("json-path", "JSON field", "jsonPath", "checks.db.status")}
               {jsonControl("json-operator", "Must", "jsonOperator")}
               {values.jsonOperator !== "exists" && jsonControl("json-expected", "Value", "jsonExpected", "up")}
-              <p id={`${ids}-json-help`} className="add-help add-field-wide">
+              <p id={`${ids}-json-help`} className="field-help field-wide">
                 {JSON_HELP}
               </p>
               </>}
@@ -740,8 +740,8 @@ export function AddMonitorForm({
       <RepeatAlertField value={repeatText} onChange={setRepeatText} error={repeatError ?? (saveError?.field === "repeat_after_s" ? saveError.message : undefined)} />
       </fieldset>
 
-      {saving && <p className="add-help">A save in progress may still complete if you close this form.</p>}
-      <div className="add-actions">
+      {saving && <p className="field-help">A save in progress may still complete if you close this form.</p>}
+      <div className="button-row">
         {/*
          * No "Test it" for a push monitor. The button probes a target, and a
          * push monitor has none: the only way to test one is to run the job,
@@ -750,7 +750,7 @@ export function AddMonitorForm({
         {!push && (
           <button
             type="button"
-            className="add-button"
+            className="button"
             onClick={() => onPreview(effective)}
             // Deliberately NOT disabled while a probe is in flight. A check can
             // take the full timeout, and the most common reason to press this
@@ -767,7 +767,7 @@ export function AddMonitorForm({
         )}
         <button
           type="submit"
-          className="add-button add-button-primary"
+          className="button button--primary"
           disabled={incomplete || saving}
         >
           {saving ? "Saving…" : "Save monitor"}
@@ -775,7 +775,7 @@ export function AddMonitorForm({
         {onCancel !== undefined && (
           <button
             type="button"
-            className="add-button add-button-quiet"
+            className="button button--quiet"
             onClick={onCancel}
           >
             Cancel
@@ -791,7 +791,7 @@ export function AddMonitorForm({
        * asked for. A save error is a different matter: it happened to them
        * rather than for them, and it gets `role="alert"` below.
        */}
-      <div role="status" aria-live="polite" className="add-result-region">
+      <div role="status" aria-live="polite" className="result-region">
         <PreviewNotice preview={preview} placed={badControl !== null} />
       </div>
 
@@ -802,7 +802,7 @@ export function AddMonitorForm({
        * under an arbitrary box would be worse than leaving them here.
        */}
       {saveError !== null && badControl === null && (
-        <p role="alert" className="add-result add-result-bad">
+        <p role="alert" className="result result--bad">
           Could not save: {saveError.message}
         </p>
       )}
@@ -833,7 +833,7 @@ function FieldError({
 }) {
   if (badControl !== control || rejection === null) return null;
   return (
-    <p id={`${ids}-field-error`} role="alert" className="add-field-error">
+    <p id={`${ids}-field-error`} role="alert" className="field-error">
       <IconAlert />
       {rejection.message}
     </p>
@@ -851,7 +851,7 @@ function PreviewNotice({
     case "idle":
       return null;
     case "checking":
-      return <p className="add-result">Checking…</p>;
+      return <p className="result">Checking…</p>;
     case "rejected":
       // Not a failed check: nothing was contacted. Saying so keeps someone
       // from going to look at a server that was never asked anything.
@@ -860,7 +860,7 @@ function PreviewNotice({
       // sentence in two places reads as two problems, and the copy down here
       // is the one that is further from the box you have to fix.
       if (placed) return null;
-      return <p className="add-result add-result-bad">{preview.message}</p>;
+      return <p className="result result--bad">{preview.message}</p>;
     case "done":
       return <PreviewSummary result={preview.result} />;
   }
@@ -870,7 +870,7 @@ function PreviewSummary({ result }: { result: PreviewResult }) {
   return (
     <p
       className={
-        result.ok ? "add-result add-result-good" : "add-result add-result-bad"
+        result.ok ? "result result--good" : "result result--bad"
       }
     >
       {describePreview(result)}{" "}

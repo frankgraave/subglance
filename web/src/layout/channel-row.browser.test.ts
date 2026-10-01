@@ -261,4 +261,35 @@ describe("the channel rows", () => {
       await page.close();
     }
   });
+
+  it("keeps the red ink on a destructive button under the pointer", async () => {
+    /*
+     * Destructive is carried by the ink (controls.css). `.icon-button:hover`
+     * sets the neutral ink and outranks `.button--danger`, so without a rule
+     * of its own the bin turned grey exactly while the pointer was on it.
+     */
+    const page = await openChannels();
+    try {
+      const selector = ".inv-row .icon-button.button--danger";
+      await page.waitForSelector(selector, { timeout: 5_000 });
+      await page.hover(selector);
+      await page.evaluate(async () => {
+        await Promise.all(
+          document.getAnimations().map((a) => a.finished.catch(() => undefined)),
+        );
+      });
+      const { ink, down } = await page.evaluate((sel: string) => {
+        const button = document.querySelector(sel) as HTMLElement;
+        const probe = document.createElement("span");
+        probe.style.color = "var(--down)";
+        document.body.append(probe);
+        const down = getComputedStyle(probe).color;
+        probe.remove();
+        return { ink: getComputedStyle(button).color, down };
+      }, selector);
+      expect(ink).toBe(down);
+    } finally {
+      await page.close();
+    }
+  });
 });

@@ -127,7 +127,7 @@ for (const theme of ["dark", "light"]) for (const width of [390, 1440]) describe
       expect(await page.$eval('[data-repeat-input]', (node) => (node as HTMLInputElement).value)).toBe("731");
       await fill(page, 'input[name="target"]', "https://changed.example/health"); await button(page, "Save changes");
       expect(f.writes).toHaveLength(1);
-      await button(page, "Test it"); await page.waitForFunction(() => document.querySelector(".add-result")?.textContent?.includes("connection refused"));
+      await button(page, "Test it"); await page.waitForFunction(() => document.querySelector(".result")?.textContent?.includes("connection refused"));
       expect(f.previews.at(-1)).toMatchObject({ target: "https://changed.example/health", min_tls_version: "1.2", follow_redirects: true });
       await button(page, "Save changes"); await page.waitForSelector('[role="dialog"]', { hidden: true });
       expect(f.stored().target).toBe("https://changed.example/health");
@@ -159,10 +159,10 @@ for (const theme of ["dark", "light"]) for (const width of [390, 1440]) describe
 it.each([0, 60, 731, 86400])("creates repeat base %s and reads the exact persisted value after reload", async (value) => {
   const f = await session(390, "dark"); const { page } = f;
   try {
-    await page.goto(`${server.url}/monitors/new`, { waitUntil: "domcontentloaded" }); await page.waitForSelector('.add-form');
+    await page.goto(`${server.url}/monitors/new`, { waitUntil: "domcontentloaded" }); await page.waitForSelector('.form-column');
     expect(await page.$eval('.add-advanced', (node) => (node as HTMLDetailsElement).open)).toBe(false);
     expect(await page.$eval('.repeat-field', (node) => node.closest('.add-advanced') === null && node.checkVisibility())).toBe(true);
-    await fill(page, '.add-form input[placeholder^="example.com"]', "https://created.example");
+    await fill(page, '.form-column input[placeholder^="example.com"]', "https://created.example");
     await page.click('.add-advanced summary');
     await page.select('.add-advanced select', "http");
     if (value === 0) {

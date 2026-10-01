@@ -62,7 +62,7 @@ export function CredentialsForm({
 
   return (
     <form
-      className="auth-form"
+      className="stack"
       noValidate
       onSubmit={(event) => {
         event.preventDefault();
@@ -70,13 +70,13 @@ export function CredentialsForm({
         onSubmit(email.trim(), password);
       }}
     >
-      <div className="auth-field">
-        <label className="auth-label" htmlFor={`${ids}-email`}>
+      <div className="field">
+        <label className="field-label" htmlFor={`${ids}-email`}>
           Email
         </label>
         <input
           id={`${ids}-email`}
-          className="auth-input"
+          className="input input--inset"
           type="email"
           name="email"
           value={email}
@@ -106,13 +106,13 @@ export function CredentialsForm({
         />
       </div>
 
-      <div className="auth-field">
-        <label className="auth-label" htmlFor={`${ids}-password`}>
+      <div className="field">
+        <label className="field-label" htmlFor={`${ids}-password`}>
           Password
         </label>
         <input
           id={`${ids}-password`}
-          className="auth-input"
+          className="input input--inset"
           type="password"
           name="password"
           value={password}
@@ -153,7 +153,7 @@ export function CredentialsForm({
              * on every keystroke, and a live region on it would make a
              * screen reader read the whole sentence letter by letter.
              */}
-            <p className="auth-sr-only" role="status">
+            <p className="sr-only" role="status">
               {passwordStrength(password) === "short"
                 ? ""
                 : describeStrength(password)}
@@ -170,12 +170,12 @@ export function CredentialsForm({
          * submission and is the reason nothing happened; a passive region
          * would let a screen-reader user press the button and hear silence.
          */
-        <p className="auth-error" id={errorId} role="alert">
+        <p className="field-error" id={errorId} role="alert">
           {rejection.message}
         </p>
       )}
 
-      <button className="auth-submit" type="submit" disabled={disabled}>
+      <button className="button-solid" type="submit" disabled={disabled}>
         {submitting
           ? setup
             ? "Creating your account\u2026"

@@ -75,12 +75,12 @@ export function ConfirmDelete({
       title={`Delete ${kind}`}
       footer={
         <>
-          <button type="button" className="add-button" onClick={close}>
+          <button type="button" className="button" onClick={close}>
             Keep it
           </button>
           <button
             type="button"
-            className="add-button inv-act--danger"
+            className="button button--danger"
             disabled={!matches}
             /*
              * The name is in the accessible name as well as the visible label:
@@ -98,21 +98,21 @@ export function ConfirmDelete({
         </>
       }
     >
-      <p className="add-help">{consequence}</p>
-      <div className="add-field">
-        <label className="add-label" htmlFor={inputId}>
-          Type <span className="nt-mask">{name}</span> to confirm
+      <p className="field-help">{consequence}</p>
+      <div className="field">
+        <label className="field-label" htmlFor={inputId}>
+          Type <span className="literal">{name}</span> to confirm
         </label>
         <input
           id={inputId}
-          className="add-input"
+          className="input"
           type="text"
           value={typed}
           autoComplete="off"
           spellCheck={false}
           onChange={(event) => setTyped(event.target.value)}
         />
-        <p className="add-help">
+        <p className="field-help">
           {matches
             ? "Names match. Deleting cannot be undone."
             : "The delete button stays disabled until the name matches exactly."}
