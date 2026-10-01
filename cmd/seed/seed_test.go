@@ -433,13 +433,20 @@ func TestSeededDeliveriesSurviveTheFirstRetentionPass(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 	names := []string{"Ops Slack", "Pager relay"}
 	written := 0
-	// One incident well outside the delivery log's window and one inside it.
-	for _, ago := range []time.Duration{60 * 24 * time.Hour, 2 * 24 * time.Hour} {
+	// One incident well outside the delivery log's window, one inside it,
+	// and one still open whose reminder count runs past now: its alerts are
+	// the newest the screen shows, and none of them may be dated later than
+	// the moment the demo starts.
+	for _, ago := range []time.Duration{60 * 24 * time.Hour, 2 * 24 * time.Hour, 5 * time.Minute} {
 		start := now.Add(-ago)
-		inc, err := db.SeedIncident(ctx, store.Incident{
+		inc := store.Incident{
 			MonitorID: m.ID, StartedAt: start, ConfirmedAt: start.Add(time.Minute),
 			ResolvedAt: start.Add(time.Hour), Cause: "timeout",
-		})
+		}
+		if ago < time.Hour {
+			inc.ResolvedAt, inc.ReminderCount = time.Time{}, 3
+		}
+		inc, err := db.SeedIncident(ctx, inc)
 		if err != nil {
 			t.Fatalf("seed incident: %v", err)
 		}
@@ -451,6 +458,16 @@ func TestSeededDeliveriesSurviveTheFirstRetentionPass(t *testing.T) {
 	}
 	if written == 0 {
 		t.Fatal("nothing was seeded; the test proves nothing")
+	}
+
+	var future int
+	if err := db.Reader.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM notif_outbox WHERE created_at > ? OR updated_at > ?",
+		now.Unix(), now.Unix()).Scan(&future); err != nil {
+		t.Fatalf("count future deliveries: %v", err)
+	}
+	if future != 0 {
+		t.Errorf("%d seeded deliveries are dated after the seed ran", future)
 	}
 
 	pruned, err := db.PruneDeliveries(ctx, now.Add(-store.DeliveryLogRetention))

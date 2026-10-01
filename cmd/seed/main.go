@@ -489,6 +489,12 @@ func seedDeliveries(
 		}
 
 		for _, moment := range moments {
+			if moment.at.After(now) {
+				// A reminder the incident's own count places after now
+				// has not been sent; a delivery for it would be dated
+				// in the future on the notifications screen.
+				continue
+			}
 			alert := notifier.AlertFromStore(m, inc, moment.event, moment.at)
 			payload, err := json.Marshal(alert)
 			if err != nil {
@@ -504,6 +510,11 @@ func seedDeliveries(
 				CreatedAt:  moment.at,
 			}
 			applyDeliveryHealth(&d, deliveryHealthOf(name), moment.at, now)
+			if d.UpdatedAt.After(now) {
+				// A delivery that gives up eleven minutes after a recent
+				// alert has not given up yet; it finishes no later than now.
+				d.UpdatedAt = now
+			}
 			if prunedOnStart(d, now) {
 				continue
 			}
