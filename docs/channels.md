@@ -25,6 +25,22 @@ guess, or an access token.
 Every channel has a **Send test** button, which delivers a real message and
 shows the exact error the far end returned.
 
+Each channel row also has a **Delivery** column, read from the outbox: what
+happened to the real alerts sent through it in the last 30 days, the window
+the delivery log is kept for.
+
+- **Failed**: the newest alert gave up after its retries, and nothing has
+  arrived since. The count and the last error are in the column's tooltip.
+- **Retrying**: an alert is queued after a failed attempt.
+- **Delivered**: the newest alert arrived.
+- **None in 30 days**: no alert went through the channel. That proves nothing
+  either way; Send test is the way to find out before an outage does.
+
+The same record is in `GET /api/v1/channels` as each channel's `delivery`.
+Its last error has the channel's masked settings replaced by their masks,
+and any other URL cut to its host, so it never shows a viewer a credential
+the settings hide.
+
 ## ntfy
 
 Alerts are published with ntfy's JSON API: a `POST` to the server root with the
@@ -66,7 +82,7 @@ refused when the channel is saved, with the number in the message.
 
 Phone numbers are personal data. An administrator reads them back as saved;
 an editor or viewer reads each one as `+31 6 •••• 5678`. Logs and the
-delivery log only ever show that masked form.
+Delivery column only ever show that masked form.
 
 On the Notifications screen the numbers are a list, one per line. An editor
 sees the masked list there; saving other changes keeps the numbers as they
@@ -94,8 +110,8 @@ and otherwise in the server's zone with its name (`14:03 UTC`).
 ### The hourly limit
 
 A channel sends at most `hourly_limit` alerts (default 10, from 1 to 100) in
-any hour. An alert past the limit is not sent; the delivery log shows it as
-not sent and why, and it is not retried. The first message after the hour
+any hour. An alert past the limit is not sent and not retried; it is recorded
+as withheld, with the reason, and does not count as a failure. The first message after the hour
 ends says how many were held back: `(+3 alerts not sent by SMS, see
 SubGlance)`. The reason is money and carriers: on Twilio every message is
 billed, and a flapping monitor must not produce a bill or get a SIM card
@@ -148,7 +164,7 @@ Set `provider: twilio`, the `account_sid` (`AC...`) and `auth_token` from the
 Twilio console, and `from`: a Twilio number (`+14155550100`), or a sender
 name of up to 11 letters and digits such as `SubGlance`. Not every country
 accepts a sender name; when Twilio refuses one, its error code and message
-are shown in the test button and the delivery log. A delivery counts as done
+are shown in the test button and the Delivery column. A delivery counts as done
 when Twilio accepts the message.
 
 The account SID is shown in full when read back, like a username; the auth
@@ -177,7 +193,7 @@ SUBGLANCE_ALLOW_PRIVATE_TARGETS=true
 Without it, saving such a channel is refused with a message naming the field,
 the address and this setting. A channel saved earlier and delivered after the
 setting was turned off fails the same way, in the test button and in the
-delivery log, and is not retried: a refused address stays refused.
+Delivery column, and is not retried: a refused address stays refused.
 
 ## Which channels get added
 

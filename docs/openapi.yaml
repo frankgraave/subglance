@@ -6533,6 +6533,57 @@ components:
           oneOf:
             - $ref: '#/components/schemas/QuietHours'
             - type: 'null'
+        delivery:
+          description: |
+            How the channel's real alerts went, from the outbox. Null only when
+            the outbox could not be read, which is not a sign of health.
+          oneOf:
+            - $ref: '#/components/schemas/ChannelDelivery'
+            - type: 'null'
+    ChannelDelivery:
+      type: object
+      description: |
+        A channel's recent delivery outcomes. Outcomes count when the delivery
+        finished, inside a window equal to the delivery log's retention; a
+        queued delivery counts whatever its age.
+      required: [state, window_days, last_delivered_at, last_failed_at, failed, pending, retrying, last_error]
+      properties:
+        state:
+          type: string
+          enum: [failed, retrying, delivered, none]
+          description: |
+            `failed`: the newest delivery to finish gave up and nothing arrived
+            since. `retrying`: a delivery is queued after a failed attempt.
+            `delivered`: the newest delivery to finish arrived. `none`: no
+            alert went through the channel in the window, which proves nothing
+            either way.
+        window_days:
+          type: integer
+          example: 30
+        last_delivered_at:
+          type: [string, 'null']
+          format: date-time
+        last_failed_at:
+          type: [string, 'null']
+          format: date-time
+        failed:
+          type: integer
+          minimum: 0
+          description: Deliveries that gave up inside the window.
+        pending:
+          type: integer
+          minimum: 0
+          description: Deliveries still queued, held ones excluded.
+        retrying:
+          type: integer
+          minimum: 0
+          description: The queued deliveries that have failed at least one attempt.
+        last_error:
+          type: string
+          description: |
+            The newest failure's message, from a delivery that gave up or one
+            being retried. The channel's masked config values are replaced by
+            their masks, and any other URL keeps only its scheme and host.
     ChannelList:
       type: object
       required: [channels]

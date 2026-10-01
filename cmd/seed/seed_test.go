@@ -409,3 +409,66 @@ func TestSeedWithSecretKey(t *testing.T) {
 		}
 	}
 }
+
+// TestSeededDeliveriesSurviveTheFirstRetentionPass is the demo's delivery
+// column: the rows the seeder writes are the rows the notifications screen
+// reads, rather than rows the server deletes the moment it starts (SUB-180).
+func TestSeededDeliveriesSurviveTheFirstRetentionPass(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.Open(ctx, store.Options{Path: filepath.Join(t.TempDir(), "seed.db")})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	chans, err := seedChannels(ctx, db)
+	if err != nil {
+		t.Fatalf("seed channels: %v", err)
+	}
+	m, err := db.CreateMonitor(ctx, store.Monitor{Name: "api", Type: "http", Target: "https://example.com"})
+	if err != nil {
+		t.Fatalf("create monitor: %v", err)
+	}
+
+	now := time.Now().Truncate(time.Second)
+	names := []string{"Ops Slack", "Pager relay"}
+	written := 0
+	// One incident well outside the delivery log's window and one inside it.
+	for _, ago := range []time.Duration{60 * 24 * time.Hour, 2 * 24 * time.Hour} {
+		start := now.Add(-ago)
+		inc, err := db.SeedIncident(ctx, store.Incident{
+			MonitorID: m.ID, StartedAt: start, ConfirmedAt: start.Add(time.Minute),
+			ResolvedAt: start.Add(time.Hour), Cause: "timeout",
+		})
+		if err != nil {
+			t.Fatalf("seed incident: %v", err)
+		}
+		n, err := seedDeliveries(ctx, db, m, inc, names, chans, now)
+		if err != nil {
+			t.Fatalf("seed deliveries: %v", err)
+		}
+		written += n
+	}
+	if written == 0 {
+		t.Fatal("nothing was seeded; the test proves nothing")
+	}
+
+	pruned, err := db.PruneDeliveries(ctx, now.Add(-store.DeliveryLogRetention))
+	if err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if pruned != 0 {
+		t.Errorf("the first retention pass deleted %d seeded deliveries", pruned)
+	}
+
+	health, err := db.ChannelHealthSince(ctx, now.Add(-store.DeliveryLogRetention))
+	if err != nil {
+		t.Fatalf("health: %v", err)
+	}
+	if h := health[chans["Ops Slack"].ID]; h.LastDeliveredAt.IsZero() {
+		t.Error("the healthy channel shows no delivery inside the window")
+	}
+	if h := health[chans["Pager relay"].ID]; h.Failed == 0 {
+		t.Error("the broken channel shows no failure inside the window")
+	}
+}

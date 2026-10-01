@@ -209,31 +209,54 @@ func (db *DB) MarkFailed(ctx context.Context, id int64, cause string) error {
 // ChannelHealth summarises how one channel's deliveries are going.
 type ChannelHealth struct {
 	ChannelID int64
-	Pending   int
-	Failed    int
 
-	// LastError is the most recent failure, empty when the last attempts
-	// went through. It answers "why is this channel not delivering" without
-	// sending the operator to the log.
-	LastError    string
-	LastFailedAt time.Time
+	// Pending counts the deliveries still waiting to be sent, whatever
+	// their age: a queued alert is work, not history, so no window hides it.
+	Pending int
+	// Retrying is the part of Pending that has already failed at least one
+	// attempt. A delivery queued a moment ago and one that has been bounced
+	// three times are both pending; only the second says the channel is in
+	// trouble.
+	Retrying int
+	// Failed counts the deliveries that gave up inside the window.
+	Failed int
+
+	// LastError is the most recent failure inside the window, from a
+	// delivery that gave up or one still being retried. It answers "why is
+	// this channel not delivering" without sending the operator to the log.
+	LastError string
+	// LastFailedAt and LastDeliveredAt are the newest outcome of each kind
+	// inside the window, zero when there was none. Which of the two is newer
+	// is what says whether a channel is failing now or failed once and has
+	// delivered since.
+	LastFailedAt    time.Time
+	LastDeliveredAt time.Time
 }
 
-// ChannelHealthSince reports pending and failed counts per channel for
-// deliveries created at or after since.
+// ChannelHealthSince reports, per channel, the outcomes of deliveries that
+// finished at or after since, and every delivery still pending.
 //
 // Scoped to a window rather than all time because the question the interface
 // asks is "is this channel working now", and a webhook that failed once last
-// month should not wear a red badge forever.
+// month should not wear a red badge forever. The window is on when the
+// delivery finished (updated_at), not when it was queued: that is the clock
+// the retention pass prunes delivered rows by, so a window no longer than
+// DeliveryLogRetention never compares a failure it can see with a success
+// that has already been deleted.
+//
+// A channel with no deliveries in the window has no entry.
 func (db *DB) ChannelHealthSince(ctx context.Context, since time.Time) (map[int64]ChannelHealth, error) {
+	at := since.Unix()
 	rows, err := db.Reader.QueryContext(ctx, `
 		SELECT channel_id,
 		       SUM(CASE WHEN status = 'pending' AND suppressed = 0 THEN 1 ELSE 0 END),
-		       SUM(CASE WHEN status = 'failed'  THEN 1 ELSE 0 END),
-		       COALESCE(MAX(CASE WHEN status = 'failed' THEN updated_at END), 0)
+		       SUM(CASE WHEN status = 'pending' AND suppressed = 0 AND attempts > 0 THEN 1 ELSE 0 END),
+		       SUM(CASE WHEN status = 'failed' AND updated_at >= ? THEN 1 ELSE 0 END),
+		       COALESCE(MAX(CASE WHEN status = 'failed' AND updated_at >= ? THEN updated_at END), 0),
+		       COALESCE(MAX(CASE WHEN status = 'delivered' AND updated_at >= ? THEN updated_at END), 0)
 		  FROM notif_outbox
-		 WHERE created_at >= ?
-		 GROUP BY channel_id`, since.Unix())
+		 WHERE status = 'pending' OR updated_at >= ?
+		 GROUP BY channel_id`, at, at, at, at)
 	if err != nil {
 		return nil, fmt.Errorf("query channel health: %w", err)
 	}
@@ -242,14 +265,17 @@ func (db *DB) ChannelHealthSince(ctx context.Context, since time.Time) (map[int6
 	out := map[int64]ChannelHealth{}
 	for rows.Next() {
 		var (
-			h            ChannelHealth
-			lastFailedAt int64
+			h                         ChannelHealth
+			lastFailed, lastDelivered int64
 		)
-		if err := rows.Scan(&h.ChannelID, &h.Pending, &h.Failed, &lastFailedAt); err != nil {
+		if err := rows.Scan(&h.ChannelID, &h.Pending, &h.Retrying, &h.Failed, &lastFailed, &lastDelivered); err != nil {
 			return nil, err
 		}
-		if lastFailedAt > 0 {
-			h.LastFailedAt = time.Unix(lastFailedAt, 0).UTC()
+		if lastFailed > 0 {
+			h.LastFailedAt = time.Unix(lastFailed, 0).UTC()
+		}
+		if lastDelivered > 0 {
+			h.LastDeliveredAt = time.Unix(lastDelivered, 0).UTC()
 		}
 		out[h.ChannelID] = h
 	}
@@ -260,11 +286,15 @@ func (db *DB) ChannelHealthSince(ctx context.Context, since time.Time) (map[int6
 	// The most recent failure message per channel, fetched separately: doing
 	// it in the aggregate above would need a window function, and SQLite's
 	// support for those is newer than the oldest build this has to run on.
+	// A delivery still being retried counts: its error is the newest thing
+	// known about a channel that is failing right now.
 	errRows, err := db.Reader.QueryContext(ctx, `
 		SELECT channel_id, last_error
 		  FROM notif_outbox
-		 WHERE status = 'failed' AND created_at >= ? AND last_error <> ''
-		 ORDER BY channel_id, updated_at DESC`, since.Unix())
+		 WHERE last_error <> ''
+		   AND ((status = 'failed' AND updated_at >= ?)
+		     OR (status = 'pending' AND suppressed = 0 AND attempts > 0))
+		 ORDER BY channel_id, updated_at DESC, id DESC`, at)
 	if err != nil {
 		return nil, fmt.Errorf("query channel errors: %w", err)
 	}
