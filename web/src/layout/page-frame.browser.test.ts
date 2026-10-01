@@ -101,7 +101,11 @@ function measure(page: Page) {
       const style = getComputedStyle(h);
       return {
         text: h.textContent?.trim() ?? "",
-        painted: box.width > 1 && box.height > 1 && style.clipPath === "none",
+        painted:
+          box.width > 1 &&
+          box.height > 1 &&
+          style.clipPath === "none" &&
+          style.visibility === "visible",
         left: Math.round(box.left),
         size: style.fontSize,
         leading: style.lineHeight,
