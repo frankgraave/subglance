@@ -1,0 +1,53 @@
+/*
+ * The page frame (SUB-182). See `components/Page.tsx` and `shell/pages.ts`.
+ *
+ * The frame owns the content width. A feature stylesheet does not set a
+ * page-level `max-width` of its own: three screens doing so is how the
+ * product ended up with three right edges.
+ */
+.page {
+  min-width: 0;
+}
+
+/* Lists of records and documents read top to bottom: ~70 characters of
+   target and error text. Past this the eye loses the line on the way back,
+   and none of these screens benefits from being wider. The dashboard
+   (`full`) takes the whole content column. */
+.page[data-width="measure"] {
+  max-width: var(--size-pane-lg);
+}
+
+/* The same column with the page's index beside it. The index's column and
+   gap are `.settings-layout`'s, whose card column takes what is left: the
+   measure, exactly. */
+.page[data-width="indexed"] {
+  max-width: calc(var(--size-col-4) + var(--space-6) + var(--size-pane-lg));
+}
+
+/*
+ * The page title, on the page role and the heavy weight that only it uses
+ * (DESIGN.md §2.5). A monitor's own `h1` wears this class too, so every
+ * screen's level-one heading is the same size, leading and weight.
+ */
+.page-title {
+  font-size: var(--type-page);
+  line-height: var(--lead-page);
+  font-weight: var(--weight-heavy);
+  color: var(--ink);
+}
+
+/* Space under the frame's own title. Not on `.page-title` itself: a monitor's
+   page draws its `h1` inside a header that spaces its own children. */
+.page > .page-title {
+  margin-bottom: var(--space-5);
+}
+
+/* Phone: the card size, as the monitor's title already did. 24px across a
+   375px screen costs a hostname two lines that fit on one at 18px, and the
+   other titles drop with it so the level stays one level. */
+@media (max-width: 640px) {
+  .page-title {
+    font-size: var(--type-card);
+    line-height: var(--lead-card);
+  }
+}

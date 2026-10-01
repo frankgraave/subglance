@@ -260,6 +260,9 @@ export function LiveMonitorDetail({
             <span aria-hidden="true">←</span> All monitors
           </button>
         </nav>
+        {/* Still a titled page while the name is unknown (SUB-182): the
+            word the tab says, at the level every page's title sits. */}
+        <h1 className="page-title">Monitor</h1>
         <p role={loading ? undefined : "alert"} className="mon-detail-empty">
           {notice}
         </p>

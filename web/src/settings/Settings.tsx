@@ -158,7 +158,7 @@ export function Settings({ client, canAdmin = false, role = canAdmin ? "admin" :
   const provide = (node: ReactNode) => <QueryClientProvider client={client ?? fallback}>{node}</QueryClientProvider>;
   const sections: Section[] = [
     { id: "account", label: "Account", keywords: "account password current new confirm sessions security",
-      body: <Card title="Account" icon={<SettingsIcon />} headingLevel={1}>
+      body: <Card title="Account" icon={<SettingsIcon />} headingLevel={2}>
         <Panel label="Password"><ChangePassword /></Panel>
       </Card> },
     // Second, beside the account: both are about the person at this browser,

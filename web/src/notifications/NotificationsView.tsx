@@ -169,9 +169,7 @@ export function NotificationsView({
         </div>
       </ToolbarTools>
 
-      {/* No visible page heading: the sidebar says Notifications and the card
-          below says Channels. The `h1` stays for heading navigation. */}
-      <h1 className="sr-only">Notifications</h1>
+      {/* The page frame's visible `h1` names this screen (SUB-182). */}
 
       {error !== null && (
         <p className="inc-notice" role="alert">
@@ -225,20 +223,10 @@ export function NotificationsView({
             : `Channels (${channels.length})`
         }
         /*
-         * `h2`, under the screen-reader-only `Notifications` `h1` above.
-         *
-         * `Card` renders `headingLevel` as a real heading element, so
-         * `headingLevel={1}` put a second `h1` in the document: the page's own
-         * sr-only one naming the route, and this card's naming a section
-         * inside it. Two level-one headings is not an outline, and the reader
-         * it costs is exactly the one the sr-only heading exists for — heading
-         * navigation stops distinguishing "the page" from "a card on it"
-         * (CodeRabbit, PR #61).
-         *
-         * `IncidentsView` already has this shape — an sr-only `h1` for the
-         * route and its cards at `h2` — and this screen is the outlier.
-         * `MonitorsView` keeps `headingLevel={1}` correctly, because it has no
-         * sr-only heading and its card title is the page's only one.
+         * `h2`, under the page frame's `Notifications` `h1`. Every screen's
+         * cards are `h2` now (SUB-182): one `h1` per document, and it is the
+         * page's, so heading navigation can tell "the page" from "a card on
+         * it" (CodeRabbit, PR #61).
          */
         headingLevel={2}
         /*

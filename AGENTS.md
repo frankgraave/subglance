@@ -79,10 +79,40 @@ switcher appears only in the dashboard's toolbar — so a control that lands in
 the wrong bar, or goes missing from one screen, fails the build rather than
 being noticed in review.
 
-A page whose card already names it does not also get an `<h1>` — but do not
-delete what the heading was carrying. When the Monitors title went, its "4
-configured, 1 paused" moved to the card's `note` prop, which is what `Card`
-grew that prop for.
+### The page frame: one title, one width rule
+
+Every route is drawn inside one frame, `Page` (`web/src/components/Page.tsx`),
+and the frame takes its title and width from one table,
+`web/src/shell/pages.ts`. A screen does not choose either for itself.
+
+- **Title.** The frame draws the page's only `h1`, visible, on the page type
+  role. It is the same word as the sidebar label and the tab title, because
+  all three read `PAGE_TITLES`. A screen's cards are `h2` under it; a screen
+  does not render an `h1` of its own, visually hidden or otherwise. The one
+  exception is a monitor's page, whose title is the monitor's name: the
+  frame gets `title={null}` and the detail view's own `h1` wears
+  `page-title`, so it sits at the same level as every other page's. The rail
+  lights the section an address belongs to — `/monitors/{id}` lights
+  Monitors.
+- **Width.** Three page types, one rule: *the column of cards is
+  `--size-pane-lg` on every screen but the dashboard.* `full` is the
+  dashboard's (an overview that is watched, and offers to fill the width);
+  `measure` is a list or a record read top to bottom; `indexed` is `measure`
+  with the page's own index standing beside the column (Settings). A feature
+  stylesheet does not set a page-level `max-width`: three screens doing so is
+  how the product had three right edges.
+
+`layout/page-frame.browser.test.ts` measures every route at two widths and
+fails on a second `h1`, a hidden one, a title off the page role or off the
+content edge, a title that disagrees with the rail or the tab, or a column
+of cards that is not its page type's width. The reasoning is in DESIGN.md
+§2.16.
+
+A card on a titled page is named for what it holds, not for the page: the
+page's `h1` already says "Incidents", so the card under it says "Open
+incidents". When the frame took over the title, do not drop what a card
+title was carrying — the Monitors card's "4 configured, 1 paused" lives in
+its `note` prop, which is what `Card` grew that prop for.
 
 Every card has an icon tile. `Card`'s `icon` prop is required, so a new card
 does not compile until you give it a glyph from `web/src/components/icons.tsx`

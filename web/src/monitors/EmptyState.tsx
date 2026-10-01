@@ -14,11 +14,18 @@ export function EmptyState({
   totalCount,
   filtered = false,
   onAddMonitor,
+  headingLevel = 2,
 }: {
   query: string;
   totalCount: number;
   /** True when a status or tag filter is on, even with an empty query. */
   filtered?: boolean;
+  /**
+   * One level under whatever heads the list it replaces: 2 on the dashboard,
+   * where it stands in for the cards under the page's `h1`, and 3 in the
+   * inventory, where it sits inside the `h2` Monitors card.
+   */
+  headingLevel?: 2 | 3;
   /**
    * Opens the add-monitor form, when the reader may add one.
    *
@@ -35,9 +42,8 @@ export function EmptyState({
   // tells a self-hoster their install is empty when in fact they pressed a
   // chip. Any active narrowing counts, not just a typed query.
   const narrowed = (needle !== "" || filtered) && totalCount > 0;
-  // An h2, one level under the page's h1 on both screens that show it: the
-  // dashboard's (visually hidden) and the inventory card's title. It was an
-  // h3 that skipped a level wherever it replaced the list (SUB-167).
+  // One level under what heads it, never a skipped level (SUB-167, SUB-182).
+  const Heading = `h${headingLevel}` as "h2" | "h3";
   return (
     <div className="mon-empty">
       {/* Three empty sockets, not three grey lamps. Decorative and
@@ -51,11 +57,11 @@ export function EmptyState({
       </div>
       {narrowed ? (
         <>
-          <h2 className="mon-empty-title">
+          <Heading className="mon-empty-title">
             {needle === ""
               ? "No monitors match this filter"
               : `No monitors match \u201C${needle}\u201D`}
-          </h2>
+          </Heading>
           <p className="mon-empty-body">
             {needle === ""
               ? `Clear the status or tag filter to see all ${totalCount} monitors.`
@@ -66,9 +72,9 @@ export function EmptyState({
         </>
       ) : (
         <>
-          <h2 className="mon-empty-title mon-empty-title--first">
+          <Heading className="mon-empty-title mon-empty-title--first">
             Nothing is being watched yet
-          </h2>
+          </Heading>
           <p className="mon-empty-body mon-empty-body--first">
             Point SubGlance at the first thing you care about — a URL, a host
             and port, or a cron job that should check in. Probing starts

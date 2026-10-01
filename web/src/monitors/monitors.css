@@ -25,54 +25,6 @@
 }
 
 /*
- * The dashboard toolbar.
- *
- * A second band of chrome attached to the shell's topbar: same fill, same
- * bottom border, no gap between them. It was a bare flex row on the page
- * background for one commit, and without a surface it read as three controls
- * floating in the content rather than as a bar.
- *
- * Negative margins pull it out of `.shell-content`'s padding so it spans the
- * full width like the topbar does, then put the padding back on its own
- * terms. The alternative — moving the toolbar into the shell — would put a
- * dashboard-specific control in a component every screen shares.
- *
- * The shell's topbar holds what is true everywhere: add, layout, workbench,
- * theme. This holds what is true on *this* screen: search, the status filter,
- * and whatever the current view brings with it.
- *
- * The fill is the topbar's, not `--surface`: that bar is a 86% canvas mix
- * behind a blur, and a flat panel fill under it reads as a lighter strip
- * stuck to the frame rather than as more of the same frame. It does not need
- * to be sticky to need the blur — the two bands are adjacent, and at rest the
- * eye compares them directly.
- */
-.mon-topbar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-  margin: calc(var(--space-6) * -1) calc(var(--space-6) * -1) 0;
-  padding: var(--space-2) var(--space-6);
-  border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--canvas) 86%, transparent);
-  backdrop-filter: blur(var(--blur-bar));
-}
-
-/*
- * The right-hand end: everything that narrows or reshapes the list.
- *
- * `auto` rather than a fixed gap after the search field, so the space between
- * them is whatever is left rather than a number to maintain.
- */
-.mon-view-tools {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin-left: auto;
-}
-
-/*
  * The status filter, framed like the segmented control beside it.
  *
  * The shell is what makes the two clusters read as siblings rather than as
@@ -944,49 +896,6 @@
   font-size: var(--type-body);
   line-height: var(--lead-body);
   color: var(--ink);
-}
-
-/*
- * Chrome that has to shrink too. The card list handles the monitors; these
- * rules stop the header around it from being the thing that overflows.
- */
-@media (max-width: 640px) {
-  .mon-topbar {
-    /* Stacked, and the search goes full width: a 280px field beside three
-       filter chips on a 375px screen leaves neither of them usable. The bar
-       keeps its surface and its edge — it is still a toolbar, just a taller
-       one. */
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--space-2);
-    margin: calc(var(--space-4) * -1) calc(var(--space-4) * -1) 0;
-    padding: var(--space-3) var(--space-4);
-  }
-
-  /* The two clusters share the row they now have to themselves, and scroll
-     rather than wrap: a filter that reflows to two lines pushes the list down
-     every time a status appears or disappears. */
-  .mon-view-tools {
-    margin-left: 0;
-    /*
-     * The scroller needs a width to scroll *within*, and `stretch` does not
-     * give it one: as a flex item whose content cannot shrink, its automatic
-     * minimum size wins and the box grows to its 376px of chips instead of
-     * taking the 343px line. `overflow-x` then has nothing to clip — the row
-     * simply hung 17px off the right edge of a 375px screen and took the
-     * whole page's scrollWidth with it.
-     *
-     * `100%` is the same instrument `.shell-search` uses in shell.css, and
-     * the one the phone-layout guard measures.
-     */
-    width: 100%;
-    overflow-x: auto;
-    /* Room for the frame's own edge and shadow inside the scroller. */
-    padding-bottom: var(--space-0h);
-  }
-
-
-
 }
 
 /*

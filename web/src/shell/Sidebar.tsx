@@ -5,6 +5,7 @@ import {
   NOTIFICATIONS_PATH,
   SETTINGS_PATH,
 } from "./route";
+import { PAGE_TITLES } from "./pages";
 import {
   DashboardIcon,
   IncidentsIcon,
@@ -55,14 +56,14 @@ type BuiltDestination = Destination & {
 const BUILT: readonly BuiltDestination[] = [
   {
     id: "dashboard",
-    label: "Dashboard",
+    label: PAGE_TITLES.dashboard,
     Icon: DashboardIcon,
     href: DASHBOARD_PATH,
     route: "dashboard",
   },
   {
     id: "incidents",
-    label: "Incidents",
+    label: PAGE_TITLES.incidents,
     Icon: IncidentsIcon,
     href: INCIDENTS_PATH,
     route: "incidents",
@@ -77,7 +78,7 @@ const BUILT: readonly BuiltDestination[] = [
    */
   {
     id: "monitors",
-    label: "Monitors",
+    label: PAGE_TITLES.monitors,
     Icon: MonitorsIcon,
     href: MONITORS_PATH,
     route: "monitors",
@@ -97,12 +98,12 @@ const BUILT: readonly BuiltDestination[] = [
 const BUILT_CONFIG: readonly BuiltDestination[] = [
   {
     id: "notifications",
-    label: "Notifications",
+    label: PAGE_TITLES.notifications,
     Icon: NotificationsIcon,
     href: NOTIFICATIONS_PATH,
     route: "notifications",
   },
-  { id: "settings", label: "Settings", Icon: SettingsIcon, href: SETTINGS_PATH, route: "settings" },
+  { id: "settings", label: PAGE_TITLES.settings, Icon: SettingsIcon, href: SETTINGS_PATH, route: "settings" },
 ];
 
 /** The destinations the rail can navigate to. */
@@ -209,13 +210,16 @@ export function Sidebar({
             key={item.id}
             item={item}
             /*
-             * A monitor's detail view belongs to the dashboard branch of the
-             * product, so Dashboard stays lit while you are on one. Lighting
-             * nothing would leave the rail claiming you are nowhere.
+             * A monitor's page lights Monitors (SUB-182). Its address is
+             * `/monitors/{id}`, a child of the inventory's, and the rail
+             * says which section of the product you are in — the same
+             * answer the address bar gives. It used to light Dashboard,
+             * which left the rail and the URL disagreeing. Lighting nothing
+             * would leave the rail claiming you are nowhere.
              */
             current={
               current === item.route ||
-              (current === "monitor" && item.route === "dashboard")
+              (current === "monitor" && item.route === "monitors")
             }
             onNavigate={onNavigate}
           />

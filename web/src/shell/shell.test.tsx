@@ -36,11 +36,14 @@ describe("Sidebar", () => {
     expect(screen.getByText("Dashboard").closest("[aria-current]")).toBeNull();
   });
 
-  it("keeps the dashboard lit while a monitor's detail view is open", () => {
-    // A monitor belongs to the dashboard branch of the product. Lighting
-    // nothing would leave the rail claiming you are nowhere.
+  it("lights Monitors while a monitor's page is open", () => {
+    // `/monitors/{id}` is a child of the inventory's address, and the rail
+    // names the section you are in (SUB-182). It used to light Dashboard,
+    // which disagreed with the address bar. Lighting nothing would leave the
+    // rail claiming you are nowhere.
     render(<Sidebar collapsed={false} current="monitor" />);
-    expect(screen.getByText("Dashboard").closest("[aria-current]")).toBeTruthy();
+    expect(screen.getByText("Monitors").closest("[aria-current]")).toBeTruthy();
+    expect(screen.getByText("Dashboard").closest("[aria-current]")).toBeNull();
   });
 
   it("makes settings reachable and current without Soon placeholders", () => {

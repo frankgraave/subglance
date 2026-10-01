@@ -4,6 +4,7 @@ import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { fetchInventory, inventoryQueryKey, setMonitorPaused } from "../monitors/inventoryApi";
 import type { ThemePreference } from "../theme/theme";
 import type { NavRoute } from "../shell/Sidebar";
+import { PAGE_TITLES } from "../shell/pages";
 
 export type CommandMenuProps = {
   client: QueryClient;
@@ -63,7 +64,7 @@ export function CommandMenu({ client, open = true, canWrite, onClose, onOpenMoni
       ...(inventory.data ?? []).map((m) => ({ id: `pause-${m.id}`, label: `${m.enabled ? "Pause" : "Resume"} ${m.name}`, detail: "", keepOpen: true, run: () => { void changePaused(m.id, m.enabled); } })),
       { id: "add", label: "Add monitor", detail: "", run: onAddMonitor },
     ] : []),
-    ...(["dashboard", "monitors", "incidents", "notifications", "settings"] as const).map((route) => ({ id: route, label: `Go to ${route[0].toUpperCase()}${route.slice(1)}`, detail: "", run: () => onNavigate(route) })),
+    ...(["dashboard", "monitors", "incidents", "notifications", "settings"] as const).map((route) => ({ id: route, label: `Go to ${PAGE_TITLES[route]}`, detail: "", run: () => onNavigate(route) })),
     ...(["light", "dark", "system"] as const).map((theme) => ({ id: theme, label: `Use ${theme} theme`, detail: "", run: () => onThemeChange(theme) })),
   ];
   const results = commands.filter((c) => `${c.label} ${c.detail}`.toLowerCase().includes(query.trim().toLowerCase()));

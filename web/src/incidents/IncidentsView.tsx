@@ -376,13 +376,8 @@ export function IncidentsView({
         </div>
       </ToolbarTools>
 
-      {/*
-       * No visible page heading, for the reason Monitors has none (SUB-138):
-       * the sidebar says Incidents and the cards below say "Open incidents"
-       * and "Resolved". The `h1` survives, visually hidden, so heading
-       * navigation still has a level-1 landmark.
-       */}
-      <h1 className="sr-only">Incidents</h1>
+      {/* The page frame's visible `h1` names this screen (SUB-182); the
+          cards below are `h2` under it. */}
 
       {churn.map(({ monitorId, note }) => (
         /*
@@ -408,8 +403,11 @@ export function IncidentsView({
          * reader just asked about, and stating it here is how "zero confirmed
          * outages" ended up on a screen with an open incident sitting behind
          * the filter.
+         *
+         * Not titled "Incidents": the page's own `h1` says that right above
+         * it (SUB-182), and the card's name is what it holds.
          */
-        <Card title="Incidents" icon={<IconAlert />} headingLevel={2}>
+        <Card title="Matching incidents" icon={<IconAlert />} headingLevel={2}>
           <Panel>
             <p className="mon-detail-empty">
               {showResolved && historyHasMore ? "No loaded incidents" : "No incidents"} match “{query.trim()}”
@@ -431,8 +429,11 @@ export function IncidentsView({
          * tool working. The helper line quantifies it: the monitor count is
          * what proves the silence was measured rather than the result of a
          * poller that stopped.
+         *
+         * Titled like the card it stands in for, so the slot keeps its name
+         * whether or not anything is open.
          */
-        <Card title="Incidents" icon={<IconAlert />} headingLevel={2}>
+        <Card title="Open incidents" icon={<IconAlert />} headingLevel={2}>
           <Panel>
             <p className="mon-detail-empty">Nothing is broken right now</p>
             <p className="mon-detail-note">

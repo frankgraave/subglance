@@ -25,6 +25,8 @@ import { useRouteFocus } from "./shell/useRouteFocus";
 import { detailTitle, monitorTitleLink, morphNavigation } from "./shell/viewTransition";
 import { AppShell } from "./shell/AppShell";
 import { PageToolbar } from "./shell/PageToolbar";
+import { pageFrame } from "./shell/pages";
+import { Page } from "./components/Page";
 import { Topbar } from "./shell/Topbar";
 import { useShellPreferences } from "./shell/useShellPreferences";
 import { useShellShortcuts } from "./shell/useShortcuts";
@@ -186,24 +188,18 @@ export default function App() {
    * so the identity of a fresh `{ name: "dashboard" }` on every render cannot
    * re-fire them.
    *
-   * The title is the route, not the monitor's name: `App` knows the id, and
-   * the name lives behind a query inside `LiveMonitorDetailRoot`. Naming the
-   * tab after the id would be worse than naming it after the screen, and
-   * threading the name up here to title the page would make the whole shell
+   * The tab title and the visible page title are the same word, read from
+   * one table (`shell/pages.ts`, SUB-182) that the sidebar's labels agree
+   * with. On a monitor's page the tab says "Monitor": `App` knows the id,
+   * and the name lives behind a query inside `LiveMonitorDetailRoot`.
+   * Naming the tab after the id would be worse than naming it after the
+   * screen, and threading the name up here would make the whole shell
    * re-render on every heartbeat.
    */
   const path = routePath(route);
-  useDocumentTitle(
-    onDetail
-      ? "Monitor"
-      : onIncidents
-        ? "Incidents"
-        : onMonitors
-          ? "Monitors"
-          : onNotifications
-            ? "Notifications"
-            : onSettings ? "Settings" : "Dashboard",
-  );
+  const frame = pageFrame(route);
+  const pageTitle = workbenchOpen ? "Workbench" : frame.title;
+  useDocumentTitle(pageTitle ?? "Monitor");
   useRouteFocus(path, mainRef);
 
   /*
@@ -412,6 +408,14 @@ export default function App() {
        * the key the boundary would stay latched and the next screen would
        * never render.
        */}
+      {/*
+       * The page frame sits outside the boundary, so a screen that crashes
+       * still says which screen it was (SUB-182).
+       */}
+      <Page
+        title={pageTitle}
+        width={workbenchOpen ? "full" : frame.width}
+      >
       <ErrorBoundary
         key={boundaryKey}
         title="Something broke while drawing this screen."
@@ -490,6 +494,7 @@ export default function App() {
           />
         )}
       </ErrorBoundary>
+      </Page>
 
       {/*
        * Add a monitor: one drawer, over whatever screen you were on (SUB-132).

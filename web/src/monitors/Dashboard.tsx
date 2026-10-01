@@ -210,7 +210,6 @@ export function Dashboard({
   return (
     <section
       className="mon-dashboard"
-      aria-labelledby={`${searchId}-title`}
       data-conn={stale ? "stale" : "live"}
     >
       {/* Above the counts, not below the list: a warning that the numbers are
@@ -218,17 +217,8 @@ export function Dashboard({
           them. */}
       {banner}
 
-      {/*
-       * `h1`, visually hidden (SUB-100): the detail view uses `h1` for the
-       * monitor's name, and the two screens disagreeing about where the
-       * outline starts leaves heading navigation with no level-1 landmark on
-       * the busier of the two. Hidden because the card below carries the
-       * visible title, and printing the same noun twice is what this
-       * rearrangement exists to stop.
-       */}
-      <h1 id={`${searchId}-title`} className="sr-only">
-        Monitors
-      </h1>
+      {/* No heading of its own: the page frame's visible `h1` names this
+          screen (SUB-182), and the cards below are `h2` under it. */}
 
       {/*
        * Everything that narrows, arranges or redraws this list is in the page

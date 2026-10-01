@@ -20,11 +20,15 @@ describe("the breakpoint", () => {
   // number rather than trusting a comment. shell.css is in the list because
   // the phone drops the sidebar rail at exactly this width; a stylesheet that
   // drifted would leave a gap where the rail is gone and the drawer is not
-  // reachable.
+  // reachable. components/page.css is in it because the page title steps
+  // down to the card size on the phone layout; a different number would give
+  // a width where the rail is gone and the title still takes two lines. (It
+  // replaced monitors.css, whose only phone query styled the dashboard's
+  // former toolbar and went with it.)
   const here = fileURLToPath(new URL(".", import.meta.url));
 
   it.each([
-    ["monitors", "monitors.css"],
+    ["components", "page.css"],
     ["shell", "shell.css"],
   ])("agrees with the media queries in %s.css", (dir, file) => {
     const css = readFileSync(join(here, "..", dir, file), "utf8");
