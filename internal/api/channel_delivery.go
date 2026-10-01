@@ -1,8 +1,10 @@
 package api
 
 import (
+	"cmp"
 	"context"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -139,14 +141,22 @@ func redactDeliveryError(msg string, ch store.Channel) string {
 	if msg == "" {
 		return ""
 	}
+	// Longest first: a shorter value inside a longer one would otherwise be
+	// replaced first, depending on map order, and leave the rest of the
+	// longer value in the message unmasked.
+	var vals []string
 	for k, v := range ch.Config {
 		if publicKeys[k] || len(strings.TrimSpace(v)) < minRedactLen {
 			continue
 		}
-		msg = strings.ReplaceAll(msg, v, maskValue(v))
+		vals = append(vals, v)
 		if t := strings.TrimSpace(v); t != v {
-			msg = strings.ReplaceAll(msg, t, maskValue(t))
+			vals = append(vals, t)
 		}
+	}
+	slices.SortFunc(vals, func(a, b string) int { return cmp.Compare(len(b), len(a)) })
+	for _, v := range vals {
+		msg = strings.ReplaceAll(msg, v, maskValue(v))
 	}
 	return urlInText.ReplaceAllStringFunc(msg, trimURL)
 }

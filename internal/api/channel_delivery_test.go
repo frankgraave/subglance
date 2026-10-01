@@ -84,6 +84,18 @@ func TestRedactDeliveryErrorTakesOutTheCredential(t *testing.T) {
 	if strings.Contains(got, "pw@") || strings.Contains(got, "user:") {
 		t.Errorf("userinfo survived: %q", got)
 	}
+
+	// One value inside another: map order must not decide whether the
+	// shorter is replaced first and leaves the longer one's middle readable.
+	nested := store.Channel{Type: store.ChannelGotify, Config: map[string]string{
+		"token": "secretAB", "url": "secretABCDEFtail",
+	}}
+	for range 64 {
+		got = redactDeliveryError("rejected secretABCDEFtail", nested)
+		if strings.Contains(got, "CDEF") || got != "rejected ****tail" {
+			t.Fatalf("an overlapping value was partly exposed: %q", got)
+		}
+	}
 }
 
 func TestChannelListCarriesTheDeliveryRecord(t *testing.T) {
