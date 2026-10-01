@@ -40,9 +40,9 @@ export function WatchdogNotice() {
 export function WatchdogCard() {
   const query = useWatchdog();
   const data = query.data;
-  return <Card title="Self-monitoring" icon={<IconPulse />} className="watchdog-card">
+  return <Card title="Self-monitoring" icon={<IconPulse />}>
     <Panel>
-      <p className="watchdog-label">Watchdog</p>
+      <p className="panel-lead">Watchdog</p>
       {!data ? <p>{query.isError ? "Watchdog state unavailable." : "Loading watchdog state…"}</p> : <>
         {query.old && <p role="status">Watchdog state unavailable. Showing the last retrieved history.</p>}
         <p>{data.configured ? "Configured" : "Not configured"}</p>
@@ -51,11 +51,11 @@ export function WatchdogCard() {
           {data.suppressed && <p>Pings withheld: the checking pipeline has not progressed.</p>}
           {data.in_flight ? <p>Ping in progress; the outcome is not known yet.</p> : <p>{resultText(data)}</p>}
           {data.last_event === "stopped" && <p>The latest attempt was a clean-shutdown ping.</p>}
-          <dl className="watchdog-history">
+          <dl className="panel-facts">
             <div><dt>Last successful ping</dt><dd><PingTime value={data.last_success_at} /></dd></div>
             <div><dt>Last attempt</dt><dd><PingTime value={data.last_attempt_at} /></dd></div>
           </dl>
-          <p className="watchdog-note">History is held only for this process. A successful ping does not confirm that the receiver will raise an alarm.</p>
+          <p className="panel-note">History is held only for this process. A successful ping does not confirm that the receiver will raise an alarm.</p>
         </>}
       </>}
     </Panel>

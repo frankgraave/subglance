@@ -87,7 +87,7 @@ function CreateForm({ role, onCreated }: { role: string; onCreated: (token: stri
 
   return (
     <form className="auth-form" aria-label="Create API token" onSubmit={submit}>
-      <div className="retention-inputs">
+      <div className="control-row">
         <div className="auth-field">
           <label className="auth-label" htmlFor={`${id}-name`}>Token name</label>
           <input className="auth-input" id={`${id}-name`} value={name} maxLength={100} autoComplete="off" spellCheck={false}
@@ -109,7 +109,7 @@ function CreateForm({ role, onCreated }: { role: string; onCreated: (token: stri
           </select>
         </div>
       </div>
-      <p className="retention-note" id={`${id}-role-help`}>{ROLE_HELP[scope]}</p>
+      <p className="panel-note" id={`${id}-role-help`}>{ROLE_HELP[scope]}</p>
       {error && !roleError && <p className="auth-error" role="alert" id={`${id}-error`}>{error.message}</p>}
       <div><button className="auth-submit" type="submit" disabled={!name.trim() || saving}>{saving ? "Creating…" : "Create token"}</button></div>
     </form>
@@ -156,10 +156,10 @@ function TokenRow({ token, now, onRevoked }: { token: ApiToken; now: number; onR
   // Revoke is a neutral button: --down text on a dark panel measures 3.9:1,
   // under the 4.5:1 a label needs. The second step is what guards it.
   return (
-    <li className="retention-inputs">
+    <li className="control-row">
       <div className="tokens-main">
         <p><strong>{token.name}</strong> <span className="nt-mask">{token.prefix}…</span></p>
-        <p className="retention-note">{facts.join(" · ")}</p>
+        <p className="panel-note">{facts.join(" · ")}</p>
         {error && <p className="auth-error" role="alert">{error}</p>}
       </div>
       <StateChip>{live ? token.role : token.revoked_at ? "revoked" : "expired"}</StateChip>
@@ -205,17 +205,17 @@ export function TokensCard({ role }: { role: string }) {
   const live = tokens.filter((t) => isLive(t, now)).length;
 
   return (
-    <Card title="API tokens" icon={<IconKey />} className="retention-card" note={query.data ? `${live} active` : undefined}>
-      <Panel>
-        <p className="retention-note">
+    <Card title="API tokens" icon={<IconKey />} note={query.data ? `${live} active` : undefined}>
+      <Panel spacing="form">
+        <p className="panel-note">
           For scripts and CI, sent as <code>Authorization: Bearer</code>. A token acts with its own role, never more than your account&apos;s.
         </p>
         {secret && <Reveal token={secret.token} name={secret.name} onDone={() => setSecret(null)} />}
         {canCreate
           ? !secret && <CreateForm role={role} onCreated={(token, details) => { setSecret({ token, name: details.name }); refresh(); }} />
-          : <p className="retention-note">A viewer can list and revoke its own tokens but not create one.</p>}
+          : <p className="panel-note">A viewer can list and revoke its own tokens but not create one.</p>}
         {!query.data ? <p>{query.isError ? "API tokens unavailable." : "Loading API tokens…"}</p>
-          : ordered.length === 0 ? <p className="retention-note">No tokens yet.</p>
+          : ordered.length === 0 ? <p className="panel-note">No tokens yet.</p>
           : <ul className="auth-form" aria-label="Your API tokens">
             {ordered.map((token) => <TokenRow key={token.id} token={token} now={now} onRevoked={refresh} />)}
           </ul>}

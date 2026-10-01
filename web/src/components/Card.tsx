@@ -121,6 +121,12 @@ export type PanelProps = {
   label?: ReactNode;
   /** Set false for a panel whose child draws to the edges, e.g. a list. */
   padded?: boolean;
+  /**
+   * `"form"` for a panel that holds a form: its children sit 16px apart, the
+   * gap a form's own fields take, so the form and the lines around it keep
+   * one rhythm instead of two.
+   */
+  spacing?: "form";
   className?: string;
 };
 
@@ -128,10 +134,12 @@ export function Panel({
   children,
   label,
   padded = true,
+  spacing,
   className,
 }: PanelProps) {
   const classes = ["panel"];
   if (!padded) classes.push("panel--flush");
+  if (spacing === "form") classes.push("panel--form");
   if (className) classes.push(className);
   return (
     <div className={classes.join(" ")}>
