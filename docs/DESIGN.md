@@ -2017,6 +2017,25 @@ and for a viewer. It fails when two rows differ in height, when a column's
 legend is at a different place in two rows, or when a value spills out of its
 slot.
 
+The notification channels list is covered too. Its rows are the same
+`.inv-row`, with two columns (Type, Added) and their own wrap at a 638px list
+(§2.13), and two things differed (SUB-172):
+
+- **The name line is a slot as well.** A channel's name is text, not a 24px
+  link, so a Default, Disabled or quiet-hours chip beside it grew the line by
+  2px. `.inv-name` now has the `--size-row-sm` floor a monitor's link already
+  gave it.
+- **Wrapped, the two columns keep their widths.** Released to their content,
+  each row put Added wherever its own type name ended. Two columns need no
+  grid: kept at their one-line rungs they line up, and a rung-3 track would
+  clip the date.
+
+`layout/channel-rows.browser.test.ts` measures a channel of every type plus an
+unknown one, with the default, disabled, both quiet-hours modes, two chips at
+once, an over-long name and a missing date, at six widths from 1440 to 320px,
+for an admin and for a viewer. It fails on the same three relationships, plus
+a name that sits at a different height in two rows.
+
 The same test holds two more relationships of the row, both found walking the
 page at every width:
 

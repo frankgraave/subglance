@@ -114,16 +114,12 @@ describe("the channel rows", () => {
         const type = row.querySelector<HTMLElement>(".inv-type")!;
         const sub = row.querySelector<HTMLElement>(".inv-sub")!;
         const others = rows
-          .filter((r) => r !== row)
           /*
-           * Compared against the rows carrying no chip only. One fixture
-           * channel is disabled and wears a `Disabled` chip, which makes its
-           * name line 23px rather than 20 and its row 57px rather than 54 —
-           * a legitimate 3px that has nothing to do with the type label.
-           * Measuring against the tallest row would fold that in and make
-           * this assertion a test of the chip.
+           * Compared against every other row, chips included. A row with a
+           * chip used to be excluded here because the chip made it taller;
+           * the name line is a fixed slot now (SUB-172), so no row is.
            */
-          .filter((r) => r.querySelector(".inv-paused-chip") === null)
+          .filter((r) => r !== row)
           .map((r) => Math.round(r.getBoundingClientRect().height));
         return {
           typeText: (type.textContent ?? "").trim(),
