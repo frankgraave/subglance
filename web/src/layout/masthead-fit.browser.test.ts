@@ -163,36 +163,50 @@ describe("beside the collapsed rail at 641px", () => {
  * A row that fits by squeezing its name is not a fix (SUB-149). Before the
  * rows wrapped by container width, the monitors inventory at 1040px beside
  * the sidebar drew every name 14px wide: no overflow, and no way to tell the
- * rows apart. The floor is rung 3 (104px), the same one the container rungs
- * are built from, so this fails if either rung drifts below its row.
+ * rows apart.
+ *
+ * The floor is rung 3 (104px), the one the container rungs are built from,
+ * for a row whose name has the room to itself. A row with a selection box
+ * (the inventory, for someone who can edit) gives the box 16px and a gap out
+ * of that rung, so its name cell is held to 76px: what it measures at the
+ * 836px wrap. That is the floor `inventory.css` states and argues for
+ * (SUB-170). Until then this check added the box's width to the name's and
+ * asserted 104 of the sum, which held while the link itself was 76px wide.
+ *
+ * Measured on the name cell, `.inv-main`, which is the width a name gets
+ * before its ellipsis: the link inside it is only as wide as its own text, so
+ * a short name would read as a narrow floor.
+ *
+ * 1130 is the narrowest window where the inventory row is still on one line
+ * beside the expanded sidebar: the list is exactly 836px there, so the name
+ * cell is measured where it is tightest rather than somewhere near it.
  */
 const LIST_ROUTES = ROUTES.filter((route) => route.name === "monitors" || route.name === "notifications");
 const NAME_FLOOR = 104;
+const NAME_FLOOR_BESIDE_BOX = 76;
 
-describe.each([641, 700, 901, 960, 1040, 1100, 1440])("list rows at %ipx", (width) => {
-  it.each(LIST_ROUTES)("keep every name at least rung 3 wide on $name", async (route) => {
-    const page = await open(width, route);
-    try {
-      /*
-       * The name cell plus the row's selection box, when it has one. Until
-       * SUB-167 the box sat inside `.inv-main`, so this floor always counted
-       * it; the box now leads the row as its own item, and the floor still
-       * counts it, so the check asks what it asked before. What that leaves
-       * the name link itself for an admin (76px at the 836px wrap, 86px at
-       * the widest list) is a separate question, SUB-170, rather than one
-       * this check quietly answers.
-       */
-      const widths = await page.evaluate(() =>
-        Array.from(document.querySelectorAll<HTMLElement>(".inv-main")).map((el) => {
-          const box = el.parentElement?.querySelector<HTMLElement>(":scope > .choice");
-          return el.getBoundingClientRect().width + (box ? box.getBoundingClientRect().width : 0);
-        }),
-      );
-      // An empty list would make Math.min return Infinity and pass vacuously.
-      expect(widths.length).toBeGreaterThan(0);
-      expect(Math.min(...widths)).toBeGreaterThanOrEqual(NAME_FLOOR);
-    } finally {
-      await page.close();
-    }
-  });
+describe.each([641, 700, 901, 960, 1040, 1100, 1130, 1440])("list rows at %ipx", (width) => {
+  it.each(LIST_ROUTES)(
+    `keep every name at least ${NAME_FLOOR}px wide, ${NAME_FLOOR_BESIDE_BOX}px beside a selection box, on $name`,
+    async (route) => {
+      const page = await open(width, route);
+      try {
+        const cells = await page.evaluate(() =>
+          Array.from(document.querySelectorAll<HTMLElement>(".inv-main")).map((el) => ({
+            width: el.getBoundingClientRect().width,
+            boxed: el.parentElement?.querySelector(":scope > .choice") != null,
+          })),
+        );
+        // An empty list would make every check below pass vacuously.
+        expect(cells.length).toBeGreaterThan(0);
+        for (const cell of cells) {
+          const floor = cell.boxed ? NAME_FLOOR_BESIDE_BOX : NAME_FLOOR;
+          expect(cell.width, `a name cell ${cell.boxed ? "beside a selection box " : ""}at ${width}px`)
+            .toBeGreaterThanOrEqual(floor);
+        }
+      } finally {
+        await page.close();
+      }
+    },
+  );
 });

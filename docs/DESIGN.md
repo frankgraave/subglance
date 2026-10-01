@@ -880,7 +880,11 @@ reads a container query instead (SUB-149): the expanded sidebar takes 232px of
 the viewport and the rail 56px, so a viewport rung cannot say whether a list
 row fits beside them. The monitors inventory and the notification channels
 wrap their rows at `@container` widths of 836px and 638px — each the row's
-measured fixed parts plus a 104px floor for the name. Those are documented as
+measured fixed parts plus a 104px floor for the name. In the inventory that
+floor is a viewer's: someone who can edit also gets a selection box, which
+comes out of the same 104px and leaves their name 76px at the wrap. That is
+accepted rather than given a second rung, and `inventory.css` says why
+(SUB-170). Those are documented as
 `--bp-inventory-row` and `--bp-channel-row` and guarded as their own set, so a
 container width can never pass as a viewport rung.
 
