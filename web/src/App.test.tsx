@@ -202,7 +202,7 @@ describe("the app shell", () => {
       ).toBeTruthy(),
     );
     // Collapsed is a rail: the destination is still there to be clicked.
-    expect(screen.getByText("Dashboard")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Dashboard" })).toBeTruthy();
   });
 
   it("reaches the add-monitor form in two clicks, and leaves it with Esc", async () => {

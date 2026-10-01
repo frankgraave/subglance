@@ -19,7 +19,11 @@
      section lands when its link is followed. */
   --settings-top: calc(var(--space-16) + var(--space-4));
   display: grid;
-  grid-template-columns: var(--size-col-4) minmax(0, var(--size-pane-lg));
+  /* The cards take the rest of the page frame, whose `indexed` width is this
+     index plus the gap plus the reading measure (`components/page.css`,
+     SUB-182). The frame owns the number, so the cards land on the same
+     measure every other screen's do without restating it here. */
+  grid-template-columns: var(--size-col-4) minmax(0, 1fr);
   gap: var(--space-6);
   align-items: start;
 }

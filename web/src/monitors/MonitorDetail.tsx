@@ -265,7 +265,7 @@ export function MonitorDetail({
        */}
       <header className="mon-detail-head">
         <div className="mon-detail-titlerow">
-          <h1 className="mon-detail-name">{name}</h1>
+          <h1 className="page-title mon-detail-name">{name}</h1>
           {/*
            * Lamp, word and age — never the reason.
            *

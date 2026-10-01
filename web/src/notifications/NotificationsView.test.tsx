@@ -411,14 +411,14 @@ describe("NotificationsView", () => {
     expect(container.querySelector(".card-note")).toBeNull();
   });
 
-  it("puts exactly one h1 on the page, with the card a level under it", () => {
+  it("leaves the h1 to the page frame, with the card a level under it", () => {
     /*
      * `Card` renders `headingLevel` as a real heading element, so
-     * `headingLevel={1}` on the card produced a second `h1`: the sr-only one
-     * naming the route, and the card's naming a section inside it (CodeRabbit,
-     * PR #61). Two level-one headings is not an outline, and it breaks heading
-     * navigation for exactly the reader the sr-only heading was added for —
-     * "the page" and "a card on it" stop being distinguishable.
+     * `headingLevel={1}` on the card produced a second `h1` beside the one
+     * naming the route (CodeRabbit, PR #61). Two level-one headings is not an
+     * outline: heading navigation stops distinguishing "the page" from "a card
+     * on it". The page's `h1` is the shell's page frame now (SUB-182), so the
+     * screen itself must carry none.
      *
      * Asserted on both states, because the card's title is conditional and a
      * regression could reach only one of them.
@@ -427,8 +427,7 @@ describe("NotificationsView", () => {
       const { container, unmount } = render(
         <NotificationsView channels={channels} />,
       );
-      const h1s = [...container.querySelectorAll("h1")];
-      expect(h1s.map((h) => h.textContent)).toEqual(["Notifications"]);
+      expect(container.querySelectorAll("h1")).toHaveLength(0);
       const title = container.querySelector(".card-title")!;
       expect(title.tagName).toBe("H2");
       unmount();

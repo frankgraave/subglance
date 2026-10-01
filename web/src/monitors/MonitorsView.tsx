@@ -260,11 +260,11 @@ export function MonitorsView({
       <Card
         title="Configured monitors"
         icon={<IconList />}
-        headingLevel={1}
+        headingLevel={2}
         /*
-         * `h1`, because this card's title is now the page's heading (SUB-138).
-         * The document must still have exactly one, and the level is a fact
-         * about where the card sits rather than a style choice.
+         * `h2`, under the page frame's visible `Monitors` `h1` (SUB-182).
+         * The card was the page's heading for a while (SUB-138); the level is
+         * a fact about where the card sits rather than a style choice.
          */
         note={describeInventory(monitors)}
         action={
@@ -329,6 +329,7 @@ export function MonitorsView({
           </p>
         ) : monitors.length === 0 ? (
           <EmptyState
+            headingLevel={3}
             query={query}
             totalCount={0}
             onAddMonitor={
@@ -339,6 +340,7 @@ export function MonitorsView({
           />
         ) : visible.length === 0 ? (
           <EmptyState
+            headingLevel={3}
             query={query}
             totalCount={monitors.length}
             filtered={type !== "" || pausedFilter !== ""}

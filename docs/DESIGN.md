@@ -351,8 +351,9 @@ order and fails when two roles collapse onto one size, because that is the
 defect this scale has had twice (SUB-167):
 
 - **Card title at 16px** sat one pixel above the 15px rows inside the card.
-  Most screens have no page title — the card names the page — so on those
-  screens nothing read as a heading. 18px is a 1.2x step over the row, the
+  At the time most screens had no visible page title — a card named the
+  page — so on those screens nothing read as a heading. Every page has one
+  now (§2.16), and the card title is the level under it. 18px is a 1.2x step over the row, the
   smallest ratio that still reads as a level rather than as a variation; the
   gap to the 24px page title stays a clear step above it.
 - **Helper at 12px** shared a size with the section legend and was the most
@@ -973,6 +974,47 @@ in the middle of the screen moves every time a row arrives. The status wall
 (§7) does centre, and it is the one screen that should: it is read from across
 a room and never scrolled.
 
+### 2.16 Every page has one frame
+
+The UI assessment of 1 October 2026 (SUB-182) measured the screens against
+each other and found that each had decided its own frame. The dashboard used
+the full width; Monitors, Incidents, Notifications and a monitor's page
+stopped at 860px with 325px of nothing to their right at 1440; Settings
+stopped at about 1050px. The dashboard's `h1` was a hidden "Monitors" in a tab
+called "Dashboard"; Monitors' was a card titled "Configured monitors"; Settings'
+was the Account card; two more were hidden. On a monitor's page the rail lit
+Dashboard. No one of these was wrong on its own screen, and together they made
+the product read as five products that share a sidebar.
+
+The fix is one frame, `Page`, drawn by the shell around every route, which
+takes the title and the width from one table (`shell/pages.ts`) rather than
+from the screen:
+
+- **One visible `h1` per page, on the page role** (24/32, `--weight-heavy`;
+  18/24 on a phone). It is the sidebar's word and the tab's word, because all
+  three read the same table. Cards are `h2` under it, and a card is named
+  for what it holds rather than for the page — "Open incidents" under
+  "Incidents", not "Incidents" twice. A monitor's page is titled with the
+  monitor's name: the shell does not know the name, so the detail view draws
+  the `h1` itself and wears the same class.
+- **Three page types, one width rule: the column of cards is
+  `--size-pane-lg` everywhere but the dashboard.** About 70 characters of
+  target and error text; past that the eye loses the line on the way back,
+  and no list or record here benefits from being wider. The dashboard is
+  `full` because it is watched, not read, and its Cards layout exists to fill
+  the width. Settings is `indexed`: its index stands to the left of the same
+  column rather than taking width out of it, so its cards are as wide as
+  every other screen's.
+- **The rail lights the section the address belongs to.** `/monitors/{id}` is
+  a child of `/monitors`, so Monitors is lit there — the same answer the
+  address bar gives.
+
+Measured, not assumed: `layout/page-frame.browser.test.ts` opens every route at
+1440 and 1920 and checks the `h1` count, visibility, role, left edge and word,
+the lit rail item, the tab title, and the reach of the cards against the
+token. The token is read through the cascade, so changing the measure moves
+the test with it, and an ad hoc `max-width` in a feature stylesheet does not.
+
 ---
 
 ## 3. The LED
@@ -1360,11 +1402,10 @@ carries the meaning (§2.3), which is exactly what makes a small dot safe here
 and nowhere else. The status-to-colour mapping lives in one module for both, so
 "paused" cannot end up hollow in one place and grey in the other.
 
-The page title is visually hidden rather than deleted: the card below already
-says "Monitors (2)", so printing the word twice was the duplication this row
-was rearranged to remove — but the `h1` stays in the outline, because the
-detail view uses `h1` for a monitor's name and a screen reader needs a level-1
-landmark on the busier of the two screens.
+The page title above the toolbar's content is the page frame's (§2.16): a
+visible "Dashboard", the word the sidebar and the tab use. It was visually
+hidden for a while and read "Monitors", which made the dashboard the one
+screen whose heading disagreed with its own tab.
 
 There is no breakpoint behind it. The grid asks for "at most N columns, never
 narrower than 380px", so a narrow window drops to as many as genuinely fit —
@@ -2060,7 +2101,8 @@ page at every width:
 Around the list, the selection count is drawn like the toolbar's "n of m
 shown" (helper size, `--ink-2`): both are counts about the list, not
 sentences. *Manage tags* is disabled when there is no monitor to tag. The
-empty state that replaces the list is an `h2` under the card's `h1`, and inside
+empty state that replaces the list is an `h3` under the card's `h2` (the page
+frame's `h1` is above both, §2.16), and inside
 a card it takes the panel radius (`--r-md`), since the card radius 6px inside
 a card corner of the same radius pinched at all four corners.
 

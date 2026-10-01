@@ -160,7 +160,7 @@ const LAYOUTS = ["Rows", "Cards", "Compact", "Status wall"];
 
 const ROUTES: { link: string | null; path: string; ready: () => Promise<unknown> }[] = [
   { link: "Dashboard", path: "/", ready: () => screen.findByText("api") },
-  { link: "Incidents", path: "/incidents", ready: () => screen.findByRole("heading", { name: "Incidents" }) },
+  { link: "Incidents", path: "/incidents", ready: () => screen.findByRole("heading", { level: 1, name: "Incidents" }) },
   { link: "Monitors", path: "/monitors", ready: () => screen.findByRole("searchbox", { name: "Filter monitors" }) },
   { link: "Notifications", path: "/notifications", ready: () => screen.findByRole("searchbox", { name: /filter channels/i }) },
   { link: "Settings", path: "/settings", ready: () => screen.findByText("Not configured") },

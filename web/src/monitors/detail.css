@@ -3,8 +3,8 @@
  *
  * Layout only; every colour, size, radius and weight comes from tokens.css.
  *
- * The page is a single column with a hard max width rather than a
- * multi-column dashboard. Its content is read top to bottom in the order the
+ * The page is a single column at the page frame's reading measure
+ * (`components/page.css`) rather than a multi-column dashboard. Its content is read top to bottom in the order the
  * questions are asked — what is it, is it up, what has it looked like, how
  * reliable is it, what has broken — and a two-column layout would turn that
  * sequence into a scan, which is the dashboard's job, not this page's.
@@ -14,9 +14,8 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
-  /* ~70 characters of target/error text. Past this the eye loses the line on
-     the way back, and none of the content here benefits from being wider. */
-  max-width: var(--size-pane-lg);
+  /* No `max-width` of its own: the page frame holds every screen but the
+     dashboard at one measure (SUB-182). */
 }
 
 /* Editing and checking share this header. Let their group take another line
@@ -105,11 +104,9 @@
   flex-wrap: wrap;
 }
 
+/* Size, leading, weight and colour are `.page-title`'s: a monitor's name is
+   this page's title and sits at the same level as every other page's. */
 .mon-detail-name {
-  font-size: var(--type-page);
-  line-height: var(--lead-page);
-  font-weight: var(--weight-heavy);
-  color: var(--ink);
   /* Wrap, never truncate. This is the page's title: a hostname cut off with
      an ellipsis leaves the reader unsure which monitor they opened. */
   overflow-wrap: anywhere;
@@ -323,18 +320,12 @@
 
 /*
  * Phone. The page already stacks, so this only reclaims the horizontal
- * padding the panels spend on a screen that has none to spare, and drops the
- * page title to the card size — 22px across a 375px screen costs two lines
- * for a hostname that fits on one at 17px.
+ * padding the panels spend on a screen that has none to spare. The title drops
+ * to the card size with every other page's (`components/page.css`).
  */
 @media (max-width: 640px) {
   .mon-detail {
     gap: var(--space-4);
-  }
-
-  .mon-detail-name {
-    font-size: var(--type-card);
-    line-height: var(--lead-card);
   }
 
   .mon-detail-status {
