@@ -38,6 +38,8 @@ function Harness({
   announcement = null,
   layout,
   cardColumns,
+  withLayouts = false,
+  onLayoutChange,
 }: {
   monitors: Monitor[];
   announcement?: string | null;
@@ -45,12 +47,16 @@ function Harness({
   /* Passing this is what makes the column switcher render: the control is
      hidden unless the dashboard is given a way to change the value. */
   cardColumns?: CardColumns;
+  /* The same for the layout switcher: a no-op handler, for a test that only
+     looks at where the switcher is. */
+  withLayouts?: boolean;
+  onLayoutChange?: (next: LayoutId) => void;
 }) {
   const [query, setQuery] = useState("");
   const [columns, setColumns] = useState<CardColumns>(cardColumns ?? "1");
   return (
     <>
-      {/* The two bars the screen portals into (SUB-138). */}
+      {/* The page toolbar the screen portals into (SUB-182). */}
       <ShellSlots />
       <Dashboard
         monitors={monitors}
@@ -61,6 +67,7 @@ function Harness({
         beatWidth={WIDTH}
         cardColumns={columns}
         onCardColumnsChange={cardColumns === undefined ? undefined : setColumns}
+        onLayoutChange={onLayoutChange ?? (withLayouts ? () => {} : undefined)}
       />
     </>
   );
@@ -72,7 +79,7 @@ const rowIds = () =>
   );
 
 const search = () =>
-  screen.getByRole("searchbox", { name: /search monitors/i });
+  screen.getByRole("searchbox", { name: /filter monitors/i });
 
 describe("Dashboard", () => {
   it("filters rows out of the DOM as you search", () => {
@@ -283,27 +290,60 @@ describe("Dashboard", () => {
     expect(chips[0].getAttribute("aria-pressed")).toBe("false");
   });
 
-  it("puts search in the masthead and the filters in the page toolbar", () => {
+  it("puts the filter field, the filters and the view tools in the page toolbar", () => {
     /*
-     * The split this screen was rearranged for (SUB-138): searching a list is
-     * true on every list screen and holds one position, while a status filter
-     * belongs to this screen alone. Asserted by which bar each lands in
-     * rather than by geometry, because jsdom has no layout — and which bar is
-     * the thing that was wrong, not the pixels.
+     * Everything that narrows or redraws this list belongs to this screen
+     * alone, so all of it is in the page toolbar (SUB-182) — the filter field
+     * first, the layout switcher and the column count last. Asserted by which
+     * bar each lands in and in what order rather than by geometry, because
+     * jsdom has no layout — and which bar is the thing that was wrong, not the
+     * pixels.
      */
     render(
-      <Harness monitors={[monitor("a", "up")]} layout="cards" cardColumns="2" />,
+      <Harness
+        monitors={[monitor("a", "up")]}
+        layout="cards"
+        cardColumns="2"
+        withLayouts
+      />,
     );
-    const masthead = document.querySelector(".shell-topbar-search")!;
-    expect(masthead.querySelector(".shell-search")).toBeTruthy();
-    expect(masthead.querySelector(".mon-filter")).toBeNull();
-
     const toolbar = document.querySelector(".shell-toolbar-slot")!;
-    expect(toolbar.querySelector(".shell-search")).toBeNull();
     const group = toolbar.querySelector(".tb-group")!;
     expect(
-      [...group.children].map((el) => el.className.split(" ")[0]),
-    ).toEqual(["mon-filter", "segmented"]);
+      [...group.children].map(
+        (el) => el.getAttribute("aria-label") ?? el.className.split(" ")[0],
+      ),
+    ).toEqual([
+      "shell-search",
+      "Filter by status",
+      "Dashboard layout",
+      "Cards per row",
+    ]);
+  });
+
+  it("offers no layout switcher when nothing can change the layout", () => {
+    /*
+     * The workbench draws this dashboard beside a switcher of its own, so the
+     * switcher here appears only when the dashboard is handed a way to change
+     * the layout: two switchers for one setting would be one too many.
+     */
+    render(<Harness monitors={[monitor("a", "up")]} />);
+    expect(
+      screen.queryByRole("group", { name: "Dashboard layout" }),
+    ).toBeNull();
+  });
+
+  it("reports the layout chosen in its own toolbar", () => {
+    const chosen: LayoutId[] = [];
+    render(
+      <Harness
+        monitors={[monitor("a", "up")]}
+        layout="rows"
+        onLayoutChange={(next) => chosen.push(next)}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Compact" }));
+    expect(chosen).toEqual(["compact"]);
   });
 
   it("has a real label on the search field, not just a placeholder", () => {

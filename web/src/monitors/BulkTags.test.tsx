@@ -74,7 +74,7 @@ it("has no management surface for a viewer, and clears selection on permission l
 
 it("closes the actual tag owner on accepted navigation while retaining search and selection", () => {
   render(<><ShellSlots /><MonitorsView monitors={monitors} onTagChange={vi.fn(async () => counts)} /></>);
-  const search = screen.getByRole("searchbox", { name: "Search monitors" });
+  const search = screen.getByRole("searchbox", { name: "Filter monitors" });
   fireEvent.change(search, { target: { value: "site 2" } });
   fireEvent.click(screen.getByRole("checkbox", { name: "Select site 2" }));
   fireEvent.click(screen.getByRole("button", { name: "Manage tags" }));
@@ -82,7 +82,7 @@ it("closes the actual tag owner on accepted navigation while retaining search an
   fireEvent.change(within(oldDialog).getByRole("textbox", { name: "Tag key" }), { target: { value: "discarded" } });
   act(() => { expect(confirmNavigation()).toBe(true); });
   expect(oldDialog.isConnected).toBe(false);
-  expect(screen.getByRole("searchbox", { name: "Search monitors" })).toBe(search);
+  expect(screen.getByRole("searchbox", { name: "Filter monitors" })).toBe(search);
   expect((search as HTMLInputElement).value).toBe("site 2");
   expect(screen.getByText("1 selected")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Manage tags" }));
@@ -97,14 +97,14 @@ it("selects only visible rows, preserves hidden selections, and forgets removed 
       <MonitorsView {...props} />
     </>,
   );
-  fireEvent.change(screen.getByRole("searchbox", { name: "Search monitors" }), {
+  fireEvent.change(screen.getByRole("searchbox", { name: "Filter monitors" }), {
     target: { value: "site 2" },
   });
   fireEvent.click(
     screen.getByRole("checkbox", { name: "Select all visible (1)" }),
   );
   expect(screen.getByText("1 selected")).toBeTruthy();
-  fireEvent.change(screen.getByRole("searchbox", { name: "Search monitors" }), {
+  fireEvent.change(screen.getByRole("searchbox", { name: "Filter monitors" }), {
     target: { value: "" },
   });
   expect(
@@ -252,7 +252,7 @@ it("selects multiple monitors, previews once and atomically applies with a paire
   fireEvent.click(select);
   fireEvent.click(screen.getByRole("checkbox", { name: "Select site 2" }));
   expect(screen.getByText("2 selected")).toBeTruthy();
-  fireEvent.change(screen.getByRole("searchbox", { name: "Search monitors" }), {
+  fireEvent.change(screen.getByRole("searchbox", { name: "Filter monitors" }), {
     target: { value: "site 3" },
   });
   expect(screen.getByText("2 selected · 2 hidden by filters")).toBeTruthy();

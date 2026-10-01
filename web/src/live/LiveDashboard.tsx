@@ -27,6 +27,8 @@ export type LiveDashboardProps = LiveOptions & {
   beatWidth?: number;
   /** The user's layout setting, already vetoed by the viewport if need be. */
   layout?: LayoutId;
+  /** Changes the layout; shows the switcher in the page toolbar. */
+  onLayoutChange?: (next: LayoutId) => void;
   /** How many cards per row, in the Cards layout. */
   cardColumns?: CardColumns;
   onCardColumnsChange?: (next: CardColumns) => void;
@@ -45,6 +47,7 @@ export type LiveDashboardProps = LiveOptions & {
 export function LiveDashboard({
   beatWidth,
   layout,
+  onLayoutChange,
   cardColumns,
   onCardColumnsChange,
   instance,
@@ -137,6 +140,7 @@ export function LiveDashboard({
       announcement={announcement}
       beatWidth={beatWidth}
       layout={layout}
+      onLayoutChange={onLayoutChange}
       cardColumns={cardColumns}
       onCardColumnsChange={onCardColumnsChange}
       stale={status === "offline"}

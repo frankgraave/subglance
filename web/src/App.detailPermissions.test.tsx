@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { disabledWatchdog } from "./watchdog/fixtures";
-import { setToolbarSlot, setTopbarSlot } from "./shell/topbarSlot";
+import { setToolbarSlot } from "./shell/toolbarSlot";
 
 class FakeSource {
   readyState = 1;
@@ -35,7 +35,6 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
-  setTopbarSlot(null);
   setToolbarSlot(null);
   window.history.replaceState(null, "", "/");
 });

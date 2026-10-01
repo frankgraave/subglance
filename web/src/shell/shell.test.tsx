@@ -182,8 +182,6 @@ describe("Topbar", () => {
     <Topbar
       sidebarCollapsed={false}
       onToggleSidebar={() => {}}
-      layout="rows"
-      onLayoutChange={() => {}}
       themePreference="system"
       onThemeChange={() => {}}
       workbenchOpen={false}
@@ -324,59 +322,67 @@ describe("useShellShortcuts", () => {
   });
 });
 
-describe("the topbar holds only what is true on every screen", () => {
+describe("the topbar holds only what works on every screen", () => {
   /*
-   * The defect this closes, measured before it was fixed.
+   * The defect the first of these closes, measured before it was fixed.
    *
    * The card-columns control shipped in this bar for one commit. It exists
    * only for Cards, so switching to Rows removed four buttons from a
    * right-aligned group — and because the group is right-aligned, what moved
-   * was everything *before* the gap: the add button and the layout switcher
-   * itself, by 121px. The control the user had just clicked slid out from
-   * under the cursor.
+   * was everything *before* the gap, by 121px. The control the user had just
+   * clicked slid out from under the cursor.
    *
-   * View-specific tools belong to the dashboard's own tools row, where
-   * appearing and disappearing costs nothing above them. jsdom has no layout
-   * so the 121px cannot be re-measured here; what *can* be asserted is the
-   * structural rule that produced it — this bar renders the same controls
-   * whichever layout is current.
+   * Since SUB-182 the layout switcher has left the bar too: it is the
+   * dashboard's own control, in the dashboard's page toolbar, and the bar no
+   * longer takes a layout at all — so it cannot render differently per
+   * layout.
    */
-  const bar = (layout: "rows" | "cards") =>
+  const bar = () =>
     render(
       <Topbar
         sidebarCollapsed={false}
         onToggleSidebar={() => {}}
-        layout={layout}
-        effectiveLayout={layout}
-        onLayoutChange={() => {}}
         themePreference="dark"
         onThemeChange={() => {}}
         workbenchOpen={false}
         onToggleWorkbench={() => {}}
+        onOpenCommands={() => {}}
       />,
     );
 
-  const groupNames = () =>
-    screen.getAllByRole("group").map((g) => g.getAttribute("aria-label"));
-
-  it("renders the same control groups in every layout", () => {
-    const { unmount } = bar("cards");
-    const inCards = groupNames();
-    unmount();
-
-    bar("rows");
-    expect(
-      groupNames(),
-      "a group that comes and goes here shifts every control before it",
-    ).toEqual(inCards);
-  });
-
-  it("does not host the cards-per-row control", () => {
-    bar("cards");
+  it("does not host the cards-per-row control or the layout switcher", () => {
+    bar();
     expect(
       screen.queryByRole("group", { name: "Cards per row" }),
-      "view tools belong to the dashboard's tools row, not the shell",
+      "view tools belong to the dashboard's toolbar, not the shell",
     ).toBeNull();
+    expect(
+      screen.queryByRole("group", { name: "Dashboard layout" }),
+      "the layouts are the dashboard's, not every screen's",
+    ).toBeNull();
+  });
+
+  it("offers search as one button that opens the command menu", () => {
+    const open = vi.fn();
+    render(
+      <Topbar
+        sidebarCollapsed={false}
+        onToggleSidebar={() => {}}
+        themePreference="dark"
+        onThemeChange={() => {}}
+        workbenchOpen={false}
+        onToggleWorkbench={() => {}}
+        onOpenCommands={open}
+      />,
+    );
+    // No field: a second entry beside the command menu is what SUB-182
+    // removed, and the field that was here belonged to one screen's list.
+    expect(screen.queryByRole("searchbox")).toBeNull();
+    const search = screen.getByRole("button", { name: "Search" });
+    expect(search.getAttribute("aria-haspopup")).toBe("dialog");
+    expect(search.getAttribute("aria-keyshortcuts")).toBe("Control+K Meta+K");
+    fireEvent.click(search);
+    expect(open).toHaveBeenCalledTimes(1);
   });
 });
 

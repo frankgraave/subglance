@@ -69,9 +69,9 @@ it("opens the password card from the sidebar for a viewer and keeps settings out
   expect(document.getElementById("users")).toBeNull();
   expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input) === "/api/v1/users")).toBe(false);
   fireEvent.change(input, { target: { value: "private" } });
-  fireEvent.change(screen.getByRole("searchbox", { name: "Search settings" }), { target: { value: "nonexistent" } });
+  fireEvent.change(screen.getByRole("searchbox", { name: "Filter settings" }), { target: { value: "nonexistent" } });
   expect(screen.getByRole("status").textContent).toMatch(/No settings match/);
-  fireEvent.change(screen.getByRole("searchbox", { name: "Search settings" }), { target: { value: "password" } });
+  fireEvent.change(screen.getByRole("searchbox", { name: "Filter settings" }), { target: { value: "password" } });
   expect((screen.getByLabelText("Current password") as HTMLInputElement).value).toBe("private");
 });
 it("shows the users card to an administrator, with their own account marked", async () => {
@@ -82,7 +82,7 @@ it("shows the users card to an administrator, with their own account marked", as
   // Account, display, users, status pages, self-monitoring, retention,
   // backups, import & export, API tokens, instance and reset.
   expect(screen.getAllByRole("region")).toHaveLength(11);
-  fireEvent.change(screen.getByRole("searchbox", { name: "Search settings" }), { target: { value: "roles" } });
+  fireEvent.change(screen.getByRole("searchbox", { name: "Filter settings" }), { target: { value: "roles" } });
   expect(screen.getByRole("heading", { name: "Users (1)" }).closest("[hidden]")).toBeNull();
   expect(screen.getByRole("heading", { name: "Retention & storage", hidden: true }).closest("[hidden]")).toBeTruthy();
 });

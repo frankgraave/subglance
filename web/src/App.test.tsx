@@ -13,7 +13,7 @@ import App from "./App";
 import { disabledWatchdog } from "./watchdog/fixtures";
 import { COMPACT_MAX_WIDTH } from "./layout/useMediaQuery";
 import { LAYOUT_STORAGE_KEY } from "./shell/preferences";
-import { setToolbarSlot, setTopbarSlot } from "./shell/topbarSlot";
+import { setToolbarSlot } from "./shell/toolbarSlot";
 
 /**
  * The shell as a whole. These are the acceptance criteria of SUB-64 rather
@@ -106,7 +106,6 @@ afterEach(() => {
    * the unmount after this file's own listeners have already been torn down
    * in some orderings, so this is belt and braces.
    */
-  setTopbarSlot(null);
   setToolbarSlot(null);
 });
 

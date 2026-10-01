@@ -1,14 +1,16 @@
-import { setToolbarSlot } from "./topbarSlot";
+import { setToolbarSlot } from "./toolbarSlot";
 
 /**
  * The page toolbar: the bar under the masthead, whose contents change with the
  * route (SUB-138).
  *
- * The split is the whole idea. The masthead above is identical on every screen
- * — sidebar, search, layout, workbench, theme — so a control there never moves
- * when you navigate. This bar is the opposite: everything in it belongs to the
- * screen you are on, and it is expected to change completely between routes.
- * Sorting, grouping, filtering and the counts that describe them live here.
+ * The split is the whole idea. The masthead above holds only what works on
+ * every screen — the sidebar, search, the workbench, the theme — so a control
+ * there never moves when you navigate (SUB-182). This bar is the opposite:
+ * everything in it belongs to the screen you are on, and it is expected to
+ * change completely between routes. A list's filter field, its sorting,
+ * grouping and filtering, the counts that describe them, and the dashboard's
+ * layout switcher live here.
  *
  * Two bars rather than one crowded row, because the two have different
  * contracts with the reader. Chrome that is always in the same place can be
@@ -24,8 +26,8 @@ import { setToolbarSlot } from "./topbarSlot";
  * that silently discards what you give it is worse than no prop.
  *
  * The controls in it are portalled from the screen through `ToolbarTools`, so
- * the filter state stays inside the screen that filters. See `TopbarTools` for
- * why a portal rather than props.
+ * the filter state stays inside the screen that filters. See `ToolbarTools`
+ * for why a portal rather than props.
  */
 export function PageToolbar() {
   return (

@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
 import { ShellSlots } from "../shell/ShellSlots";
-import { setToolbarSlot, setTopbarSlot } from "../shell/topbarSlot";
+import { setToolbarSlot } from "../shell/toolbarSlot";
 import { Settings } from "../settings/Settings";
 import { backupKey } from "./api";
 import { unconfiguredBackup } from "./fixtures";
@@ -15,7 +15,7 @@ const healthy = {
 };
 
 const clients: QueryClient[] = [];
-afterEach(() => { cleanup(); for (const client of clients.splice(0)) client.clear(); setTopbarSlot(null); setToolbarSlot(null); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); for (const client of clients.splice(0)) client.clear(); setToolbarSlot(null); vi.unstubAllGlobals(); });
 
 function mount(body: unknown, { status = 200, canAdmin = true } = {}) {
   // Every other card on the page gets the same body; only the backup card is under test.
@@ -101,9 +101,9 @@ it("is neither shown nor fetched for a non-administrator", async () => {
 it("is found by the settings search", async () => {
   mount(healthy);
   await screen.findByText("s3://ops-backups/subglance/");
-  fireEvent.change(screen.getByLabelText("Search settings"), { target: { value: "restore" } });
+  fireEvent.change(screen.getByLabelText("Filter settings"), { target: { value: "restore" } });
   expect(document.getElementById("backups")?.hidden).toBe(false);
   expect(document.getElementById("account")?.hidden).toBe(true);
-  fireEvent.change(screen.getByLabelText("Search settings"), { target: { value: "password" } });
+  fireEvent.change(screen.getByLabelText("Filter settings"), { target: { value: "password" } });
   expect(document.getElementById("backups")?.hidden).toBe(true);
 });

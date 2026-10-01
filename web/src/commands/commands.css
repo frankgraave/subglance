@@ -71,10 +71,7 @@
 [data-theme="dark"] .command-menu :is(input, button):focus-visible {
   outline-color: var(--accent-ring-dark);
 }
-.shell-command-launcher .shell-search-kbd { color: var(--ink-2); border: 0; padding: 0; }
-.shell-command-launcher > svg { display: none; }
 @media (max-width: 640px) {
   .command-menu { margin-top: var(--space-6); }
   .command-menu input { font-size: var(--type-nozoom); line-height: var(--lead-nozoom); }
-  .shell-command-launcher > svg { display: block; }
 }

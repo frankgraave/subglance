@@ -391,28 +391,6 @@ export default function App() {
           sidebarCollapsed={narrow ? !navOpen : sidebarCollapsed}
           narrow={narrow}
           onToggleSidebar={toggleNav}
-          layout={layout}
-          effectiveLayout={shown}
-          onLayoutChange={(next) => {
-            if (next === "wall" && route.name === "dashboard" && addOpen) {
-              if (!confirmLeave()) return;
-              setAddOpen(false);
-            }
-            setLayout(next);
-          }}
-          /*
-           * Layouts are how this product draws a list of monitors, and the
-           * masthead is the same on every screen (SUB-138), so the switcher
-           * stays put rather than following the dashboard around.
-           *
-           * It still renders nothing where there is nothing to switch: the
-           * workbench is a fixture gallery and a monitor's detail page is one
-           * monitor, so four arrangements of a list would be a choice that
-           * changes nothing. Incidents and Monitors keep it — both are lists
-           * of monitor-shaped things, and offering the same four views there
-           * is the consistency Frank asked for rather than a dead control.
-           */
-          showLayouts={!workbenchOpen && !onDetail}
           themePreference={preference}
           onThemeChange={setPreference}
           workbenchOpen={workbenchOpen}
@@ -485,6 +463,19 @@ export default function App() {
           <LiveDashboardRoot
             client={queryClient}
             layout={shown}
+            /*
+             * The layout switcher is the dashboard's own control (SUB-182):
+             * the four layouts are four ways of drawing this screen, and on
+             * every other screen the switcher changed nothing. The wall
+             * replaces the add drawer, so choosing it asks first.
+             */
+            onLayoutChange={(next) => {
+              if (next === "wall" && addOpen) {
+                if (!confirmLeave()) return;
+                setAddOpen(false);
+              }
+              setLayout(next);
+            }}
             cardColumns={cardColumns}
             onCardColumnsChange={setCardColumns}
             onOpenMonitor={openMonitor}

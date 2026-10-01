@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { IncidentsView } from "./IncidentsView";
-import { setToolbarSlot, setTopbarSlot } from "../shell/topbarSlot";
+import { setToolbarSlot } from "../shell/toolbarSlot";
 import type { Incident } from "../monitors/detail";
 
 /**
@@ -48,14 +48,11 @@ const resolvedIncident = incident({
 });
 
 let toolbar: HTMLElement;
-let masthead: HTMLElement;
 
 function renderWithToolbar(ui: Parameters<typeof render>[0]) {
   toolbar = document.createElement("div");
-  masthead = document.createElement("div");
-  document.body.append(toolbar, masthead);
+  document.body.append(toolbar);
   setToolbarSlot(toolbar);
-  setTopbarSlot(masthead);
   return render(ui);
 }
 
@@ -64,9 +61,7 @@ afterEach(() => {
   // Otherwise the next test portals into this test's detached node and its
   // controls land somewhere nothing can query.
   setToolbarSlot(null);
-  setTopbarSlot(null);
   toolbar.remove();
-  masthead.remove();
 });
 
 describe("the incidents toolbar slot is filled, and everything in it works", () => {
@@ -160,7 +155,7 @@ describe("the incidents toolbar slot is filled, and everything in it works", () 
     fireEvent.change(within(toolbar).getByLabelText("Show"), {
       target: { value: "resolved" },
     });
-    fireEvent.change(within(masthead).getByLabelText("Filter incidents by monitor"), {
+    fireEvent.change(within(toolbar).getByLabelText("Filter incidents by monitor"), {
       target: { value: "api" },
     });
     expect(document.body.textContent).not.toMatch(/nothing resolved in the last/i);

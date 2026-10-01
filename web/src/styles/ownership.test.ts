@@ -73,7 +73,6 @@ const exceptions = new Map<string, string>([
   ["tb-select", PAGE_TOOLBAR],
   ["shell-icon", SHELL_ICON],
   ["shell-icon-btn", SHELL_ICON],
-  ["shell-command-launcher", "The command menu's launcher sits in the masthead; commands.css styles the launcher with the menu it opens."],
   ["led", BRAND_LAMP],
   ["hb-tooltip", TOOLTIP],
   ["conn-badge", "The host-offline line wears the connection badge's look on purpose: both say whether the data on screen can be taken at face value (HostOffline.tsx)."],

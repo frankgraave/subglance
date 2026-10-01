@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Card } from "../components/Card";
 import { IconSend } from "../components/icons";
 import { PlusIcon, SearchIcon } from "../shell/icons";
-import { TopbarTools } from "../shell/TopbarTools";
+import { ToolbarTools } from "../shell/ToolbarTools";
 import { Drawer } from "../components/Drawer";
 import { ConfirmDelete } from "../components/ConfirmDelete";
 import { StateChip } from "../components/Chip";
@@ -145,25 +145,29 @@ export function NotificationsView({
   return (
     <section className="mon-detail inv-screen" aria-label="Notifications">
       {/*
-       * Search in the masthead, like every other list screen (SUB-138). It
-       * filters by channel name and by type, which are the two things written
-       * on a row.
+       * The filter field, in this page's toolbar like every other list
+       * screen's (SUB-182). It filters by channel name and by type, which are
+       * the two things written on a row. It is the toolbar's only control, so
+       * the bar appears here for one field: the alternative, a field in the
+       * masthead, was a second search entry beside the command menu.
        */}
-      <TopbarTools>
-        <label className="shell-search">
-          <span className="sr-only">Filter channels by name or type</span>
-          <SearchIcon />
-          <input
-            type="search"
-            className="shell-search-input"
-            value={query}
-            placeholder="Filter channels…"
-            autoComplete="off"
-            spellCheck={false}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </label>
-      </TopbarTools>
+      <ToolbarTools>
+        <div className="tb-group">
+          <label className="shell-search">
+            <span className="sr-only">Filter channels by name or type</span>
+            <SearchIcon />
+            <input
+              type="search"
+              className="shell-search-input"
+              value={query}
+              placeholder="Filter channels…"
+              autoComplete="off"
+              spellCheck={false}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+        </div>
+      </ToolbarTools>
 
       {/* No visible page heading: the sidebar says Notifications and the card
           below says Channels. The `h1` stays for heading navigation. */}

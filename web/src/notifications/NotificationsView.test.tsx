@@ -8,7 +8,7 @@ import {
   within,
 } from "@testing-library/react";
 import type { ReactElement } from "react";
-import { setToolbarSlot, setTopbarSlot } from "../shell/topbarSlot";
+import { setToolbarSlot } from "../shell/toolbarSlot";
 import { NotificationsView } from "./NotificationsView";
 import { channelFromApi } from "./channels";
 import type { Channel } from "./channels";
@@ -36,8 +36,8 @@ function make(over: Record<string, unknown> = {}): Channel {
 }
 
 /*
- * A stand-in masthead slot, so the screen's filter field has somewhere to
- * portal to (SUB-138). `TopbarTools` renders nothing when no slot is
+ * A stand-in toolbar slot, so the screen's filter field has somewhere to
+ * portal to (SUB-182). `ToolbarTools` renders nothing when no slot is
  * registered, which is correct behaviour — the status wall has no chrome —
  * but it means a test file that never registers one cannot see the filter at
  * all, and an assertion about filtering would fail for an absence the product
@@ -46,10 +46,8 @@ function make(over: Record<string, unknown> = {}): Channel {
  * toggle fail one.
  */
 function render(ui: ReactElement) {
-  const masthead = document.createElement("div");
   const toolbar = document.createElement("div");
-  document.body.append(masthead, toolbar);
-  setTopbarSlot(masthead);
+  document.body.append(toolbar);
   setToolbarSlot(toolbar);
   return renderBare(ui);
 }
@@ -58,7 +56,6 @@ afterEach(() => {
   cleanup();
   // Otherwise the next test portals into the previous test's detached slot,
   // and its controls are rendered into a node nobody can query.
-  setTopbarSlot(null);
   setToolbarSlot(null);
 });
 
