@@ -388,6 +388,17 @@
     },
     {
       "rule": "color-contrast",
+      "selector": "li[data-paused=\"true\"] > .inv-line > .inv-meta > .inv-col--type.inv-col > .inv-label",
+      "scopes": [
+        "light: monitors",
+        "light: add monitor",
+        "dark: monitors",
+        "dark: add monitor"
+      ],
+      "reason": "Existing contrast debt in inv-label: the shared ink role or muted-state opacity is below the AA text floor, the same debt as the other paused-row legends. Not new: the legend's colour and the paused row's opacity are unchanged; axe did not report this node before the selection box moved out of the name cell (SUB-167) and does now. Remediation changes the shared palette/visual hierarchy and is deferred from this gate. This is not a WCAG exemption; only these measured screen/theme/selector combinations are waived, and the waiver must be removed when fixed."
+    },
+    {
+      "rule": "color-contrast",
       "selector": "li[data-paused=\"true\"] > .inv-line > .inv-meta > .inv-col--num.inv-col:nth-child(2) > .inv-label",
       "scopes": [
         "light: monitors",

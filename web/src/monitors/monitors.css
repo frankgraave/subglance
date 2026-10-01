@@ -619,6 +619,15 @@
   background: var(--surface);
 }
 
+/*
+ * Inside a card the empty state stands where the rows would be, so it takes
+ * their shape: the panel radius, not the card's own (§2.7). The same 12px
+ * corner 6px inside a 12px corner pinched at all four corners of the empty
+ * monitors inventory (SUB-167). On the dashboard it replaces the card and
+ * keeps the card's radius.
+ */
+.card .mon-empty { border-radius: var(--r-md); }
+
 .mon-empty-leds {
   display: flex;
   justify-content: center;

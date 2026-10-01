@@ -321,6 +321,26 @@ describe("MonitorsView", () => {
     expect(screen.queryByText(/Nothing is being watched yet/)).toBeNull();
   });
 
+  it("heads the empty state one level under the card's h1", () => {
+    // The card title is the page's h1, so the empty state that stands in for
+    // the list is an h2. An h3 here skipped a level for every reader who
+    // moves through the page by its headings.
+    render(<MonitorsView monitors={[]} />);
+    expect(screen.getByRole("heading", { level: 1, name: "Configured monitors" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: "Nothing is being watched yet" })).toBeTruthy();
+  });
+
+  it("offers no tag management for an empty inventory", () => {
+    // Nothing to select and nothing to rename: the drawer would open on a
+    // form with no monitor it could act on.
+    const onTagChange = vi.fn();
+    const view = render(<MonitorsView monitors={[]} onTagChange={onTagChange} />);
+    const button = screen.getByRole("button", { name: "Manage tags" }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    view.rerender(<MonitorsView monitors={[make()]} onTagChange={onTagChange} />);
+    expect((screen.getByRole("button", { name: "Manage tags" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it("shows a failed write on the row it belongs to", () => {
     render(
       <MonitorsView

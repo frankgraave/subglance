@@ -6,17 +6,18 @@
   align-items: center;
   gap: var(--space-2);
 }
+/* The group box sits over the column of row boxes it selects: the row's edge
+   and its padding, so its drawn box starts where theirs do. */
 .bulk-tags-selection {
   margin-block-end: var(--space-3);
+  padding-inline-start: calc(var(--space-3) + 1px);
 }
-.bulk-tags-selection p {
-  margin: 0;
-}
-/* The box is drawn by `Checkbox` (choice.css); this only spaces it from the
-   name. The target already carries five pixels either side of the drawn box,
-   so the small step reads as the same gap the name has elsewhere. */
+/* The box is drawn by `Checkbox` (choice.css). Its 26px target hangs five
+   pixels past the drawn box on each side, into the row's padding and the gap
+   to the lamp, so the drawn box takes the row's leading edge and is one
+   ordinary gap from the lamp, like every other item on the line. */
 .bulk-tags-select {
-  margin-inline-end: var(--space-1);
+  margin-inline: calc((var(--size-icon-md) - var(--size-square-compact)) / 2);
 }
 .bulk-tags-form p {
   color: var(--ink);

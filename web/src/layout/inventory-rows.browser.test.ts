@@ -23,6 +23,10 @@
  * A viewer gets the same page without the checkboxes and the actions, so
  * both roles are measured.
  *
+ * Two relationships beside the heights belong to the same row (SUB-167): the
+ * lamp stays on the name's line when the row wraps, and the row boxes sit in
+ * one column under the "Select all visible" box.
+ *
  * Does not run with `npm test`: needs a built bundle and a browser.
  *
  * @vitest-environment node
@@ -132,14 +136,30 @@ type RowMeasure = {
   labelHeight: number;
   /** Each column legend's position relative to its own row's corner. */
   labelOffsets: string[];
+  /** The lamp's vertical centre, and the name link's top and bottom. */
+  lamp: number;
+  nameTop: number;
+  nameBottom: number;
+  /** The left edge of the drawn selection box, if the row has one. */
+  box: number | null;
 };
 
 function measureRows(page: Page): Promise<RowMeasure[]> {
-  return page.evaluate(() =>
-    [...document.querySelectorAll<HTMLElement>(".inv-row")].map((row) => {
+  return page.evaluate(() => {
+    /** Where a checkbox's drawn box starts: its 16px box sits centred in a
+     *  larger target, and the box is what the eye lines up. */
+    const drawnBoxLeft = (input: HTMLElement | null): number | null => {
+      if (!input) return null;
+      const target = input.getBoundingClientRect();
+      const box = parseFloat(getComputedStyle(input, "::before").width);
+      return Math.round((target.left + (target.width - box) / 2) * 10) / 10;
+    };
+    return [...document.querySelectorAll<HTMLElement>(".inv-row")].map((row) => {
       const main = row.querySelector<HTMLElement>(".inv-main")!.getBoundingClientRect();
       const meta = row.querySelector<HTMLElement>(".inv-meta")!.getBoundingClientRect();
       const labels = [...row.querySelectorAll<HTMLElement>(".inv-label")];
+      const lamp = row.querySelector<HTMLElement>(".inv-led .led")!.getBoundingClientRect();
+      const link = row.querySelector<HTMLElement>(".inv-name a")!.getBoundingClientRect();
       return {
         name: (row.querySelector(".inv-name a")?.textContent ?? "").trim(),
         height: Math.round(row.getBoundingClientRect().height * 10) / 10,
@@ -152,9 +172,24 @@ function measureRows(page: Page): Promise<RowMeasure[]> {
           const corner = row.getBoundingClientRect();
           return `${Math.round(box.left - corner.left)},${Math.round(box.top - corner.top)}`;
         }),
+        lamp: lamp.top + lamp.height / 2,
+        nameTop: link.top,
+        nameBottom: link.bottom,
+        box: drawnBoxLeft(row.querySelector<HTMLElement>(".choice")),
       };
-    }),
-  );
+    });
+  });
+}
+
+/** The group box's drawn left edge, or null for a viewer, who has none. */
+function groupBoxLeft(page: Page): Promise<number | null> {
+  return page.evaluate(() => {
+    const input = document.querySelector<HTMLElement>(".bulk-tags-selection .choice");
+    if (!input) return null;
+    const target = input.getBoundingClientRect();
+    const box = parseFloat(getComputedStyle(input, "::before").width);
+    return Math.round((target.left + (target.width - box) / 2) * 10) / 10;
+  });
 }
 
 /**
@@ -283,6 +318,43 @@ describe("the monitors inventory rows", () => {
            * A value either fits its slot or ends in an ellipsis on one line.
            */
           expect(await valuesOutOfSlot(page)).toEqual([]);
+        });
+
+        it("keep the lamp on the name's line", () => {
+          /*
+           * The lamp is the row's status and the name is what it is about.
+           * Wrapped, the name took a line of its own and left the lamp alone
+           * above it: 15px of every row spent on a 7px lamp, with the status
+           * a line away from its monitor (SUB-167). The lamp's centre falls
+           * inside the name link's box at every width.
+           */
+          for (const row of rows) {
+            expect(row.lamp, `${row.name}: lamp centre ${row.lamp}, name ${row.nameTop}-${row.nameBottom}`)
+              .toBeGreaterThanOrEqual(row.nameTop);
+            expect(row.lamp, row.name).toBeLessThanOrEqual(row.nameBottom);
+          }
+        });
+
+        it("put every selection box in one column under the group box", async () => {
+          /*
+           * "Select all visible" selects the boxes below it, so it sits over
+           * them. The row boxes used to sit after the lamp, inside the name
+           * cell, 45px right of the group box; now each row starts with its
+           * box, and the group box starts at the same edge.
+           */
+          const group = await groupBoxLeft(page);
+          const boxes = rows.map((row) => row.box);
+          if (role === "viewer") {
+            expect(group).toBeNull();
+            expect(boxes.every((box) => box === null)).toBe(true);
+            return;
+          }
+          expect(group).not.toBeNull();
+          for (const box of boxes) {
+            expect(box, `row boxes ${JSON.stringify(boxes)}, group ${group}`).not.toBeNull();
+            expect(Math.abs(box! - group!), `row boxes ${JSON.stringify(boxes)}, group ${group}`)
+              .toBeLessThanOrEqual(0.5);
+          }
         });
 
         it("put each column at the same place in every row", () => {

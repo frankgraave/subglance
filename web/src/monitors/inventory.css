@@ -7,8 +7,9 @@
  * headroom and a whole screen had to fit inside it. So almost everything here
  * is borrowed rather than declared — the screen wears `.mon-detail`'s column,
  * the rows borrow `.panel-row`'s surface treatment through their own minimal
- * rule, the controls are `.add-button`, `.add-input` and `.mon-facet-select`,
- * and the chips, values and lamps are the shared components. What is left is
+ * rule, the buttons are `.add-button`, the filters sit in the shell's toolbar
+ * as its own `.tb-*` fields, and the chips, values and lamps are the shared
+ * components. What is left is
  * the one thing that genuinely differs from every other list in the product:
  * fixed-width settings columns, so the eye can read straight *down* a column
  * and find the monitor checked once an hour or the one with no channel.
@@ -91,8 +92,8 @@
  * `inline-block` makes the anchor an atomic box, so the ellipsis has to move
  * onto it: the span's own `text-overflow` cannot reach inside an atomic
  * inline and would clip a long name mid-letter instead. `max-width: 100%`
- * keeps it inside the column, and `middle` lines it up with the selection
- * checkbox beside it, which sits the same way.
+ * keeps it inside the column, and `middle` lines it up with the Paused chip
+ * beside it, which sits the same way.
  */
 .inv-name > a {
   display: inline-block;
@@ -256,54 +257,10 @@
 
 .inv-result--bad { color: var(--down); }
 
-/* Centred on the name line like the checkbox and the link beside it. On the
-   text baseline it hung 0.1px below the link's box and made a paused row
-   that much taller than the rest. */
+/* Centred on the name line like the link beside it. On the text baseline it
+   hung 0.1px below the link's box and made a paused row that much taller
+   than the rest. */
 .inv-paused-chip { margin-left: var(--space-2); vertical-align: middle; }
-
-/*
- * The page's tools, as they sit in the shell's toolbar (SUB-134).
- *
- * A single baseline row, which is the fix for the misalignment Frank pointed
- * at: the old bar stacked each label ABOVE its control in a column, so SEARCH
- * sat on its own line while the selects beside it did not, and the three
- * controls never shared an edge. Label beside control, everything centred on
- * one line, and the row is what aligns them rather than three separate
- * columns that happen to be adjacent.
- */
-.inv-tools {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-  min-width: 0;
-}
-
-.inv-tool {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-/* The search box takes the slack; the two selects stay at their content
-   width. */
-.inv-tool:first-child { flex: 1 1 14rem; }
-
-.inv-tool-label { @apply caps-legend; white-space: nowrap; }
-
-/*
- * The search box keeps the no-zoom size at every width.
- *
- * `.add-input` steps down to `--type-body` above 640px, which is right for a
- * form but not for this: a search field is the one control on the page people
- * reach for on a tablet in landscape, and anything under 16px makes iOS Safari
- * zoom on focus and leave them scrolled sideways (DESIGN.md §13).
- */
-.inv-search-input {
-  font-size: var(--type-nozoom);
-  line-height: var(--lead-nozoom);
-}
 
 /*
  * Too narrow for one line: the settings columns stop pretending to be a table
@@ -323,7 +280,9 @@
  * (104px): the name is the only way to identify the row, so it must never be
  * narrower than the "Timeout" column beside it. 706 + 26 + 104 = 836. Below
  * that the one-line row would squeeze the name to a sliver before it
- * overflowed; wrapping gives it the full width instead.
+ * overflowed; wrapping gives it the full width instead. An admin's selection
+ * box (16px and a gap) comes out of that floor, as it did when it sat inside
+ * the name cell.
  *
  * `min-width: 0` on the wrapped meta row is the other half. Its automatic
  * minimum is the min-content of its widest column, and the tags column's is
@@ -338,7 +297,14 @@
  */
 @container inv-list (width < 836px) {
   .inv-line { flex-wrap: wrap; row-gap: var(--space-2); }
-  .inv-main { flex: 1 1 100%; }
+  /*
+   * The name stays on the lamp's line (SUB-167). A basis of 100% gave it a
+   * line of its own, so the lamp sat alone above it: 15px of every wrapped
+   * row spent on a 7px lamp, and the status a line away from the name it
+   * describes. A basis of 0 lets it fill what the lamp leaves, and the
+   * columns below it still take a line of their own.
+   */
+  .inv-main { flex-basis: 0; }
   /*
    * Wrapped, the columns go on a grid of equal tracks rather than a flex
    * wrap (SUB-167).
