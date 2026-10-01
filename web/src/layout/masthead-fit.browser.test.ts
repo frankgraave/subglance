@@ -8,9 +8,9 @@
  * right-hand group ended 117px past the viewport on every route, because the
  * search slot could not shrink below the field's fixed width.
  *
- * The masthead is the same on every route, so every route is walked anyway:
- * the point of the check is that a route cannot quietly add something that
- * breaks it.
+ * The masthead holds the same controls on every route (SUB-182), so every
+ * route is walked anyway: the point of the check is that a route cannot
+ * quietly add something that breaks it.
  *
  * @vitest-environment node
  */
@@ -100,23 +100,31 @@ describe.each(BAR_WIDTHS)("masthead at %ipx", (width) => {
   });
 
   /*
-   * The preferences group reads as one control strip. When it wrapped inside
-   * itself the theme toggle landed alone under the layout switcher, which is
-   * how the bar grew to three rows at 641px and to two at 901–1040px.
+   * The bar is one line from 641px up. It used to be two below 900px, by
+   * decision, because the layout switcher made it about 760px wide; with the
+   * switcher in the dashboard's own toolbar (SUB-182) the search button takes
+   * the slack instead, and the toggle, search, workbench and theme share one
+   * line. When the right-hand group wrapped inside itself the theme toggle
+   * landed alone on a row of its own, which is how the bar once grew to three
+   * rows at 641px.
    */
-  it("keeps the layout, workbench and theme controls on one line", async () => {
+  it("keeps the toggle, search, workbench and theme on one line", async () => {
     const page = await open(width, ROUTES[0]);
     try {
       // Centres rather than tops: the three are different heights and the
       // group centres them, so their tops never agree even on one line.
       const centres = await page.evaluate(() =>
-        Array.from(document.querySelectorAll<HTMLElement>(".shell-topbar-right > *")).map((el) => {
+        Array.from(
+          document.querySelectorAll<HTMLElement>(
+            ".shell-topbar > .shell-icon-btn, .shell-command-launcher, .shell-topbar-right > *",
+          ),
+        ).map((el) => {
           const r = el.getBoundingClientRect();
           return Math.round(r.top + r.height / 2);
         }),
       );
-      expect(centres).toHaveLength(3);
-      expect(centres).toEqual([centres[0], centres[0], centres[0]]);
+      expect(centres).toHaveLength(4);
+      expect(centres).toEqual([centres[0], centres[0], centres[0], centres[0]]);
     } finally {
       await page.close();
     }

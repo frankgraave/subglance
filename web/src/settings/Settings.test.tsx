@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ShellSlots } from "../shell/ShellSlots";
-import { setToolbarSlot, setTopbarSlot } from "../shell/topbarSlot";
+import { setToolbarSlot } from "../shell/toolbarSlot";
 import { Settings } from "./Settings";
 import type { DisplayPreferences } from "./DisplayCard";
 
@@ -28,7 +28,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   for (const client of clients.splice(0)) client.clear();
-  setTopbarSlot(null); setToolbarSlot(null);
+  setToolbarSlot(null);
   vi.unstubAllGlobals();
   window.history.replaceState(null, "", "/");
 });
@@ -93,7 +93,7 @@ it("keeps a section chosen by the address until the reader scrolls by hand", () 
 it("lists only the sections the search leaves visible, and hides the index when none match", () => {
   window.history.replaceState(null, "", "/settings");
   renderSettings();
-  const search = screen.getByRole("searchbox", { name: "Search settings" });
+  const search = screen.getByRole("searchbox", { name: "Filter settings" });
   fireEvent.change(search, { target: { value: "bearer" } });
   expect(within(index()).getAllByRole("link").map((link) => link.textContent)).toEqual(["API tokens"]);
   fireEvent.change(search, { target: { value: "no such setting" } });
@@ -106,7 +106,7 @@ it("moves the current section off one the search hides, and does not bring it ba
   renderSettings();
   fireEvent.click(within(index()).getByRole("link", { name: "Retention & storage" }));
   expect(current()).toEqual(["Retention & storage"]);
-  const search = screen.getByRole("searchbox", { name: "Search settings" });
+  const search = screen.getByRole("searchbox", { name: "Filter settings" });
   fireEvent.change(search, { target: { value: "bearer" } });
   expect(current()).toEqual(["API tokens"]);
   fireEvent.change(search, { target: { value: "no such setting" } });
@@ -159,7 +159,7 @@ it("finds the display section by what it controls", () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(client);
   render(<QueryClientProvider client={client}><ShellSlots /><Settings client={client} display={displayPrefs()} /></QueryClientProvider>);
-  const search = screen.getByRole("searchbox", { name: "Search settings" });
+  const search = screen.getByRole("searchbox", { name: "Filter settings" });
   for (const word of ["theme", "dark", "layout", "columns"]) {
     fireEvent.change(search, { target: { value: word } });
     expect(within(index()).getAllByRole("link").map((link) => link.textContent), word).toEqual(["Display"]);
@@ -181,7 +181,7 @@ it("offers status pages to an administrator only, beside Users", async () => {
   expect(links.indexOf("Status pages")).toBe(links.indexOf("Users") + 1);
   // The editor arrives as its own chunk; the unavailable list is its answer to the 404.
   expect(await screen.findByText("Status pages unavailable.")).toBeTruthy();
-  const search = screen.getByRole("searchbox", { name: "Search settings" });
+  const search = screen.getByRole("searchbox", { name: "Filter settings" });
   fireEvent.change(search, { target: { value: "public" } });
   expect(within(index()).getAllByRole("link").map((link) => link.textContent)).toEqual(["Status pages"]);
 });
@@ -208,6 +208,6 @@ it("offers import and export to editors and administrators, beside Backups", asy
   render(<QueryClientProvider client={client}><ShellSlots /><Settings client={client} canAdmin /></QueryClientProvider>);
   links = within(index()).getAllByRole("link").map((link) => link.textContent);
   expect(links.indexOf("Import & export")).toBe(links.indexOf("Backups") + 1);
-  fireEvent.change(screen.getByRole("searchbox", { name: "Search settings" }), { target: { value: "yaml" } });
+  fireEvent.change(screen.getByRole("searchbox", { name: "Filter settings" }), { target: { value: "yaml" } });
   expect(within(index()).getAllByRole("link").map((link) => link.textContent)).toEqual(["Import & export"]);
 });

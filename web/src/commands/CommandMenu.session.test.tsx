@@ -18,7 +18,7 @@ it("removes and resets the palette and cache at session end, with no write comma
   const user = { id: 1, role: "admin" as const, email: "operator@example.com", created_at: "2026-09-01" };
   state.session = { state: "signedIn", user };
   const mounted = render(<App />);
-  fireEvent.click(screen.getByRole("button", { name: "Open command menu" }));
+  fireEvent.click(screen.getByRole("button", { name: "Search" }));
   await screen.findByRole("option", { name: /Open Private monitor/ });
   expect(client.getQueryCache().getAll().length).toBeGreaterThan(0);
   state.session = { state: "anonymous" };
@@ -31,7 +31,7 @@ it("removes and resets the palette and cache at session end, with no write comma
   mounted.rerender(<App />);
   await act(async () => {});
   expect(screen.queryByRole("dialog", { name: "Command menu" })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Open command menu" }));
+  fireEvent.click(screen.getByRole("button", { name: "Search" }));
   await screen.findByRole("option", { name: /Open Private monitor/ });
   expect(screen.queryByRole("option", { name: /Pause|Resume|Add monitor/ })).toBeNull();
 });

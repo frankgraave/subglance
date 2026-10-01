@@ -10,8 +10,9 @@ import {
 } from "../shell/preferences";
 import { LED_STATE } from "./ledState";
 import { CardColumnsSwitcher } from "../shell/CardColumnsSwitcher";
+import { LayoutSwitcher } from "../shell/LayoutSwitcher";
 import { SearchIcon } from "../shell/icons";
-import { ToolbarTools, TopbarTools } from "../shell/TopbarTools";
+import { ToolbarTools } from "../shell/ToolbarTools";
 import { MonitorCardList } from "./MonitorCardList";
 import { MonitorCompactList } from "./MonitorCompactList";
 import { MonitorTable } from "./MonitorTable";
@@ -61,6 +62,12 @@ export type DashboardProps = {
    * here; the shell swaps this whole component out for the wall.
    */
   layout?: LayoutId;
+  /**
+   * Changes the layout. Its presence is what puts the layout switcher in the
+   * page toolbar: the workbench draws the dashboard with a switcher of its
+   * own, and two switchers for one setting would be one too many.
+   */
+  onLayoutChange?: (next: LayoutId) => void;
   /** How many cards per row, in the Cards layout. See CardColumnsSwitcher. */
   cardColumns?: CardColumns;
   /** Omitted where the count is fixed, e.g. the workbench. */
@@ -129,6 +136,7 @@ export function Dashboard({
   announcement = null,
   beatWidth,
   layout = DEFAULT_LAYOUT,
+  onLayoutChange,
   cardColumns = "1",
   onCardColumnsChange,
   banner = null,
@@ -211,17 +219,6 @@ export function Dashboard({
       {banner}
 
       {/*
-       * Search goes to the masthead; everything that narrows the list goes to
-       * the page toolbar (SUB-138).
-       *
-       * This screen used to carry its own bar, and the monitors page carried
-       * a different one, so two screens that both search a list of monitors
-       * put the field in two places. The split is by what a control *is*:
-       * search is true on every list screen and holds one position; a status
-       * filter is this screen's alone and is expected to change with the
-       * route.
-       */}
-      {/*
        * `h1`, visually hidden (SUB-100): the detail view uses `h1` for the
        * monitor's name, and the two screens disagreeing about where the
        * outline starts leaves heading navigation with no level-1 landmark on
@@ -233,29 +230,31 @@ export function Dashboard({
         Monitors
       </h1>
 
-      <TopbarTools>
-        <label className="shell-search">
-          {/* A real <label>, hidden. Placeholder-as-label disappears the
-              moment someone types, which is when they most need it. */}
-          <span className="sr-only">Search monitors by name or target</span>
-          <SearchIcon />
-          <input
-            id={searchId}
-            type="search"
-            className="shell-search-input"
-            value={query}
-            placeholder="Search monitors…"
-            autoComplete="off"
-            spellCheck={false}
-            onChange={(event) => onQueryChange(event.target.value)}
-          />
-          {/* The shortcut is now the global Topbar launcher. This field
-              still filters this page only; opening commands preserves it. */}
-        </label>
-      </TopbarTools>
-
+      {/*
+       * Everything that narrows, arranges or redraws this list is in the page
+       * toolbar (SUB-182), the filter field first. The masthead above it keeps
+       * one search for the whole product — the command menu — so the field
+       * here says what it is: a filter over the list beneath it.
+       */}
       <ToolbarTools>
         <div className="tb-group">
+          <label className="shell-search">
+            {/* A real <label>, hidden. Placeholder-as-label disappears the
+                moment someone types, which is when they most need it. */}
+            <span className="sr-only">Filter monitors by name or target</span>
+            <SearchIcon />
+            <input
+              id={searchId}
+              type="search"
+              className="shell-search-input"
+              value={query}
+              placeholder="Filter monitors…"
+              autoComplete="off"
+              spellCheck={false}
+              onChange={(event) => onQueryChange(event.target.value)}
+            />
+          </label>
+
           {/*
            * The status filter.
            *
@@ -387,14 +386,22 @@ export function Dashboard({
           )}
 
           {/*
+           * The layout switcher, at the end with the other view tool: it
+           * changes how this list is drawn, never which monitors are in it,
+           * and it does nothing on any other screen — so it is not chrome.
+           */}
+          {onLayoutChange !== undefined && (
+            <LayoutSwitcher layout={shown} onChange={onLayoutChange} />
+          )}
+
+          {/*
            * View tools, empty for three of the four layouts.
            *
            * Keyed off the layout actually on screen rather than the stored
            * preference — on a narrow viewport the preference may be Rows while
            * Cards is what renders, and the control has to follow what the user
-           * can see. It sits at the end of this bar rather than in the
-           * masthead: appearing and disappearing costs nothing here, and in
-           * the masthead it slid the control you had just pressed sideways.
+           * can see. It sits after the layout switcher, at the end of the bar,
+           * so appearing and disappearing never moves a control before it.
            */}
           {shown === "cards" && onCardColumnsChange !== undefined && (
             <CardColumnsSwitcher

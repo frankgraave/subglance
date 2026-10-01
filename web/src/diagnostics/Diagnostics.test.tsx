@@ -6,7 +6,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
 import { ShellSlots } from "../shell/ShellSlots";
-import { setToolbarSlot, setTopbarSlot } from "../shell/topbarSlot";
+import { setToolbarSlot } from "../shell/toolbarSlot";
 import { Settings } from "../settings/Settings";
 import { disabledWatchdog } from "../watchdog/fixtures";
 import { diagnosticsText, formatBytes, formatUptime } from "./format";
@@ -29,7 +29,7 @@ function settings(diagnostics: unknown, { canAdmin = true, status = 200 } = {}) 
   render(<QueryClientProvider client={client}><ShellSlots /><Settings client={client} canAdmin={canAdmin} /></QueryClientProvider>);
   return fetcher;
 }
-afterEach(() => { cleanup(); for (const c of clients.splice(0)) c.clear(); setTopbarSlot(null); setToolbarSlot(null); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); for (const c of clients.splice(0)) c.clear(); setToolbarSlot(null); vi.unstubAllGlobals(); });
 
 const card = () => document.getElementById("instance") as HTMLElement;
 const reading = (label: string) => within(card()).getByText(label).nextElementSibling as HTMLElement;
@@ -95,7 +95,7 @@ it("is neither rendered nor requested for anyone but an administrator", async ()
 it("is found by searching for the pool", async () => {
   settings(steadyDiagnostics);
   await screen.findByText("2 / 16 busy");
-  fireEvent.change(screen.getByRole("searchbox", { name: "Search settings" }), { target: { value: "queue" } });
+  fireEvent.change(screen.getByRole("searchbox", { name: "Filter settings" }), { target: { value: "queue" } });
   expect(card().hidden).toBe(false);
   expect(document.getElementById("account")?.hidden).toBe(true);
 });

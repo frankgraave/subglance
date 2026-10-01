@@ -1283,8 +1283,8 @@ wait out the backoff timer.
 ## 7. Layouts
 
 Layout is a **user setting**, not a design decision made on everyone's
-behalf. Four views of the same data, picked from the grid icon in the toolbar,
-remembered per user.
+behalf. Four views of the same data, picked from the switcher in the
+dashboard's toolbar (or Settings → Display), remembered per user.
 
 | Layout | For | Character |
 |---|---|---|
@@ -1316,9 +1316,11 @@ teaches people it does nothing. The count is stored under its own key so it
 survives a trip through Rows and back.
 
 **It lives in the dashboard's toolbar, not in the shell's topbar.** The topbar
-holds what is true on every screen — add, layout, workbench, theme — and a
-second bar under it holds what belongs to *this* screen: search, the status
-filter, and whatever the current view brings with it. The split is not
+holds what works on every screen — the sidebar toggle, search, the workbench,
+the theme — and a second bar under it holds what belongs to *this* screen: the
+filter field, the status filter, the layout switcher and whatever the current
+view brings with it. The layout switcher moved down for the same reason
+(SUB-182): on every screen but the dashboard it changed nothing. The split is not
 tidiness. A view-specific control in the topbar appears and disappears inside a
 right-aligned group, which slides everything before it sideways — measured at
 121px, including the layout switcher the user had just clicked. Chrome that
@@ -1509,9 +1511,12 @@ This is the difference between finished and nearly finished.
 monitors and actions, because the user doesn't know which of the two they're
 after.
 
-The global masthead launcher promotes the original `⌘K` hint without changing
-the page search: that field still filters its own page. On phones the same
-launcher shows a search glyph. The palette uses an opaque `--surface-float`
+The masthead's search is the launcher (SUB-182): a button drawn as a search
+field, named "Search", carrying the `⌘K` keycap, on every screen including a
+monitor's detail page. It is the only search entry in the masthead; a screen
+that filters its own list does so from a field in its page toolbar, which the
+palette leaves untouched. On phones the keycap goes and the glyph and the word
+stay. The palette uses an opaque `--surface-float`
 native modal above existing drawers, a bounded scrolling list, and the
 reference's 12px outer / 6px option corners. All matching monitors remain
 reachable; arrows scroll the active option into view without moving input focus.

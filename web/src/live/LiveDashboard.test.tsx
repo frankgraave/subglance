@@ -22,8 +22,8 @@ import { ShellSlots } from "../shell/ShellSlots";
 /*
  * Every render gets the shell's two portal targets (SUB-138).
  *
- * This screen contributes its search to the masthead and its filters to the
- * page toolbar. Without the slots `TopbarTools` renders null — which is
+ * This screen contributes its filter field and its filters to the page
+ * toolbar. Without the slot `ToolbarTools` renders null — which is
  * correct for the status wall and wrong here — so the controls would vanish
  * and every assertion about them would pass by not looking.
  */
@@ -542,6 +542,58 @@ describe("LiveDashboard", () => {
       />,
     );
     expect(await screen.findByRole("alert")).toBeTruthy();
+  });
+
+  describe("the layout switcher before the first list arrives", () => {
+    /*
+     * The switcher is the dashboard's own control (SUB-182), and the loading
+     * and failed-load sentences are drawn instead of `Dashboard`. If the
+     * switcher only came with the list, those two moments would leave no way
+     * to the status wall — the layout that is built to carry the sentence.
+     */
+    const switcher = () =>
+      document
+        .querySelector(".shell-toolbar-slot")
+        ?.querySelector('[role="group"][aria-label="Dashboard layout"]') ??
+      null;
+
+    it("is in the page toolbar while the first load is in flight", () => {
+      vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise(() => {})));
+      const chosen: string[] = [];
+      render(
+        <LiveDashboardRoot
+          client={new QueryClient()}
+          layout="rows"
+          onLayoutChange={(next) => chosen.push(next)}
+          createEventSource={() => new FakeSource()}
+        />,
+      );
+      expect(screen.getAllByText(/Loading monitors…/).length).toBeGreaterThan(0);
+      expect(switcher()).not.toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Status wall" }));
+      expect(chosen).toEqual(["wall"]);
+    });
+
+    it("is in the page toolbar when the first load fails", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi
+          .fn()
+          .mockResolvedValue({ ok: false, status: 503, json: async () => ({}) }),
+      );
+      render(
+        <LiveDashboardRoot
+          client={
+            new QueryClient({ defaultOptions: { queries: { retry: false } } })
+          }
+          layout="rows"
+          onLayoutChange={() => {}}
+          createEventSource={() => new FakeSource()}
+        />,
+      );
+      expect(await screen.findByRole("alert")).toBeTruthy();
+      expect(switcher()).not.toBeNull();
+    });
   });
 
   describe("an event about a monitor the list has never seen", () => {

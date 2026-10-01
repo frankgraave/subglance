@@ -213,24 +213,6 @@
   backdrop-filter: blur(var(--blur-bar));
 }
 
-/*
- * The page zone (SUB-131): whatever the route on screen contributes.
- *
- * `min-width: 0` so a long control inside it shrinks rather than pushing the
- * right-hand group off the bar — the global controls are the ones that must
- * never move, because they are the same four in the same place on every
- * screen and that constancy is what makes them findable.
- */
-.shell-topbar-page {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-.shell-topbar-slot { display: contents; }
-
 .shell-topbar-right {
   display: flex;
   align-items: center;
@@ -238,68 +220,10 @@
   margin-left: auto;
   flex-wrap: wrap;
   justify-content: flex-end;
-  /* The right-hand group keeps its width and the search field gives way
-     instead (below). Both used to shrink together, and the group lost: from
-     901px up to about 1040px (sidebar expanded) the layout switcher wrapped
-     onto a second line inside a one-line bar. */
+  /* The right-hand group keeps its width and the search button gives way
+     instead: from 641px up, the workbench and the theme stay on the bar's one
+     line and the button narrows (SUB-148, SUB-182). */
   flex: none;
-}
-
-/*
- * The search slot is the one thing in the bar that can give up width.
- *
- * `min-width: 0` is the whole fix: without it the slot's minimum is its
- * content's, and `.shell-search` asks for a fixed `--size-pane-sm`, so the
- * slot could never be narrower than that and the right-hand group was pushed
- * past the viewport instead (SUB-148: 117px of sideways scroll at 768px, on
- * every route). The field's own `max-width: 100%` then lets it follow the
- * slot down.
- */
-.shell-topbar-search {
-  flex: 0 1 auto;
-  min-width: 0;
-}
-
-/*
- * Tablet: two rows, by decision rather than by accident.
- *
- * Between the phone and tablet rungs the sidebar is still expanded, which
- * leaves the bar 361px at 641px and 588px at 820px. The bar's contents need
- * about 760px on one line, so something has to move. The row that moves is
- * the display preferences — layout, workbench, theme — because they are
- * chosen once and then left, while the sidebar toggle, search and command
- * menu are what the hand reaches for on every visit. Those three keep the
- * first row, with the field taking the slack; the preferences get a row of
- * their own, still right-aligned, so they stay where the eye learned them.
- *
- * Considered and rejected: icon-only layout segments. Four glyphs save about
- * 130px, which is not enough at 641px, and "Rows" versus "Compact" is a
- * difference the words carry and a pair of line drawings does not. Moving the
- * switcher behind a menu hides the current layout behind a click, which
- * DESIGN.md §7.2 already declined for this control.
- *
- * Scoped to the band, because the phone rules below already reshape this bar
- * and are pinned by their own browser tests.
- */
-@media (min-width: 641px) and (max-width: 900px) {
-  .shell-topbar { flex-wrap: wrap; row-gap: var(--space-2); }
-  /* A zero basis, so the first row never breaks between the field and the
-     command launcher; it grows back to no more than the field's own width, so
-     the launcher stays beside the field instead of drifting to the far edge. */
-  .shell-topbar-search { flex: 1 1 0; max-width: var(--size-pane-sm); }
-  /* Measured at 641px, the narrowest width in the band: the preferences row
-     has 361px and needs 398px at full size, so it broke once more and the
-     theme toggle sat alone on a third row. Tighter segments and a tighter
-     gap between the three controls bring it under 361px. Measured with the
-     bundled Inter loaded, in Chromium 152 and 153: 6px of segment padding
-     still needs 365px, so the padding takes the 4px rung. Both stay above the
-     WCAG 2.5.8 target floor; only the air around the labels shrinks.
-     With the labels on the 13px helper rung the row needs 362.5px in
-     Chromium 152 (357.4px in 153) at a 4px gap, so the gap between the three
-     controls takes the 2px rung: 358.5px. Each control keeps its own border,
-     so they still read as three; the labels keep their size and their air. */
-  .shell-topbar-right { flex: 1 1 100%; gap: var(--space-0h); }
-  .shell-topbar-right .segmented .segmented-option { padding: 0 var(--space-1); }
 }
 
 .shell-icon-btn {
@@ -594,6 +518,38 @@
 .shell-search-input::placeholder { color: var(--ink-4); }
 
 /*
+ * The masthead's search: a button drawn as the field it replaced (SUB-182).
+ *
+ * It opens the command menu, which has its own input, so it is a button and
+ * not a field; it keeps the field's frame because "search" is what it is for
+ * and a field is what search looks like. It takes the slack in the bar: from
+ * its natural 280px down to whatever the workbench and the theme leave it,
+ * with the words giving way to an ellipsis before anything wraps.
+ */
+.shell-command-launcher {
+  flex: 0 1 auto;
+  min-width: 0;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+/* `--ink-2`, not the placeholder's `--ink-4`: these are a control's words,
+   not a hint inside an empty field, and they have to clear AA (§2.3). */
+.shell-command-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  color: var(--ink-2);
+}
+
+.shell-command-launcher .shell-search-kbd { color: var(--ink-2); }
+
+/*
  * The small keycap inside the global command launcher. The button owns the
  * accessible name and shortcut; the keycap is its visual annotation.
  */
@@ -803,6 +759,11 @@
     height: auto;
     padding: var(--space-2) var(--space-2h);
   }
+
+  /* The masthead's search shares its one line with the toggle and the
+     preferences, so it takes what they leave rather than the full width the
+     toolbar's fields take. */
+  .shell-command-launcher { flex: 1 1 0; width: auto; }
 
   .shell-search-input {
     width: 100%;

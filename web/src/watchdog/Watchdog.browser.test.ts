@@ -129,10 +129,10 @@ it.each([["dark", 390], ["light", 390], ["dark", 1440], ["light", 1440]] as cons
     await proof(page, "#self-monitoring", `watchdog-rejected-${theme}-${width}`);
     // Filtering never unmounts the existing dirty account form.
     await page.type('input[name="current_password"]', "local-unsaved-draft");
-    await page.type('input[aria-label="Search settings"]', "watchdog");
+    await page.type('input[aria-label="Filter settings"]', "watchdog");
     expect(await page.$eval("#account", (el) => (el as HTMLElement).hidden)).toBe(true);
     expect(await page.$eval("#self-monitoring", (el) => (el as HTMLElement).hidden)).toBe(false);
-    await page.focus('input[aria-label="Search settings"]'); await page.keyboard.down("Control"); await page.keyboard.press("A"); await page.keyboard.up("Control"); await page.keyboard.press("Backspace");
+    await page.focus('input[aria-label="Filter settings"]'); await page.keyboard.down("Control"); await page.keyboard.press("A"); await page.keyboard.up("Control"); await page.keyboard.press("Backspace");
     expect(await page.$eval('input[name="current_password"]', (el) => el.value)).toBe("local-unsaved-draft");
   } finally { await context.close(); }
 

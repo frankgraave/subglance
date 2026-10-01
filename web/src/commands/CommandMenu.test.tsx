@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import App from "../App";
-import { setToolbarSlot, setTopbarSlot } from "../shell/topbarSlot";
+import { setToolbarSlot } from "../shell/toolbarSlot";
 
 const monitor = (id: number) => ({ id, name: `Service ${id}`, type: "http", target: `https://service-${id}.example`, enabled: true, status: "up", interval_s: 60, timeout_s: 10, tags: {} });
 let monitors = Array.from({ length: 200 }, (_, i) => monitor(i + 1));
@@ -30,7 +30,7 @@ beforeEach(() => {
     return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
   }));
 });
-afterEach(() => { cleanup(); setTopbarSlot(null); setToolbarSlot(null); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); setToolbarSlot(null); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 async function launch() {
   await screen.findByText("operator@example.com");
@@ -86,7 +86,7 @@ it("promotes one global launcher, preserves page search and ignores invalid laun
     fireEvent.keyDown(input, { key: "k", ctrlKey: true, ...extra });
     expect(screen.queryByRole("dialog", { name: "Command menu" })).toBeNull();
   }
-  const launchers = screen.getAllByRole("button", { name: "Open command menu" });
+  const launchers = screen.getAllByRole("button", { name: "Search" });
   expect(launchers).toHaveLength(1);
   fireEvent.keyDown(input, { key: "K", metaKey: true });
   const dialog = await screen.findByRole("dialog", { name: "Command menu" });

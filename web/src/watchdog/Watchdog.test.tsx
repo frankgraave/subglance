@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { ShellSlots } from "../shell/ShellSlots";
-import { setTopbarSlot, setToolbarSlot } from "../shell/topbarSlot";
+import { setToolbarSlot } from "../shell/toolbarSlot";
 import { watchdogKey } from "./api";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
@@ -22,7 +22,7 @@ function settings(body: unknown, status = 200) {
  render(<QueryClientProvider client={client}><ShellSlots /><Settings client={client} /></QueryClientProvider>);
  return { client, fetcher };
 }
-afterEach(() => { cleanup(); for (const client of clients.splice(0)) client.clear(); setTopbarSlot(null); setToolbarSlot(null); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); for (const client of clients.splice(0)) client.clear(); setToolbarSlot(null); vi.unstubAllGlobals(); });
 
 it.each([
  [{ ...success, last_result: "rejected", last_status_code: 403 }, "Last ping rejected (HTTP 403)."],
@@ -63,7 +63,7 @@ it("searches the watchdog section without unmounting a dirty account form", asyn
  settings(success); await screen.findByText("Configured");
  const password = screen.getByLabelText("Current password") as HTMLInputElement;
  fireEvent.change(password, { target: { value: "unsaved" } });
- const search = screen.getByRole("searchbox", { name: "Search settings" });
+ const search = screen.getByRole("searchbox", { name: "Filter settings" });
  fireEvent.change(search, { target: { value: "watchdog" } });
  expect(screen.queryByText(/No settings match/)).toBeNull();
  expect(document.getElementById("account")?.hidden).toBe(true);

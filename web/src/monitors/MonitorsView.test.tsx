@@ -9,7 +9,7 @@ import {
 } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { MonitorsView } from "./MonitorsView";
-import { setToolbarSlot, setTopbarSlot } from "../shell/topbarSlot";
+import { setToolbarSlot } from "../shell/toolbarSlot";
 import { inventoryFromApi } from "./inventory";
 import type { InventoryMonitor } from "./inventory";
 
@@ -42,9 +42,10 @@ function make(over: Record<string, unknown> = {}): InventoryMonitor {
 /**
  * Renders the screen with a toolbar to put its controls in.
  *
- * Since SUB-134 the search box, the two filters and the "n of m shown" counter
- * are portalled out of the Card into the shell, and since SUB-138 they go to
- * two different bars: search to the masthead, filters to the page toolbar.
+ * Since SUB-134 the filter field, the two filters and the "n of m shown"
+ * counter are portalled out of the Card into the shell's page toolbar (since
+ * SUB-182 all of them; between SUB-138 and SUB-182 the field sat in the
+ * masthead).
  * That is the behaviour under test in several assertions below, and a bare
  * `render` has neither bar — so the controls would have nowhere to go and
  * every assertion about them would fail for an absence the product does not
@@ -56,10 +57,8 @@ function make(over: Record<string, unknown> = {}): InventoryMonitor {
  * is where the two are asserted together.
  */
 function render(ui: ReactElement) {
-  const masthead = document.createElement("div");
   const toolbar = document.createElement("div");
-  document.body.append(masthead, toolbar);
-  setTopbarSlot(masthead);
+  document.body.append(toolbar);
   setToolbarSlot(toolbar);
   return renderBare(ui);
 }
@@ -68,7 +67,6 @@ afterEach(() => {
   cleanup();
   // Otherwise the next test portals into the previous test's detached slot,
   // and its controls are rendered into a node nobody can query.
-  setTopbarSlot(null);
   setToolbarSlot(null);
 });
 

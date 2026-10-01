@@ -1,36 +1,44 @@
 import type { ReactNode } from "react";
 import { ThemeToggle } from "../components/ThemeToggle";
 import type { ThemePreference } from "../theme/theme";
-import { LayoutSwitcher } from "./LayoutSwitcher";
 import { BeakerIcon, SidebarIcon, SearchIcon } from "./icons";
-import { setTopbarSlot } from "./topbarSlot";
-import type { LayoutId } from "./preferences";
 
 /**
- * The masthead: the same bar on every screen (SUB-138).
+ * The masthead: what works on every screen, and nothing else (SUB-182).
  *
- * Sticky, because at 200 monitors the layout switch is otherwise a scroll away
- * from the rows it changes. It carries no page title — the sidebar already
- * says where you are, and a heading repeated in two pieces of chrome is the
- * kind of decoration rule 1 rejects.
+ * Sticky, so the controls that are always there are always in reach. It
+ * carries no page title — the sidebar already says where you are, and a
+ * heading repeated in two pieces of chrome is the kind of decoration rule 1
+ * rejects.
  *
- * The connection banner is rendered *above* this bar by the dashboard itself:
- * a warning that the numbers are frozen has to be read before the numbers, and
- * this is the last chrome before them.
+ * The connection banner is rendered *below* this bar by the dashboard itself:
+ * a warning that the numbers are frozen has to be read before the numbers,
+ * and the dashboard is the only screen that has those numbers.
  *
- * **What belongs here is what is true everywhere.** Left: the sidebar toggle,
- * then search. Right: the layout switcher, the workbench, the theme. Nothing
- * in this bar appears on one screen and not another, so moving between screens
- * never moves a control the hand has already learned.
+ * **The rule: a control is in this bar only on a screen where it does
+ * something.** Left: the sidebar toggle, then search. Right: the workbench and
+ * the theme. All four work on every route, the monitor detail page included,
+ * so the bar is the same everywhere as a consequence of the rule rather than
+ * as a rule of its own.
  *
- * That rule is why the add-monitor button left this bar. It sat on the right
- * for a good reason — product principle 2 begins with *finding* the primary
- * action, and a monitoring tool whose add button hides behind a settings page
- * fails the sixty seconds before the form is reached. But a global button
- * cannot be honest about a local action: pressing it on Notifications opened a
- * drawer for adding a *monitor*, on a screen about channels. The principle is
- * unchanged and the answer moved — Monitors carries an "Add monitor" button in
- * its own card header, and the empty dashboard carries the loud version.
+ * It used to be the other way round (SUB-138): the bar was held identical on
+ * every screen, and so the dashboard's layout switcher sat on Monitors,
+ * Incidents, Notifications and Settings, where pressing it changed nothing on
+ * screen. A control that does nothing where it is shown teaches people the
+ * bar is decoration. The switcher is now the dashboard's own, in its page
+ * toolbar.
+ *
+ * **Search is one entry, and it is global.** It opens the command menu, which
+ * finds any monitor and any destination from any screen — the detail page
+ * included, which used to lose search altogether. The field beside it that
+ * narrowed the current list was a second search entry in the same place;
+ * narrowing a list is that screen's tool, so it is a filter in that screen's
+ * toolbar now.
+ *
+ * The add-monitor button left this bar for the same reason: pressed on
+ * Notifications it opened a drawer for adding a *monitor*, on a screen about
+ * channels. Monitors carries an "Add monitor" button in its own card header,
+ * and the empty dashboard carries the loud version.
  *
  * Tools that belong to one route live in `PageToolbar`, the bar underneath.
  */
@@ -40,28 +48,17 @@ export type TopbarProps = {
   /** True below the breakpoint, where this button opens a drawer. */
   narrow?: boolean;
   onToggleSidebar: () => void;
-  /**
-   * The layout switcher's state. Omitted where the switcher does not belong —
-   * see `showLayouts`.
-   */
-  layout?: LayoutId;
-  effectiveLayout?: LayoutId;
-  onLayoutChange?: (next: LayoutId) => void;
-  /**
-   * Whether this route has layouts to switch between.
-   *
-   * A prop rather than something inferred here from `onLayoutChange`, because
-   * "this screen has no layouts" is a fact about the route and `App` is what
-   * knows the route. Inferring it from a missing callback would make the bar's
-   * contents depend on how carefully a caller spelled its props.
-   */
-  showLayouts?: boolean;
   themePreference: ThemePreference;
   onThemeChange: (next: ThemePreference) => void;
   workbenchOpen: boolean;
   onToggleWorkbench: () => void;
+  /** Opens the command menu: the masthead's search. */
   onOpenCommands?: () => void;
-  /** Optional extra controls, e.g. a search field owned by the page. */
+  /**
+   * Anything else genuinely global, which is currently nothing. Kept as the
+   * escape hatch for a control that works on every screen and does not fit
+   * the groups below; a control for one screen goes to `PageToolbar`.
+   */
   children?: ReactNode;
 };
 
@@ -69,10 +66,6 @@ export function Topbar({
   sidebarCollapsed,
   narrow = false,
   onToggleSidebar,
-  layout = "rows",
-  effectiveLayout,
-  onLayoutChange,
-  showLayouts = false,
   themePreference,
   onThemeChange,
   workbenchOpen,
@@ -115,48 +108,38 @@ export function Topbar({
       </button>
 
       {/*
-       * Search sits beside the sidebar toggle on every screen, because what it
-       * searches is always "the things this screen lists". The field is
-       * rendered by the screen — the query belongs to the list it filters —
-       * and portalled in through `TopbarTools`, so the position is the
-       * shell's and the state stays in the page.
+       * Search: one entry, on every screen (SUB-182).
        *
-       * The slot exists even when empty: it is what the portal attaches to,
-       * and a container created only when something wants it would never
-       * exist on the render that wants it. An empty flex child occupies no
-       * space, so a screen without search costs nothing.
+       * A button drawn as a field, not an input. What it opens is a dialog
+       * with its own input, and an input here would have to hand its first
+       * keystroke over to that one — a field that moves your cursor somewhere
+       * else as you type is a stranger control than a button that says what
+       * it opens.
+       *
+       * Named "Search", which is also the word on it: the visible label is
+       * the accessible name (WCAG 2.5.3), so someone who says "click Search"
+       * reaches it. `aria-haspopup` says a dialog follows, `aria-keyshortcuts`
+       * carries the shortcut, and the keycap only draws it.
        */}
-      <div ref={setTopbarSlot} className="shell-topbar-search" />
-      {onOpenCommands && <button type="button" className="shell-icon-btn shell-command-launcher" aria-label="Open command menu" aria-keyshortcuts="Control+K Meta+K" title="Command menu — Ctrl/Cmd + K" onClick={onOpenCommands}><span className="shell-search-kbd" aria-hidden="true">⌘K</span><SearchIcon /></button>}
+      {onOpenCommands && (
+        <button
+          type="button"
+          className="shell-search shell-command-launcher"
+          aria-label="Search"
+          aria-haspopup="dialog"
+          aria-keyshortcuts="Control+K Meta+K"
+          title="Search monitors and pages — Ctrl/Cmd + K"
+          onClick={onOpenCommands}
+        >
+          <SearchIcon />
+          <span className="shell-command-text">Search…</span>
+          <span className="shell-search-kbd" aria-hidden="true">⌘K</span>
+        </button>
+      )}
 
-      {/* Anything else a caller wants in the masthead, which is currently
-          nothing: kept because `children` is the escape hatch for a control
-          that is genuinely global and does not fit the three groups above. */}
       {children}
 
       <div className="shell-topbar-right">
-        {/*
-         * The layout switcher is global chrome, not a page tool (SUB-138).
-         *
-         * It was moved into the page zone earlier on the argument that it
-         * changes the dashboard and therefore belongs to it. Frank's rule is
-         * simpler and holds better: the masthead is identical everywhere, so
-         * a control that is in it must never move. Rows/Cards/Compact/Status
-         * wall is how *this product* draws a list of monitors, and it reads
-         * as an app-level preference rather than as a dashboard filter.
-         *
-         * On a route with one arrangement it renders nothing at all rather
-         * than offering a choice that changes nothing — `showLayouts` is the
-         * route's answer, not this component's guess.
-         */}
-        {showLayouts && onLayoutChange !== undefined && (
-          <LayoutSwitcher
-            layout={layout}
-            effective={effectiveLayout}
-            onChange={onLayoutChange}
-          />
-        )}
-
         {/*
          * The workbench survives, as a side track rather than a tab beside the
          * product. Judging a component in isolation and in both themes is

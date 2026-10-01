@@ -5,7 +5,7 @@ import { Card, Panel } from "../components/Card";
 import { IconDatabase, IconGlobe, IconTransfer } from "../components/icons";
 import { ChangePassword } from "../auth/ChangePassword";
 import { SearchIcon, SettingsIcon } from "../shell/icons";
-import { TopbarTools } from "../shell/TopbarTools";
+import { ToolbarTools } from "../shell/ToolbarTools";
 import { WatchdogCard } from "../watchdog/Watchdog";
 import { DiagnosticsCard } from "../diagnostics/Diagnostics";
 import { BackupCard } from "../backup/Backup";
@@ -208,14 +208,18 @@ export function Settings({ client, canAdmin = false, role = canAdmin ? "admin" :
   const [current, setCurrent] = useCurrentSection(shown.map((section) => section.id));
   useInitialFragment();
   return <>
-    <TopbarTools>
-      <label className="shell-search">
-        <SearchIcon />
-        <input type="search" className="shell-search-input" aria-label="Search settings" placeholder="Search settings…"
-          autoComplete="off" spellCheck={false}
-          value={query} onChange={(event) => setQuery(event.target.value)} />
-      </label>
-    </TopbarTools>
+    {/* A filter over the sections below, so it sits in this page's toolbar
+        (SUB-182): the masthead's one search is the command menu. */}
+    <ToolbarTools>
+      <div className="tb-group">
+        <label className="shell-search">
+          <SearchIcon />
+          <input type="search" className="shell-search-input" aria-label="Filter settings" placeholder="Filter settings…"
+            autoComplete="off" spellCheck={false}
+            value={query} onChange={(event) => setQuery(event.target.value)} />
+        </label>
+      </div>
+    </ToolbarTools>
     <div className="settings-layout">
       {/*
        * The index is navigation, not state: every link is a real fragment, so

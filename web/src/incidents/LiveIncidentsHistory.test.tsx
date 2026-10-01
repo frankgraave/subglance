@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
 import { LiveIncidentsRoot } from "./LiveIncidents";
-import { setToolbarSlot } from "../shell/topbarSlot";
+import { setToolbarSlot } from "../shell/toolbarSlot";
 import type { fetchResolvedIncidents } from "./api";
 import type { EventSourceLike } from "../live/connection";
 import type { Incident } from "../monitors/detail";

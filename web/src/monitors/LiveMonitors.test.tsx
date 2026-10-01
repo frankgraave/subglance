@@ -19,8 +19,8 @@ import { ShellSlots } from "../shell/ShellSlots";
 /*
  * Every render gets the shell's two portal targets (SUB-138).
  *
- * This screen contributes its search to the masthead and its filters to the
- * page toolbar. Without the slots `TopbarTools` renders null — which is
+ * This screen contributes its filter field and its filters to the page
+ * toolbar. Without the slot `ToolbarTools` renders null — which is
  * correct for the status wall and wrong here — so the controls would vanish
  * and every assertion about them would pass by not looking.
  */

@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
 /*
- * The masthead's contract: the bar is identical on every screen (SUB-138).
+ * The masthead's contract (SUB-182): a control is in the bar only on a screen
+ * where it does something. The global set — sidebar toggle, search,
+ * workbench, theme — is on every route, the monitor detail page included; a
+ * control for one screen is on that screen and nowhere else.
  *
- * Its own file because each assertion here walks the whole app across four
+ * Its own file because each assertion here walks the whole app across six
  * routes, and `App.test.tsx` already mounts the shell fourteen times. Adding
  * three more full mounts to that file made the tests after them fail on a
  * monitor list that had not arrived yet — a property of the file's size, not
@@ -19,7 +22,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { disabledWatchdog } from "./watchdog/fixtures";
-import { setToolbarSlot, setTopbarSlot } from "./shell/topbarSlot";
+import { setToolbarSlot } from "./shell/toolbarSlot";
 
 /** jsdom has neither matchMedia nor EventSource. */
 class FakeSource {
@@ -55,6 +58,9 @@ const MONITOR = {
 };
 
 beforeEach(() => {
+  // Every test starts on the dashboard: the first one ends on a monitor's
+  // detail page, and the route is the address bar's, which outlives a test.
+  window.history.replaceState(null, "", "/");
   window.localStorage.clear();
   vi.stubGlobal("matchMedia", (query: string) => ({
     matches: false,
@@ -81,7 +87,18 @@ beforeEach(() => {
     vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
       if (url === "/api/v1/watchdog") return Promise.resolve(new Response(JSON.stringify(disabledWatchdog)));
-      const body = url.includes("/auth/me") ? USER : { monitors: [MONITOR] };
+      const path = url.split("?")[0];
+      const body = url.includes("/auth/me")
+        ? USER
+        : path === "/api/v1/monitors/1"
+          ? MONITOR
+          : path === "/api/v1/monitors/1/uptime"
+            ? { windows: [] }
+            : path === "/api/v1/monitors/1/incidents"
+              ? { incidents: [] }
+              : path === "/api/v1/monitors/1/heartbeats"
+                ? { heartbeats: [] }
+                : { monitors: [MONITOR] };
       return Promise.resolve({
         ok: true,
         status: 200,
@@ -106,68 +123,113 @@ afterEach(() => {
    * the unmount after this file's own listeners have already been torn down
    * in some orderings, so this is belt and braces.
    */
-  setTopbarSlot(null);
   setToolbarSlot(null);
 });
 
+/** The masthead's controls by accessible name, in order. */
+const mastheadNames = () =>
+  [
+    ...document.querySelector(".shell-topbar")!.querySelectorAll("button, input, select"),
+  ].map((el) =>
+    el.tagName === "BUTTON"
+      ? (el.getAttribute("aria-label") ?? el.textContent ?? "")
+      : `${el.tagName.toLowerCase()}:${el.getAttribute("type") ?? ""}`,
+  );
+
+/** The page toolbar's controls by accessible name, in order. */
+const toolbarNames = () =>
+  [...document.querySelectorAll(".shell-toolbar button, .shell-toolbar input, .shell-toolbar select")].map(
+    (el) => el.getAttribute("aria-label") ?? el.textContent ?? el.tagName,
+  );
+
+/*
+ * What works on every screen. Written out rather than read off the dashboard,
+ * so the set is a decision this file states and not whatever the first screen
+ * happened to render.
+ */
+const GLOBAL = [
+  "Collapse sidebar (Ctrl+B)",
+  "Search",
+  "Component workbench",
+  "Light",
+  "Dark",
+  "Auto",
+];
+
+const LAYOUTS = ["Rows", "Cards", "Compact", "Status wall"];
+
+const ROUTES: { link: string | null; path: string; ready: () => Promise<unknown> }[] = [
+  { link: "Dashboard", path: "/", ready: () => screen.findByText("api") },
+  { link: "Incidents", path: "/incidents", ready: () => screen.findByRole("heading", { name: "Incidents" }) },
+  { link: "Monitors", path: "/monitors", ready: () => screen.findByRole("searchbox", { name: "Filter monitors" }) },
+  { link: "Notifications", path: "/notifications", ready: () => screen.findByRole("searchbox", { name: /filter channels/i }) },
+  { link: "Settings", path: "/settings", ready: () => screen.findByText("Not configured") },
+];
+
+async function visit(route: (typeof ROUTES)[number]) {
+  fireEvent.click(screen.getByRole("link", { name: route.link! }));
+  await waitFor(() => expect(window.location.pathname).toBe(route.path));
+  await route.ready();
+}
+
 describe("the masthead", () => {
-  it("keeps the masthead identical on every screen", async () => {
+  it("holds the global set, and only the global set, on every route", async () => {
     /*
-     * The rule the masthead exists for (SUB-138): what is in it is true
-     * everywhere, so it never changes as you navigate. Earlier it did — the
-     * layout switcher was dashboard-only and the add button was global while
-     * meaning something local — and the bar taught people to re-read it on
-     * every screen.
-     *
-     * Checked by walking the routes and comparing the accessible names of the
-     * bar's controls, which is stronger than asserting any single button: a
-     * control added to one screen's masthead fails this without anyone having
-     * to remember to write a test for it.
+     * The rule (SUB-182): a control is in this bar only where it does
+     * something. Checked as an exact list per route rather than as "the same
+     * as the dashboard", so a control that leaks into the bar on one screen
+     * fails here, and so does one that goes missing from one screen — which is
+     * how search disappeared from the monitor detail page.
      */
     render(<App />);
     await screen.findByText("api");
 
+    for (const route of ROUTES) {
+      if (route.path !== "/") await visit(route);
+      expect(mastheadNames(), route.path).toEqual(GLOBAL);
+    }
+
+    // The detail page is reached from the list, not from the sidebar, and it
+    // is the screen that used to lose search.
+    fireEvent.click(screen.getByRole("link", { name: "Dashboard" }));
+    fireEvent.click(await screen.findByRole("link", { name: "api" }));
+    await waitFor(() => expect(window.location.pathname).toBe("/monitors/1"));
+    expect(mastheadNames(), "/monitors/1").toEqual(GLOBAL);
+  });
+
+  it("puts the layout switcher in the dashboard's toolbar and on no other screen", async () => {
     /*
-     * The *shape* of the bar, not its wording.
-     *
-     * A search field is in the same place on every screen and says what it
-     * searches there — "Search monitors…" on the dashboard, "Filter
-     * channels…" on Notifications — and requiring identical placeholder text
-     * would forbid the field from being honest about its own screen. What
-     * must not change is which controls exist and in what order, so buttons
-     * are compared by name and the field by being a search box at all.
+     * The four layouts are four ways of drawing the dashboard. In the masthead
+     * the switcher sat on Monitors, Incidents, Notifications and Settings,
+     * where pressing it changed nothing on screen.
      */
-    const mastheadShape = () =>
-      [
-        ...document
-          .querySelector(".shell-topbar")!
-          .querySelectorAll("button, input"),
-      ].map((el) =>
-        el.tagName === "INPUT"
-          ? `input:${el.getAttribute("type")}`
-          : `button:${el.getAttribute("aria-label") ?? el.textContent ?? ""}`,
-      );
+    render(<App />);
+    await screen.findByText("api");
+    const onDashboard = toolbarNames();
+    for (const layout of LAYOUTS) expect(onDashboard).toContain(layout);
 
-    const onDashboard = mastheadShape();
-    // It is not empty, or this test would pass against a missing bar.
-    expect(onDashboard.length).toBeGreaterThan(4);
-    expect(onDashboard).toContain("input:search");
-    expect(onDashboard).toContain("button:Status wall");
-
-    for (const destination of ["Incidents", "Monitors", "Notifications", "Settings"]) {
-      fireEvent.click(screen.getByRole("link", { name: destination }));
-      await waitFor(() =>
-        expect(
-          screen
-            .getByRole("link", { name: destination })
-            .getAttribute("aria-current"),
-        ).toBe("page"),
-      );
-      if (destination === "Settings") await screen.findByText("Not configured");
-      expect(mastheadShape()).toEqual(onDashboard);
+    for (const route of ROUTES.slice(1)) {
+      await visit(route);
+      const here = [...mastheadNames(), ...toolbarNames()];
+      for (const layout of LAYOUTS) expect(here, `${layout} on ${route.path}`).not.toContain(layout);
     }
   });
 
+  it("offers one search entry per bar, never two side by side", async () => {
+    /*
+     * The masthead's search is the command menu, on every screen. A screen
+     * that filters its list does it from its own toolbar, so the masthead
+     * never carries a second, page-bound field beside the global one.
+     */
+    render(<App />);
+    await screen.findByText("api");
+    for (const route of ROUTES) {
+      if (route.path !== "/") await visit(route);
+      const masthead = document.querySelector(".shell-topbar")!;
+      expect(masthead.querySelectorAll("input").length, route.path).toBe(0);
+      expect(within(masthead as HTMLElement).getAllByRole("button", { name: "Search" })).toHaveLength(1);
+    }
+  });
 
   it("never puts a monitor-shaped action in the masthead", async () => {
     /*
@@ -197,17 +259,12 @@ describe("the masthead", () => {
 
 
 
-  it("keeps every pressed-state control in the masthead honest on every screen", async () => {
+  it("keeps every pressed-state control in the masthead the same on every screen", async () => {
     /*
-     * The general form of the rule above, and the reason the [+] left the
-     * bar: a control in chrome that is on every screen must mean the same
-     * thing on every screen. The layout segments and the theme segments
-     * legitimately carry `aria-pressed` — they report which option is on —
-     * so what is asserted is that the set does not change as you navigate.
-     *
-     * A control that is honest on the dashboard and meaningless elsewhere
-     * shows up here as a difference, without anybody having to remember that
-     * this test exists.
+     * A control in chrome that is on every screen must mean the same thing on
+     * every screen. The theme segments and the workbench legitimately carry
+     * `aria-pressed` — they report what is on — so what is asserted is that
+     * the set does not change as you navigate.
      */
     render(<App />);
     await screen.findByText(USER.email);
@@ -223,24 +280,18 @@ describe("the masthead", () => {
     expect(onDashboard).toContain("Component workbench");
     expect(onDashboard).not.toContain("Add a monitor");
 
-    for (const destination of ["Incidents", "Monitors", "Notifications", "Settings"]) {
-      fireEvent.click(screen.getByRole("link", { name: destination }));
-      await waitFor(() =>
-        expect(
-          screen
-            .getByRole("link", { name: destination })
-            .getAttribute("aria-current"),
-        ).toBe("page"),
-      );
+    for (const route of ROUTES.slice(1)) {
+      await visit(route);
       expect(pressedNames()).toEqual(onDashboard);
     }
   });
 
-  it("drives the same preferences from the settings page as from the masthead", async () => {
+  it("drives the same preferences from the settings page as from the bars", async () => {
     /*
      * The Display section on /settings is a second view of the preferences
      * App owns, not a second copy of them: a choice made there has to show
-     * in the masthead at once and be what the next visit reads back.
+     * in the masthead and the dashboard's toolbar at once and be what the
+     * next visit reads back.
      */
     render(<App />);
     await screen.findByText(USER.email);
@@ -256,11 +307,15 @@ describe("the masthead", () => {
     expect(pressed(masthead, "Colour theme", "Light")).toBe("true");
 
     fireEvent.click(within(within(card).getByRole("group", { name: "Dashboard layout" })).getByRole("button", { name: "Compact" }));
-    expect(pressed(masthead, "Dashboard layout", "Compact")).toBe("true");
     expect(window.localStorage.getItem("subglance:layout")).toBe("compact");
 
     fireEvent.click(within(within(card).getByRole("group", { name: "Cards per row" })).getByRole("button", { name: "Three per row" }));
     expect(pressed(card, "Cards per row", "Three per row")).toBe("true");
     expect(window.localStorage.getItem("subglance:card-columns")).toBe("3");
+
+    fireEvent.click(screen.getByRole("link", { name: "Dashboard" }));
+    await screen.findByText("api");
+    const toolbar = document.querySelector<HTMLElement>(".shell-toolbar")!;
+    expect(pressed(toolbar, "Dashboard layout", "Compact")).toBe("true");
   });
 });

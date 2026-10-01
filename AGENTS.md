@@ -49,23 +49,35 @@ cannot quietly rot into a list of justified-sounding lies.
 
 ### Where a control belongs
 
-Two bars, and one question decides between them: **is this true on every
-screen?**
+Two bars, and one question decides between them: **does this control do
+something on every screen?**
 
 - **Yes** — the masthead (`web/src/shell/Topbar.tsx`). The sidebar toggle,
-  search, the layout switcher, the theme. It is identical on every route, so
-  it can be read once instead of re-read per screen.
+  search (which opens the command menu), the workbench, the theme. Because
+  each of them works everywhere, the bar is the same on every route,
+  including a monitor's detail page — it can be read once instead of re-read
+  per screen.
 - **No** — the page toolbar (`web/src/shell/PageToolbar.tsx`), filled through
-  a portal slot by whichever view is mounted. It hides itself on screens with
-  nothing to put in it rather than sitting there empty.
+  a portal slot (`ToolbarTools`) by whichever view is mounted. A list's
+  filter field, its filters and counts, and the dashboard's layout switcher
+  live here. It hides itself on screens with nothing to put in it rather than
+  sitting there empty.
 - **Neither** — an action that operates on one kind of thing belongs in the
   header of the card it acts on. Adding a monitor is a monitors action; it is
   not chrome, because chrome that is also present on Notifications while
   meaning something about monitors is chrome you have to re-read.
 
-`web/src/App.masthead.test.tsx` walks all four routes and compares the bar's
-accessible names, so a control added to one screen's masthead fails the build
-rather than being noticed in review.
+A control is in the masthead only on a screen where it does something. The
+layout switcher used to sit there on every route, and on four of them
+pressing it changed nothing on screen; it is the dashboard's now. There is
+one search entry in the masthead — a second, page-bound field beside it is a
+filter, and goes in that page's toolbar.
+
+`web/src/App.masthead.test.tsx` walks every route, the detail page included,
+and asserts the masthead holds exactly the global set and that the layout
+switcher appears only in the dashboard's toolbar — so a control that lands in
+the wrong bar, or goes missing from one screen, fails the build rather than
+being noticed in review.
 
 A page whose card already names it does not also get an `<h1>` — but do not
 delete what the heading was carrying. When the Monitors title went, its "4

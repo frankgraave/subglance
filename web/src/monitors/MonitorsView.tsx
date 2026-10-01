@@ -3,7 +3,7 @@ import { registerNavigationCleanup } from "../shell/leaveGuard";
 import { Card, Panel } from "../components/Card";
 import { PlusIcon, SearchIcon } from "../shell/icons";
 import { IconList, IconPulse } from "../components/icons";
-import { ToolbarTools, TopbarTools } from "../shell/TopbarTools";
+import { ToolbarTools } from "../shell/ToolbarTools";
 import { Drawer } from "../components/Drawer";
 import { ConfirmDelete } from "../components/ConfirmDelete";
 import { StateChip } from "../components/Chip";
@@ -184,13 +184,10 @@ export function MonitorsView({
       )}
 
       {/*
-       * Search in the masthead, filters in the page toolbar (SUB-138).
-       *
-       * Both used to sit together in one bar, which made the monitors page
-       * look different from the dashboard even though both screens search a
-       * list of monitors. The split follows what the control *is*: searching
-       * "the things this screen lists" is true everywhere and holds the same
-       * position everywhere, while a type facet is this screen's alone.
+       * The filter field, the filters and the count, together in the page
+       * toolbar (SUB-182). The masthead keeps one search for the whole
+       * product — the command menu — so this field is named for what it is: a
+       * filter over the list beneath it.
        *
        * The counter travels with the filters, and that is not tidiness.
        * "3 of 3 shown" is the filter's honesty — it says you are looking at a
@@ -198,29 +195,27 @@ export function MonitorsView({
        * controls that make the claim true.
        *
        * Portalled rather than passed up as props, so the filter state stays
-       * inside the screen that filters. See `TopbarTools`.
+       * inside the screen that filters. See `ToolbarTools`.
        */}
-      <TopbarTools>
-        <label className="shell-search">
-          <span className="sr-only">Search monitors</span>
-          <SearchIcon />
-          <input
-            type="search"
-            /* `shell-search-input` pins the 16px minimum at every width.
-               `.input` drops to 14px above 640px, which is fine for a
-               form nobody types into on a phone in landscape and wrong for a
-               search box: iOS Safari zooms the page on focus below 16px and
-               leaves the reader scrolled sideways (DESIGN.md §13). */
-            className="shell-search-input"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search monitors…"
-          />
-        </label>
-      </TopbarTools>
-
       <ToolbarTools>
         <div className="tb-group">
+          <label className="shell-search">
+            <span className="sr-only">Filter monitors</span>
+            <SearchIcon />
+            <input
+              type="search"
+              /* `shell-search-input` pins the 16px minimum at every width.
+                 `.input` drops to 14px above 640px, which is fine for a
+                 form nobody types into on a phone in landscape and wrong for a
+                 search box: iOS Safari zooms the page on focus below 16px and
+                 leaves the reader scrolled sideways (DESIGN.md §13). */
+              className="shell-search-input"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Filter monitors…"
+            />
+          </label>
+
           <label className="tb-field">
             <span className="tb-label">Type</span>
             <select

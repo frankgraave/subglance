@@ -4,7 +4,7 @@ import { IncidentStoryItem } from "./IncidentStoryItem";
 import { IncidentClusterItem } from "./IncidentClusterItem";
 import { useState } from "react";
 import { SearchIcon } from "../shell/icons";
-import { ToolbarTools, TopbarTools } from "../shell/TopbarTools";
+import { ToolbarTools } from "../shell/ToolbarTools";
 import { HISTORY_WINDOWS } from "./api";
 import { clusterIncidents } from "./cluster";
 import { describeChurn, incidentState } from "./story";
@@ -290,30 +290,6 @@ export function IncidentsView({
       aria-label="Incidents"
     >
       {/*
-       * Search, in the masthead like every other list screen (SUB-138).
-       *
-       * It filters by monitor name, which is the question this screen is
-       * actually read with: "did api go down again". It does not search
-       * incident text, because an incident has none — inventing a field to
-       * search would be a control that looks like it does more than it does.
-       */}
-      <TopbarTools>
-        <label className="shell-search">
-          <span className="sr-only">Filter incidents by monitor</span>
-          <SearchIcon />
-          <input
-            type="search"
-            className="shell-search-input"
-            value={query}
-            placeholder="Filter by monitor…"
-            autoComplete="off"
-            spellCheck={false}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </label>
-      </TopbarTools>
-
-      {/*
        * The page toolbar's own controls — the slot SUB-131 opened and SUB-136
        * left empty, deliberately, because the scope filter it named had
        * nothing behind it and a control that promises a function it does not
@@ -330,9 +306,29 @@ export function IncidentsView({
        * A screen rendered from a fixture has no refetch to trigger, and a
        * select that silently does nothing is exactly the dead control this
        * ticket refused to ship.
+       *
+       * The filter field leads (SUB-182). It filters by monitor name, which
+       * is the question this screen is actually read with: "did api go down
+       * again". It does not search incident text, because an incident has
+       * none — inventing a field to search would be a control that looks like
+       * it does more than it does.
        */}
       <ToolbarTools>
         <div className="tb-group">
+          <label className="shell-search">
+            <span className="sr-only">Filter incidents by monitor</span>
+            <SearchIcon />
+            <input
+              type="search"
+              className="shell-search-input"
+              value={query}
+              placeholder="Filter by monitor…"
+              autoComplete="off"
+              spellCheck={false}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+
           <label className="tb-field">
             <span className="tb-label">Show</span>
             <select
