@@ -229,12 +229,28 @@
  * 836px is measured, not guessed. The row's fixed parts — lamp, the four
  * settings columns, the four action squares and the gaps between them — take
  * 706px, its padding and edges 26px, and the name gets a floor of rung 3
- * (104px): the name is the only way to identify the row, so it must never be
+ * (104px): the name is the only way to identify the row, so it should not be
  * narrower than the "Timeout" column beside it. 706 + 26 + 104 = 836. Below
  * that the one-line row would squeeze the name to a sliver before it
- * overflowed; wrapping gives it the full width instead. An admin's selection
- * box (16px and a gap) comes out of that floor, as it did when it sat inside
- * the name cell.
+ * overflowed; wrapping gives it the full width instead.
+ *
+ * That floor is a viewer's, and a viewer has more than it: a viewer's row has
+ * no actions, so its name is 226px wide at the wrap. Someone who can edit
+ * (an admin or an editor) gets the actions and a selection box as well, and
+ * the box — 16px drawn and a 12px gap — comes out of the same 104. Their
+ * floor is 76px: at the wrap, and 86px at the widest the list gets (846px,
+ * the screen's 860px measure less the card's padding and edges). Measured in
+ * Chromium (SUB-170), and asserted in `masthead-fit.browser.test.ts`.
+ *
+ * 76 is accepted rather than moved up to 104, for three reasons. The floor
+ * exists to stop the name collapsing to nothing, as it did at 14px before
+ * the wrap (SUB-149); 76px still holds about ten characters before the
+ * ellipsis, and the whole name is the link's text for a screen reader and
+ * one click away. A wrap of its own for writers would mean this block twice,
+ * under a second container name, because a container condition cannot be a
+ * variable. And that wrap would sit at 864px, above the widest the list ever
+ * gets: a writer's row would never be on one line again at any window width,
+ * which trades a narrower name for losing the columns altogether.
  *
  * `min-width: 0` on the wrapped meta row is the other half. Its automatic
  * minimum is the min-content of its widest column, and the tags column's is
