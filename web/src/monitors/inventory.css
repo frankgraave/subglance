@@ -81,7 +81,17 @@
   white-space: nowrap;
 }
 
-.inv-name { font-size: var(--type-row); line-height: var(--lead-row); }
+/*
+ * The name line is a slot too (SUB-172): `--size-row-sm`, the height a
+ * monitor's 24px name link already gives it. A channel row's name is text,
+ * 20px, and grew to 22 around a Default, Disabled or quiet-hours chip, so a
+ * row with a chip stood 2px taller than one without once wrapped.
+ */
+.inv-name {
+  min-height: var(--size-row-sm);
+  font-size: var(--type-row);
+  line-height: var(--lead-row);
+}
 
 /*
  * The name link is a 24px target (WCAG 2.2 SC 2.5.8), as the card's name link

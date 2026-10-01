@@ -362,18 +362,18 @@
   .inv-line { flex-wrap: wrap; row-gap: var(--space-2); }
   .inv-main { flex: 1 1 100%; }
   .inv-meta { flex: 1 1 100%; flex-wrap: wrap; min-width: 0; }
-  .inv-col--type,
-  .inv-col--num,
-  .inv-col--chan,
-  .inv-col--tags,
-  .inv-col--added { width: auto; }
-  .inv-acts { margin-left: auto; }
   /*
-   * `.nt-card .inv-col--type` is more specific than the release above and
-   * would hold 104px through it — the sideways scroll this block exists to
-   * prevent, arrived at from the other side.
+   * Wrapped, the two columns keep their one-line widths (SUB-172). They used to
+   * be released to their content, so each row broke wherever its own type name
+   * ran out: Added sat 50px from Type in one row and 102px in the next. Fixed
+   * widths put each column at the same place in every row, which is what the
+   * monitors inventory's equal grid tracks are for, without the grid: a track of
+   * rung 3 would clip the Added date, which needs rung 4. Type and Added take
+   * 284px with their gap, so they share a line in any list wider than 310px; on
+   * a 320px phone they take a line each, in every row alike.
+   * `channel-rows.browser.test.ts` holds it.
    */
-  .nt-card .inv-col--type { width: auto; }
+  .inv-acts { margin-left: auto; }
 }
 
 /*
