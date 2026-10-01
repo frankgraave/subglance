@@ -6,6 +6,16 @@ import { serveBuild, type Server } from "../layout/harness/server";
 let browser: Browser, server: Server;
 beforeAll(async () => { server = await serveBuild(); browser = await chromium(); });
 afterAll(async () => { await browser?.close(); await server?.close(); });
+/*
+ * The menu's navigation and theme commands are there the moment it opens, but
+ * its monitor commands arrive with the inventory, which is fetched when the
+ * menu opens. Under the load of the full browser suite that gap was once wide
+ * enough for a count read straight after typing to find 0 of 200 options
+ * (SUB-169). So every helper waits for the state it depends on, and the
+ * fixture holds the inventory back: a helper that samples instead of waiting
+ * then fails on every run, not once in several hundred.
+ */
+const inventoryDelayMs = 250;
 async function open(theme: string, width: number, path = "/", deferWrite?: (complete: () => void) => void) {
   const page = await browser.newPage();
   await page.setViewport({ width, height: 1000 });
@@ -23,7 +33,7 @@ async function open(theme: string, width: number, path = "/", deferWrite?: (comp
       return;
     }
     if (url.pathname === "/api/v1/monitors") {
-      void request.respond({ status: 200, contentType: "application/json", body: JSON.stringify({ monitors: Array.from({ length: 200 }, (_, i) => ({ id: i + 1, name: `Service ${String(i + 1).padStart(3, "0")}`, type: "http", target: `https://service-${i + 1}.example`, enabled: !paused.has(i + 1), status: "up", interval_s: 60, timeout_s: 10, tags: {} })) }) });
+      setTimeout(() => void request.respond({ status: 200, contentType: "application/json", body: JSON.stringify({ monitors: Array.from({ length: 200 }, (_, i) => ({ id: i + 1, name: `Service ${String(i + 1).padStart(3, "0")}`, type: "http", target: `https://service-${i + 1}.example`, enabled: !paused.has(i + 1), status: "up", interval_s: 60, timeout_s: 10, tags: {} })) }) }), inventoryDelayMs);
     } else void request.continue();
   });
   await page.goto(server.url + path, { waitUntil: "domcontentloaded" });
@@ -33,7 +43,12 @@ async function open(theme: string, width: number, path = "/", deferWrite?: (comp
 async function launch(page: Page) {
   await page.keyboard.down("Control"); await page.keyboard.press("k"); await page.keyboard.up("Control");
   await page.waitForSelector(".command-menu[open]");
-  await page.waitForSelector('.command-menu [role="option"]');
+  await inventoryListed(page);
+}
+// An option is not enough: the static commands render before the inventory.
+// Only monitor commands start with "Open ".
+async function inventoryListed(page: Page) {
+  await page.waitForFunction(() => [...document.querySelectorAll('.command-menu [role="option"]')].some((el) => el.textContent?.startsWith("Open ")));
 }
 async function search(page: Page, value: string) {
   await page.focus('.command-menu [role="combobox"]');
@@ -123,9 +138,9 @@ it.each([ ["dark", 390], ["light", 390], ["dark", 1440], ["light", 1440] ] as co
   try {
     await page.focus('.shell-command-launcher');
     await page.keyboard.press("Enter");
-    await page.waitForSelector('.command-menu [role="option"]');
+    await inventoryListed(page);
     await search(page, "Open Service");
-    expect(await page.$$eval('.command-menu [role="option"]', (els) => els.length)).toBe(200);
+    await expect.poll(() => page.$$eval('.command-menu [role="option"]', (els) => els.length), { timeout: 5_000 }).toBe(200);
     for (let i = 0; i < 199; i++) await page.keyboard.press("ArrowDown");
     const shape = await page.evaluate(() => {
       const menu = document.querySelector<HTMLDialogElement>(".command-menu")!;
