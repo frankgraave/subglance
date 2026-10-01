@@ -9,15 +9,15 @@
  * destination string for a Slack row: a page that renders a destination it
  * never received would have to invent one.
  *
- * **Delivery history is modelled as absent, not as healthy.** The mockup puts
- * "Delivered / Failed ×11 / Never fired" on every row, and the ticket asks for
- * three distinguishable states. The API offers none of them: `GET /channels`
- * carries no delivery counts, no last error and no last-sent timestamp, and
- * the one place that knowledge exists — `store.ChannelHealthSince` — is not
- * wired to any handler. So the third state on this page is *unknown*, and it
- * says so in those words. Painting a green tick on a channel whose last eleven
- * deliveries failed is the single most dangerous thing this screen could do,
- * and it is exactly what "assume healthy until told otherwise" produces.
+ * **Delivery history is read from the outbox, never assumed (SUB-180).** The
+ * mockup puts "Delivered / Failed ×11 / Never fired" on every row. `GET
+ * /channels` carries each channel's `delivery` record — the newest delivered
+ * and failed alert inside the outbox's 30-day window, counts, and the last
+ * error — and `historyFromApi` reads it. A record the server did not send
+ * (an older server, or an outbox it could not read) is *unknown*, never
+ * healthy: painting a green tick on a channel whose last eleven deliveries
+ * failed is the single most dangerous thing this screen could do, and it is
+ * exactly what "assume healthy until told otherwise" produces.
  */
 
 /** The eight types `store` accepts, mirroring its CHECK constraint. */
@@ -72,8 +72,21 @@ export type ApiChannel = {
   enabled?: boolean;
   is_default?: boolean;
   quiet_hours?: ApiQuietHours | null;
+  delivery?: ApiDelivery | null;
   created_at?: string;
   updated_at?: string;
+};
+
+/** A channel's delivery record, as `channelDelivery` writes it. */
+export type ApiDelivery = {
+  state?: string;
+  window_days?: number;
+  last_delivered_at?: string | null;
+  last_failed_at?: string | null;
+  failed?: number;
+  pending?: number;
+  retrying?: number;
+  last_error?: string;
 };
 
 export type Channel = {
@@ -101,6 +114,8 @@ export type Channel = {
    */
   quietHours: QuietHours | null;
   createdAt: number | null;
+  /** How the channel's real alerts went, from the outbox. */
+  history: ChannelHistory;
 };
 
 export function channelFromApi(api: ApiChannel): Channel {
@@ -113,6 +128,7 @@ export function channelFromApi(api: ApiChannel): Channel {
     isDefault: api.is_default === true,
     quietHours: quietFromApi(api.quiet_hours),
     createdAt: toUnixMs(api.created_at),
+    history: historyFromApi(api.delivery),
   };
 }
 
@@ -174,8 +190,8 @@ export function quietChip(quiet: QuietHours): string {
   return `Quiet ${quiet.start}–${quiet.end}, ${mode}`;
 }
 
-function toUnixMs(value: string | undefined): number | null {
-  if (value === undefined || value === "") return null;
+function toUnixMs(value: string | null | undefined): number | null {
+  if (value === undefined || value === null || value === "") return null;
   const ms = Date.parse(value);
   return Number.isFinite(ms) ? ms : null;
 }
@@ -673,4 +689,151 @@ export function describeDelivery(state: DeliveryState): string {
     default:
       return "Not verified";
   }
+}
+
+/**
+ * A channel's delivery history: what happened to the real alerts sent
+ * through it, as opposed to what a test from this browser reported.
+ *
+ * `unknown` is a record the server did not send, or a state this build has
+ * no word for. It is drawn as nothing at all, never as healthy.
+ */
+export type ChannelHistory = {
+  state: "delivered" | "failed" | "retrying" | "none" | "unknown";
+  /** The window the counts cover, in days. */
+  windowDays: number;
+  lastDeliveredAt: number | null;
+  lastFailedAt: number | null;
+  /** Alerts that gave up inside the window. */
+  failed: number;
+  /** Alerts still waiting, of which `retrying` have failed an attempt. */
+  pending: number;
+  retrying: number;
+  /** The newest failure, credentials already taken out by the server. */
+  lastError: string;
+};
+
+export const HISTORY_UNKNOWN: ChannelHistory = {
+  state: "unknown",
+  windowDays: 30,
+  lastDeliveredAt: null,
+  lastFailedAt: null,
+  failed: 0,
+  pending: 0,
+  retrying: 0,
+  lastError: "",
+};
+
+const HISTORY_STATES = new Set(["delivered", "failed", "retrying", "none"]);
+
+export function historyFromApi(
+  api: ApiDelivery | null | undefined,
+): ChannelHistory {
+  if (api === null || api === undefined || typeof api !== "object") {
+    return HISTORY_UNKNOWN;
+  }
+  const state = HISTORY_STATES.has(api.state ?? "")
+    ? (api.state as ChannelHistory["state"])
+    : "unknown";
+  return {
+    state,
+    windowDays: count(api.window_days) || HISTORY_UNKNOWN.windowDays,
+    lastDeliveredAt: toUnixMs(api.last_delivered_at),
+    lastFailedAt: toUnixMs(api.last_failed_at),
+    failed: count(api.failed),
+    pending: count(api.pending),
+    retrying: count(api.retrying),
+    lastError: typeof api.last_error === "string" ? api.last_error : "",
+  };
+}
+
+function count(n: number | undefined): number {
+  return typeof n === "number" && Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/**
+ * The chip a row draws for its history, or null for `unknown`.
+ *
+ * Three states that never share a colour, as SUB-123 asked: red for alerts
+ * that gave up, amber for alerts being retried, green for a channel whose
+ * newest alert arrived. "None in 30 days" is a dashed state chip, not a
+ * status: a channel nobody needed has proved nothing either way.
+ */
+export function historyChip(
+  history: ChannelHistory,
+): { status: "up" | "warn" | "down" | null; word: string } | null {
+  switch (history.state) {
+    case "delivered":
+      return { status: "up", word: "Delivered" };
+    case "failed":
+      return { status: "down", word: "Failed" };
+    case "retrying":
+      return { status: "warn", word: "Retrying" };
+    case "none":
+      return { status: null, word: `None in ${history.windowDays} days` };
+    default:
+      return null;
+  }
+}
+
+/**
+ * The moment the chip is about, beside it: when the newest alert arrived or
+ * gave up. Retrying names how many are queued instead, since the moment it
+ * is about has not happened yet.
+ */
+export function historyMoment(history: ChannelHistory): string | null {
+  switch (history.state) {
+    case "delivered":
+      return shortDate(history.lastDeliveredAt);
+    case "failed":
+      return shortDate(history.lastFailedAt);
+    case "retrying":
+      return `${history.pending} queued`;
+    default:
+      return null;
+  }
+}
+
+/**
+ * The whole history as one sentence, for the row's screen-reader text and
+ * the cell's title, where the counts and the error have room.
+ */
+export function describeHistory(history: ChannelHistory): string {
+  const window = `in the last ${history.windowDays} days`;
+  const error = history.lastError === "" ? "" : `: ${history.lastError}`;
+  switch (history.state) {
+    case "delivered":
+      return `Last alert delivered ${longDate(history.lastDeliveredAt)}`;
+    case "failed":
+      return `${plural(history.failed, "alert")} gave up ${window}, the newest ${longDate(history.lastFailedAt)}${error}`;
+    case "retrying":
+      return `${plural(history.retrying, "alert")} being retried after a failed attempt${error}`;
+    case "none":
+      return `No alert went through this channel ${window}`;
+    default:
+      return "Not verified: this server sent no delivery history";
+  }
+}
+
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
+function shortDate(ms: number | null): string | null {
+  if (ms === null) return null;
+  return new Date(ms).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function longDate(ms: number | null): string {
+  if (ms === null) return "at an unknown time";
+  return new Date(ms).toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }

@@ -1,17 +1,18 @@
 import { memo } from "react";
 import { StateChip, StatusChip } from "../components/Chip";
-import { Value } from "../components/Value";
 import {
   IconBell,
   IconBellOff,
   IconPencil,
   IconTrash,
 } from "../components/icons";
-import { formatMoment } from "../monitors/detail";
 import {
   describeDelivery,
   describeDestination,
+  describeHistory,
   describeQuietHours,
+  historyChip,
+  historyMoment,
   quietChip,
   typeLabel,
 } from "./channels";
@@ -59,16 +60,14 @@ const TEST_BUSY_WORD = "Sending test…";
  * running and stops SubGlance telling anyone. Same-shaped buttons for those
  * two would claim they are the same act.
  *
- * **Delivery is not a column any more.** It used to be one, and it read "Not
- * verified" in a dashed chip on every row, always, because the API carries no
- * delivery history at all. A value that is identical on every row and
- * structurally incapable of differing carries no information, and this one was
- * taking the most visual weight in the row to carry it. The fact is now stated
- * once for the whole list, where it belongs — it is a property of the product,
- * not of a channel — and the row prints a delivery state only when a test has
- * actually produced one, as a chip on the name line beside the row's other
- * state. Nothing was softened: see `NotificationsView`'s legend, which still
- * says a channel failing for three days looks exactly like one never needed.
+ * **Delivery is a column again, and now it differs per row (SUB-180).** It
+ * was removed when it read "Not verified" on every row, always, because the
+ * API carried no delivery history; a value that cannot vary is not a column.
+ * The API now sends each channel's record from the outbox, so the column
+ * says what happened to the channel's real alerts: Failed, Retrying,
+ * Delivered, or "None in 30 days". A test result is a different, narrower
+ * claim — about one moment, from this browser — and keeps its own chip on the
+ * name line.
  */
 
 export type ChannelRowProps = {
@@ -111,6 +110,20 @@ function ChannelRowImpl({
 }: ChannelRowProps) {
   const destination = describeDestination(channel);
   const deliveryWord = describeDelivery(delivery);
+  /*
+   * A switched-off channel with nothing in its window draws no chip. "None
+   * in 30 days" is a warning that the channel has proved nothing and wants a
+   * test; on a channel that sends nothing by choice the Disabled chip already
+   * says why it is quiet, and a second chip saying so again would be the
+   * dimmed row's loudest thing. History it does have — say it failed before
+   * someone switched it off — still shows.
+   */
+  const chip =
+    !channel.enabled && channel.history.state === "none"
+      ? null
+      : historyChip(channel.history);
+  const moment = historyMoment(channel.history);
+  const historyText = describeHistory(channel.history);
   const testWord = testing ? TEST_BUSY_WORD : "Send test";
   const label = `${typeLabel(channel.type)} ${channel.name}`;
   /*
@@ -183,35 +196,31 @@ function ChannelRowImpl({
           </span>
 
           {/*
-           * When the channel was added (SUB-138).
+           * What happened to the channel's real alerts (SUB-180). It took
+           * the Added column's place and its rung-4 width: that column was
+           * put here in SUB-138 as the most honest thing available while
+           * the API carried no history, and the date it showed bears on the
+           * page's question far less than whether alerts arrive. The width
+           * is what holds the 638px wrap the row's layout is measured at.
            *
-           * The column that used to sit here said "Not verified" in a dashed
-           * chip on every row, always — the API carries no delivery history,
-           * so it was structurally incapable of ever differing. A value
-           * identical on every row is not a column; it is a caption repeated N
-           * times, and it was taking the most visual weight in the row to be
-           * one. That fact is now stated once above the list.
-           *
-           * This is the honest thing to put in its place: `created_at` is
-           * already on the wire, already parsed, and was being thrown away.
-           * It genuinely differs per row, and it is the one date that bears on
-           * the page's own argument — a channel added eleven months ago and
-           * never tested is a different risk from one added this morning, and
-           * until now nothing on the screen let you tell those apart.
-           *
-           * Absolute, not "3 days ago", matching the monitor detail view: this
-           * is a date you line up against when someone changed something, and
-           * a relative stamp goes stale while the page sits open.
-           *
-           * A server that sends no timestamp gets an empty `Value`, which
-           * renders in the tone that means "no measurement" — not a zero, and
-           * not an invented date.
+           * The chip is the state, the text beside it the moment it is
+           * about. The counts and the error go in the title and in the
+           * row's screen-reader sentence, where they have room; a third
+           * line on a failing row would make it taller than its neighbours
+           * (DESIGN.md §8.10). `null` — a record the server did not send —
+           * draws nothing rather than a guess.
            */}
-          <span className="inv-col inv-col--added">
-            <span className="inv-label">Added</span>
-            <Value value={channel.createdAt}>
-              {formatMoment(channel.createdAt)}
-            </Value>
+          <span className="inv-col inv-col--delivery" title={historyText}>
+            <span className="inv-label">Delivery</span>
+            <span className="nt-history">
+              {chip !== null &&
+                (chip.status === null ? (
+                  <StateChip>{chip.word}</StateChip>
+                ) : (
+                  <StatusChip status={chip.status}>{chip.word}</StatusChip>
+                ))}
+              {moment !== null && <span className="inv-type">{moment}</span>}
+            </span>
           </span>
         </div>
 
@@ -312,15 +321,17 @@ function ChannelRowImpl({
       <span className="sr-only">
         {/* The row's facts as one sentence, so a screen reader gets the same
             page as the eye rather than a run of unlabelled columns. The
-            delivery state is spoken on every row, including the unknown one:
-            the eye has the list's legend a few centimetres above and in view,
-            and a reader moving item by item through a list does not. */}
+            delivery history is spoken on every row, including an unknown
+            one: the eye has the list's legend a few centimetres above and in
+            view, and a reader moving item by item through a list does not.
+            A test result follows it only when a test produced one. */}
         {typeLabel(channel.type)} channel, delivering to {destination}.{" "}
         {channel.isDefault ? "The default channel. " : ""}
         {channel.quietHours !== null
           ? `${describeQuietHours(channel.quietHours).replace(/^q/, "Q")}. `
           : ""}
-        {channel.enabled ? "Enabled" : "Disabled"}. {deliveryWord}.
+        {channel.enabled ? "Enabled" : "Disabled"}. {historyText}.
+        {delivery.kind === "unknown" ? "" : ` ${deliveryWord}.`}
       </span>
     </li>
   );

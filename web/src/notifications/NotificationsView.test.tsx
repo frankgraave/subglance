@@ -137,49 +137,98 @@ describe("NotificationsView", () => {
     expect(within(row).getByText("endpoint ending ****B07F")).toBeTruthy();
   });
 
-  it("never claims an untested channel is healthy, and draws no chip for it", () => {
+  it("never claims a channel with no delivery record is healthy", () => {
     /*
-     * The API carries no delivery history, so a green tick here would be
-     * invented — and an invented green tick on a monitoring tool is how a dead
-     * channel goes on looking fine for three days.
-     *
-     * This used to assert a dashed "Not verified" chip on the row. The chip is
-     * gone (SUB-138) because it was on 100% of rows, always, and structurally
-     * incapable of differing: a value that cannot vary is not information, and
-     * that one was taking the heaviest ink in the row to be none. What must
-     * not change is the claim, so the assertion is now in two halves — the row
-     * states nothing about delivery, and the list states the reason once.
+     * A server that sends no delivery record (an older one, or one whose
+     * outbox read failed) has told this page nothing, and a green tick here
+     * would be invented — an invented green tick on a monitoring tool is how
+     * a dead channel goes on looking fine for three days. So the row draws
+     * no chip at all, in any colour, and says in its screen-reader sentence
+     * that nothing is verified.
      */
     const { container } = render(<NotificationsView channels={[make()]} />);
     const row = screen.getByRole("listitem");
-    // No status chip on the row: not green, not red, not any colour at all.
     expect(row.querySelector(".chip--status")).toBeNull();
     expect(row.querySelector(".chip--state")).toBeNull();
-    /*
-     * Nothing about delivery in the row's *visible* text. The `sr-only`
-     * sentence deliberately still says "Not verified" and is excluded here:
-     * the eye has the list's legend a few centimetres above and in view, and
-     * a screen-reader user moving item by item through a list does not, so
-     * dropping it there would take the caveat away from the one reader who
-     * cannot see it stated once.
-     */
-    const visible = [...row.childNodes]
-      .map((node) => (node as HTMLElement).textContent ?? "")
-      .join(" ");
     const srOnly = row.querySelector(".sr-only")!.textContent ?? "";
-    const seen = visible.replace(srOnly, "");
-    expect(seen).not.toMatch(/delivered/i);
-    expect(seen).not.toMatch(/verified/i);
     expect(srOnly).toMatch(/Not verified/);
-    /*
-     * And the sentence that replaces it is present and unhedged. "Keeps no
-     * delivery history" is the load-bearing phrase: it is a statement about
-     * what SubGlance can see, not a reassurance, and it is in the summary
-     * rather than behind the disclosure so it is read without a click.
-     */
+    expect(srOnly).not.toMatch(/delivered/i);
+    // The list says, once and without a click, what the column covers.
     const summary = container.querySelector(".nt-legend-summary");
-    expect(summary).not.toBeNull();
-    expect(summary!.textContent).toMatch(/keeps no delivery history/i);
+    expect(summary!.textContent).toMatch(/real alerts/i);
+  });
+
+  it("draws each delivery history in words, apart from a test result (SUB-180)", () => {
+    /*
+     * The three states SUB-123 asked for, plus "none", each in a word so no
+     * state is carried by colour alone: Failed in red, Retrying in amber,
+     * Delivered in green, and a quiet channel as a dashed chip that is not a
+     * status at all. The chip sits in the Delivery column, not on the name
+     * line, where a test's chip goes.
+     */
+    const history = (state: string, over: Record<string, unknown> = {}) => ({
+      state,
+      window_days: 30,
+      last_delivered_at: "2026-09-30T08:00:00Z",
+      last_failed_at: "2026-09-30T09:00:00Z",
+      failed: 3,
+      pending: 2,
+      retrying: 2,
+      last_error: "endpoint returned 503",
+      ...over,
+    });
+    render(
+      <NotificationsView
+        channels={[
+          make({ id: 1, name: "A", delivery: history("failed") }),
+          make({ id: 2, name: "B", delivery: history("retrying") }),
+          make({ id: 3, name: "C", delivery: history("delivered") }),
+          make({ id: 4, name: "D", delivery: history("none") }),
+        ]}
+      />,
+    );
+    const [failed, retrying, delivered, none] = screen.getAllByRole("listitem");
+    const chip = (row: HTMLElement) =>
+      row.querySelector(".inv-col--delivery .chip") as HTMLElement;
+    expect(chip(failed).textContent).toBe("Failed");
+    expect(chip(failed).dataset.status).toBe("down");
+    expect(chip(retrying).textContent).toBe("Retrying");
+    expect(chip(retrying).dataset.status).toBe("warn");
+    expect(chip(delivered).textContent).toBe("Delivered");
+    expect(chip(delivered).dataset.status).toBe("up");
+    expect(chip(none).textContent).toBe("None in 30 days");
+    expect(chip(none).classList.contains("chip--state")).toBe(true);
+    // Nothing on the name line: that is where a test's result goes.
+    for (const row of [failed, retrying, delivered, none]) {
+      expect(row.querySelector(".inv-name .chip--status")).toBeNull();
+    }
+    // The counts and the error are spoken, not only hovered.
+    expect(retrying.querySelector(".sr-only")!.textContent).toMatch(
+      /2 alerts being retried after a failed attempt: endpoint returned 503/,
+    );
+    expect(failed.querySelector(".sr-only")!.textContent).toMatch(
+      /3 alerts gave up in the last 30 days.*endpoint returned 503/,
+    );
+    expect(retrying.querySelector(".inv-col--delivery")!.textContent).toMatch(
+      /2 queued/,
+    );
+  });
+
+  it("draws no 'none' chip on a channel that is switched off", () => {
+    // The Disabled chip already says why it is quiet. A history it does have
+    // still shows: a channel switched off because it was failing says so.
+    render(
+      <NotificationsView
+        channels={[
+          make({ id: 1, name: "Off", enabled: false, delivery: { state: "none", window_days: 30 } }),
+          make({ id: 2, name: "Off and failing", enabled: false, delivery: { state: "failed", window_days: 30, failed: 1 } }),
+        ]}
+      />,
+    );
+    const [quiet, failing] = screen.getAllByRole("listitem");
+    expect(quiet.querySelector(".inv-col--delivery .chip")).toBeNull();
+    expect(quiet.querySelector(".sr-only")!.textContent).toMatch(/No alert went through/);
+    expect(failing.querySelector(".inv-col--delivery .chip")!.textContent).toBe("Failed");
   });
 
   it("draws a delivery chip only once a test has produced a result", () => {
@@ -200,13 +249,6 @@ describe("NotificationsView", () => {
       within(tested).getByText("Test delivered", { selector: ".chip" }),
     ).toBeTruthy();
     expect(untested.querySelector(".chip--status")).toBeNull();
-  });
-
-  it("states once that delivery history is not available", () => {
-    // Without the explanation, "Not verified" on every row reads as a bug in
-    // this page rather than as a gap in the API.
-    render(<NotificationsView channels={[make()]} />);
-    expect(screen.getByText(/carries no delivery history/i)).toBeTruthy();
   });
 
   it("never renders a stored secret, only the mask the API returned", () => {
@@ -532,10 +574,11 @@ describe("NotificationsView", () => {
     const { container } = render(<NotificationsView channels={[make()]} />);
     const legend = container.querySelector(".nt-legend");
     expect(legend).not.toBeNull();
-    expect(legend!.textContent).toMatch(/carries no delivery history/i);
-    expect(legend!.textContent).toMatch(
-      /failed every delivery for three days looks exactly the same/i,
-    );
+    expect(legend!.textContent).toMatch(/real alerts/i);
+    // The part of the old caveat that is still true, and still the dangerous
+    // one to forget: a quiet channel has proved nothing.
+    expect(legend!.textContent).toMatch(/has proved nothing either way/i);
+    expect(legend!.textContent).toMatch(/Sending a test is the only way/i);
     // Above the list, not after it: it explains the rows that follow.
     expect(
       legend!.compareDocumentPosition(container.querySelector(".inv-list")!) &
@@ -558,7 +601,7 @@ describe("NotificationsView", () => {
     const details = container.querySelector(".nt-legend") as HTMLDetailsElement;
     expect(details.open).toBe(false);
     const summary = container.querySelector(".nt-legend-summary")!;
-    expect(summary.textContent).toMatch(/keeps no delivery history/i);
+    expect(summary.textContent).toMatch(/real alerts .* last 30 days/i);
     /*
      * And it must not overreach into denying a result the rows can carry.
      * "No channel below is known to be working" contradicted a row that had
