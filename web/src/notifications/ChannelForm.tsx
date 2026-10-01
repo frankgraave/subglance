@@ -260,7 +260,7 @@ export function ChannelForm({
   const renderControl = (spec: FieldSpec, inputId: string, invalid: boolean) => {
     const common = {
       id: inputId,
-      className: "add-input",
+      className: "input",
       ref: (node: FieldControl | null) => {
         fieldRefs.current[spec.key] = node;
       },
@@ -326,7 +326,7 @@ export function ChannelForm({
   };
 
   return (
-    <form className="add-form" onSubmit={submit}>
+    <form className="form-column" onSubmit={submit}>
       {/*
        * Type is a select, and it is fixed once the channel exists.
        *
@@ -336,7 +336,7 @@ export function ChannelForm({
        * Delete and recreate is the honest path, and it is one the user can see
        * the consequence of.
        */}
-      <div className="add-field">
+      <div className="field">
         {/*
          * Same rule as the stored-secret field below: while the type is stated
          * rather than chosen, there is no select for the label to point at.
@@ -345,14 +345,14 @@ export function ChannelForm({
          * that was reported.
          */}
         {editing ? (
-          <p className="add-label">Type</p>
+          <p className="field-label">Type</p>
         ) : (
-          <label className="add-label" htmlFor={`${ids}-type`}>
+          <label className="field-label" htmlFor={`${ids}-type`}>
             Type
           </label>
         )}
         {editing ? (
-          <p className="add-help">
+          <p className="field-help">
             <b>{typeLabel(type)}</b> — a channel's type cannot be changed here.
             Each type stores different settings, so switching one would ask you
             to re-enter every field including the credential. Delete this
@@ -361,7 +361,7 @@ export function ChannelForm({
         ) : (
           <select
             id={`${ids}-type`}
-            className="add-input"
+            className="input"
             value={type}
             onChange={(event) => {
               setType(event.target.value as ChannelType);
@@ -379,14 +379,14 @@ export function ChannelForm({
         )}
       </div>
 
-      <div className="add-field">
-        <label className="add-label" htmlFor={`${ids}-name`}>
+      <div className="field">
+        <label className="field-label" htmlFor={`${ids}-name`}>
           Name
         </label>
         <input
           id={`${ids}-name`}
           ref={nameRef}
-          className="add-input"
+          className="input"
           value={name}
           onChange={(event) => setName(event.target.value)}
           placeholder="On-call Slack"
@@ -398,7 +398,7 @@ export function ChannelForm({
             : {})}
         />
         {problem?.key === "name" && (
-          <p className="add-field-error" id={`${ids}-name-error`} role="alert">
+          <p className="field-error" id={`${ids}-name-error`} role="alert">
             {problem.message}
           </p>
         )}
@@ -417,7 +417,7 @@ export function ChannelForm({
            * Absent means on: the sender's default for every such setting.
            */
           return (
-            <div className="add-field" key={spec.key}>
+            <div className="field" key={spec.key}>
               <Checkbox
                 checked={values[spec.key] !== "false"}
                 onChange={(event) =>
@@ -430,7 +430,7 @@ export function ChannelForm({
                 {spec.label}
               </Checkbox>
               {spec.help !== undefined && (
-                <p className="add-help" id={`${inputId}-help`}>
+                <p className="field-help" id={`${inputId}-help`}>
                   {spec.help}
                 </p>
               )}
@@ -438,7 +438,7 @@ export function ChannelForm({
           );
         }
         return (
-          <div className="add-field" key={spec.key}>
+          <div className="field" key={spec.key}>
             {/*
              * A label is a promise that something is labelled.
              *
@@ -450,12 +450,12 @@ export function ChannelForm({
              * plain text and the button names itself after it instead.
              */}
             {showingStored ? (
-              <p className="add-label" id={`${inputId}-name`}>
+              <p className="field-label" id={`${inputId}-name`}>
                 {spec.label}
                 {!spec.required && " (optional)"}
               </p>
             ) : (
-              <label className="add-label" htmlFor={inputId}>
+              <label className="field-label" htmlFor={inputId}>
                 {spec.label}
                 {!spec.required && " (optional)"}
               </label>
@@ -472,18 +472,18 @@ export function ChannelForm({
                * and a read-only box full of dots invites someone to try.
                */
               <>
-                <p className="add-help" id={`${inputId}-state`}>
+                <p className="field-help" id={`${inputId}-state`}>
                   {spec.secret
                     ? "A value is stored. It is never sent back to this page, so it cannot be shown or copied — only replaced."
                     : "Only an administrator reads these in full. Saving keeps them as they are; replacing them means typing the whole list again."}{" "}
                   {channel !== null && (
-                    <span className="nt-mask">{channel.config[spec.key]}</span>
+                    <span className="literal">{channel.config[spec.key]}</span>
                   )}
                 </p>
-                <div className="add-actions">
+                <div className="button-row">
                   <button
                     type="button"
-                    className="add-button nt-act"
+                    className="button button--compact"
                     aria-describedby={`${inputId}-state`}
                     onClick={() => {
                       setReplacing((current) => ({
@@ -506,7 +506,7 @@ export function ChannelForm({
                 {renderControl(spec, inputId, invalid)}
                 {invalid && (
                   <p
-                    className="add-field-error"
+                    className="field-error"
                     id={`${inputId}-error`}
                     role="alert"
                   >
@@ -514,10 +514,10 @@ export function ChannelForm({
                   </p>
                 )}
                 {stored && (
-                  <div className="add-actions">
+                  <div className="button-row">
                     <button
                       type="button"
-                      className="add-button add-button-quiet nt-act"
+                      className="button button--quiet button--compact"
                       onClick={() =>
                         setReplacing((current) => {
                           const next = { ...current };
@@ -534,7 +534,7 @@ export function ChannelForm({
             )}
 
             {spec.help !== undefined && (
-              <p className="add-help">{spec.help}</p>
+              <p className="field-help">{spec.help}</p>
             )}
           </div>
         );
@@ -561,7 +561,7 @@ export function ChannelForm({
        * oversight and add them, and each one would save a setting the notifier
        * never reads.
        */}
-      <p className="add-help">
+      <p className="field-help">
         The settings shown are the ones the senders in{" "}
         <code>internal/notifier</code> actually read. The mockup also draws a
         Slack channel label, an HTTP method and a webhook signing secret; none
@@ -571,15 +571,15 @@ export function ChannelForm({
       </p>
 
       {problem !== null && problem.key === null && (
-        <p className="add-field-error" role="alert">
+        <p className="field-error" role="alert">
           {problem.message}
         </p>
       )}
 
-      <div className="add-actions">
+      <div className="button-row">
         <button
           type="submit"
-          className="add-button add-button-primary"
+          className="button button--primary"
           disabled={saving}
         >
           {saving ? "Saving…" : editing ? "Save changes" : "Add channel"}
@@ -587,7 +587,7 @@ export function ChannelForm({
         {onCancel !== undefined && (
           <button
             type="button"
-            className="add-button add-button-quiet"
+            className="button button--quiet"
             onClick={onCancel}
           >
             Cancel

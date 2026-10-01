@@ -317,14 +317,14 @@ describe("the app shell", () => {
     /*
      * Two surfaces, never three (PR #42, tightened in SUB-138).
      *
-     * This used to assert `.card .panel .add-form` — drawer, card, panel,
+     * This used to assert `.card .panel .form-column` — drawer, card, panel,
      * form — which is the third frame Frank pointed at in the drawer
      * screenshot. The card is gone; the drawer's own header is what it was
      * reaching for. The panel stays, so the form is not bare on the drawer
      * background.
      */
     expect(dialog.querySelector(".card")).toBeNull();
-    expect(dialog.querySelector(".panel .add-form")).toBeTruthy();
+    expect(dialog.querySelector(".panel .form-column")).toBeTruthy();
   });
 
   /**

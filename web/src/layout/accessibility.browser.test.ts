@@ -108,7 +108,7 @@ async function openScreen(page: Page, screen: Screen, theme: string, incidentIdO
     const button = await page.waitForSelector(selector, { visible: true });
     if (!button) throw new Error(`Missing ${selector}`);
     await button.click();
-    await page.waitForSelector(screen.drawer === "add" ? ".drawer-panel .add-form" : ".shell-drawer", { visible: true });
+    await page.waitForSelector(screen.drawer === "add" ? ".drawer-panel .form-column" : ".shell-drawer", { visible: true });
   }
   await page.evaluate(async () => {
     await document.fonts.ready;

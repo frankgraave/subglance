@@ -86,7 +86,7 @@ it("real Go API persists the edit, previews without history, rejects stale ETags
     await fill(page, 'input[name="target"]', `${f.target}/changed`);
     await button(page, "Save changes");
     expect((await f.api(path).then((r) => r.json())).target).toBe(`${f.target}/old`);
-    await button(page, "Test it"); await page.waitForSelector(".add-result-bad");
+    await button(page, "Test it"); await page.waitForSelector(".result--bad");
     expect((await fetch(`${f.target}/stats`).then((r) => r.json())).probes).toBe(probes.probes + 1);
     expect(await f.api(`${path}/heartbeats`).then((r) => r.json())).toEqual(before);
     expect((await f.api(path).then((r) => r.json())).target).toBe(`${f.target}/old`);
@@ -121,8 +121,8 @@ it.each([0, 60, 731, 86400])("real Go create persists repeat base %s across relo
     await page.setExtraHTTPHeaders({ Authorization: `Bearer ${f.token}` });
     await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
     await page.goto(`${f.url}/monitors/new`, { waitUntil: "domcontentloaded" });
-    await page.waitForSelector('.add-form');
-    await fill(page, '.add-form input[placeholder^="example.com"]', `${f.target}/created`);
+    await page.waitForSelector('.form-column');
+    await fill(page, '.form-column input[placeholder^="example.com"]', `${f.target}/created`);
     await page.click('.add-advanced summary');
     await page.select('.add-advanced select', "http");
     await fill(page, '[data-repeat-input]', String(value));

@@ -79,10 +79,10 @@ export function PushUrlReveal({
     <section
       ref={panel}
       tabIndex={-1}
-      className="push-reveal"
+      className="form-column"
       aria-labelledby="push-reveal-title"
     >
-      <h2 id="push-reveal-title" className="add-title">
+      <h2 id="push-reveal-title" className="form-title">
         {name} is waiting for its first report
       </h2>
 
@@ -91,20 +91,20 @@ export function PushUrlReveal({
        * cannot be recovered, and it has to interrupt rather than wait to be
        * read in turn.
        */}
-      <p role="alert" className="push-reveal-warn">
+      <p role="alert" className="warn-note">
         This URL is shown once. It is stored hashed, so closing this panel loses
         it — a monitor whose URL was never saved has to be deleted and made
         again.
       </p>
 
-      <div className="add-field">
-        <label className="add-label" htmlFor="push-reveal-url">
+      <div className="field">
+        <label className="field-label" htmlFor="push-reveal-url">
           Push URL
         </label>
-        <div className="push-reveal-row">
+        <div className="copy-row">
           <input
             id="push-reveal-url"
-            className="add-input push-reveal-input"
+            className="input copy-input"
             value={url}
             readOnly
             spellCheck={false}
@@ -112,7 +112,7 @@ export function PushUrlReveal({
           />
           <button
             type="button"
-            className="add-button"
+            className="button"
             onClick={() => copy("url", url)}
           >
             Copy
@@ -120,14 +120,14 @@ export function PushUrlReveal({
         </div>
       </div>
 
-      <div className="add-field">
-        <label className="add-label" htmlFor="push-reveal-curl">
+      <div className="field">
+        <label className="field-label" htmlFor="push-reveal-curl">
           For a cron line
         </label>
-        <div className="push-reveal-row">
+        <div className="copy-row">
           <input
             id="push-reveal-curl"
-            className="add-input push-reveal-input"
+            className="input copy-input"
             value={curlLine(url)}
             readOnly
             spellCheck={false}
@@ -136,25 +136,25 @@ export function PushUrlReveal({
           />
           <button
             type="button"
-            className="add-button"
+            className="button"
             onClick={() => copy("curl", curlLine(url))}
           >
             Copy
           </button>
         </div>
-        <p id="push-reveal-curl-help" className="add-help">
+        <p id="push-reveal-curl-help" className="field-help">
           Put it after the job, on the same line.
         </p>
       </div>
 
-      <div className="add-field">
-        <label className="add-label" htmlFor="push-reveal-status">
+      <div className="field">
+        <label className="field-label" htmlFor="push-reveal-status">
           To report failures too
         </label>
-        <div className="push-reveal-row">
+        <div className="copy-row">
           <input
             id="push-reveal-status"
-            className="add-input push-reveal-input"
+            className="input copy-input"
             value={curlStatusLine(url)}
             readOnly
             spellCheck={false}
@@ -163,37 +163,37 @@ export function PushUrlReveal({
           />
           <button
             type="button"
-            className="add-button"
+            className="button"
             onClick={() => copy("status", curlStatusLine(url))}
           >
             Copy
           </button>
         </div>
-        <p id="push-reveal-status-help" className="add-help">
+        <p id="push-reveal-status-help" className="field-help">
           Passes the job’s exit code along, so a backup that ran and failed
           shows as down instead of as a successful report.
         </p>
       </div>
 
-      <div role="status" aria-live="polite" className="add-result-region">
+      <div role="status" aria-live="polite" className="result-region">
         {copied === null ? null : copied === "failed" ? (
-          <p className="add-result add-result-bad">
+          <p className="result result--bad">
             Could not copy. Select the text and copy it by hand.
           </p>
         ) : copied === "none" ? (
-          <p className="add-result add-result-bad">
+          <p className="result result--bad">
             This browser will not give a page on an insecure origin access to
             the clipboard. Select the text and copy it by hand.
           </p>
         ) : (
-          <p className="add-result add-result-good">Copied.</p>
+          <p className="result result--good">Copied.</p>
         )}
       </div>
 
-      <div className="add-actions">
+      <div className="button-row">
         <button
           type="button"
-          className="add-button add-button-primary"
+          className="button button--primary"
           onClick={onDone}
         >
           I have saved it

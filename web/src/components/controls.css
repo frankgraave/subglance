@@ -1,0 +1,409 @@
+/*
+ * The controls every screen shares: the form column, a field with its label,
+ * help and error, the inputs, the buttons, the result line under a form, the
+ * copy row, the warning note, a literal value, text that is read but not
+ * drawn (SUB-173).
+ *
+ * These rules used to live in the add-monitor form's, the sign-in screen's and
+ * the monitors inventory's stylesheets, and about ten other screens wore those
+ * features' class names to get them. A change to the sign-in form's spacing or
+ * to the add-monitor form's buttons then moved every settings form, and
+ * nothing in the markup said so. A class that more than one feature uses lives
+ * here, under a name that belongs to no feature; `ownership.test.ts` fails on
+ * a class whose only stylesheet sits in another feature's directory.
+ */
+
+/* A vertical run of fields, rows or blocks at the field rhythm. It carries no
+   width of its own, so it fills a card panel or the sign-in card. */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* The same run, capped: a form field that runs the width of a 27" display is
+   harder to read, not easier — the eye loses the label before it reaches the
+   input. The drawers' forms and the shown-once secret panels use it. */
+.form-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 34rem;
+}
+
+.form-title {
+  font-size: var(--type-card);
+  line-height: var(--lead-card);
+  font-weight: var(--weight-strong);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.field-label {
+  @apply caps-legend;
+}
+
+.input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+  /* 16px on a phone, because anything smaller makes iOS Safari zoom the page
+     on focus and leave the user scrolled sideways (DESIGN.md §13). On the
+     sign-in screen that zoom is especially bad: it lands mid-form on the very
+     first interaction anyone has with the product. */
+  font-size: var(--type-nozoom);
+  line-height: var(--lead-nozoom);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  transition: border-color var(--dur-hover) var(--ease), box-shadow var(--dur-hover) var(--ease);
+}
+
+@media (min-width: 641px) {
+  .input {
+    font-size: var(--type-body);
+    line-height: var(--lead-body);
+  }
+}
+
+.input::placeholder { color: var(--ink-4); }
+
+/*
+ * A field sunk into its panel: the canvas behind it rather than the surface.
+ * The sign-in card and the settings cards' forms draw their fields this way,
+ * the drawers' forms do not. Its placeholder keeps the base layer's ink, as
+ * these fields always have: one placeholder ink for every field is a visual
+ * change rather than a move, and is not made here.
+ */
+.input--inset { background: var(--canvas); }
+.input--inset::placeholder { color: revert-layer; }
+
+/*
+ * A field that sits inside a sentence rather than in a form column: the
+ * default-channel choice on the notifications page reads "Monitors with no
+ * channels of their own alert through [select]". It keeps the field's height,
+ * border and no-zoom size, and gives up only the full-width track, which in a
+ * sentence would push the select onto a line of its own.
+ *
+ * Before this it was a bare native select with no class that styled it,
+ * measured at 17px tall on a phone: under the 24px target floor (WCAG 2.2
+ * SC 2.5.8) that `phone-layout.browser.test.ts` enforces.
+ */
+.input--fit {
+  width: auto;
+  max-width: 100%;
+}
+
+/* The control accent, not the blue browser glow and not status green (§2.8):
+   a focused field is a control you are driving, not a healthy monitor. */
+.input:focus-visible {
+  outline: none;
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.input[aria-invalid="true"] {
+  border-color: var(--down);
+}
+
+.input[aria-invalid="true"]:focus {
+  border-color: var(--down);
+  box-shadow: 0 0 0 3px var(--ring-down);
+}
+
+.field-help {
+  font-size: var(--type-helper);
+  line-height: var(--lead-prose);
+  color: var(--ink-2);
+}
+
+/*
+ * The message for the input directly above it, or for the form.
+ *
+ * Same size as the help text and directly beneath it, so the field reads as
+ * one block rather than as a box with something shouting under it. Colour is
+ * the only difference, and colour is deliberately not the only signal: the
+ * input itself carries aria-invalid and a red border, so this still works for
+ * anyone who cannot tell --down from --ink-3 (DESIGN.md §3.1).
+ *
+ * It takes the prose leading rather than the single-line pair: the message is
+ * a sentence, not a word — "press Test it first, or pick a type…" wraps at any
+ * realistic field width — which is the case --lead-prose exists for.
+ */
+.field-error {
+  font-size: var(--type-helper);
+  line-height: var(--lead-prose);
+  color: var(--down);
+}
+
+.field-error > svg {
+  display: inline-block;
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+  margin-right: var(--space-1);
+  vertical-align: middle;
+}
+
+/* Fields side by side while they fit, one per line when they do not. */
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+/* A cell of .field-grid that takes every track. */
+.field-wide { grid-column: 1 / -1; }
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.button {
+  /* Inline-flex, not the default inline-block: a button whose label is a word
+     plus a glyph (SUB-138) stacks them onto two lines otherwise, which is how
+     "Add monitor" grew a second row with a lonely + under it. */
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  font: inherit;
+  font-size: var(--type-body);
+  line-height: var(--lead-body);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background var(--dur-hover) var(--ease), border-color var(--dur-hover) var(--ease);
+}
+
+.button > svg {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+  flex: none;
+  /* The glyph leads visually and the word follows, which is the shape a
+     primary add action has everywhere it appears. In the markup the order is
+     reversed, because the button is named by aria-label there and the DOM
+     order is free to serve layout. */
+  order: -1;
+}
+
+.button:hover:not(:disabled) { background: var(--surface-2); border-color: var(--border-hi); }
+
+.button:disabled { opacity: .5; cursor: not-allowed; }
+
+/* The fill arrives on hover, so a permanently green button on screen does not
+   become wallpaper that gets clicked by accident (§7.1). */
+.button--primary {
+  border-color: var(--accent-border);
+  /* Ink and fill must switch together. Fading from the light surface while
+     the label is already white makes intermediate hover frames unreadable. */
+  transition: border-color var(--dur-hover) var(--ease);
+}
+.button--primary:hover:not(:disabled) {
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-color: var(--accent-border);
+}
+
+.button--quiet { color: var(--ink-3); border-color: transparent; background: transparent; }
+
+/* A worded action in a list row: the row's scale rather than a form's. */
+.button--compact {
+  padding: var(--space-1) var(--space-2h);
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+}
+
+/*
+ * A glyph-only action (SUB-134). A square the size of the shell's icon
+ * buttons, carrying a glyph and nothing else; its name is in aria-label.
+ *
+ * Square rather than the text button's padding, because a 16px glyph in a box
+ * shaped for a word sits in a pool of space and stops reading as a target.
+ * The 28px box still clears the 24px minimum target size (WCAG 2.2 SC 2.5.8)
+ * with the row's own gap around it. Always drawn, never revealed on hover: a
+ * control that appears only under a pointer is unfindable on a phone.
+ */
+.icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: var(--size-square-compact);
+  height: var(--size-square-compact);
+  padding: 0;
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: background var(--dur-hover) var(--ease), color var(--dur-hover) var(--ease),
+    border-color var(--dur-hover) var(--ease);
+}
+
+.icon-button > svg { width: var(--space-4); height: var(--space-4); }
+
+.icon-button:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--border-hi);
+  color: var(--ink);
+}
+
+/* One focus language across the product, and it is the accent ring. */
+.icon-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+/* A disabled action is dimmed and says why in its title — the push monitor
+   case. The dimming is never the only signal. */
+.icon-button:disabled { opacity: .45; cursor: default; }
+
+/*
+ * A check in flight, for the eye.
+ *
+ * `aria-busy` tells assistive technology, and until this rule nothing told
+ * anybody else: an in-flight check and a check that is unavailable are both
+ * disabled, so both got the same dimming, and a sighted reader could not tell
+ * "working on it" from "you cannot do this here". The glyph turns instead.
+ */
+@keyframes icon-button-spin {
+  to { transform: rotate(1turn); }
+}
+
+.icon-button[data-busy="true"] > svg {
+  animation: icon-button-spin 900ms linear infinite;
+}
+
+/* Motion is the signal, not the only one: the title and the dimming stay, so
+   suppressing the rotation costs nothing but the movement. */
+@media (prefers-reduced-motion: reduce) {
+  .icon-button[data-busy="true"] > svg { animation: none; }
+}
+
+/* Destructive is outlined, never filled: a filled red button is the one a
+   hand lands on by accident. The red is in the *ink*, not in the edge —
+   §2.9 gives borders to three role tokens, and spending a status colour on
+   an edge would make a control look like a monitor that is down. On a
+   .button or an .icon-button alike. */
+.button--danger { color: var(--down); }
+
+/*
+ * The one loud button: a form whose whole job is one action — sign in, save
+ * this card. Elsewhere the primary action fills only on hover
+ * (.button--primary), because a permanently filled button becomes wallpaper
+ * (DESIGN.md §7.1).
+ */
+.button-solid {
+  min-height: var(--control-h);
+  padding: var(--space-2) var(--space-4);
+  font: inherit;
+  font-size: var(--type-body);
+  line-height: var(--lead-body);
+  font-weight: var(--weight-strong);
+  /* White on the accent, not the theme's canvas on status green. That swap
+     is what §2.8 is for: a filled primary button is a control, and painting
+     it --up made "the button" and "the monitor is healthy" the same colour.
+     White on --accent is 5.25:1 and identical in both themes. */
+  color: var(--accent-ink);
+  background: var(--accent);
+  /* The same hue one step lighter, which is what keeps a filled control
+     looking crisp rather than printed on. */
+  border: 1px solid var(--accent-border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: opacity var(--dur-hover) var(--ease);
+}
+
+.button-solid:hover:not(:disabled) { opacity: .9; }
+
+.button-solid:disabled {
+  /* Dimmed rather than hidden: the button is the answer to "what do I do
+     here", and removing it while a field is empty leaves the question open. */
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.button-solid:focus-visible {
+  outline: var(--outline-w) solid var(--accent-border);
+  outline-offset: var(--outline-offset);
+}
+
+/* What happened after a form's last action, in a live region that takes no
+   room until it has something to say. */
+.result-region:empty { display: none; }
+
+.result {
+  font-size: var(--type-body);
+  line-height: var(--lead-body);
+  color: var(--ink-2);
+}
+
+.result--good { color: var(--up); }
+.result--bad { color: var(--down); }
+
+/*
+ * A caveat the reader must not skim past: a secret shown once, a file that
+ * carries credentials, a failed maintenance pass. A filled block rather than
+ * coloured text, because this is where clicking past something loses data.
+ */
+.warn-note {
+  padding: var(--space-3);
+  border-left: var(--size-status-rail) solid var(--warn);
+  border-radius: var(--radius-sm);
+  background: var(--warn-dim);
+  /* `--ink`, the ink the rest of the product gives text that matters. */
+  color: var(--ink);
+  font-size: var(--type-body);
+  line-height: var(--lead-body);
+}
+
+/*
+ * A value to copy, beside its Copy button. The value is long and must not be
+ * truncated into something that looks copyable but is not, so the input takes
+ * the width and the button keeps its own.
+ */
+.copy-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: stretch;
+}
+
+.copy-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  @apply face-mono;
+}
+
+/* A literal value inside prose or a row: a masked secret, a token prefix, the
+   name to retype before deleting something. */
+.literal {
+  @apply face-mono;
+  color: var(--ink-3);
+}
+
+/*
+ * Screen-reader-only text. Clipped rather than display:none, which would take
+ * it out of the accessibility tree along with the pixels — and on the lamp
+ * this text is the entire reason the status is not colour-only.
+ */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

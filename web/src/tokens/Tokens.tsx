@@ -40,18 +40,18 @@ function Reveal({ token, name, onDone }: { token: string; name: string; onDone: 
     navigator.clipboard.writeText(token).then(() => setCopied("Copied."), () => setCopied("Could not copy. Select the token and copy it by hand."));
   };
   return (
-    <div ref={panel} tabIndex={-1} className="push-reveal" aria-labelledby={`${id}-title`}>
-      <p className="auth-label" id={`${id}-title`}>New token for {name}, shown once</p>
-      <p role="alert" className="push-reveal-warn">
+    <div ref={panel} tabIndex={-1} className="form-column" aria-labelledby={`${id}-title`}>
+      <p className="field-label" id={`${id}-title`}>New token for {name}, shown once</p>
+      <p role="alert" className="warn-note">
         This is the only time this token is shown. SubGlance stores a hash of it, so if it is lost, revoke it and create another.
       </p>
-      <div className="push-reveal-row">
-        <input className="add-input push-reveal-input" aria-label={`Token for ${name}`} value={token} readOnly spellCheck={false}
+      <div className="copy-row">
+        <input className="input copy-input" aria-label={`Token for ${name}`} value={token} readOnly spellCheck={false}
           onFocus={(event) => event.currentTarget.select()} />
-        <button type="button" className="add-button" onClick={copy}>Copy</button>
+        <button type="button" className="button" onClick={copy}>Copy</button>
       </div>
-      <div role="status" aria-live="polite" className="add-result-region">{copied && <p className="add-result">{copied}</p>}</div>
-      <div><button type="button" className="add-button add-button-primary" onClick={onDone}>I have saved it</button></div>
+      <div role="status" aria-live="polite" className="result-region">{copied && <p className="result">{copied}</p>}</div>
+      <div><button type="button" className="button button--primary" onClick={onDone}>I have saved it</button></div>
     </div>
   );
 }
@@ -86,32 +86,32 @@ function CreateForm({ role, onCreated }: { role: string; onCreated: (token: stri
   }
 
   return (
-    <form className="auth-form" aria-label="Create API token" onSubmit={submit}>
+    <form className="stack" aria-label="Create API token" onSubmit={submit}>
       <div className="control-row">
-        <div className="auth-field">
-          <label className="auth-label" htmlFor={`${id}-name`}>Token name</label>
-          <input className="auth-input" id={`${id}-name`} value={name} maxLength={100} autoComplete="off" spellCheck={false}
+        <div className="field">
+          <label className="field-label" htmlFor={`${id}-name`}>Token name</label>
+          <input className="input input--inset" id={`${id}-name`} value={name} maxLength={100} autoComplete="off" spellCheck={false}
             placeholder="grafana" aria-describedby={error?.field === "name" ? `${id}-error` : undefined}
             aria-invalid={error?.field === "name" ? true : undefined} onChange={(event) => setName(event.target.value)} />
         </div>
-        <div className="auth-field">
+        <div className="field">
           {/* The group carries the name "Role"; this is its visible caption. */}
-          <span className="auth-label" aria-hidden="true">Role</span>
+          <span className="field-label" aria-hidden="true">Role</span>
           <SegmentedControl label="Role" value={scope} onChange={setScope}
             options={roles.map((item) => ({ id: item, label: roleLabel(item) }))}
             describedBy={roleError ? `${id}-role-help ${id}-error` : `${id}-role-help`} />
-          {roleError && <p className="auth-error" role="alert" id={`${id}-error`}>{error.message}</p>}
+          {roleError && <p className="field-error" role="alert" id={`${id}-error`}>{error.message}</p>}
         </div>
-        <div className="auth-field">
-          <label className="auth-label" htmlFor={`${id}-expiry`}>Expires</label>
-          <select className="auth-input" id={`${id}-expiry`} value={expiry} onChange={(event) => setExpiry(event.target.value)}>
+        <div className="field">
+          <label className="field-label" htmlFor={`${id}-expiry`}>Expires</label>
+          <select className="input input--inset" id={`${id}-expiry`} value={expiry} onChange={(event) => setExpiry(event.target.value)}>
             {EXPIRY.map(([value, label]) => <option key={label} value={value}>{label}</option>)}
           </select>
         </div>
       </div>
       <p className="panel-note" id={`${id}-role-help`}>{ROLE_HELP[scope]}</p>
-      {error && !roleError && <p className="auth-error" role="alert" id={`${id}-error`}>{error.message}</p>}
-      <div><button className="auth-submit" type="submit" disabled={!name.trim() || saving}>{saving ? "Creating…" : "Create token"}</button></div>
+      {error && !roleError && <p className="field-error" role="alert" id={`${id}-error`}>{error.message}</p>}
+      <div><button className="button-solid" type="submit" disabled={!name.trim() || saving}>{saving ? "Creating…" : "Create token"}</button></div>
     </form>
   );
 }
@@ -158,19 +158,19 @@ function TokenRow({ token, now, onRevoked }: { token: ApiToken; now: number; onR
   return (
     <li className="control-row">
       <div className="tokens-main">
-        <p><strong>{token.name}</strong> <span className="nt-mask">{token.prefix}…</span></p>
+        <p><strong>{token.name}</strong> <span className="literal">{token.prefix}…</span></p>
         <p className="panel-note">{facts.join(" · ")}</p>
-        {error && <p className="auth-error" role="alert">{error}</p>}
+        {error && <p className="field-error" role="alert">{error}</p>}
       </div>
       <StateChip>{live ? token.role : token.revoked_at ? "revoked" : "expired"}</StateChip>
       {live && (confirming ? (
-        <span className="add-actions">
-          <button type="button" className="add-button" disabled={busy} onClick={() => void revoke()}
+        <span className="button-row">
+          <button type="button" className="button" disabled={busy} onClick={() => void revoke()}
             aria-label={`Confirm revoking ${token.name}`}>Revoke now</button>
-          <button type="button" className="add-button" disabled={busy} onClick={() => setConfirming(false)}>Keep</button>
+          <button type="button" className="button" disabled={busy} onClick={() => setConfirming(false)}>Keep</button>
         </span>
       ) : (
-        <button type="button" className="add-button" aria-label={`Revoke ${token.name}`} onClick={() => setConfirming(true)}>Revoke</button>
+        <button type="button" className="button" aria-label={`Revoke ${token.name}`} onClick={() => setConfirming(true)}>Revoke</button>
       ))}
     </li>
   );
@@ -216,7 +216,7 @@ export function TokensCard({ role }: { role: string }) {
           : <p className="panel-note">A viewer can list and revoke its own tokens but not create one.</p>}
         {!query.data ? <p>{query.isError ? "API tokens unavailable." : "Loading API tokens…"}</p>
           : ordered.length === 0 ? <p className="panel-note">No tokens yet.</p>
-          : <ul className="auth-form" aria-label="Your API tokens">
+          : <ul className="stack" aria-label="Your API tokens">
             {ordered.map((token) => <TokenRow key={token.id} token={token} now={now} onRevoked={refresh} />)}
           </ul>}
       </Panel>

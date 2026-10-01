@@ -93,10 +93,10 @@ function AmountField({ label, unit, offLabel, restore, draft, onChange, disabled
   const help = [`${id}-help`, error ? `${id}-error` : ""].filter(Boolean).join(" ");
   return (
     <fieldset className="retention-field" disabled={disabled || locked}>
-      <legend className="auth-label">{label}</legend>
+      <legend className="field-label">{label}</legend>
       <div className="control-row">
         <input
-          className="auth-input retention-days" type="number" min={min} step="1" inputMode="numeric"
+          className="input input--inset retention-days" type="number" min={min} step="1" inputMode="numeric"
           aria-label={`${label}, in ${unit}`} aria-describedby={help} aria-invalid={error ? true : undefined}
           value={draft.off ? "" : draft.value} disabled={draft.off}
           onChange={(event) => onChange({ ...draft, value: event.target.value })}
@@ -106,7 +106,7 @@ function AmountField({ label, unit, offLabel, restore, draft, onChange, disabled
           onChange={(event) => onChange({ value: draft.value || restore, off: event.target.checked })}>{offLabel}</Checkbox>
       </div>
       <p className="panel-note" id={`${id}-help`}>{note}</p>
-      {error && <p className="auth-error" id={`${id}-error`} role="alert">{error}</p>}
+      {error && <p className="field-error" id={`${id}-error`} role="alert">{error}</p>}
     </fieldset>
   );
 }
@@ -153,16 +153,16 @@ function RunAtField({ data, value, onChange, disabled, error }: {
   const id = useId();
   const pin = data.run_at;
   return (
-    <div className="auth-field">
-      <label className="auth-label" htmlFor={id}>Run the daily pass at</label>
-      <input className="auth-input retention-time" id={id} type="time" step="60" required value={value}
+    <div className="field">
+      <label className="field-label" htmlFor={id}>Run the daily pass at</label>
+      <input className="input input--inset retention-time" id={id} type="time" step="60" required value={value}
         disabled={disabled || pin.source === "pinned"} aria-invalid={error ? true : undefined}
         aria-describedby={`${id}-help${error ? ` ${id}-error` : ""}`} onChange={(event) => onChange(event.target.value)} />
       <p className="panel-note" id={`${id}-help`}>
         {pin.source === "pinned" ? `Set by ${pin.pinned_by} to ${pin.value}; change it there.`
           : "In the server's time zone (its TZ variable, UTC without one). A new time never starts a pass by itself."}
       </p>
-      {error && <p className="auth-error" id={`${id}-error`} role="alert">{error}</p>}
+      {error && <p className="field-error" id={`${id}-error`} role="alert">{error}</p>}
     </div>
   );
 }
@@ -258,7 +258,7 @@ function RetentionForm({ data, canAdmin, outcome, setOutcome }: {
   const locked = !canAdmin || saving;
   const minimumMB = Math.ceil(size.minimum_bytes / MB);
   return (
-    <form className="auth-form" aria-label="Retention" onSubmit={submit}>
+    <form className="stack" aria-label="Retention" onSubmit={submit}>
       <AmountField label="Keep raw heartbeats" unit="days" offLabel="Forever" restore={String(data.raw.seconds / DAY || 30)}
         draft={raw} onChange={edit(setRaw)} disabled={locked} locked={data.raw.source === "pinned"} min={1}
         note={windowNote(data.raw, estimate(raw.off ? null : Number(raw.value) || null, data.tables, ["heartbeats", "heartbeat_responses"]))}
@@ -285,10 +285,10 @@ function RetentionForm({ data, canAdmin, outcome, setOutcome }: {
             : "Nothing is old enough to be removed by this change yet."}
         </p>
       )}
-      {rejection && !rejection.field && <p className="auth-error" role="alert">{rejection.message}</p>}
+      {rejection && !rejection.field && <p className="field-error" role="alert">{rejection.message}</p>}
       {canAdmin && (
         <div>
-          <button className="auth-submit" type="submit" disabled={!changed || !valid || saving || !previewReady}>
+          <button className="button-solid" type="submit" disabled={!changed || !valid || saving || !previewReady}>
             {saving ? "Saving…" : "Save retention"}
           </button>
         </div>
@@ -321,7 +321,7 @@ export function RetentionCard({ canAdmin }: { canAdmin: boolean }) {
       <Panel spacing="form">
         {!data ? <p>{query.isError ? "Retention settings unavailable." : "Loading retention settings…"}</p> : <>
           <table className="retention-tables">
-            <caption className="auth-label">Database today</caption>
+            <caption className="field-label">Database today</caption>
             <thead><tr><th scope="col">Table</th><th scope="col">Rows</th><th scope="col">Size</th><th scope="col">Added per day</th></tr></thead>
             <tbody>
               {data.tables.map((table) => (

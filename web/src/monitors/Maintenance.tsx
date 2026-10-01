@@ -79,23 +79,23 @@ function MaintenanceManager({ monitors, canWrite }: { monitors: readonly Invento
       <p>{window.monitor_id ? monitors.find((m) => m.id === String(window.monitor_id))?.name ?? `Monitor ${window.monitor_id}` : `${window.tag_key}:${window.tag_value}`}</p>
       <p>{window.timezone ? `${window.weekdays?.map((day) => DAYS[day]).join(", ")} at ${window.local_time} (${window.timezone}), ${window.duration_minutes} minutes`
         : `${window.starts_at} → ${window.ends_at}`}</p>
-      {canWrite ? <button className="add-button" type="button" disabled={busy} aria-label={`Cancel maintenance ${window.name}`} onClick={() => void cancel(window)}>Cancel maintenance</button> : null}
+      {canWrite ? <button className="button" type="button" disabled={busy} aria-label={`Cancel maintenance ${window.name}`} onClick={() => void cancel(window)}>Cancel maintenance</button> : null}
     </li>)}</ul>
-    {canWrite ? <form className="add-form" onSubmit={(event) => void submit(event)} aria-label="Schedule maintenance">
+    {canWrite ? <form className="form-column" onSubmit={(event) => void submit(event)} aria-label="Schedule maintenance">
       <fieldset disabled={busy} className="maintenance-fields">
-        <label className="add-field">Name<input className="add-input" name="name" required maxLength={120}/></label>
-        <label className="add-field">Applies to<select className="add-input" name="scope" value={scope} onChange={(e) => setScope(e.target.value)}><option value="monitor">One monitor</option><option value="tag">Tag group</option></select></label>
-        {scope === "monitor" ? <label className="add-field">Monitor<select className="add-input" name="monitor_id" required><option value="">Choose a monitor</option>{monitors.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
-          : <div className="add-grid"><label className="add-field">Tag key<input className="add-input" name="tag_key" required placeholder="env"/></label><label className="add-field">Tag value<input className="add-input" name="tag_value" required placeholder="prod"/></label></div>}
-        <label className="add-field">Schedule<select className="add-input" name="schedule" value={weekly ? "weekly" : "once"} onChange={(e) => setWeekly(e.target.value === "weekly")}><option value="once">One-off</option><option value="weekly">Weekly</option></select></label>
+        <label className="field">Name<input className="input" name="name" required maxLength={120}/></label>
+        <label className="field">Applies to<select className="input" name="scope" value={scope} onChange={(e) => setScope(e.target.value)}><option value="monitor">One monitor</option><option value="tag">Tag group</option></select></label>
+        {scope === "monitor" ? <label className="field">Monitor<select className="input" name="monitor_id" required><option value="">Choose a monitor</option>{monitors.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
+          : <div className="field-grid"><label className="field">Tag key<input className="input" name="tag_key" required placeholder="env"/></label><label className="field">Tag value<input className="input" name="tag_value" required placeholder="prod"/></label></div>}
+        <label className="field">Schedule<select className="input" name="schedule" value={weekly ? "weekly" : "once"} onChange={(e) => setWeekly(e.target.value === "weekly")}><option value="once">One-off</option><option value="weekly">Weekly</option></select></label>
         {weekly ? <>
-          <label className="add-field">Timezone<input className="add-input" name="timezone" required defaultValue="UTC" aria-describedby={`${id}-dst`} placeholder="Europe/Amsterdam"/></label>
+          <label className="field">Timezone<input className="input" name="timezone" required defaultValue="UTC" aria-describedby={`${id}-dst`} placeholder="Europe/Amsterdam"/></label>
           <fieldset className="maintenance-days"><legend>Weekdays</legend>{DAYS.map((day, index) => <Checkbox key={day} name="weekdays" value={index} defaultChecked={index === 0}>{day}</Checkbox>)}</fieldset>
-          <div className="add-grid"><label className="add-field">Local start time<input className="add-input" type="time" name="local_time" required defaultValue="02:00"/></label><label className="add-field">Duration (minutes)<input className="add-input" type="number" name="duration_minutes" min={1} max={1440} required defaultValue={60}/></label></div>
+          <div className="field-grid"><label className="field">Local start time<input className="input" type="time" name="local_time" required defaultValue="02:00"/></label><label className="field">Duration (minutes)<input className="input" type="number" name="duration_minutes" min={1} max={1440} required defaultValue={60}/></label></div>
           <p id={`${id}-dst`}>Use an IANA timezone. A missing daylight-saving time is skipped; a repeated time starts once, at the earlier occurrence. Duration is elapsed minutes.</p>
-        </> : <div className="add-grid"><label className="add-field">Start (UTC)<input className="add-input" type="datetime-local" name="starts_at" required/></label><label className="add-field">End (UTC)<input className="add-input" type="datetime-local" name="ends_at" required/></label></div>}
+        </> : <div className="field-grid"><label className="field">Start (UTC)<input className="input" type="datetime-local" name="starts_at" required/></label><label className="field">End (UTC)<input className="input" type="datetime-local" name="ends_at" required/></label></div>}
       </fieldset>
-      <button className="add-button add-button-primary" type="submit" disabled={busy}>Schedule maintenance</button>
+      <button className="button button--primary" type="submit" disabled={busy}>Schedule maintenance</button>
     </form> : null}
     <p role="status">{busy ? "Saving maintenance…" : message}</p>
     {error ? <p role="alert">{error}</p> : null}

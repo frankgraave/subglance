@@ -56,10 +56,10 @@ it("pauses/resumes persisted monitors, opens the create form and expires the ope
     await expect.poll(async () => (await read()).body.enabled).toBe(true);
     await page.waitForFunction(() => !document.querySelector('.command-menu [aria-disabled="true"]'));
     await command(page, "Add monitor");
-    await page.waitForSelector(".add-form");
+    await page.waitForSelector(".form-column");
     expect(new URL(page.url()).pathname).toBe("/monitors/new");
     await page.keyboard.press("Escape");
-    await page.waitForSelector(".add-form", { hidden: true });
+    await page.waitForSelector(".form-column", { hidden: true });
     // Invalidate this cookie on the actual server, then discover 401 via a
     // palette request. The menu must disappear instead of exposing cached data.
     expect(await page.evaluate(async () => (await fetch("/api/v1/auth/logout", { method: "POST" })).status)).toBe(204);

@@ -54,26 +54,26 @@ function CreateForm({ onCreated, onCancel }: { onCreated: (account: Account) => 
   }
 
   return (
-    <form className="auth-form" aria-label="Add user" onSubmit={submit}>
+    <form className="stack" aria-label="Add user" onSubmit={submit}>
       <div className="control-row">
-        <div className="auth-field">
-          <label className="auth-label" htmlFor={`${id}-email`}>Email</label>
-          <input className="auth-input" id={`${id}-email`} type="email" value={email} autoComplete="off" spellCheck={false}
+        <div className="field">
+          <label className="field-label" htmlFor={`${id}-email`}>Email</label>
+          <input className="input input--inset" id={`${id}-email`} type="email" value={email} autoComplete="off" spellCheck={false}
             aria-describedby={fieldError("email")} aria-invalid={fieldError("email") ? true : undefined}
             onChange={(event) => setEmail(event.target.value)} />
         </div>
-        <div className="auth-field">
-          <label className="auth-label" htmlFor={`${id}-password`}>Password</label>
+        <div className="field">
+          <label className="field-label" htmlFor={`${id}-password`}>Password</label>
           {/* new-password, so a browser offers to generate one rather than
               filling in the administrator's own. */}
-          <input className="auth-input" id={`${id}-password`} type="password" value={password} autoComplete="new-password"
+          <input className="input input--inset" id={`${id}-password`} type="password" value={password} autoComplete="new-password"
             aria-describedby={[`${id}-password-help`, fieldError("password")].filter(Boolean).join(" ")}
             aria-invalid={fieldError("password") ? true : undefined}
             onChange={(event) => setPassword(event.target.value)} />
         </div>
-        <div className="auth-field">
-          <label className="auth-label" htmlFor={`${id}-role`}>Role</label>
-          <select className="auth-input" id={`${id}-role`} value={role} aria-describedby={`${id}-role-help`}
+        <div className="field">
+          <label className="field-label" htmlFor={`${id}-role`}>Role</label>
+          <select className="input input--inset" id={`${id}-role`} value={role} aria-describedby={`${id}-role-help`}
             onChange={(event) => setRole(event.target.value as UserRole)}>
             {ROLES.map((item) => <option key={item} value={item}>{label(item)}</option>)}
           </select>
@@ -83,10 +83,10 @@ function CreateForm({ onCreated, onCancel }: { onCreated: (account: Account) => 
         At least {MIN_PASSWORD_LENGTH} characters. Hand it over yourself; the new user can change it under Account.
       </p>
       <p className="panel-note" id={`${id}-role-help`}>{ROLE_HELP[role]}</p>
-      {error && <p className="auth-error" role="alert" id={`${id}-error`}>{error.message}</p>}
-      <div className="add-actions">
-        <button className="auth-submit" type="submit" disabled={!ready || saving}>{saving ? "Adding…" : "Add user"}</button>
-        <button className="add-button" type="button" onClick={onCancel}>Cancel</button>
+      {error && <p className="field-error" role="alert" id={`${id}-error`}>{error.message}</p>}
+      <div className="button-row">
+        <button className="button-solid" type="submit" disabled={!ready || saving}>{saving ? "Adding…" : "Add user"}</button>
+        <button className="button" type="button" onClick={onCancel}>Cancel</button>
       </div>
     </form>
   );
@@ -124,10 +124,10 @@ function UserRow({ account, you, onChanged }: { account: Account; you: boolean; 
   // label needs 4.5:1. The retyped address in ConfirmDelete guards it.
   return (
     <li className="control-row">
-      <div className="inv-main">
+      <div className="control-row-main">
         <p><strong>{account.email}</strong></p>
         <p className="panel-note">created {day(account.created_at)}</p>
-        {error && <p className="auth-error" role="alert">{error}</p>}
+        {error && <p className="field-error" role="alert">{error}</p>}
       </div>
       {you ? <>
         {/* No role picker and no Remove on your own row: the one administrator
@@ -135,7 +135,7 @@ function UserRow({ account, you, onChanged }: { account: Account; you: boolean; 
         <StateChip>{account.role}</StateChip>
         <StateChip>you</StateChip>
       </> : <>
-        <select className="auth-input" aria-label={`Role for ${account.email}`} value={role} disabled={busy}
+        <select className="input input--inset" aria-label={`Role for ${account.email}`} value={role} disabled={busy}
           onChange={(event) => { setRole(event.target.value as UserRole); setError(null); }}>
           {ROLES.map((item) => <option key={item} value={item}>{label(item)}</option>)}
         </select>
@@ -143,13 +143,13 @@ function UserRow({ account, you, onChanged }: { account: Account; you: boolean; 
             through a closed select fires a change per option on some
             platforms, which would re-role the account at every keypress. */}
         {role !== account.role ? (
-          <span className="add-actions">
-            <button type="button" className="add-button add-button-primary" disabled={busy} onClick={() => void saveRole()}
+          <span className="button-row">
+            <button type="button" className="button button--primary" disabled={busy} onClick={() => void saveRole()}
               aria-label={`Save role for ${account.email}`}>Save role</button>
-            <button type="button" className="add-button" disabled={busy} onClick={() => setRole(account.role)}>Undo</button>
+            <button type="button" className="button" disabled={busy} onClick={() => setRole(account.role)}>Undo</button>
           </span>
         ) : (
-          <button type="button" className="inv-act inv-act--icon inv-act--danger" disabled={busy}
+          <button type="button" className="icon-button button--danger" disabled={busy}
             aria-label={`Remove ${account.email}`} title={`Remove ${account.email}`} onClick={() => setConfirming(true)}>
             <IconTrash />
           </button>
@@ -189,13 +189,13 @@ export function UsersCard({ userId }: { userId?: number }) {
     // Titled with its count like every card that frames a list (DESIGN.md §8.3);
     // the count is read from the rows it renders, so the two cannot drift.
     <Card title={users ? `Users (${users.length})` : "Users"} icon={<IconUsers />}
-      action={!adding && <button type="button" className="add-button" onClick={() => { setAdding(true); setMessage(null); }}>Add user</button>}>
+      action={!adding && <button type="button" className="button" onClick={() => { setAdding(true); setMessage(null); }}>Add user</button>}>
       <Panel spacing="form">
         {adding && <CreateForm onCancel={() => setAdding(false)}
           onCreated={(account) => { setAdding(false); done(`${account.email} was added as ${withArticle(account.role)}.`); }} />}
-        <div role="status" aria-live="polite" className="add-result-region">{message && <p className="add-result">{message}</p>}</div>
+        <div role="status" aria-live="polite" className="result-region">{message && <p className="result">{message}</p>}</div>
         {!users ? <p>{query.isError ? "Users unavailable." : "Loading users…"}</p>
-          : <ul className="auth-form" aria-label="Accounts">
+          : <ul className="stack" aria-label="Accounts">
             {/* Keyed on the role too, so a saved change restarts the row's draft from the server's answer. */}
             {users.map((account) => <UserRow key={`${account.id}/${account.role}`} account={account} you={account.id === userId} onChanged={done} />)}
           </ul>}

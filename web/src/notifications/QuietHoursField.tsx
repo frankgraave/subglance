@@ -55,8 +55,8 @@ export function QuietHoursField({
   const described = error !== null ? `${ids}-help ${ids}-error` : `${ids}-help`;
 
   return (
-    <fieldset className="add-field nt-quiet">
-      <legend className="add-label">Quiet hours</legend>
+    <fieldset className="field nt-quiet">
+      <legend className="field-label">Quiet hours</legend>
       <Checkbox
         checked={value.enabled}
         onChange={(event) => set({ enabled: event.target.checked })}
@@ -67,14 +67,14 @@ export function QuietHoursField({
 
       {value.enabled && (
         <>
-          <div className="add-grid nt-quiet-grid">
-            <div className="add-field">
-              <label className="add-label" htmlFor={`${ids}-start`}>
+          <div className="field-grid nt-quiet-grid">
+            <div className="field">
+              <label className="field-label" htmlFor={`${ids}-start`}>
                 From
               </label>
               <input
                 id={`${ids}-start`}
-                className="add-input"
+                className="input"
                 type="time"
                 step={60}
                 required
@@ -84,13 +84,13 @@ export function QuietHoursField({
                 {...(error !== null ? { "aria-invalid": true as const } : {})}
               />
             </div>
-            <div className="add-field">
-              <label className="add-label" htmlFor={`${ids}-end`}>
+            <div className="field">
+              <label className="field-label" htmlFor={`${ids}-end`}>
                 Until
               </label>
               <input
                 id={`${ids}-end`}
-                className="add-input"
+                className="input"
                 type="time"
                 step={60}
                 required
@@ -100,13 +100,13 @@ export function QuietHoursField({
                 {...(error !== null ? { "aria-invalid": true as const } : {})}
               />
             </div>
-            <div className="add-field add-field-wide">
-              <label className="add-label" htmlFor={`${ids}-zone`}>
+            <div className="field field-wide">
+              <label className="field-label" htmlFor={`${ids}-zone`}>
                 Timezone
               </label>
               <input
                 id={`${ids}-zone`}
-                className="add-input"
+                className="input"
                 required
                 autoComplete="off"
                 spellCheck={false}
@@ -130,7 +130,7 @@ export function QuietHoursField({
           </div>
 
           <fieldset className="nt-quiet-modes">
-            <legend className="add-label">During the window</legend>
+            <legend className="field-label">During the window</legend>
             <Radio
               name={`${ids}-during`}
               value="hold"
@@ -151,7 +151,7 @@ export function QuietHoursField({
         </>
       )}
 
-      <p className="add-help" id={`${ids}-help`}>
+      <p className="field-help" id={`${ids}-help`}>
         {value.enabled
           ? "An end earlier than the start runs past midnight. Recoveries during the window go into the same digest, so a night that fixed itself arrives as one message."
           : "Off: this channel delivers at any hour."}
@@ -161,7 +161,7 @@ export function QuietHoursField({
       </p>
 
       {error !== null && (
-        <p className="add-field-error" id={`${ids}-error`} role="alert">
+        <p className="field-error" id={`${ids}-error`} role="alert">
           {error}
         </p>
       )}

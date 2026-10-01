@@ -71,7 +71,7 @@ async function open(width: number, theme: string, step: Step): Promise<Page> {
     if (step === "reveal") {
       const [confirm] = await page.$$("xpath/.//button[normalize-space()='Import subglance.yaml']");
       await confirm.click();
-      await page.waitForSelector("#configuration .push-reveal", { timeout: 10_000 });
+      await page.waitForSelector("#configuration .form-column", { timeout: 10_000 });
     }
     await settle(page);
   } catch (err) {
@@ -145,7 +145,7 @@ it("sends the chosen file's bytes to the dry run, then to the apply", async () =
     await input!.uploadFile(file);
     const confirm = await page.waitForSelector("xpath/.//button[normalize-space()='Import subglance.yaml']", { timeout: 10_000 });
     await confirm!.click();
-    await page.waitForSelector("#configuration .push-reveal");
+    await page.waitForSelector("#configuration .form-column");
     const yaml = "version: 1\nmonitors:\n  - key: shop\n    name: Webshop\n";
     expect(bodies).toEqual([`?dry_run=true application/yaml ${yaml}`, ` application/yaml ${yaml}`]);
   } finally {

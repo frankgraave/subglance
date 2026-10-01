@@ -66,16 +66,16 @@ export function ResetInstanceCard() {
   return (
     <Card title="Reset this instance" icon={<IconAlert />}>
       <Panel>
-        <form className="auth-form" aria-label="Reset this instance" onSubmit={submit}>
+        <form className="stack" aria-label="Reset this instance" onSubmit={submit}>
           <p className="panel-note">
             Deletes every monitor, heartbeat, incident, notification channel, maintenance window and API token.
             User accounts, sessions and settings such as retention are kept, so you stay signed in.
             This cannot be undone, and there is no copy unless you made a backup.
           </p>
-          <div className="auth-field">
-            <label className="auth-label" htmlFor={`${id}-confirm`}>Type <b>{RESET_PHRASE}</b> to enable the button</label>
+          <div className="field">
+            <label className="field-label" htmlFor={`${id}-confirm`}>Type <b>{RESET_PHRASE}</b> to enable the button</label>
             <input
-              id={`${id}-confirm`} className="auth-input" type="text" value={typed} disabled={busy}
+              id={`${id}-confirm`} className="input input--inset" type="text" value={typed} disabled={busy}
               autoComplete="off" spellCheck={false} autoCapitalize="off"
               aria-describedby={`${id}-state`}
               onChange={(event) => { setTyped(event.target.value); setDone(null); setError(null); }}
@@ -85,9 +85,9 @@ export function ResetInstanceCard() {
                 : "The button stays disabled until the phrase matches exactly, including case."}
             </p>
           </div>
-          {error && <p className="auth-error" role="alert">{error}</p>}
+          {error && <p className="field-error" role="alert">{error}</p>}
           <div>
-            <button className="add-button inv-act--danger" type="submit" disabled={!matches || busy}>
+            <button className="button button--danger" type="submit" disabled={!matches || busy}>
               {busy ? "Deleting…" : "Delete all data"}
             </button>
           </div>

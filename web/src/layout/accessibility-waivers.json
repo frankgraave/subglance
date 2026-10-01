@@ -611,12 +611,12 @@
     },
     {
       "rule": "color-contrast",
-      "selector": ".add-button-quiet",
+      "selector": ".button--quiet",
       "scopes": [
         "light: add monitor",
         "dark: add monitor"
       ],
-      "reason": "Existing contrast debt in add-button add-button-quiet: the shared ink role or muted-state opacity is below the AA text floor. Remediation changes the shared palette/visual hierarchy and is deferred from this gate. This is not a WCAG exemption; only these measured screen/theme/selector combinations are waived, and the waiver must be removed when fixed."
+      "reason": "Existing contrast debt in button button--quiet: the shared ink role or muted-state opacity is below the AA text floor. Remediation changes the shared palette/visual hierarchy and is deferred from this gate. This is not a WCAG exemption; only these measured screen/theme/selector combinations are waived, and the waiver must be removed when fixed."
     },
     {
       "rule": "color-contrast",

@@ -243,7 +243,7 @@ export function NotificationsView({
           (!loading && error === null && channels.length === 0) ? undefined : (
             <button
               type="button"
-              className="add-button add-button-primary"
+              className="button button--primary"
               // Named here rather than by its text content, for the same
               // reason as Add monitor: an unnamed inline <svg> leaves the
               // button's accessible name up to the screen reader.
@@ -291,7 +291,7 @@ export function NotificationsView({
              * server would reject.
              */
             <div className="nt-empty">
-              <p className="add-title">Alerts are going nowhere.</p>
+              <p className="form-title">Alerts are going nowhere.</p>
               <p className="nt-note nt-note--lede">
                 A channel is where SubGlance sends a message when a monitor
                 fails. Until one exists, every failure is still detected,
@@ -302,10 +302,10 @@ export function NotificationsView({
                 one and testing it takes about a minute.
               </p>
               {onCreateOpenChange !== undefined && (
-                <div className="add-actions">
+                <div className="button-row">
                   <button
                     type="button"
-                    className="add-button add-button-primary"
+                    className="button button--primary"
                     onClick={() => onCreateOpenChange(true)}
                   >
                     <PlusIcon aria-hidden="true" />
@@ -371,7 +371,7 @@ export function NotificationsView({
                 <label>
                   Monitors with no channels of their own alert through{" "}
                   <select
-                    className="add-input add-input--fit"
+                    className="input input--fit"
                     value={defaultChannel?.id ?? ""}
                     disabled={savingDefault}
                     aria-busy={savingDefault}

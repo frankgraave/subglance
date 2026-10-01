@@ -1135,23 +1135,10 @@
 
 /* ── Add monitor ───────────────────────────────────────────────────────────
  *
- * One column, one required field. The width is capped because a form field
- * that runs the width of a 27" display is harder to read, not easier — the eye
- * loses the label before it reaches the input.
+ * The form's column, fields, inputs and buttons are the shared controls in
+ * components/controls.css (SUB-173). What is left here is what only the
+ * monitor forms draw.
  */
-
-.add-form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  max-width: 34rem;
-}
-
-.add-title {
-  font-size: var(--type-card);
-  line-height: var(--lead-card);
-  font-weight: var(--weight-strong);
-}
 
 .add-lede {
   margin-top: calc(var(--space-2) * -1);
@@ -1160,112 +1147,13 @@
   color: var(--ink-2);
 }
 
-.add-field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.add-label {
-  @apply caps-legend;
-}
-
-.add-input {
-  width: 100%;
-  padding: var(--space-2) var(--space-3);
-  font: inherit;
-  /* 16px on a phone, because anything smaller makes iOS Safari zoom the page
-     on focus and leave the user scrolled sideways (DESIGN.md §13). */
-  font-size: var(--type-nozoom);
-  line-height: var(--lead-nozoom);
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--border-control);
-  border-radius: var(--r-sm);
-  transition: border-color var(--dur-hover) var(--ease), box-shadow var(--dur-hover) var(--ease);
-}
-
-@media (min-width: 641px) {
-  .add-input {
-    font-size: var(--type-body);
-    line-height: var(--lead-body);
-  }
-}
-
-.add-input::placeholder { color: var(--ink-4); }
-
-/*
- * A field that sits inside a sentence rather than in a form column: the
- * default-channel choice on the notifications page reads "Monitors with no
- * channels of their own alert through [select]". It keeps the field's height,
- * border and no-zoom size, and gives up only the full-width track, which in a
- * sentence would push the select onto a line of its own.
- *
- * Before this it was a bare native select with no class that styled it,
- * measured at 17px tall on a phone: under the 24px target floor (WCAG 2.2
- * SC 2.5.8) that `phone-layout.browser.test.ts` enforces.
- */
-.add-input--fit {
-  width: auto;
-  max-width: 100%;
-}
-
-/* The control accent, not the blue browser glow and not status green (§2.8):
-   a focused field is a control you are driving, not a healthy monitor. */
-.add-input:focus-visible {
-  outline: none;
-  border-color: var(--accent-border);
-  box-shadow: 0 0 0 3px var(--accent-ring);
-}
-
-.add-help {
-  font-size: var(--type-helper);
-  line-height: var(--lead-prose);
-  color: var(--ink-2);
-}
-
-/*
- * The message for the input directly above it.
- *
- * Same size as the help text and directly beneath it, so the field reads as
- * one block rather than as a box with something shouting under it. Colour is
- * the only difference, and colour is deliberately not the only signal: the
- * input itself carries aria-invalid and a red border, so this still works for
- * anyone who cannot tell --down from --ink-3 (DESIGN.md §3.1).
- *
- * It takes the prose leading rather than the single-line pair: the message is
- * a sentence, not a word — "press Test it first, or pick a type…" wraps at any
- * realistic field width — which is the case --lead-prose exists for.
- */
-.add-field-error {
-  font-size: var(--type-helper);
-  line-height: var(--lead-prose);
-  color: var(--down);
-}
-
 /* New edit/reminder copy clears AA without changing the status palette. */
-.edit-form .add-help,
-.edit-form .add-button-quiet,
-.repeat-field .add-help { color: var(--ink-2); }
-.edit-form .add-field-error,
-.edit-form .add-result,
-.repeat-field .add-field-error { color: var(--ink); }
-.add-field-error > svg {
-  display: inline-block;
-  width: var(--size-icon-sm);
-  height: var(--size-icon-sm);
-  margin-right: var(--space-1);
-  vertical-align: middle;
-}
-
-.add-input[aria-invalid="true"] {
-  border-color: var(--down);
-}
-
-.add-input[aria-invalid="true"]:focus {
-  border-color: var(--down);
-  box-shadow: 0 0 0 3px var(--ring-down);
-}
+.edit-form .field-help,
+.edit-form .button--quiet,
+.repeat-field .field-help { color: var(--ink-2); }
+.edit-form .field-error,
+.edit-form .result,
+.repeat-field .field-error { color: var(--ink); }
 
 .add-addon {
   position: relative;
@@ -1273,7 +1161,7 @@
   align-items: center;
 }
 
-.add-addon .add-input { padding-right: var(--space-10); }
+.add-addon .input { padding-right: var(--space-10); }
 
 /* The unit sits on the field rather than in the label, so the label can say
    what the number means and the field can say what it is measured in. */
@@ -1300,130 +1188,7 @@
 
 .add-summary:hover { color: var(--ink); }
 
-.add-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
-  gap: var(--space-4);
-  margin-top: var(--space-4);
-}
-
-.add-field-wide { grid-column: 1 / -1; }
-
-.add-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-}
-
-.add-button {
-  /* Inline-flex, not the default inline-block: a button whose label is a word
-     plus a glyph (SUB-138) stacks them onto two lines otherwise, which is how
-     "Add monitor" grew a second row with a lonely + under it. */
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  font: inherit;
-  font-size: var(--type-body);
-  line-height: var(--lead-body);
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--border-control);
-  border-radius: var(--r-sm);
-  cursor: pointer;
-  transition: background var(--dur-hover) var(--ease), border-color var(--dur-hover) var(--ease);
-}
-
-.add-button > svg {
-  width: var(--size-icon-sm);
-  height: var(--size-icon-sm);
-  flex: none;
-  /* The glyph leads visually and the word follows, which is the shape a
-     primary add action has everywhere it appears. In the markup the order is
-     reversed, because the button is named by aria-label there and the DOM
-     order is free to serve layout. */
-  order: -1;
-}
-
-.add-button:hover:not(:disabled) { background: var(--surface-2); border-color: var(--border-hi); }
-
-.add-button:disabled { opacity: .5; cursor: not-allowed; }
-
-/* The fill arrives on hover, so a permanently green button on screen does not
-   become wallpaper that gets clicked by accident (§7.1). */
-.add-button-primary {
-  border-color: var(--accent-border);
-  /* Ink and fill must switch together. Fading from the light surface while
-     the label is already white makes intermediate hover frames unreadable. */
-  transition: border-color var(--dur-hover) var(--ease);
-}
-.add-button-primary:hover:not(:disabled) {
-  color: var(--accent-ink);
-  background: var(--accent);
-  border-color: var(--accent-border);
-}
-
-.add-button-quiet { color: var(--ink-3); border-color: transparent; background: transparent; }
-
-.add-result-region:empty { display: none; }
-
-.add-result {
-  font-size: var(--type-body);
-  line-height: var(--lead-body);
-  color: var(--ink-2);
-}
-
-.add-result-good { color: var(--up); }
-.add-result-bad { color: var(--down); }
-
 .add-result-kind { color: var(--ink-3); }
-
-/*
- * The push URL, shown once.
- *
- * Laid out like the form it replaces so the transition does not feel like a
- * different screen: same field stack, same max width. The one departure is the
- * warning, which gets a filled block rather than coloured text — this is the
- * only place in the product where clicking past something destroys data, and
- * it has to survive being skimmed.
- */
-.push-reveal {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  max-width: 34rem;
-}
-
-.push-reveal-warn {
-  padding: var(--space-3);
-  border-left: var(--size-status-rail) solid var(--warn);
-  border-radius: var(--radius-sm);
-  background: var(--warn-dim);
-  /* `--ink`, not the `--ink-1` this said: there is no `--ink-1` in tokens.css
-     — the scale runs `--ink`, `--ink-2`, `--ink-3`, `--ink-4` — so the colour
-     was falling through to whatever the panel inherited. This is a caveat the
-     reader must not skim past, and `--ink` is the ink the rest of the product
-     gives text that matters. */
-  color: var(--ink);
-  font-size: var(--type-body);
-  line-height: var(--lead-body);
-}
-
-.push-reveal-row {
-  display: flex;
-  gap: var(--space-2);
-  align-items: stretch;
-}
-
-/*
- * The URL is long and must not be truncated into something that looks copyable
- * but is not, so the input takes the width and the button keeps its own.
- */
-.push-reveal-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  @apply face-mono;
-}
 
 /*
  * The monitor name is a link into its detail view, in every layout.

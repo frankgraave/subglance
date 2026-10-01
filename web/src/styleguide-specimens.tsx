@@ -99,26 +99,26 @@ export const specimens: Specimen[] = [
   {
     id: "buttons",
     title: "Buttons",
-    source: "web/src/monitors/monitors.css, web/src/monitors/inventory.css",
+    source: "web/src/components/controls.css",
     rule:
       "The accent fills controls and nothing else. A primary action gets the accent border, and carries a + when it adds the thing the surface it sits on is a list of. A compact row action sits in a 26px square with its name in aria-label. Delete is a glyph like its neighbours: the bin carries destructive in its shape, so it survives greyscale where red alone would not, and the confirmation that makes you type the name is what buys back the pause the word used to.",
     node: row(
       <button
         key="p"
         type="button"
-        className="add-button add-button-primary"
+        className="button button--primary"
         aria-label="Add monitor"
       >
         <PlusIcon aria-hidden="true" />
         Add monitor
       </button>,
-      <button key="s" type="button" className="add-button">
+      <button key="s" type="button" className="button">
         Cancel
       </button>,
       <button
         key="check"
         type="button"
-        className="inv-act inv-act--icon"
+        className="icon-button"
         aria-label="Check now"
         title="Check now"
       >
@@ -127,7 +127,7 @@ export const specimens: Specimen[] = [
       <button
         key="pause"
         type="button"
-        className="inv-act inv-act--icon"
+        className="icon-button"
         aria-label="Pause"
         title="Pause"
       >
@@ -136,7 +136,7 @@ export const specimens: Specimen[] = [
       <button
         key="edit"
         type="button"
-        className="inv-act inv-act--icon"
+        className="icon-button"
         aria-label="Edit"
         title="Edit"
       >
@@ -145,7 +145,7 @@ export const specimens: Specimen[] = [
       <button
         key="del"
         type="button"
-        className="inv-act inv-act--icon inv-act--danger"
+        className="icon-button button--danger"
         aria-label="Delete"
         title="Delete"
       >

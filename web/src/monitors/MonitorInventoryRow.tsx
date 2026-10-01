@@ -225,7 +225,7 @@ function MonitorInventoryRowImpl({
           {onCheckNow !== undefined && (
             <button
               type="button"
-              className="inv-act inv-act--icon"
+              className="icon-button"
               onClick={() => onCheckNow(monitor.id)}
               disabled={!checkable || checking}
               /* The word used to carry this: the label read "Checking…" while
@@ -264,7 +264,7 @@ function MonitorInventoryRowImpl({
           {onTogglePaused !== undefined && (
             <button
               type="button"
-              className="inv-act inv-act--icon"
+              className="icon-button"
               onClick={() => onTogglePaused(monitor.id, !paused)}
               disabled={busy}
               aria-busy={busy}
@@ -283,7 +283,7 @@ function MonitorInventoryRowImpl({
           {onEdit !== undefined && (
             <button
               type="button"
-              className="inv-act inv-act--icon"
+              className="icon-button"
               onClick={() => onEdit(monitor.id)}
               aria-label={`Edit ${monitor.name}`}
               title={`Edit ${monitor.name}`}
@@ -295,7 +295,7 @@ function MonitorInventoryRowImpl({
           {onDelete !== undefined && (
             <button
               type="button"
-              className="inv-act inv-act--icon inv-act--danger"
+              className="icon-button button--danger"
               onClick={() => onDelete(monitor.id)}
               aria-label={`Delete ${monitor.name}`}
               title={`Delete ${monitor.name}`}

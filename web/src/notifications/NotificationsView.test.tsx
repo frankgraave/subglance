@@ -647,8 +647,8 @@ describe("NotificationsView", () => {
     const del = screen.getByRole("button", {
       name: "Delete Slack On-call Slack",
     });
-    expect(del.className).toContain("inv-act--icon");
-    expect(del.className).toContain("inv-act--danger");
+    expect(del.className).toContain("icon-button");
+    expect(del.className).toContain("button--danger");
     // A glyph, not a word: the accessible name carries the verb, the face does not.
     expect((del.textContent ?? "").trim()).toBe("");
     expect(del.querySelector("svg")).not.toBeNull();
@@ -658,7 +658,7 @@ describe("NotificationsView", () => {
       "Disable Slack On-call Slack",
     ]) {
       const button = screen.getByRole("button", { name });
-      expect(button.className).toContain("inv-act--icon");
+      expect(button.className).toContain("icon-button");
       expect((button.textContent ?? "").trim()).toBe("");
     }
     /*
@@ -669,7 +669,7 @@ describe("NotificationsView", () => {
      */
     const test = container.querySelector(".nt-act-test")!;
     expect(test.textContent).toBe("Send test");
-    expect(test.className).not.toContain("inv-act--icon");
+    expect(test.className).not.toContain("icon-button");
   });
 
   it("reserves the width of the test button, whose label changes", () => {

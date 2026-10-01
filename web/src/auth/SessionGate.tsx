@@ -60,10 +60,10 @@ export function SessionGate({
               SubGlance is running in your browser, but the server behind it did
               not answer, so there is no way to tell whether you are signed in.
             </p>
-            <p className="auth-error" role="alert">
+            <p className="field-error" role="alert">
               {session.message}
             </p>
-            <button className="auth-submit" type="button" onClick={onRetry}>
+            <button className="button-solid" type="button" onClick={onRetry}>
               Try again
             </button>
           </div>

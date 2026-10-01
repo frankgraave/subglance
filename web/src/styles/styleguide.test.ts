@@ -223,6 +223,6 @@ describe("the living style guide", () => {
     expect(html).toContain('class="chip chip--status"');
     expect(html).toContain('class="led"');
     expect(html).toContain('class="segmented');
-    expect(html).toMatch(/inv-act inv-act--icon/);
+    expect(html).toContain('class="icon-button"');
   });
 });

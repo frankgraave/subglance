@@ -144,7 +144,7 @@
   gap: 0;
 }
 
-/* A panel that holds a form takes the form's own field gap (.auth-form), so
+/* A panel that holds a form takes the form's own field gap (.stack), so
    a lead paragraph, the fields and the list under them keep one rhythm. Set
    through Panel's `spacing` prop rather than by a card's class reaching into
    its panels, which is how one card's layout used to move others (SUB-171). */

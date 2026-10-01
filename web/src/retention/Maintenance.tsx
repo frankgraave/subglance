@@ -60,7 +60,7 @@ function LastPass({ pass }: { pass: RetentionPass }) {
   const notice = capNotice(pass.size_cap, pass.started_at);
   return <>
     {pass.error !== null
-      ? <p className="push-reveal-warn">The last pass failed: {pass.error}</p>
+      ? <p className="warn-note">The last pass failed: {pass.error}</p>
       : <p>{removed(pass)}</p>}
     {notice && <p>{notice}</p>}
     <dl className="panel-facts">
@@ -74,7 +74,7 @@ function LastPass({ pass }: { pass: RetentionPass }) {
 
 /*
  * Failures here wear the caveat style (a warn rail, `--ink` text), not the
- * form's `.auth-error`: its `--down` text measures under 4.5:1 on a card
+ * form's `.field-error`: its `--down` text measures under 4.5:1 on a card
  * panel (Retention.browser.test.ts). A failed pass is a caveat the reader
  * must not skim past, which is what that style is for.
  */
@@ -130,16 +130,16 @@ function RunNow({ data }: { data: Retention }) {
         : `A pass now would fold ${plural(impact.heartbeats, "raw heartbeat", "raw heartbeats")} into hourly summaries and delete ${plural(impact.hourly_buckets, "hourly summary", "hourly summaries")} and ${plural(impact.incidents, "resolved incident", "resolved incidents")}.`}
       {data.max_database_size.bytes > 0 && ` The ${formatBytes(data.max_database_size.bytes)} size limit may remove more; that depends on what the windows free, so it cannot be counted in advance.`}
     </p>}
-    {error && <p className="push-reveal-warn" role="alert">{error}</p>}
+    {error && <p className="warn-note" role="alert">{error}</p>}
     <div className="control-row">
       {asked
         ? <>
-          <button className="add-button" type="button" disabled={busy || !(ready || preview.isError)} onClick={() => void start()}>
+          <button className="button" type="button" disabled={busy || !(ready || preview.isError)} onClick={() => void start()}>
             {busy ? "Starting…" : "Start the pass"}
           </button>
-          <button className="add-button" type="button" disabled={busy} onClick={() => { setAsked(false); setError(null); }}>Cancel</button>
+          <button className="button" type="button" disabled={busy} onClick={() => { setAsked(false); setError(null); }}>Cancel</button>
         </>
-        : <button className="add-button" type="button" onClick={() => { setAsked(true); setError(null); }}>Run now…</button>}
+        : <button className="button" type="button" onClick={() => { setAsked(true); setError(null); }}>Run now…</button>}
     </div>
   </>;
 }
@@ -180,7 +180,7 @@ function Compact({ plan, canAdmin }: { plan: CompactPlan; canAdmin: boolean }) {
     : `The ${formatBytes(plan.size_bytes)} file never shrinks by itself (${formatBytes(plan.free_bytes)} of it is empty now): it predates the mode that hands deleted space back to the disk.`;
   return <Panel label="Database file" spacing="form">
     {last && (last.error !== null
-      ? <p className="push-reveal-warn">The last compaction failed: {last.error}</p>
+      ? <p className="warn-note">The last compaction failed: {last.error}</p>
       : <p>Compacted <When value={last.finished_at} /> in {formatDuration(last.duration_ms)}: {formatBytes(last.before_bytes)} to {formatBytes(last.after_bytes)}.
         {last.shrink_pending && " The file reaches that size at the next checkpoint."}</p>)}
     {plan.running ? <p role="status">Compacting the database. Checks keep running; their results are recorded when it finishes.</p>
@@ -191,9 +191,9 @@ function Compact({ plan, canAdmin }: { plan: CompactPlan; canAdmin: boolean }) {
             While it runs, which takes about {describeSeconds(plan.estimate_seconds)}, results wait and are recorded when it finishes.
             {plan.disk_shortfall && ` It needs ${formatBytes(plan.disk_shortfall.need_bytes)} free for the copy and the disk has ${formatBytes(plan.disk_shortfall.free_bytes)}, so it cannot run.`}
           </p>
-          {error && <p className="push-reveal-warn" role="alert">{error}</p>}
+          {error && <p className="warn-note" role="alert">{error}</p>}
           <div>
-            <button className="add-button" type="button" disabled={busy || plan.disk_shortfall !== null} onClick={() => void start()}>
+            <button className="button" type="button" disabled={busy || plan.disk_shortfall !== null} onClick={() => void start()}>
               {busy ? "Starting…" : "Compact database"}
             </button>
           </div>

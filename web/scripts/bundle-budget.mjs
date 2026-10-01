@@ -47,7 +47,7 @@ const budgets = {
    * It is stated rather than nudged, and it is the smaller half of the story:
    * the CSS budget was NOT raised for the same screen. The page wears
    * `.mon-detail`'s column, `Card`, `Drawer`, `Value`, `StateChip`, `Led`,
-   * `.add-button`, `.add-input` and `.mon-facet-select`, so the entire screen
+   * `.button`, `.input` and `.mon-facet-select`, so the entire screen
    * cost 0.4 kB of CSS and stayed under the 13 kB ceiling SUB-34 set. The
    * behaviour is where a management screen's weight actually lives.
    *
@@ -272,7 +272,7 @@ const budgets = {
    * screen: a row with seven columns, an inline-expanding detail with a
    * timeline and a code block, a cluster wrapper, and a day-grouped history —
    * after being made to reuse everything that already existed. The row borrows
-   * `Card`, `Panel`, `StatusChip`, `Value`, `Led` and `.add-button`; the screen
+   * `Card`, `Panel`, `StatusChip`, `Value`, `Led` and `.button`; the screen
    * wears the detail page's own column classes rather than declaring a second
    * copy; and the incident rules deleted from `detail.css` paid for part of it.
    *
