@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/frankgraave/subglance/internal/store"
 )
 
 // testCSS stands in for the built stylesheet: the unit suite must not depend
@@ -151,6 +153,20 @@ func TestRenderPrintsThePageFields(t *testing.T) {
 	}
 	if got := strings.Count(html, "<i data-s="); got != 5*HistoryDays {
 		t.Errorf("history bars = %d, want %d", got, 5*HistoryDays)
+	}
+}
+
+// TestRenderNeverPublishesAPerfectUptimeItDidNotMeasure follows a near-perfect
+// count from the history to the printed page: one confirmed-down check in
+// 20,001 must read 99.99%, because "100.00% uptime" beside a history bar that
+// shows the outage is the one number on a public page a reader trusts most.
+func TestRenderNeverPublishesAPerfectUptimeItDidNotMeasure(t *testing.T) {
+	p := previewPage(t, "allup")
+	p.Entries = p.Entries[:1]
+	p.Entries[0].Uptime90d = Uptime([]store.StatusHistoryHour{{Up: 20000, Down: 1}})
+	html := render(t, p)
+	if !strings.Contains(html, "99.99% uptime, 90 days") || strings.Contains(html, "100.00%") {
+		t.Errorf("one down check in 20,001 is not printed as 99.99%%")
 	}
 }
 

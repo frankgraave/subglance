@@ -5211,7 +5211,7 @@ components:
           type: boolean
         uptime_90d:
           type: [number, 'null']
-          description: Percentage over 90 days, maintenance excluded; `null` without data.
+          description: Percentage over 90 days, maintenance excluded, rounded down to two decimals so that 100 means no confirmed-down check; `null` without data.
         days:
           type: array
           description: One per day, oldest first, in the page's time zone.

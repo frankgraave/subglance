@@ -1,6 +1,7 @@
 package statuspage
 
 import (
+	"strconv"
 	"testing"
 	"time"
 
@@ -120,8 +121,30 @@ func TestUptimeCountsConfirmedChecksOnly(t *testing.T) {
 		t.Error("only uncounted checks: want nil")
 	}
 	got := Uptime([]store.StatusHistoryHour{{Up: 2, Down: 1, Warning: 50, Maintenance: 50}})
-	if got == nil || *got != 66.67 {
-		t.Errorf("uptime = %v, want 66.67", got)
+	if got == nil || *got != 66.66 {
+		t.Errorf("uptime = %v, want 66.66 (rounded down)", fmtUptime(got))
+	}
+}
+
+// TestUptimeNeverRoundsUpToPerfect pins that 100 means zero confirmed-down
+// checks. Rounding to nearest turned one down check in 20,001 (99.995%) into
+// "100.00% uptime" on a public page whose history bar shows the outage.
+func TestUptimeNeverRoundsUpToPerfect(t *testing.T) {
+	for _, c := range []struct {
+		up, down int
+		want     float64
+	}{
+		{up: 20000, down: 1, want: 99.99},
+		{up: 43117, down: 21, want: 99.95},
+		{up: 999999, down: 1, want: 99.99},
+		{up: 997, down: 3, want: 99.7},
+		{up: 5, down: 0, want: 100},
+		{up: 0, down: 4, want: 0},
+	} {
+		got := Uptime([]store.StatusHistoryHour{{Up: c.up, Down: c.down}})
+		if got == nil || *got != c.want {
+			t.Errorf("%d up, %d down: uptime = %s, want %v", c.up, c.down, fmtUptime(got), c.want)
+		}
 	}
 }
 
@@ -159,4 +182,13 @@ func TestOutagesKeepTheLastFourteenDaysNewestFirst(t *testing.T) {
 	if got[1].ResolvedAt == nil || got[1].DurationS != 2*24*3600 {
 		t.Errorf("resolved outage = %+v, want resolved, two days", got[1])
 	}
+}
+
+// fmtUptime prints an uptime pointer as its value, so a failure says the
+// number rather than an address.
+func fmtUptime(p *float64) string {
+	if p == nil {
+		return "nil"
+	}
+	return strconv.FormatFloat(*p, 'f', -1, 64)
 }

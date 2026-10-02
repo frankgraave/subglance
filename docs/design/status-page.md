@@ -44,7 +44,7 @@ Per entry, in the page's `entries` list (one per monitor on the page):
 | `name` | `status_page_entries.display_name` | Required. Never falls back to the internal name |
 | `status` | derived, see §1.3 | One of `up`, `degraded`, `down`, `no_data`, `not_monitored` |
 | `in_maintenance` | maintenance windows | Boolean only; the window's name is not shown |
-| `uptime_90d` | hourly rollup | Percentage, 2 decimals, `null` when there is no data |
+| `uptime_90d` | hourly rollup | Percentage, rounded down to 2 decimals (100 only with no confirmed-down check), `null` when there is no data |
 | `days` | hourly rollup | 90 entries, oldest first: `{ "date", "state", "down_minutes" }` |
 
 Page-level lists:

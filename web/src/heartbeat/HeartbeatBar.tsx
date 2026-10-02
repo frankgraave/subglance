@@ -20,6 +20,7 @@ import {
 } from "./model";
 import { Tooltip, type TooltipRow } from "../components/Tooltip";
 import { Chart } from "../components/Chart";
+import { floorPercent } from "../monitors/format";
 import type { ChipStatus } from "../components/Chip";
 import type { ReactNode } from "react";
 
@@ -491,7 +492,7 @@ export function HeartbeatBar({
   const pct =
     eligible.length === 0
       ? "—"
-      : `${((eligible.filter((b) => b.assessment === "up").length / eligible.length) * 100).toFixed(2)}%`;
+      : `${floorPercent((eligible.filter((b) => b.assessment === "up").length / eligible.length) * 100, 2)}%`;
 
   // The chrome states the window it is drawing, not the clock: a bar showing
   // yesterday's history must not label itself with now.

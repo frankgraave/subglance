@@ -59,7 +59,9 @@ describe("MonitorCardList", () => {
     // facts, so it is asserted by its pixels rather than by its table.
     expect(card.querySelector(".hb-track")).toBeTruthy();
     expect(within(card).queryByRole("table")).toBeNull();
-    expect(facts(card)).toEqual(["87 ms", "100%"]);
+    // 99.95 is a window with a confirmed outage in it, so it never reads
+    // "100%" (formatUptime rounds down).
+    expect(facts(card)).toEqual(["87 ms", "99.9%"]);
   });
 
   it("labels each number, because a card has no column header", () => {
