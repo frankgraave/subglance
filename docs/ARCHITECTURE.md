@@ -13,9 +13,9 @@
 | Migrations | Hand-rolled, embed.FS + transactions | See §3.1: an external library adds nothing here |
 | Frontend | React 19 + Vite + TypeScript | Richest ecosystem for exactly the UI quality this product needs |
 | Styling | Tailwind CSS v4 | Fast iteration, consistent design tokens |
-| Components | shadcn/ui (base, heavily customized) | A starting point, not an end point — it must not look like stock shadcn |
+| Components | Own components in `web/src/components`, no component library | Every control is drawn from the design tokens in `web/src/styles/tokens.css`, and the build fails on a value off the scale (`AGENTS.md`); a library's defaults would be one more source of values to override |
 | Animation | CSS transitions + the browser's View Transitions API | No animation library. Opening a monitor morphs its name into the page title through `document.startViewTransition` (`web/src/shell/viewTransition.ts`); browsers without it, and readers who ask for reduced motion, get the instant swap |
-| Charts | Custom SVG components, possibly visx | Off-the-shelf chart libs look generic; the heartbeat bar is the brand icon |
+| Charts | Custom SVG components, no chart library | Off-the-shelf chart libs look generic; the heartbeat bar is the brand icon |
 | State/data | TanStack Query | Caching, polling and optimistic updates |
 | Realtime | Server-Sent Events | Simpler than WebSockets and sufficient: traffic only goes one way |
 | Distribution | Frontend via `embed.FS` in the binary | One file contains the entire application |
@@ -182,33 +182,39 @@ nothing here.
 
 ## 4. API design
 
-Base: `/api/v1`. The OpenAPI spec is generated and shipped along with it.
+Base: `/api/v1`; the two probes are also served at the root, and `/metrics`
+only there. The OpenAPI spec, [`openapi.yaml`](openapi.yaml), is written by
+hand; a test compares it with the server's route table on every run, so a route
+missing from the spec, or a documented route that does not exist, fails the
+build. The list below is the core, and a test holds every line of it to the
+same route table; the spec has the rest (users, tokens, maintenance, routing
+rules, status pages, settings, backups, configuration files).
 
 ```
-GET    /monitors                list with current status
-POST   /monitors                create
-GET    /monitors/{id}
-PATCH  /monitors/{id}
-DELETE /monitors/{id}
-POST   /monitors/{id}/pause
-POST   /monitors/{id}/resume
-POST   /monitors/{id}/check     run immediately
-GET    /monitors/{id}/heartbeats?range=24h
-GET    /monitors/{id}/uptime?range=30d
-GET    /monitors/{id}/latency?window=7d  stepped series for the latency chart
+GET    /api/v1/monitors                  list with current status
+POST   /api/v1/monitors                  create
+GET    /api/v1/monitors/{id}
+PATCH  /api/v1/monitors/{id}
+DELETE /api/v1/monitors/{id}
+POST   /api/v1/monitors/{id}/pause
+POST   /api/v1/monitors/{id}/resume
+POST   /api/v1/monitors/{id}/check       run immediately
+GET    /api/v1/monitors/{id}/heartbeats  ?limit=100
+GET    /api/v1/monitors/{id}/uptime      ?window=30d
+GET    /api/v1/monitors/{id}/latency     ?window=7d, stepped series for the chart
 
-GET    /incidents               ?status=open|resolved
-GET    /incidents/{id}
-POST   /incidents/{id}/acknowledge
+GET    /api/v1/incidents                 open incidents
+GET    /api/v1/incidents/resolved        resolved incidents, paged
+POST   /api/v1/incidents/{id}/ack
 
-GET    /channels
-POST   /channels
-POST   /channels/{id}/test
+GET    /api/v1/channels
+POST   /api/v1/channels
+POST   /api/v1/channels/{id}/test
 
-GET    /stream                  Server-Sent Events, live updates
-GET    /health                  liveness of SubGlance itself
-GET    /ready                   readiness: can the database be reached?
-GET    /metrics                 operational counters, Prometheus text format
+GET    /api/v1/stream                    Server-Sent Events, live updates
+GET    /health                           liveness of SubGlance itself
+GET    /api/v1/ready                     readiness: can the database be reached?
+GET    /metrics                          operational counters, Prometheus text format
 ```
 
 **Liveness vs. readiness.** `/health` is deliberately dependency-free: it has
@@ -259,17 +265,18 @@ checkout where Node was never installed.
 ```
 web/
   src/
-    routes/          dashboard · monitor-detail · incidents · settings
-    components/
-      heartbeat-bar/    THE brand component — deserves its own attention
-      status-pill/
-      latency-chart/
-      command-menu/     cmd-K
-    lib/
-      api.ts            generated client from OpenAPI
-      stream.ts         SSE subscription
-    styles/
-      tokens.css        design tokens: color, spacing, timing
+    App.tsx           routes, drawn inside one page frame (components/Page.tsx)
+    shell/            masthead, sidebar, page toolbar, route table (pages.ts)
+    components/       shared building blocks: Card, Drawer, Menu, Chart, Choice…
+    heartbeat/        THE brand component — deserves its own attention
+    live/             the dashboard's data: first fetch, then the SSE stream
+    monitors/ incidents/ notifications/ settings/ statuspages/ …
+                      one folder per screen or settings card, each with its
+                      own api.ts of hand-written fetch helpers
+    commands/         the command menu (cmd-K)
+    api/http.ts       the one place a request leaves the app
+    styles/tokens.css design tokens: colour, type, spacing, size, motion
+    layout/           browser tests that measure the real build
 ```
 
 **Design principles** (settled together in the design phase before anything
@@ -285,38 +292,56 @@ gets built):
 
 - Passwords with argon2id
 - Rate limiting on login
-- All user-configurable URLs SSRF-filtered (no internal networks without explicit permission). The guard runs when a check or a notification is sent; it does not yet run when a notification channel is saved, so a channel pointed at a blocked address is refused at delivery rather than at save time
-- Notification configuration is stored as plain JSON in the database. It is masked in every API response, but it is not encrypted at rest — that is still open
+- All user-configurable URLs SSRF-filtered (no internal networks without explicit permission). The guard runs when a check or a notification is sent, and also when a notification channel is saved, so a channel pointed at a blocked address is refused on the form rather than at the first alert
+- Notification configuration is masked in every API response. It is stored as plain JSON unless `--secret-key` is set, which encrypts it at rest with AES-256-GCM; see [encrypting channel configuration](operations.md#encrypting-channel-configuration) and [SECURITY.md](../SECURITY.md)
 - CSRF token on cookie-based requests
 - Secure headers by default, no inline scripts
 
 ## 7. Build and distribution
 
 ```
-docker run -d -p 8080:8080 -v subglance:/data ghcr.io/frankgraave/subglance
+docker run -d -p 127.0.0.1:8080:8080 -v subglance:/data ghcr.io/frankgraave/subglance:edge
 ```
 
 That's all it takes. Multi-arch image (amd64 + arm64, because Raspberry Pis are
-a large part of this audience), built from `scratch` or `distroless`. Standalone
-binaries per platform with every release.
+a large part of this audience), built from distroless static. There is no
+`:latest` yet: `:edge` follows `develop`, and a release publishes its own
+version tag. Standalone binaries per platform, with signed checksums, with every
+release. [Installing SubGlance](installation.md) has the details.
 
 ## 8. Project structure
 
 ```
-cmd/subglance/        main
+cmd/
+  subglance/          main
+  seed/               fills a database with a demo estate (docs/seeding.md)
+  checkdemo/ statedemo/ loadtest/   development tools, not shipped
 internal/
   checker/            check implementations
   scheduler/          time wheel + worker pool
   state/              incidents, confirmation, flapping
+  monitor/            wires the store to the scheduler and the state engine
+  connectivity/       is the host itself offline?
   notifier/           channels, outbox, grouping
   store/              database, migrations, queries
-  api/                handlers, middleware, auth
-  config/
+  api/                handlers, middleware, route table
+  auth/               password hashing, sessions, API tokens
+  statuspage/         what a public status page may show
+  configfile/         YAML export and import
+  backup/             scheduled snapshots to S3-compatible storage
+  housekeeping/       the daily retention pass
+  watchdog/           pings an external dead man's switch
+  events/             in-process fan-out to the SSE stream
+  webui/              the embedded dashboard
+  config/ logging/ buildinfo/ datalock/ trustedproxy/
 web/                  frontend (built separately, embedded)
 docs/
 ```
 
-## 9. Open decisions
+## 9. Decisions that were open
 
-- [ ] sqlc vs. hand-written queries
-- [ ] Alert rules in the database or in code
+- [x] sqlc vs. hand-written queries: hand-written. `go.mod` has no sqlc, and
+  the queries live beside the types they fill in `internal/store`.
+- [x] Alert rules in the database or in code: in the database, as routing
+  rules (tag to channels, with per-monitor exclusions), editable over the API
+  and exported with the configuration file.

@@ -55,11 +55,12 @@ volume, so there is nothing else to run alongside it.
 > or an SSH tunnel, or drop the prefix as a deliberate choice once an
 > administrator exists.
 
-The image tags track branches rather than releases. `:edge` and `:develop` both
-follow the head of `develop` and will change under you; a short-SHA tag is
-published alongside them for pinning an exact build. Released versions are
-published as archives on the [releases page](https://github.com/frankgraave/subglance/releases)
-rather than as image tags, so pin the SHA if you need a fixed container.
+`:edge` and `:develop` both follow the head of `develop` and will change under
+you; a short-SHA tag such as `:sha-a1d74fc` is published alongside them for
+pinning an exact build. A release publishes its version as an image tag as
+well, such as `:0.1.0-rc4` (no `v`), next to the archives on the
+[releases page](https://github.com/frankgraave/subglance/releases). `:edge` has
+everything merged since the latest release; the README lists what that is.
 
 The image is `linux/amd64` and `linux/arm64`, built from
 [distroless static](https://github.com/GoogleContainerTools/distroless): no
@@ -150,7 +151,7 @@ Select-String subglance_VERSION_windows_amd64.zip SHA256SUMS
 ```
 
 > [!NOTE]
-> The newest published version is `v0.1.0-rc3`, a release candidate. It is a
+> The newest published version is `v0.1.0-rc4`, a release candidate. It is a
 > real, signed build with archives for all five platforms — but a candidate,
 > not v0.1: pin it deliberately rather than treating it as stable.
 
