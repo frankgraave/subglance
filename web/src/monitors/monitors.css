@@ -522,9 +522,29 @@
  * rather than receding further: an address you cannot read is not a quieter
  * address, it is a missing one.
  */
-.mon-target {
-  display: block;
+/*
+ * The line under the name: why it is down, then the address (SUB-194).
+ *
+ * The why is the failure kind in the incident row's chip, so the dashboard
+ * and the incident say it in the same words. It comes first and keeps its
+ * width; the address takes what is left and is the one that clips. A
+ * failure the server did not class shows its own message in the chip, and
+ * that one may clip as well rather than push the address out entirely.
+ *
+ * Name 20 + 2 + chip 22 is 44px, inside the row's 58, so a down row is the
+ * same height as every other row.
+ */
+.mon-sub {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
   margin-top: var(--space-0h);
+}
+
+.mon-target {
+  flex: 1 1 0;
+  min-width: 0;
   @apply face-mono;
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
@@ -542,15 +562,17 @@
   color: var(--ink);
 }
 
+/* Block rather than the chip's inline-flex, so a long unclassed message
+   ends in an ellipsis instead of overflowing. --ink-2 like the incident
+   row's chip: the lamp and the rail already say down in red, and the word is
+   here to say why. */
 .mon-error {
   display: block;
-  @apply face-sans;
-  font-size: var(--type-helper);
-  line-height: var(--lead-helper);
-  color: var(--down);
-  white-space: nowrap;
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: var(--ink-2);
 }
 
 /* The empty dashboard is the onboarding (DESIGN.md §7.6), so it gets real

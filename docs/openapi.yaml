@@ -5509,6 +5509,16 @@ components:
           description: |
             The most recent failure message; falls back to the open incident's
             last error when the heartbeat itself carried none.
+        failure_kind:
+          type: string
+          description: |
+            What kind of failure `error` describes, so a list can name it in
+            a few words: a FailureKind of the failing heartbeat, or
+            `local_network` when this host could reach none of its
+            connectivity targets either, or the open incident's cause when
+            `error` fell back to the incident's last error. Omitted when
+            `error` has no classification.
+          example: timeout
         incident_id:
           type: integer
           format: int64

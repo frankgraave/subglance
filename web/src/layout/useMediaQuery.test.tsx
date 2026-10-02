@@ -2,10 +2,11 @@
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  RAIL_VETO_MAX_WIDTH,
   SIDEBAR_VETO_MAX_WIDTH,
   useCompactViewport,
   useMediaQuery,
-  useSidebarSqueeze,
+  useRowsSqueeze,
 } from "./useMediaQuery";
 
 afterEach(() => {
@@ -77,7 +78,7 @@ describe("useMediaQuery", () => {
 
 /**
  * A `matchMedia` that answers `(max-width: N)` against a fixed width, so the
- * two queries `useSidebarSqueeze` asks get different answers the way a real
+ * queries `useRowsSqueeze` asks get different answers the way a real
  * viewport gives them.
  */
 function stubWidth(width: number) {
@@ -93,19 +94,24 @@ function stubWidth(width: number) {
 }
 
 function SqueezeProbe({ collapsed }: { collapsed: boolean }) {
-  return <span>{useSidebarSqueeze(collapsed) ? "squeezed" : "fits"}</span>;
+  return <span>{useRowsSqueeze(collapsed) ? "squeezed" : "fits"}</span>;
 }
 
-describe("useSidebarSqueeze (SUB-149)", () => {
+describe("useRowsSqueeze (SUB-149, SUB-194)", () => {
   it.each([
     // [viewport, sidebar collapsed, expected]
     [641, false, "squeezed"],
     [SIDEBAR_VETO_MAX_WIDTH, false, "squeezed"],
     [SIDEBAR_VETO_MAX_WIDTH + 1, false, "fits"],
-    // The rail leaves the column the row layout was designed into.
-    [641, true, "fits"],
+    // Beside the rail the column is 176px wider, so rows come back sooner,
+    // but not at 641: the name cell there was the same 86px as beside the
+    // sidebar at 820.
+    [641, true, "squeezed"],
+    [RAIL_VETO_MAX_WIDTH, true, "squeezed"],
+    [RAIL_VETO_MAX_WIDTH + 1, true, "fits"],
     // Below the breakpoint the phone veto owns the answer, not this one.
     [640, false, "fits"],
+    [640, true, "fits"],
   ] as const)("at %ipx, collapsed=%s: %s", (width, collapsed, expected) => {
     stubWidth(width);
     render(<SqueezeProbe collapsed={collapsed} />);

@@ -69,35 +69,58 @@ export const SIDEBAR_WIDTH = 232;
 export const RAIL_WIDTH = 56;
 
 /**
+ * What the rows table needs beside the navigation, in pixels (SUB-194).
+ *
+ * The table's four fixed columns are status 64, last checks 168, latency 104
+ * and 24h 104: 440px before the name gets anything. The name's floor is
+ * rung 4 (168px, the inventory's floor too) plus the cell's 24px of padding,
+ * and around the table sit the page's 48px of padding and the card's 14px of
+ * padding and border. `layout/dashboard-names.browser.test.ts` measures the
+ * name cell at the first width where rows come back, so these numbers cannot
+ * drift from the CSS unnoticed.
+ */
+export const ROWS_FIXED_COLUMNS = 440;
+export const ROWS_NAME_FLOOR = 168;
+export const ROWS_NAME_PADDING = 24;
+export const ROWS_CHROME = 48 + 14;
+
+/** The widest viewport at which the rows table is vetoed beside `nav`. */
+export function rowsVetoMaxWidth(nav: number): number {
+  return nav + ROWS_CHROME + ROWS_FIXED_COLUMNS + ROWS_NAME_PADDING + ROWS_NAME_FLOOR - 1;
+}
+
+/**
  * The widest viewport at which the expanded sidebar still vetoes the rows
- * layout: 816px (SUB-149).
+ * layout: 925px. Beside the rail it is 749px.
  *
  * The 640px breakpoint is a viewport width, but what decides whether five
  * facts fit on one line is the width of the content column beside the
- * navigation. Above 640px the navigation is always there, and the narrowest
- * column the row layouts were ever designed into is the one beside the
- * *rail*: 641 − 56 = 585. Beside the expanded sidebar the same 641px viewport
- * leaves 176px less, and the rows table scrolled the page 62px sideways.
+ * navigation. SUB-149 first extended the veto by the 176px the sidebar takes
+ * over the rail, to 816px, which stopped the table scrolling the page
+ * sideways but still let rows through with an 86px name cell: at 820px beside
+ * the sidebar 25 of the 26 demo names ended in an ellipsis, and beside the
+ * rail at 641px the cell was the same 86px. A row that fits by cutting the
+ * name to "Postgr…" has not fitted.
  *
- * So the veto extends by exactly the difference between the two, and rows
- * come back at the first width where the column beside the sidebar is
- * as wide as the one beside the rail at 641px — no new judgement about how
- * wide a row must be, only the existing one applied to the column instead of
- * the window.
+ * So the veto now holds until the name cell reaches its floor, whichever
+ * navigation is showing. Cards keep every fact the row shows, and wrap the
+ * name instead of cutting it.
  */
-export const SIDEBAR_VETO_MAX_WIDTH = COMPACT_MAX_WIDTH + SIDEBAR_WIDTH - RAIL_WIDTH;
+export const SIDEBAR_VETO_MAX_WIDTH = rowsVetoMaxWidth(SIDEBAR_WIDTH);
+export const RAIL_VETO_MAX_WIDTH = rowsVetoMaxWidth(RAIL_WIDTH);
 
 /**
- * True when the expanded sidebar leaves the content column too narrow for the
- * rows table, although the viewport is above the breakpoint.
+ * True when the content column beside the navigation is too narrow for the
+ * rows table to give a name its floor, although the viewport is above the
+ * breakpoint.
  *
- * Only the sidebar decides it: with the rail, every width above 640px has the
- * column the row layout was designed into. Both queries are subscribed to on
- * every render because hooks cannot be skipped; the sidebar only decides
- * whether the answer counts.
+ * Both queries are subscribed to on every render because hooks cannot be
+ * skipped; the sidebar only decides which one counts. Below the breakpoint
+ * the phone veto owns the answer.
  */
-export function useSidebarSqueeze(sidebarCollapsed: boolean): boolean {
+export function useRowsSqueeze(sidebarCollapsed: boolean): boolean {
   const narrow = useCompactViewport();
   const besideSidebar = useMediaQuery(`(max-width: ${SIDEBAR_VETO_MAX_WIDTH}px)`);
-  return !narrow && !sidebarCollapsed && besideSidebar;
+  const besideRail = useMediaQuery(`(max-width: ${RAIL_VETO_MAX_WIDTH}px)`);
+  return !narrow && (sidebarCollapsed ? besideRail : besideSidebar);
 }

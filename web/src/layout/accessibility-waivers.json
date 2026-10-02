@@ -144,7 +144,7 @@
     },
     {
       "rule": "color-contrast",
-      "selector": "tr[data-testid=\"monitor-row-1\"] > .mon-cell--name[scope=\"row\"] > .mon-target",
+      "selector": "tr[data-testid=\"monitor-row-1\"] > .mon-cell--name[scope=\"row\"] > .mon-sub > .mon-target",
       "scopes": [
         "light: dashboard rows",
         "dark: dashboard rows"
@@ -153,7 +153,7 @@
     },
     {
       "rule": "color-contrast",
-      "selector": "tr[data-testid=\"monitor-row-2\"] > .mon-cell--name[scope=\"row\"] > .mon-target",
+      "selector": "tr[data-testid=\"monitor-row-2\"] > .mon-cell--name[scope=\"row\"] > .mon-sub > .mon-target",
       "scopes": [
         "light: dashboard rows",
         "dark: dashboard rows"
@@ -162,7 +162,7 @@
     },
     {
       "rule": "color-contrast",
-      "selector": "tr[data-testid=\"monitor-row-4\"] > .mon-cell--name[scope=\"row\"] > .mon-target",
+      "selector": "tr[data-testid=\"monitor-row-4\"] > .mon-cell--name[scope=\"row\"] > .mon-sub > .mon-target",
       "scopes": [
         "light: dashboard rows",
         "dark: dashboard rows"
@@ -171,7 +171,7 @@
     },
     {
       "rule": "color-contrast",
-      "selector": "tr[data-testid=\"monitor-row-3\"] > .mon-cell--name[scope=\"row\"] > .mon-target",
+      "selector": "tr[data-testid=\"monitor-row-3\"] > .mon-cell--name[scope=\"row\"] > .mon-sub > .mon-target",
       "scopes": [
         "light: dashboard rows",
         "dark: dashboard rows"

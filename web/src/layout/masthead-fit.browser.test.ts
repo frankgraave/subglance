@@ -17,10 +17,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { chromium, type Browser, type Page } from "./harness/browser";
 import { serveBuild, type Server } from "./harness/server";
+import { RAIL_VETO_MAX_WIDTH } from "./useMediaQuery";
 
 const ROUTES = [
   // Rows or cards: beside the expanded sidebar the rows preference gives way
-  // to cards up to 816px (SUB-149), and this file walks both sides of that.
+  // to cards up to 925px (SUB-149, SUB-194), and this file walks both sides
+  // of that.
   { name: "dashboard", path: "/", ready: "[data-testid^='monitor-row-'], [data-testid^='monitor-card-']" },
   { name: "monitors", path: "/monitors", ready: ".inv-list > li" },
   { name: "incidents", path: "/incidents", ready: ".inc-line" },
@@ -147,24 +149,28 @@ describe.each(PAGE_WIDTHS)("page at %ipx", (width) => {
 });
 
 /*
- * The sidebar veto must not reach past the sidebar (SUB-149). Beside the rail
- * the column at 641px is 537px wide and the rows table fits, so rows is what
- * renders there — cards would be a veto with nothing to protect.
+ * Beside the collapsed rail the rows table comes back as soon as its name
+ * cell reaches the floor (SUB-149, SUB-194): at 750px, not at the 641px
+ * SUB-149 first allowed, where the table fitted only by cutting every name
+ * to a 59px cell. The first width that takes rows must not scroll sideways.
  */
-describe("beside the collapsed rail at 641px", () => {
-  it("keeps the rows layout and does not scroll sideways", async () => {
+describe("beside the collapsed rail", () => {
+  it.each([
+    [RAIL_VETO_MAX_WIDTH, 0],
+    [RAIL_VETO_MAX_WIDTH + 1, 1],
+  ])("at %ipx renders %i rows layout without scrolling sideways", async (width, rowsLayout) => {
     const page = await browser.newPage();
     try {
       await page.evaluateOnNewDocument(() => localStorage.setItem("subglance:sidebar", "collapsed"));
-      await page.setViewport({ width: 641, height: 800, deviceScaleFactor: 1 });
+      await page.setViewport({ width, height: 800, deviceScaleFactor: 1 });
       await page.goto(server.url + "/", { waitUntil: "domcontentloaded" });
-      await page.waitForSelector("[data-testid^='monitor-row-']", { timeout: 15_000 });
+      await page.waitForSelector("[data-testid^='monitor-row-'], [data-testid^='monitor-card-']", { timeout: 15_000 });
       await page.evaluate(() => document.fonts.ready.then(() => undefined));
       const seen = await page.evaluate(() => ({
-        cards: document.querySelectorAll("[data-testid^='monitor-card-']").length,
+        rows: document.querySelectorAll("[data-testid^='monitor-row-']").length > 0 ? 1 : 0,
         overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       }));
-      expect(seen).toEqual({ cards: 0, overflow: 0 });
+      expect(seen).toEqual({ rows: rowsLayout, overflow: 0 });
     } finally {
       await page.close();
     }

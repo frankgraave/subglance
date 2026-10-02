@@ -55,6 +55,8 @@ export type HeartbeatEvent = {
   latencyMs: number | null;
   statusCode?: number;
   error?: string;
+  /** The kind of a failed check's `error`, e.g. `timeout`. */
+  failureKind?: string;
   /**
    * Present only on a pass that left a confirmed incident open. The pass is
    * assessed `up` (it is not downtime), so this is the one thing that stops
@@ -71,6 +73,8 @@ export type StatusEvent = {
   /** The state engine's event name, e.g. "incident_confirmed". */
   event: string;
   error?: string;
+  /** The incident's cause, which classifies `error` the way a kind does. */
+  cause?: string;
 };
 
 export type LiveEvent = HelloEvent | PingEvent | LaggedEvent | HeartbeatEvent | StatusEvent;
@@ -141,6 +145,7 @@ export function parseEvent(type: string, data: string): LiveEvent | null {
         latencyMs: num(payload.latency_ms),
         statusCode: num(payload.status_code) ?? undefined,
         error: str(payload.error),
+        failureKind: str(payload.failure_kind),
         recovery: recoveryFromWire(payload.recovery),
       };
     }
@@ -153,6 +158,7 @@ export function parseEvent(type: string, data: string): LiveEvent | null {
         at: toUnixMs(str(body.at)) ?? Date.now(),
         event: str(payload.event) ?? "",
         error: str(payload.error),
+        cause: str(payload.cause),
       };
     }
     default:

@@ -68,10 +68,19 @@ describe("parseEvent", () => {
         frame({
           monitor_id: "9",
           at: "2026-09-11T08:31:00Z",
-          data: { event: "incident_confirmed", error: "500" },
+          data: { event: "incident_confirmed", error: "500", cause: "status" },
         }),
       ),
-    ).toMatchObject({ kind: "status", monitorId: "9", event: "incident_confirmed", error: "500" });
+    ).toMatchObject({ kind: "status", monitorId: "9", event: "incident_confirmed", error: "500", cause: "status" });
+  });
+
+  it("reads a failed heartbeat's kind", () => {
+    expect(
+      parseEvent(
+        "heartbeat",
+        frame({ monitor_id: 9, at: "2026-09-11T08:31:00Z", data: { ok: false, error: "x", failure_kind: "dns" } }),
+      ),
+    ).toMatchObject({ kind: "heartbeat", ok: false, error: "x", failureKind: "dns" });
   });
 });
 

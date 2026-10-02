@@ -180,7 +180,7 @@ contradicting the code. Two consequences, both deliberate:
 |---|---|
 | 2px `--down` leading edge | yes — it is a position as well as a hue |
 | sorted to the top under a counted **Needs attention (n)** heading | yes |
-| the failure reason printed in words where the latency would be | yes |
+| the failure kind printed in words under the name | yes |
 | the heartbeat bar: a failed check is drawn **full height** | yes |
 | the word `Down`, visible in the compact and card layouts | yes, in those layouts |
 | the word `Down`, `sr-only` in the rows layout | to assistive technology only |
@@ -1248,8 +1248,8 @@ being down. The 2px stay painted at a strength that reads as "was", not "is".
 
 **Never colour alone, after the drain as before it** (§9). Once the edge is
 desaturated a down row is still carried by its position (sorted to the top,
-under a counted **Needs attention (n)** heading), by the failure reason
-printed in words where the latency would be, by the full-height failed checks
+under a counted **Needs attention (n)** heading), by the failure kind
+printed in words under the name, by the full-height failed checks
 in the heartbeat bar, and by the status word itself — moved to the past tense,
 in the markup, so it reaches a screen reader too.
 
@@ -1430,11 +1430,27 @@ width. The stored preference is *not* rewritten when this happens — opening th
 dashboard on a phone must not change what the desktop shows tomorrow — and the
 toolbar shows the layout actually on screen rather than the overridden one.
 
-The same veto holds Rows (not Compact) beside the expanded sidebar up to 816px
-(SUB-149): 640 plus the 176px the sidebar takes over the rail, so Rows comes
-back at the first width where its column is as wide as the rail leaves at
-641px. Compact measured flush there and is left alone; with the rail collapsed
-nothing changes.
+The same veto holds Rows (not Compact) until its name has room: up to 925px
+beside the expanded sidebar and 749px beside the rail (SUB-149, SUB-194). The
+table's four fixed columns take 440px before the name gets any, so Rows comes
+back at the first width where the name cell reaches rung 4 (168px) inside its
+padding. SUB-149 first stopped at 816px, where the table no longer scrolled
+the page sideways but the name had 86px: 25 of the 26 demo names ended in an
+ellipsis, and the rail at 641px gave the same 86px. A row that fits by cutting
+the name has not fitted; Cards wrap it instead. Compact measured flush and is
+left alone.
+
+**A down row says why under its name** (SUB-194). The failure kind, in the
+incident row's chip and words (§8.6) — "connection refused", "timed out" —
+sits on the address's line, before the address, and its title holds the full
+error. The latency column keeps a latency: the error used to stand in for it,
+clipped to "unexpecte…" in 104px. A failure the server did not class shows
+its own message in the chip, which may clip; the full text is the first thing
+on the monitor's page. The row stays 58px, the same as an up row.
+`layout/dashboard-names.browser.test.ts` loads the seed estate at 820, 1024
+and 1440 beside either navigation and fails on a cut-off name, an error back
+in a number column, a cut-off kind, or rows that do not come back exactly
+where the name reaches its floor.
 
 **The counts are the status filter (SUB-65).** At 200 monitors the question is
 almost never "show me everything", it is "show me the two that are down" — and
@@ -2168,7 +2184,7 @@ Not an afterthought — several of the decisions above exist precisely for it.
   up row is no longer the edge's hue. It is:
   **(a)** position — down sorts to the top, under a **Needs attention (n)**
   heading that states the count in words;
-  **(b)** the failure reason, printed in words where the latency would be;
+  **(b)** the failure kind, printed in words under the name;
   **(c)** the status word itself, moved to the past tense (**Was down**) in
   the markup, which is what reaches a screen reader;
   **(d)** the heartbeat bar, which draws a failed check full height.
@@ -2210,8 +2226,8 @@ quietly taken:
   two of the five states and false of the three that matter.
 - **So the second signal for a sighted reader lives outside the cell.** For
   `down`, which is the case the rule exists for: position (sorted to the top,
-  under a counted **Needs attention (n)** heading), the failure reason printed
-  in words where the latency would be, and the heartbeat bar, where a failed
+  under a counted **Needs attention (n)** heading), the failure kind printed
+  in words under the name, and the heartbeat bar, where a failed
   check is drawn full height — a non-colour carrier §2.3 already names. For
   `pending`, `waiting` and `paused`: the 2px leading edge, solid for pending,
   dotted for paused (§3.1).
