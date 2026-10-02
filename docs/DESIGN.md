@@ -502,6 +502,15 @@ the utility binding therefore carry different names, exactly as `--canvas` and
 status codes. Numbers stacked in a column have to line up — otherwise you're not
 comparing them, you're reading them.
 
+**Uptime rounds down, never to nearest.** 21 confirmed-down checks out of
+43,138 is 99.951%, and to-nearest at one decimal prints that as "100%" — the
+reading people take to mean "never down", printed above the line that counts
+the outage. Every uptime figure (dashboard, detail windows, the heartbeat
+chart's headline, the public status page) is therefore floored at its
+precision, and "100%" appears only when no check in the window was confirmed
+down. `formatUptime` and `floorPercent` in `web/src/monitors/format.ts` and
+`Uptime` in `internal/statuspage/history.go` carry the rule.
+
 **A face is a configuration, not a family name.** Naming the family got the
 shapes and nothing else, so every property that decides how those shapes render
 was left to the browser or repeated per component. Each face is now defined once

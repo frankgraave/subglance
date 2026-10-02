@@ -383,6 +383,21 @@ describe("HeartbeatBar, framed", () => {
     );
   });
 
+  it("rounds the headline down, so it never claims more uptime than counted", () => {
+    // Two up, one down is 66.666…%: to nearest that is 66.67, a share that
+    // did not happen. Down, it is 66.66, and 100.00 stays reserved for no
+    // confirmed-down check at all.
+    render(
+      <HeartbeatBar
+        beats={beats(3, (i) => ({ ok: i !== 0, assessment: i !== 0 ? "up" : "down" }))}
+        label="API"
+        width={WIDTH}
+        framed
+      />,
+    );
+    expect(screen.getByTestId("chart-headline").textContent).toBe("66.66%");
+  });
+
   it("says so in words when there is nothing to divide", () => {
     // 0/0 is NaN%, and "NaN%" above an empty track reads as a crash rather
     // than as a monitor that has not run yet.

@@ -113,19 +113,25 @@ func Days(h History, now time.Time, loc *time.Location) []Day {
 }
 
 // Uptime returns the share of passing checks outside maintenance, rounded
-// to two decimals, or nil when there were none to count. It counts exactly
-// what the dashboard's uptime counts: confirmed-down checks against passing
-// ones, with unconfirmed failures and unassessed history left out.
+// down to two decimals, or nil when there were none to count. It counts
+// exactly what the dashboard's uptime counts: confirmed-down checks against
+// passing ones, with unconfirmed failures and unassessed history left out.
+//
+// Down, not to nearest: one confirmed-down check in 20,001 is 99.995%, and
+// rounding that to nearest publishes "100.00% uptime" on a page whose history
+// bar shows the outage. 100 is therefore reserved for zero down checks. The
+// division is done in whole hundredths of a percent, so no float noise can
+// nudge a value across a digit.
 func Uptime(hours []store.StatusHistoryHour) *float64 {
-	var up, down int
+	var up, down int64
 	for _, h := range hours {
-		up += h.Up
-		down += h.Down
+		up += int64(h.Up)
+		down += int64(h.Down)
 	}
 	if up+down == 0 {
 		return nil
 	}
-	pct := math.Round(float64(up)/float64(up+down)*100*100) / 100
+	pct := float64(up*10000/(up+down)) / 100
 	return &pct
 }
 

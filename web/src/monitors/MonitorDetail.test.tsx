@@ -182,6 +182,26 @@ describe("uptime windows", () => {
     expect(document.body.textContent).toContain("3 of 1000 confirmed down");
   });
 
+  it("does not print 100% above a count of confirmed-down checks", () => {
+    // The demo's "Marketing site": 21 of 43,138 down is 99.951%, which used
+    // to round to "100%" right above the line that counts the 21.
+    view({
+      windows: [
+        window_({
+          window: "30d",
+          total: 43_138,
+          up: 43_117,
+          down: 21,
+          uptime: (43_117 / 43_138) * 100,
+        }),
+      ],
+    });
+    const windows = document.querySelector(".mon-detail-windows");
+    expect(windows?.textContent).toContain("21 of 43138 confirmed down");
+    expect(windows?.textContent).toContain("99.9%");
+    expect(windows?.textContent).not.toContain("100%");
+  });
+
   it("renders an unknown uptime as unknown, never as 0%", () => {
     // A monitor created an hour ago has no 30d uptime. "0%" would read as a
     // month-long outage.
