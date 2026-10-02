@@ -619,7 +619,7 @@ describe("the status rail stops asserting when the stream dies", () => {
           if (!el) return { missing: true };
           const live = window.getComputedStyle(el).color;
           const down = window.getComputedStyle(document.documentElement)
-            .getPropertyValue(${JSON.stringify(layout === "compact" ? "--ink-2" : "--down")}).trim();
+            .getPropertyValue(${JSON.stringify(layout === "cards" ? "--down" : "--ink-2")}).trim();
           const ink3 = window.getComputedStyle(document.documentElement)
             .getPropertyValue("--ink-3").trim();
           screen.setAttribute("data-conn", "stale");
@@ -646,8 +646,10 @@ describe("the status rail stops asserting when the stream dies", () => {
           drain.missing,
           `no ${selector} in the ${layout} layout; the fixture must have a failing monitor`,
         ).toBe(false);
-        // Compact's nested panel needs ink-2 for AA (DESIGN.md §2.6); the
-        // other layouts keep status ink. All three must still drain to ink-3.
+        // Compact's nested panel needs ink-2 for AA (DESIGN.md §2.6), and the
+        // rows layout's cause is the incident row's chip, in its ink-2
+        // (SUB-194): the lamp and the rail say down in red, the word says
+        // why. Cards keep status ink. All three must still drain to ink-3.
         expect(
           drain.live,
           `${selector} must use its documented live ink role`,
@@ -672,8 +674,8 @@ describe("the status rail stops asserting when the stream dies", () => {
      *
      * The answer has to hold in greyscale and it has to hold for a screen
      * reader, so it is asserted as text rather than as pixels — the row's
-     * accessible name, and the visible failure reason printed where the
-     * latency would be. Both survive the drain untouched, because neither is
+     * accessible name, and the visible failure kind printed under the
+     * name (SUB-194). Both survive the drain untouched, because neither is
      * made of colour.
      */
     const page = await openDashboard(

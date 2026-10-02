@@ -561,3 +561,58 @@ describe("the status column has a visible header", () => {
     expect(first.querySelector(".sr-only")).toBeNull();
   });
 });
+
+/*
+ * A down row says why under its name, in the incident row's words, and keeps
+ * its latency column for a latency (SUB-194). The error used to stand in for
+ * the latency, clipped to "unexpecte…" in a 104px column.
+ */
+describe("a down row's cause", () => {
+  const down = (over: Partial<Monitor> = {}) =>
+    monitor("db", "down", {
+      latencyMs: null,
+      error: "dial tcp: connect: connection refused",
+      failureKind: "connection",
+      ...over,
+    });
+
+  it("names the failure kind under the name, with the full error as its title", () => {
+    render(<MonitorTable monitors={[down()]} beatWidth={WIDTH} />);
+    const row = screen.getByTestId("monitor-row-db");
+    const header = within(row).getByRole("rowheader");
+    const chip = header.querySelector(".mon-error") as HTMLElement;
+    expect(chip.textContent).toBe("connection refused");
+    expect(chip.title).toBe("dial tcp: connect: connection refused");
+    expect(chip.classList.contains("chip--state")).toBe(true);
+  });
+
+  it("leaves the number columns to numbers", () => {
+    render(<MonitorTable monitors={[down()]} beatWidth={WIDTH} />);
+    const row = screen.getByTestId("monitor-row-db");
+    const cells = row.querySelectorAll(".mon-cell--num");
+    expect(cells[0]!.textContent).toBe("—No latency data");
+    expect(row.querySelector(".mon-cell--num .mon-error")).toBeNull();
+  });
+
+  it("shows an unclassed failure's own message", () => {
+    render(<MonitorTable monitors={[down({ failureKind: undefined })]} beatWidth={WIDTH} />);
+    const chip = screen.getByTestId("monitor-row-db").querySelector(".mon-error") as HTMLElement;
+    expect(chip.textContent).toBe("dial tcp: connect: connection refused");
+  });
+
+  it("says nothing for a monitor that is not down", () => {
+    render(
+      <MonitorTable
+        monitors={[monitor("api", "warning", { error: "timeout", failureKind: "timeout" })]}
+        beatWidth={WIDTH}
+      />,
+    );
+    expect(screen.getByTestId("monitor-row-api").querySelector(".mon-error")).toBeNull();
+  });
+
+  it("redraws when only the kind changes", () => {
+    const { rerender } = render(<MonitorTable monitors={[down()]} beatWidth={WIDTH} />);
+    rerender(<MonitorTable monitors={[down({ failureKind: "timeout" })]} beatWidth={WIDTH} />);
+    expect(screen.getByTestId("monitor-row-db").querySelector(".mon-error")!.textContent).toBe("timed out");
+  });
+});

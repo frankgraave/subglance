@@ -114,6 +114,9 @@ export function applyHeartbeat(monitors: readonly Monitor[], e: HeartbeatEvent):
     latencyMs: e.latencyMs,
     lastCheck: e.at,
     error: e.ok ? undefined : e.error,
+    // The kind belongs to this error, so it is replaced with it, never kept
+    // from an earlier failure that said something else.
+    failureKind: e.ok ? undefined : e.failureKind,
     beats: [...m.beats, {
       ts: e.at,
       ok: e.ok,
@@ -146,5 +149,9 @@ export function applyStatus(monitors: readonly Monitor[], e: StatusEvent): Monit
     // definition; keeping the pause is the safer of the two wrong answers.
     status: m.status === "paused" ? "paused" : status,
     error: status === "up" ? undefined : (e.error ?? m.error),
+    // Only with its own error: a cause without one would relabel a message
+    // it was not sent with.
+    failureKind:
+      status === "up" ? undefined : e.error !== undefined ? e.cause : m.failureKind,
   }));
 }

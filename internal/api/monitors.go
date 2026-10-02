@@ -54,6 +54,13 @@ type monitorResponse struct {
 	StatusCode int        `json:"status_code,omitempty"`
 	Error      string     `json:"error,omitempty"`
 
+	// FailureKind classifies Error: the checker's kind of the failing
+	// heartbeat, or the open incident's cause when Error came from the
+	// incident. It is what lets a list name the failure in a few words and
+	// leave the full message to the monitor's page. Omitted whenever Error
+	// has no classification, including on a passing check.
+	FailureKind string `json:"failure_kind,omitempty"`
+
 	// IncidentID and IncidentSince describe the open incident, if any. They
 	// let the UI link straight from a red row to the incident without a
 	// second round trip.
@@ -955,6 +962,9 @@ func (s *Server) describeMonitor(r *http.Request, m store.Monitor) monitorRespon
 		resp.LatencyMS = hb.LatencyMS
 		resp.StatusCode = hb.StatusCode
 		resp.Error = hb.Error
+		if !hb.OK {
+			resp.FailureKind = hb.FailureKind
+		}
 	case errors.Is(err, sql.ErrNoRows):
 		// Never checked yet.
 		resp.Status = "pending"
@@ -980,7 +990,10 @@ func (s *Server) describeMonitor(r *http.Request, m store.Monitor) monitorRespon
 			}
 		}
 		if resp.Error == "" {
+			// The kind travels with the message it classifies, so a
+			// fallback error never wears the heartbeat's kind or none.
 			resp.Error = inc.LastError
+			resp.FailureKind = inc.Cause
 		}
 	case errors.Is(err, store.ErrNoOpenIncident):
 		// Nothing wrong.

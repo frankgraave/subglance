@@ -114,6 +114,11 @@ describe("fromApi", () => {
   it("carries the failure reason through", () => {
     expect(fromApi(api({ status: "down", error: "502 Bad Gateway" })).error).toBe("502 Bad Gateway");
   });
+
+  it("carries the failure kind with it, and leaves an absent one absent", () => {
+    expect(fromApi(api({ status: "down", error: "502", failure_kind: "status" })).failureKind).toBe("status");
+    expect(fromApi(api({ status: "down", error: "502" })).failureKind).toBeUndefined();
+  });
 });
 
 describe("fromApi tags", () => {

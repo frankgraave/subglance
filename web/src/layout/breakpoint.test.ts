@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   COMPACT_MAX_WIDTH,
+  RAIL_VETO_MAX_WIDTH,
   RAIL_WIDTH,
   SIDEBAR_VETO_MAX_WIDTH,
   SIDEBAR_WIDTH,
@@ -39,14 +40,15 @@ describe("the breakpoint", () => {
     for (const width of widths) expect(width).toBe(COMPACT_MAX_WIDTH);
   });
 
-  // The sidebar veto (SUB-149) is computed from two widths the shell's grid
-  // track takes from tokens.css. A copy in TypeScript that drifted from the
-  // token would move the veto without anyone touching it.
+  // The rows veto (SUB-149, SUB-194) is computed from two widths the shell's
+  // grid track takes from tokens.css. A copy in TypeScript that drifted from
+  // the token would move the veto without anyone touching it.
   it("takes the sidebar and rail widths from the tokens the shell uses", () => {
     const tokens = readFileSync(join(here, "..", "styles", "tokens.css"), "utf8");
     const px = (name: string) => Number(new RegExp(`${name}:\\s*(\\d+)px`).exec(tokens)?.[1]);
     expect(px("--size-sidebar")).toBe(SIDEBAR_WIDTH);
     expect(px("--size-rail")).toBe(RAIL_WIDTH);
-    expect(SIDEBAR_VETO_MAX_WIDTH).toBe(816);
+    expect(SIDEBAR_VETO_MAX_WIDTH).toBe(925);
+    expect(RAIL_VETO_MAX_WIDTH).toBe(749);
   });
 });

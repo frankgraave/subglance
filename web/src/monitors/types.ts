@@ -85,6 +85,12 @@ export type Monitor = {
   lastCheck: number | null;
   /** Failure reason for the last check, when there was one. */
   error?: string;
+  /**
+   * What kind of failure `error` is — the server's `failure_kind`, such as
+   * `timeout` or `status` — so a list can say it in a few words (SUB-194).
+   * Absent whenever `error` is, and for a failure the server did not class.
+   */
+  failureKind?: string;
   /** Set only while `status` is `recovering`: how far the streak has got. */
   recovery?: Recovery;
   /**
@@ -169,6 +175,8 @@ export type ApiMonitor = {
   latency_ms?: number | null;
   status_code?: number;
   error?: string;
+  /** The kind of `error`; absent when `error` is or has no class. */
+  failure_kind?: string;
   incident_id?: string;
   incident_since?: string;
   uptime_24h?: number | null;
@@ -341,6 +349,7 @@ export function fromApi(api: ApiMonitor): Monitor {
     lastCheck: toUnixMs(api.last_check),
     createdAt: toUnixMs(api.created_at),
     error: api.error,
+    failureKind: api.failure_kind || undefined,
     // The streak only for a monitor the server says is recovering.
     recovery:
       api.enabled && api.status === "recovering"

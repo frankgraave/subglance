@@ -1,5 +1,6 @@
 import { memo } from "react";
 import { HeartbeatBar } from "../heartbeat/HeartbeatBar";
+import { causeWords } from "../incidents/story";
 import { describeTarget, formatLatency, formatUptime } from "./format";
 import { Led } from "./Led";
 import { MonitorLink } from "./MonitorLink";
@@ -49,6 +50,11 @@ function MonitorRowImpl({
   stale = false,
 }: MonitorRowProps) {
   const { name, status, latencyMs, uptime24h, beats, error } = monitor;
+  // The why, said short: the failure kind in the words the incident row uses.
+  // A failure the server did not class falls back to its own message, which
+  // the chip clips; the full message is in the title and on the monitor's page.
+  const cause =
+    status === "down" && error ? (causeWords(monitor.failureKind) ?? error) : null;
 
   return (
     <tr
@@ -74,8 +80,7 @@ function MonitorRowImpl({
        * instead: the heartbeat bar's height, which §2.3 already names as a
        * non-colour carrier (a failed check is drawn full height), plus, for
        * `down`, the row's position under a counted "Needs attention (n)"
-       * heading and the failure reason printed in words where the latency
-       * would be.
+       * heading and the failure kind printed in words under the name.
        */}
       <td className="mon-cell mon-cell--led">
         <Led status={status} stale={stale} recovery={monitor.recovery} />
@@ -91,7 +96,24 @@ function MonitorRowImpl({
           onOpen={onOpen}
           className="mon-name"
         />
-        <span className="mon-target">{describeTarget(monitor)}</span>
+        {/*
+         * A down monitor says why on the line under its name (SUB-194), as
+         * the failure kind in the chip the incident row uses, and keeps its
+         * latency column for a latency. The error used to stand in for the
+         * latency, clipped to "unexpecte…" in a 104px column, while the
+         * kind that says the same thing in three words never reached the
+         * dashboard. The full message is the chip's title here and the
+         * first thing on the monitor's page; it is not repeated in the row
+         * header, which a screen reader reads again on every cell.
+         */}
+        <span className="mon-sub">
+          {cause === null ? null : (
+            <span className="chip chip--state mon-error" title={error}>
+              {cause}
+            </span>
+          )}
+          <span className="mon-target">{describeTarget(monitor)}</span>
+        </span>
       </th>
 
       <td className="mon-cell mon-cell--beats">
@@ -113,13 +135,7 @@ function MonitorRowImpl({
       </td>
 
       <td className="mon-cell mon-cell--num">
-        {status === "down" && error ? (
-          // A failed check has no latency to report, so the column carries the
-          // reason instead — colour plus text, never colour alone (§2.3).
-          <span className="mon-error" title={error}>
-            {error}
-          </span>
-        ) : latencyMs === null ? (
+        {latencyMs === null ? (
           <Unknown what="latency" />
         ) : (
           formatLatency(latencyMs)
@@ -166,6 +182,7 @@ export const MonitorRow = memo(MonitorRowImpl, (prev, next) => {
     a.latencyMs === b.latencyMs &&
     a.uptime24h === b.uptime24h &&
     a.error === b.error &&
+    a.failureKind === b.failureKind &&
     a.lastCheck === b.lastCheck &&
     a.beats.length === b.beats.length &&
     // Beats are append-only and oldest-first, so the newest timestamp is a

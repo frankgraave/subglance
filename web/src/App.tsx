@@ -31,7 +31,7 @@ import { Topbar } from "./shell/Topbar";
 import { useShellPreferences } from "./shell/useShellPreferences";
 import { useShellShortcuts } from "./shell/useShortcuts";
 import { effectiveLayout } from "./shell/preferences";
-import { useCompactViewport, useSidebarSqueeze } from "./layout/useMediaQuery";
+import { useCompactViewport, useRowsSqueeze } from "./layout/useMediaQuery";
 
 /**
  * The application shell.
@@ -154,10 +154,10 @@ export default function App() {
   /*
    * Two widths, two questions. `narrow` decides where the navigation lives
    * (rail or drawer) and is a viewport fact. Whether the rows table fits is a
-   * fact about the content column, which the expanded sidebar makes 176px
-   * narrower than the rail does (SUB-149).
+   * fact about the content column, which the navigation beside it decides
+   * (SUB-149, SUB-194).
    */
-  const squeezed = useSidebarSqueeze(sidebarCollapsed);
+  const squeezed = useRowsSqueeze(sidebarCollapsed);
   const shown = effectiveLayout(layout, narrow, squeezed);
   const onDetail = route.name === "monitor";
   const onIncidents = route.name === "incidents";

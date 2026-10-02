@@ -51,6 +51,18 @@ describe("applyHeartbeat", () => {
     expect(m.error).toBe("timeout");
   });
 
+  it("replaces the failure kind with the error it classifies", () => {
+    // The kind belongs to one error: a later failure without a kind must not
+    // keep the earlier failure's words, and a pass clears both.
+    const down = monitor({ status: "down", error: "500", failureKind: "status" });
+    const [timedOut] = applyHeartbeat([down], beat({ ok: false, error: "deadline", failureKind: "timeout" }));
+    expect(timedOut).toMatchObject({ error: "deadline", failureKind: "timeout" });
+    const [unclassed] = applyHeartbeat([timedOut], beat({ ok: false, error: "odd" }));
+    expect(unclassed.failureKind).toBeUndefined();
+    const [passed] = applyHeartbeat([timedOut], beat({ ok: true }));
+    expect(passed.failureKind).toBeUndefined();
+  });
+
   it("keeps a confirmed outage red until the incident resolves", () => {
     // One passing check is not a recovery: the server waits for the recovery
     // threshold and then sends `incident_resolved`. Going green on the pass
@@ -93,6 +105,16 @@ describe("applyStatus", () => {
       status: "down",
       error: "500",
     });
+  });
+
+  it("takes the incident's cause with its error, and only with it", () => {
+    const [confirmed] = applyStatus([monitor()], status({ error: "refused", cause: "connection" }));
+    expect(confirmed).toMatchObject({ error: "refused", failureKind: "connection" });
+    // A frame with no error keeps the error it had, and so its kind.
+    const kept = monitor({ status: "warning", error: "500", failureKind: "status" });
+    expect(applyStatus([kept], status({ cause: "timeout" }))[0]).toMatchObject({ error: "500", failureKind: "status" });
+    const [resolved] = applyStatus([confirmed], status({ event: "incident_resolved" }));
+    expect(resolved.failureKind).toBeUndefined();
   });
 
   it("clears the error on recovery", () => {
