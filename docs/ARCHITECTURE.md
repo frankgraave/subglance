@@ -182,7 +182,7 @@ nothing here.
 
 ## 4. API design
 
-Base: `/api/v1`; the two probes are also served at the root, and `/metrics`
+Base: `/api/v1`; the liveness probe is also served at the root, and `/metrics`
 only there. The OpenAPI spec, [`openapi.yaml`](openapi.yaml), is written by
 hand; a test compares it with the server's route table on every run, so a route
 missing from the spec, or a documented route that does not exist, fails the
@@ -220,12 +220,13 @@ GET    /metrics                          operational counters, Prometheus text f
 **Liveness vs. readiness.** `/health` is deliberately dependency-free: it has
 to answer even when the database is unhappy, because an orchestrator uses it to
 decide whether the process should be restarted — and restarting doesn't fix a
-sick database. `/ready` does check the dependencies. So `/health` 200 with
-`/ready` 503 means: leave this process alone, but don't send it traffic yet.
+sick database. `/api/v1/ready` does check the dependencies. So `/health` 200
+with `/api/v1/ready` 503 means: leave this process alone, but don't send it
+traffic yet.
 
 **Why `/metrics` is authenticated when the two probes are not.** Neither probe
 distinguishes the failure that matters most: when the disk fills, `/health`
-answers 200 because the process is alive and `/ready` answers 200 because a
+answers 200 because the process is alive and `/api/v1/ready` answers 200 because a
 read-only SQLite database still answers a ping, while every heartbeat write
 fails. `/metrics` is where that becomes a number
 (`subglance_heartbeat_write_failures_total`) — but it also publishes how many

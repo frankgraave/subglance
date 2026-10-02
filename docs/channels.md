@@ -240,9 +240,12 @@ version may add one.
 When monitors fail inside one grouping window, the channel receives a single
 alert. `grouped_names` lists every monitor, oldest failure first, and
 `grouped_cause` is the cause when they all agree. `members` holds each
-monitor's own alert in the shape above. The top-level fields repeat the first
-member's, except `monitor_id`, which is 0, because the alert is about more than
-one monitor. A quiet-hours digest also lists its alerts in `members`.
+monitor's own alert in the shape above. At the top level, `event`, `at`,
+`started_at`, `incident_id`, `monitor_name`, `monitor_type` and `target` repeat
+the first member's, and `monitor_id` is 0 since the alert is about more than one
+monitor. `cause`, `last_error` and `reminder_count` are not set at the top
+level: read each monitor's failure from its entry in `members`. A quiet-hours
+digest also lists its alerts in `members`.
 
 `started_at` is `0001-01-01T00:00:00Z` when there is no outage behind the
 message: the **Send test** button, a backup notice and a digest. The test

@@ -50,15 +50,28 @@ func TestArchitectureRoutesAreServed(t *testing.T) {
 		served[routeKey(rt)] = true
 	}
 
-	line := regexp.MustCompile(`(?m)^(GET|POST|PUT|PATCH|DELETE)\s+(/\S*)`)
-	found := line.FindAllStringSubmatch(block, -1)
-	if len(found) == 0 {
-		t.Fatalf("%s §4 lists no endpoints; the check is broken", architecturePath)
-	}
-	for _, m := range found {
+	// Every non-empty line of the block must be an endpoint. A line this
+	// pattern does not recognise is reported rather than skipped: a skipped
+	// line is a route nobody checked.
+	line := regexp.MustCompile(`^([A-Z]+)\s+(/\S+)(\s.*)?$`)
+	found := 0
+	for _, raw := range strings.Split(block, "\n") {
+		text := strings.TrimSpace(raw)
+		if text == "" {
+			continue
+		}
+		found++
+		m := line.FindStringSubmatch(text)
+		if m == nil {
+			t.Errorf("%s §4 has a line that is not an endpoint: %q", architecturePath, text)
+			continue
+		}
 		path, _, _ := strings.Cut(m[2], "?")
 		if key := m[1] + " " + path; !served[key] {
 			t.Errorf("%s §4 lists %s, which the server does not serve", architecturePath, key)
 		}
+	}
+	if found == 0 {
+		t.Fatalf("%s §4 lists no endpoints; the check is broken", architecturePath)
 	}
 }
