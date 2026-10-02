@@ -20,6 +20,17 @@
  * copy of a signal the markup already carries (DESIGN.md §2.3).
  */
 
+/*
+ * The list and its header row (SUB-194). The wrapper is the container the
+ * one-line layout below is keyed to: the header sits outside the list, so it
+ * cannot ask the list how wide it is. The two are the same width, because
+ * the wrapper has no padding or edge of its own.
+ */
+.inv-table { container: inv-table / inline-size; }
+
+/* Drawn only on one line; a wrapped row shows each column's own legend. */
+.inv-head { display: none; }
+
 .inv-list {
   display: flex;
   flex-direction: column;
@@ -176,11 +187,25 @@
 
    type takes rung 2 (64): its widest label, "TYPE", is 56px. num, chan and
    tags take rung 3 (104): 83, 87 and — tags being data — the rung that holds
-   the longest label rather than the longest value, which truncates. */
-.inv-col--type { width: var(--size-col-2); }
-.inv-col--num { width: var(--size-col-3); justify-items: end; }
-.inv-col--chan { width: var(--size-col-3); }
-.inv-col--tags { width: var(--size-col-3); }
+   the longest label rather than the longest value, which truncates.
+
+   Timeout gave its rung back (SUB-194). The legends are in the caps legend
+   role now and measure 28 to 56px in the shipped face, so a label no longer
+   sets a width; the values do. A timeout is 1 to 120 seconds and
+   `formatDuration` floors it to whole minutes, so the widest it can print is
+   "2 min", and a push monitor's "n/a" is narrower still: rung 2 holds every
+   value the column can show. Every stays on rung 3, because an interval runs
+   to a day and "23 h 59 min" is 11 characters. The 40px go to the name.
+
+   Each header cell takes its column's width from the same rule, so a legend
+   cannot drift off the values under it. */
+.inv-col--type, .inv-hcol--type { width: var(--size-col-2); }
+.inv-col--num { justify-items: end; }
+.inv-hcol--num { text-align: right; }
+.inv-col--every, .inv-hcol--every { width: var(--size-col-3); }
+.inv-col--timeout, .inv-hcol--timeout { width: var(--size-col-2); }
+.inv-col--chan, .inv-hcol--chan { width: var(--size-col-3); }
+.inv-col--tags, .inv-hcol--tags { width: var(--size-col-3); }
 
 .inv-label { @apply caps-legend; }
 
@@ -215,6 +240,82 @@
 .inv-paused-chip { margin-left: var(--space-2); vertical-align: middle; }
 
 /*
+ * Wide enough for one line: the name and the address come first (SUB-194).
+ *
+ * The row used to be one flex line, and everything on it was a fixed width
+ * except the name and target, which shared what was left: 86px beside the
+ * 860px measure for someone who can edit, so most names and every address
+ * ended in an ellipsis while the fixed columns stood half empty.
+ *
+ * Now it is two lines on a grid. The name shares the first line with the
+ * settings columns, and the address shares the second with the row's
+ * actions, spanning under the columns. The name gets the whole row less the
+ * columns — 260px at the widest list for someone who can edit, 250 at the
+ * wrap — and the address the whole row less the actions, 626px. A viewer's
+ * row has neither box nor actions: 288 and 776. The header row above
+ * the list names the columns once, so a row no longer repeats them; their
+ * legends stay in the row, visually hidden, as each value's spoken name.
+ *
+ * `.inv-main` lets go of its box (`display: contents`) so the name and the
+ * address can sit on different tracks. It is a plain `div` with no role, so
+ * nothing is lost to assistive technology by flattening it.
+ *
+ * The selection box is a track only where there is one: a viewer's row has
+ * no box, and an empty track would still take a gap.
+ */
+@container inv-table (width >= 836px) {
+  .inv-head {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
+    /* The row's padding and edge, so the header's columns end where the
+       row's do. */
+    padding: 0 calc(var(--space-3) + 1px) var(--space-1h);
+  }
+  .inv-head > span {
+    @apply caps-legend;
+    flex: none;
+  }
+
+  .inv-line {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "led name meta meta"
+      ".   sub  sub  acts";
+    align-items: center;
+    /* The address sits directly under the name, as it did in the one cell
+       they shared; the base rule's gap is for the flex line. */
+    gap: 0 var(--space-3);
+  }
+  .inv-line:has(> .choice) {
+    grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "box led name meta meta"
+      ".   .   sub  sub  acts";
+  }
+  .inv-line > .choice { grid-area: box; }
+  .inv-led { grid-area: led; }
+  .inv-main { display: contents; }
+  .inv-name { grid-area: name; }
+  .inv-sub { grid-area: sub; }
+  .inv-meta { grid-area: meta; justify-self: end; }
+  .inv-acts { grid-area: acts; }
+
+  /* One track: the legend is out of the flow, so the value is the cell. */
+  .inv-col { grid-template-rows: var(--size-row-sm); position: relative; }
+  .inv-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/*
  * Too narrow for one line: the settings columns stop pretending to be a table
  * and wrap under the name. The page itself never scrolls sideways — that
  * lesson is already in incidents.css — so nothing here keeps a fixed width
@@ -234,23 +335,14 @@
  * that the one-line row would squeeze the name to a sliver before it
  * overflowed; wrapping gives it the full width instead.
  *
- * That floor is a viewer's, and a viewer has more than it: a viewer's row has
- * no actions, so its name is 226px wide at the wrap. Someone who can edit
- * (an admin or an editor) gets the actions and a selection box as well, and
- * the box — 16px drawn and a 12px gap — comes out of the same 104. Their
- * floor is 76px: at the wrap, and 86px at the widest the list gets (846px,
- * the screen's 860px measure less the card's padding and edges). Measured in
- * Chromium (SUB-170), and asserted in `masthead-fit.browser.test.ts`.
- *
- * 76 is accepted rather than moved up to 104, for three reasons. The floor
- * exists to stop the name collapsing to nothing, as it did at 14px before
- * the wrap (SUB-149); 76px still holds about ten characters before the
- * ellipsis, and the whole name is the link's text for a screen reader and
- * one click away. A wrap of its own for writers would mean this block twice,
- * under a second container name, because a container condition cannot be a
- * variable. And that wrap would sit at 864px, above the widest the list ever
- * gets: a writer's row would never be on one line again at any window width,
- * which trades a narrower name for losing the columns altogether.
+ * That arithmetic was for the single flex line, where the name shared its
+ * width with the address and every column. Since SUB-194 the wide row is the
+ * two-line grid above, and the name has the line less the settings columns:
+ * 250px at the wrap for someone who can edit, 278px for a viewer, measured in
+ * Chromium and held at rung 4 (168px) by `masthead-fit.browser.test.ts`. The
+ * wrap stays at 836px because the second line has to hold the address beside
+ * the four actions, and below it the wrapped row gives the name the full
+ * width anyway.
  *
  * `min-width: 0` on the wrapped meta row is the other half. Its automatic
  * minimum is the min-content of its widest column, and the tags column's is
@@ -294,7 +386,8 @@
     min-width: 0;
   }
   .inv-col--type,
-  .inv-col--num,
+  .inv-col--every,
+  .inv-col--timeout,
   .inv-col--chan,
   .inv-col--tags { width: auto; }
   /* A track is not a column of numbers to compare down; start-aligned like

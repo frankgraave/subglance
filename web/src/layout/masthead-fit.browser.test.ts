@@ -177,44 +177,39 @@ describe("beside the collapsed rail at 641px", () => {
  * the sidebar drew every name 14px wide: no overflow, and no way to tell the
  * rows apart.
  *
- * The floor is rung 3 (104px), the one the container rungs are built from,
- * for a row whose name has the room to itself. A row with a selection box
- * (the inventory, for someone who can edit) gives the box 16px and a gap out
- * of that rung, so its name cell is held to 76px: what it measures at the
- * 836px wrap. That is the floor `inventory.css` states and argues for
- * (SUB-170). Until then this check added the box's width to the name's and
- * asserted 104 of the sum, which held while the link itself was 76px wide.
+ * A channel row's floor is rung 3 (104px), the one the container rungs are
+ * built from. The inventory's is rung 4 (168px), for every role (SUB-194):
+ * on one line its name no longer shares a line with the address and gets the
+ * row less the settings columns, 250px at the 836px wrap for someone with a
+ * selection box and four actions, and wrapped it has the full width. Until
+ * then the inventory's floor was 76px beside a selection box, which is what
+ * the name measured at the wrap (SUB-170).
  *
- * Measured on the name cell, `.inv-main`, which is the width a name gets
+ * Measured on the name itself, `.inv-name`, which is the width a name gets
  * before its ellipsis: the link inside it is only as wide as its own text, so
- * a short name would read as a narrow floor.
+ * a short name would read as a narrow floor. (Not `.inv-main`: on one line it
+ * lets go of its box so the name and address can sit on different tracks.)
  *
  * 1130 is the narrowest window where the inventory row is still on one line
  * beside the expanded sidebar: the list is exactly 836px there, so the name
- * cell is measured where it is tightest rather than somewhere near it.
+ * is measured where it is tightest rather than somewhere near it.
  */
 const LIST_ROUTES = ROUTES.filter((route) => route.name === "monitors" || route.name === "notifications");
-const NAME_FLOOR = 104;
-const NAME_FLOOR_BESIDE_BOX = 76;
+const NAME_FLOOR: Record<string, number> = { monitors: 168, notifications: 104 };
 
 describe.each([641, 700, 901, 960, 1040, 1100, 1130, 1440])("list rows at %ipx", (width) => {
   it.each(LIST_ROUTES)(
-    `keep every name at least ${NAME_FLOOR}px wide, ${NAME_FLOOR_BESIDE_BOX}px beside a selection box, on $name`,
+    "keep every name at least its list's floor wide on $name",
     async (route) => {
       const page = await open(width, route);
       try {
-        const cells = await page.evaluate(() =>
-          Array.from(document.querySelectorAll<HTMLElement>(".inv-main")).map((el) => ({
-            width: el.getBoundingClientRect().width,
-            boxed: el.parentElement?.querySelector(":scope > .choice") != null,
-          })),
+        const widths = await page.evaluate(() =>
+          Array.from(document.querySelectorAll<HTMLElement>(".inv-name")).map((el) => el.getBoundingClientRect().width),
         );
         // An empty list would make every check below pass vacuously.
-        expect(cells.length).toBeGreaterThan(0);
-        for (const cell of cells) {
-          const floor = cell.boxed ? NAME_FLOOR_BESIDE_BOX : NAME_FLOOR;
-          expect(cell.width, `a name cell ${cell.boxed ? "beside a selection box " : ""}at ${width}px`)
-            .toBeGreaterThanOrEqual(floor);
+        expect(widths.length).toBeGreaterThan(0);
+        for (const cell of widths) {
+          expect(cell, `a name on ${route.name} at ${width}px`).toBeGreaterThanOrEqual(NAME_FLOOR[route.name]!);
         }
       } finally {
         await page.close();

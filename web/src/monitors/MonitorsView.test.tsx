@@ -83,6 +83,30 @@ describe("MonitorsView", () => {
     expect(within(row).getByText("Channels")).toBeTruthy();
   });
 
+  it("names the columns once over the list, without taking each row's legends", () => {
+    /*
+     * On one line the legends are drawn once, in a header row over the list
+     * (SUB-194). That header is a picture for the eye: it is hidden from
+     * assistive technology, and every row keeps its own legends as the
+     * spoken name of each value, because a list cannot tie a header to the
+     * cells under it the way a table can.
+     */
+    const { container } = render(
+      <MonitorsView monitors={[make(), make({ id: 2, name: "cdn" })]} />,
+    );
+    const head = container.querySelector(".inv-head");
+    expect(head).not.toBeNull();
+    expect(head!.getAttribute("aria-hidden")).toBe("true");
+    expect(head!.textContent).toBe("TypeEveryTimeoutChannelsTags");
+    // Before the list, so it reads as a header rather than a footer.
+    expect(head!.nextElementSibling?.classList.contains("inv-list")).toBe(true);
+    for (const row of screen.getAllByRole("listitem")) {
+      expect(
+        [...row.querySelectorAll(".inv-label")].map((label) => label.textContent),
+      ).toEqual(["Type", "Every", "Timeout", "Channels", "Tags"]);
+    }
+  });
+
   it("shows paused monitors by default, where the dashboard hides them", () => {
     // This is the strongest argument for a separate page: the two views want
     // opposite defaults, and a monitor somebody paused during a deploy and

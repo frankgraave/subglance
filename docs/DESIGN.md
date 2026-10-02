@@ -2063,9 +2063,37 @@ screen (SUB-167), for three reasons, and each has its own rule now:
 `layout/inventory-rows.browser.test.ts` measures the rows with every cell
 shape the row can take (attached, rule-routed, default, none, not loaded,
 paused, push, no tags) at five widths on either side of the wrap, for an admin
-and for a viewer. It fails when two rows differ in height, when a column's
-legend is at a different place in two rows, or when a value spills out of its
-slot.
+and for a viewer. It fails when two rows differ in height, when a column is at
+a different place in two rows, or when a value spills out of its slot.
+
+**On one line, the name and the address come first (SUB-194).** The one-line
+row used to be a single flex line on which every settings column and every
+action took its width before the name and address, which shared the rest:
+86px for someone who can edit at the widest list, so the demo estate's
+"API — health" and "API — checkout" both read "API — …" and every address
+was about ten characters. Above the wrap the row is now two lines on a grid:
+
+- the name shares the first line with the settings columns, and the address
+  shares the second with the actions, spanning under the columns. At the
+  widest list that is 260px of name and 626px of address for someone who can
+  edit (250 and 616 at the wrap), where both were 86; a viewer, with no box
+  and no actions, gets 288 and 776;
+- the columns are named once, in a header row over the list, rather than in
+  every row. Each header cell takes its width from the same rule as its
+  column, and the header is `aria-hidden`: every row keeps its legends,
+  visually hidden, as the spoken name of each value, because a list is not a
+  table and a header cannot be associated with the cells under it;
+- Timeout moved down to rung 2 (64px). A legend no longer sets a column's
+  width once it is in the header, so the values do, and the widest timeout
+  `formatDuration` can print is "2 min".
+
+Wrapped, nothing changed: every column shows its own legend over its slot, as
+above. The header and the grid are keyed to a container around the list and
+its header, at the same 836px rung as the wrap, so the two can never disagree.
+`layout/inventory-names.browser.test.ts` loads the estate `make seed` creates,
+read out of `cmd/seed/catalogue.go`, and fails on any name or address that ends
+in an ellipsis at 820, 1024 or 1440px, for either role; the rows test above
+also fails on a header cell that does not stand exactly over its column.
 
 The notification channels list is covered too. Its rows are the same
 `.inv-row`, with two columns (Type, Added) and their own wrap at a 638px list

@@ -26,12 +26,17 @@ import type { CheckOutcome } from "./inventoryApi";
 /**
  * One monitor as one inventory row.
  *
- * The shape is the approved mockup's: name and target take the elastic column
- * and clip; every setting after them is a fixed-width column, so the eye can
- * read straight *down* "Every" and find the monitor checked once an hour, or
- * down "Channels" and find the one nobody will hear about. That downward scan
- * is the whole reason the page exists — it finds misconfiguration, where the
- * dashboard finds outages.
+ * Name and target come first and get the room; every setting after them is a
+ * fixed-width column, so the eye can read straight *down* "Every" and find the
+ * monitor checked once an hour, or down "Channels" and find the one nobody
+ * will hear about. That downward scan is the whole reason the page exists —
+ * it finds misconfiguration, where the dashboard finds outages.
+ *
+ * Where the list is wide enough the settings columns sit on the target's line,
+ * under one header row for the whole list, and the name has the line above
+ * them to itself (SUB-194). Each column's legend is still in the row, visually
+ * hidden there, so a screen reader hears "Every 1 min" rather than a bare
+ * reading. Narrower, the row wraps and every column shows its own legend.
  *
  * **Every action is inline and present on every row.** No hover-only `⋯` menu:
  * a menu that hides Pause next to Delete behind a pointer is unusable on a
@@ -156,14 +161,14 @@ function MonitorInventoryRowImpl({
             <span className="inv-type">{typeLabel(monitor.type)}</span>
           </span>
 
-          <span className="inv-col inv-col--num">
+          <span className="inv-col inv-col--num inv-col--every">
             <span className="inv-label">Every</span>
             <Value value={intervalOf(monitor)}>
               {formatDuration(intervalOf(monitor))}
             </Value>
           </span>
 
-          <span className="inv-col inv-col--num">
+          <span className="inv-col inv-col--num inv-col--timeout">
             <span className="inv-label">Timeout</span>
             {monitor.timeoutS === null ? (
               /* Not a dash: a push monitor has no timeout because nothing is
@@ -374,3 +379,33 @@ function MonitorInventoryRowImpl({
 }
 
 export const MonitorInventoryRow = memo(MonitorInventoryRowImpl);
+
+/**
+ * The list's one row of column legends, drawn over the rows when they are on
+ * one line (SUB-194).
+ *
+ * Every row used to print TYPE, EVERY, TIMEOUT, CHANNELS and TAGS above its
+ * own values: twenty-six rows, a hundred and thirty legends, and the space
+ * they took came out of the name. One header says it once.
+ *
+ * `aria-hidden`, because it is a picture of the legends rather than their
+ * source: each row still carries its own, visually hidden, so a screen reader
+ * moving through a row hears "Timeout 10 s" without having to remember a
+ * header it passed twenty rows ago. The list is a list, not a table, so a
+ * header here could not be associated with the cells anyway.
+ *
+ * Each cell takes its column's width from the same rule as the column, so a
+ * legend cannot drift off the values under it. Hidden by the stylesheet when
+ * the rows wrap, where each column shows its own.
+ */
+export function MonitorInventoryHead() {
+  return (
+    <div className="inv-head" aria-hidden="true">
+      <span className="inv-hcol--type">Type</span>
+      <span className="inv-hcol--num inv-hcol--every">Every</span>
+      <span className="inv-hcol--num inv-hcol--timeout">Timeout</span>
+      <span className="inv-hcol--chan">Channels</span>
+      <span className="inv-hcol--tags">Tags</span>
+    </div>
+  );
+}
