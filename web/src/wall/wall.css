@@ -28,7 +28,7 @@
 /* Whispered, not shouted: if the header competes with the lamps for attention
    from across the room, the lamps have lost. */
 .wall-title { font-size: var(--type-body); line-height: var(--lead-body); font-weight: var(--weight-strong); color: var(--ink-2); }
-.wall-meta { @apply face-mono; font-size: var(--type-helper); line-height: var(--lead-helper); color: var(--ink-4); }
+.wall-meta { @apply face-mono; font-size: var(--type-helper); line-height: var(--lead-helper); color: var(--ink-3); }
 .wall-meta-down { color: var(--down); font-weight: var(--weight-strong); }
 .wall-meta-stale { color: var(--warn); }
 /* Deliberately not `--down`: a count we can no longer vouch for must not be
@@ -40,7 +40,7 @@
   @apply face-mono;
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
-  color: var(--ink-4);
+  color: var(--ink-3);
 }
 
 .wall-grid {

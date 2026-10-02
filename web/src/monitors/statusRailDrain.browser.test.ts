@@ -618,8 +618,8 @@ describe("the status rail stops asserting when the stream dies", () => {
           const el = document.querySelector(${JSON.stringify(selector)});
           if (!el) return { missing: true };
           const live = window.getComputedStyle(el).color;
-          const down = window.getComputedStyle(document.documentElement)
-            .getPropertyValue(${JSON.stringify(layout === "cards" ? "--down" : "--ink-2")}).trim();
+          const liveInk = window.getComputedStyle(document.documentElement)
+            .getPropertyValue("--ink-2").trim();
           const ink3 = window.getComputedStyle(document.documentElement)
             .getPropertyValue("--ink-3").trim();
           screen.setAttribute("data-conn", "stale");
@@ -629,7 +629,7 @@ describe("the status rail stops asserting when the stream dies", () => {
           document.body.appendChild(probe);
           probe.style.color = ink3;
           const ink3Rgb = window.getComputedStyle(probe).color;
-          probe.style.color = down;
+          probe.style.color = liveInk;
           const downRgb = window.getComputedStyle(probe).color;
           probe.remove();
           screen.setAttribute("data-conn", "live");
@@ -646,10 +646,11 @@ describe("the status rail stops asserting when the stream dies", () => {
           drain.missing,
           `no ${selector} in the ${layout} layout; the fixture must have a failing monitor`,
         ).toBe(false);
-        // Compact's nested panel needs ink-2 for AA (DESIGN.md §2.6), and the
+        // Compact's nested panel needs ink-2 for AA (DESIGN.md §2.6), the
         // rows layout's cause is the incident row's chip, in its ink-2
-        // (SUB-194): the lamp and the rail say down in red, the word says
-        // why. Cards keep status ink. All three must still drain to ink-3.
+        // (SUB-194), and the card's sentence followed once --down on a card
+        // measured 4.2:1 (SUB-181): the lamp and the rail say down in red,
+        // the words say why. All three must still drain to ink-3.
         expect(
           drain.live,
           `${selector} must use its documented live ink role`,

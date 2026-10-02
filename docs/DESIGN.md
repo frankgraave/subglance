@@ -63,7 +63,7 @@ Everything a user can click, hover or read still takes its radius from a token.
 
 --ink:        oklch(.97 0 0);             /* primary text */
 --ink-2:      oklch(.708 0 0);            /* secondary text */
---ink-3:      oklch(.556 0 0);            /* labels, help text */
+--ink-3:      oklch(.675 0 0);            /* labels, help text: 4.5:1 floor */
 --ink-4:      oklch(.439 0 0);            /* placeholders, disabled */
 ```
 
@@ -76,8 +76,8 @@ explain it. And it fails on identity: an alpha composites against whatever is
 beneath it, so the same tooltip was `#232323` over the page and `#292929` over
 a card — one element, two colours, decided by where it happened to open. The
 opaque token is measured rather than picked: `--ink` reaches 13.9:1 on it,
-`--ink-2` 5.9:1 and `--ink-3` 3.2:1, so every ink that appears on a floating
-surface clears AA at its size and the quietest clears the 3:1 non-text floor.
+`--ink-2` 5.9:1 and `--ink-3` 5.2:1, so every ink that appears on a floating
+surface clears the 4.5:1 text floor.
 
 **Surfaces are white at low alpha, not lighter greys.** This is the decision
 that makes a stack of panels read as one material rather than as separately
@@ -99,8 +99,26 @@ something.
 --surface-float: #ffffff;
 --border:     #e6e6e4;   --border-hi:  #d6d6d3;
 --ink:        #16181a;   --ink-2:      #5c6165;
---ink-3:      #8b9196;   --ink-4:      #b6bbbf;
+--ink-3:      #6b7075;   --ink-4:      #b6bbbf;
 ```
+
+**`--ink-3` is text, so it is held to the text floor.** It is the tone of
+labels, help text and a row's address — words somebody reads — and WCAG 1.4.3
+asks 4.5:1 of them at the sizes they are set at. It used to be `.556` /
+`#8b9196`, which measured 2.9-3.8:1, and every screen it appeared on carried a
+waiver for it in `layout/accessibility-waivers.json`. The value is now chosen
+from the backdrops it is actually drawn on rather than from `--surface`
+alone: the darkest is an unselected segment inside a card panel, where the
+dark theme's alphas composite to `#2e2e2e`. `.675` (`#979797`) measures 4.65:1
+there; `#6b7075` measures 4.6:1 on `--surface-2` in light. The cost is a
+smaller step between `--ink-2` and `--ink-3` than before, and that is the
+honest consequence of the floor: below `--ink-2` there is not much room left
+that is still readable. Hierarchy that needed the old gap now comes from
+size, weight and face, which cost nothing in contrast.
+
+`--ink-4` is unchanged and stays what §9 says it is: placeholders and
+disabled state, never text meant to be read. `accessibility-waivers.json`
+can only shrink — the gate fails when it grows past its recorded count.
 
 Light isn't dark flipped. `--canvas` is a warm grey (`#fbfbfa`), not white;
 cards *are* white. That way cards sit in front of the page instead of
@@ -119,8 +137,8 @@ marks this product is read by. The worst case per mark, at 1440px:
 | lamp / bar `up` | 3.3:1 / 3.6:1 | 6.9:1 / 7.9:1 |
 | lamp / bar / rail `warn` | 4.8:1 | 9.1:1 |
 | lamp / bar / rail `down` | 4.5:1 | 3.9:1 |
-| paused ring / dotted rail | 6.0:1 / 3.2:1 | 5.9:1 / 3.5:1 |
-| unlit ring / waiting rail (`--ink-3`) | 3.05:1 / 3.2:1 | 3.2:1 / 3.5:1 |
+| paused ring / dotted rail | 6.0:1 / 5.0:1 | 5.9:1 / 5.7:1 |
+| unlit ring / waiting rail (`--ink-3`) | 4.8:1 / 5.0:1 | 5.2:1 / 5.7:1 |
 | unlit lamp fill (`--idle`, no floor) | 1.6:1 | 1.9:1 |
 
 Every mark that carries a state clears the 3:1 non-text floor in both themes;
@@ -226,9 +244,9 @@ precisely so ordinary text keeps working on them.
 
 | Token | Dark | Light | Measured on `--surface` |
 |---|---|---|---|
-| `--ink-2` | `#9ba1a6` | `#5c6165` | 6.82:1 dark, 6.26:1 light |
-| `--ink-zero` | `#6f767b` | `#7b8186` | 3.86:1 dark, 3.94:1 light |
-| `--ink-3` | `#61686d` | `#8b9196` | 3.14:1 dark, 3.19:1 light |
+| `--ink-2` | `#a1a1a1` | `#5c6165` | 6.45:1 dark, 6.26:1 light |
+| `--ink-zero` | `#9b9b9b` | `#63686c` | 6.00:1 dark, 5.63:1 light |
+| `--ink-3` | `#979797` | `#6b7075` | 5.71:1 dark, 5.00:1 light |
 
 A column of zeros at full strength competes with the measurements beside it for
 attention it has not earned: nothing happened, and nothing is what that should
@@ -236,7 +254,10 @@ look like. But a zero is still a reading. `0 failures` and `no data for this
 window` are different statements, and a screen that renders both at `--ink-3`
 can no longer tell them apart — so the zero tone sits one step above the one
 that means absent, and the two land within 0.1 of each other across themes so
-the distinction survives a theme switch.
+the distinction survives a theme switch. Since `--ink-3` moved up to the
+text floor (§2.2) the three sit closer together than they did; the order is
+what `tokens.test.ts` holds, and the zero still sits between the other two in
+both themes.
 
 **Colour never stands alone.** Roughly 8% of men can't reliably tell red from
 green — for a product built around red-versus-green that isn't an edge case. So
@@ -568,8 +589,9 @@ Two decisions inside it are not the ones the old rules made:
 - **The tone goes up, not down.** Two of the nine rules faded the label to
   `--ink-4`, which measures 1.90:1 against `--surface` in dark and 1.94:1 in
   light — below even the 3:1 floor a non-text edge owes, on text that says what
-  the number under it means. `--ink-3` is no better at 3.37 / 3.19. `--ink-2`
-  is the first rung that clears AA for text (7.31 / 6.26), and once the face
+  the number under it means. `--ink-3` was no better at the time, 3.37 / 3.19
+  (it has since been raised to the text floor, §2.2). `--ink-2`
+  was the first rung that cleared AA for text (7.31 / 6.26), and once the face
   and the casing carry the quietness there is nothing left for the greying to
   do. Weight drops from 500 to plain for the same reason: it was compensating.
 
@@ -1093,7 +1115,8 @@ first leans on text a sighted user scanning a wall of lamps does not read; the
 second spends a colour, because a grey bright enough for 3:1 starts to read as
 a fourth status. So the unlit lamp keeps its dim fill, which is what reads as
 "not lit", and gains a 1.5px `--ink-3` inset ring, which clears 3:1 on every
-surface it was measured on (3.05:1 at its thinnest, light). It is the paused lamp's construction in a quieter ink: filled with a
+surface it was measured on (3.05:1 at its thinnest, light, before `--ink-3`
+moved to the text floor; 4.8:1 now). It is the paused lamp's construction in a quieter ink: filled with a
 ring versus hollow with a ring keeps the two apart, in greyscale as well. The
 waiting rail moves to `--ink-3` for the same reason; the paused rail already
 uses it, and solid versus dotted keeps those two apart. No new colour and no
@@ -1104,8 +1127,20 @@ enough on its own once a list is 200 long: rows, cards and compact lines take a
 2px **dotted** `--ink-3` leading edge (down is solid `--down`, pending solid
 `--warn`), and a wall card switches its border to **dashed**. Solid means "look
 at this", dotted and dashed mean "this is deliberate". `--ink-3` and not
-`--ink-4` for the same contrast reason: 3.4:1 / 3.2:1 against `--surface`
+`--ink-4` for the same contrast reason: 5.7:1 / 5.0:1 against `--surface`
 versus 1.9:1.
+
+**A paused row recedes by tone, not by opacity.** Rows, cards and compact
+lines used to fade every child to `.62`, and inventory and channel rows the
+whole row to `.72`. That put every word in a paused row under 4.5:1 — the
+address at 1.9-2.3:1, the Paused chip itself at 3.3:1 — and the
+inactive-component exemption in WCAG 1.4.3 does not reach it: a paused row is
+not inactive. Its name opens the monitor, its actions resume it, and the
+address is often what the reader came to check. So the fade stays only on the
+heartbeat, which is a picture of the past and owes no text contrast, and the
+words step down a rung instead: the name to `--ink-2`, the readings with it.
+The dotted edge, the dashed border and the Paused chip still carry the state;
+none of them was ever made of opacity.
 
 **Reserved for maintenance windows (SUB-33).** A monitor inside a maintenance
 window is the same hollow socket with a `--warn` ring: still not being measured,

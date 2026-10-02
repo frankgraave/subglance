@@ -4,6 +4,7 @@
   flex: 1 1 auto;
   min-width: 0;
 }
-/* The prefix is a .literal in the mono face, but not at its --ink-3:
-   on a card panel that measures 3.05:1, under the 4.5:1 text needs. */
+/* The prefix is a .literal in the mono face, but at --ink-2 rather than its
+   --ink-3: it is the part of the row that tells two tokens apart, so it reads
+   at the row's secondary tone. */
 .tokens-main .literal { color: var(--ink-2); }

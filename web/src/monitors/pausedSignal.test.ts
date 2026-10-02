@@ -93,11 +93,24 @@ describe("paused carries a second signal in every list layout", () => {
 
     it(`keeps ${block}'s paused edge out of the faded content`, () => {
       // `opacity` on the element composites its own border, so fading the
-      // block would take the dotted edge down with it — from 3.4:1 to roughly
-      // 2:1, under the 3:1 floor the edge exists to clear. The fade belongs to
-      // the children. Caught by CodeRabbit on PR #11.
+      // block would take the dotted edge down with it, under the 3:1 floor
+      // the edge exists to clear. Caught by CodeRabbit on PR #11.
       expect(statusRule(monitorsCss, block, "paused")).not.toContain("opacity");
-      expect(monitorsCss).toContain(`.${block}[data-status="paused"] > * { opacity:`);
+    });
+
+    it(`fades none of ${block}'s words, only its heartbeat`, () => {
+      // SUB-181: `> * { opacity: .62 }` put every word in a paused row under
+      // the 4.5:1 text owes, the address at about 2:1. A paused row is still
+      // operable, so the WCAG 1.4.3 exemption for inactive components does
+      // not cover it. The words step down a tone instead; only the heartbeat,
+      // a picture, may fade. accessibility.browser.test.ts measures the
+      // result; this pins the mechanism, so a blanket fade cannot return.
+      const faded = [...monitorsCss.matchAll(
+        new RegExp(`\\.${block}\\[data-status="paused"\\]([^{,]*)\\{[^}]*opacity`, "g"),
+      )].map((match) => match[1].trim());
+      for (const target of faded) {
+        expect(target, `${block} paused fades ${target || "itself"}`).toMatch(/^> \.(?:mon-cell--beats|mon-card-beats)$/);
+      }
     });
   }
 

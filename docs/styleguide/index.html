@@ -319,7 +319,7 @@
         </td>
         <td><code>--surface-float</code></td>
         <td class="sg-value"><code>oklch(.269 0 0)</code><br><code class="sg-light">#ffffff</code></td>
-        <td class="sg-why">The fill of anything that FLOATS above the page: tooltip, menu, drawer. The only opaque surface in the dark theme, and deliberately so. <details class="sg-more"><summary>more</summary>Every other surface here is white at a low alpha, which is right for things that sit *on* each other — an alpha fill inherits what is beneath it, so a panel on a card is one step up without anyone choosing a third grey. A floating layer is the case that argument does not cover, and it fails twice. It fails on legibility: `--surface-2` is 5% white, so 95% of whatever is behind the tooltip is still readable through it, which is what the heartbeat readout was reported for. And it fails on identity: composited on the canvas the same 5% lands at #232323, on a card at #292929. A tooltip is one object and it was two colours depending on which row it happened to open over. `oklch(.269 0 0)` = #262626, sitting between those two measurements rather than matching either: the point is that it no longer depends on the answer. It is the neutral one step above the canvas — chroma 0 like the rest of the scale (§2.1) — and it is measured, not chosen: --ink reaches 13.9:1 on it, --ink-2 5.9:1, and --ink-3 3.2:1, so every ink the tooltip uses clears AA for the size it is set at and the quietest of them still clears the 3:1 non-text floor.</details></td>
+        <td class="sg-why">The fill of anything that FLOATS above the page: tooltip, menu, drawer. The only opaque surface in the dark theme, and deliberately so. <details class="sg-more"><summary>more</summary>Every other surface here is white at a low alpha, which is right for things that sit *on* each other — an alpha fill inherits what is beneath it, so a panel on a card is one step up without anyone choosing a third grey. A floating layer is the case that argument does not cover, and it fails twice. It fails on legibility: `--surface-2` is 5% white, so 95% of whatever is behind the tooltip is still readable through it, which is what the heartbeat readout was reported for. And it fails on identity: composited on the canvas the same 5% lands at #232323, on a card at #292929. A tooltip is one object and it was two colours depending on which row it happened to open over. `oklch(.269 0 0)` = #262626, sitting between those two measurements rather than matching either: the point is that it no longer depends on the answer. It is the neutral one step above the canvas — chroma 0 like the rest of the scale (§2.1) — and it is measured, not chosen: --ink reaches 13.9:1 on it, --ink-2 5.9:1 and --ink-3 5.2:1, so every ink the tooltip uses clears the 4.5:1 text floor.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -368,13 +368,13 @@
       <tr>
         <td class="sg-cell-swatch">
           <span class="sg-checker"
-            ><span class="sg-swatch" style="background: oklch(.556 0 0)"></span
-            ><span class="sg-swatch sg-swatch-light" style="background: #8b9196"></span
+            ><span class="sg-swatch" style="background: oklch(.675 0 0)"></span
+            ><span class="sg-swatch sg-swatch-light" style="background: #6b7075"></span
           ></span>
         </td>
         <td><code>--ink-3</code></td>
-        <td class="sg-value"><code>oklch(.556 0 0)</code><br><code class="sg-light">#8b9196</code></td>
-        <td class="sg-why">The neutral scale is achromatic — chroma exactly 0. A grey with a hint of blue in it reads as a colour decision, and this palette leaves colour to the data.</td>
+        <td class="sg-value"><code>oklch(.675 0 0)</code><br><code class="sg-light">#6b7075</code></td>
+        <td class="sg-why">Labels, help text, a row's address. Text, so it owes 4.5:1 (WCAG 1.4.3) on every backdrop it is drawn on, and the backdrop decides the value: the darkest place it sits is an unselected segment inside a card panel, where <details class="sg-more"><summary>more</summary>the alphas composite to #2e2e2e. `.675` (#979797) measures 4.65:1 there, 5.7:1 on --surface and 6.1:1 on the canvas. It was `.556`, which measured 2.9-3.8:1 and needed a waiver on every screen it appeared on.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
@@ -385,18 +385,18 @@
         </td>
         <td><code>--ink-4</code></td>
         <td class="sg-value"><code>oklch(.439 0 0)</code><br><code class="sg-light">#b6bbbf</code></td>
-        <td class="sg-why">The neutral scale is achromatic — chroma exactly 0. A grey with a hint of blue in it reads as a colour decision, and this palette leaves colour to the data.</td>
+        <td class="sg-why">Placeholders and disabled state, never text meant to be read: 2.1:1 on --surface, under every floor on purpose.</td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">
           <span class="sg-checker"
-            ><span class="sg-swatch" style="background: oklch(.62 0 0)"></span
-            ><span class="sg-swatch sg-swatch-light" style="background: #7b8186"></span
+            ><span class="sg-swatch" style="background: oklch(.69 0 0)"></span
+            ><span class="sg-swatch sg-swatch-light" style="background: #63686c"></span
           ></span>
         </td>
         <td><code>--ink-zero</code></td>
-        <td class="sg-value"><code>oklch(.62 0 0)</code><br><code class="sg-light">#7b8186</code></td>
-        <td class="sg-why">A zero that is genuinely zero, not a missing reading. A column of zeros at full strength competes with the measurements beside it for attention it has not earned — nothing happened, and nothing is what it should look <details class="sg-more"><summary>more</summary>like. But a zero is still data: it sits one step down, not at the strength reserved for absent values, because &quot;no failures in this window&quot; and &quot;no data for this window&quot; are different statements and the screen has to be able to make both.</details></td>
+        <td class="sg-value"><code>oklch(.69 0 0)</code><br><code class="sg-light">#63686c</code></td>
+        <td class="sg-why">A zero that is genuinely zero, not a missing reading. A column of zeros at full strength competes with the measurements beside it for attention it has not earned — nothing happened, and nothing is what it should look <details class="sg-more"><summary>more</summary>like. But a zero is still data: it sits one step down, not at the strength reserved for absent values, because &quot;no failures in this window&quot; and &quot;no data for this window&quot; are different statements and the screen has to be able to make both. It moved with --ink-3, which it has to stay above: `.69` (#9b9b9b), 6.0:1 on --surface. The gap to either neighbour is small now, because both had to clear 4.5:1 and there is little room left under --ink-2.</details></td>
       </tr>
       <tr>
         <td class="sg-cell-swatch">

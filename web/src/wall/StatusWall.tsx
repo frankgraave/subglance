@@ -24,9 +24,10 @@ import { formatClock, useSecondsClock } from "./clock";
  * second is the cheapest possible proof of life, and it is the only moving
  * thing here on purpose.
  *
- * **The header whispers.** Instance name, a count, the time — in `--ink-3` and
- * `--ink-4`, because if the room can read the header at a glance it is
- * competing with the lamps, which are the actual signal.
+ * **The header whispers.** Instance name, a count, the time — small, mono and
+ * in `--ink-3`, because if the room can read the header at a glance it is
+ * competing with the lamps, which are the actual signal. Not `--ink-4`: that
+ * is the placeholder tone, 1.9:1, and the time is text someone reads.
  */
 
 export type StatusWallProps = {

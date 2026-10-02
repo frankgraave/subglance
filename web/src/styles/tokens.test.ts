@@ -2475,10 +2475,12 @@ describe("the caps legend is applied as a role", () => {
   });
 
   it("gives the legend a tone that clears AA rather than a faded one", () => {
-    // `--ink-3` and `--ink-4` are the two this role was written with and the
-    // two it may not use: measured against `--surface` they reach 3.37:1 and
-    // 1.90:1 in dark, 3.19:1 and 1.94:1 in light. This is text, so it owes
-    // 4.5:1, and `--ink-2` is the first rung that pays it (7.31 / 6.26).
+    // `--ink-3` and `--ink-4` are the two this role was written with. When
+    // it was, they reached 3.37:1 and 1.90:1 against `--surface` in dark,
+    // 3.19:1 and 1.94:1 in light, and `--ink-2` was the first rung to pay the
+    // 4.5:1 text owes (7.31 / 6.26). `--ink-3` has since moved up to that floor
+    // (SUB-181), but only just; the legend keeps `--ink-2` so the words that
+    // say what a number means are not the ones with the thinnest margin.
     const start = indexCss.indexOf("@utility caps-legend {");
     const body = indexCss.slice(start, indexCss.indexOf("\n}", start));
     expect(body).toContain("color: var(--ink-2);");
