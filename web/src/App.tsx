@@ -415,7 +415,13 @@ export default function App() {
               cardColumns, onCardColumnsChange: setCardColumns,
             }} />
         ) : onIncidents ? (
-          <LiveIncidentsRoot client={queryClient} />
+          <LiveIncidentsRoot
+            client={queryClient}
+            /* Muting repeat alerts is a write the server refuses a viewer, so
+               the incidents list draws the button only for a role that may
+               press it, as the monitor's own page already did. */
+            canWrite={session.state === "signedIn" && canWrite(session.user)}
+          />
         ) : route.name === "notifications" ? (
           <LiveNotificationsRoot
             client={queryClient}
