@@ -402,21 +402,31 @@
 /* Paused is not trouble and not a gap in the data: someone switched it off.
    A dotted neutral edge says "deliberate" where down and pending say "look at
    this", and it keeps the two apart in greyscale as well as in colour.
-   --ink-3 rather than --ink-4: measured against --surface, ink-3 is 3.4:1
-   (dark) / 3.2:1 (light) and clears the 3:1 non-text floor, ink-4 is 1.9:1 in
-   both and would be a signal only people with good monitors could see.
-   The reduced opacity stays: a monitor nobody is watching should recede. */
+   --ink-3 rather than --ink-4: measured against --surface, ink-3 is 5.7:1
+   (dark) / 5.0:1 (light) and clears the 3:1 non-text floor, ink-4 is 1.9:1 in
+   both and would be a signal only people with good monitors could see. */
 .mon-row[data-status="paused"] > :first-child {
   border-left-style: dotted;
   border-left-color: var(--ink-3);
 }
 
-/* The opacity sits on the children, never on the block itself.
-   `opacity` on the element composites its border too, so `.62` would drop the
-   dotted --ink-3 edge from 3.4:1 to roughly 2:1 against --surface and sink the
-   one signal this rule exists to add below the WCAG 1.4.11 floor of 3:1. The
-   content still recedes; the edge stays at full strength. */
-.mon-row[data-status="paused"] > * { opacity: .62; }
+/*
+ * A monitor nobody is watching recedes, and it recedes without fading text.
+ *
+ * It used to take `opacity: .62` on every cell. That put every line of text in
+ * the row under the 4.5:1 its size owes (WCAG 1.4.3): the address measured
+ * 1.9-2.2:1 and the status label 2.7-3.2:1. The inactive-component exemption
+ * does not cover it, because a paused row is not inactive: its name opens the
+ * monitor and the address is the thing a reader came to check. So the fade is
+ * kept for the one part of the row that is a picture, the heartbeat, and the
+ * words step down a tone instead: the name to --ink-2, the readings with it.
+ *
+ * Never on the block itself: `opacity` on the element composites its border
+ * too, and would sink the dotted edge above under the 3:1 non-text floor.
+ */
+.mon-row[data-status="paused"] > .mon-cell--beats { opacity: .62; }
+.mon-row[data-status="paused"] .mon-name,
+.mon-row[data-status="paused"] > .mon-cell--num { color: var(--ink-2); }
 
 /*
  * A down row hovers like every other row: the edge lights, the fill does not.
@@ -517,10 +527,11 @@
  * --ink-3, not --ink-2. The name is the finding and the address is what it
  * points at, which is exactly the ladder DESIGN.md §9 states — and until now
  * the two rendered in the same ink, so the only thing separating them was the
- * face. Measured against the row's surface in the browser: 3.5:1 in dark and
- * 3.2:1 in light, which clears the 3:1 floor. It stays above that deliberately
- * rather than receding further: an address you cannot read is not a quieter
- * address, it is a missing one.
+ * face. Measured against the row's surface in the browser: 5.7:1 in dark and
+ * 5.0:1 in light, which clears the 4.5:1 text floor (SUB-181; it was 3.5 and
+ * 3.2 before --ink-3 was raised). It stays above that deliberately rather than
+ * receding further: an address you cannot read is not a quieter address, it
+ * is a missing one.
  */
 /*
  * The line under the name: why it is down, then the address (SUB-194).
@@ -853,7 +864,9 @@
   border-left: var(--size-status-rail) dotted var(--ink-3);
 }
 
-.mon-card[data-status="paused"] > * { opacity: .62; }
+.mon-card[data-status="paused"] > .mon-card-beats { opacity: .62; }
+.mon-card[data-status="paused"] .mon-card-name,
+.mon-card[data-status="paused"] .mon-card-fact dd { color: var(--ink-2); }
 
 .mon-card-head {
   display: flex;
@@ -894,7 +907,10 @@
   margin-top: var(--space-2);
   font-size: var(--type-helper);
   line-height: var(--lead-prose);
-  color: var(--down);
+  /* --ink-2, as in the other two layouts: --down on the card measures 4.2:1 in
+     dark, under the 4.5:1 a sentence owes. The lamp and the rail say down in
+     red; the sentence says why, and has to be readable to do it. */
+  color: var(--ink-2);
   overflow-wrap: anywhere;
 }
 
@@ -1014,7 +1030,8 @@
   border-left: var(--size-status-rail) dotted var(--ink-3);
 }
 
-.mon-line[data-status="paused"] > * { opacity: .62; }
+/* No heartbeat in this layout, so nothing fades; the name steps down. */
+.mon-line[data-status="paused"] .mon-line-name { color: var(--ink-2); }
 
 .mon-line-name {
   color: var(--ink);

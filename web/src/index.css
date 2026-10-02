@@ -52,9 +52,10 @@
  *
  * The fix is not more grey. A legend is quiet because it is small, mono and
  * uppercase; fading it spends contrast to buy a quietness the face and the
- * casing already give for free. So the role takes `--ink-2` (7.31:1 dark,
+ * casing already give for free. So the role takes `--ink-2` (6.45:1 dark,
  * 6.26:1 light against `--surface`) and clears AA at 12px, which neither
- * `--ink-3` (3.37 / 3.19) nor `--ink-4` did.
+ * `--ink-3` (3.37 / 3.19 at the time; raised to the floor since) nor
+ * `--ink-4` did.
  *
  * Weight drops to plain for the same reason: 500 was compensating for the
  * greying. Mono at 12px uppercase does not need it.

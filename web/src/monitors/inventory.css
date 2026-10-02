@@ -49,17 +49,26 @@
 }
 
 /*
- * A paused monitor is dimmed and dashed — never coloured.
+ * A paused monitor is dashed and quieter — never coloured.
  *
  * It is a configuration state, not a health state, so borrowing a status hue
  * would make "somebody switched this off" look like "something is wrong". The
  * row also carries a Paused chip in words, which is the signal that survives a
  * stylesheet, a printout and colour blindness alike.
+ *
+ * Quieter by tone, not by opacity. `.72` on the row put its address, its
+ * labels and the Paused chip itself under 4.5:1; the row is still operable,
+ * so its text owes the same contrast as any other row's. The name steps down
+ * to --ink-2 instead, and the dashed edge and the chip carry the state.
  */
 .inv-row[data-paused="true"] {
-  opacity: .72;
   border-style: dashed;
 }
+/* A disabled channel's row is the same row on the notifications page, and
+   its name steps down the same way; stated here so the name keeps one
+   stylesheet (ownership.test.ts). The link inherits the tone. */
+.inv-row[data-paused="true"] .inv-name,
+.inv-row[data-disabled="true"] .inv-name { color: var(--ink-2); }
 
 .inv-line {
   display: flex;

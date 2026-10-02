@@ -580,9 +580,8 @@
    * than matching either: the point is that it no longer depends on the answer.
    * It is the neutral one step above the canvas — chroma 0 like the rest of the
    * scale (§2.1) — and it is measured, not chosen: --ink reaches 13.9:1 on it,
-   * --ink-2 5.9:1, and --ink-3 3.2:1, so every ink the tooltip uses clears AA
-   * for the size it is set at and the quietest of them still clears the 3:1
-   * non-text floor.
+   * --ink-2 5.9:1 and --ink-3 5.2:1, so every ink the tooltip uses clears the
+   * 4.5:1 text floor.
    */
   --surface-float: oklch(.269 0 0);
   /* The resting edge of a card or row. Translucent so it picks up the
@@ -596,7 +595,15 @@
      the data. */
   --ink:         oklch(.97 0 0);
   --ink-2:       oklch(.708 0 0);
-  --ink-3:       oklch(.556 0 0);
+  /* Labels, help text, a row's address. Text, so it owes 4.5:1 (WCAG 1.4.3)
+     on every backdrop it is drawn on, and the backdrop decides the value: the
+     darkest place it sits is an unselected segment inside a card panel, where
+     the alphas composite to #2e2e2e. `.675` (#979797) measures 4.65:1 there,
+     5.7:1 on --surface and 6.1:1 on the canvas. It was `.556`, which measured
+     2.9-3.8:1 and needed a waiver on every screen it appeared on. */
+  --ink-3:       oklch(.675 0 0);
+  /* Placeholders and disabled state, never text meant to be read: 2.1:1 on
+     --surface, under every floor on purpose. */
   --ink-4:       oklch(.439 0 0);
 
   /* A zero that is genuinely zero, not a missing reading.
@@ -605,8 +612,11 @@
      what it should look like. But a zero is still data: it sits one step
      down, not at the strength reserved for absent values, because "no
      failures in this window" and "no data for this window" are different
-     statements and the screen has to be able to make both. */
-  --ink-zero:    oklch(.62 0 0);
+     statements and the screen has to be able to make both.
+     It moved with --ink-3, which it has to stay above: `.69` (#9b9b9b),
+     6.0:1 on --surface. The gap to either neighbour is small now, because
+     both had to clear 4.5:1 and there is little room left under --ink-2. */
+  --ink-zero:    oklch(.69 0 0);
 
   /* The status palette. Each status has a strong tone for the marks that
      carry it -- the lamp, the chip, the legend swatch, the leading edge of a
@@ -782,7 +792,7 @@
    * already — so this token exists in this theme for the other half of the
    * argument: a floating layer must be one colour wherever it opens, and
    * naming it separately is what lets the tooltip stop asking what is under
-   * it. Measured on it: --ink 17.8:1, --ink-2 6.3:1, --ink-3 3.2:1.
+   * it. Measured on it: --ink 17.8:1, --ink-2 6.3:1, --ink-3 5.0:1.
    */
   --surface-float: #ffffff;
   --border:      #e6e6e4;
@@ -790,12 +800,15 @@
 
   --ink:         #16181a;
   --ink-2:       #5c6165;
-  --ink-3:       #8b9196;
+  /* Measured on the same rule as dark: the darkest backdrop it is drawn on is
+     --surface-2 under a segment or a summary count, 4.6:1 there and 5.0:1 on
+     white. It was #8b9196, 2.9-3.2:1. */
+  --ink-3:       #6b7075;
   --ink-4:       #b6bbbf;
 
   /* Same role as in dark: one step down from a real reading, still clearly
-     above the tone that means "no data". */
-  --ink-zero:    #7b8186;
+     above the tone that means "no data". 5.6:1 on white. */
+  --ink-zero:    #63686c;
 
   --up:          #059669;
   --up-dim:      #d9f5e9;

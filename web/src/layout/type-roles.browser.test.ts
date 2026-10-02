@@ -117,9 +117,9 @@ describe("the caps legend reaches the pixels", () => {
   it("renders it at the one tone that clears the text floor", async () => {
     // Asserted positively, because the decision was a specific tone and not
     // merely "not the old one": `--ink-4` (1.90:1) is what comes back if the
-    // role fails to apply, but `--ink-3` measures 3.37:1 and is also below the
-    // 4.5:1 that 12px text owes. `--ink-2` (7.31:1 dark, 6.26:1 light) is the
-    // first rung that clears it, so that is what this pins.
+    // role fails to apply. `--ink-3` measured 3.37:1 when the role was set
+    // and has since been raised to the 4.5:1 floor (SUB-181); the legend
+    // stays on `--ink-2` (6.45:1 dark, 6.26:1 light), so that is what this pins.
     const colour = await computed(".mon-head", "color");
     expect(colour).toBe(await resolved("--ink-2"));
     expect(colour).not.toBe(await resolved("--ink-3"));

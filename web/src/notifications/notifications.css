@@ -85,10 +85,12 @@
  *
  * It is a configuration state, not a health state, so borrowing a status hue
  * would make "somebody switched this off" look like "this is failing". Shares
- * its treatment with a paused monitor for that reason.
+ * its treatment with a paused monitor for that reason, tone included: the
+ * name steps down (inventory.css, beside the paused rule) rather than the row
+ * fading, because a disabled channel's row can still be enabled, edited and
+ * tested, and its text owes 4.5:1.
  */
 .inv-row[data-disabled="true"] {
-  opacity: .72;
   border-style: dashed;
 }
 
@@ -112,10 +114,12 @@
  * itself carries the attention and the measure is bounded by the form. On this
  * page the same class was setting four standalone paragraphs, one of them
  * load-bearing, at the page's quietest ink across the full 860px column. That
- * is a line of roughly 140 characters at 3.2:1 — text formatted to be skipped.
+ * was a line of roughly 140 characters at 3.2:1 — text formatted to be
+ * skipped. (--ink-3 has since been raised to 4.5:1, which makes it legal, not
+ * comfortable, for a paragraph that long.)
  *
- * So: one step louder, and bounded. `--ink-2` measures 5.9:1 rather than
- * 3.2:1, which is the difference between clearing AA for body text and not.
+ * So: one step louder, and bounded. `--ink-2` measures 6.3:1, comfortably
+ * clear of the floor for prose that has to be read rather than glanced at.
  */
 .nt-note {
   font-size: var(--type-helper);

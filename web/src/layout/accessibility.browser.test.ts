@@ -120,7 +120,21 @@ async function openScreen(page: Page, screen: Screen, theme: string, incidentIdO
   expect(await page.$eval("html", (el) => el.getAttribute("data-theme"))).toBe(theme);
 }
 
-async function audit(page: Page, scope = "light: login"): Promise<void> {
+type Waiver = { rule: string; selector: string; scopes: string[]; reason: string };
+/* Typed here because an empty JSON array imports as `never[]`. */
+const WAIVERS: readonly Waiver[] = baseline.entries as Waiver[];
+
+/*
+ * The most the waiver list may hold (SUB-181). It was 66 entries on 1 October
+ * 2026, every one of them a text role under 4.5:1, and it had grown from 55
+ * because a new screen added waivers instead of fixing its ink. The tones
+ * were fixed instead and the list is empty, so the ceiling is zero. Raising it
+ * is allowed and meant to be deliberate: the diff that adds a waiver has to
+ * change this number too, beside a reason a reviewer can disagree with.
+ */
+const WAIVER_CEILING = { entries: 0, scopes: 0 };
+
+async function audit(page: Page, scope = "light: login", waivers: readonly Waiver[] = WAIVERS): Promise<void> {
   await page.addScriptTag({ content: axe.source });
   const violations = await page.evaluate(async () => {
     const result = await (window as typeof window & { axe: typeof axe }).axe.run(document, {
@@ -131,7 +145,7 @@ async function audit(page: Page, scope = "light: login"): Promise<void> {
       nodes: nodes.map(({ target, html, failureSummary }) => ({ target, html, failureSummary })),
     }));
   });
-  const expected = baseline.entries.filter((entry) => entry.scopes.includes(scope));
+  const expected = waivers.filter((entry) => entry.scopes.includes(scope));
   const key = (rule: string, target: unknown) => JSON.stringify([rule, target]);
   const waived = new Set(expected.map((entry) => key(entry.rule, [entry.selector])));
   const observed = violations.flatMap(({ id, help, helpUrl, nodes }) =>
@@ -144,21 +158,29 @@ async function audit(page: Page, scope = "light: login"): Promise<void> {
 }
 
 describe("the accessibility gate itself", () => {
+  it("lets the waiver list shrink and never grow", () => {
+    const entries = WAIVERS;
+    expect(entries.length, "waiver entries; lower the ceiling when one is removed").toBeLessThanOrEqual(WAIVER_CEILING.entries);
+    // Counted per screen and theme as well: one entry that gains scopes is
+    // the same growth by another route.
+    const scopes = entries.reduce((sum, entry) => sum + entry.scopes.length, 0);
+    expect(scopes, "waived screen/theme scopes").toBeLessThanOrEqual(WAIVER_CEILING.scopes);
+  });
   it("has no remaining waivers for the repaired secondary text roles", () => {
-    expect(baseline.entries.filter((entry) =>
+    expect(WAIVERS.filter((entry) =>
       /\.(?:inc-sub|tb-count|mon-detail-note)\b/.test(entry.selector),
     )).toEqual([]);
     // Remaining auth debt is out of this repair's scope. In particular,
     // do not turn those exact selectors into wildcard useId exemptions.
-    for (const entry of baseline.entries.filter((entry) => entry.selector.includes("_r_"))) {
+    for (const entry of WAIVERS.filter((entry) => entry.selector.includes("_r_"))) {
       expect(["#_r_0_-strength"]).toContain(entry.selector);
     }
   });
   it("keeps every waiver unique, reasoned and scoped to an audited screen/theme", () => {
     const scopes = new Set(SCREENS.flatMap((screen) => ["light", "dark"].map((theme) => `${theme}: ${screen.name}`)));
-    const keys = baseline.entries.map((entry) => `${entry.rule}: ${entry.selector}`);
+    const keys = WAIVERS.map((entry) => `${entry.rule}: ${entry.selector}`);
     expect(new Set(keys).size).toBe(keys.length);
-    for (const entry of baseline.entries) {
+    for (const entry of WAIVERS) {
       expect(entry.rule).toBe("color-contrast");
       expect(entry.reason.length).toBeGreaterThan(40);
       expect(entry.scopes.length).toBeGreaterThan(0);
@@ -167,16 +189,33 @@ describe("the accessibility gate itself", () => {
     }
   });
   it("rejects a now-obsolete waiver after a real rendered element is repaired", async () => {
+    // The list is empty, so this case brings its own waiver: a deliberately
+    // unreadable note on the setup card, waived by its exact selector, which
+    // passes while it violates and fails once it is repaired.
     const context = await browser.createBrowserContext();
     const page = await context.newPage();
     try {
       await openScreen(page, SCREENS.find((screen) => screen.name === "setup")!, "light");
       await audit(page, "light: setup");
-      await page.$eval(".auth-note", (element) => {
+      await page.$eval(".auth-card", (card) => {
+        const note = document.createElement("p");
+        note.id = "deliberate-obsolete-waiver";
+        note.textContent = "Deliberately faint note";
+        note.style.cssText = "color: var(--ink-4); transition: none; animation: none";
+        card.append(note);
+      });
+      const waiver: Waiver[] = [{
+        rule: "color-contrast",
+        selector: "#deliberate-obsolete-waiver",
+        scopes: ["light: setup"],
+        reason: "A synthetic waiver for the gate's own test: it must stop matching once the element is repaired.",
+      }];
+      await audit(page, "light: setup", waiver);
+      await page.$eval("#deliberate-obsolete-waiver", (element) => {
         (element as HTMLElement).style.color = "var(--ink)";
       });
-      await expect(audit(page, "light: setup")).rejects.toThrow("remove obsolete contrast waivers");
-      await page.$eval(".auth-note", (element) => (element as HTMLElement).style.removeProperty("color"));
+      await expect(audit(page, "light: setup", waiver)).rejects.toThrow("remove obsolete contrast waivers");
+      await page.$eval("#deliberate-obsolete-waiver", (element) => element.remove());
       await audit(page, "light: setup");
     } finally {
       await context.close();
@@ -219,7 +258,8 @@ describe("the accessibility gate itself", () => {
       await page.$eval(".inc-sub", (element) => {
         const broken = element.cloneNode(false) as HTMLElement;
         broken.textContent = "New incident contrast regression";
-        broken.style.cssText = "color: var(--ink-3); transition: none; animation: none";
+        // --ink-4, the placeholder tone: --ink-3 clears AA since SUB-181.
+        broken.style.cssText = "color: var(--ink-4); transition: none; animation: none";
         element.after(broken);
       });
       await expect(audit(page, `${theme}: monitor detail`)).rejects.toMatchObject({

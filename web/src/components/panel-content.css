@@ -13,8 +13,8 @@
    label: "Watchdog", "Scheduled backups". */
 .panel-lead { font-weight: var(--weight-strong); }
 
-/* --ink-2, not --ink-3: on a card panel --ink-3 measures 3.05:1, under the
-   4.5:1 that helper-size text needs. */
+/* --ink-2: a panel's note is prose somebody reads, the tone a sentence takes.
+   (--ink-3 measured 3.05:1 here when this was set; it clears 4.5:1 now.) */
 .panel-note,
 .panel-facts dt {
   color: var(--ink-2);
