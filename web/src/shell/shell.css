@@ -221,8 +221,8 @@
   flex-wrap: wrap;
   justify-content: flex-end;
   /* The right-hand group keeps its width and the search button gives way
-     instead: from 641px up, the workbench and the theme stay on the bar's one
-     line and the button narrows (SUB-148, SUB-182). */
+     instead: from 641px up, the theme stays on the bar's one line and the
+     button narrows (SUB-148, SUB-182). */
   flex: none;
 }
 
@@ -523,7 +523,7 @@
  * It opens the command menu, which has its own input, so it is a button and
  * not a field; it keeps the field's frame because "search" is what it is for
  * and a field is what search looks like. It takes the slack in the bar: from
- * its natural 280px down to whatever the workbench and the theme leave it,
+ * its natural 280px down to whatever the theme leaves it,
  * with the words giving way to an ellipsis before anything wraps.
  */
 .shell-command-launcher {

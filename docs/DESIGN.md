@@ -1360,8 +1360,8 @@ teaches people it does nothing. The count is stored under its own key so it
 survives a trip through Rows and back.
 
 **It lives in the dashboard's toolbar, not in the shell's topbar.** The topbar
-holds what works on every screen — the sidebar toggle, search, the workbench,
-the theme — and a second bar under it holds what belongs to *this* screen: the
+holds what works on every screen — the sidebar toggle, search, the theme —
+and a second bar under it holds what belongs to *this* screen: the
 filter field, the status filter, the layout switcher and whatever the current
 view brings with it. The layout switcher moved down for the same reason
 (SUB-182): on every screen but the dashboard it changed nothing. The split is not

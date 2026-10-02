@@ -92,7 +92,7 @@ it("shows the instance card to an administrator, from the session's own role", a
   expect(await screen.findByText("2 / 16 busy")).toBeTruthy();
   expect(screen.getByRole("heading", { name: "Instance" })).toBeTruthy();
 });
-it.each(["sidebar", "Escape", "field Escape", "workbench", "signout"])("guards %s from /monitors/new reached via the dashboard, preserving the URL and input on cancel", async (path) => {
+it.each(["sidebar", "Escape", "field Escape", "signout"])("guards %s from /monitors/new reached via the dashboard, preserving the URL and input on cancel", async (path) => {
   const input = await openFromDashboard();
   fireEvent.change(input, { target: { value: "kept draft" } });
   const dismiss = () => {
@@ -100,7 +100,6 @@ it.each(["sidebar", "Escape", "field Escape", "workbench", "signout"])("guards %
     if (path === "signout") fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
     if (path === "Escape") fireEvent.keyDown(window, { key: "Escape" });
     if (path === "field Escape") fireEvent.keyDown(input, { key: "Escape" });
-    if (path === "workbench") fireEvent.click(screen.getByRole("button", { name: "Component workbench" }));
   };
   dismiss();
   expect(window.confirm).toHaveBeenCalledTimes(1);

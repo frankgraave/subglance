@@ -547,26 +547,28 @@ export function NotificationsView({
       )}
 
       {/*
-       * What is deliberately not on this page.
-       *
-       * Stated rather than silently missing, because the approved mockup draws
-       * all of it and a reader comparing the two would otherwise conclude the
-       * page is unfinished by accident.
+       * Where the rest of alerting is set, since it is not on this page.
        *
        * Given a heading rather than left as an unlabelled grey paragraph
-       * trailing the card (SUB-138). Unheaded caveat prose at the bottom of a
-       * screen reads as boilerplate and is skipped; what it actually contains
-       * is a scope decision a reader may want to disagree with, so it is
-       * framed as one. The text is unchanged and the measure is bounded, which
-       * is the only reason it is now legible at all.
+       * trailing the card (SUB-138): unheaded caveat prose at the bottom of a
+       * screen reads as boilerplate and is skipped.
+       *
+       * It used to say tag routing rules had no backend and point at a ticket
+       * number. Both stopped being true or useful to anyone reading the page
+       * (SUB-193): routing rules exist in the API and in configuration files,
+       * and a ticket number means nothing to a person running the product. So
+       * it says where each thing is set today. When the monitor form and this
+       * page grow editors for them (SUB-179, SUB-158), this is the paragraph
+       * that changes.
        */}
       <aside className="nt-scope" aria-label="Not on this page">
         <p className="nt-scope-legend">Not on this page</p>
         <p className="nt-note">
-          Tag routing rules, severity floors and the delivery log are not here.
-          They have no backend today (SUB-124), and a switch that silently
-          changes nothing is worse than no switch at all. Which monitors use a
-          channel is set on the monitor; quiet hours are set on the channel.
+          Which monitors alert through which channels is set outside this page
+          for now: a monitor&rsquo;s own channels and tag routing rules are set
+          through the API or a configuration file imported under Settings,
+          Import &amp; export. A monitor with neither alerts through the default
+          channel. Quiet hours are set on each channel.
         </p>
       </aside>
     </section>

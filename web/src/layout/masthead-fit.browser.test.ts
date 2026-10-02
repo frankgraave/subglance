@@ -105,12 +105,11 @@ describe.each(BAR_WIDTHS)("masthead at %ipx", (width) => {
    * The bar is one line from 641px up. It used to be two below 900px, by
    * decision, because the layout switcher made it about 760px wide; with the
    * switcher in the dashboard's own toolbar (SUB-182) the search button takes
-   * the slack instead, and the toggle, search, workbench and theme share one
-   * line. When the right-hand group wrapped inside itself the theme toggle
+   * the slack instead, and the toggle, search and theme share one line. When the right-hand group wrapped inside itself the theme toggle
    * landed alone on a row of its own, which is how the bar once grew to three
    * rows at 641px.
    */
-  it("keeps the toggle, search, workbench and theme on one line", async () => {
+  it("keeps the toggle, search and theme on one line", async () => {
     const page = await open(width, ROUTES[0]);
     try {
       // Centres rather than tops: the three are different heights and the
@@ -125,8 +124,8 @@ describe.each(BAR_WIDTHS)("masthead at %ipx", (width) => {
           return Math.round(r.top + r.height / 2);
         }),
       );
-      expect(centres).toHaveLength(4);
-      expect(centres).toEqual([centres[0], centres[0], centres[0], centres[0]]);
+      expect(centres).toHaveLength(3);
+      expect(centres).toEqual([centres[0], centres[0], centres[0]]);
     } finally {
       await page.close();
     }

@@ -239,49 +239,39 @@ describe("the app shell", () => {
   });
 
   /*
-   * Every control in the bar reports the state the screen is actually in.
+   * The workbench is an address, not a control (SUB-193).
    *
-   * The defect this began as: the add form was a *screen*, the render branch
-   * preferred the workbench, and pressing Add while the workbench was open lit
-   * the add button over a workbench that stayed on screen — a control claiming
-   * a state the page did not have.
-   *
-   * The add button has since left the masthead entirely (SUB-138), so the
-   * original pairing cannot be staged any more. The rule underneath is what
-   * was always worth asserting and it still applies to every control that
-   * remains: a button reads as pressed if and only if the thing it opens is
-   * on screen. The workbench is the one toggle left in the bar, and it is
-   * checked against its own content rather than against its own attribute —
-   * the claim under test cannot also be the evidence for it.
+   * It used to be a beaker button in the masthead, on every screen and every
+   * phone, one press from a page of fixture monitors that look like a real
+   * estate. It is a developer tool: the person who wants it types
+   * `/workbench`, and nobody else meets it. Checked from both sides — absent
+   * from every bar on the dashboard, and still whole at its address, because a
+   * test asserting only the absence would also pass if the workbench had been
+   * deleted.
    */
-  it("never lets a control claim a state the screen does not have", async () => {
+  it("keeps the workbench at its own address and out of every bar", async () => {
     render(<App />);
     await screen.findByText("api");
+    expect(screen.queryByRole("button", { name: /workbench/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /workbench/i })).toBeNull();
+    expect(screen.queryByText(/fixtures, not live data/i)).toBeNull();
+    cleanup();
 
-    const workbench = screen.getByRole("button", {
-      name: "Component workbench",
-    });
-    /*
-     * The workbench's own content, not the button's attribute: the claim
-     * under test cannot also be the evidence for it. Its fixture gallery
-     * carries a heading no other screen has.
-     */
-    const gallery = () =>
-      screen.queryByText(/fixtures, not live data/i);
-
-    expect(workbench.getAttribute("aria-pressed")).toBe("false");
-    expect(gallery()).toBeNull();
-
-    fireEvent.click(workbench);
-    await waitFor(() => expect(gallery()).toBeTruthy());
-    expect(workbench.getAttribute("aria-pressed")).toBe("true");
+    window.history.replaceState(null, "", "/workbench");
+    render(<App />);
+    expect(await screen.findByText(/fixtures, not live data/i)).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1, name: "Workbench" })).toBeTruthy();
     // The galleries are split out of the entry chunk and arrive through
-    // Suspense (SUB-165): the heading above is not proof they rendered.
+    // Suspense (SUB-165): the line above is not proof they rendered.
     expect(await screen.findByRole("heading", { name: "Sizes" })).toBeTruthy();
+    // Not a section of the product, so the rail lights nothing.
+    const rail = screen.getByRole("navigation", { name: "Primary" });
+    expect(rail.querySelector("[aria-current='page']")).toBeNull();
 
-    fireEvent.click(workbench);
-    await waitFor(() => expect(gallery()).toBeNull());
-    expect(workbench.getAttribute("aria-pressed")).toBe("false");
+    // Esc leaves it for the dashboard, the way it leaves any other place.
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(window.location.pathname).toBe("/"));
+    await waitFor(() => expect(screen.queryByText(/fixtures, not live data/i)).toBeNull());
   });
 
   /*

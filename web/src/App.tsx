@@ -43,10 +43,14 @@ import { useCompactViewport, useRowsSqueeze } from "./layout/useMediaQuery";
  * This component owns the two shell preferences and the two shortcuts;
  * everything below it is presentational and takes them as props.
  *
- * The workbench survives as a side track behind the beaker button. Judging a
- * component in isolation, in both themes and in every status is something the
- * live screen cannot do — it only ever shows the states the server happens to
- * be in — but it is a developer tool and does not belong in the navigation.
+ * The workbench survives as a side track at its own address, `/workbench`.
+ * Judging a component in isolation, in both themes and in every status is
+ * something the live screen cannot do — it only ever shows the states the
+ * server happens to be in — but it is a developer tool, drawn on fixture data
+ * that looks like a real estate. It used to be a beaker button in the
+ * masthead, on every screen and every phone, one press from a page of fake
+ * monitors (SUB-193). An address is typed by the person who wants it and met
+ * by nobody else.
  */
 export default function App() {
   const { preference, setPreference } = useTheme();
@@ -59,10 +63,10 @@ export default function App() {
     sidebarCollapsed,
     toggleSidebar,
   } = useShellPreferences(window.localStorage);
-  const [workbenchOpen, setWorkbenchOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const { route, navigate } = useRoute();
+  const workbenchOpen = route.name === "workbench";
   /*
    * One query client for both screens, created here rather than inside each
    * root.
@@ -82,11 +86,10 @@ export default function App() {
 
   const openMonitor = useCallback(
     (id: string) => {
-      if (route.name === "monitor" && route.id === id && !workbenchOpen && !addOpen) return;
+      if (route.name === "monitor" && route.id === id && !addOpen) return;
       if (!confirmNavigation()) return;
       morphNavigation(
         () => {
-          setWorkbenchOpen(false);
           setAddOpen(false);
           navigate({ name: "monitor", id });
           // A new page starts at the top. Without this the browser keeps the
@@ -98,7 +101,7 @@ export default function App() {
         { from: () => monitorTitleLink(mainRef.current, id), to: () => detailTitle(mainRef.current) },
       );
     },
-    [navigate, route, workbenchOpen, addOpen],
+    [navigate, route, addOpen],
   );
   /*
    * The way back does not morph, and neither does browser Back.
@@ -117,8 +120,8 @@ export default function App() {
   /*
    * Navigation from the rail and the phone drawer.
    *
-   * It closes the two overlays for the same reason `toggleWorkbench` does:
-   * the render branch below can only show one thing, and leaving `addOpen`
+   * It closes the add drawer because the render branch below can only show
+   * one thing, and leaving `addOpen`
    * set while navigating would light the add button as pressed over a screen
    * that is not the add form. Same scroll reset as `openMonitor` — a new
    * screen starts at the top.
@@ -126,7 +129,6 @@ export default function App() {
   const goTo = useCallback(
     (name: NavRoute) => {
       if (!confirmNavigation()) return;
-      setWorkbenchOpen(false);
       setAddOpen(false);
       navigate(
         name === "monitors" || name === "notifications"
@@ -198,7 +200,7 @@ export default function App() {
    */
   const path = routePath(route);
   const frame = pageFrame(route);
-  const pageTitle = workbenchOpen ? "Workbench" : frame.title;
+  const pageTitle = frame.title;
   useDocumentTitle(pageTitle ?? "Monitor");
   useRouteFocus(path, mainRef);
 
@@ -217,7 +219,7 @@ export default function App() {
     !onSettings;
   /*
    * What "a different screen" means for the inner error boundary: the route,
-   * plus the workbench. Changing either remounts the boundary and so clears a
+   * the workbench included. Changing it remounts the boundary and so clears a
    * caught error — otherwise a crash on one screen would latch and every
    * screen after it would show the panel instead.
    *
@@ -227,26 +229,9 @@ export default function App() {
    * throw away its filters and scroll position for a panel that covers a
    * quarter of the width.
    */
-  const boundaryKey = `${route.name}:${route.name === "monitor" ? route.id : ""}:${
-    workbenchOpen ? "w" : ""
-  }`;
+  const boundaryKey = `${route.name}:${route.name === "monitor" ? route.id : ""}`;
 
   const leaveWall = useCallback(() => setLayout("rows"), [setLayout]);
-  /*
-   * Leaving the workbench closes the add drawer with it.
-   *
-   * The two are no longer mutually exclusive as *content* — the drawer is an
-   * overlay now, so it can sit over the workbench the way it sits over any
-   * other screen — but switching the screen underneath a modal form is a
-   * context change, and a form left open across one is a form describing a
-   * page that is gone. Closing it here keeps what the add button claims and
-   * what is on screen the same thing.
-   */
-  const toggleWorkbench = useCallback(() => {
-    if (!confirmLeave()) return;
-    setAddOpen(false);
-    setWorkbenchOpen((open) => !open);
-  }, []);
   /*
    * Closing on success rather than navigating to the new monitor.
    *
@@ -329,12 +314,10 @@ export default function App() {
           ? () => setCreateOpen(false)
           : isWall
           ? leaveWall
-          : workbenchOpen
-            ? toggleWorkbench
-            : onDetail || onIncidents
+          : onDetail || onIncidents || workbenchOpen
               ? // Last in the queue, because these are places rather than
                 // overlays: anything layered on top of one must be dismissed
-                // before Esc means "leave this screen". Both land on the
+                // before Esc means "leave this screen". All land on the
                 // dashboard, which is the one place that always exists.
                 //
                 // Via `goTo` rather than `showDashboard`, so Esc resets the
@@ -389,8 +372,6 @@ export default function App() {
           onToggleSidebar={toggleNav}
           themePreference={preference}
           onThemeChange={setPreference}
-          workbenchOpen={workbenchOpen}
-          onToggleWorkbench={toggleWorkbench}
           onOpenCommands={() => setCommandOpen(true)}
         />
       }
@@ -414,7 +395,7 @@ export default function App() {
        */}
       <Page
         title={pageTitle}
-        width={workbenchOpen ? "full" : frame.width}
+        width={frame.width}
       >
       <ErrorBoundary
         key={boundaryKey}
@@ -535,8 +516,8 @@ export default function App() {
       {session.state === "signedIn" && <CommandMenu client={queryClient} open={commandOpen} canWrite={canWrite(session.user)} onClose={() => setCommandOpen(false)} onOpenMonitor={openMonitor}
         onNavigate={goTo} onThemeChange={setPreference} onAddMonitor={() => {
           // Already here: keep the mounted draft AND its guard, without a discard.
-          if (route.name === "monitors" && route.create && !workbenchOpen) return;
-          if (confirmNavigation()) { setWorkbenchOpen(false); setAddOpen(false); setCreateOpen(true); }
+          if (route.name === "monitors" && route.create) return;
+          if (confirmNavigation()) { setAddOpen(false); setCreateOpen(true); }
         }} />}
     </SessionGate>
   );
@@ -545,8 +526,8 @@ export default function App() {
 /*
  * The workbench's galleries load on first open, not with the app.
  *
- * They are fixtures for judging components and are only reachable through
- * the workbench button, so shipping them in the entry chunk made every
+ * They are fixtures for judging components and are only reachable at
+ * `/workbench`, so shipping them in the entry chunk made every
  * visitor download a developer tool. Split out, the entry keeps roughly 3 kB
  * gzip of room under its ceiling for screens people actually use.
  *
@@ -561,8 +542,8 @@ function Workbench() {
   return (
     <div className="flex flex-col gap-10">
       <p className="text-helper text-ink-3">
-        Component workbench — fixtures, not live data. Press Esc to go back to
-        the dashboard.
+        Component workbench — fixtures, not live data. Press Esc to go to the
+        dashboard.
       </p>
       <Suspense
         fallback={<p className="text-helper text-ink-3">Loading the fixtures…</p>}

@@ -10,7 +10,11 @@
  *      import anywhere would fold the module back into the entry and the
  *      chunk would never be requested at all, which fails claim 2 instead.
  *   2. Opening the workbench requests it and renders what it holds, so the
- *      split did not leave the button pointing at a fallback forever.
+ *      split did not leave its address pointing at a fallback forever.
+ *
+ * The workbench is opened at `/workbench`, the only way in since the masthead
+ * button went (SUB-193). Client-side, from the loaded dashboard, so claim 1
+ * is measured on the same page that then opens it.
  *
  * @vitest-environment node
  */
@@ -32,7 +36,7 @@ beforeAll(async () => {
   // Not networkidle: the dashboard holds its event stream open, so the
   // network is never idle. The rendered dashboard is the settled state.
   await page.goto(server.url + "/", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector('[aria-label="Component workbench"]', {
+  await page.waitForSelector("[data-testid^='monitor-row-']", {
     timeout: 15_000,
   });
 }, 120_000);
@@ -52,7 +56,12 @@ it("does not fetch the workbench galleries on first load", () => {
 });
 
 it("fetches and renders them when the workbench opens", async () => {
-  await page.click('[aria-label="Component workbench"]');
+  // No control leads here, so the address is pushed the way a typed URL
+  // followed by Back/Forward would arrive: a history entry and a popstate.
+  await page.evaluate(() => {
+    window.history.pushState(null, "", "/workbench");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
   await page.waitForFunction(
     () =>
       Array.from(document.querySelectorAll("h3")).some(

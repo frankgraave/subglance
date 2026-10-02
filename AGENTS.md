@@ -53,10 +53,12 @@ Two bars, and one question decides between them: **does this control do
 something on every screen?**
 
 - **Yes** — the masthead (`web/src/shell/Topbar.tsx`). The sidebar toggle,
-  search (which opens the command menu), the workbench, the theme. Because
-  each of them works everywhere, the bar is the same on every route,
-  including a monitor's detail page — it can be read once instead of re-read
-  per screen.
+  search (which opens the command menu), the theme. Because each of them
+  works everywhere, the bar is the same on every route, including a
+  monitor's detail page — it can be read once instead of re-read per screen.
+  Working everywhere is necessary, not sufficient: the component workbench
+  worked everywhere too, and is a developer tool, so it lives at
+  `/workbench` with nothing linking to it.
 - **No** — the page toolbar (`web/src/shell/PageToolbar.tsx`), filled through
   a portal slot (`ToolbarTools`) by whichever view is mounted. A list's
   filter field, its filters and counts, and the dashboard's layout switcher
@@ -151,6 +153,12 @@ rows give way to cards until the name cell has 168px beside whichever
 navigation is showing, and a down row names its failure kind under the name
 rather than in the latency column; `layout/dashboard-names.browser.test.ts`
 fails on either (DESIGN.md §7).
+
+Text a user can read names no ticket number, no source path and no design
+mockup: the reasoning that needs them belongs in a code comment beside the
+sentence. `layout/developer-copy.browser.test.ts` walks every route and fails
+on `SUB-\d+`, `internal/` or "mockup" in rendered text, accessible names,
+tooltips, placeholders or the tab title.
 
 A button that is a glyph plus a word needs an explicit `aria-label`. What a
 screen reader makes of an unnamed inline `<svg>` is not fixed — some skip it,
