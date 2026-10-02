@@ -556,18 +556,21 @@ export function ChannelForm({
       {/*
        * What this form does not offer, and why.
        *
-       * Saying it is cheaper than the alternative: a reviewer comparing this
-       * with the mockup would otherwise read the missing controls as an
-       * oversight and add them, and each one would save a setting the notifier
-       * never reads.
+       * The settings shown are the ones the senders in `internal/notifier`
+       * actually read. The design mockup also draws a Slack channel label, an
+       * HTTP method and a webhook signing secret; none of those exist on the
+       * wire, so offering them would store values nothing would ever use. That
+       * reasoning stays here, for the next person comparing the two: the
+       * sentence on screen used to carry it, and a package path and a mockup
+       * mean nothing to the person filling in the form (SUB-193).
+       *
+       * What the reader does need is the one thing they will look for here and
+       * not find: which monitors use this channel.
        */}
       <p className="field-help">
-        The settings shown are the ones the senders in{" "}
-        <code>internal/notifier</code> actually read. The mockup also draws a
-        Slack channel label, an HTTP method and a webhook signing secret; none
-        of those exist on the wire, so offering them would store values nothing
-        would ever use. Which monitors alert through this channel is set on the
-        monitor, not here.
+        Which monitors alert through this channel is not chosen here: it is set
+        through the API or an imported configuration file, as a monitor&rsquo;s
+        own channels or a tag routing rule.
       </p>
 
       {problem !== null && problem.key === null && (

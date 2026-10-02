@@ -182,6 +182,17 @@ describe("ChannelForm", () => {
     );
   });
 
+  it("says where a channel's monitors are chosen, in the reader's terms", () => {
+    // It used to explain itself with a package path and the design mockup,
+    // neither of which the person filling in the form has seen, and to claim
+    // the monitor form chooses channels, which it does not (SUB-193).
+    const { container } = render(<ChannelForm onSave={async () => {}} />);
+    expect(
+      screen.getByText(/which monitors alert through this channel is not chosen here/i).textContent,
+    ).toMatch(/API or an imported configuration file/);
+    expect(container.textContent).not.toMatch(/internal\/|mockup|SUB-\d+/i);
+  });
+
   it("offers no field the notifier does not read", () => {
     // The mockup draws a Slack channel label, an HTTP method and a signing
     // secret. Saving any of them would store a value nothing would ever use.

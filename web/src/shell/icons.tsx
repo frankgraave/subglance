@@ -89,14 +89,6 @@ export function CloseIcon(props: IconProps) {
   );
 }
 
-export function BeakerIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <path d="M9 3h6M10 3v6l-5.5 9A2 2 0 0 0 6.2 21h11.6a2 2 0 0 0 1.7-3L14 9V3" />
-    </Icon>
-  );
-}
-
 /**
  * A door with an arrow leaving through it.
  *

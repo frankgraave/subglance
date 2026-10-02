@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { ThemeToggle } from "../components/ThemeToggle";
 import type { ThemePreference } from "../theme/theme";
-import { BeakerIcon, SidebarIcon, SearchIcon } from "./icons";
+import { SidebarIcon, SearchIcon } from "./icons";
 
 /**
  * The masthead: what works on every screen, and nothing else (SUB-182).
@@ -16,10 +16,16 @@ import { BeakerIcon, SidebarIcon, SearchIcon } from "./icons";
  * and the dashboard is the only screen that has those numbers.
  *
  * **The rule: a control is in this bar only on a screen where it does
- * something.** Left: the sidebar toggle, then search. Right: the workbench and
- * the theme. All four work on every route, the monitor detail page included,
- * so the bar is the same everywhere as a consequence of the rule rather than
- * as a rule of its own.
+ * something.** Left: the sidebar toggle, then search. Right: the theme. All
+ * three work on every route, the monitor detail page included, so the bar is
+ * the same everywhere as a consequence of the rule rather than as a rule of
+ * its own.
+ *
+ * The component workbench used to sit on the right as a beaker button. It
+ * worked on every screen, but it is a developer tool drawn on fixture data,
+ * and a control everybody meets for something almost nobody needs is noise
+ * at best and a page of fake monitors at worst (SUB-193). It lives at
+ * `/workbench` now, typed rather than linked.
  *
  * It used to be the other way round (SUB-138): the bar was held identical on
  * every screen, and so the dashboard's layout switcher sat on Monitors,
@@ -50,8 +56,6 @@ export type TopbarProps = {
   onToggleSidebar: () => void;
   themePreference: ThemePreference;
   onThemeChange: (next: ThemePreference) => void;
-  workbenchOpen: boolean;
-  onToggleWorkbench: () => void;
   /** Opens the command menu: the masthead's search. */
   onOpenCommands?: () => void;
   /**
@@ -68,8 +72,6 @@ export function Topbar({
   onToggleSidebar,
   themePreference,
   onThemeChange,
-  workbenchOpen,
-  onToggleWorkbench,
   onOpenCommands,
   children,
 }: TopbarProps) {
@@ -140,24 +142,6 @@ export function Topbar({
       {children}
 
       <div className="shell-topbar-right">
-        {/*
-         * The workbench survives, as a side track rather than a tab beside the
-         * product. Judging a component in isolation and in both themes is
-         * something the live screen cannot do — it only ever shows the states
-         * the server happens to be in — but it is a developer tool, and the
-         * first thing you land on must be the real dashboard.
-         */}
-        <button
-          type="button"
-          className="shell-icon-btn"
-          onClick={onToggleWorkbench}
-          aria-pressed={workbenchOpen}
-          aria-label="Component workbench"
-          title="Component workbench — every state, both themes"
-        >
-          <BeakerIcon />
-        </button>
-
         <ThemeToggle preference={themePreference} onChange={onThemeChange} />
       </div>
     </header>

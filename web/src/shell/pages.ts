@@ -54,6 +54,9 @@ export type PageFrame = {
 /** The frame a route is drawn in. */
 export function pageFrame(route: Route): PageFrame {
   if (route.name === "monitor") return { title: null, width: "measure" };
+  // Not a screen of the product, so not in `PAGE_TITLES` or the rail. Full
+  // width because its galleries lay states side by side.
+  if (route.name === "workbench") return { title: "Workbench", width: "full" };
   return {
     title: PAGE_TITLES[route.name],
     width:

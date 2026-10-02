@@ -119,7 +119,7 @@ export type SidebarProps = {
   /** Shown under the product name; the instance this dashboard watches. */
   instance?: string;
   /** Which built destination is on screen. Defaults to the dashboard. */
-  current?: NavRoute | "monitor";
+  current?: NavRoute | "monitor" | "workbench";
   /** Client-side navigation. Absent means the links do a full page load. */
   onNavigate?: (route: NavRoute) => void;
   /** The signed-in address. Absent means no account footer is drawn. */

@@ -187,8 +187,6 @@ describe("Topbar", () => {
       onToggleSidebar={() => {}}
       themePreference="system"
       onThemeChange={() => {}}
-      workbenchOpen={false}
-      onToggleWorkbench={() => {}}
       {...over}
     />
   );
@@ -347,8 +345,6 @@ describe("the topbar holds only what works on every screen", () => {
         onToggleSidebar={() => {}}
         themePreference="dark"
         onThemeChange={() => {}}
-        workbenchOpen={false}
-        onToggleWorkbench={() => {}}
         onOpenCommands={() => {}}
       />,
     );
@@ -373,8 +369,6 @@ describe("the topbar holds only what works on every screen", () => {
         onToggleSidebar={() => {}}
         themePreference="dark"
         onThemeChange={() => {}}
-        workbenchOpen={false}
-        onToggleWorkbench={() => {}}
         onOpenCommands={open}
       />,
     );

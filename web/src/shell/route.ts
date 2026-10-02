@@ -28,7 +28,14 @@ export type Route =
    * is in and "here is the form that fixes it" is the link somebody sends.
    */
   | { name: "notifications"; create: boolean }
-  | { name: "monitor"; id: string };
+  | { name: "monitor"; id: string }
+  /**
+   * The component workbench: every component in every state, on fixtures
+   * (SUB-193). A developer tool, so it is an address and not a control —
+   * nothing in the product links to it, and a person who never types it
+   * never meets fixture data that looks like their own.
+   */
+  | { name: "workbench" };
 
 export const DASHBOARD_PATH = "/";
 
@@ -56,6 +63,9 @@ export const MONITORS_PATH = "/monitors";
  * *against* the inventory.
  */
 export const MONITOR_CREATE_PATH = "/monitors/new";
+
+/** The component workbench. Typed, never linked. */
+export const WORKBENCH_PATH = "/workbench";
 
 /** The notification channels: who hears about an incident, and whether they can. */
 export const NOTIFICATIONS_PATH = "/notifications";
@@ -91,6 +101,7 @@ export function monitorPath(id: string): string {
 export function parseRoute(pathname: string): Route {
   const segments = pathname.split("/").filter((segment) => segment !== "");
   if (segments.length === 1 && segments[0] === "settings") return { name: "settings" };
+  if (segments.length === 1 && segments[0] === "workbench") return { name: "workbench" };
   if (segments.length === 1 && segments[0] === "incidents") {
     return { name: "incidents" };
   }
@@ -152,5 +163,6 @@ export function routePath(route: Route): string {
     return route.create ? NOTIFICATION_CREATE_PATH : NOTIFICATIONS_PATH;
   if (route.name === "incidents") return INCIDENTS_PATH;
   if (route.name === "settings") return SETTINGS_PATH;
+  if (route.name === "workbench") return WORKBENCH_PATH;
   return DASHBOARD_PATH;
 }

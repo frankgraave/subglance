@@ -783,13 +783,20 @@ describe("NotificationsView", () => {
     expect(screen.getByText(/may not send a test/i)).toBeTruthy();
   });
 
-  it("builds no routing, quiet hours or severity controls, and says why", () => {
-    // SUB-124 has no backend. A quiet-hours switch that silently changes
-    // nothing is worse than no switch at all.
-    render(<NotificationsView channels={[make()]} onSave={async () => {}} />);
+  it("builds no routing or severity controls, and says where routing is set", () => {
+    // The page has no editor for routing yet (SUB-158, SUB-179), so it says
+    // where it is set today rather than claiming it does not exist: routing
+    // rules have had a backend since SUB-147 (SUB-193).
+    const { container } = render(
+      <NotificationsView channels={[make()]} onSave={async () => {}} />,
+    );
     expect(screen.queryByRole("button", { name: /quiet hours/i })).toBeNull();
     expect(screen.queryByLabelText(/severity/i)).toBeNull();
-    expect(screen.getByText(/no backend today \(SUB-124\)/i)).toBeTruthy();
+    const scope = screen.getByRole("complementary", { name: "Not on this page" });
+    expect(scope.textContent).toMatch(/tag routing rules are set through the API or a configuration file/i);
+    expect(scope.textContent).toMatch(/Import & export/);
+    expect(scope.textContent).not.toMatch(/no backend/i);
+    expect(container.textContent).not.toMatch(/SUB-\d+/);
   });
 
   it("puts the rows directly on the card — two surfaces, never three", () => {

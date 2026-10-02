@@ -30,14 +30,8 @@ beforeAll(async () => {
   browser = await chromium();
   page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 900, deviceScaleFactor: 1 });
-  await page.goto(server.url + "/", { waitUntil: "domcontentloaded" });
-  // The chips live in the workbench, behind its toggle. Waiting for the
-  // button first: a face is only fetched once something asks for it, and a
-  // click dispatched before hydration lands on nothing.
-  await page.waitForSelector('[aria-label="Component workbench"]', {
-    timeout: 15_000,
-  });
-  await page.click('[aria-label="Component workbench"]');
+  // The chips live in the workbench, at its own address (SUB-193).
+  await page.goto(server.url + "/workbench", { waitUntil: "domcontentloaded" });
   await page.waitForSelector(".chip--status", { timeout: 15_000 });
 }, 120_000);
 

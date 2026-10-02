@@ -126,6 +126,17 @@ describe("parseRoute", () => {
   });
 });
 
+describe("the workbench address", () => {
+  it("reads /workbench as the workbench and nothing deeper", () => {
+    // SUB-193: the only way in now that the masthead button is gone, so the
+    // address is the feature. A deeper path promises a screen that is not
+    // there and falls through like any other unknown path.
+    expect(parseRoute("/workbench")).toEqual({ name: "workbench" });
+    expect(parseRoute("/workbench/")).toEqual({ name: "workbench" });
+    expect(parseRoute("/workbench/sizes")).toEqual({ name: "dashboard" });
+  });
+});
+
 describe("routePath", () => {
   it("inverts parseRoute for both routes", () => {
     for (const route of [
@@ -137,6 +148,7 @@ describe("routePath", () => {
       { name: "monitors", create: true },
       { name: "notifications", create: false },
       { name: "notifications", create: true },
+      { name: "workbench" },
     ] as const) {
       expect(parseRoute(routePath(route))).toEqual(route);
     }

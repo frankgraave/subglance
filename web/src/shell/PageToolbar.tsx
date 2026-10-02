@@ -5,7 +5,7 @@ import { setToolbarSlot } from "./toolbarSlot";
  * route (SUB-138).
  *
  * The split is the whole idea. The masthead above holds only what works on
- * every screen — the sidebar, search, the workbench, the theme — so a control
+ * every screen — the sidebar, search, the theme — so a control
  * there never moves when you navigate (SUB-182). This bar is the opposite:
  * everything in it belongs to the screen you are on, and it is expected to
  * change completely between routes. A list's filter field, its sorting,

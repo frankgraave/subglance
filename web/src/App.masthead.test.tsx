@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /*
  * The masthead's contract (SUB-182): a control is in the bar only on a screen
- * where it does something. The global set — sidebar toggle, search,
- * workbench, theme — is on every route, the monitor detail page included; a
+ * where it does something. The global set — sidebar toggle, search, theme —
+ * is on every route, the monitor detail page included; a
  * control for one screen is on that screen and nowhere else.
  *
  * Its own file because each assertion here walks the whole app across six
@@ -150,7 +150,6 @@ const toolbarNames = () =>
 const GLOBAL = [
   "Collapse sidebar (Ctrl+B)",
   "Search",
-  "Component workbench",
   "Light",
   "Dark",
   "Auto",
@@ -262,9 +261,9 @@ describe("the masthead", () => {
   it("keeps every pressed-state control in the masthead the same on every screen", async () => {
     /*
      * A control in chrome that is on every screen must mean the same thing on
-     * every screen. The theme segments and the workbench legitimately carry
-     * `aria-pressed` — they report what is on — so what is asserted is that
-     * the set does not change as you navigate.
+     * every screen. The theme segments legitimately carry `aria-pressed` —
+     * they report what is on — so what is asserted is that the set does not
+     * change as you navigate.
      */
     render(<App />);
     await screen.findByText(USER.email);
@@ -277,7 +276,7 @@ describe("the masthead", () => {
       ].map((el) => el.getAttribute("aria-label") ?? el.textContent ?? "");
 
     const onDashboard = pressedNames();
-    expect(onDashboard).toContain("Component workbench");
+    expect(onDashboard).toEqual(["Light", "Dark", "Auto"]);
     expect(onDashboard).not.toContain("Add a monitor");
 
     for (const route of ROUTES.slice(1)) {
