@@ -195,6 +195,69 @@ the address and this setting. A channel saved earlier and delivered after the
 setting was turned off fails the same way, in the test button and in the
 Delivery column, and is not retried: a refused address stays refused.
 
+## The webhook payload
+
+A `webhook` channel sends one `POST` per alert with `Content-Type:
+application/json`, a `User-Agent` starting with `SubGlance/`, any headers set
+in `headers`, and this body:
+
+```json
+{
+  "monitor_id": 7,
+  "monitor_name": "Checkout API",
+  "monitor_type": "http",
+  "target": "https://shop.example.com/health",
+  "event": "incident_confirmed",
+  "incident_id": 312,
+  "started_at": "2026-10-02T03:12:40Z",
+  "at": "2026-10-02T03:14:10Z",
+  "cause": "timeout",
+  "last_error": "no response within 10s"
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `monitor_id`, `monitor_name`, `monitor_type`, `target` | The monitor, as it was when the alert fired. A retry an hour later still says what was true then |
+| `event` | What happened: see below |
+| `incident_id` | The incident the alert belongs to; left out when there is none |
+| `started_at` | When the outage began: the first failed check, not the confirmation |
+| `at` | When this alert fired |
+| `cause` | The failure kind: `dns`, `connection`, `tls`, `timeout`, `status`, `keyword`, `assertion`, `cert_expiry`, `push_overdue`, `push_reported`, `local_network` or `internal` |
+| `last_error` | The checker's message for the latest failure |
+| `reminder_count` | Which repeat of an unanswered alert this is; left out on the first |
+| `grouped_names`, `grouped_cause`, `members` | Set when several alerts were sent as one: see below |
+| `digest`, `digest_timezone` | Set on the summary a channel receives when its quiet hours end |
+
+A monitor's alerts carry `incident_confirmed` (it is down), `incident_reminder`
+(it is still down and nobody has acknowledged it) or `incident_resolved` (it is
+back up). Messages about SubGlance itself carry `backup_failed` or
+`local_network_restored`, with `monitor_id` 0 and `monitor_name`
+`SubGlance`; a quiet-hours summary carries `quiet_hours_digest`. Ignore an
+`event` you do not recognise rather than treating it as an outage: a newer
+version may add one.
+
+When monitors fail inside one grouping window, the channel receives a single
+alert. `grouped_names` lists every monitor, oldest failure first, and
+`grouped_cause` is the cause when they all agree. `members` holds each
+monitor's own alert in the shape above. At the top level, `event`, `at`,
+`started_at`, `incident_id`, `monitor_name`, `monitor_type` and `target` repeat
+the first member's, and `monitor_id` is 0 since the alert is about more than one
+monitor. `cause`, `last_error` and `reminder_count` are not set at the top
+level: read each monitor's failure from its entry in `members`. A quiet-hours
+digest also lists its alerts in `members`.
+
+`started_at` is `0001-01-01T00:00:00Z` when there is no outage behind the
+message: the **Send test** button, a backup notice and a digest. The test
+message is shaped like a recovery (`event` is `incident_resolved`) with
+`monitor_id` 0 and `monitor_name` `SubGlance test`, so a receiver that acts on
+recoveries should check the `monitor_id` first.
+
+A `2xx` answer counts as delivered. A `429`, a `5xx` or a network error is
+retried, six attempts in all spread over about twenty minutes, before the
+alert is marked failed; any other `4xx` fails it at once, because retrying
+cannot fix a request the receiver refuses.
+
 ## Which channels get added
 
 A new channel type is maintenance for as long as the upstream API exists, so
@@ -204,6 +267,7 @@ for Android meet the first; Slack, Discord, Telegram, email and Twilio meet the
 second.
 
 For anything else (Teams, Matrix, Pushover and so on), use the `webhook`
-channel. It posts the alert as a stable, documented JSON object, and custom
-headers cover most authentication schemes. A request for a new type is judged
-against the bar above, not against whether another tool has it.
+channel. It posts the alert as a stable JSON object, described under
+[the webhook payload](#the-webhook-payload), and custom headers cover most
+authentication schemes. A request for a new type is judged against the bar
+above, not against whether another tool has it.

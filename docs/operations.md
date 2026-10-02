@@ -256,7 +256,8 @@ caller name its own address — and the login rate limiter keys on that address,
 so a fresh value per request is credential guessing with the limit switched off.
 
 If SubGlance runs behind nginx, Caddy, Traefik or a load balancer, name it here
-and real client addresses reappear in the rate limiter and the session list:
+and real client addresses reappear in the rate limiters and in the log lines
+that name a caller:
 
 ```
 --trusted-proxies 127.0.0.1,172.16.0.0/12

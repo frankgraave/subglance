@@ -20,9 +20,10 @@ everything is running, what is broken, and since when.
 > [!NOTE]
 > **Status: early development.** The engine works end to end — monitors are
 > scheduled, checked, confirmed into incidents, streamed to a live dashboard and
-> delivered to a human over five notification channels. The latest build is
-> **`v0.1.0-rc4`**, a signed release candidate with binaries for five platforms.
-> What remains before v0.1 itself is listed under [where it stands](#where-it-stands).
+> delivered to a human over eight notification channels. The latest release is
+> **`v0.1.0-rc4`**, a signed release candidate with binaries for five platforms;
+> the `:edge` image carries everything merged since, listed under
+> [newer than the latest release](#newer-than-the-latest-release).
 
 ## Quick start
 
@@ -84,6 +85,7 @@ explains it and how to choose other targets or turn it off.
 | **[Keyboard commands](docs/keyboard.md)** | Command menu, monitor search and actions, navigation, themes and focus behavior |
 | **[Installing SubGlance](docs/installation.md)** | Docker Compose, Docker, a downloaded binary with signature verification, building from source, running the tests |
 | **[Using SubGlance](docs/using-subglance.md)** | First run, your first monitor, authentication, the five check types, push monitors, how a failure becomes an alert, repeat alerts, the API |
+| **[Notification channels](docs/channels.md)** | The settings each of the eight channel types needs, the Delivery column, SMS limits, private addresses, and the webhook payload |
 | **[Configuration files](docs/configuration-files.md)** | Export and import monitors, channels, routing rules and maintenance windows as YAML, without credentials |
 | **[Managing tags](docs/tags.md)** | Bulk assignment/removal, instance-wide renames, collision policy and conditional API writes |
 | **[Running SubGlance](docs/operations.md)** | The configuration table, worker sizing, metrics, shutdown, the dead man's switch, backup and restore |
@@ -94,21 +96,25 @@ explains it and how to choose other targets or turn it off.
 
 An honest split, because a roadmap says nothing about what you can run today.
 Everything below is judged by whether it works end to end, not by whether code
-exists for it.
+exists for it. It describes `develop`, which is what the `:edge` image runs;
+what has not reached a release yet is listed under
+[newer than the latest release](#newer-than-the-latest-release).
 
 | Area | State |
 |---|---|
 | Checks — HTTP(S), TCP, ping, SSL, push | ✅ Working |
 | Scheduler, state engine, flapping suppression | ✅ Working |
-| Notifications — webhook, Discord, Slack, Telegram, email, ntfy, Gotify | ✅ Working |
+| Notifications — webhook, Discord, Slack, Telegram, email, ntfy, Gotify, SMS | ✅ Working |
 | REST API v1 + OpenAPI 3.1 specification | ✅ Working |
 | Authentication — sessions, API tokens, three roles | ✅ Working |
 | Dashboard, monitor detail, incidents, monitors, notifications screens | ✅ Working |
 | Signed multi-platform release builds | ✅ Working (`v0.1.0-rc4`) |
 | Maintenance windows — one-off and weekly, by monitor or tag | ✅ Working |
+| Public status pages | ✅ Working |
+| Configuration files — YAML export and import | ✅ Working |
 | Scheduled backups to S3-compatible storage, and restore | ✅ Working |
 | Latency chart on the detail view — 24h, 7d and 30d | ✅ Working |
-| Settings — account, display, users, retention, backups, API tokens, instance diagnostics, reset | ✅ Working |
+| Settings — account, display, users, status pages, self-monitoring, retention, backups, import and export, API tokens, instance diagnostics, reset | ✅ Working |
 
 <details>
 <summary><strong>What "working" covers, in detail</strong></summary>
@@ -136,11 +142,9 @@ exists for it.
 - **Delivering the alert**: webhook, Discord, Slack, Telegram, email, the
   self-hosted push services ntfy and Gotify, and SMS through an Android phone
   or Twilio, one 160-character message per alert with an hourly limit
-  ([channels](docs/channels.md); SMS is set up through the API until the
-  Notifications screen offers it), sent
-  from an outbox that retries with exponential backoff and jitter and
-  dead-letters a delivery that keeps failing, so a Slack outage never blocks the
-  checker loop. `POST /api/v1/channels/{id}/test` sends a real message through a
+  ([channels](docs/channels.md)), sent from an outbox that retries with
+  exponential backoff and jitter and dead-letters a delivery that keeps
+  failing, so a Slack outage never blocks the checker loop. `POST /api/v1/channels/{id}/test` sends a real message through a
   channel, so a misconfigured webhook is found when it is saved rather than
   during the first outage
 - **Alert grouping**: twenty monitors failing on one dead uplink send one
@@ -173,13 +177,33 @@ exists for it.
 
 </details>
 
+### Newer than the latest release
+
+These work on the `:edge` image, which follows `develop`, but arrived after
+`v0.1.0-rc4` was tagged: the release archives and the `:0.1.0-rc4` image do not
+have them.
+
+- **Public status pages** at `/status/<slug>`, managed under Settings
+- **Configuration files**: export and import monitors, channels, routing rules
+  and maintenance windows as YAML
+- **The ntfy, Gotify and SMS channels**, and the **Delivery** column that shows
+  what happened to each channel's recent alerts
+- **JSON assertions** on HTTP checks: fail when a field of the response does
+  not match
+- **Holding off outages while the host itself is offline**, and saying so on
+  the dashboard
+- **Retention controls**: a database size limit, the time of day the pass runs,
+  running it now, and compacting the database
+- **The Display section** in Settings, and pausing, resuming and deleting a
+  monitor from its detail page
+
 ### Not working yet
 
 Everything planned for v0.1 is listed as working above.
 
-Deliberately **not** in v0.1: status pages, config-as-code, multi-region checks,
-on-call schedules, SSO, mobile app, CLI, Postgres. They are on the roadmap; they
-are not in the first release.
+Deliberately **not** in v0.1: multi-region checks, on-call schedules, SSO,
+mobile app, CLI, Postgres. They are on the roadmap; they are not in the first
+release.
 
 ### Known sharp edges
 
@@ -191,11 +215,6 @@ Things that work, but not the way they eventually should:
   read the database file or any backup of it. The API masks them on the way
   out; the file does not. Setting a key encrypts them at rest — see
   [encrypting channel configuration](docs/operations.md#encrypting-channel-configuration).
-- **A channel's target address is only checked when a message is sent**, not
-  when the channel is saved. The SSRF guard runs at delivery, which is what
-  stops a channel from reaching `169.254.169.254` — but a channel pointed
-  there saves without complaint and only reports the problem on the first
-  alert.
 
 ## Releases
 
@@ -207,7 +226,8 @@ identity, so the signature can be checked without trusting a key I could lose.
 
 The container image is built on every push to `develop`, so `:edge` and
 `:develop` move under you; a short-SHA tag is published alongside them for
-pinning an exact build.
+pinning an exact build. A release tag publishes its version as an image tag
+too, such as `:0.1.0-rc4`.
 
 ## Contributing
 

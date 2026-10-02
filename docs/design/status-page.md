@@ -6,8 +6,10 @@ read path that needs no login besides `/push`, and the data model. The static
 prototype beside it, [`docs/mockups/pages/status.html`](../mockups/pages/status.html),
 draws the result on a phone, a tablet and a desktop, in both themes.
 
-Nothing here is built yet. The build ticket (SUB-153) takes its acceptance
-criteria from this file.
+The page is built (SUB-153). This file stays as the design record: the
+reasoning behind the allowlist, the threat model and the data model. How to
+switch a page on and run it is in
+[operations](../operations.md#public-status-pages).
 
 **Version 1 is small on purpose.** A page shows a chosen set of monitors under
 public names, their current state, a 90-day history and the outages behind it,

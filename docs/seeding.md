@@ -53,9 +53,10 @@ one row.
 - **Incidents in every state**: resolved, open and confirmed, open but not yet
   confirmed, acknowledged and still broken, and one escalating through repeat
   reminders because nobody has answered it.
-- **Eight notification channels**, one of each type plus a webhook that is
-  failing, one with a backlog, and one switched off, so the channel health
-  badges have something other than a row of green to show.
+- **Eight notification channels**: Slack, Discord, Telegram, email and four
+  webhooks, one healthy, one failing, one with a backlog and one switched off,
+  so the Delivery column has something other than a row of green to show. The
+  ntfy, Gotify and SMS types are not seeded.
 - **Outbox rows** for every alert those incidents produced — delivered, failed
   and pending — which is where the notifications screen's Delivery column
   reads from. A delivered alert older than the delivery log's 30 days is not
