@@ -472,11 +472,13 @@ const depthTokens = [
 const motionTokens = group(root, "--dur", "--ease");
 const bpTokens = group(root, "--bp-");
 // Container rungs (SUB-149) are list widths read by `@container`, never by
-// `@media`; every one of them is named for the row it fits, `--bp-*-row`.
-// The guide shows them in their own table so neither set is mistaken for the
-// other.
-const bpContainerTokens = bpTokens.filter(([name]) => name.endsWith("-row"));
-const bpViewportTokens = bpTokens.filter(([name]) => !name.endsWith("-row"));
+// `@media`; each is named for what it fits, a list's row (`--bp-*-row`) or an
+// incident's line (`--bp-*-line`, SUB-194). The guide shows them in their own
+// table so neither set is mistaken for the other, and `tokens.test.ts` fails
+// when a rung lands in the wrong one.
+const isContainerRung = (name) => name.endsWith("-row") || name.endsWith("-line");
+const bpContainerTokens = bpTokens.filter(([name]) => isContainerRung(name));
+const bpViewportTokens = bpTokens.filter(([name]) => !isContainerRung(name));
 const controlTokens = group(root, "--control-");
 
 function specimenBlock(spec) {

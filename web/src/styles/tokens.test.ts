@@ -1237,6 +1237,25 @@ describe("tokens.css is the only source of size", () => {
       );
     }
   });
+
+  it("files every rung in the guide's table for its kind", () => {
+    // The guide sorts the rungs into two tables by name. A container rung
+    // filed under the viewport widths reads as a value an `@media` rule may
+    // use, which is the mistake the two tables exist to prevent (SUB-194).
+    const guide = readFileSync(join(repoRoot, "docs", "styleguide", "index.html"), "utf8");
+    const table = (lead: string) => {
+      const start = guide.indexOf(lead);
+      expect(start, `the guide has no "${lead}" table`).toBeGreaterThan(-1);
+      const body = guide.slice(start, guide.indexOf("</table>", start));
+      return new Set(
+        [...body.matchAll(/<td class="sg-value"><code>([^<]+)<\/code><\/td>/g)].map(
+          ([, value]) => value,
+        ),
+      );
+    };
+    expect(table("Viewport widths:")).toEqual(BREAKPOINTS);
+    expect(table("Container widths:")).toEqual(CONTAINER_BREAKPOINTS);
+  });
 });
 
 /**

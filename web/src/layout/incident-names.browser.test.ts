@@ -122,6 +122,12 @@ type Line = {
   lineLeft: number;
   lineWidth: number;
   contentRight: number;
+  /** The width the line's container query reads: inside its padding. */
+  contentWidth: number;
+  /** Where the numbers and the why sit, top and bottom. */
+  factsTop: number;
+  whyTop: number;
+  whyBottom: number;
   errorClipped: boolean;
   errorRight: number;
   /** Where each number column starts, relative to the line. */
@@ -137,8 +143,11 @@ async function lines(page: Page): Promise<Line[]> {
     [...document.querySelectorAll<HTMLElement>(".inc-row")].map((row) => {
       const line = row.querySelector<HTMLElement>(".inc-line")!;
       const box = line.getBoundingClientRect();
+      const style = getComputedStyle(line);
       const at = (selector: string) =>
         Math.round(row.querySelector<HTMLElement>(selector)!.getBoundingClientRect().left - box.left);
+      const facts = row.querySelector<HTMLElement>(".inc-facts")!.getBoundingClientRect();
+      const why = row.querySelector<HTMLElement>(".inc-why")!.getBoundingClientRect();
       const name = row.querySelector<HTMLElement>(".inc-name")!;
       const error = row.querySelector<HTMLElement>(".inc-sub")!;
       return {
@@ -146,7 +155,11 @@ async function lines(page: Page): Promise<Line[]> {
         nameClipped: name.scrollWidth > name.clientWidth,
         lineLeft: Math.round(box.left),
         lineWidth: Math.round(box.width),
-        contentRight: Math.round(box.right - parseFloat(getComputedStyle(line).paddingRight)),
+        contentRight: Math.round(box.right - parseFloat(style.paddingRight)),
+        contentWidth: Math.round(box.width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)),
+        factsTop: Math.round(facts.top),
+        whyTop: Math.round(why.top),
+        whyBottom: Math.round(why.bottom),
         errorClipped: error.scrollWidth > error.clientWidth,
         errorRight: Math.round(error.getBoundingClientRect().right),
         time: at(".inc-col-time"),
@@ -189,6 +202,18 @@ describe("the seed estate in the incident rows", () => {
         for (const key of ["lineLeft", "lineWidth", "time", "dur", "ack"] as const) {
           expect(new Set(measured.map((line) => line[key])), `${key} differs between rows`).toHaveLength(1);
         }
+        // The numbers sit beside the name from 716px of line content and
+        // under the why below it (`@container inc-line`). At 820 the expanded
+        // sidebar leaves the line under 716, so this width is the one that
+        // exercises the narrow order; 1440 exercises the wide one.
+        if (width === 820) expect(measured.every((line) => line.contentWidth < 716)).toBe(true);
+        if (width === 1440) expect(measured.every((line) => line.contentWidth >= 716)).toBe(true);
+        const misplaced = measured
+          .filter((line) =>
+            line.contentWidth < 716 ? line.factsTop < line.whyBottom : line.factsTop >= line.whyTop,
+          )
+          .map((line) => `${line.name}: numbers at ${line.factsTop}, why ${line.whyTop}-${line.whyBottom}`);
+        expect(misplaced).toEqual([]);
       } finally {
         await page.close();
       }
