@@ -15,7 +15,6 @@ import { LiveIncidentsRoot } from "./incidents/LiveIncidents";
 import { LiveMonitorsRoot } from "./monitors/LiveMonitors";
 import { LiveNotificationsRoot } from "./notifications/LiveNotifications";
 import { createQueryClient } from "./live/queryClient";
-import { monitorsQueryKey } from "./live/api";
 import { ErrorBoundary } from "./shell/ErrorBoundary";
 import { useRoute } from "./shell/useRoute";
 import { routePath } from "./shell/route";
@@ -260,7 +259,10 @@ export default function App() {
    */
   const onMonitorCreated = useCallback(() => {
     setAddOpen(false);
-    void queryClient.invalidateQueries({ queryKey: monitorsQueryKey });
+    // The whole prefix, not only the dashboard's read: the monitors page and
+    // the notifications page's "Who hears what" read the inventory, and a
+    // monitor created with channels has to appear there with them.
+    void queryClient.invalidateQueries({ queryKey: ["monitors"] });
   }, [queryClient]);
   const closeNav = useCallback(() => setNavOpen(false), []);
 

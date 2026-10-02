@@ -321,20 +321,45 @@ type RuleRoute struct {
 	Channels []ChannelSummary
 }
 
-// MonitorRuleRoutes reads, for every monitor at once, which rules route it
-// and to which channels. Rules the monitor is excluded from and rules with no
-// channels are left out, because neither sends it anything. A missing monitor
-// key means no rule routes it only when err is nil.
-func (db *DB) MonitorRuleRoutes(ctx context.Context) (map[int64][]RuleRoute, error) {
-	rows, err := db.Reader.QueryContext(ctx, `
+// monitorRuleRoutesSelect lists, per monitor, the rules that route it and the
+// channels each adds. The two variants differ only in whether they are
+// narrowed to one monitor; both are constants, so nothing is concatenated
+// from a caller's value.
+const monitorRuleRoutesSelect = `
 		SELECT t.monitor_id, r.id, r.tag_key, r.tag_value, c.id, c.name
 		  FROM routing_rules r
 		  JOIN monitor_tags t ON t.key = r.tag_key AND t.value = r.tag_value
 		  JOIN routing_rule_channels rc ON rc.rule_id = r.id
 		  JOIN notif_channels c ON c.id = rc.channel_id
 		 WHERE NOT EXISTS (SELECT 1 FROM routing_rule_exclusions e
-		                    WHERE e.rule_id = r.id AND e.monitor_id = t.monitor_id)
-		 ORDER BY t.monitor_id, r.id, c.id`)
+		                    WHERE e.rule_id = r.id AND e.monitor_id = t.monitor_id)`
+
+const monitorRuleRoutesOrder = `
+		 ORDER BY t.monitor_id, r.id, c.id`
+
+// MonitorRuleRoutes reads, for every monitor at once, which rules route it
+// and to which channels. Rules the monitor is excluded from and rules with no
+// channels are left out, because neither sends it anything. A missing monitor
+// key means no rule routes it only when err is nil.
+func (db *DB) MonitorRuleRoutes(ctx context.Context) (map[int64][]RuleRoute, error) {
+	return db.queryRuleRoutes(ctx, monitorRuleRoutesSelect+monitorRuleRoutesOrder)
+}
+
+// RuleRoutesForMonitor is MonitorRuleRoutes narrowed to one monitor, for the
+// single-monitor read: the same rules, without reading every other
+// monitor's routing to answer for one. Nil with a nil error means no rule
+// routes it.
+func (db *DB) RuleRoutesForMonitor(ctx context.Context, monitorID int64) ([]RuleRoute, error) {
+	out, err := db.queryRuleRoutes(ctx,
+		monitorRuleRoutesSelect+` AND t.monitor_id = ?`+monitorRuleRoutesOrder, monitorID)
+	if err != nil {
+		return nil, err
+	}
+	return out[monitorID], nil
+}
+
+func (db *DB) queryRuleRoutes(ctx context.Context, query string, args ...any) (map[int64][]RuleRoute, error) {
+	rows, err := db.Reader.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query monitor rule routes: %w", err)
 	}

@@ -557,18 +557,19 @@ export function NotificationsView({
        * number. Both stopped being true or useful to anyone reading the page
        * (SUB-193): routing rules exist in the API and in configuration files,
        * and a ticket number means nothing to a person running the product. So
-       * it says where each thing is set today. When the monitor form and this
-       * page grow editors for them (SUB-179, SUB-158), this is the paragraph
-       * that changes.
+       * it says where each thing is set today. A monitor's own channels moved
+       * into its add and edit forms (SUB-179); when this page grows an editor
+       * for routing rules (SUB-158), this is the paragraph that changes again.
        */}
       <aside className="nt-scope" aria-label="Not on this page">
         <p className="nt-scope-legend">Not on this page</p>
         <p className="nt-note">
-          Which monitors alert through which channels is set outside this page
-          for now: a monitor&rsquo;s own channels and tag routing rules are set
-          through the API or a configuration file imported under Settings,
-          Import &amp; export. A monitor with neither alerts through the default
-          channel. Quiet hours are set on each channel.
+          Which monitors alert through which channels is set outside this page:
+          a monitor&rsquo;s own channels are chosen in its add and edit forms,
+          and tag routing rules are set through the API or a configuration file
+          imported under Settings, Import &amp; export. A monitor with neither
+          alerts through the default channel. Quiet hours are set on each
+          channel.
         </p>
       </aside>
     </section>

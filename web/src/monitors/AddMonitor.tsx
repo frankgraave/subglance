@@ -14,6 +14,7 @@ import {
 } from "./preview";
 import type { PreviewRequest, PreviewState } from "./preview";
 import type { Rejection } from "./AddMonitorForm";
+import type { Channel } from "../notifications/channels";
 
 /**
  * The data owner for the add-monitor form.
@@ -32,6 +33,7 @@ export type AddMonitorProps = {
   api?: {
     preview: typeof previewCheck;
     create: typeof createMonitor;
+    channels?: (signal: AbortSignal) => Promise<Channel[]>;
   };
 };
 
@@ -194,6 +196,7 @@ export function AddMonitor({ onCreated, onCancel, api }: AddMonitorProps) {
     <div ref={element}><AddMonitorForm
       key={formVersion}
       onDirtyChange={onDirtyChange}
+      loadChannels={api?.channels}
       onPreview={runPreview}
       onSubmit={save}
       preview={state}
@@ -218,6 +221,11 @@ function bodyFor(
   values: AddMonitorValues,
   state: PreviewState,
 ): Record<string, unknown> {
+  // Omitted when none is chosen, the same request as before the form could
+  // choose: the monitor then alerts through its rules or the default.
+  const channels = values.channelIds === ""
+    ? {}
+    : { channel_ids: values.channelIds.split(",").map(Number) };
   if (isPush(values)) {
     return {
       name: values.name.trim(),
@@ -225,9 +233,11 @@ function bodyFor(
       push_interval_s: values.pushIntervalS,
       push_grace_s: values.pushGraceS,
       repeat_after_s: values.repeatAfterS,
+      ...channels,
     };
   }
   return {
+    ...channels,
     name: values.name.trim() !== "" ? values.name.trim() : values.target.trim(),
     // The server infers the type for a preview, but creating a monitor
     // requires one. Reusing what the preview resolved is why the preview

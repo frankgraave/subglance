@@ -68,12 +68,16 @@ it.each([
   expect(after.defaultPrevented).toBe(false);
 });
 
+/** The form reads the channel list on mount (SUB-179); answer it with none. */
+const channelsRead = (url: unknown) => String(url) === "/api/v1/channels";
+const noChannels = () => Promise.resolve(new Response(JSON.stringify({ channels: [] })));
 function fillExplicit() {
   fireEvent.change(screen.getByLabelText("What should be watched"), { target: { value: "https://example.test" } });
   fireEvent.change(screen.getByLabelText("Check type"), { target: { value: "http" } });
 }
 it("resets a successful create even when the caller keeps the form mounted", async () => {
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: 9 }), { status: 201 })));
+  vi.stubGlobal("fetch", vi.fn((url: unknown) => channelsRead(url) ? noChannels()
+    : Promise.resolve(new Response(JSON.stringify({ id: 9 }), { status: 201 }))));
   render(<AddMonitor />); fillExplicit();
   fireEvent.click(screen.getByRole("button", { name: "Save monitor" }));
   await waitFor(() => expect((screen.getByLabelText("What should be watched") as HTMLInputElement).value).toBe(""));
@@ -82,15 +86,15 @@ it("resets a successful create even when the caller keeps the form mounted", asy
 });
 it("aborts pending work on confirmed discard and ignores a late save result", async () => {
   let resolve!: (response: Response) => void;
-  const fetcher = vi.fn(() => new Promise<Response>((r) => { resolve = r; }));
-  vi.stubGlobal("fetch", fetcher);
+  const fetcher = vi.fn((_url: unknown, _init?: RequestInit) => new Promise<Response>((r) => { resolve = r; }));
+  vi.stubGlobal("fetch", (url: unknown, init?: RequestInit) => channelsRead(url) ? noChannels() : fetcher(url, init));
   const created = vi.fn();
   const view = render(<AddMonitor onCreated={created} />); fillExplicit();
   const form = screen.getByRole("form", { name: "Add a monitor" });
   fireEvent.submit(form); fireEvent.submit(form);
   expect(fetcher).toHaveBeenCalledTimes(1);
   expect((screen.getByLabelText("What should be watched") as HTMLInputElement).matches(":disabled")).toBe(true);
-  const signal = vi.mocked(fetch).mock.calls[0][1]!.signal!;
+  const signal = fetcher.mock.calls[0][1]!.signal!;
   view.unmount(); expect(signal.aborted).toBe(true);
   resolve(new Response(JSON.stringify({ id: 9 }), { status: 201 }));
   await waitFor(() => expect(created).not.toHaveBeenCalled());

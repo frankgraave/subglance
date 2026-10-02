@@ -184,12 +184,13 @@ describe("ChannelForm", () => {
 
   it("says where a channel's monitors are chosen, in the reader's terms", () => {
     // It used to explain itself with a package path and the design mockup,
-    // neither of which the person filling in the form has seen, and to claim
-    // the monitor form chooses channels, which it does not (SUB-193).
+    // neither of which the person filling in the form has seen (SUB-193).
+    // The monitor form chooses a monitor's own channels since SUB-179; rules
+    // are still set through the API or a file.
     const { container } = render(<ChannelForm onSave={async () => {}} />);
-    expect(
-      screen.getByText(/which monitors alert through this channel is not chosen here/i).textContent,
-    ).toMatch(/API or an imported configuration file/);
+    const note = screen.getByText(/which monitors alert through this channel is not chosen here/i).textContent;
+    expect(note).toMatch(/each monitor chooses its own channels in its add and edit forms/);
+    expect(note).toMatch(/API or an imported configuration file/);
     expect(container.textContent).not.toMatch(/internal\/|mockup|SUB-\d+/i);
   });
 

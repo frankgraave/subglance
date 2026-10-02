@@ -81,6 +81,19 @@ type Monitor struct {
 	// shape and the normalisation rules; nil and empty mean the same thing.
 	Tags map[string]string
 
+	// ChannelIDs, when non-nil, replaces the monitor's own channel
+	// assignments in the same transaction as the create or update that
+	// carries it; an empty, non-nil slice removes them all. Nil leaves them
+	// alone. Reads never fill it: the assignments live in their own table and
+	// are read with ListMonitorChannels, so a monitor read, changed and
+	// written back keeps whatever channels it had.
+	//
+	// It rides on the write rather than following it as a second call so an
+	// edit that changes the name and the channels together either happens or
+	// does not, and so the If-Match that guards the row guards the
+	// assignments too.
+	ChannelIDs []int64
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -310,6 +323,11 @@ func (db *DB) CreateMonitor(ctx context.Context, m Monitor) (Monitor, error) {
 	m.ID = id
 	if err := replaceTags(ctx, tx, id, m.Tags); err != nil {
 		return Monitor{}, err
+	}
+	if len(m.ChannelIDs) > 0 {
+		if err := replaceMonitorChannels(ctx, tx, id, m.ChannelIDs); err != nil {
+			return Monitor{}, err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return Monitor{}, fmt.Errorf("commit create monitor: %w", err)
@@ -1024,6 +1042,11 @@ func (db *DB) updateMonitor(ctx context.Context, m Monitor, expected []int64) (M
 	// monitor, exactly like headers, so there has to be a way to remove one.
 	if err := replaceTags(ctx, tx, m.ID, m.Tags); err != nil {
 		return Monitor{}, err
+	}
+	if m.ChannelIDs != nil {
+		if err := replaceMonitorChannels(ctx, tx, m.ID, m.ChannelIDs); err != nil {
+			return Monitor{}, err
+		}
 	}
 
 	var stored int64

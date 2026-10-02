@@ -154,6 +154,11 @@ export type MonitorPatch = {
   min_tls_version?: string;
   /** Replaces the assertion; `null` removes it. */
   json_assertion?: JsonAssertion | null;
+  /**
+   * Replaces the monitor's own channels, in the same conditional write as
+   * the rest; `[]` removes them all.
+   */
+  channel_ids?: number[];
 };
 
 /**

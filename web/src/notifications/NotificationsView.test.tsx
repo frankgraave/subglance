@@ -784,15 +784,17 @@ describe("NotificationsView", () => {
   });
 
   it("builds no routing or severity controls, and says where routing is set", () => {
-    // The page has no editor for routing yet (SUB-158, SUB-179), so it says
-    // where it is set today rather than claiming it does not exist: routing
-    // rules have had a backend since SUB-147 (SUB-193).
+    // The page has no editor for routing yet (SUB-158), so it says where it
+    // is set today rather than claiming it does not exist: routing rules have
+    // had a backend since SUB-147 (SUB-193), and a monitor's own channels are
+    // chosen in its form (SUB-179).
     const { container } = render(
       <NotificationsView channels={[make()]} onSave={async () => {}} />,
     );
     expect(screen.queryByRole("button", { name: /quiet hours/i })).toBeNull();
     expect(screen.queryByLabelText(/severity/i)).toBeNull();
     const scope = screen.getByRole("complementary", { name: "Not on this page" });
+    expect(scope.textContent).toMatch(/own channels are chosen in its add and edit forms/i);
     expect(scope.textContent).toMatch(/tag routing rules are set through the API or a configuration file/i);
     expect(scope.textContent).toMatch(/Import & export/);
     expect(scope.textContent).not.toMatch(/no backend/i);

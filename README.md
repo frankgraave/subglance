@@ -196,6 +196,7 @@ have them.
   running it now, and compacting the database
 - **The Display section** in Settings, and pausing, resuming and deleting a
   monitor from its detail page
+- **Choosing a monitor's channels** in its add and edit forms
 
 ### Not working yet
 
