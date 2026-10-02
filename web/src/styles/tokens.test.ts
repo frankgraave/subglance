@@ -978,7 +978,7 @@ const BREAKPOINTS = new Set(["640px", "641px", "900px"]);
  * `@media (max-width: 836px)` through as a "ladder" value, which is the drift
  * this guard exists to stop, arriving through the side door (SUB-149).
  */
-const CONTAINER_BREAKPOINTS = new Set(["836px", "638px"]);
+const CONTAINER_BREAKPOINTS = new Set(["836px", "638px", "716px"]);
 
 /**
  * The top-level parenthesised conditions of a media query, balanced.

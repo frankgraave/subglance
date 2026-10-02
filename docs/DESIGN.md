@@ -885,9 +885,11 @@ measured fixed parts plus a 104px floor for the name. In the inventory that
 floor is a viewer's: someone who can edit also gets a selection box, which
 comes out of the same 104px and leaves their name 76px at the wrap. That is
 accepted rather than given a second rung, and `inventory.css` says why
-(SUB-170). Those are documented as
-`--bp-inventory-row` and `--bp-channel-row` and guarded as their own set, so a
-container width can never pass as a viewport rung.
+(SUB-170). An incident's line takes the same approach at 716px, with a
+272px floor because on a monitor's page its name slot holds a date and a time
+(SUB-194). Those are documented as `--bp-inventory-row`, `--bp-channel-row` and
+`--bp-incident-line` and guarded as their own set, so a container width can
+never pass as a viewport rung.
 
 ### 2.14 The column ladder is a proportion
 
@@ -1783,11 +1785,29 @@ The same row is drawn on the monitor detail page and on `/incidents`. One
 component, because two would grow two vocabularies for the three states below —
 and one of them would eventually get the third state wrong.
 
-The collapsed row's column order is the order the questions get asked at
-03:00: **is it bad** (the lamp) → **what is it** (the name, error beneath) →
-**why** (the failure kind) → **since when** → **for how long** → **is anyone on
-it** → **can I take it**. Fixed column widths, because a time column that
-shifts by two pixels per row is not a column.
+The collapsed row's order is the order the questions get asked at 03:00:
+**is it bad** (the lamp) → **what is it** (the name) → **why** (the failure
+kind and the error) → **since when** → **for how long** → **is anyone on it**
+→ **can I take it**. Fixed column widths for the numbers, because a time
+column that shifts by two pixels per row is not a column.
+
+**The name comes first, and the why gets a line of its own** (SUB-194). The
+first line is the name and the three numbers; the second is the failure kind
+as a chip, then the error, as wide as the line. Kind and error are one answer,
+said short and then in full, and they used to sit apart: the error clipped
+under the name and the kind in a 168px column beside it. Four fixed columns
+took 544px before the name got any, so beside the expanded sidebar a name had
+130px at 1440 and none at 820. Below 716px of line (a container query, not a
+viewport one: the sidebar and the page decide the line's width) the numbers
+move under the why and the name has the first line to itself.
+
+**Every line in a list is one width.** A row that cannot be muted, an open
+row whose button has moved to the footer, and a history row hold an empty
+slot of the button's width, so their columns sit where the columns of a
+row with the button sit. `layout/incident-names.browser.test.ts` measures
+the seed estate's incidents at 820, 1024 and 1440 and fails on a cut-off
+name, an error cut short of the line's end, or a column that moves between
+rows.
 
 #### Acknowledged is not resolved
 
