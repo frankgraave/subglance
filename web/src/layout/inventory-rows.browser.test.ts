@@ -134,8 +134,10 @@ type RowMeasure = {
   labelTops: number[];
   /** The tallest legend's height: two legends closer than this share a line. */
   labelHeight: number;
-  /** Each column legend's position relative to its own row's corner. */
-  labelOffsets: string[];
+  /** Each column's box relative to its own row's corner. */
+  columnOffsets: string[];
+  /** Each column's left and right edge, in page coordinates. */
+  columnEdges: [number, number][];
   /** The lamp's vertical centre, and the name link's top and bottom. */
   lamp: number;
   nameTop: number;
@@ -155,22 +157,30 @@ function measureRows(page: Page): Promise<RowMeasure[]> {
       return Math.round((target.left + (target.width - box) / 2) * 10) / 10;
     };
     return [...document.querySelectorAll<HTMLElement>(".inv-row")].map((row) => {
-      const main = row.querySelector<HTMLElement>(".inv-main")!.getBoundingClientRect();
+      const name = row.querySelector<HTMLElement>(".inv-name")!.getBoundingClientRect();
       const meta = row.querySelector<HTMLElement>(".inv-meta")!.getBoundingClientRect();
-      const labels = [...row.querySelectorAll<HTMLElement>(".inv-label")];
+      // On one line the legends are in the header row above the list and
+      // each row's own copy is visually hidden; its box is a 1px clip.
+      const labels = [...row.querySelectorAll<HTMLElement>(".inv-label")].filter(
+        (label) => label.getBoundingClientRect().width > 1,
+      );
       const lamp = row.querySelector<HTMLElement>(".inv-led .led")!.getBoundingClientRect();
       const link = row.querySelector<HTMLElement>(".inv-name a")!.getBoundingClientRect();
       return {
         name: (row.querySelector(".inv-name a")?.textContent ?? "").trim(),
         height: Math.round(row.getBoundingClientRect().height * 10) / 10,
         // The meta row sits under the name once the container is too narrow.
-        wrapped: meta.top >= main.bottom - 1,
+        wrapped: meta.top >= name.bottom - 1,
         labelTops: labels.map((label) => Math.round(label.getBoundingClientRect().top * 10) / 10),
-        labelHeight: Math.max(...labels.map((label) => label.getBoundingClientRect().height)),
-        labelOffsets: labels.map((label) => {
-          const box = label.getBoundingClientRect();
+        labelHeight: Math.max(0, ...labels.map((label) => label.getBoundingClientRect().height)),
+        columnOffsets: [...row.querySelectorAll<HTMLElement>(".inv-col")].map((col) => {
+          const box = col.getBoundingClientRect();
           const corner = row.getBoundingClientRect();
-          return `${Math.round(box.left - corner.left)},${Math.round(box.top - corner.top)}`;
+          return `${Math.round(box.left - corner.left)},${Math.round(box.top - corner.top)},${Math.round(box.width)}`;
+        }),
+        columnEdges: [...row.querySelectorAll<HTMLElement>(".inv-col")].map((col) => {
+          const box = col.getBoundingClientRect();
+          return [Math.round(box.left * 10) / 10, Math.round(box.right * 10) / 10] as [number, number];
         }),
         lamp: lamp.top + lamp.height / 2,
         nameTop: link.top,
@@ -205,20 +215,22 @@ function valuesOutOfSlot(page: Page): Promise<string[]> {
       const label = `${col.className}: ${(value.textContent ?? "").trim()}`;
       const problems: string[] = [];
 
-      // The slot is the column's second grid track, not the whole column:
-      // the column also holds the legend and the gap above the value.
+      // The slot is the column's last grid track, not the whole column:
+      // wrapped, the column also holds the legend and the gap above the
+      // value. On one line the legend is out of the flow (it is in the
+      // header row), and the one track is the slot.
       const style = getComputedStyle(col);
       const tracks = style.gridTemplateRows.split(" ").map(parseFloat);
       const colBox = col.getBoundingClientRect();
       const left = colBox.left + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft);
       const right = colBox.right - parseFloat(style.borderRightWidth) - parseFloat(style.paddingRight);
+      const above = tracks.length > 1 ? tracks[0]! + (parseFloat(style.rowGap) || 0) : 0;
       const top =
         colBox.top +
         parseFloat(style.borderTopWidth) +
         parseFloat(style.paddingTop) +
-        tracks[0]! +
-        (parseFloat(style.rowGap) || 0);
-      const bottom = top + tracks[1]!;
+        above;
+      const bottom = top + tracks[tracks.length - 1]!;
       const box = value.getBoundingClientRect();
       if (
         box.left < left - 0.5 ||
@@ -303,7 +315,9 @@ describe("the monitors inventory rows", () => {
           for (const row of rows) {
             const tops = [...new Set(row.labelTops)].sort((a, b) => a - b);
             const context = `${row.name}: legend tops ${JSON.stringify(row.labelTops)}`;
-            if (!row.wrapped) expect(tops.length, context).toBe(1);
+            // On one line the row draws no legend of its own: the header row
+            // carries them, and is measured below.
+            if (!row.wrapped) expect(tops.length, context).toBe(0);
             for (let i = 1; i < tops.length; i++) {
               expect(tops[i]! - tops[i - 1]!, context).toBeGreaterThanOrEqual(row.labelHeight - 0.5);
             }
@@ -364,11 +378,42 @@ describe("the monitors inventory rows", () => {
            * the columns used to break wherever each row's content ran out, so
            * Tags sat on the second line of one row and the third of the next.
            */
-          const shapes = Object.fromEntries(rows.map((row) => [row.name, row.labelOffsets.join(" ")]));
+          const shapes = Object.fromEntries(rows.map((row) => [row.name, row.columnOffsets.join(" ")]));
           expect(
             new Set(Object.values(shapes)).size,
-            `legend positions differ between rows: ${JSON.stringify(shapes)}`,
+            `column positions differ between rows: ${JSON.stringify(shapes)}`,
           ).toBe(1);
+        });
+
+        it("name the columns once, over the columns they name", async () => {
+          /*
+           * On one line the legends are a header row over the list rather
+           * than a copy in every row (SUB-194), so each header cell has to
+           * stand exactly over its column: a legend 2px off its values is the
+           * misreading a header exists to prevent. Wrapped, the header is
+           * gone and every column shows its own legend again.
+           */
+          const head = await page.evaluate(() =>
+            [...document.querySelectorAll<HTMLElement>(".inv-head > span")]
+              .filter((cell) => cell.getBoundingClientRect().width > 0)
+              .map((cell) => {
+                const box = cell.getBoundingClientRect();
+                return { text: (cell.textContent ?? "").trim(), edges: [Math.round(box.left * 10) / 10, Math.round(box.right * 10) / 10] };
+              }),
+          );
+          if (rows[0]!.wrapped) {
+            expect(head, "a header row over wrapped rows").toEqual([]);
+            return;
+          }
+          expect(head.map((cell) => cell.text)).toEqual(["Type", "Every", "Timeout", "Channels", "Tags"]);
+          for (const row of rows) {
+            expect(row.columnEdges.length, row.name).toBe(head.length);
+            row.columnEdges.forEach(([left, right], i) => {
+              const context = `${row.name}: ${head[i]!.text} spans ${head[i]!.edges.join("-")}, its column ${left}-${right}`;
+              expect(Math.abs(left - head[i]!.edges[0]!), context).toBeLessThanOrEqual(0.5);
+              expect(Math.abs(right - head[i]!.edges[1]!), context).toBeLessThanOrEqual(0.5);
+            });
+          }
         });
       });
     }

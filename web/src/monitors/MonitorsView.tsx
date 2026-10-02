@@ -9,7 +9,7 @@ import { ConfirmDelete } from "../components/ConfirmDelete";
 import { StateChip } from "../components/Chip";
 import { Checkbox } from "../components/Choice";
 import { EmptyState } from "./EmptyState";
-import { MonitorInventoryRow } from "./MonitorInventoryRow";
+import { MonitorInventoryHead, MonitorInventoryRow } from "./MonitorInventoryRow";
 import { AddMonitor } from "./AddMonitor";
 import { EditMonitorForm } from "./EditMonitorForm";
 import { BulkTagDrawer, type TagChange } from "./BulkTagDrawer";
@@ -346,6 +346,8 @@ export function MonitorsView({
             filtered={type !== "" || pausedFilter !== ""}
           />
         ) : (
+          <div className="inv-table">
+          <MonitorInventoryHead />
           <ul className="inv-list">
             {visible.map((monitor) => (
               <MonitorInventoryRow
@@ -366,6 +368,7 @@ export function MonitorsView({
               />
             ))}
           </ul>
+          </div>
         )}
       </Card>
 

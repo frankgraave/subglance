@@ -136,10 +136,13 @@ and its `choice.css`. Pass the label as children. The reasoning is in
 DESIGN.md §8.9.
 
 Every row of a list is one height. In the monitors inventory each settings
-column is a legend over a fixed `--size-row-sm` value slot, a value is one line
-that ends in an ellipsis rather than wrapping, and a wrapped row puts its
-columns on equal grid tracks. `layout/inventory-rows.browser.test.ts` fails on
-two rows of different height. The reasoning is in DESIGN.md §8.10.
+column is a fixed `--size-row-sm` value slot under a legend (one header row
+for the list when the rows are on one line, the column's own legend when they
+wrap), a value is one line that ends in an ellipsis rather than wrapping, and
+a wrapped row puts its columns on equal grid tracks. The name and the address
+get their room before any column does. `layout/inventory-rows.browser.test.ts`
+fails on two rows of different height, and `inventory-names.browser.test.ts`
+on a demo-estate name that is cut off. The reasoning is in DESIGN.md §8.10.
 
 A button that is a glyph plus a word needs an explicit `aria-label`. What a
 screen reader makes of an unnamed inline `<svg>` is not fixed — some skip it,
