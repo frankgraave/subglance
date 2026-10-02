@@ -11,11 +11,14 @@ import type { Incident } from "../monitors/detail";
 /**
  * One incident: a single-line row that expands in place.
  *
- * The shape is the approved page proposal's, and so is the column order,
- * because that order is the order the questions get asked at 03:00: **is it
- * bad** (the lamp) → **what is it** (the name, with the error under it) →
- * **why** (the failure kind) → **since when** → **for how long** → **is anyone
- * on it** → **can I take it**.
+ * The shape is the approved page proposal's, and so is the order, because
+ * that order is the order the questions get asked at 03:00: **is it bad**
+ * (the lamp) → **what is it** (the name) → **why** (the failure kind and the
+ * error) → **since when** → **for how long** → **is anyone on it** → **can I
+ * take it**. The why has a line of its own under the name (SUB-194): the
+ * name and the numbers share the first line, so the numbers still line up
+ * down the list, and the kind and the error get the width under them rather
+ * than whatever four fixed columns left over.
  *
  * ---
  *
@@ -157,7 +160,7 @@ export function IncidentStoryItem({
           {subject === undefined ? null : <>{subject}: </>}
           {story.sentence}
         </span>
-        <span className="inc-line-inner" aria-hidden="true">
+        <span className="inc-line-inner inc-line-grid" aria-hidden="true">
           {/*
            * The lamp states the service. `labelled={false}` because the
            * sr-only sentence already says it in words, and a lamp that
@@ -168,39 +171,60 @@ export function IncidentStoryItem({
             labelled={false}
             className="inc-led"
           />
-          <span className="inc-main">
-            <span className="inc-name">
-              {subject ?? story.began}
+          {/*
+           * Two lines, and what goes on which is the point of SUB-194.
+           *
+           * The first line is the row's identity and its numbers: the name,
+           * since when, for how long, is anyone on it. The second is the
+           * why, as one phrase: the failure kind as a word, then the error
+           * the checker wrote. Both halves of the why used to be split
+           * across the row, the error under the name and the kind in a
+           * fixed 168px column beside it, so four fixed columns left the
+           * name 130px at 1440 and nothing at all at 820. Kind and error
+           * are one answer read together, and on a line of their own they
+           * get the whole width under the numbers.
+           */}
+          <span className="inc-name">
+            {subject ?? story.began}
+          </span>
+          {/*
+           * The when and the response, as one group: on a wide line it ends
+           * the first line beside the name, each value in its fixed column so
+           * the numbers line up down the list; on a narrow one it becomes a
+           * third line under the why.
+           */}
+          <span className="inc-facts">
+            <Value className="inc-col inc-col-time">
+              {formatClock(incident.startedAt) ?? "—"}
+            </Value>
+            <Value className="inc-col inc-col-dur">
+              {formatDuration(story.durationS)}
+            </Value>
+            {/*
+             * The response column: is anybody on it. Separate from the lamp on
+             * purpose — the service's state and the response's state are two
+             * questions, and one combined word is how "acked" comes to read as
+             * "fixed".
+             */}
+            <span className="inc-col inc-col-ack">
+              <StatusChip status={STATE_TONE[story.state]}>
+                {story.badge}
+              </StatusChip>
             </span>
-            {/* The error, one line, clipped. The full string is in the detail
-                below, where it has room to wrap. */}
+          </span>
+          <span className="inc-why">
+            {/* The failure kind as a word, so the row still reads in greyscale
+                and a colour-blind reader loses nothing (DESIGN.md §2.3). */}
+            {story.cause === null ? null : (
+              <span className="inc-kind">
+                <span className="chip chip--state">{story.cause}</span>
+              </span>
+            )}
+            {/* The error, one line, clipped only past the row's full width.
+                The whole string is in the detail below, where it wraps. */}
             <span className="inc-sub">
               {incident.lastError ?? story.cause ?? story.began}
             </span>
-          </span>
-          {/* The failure kind as a word, so the row still reads in greyscale
-              and a colour-blind reader loses nothing (DESIGN.md §2.3). */}
-          <span className="inc-col inc-col-kind">
-            {story.cause === null ? null : (
-              <span className="chip chip--state">{story.cause}</span>
-            )}
-          </span>
-          <Value className="inc-col inc-col-time">
-            {formatClock(incident.startedAt) ?? "—"}
-          </Value>
-          <Value className="inc-col inc-col-dur">
-            {formatDuration(story.durationS)}
-          </Value>
-          {/*
-           * The response column: is anybody on it. Separate from the lamp on
-           * purpose — the service's state and the response's state are two
-           * questions, and one combined word is how "acked" comes to read as
-           * "fixed".
-           */}
-          <span className="inc-col inc-col-ack">
-            <StatusChip status={STATE_TONE[story.state]}>
-              {story.badge}
-            </StatusChip>
           </span>
         </span>
       </button>
@@ -278,6 +302,22 @@ export function IncidentStoryItem({
           </button>
         </div>
       ) : null}
+
+      {/*
+       * The action's place, held empty on every line that does not draw the
+       * button (SUB-194).
+       *
+       * A row whose incident cannot be muted (a warning nobody was paged for,
+       * or one already resolved) has no button, and its line used to take
+       * the button's 58px for itself. Every column on it then sat 58px to
+       * the right of the same column on the row above, so the numbers down
+       * the list stopped being columns. The same happened to an open row,
+       * whose button moves down into the footer, and to the history card
+       * under the open ones, which offers no action at all. An empty slot of
+       * the button's width keeps every incident line one width, so the open
+       * card and the history card on one screen share their columns too.
+       */}
+      {ackable && !open ? null : <span className="inc-act-slot" aria-hidden="true" />}
 
       {/*
        * The detail. Rendered only when open — an off-screen copy would keep

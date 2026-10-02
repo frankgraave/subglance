@@ -143,6 +143,10 @@ a wrapped row puts its columns on equal grid tracks. The name and the address
 get their room before any column does. `layout/inventory-rows.browser.test.ts`
 fails on two rows of different height, and `inventory-names.browser.test.ts`
 on a demo-estate name that is cut off. The reasoning is in DESIGN.md §8.10.
+An incident row puts the name beside its numbers and the failure kind and
+error on a line of their own, and holds the mute button's width on rows
+without one; `layout/incident-names.browser.test.ts` fails on a cut-off seed
+name or a column that moves between rows (DESIGN.md §8.6).
 
 A button that is a glyph plus a word needs an explicit `aria-label`. What a
 screen reader makes of an unnamed inline `<svg>` is not fixed — some skip it,

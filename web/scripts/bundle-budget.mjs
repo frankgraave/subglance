@@ -350,8 +350,19 @@ const budgets = {
    * two viewport media queries, the container declarations, and the channel
    * row's own copy of the wrap rules (a container condition cannot be a
    * variable, so the inventory's block cannot serve a second width).
+   *
+   * 17 -> 18 kB gzip, raised deliberately for SUB-194 (incident rows that
+   * keep the name and the error, and line their columns up). Measured with
+   * Node gzip, level 6: develop at 8fd00a5 is 17,345 bytes of entry CSS, 63
+   * under the 17,408 ceiling; this branch is 17,495, 150 more and 87 over.
+   * The 150 bytes are the incident line's two-line grid and its areas, the
+   * container query that puts the numbers beside the name only where they
+   * fit, the empty slot that holds the mute button's width on rows without
+   * one, and the phone rule that gives the slot back. Three rules were
+   * dropped while measuring because the layout did not need them; the rest
+   * is the layout. 18 leaves about 930 bytes.
    */
-  css: 17,
+  css: 18,
   fonts: 80,
 };
 

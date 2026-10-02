@@ -165,9 +165,9 @@ describe("acknowledged is not resolved — for the ear", () => {
 });
 
 describe("the row is a story, not a log line", () => {
-  it("shows the kind, the start time and the duration as columns", () => {
+  it("shows the kind beside the error, and the start time and the duration as columns", () => {
     const { container } = row();
-    expect(container.querySelector(".inc-col-kind")?.textContent).toContain(
+    expect(container.querySelector(".inc-kind")?.textContent).toContain(
       "DNS failure",
     );
     expect(container.querySelector(".inc-col-dur")?.textContent).toContain(
@@ -178,7 +178,7 @@ describe("the row is a story, not a log line", () => {
 
   it("prints the cause in words, never as the database key", () => {
     const { container } = row({ cause: "dns" });
-    const kind = container.querySelector(".inc-col-kind")!;
+    const kind = container.querySelector(".inc-kind")!;
     expect(kind.textContent).toContain("DNS failure");
     expect(kind.textContent).not.toMatch(/^dns$/);
   });

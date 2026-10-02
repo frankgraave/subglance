@@ -206,6 +206,9 @@
 .inc-line {
   flex: 1 1 0;
   min-width: 0;
+  /* The incident line decides its own layout from its own width (SUB-194),
+     not the window's: see `@container inc-line` below. */
+  container: inc-line / inline-size;
   padding: var(--space-3) var(--space-4);
   border: 0;
   background: none;
@@ -247,7 +250,74 @@
 
 .inc-led { flex: none; }
 
+/* A cluster's summary: its badge, then the sentence, then the time. */
 .inc-main { min-width: 0; flex: 1; }
+
+/*
+ * One incident's line: two lines, and the name comes first (SUB-194).
+ *
+ * The line used to be one flex row: lamp, name with the error under it, then
+ * four fixed columns (kind 168, time 104, duration 104, response 168). The
+ * columns took 544px plus their gaps before the name got anything, so at
+ * 1440 beside the expanded sidebar the name had 130px and the error under it
+ * was cut at the same 130 ("unexpected statu…"), at 1024 both had 14px, and
+ * at 820 the name had none at all. The text that tells one incident from
+ * the next was the first thing given up.
+ *
+ * Now the kind leaves the column row and joins the error, because they are
+ * one answer: "unexpected status code" and "unexpected status 502, want
+ * 200-299" are the same why, said short and then said in full. That phrase
+ * gets a line of its own under the name, as wide as the line is. The name
+ * shares the first line with the three numbers, which keep their fixed
+ * columns there so time, duration and response still line up down the
+ * list.
+ *
+ * On a narrow line the numbers move under the why as a third line, and the
+ * name has the whole first line to itself. `@container inc-line` below says
+ * where.
+ *
+ * It costs height. Measured in Chromium, a closed row is 75px on the wide
+ * layout and 99px on the narrow one, where it was a single line of about
+ * 60. That is the price of a readable name and error, the same trade the
+ * inventory made for its addresses (DESIGN.md §8.10).
+ */
+.inc-line-grid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "led name"
+    ".   why"
+    ".   facts";
+  align-items: center;
+  column-gap: var(--space-3);
+  row-gap: var(--space-1);
+}
+
+.inc-line-grid > .inc-led { grid-area: led; }
+.inc-line-grid > .inc-name { grid-area: name; }
+
+/* The why: the failure kind as a word, then the error the checker wrote. */
+.inc-why {
+  grid-area: why;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* Nothing more is needed for the two to share the line: the chip does not
+   wrap, so it keeps its width, and the error clips (`overflow: hidden`), so
+   as a flex item it may shrink to nothing and takes what the chip leaves. */
+
+/* Since when, for how long, is anyone on it. */
+.inc-facts {
+  grid-area: facts;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-3);
+  row-gap: var(--space-1);
+}
 
 /* Clipped, never wrapped. A hostname that wraps to two lines turns a stack of
    rows into a ragged column and costs the scan the whole list exists for; the
@@ -281,34 +351,56 @@
  * a column scannable — a time column that shifts by two pixels per row cannot
  * be read as a column at all.
  *
- * All four sit on the Fibonacci column ladder (§2.14), which is what relates
- * them to the dashboard's columns one screen away. They were 116 / 88 / 72 /
- * 128 before — four numbers agreeing with nothing, and one of them measurably
- * short: a "Connection refused" chip measures 142px and had 116px to sit in,
- * so the longest failure kind was clipped in the column whose whole job is to
- * name it.
+ * They sit on the Fibonacci column ladder (§2.14), which is what relates
+ * them to the dashboard's columns one screen away.
  *
- * kind takes rung 4 (168) because the widest chip needs 142; ack takes rung 4
- * because its button measures 113 and rung 3 is 104.
+ * **time and dur take rung 3 (104), not rung 2 (64).** `formatClock` renders
+ * a 12-hour clock and `formatDuration` renders words: measured in Chromium in
+ * the shipped mono face, `01:59 PM` is **66.45px** and `7 h 24 min` is
+ * **72.81px**. Both overflow a 64px column and wrapped onto two lines in
+ * every open incident when they sat on rung 2. Rung 3 is the smallest rung
+ * that holds the widest label of each. They share one rung because they hold
+ * one kind of reading.
  *
- * **time and dur take rung 3 (104), not rung 2 (64), and that is a bug fix.**
- * The note that put them on rung 2 measured the wrong strings. It priced time
- * as `14:03:27` (63px) and duration as `12 d 23 h` (62px), but `formatClock`
- * renders a 12-hour clock and `formatDuration` renders words: measured in
- * Chromium in the shipped mono face, `01:59 PM` is **66.45px** and
- * `7 h 24 min` is **72.81px**. Both overflow a 64px column, so both wrapped
- * onto two lines in every open incident — the `PM` fell under the digits and
- * the column the width exists to create was destroyed by the width itself.
- * Rung 3 is the smallest rung that holds the widest label of each.
- *
- * They still share one rung as the old note intended, because they still hold
- * one kind of reading; only the rung was wrong.
+ * The response takes rung 4 on the wide line, where it is the last column:
+ * "Acked, still down" measures 136px and rung 3 is 104. On the narrow line
+ * it is the last thing on its own line and takes its own width.
  */
 .inc-col { flex: none; }
-.inc-col-kind { width: var(--size-col-4); }
 .inc-col-time { width: var(--size-col-3); color: var(--ink-2); }
 .inc-col-dur { width: var(--size-col-3); }
-.inc-col-ack { width: var(--size-col-4); display: flex; justify-content: flex-end; }
+.inc-col-ack { display: flex; }
+
+/*
+ * The wide line: the numbers beside the name.
+ *
+ * 716px of line content (a container query measures inside the padding) is
+ * the 20px lamp, two 12px gaps, the numbers (104 + 104 + 168 and their two
+ * 12px gaps, 400px) and a floor of rung 5 (272px) for the name. Rung 5 and
+ * not rung 4, because on a monitor's own page the name is the outage's start
+ * ("Down since Oct 2, 2026, 01:29 AM"), which measures about 240px; a demo
+ * monitor's name is at most 140. Below 716 the numbers go under the why.
+ *
+ * A container query, not a media query, for the reason the inventory gave
+ * (SUB-149): the line's width depends on the sidebar, the page and whether
+ * the row holds the mute control, and the window knows none of them. The
+ * slot `.inc-act-slot` holds every line to one width, so every row of a
+ * list, and of the two lists on the incidents screen, takes the same layout
+ * and their columns agree.
+ */
+@container inc-line (width >= 716px) {
+  .inc-line-grid {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "led name facts"
+      ".   why  why";
+  }
+
+  .inc-line-grid .inc-col-ack {
+    width: var(--size-col-4);
+    justify-content: flex-end;
+  }
+}
 
 /*
  * The action bar: *on* the line when closed, the tray's footer when open.
@@ -351,6 +443,16 @@
 .inc-act {
   flex: none;
   padding: var(--space-3) var(--space-4);
+}
+
+/* The width `.inc-act` takes on a closed line, held empty (SUB-194): the
+   26px square and the same padding, so a line beside it is exactly as wide
+   as a line beside the button. */
+.inc-act-slot {
+  flex: none;
+  box-sizing: content-box;
+  width: var(--size-square-compact);
+  padding-inline: var(--space-4);
 }
 
 .inc-detail,
@@ -585,22 +687,30 @@
 }
 
 /*
- * Phone: the columns stop pretending to be a table and stack.
+ * Phone: a cluster's summary stacks.
  *
  * The product already learned this once — a toolbar that scrolls sideways is
  * fine, a page that scrolls sideways is a bug — so nothing here is allowed a
- * fixed width that could push the document past the viewport.
+ * fixed width that could push the document past the viewport. An incident's
+ * own line already puts the name, the why and the numbers on three lines
+ * below 716px of line; the phone only gives up the slot and the fixed
+ * widths, below.
  */
 @media (max-width: 640px) {
-  .inc-line-inner { flex-wrap: wrap; row-gap: var(--space-2); }
+  .inc-cluster-line > .inc-line-inner { flex-wrap: wrap; row-gap: var(--space-2); }
   .inc-main { flex: 1 1 100%; }
-  /* The widths were already released at the tablet rung below; only the wrap
-     and the push-right are new here. */
-  .inc-col-ack { margin-left: auto; }
+
+  /* Every line on a phone is a narrow one, so the slot has no wide layout
+     to keep in step and only costs the why 58px. The numbers take their
+     own widths, which keeps time, duration and the response on one line
+     under the why rather than three. */
+  .inc-act-slot { display: none; }
+  .inc-col-time,
+  .inc-col-dur { width: auto; }
 }
 
 /*
- * Tablet and below: the detail stacks, and the fixed columns give up.
+ * Tablet and below: the detail stacks.
  *
  * Measured, not guessed. `minmax(0, auto)` lets the timeline claim its own
  * 388px intrinsic measure, which is right while there is width to spare and
@@ -614,15 +724,10 @@
  * divider on a single-column grid is a line down the side of the content
  * pointing at nothing. The row gap already separates them.
  *
- * **And the collapsed line's fixed columns stop being fixed here**, which is
- * the cost of putting time and dur on rung 3. 104 + 104 + 168 + 168 is 544px
- * of column plus 48px of gaps in a 572px card, which leaves −20px for the
- * monitor name: measured at 900, the name rendered at zero width and the
- * response chip hung outside the card. A column that cannot fit is not a
- * column, so below the tablet rung each cell takes its content's width — the
- * same line, still in order, alignment traded for the name being present at
- * all. The widths return above 900px, where the card is 812 and they fit with
- * 200px to spare.
+ * The collapsed line's columns used to be released here too, because four
+ * fixed columns left the name nothing at 900px. The line now decides that
+ * from its own width (`@container inc-line` above), so this rule is about
+ * the detail only.
  */
 @media (max-width: 900px) {
   .inc-detail-grid { grid-template-columns: minmax(0, 1fr); }
@@ -630,9 +735,4 @@
     border-left: 0;
     padding-left: 0;
   }
-
-  .inc-col-kind,
-  .inc-col-time,
-  .inc-col-dur,
-  .inc-col-ack { width: auto; }
 }

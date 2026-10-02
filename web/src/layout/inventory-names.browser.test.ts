@@ -24,69 +24,10 @@
  *
  * @vitest-environment node
  */
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { chromium, type Browser, type Page } from "./harness/browser";
+import { seedEstate } from "./harness/seed";
 import { serveBuild, type Server } from "./harness/server";
-import type { ApiMonitor } from "../monitors/types";
-
-const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
-
-/** The Go type expressions the catalogue uses, as the wire's type names. */
-const SEED_TYPES: Record<string, string> = {
-  "string(checker.TypeHTTP)": "http",
-  "string(checker.TypeTCP)": "tcp",
-  "string(checker.TypePing)": "ping",
-  "string(checker.TypeSSL)": "ssl",
-  "store.TypePush": "push",
-};
-
-/**
- * The seed's monitors, as the list endpoint would return them.
- *
- * Only what the row draws is read: name, type, target, interval, timeout,
- * whether it is paused, its tags and a push monitor's interval. A field this
- * parser cannot find fails the test rather than defaulting, so a reshaped
- * catalogue is noticed instead of silently measuring nothing.
- */
-function seedEstate(): ApiMonitor[] {
-  const source = readFileSync(join(repoRoot, "cmd/seed/catalogue.go"), "utf8");
-  const body = source.slice(source.indexOf("func monitors() []monitorSpec"));
-  const specs = body.split("monitor: store.Monitor{").slice(1);
-  return specs.map((spec, i) => {
-    const block = spec.slice(0, spec.indexOf("\n\t\t\t},"));
-    const read = (pattern: RegExp, what: string): string => {
-      const found = pattern.exec(block);
-      if (!found) throw new Error(`seed monitor ${i + 1}: no ${what} in ${block.slice(0, 80)}`);
-      return found[1]!;
-    };
-    const type = SEED_TYPES[read(/Type: ([^,]+),/, "type")];
-    if (type === undefined) throw new Error(`seed monitor ${i + 1}: unknown type`);
-    const tags = Object.fromEntries(
-      [...(/Tags:\s+map\[string\]string\{([^}]*)\}/.exec(block)?.[1] ?? "").matchAll(/"([^"]+)": "([^"]+)"/g)].map(
-        (pair) => [pair[1]!, pair[2]!],
-      ),
-    );
-    const push = /PushIntervalS: (\d+)/.exec(block);
-    return {
-      id: i + 1,
-      name: read(/Name: "([^"]*)"/, "name"),
-      type,
-      target: read(/Target:\s+"([^"]*)"/, "target"),
-      interval_s: Number(read(/IntervalS: (\d+)/, "interval")),
-      timeout_s: Number(read(/TimeoutS: (\d+)/, "timeout")),
-      enabled: !/Enabled: false/.test(block),
-      status: "up",
-      created_at: new Date().toISOString(),
-      tags,
-      channels: [{ id: 1, name: "Ops Slack" }],
-      rule_channels: [],
-      ...(push ? { push_interval_s: Number(push[1]), push_grace_s: 300, push_token_prefix: "sgp_seed" } : {}),
-    } as ApiMonitor;
-  });
-}
 
 const ESTATE = seedEstate();
 

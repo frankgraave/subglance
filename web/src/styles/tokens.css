@@ -464,6 +464,10 @@
      for the name; the arithmetic is beside the rule that uses it. */
   --bp-inventory-row: 836px; /* the monitors inventory row fits on one line */
   --bp-channel-row: 638px;   /* the notification channel row fits on one line */
+  /* An incident's numbers fit beside its name (SUB-194). Its floor for the
+     name is rung 5 (272px), not 104: on a monitor's own page the name slot
+     holds the outage's start, a date and a time, about 240px. */
+  --bp-incident-line: 716px;
 
   /* The control accent (§2.8). It sits in :root rather than in the two theme
      blocks because it is deliberately the same colour in both: an accent that
