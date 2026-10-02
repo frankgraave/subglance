@@ -77,31 +77,47 @@ export function channelIdsFromText(text: string): string[] {
  *
  * The routing rules are the server's: alerts go to the union of a monitor's
  * own channels and every rule its tags match, and the default stands in only
- * when that union is empty (SUB-147, SUB-124). The sentence exists so nobody
- * has to know that to read the form: with nothing ticked, it names who does
- * hear about the monitor, and when nobody would, it says so, as a warning.
+ * when that union is empty (SUB-147, SUB-124). A disabled channel still
+ * counts toward that union, so it keeps the default out, but the sender
+ * skips it: a route made only of disabled channels reaches nobody. The
+ * sentence exists so nobody has to know that to read the form: it names who
+ * does hear about the monitor, and when nobody would, it says so, as a
+ * warning.
  *
- * `rules` are the ones the monitor's saved tags match; a monitor being added
- * has none yet.
+ * `chosen` are the channels ticked here, `all` the instance's channels, and
+ * `rules` the ones the monitor's saved tags match; a monitor being added has
+ * none yet.
  */
 export function describeRouting(
-  chosen: number,
+  chosen: readonly Channel[],
   rules: readonly RuleRoute[],
-  defaultName: string | undefined,
+  all: readonly Channel[],
 ): { text: string; warn: boolean } | null {
-  const routed = rules.flatMap((rule) => rule.names.map((name) => `${name} via ${rule.tag}`));
+  const known = (id: string) => all.find((channel) => channel.id === id);
+  const routed = rules.flatMap((rule) =>
+    rule.ids.flatMap((id, index) => (known(id)?.enabled ? [`${rule.names[index]} via ${rule.tag}`] : [])),
+  );
+  const live = chosen.filter((channel) => channel.enabled).length;
   if (routed.length > 0) {
     const list = routed.join(", ");
-    return chosen === 0
+    if (live > 0) return { text: `Alerts also go to ${list}, from a tag routing rule.`, warn: false };
+    return chosen.length === 0
       ? { text: `With none chosen, alerts go to ${list}, from a tag routing rule.`, warn: false }
-      : { text: `Alerts also go to ${list}, from a tag routing rule.`, warn: false };
+      : { text: `Nothing chosen here is enabled, so alerts go only to ${list}, from a tag routing rule.`, warn: false };
   }
-  if (chosen > 0) {
-    return defaultName === undefined
+  const def = all.find((channel) => channel.isDefault);
+  if (live > 0) {
+    return def === undefined
       ? null
-      : { text: `The default channel, ${defaultName}, is not used while a channel is chosen here.`, warn: false };
+      : { text: `The default channel, ${def.name}, is not used while a channel is chosen here.`, warn: false };
   }
-  return defaultName === undefined
-    ? { text: "With none chosen and no default channel, nobody is alerted about this monitor.", warn: true }
-    : { text: `With none chosen, alerts go to the default channel, ${defaultName}.`, warn: false };
+  if (chosen.length > 0 || rules.some((rule) => rule.ids.some((id) => known(id) !== undefined))) {
+    return { text: "Every channel this monitor is routed to is disabled, so nobody is alerted about it.", warn: true };
+  }
+  if (def === undefined) {
+    return { text: "With none chosen and no default channel, nobody is alerted about this monitor.", warn: true };
+  }
+  return def.enabled
+    ? { text: `With none chosen, alerts go to the default channel, ${def.name}.`, warn: false }
+    : { text: `With none chosen, alerts go to the default channel, ${def.name}, which is disabled, so nobody is alerted about this monitor.`, warn: true };
 }

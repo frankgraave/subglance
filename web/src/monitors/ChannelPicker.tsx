@@ -45,7 +45,7 @@ export function ChannelPicker({ value, onChange, rules = [], error, failedNote, 
     onChange(on ? [...kept, id] : kept);
   };
   const routing = options.phase === "ready" && channels.length > 0
-    ? describeRouting(channels.filter((c) => chosen.has(c.id)).length, rules, channels.find((c) => c.isDefault)?.name)
+    ? describeRouting(channels.filter((c) => chosen.has(c.id)), rules, channels)
     : null;
   const described = [
     ...(routing !== null || (options.phase === "ready" && channels.length === 0) ? [`${ids}-help`] : []),

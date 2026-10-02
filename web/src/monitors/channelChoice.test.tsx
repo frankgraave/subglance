@@ -46,22 +46,44 @@ const box = (name: RegExp) => screen.getByRole("checkbox", { name }) as HTMLInpu
 const group = () => screen.getByRole("group", { name: "Channels" });
 
 describe("describeRouting", () => {
+  const [OPS, PAGER, OLD] = CHANNELS;
+  const OFF_PAGER = channel({ id: 2, name: "Pager", type: "sms", enabled: false });
+  const OFF_OPS = channel({ id: 1, name: "Ops", type: "slack", is_default: true, enabled: false });
+
   it("names the default as the fallback only while nothing is chosen", () => {
-    expect(describeRouting(0, [], "Ops")?.text).toBe("With none chosen, alerts go to the default channel, Ops.");
-    expect(describeRouting(1, [], "Ops")?.text).toMatch(/default channel, Ops, is not used while a channel is chosen/);
-    expect(describeRouting(1, [], undefined)).toBeNull();
+    expect(describeRouting([], [], CHANNELS)?.text).toBe("With none chosen, alerts go to the default channel, Ops.");
+    expect(describeRouting([PAGER], [], CHANNELS)?.text).toMatch(/default channel, Ops, is not used while a channel is chosen/);
+    expect(describeRouting([PAGER], [], [PAGER, OLD])).toBeNull();
   });
 
   it("warns when nobody would hear about the monitor", () => {
-    expect(describeRouting(0, [], undefined)).toEqual({
+    expect(describeRouting([], [], [PAGER, OLD])).toEqual({
       text: "With none chosen and no default channel, nobody is alerted about this monitor.", warn: true,
     });
   });
 
   it("names rule-routed channels, which the default never replaces", () => {
     const rules = [{ tag: "env:prod", names: ["Pager"], ids: ["2"] }];
-    expect(describeRouting(0, rules, "Ops")).toEqual({ text: "With none chosen, alerts go to Pager via env:prod, from a tag routing rule.", warn: false });
-    expect(describeRouting(2, rules, "Ops")?.text).toBe("Alerts also go to Pager via env:prod, from a tag routing rule.");
+    expect(describeRouting([], rules, CHANNELS)).toEqual({ text: "With none chosen, alerts go to Pager via env:prod, from a tag routing rule.", warn: false });
+    expect(describeRouting([OPS, OLD], rules, CHANNELS)?.text).toBe("Alerts also go to Pager via env:prod, from a tag routing rule.");
+  });
+
+  // The server counts a disabled channel toward a monitor's route, so it
+  // keeps the default out, and then sends it nothing.
+  it("does not count a disabled channel as somebody who hears", () => {
+    expect(describeRouting([OLD], [], CHANNELS)).toEqual({
+      text: "Every channel this monitor is routed to is disabled, so nobody is alerted about it.", warn: true,
+    });
+    const offRule = [{ tag: "env:prod", names: ["Pager"], ids: ["2"] }];
+    expect(describeRouting([], offRule, [OPS, OFF_PAGER, OLD])).toEqual({
+      text: "Every channel this monitor is routed to is disabled, so nobody is alerted about it.", warn: true,
+    });
+    expect(describeRouting([OLD], offRule, CHANNELS)).toEqual({
+      text: "Nothing chosen here is enabled, so alerts go only to Pager via env:prod, from a tag routing rule.", warn: false,
+    });
+    expect(describeRouting([], [], [OFF_OPS, PAGER])).toEqual({
+      text: "With none chosen, alerts go to the default channel, Ops, which is disabled, so nobody is alerted about this monitor.", warn: true,
+    });
   });
 });
 
