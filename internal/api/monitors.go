@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -265,6 +266,10 @@ type createMonitorRequest struct {
 	PushGraceS        *int              `json:"push_grace_s"`
 	// JSONAssertion is optional; omitted or null means none.
 	JSONAssertion *jsonAssertionWire `json:"json_assertion"`
+	// ChannelIDs attaches the monitor's own channels as it is created.
+	// Omitted or empty means none, so its alerts go to the routing rules
+	// its tags match, or to the default.
+	ChannelIDs []int64 `json:"channel_ids"`
 }
 
 func (s *Server) handleListMonitors(w http.ResponseWriter, r *http.Request) {
@@ -331,25 +336,7 @@ func (s *Server) handleListMonitors(w http.ResponseWriter, r *http.Request) {
 	for _, m := range monitors {
 		resp := s.describeMonitor(r, m)
 		if channelErr == nil {
-			attached := make([]monitorChannelResponse, 0, len(channels[m.ID]))
-			for _, c := range channels[m.ID] {
-				attached = append(attached, monitorChannelResponse{ID: c.ID, Name: c.Name})
-			}
-			resp.Channels = &attached
-			routes := make([]monitorRuleRouteResponse, 0, len(ruleRoutes[m.ID]))
-			for _, rt := range ruleRoutes[m.ID] {
-				via := make([]monitorChannelResponse, 0, len(rt.Channels))
-				for _, c := range rt.Channels {
-					via = append(via, monitorChannelResponse{ID: c.ID, Name: c.Name})
-				}
-				routes = append(routes, monitorRuleRouteResponse{
-					RuleID: rt.RuleID, TagKey: rt.TagKey, TagValue: rt.TagValue, Channels: via,
-				})
-			}
-			resp.RuleChannels = &routes
-			if len(attached) == 0 && len(routes) == 0 {
-				resp.DefaultChannel = fallback
-			}
+			withRoutes(&resp, channels[m.ID], ruleRoutes[m.ID], fallback)
 		}
 		if perMonitor > 0 {
 			resp.Heartbeats = oldestFirstHeartbeats(beats[m.ID])
@@ -357,6 +344,59 @@ func (s *Server) handleListMonitors(w http.ResponseWriter, r *http.Request) {
 		out = append(out, resp)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"monitors": out})
+}
+
+// withRoutes fills in who an alert for this monitor reaches: its own
+// channels, the routing rules that add more, and the default when both are
+// empty. Shared by the list and the single-monitor read so the two can never
+// describe the same monitor's routing differently.
+func withRoutes(resp *monitorResponse, attached []store.ChannelSummary, rules []store.RuleRoute, fallback *monitorChannelResponse) {
+	own := make([]monitorChannelResponse, 0, len(attached))
+	for _, c := range attached {
+		own = append(own, monitorChannelResponse{ID: c.ID, Name: c.Name})
+	}
+	resp.Channels = &own
+	routes := make([]monitorRuleRouteResponse, 0, len(rules))
+	for _, rt := range rules {
+		via := make([]monitorChannelResponse, 0, len(rt.Channels))
+		for _, c := range rt.Channels {
+			via = append(via, monitorChannelResponse{ID: c.ID, Name: c.Name})
+		}
+		routes = append(routes, monitorRuleRouteResponse{
+			RuleID: rt.RuleID, TagKey: rt.TagKey, TagValue: rt.TagValue, Channels: via,
+		})
+	}
+	resp.RuleChannels = &routes
+	if len(own) == 0 && len(routes) == 0 {
+		resp.DefaultChannel = fallback
+	}
+}
+
+// monitorRoutes reads one monitor's routing for the single-monitor read. It
+// reports false, having logged why, when any part could not be read: the
+// caller then leaves all three fields out, because a partial answer (own
+// channels without the rules, say) would read as a complete one.
+func (s *Server) monitorRoutes(ctx context.Context, id int64) ([]store.ChannelSummary, []store.RuleRoute, *monitorChannelResponse, bool) {
+	attached, err := s.db.MonitorChannelRefs(ctx, id)
+	if err != nil {
+		s.log.Error("monitor channel refs", "monitor_id", id, "error", err)
+		return nil, nil, nil, false
+	}
+	rules, err := s.db.RuleRoutesForMonitor(ctx, id)
+	if err != nil {
+		s.log.Error("monitor rule routes", "monitor_id", id, "error", err)
+		return nil, nil, nil, false
+	}
+	def, ok, err := s.db.DefaultChannel(ctx)
+	if err != nil {
+		s.log.Error("default channel", "error", err)
+		return nil, nil, nil, false
+	}
+	var fallback *monitorChannelResponse
+	if ok {
+		fallback = &monitorChannelResponse{ID: def.ID, Name: def.Name}
+	}
+	return attached, rules, fallback, true
 }
 
 // oldestFirstHeartbeats reverses a newest-first run of heartbeats.
@@ -467,7 +507,13 @@ func (s *Server) handleCreateMonitor(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	m.ChannelIDs = req.ChannelIDs
+
 	created, err := s.db.CreateMonitor(r.Context(), m)
+	if errors.Is(err, store.ErrUnknownChannel) {
+		writeProblem(w, http.StatusBadRequest, unknownChannelProblem(err))
+		return
+	}
 	if err != nil {
 		s.log.Error("create monitor", "error", err)
 		writeError(w, http.StatusBadRequest, "could not create monitor: "+err.Error())
@@ -807,8 +853,17 @@ func (s *Server) handleGetMonitor(w http.ResponseWriter, r *http.Request) {
 	if headers == nil {
 		headers = map[string]string{}
 	}
+	// Routing is read after the row, never before: the edit form sends these
+	// channels back under the ETag set above. Read in this order, a channel
+	// change landing in between pairs new channels with an old version, and
+	// the save is refused as stale. The other order would pair old channels
+	// with the new version, and the save would quietly put them back.
+	described := s.describeMonitor(r, m)
+	if attached, rules, fallback, ok := s.monitorRoutes(r.Context(), id); ok {
+		withRoutes(&described, attached, rules, fallback)
+	}
 	resp := monitorDetailResponse{
-		monitorResponse: s.describeMonitor(r, m),
+		monitorResponse: described,
 		Method:          m.Method, ExpectedStatus: m.ExpectedStatus,
 		Keyword: m.Keyword, KeywordMode: m.KeywordMode,
 		FollowRedirects:   m.FollowRedirects,
@@ -1100,6 +1155,12 @@ type patchMonitorRequest struct {
 	// Raw, because a pointer cannot tell an omitted key from an explicit
 	// null, and here the two mean "leave it" and "remove it".
 	JSONAssertion json.RawMessage `json:"json_assertion"`
+
+	// ChannelIDs replaces the monitor's own channels when present, in the
+	// same write as every other field, so the If-Match that guards the row
+	// guards them too. `[]` removes them all; omitted or null leaves them.
+	// The same set PUT /monitors/{id}/channels replaces.
+	ChannelIDs *[]int64 `json:"channel_ids"`
 }
 
 // handlePatchMonitor applies a partial update to an existing monitor.
@@ -1185,6 +1246,9 @@ func (s *Server) handlePatchMonitor(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, store.ErrVersionConflict):
 		writeConflict(w, id)
 		return
+	case errors.Is(err, store.ErrUnknownChannel):
+		writeProblem(w, http.StatusBadRequest, unknownChannelProblem(err))
+		return
 	case errors.Is(err, sql.ErrNoRows):
 		// Deleted between the read and the write. For `If-Match: *` that is a
 		// failed precondition, not a missing resource: the client asked us to
@@ -1210,6 +1274,16 @@ func (s *Server) handlePatchMonitor(w http.ResponseWriter, r *http.Request) {
 
 	s.log.Info("monitor updated", "id", updated.ID, "name", updated.Name, "target", updated.Target)
 	writeJSON(w, http.StatusOK, s.describeMonitor(r, updated))
+}
+
+// unknownChannelProblem blames channel_ids for a channel that does not exist,
+// which in a form usually means it was deleted after the form was opened.
+func unknownChannelProblem(err error) problem {
+	msg := "a chosen channel does not exist; it may have been deleted"
+	if _, id, ok := strings.Cut(err.Error(), store.ErrUnknownChannel.Error()+": "); ok {
+		msg = "channel " + id + " does not exist; it may have been deleted"
+	}
+	return fieldProblem("channel_ids", msg)
 }
 
 // writeConflict reports that the monitor moved on since the caller read it.
@@ -1345,6 +1419,11 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 			}
 			m.MinTLSVersion = v
 		}
+	}
+	if req.ChannelIDs != nil {
+		// Non-nil even for `[]`, because nil on the store side means
+		// "leave the assignments alone" and `[]` means "remove them".
+		m.ChannelIDs = append([]int64{}, (*req.ChannelIDs)...)
 	}
 	if req.Tags != nil {
 		tags, err := store.NormaliseTags(*req.Tags)

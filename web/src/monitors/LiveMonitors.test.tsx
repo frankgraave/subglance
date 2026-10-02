@@ -331,6 +331,21 @@ describe("LiveMonitors", () => {
     expect(screen.queryByRole("button", { name: /add monitor/i })).toBeNull();
   });
 
+  it("shows a viewer each monitor's channels without a way to change them", async () => {
+    // SUB-179: the channels are chosen in the edit form, which a viewer never
+    // gets; the row's Channels column is their read-only view of the same set.
+    render(
+      <LiveMonitorsRoot
+        client={client()}
+        fetchMonitors={() => Promise.resolve([make({ channels: [{ id: 1, name: "Operations" }], rule_channels: [] })])}
+        canWrite={false}
+      />,
+    );
+    expect(await screen.findByText("Operations")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Edit auth" })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: /Operations/ })).toBeNull();
+  });
+
   it("surfaces a failed list rather than showing an empty instance", async () => {
     // "Nothing is being watched yet" on an instance with forty monitors is the
     // single most alarming wrong thing this screen could say.

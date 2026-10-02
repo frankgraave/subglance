@@ -335,6 +335,30 @@ func (db *DB) MonitorChannelSummaries(ctx context.Context) (map[int64][]ChannelS
 	return out, nil
 }
 
+// MonitorChannelRefs is MonitorChannelSummaries for one monitor: the ids and
+// names of the channels attached to it, ordered by id, without reading any
+// channel's credentials. Nil with a nil error means none are attached.
+func (db *DB) MonitorChannelRefs(ctx context.Context, monitorID int64) ([]ChannelSummary, error) {
+	rows, err := db.Reader.QueryContext(ctx, `
+		SELECT c.id, c.name
+		  FROM monitor_channels mc JOIN notif_channels c ON c.id = mc.channel_id
+		 WHERE mc.monitor_id = ?
+		 ORDER BY c.id`, monitorID)
+	if err != nil {
+		return nil, fmt.Errorf("query monitor channel refs: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []ChannelSummary
+	for rows.Next() {
+		var c ChannelSummary
+		if err := rows.Scan(&c.ID, &c.Name); err != nil {
+			return nil, fmt.Errorf("scan monitor channel ref: %w", err)
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
 // SetMonitorChannels replaces a monitor's channel assignments with ids.
 //
 // Replace rather than add: the caller sends the set it wants, which makes the
@@ -344,6 +368,12 @@ func (db *DB) MonitorChannelSummaries(ctx context.Context) (map[int64][]ChannelS
 // The whole replacement runs in one transaction, so a request naming one bad
 // channel leaves the existing assignments untouched instead of clearing them
 // and then failing halfway.
+//
+// It advances the monitor's updated_at, which is the version behind its ETag.
+// The single-monitor read returns the assignments beside that version and the
+// edit form sends them back under If-Match, so a change made here between
+// that read and the save has to make the save's precondition fail. Without
+// the bump the form's write would silently put back the set it had read.
 func (db *DB) SetMonitorChannels(ctx context.Context, monitorID int64, ids []int64) error {
 	tx, err := db.Writer.BeginTx(ctx, nil)
 	if err != nil {
@@ -351,15 +381,33 @@ func (db *DB) SetMonitorChannels(ctx context.Context, monitorID int64, ids []int
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	var exists int
-	err = tx.QueryRowContext(ctx, "SELECT 1 FROM monitors WHERE id = ?", monitorID).Scan(&exists)
-	if errors.Is(err, sql.ErrNoRows) {
+	res, err := tx.ExecContext(ctx,
+		"UPDATE monitors SET updated_at = MAX(?, updated_at + 1) WHERE id = ?",
+		time.Now().Unix(), monitorID)
+	if err != nil {
+		return fmt.Errorf("bump monitor %d version: %w", monitorID, err)
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return fmt.Errorf("rows affected: %w", err)
+	} else if n == 0 {
 		return fmt.Errorf("%w: monitor %d", ErrNotFound, monitorID)
 	}
-	if err != nil {
-		return fmt.Errorf("look up monitor %d: %w", monitorID, err)
+
+	if err := replaceMonitorChannels(ctx, tx, monitorID, ids); err != nil {
+		return err
 	}
 
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+	return nil
+}
+
+// replaceMonitorChannels swaps a monitor's own channel assignments for ids
+// inside the caller's transaction. It is shared by SetMonitorChannels and by
+// the monitor create and update paths, which assign channels in the same
+// transaction as the row they write.
+func replaceMonitorChannels(ctx context.Context, tx *sql.Tx, monitorID int64, ids []int64) error {
 	if _, err := tx.ExecContext(ctx,
 		"DELETE FROM monitor_channels WHERE monitor_id = ?", monitorID); err != nil {
 		return fmt.Errorf("clear monitor channels: %w", err)
@@ -385,10 +433,6 @@ func (db *DB) SetMonitorChannels(ctx context.Context, monitorID int64, ids []int
 			ON CONFLICT DO NOTHING`, monitorID, id); err != nil {
 			return fmt.Errorf("assign channel %d: %w", id, err)
 		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit: %w", err)
 	}
 	return nil
 }

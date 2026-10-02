@@ -41,6 +41,22 @@ Its last error has the channel's masked settings replaced by their masks,
 and any other URL cut to its host, so it never shows a viewer a credential
 the settings hide.
 
+## Which monitors use a channel
+
+A monitor's own channels are chosen under **Channels** in its add and edit
+forms. Its alerts go to those channels plus the channels of every tag routing
+rule whose tag it carries; when that comes to none, they go to the default
+channel. The form says which applies as the boxes stand, and warns before a
+monitor that would alert nobody is saved. Routing rules have no editor yet:
+they are set through the API (`/api/v1/routing-rules`) or a configuration
+file.
+
+Through the API, the same set is `channel_ids` on `POST /api/v1/monitors`
+and `PATCH /api/v1/monitors/{id}`, or the whole of
+`PUT /api/v1/monitors/{id}/channels`. On the PATCH it is part of the same
+conditional write as the other fields, and changing a monitor's channels by
+any route advances its `ETag`.
+
 ## ntfy
 
 Alerts are published with ntfy's JSON API: a `POST` to the server root with the

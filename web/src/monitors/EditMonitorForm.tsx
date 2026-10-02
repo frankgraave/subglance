@@ -11,6 +11,9 @@ import { ApiError, describePreview, fingerprintPreview, previewCheck } from "./p
 import type { PreviewRequest, PreviewState } from "./preview";
 import { confirmLeave, registerLeaveGuard } from "../shell/leaveGuard";
 import { TlsFloorField } from "./TlsFloorField";
+import { ChannelPicker } from "./ChannelPicker";
+import { channelIdsFromText, channelIdsText } from "./channelChoice";
+import type { Channel } from "../notifications/channels";
 import { JSON_HELP, JSON_OPERATORS, assertionFrom, expectedProblem, expectedText } from "./jsonAssertion";
 
 export type EditMonitorFormProps = {
@@ -20,6 +23,8 @@ export type EditMonitorFormProps = {
   onCancel?: () => void;
   /** Explicitly replaces the draft after a conflict; never retries a write. */
   onReload?: () => void;
+  /** Injected in tests. Defaults to the real channel list. */
+  loadChannels?: (signal: AbortSignal) => Promise<Channel[]>;
 };
 
 type Problem = { message: string; field?: string } | null;
@@ -46,6 +51,9 @@ const LABELS: Record<string, string> = {
 function valuesFor(monitor: InventoryMonitor): Record<string, string> {
   const values: Record<string, string> = { name: monitor.name, tags: tagsToText(monitor.tags) };
   if (monitor.repeatAfterS !== undefined) values.repeat_after_s = String(monitor.repeatAfterS);
+  // Editable only when the read said what is attached: an unknown set shown
+  // as none would detach every channel on the first save that touched it.
+  if (monitor.channels.known && monitor.channels.ids !== undefined) values.channel_ids = channelIdsText(monitor.channels.ids);
   if (monitor.push) {
     values.push_interval_s = String(monitor.push.intervalS);
     values.push_grace_s = String(monitor.push.graceS);
@@ -77,7 +85,15 @@ function valuesFor(monitor: InventoryMonitor): Record<string, string> {
 
 /** Shared by the inventory and detail drawers. Drafts, including request
  * credentials, stay in this mount only; the leave guard receives no values. */
-export function EditMonitorForm({ monitor, onSave, onCancel, onReload }: EditMonitorFormProps) {
+/** The control a problem on `field` points at, for focus. */
+function controlIn(form: HTMLFormElement | null, field: string, tlsId: string): HTMLElement | null {
+  if (form === null) return null;
+  if (field === "repeat_after_s") return form.querySelector<HTMLElement>("[data-repeat-input]");
+  if (field === "channel_ids") return form.querySelector<HTMLElement>("[data-channel-input]");
+  return form.elements.namedItem(field === "min_tls_version" ? tlsId : field) as HTMLElement | null;
+}
+
+export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChannels }: EditMonitorFormProps) {
   const ids = useId();
   const [initial] = useState(() => valuesFor(monitor));
   const [values, setValues] = useState(initial);
@@ -95,9 +111,7 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload }: EditMon
   useEffect(() => {
     // API errors arrive while the fieldset is disabled. Focus after it unlocks.
     if (saving || !problem?.field) return;
-    const control = problem.field === "repeat_after_s"
-      ? form.current?.querySelector<HTMLElement>("[data-repeat-input]")
-      : form.current?.elements.namedItem(problem.field === "min_tls_version" ? `${ids}-min-tls` : problem.field) as HTMLElement | null;
+    const control = controlIn(form.current, problem.field, `${ids}-min-tls`);
     const panel = control?.closest("details");
     if (panel) panel.open = true;
     control?.focus();
@@ -117,9 +131,7 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload }: EditMon
     }
   };
   const reject = (message: string, field?: string) => {
-    const control = field === "repeat_after_s"
-      ? form.current?.querySelector<HTMLElement>("[data-repeat-input]")
-      : field ? form.current?.elements.namedItem(field === "min_tls_version" ? `${ids}-min-tls` : field) as HTMLElement | null : null;
+    const control = field ? controlIn(form.current, field, `${ids}-min-tls`) : null;
     setProblem({ message, ...(control ? { field } : {}) });
     control?.focus();
   };
@@ -154,6 +166,7 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload }: EditMon
       parsed.repeat_after_s = Number(values.repeat_after_s);
     }
     if ("follow_redirects" in values) parsed.follow_redirects = values.follow_redirects === "true";
+    if ("channel_ids" in values) parsed.channel_ids = channelIdsFromText(values.channel_ids).map(Number);
     if ("headers" in values) {
       try {
         const headers: unknown = JSON.parse(values.headers);
@@ -271,6 +284,13 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload }: EditMon
       </>}
       {field("tags", true)}
       <p className="field-help">One key:value per line — a value may contain commas and colons. Saving replaces the whole set, so a tag left out here is a tag removed.</p>
+      {"channel_ids" in values ? <ChannelPicker value={channelIdsFromText(values.channel_ids)}
+        onChange={(chosen) => update("channel_ids", channelIdsText(chosen))}
+        rules={monitor.channels.known ? monitor.channels.rules : undefined}
+        error={problem?.field === "channel_ids" ? problem.message : undefined}
+        failedNote="The other settings can still be saved; this monitor's channels are left as they are."
+        load={loadChannels} />
+        : <p className="field-help">This monitor&rsquo;s channels could not be read, so they cannot be changed here. Reload to try again.</p>}
       {"repeat_after_s" in values ? <RepeatAlertField value={values.repeat_after_s} onChange={(value) => update("repeat_after_s", value)} error={problem?.field === "repeat_after_s" ? problem.message : undefined} /> : <p className="field-help">Repeat alert settings unavailable. Reload to read the current value.</p>}
     </fieldset>
     {problem && !problem.field && <p className="field-error" role="alert"><IconAlert />{problem.message}</p>}

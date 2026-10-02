@@ -262,8 +262,18 @@ const budgets = {
    * on; together they spent the room the 154 above left. The status-page
    * admin API branch that carries this edit changes no frontend file and
    * measures the same 157,704. No new dependency. 155 leaves 1,016 bytes.
+   *
+   * 155 -> 156 KiB gzip for SUB-179 (choosing a monitor's channels in its
+   * add and edit forms). Develop at 1114525 measures 158,328 bytes of entry
+   * JS (Node gzip, level 6, index plus the icons chunk); this branch measures
+   * 158,979, 651 more and 259 over 155. That is a channel picker in both
+   * forms, its channel read, and the sentence that names who hears about the
+   * monitor as the boxes stand. No new dependency. 156 leaves 765 bytes,
+   * which is not room for another screen: the add and edit forms load with
+   * the entry although nobody needs them until a drawer opens, and moving
+   * them behind lazy() is the change that buys room back, not the next raise.
    */
-  js: 155,
+  js: 156,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *

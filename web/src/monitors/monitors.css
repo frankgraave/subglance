@@ -1122,6 +1122,24 @@
   pointer-events: none;
 }
 
+/*
+ * A monitor's own channels in its add and edit forms (SUB-179): a fieldset
+ * whose legend is the field label, so it takes the browser's fieldset frame
+ * off, as the quiet-hours group does. One channel per line, because a
+ * channel's label carries its type and state and does not wrap well beside
+ * another.
+ */
+.mon-channels {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.mon-channels-list {
+  display: flex;
+  flex-direction: column;
+}
+
 .add-advanced {
   border-top: 1px solid var(--border);
   padding-top: var(--space-4);

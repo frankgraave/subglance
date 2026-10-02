@@ -565,12 +565,15 @@ export function ChannelForm({
        * mean nothing to the person filling in the form (SUB-193).
        *
        * What the reader does need is the one thing they will look for here and
-       * not find: which monitors use this channel.
+       * not find: which monitors use this channel. A monitor's own channels
+       * are chosen in its form since SUB-179; tag routing rules still have no
+       * editor (SUB-158).
        */}
       <p className="field-help">
-        Which monitors alert through this channel is not chosen here: it is set
-        through the API or an imported configuration file, as a monitor&rsquo;s
-        own channels or a tag routing rule.
+        Which monitors alert through this channel is not chosen here: each
+        monitor chooses its own channels in its add and edit forms, and a tag
+        routing rule, set through the API or an imported configuration file,
+        can add more.
       </p>
 
       {problem !== null && problem.key === null && (

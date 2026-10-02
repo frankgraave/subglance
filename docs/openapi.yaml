@@ -1508,6 +1508,12 @@ paths:
         stored configuration, not the exact bytes of this response, which also
         carry live status, latency and uptime and therefore change without any
         edit.
+
+        Like the list, it carries `channels`, `rule_channels` and
+        `default_channel`, read after the version, so the channels an editor
+        is shown are never older than the `ETag` they will be saved under.
+        Changing the channels through `PUT /api/v1/monitors/{id}/channels`
+        advances the version too.
       responses:
         '200':
           description: The monitor.
@@ -1927,6 +1933,10 @@ paths:
         The supplied list becomes the complete set of channels for the monitor;
         anything not listed is unassigned. Sending an empty array detaches all
         of them. The updated set is returned, with secrets masked.
+
+        It advances the monitor's version, so an `ETag` read before it no
+        longer matches. `channel_ids` on `PATCH /api/v1/monitors/{id}` sets
+        the same assignments conditionally, with the rest of an edit.
       requestBody:
         required: true
         content:
@@ -5460,26 +5470,28 @@ components:
         channels:
           type: array
           description: |
-            List reads only. Attached channel IDs and names, ordered by ID,
-            including disabled channels. Empty means no attachments. Omitted
-            if attachments could not be loaded; never infer none from absence.
+            List and single-monitor reads. Attached channel IDs and names,
+            ordered by ID, including disabled channels. Empty means no
+            attachments. Omitted if attachments could not be loaded; never
+            infer none from absence.
             Channel configuration and credentials are never included.
           items:
             $ref: '#/components/schemas/MonitorChannel'
         rule_channels:
           type: array
           description: |
-            List reads only, present exactly when `channels` is. The routing
-            rules that add channels for this monitor, each with the channels it
-            adds; rules the monitor is excluded from are left out. An alert
-            goes to the union of `channels` and every entry here.
+            List and single-monitor reads, present exactly when `channels`
+            is. The routing rules that add channels for this monitor, each
+            with the channels it adds; rules the monitor is excluded from are
+            left out. An alert goes to the union of `channels` and every entry
+            here.
           items:
             $ref: '#/components/schemas/MonitorRuleRoute'
         default_channel:
           allOf:
             - $ref: '#/components/schemas/MonitorChannel'
           description: |
-            List reads only. Present exactly when `channels` and
+            List and single-monitor reads. Present exactly when `channels` and
             `rule_channels` are present and both empty and an instance default
             is set: the channel this monitor's alerts go to instead. Empty
             lists without this field mean nobody is alerted about this monitor.
@@ -5716,6 +5728,17 @@ components:
         json_assertion:
           $ref: '#/components/schemas/JSONAssertion'
           description: Optional; only for `http` monitors. Omitted or `null` means none.
+        channel_ids:
+          type: array
+          description: |
+            The monitor's own notification channels, attached in the same
+            transaction as the monitor. Omitted or empty means none, so its
+            alerts go to the routing rules its tags match, or to the default
+            channel. An id that does not exist rejects the whole create with a
+            400 whose `field` is `channel_ids`.
+          items:
+            type: integer
+            format: int64
         follow_redirects:
           type: boolean
           default: true
@@ -5867,6 +5890,18 @@ components:
           oneOf:
             - $ref: '#/components/schemas/JSONAssertion'
             - type: 'null'
+        channel_ids:
+          type: array
+          description: |
+            Replaces the monitor's own notification channels, the same set
+            `PUT /api/v1/monitors/{id}/channels` replaces, in the same write
+            as every other field: under `If-Match` it is conditional with
+            them, and an id that does not exist rejects the whole patch with a
+            400 whose `field` is `channel_ids`. `[]` removes them all;
+            omitting the key leaves them alone.
+          items:
+            type: integer
+            format: int64
         follow_redirects:
           type: boolean
         headers:

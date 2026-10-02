@@ -1,6 +1,9 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { RepeatAlertField } from "./RepeatAlertField";
+import { ChannelPicker } from "./ChannelPicker";
+import { channelIdsFromText, channelIdsText } from "./channelChoice";
+import type { Channel } from "../notifications/channels";
 import { validRepeat, REPEAT_ERROR } from "./repeat";
 import { IconAlert } from "../components/icons";
 import { isPush } from "./push";
@@ -60,6 +63,11 @@ export type AddMonitorValues = {
   jsonPath: string;
   jsonOperator: string;
   jsonExpected: string;
+  /**
+   * The monitor's own channels, as sorted comma-joined ids: text rather than
+   * an array so ticking a box and unticking it again reads as no change.
+   */
+  channelIds: string;
 };
 
 /**
@@ -102,6 +110,7 @@ const FIELD_CONTROL: Record<string, string> = {
   "json_assertion.path": "json-path",
   "json_assertion.operator": "json-operator",
   "json_assertion.expected": "json-expected",
+  channel_ids: "channels",
 };
 
 /**
@@ -140,6 +149,8 @@ export type AddMonitorFormProps = {
   onCancel?: () => void;
   /** Reports dirty state only; field values never leave for persistence. */
   onDirtyChange?: (dirty: boolean) => void;
+  /** Injected in tests. Defaults to the real channel list. */
+  loadChannels?: (signal: AbortSignal) => Promise<Channel[]>;
 };
 
 const DEFAULTS: AddMonitorValues = {
@@ -169,6 +180,7 @@ const DEFAULTS: AddMonitorValues = {
   jsonPath: "",
   jsonOperator: "equals",
   jsonExpected: "",
+  channelIds: "",
 };
 
 export function AddMonitorForm({
@@ -179,6 +191,7 @@ export function AddMonitorForm({
   saveError = null,
   onCancel,
   onDirtyChange,
+  loadChannels,
 }: AddMonitorFormProps) {
   const ids = useId();
   const [repeatText, setRepeatText] = useState("900");
@@ -737,6 +750,11 @@ export function AddMonitorForm({
           )}
         </div>
       </details>
+      <ChannelPicker value={channelIdsFromText(values.channelIds)}
+        onChange={(chosen) => setValues((v) => ({ ...v, channelIds: channelIdsText(chosen) }))}
+        error={badControl === "channels" ? rejection?.message : undefined}
+        failedNote="The monitor can still be saved; it then alerts through the default channel, and its channels can be chosen later in its edit form."
+        load={loadChannels} />
       <RepeatAlertField value={repeatText} onChange={setRepeatText} error={repeatError ?? (saveError?.field === "repeat_after_s" ? saveError.message : undefined)} />
       </fieldset>
 
