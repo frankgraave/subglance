@@ -1,10 +1,11 @@
 import { Card, Panel } from "../components/Card";
-import { IconAlert, IconClock } from "../components/icons";
+import { IconAlert, IconClock, IconFilter } from "../components/icons";
 import { IncidentStoryItem } from "./IncidentStoryItem";
 import { IncidentClusterItem } from "./IncidentClusterItem";
 import { useState } from "react";
 import { SearchIcon } from "../shell/icons";
 import { ToolbarTools } from "../shell/ToolbarTools";
+import { ToolbarSelect } from "../shell/ToolbarSelect";
 import { HISTORY_WINDOWS } from "./api";
 import { clusterIncidents } from "./cluster";
 import { describeChurn, incidentState } from "./story";
@@ -329,39 +330,35 @@ export function IncidentsView({
             />
           </label>
 
-          <label className="tb-field">
-            <span className="tb-label">Show</span>
-            <select
-              className="tb-select"
-              value={scope}
-              onChange={(event) => setScope(event.target.value as IncidentScope)}
-            >
-              {/* "All" first and selected by default: this screen's job is to
-                  show everything that happened, and a filter that starts
-                  narrowed hides rows the reader never asked to hide. */}
-              <option value="all">Open and resolved</option>
-              <option value="open">Open only</option>
-              <option value="resolved">Resolved only</option>
-            </select>
-          </label>
+          <ToolbarSelect
+            icon={<IconFilter />}
+            label="Show"
+            value={scope}
+            onChange={(value) => setScope(value as IncidentScope)}
+          >
+            {/* "All" first and selected by default: this screen's job is to
+                show everything that happened, and a filter that starts
+                narrowed hides rows the reader never asked to hide. */}
+            <option value="all">Open and resolved</option>
+            <option value="open">Open only</option>
+            <option value="resolved">Resolved only</option>
+          </ToolbarSelect>
 
           {onHistoryDaysChange === undefined ? null : (
-            <label className="tb-field">
-              <span className="tb-label">History</span>
-              <select
-                className="tb-select"
-                value={historyDays}
-                onChange={(event) =>
-                  onHistoryDaysChange(Number(event.target.value))
-                }
-              >
-                {HISTORY_WINDOWS.map((window) => (
-                  <option key={window.days} value={window.days}>
-                    {window.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            // The clock: a window of time, the glyph the Resolved card
+            // below it wears for the same subject.
+            <ToolbarSelect
+              icon={<IconClock />}
+              label="History"
+              value={historyDays}
+              onChange={(value) => onHistoryDaysChange(Number(value))}
+            >
+              {HISTORY_WINDOWS.map((window) => (
+                <option key={window.days} value={window.days}>
+                  {window.label}
+                </option>
+              ))}
+            </ToolbarSelect>
           )}
 
           <p className="tb-count" role="status">

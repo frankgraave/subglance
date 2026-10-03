@@ -13,6 +13,7 @@ import { CardColumnsSwitcher } from "../shell/CardColumnsSwitcher";
 import { LayoutSwitcher } from "../shell/LayoutSwitcher";
 import { SearchIcon } from "../shell/icons";
 import { ToolbarTools } from "../shell/ToolbarTools";
+import { ToolbarSelect } from "../shell/ToolbarSelect";
 import { MonitorCardList } from "./MonitorCardList";
 import { MonitorCompactList } from "./MonitorCompactList";
 import { MonitorTable } from "./MonitorTable";
@@ -316,27 +317,24 @@ export function Dashboard({
            * is visible is the kind of thing people press twice.
            */}
           {facets.length > 0 && (
-            <label className="tb-field tb-field--framed">
-              {/* A different glyph from the facets, because it is a different
-                  kind of control: rows gathered under headings, not a filter.
-                  Decorative — the <label> names the select. */}
-              <IconGroup />
-              <span className="tb-label">Group by</span>
-              {/* Its own class, not `mon-facet-select`: it looks the same but
-                  it is not a facet, and one selector must not match both. */}
-              <select
-                className="tb-select mon-group-select"
-                value={groupKey ?? ""}
-                onChange={(event) => setGroupKey(event.target.value || null)}
-              >
-                <option value="">None</option>
-                {facets.map((facet) => (
-                  <option key={facet.key} value={facet.key}>
-                    {facet.key}
-                  </option>
-                ))}
-              </select>
-            </label>
+            // A different glyph from the facets, because it is a different
+            // kind of control: rows gathered under headings, not a filter.
+            // Its own select class, not `mon-facet-select`: it looks the same
+            // but it is not a facet, and one selector must not match both.
+            <ToolbarSelect
+              icon={<IconGroup />}
+              label="Group by"
+              selectClassName="mon-group-select"
+              value={groupKey ?? ""}
+              onChange={(value) => setGroupKey(value || null)}
+            >
+              <option value="">None</option>
+              {facets.map((facet) => (
+                <option key={facet.key} value={facet.key}>
+                  {facet.key}
+                </option>
+              ))}
+            </ToolbarSelect>
           )}
 
           {/*

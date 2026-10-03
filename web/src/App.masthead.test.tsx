@@ -258,6 +258,34 @@ describe("the masthead", () => {
 
 
 
+  it("draws every select in the page toolbar as one framed field, on every screen", async () => {
+    /*
+     * The dashboard framed its tag filters with a glyph while Monitors and
+     * Incidents drew a bare key beside a bordered select, so one bar held two
+     * patterns depending on the screen. Checked on the rendered bar of every
+     * route, because a select portalled into the toolbar is invisible to a
+     * scan of its source file.
+     */
+    render(<App />);
+    await screen.findByText("api");
+    let seen = 0;
+    for (const route of ROUTES) {
+      if (route.path !== "/") await visit(route);
+      for (const select of document.querySelectorAll<HTMLSelectElement>(".shell-toolbar select")) {
+        seen++;
+        const frame = select.closest("label");
+        const where = `${route.path}: ${frame?.textContent ?? select.outerHTML}`;
+        expect(frame?.classList.contains("tb-field"), where).toBe(true);
+        expect(select.classList.contains("tb-select"), where).toBe(true);
+        expect(frame?.querySelector(":scope > svg[aria-hidden='true']"), where).not.toBeNull();
+        expect(frame?.querySelector(".tb-label")?.textContent?.trim(), where).toBeTruthy();
+      }
+    }
+    // Monitors (type, paused, sort) and Incidents (show, history) at least,
+    // so the walk cannot pass on a toolbar that rendered no selects.
+    expect(seen).toBeGreaterThanOrEqual(5);
+  });
+
   it("keeps every pressed-state control in the masthead the same on every screen", async () => {
     /*
      * A control in chrome that is on every screen must mean the same thing on

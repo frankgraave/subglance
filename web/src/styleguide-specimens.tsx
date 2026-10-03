@@ -21,8 +21,9 @@ import {
   StateChip,
   StatusChip,
 } from "./components/Chip";
-import { IconPause, IconPencil, IconPulse, IconRefresh, IconTrash } from "./components/icons";
+import { IconFilter, IconPause, IconPencil, IconPulse, IconRefresh, IconTag, IconTrash } from "./components/icons";
 import { PlusIcon, SearchIcon, SidebarIcon } from "./shell/icons";
+import { ToolbarSelect } from "./shell/ToolbarSelect";
 import { IconTile } from "./components/IconTile";
 import { Checkbox, Radio } from "./components/Choice";
 import { PanelList, PanelRow } from "./components/PanelList";
@@ -203,9 +204,9 @@ export const specimens: Specimen[] = [
   {
     id: "chrome",
     title: "Masthead and toolbar",
-    source: "web/src/shell/Topbar.tsx, web/src/shell/PageToolbar.tsx",
+    source: "web/src/shell/Topbar.tsx, web/src/shell/PageToolbar.tsx, web/src/shell/ToolbarSelect.tsx",
     rule:
-      "Two bars, and which one a control belongs in is decided by a single question: does it do something on every screen? The masthead holds what does — the sidebar toggle, search, the theme. It never changes as you navigate, so it stays readable without being re-read. The toolbar below holds what is true of this screen only, and disappears on screens with nothing to put in it rather than sitting there empty. An action that operates on one kind of thing fails the question: adding a monitor is a monitors action, so it lives in the header of the card it adds to, not in chrome that is also present on Notifications.",
+      "Two bars, and which one a control belongs in is decided by a single question: does it do something on every screen? The masthead holds what does — the sidebar toggle, search, the theme. It never changes as you navigate, so it stays readable without being re-read. The toolbar below holds what is true of this screen only, and disappears on screens with nothing to put in it rather than sitting there empty. An action that operates on one kind of thing fails the question: adding a monitor is a monitors action, so it lives in the header of the card it adds to, not in chrome that is also present on Notifications. Every select in the toolbar is one framed field with a glyph, on every screen: a filter, an order and a window look like one kind of control because they are one.",
     node: (
       <div className="sg-chrome">
         <div className="shell-topbar">
@@ -241,18 +242,12 @@ export const specimens: Specimen[] = [
                   readOnly
                 />
               </label>
-              <label className="tb-field">
-                <span className="tb-label">Type</span>
-                <select className="tb-select">
-                  <option>All types</option>
-                </select>
-              </label>
-              <label className="tb-field">
-                <span className="tb-label">Paused</span>
-                <select className="tb-select">
-                  <option>All</option>
-                </select>
-              </label>
+              <ToolbarSelect icon={<IconFilter />} label="Type" value="" onChange={() => {}}>
+                <option value="">All types</option>
+              </ToolbarSelect>
+              <ToolbarSelect icon={<IconTag />} label="env" value="" onChange={() => {}}>
+                <option value="">Any</option>
+              </ToolbarSelect>
               <p className="tb-count">4 of 4 shown</p>
             </div>
           </div>
