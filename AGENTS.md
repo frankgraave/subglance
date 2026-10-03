@@ -136,6 +136,13 @@ A checkbox or radio is `Checkbox` or `Radio` from
 and never `accent-color`: `tokens.test.ts` refuses both outside that component
 and its `choice.css`. Pass the label as children. The reasoning is in
 DESIGN.md §8.9.
+A dropdown is `Select` and a file chooser is `FileInput`, both from
+`web/src/components/`, never a hand-written `<select>` or
+`<input type="file">`; `tokens.test.ts` refuses either elsewhere. Give
+`Select` the field's own class (`input`, `input--fit`) and it adds the
+painted arrow; a field's class writes `background-color`, never the
+`background` shorthand, which wipes that arrow. The reasoning is in
+DESIGN.md §8.11.
 
 Every row of a list is one height. In the monitors inventory each settings
 column is a fixed `--size-row-sm` value slot under a legend (one header row

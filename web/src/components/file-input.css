@@ -1,0 +1,53 @@
+/*
+ * The file chooser (FileInput.tsx, DESIGN.md §8.11).
+ *
+ * The platform draws the button of an `<input type="file">` in its own type
+ * and grey, which on the import card sat beside the product's buttons as the
+ * one control that looked borrowed. `::file-selector-button` restyles that
+ * button as a `.button`: same padding, type, frame, fill and hover. The text
+ * after it is the browser's status line ("No file chosen", then the name)
+ * and takes `--ink-2`, the ink of a status line rather than of a value.
+ *
+ * No `.input` frame round the whole control: a bordered field holding a
+ * bordered button is the double framing §2.7 removes everywhere else, and the
+ * button is the part that is pressed. The focus ring is the global one, drawn
+ * round the input.
+ */
+.file-input {
+  max-width: 100%;
+  font: inherit;
+  /* The no-zoom floor on a phone and body type above it, as `.input`. */
+  font-size: var(--type-nozoom);
+  line-height: var(--lead-nozoom);
+  color: var(--ink-2);
+}
+
+@media (min-width: 641px) {
+  .file-input {
+    font-size: var(--type-body);
+    line-height: var(--lead-body);
+  }
+}
+
+/* The button is a separate element with its own UA type. Chromium happens
+   to inherit the family; Firefox and Safari do not, so `font: inherit`
+   brings it back to the product's in every engine. */
+.file-input::file-selector-button {
+  margin-right: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background var(--dur-hover) var(--ease), border-color var(--dur-hover) var(--ease);
+}
+
+.file-input:hover:not(:disabled)::file-selector-button {
+  background: var(--surface-2);
+  border-color: var(--border-hi);
+}
+
+.file-input:disabled { opacity: .5; }
+.file-input:disabled::file-selector-button { cursor: not-allowed; }

@@ -15,6 +15,7 @@ import type { Channel, DeliveryState } from "./channels";
 import { DELIVERY_UNKNOWN, HISTORY_UNKNOWN } from "./channels";
 import type { ChannelInput } from "./channelsApi";
 import type { QuietHours } from "./channels";
+import { Select } from "../components/Select";
 
 /** Shared empty default: a new Set per render would break memoisation. */
 const EMPTY_TOGGLING: ReadonlySet<string> = new Set();
@@ -374,7 +375,7 @@ export function NotificationsView({
               ) : (
                 <label>
                   Monitors with no channels of their own alert through{" "}
-                  <select
+                  <Select
                     className="input input--fit"
                     value={defaultChannel?.id ?? ""}
                     disabled={savingDefault}
@@ -393,7 +394,7 @@ export function NotificationsView({
                           : `${channel.name} (disabled)`}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </label>
               )}
               {defaultError !== null && (

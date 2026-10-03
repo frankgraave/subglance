@@ -6,6 +6,7 @@ import { IconAlert } from "../components/icons";
 import { windowCovers, type MaintenanceMonitor } from "./maintenanceScope";
 import { DurationField } from "./DurationField";
 import { MINUTES_TO_HOURS } from "./duration";
+import { Select } from "../components/Select";
 
 type Window = {
   id: number; name: string; monitor_id?: number; tag_key?: string; tag_value?: string;
@@ -99,10 +100,10 @@ export default function MaintenanceManager({ monitors, canWrite, focus }: { moni
     {canWrite ? <form className="form-column" onSubmit={(event) => void submit(event)} aria-label="Schedule maintenance">
       <fieldset disabled={busy} className="maintenance-fields">
         <label className="field">Name<input className="input" name="name" required maxLength={120}/></label>
-        <label className="field">Applies to<select className="input" name="scope" value={scope} onChange={(e) => setScope(e.target.value)}><option value="monitor">One monitor</option><option value="tag">Tag group</option></select></label>
-        {scope === "monitor" ? <label className="field">Monitor<select className="input" name="monitor_id" required defaultValue={focus?.id ?? ""}><option value="">Choose a monitor</option>{monitors.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
+        <label className="field">Applies to<Select className="input" name="scope" value={scope} onChange={(e) => setScope(e.target.value)}><option value="monitor">One monitor</option><option value="tag">Tag group</option></Select></label>
+        {scope === "monitor" ? <label className="field">Monitor<Select className="input" name="monitor_id" required defaultValue={focus?.id ?? ""}><option value="">Choose a monitor</option>{monitors.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</Select></label>
           : <div className="field-grid"><label className="field">Tag key<input className="input" name="tag_key" required placeholder="env"/></label><label className="field">Tag value<input className="input" name="tag_value" required placeholder="prod"/></label></div>}
-        <label className="field">Schedule<select className="input" name="schedule" value={weekly ? "weekly" : "once"} onChange={(e) => setWeekly(e.target.value === "weekly")}><option value="once">One-off</option><option value="weekly">Weekly</option></select></label>
+        <label className="field">Schedule<Select className="input" name="schedule" value={weekly ? "weekly" : "once"} onChange={(e) => setWeekly(e.target.value === "weekly")}><option value="once">One-off</option><option value="weekly">Weekly</option></Select></label>
         {weekly ? <>
           <label className="field">Timezone<input className="input" name="timezone" required defaultValue="UTC" aria-describedby={`${id}-dst`} placeholder="Europe/Amsterdam"/></label>
           <fieldset className="maintenance-days"><legend>Weekdays</legend>{DAYS.map((day, index) => <Checkbox key={day} name="weekdays" value={index} defaultChecked={index === 0}>{day}</Checkbox>)}</fieldset>

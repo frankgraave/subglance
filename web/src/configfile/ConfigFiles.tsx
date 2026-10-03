@@ -7,6 +7,7 @@ import { ApiError } from "../api/http";
 import { PushUrlReveal } from "../monitors/PushUrlReveal";
 import { registerLeaveGuard } from "../shell/leaveGuard";
 import { GROUPS, MAX_FILE_BYTES, changing, downloadConfig, importConfig, pushUrls, type ImportItem, type ImportReport } from "./api";
+import { FileInput } from "../components/FileInput";
 
 const docs = "https://github.com/frankgraave/subglance/blob/develop/docs/configuration-files.md";
 
@@ -210,7 +211,7 @@ function ImportPanel() {
     </p>
     <div className="field">
       <label className="field-label" htmlFor={`${id}-file`}>Configuration file</label>
-      <input key={inputVersion} id={`${id}-file`} type="file" className="input"
+      <FileInput key={inputVersion} id={`${id}-file`}
         accept=".yaml,.yml,application/yaml,text/yaml" disabled={busy} onChange={(event) => void check(event)} />
     </div>
     <div role="status" aria-live="polite" className="result-region">

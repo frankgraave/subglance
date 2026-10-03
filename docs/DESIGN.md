@@ -2270,6 +2270,53 @@ frame's `h1` is above both, §2.16), and inside
 a card it takes the panel radius (`--r-md`), since the card radius 6px inside
 a card corner of the same radius pinched at all four corners.
 
+### 8.11 A dropdown is `Select`, a file chooser is `FileInput`
+
+Both live in `web/src/components/` and are the real elements, restyled
+rather than replaced, for the reason §8.9 gives for the checkbox: the OS
+picker on a phone, type-to-find, the label association, the value in
+`FormData` and what a screen reader announces all stay the browser's.
+
+- **The select's arrow is painted, not the platform's.** Every select in a
+  form took its frame and fill from `.input` and kept the platform's arrow
+  inside it, so the one part of the control that says "this opens" was the
+  one part not drawn from tokens, and it changed with the browser and the
+  theme. `select.css` sets `appearance: none` and paints a solid 8 × 4 caret
+  in `--ink-2` with two gradients, the construction the mockups' `common.css`
+  already uses. The text stops `--space-8` from the edge so a long option
+  ends before the caret. In the toolbar frame (§8.4) the caret moves to the
+  frame's inner edge, because the frame's padding already stands off the
+  border.
+- **The field's class still says which field it is.** `Select` adds `select`
+  after the caller's class (`input`, `input--fit`, the toolbar's own), so a
+  form field keeps its frame and a toolbar select keeps its borderless one.
+  A field's class writes `background-color`, never the `background`
+  shorthand, which would wipe the caret.
+- **The file chooser's button is a `.button`.** `::file-selector-button` is
+  the one part of the control CSS can reach; `file-input.css` gives it the
+  button's padding, type, frame, fill and hover. The status text beside it
+  ("No file chosen", then the name) is the browser's and takes `--ink-2`. It is not hidden behind a styled label: that hides
+  the input, and the focus ring and the announcement then have to be
+  rebuilt by hand. No `.input` frame goes round the whole control, because a
+  bordered field holding a bordered button is the double framing §2.7
+  removes.
+- **Forced colours hand the select back to the platform**, as they do the
+  checkbox: Windows High Contrast may drop the painted caret, and a select
+  with no arrow reads as a text field.
+
+`tokens.test.ts` refuses a `<select>` written outside `Select.tsx`, a file
+input written outside `FileInput.tsx`, and `[type=file]` or
+`::file-selector-button` in any stylesheet but `file-input.css`.
+`layout/native-controls.browser.test.ts` opens every screen with a select in
+both themes and fails on one whose caret the compositor did not paint, and
+on a file chooser whose button is not drawn as the product's button.
+
+The time and date fields (maintenance windows, quiet hours, the retention
+clock) keep the platform's picker. Their face is already `.input`, and the
+picker inside them is a calendar or a clock that no stylesheet can match
+across browsers; restyling only its icon would change nothing a reader
+notices.
+
 ---
 
 ## 9. Accessibility

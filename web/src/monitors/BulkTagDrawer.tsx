@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { Drawer } from "../components/Drawer";
 import { Panel } from "../components/Card";
 import type { TagOperation, TagResult } from "./bulkTagsApi";
+import { Select } from "../components/Select";
 
 export type TagChange = (
   operation: TagOperation,
@@ -131,7 +132,7 @@ export function BulkTagDrawer({
             <legend className="add-legend">Tag change</legend>
             <label className="field">
               <span className="field-label">Action</span>
-              <select
+              <Select
                 className="input"
                 value={action}
                 onChange={(e) => {
@@ -145,7 +146,7 @@ export function BulkTagDrawer({
                 <option value="rename_value">
                   Rename value across instance
                 </option>
-              </select>
+              </Select>
             </label>
             <label className="field">
               <span className="field-label">Tag key</span>

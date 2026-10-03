@@ -16,6 +16,7 @@ import { TLS_FLOOR_UNSET } from "./tlsFloor";
 import type { PreviewResult, PreviewState } from "./preview";
 import { describePreview, suggestName } from "./preview";
 import { JSON_HELP, JSON_OPERATORS } from "./jsonAssertion";
+import { Select } from "../components/Select";
 
 /**
  * Add a monitor in under sixty seconds (DESIGN.md §7.2, product principle 2).
@@ -367,9 +368,9 @@ export function AddMonitorForm({
       <div className="field">
         <label className="field-label" htmlFor={props.id}>{label}</label>
         {placeholder === undefined ? (
-          <select {...props}>
+          <Select {...props}>
             {JSON_OPERATORS.map((op) => <option key={op} value={op}>{op.replace("_", " ")}</option>)}
-          </select>
+          </Select>
         ) : (
           <input {...props} placeholder={placeholder} autoComplete="off" spellCheck={false} />
         )}
@@ -571,7 +572,7 @@ export function AddMonitorForm({
             <label className="field-label" htmlFor={`${ids}-type`}>
               Check type
             </label>
-            <select
+            <Select
               id={`${ids}-type`}
               className="input"
               value={values.type}
@@ -589,7 +590,7 @@ export function AddMonitorForm({
               <option value="ping">Ping</option>
               <option value="ssl">TLS certificate</option>
               <option value="push">Push — the job reports in</option>
-            </select>
+            </Select>
             <FieldError
               control="type"
               badControl={badControl}

@@ -1,4 +1,5 @@
 import type { ReactElement, ReactNode } from "react";
+import { Select } from "../components/Select";
 
 /**
  * Every select in the page toolbar, on every screen.
@@ -43,13 +44,13 @@ export function ToolbarSelect({
     <label className="tb-field" data-facet-key={facetKey}>
       {icon}
       <span className="tb-label">{label}</span>
-      <select
+      <Select
         className={selectClassName === undefined ? "tb-select" : `tb-select ${selectClassName}`}
         value={value}
         onChange={(event) => onChange(event.target.value)}
       >
         {children}
-      </select>
+      </Select>
     </label>
   );
 }
