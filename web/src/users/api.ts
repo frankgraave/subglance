@@ -1,6 +1,7 @@
 import { apiJSON, apiPost, apiRequest } from "../api/http";
+import { isRole, type Role } from "../auth/roles";
 
-export type UserRole = "admin" | "editor" | "viewer";
+export type UserRole = Role;
 
 /** An account as the server lists it. Password hashes never leave the server. */
 export interface Account {
@@ -11,13 +12,12 @@ export interface Account {
 }
 
 export const usersKey = ["users"] as const;
-export const ROLES: readonly UserRole[] = ["viewer", "editor", "admin"];
 
 function validAccount(value: unknown): value is Account {
   if (!value || typeof value !== "object") return false;
   const a = value as Record<string, unknown>;
   return typeof a.id === "number" && typeof a.email === "string" &&
-    ROLES.includes(a.role as UserRole) && typeof a.created_at === "string";
+    isRole(a.role) && typeof a.created_at === "string";
 }
 
 function account(data: unknown): Account {

@@ -62,7 +62,7 @@
               color var(--dur-hover) var(--ease);
 }
 
-.segmented .segmented-option:hover:not([aria-pressed="true"]) {
+.segmented .segmented-option:hover:not([aria-pressed="true"], :disabled) {
   color: var(--ink-2);
   /* The edge arrives on hover into the space the transparent border already
      reserved, so nothing shifts. */
@@ -79,6 +79,10 @@
   border-color: var(--accent-border);
   color: var(--accent-ink);
 }
+
+/* A choice whose save is in flight: dimmed like a disabled .button, with the
+   selection still drawn so the reader sees what is being saved. */
+.segmented .segmented-option:disabled { opacity: .5; cursor: not-allowed; }
 
 /*
  * An icon segment.

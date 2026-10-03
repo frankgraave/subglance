@@ -46,7 +46,7 @@ const ROUTES: { path: string; ready: string }[] = [
   { path: "/incidents", ready: ".inc-line" },
   { path: "/notifications", ready: ".inv-row" },
   { path: "/notifications/new", ready: ".drawer-panel form" },
-  { path: "/settings", ready: "#users li select" },
+  { path: "/settings", ready: "#users li .segmented" },
 ];
 
 /** Ticket numbers, source paths, and the design prototype. */

@@ -3,9 +3,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, Panel } from "../components/Card";
 import { StateChip } from "../components/Chip";
 import { ConfirmDelete } from "../components/ConfirmDelete";
+import { RoleChoice } from "../components/RoleChoice";
 import { IconTrash, IconUsers } from "../components/icons";
 import { ApiError, MIN_PASSWORD_LENGTH } from "../auth/api";
-import { ROLES, createUser, deleteUser, fetchUsers, setUserRole, usersKey, type Account, type UserRole } from "./api";
+import { createUser, deleteUser, fetchUsers, setUserRole, usersKey, type Account, type UserRole } from "./api";
 
 const ROLE_HELP: Record<UserRole, string> = {
   viewer: "Viewer: sees monitors, incidents and settings, and changes nothing. Right for someone who only needs to look.",
@@ -13,7 +14,6 @@ const ROLE_HELP: Record<UserRole, string> = {
   admin: "Admin: also manages accounts and instance-wide settings such as retention.",
 };
 
-const label = (role: UserRole) => role[0].toUpperCase() + role.slice(1);
 const withArticle = (role: UserRole) => `${role === "viewer" ? "a" : "an"} ${role}`;
 const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 
@@ -72,11 +72,9 @@ function CreateForm({ onCreated, onCancel }: { onCreated: (account: Account) => 
             onChange={(event) => setPassword(event.target.value)} />
         </div>
         <div className="field">
-          <label className="field-label" htmlFor={`${id}-role`}>Role</label>
-          <select className="input input--inset" id={`${id}-role`} value={role} aria-describedby={`${id}-role-help`}
-            onChange={(event) => setRole(event.target.value as UserRole)}>
-            {ROLES.map((item) => <option key={item} value={item}>{label(item)}</option>)}
-          </select>
+          {/* The group carries the name "Role"; this is its visible caption. */}
+          <span className="field-label" aria-hidden="true">Role</span>
+          <RoleChoice label="Role" value={role} onChange={setRole} describedBy={`${id}-role-help`} />
         </div>
       </div>
       <p className="panel-note" id={`${id}-password-help`}>
@@ -135,13 +133,11 @@ function UserRow({ account, you, onChanged }: { account: Account; you: boolean; 
         <StateChip>{account.role}</StateChip>
         <StateChip>you</StateChip>
       </> : <>
-        <select className="input input--inset" aria-label={`Role for ${account.email}`} value={role} disabled={busy}
-          onChange={(event) => { setRole(event.target.value as UserRole); setError(null); }}>
-          {ROLES.map((item) => <option key={item} value={item}>{label(item)}</option>)}
-        </select>
-        {/* A change is saved by a button, not by the select itself: arrowing
-            through a closed select fires a change per option on some
-            platforms, which would re-role the account at every keypress. */}
+        <RoleChoice label={`Role for ${account.email}`} value={role} disabled={busy}
+          onChange={(next) => { setRole(next); setError(null); }} />
+        {/* A change is saved by a button, not by pressing a segment: what an
+            account may do should not change on a press that missed its
+            neighbour, so a pressed segment is a draft until Save role. */}
         {role !== account.role ? (
           <span className="button-row">
             <button type="button" className="button button--primary" disabled={busy} onClick={() => void saveRole()}

@@ -1702,6 +1702,16 @@ outer minus the padding. Measured on the reference: `--r-md` (8px) outside, 2px
 of padding, `--r-sm` (6px) on the segment — `8 − 2 = 6`, exactly concentric.
 This is the case the concentric guard in `tokens.test.ts` was landed for.
 
+**A role is chosen with `RoleChoice`, one segmented control for accounts and
+tokens alike.** The same three roles used to be a native select under Users
+and a segmented control under API tokens: two controls to learn for one
+choice. Three options are this control's case, and every role stays readable
+without opening anything. In a list row a pressed segment is a draft until
+Save role, because what an account may do should not change on a press that
+missed its neighbour; while that save is in flight every segment is disabled
+and the chosen one stays drawn. `RoleChoice.test.tsx` fails on a role picker
+built anywhere else.
+
 ### 8.1 The chip family
 
 Five kinds, and one rule holds them apart:

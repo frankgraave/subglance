@@ -58,7 +58,7 @@ const ROUTES: Route[] = [
   { path: "/monitors", ready: ".inv-list > li", title: "Monitors", lit: "Monitors", tab: "Monitors", width: "measure" },
   { path: "/incidents", ready: ".inc-line", title: "Incidents", lit: "Incidents", tab: "Incidents", width: "measure" },
   { path: "/notifications", ready: ".inv-row", title: "Notifications", lit: "Notifications", tab: "Notifications", width: "measure" },
-  { path: "/settings", ready: "#users li select", title: "Settings", lit: "Settings", tab: "Settings", width: "indexed" },
+  { path: "/settings", ready: "#users li .segmented", title: "Settings", lit: "Settings", tab: "Settings", width: "indexed" },
   { path: "/monitors/1", ready: ".mon-detail-windows", title: null, lit: "Monitors", tab: "Monitor", width: "measure" },
 ];
 
