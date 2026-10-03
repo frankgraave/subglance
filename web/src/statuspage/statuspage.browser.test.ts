@@ -97,6 +97,14 @@ async function measure(page: Page) {
       visibleBars: [...new Set(bars.map(list => list.length))],
       narrowestBar: Math.min(...bars.flat().map(bar => bar.getBoundingClientRect().width)),
       oldestLabel: [...new Set(axis.map(labels => labels[0]))],
+      // The figure under the bar names its period; it has to be the bar's.
+      uptimePeriod: [...new Set(axis.map(labels => /, (\d+) days$/.exec(labels[1] ?? "")?.[1] ?? labels[1]))],
+      // Screen-reader text drawn on screen: the summary's status word beside
+      // the sentence that already says it, or the 90-day history sentence
+      // under a 30-day bar. Clipped to a pixel when the rule is shipped.
+      exposedSrOnly: Array.from(document.querySelectorAll<HTMLElement>(".sr-only"))
+        .filter(el => { const r = el.getBoundingClientRect(); return r.width > 1 || r.height > 1; })
+        .map(el => el.textContent?.slice(0, 40)),
       wordless: Array.from(document.querySelectorAll(".led")).filter(led =>
         !led.nextElementSibling?.textContent?.trim()).length,
       heights: Object.fromEntries(["up", "warn", "down", "none"].map(state => [state,
@@ -137,6 +145,7 @@ function expectRenderedAsDesigned(m: Awaited<ReturnType<typeof measure>>, theme:
   expect(m.controls, "nothing on the page to operate, not even a theme toggle").toBe(0);
   expect(m.overflow, "page-level sideways scroll").toBeLessThanOrEqual(0);
   expect(m.wordless).toBe(0);
+  expect(m.exposedSrOnly, "screen-reader text is not drawn").toEqual([]);
 }
 
 for (const theme of ["dark", "light"]) {
@@ -150,6 +159,7 @@ for (const theme of ["dark", "light"]) {
           expect(m.rows).toBe(5);
           expect(m.visibleBars).toEqual([30]);
           expect(m.oldestLabel).toEqual(["30 days ago"]);
+          expect(m.uptimePeriod, "uptime over the days the bar draws").toEqual(["30"]);
           expect(m.narrowestBar, "a bar under 2px is no longer a bar").toBeGreaterThanOrEqual(2);
           expectDistinctHeights(m.heights);
           expect(m.historyDays).toEqual([90, 90, 90, 90, 90]);
@@ -163,6 +173,7 @@ for (const theme of ["dark", "light"]) {
           expectRenderedAsDesigned(m, theme, blocked);
           expect(m.visibleBars).toEqual([90]);
           expect(m.oldestLabel).toEqual(["90 days ago"]);
+          expect(m.uptimePeriod, "uptime over the days the bar draws").toEqual(["90"]);
           expect(m.narrowestBar).toBeGreaterThanOrEqual(2);
           expectDistinctHeights(m.heights);
           expect(m.historyDays).toEqual([90, 90, 90, 90, 90]);

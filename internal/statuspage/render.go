@@ -135,7 +135,7 @@ type serviceView struct {
 	Days                   []string
 	History                string
 	Oldest, OldestPhone    string
-	Uptime                 string
+	Uptime, UptimePhone    string
 }
 
 type outageView struct {
@@ -144,8 +144,9 @@ type outageView struct {
 }
 
 // phoneDays is how many days the history shows on a phone (design §2). The
-// stylesheet hides the older bars; the axis label has to say the same.
-const phoneDays = 30
+// stylesheet hides the older bars; the axis label and the uptime figure have
+// to say the same.
+const phoneDays = RecentDays
 
 func newView(p Page, loc *time.Location, css template.CSS) view {
 	now := p.GeneratedAt.In(loc)
@@ -157,7 +158,7 @@ func newView(p Page, loc *time.Location, css template.CSS) view {
 		Title:       p.Title,
 		Description: p.Description,
 		Timezone:    p.Timezone,
-		Updated:     now.Format("15:04"),
+		Updated:     updated(now),
 		UpdatedISO:  p.GeneratedAt.UTC().Format(time.RFC3339),
 		Summary:     summarise(p.Entries),
 		CSS:         css,
@@ -279,7 +280,8 @@ func serviceRow(e Entry) serviceView {
 		History:       historyText(e.Days),
 		Oldest:        fmt.Sprintf("%d days ago", len(e.Days)),
 		OldestPhone:   fmt.Sprintf("%d days ago", min(phoneDays, len(e.Days))),
-		Uptime:        "No uptime data yet",
+		Uptime:        uptimeText(e.Uptime90d, HistoryDays, false),
+		UptimePhone:   uptimeText(e.Uptime30d, phoneDays, e.Uptime90d != nil),
 	}
 	switch e.Status {
 	case StatusDown:
@@ -293,10 +295,31 @@ func serviceRow(e Entry) serviceView {
 			s.Days[i] = "none"
 		}
 	}
-	if e.Uptime90d != nil {
-		s.Uptime = fmt.Sprintf("%.2f%% uptime, 90 days", *e.Uptime90d)
-	}
 	return s
+}
+
+// uptimeText is an uptime figure with the period it covers, which is the
+// period of the bar drawn above it: 90 days, or 30 on a phone. older says
+// there is data from before that period, so an empty one is not "yet": a
+// monitor paused a month ago has a 90-day figure and no 30-day one.
+func uptimeText(pct *float64, days int, older bool) string {
+	switch {
+	case pct != nil:
+		return fmt.Sprintf("%.2f%% uptime, %d days", *pct, days)
+	case older:
+		return fmt.Sprintf("No uptime data, %d days", days)
+	default:
+		return "No uptime data yet"
+	}
+}
+
+// updated is the moment the page was built, always with its date. Every
+// other time on the page is relative to it ("today", "tomorrow", "4 h so
+// far"), and a page read from a cache or left open in a tab is read on a
+// later day than the one it was built on. The server cannot know when it will
+// be read, so the one absolute time on the page carries its day.
+func updated(now time.Time) string {
+	return now.Format("Mon 2 Jan, 15:04")
 }
 
 // historyText is the history bar as a sentence. The bars are aria-hidden, so

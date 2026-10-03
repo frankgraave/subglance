@@ -19,7 +19,7 @@ func fullPage() Page {
 		Title: "t", Description: "d", GeneratedAt: at, Timezone: "UTC",
 		Summary: Summary{Up: 1},
 		Entries: []Entry{{
-			Key: "k", Name: "n", Status: StatusUp, InMaintenance: true, Uptime90d: &pct,
+			Key: "k", Name: "n", Status: StatusUp, InMaintenance: true, Uptime90d: &pct, Uptime30d: &pct,
 			Days: []Day{{Date: "2026-09-29", State: DayUp, DownMinutes: 1}},
 		}},
 		Maintenance: []Maintenance{{StartsAt: at, EndsAt: at, Keys: []string{"k"}}},
@@ -55,7 +55,7 @@ var publicFields = []string{
 	"summary", "summary.up", "summary.degraded", "summary.down", "summary.unmonitored",
 	"entries",
 	"entries[].key", "entries[].name", "entries[].status", "entries[].in_maintenance",
-	"entries[].uptime_90d", "entries[].days",
+	"entries[].uptime_90d", "entries[].uptime_30d", "entries[].days",
 	"entries[].days[].date", "entries[].days[].state", "entries[].days[].down_minutes",
 	"maintenance", "maintenance[].starts_at", "maintenance[].ends_at", "maintenance[].keys",
 	"outages", "outages[].key", "outages[].started_at", "outages[].resolved_at", "outages[].duration_s",

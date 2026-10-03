@@ -148,6 +148,29 @@ func TestUptimeNeverRoundsUpToPerfect(t *testing.T) {
 	}
 }
 
+// The recent figure starts where a phone's bar starts: the local midnight 29
+// days before today, the same bound Days draws between bars.
+func TestUptimeFromStartsAtThePhonesFirstDay(t *testing.T) {
+	from := RecentSince(now, amsterdam)
+	if want := time.Date(2026, 8, 30, 22, 0, 0, 0, time.UTC); !from.Equal(want) {
+		t.Fatalf("RecentSince = %s, want %s (00:00 on 31 Aug in Amsterdam)", from.UTC(), want)
+	}
+	if got := Days(History{}, now, amsterdam)[HistoryDays-RecentDays].Date; got != "2026-08-31" {
+		t.Fatalf("first day a phone draws = %s, want 2026-08-31", got)
+	}
+	hours := []store.StatusHistoryHour{
+		{Hour: from.Add(-time.Hour), Down: 7},
+		{Hour: from, Up: 3, Down: 1},
+		{Hour: hour(29, 9), Up: 4},
+	}
+	if got := UptimeFrom(hours, from); got == nil || *got != 87.5 {
+		t.Errorf("recent uptime = %s, want 87.5 (the hour before the bound left out)", fmtUptime(got))
+	}
+	if got := UptimeFrom(hours[:1], from); got != nil {
+		t.Errorf("no recent checks: uptime = %s, want nil", fmtUptime(got))
+	}
+}
+
 // TestOutagesDoNotPublishTheFuture pins that a span stamped after now is
 // never reported as a fact: an outage that has not started is left out, and
 // one whose end lies ahead stays open with a duration measured up to now.

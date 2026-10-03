@@ -47,6 +47,7 @@ Per entry, in the page's `entries` list (one per monitor on the page):
 | `status` | derived, see §1.3 | One of `up`, `degraded`, `down`, `no_data`, `not_monitored` |
 | `in_maintenance` | maintenance windows | Boolean only; the window's name is not shown |
 | `uptime_90d` | hourly rollup | Percentage, rounded down to 2 decimals (100 only with no confirmed-down check), `null` when there is no data |
+| `uptime_30d` | hourly rollup | The same over the last 30 days, the period a phone draws (§2) |
 | `days` | hourly rollup | 90 entries, oldest first: `{ "date", "state", "down_minutes" }` |
 
 Page-level lists:
@@ -159,12 +160,17 @@ Decisions it draws:
 - **Phone:** the history shows the last 30 days instead of 90. Ninety bars in
   a 320px column come out under 2px wide, which is no longer a bar. The axis
   label changes with it ("30 days ago"), so the picture never claims a range it
-  does not draw. The uptime figure stays the 90-day number and says so.
+  does not draw. The uptime figure changes with it too ("99.94% uptime, 30
+  days"): a 90-day number under a 30-day bar describes days the visitor
+  cannot see, and the screen-reader sentence keeps the full 90.
 - **Both themes** come from the tokens. The page follows the visitor's
   `prefers-color-scheme`; there is no toggle on the real page (the prototype
   has one for review only).
 - **Times** are shown in the page's configured time zone, named once in the
-  footer, never in the server's.
+  footer, never in the server's. The summary's "Updated" time always carries
+  its date ("Updated Fri 3 Oct, 14:32"): every other time on the page is
+  relative to it, and a page read from a cache or an open tab is read on a
+  later day than the one it was built on.
 
 ---
 
