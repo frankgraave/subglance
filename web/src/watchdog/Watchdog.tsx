@@ -46,6 +46,13 @@ export function WatchdogCard() {
       {!data ? <p>{query.isError ? "Watchdog state unavailable." : "Loading watchdog state…"}</p> : <>
         {query.old && <p role="status">Watchdog state unavailable. Showing the last retrieved history.</p>}
         <p>{data.configured ? "Configured" : "Not configured"}</p>
+        {/* The card is where somebody looks for the switch, so the unset state
+            says what a watchdog is and what to set, and links where the
+            dashboard notice does: one place to read about it, not two. */}
+        {!data.configured && <p className="panel-note">
+          A watchdog is an outside service that SubGlance pings on a schedule and that raises the alarm when the pings stop: set{" "}
+          <code>SUBGLANCE_WATCHDOG_URL</code> to its ping address and restart SubGlance. <a href={watchdogReadme}>Read about self-monitoring</a>.
+        </p>}
         {data.configured && <>
           {data.overdue && <p>Watchdog activity is overdue. Past pings do not confirm current operation.</p>}
           {data.suppressed && <p>Pings withheld: the checking pipeline has not progressed.</p>}

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, Panel } from "../components/Card";
 import { IconArchive } from "../components/icons";
@@ -7,6 +8,14 @@ import { backupKey, fetchBackup } from "./api";
 // Setup for scheduled backups, and the restore procedure for them.
 const backupDocs = "https://github.com/frankgraave/subglance/blob/develop/docs/operations.md#scheduled-backups-to-s3-compatible-storage";
 const restoreDocs = "https://github.com/frankgraave/subglance/blob/develop/docs/operations.md#restoring-from-s3";
+
+// The three settings without which no backup runs; Load refuses a target
+// that is missing either credential (internal config, validateBackup).
+const backupSettings: [string, ReactNode][] = [
+  ["SUBGLANCE_BACKUP_TARGET", <>The bucket, and optionally a prefix: <code>s3://bucket/prefix</code></>],
+  ["SUBGLANCE_BACKUP_ACCESS_KEY_ID", "The access key ID for that bucket"],
+  ["SUBGLANCE_BACKUP_SECRET_ACCESS_KEY_FILE", <>A file holding the secret access key, or the key itself in <code>SUBGLANCE_BACKUP_SECRET_ACCESS_KEY</code></>],
+];
 
 function When({ value }: { value: string }) {
   return <time dateTime={value}>{new Date(value).toLocaleString(undefined, { timeZoneName: "short" })}</time>;
@@ -30,7 +39,18 @@ export function BackupCard() {
         {query.isError && <p role="status">Backup state unavailable. Showing the last retrieved history.</p>}
         {!data.configured ? <>
           <p>Not configured. SubGlance has no scheduled backup target.</p>
-          <p className="panel-note">Set a backup target to keep copies in S3-compatible storage. <a href={backupDocs}>Read about backups</a>.</p>
+          {/* Names the settings rather than only linking to them: the card is
+              the one place an operator looks, and a link alone sends them off
+              to find three variable names. They are environment variables
+              because the credentials can be nothing else (a flag shows in ps). */}
+          <p className="panel-note">Scheduled backups to S3-compatible storage need these environment variables, then a restart:</p>
+          <dl className="panel-settings">
+            {backupSettings.map(([name, purpose]) => <div key={name}><dt><code>{name}</code></dt><dd>{purpose}</dd></div>)}
+          </dl>
+          <p className="panel-note">
+            Set <code>SUBGLANCE_BACKUP_REGION</code> when the bucket is not in <code>us-east-1</code>, and <code>SUBGLANCE_BACKUP_ENDPOINT</code> for
+            storage other than AWS S3. <a href={backupDocs}>Read about backups</a>.
+          </p>
         </> : <>
           <p>Target <code>{data.target}</code></p>
           {data.last_error !== null && data.last_error_at !== null

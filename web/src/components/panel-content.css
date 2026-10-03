@@ -16,7 +16,8 @@
 /* --ink-2: a panel's note is prose somebody reads, the tone a sentence takes.
    (--ink-3 measured 3.05:1 here when this was set; it clears 4.5:1 now.) */
 .panel-note,
-.panel-facts dt {
+.panel-facts dt,
+.panel-settings dd {
   color: var(--ink-2);
   font-size: var(--type-helper);
   line-height: var(--lead-prose);
@@ -31,6 +32,10 @@
   text-decoration: underline;
 }
 
+/* A setting's name in a note is one unbroken word wider than a phone's
+   column; it breaks rather than pushing the card past the screen. */
+.panel-note code { overflow-wrap: anywhere; }
+
 /* Label over value, side by side while they fit. */
 .panel-facts {
   display: flex;
@@ -40,6 +45,18 @@
 }
 .panel-facts dd { margin: var(--space-1) 0 0; }
 .panel-facts time { @apply face-mono; }
+
+/* What a panel asks to be configured, one setting under the other: the name,
+   and below it what it holds. Stacked rather than side by side like
+   .panel-facts, because a setting's name is long enough to fill a phone's
+   line on its own, and is broken anywhere rather than pushing the card wide. */
+.panel-settings {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.panel-settings dd { margin: var(--space-1) 0 0; }
 
 /* Controls and the words beside them on one line, wrapping when they do not
    fit: an input with its unit, a list row with its actions. */
