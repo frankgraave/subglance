@@ -1898,7 +1898,7 @@ There are **three** states, never two:
 
 | State | Response chip | Row tint | What it means |
 |---|---|---|---|
-| open | Not muted | `--down` | Broken. Repeat alerts are escalating. |
+| open | Not muted | `--down` | Broken. Nobody has muted its repeats. |
 | acked | Muted, still down | `--warn` | Broken. Somebody is on it; repeats muted. |
 | resolved | Resolved | none | Over. |
 
