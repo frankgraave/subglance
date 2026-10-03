@@ -1898,8 +1898,8 @@ There are **three** states, never two:
 
 | State | Response chip | Row tint | What it means |
 |---|---|---|---|
-| open | Unacked | `--down` | Broken. Repeat alerts are escalating. |
-| acked | Acked, still down | `--warn` | Broken. Somebody is on it; repeats muted. |
+| open | Not muted | `--down` | Broken. Repeat alerts are escalating. |
+| acked | Muted, still down | `--warn` | Broken. Somebody is on it; repeats muted. |
 | resolved | Resolved | none | Over. |
 
 **The lamp states the service; the chip states the response.** They are two
@@ -1913,16 +1913,23 @@ and `resolved_at` are separate columns — and so must the screen, because a row
 that reads as finished while the service is still down is the exact comfortable
 untruth this product exists to avoid.
 
-Three consequences, all load-bearing:
+Four consequences, all load-bearing:
 
-* **The chip is never just "Acknowledged".** On its own that label is what
-  makes a still-broken service look handled. It says "Acked, still down", and
+* **The chip is never just "Muted".** On its own that label is what
+  makes a still-broken service look handled. It says "Muted, still down", and
   it is not allowed to be shorter than the truth just because its column is
   narrow.
+* **The chip speaks the button's verb.** The control is "Mute repeat alerts",
+  so the chip says "Not muted" before the click and "Muted, still down" after
+  it. A button named for one verb that changes a column named for another
+  ("Acked") asks the reader to take on trust that both words mean one act.
+  The API keeps its `ack` name; the screen uses one word for it. "Not muted"
+  claims nothing about delivery: maintenance, quiet hours or "Do not repeat"
+  can still hold a repeat back, and the chip cannot see them.
 * **The acked tint is `--warn`, never `--up`.** The middle state must not
   borrow the colour of health — colour is the channel that reads fastest, so it
   would say "fixed" before the word beside it could say otherwise.
-* **The acknowledgement clause carries "still down" inside the same string.**
+* **The mute clause carries "still down" inside the same string.**
   Not as a flag a component decorates, so no caller can print the reassuring
   half alone.
 

@@ -31,7 +31,7 @@ it("preserves meaningful zero without inventing an already-issued reminder", () 
   expect(screen.getByText(/0 reminders issued/)).toBeTruthy();
 });
 it.each([
-  ["resolved", "resolved"], ["acknowledged", "acknowledged"], ["unconfirmed", "confirmation"],
+  ["resolved", "resolved"], ["acknowledged", "repeat alerts muted"], ["unconfirmed", "confirmation"],
   ["paused", "monitor is paused"], ["disabled", "Do not repeat"], ["flapping", "flapping"],
   ["maintenance", "maintenance window is active"], ["maintenance_pending", "initial alert is pending after maintenance"],
 ])("uses authoritative %s suppression instead of computing a due time", (status, words) => {

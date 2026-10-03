@@ -382,9 +382,9 @@ describe("the expanded incident row", () => {
           paint.visibleStatus,
           "the open row's response column must say its state in a visible " +
             "word; colour is not allowed to be the only signal",
-        ).toBe("Unacked");
+        ).toBe("Not muted");
         expect(
-          paint.words.some((w: string) => /unacked|acked|down|refused|failure/i.test(w)),
+          paint.words.some((w: string) => /not muted|muted|down|refused|failure/i.test(w)),
           `the open row must state its condition in words as well as colour; found ${JSON.stringify(
             paint.words,
           )}`,
@@ -479,7 +479,7 @@ describe("the expanded incident row", () => {
      * The rail is a status colour, so §6 applies to it: when the stream dies
      * the screen stops asserting. Everything else in the row already withdrew
      * — the lamp desaturates, the numbers drop to `--ink-3`, the badge word
-     * becomes "Was unacked" — and the rail was sitting through all of it at
+     * becomes "Was not muted" — and the rail was sitting through all of it at
      * full strength.
      *
      * `data-conn` is set on the container here rather than by killing the

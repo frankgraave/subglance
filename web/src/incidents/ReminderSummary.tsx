@@ -3,7 +3,7 @@ import { formatMoment } from "../monitors/detail";
 
 const REASON: Record<Exclude<ReminderStatus, "scheduled">, string> = {
   unconfirmed: "Reminders wait for incident confirmation.",
-  acknowledged: "Reminders stopped — incident acknowledged.",
+  acknowledged: "Reminders stopped — repeat alerts muted.",
   resolved: "Reminders stopped — incident resolved.",
   paused: "Reminders suspended — monitor is paused.",
   disabled: "Reminders disabled — Do not repeat is selected.",

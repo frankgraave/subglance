@@ -84,6 +84,7 @@ describe("the badge word says the state, never only the colour", () => {
      */
     expect(STATE_BADGE.acked).toMatch(/still down/i);
     expect(STATE_BADGE.acked).not.toBe("Acknowledged");
+    expect(STATE_BADGE.acked).not.toBe("Muted");
   });
 
   it("gives every state a distinct word, so colour is never the only signal", () => {
@@ -103,8 +104,8 @@ describe("the badge word says the state, never only the colour", () => {
   it("moves the badge out of the present tense on a dead stream (SUB-111)", () => {
     // Once the stream is dead no view asserts anything about now, and a
     // stylesheet cannot reach a word.
-    expect(stateBadge("open", true)).toBe("Was unacked");
-    expect(stateBadge("open", false)).toBe("Unacked");
+    expect(stateBadge("open", true)).toBe("Was not muted");
+    expect(stateBadge("open", false)).toBe("Not muted");
     expect(stateBadge("acked", true)).toMatch(/was still down/i);
     for (const phrase of Object.values(STATE_BADGE_LAST_KNOWN)) {
       expect(phrase, `"${phrase}" reads as a claim about now`).not.toMatch(
@@ -197,7 +198,7 @@ describe("the sentence a reader is given", () => {
       incident({ acked: true, ackedAt: T0 + 420_000, durationS: 720 }),
       T0 + 720_000,
     );
-    expect(story.sentence).toMatch(/Acknowledged/);
+    expect(story.sentence).toMatch(/Repeat alerts muted/);
     expect(story.sentence).toMatch(/still down/i);
     expect(story.sentence).toContain("and counting");
     expect(story.sentence).not.toMatch(/Recovered|Resolved/i);
@@ -205,7 +206,7 @@ describe("the sentence a reader is given", () => {
 
   it("cannot print the reassuring half of the ack clause on its own", () => {
     // `acked` is one string, not a flag a caller decorates: there is no way
-    // for a component to render "Acknowledged at 14:10" without the rest.
+    // for a component to render "Repeat alerts muted at 14:10" without the rest.
     const story = incidentStory(
       incident({ acked: true, ackedAt: T0 + 420_000 }),
       T0 + 720_000,
@@ -217,7 +218,7 @@ describe("the sentence a reader is given", () => {
   it("does not invent delivery status for an open incident during maintenance", () => {
     // Incident state alone cannot prove a delivery: maintenance can mute it.
     const story = incidentStory(incident(), T0 + 720_000);
-    expect(story.sentence).toMatch(/Not acknowledged/i);
+    expect(story.sentence).toMatch(/Repeat alerts not muted/i);
     expect(story.sentence).not.toMatch(/escalating|alerts are/i);
   });
 

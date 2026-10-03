@@ -27,7 +27,7 @@ export function RepeatAlertField({ value, onChange, error }: {
     <select ref={modeRef} id={`${id}-mode`} className="input" value={isOff ? "off" : "on"}
       aria-invalid={error ? true : undefined} aria-describedby={described}
       onChange={(event) => onChange(event.target.value === "off" ? "0" : "900")}>
-      <option value="on">Repeat while unacknowledged</option>
+      <option value="on">Repeat until muted</option>
       <option value="off">Do not repeat</option>
     </select>
     {!isOff && <>
@@ -41,7 +41,7 @@ export function RepeatAlertField({ value, onChange, error }: {
           onChange(turnsOff ? "0" : next);
         }} />
     </>}
-    <p id={`${id}-help`} className="field-help">Each later repeat waits four times as long as the one before, up to once a day. At least 1 minute keeps reminders from becoming too frequent. Acknowledging stops repeats.</p>
+    <p id={`${id}-help`} className="field-help">Each later repeat waits four times as long as the one before, up to once a day. At least 1 minute keeps reminders from becoming too frequent. Muting the incident stops repeats.</p>
     {error && <p id={`${id}-error`} className="field-error" role="alert">{error}</p>}
   </div>;
 }

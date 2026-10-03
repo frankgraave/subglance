@@ -571,7 +571,7 @@ export function MonitorDetail({
           )}
           {ackError !== null ? (
             <p role="alert" className="inc-notice">
-              Could not acknowledge: {ackError.message}
+              Could not mute repeat alerts: {ackError.message}
             </p>
           ) : null}
           {error !== null && loaded ? (

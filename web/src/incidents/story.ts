@@ -29,8 +29,8 @@
  * Confirmed incidents distinguish open, acknowledged and resolved. An
  * unconfirmed failure is Warning and never claims downtime or alert delivery. `acked` is a state of the
  * *response*, not of the incident, and its wording keeps the outage in the
- * present tense: "Down since 14:03, 12 min and counting. Acknowledged at
- * 14:10 — still down, repeat alerts paused."
+ * present tense: "Down since 14:03, 12 min and counting. Repeat alerts muted
+ * at 14:10 — still down."
  */
 
 import { formatDuration, formatMoment } from "../monitors/detail";
@@ -62,25 +62,37 @@ export function incidentState(incident: Incident): IncidentState {
  * ticket turns on, and drawing it as a second column rather than as one
  * combined word is what makes the two states impossible to conflate.
  *
- * The acked word still carries "still down" rather than reading
- * "Acknowledged". On its own that label is the one that would make a
- * still-broken service look handled, and a badge is not allowed to be shorter
- * than the truth just because its column is narrow.
+ * **It speaks the button's verb.** The control beside it says "Mute repeat
+ * alerts", so the badge says "Not muted" before the click and "Muted, still
+ * down" after it. It used to say "Unacked" and "Acked, still down": a reader
+ * pressed a button called Mute and watched a column called Acked change, and
+ * had to take on trust that the two words named one act (SUB-190). The API
+ * keeps its `ack` name; the screen uses one verb for it.
+ *
+ * "Not muted" claims nothing about delivery. A maintenance window, quiet
+ * hours or a monitor set to "Do not repeat" can all hold a repeat back, and
+ * the badge cannot see any of them; what it knows is that nobody pressed the
+ * button.
+ *
+ * The muted word still carries "still down" rather than reading "Muted". On
+ * its own that label is the one that would make a still-broken service look
+ * handled, and a badge is not allowed to be shorter than the truth just
+ * because its column is narrow.
  *
  * The stale column is SUB-111 applied here: once the live stream is dead, no
  * view states anything in the present tense, and CSS cannot reach a word.
  */
 export const STATE_BADGE: Record<IncidentState, string> = {
   warning: "Warning",
-  open: "Unacked",
-  acked: "Acked, still down",
+  open: "Not muted",
+  acked: "Muted, still down",
   resolved: "Resolved",
 };
 
 export const STATE_BADGE_LAST_KNOWN: Record<IncidentState, string> = {
   warning: "Was warning",
-  open: "Was unacked",
-  acked: "Acked, was still down",
+  open: "Was not muted",
+  acked: "Muted, was still down",
   resolved: "Resolved",
 };
 
@@ -198,8 +210,8 @@ export type IncidentStory = {
   /** "Recovered at 14:15", or null while the incident is open. */
   ended: string | null;
   /**
-   * What acknowledging did, in the words that keep it apart from resolving.
-   * Null when nobody has acked, so the caller can offer the button instead.
+   * What muting did, in the words that keep it apart from resolving.
+   * Null when nobody has muted, so the caller can offer the button instead.
    */
   acked: string | null;
   /**
@@ -207,7 +219,7 @@ export type IncidentStory = {
    *
    * This is what a screen reader hears, and it is assembled from exactly the
    * same parts the eye is shown — no more and no less. The guard against a
-   * visual-only distinction between "acknowledged" and "resolved" is not a
+   * visual-only distinction between "muted" and "resolved" is not a
    * convention here; it is this field.
    */
   sentence: string;
@@ -284,12 +296,12 @@ export function incidentStory(
         })();
 
   /*
-   * The acknowledgement clause always carries "still down" with it.
+   * The mute clause always carries "still down" with it.
    *
    * Written as one string rather than as a flag the caller decorates, because
-   * the two halves must not be separable: every rendering of "acknowledged"
-   * in this product arrives with the reminder that the service has not come
-   * back, and a caller cannot accidentally print only the reassuring half.
+   * the two halves must not be separable: every rendering of "muted" in this
+   * product arrives with the reminder that the service has not come back,
+   * and a caller cannot accidentally print only the reassuring half.
    */
   const ackMoment =
     formatClock(incident.ackedAt) ?? formatMoment(incident.ackedAt);
@@ -303,16 +315,15 @@ export function incidentStory(
    * OpenAPI spec and `internal/store/incidents.go` all state. So the sentence
    * says muted rather than hedging — and it says *repeat* alerts, because the
    * first alert has already gone out and the recovery notice will still
-   * arrive.
+   * arrive. It is the button's own wording, so the sentence a screen reader
+   * hears names the act by the word the control used (SUB-190).
    */
-  const stillDown = stale
-    ? "was still down, repeat alerts muted"
-    : "still down, repeat alerts muted";
+  const stillDown = stale ? "was still down" : "still down";
   const acked =
     state === "acked"
       ? ackMoment === null
-        ? `Acknowledged — ${stillDown}`
-        : `Acknowledged at ${ackMoment} — ${stillDown}`
+        ? `Repeat alerts muted — ${stillDown}`
+        : `Repeat alerts muted at ${ackMoment} — ${stillDown}`
       : null;
 
   const parts = [
@@ -321,11 +332,11 @@ export function incidentStory(
     cause === null ? null : `${capitalise(cause)}.`,
     ended === null ? null : `${ended}.`,
     acked === null ? null : `${acked}.`,
-    // Acknowledgement is known; delivery and maintenance suppression are not.
+    // Muting is known; delivery and maintenance suppression are not.
     state === "open"
       ? stale
-        ? "Not acknowledged when we lost contact."
-        : "Not acknowledged."
+        ? "Repeat alerts not muted when we lost contact."
+        : "Repeat alerts not muted."
       : null,
   ].filter((part): part is string => part !== null);
 
@@ -413,8 +424,8 @@ export function incidentTimeline(
        * recovery notice will still arrive.
        */
       what: stale
-        ? "Acknowledged — repeat alerts muted, incident was still open"
-        : "Acknowledged — repeat alerts muted, incident still open",
+        ? "Repeat alerts muted — incident was still open"
+        : "Repeat alerts muted — incident still open",
     });
   }
   steps.push(

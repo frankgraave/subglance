@@ -9,12 +9,12 @@
  * `StatusChip`, so it is a word first (DESIGN.md §2.3), the failure kind is a
  * word beside it, and the whole story is repeated as prose for a screen
  * reader. Nothing in this file is load-bearing for meaning: with the
- * stylesheet off, the row still says "Acked, still down" and still says why.
+ * stylesheet off, the row still says "Muted, still down" and still says why.
  * That is deliberate — the risk this ticket is about is an acknowledged outage
  * that *looks* finished, and a look is the one thing a CSS file controls.
  *
  * The dead-stream treatment (DESIGN.md §6) is likewise absent on purpose. On
- * these rows every claim is a word — "Unacked", "12 min and counting" — and a
+ * these rows every claim is a word — "Not muted", "12 min and counting" — and a
  * stylesheet can dim a word but cannot change what it says. So the tense moves
  * in the markup instead (`stateBadge`, `incidentStory`), exactly as SUB-111
  * required of the status pill. The screen wears `.mon-detail`, so the lamp
@@ -106,7 +106,7 @@
  * grows with it. Measured in Chromium at 1440, the open row's detail is 844px
  * wide and 165px tall, so expanding one incident turned 139,260px² of the page
  * into flat `--down-dim` carrying no information that the lamp, the failure
- * chip and the word "Unacked" were not already carrying three times over. A
+ * chip and the words "Not muted" were not already carrying three times over. A
  * tint that says "down" is a reasonable mark on a 40px line; the same tint
  * stretched over a panel is a background, and a red background is the loudest
  * thing on the screen for as long as the row stays open.
@@ -118,7 +118,7 @@
  *
  * `--warn` and not `--up` for the acked row, and this is the rule the whole
  * ticket turns on: the middle state must not borrow the colour of health. It
- * is only ever a second voice — the chip in the row says "Acked, still down"
+ * is only ever a second voice — the chip in the row says "Muted, still down"
  * in words, which is what a reader who cannot separate amber from green has.
  *
  * A resolved row gets no edge at all: a column of marked rows from last month
@@ -167,7 +167,7 @@
  * lamp beside it. Without this the rail was the one mark on the screen still
  * at full strength after the stream died: `connection.css` drains `.led` and
  * `.hb-bar`, dims the numbers to `--ink-3`, and `stateBadge` moves the word to
- * "Was unacked" — and a fully saturated red edge sat through all of it,
+ * "Was not muted" — and a fully saturated red edge sat through all of it,
  * outshouting the drained lamp two pixels away and re-asserting in colour
  * exactly what the badge had just stopped asserting in words.
  *
@@ -363,8 +363,8 @@
  * one kind of reading.
  *
  * The response takes rung 4 on the wide line, where it is the last column:
- * "Acked, still down" measures 136px and rung 3 is 104. On the narrow line
- * it is the last thing on its own line and takes its own width.
+ * "Muted, still down" does not fit rung 3 (104px). On the narrow line it is
+ * the last thing on its own line and takes its own width.
  */
 .inc-col { flex: none; }
 .inc-col-time { width: var(--size-col-3); color: var(--ink-2); }

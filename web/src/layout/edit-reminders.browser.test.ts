@@ -155,7 +155,7 @@ for (const theme of ["dark", "light"]) for (const width of [390, 1440]) describe
       expect(await page.$eval('.repeat-field select', (node) => (node as HTMLSelectElement).value)).toBe("off");
       await button(page, "Cancel");
       await page.click('button[aria-label^="Mute repeat alerts for"]');
-      await page.waitForFunction(() => document.querySelector('.inc-reminders')?.textContent?.includes("incident acknowledged"));
+      await page.waitForFunction(() => document.querySelector('.inc-reminders')?.textContent?.includes("repeat alerts muted"));
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     } finally { await f.context.close(); }
   });

@@ -15,12 +15,12 @@ it("associates repeat mode with its help and rejection even when seconds are hid
   const mode = screen.getByLabelText("Repeat alerts");
   const descriptions = () => (mode.getAttribute("aria-describedby") ?? "").split(" ")
     .map((id) => document.getElementById(id)?.textContent ?? "");
-  expect(descriptions().join(" ")).toMatch(/acknowledging stops repeats/i);
+  expect(descriptions().join(" ")).toMatch(/muting the incident stops repeats/i);
   expect(mode.getAttribute("aria-invalid")).toBeNull();
   rerender(<RepeatAlertField value="0" onChange={vi.fn()} error="Repeat setting was refused" />);
   expect(screen.queryByLabelText("First repeat after")).toBeNull();
   expect(descriptions()).toEqual([
-    expect.stringMatching(/acknowledging stops repeats/i), "Repeat setting was refused",
+    expect.stringMatching(/muting the incident stops repeats/i), "Repeat setting was refused",
   ]);
   expect(mode.getAttribute("aria-invalid")).toBe("true");
 });
