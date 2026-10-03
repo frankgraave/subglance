@@ -13,10 +13,29 @@
 }
 .command-menu[open] { display: flex; flex-direction: column; }
 .command-menu::backdrop { background: var(--scrim); }
+/*
+ * The field and its glyph. The glyph is laid over the input's own padding
+ * rather than placed beside it, so the input is still the box that takes the
+ * focus ring, and the ring goes round the glyph as well.
+ */
+.command-search { position: relative; flex: none; }
+.command-search-icon {
+  position: absolute;
+  inset-inline-start: var(--space-4);
+  top: 50%;
+  translate: 0 -50%;
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.6;
+  color: var(--ink-2);
+  pointer-events: none;
+}
 .command-menu input {
-  flex: none;
   width: 100%;
   padding: var(--space-4);
+  padding-inline-start: calc(var(--space-4) + var(--size-icon-md) + var(--space-2));
   font-size: var(--type-row);
   line-height: var(--lead-row);
   color: var(--ink);
@@ -24,6 +43,8 @@
   border: 0;
   border-bottom: 1px solid var(--border-control);
 }
+/* `--ink-2`, not the shell field's `--ink-4`: the placeholder is the only
+   thing that says what this field searches, and it has to clear AA. */
 .command-menu input::placeholder { color: var(--ink-2); }
 .command-menu [role="listbox"] {
   min-height: 0;
@@ -48,15 +69,74 @@
   overflow-wrap: anywhere;
   cursor: pointer;
 }
-.command-menu [role="option"] span {
+.command-detail {
   color: var(--ink-2);
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
+}
+/*
+ * A monitor's option puts its lamp beside the name, as every other list of
+ * monitors does, and centres it on the two lines rather than the first: the
+ * lamp is about the monitor, not about either line.
+ */
+.command-menu [role="option"].command-monitor {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: var(--space-3);
+  row-gap: var(--space-1);
+}
+.command-lamp { grid-row: span 2; display: flex; }
+.command-monitor .command-label, .command-monitor .command-detail { grid-column: 2; }
+/* The group's name: the section role, which is what a heading over a list
+   of rows is everywhere else in the product (DESIGN.md §2.5). */
+.command-group {
+  @apply caps-legend;
+  padding: var(--space-2) var(--space-3) var(--space-1);
 }
 .command-menu [role="option"][aria-selected="true"],
 .command-menu [role="option"]:hover { background: var(--surface-hi); }
 .command-menu [aria-disabled="true"] { cursor: wait; }
 .command-menu p { padding: var(--space-2) var(--space-4); color: var(--ink-2); font-size: var(--type-helper); line-height: var(--lead-helper); }
+/* The keys the menu answers to, and its close button, on one line under
+   the list. */
+.command-foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-inline-start: var(--space-4);
+  border-top: 1px solid var(--border-control);
+}
+.command-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1h) var(--space-4);
+  color: var(--ink-2);
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+}
+/* The masthead launcher's keycap (shell.css), drawn the same way so the
+   shortcut that opened the menu and the keys that drive it look like one
+   family. `--ink-2` rather than that keycap's `--ink-4`: these are the only
+   statement of how the menu is driven, so they have to clear AA. */
+.command-menu kbd {
+  @apply face-mono;
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  padding: 0 var(--space-1h);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  color: var(--ink-2);
+}
+/* A key sits beside its word by a gap, not a margin, so it can stand on
+   either side of it ("Close Esc", "Enter to select"). */
+.command-keys > span, .command-foot > button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
 .command-menu button:not([role="option"]) {
   padding: var(--space-2) var(--space-4);
   color: var(--ink-2);
@@ -73,5 +153,8 @@
 }
 @media (max-width: 640px) {
   .command-menu { margin-top: var(--space-6); }
+  /* No keyboard to press them with. */
+  .command-keys, .command-menu kbd { display: none; }
+  .command-foot { justify-content: flex-end; }
   .command-menu input { font-size: var(--type-nozoom); line-height: var(--lead-nozoom); }
 }

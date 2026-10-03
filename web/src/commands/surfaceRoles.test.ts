@@ -31,6 +31,8 @@ it("requires an explicit role review for every new 4px caller", () => {
   }
   walk("web/src");
   expect(callers.sort()).toEqual([
+    // The menu's own keycaps: the masthead keycap's role, inside the menu it opens.
+    "web/src/commands/commands.css: .command-menu kbd",
     "web/src/components/choice.css: .choice::before, .choice::after",
     "web/src/components/panellist.css: .panel-row :is(a, button):focus-visible",
     "web/src/shell/shell.css: .shell-nav-soon",

@@ -1624,6 +1624,21 @@ native modal above existing drawers, a bounded scrolling list, and the
 reference's 12px outer / 6px option corners. All matching monitors remain
 reachable; arrows scroll the active option into view without moving input focus.
 
+The field carries the search glyph and a placeholder that says what it
+searches. Results sit under four named groups, in this order: Monitors,
+Actions, Navigation, Theme. Monitors come first because finding one is what the
+menu is opened for past a handful of them; a group with nothing in it after
+filtering, or none for a read-only account, is not drawn. The groups are the
+ARIA grouped-listbox pattern (`group` named by a presentational label), and the
+arrow keys walk one flat order that matches the drawn one, so the highlight
+never jumps back over a heading. A monitor's option carries its lamp and its
+status as a word ("Down · https://…"): the word is what a screen reader hears
+and a colour-blind reader reads, and because it is searched text, typing "down"
+narrows the list to monitors that are. A footer names the keys (↑ ↓ to move,
+Enter to select, Esc on the close button); the hints are hidden from assistive
+technology, which the combobox role already tells how the menu is driven, and
+from phones, which have no keyboard to press them with.
+
 Open a monitor by name or target, pause/resume it, add a monitor, navigate to
 Dashboard/Monitors/Incidents/Notifications/Settings, or choose light/dark/system
 through the same saved theme preference as the masthead. Write commands are
