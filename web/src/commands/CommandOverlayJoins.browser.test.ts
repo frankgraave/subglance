@@ -80,6 +80,8 @@ it.each([['dark', 390], ['light', 390], ['dark', 1440], ['light', 1440]] as cons
     expect(await draft!.evaluate((el) => el.isConnected)).toBe(false);
     expect(await inventory!.evaluate((el) => el.isConnected)).toBe(true);
     expect(await page.$eval('.shell-search-input', (el) => (el as HTMLInputElement).value)).toBe('auth');
+    // The add form is fetched when its drawer opens, so wait for its field.
+    await page.waitForSelector(name);
     await page.type(name, 'new draft');
     accept = false;
     await page.keyboard.press('Escape');

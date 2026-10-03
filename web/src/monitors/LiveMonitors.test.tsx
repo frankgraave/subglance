@@ -146,7 +146,7 @@ describe("LiveMonitors", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Edit auth" }));
     const dialog = await screen.findByRole("dialog");
-    const nameInput = within(dialog).getByLabelText("Name") as HTMLInputElement;
+    const nameInput = (await within(dialog).findByLabelText("Name")) as HTMLInputElement;
     expect(nameInput.value).toBe("auth-renamed-elsewhere");
 
     fireEvent.change(nameInput, { target: { value: "auth-eu" } });
@@ -234,7 +234,7 @@ describe("LiveMonitors", () => {
     // Start a save on A…
     fireEvent.click(await screen.findByRole("button", { name: "Edit auth" }));
     const first = await screen.findByRole("dialog");
-    fireEvent.change(within(first).getByLabelText("Name"), {
+    fireEvent.change(await within(first).findByLabelText("Name"), {
       target: { value: "auth-eu" },
     });
     fireEvent.click(

@@ -11,8 +11,7 @@ import { StateChip } from "../components/Chip";
 import { Checkbox } from "../components/Choice";
 import { EmptyState } from "./EmptyState";
 import { MonitorInventoryHead, MonitorInventoryRow } from "./MonitorInventoryRow";
-import { AddMonitor } from "./AddMonitor";
-import { EditMonitorForm } from "./EditMonitorForm";
+import { LazyAddMonitor, LazyEditMonitorForm } from "./LazyMonitorForms";
 import { BulkTagDrawer, type TagChange } from "./BulkTagDrawer";
 import { filterByTags, filterMonitors, liveTagSelection, sameTagSelection, tagFacets } from "./model";
 import type { TagSelection } from "./model";
@@ -502,7 +501,7 @@ export function MonitorsView({
          * drawer's header is the card header this was reaching for.
          */}
         <Panel>
-          <AddMonitor
+          <LazyAddMonitor
             onCreated={() => {
               onCreated?.();
               onCreateOpenChange?.(false);
@@ -520,7 +519,7 @@ export function MonitorsView({
         {editing !== null && onSave !== undefined && (
           <Card title={editing.name} icon={<IconPulse />} headingLevel={3}>
             <Panel>
-              <EditMonitorForm
+              <LazyEditMonitorForm
               /* Keyed on the id AND the name, so re-opening a monitor that
                  changed elsewhere rebuilds the form from the new values
                  rather than keeping state from the previous open. */

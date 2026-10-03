@@ -284,8 +284,20 @@ const budgets = {
    * raise against the advice it gives, because lazy-loading the forms changes
    * every test that opens a drawer and reads a field in the same tick, which
    * is a change of its own, filed as SUB-208. 157 leaves 541 bytes.
+   *
+   * 157 -> 147 KiB gzip for SUB-208, the first time this number has come
+   * down. The add and edit monitor forms, and what only they import (the
+   * duration, channel and TLS floor fields, the JSON assertion, the preview
+   * check and the push URL reveal), now load from `LazyMonitorForms.tsx`
+   * when a drawer opens instead of with the entry. Develop at baecb78
+   * measures 160,498 bytes of entry JS (Node gzip, level 6, index plus the
+   * icons and Select chunks it preloads); this branch measures 148,911,
+   * 11,587 less. The ceiling comes down to the next whole kilobyte above
+   * that, as every raise above went up to one: 147 leaves 1,617 bytes. The
+   * room is given back on purpose rather than kept as slack, so the next
+   * screen that needs it states the raise beside this note.
    */
-  js: 157,
+  js: 147,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *
