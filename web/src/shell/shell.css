@@ -790,11 +790,19 @@
     font-size: var(--type-nozoom);
     line-height: var(--lead-nozoom);
     padding-block: var(--space-0h);
-    /* No cap here: the cap is sized for helper type, and at 16px it would cut
-       "Open and resolved". The group wraps, so the control takes the width its
-       own text needs on the one screen where width is scarce. */
+    /* No fixed cap here: the cap is sized for helper type, and at 16px it
+       would cut "Open and resolved". The bar is the cap instead. The group
+       wraps, so the control takes the width its own text needs, up to the
+       width of the bar; a native select sizes itself to its widest option,
+       so one long tag value used to push the whole page sideways. That needs
+       all three links below to give: the select may shrink inside its frame,
+       the frame may be no wider than its group, and the group may be no
+       wider than the bar. */
     max-width: none;
+    min-width: 0;
   }
+
+  .tb-group { min-width: 0; }
 
   /*
    * The frame gives up its fixed height on a phone, for the same reason
@@ -808,6 +816,7 @@
    */
   .tb-field {
     height: auto;
+    max-width: 100%;
     padding-block: var(--space-0h);
   }
 }

@@ -173,6 +173,60 @@ describe("the phone fixture", () => {
   });
 });
 
+/*
+ * A tag value is data, and nothing caps how long it is.
+ *
+ * A native select sizes itself to its widest option, not to the chosen one,
+ * and on a phone the toolbar select drops its fixed cap so "Open and
+ * resolved" stays whole at the 16px no-zoom floor. Without a second limit,
+ * one long value in any monitor's tags made its filter as wide as that value
+ * and pushed the whole page sideways. The seed estate has no such value, so
+ * the sweep below cannot see it; this case adds one.
+ */
+describe("a long tag value", () => {
+  const LONG_VALUE = "customer-with-an-unreasonably-long-tag-value-for-a-phone";
+  const LONG_BODY = JSON.stringify({
+    monitors: ESTATE.map((monitor, i) =>
+      i === 0 ? { ...monitor, tags: { ...(monitor.tags ?? {}), customer: LONG_VALUE } } : monitor,
+    ),
+  });
+
+  it.each(WIDTHS)("stays inside the toolbar at %ipx", async (width) => {
+    const page = await browser.newPage();
+    try {
+      await page.setViewport({ width, height: 800, deviceScaleFactor: 1, isMobile: true });
+      await page.setRequestInterception(true);
+      page.on("request", (request) => {
+        const url = new URL(request.url());
+        if (url.pathname === "/api/v1/monitors" && request.method() === "GET") {
+          void request.respond({ status: 200, contentType: "application/json", body: LONG_BODY });
+        } else {
+          void request.continue();
+        }
+      });
+      await page.goto(server.url + "/", { waitUntil: "domcontentloaded" });
+      await page.waitForSelector('.shell-toolbar [data-facet-key="customer"] .tb-select', { timeout: 15_000 });
+      await page.evaluate(
+        () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+      );
+      const seen = await page.evaluate(() => {
+        const select = document.querySelector('.shell-toolbar [data-facet-key="customer"] .tb-select');
+        const bar = document.querySelector(".shell-toolbar");
+        if (select === null || bar === null) throw new Error("no customer filter in the toolbar");
+        return {
+          scrollWidth: document.documentElement.scrollWidth,
+          clientWidth: document.documentElement.clientWidth,
+          selectInsideBar:
+            Math.round(select.getBoundingClientRect().right) <= Math.round(bar.getBoundingClientRect().right),
+        };
+      });
+      expect(seen).toEqual({ scrollWidth: seen.clientWidth, clientWidth: seen.clientWidth, selectInsideBar: true });
+    } finally {
+      await page.close();
+    }
+  });
+});
+
 describe.each(WIDTHS)("at %ipx", (width) => {
   describe.each(SCREENS)("$name", (screen) => {
     it("does not scroll sideways", async () => {
