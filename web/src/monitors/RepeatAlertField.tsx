@@ -1,6 +1,7 @@
 import { useId, useRef } from "react";
 import { DurationField } from "./DurationField";
 import { SECONDS_TO_HOURS } from "./duration";
+import { Select } from "../components/Select";
 
 const isNumericZero = (value: string) => value.trim() !== "" && Number(value) === 0;
 
@@ -24,12 +25,12 @@ export function RepeatAlertField({ value, onChange, error }: {
   const described = `${id}-help${error ? ` ${id}-error` : ""}`;
   return <div className="field repeat-field">
     <label className="field-label" htmlFor={`${id}-mode`}>Repeat alerts</label>
-    <select ref={modeRef} id={`${id}-mode`} className="input" value={isOff ? "off" : "on"}
+    <Select ref={modeRef} id={`${id}-mode`} className="input" value={isOff ? "off" : "on"}
       aria-invalid={error ? true : undefined} aria-describedby={described}
       onChange={(event) => onChange(event.target.value === "off" ? "0" : "900")}>
       <option value="on">Repeat until muted</option>
       <option value="off">Do not repeat</option>
-    </select>
+    </Select>
     {!isOff && <>
       <label className="field-label" htmlFor={`${id}-seconds`}>First repeat after</label>
       <DurationField id={`${id}-seconds`} value={value} units={SECONDS_TO_HOURS} label="First repeat after"

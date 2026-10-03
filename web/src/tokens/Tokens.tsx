@@ -6,6 +6,7 @@ import { StateChip } from "../components/Chip";
 import { RoleChoice } from "../components/RoleChoice";
 import { ApiError } from "../api/http";
 import { createToken, fetchTokens, revokeToken, rolesWithin, tokensKey, type ApiToken, type TokenRole } from "./api";
+import { Select } from "../components/Select";
 
 const EXPIRY: [string, string][] = [["", "Never"], ["720h", "30 days"], ["2160h", "90 days"], ["8760h", "1 year"]];
 const ROLE_HELP: Record<TokenRole, string> = {
@@ -102,9 +103,9 @@ function CreateForm({ role, onCreated }: { role: string; onCreated: (token: stri
         </div>
         <div className="field">
           <label className="field-label" htmlFor={`${id}-expiry`}>Expires</label>
-          <select className="input input--inset" id={`${id}-expiry`} value={expiry} onChange={(event) => setExpiry(event.target.value)}>
+          <Select className="input input--inset" id={`${id}-expiry`} value={expiry} onChange={(event) => setExpiry(event.target.value)}>
             {EXPIRY.map(([value, label]) => <option key={label} value={value}>{label}</option>)}
-          </select>
+          </Select>
         </div>
       </div>
       <p className="panel-note" id={`${id}-role-help`}>{ROLE_HELP[scope]}</p>

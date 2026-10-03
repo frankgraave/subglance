@@ -15,6 +15,7 @@ import {
   createStatusPage, deleteStatusPage, fetchStatusPages, setStatusPageEntries, slugFrom, statusPagesKey, updateStatusPage,
   type EntryInput, type Selection, type StatusPage, type StatusPageSettings,
 } from "./api";
+import { Select } from "../components/Select";
 
 type Rejection = { field?: string; message: string };
 const rejectionOf = (error: unknown): Rejection => error instanceof ApiError
@@ -140,10 +141,10 @@ function SettingsForm({ page, onSaved, onCancel }: {
         drawer should not add a fourth measured instance of it. */}
     <Field id={`${id}-selection`} label="Shows" error={fieldError("selection")}
       help={draft.selection === "monitors" ? "Exactly the monitors you add to the page." : "Monitors carrying this tag, once each has a public name."}>
-      <select {...input("selection", true)} value={draft.selection} onChange={(event) => set("selection", event.target.value as Selection)}>
+      <Select {...input("selection", true)} value={draft.selection} onChange={(event) => set("selection", event.target.value as Selection)}>
         <option value="monitors">Chosen monitors</option>
         <option value="tag">Monitors with a tag</option>
-      </select>
+      </Select>
     </Field>
     {draft.selection === "tag" && <div className="control-row">
       <Field id={`${id}-tag_key`} label="Tag key" error={fieldError("tag_key")}>
@@ -283,10 +284,10 @@ function ServicesForm({ page, monitors, onSaved, onCancel }: {
     {candidates.length > 0 && <div className="control-row">
       <div className="field control-row-main">
         <label className="field-label" htmlFor={`${id}-add`}>Add a monitor</label>
-        <select className="input input--inset" id={`${id}-add`} value={adding} onChange={(event) => setAdding(event.target.value)}>
+        <Select className="input input--inset" id={`${id}-add`} value={adding} onChange={(event) => setAdding(event.target.value)}>
           <option value="">Choose a monitor</option>
           {candidates.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-        </select>
+        </Select>
       </div>
       <button type="button" className="button" disabled={adding === ""} onClick={() => add(Number(adding))}>Add</button>
     </div>}

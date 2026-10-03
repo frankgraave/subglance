@@ -15,5 +15,13 @@
       }
     ],
     "jsx-a11y/prefer-tag-over-role": "off"
+  },
+  "settings": {
+    "jsx-a11y": {
+      "components": {
+        "Select": "select",
+        "FileInput": "input"
+      }
+    }
   }
 }

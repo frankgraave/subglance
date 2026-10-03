@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { InputHTMLAttributes } from "react";
 import { amountIn, sameWire, toWire, unitFor, unitName } from "./duration";
 import type { DurationUnit } from "./duration";
+import { Select } from "../components/Select";
 
 export type DurationFieldProps = {
   /** The number box's id, which the caller's `<label htmlFor>` points at. */
@@ -60,9 +61,9 @@ export function DurationField({ id, value, onChange, units, label, inputProps }:
   }
   return <div className="mon-duration">
     {box}
-    <select className="input input--fit" aria-label={`${label}: unit`} value={unit.id}
+    <Select className="input input--fit" aria-label={`${label}: unit`} value={unit.id}
       onChange={(event) => report(shown.amount, units.find((u) => u.id === event.target.value) ?? unit)}>
       {units.map((u) => <option key={u.id} value={u.id}>{unitName(u, shown.amount)}</option>)}
-    </select>
+    </Select>
   </div>;
 }

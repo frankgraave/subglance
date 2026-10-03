@@ -15,6 +15,7 @@ import type { Channel, ChannelType, FieldSpec, QuietHours } from "./channels";
 import type { ChannelInput } from "./channelsApi";
 import { QuietHoursField } from "./QuietHoursField";
 import { draftFrom, quietChange, quietProblem } from "./quietHours";
+import { Select } from "../components/Select";
 
 /**
  * Adding or editing one channel.
@@ -273,7 +274,7 @@ export function ChannelForm({
     };
     if (spec.control === "select") {
       return (
-        <select
+        <Select
           {...common}
           value={fieldValue(allSpecs, values, spec.key)}
           onChange={(event) => {
@@ -286,7 +287,7 @@ export function ChannelForm({
               {option.label}
             </option>
           ))}
-        </select>
+        </Select>
       );
     }
     if (spec.control === "list") {
@@ -359,7 +360,7 @@ export function ChannelForm({
             channel and add the other kind instead.
           </p>
         ) : (
-          <select
+          <Select
             id={`${ids}-type`}
             className="input"
             value={type}
@@ -375,7 +376,7 @@ export function ChannelForm({
                 {typeLabel(value)}
               </option>
             ))}
-          </select>
+          </Select>
         )}
       </div>
 

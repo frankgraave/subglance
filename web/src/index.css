@@ -83,6 +83,8 @@
 @import "./components/panel-content.css";
 @import "./components/controls.css";
 @import "./components/choice.css";
+@import "./components/select.css";
+@import "./components/file-input.css";
 @import "./components/icontile.css";
 @import "./components/legend.css";
 @import "./components/menu.css";

@@ -50,7 +50,7 @@ describe("ToolbarSelect", () => {
     const select = screen.getByRole("combobox", { name: "env" });
     fireEvent.change(select, { target: { value: "prod" } });
     expect(onChange).toHaveBeenCalledWith("prod");
-    expect(select.className).toBe("tb-select mon-facet-select");
+    expect(select.className).toBe("tb-select mon-facet-select select");
     expect(select.closest("[data-facet-key]")?.getAttribute("data-facet-key")).toBe("env");
   });
 });

@@ -19,6 +19,7 @@ import { ChannelPicker } from "./ChannelPicker";
 import { channelIdsFromText, channelIdsText } from "./channelChoice";
 import type { Channel } from "../notifications/channels";
 import { JSON_HELP, JSON_OPERATORS, assertionFrom, expectedProblem, expectedText } from "./jsonAssertion";
+import { Select } from "../components/Select";
 
 export type EditMonitorFormProps = {
   /** Values and validator must come from the same detail response. */
@@ -262,7 +263,7 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
       <label className="field-label" htmlFor={props.id}>{LABELS[key]}</label>
       {units ? <DurationField id={props.id} value={props.value} onChange={(value) => update(key, value)} units={units} label={LABELS[key]}
         inputProps={{ name: key, "aria-invalid": props["aria-invalid"], "aria-describedby": props["aria-describedby"] }} />
-        : options ? <select {...props}>{options.map((op) => <option key={op} value={op}>{op.replace("_", " ")}</option>)}</select>
+        : options ? <Select {...props}>{options.map((op) => <option key={op} value={op}>{op.replace("_", " ")}</option>)}</Select>
         : multiline ? <textarea {...props} rows={3} spellCheck={false} /> : <input {...props} autoComplete="off" />}
       {problem?.field === key && <p id={`${ids}-error`} role="alert" className="field-error"><IconAlert />{problem.message}</p>}
     </div>;

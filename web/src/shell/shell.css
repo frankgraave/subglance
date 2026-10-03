@@ -716,9 +716,14 @@
   text-overflow: ellipsis;
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
-  padding: var(--space-1) 0;
+  /* The caret (select.css) moves to the frame's inner edge, where the frame's
+     own padding already stands off the border; the text stops `--space-4`
+     short of it, the caret's 8px plus a gap. */
+  padding: var(--space-1) var(--space-4) var(--space-1) 0;
+  background-position: right var(--space-1) center, right 0 center;
   color: var(--ink);
-  background: transparent;
+  /* A longhand: the shorthand would wipe the painted caret. */
+  background-color: transparent;
   border: 1px solid transparent;
   border-radius: var(--r-sm);
 }

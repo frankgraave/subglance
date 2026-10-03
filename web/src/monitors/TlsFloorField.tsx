@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { TLS_FLOOR_OPTIONS } from "./tlsFloor";
+import { Select } from "../components/Select";
 
 /**
  * The TLS floor control, and the sentences that make it mean something.
@@ -50,7 +51,7 @@ export function TlsFloorField({
       <label className="field-label" htmlFor={id}>
         Minimum TLS version
       </label>
-      <select
+      <Select
         id={id}
         className="input"
         value={value}
@@ -68,7 +69,7 @@ export function TlsFloorField({
             {option.label}
           </option>
         ))}
-      </select>
+      </Select>
       {children}
       <p id={helpId} className="field-help">
         This is the floor SubGlance dials with, not a description of what the

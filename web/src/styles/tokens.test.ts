@@ -3657,3 +3657,94 @@ describe("a checkbox or radio is Choice, never a loose input", () => {
     ).toEqual(['[type="checkbox"]', "[type=radio]", ":checked", "accent-color:"]);
   });
 });
+
+/**
+ * SUB-190: one dropdown, one file chooser.
+ *
+ * Every select in the forms took its frame and fill from `.input` and kept
+ * the platform's arrow inside it, and the import card's file input was the
+ * browser's grey "Choose File" button beside the product's own buttons. Both
+ * are real elements still, drawn by `Select.tsx` and `FileInput.tsx` with
+ * their stylesheets, and this refuses either one written anywhere else, the
+ * way the block above refuses a loose checkbox.
+ */
+describe("a select or file input is Select or FileInput, never a loose element", () => {
+  /**
+   * JSX that writes the element itself. A component named `Select` does not match.
+   * A convention check, not a parser: `createElement("select")`, a spread
+   * `{...{ type: "file" }}` or `setAttribute("type", "file")` passes it. No
+   * view here builds markup that way, and a select made so would still fail
+   * native-controls.browser.test.ts on the screens that test opens.
+   */
+  const LOOSE_SELECT = /<select(?=[\s>{/])/g;
+  const LOOSE_FILE = /\btype\s*=\s*\{?\s*["'`]file["'`]/g;
+  /** A stylesheet reaching either native part past its component. */
+  const LOOSE_STYLE = /\[type\s*=\s*["']?file["']?\]|::file-selector-button|::-webkit-file-upload-button/g;
+  const SELECT_TSX = join(webSrc, "components", "Select.tsx");
+  const FILE_TSX = join(webSrc, "components", "FileInput.tsx");
+  const FILE_CSS = join(webSrc, "components", "file-input.css");
+
+  function loose(source: string, pattern: RegExp): string[] {
+    return [...stripComments(source).matchAll(pattern)].map((m) => m[0]);
+  }
+
+  it("writes a <select> only in Select.tsx and a file input only in FileInput.tsx", () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (!/\.tsx?$/.test(file)) continue;
+      const source = readFileSync(file, "utf8");
+      const hits = [
+        ...(file === SELECT_TSX ? [] : loose(source, LOOSE_SELECT)),
+        ...(file === FILE_TSX ? [] : loose(source, LOOSE_FILE)),
+      ];
+      for (const hit of hits) offenders.push(`${relative(repoRoot, file)}: ${hit}`);
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("styles the file chooser's native parts only in file-input.css", () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (!file.endsWith(".css") || file === FILE_CSS) continue;
+      for (const hit of loose(readFileSync(file, "utf8"), LOOSE_STYLE)) {
+        offenders.push(`${relative(repoRoot, file)}: ${hit}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("has owners that really are the only writers", () => {
+    expect(loose(readFileSync(SELECT_TSX, "utf8"), LOOSE_SELECT)).toEqual(["<select"]);
+    expect(loose(readFileSync(FILE_TSX, "utf8"), LOOSE_FILE)).toEqual(['type="file"']);
+    expect(loose(readFileSync(FILE_CSS, "utf8"), LOOSE_STYLE)).toContain("::file-selector-button");
+  });
+
+  it("bites on each loose form in a fixture", () => {
+    expect(
+      loose(`
+        <select className="input">
+        <select
+          id="x">
+        <select{...props}>
+        <Select className="input">
+        {/* <select> */}
+      `, LOOSE_SELECT),
+    ).toEqual(["<select", "<select", "<select"]);
+    expect(
+      loose(`
+        <input type="file" />
+        <input type={'file'} />
+        <input type="text" />
+        <FileInput accept=".yaml" />
+      `, LOOSE_FILE),
+    ).toEqual(['type="file"', "type={'file'"]);
+    expect(
+      loose(`
+        .a input[type="file"] { color: red; }
+        .b::file-selector-button { color: red; }
+        .c::-webkit-file-upload-button { color: red; }
+        .d { color: var(--ink); }
+      `, LOOSE_STYLE),
+    ).toEqual(['[type="file"]', "::file-selector-button", "::-webkit-file-upload-button"]);
+  });
+});

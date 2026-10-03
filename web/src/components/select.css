@@ -1,0 +1,46 @@
+/*
+ * The dropdown's closed face (Select.tsx, DESIGN.md §8.11).
+ *
+ * `appearance: none` takes the platform's arrow away and two gradients paint
+ * one back: a solid caret, 8px wide and 4px tall, in `--ink-2`. It is the
+ * construction the mockups' `common.css` uses, so the app and the design
+ * source draw the same arrow. Before this, a select took the field's frame
+ * and fill from `.input` and kept the platform's arrow inside it, so the one
+ * part of the control that says "this opens" was the one part not drawn from
+ * tokens, and it differed by browser and by theme.
+ *
+ * The caret sits `--space-3` in from the edge, where the field's own padding
+ * would end, and the text stops `--space-8` from the edge so a long option
+ * ends before the caret instead of running under it. Longhands only: a
+ * `background` shorthand here would reset the fill a field's own class gives
+ * it, and one in a field's class resets the caret, which is why `.tb-select`
+ * writes `background-color`. `native-controls.browser.test.ts` fails on a
+ * rendered select whose caret was not painted.
+ */
+.select {
+  appearance: none;
+  padding-right: var(--space-8);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ink-2) 50%),
+    linear-gradient(135deg, var(--ink-2) 50%, transparent 50%);
+  background-position: right var(--space-4) center, right var(--space-3) center;
+  background-size: var(--space-1) var(--space-1);
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+
+/* A disabled select is dimmed and refuses the pointer, as a disabled
+   `.button` is (controls.css), so its caret does not offer a list that will
+   not open. Opacity rather than a fill: a fill would need the `background`
+   shorthand's longhands here, and the field's class owns those. */
+.select:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+/* Forced colours hand the control back to the platform, as choice.css does:
+   Windows High Contrast may drop the painted caret, and a select with no
+   arrow reads as a text field. */
+@media (forced-colors: active) {
+  .select { appearance: auto; }
+}
