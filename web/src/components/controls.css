@@ -297,10 +297,27 @@
    .button or an .icon-button alike. */
 .button--danger { color: var(--down); }
 
-/* `.icon-button:hover` sets the neutral ink and outranks the line above, so a
-   destructive icon button turned grey at the one moment the pointer was on
-   it. The edge and the surface still answer the hover; the ink stays red. */
-.icon-button.button--danger:hover:not(:disabled) { color: var(--down); }
+/*
+ * A row's bin rests in the neutral ink and turns red when a pointer or the
+ * keyboard reaches it.
+ *
+ * Every row of a list carries one, so at rest a list of twenty-six monitors
+ * was a column of twenty-six red marks: the loudest thing on the page was an
+ * action nobody had reached for, drawn in the colour this product spends on a
+ * monitor that is down. The bin's shape still says "destructive" at rest, so
+ * nothing depends on the hue (§2.3), and the red arrives at the moment it is
+ * information — when this button is the one about to be pressed. The
+ * deliberate pause stays one step later, in the confirmation that names what
+ * is destroyed. A text Delete (`.button.button--danger`) is unchanged: it is
+ * the commitment itself, not one of many.
+ */
+.icon-button.button--danger { color: var(--ink-2); }
+
+/* `.icon-button:hover` sets the neutral ink and outranks the line above, so
+   the hover needs its own rule to turn the bin red. The edge and the surface
+   answer the hover as on every icon button. */
+.icon-button.button--danger:hover:not(:disabled),
+.icon-button.button--danger:focus-visible { color: var(--down); }
 
 /*
  * The one loud button: a form whose whole job is one action — sign in, save

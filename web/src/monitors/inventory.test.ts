@@ -7,6 +7,7 @@ import {
   filterByType,
   intervalOf,
   inventoryFromApi,
+  sortInventory,
   inventoryFromPayload,
   typeLabel,
 } from "./inventory";
@@ -222,5 +223,40 @@ describe("describeInventory", () => {
 
   it("says nothing about pausing when nothing is paused", () => {
     expect(describeInventory([monitor()])).toBe("1 configured");
+  });
+});
+
+describe("sortInventory", () => {
+  const list = [
+    monitor({ id: "1", name: "Marketing site", status: "up", type: "http", intervalS: 60 }),
+    monitor({ id: "2", name: "API checkout", status: "down", type: "tcp", intervalS: 30 }),
+    monitor({ id: "3", name: "docs", status: "paused", type: "ping", intervalS: 300 }),
+    monitor({ id: "4", name: "Backups", status: "warning", type: "http", intervalS: 30 }),
+  ];
+  const names = (sorted: InventoryMonitor[]) => sorted.map((m) => m.name);
+
+  it("orders by name, ignoring case, rather than by creation", () => {
+    expect(names(sortInventory(list, "name"))).toEqual(["API checkout", "Backups", "docs", "Marketing site"]);
+  });
+
+  it("puts the worst status first, so the top of the list is what is wrong", () => {
+    // Not the name order by coincidence: "Backups" (warning) and "docs"
+    // (paused) are what the status rank puts there.
+    const shuffled = [list[2], list[0], list[3], list[1]];
+    expect(sortInventory(shuffled, "status").map((m) => m.status)).toEqual(["down", "warning", "paused", "up"]);
+  });
+
+  it("groups by type and breaks ties by name", () => {
+    expect(names(sortInventory(list, "type"))).toEqual(["Backups", "Marketing site", "docs", "API checkout"]);
+  });
+
+  it("orders by interval, shortest first, and breaks ties by name", () => {
+    expect(names(sortInventory(list, "interval"))).toEqual(["API checkout", "Backups", "Marketing site", "docs"]);
+  });
+
+  it("returns a copy and leaves the caller's array alone", () => {
+    const before = names(list);
+    expect(sortInventory(list, "name")).not.toBe(list);
+    expect(names(list)).toEqual(before);
   });
 });

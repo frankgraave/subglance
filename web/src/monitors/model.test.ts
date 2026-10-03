@@ -5,6 +5,7 @@ import {
   describeTags,
   filterByStatus,
   filterByTags,
+  liveTagSelection,
   tagFacets,
   UNTAGGED_LABEL,
   filterMonitors,
@@ -568,5 +569,24 @@ describe("sectionsByTag", () => {
       s.monitors.map((m) => m.id),
     );
     expect([...flat].sort()).toEqual(["a", "b", "c", "d"]);
+  });
+});
+
+describe("liveTagSelection", () => {
+  const facets = [
+    { key: "env", values: ["prod", "staging"] },
+    { key: "team", values: ["core"] },
+  ];
+
+  it("keeps a pair whose key and value both still exist", () => {
+    expect(liveTagSelection(facets, { env: "prod" })).toEqual({ env: "prod" });
+  });
+
+  it("drops a value no monitor carries any more, which no select could clear", () => {
+    expect(liveTagSelection(facets, { env: "dev", team: "core" })).toEqual({ team: "core" });
+  });
+
+  it("drops a key no monitor carries, and the empty 'Any' choice", () => {
+    expect(liveTagSelection(facets, { region: "eu", env: "" })).toEqual({});
   });
 });

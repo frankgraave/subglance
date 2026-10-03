@@ -26,10 +26,12 @@ function renderDetail(options: {
   pause?: (id: string, paused: boolean) => Promise<void>;
   remove?: (id: string) => Promise<void>;
   onBack?: () => void;
+  maintenance?: unknown[];
 } = {}) {
   const monitors = options.monitors ?? [monitor()];
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
-    const body = url.includes("/heartbeats") ? { heartbeats: [] }
+    const body = url.includes("/maintenance") ? { maintenance: options.maintenance ?? [] }
+      : url.includes("/heartbeats") ? { heartbeats: [] }
       : url.includes("/uptime") ? { windows: [] }
       : url.includes("/incidents") ? { incidents: [] }
       : url.includes("/latency") ? { points: [] }
@@ -39,14 +41,15 @@ function renderDetail(options: {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const pause = vi.fn(options.pause ?? (async () => undefined));
   const remove = vi.fn(options.remove ?? (async () => undefined));
-  render(
+  const tree = (id: string) => (
     <LiveMonitorDetailRoot
-      client={client} id="1" beatWidth={400} canWrite={options.canWrite}
+      client={client} id={id} beatWidth={400} canWrite={options.canWrite}
       pause={pause} remove={remove} onBack={options.onBack}
       createEventSource={source}
-    />,
+    />
   );
-  return { client, pause, remove };
+  const view = render(tree("1"));
+  return { client, pause, remove, rerender: (id: string) => view.rerender(tree(id)) };
 }
 
 async function openMore() {
@@ -116,6 +119,42 @@ describe("LiveMonitorDetail actions", () => {
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Delete api" })); });
     expect((await screen.findByText("Could not delete: database is locked")).closest("[role=alert]")).not.toBeNull();
     expect(onBack).not.toHaveBeenCalled();
+  });
+
+  it("schedules maintenance from the monitor's own page, narrowed to it", async () => {
+    // A window for this monitor, one for a tag it carries, and one for a
+    // monitor that is not this one: the drawer lists the two that cover it.
+    renderDetail({
+      monitors: [monitor({ tags: { env: "prod" } }), monitor({ id: 2, name: "db" })],
+      maintenance: [
+        { id: 1, name: "Deploy api", monitor_id: 1, active: false, starts_at: "2026-10-03T01:00:00Z", ends_at: "2026-10-03T02:00:00Z" },
+        { id: 2, name: "Prod patching", tag_key: "env", tag_value: "prod", active: false, timezone: "UTC", weekdays: [0], local_time: "02:00", duration_minutes: 60 },
+        { id: 3, name: "Database upgrade", monitor_id: 2, active: false, starts_at: "2026-10-03T01:00:00Z", ends_at: "2026-10-03T02:00:00Z" },
+      ],
+    });
+    await openMore();
+    fireEvent.click(screen.getByRole("menuitem", { name: /Schedule maintenance/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Maintenance for api" });
+    await waitFor(() => expect(dialog.textContent).toContain("Deploy api"));
+    expect(dialog.textContent).toContain("Prod patching");
+    expect(dialog.textContent).not.toContain("Database upgrade");
+    // The form starts on this monitor, and still offers the others.
+    const choice = (await screen.findByRole("combobox", { name: "Monitor" })) as HTMLSelectElement;
+    expect(choice.value).toBe("1");
+    expect([...choice.options].map((o) => o.textContent)).toContain("db");
+  });
+
+  it("does not reopen maintenance on returning from another monitor", async () => {
+    const { rerender } = renderDetail({ monitors: [monitor(), monitor({ id: 2, name: "db" })] });
+    await openMore();
+    fireEvent.click(screen.getByRole("menuitem", { name: /Schedule maintenance/ }));
+    await screen.findByRole("dialog", { name: "Maintenance for api" });
+    rerender("2");
+    await screen.findByRole("heading", { name: "db" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    rerender("1");
+    await screen.findByRole("heading", { name: "api" });
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("offers no menu to a viewer", async () => {

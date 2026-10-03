@@ -500,3 +500,98 @@ describe("an icon-only action still says what it is doing", () => {
     ).toBeTruthy();
   });
 });
+
+describe("finding and arranging the inventory", () => {
+  const estate = [
+    make({ id: 1, name: "Marketing site", status: "up", tags: { env: "prod" } }),
+    make({ id: 2, name: "API checkout", status: "down", type: "tcp", target: "api.example.com:443", tags: { env: "prod" } }),
+    make({ id: 3, name: "Docs", status: "up", tags: { env: "staging" } }),
+  ];
+  const rowNames = () =>
+    screen.getAllByRole("listitem").map((row) => within(row).getAllByRole("link")[0].textContent);
+
+  it("lists monitors by name, not in the order they were created", () => {
+    render(<MonitorsView monitors={estate} />);
+    expect(rowNames()).toEqual(["API checkout", "Docs", "Marketing site"]);
+  });
+
+  it("sorts by status with the worst first", () => {
+    render(<MonitorsView monitors={estate} />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Sort" }), { target: { value: "status" } });
+    expect(rowNames()[0]).toBe("API checkout");
+    fireEvent.change(screen.getByRole("combobox", { name: "Sort" }), { target: { value: "type" } });
+    expect(rowNames()).toEqual(["Docs", "Marketing site", "API checkout"]);
+  });
+
+  it("offers the dashboard's tag filters", () => {
+    render(<MonitorsView monitors={estate} />);
+    fireEvent.change(screen.getByRole("combobox", { name: "env" }), { target: { value: "staging" } });
+    expect(rowNames()).toEqual(["Docs"]);
+    expect(screen.getByText("1 of 3 shown")).toBeTruthy();
+  });
+
+  it("forgets a tag filter whose value vanished, even when the value returns", () => {
+    const view = render(<MonitorsView monitors={estate} />);
+    fireEvent.change(screen.getByRole("combobox", { name: "env" }), { target: { value: "staging" } });
+    expect(rowNames()).toEqual(["Docs"]);
+    view.rerender(<MonitorsView monitors={estate.map((m) => ({ ...m, tags: { env: "prod" } }))} />);
+    // "staging" comes back. Nobody chose it again, so it must not filter.
+    view.rerender(<MonitorsView monitors={estate} />);
+    expect((screen.getByRole("combobox", { name: "env" }) as HTMLSelectElement).value).toBe("");
+    expect(rowNames()).toHaveLength(3);
+  });
+});
+
+describe("the selection bar", () => {
+  const pair = [
+    make({ id: 1, name: "alpha" }),
+    make({ id: 2, name: "beta", enabled: false, status: "paused" }),
+  ];
+
+  it("says nothing about a selection until there is one", () => {
+    render(<MonitorsView monitors={pair} onTagChange={vi.fn()} onTogglePaused={vi.fn()} />);
+    expect(screen.queryByText(/selected/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Clear selection" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Pause \d/ })).toBeNull();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select alpha" }));
+    expect(screen.getByText("1 selected")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Clear selection" })).toBeTruthy();
+  });
+
+  it("pauses and resumes the selection, one row's own request each", () => {
+    const toggle = vi.fn();
+    render(<MonitorsView monitors={pair} onTagChange={vi.fn()} onTogglePaused={toggle} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select all visible (2)" }));
+    // Only the monitor that would change is counted: beta is already paused.
+    fireEvent.click(screen.getByRole("button", { name: "Pause 1 selected" }));
+    expect(toggle).toHaveBeenCalledTimes(1);
+    expect(toggle).toHaveBeenCalledWith("1", true);
+    fireEvent.click(screen.getByRole("button", { name: "Resume 1 selected" }));
+    expect(toggle).toHaveBeenLastCalledWith("2", false);
+  });
+
+  it("offers no bulk pause to a reader who may not pause", () => {
+    render(<MonitorsView monitors={pair} onTagChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select all visible (2)" }));
+    expect(screen.queryByRole("button", { name: /selected$/ })).toBeNull();
+  });
+});
+
+describe("scheduled maintenance from the inventory", () => {
+  it("opens from the top of the page, for a viewer too", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ maintenance: [] }));
+    const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <MonitorsView monitors={[make()]} />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Maintenance" }));
+    const dialog = screen.getByRole("dialog", { name: "Scheduled maintenance" });
+    expect(await within(dialog).findByText("No maintenance windows scheduled.")).toBeTruthy();
+    expect(within(dialog).queryByRole("button", { name: "Schedule maintenance" })).toBeNull();
+    vi.restoreAllMocks();
+    client.clear();
+  });
+});

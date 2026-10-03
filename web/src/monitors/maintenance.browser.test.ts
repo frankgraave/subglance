@@ -51,7 +51,7 @@ it.each([["dark",375,0],["light",375,1],["dark",1440,2],["light",1440,3]] as con
   await page.setViewport({width,height:1000});
   await page.evaluateOnNewDocument((key,value)=>localStorage.setItem(key,value),THEME_STORAGE_KEY,theme);
   await page.goto(`${fixture.url}/monitors`,{waitUntil:"domcontentloaded"});
-  await (await page.waitForSelector('.maintenance summary'))!.click();
+  await (await page.waitForSelector('::-p-aria(Maintenance[role="button"])'))!.click();
   await page.waitForFunction(()=>document.querySelector('.maintenance')?.textContent?.includes("No maintenance windows scheduled."));
   await page.type('.maintenance input[name="name"]',`Deploy ${index}`);
   await page.select('.maintenance select[name="monitor_id"]',String(id));
@@ -101,7 +101,7 @@ it.each([["dark",375,0],["light",375,1],["dark",1440,2],["light",1440,3]] as con
   await page.setOfflineMode(false);
   await page.waitForFunction(()=>Array.from(document.querySelectorAll('[role="status"]')).some(el=>el.textContent==="Scheduled maintenance — checks continue; alerts suppressed."));
   await page.goto(`${fixture.url}/monitors`,{waitUntil:"domcontentloaded"});
-  await (await page.waitForSelector('.maintenance summary'))!.click();
+  await (await page.waitForSelector('::-p-aria(Maintenance[role="button"])'))!.click();
   const cancel=await page.waitForSelector(`[aria-label="Cancel maintenance Deploy ${index}"]:not([disabled])`);
   await cancel!.evaluate(el=>el.scrollIntoView({block:"center"}));
   await cancel!.click();
@@ -204,7 +204,7 @@ it.each([["dark",375],["light",375],["dark",1440],["light",1440]] as const)("mai
   await page.setViewport({width,height:1000});
   await page.evaluateOnNewDocument((key,value)=>localStorage.setItem(key,value),THEME_STORAGE_KEY,theme);
   await page.goto(`${fixture.url}/monitors`,{waitUntil:"domcontentloaded"});
-  await (await page.waitForSelector('.maintenance summary'))!.click();
+  await (await page.waitForSelector('::-p-aria(Maintenance[role="button"])'))!.click();
   const button=await page.waitForSelector('.maintenance button[type="submit"]');
   await button!.evaluate(el=>el.scrollIntoView({block:"center"}));
   await page.evaluate(axe.source);

@@ -1,8 +1,10 @@
 # Scheduled maintenance
 
-Open **Monitors → Scheduled maintenance → Manage scheduled maintenance** to
-list, schedule or cancel a window. Editors and administrators can make changes;
-viewers can inspect schedules. The API offers the same operations:
+Open **Monitors → Maintenance** to list, schedule or cancel a window. On a
+monitor's own page, **More → Schedule maintenance** opens the same schedule
+narrowed to the windows that cover that monitor, with the form starting on it.
+Editors and administrators can make changes; viewers can inspect schedules from
+the Monitors page. The API offers the same operations:
 
 - `GET /api/v1/maintenance`
 - `POST /api/v1/maintenance`

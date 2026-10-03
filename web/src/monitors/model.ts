@@ -46,7 +46,7 @@ const NAME_COLLATOR = new Intl.Collator("en", {
  * total and identical in every browser, which `<` is and `localeCompare`
  * — which without an explicit locale follows the visitor's — is not.
  */
-function byName(a: Monitor, b: Monitor): number {
+export function byName(a: Monitor, b: Monitor): number {
   const byLabel = NAME_COLLATOR.compare(a.name, b.name);
   if (byLabel !== 0) return byLabel;
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
@@ -205,14 +205,51 @@ export type TagSelection = Readonly<Record<string, string>>;
  * An empty selection returns a copy, so "not filtering" costs one array copy
  * and no special case at the call site.
  */
-export function filterByTags(
-  monitors: readonly Monitor[],
+export function filterByTags<T extends Monitor>(
+  monitors: readonly T[],
   selected: TagSelection,
-): Monitor[] {
+): T[] {
   const pairs = Object.entries(selected).filter(([, value]) => value !== "");
   if (pairs.length === 0) return [...monitors];
   return monitors.filter((m) =>
     pairs.every(([key, value]) => m.tags[key] === value),
+  );
+}
+
+/**
+ * The part of a tag selection that can still filter.
+ *
+ * A selection whose key *or value* has since vanished from the data would
+ * silently empty the list with no control left to clear it: the select can
+ * only offer values that still exist, so a stale one is unreachable. Both
+ * halves of a pair therefore have to be live for it to keep filtering. Shared
+ * by the dashboard and the inventory, so the two screens cannot disagree
+ * about which of their filters still applies.
+ */
+export function liveTagSelection(
+  facets: readonly TagFacet[],
+  selected: TagSelection,
+): TagSelection {
+  return Object.fromEntries(
+    facets
+      .map((facet) => [facet, selected[facet.key] ?? ""] as const)
+      .filter(([facet, value]) => value !== "" && facet.values.includes(value))
+      .map(([facet, value]) => [facet.key, value]),
+  );
+}
+
+/**
+ * Whether two tag selections name the same pairs, key for key.
+ *
+ * What lets a screen store only its live selection: it compares what it holds
+ * with `liveTagSelection` of it, and writes back only when they differ, so the
+ * write settles after one pass instead of re-rendering on every frame.
+ */
+export function sameTagSelection(a: TagSelection, b: TagSelection): boolean {
+  const keys = Object.keys(a);
+  return (
+    keys.length === Object.keys(b).length &&
+    keys.every((key) => key in b && a[key] === b[key])
   );
 }
 

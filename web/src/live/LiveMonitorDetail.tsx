@@ -9,6 +9,7 @@ import { monitorDeleteConsequence } from "../monitors/inventory";
 import { useLiveMonitors } from "./useLiveMonitors";
 import { useNow } from "./useNow";
 import { EditMonitorDrawer } from "../monitors/EditMonitorDrawer";
+import { MaintenanceDrawer } from "../monitors/MaintenanceDrawer";
 import { MonitorDetail } from "../monitors/MonitorDetail";
 import { detailQueryKey, fetchMonitorDetail } from "../monitors/detail";
 import { fetchResponseHistory, responseHistoryQueryKey } from "../monitors/responseHistoryApi";
@@ -63,9 +64,12 @@ export function LiveMonitorDetail({
   const now = useNow();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Keyed by id like the edit drawer, so leaving the monitor closes it.
+  const [maintenanceId, setMaintenanceId] = useState<string | null>(null);
   // Leaving a monitor ends its edit session, even when the next id is missing.
   // Clear before children commit so returning cannot reopen or focus a drawer.
   if (editingId !== null && editingId !== id) setEditingId(null);
+  if (maintenanceId !== null && maintenanceId !== id) setMaintenanceId(null);
 
   const detail = useQuery({
     queryKey: detailQueryKey(id),
@@ -273,6 +277,13 @@ export function LiveMonitorDetail({
   return (
     <>
     {canWrite && editingId === id && <EditMonitorDrawer key={id} id={id} onClose={() => setEditingId(null)} />}
+    <MaintenanceDrawer
+      open={canWrite && maintenanceId === id}
+      onClose={() => setMaintenanceId(null)}
+      monitors={monitors}
+      canWrite={canWrite}
+      focus={monitor}
+    />
     {canWrite && confirmingDelete === id && (
       <ConfirmDelete
         open
@@ -330,6 +341,7 @@ export function LiveMonitorDetail({
       } : undefined}
       busy={(pauseMutation.isPending && pauseMutation.variables?.monitorId === id) || (deleteMutation.isPending && deleteMutation.variables === id)}
       onDelete={canWrite ? () => setConfirmingDelete(id) : undefined}
+      onMaintenance={canWrite ? () => setMaintenanceId(id) : undefined}
       actionError={actionErrors[id] ?? null}
       ackingIds={ackingIds}
       ackError={ackMutation.error instanceof Error ? ackMutation.error : null}
