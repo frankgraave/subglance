@@ -5203,7 +5203,7 @@ components:
                 format: int64
     PublicStatusPageEntry:
       type: object
-      required: [key, name, status, in_maintenance, uptime_90d, days]
+      required: [key, name, status, in_maintenance, uptime_90d, uptime_30d, days]
       properties:
         key:
           type: string
@@ -5222,6 +5222,9 @@ components:
         uptime_90d:
           type: [number, 'null']
           description: Percentage over 90 days, maintenance excluded, rounded down to two decimals so that 100 means no confirmed-down check; `null` without data.
+        uptime_30d:
+          type: [number, 'null']
+          description: The same figure over the last 30 days, in the page's time zone, which is the period the page's phone layout draws; `null` without data in those days.
         days:
           type: array
           description: One per day, oldest first, in the page's time zone.

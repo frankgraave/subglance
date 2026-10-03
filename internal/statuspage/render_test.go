@@ -163,27 +163,77 @@ func TestRenderPrintsThePageFields(t *testing.T) {
 func TestRenderNeverPublishesAPerfectUptimeItDidNotMeasure(t *testing.T) {
 	p := previewPage(t, "allup")
 	p.Entries = p.Entries[:1]
-	p.Entries[0].Uptime90d = Uptime([]store.StatusHistoryHour{{Up: 20000, Down: 1}})
+	near := []store.StatusHistoryHour{{Up: 20000, Down: 1}}
+	p.Entries[0].Uptime90d = Uptime(near)
+	p.Entries[0].Uptime30d = Uptime(near)
 	html := render(t, p)
-	if !strings.Contains(html, "99.99% uptime, 90 days") || strings.Contains(html, "100.00%") {
+	if !strings.Contains(html, "99.99% uptime, 90 days") || !strings.Contains(html, "99.99% uptime, 30 days") ||
+		strings.Contains(html, "100.00%") {
 		t.Errorf("one down check in 20,001 is not printed as 99.99%%")
 	}
 }
 
 func TestRenderUsesThePageTimeZone(t *testing.T) {
 	p := previewPage(t, "allup")
-	if html := render(t, p); !strings.Contains(html, `datetime="2026-09-29T12:34:00Z">14:34</time>`) {
+	if html := render(t, p); !strings.Contains(html, `datetime="2026-09-29T12:34:00Z">Tue 29 Sep, 14:34</time>`) {
 		t.Error("the update time is not in Europe/Amsterdam")
 	}
 	p.Timezone = "UTC"
-	if html := render(t, p); !strings.Contains(html, `>12:34</time>`) {
+	if html := render(t, p); !strings.Contains(html, `>Tue 29 Sep, 12:34</time>`) {
 		t.Error("the update time does not follow the page's zone")
+	}
+	// 23:30 UTC is already the next day in Amsterdam: the date is the
+	// page's, not the server's.
+	p.Timezone = "Europe/Amsterdam"
+	p.GeneratedAt = time.Date(2026, 9, 29, 23, 30, 0, 0, time.UTC)
+	if html := render(t, p); !strings.Contains(html, `>Wed 30 Sep, 01:30</time>`) {
+		t.Error("the update date is not the page zone's date")
 	}
 	p.Timezone = "Not/AZone"
 	if _, err := newTestRenderer(t).Render(p); err == nil {
 		t.Error("an unknown zone must fail, not fall back to the server's")
 	}
 }
+
+// The page is read later than it is built: from a proxy's cache, or a tab
+// left open overnight. A bare "Updated 14:34" then claims today's 14:34.
+func TestUpdatedAlwaysCarriesItsDate(t *testing.T) {
+	html := render(t, previewPage(t, "outage"))
+	got := regexp.MustCompile(`Updated <time[^>]*>([^<]*)</time>`).FindStringSubmatch(html)
+	if got == nil || !regexp.MustCompile(`^\w{3} \d{1,2} \w{3}, \d{2}:\d{2}$`).MatchString(got[1]) {
+		t.Errorf("updated = %q, want a weekday, date and time", got)
+	}
+}
+
+// A phone draws 30 days of history, so the figure under it is the 30-day
+// one; the 90-day figure stays with the 90-day bar. The stylesheet shows one
+// of the two spans, so each must name its own period.
+func TestUptimeFollowsTheDaysTheBarDraws(t *testing.T) {
+	html := render(t, previewPage(t, "outage"))
+	for _, want := range []string{
+		`<span class="sp-uptime sp-mono sp-axis-desk">99.71% uptime, 90 days</span>`,
+		`<span class="sp-uptime sp-mono sp-axis-phone">99.17% uptime, 30 days</span>`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("page lacks %s", want)
+		}
+	}
+	for _, c := range []struct {
+		e        Entry
+		desk, ph string
+	}{
+		{Entry{}, "No uptime data yet", "No uptime data yet"},
+		{Entry{Uptime90d: ptr(99.5)}, "99.50% uptime, 90 days", "No uptime data, 30 days"},
+		{Entry{Uptime90d: ptr(99.5), Uptime30d: ptr(100)}, "99.50% uptime, 90 days", "100.00% uptime, 30 days"},
+	} {
+		row := serviceRow(c.e)
+		if row.Uptime != c.desk || row.UptimePhone != c.ph {
+			t.Errorf("%+v: got %q / %q, want %q / %q", c.e, row.Uptime, row.UptimePhone, c.desk, c.ph)
+		}
+	}
+}
+
+func ptr(v float64) *float64 { return &v }
 
 func TestAnEmptyPageSaysSoAndDrawsNoLists(t *testing.T) {
 	html := render(t, previewPage(t, "empty"))

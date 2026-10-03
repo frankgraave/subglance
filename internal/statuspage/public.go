@@ -65,7 +65,10 @@ type Entry struct {
 	Status        Status   `json:"status"`
 	InMaintenance bool     `json:"in_maintenance"`
 	Uptime90d     *float64 `json:"uptime_90d"`
-	Days          []Day    `json:"days"`
+	// Uptime30d is the same figure over the last RecentDays days, the
+	// period a phone's shorter history bar draws.
+	Uptime30d *float64 `json:"uptime_30d"`
+	Days      []Day    `json:"days"`
 }
 
 // Day is one day of an entry's history, in the page's time zone.

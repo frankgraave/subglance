@@ -28,8 +28,10 @@ func PreviewScenarios(now time.Time) map[string]Page {
 			Outages:     []Outage{},
 		}
 	}
-	entry := func(key, name string, status Status, uptime float64, hist []Day) Entry {
-		return Entry{Key: key, Name: name, Status: status, Uptime90d: pct(uptime), Days: hist}
+	// The two figures are the history's 90 days and the 30 a phone draws;
+	// a scenario states both, as Build would compute them.
+	entry := func(key, name string, status Status, uptime, recent float64, hist []Day) Entry {
+		return Entry{Key: key, Name: name, Status: status, Uptime90d: pct(uptime), Uptime30d: pct(recent), Days: hist}
 	}
 	days := func(down, degraded []int, noDataFrom int) []Day {
 		return previewDays(now, loc, down, degraded, noDataFrom)
@@ -42,11 +44,11 @@ func PreviewScenarios(now time.Time) map[string]Page {
 
 	outage := base()
 	outage.Entries = []Entry{
-		entry("a1", "Website", StatusUp, 99.98, days([]int{41}, []int{12}, 0)),
-		entry("a2", "Web app", StatusUp, 99.95, days([]int{41, 63}, nil, 0)),
-		entry("a3", "Public API", StatusDown, 99.71, days([]int{0, 9, 41}, []int{22}, 0)),
-		entry("a4", "Email delivery", StatusDegraded, 99.90, days(nil, []int{0, 1, 30}, 0)),
-		entry("a5", "Background jobs", StatusUp, 100, days(nil, nil, 0)),
+		entry("a1", "Website", StatusUp, 99.98, 100, days([]int{41}, []int{12}, 0)),
+		entry("a2", "Web app", StatusUp, 99.95, 100, days([]int{41, 63}, nil, 0)),
+		entry("a3", "Public API", StatusDown, 99.71, 99.17, days([]int{0, 9, 41}, []int{22}, 0)),
+		entry("a4", "Email delivery", StatusDegraded, 99.90, 100, days(nil, []int{0, 1, 30}, 0)),
+		entry("a5", "Background jobs", StatusUp, 100, 100, days(nil, nil, 0)),
 	}
 	tomorrow := time.Date(now.In(loc).Year(), now.In(loc).Month(), now.In(loc).Day()+1, 2, 0, 0, 0, loc)
 	outage.Maintenance = []Maintenance{{StartsAt: tomorrow.UTC(), EndsAt: tomorrow.Add(time.Hour).UTC(), Keys: []string{"a2"}}}
@@ -59,22 +61,22 @@ func PreviewScenarios(now time.Time) map[string]Page {
 
 	allUp := base()
 	allUp.Entries = []Entry{
-		entry("a1", "Website", StatusUp, 99.98, days([]int{41}, []int{12}, 0)),
-		entry("a2", "Web app", StatusUp, 99.95, days([]int{41, 63}, nil, 0)),
-		entry("a3", "Public API", StatusUp, 99.93, days([]int{9, 41}, []int{22}, 0)),
-		entry("a4", "Email delivery", StatusUp, 100, days(nil, []int{30}, 0)),
-		entry("a5", "Background jobs", StatusUp, 100, days(nil, nil, 0)),
+		entry("a1", "Website", StatusUp, 99.98, 100, days([]int{41}, []int{12}, 0)),
+		entry("a2", "Web app", StatusUp, 99.95, 100, days([]int{41, 63}, nil, 0)),
+		entry("a3", "Public API", StatusUp, 99.93, 99.94, days([]int{9, 41}, []int{22}, 0)),
+		entry("a4", "Email delivery", StatusUp, 100, 100, days(nil, []int{30}, 0)),
+		entry("a5", "Background jobs", StatusUp, 100, 100, days(nil, nil, 0)),
 	}
 	allUp.Outages = []Outage{resolved("a3", 9*24*time.Hour+3*time.Hour, 23*time.Minute)}
 	allUp.Summary = Summarise(allUp.Entries)
 
 	maintenance := base()
 	maintenance.Entries = []Entry{
-		entry("a1", "Website", StatusUp, 99.98, days([]int{41}, []int{12}, 0)),
-		entry("a2", "Web app", StatusUp, 99.95, days([]int{41, 63}, nil, 0)),
-		entry("a3", "Public API", StatusUp, 99.93, days([]int{9, 41}, []int{22}, 0)),
-		entry("a4", "Email delivery", StatusUp, 100, days(nil, []int{30}, 0)),
-		entry("a5", "Background jobs", StatusNotMonitored, 100, days(nil, nil, 20)),
+		entry("a1", "Website", StatusUp, 99.98, 100, days([]int{41}, []int{12}, 0)),
+		entry("a2", "Web app", StatusUp, 99.95, 100, days([]int{41, 63}, nil, 0)),
+		entry("a3", "Public API", StatusUp, 99.93, 99.94, days([]int{9, 41}, []int{22}, 0)),
+		entry("a4", "Email delivery", StatusUp, 100, 100, days(nil, []int{30}, 0)),
+		entry("a5", "Background jobs", StatusNotMonitored, 100, 100, days(nil, nil, 20)),
 	}
 	maintenance.Entries[1].InMaintenance = true
 	maintenance.Maintenance = []Maintenance{{StartsAt: now.Add(-14 * time.Minute).UTC(), EndsAt: now.Add(46 * time.Minute).UTC(), Keys: []string{"a2"}}}

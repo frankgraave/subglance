@@ -149,6 +149,7 @@ func (b Builder) entry(ctx context.Context, m store.Monitor, se store.StatusPage
 		Status:        PublicStatus(live),
 		InMaintenance: inMaintenance,
 		Uptime90d:     Uptime(hours),
+		Uptime30d:     UptimeFrom(hours, RecentSince(now, loc)),
 		Days:          Days(History{Hours: hours, Incidents: incidents, Maintenance: past}, now, loc),
 	}, incidents, nil
 }

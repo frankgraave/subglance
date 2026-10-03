@@ -271,6 +271,22 @@ func TestBuildHistoryAndOutages(t *testing.T) {
 	}
 }
 
+// A confirmed-down check 40 days ago is in the 90-day figure and not in the
+// 30-day one a phone prints under its 30 bars.
+func TestBuildUptimeOverBothPeriods(t *testing.T) {
+	now := time.Date(2026, 9, 29, 15, 0, 0, 0, time.UTC)
+	f := seed(t, now)
+	f.beat(t, now.Add(-40*24*time.Hour), false, "down")
+
+	e := f.build(t, nil, now).Entries[0]
+	if e.Uptime90d == nil || *e.Uptime90d != 50 {
+		t.Errorf("uptime_90d = %v, want 50 (one up, one down)", fmtUptime(e.Uptime90d))
+	}
+	if e.Uptime30d == nil || *e.Uptime30d != 100 {
+		t.Errorf("uptime_30d = %v, want 100 (the down check is older)", fmtUptime(e.Uptime30d))
+	}
+}
+
 func TestBuildMaintenance(t *testing.T) {
 	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
 	ctx := t.Context()

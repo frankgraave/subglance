@@ -11,6 +11,11 @@ import (
 // HistoryDays is how many days an entry's history covers.
 const HistoryDays = 90
 
+// RecentDays is how many of those days a phone draws (design §2), and so the
+// period of the second uptime figure: the number printed under a bar has to
+// be about the days that bar shows.
+const RecentDays = 30
+
 // OutageWindow is how far back the outage list reaches (design §1.1).
 const OutageWindow = 14 * 24 * time.Hour
 
@@ -36,8 +41,21 @@ type History struct {
 // Since is where a history read for Days has to start: the first instant of
 // the oldest day shown, in the page's zone.
 func Since(now time.Time, loc *time.Location) time.Time {
+	return daysBack(now, loc, HistoryDays)
+}
+
+// RecentSince is the first instant of the oldest of the last RecentDays days,
+// in the page's zone: the same bound Days uses between the bars a phone hides
+// and the ones it draws.
+func RecentSince(now time.Time, loc *time.Location) time.Time {
+	return daysBack(now, loc, RecentDays)
+}
+
+// daysBack is the local midnight that starts the oldest of the last n days,
+// today included.
+func daysBack(now time.Time, loc *time.Location, n int) time.Time {
 	local := now.In(loc)
-	return time.Date(local.Year(), local.Month(), local.Day()-(HistoryDays-1), 0, 0, 0, 0, loc)
+	return time.Date(local.Year(), local.Month(), local.Day()-(n-1), 0, 0, 0, 0, loc)
 }
 
 // Days returns HistoryDays days of history, oldest first, the last one being
@@ -133,6 +151,20 @@ func Uptime(hours []store.StatusHistoryHour) *float64 {
 	}
 	pct := float64(up*10000/(up+down)) / 100
 	return &pct
+}
+
+// UptimeFrom is Uptime over the hours that start at or after from. An hour
+// is counted with the day its first minute falls in, exactly as Days places
+// it, so a figure printed under a shortened bar covers the hours that bar
+// draws and no others.
+func UptimeFrom(hours []store.StatusHistoryHour, from time.Time) *float64 {
+	var recent []store.StatusHistoryHour
+	for _, h := range hours {
+		if !h.Hour.Before(from) {
+			recent = append(recent, h)
+		}
+	}
+	return Uptime(recent)
 }
 
 // Outages lists the confirmed incidents that were running inside
