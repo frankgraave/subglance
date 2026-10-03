@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
 import { UsersCard } from "./Users";
@@ -49,11 +49,24 @@ function mount(users: Account[] = twoUsers, onRequest?: Handler) {
 const calls = (fetcher: ReturnType<typeof vi.fn>, method: string) =>
   fetcher.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === method);
 
+/** The segment drawn as chosen in the role group with this name. */
+function pressedRole(name: string) {
+  const pressed = within(screen.getByRole("group", { name })).getAllByRole("button")
+    .filter((button) => button.getAttribute("aria-pressed") === "true");
+  expect(pressed).toHaveLength(1);
+  return pressed[0].textContent;
+}
+
+/** Press one role in the role group with this name. */
+function pickRole(name: string, role: string) {
+  fireEvent.click(within(screen.getByRole("group", { name })).getByRole("button", { name: role }));
+}
+
 it("lists every account with its role, and marks your own", async () => {
   mount();
   expect(await screen.findByText("oncall@example.com")).toBeTruthy();
   expect(screen.getByRole("heading", { name: "Users (2)" })).toBeTruthy();
-  expect((screen.getByLabelText("Role for oncall@example.com") as HTMLSelectElement).value).toBe("viewer");
+  expect(pressedRole("Role for oncall@example.com")).toBe("Viewer");
   expect(screen.getByText("you")).toBeTruthy();
 });
 
@@ -62,38 +75,57 @@ it("lists every account with its role, and marks your own", async () => {
 it("offers no role change and no removal on your own row", async () => {
   mount();
   await screen.findByText("oncall@example.com");
-  expect(screen.queryByLabelText("Role for operator@example.com")).toBeNull();
+  expect(screen.queryByRole("group", { name: "Role for operator@example.com" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Remove operator@example.com" })).toBeNull();
   expect(screen.getByRole("button", { name: "Remove oncall@example.com" })).toBeTruthy();
 });
 
 it("changes a role only when the change is saved", async () => {
   const fetcher = mount();
-  const select = await screen.findByLabelText("Role for oncall@example.com");
-  fireEvent.change(select, { target: { value: "editor" } });
+  await screen.findByRole("group", { name: "Role for oncall@example.com" });
+  pickRole("Role for oncall@example.com", "Editor");
+  expect(pressedRole("Role for oncall@example.com")).toBe("Editor");
   expect(calls(fetcher, "PATCH")).toHaveLength(0);
   fireEvent.click(screen.getByRole("button", { name: "Save role for oncall@example.com" }));
   expect(await screen.findByText("oncall@example.com is now an editor.")).toBeTruthy();
   const [url, init] = calls(fetcher, "PATCH")[0];
   expect(url).toBe("/api/v1/users/2");
   expect(JSON.parse(String((init as RequestInit).body))).toEqual({ role: "editor" });
-  await waitFor(() => expect((screen.getByLabelText("Role for oncall@example.com") as HTMLSelectElement).value).toBe("editor"));
+  await waitFor(() => expect(pressedRole("Role for oncall@example.com")).toBe("Editor"));
   expect(screen.queryByRole("button", { name: "Save role for oncall@example.com" })).toBeNull();
+});
+
+it("holds the role still while its change is being saved", async () => {
+  let release: (response: Response) => void = () => {};
+  const fetcher = mount();
+  const answer = fetcher.getMockImplementation()!;
+  // The PATCH answers only when the test says so, so "saving" can be looked at.
+  fetcher.mockImplementation((url: string, init?: RequestInit) => init?.method === "PATCH"
+    ? new Promise<Response>((resolve) => { release = resolve; }) : answer(url, init));
+  await screen.findByRole("group", { name: "Role for oncall@example.com" });
+  pickRole("Role for oncall@example.com", "Editor");
+  fireEvent.click(screen.getByRole("button", { name: "Save role for oncall@example.com" }));
+  const segments = within(screen.getByRole("group", { name: "Role for oncall@example.com" })).getAllByRole("button");
+  await waitFor(() => expect(segments.every((button) => (button as HTMLButtonElement).disabled)).toBe(true));
+  expect(pressedRole("Role for oncall@example.com")).toBe("Editor");
+  release(json({ ...twoUsers[1], role: "editor" }));
+  expect(await screen.findByText("oncall@example.com is now an editor.")).toBeTruthy();
 });
 
 it("puts a draft role back with Undo, without asking the server", async () => {
   const fetcher = mount();
-  const select = await screen.findByLabelText("Role for oncall@example.com") as HTMLSelectElement;
-  fireEvent.change(select, { target: { value: "admin" } });
+  await screen.findByRole("group", { name: "Role for oncall@example.com" });
+  pickRole("Role for oncall@example.com", "Admin");
   fireEvent.click(screen.getByRole("button", { name: "Undo" }));
-  expect(select.value).toBe("viewer");
+  expect(pressedRole("Role for oncall@example.com")).toBe("Viewer");
   expect(calls(fetcher, "PATCH")).toHaveLength(0);
 });
 
 it("shows the server's refusal on the row it is about", async () => {
   mount(twoUsers, (_url, init) => init?.method === "PATCH"
     ? json({ error: "cannot demote the last administrator", field: "role" }, 400) : undefined);
-  fireEvent.change(await screen.findByLabelText("Role for oncall@example.com"), { target: { value: "editor" } });
+  await screen.findByRole("group", { name: "Role for oncall@example.com" });
+  pickRole("Role for oncall@example.com", "Editor");
   fireEvent.click(screen.getByRole("button", { name: "Save role for oncall@example.com" }));
   expect((await screen.findByRole("alert")).textContent).toBe("cannot demote the last administrator");
 });
@@ -125,7 +157,9 @@ it("adds a viewer by default, and waits for a password of the minimum length", a
   const fetcher = mount();
   fireEvent.click(await screen.findByRole("button", { name: "Add user" }));
   const form = screen.getByRole("form", { name: "Add user" });
-  expect((screen.getByLabelText("Role") as HTMLSelectElement).value).toBe("viewer");
+  expect(pressedRole("Role")).toBe("Viewer");
+  expect(within(screen.getByRole("group", { name: "Role" })).getAllByRole("button").map((b) => b.textContent))
+    .toEqual(["Viewer", "Editor", "Admin"]);
   fireEvent.change(screen.getByLabelText("Email"), { target: { value: " new@example.com " } });
   fireEvent.change(screen.getByLabelText("Password"), { target: { value: "short" } });
   const submit = form.querySelector("button[type=submit]") as HTMLButtonElement;
@@ -137,7 +171,7 @@ it("adds a viewer by default, and waits for a password of the minimum length", a
   expect(JSON.parse(String((calls(fetcher, "POST")[0][1] as RequestInit).body)))
     .toEqual({ email: "new@example.com", password: "correct-horse-battery", role: "viewer" });
   expect(screen.queryByRole("form", { name: "Add user" })).toBeNull();
-  expect(await screen.findByLabelText("Role for new@example.com")).toBeTruthy();
+  expect(await screen.findByRole("group", { name: "Role for new@example.com" })).toBeTruthy();
 });
 
 it("keeps the form and its input when the server refuses a new account", async () => {

@@ -68,6 +68,11 @@ export type SegmentedControlProps<Id extends string> = {
   className?: string;
   /** Ids of help or error text for the group, as `aria-describedby`. */
   describedBy?: string;
+  /**
+   * Every segment refuses presses, for a choice whose save is in flight.
+   * The selection stays drawn, so the reader still sees what is being saved.
+   */
+  disabled?: boolean;
 };
 
 export function SegmentedControl<Id extends string>({
@@ -77,6 +82,7 @@ export function SegmentedControl<Id extends string>({
   onChange,
   className,
   describedBy,
+  disabled,
 }: SegmentedControlProps<Id>) {
   return (
     <div
@@ -95,6 +101,7 @@ export function SegmentedControl<Id extends string>({
               : "segmented-option segmented-option--icon"
           }
           aria-pressed={value === option.id}
+          disabled={disabled}
           // An icon segment keeps its name in `aria-label`, since the glyph
           // carries no text for the accessibility tree to read.
           {...(option.icon === undefined ? {} : { "aria-label": option.label })}

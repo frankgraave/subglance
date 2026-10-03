@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, Panel } from "../components/Card";
 import { IconKey } from "../components/icons";
 import { StateChip } from "../components/Chip";
-import { SegmentedControl } from "../components/SegmentedControl";
+import { RoleChoice } from "../components/RoleChoice";
 import { ApiError } from "../api/http";
 import { createToken, fetchTokens, revokeToken, rolesWithin, tokensKey, type ApiToken, type TokenRole } from "./api";
 
@@ -16,7 +16,6 @@ const ROLE_HELP: Record<TokenRole, string> = {
 
 /** setTimeout's ceiling: a longer delay overflows and fires at once. */
 const MAX_TIMER_MS = 2_147_483_647;
-const roleLabel = (role: TokenRole) => role[0].toUpperCase() + role.slice(1);
 
 const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 
@@ -97,8 +96,7 @@ function CreateForm({ role, onCreated }: { role: string; onCreated: (token: stri
         <div className="field">
           {/* The group carries the name "Role"; this is its visible caption. */}
           <span className="field-label" aria-hidden="true">Role</span>
-          <SegmentedControl label="Role" value={scope} onChange={setScope}
-            options={roles.map((item) => ({ id: item, label: roleLabel(item) }))}
+          <RoleChoice label="Role" value={scope} onChange={setScope} roles={roles}
             describedBy={roleError ? `${id}-role-help ${id}-error` : `${id}-role-help`} />
           {roleError && <p className="field-error" role="alert" id={`${id}-error`}>{error.message}</p>}
         </div>

@@ -1,6 +1,7 @@
 import { apiJSON, apiPost, apiRequest } from "../api/http";
+import { isRole, type Role } from "../auth/roles";
 
-export type TokenRole = "admin" | "editor" | "viewer";
+export type TokenRole = Role;
 
 /** An API token as the server lists it. The secret itself is never here. */
 export interface ApiToken {
@@ -16,14 +17,13 @@ export interface ApiToken {
 
 export const tokensKey = ["tokens"] as const;
 
-const ROLES: readonly string[] = ["admin", "editor", "viewer"];
 const optionalText = (value: unknown) => value === undefined || typeof value === "string";
 
 function validToken(value: unknown): value is ApiToken {
   if (!value || typeof value !== "object") return false;
   const t = value as Record<string, unknown>;
   return typeof t.id === "number" && typeof t.name === "string" && typeof t.prefix === "string" &&
-    ROLES.includes(t.role as string) && typeof t.created_at === "string" &&
+    isRole(t.role) && typeof t.created_at === "string" &&
     optionalText(t.expires_at) && optionalText(t.last_used_at) && optionalText(t.revoked_at);
 }
 
