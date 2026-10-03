@@ -40,6 +40,22 @@
 .mon-filter {
   display: inline-flex;
   align-items: center;
+  /*
+   * The chips wrap inside the frame instead of pushing it past the screen.
+   *
+   * Each chip is `nowrap` and the frame used not to wrap, so the whole cluster
+   * was one unbreakable box: seven statuses measure about 680px, and on a
+   * phone that box set the page's width — 703px of scroll at 320px, the
+   * status counts and every tag filter after them off screen (SUB-192). The
+   * toolbar around it already wraps (`.tb-group`), which only helps a child
+   * that can become narrower than one line. `max-width` is what lets this one
+   * do that: without it a flex item never shrinks below its content.
+   *
+   * Not phone-only. The cluster is as wide as the statuses in the estate, not
+   * as the viewport, so a tablet beside the sidebar overflows the same way.
+   */
+  flex-wrap: wrap;
+  max-width: 100%;
   gap: 1px;
   padding: var(--space-0h);
   border: 1px solid var(--border-control);
