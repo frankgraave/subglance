@@ -1,6 +1,10 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { RepeatAlertField } from "./RepeatAlertField";
+import { AlertingSection } from "./AlertingSection";
+import { DurationField } from "./DurationField";
+import { durationAllowed, DURATION_LIMITS, SECONDS_ONLY, SECONDS_TO_DAYS, SECONDS_TO_HOURS } from "./duration";
+import type { DurationUnit } from "./duration";
 import { ChannelPicker } from "./ChannelPicker";
 import { channelIdsFromText, channelIdsText } from "./channelChoice";
 import type { Channel } from "../notifications/channels";
@@ -135,6 +139,17 @@ const ADVANCED_CONTROLS = new Set([
   "json-expected",
 ]);
 
+/** The numeric values that are lengths of time, by the API field each becomes. */
+type DurationKey = "intervalS" | "timeoutS" | "pushIntervalS" | "pushGraceS";
+const PROBE_DURATIONS: readonly (readonly [string, DurationKey])[] = [
+  ["interval_s", "intervalS"],
+  ["timeout_s", "timeoutS"],
+];
+const PUSH_DURATIONS: readonly (readonly [string, DurationKey])[] = [
+  ["push_interval_s", "pushIntervalS"],
+  ["push_grace_s", "pushGraceS"],
+];
+
 export type AddMonitorFormProps = {
   /** Runs a preview. The caller reports the outcome back through `preview`. */
   onPreview: (values: AddMonitorValues) => void;
@@ -213,6 +228,16 @@ export function AddMonitorForm({
    * stale value after a concurrent re-render.
    */
   const [typedName, setTypedName] = useState<string | null>(null);
+  /*
+   * A duration the API would refuse, caught before anything is sent.
+   *
+   * The number boxes used to be `type="number"` with a min and a max, and the
+   * browser refused an out-of-range value with a bubble of its own. A
+   * duration box takes "1.5" with "hours" beside it, which only this form can
+   * multiply out, so this form checks the result and places the message under
+   * the field the way a server rejection is placed.
+   */
+  const [localError, setLocalError] = useState<Rejection | null>(null);
   const dirty = repeatText !== "900" || (typedName ?? "") !== "" ||
     Object.keys(DEFAULTS).some((key) => values[key as keyof AddMonitorValues] !== DEFAULTS[key as keyof AddMonitorValues]);
   useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
@@ -242,7 +267,7 @@ export function AddMonitorForm({
    * other about the same input.
    */
   const rejection: Rejection | null =
-    saveError ?? (preview.phase === "rejected" ? preview : null);
+    localError ?? saveError ?? (preview.phase === "rejected" ? preview : null);
   const badControl =
     rejection?.field !== undefined
       ? (FIELD_CONTROL[rejection.field] ?? null)
@@ -296,6 +321,33 @@ export function AddMonitorForm({
         }
       : { "aria-describedby": describedBy };
 
+  /** `aria-*` for a control whose only description is a rejection placed under it. */
+  const errorProps = (control: string) =>
+    badControl === control
+      ? { "aria-invalid": true as const, "aria-describedby": `${ids}-field-error` }
+      : {};
+
+  /** A length of time over one of the numeric values (DurationField.tsx). */
+  const duration = (
+    control: string,
+    key: DurationKey,
+    units: readonly DurationUnit[],
+    label: string,
+    aria: { "aria-invalid"?: boolean; "aria-describedby"?: string },
+  ) => (
+    <DurationField
+      id={`${ids}-${control}`}
+      value={String(values[key])}
+      units={units}
+      label={label}
+      inputProps={aria}
+      onChange={(value) => {
+        setLocalError(null);
+        setValues((v) => ({ ...v, [key]: Number(value) }));
+      }}
+    />
+  );
+
   /** One of the three assertion controls; without a placeholder it is the operator select. */
   const jsonControl = (
     control: string,
@@ -328,9 +380,30 @@ export function AddMonitorForm({
 
   const setTarget = (target: string) => setValues((v) => ({ ...v, target }));
 
+  /**
+   * Whether every duration on screen is one the API accepts; when one is not,
+   * its message is placed under it and it takes focus. Run before a probe as
+   * well as before a save: a timeout typed as a word would otherwise reach
+   * the probe as nothing at all.
+   */
+  const durationsAllowed = (): boolean => {
+    setLocalError(null);
+    const outOfRange = (push ? PUSH_DURATIONS : PROBE_DURATIONS)
+      .find(([field, key]) => !durationAllowed(field, values[key]));
+    if (outOfRange === undefined) return true;
+    const [field] = outOfRange;
+    setLocalError({ field, message: DURATION_LIMITS[field].message });
+    const control = document.getElementById(`${ids}-${FIELD_CONTROL[field]}`);
+    const panel = control?.closest("details");
+    if (panel) panel.open = true;
+    control?.focus();
+    return false;
+  };
+
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (incomplete || saving) return;
+    if (!durationsAllowed()) return;
     if (!validRepeat(repeatText)) {
       setRepeatError(REPEAT_ERROR);
       formRef.current?.querySelector<HTMLInputElement>("[data-repeat-input]")?.focus();
@@ -442,28 +515,10 @@ export function AddMonitorForm({
             <label className="field-label" htmlFor={`${ids}-push-interval`}>
               Should report every
             </label>
-            <div className="add-addon">
-              <input
-                id={`${ids}-push-interval`}
-                className="input"
-                type="number"
-                min={60}
-                max={2592000}
-                value={values.pushIntervalS}
-                onChange={(event) =>
-                  setValues((v) => ({
-                    ...v,
-                    pushIntervalS: Number(event.target.value),
-                  }))
-                }
-                {...invalidProps("push-interval", `${ids}-push-interval-help`)}
-              />
-              <span className="add-unit" aria-hidden="true">
-                sec
-              </span>
-            </div>
+            {duration("push-interval", "pushIntervalS", SECONDS_TO_DAYS, "Should report every",
+              invalidProps("push-interval", `${ids}-push-interval-help`))}
             <p id={`${ids}-push-interval-help`} className="field-help">
-              How often the job runs. 3600 is hourly, 86400 is daily.
+              How often the job runs: 1 hour for an hourly job, 1 day for a nightly one.
             </p>
             <FieldError
               control="push-interval"
@@ -477,26 +532,8 @@ export function AddMonitorForm({
             <label className="field-label" htmlFor={`${ids}-push-grace`}>
               Allow it to be late by
             </label>
-            <div className="add-addon">
-              <input
-                id={`${ids}-push-grace`}
-                className="input"
-                type="number"
-                min={0}
-                max={2592000}
-                value={values.pushGraceS}
-                onChange={(event) =>
-                  setValues((v) => ({
-                    ...v,
-                    pushGraceS: Number(event.target.value),
-                  }))
-                }
-                {...invalidProps("push-grace", `${ids}-push-grace-help`)}
-              />
-              <span className="add-unit" aria-hidden="true">
-                sec
-              </span>
-            </div>
+            {duration("push-grace", "pushGraceS", SECONDS_TO_DAYS, "Allow it to be late by",
+              invalidProps("push-grace", `${ids}-push-grace-help`))}
             <p id={`${ids}-push-grace-help`} className="field-help">
               Silence past the interval plus this is a failure. A backup that
               usually takes a few minutes longer needs room here.
@@ -567,32 +604,7 @@ export function AddMonitorForm({
                 <label className="field-label" htmlFor={`${ids}-interval`}>
                   Check every
                 </label>
-                <div className="add-addon">
-                  <input
-                    id={`${ids}-interval`}
-                    className="input"
-                    type="number"
-                    min={20}
-                    max={86400}
-                    value={values.intervalS}
-                    onChange={(event) =>
-                      setValues((v) => ({
-                        ...v,
-                        intervalS: Number(event.target.value),
-                      }))
-                    }
-                    aria-invalid={badControl === "interval" ? true : undefined}
-                    aria-describedby={
-                      badControl === "interval"
-                        ? `${ids}-field-error`
-                        : undefined
-                    }
-                  />
-                  {/* Units live in an addon on the field, not in the label (§7.2). */}
-                  <span className="add-unit" aria-hidden="true">
-                    sec
-                  </span>
-                </div>
+                {duration("interval", "intervalS", SECONDS_TO_HOURS, "Check every", errorProps("interval"))}
                 <FieldError
                   control="interval"
                   badControl={badControl}
@@ -605,31 +617,7 @@ export function AddMonitorForm({
                 <label className="field-label" htmlFor={`${ids}-timeout`}>
                   Give up after
                 </label>
-                <div className="add-addon">
-                  <input
-                    id={`${ids}-timeout`}
-                    className="input"
-                    type="number"
-                    min={1}
-                    max={120}
-                    value={values.timeoutS}
-                    onChange={(event) =>
-                      setValues((v) => ({
-                        ...v,
-                        timeoutS: Number(event.target.value),
-                      }))
-                    }
-                    aria-invalid={badControl === "timeout" ? true : undefined}
-                    aria-describedby={
-                      badControl === "timeout"
-                        ? `${ids}-field-error`
-                        : undefined
-                    }
-                  />
-                  <span className="add-unit" aria-hidden="true">
-                    sec
-                  </span>
-                </div>
+                {duration("timeout", "timeoutS", SECONDS_ONLY, "Give up after", errorProps("timeout"))}
                 <FieldError
                   control="timeout"
                   badControl={badControl}
@@ -750,12 +738,14 @@ export function AddMonitorForm({
           )}
         </div>
       </details>
-      <ChannelPicker value={channelIdsFromText(values.channelIds)}
-        onChange={(chosen) => setValues((v) => ({ ...v, channelIds: channelIdsText(chosen) }))}
-        error={badControl === "channels" ? rejection?.message : undefined}
-        failedNote="The monitor can still be saved; it then alerts through the default channel, and its channels can be chosen later in its edit form."
-        load={loadChannels} />
-      <RepeatAlertField value={repeatText} onChange={setRepeatText} error={repeatError ?? (saveError?.field === "repeat_after_s" ? saveError.message : undefined)} />
+      <AlertingSection>
+        <ChannelPicker value={channelIdsFromText(values.channelIds)}
+          onChange={(chosen) => setValues((v) => ({ ...v, channelIds: channelIdsText(chosen) }))}
+          error={badControl === "channels" ? rejection?.message : undefined}
+          failedNote="The monitor can still be saved; it then alerts through the default channel, and its channels can be chosen later in its edit form."
+          load={loadChannels} />
+        <RepeatAlertField value={repeatText} onChange={setRepeatText} error={repeatError ?? (saveError?.field === "repeat_after_s" ? saveError.message : undefined)} />
+      </AlertingSection>
       </fieldset>
 
       {saving && <p className="field-help">A save in progress may still complete if you close this form.</p>}
@@ -769,7 +759,7 @@ export function AddMonitorForm({
           <button
             type="button"
             className="button"
-            onClick={() => onPreview(effective)}
+            onClick={() => { if (durationsAllowed()) onPreview(effective); }}
             // Deliberately NOT disabled while a probe is in flight. A check can
             // take the full timeout, and the most common reason to press this
             // twice is that the typo became obvious the moment the first one

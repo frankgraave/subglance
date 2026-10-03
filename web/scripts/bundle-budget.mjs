@@ -272,8 +272,20 @@ const budgets = {
    * which is not room for another screen: the add and edit forms load with
    * the entry although nobody needs them until a drawer opens, and moving
    * them behind lazy() is the change that buys room back, not the next raise.
+   *
+   * 156 -> 157 KiB gzip for SUB-190 (durations as a number and a unit).
+   * Develop at e44d504 measures 158,891 bytes of entry JS (Node gzip, level
+   * 6, index plus the http chunk); this branch measures 160,227, 1,336 more
+   * and 483 over 156. That is the duration field with its unit picker on
+   * every length of time in the add, edit and maintenance forms, the check
+   * that refuses a fraction of a second instead of rounding it, and the
+   * Alerts heading that separates the channel and repeat controls from the
+   * advanced panel. No new dependency. The note above still holds: this is a
+   * raise against the advice it gives, because lazy-loading the forms changes
+   * every test that opens a drawer and reads a field in the same tick, which
+   * is a change of its own, filed as SUB-208. 157 leaves 541 bytes.
    */
-  js: 156,
+  js: 157,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *

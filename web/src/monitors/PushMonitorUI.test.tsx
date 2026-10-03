@@ -72,11 +72,11 @@ describe("the add form in push mode", () => {
     choosePush();
     // Required fields, so they must be reachable without opening anything.
     const interval = screen.getByLabelText(
-      /should report every/i,
+      /^should report every$/i,
     ) as HTMLInputElement;
     expect(interval.closest("details")).toBeNull();
     expect(
-      screen.getByLabelText(/allow it to be late by/i).closest("details"),
+      screen.getByLabelText(/^allow it to be late by$/i).closest("details"),
     ).toBeNull();
   });
 
@@ -92,8 +92,9 @@ describe("the add form in push mode", () => {
     render(<AddMonitor api={{ preview: vi.fn(), create }} />);
     choosePush();
     setField(/^name$/i, "Nightly backup");
-    setField(/should report every/i, "86400");
-    setField(/allow it to be late by/i, "1800");
+    // Shown in the units the defaults load in: 1 hour and 1 minute.
+    setField(/^should report every$/i, "24");
+    setField(/^allow it to be late by$/i, "30");
     click(/save monitor/i);
 
     await waitFor(() => expect(create).toHaveBeenCalled());

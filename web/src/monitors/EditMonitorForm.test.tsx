@@ -26,9 +26,9 @@ describe("EditMonitorForm", () => {
   it.each([0, 60, 731, 86400])("edits the loaded repeat base to %s without a target preview", async (value) => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(<EditMonitorForm monitor={make({ repeat_after_s: 173 })} onSave={onSave} />);
-    expect((screen.getByLabelText("Repeat alert base (seconds)") as HTMLInputElement).value).toBe("173");
+    expect((screen.getByLabelText("First repeat after") as HTMLInputElement).value).toBe("173");
     if (value === 0) fireEvent.change(screen.getByLabelText("Repeat alerts"), { target: { value: "off" } });
-    else fireEvent.change(screen.getByLabelText("Repeat alert base (seconds)"), { target: { value: String(value) } });
+    else fireEvent.change(screen.getByLabelText("First repeat after"), { target: { value: String(value) } });
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(onSave).toHaveBeenCalledWith({ repeat_after_s: value }));
   });
@@ -38,11 +38,12 @@ describe("EditMonitorForm", () => {
     render(<EditMonitorForm monitor={make({ repeat_after_s: 0 })} onSave={onSave} />);
     expect((screen.getByLabelText("Repeat alerts") as HTMLSelectElement).value).toBe("off");
     fireEvent.change(screen.getByLabelText("Repeat alerts"), { target: { value: "on" } });
-    const field = screen.getByLabelText("Repeat alert base (seconds)");
+    fireEvent.change(screen.getByLabelText("First repeat after: unit"), { target: { value: "s" } });
+    const field = screen.getByLabelText("First repeat after");
     fireEvent.change(field, { target: { value } });
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     expect(onSave).not.toHaveBeenCalled();
-    expect(screen.getByRole("alert").textContent).toMatch(/repeat.*60.*frequent/i);
+    expect(screen.getByRole("alert").textContent).toMatch(/1 min.*frequent/i);
     expect(document.activeElement).toBe(field);
   });
   it("sends only the fields that changed", async () => {
@@ -73,12 +74,14 @@ describe("EditMonitorForm", () => {
   it("rejects an out-of-range interval before the server has to", () => {
     const onSave = vi.fn();
     render(<EditMonitorForm monitor={make()} onSave={onSave} />);
-    fireEvent.change(screen.getByLabelText(/interval/i), {
+    // 60 s loads as 1 minute; counted in seconds, 5 is under the floor.
+    fireEvent.change(screen.getByLabelText("Check every: unit"), { target: { value: "s" } });
+    fireEvent.change(screen.getByLabelText("Check every"), {
       target: { value: "5" },
     });
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
     expect(onSave).not.toHaveBeenCalled();
-    expect(screen.getByRole("alert").textContent).toMatch(/between 20 and 86400/);
+    expect(screen.getByRole("alert").textContent).toMatch(/between 20 s and 1 d/);
   });
 
   it("refuses tag text it cannot parse, rather than sending a guess", () => {
@@ -127,7 +130,7 @@ describe("EditMonitorForm", () => {
     render(<EditMonitorForm monitor={make()} onSave={vi.fn()} />);
     expect(screen.getByText(/check type stays fixed/i)).toBeTruthy();
     expect(screen.queryByLabelText("HTTP method")).toBeNull();
-    expect(screen.queryByLabelText("Repeat alert base (seconds)")).toBeNull();
+    expect(screen.queryByLabelText("First repeat after")).toBeNull();
     expect(screen.getByText(/repeat alert settings unavailable/i)).toBeTruthy();
   });
 
@@ -205,8 +208,9 @@ describe("EditMonitorForm", () => {
     render(
       <EditMonitorForm monitor={make({ tags: { env: "prod" } })} onSave={onSave} />,
     );
-    fireEvent.change(screen.getByLabelText(/interval/i), {
-      target: { value: "120" },
+    // Loaded as 1 minute; 2 of them is 120 seconds on the wire.
+    fireEvent.change(screen.getByLabelText("Check every"), {
+      target: { value: "2" },
     });
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
     await waitFor(() => expect(onSave).toHaveBeenCalled());
@@ -241,7 +245,8 @@ describe("EditMonitorForm", () => {
      * to scroll back up to fix.
      */
     render(<EditMonitorForm monitor={make()} onSave={vi.fn()} />);
-    const interval = screen.getByLabelText(/interval/i);
+    const interval = screen.getByLabelText("Check every");
+    fireEvent.change(screen.getByLabelText("Check every: unit"), { target: { value: "s" } });
     fireEvent.change(interval, { target: { value: "5" } });
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
 
@@ -249,7 +254,7 @@ describe("EditMonitorForm", () => {
     const describedBy = interval.getAttribute("aria-describedby");
     expect(describedBy).toBeTruthy();
     expect(document.getElementById(describedBy!)?.textContent).toMatch(
-      /between 20 and 86400/,
+      /between 20 s and 1 d/,
     );
     expect(document.activeElement).toBe(interval);
     expect(screen.getByRole("alert").querySelector('svg[aria-hidden="true"]')).not.toBeNull();

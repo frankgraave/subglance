@@ -103,7 +103,7 @@ describe("detail check permissions through the real app shell", () => {
       if (allowed) {
         fireEvent.click(screen.getByRole("button", { name: "Edit monitor" }));
         expect((await screen.findByLabelText("Name") as HTMLInputElement).value).toBe("Latest settings");
-        expect((screen.getByLabelText("Repeat alert base (seconds)") as HTMLInputElement).value).toBe("731");
+        expect((screen.getByLabelText("First repeat after") as HTMLInputElement).value).toBe("731");
         expect(screen.queryByRole("alert")).toBeNull();
       }
     },

@@ -600,7 +600,7 @@ describe("a rejection that names a field", () => {
 
     expect(panel().open).toBe(true);
     const described = (
-      field(/check every/i).getAttribute("aria-describedby") ?? ""
+      field(/^check every$/i).getAttribute("aria-describedby") ?? ""
     )
       .split(" ")
       .filter((id) => id !== "")

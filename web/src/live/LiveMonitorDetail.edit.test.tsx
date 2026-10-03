@@ -66,7 +66,7 @@ it("never overwrites a concurrent edit and reloads only by deliberate action", a
   expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe("Draft");
   fireEvent.click(screen.getByRole("button", { name: "Reload latest settings" }));
   await waitFor(() => expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe("Another editor"));
-  expect((screen.getByLabelText("Repeat alert base (seconds)") as HTMLInputElement).value).toBe("877");
+  expect((screen.getByLabelText("First repeat after") as HTMLInputElement).value).toBe("877");
   expect(f.writes).toHaveLength(1);
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Rebased draft" } });
   fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
