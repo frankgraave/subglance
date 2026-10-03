@@ -1,8 +1,11 @@
 # Keyboard commands
 
 Open the command menu with **Ctrl/Cmd+K** or the command button in the masthead.
-Search monitor names and targets, use the arrow keys to move through results,
-and press Enter to open one. Matching monitors are not capped at the first page.
+Search monitor names, targets and status words (type "down" to list the
+monitors that are), use the arrow keys to move through results, and press Enter
+to open one. Results are grouped as Monitors, Actions, Navigation and Theme, and
+the arrow keys move through them in that order. Matching monitors are not capped
+at the first page.
 
 Editors and administrators can pause or resume a monitor and open Add monitor.
 Everyone can navigate to Dashboard, Monitors, Incidents, Notifications and

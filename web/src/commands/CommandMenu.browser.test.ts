@@ -60,7 +60,7 @@ it.each(["dark", "light"])("uses the surface-specific focus ring in %s mode", as
   const page = await open(theme, 1440);
   try {
     await launch(page);
-    for (const selector of [".command-menu input", ".command-menu > button"]) {
+    for (const selector of [".command-menu input", ".command-foot > button"]) {
       if (selector.endsWith("button")) await page.keyboard.press("Tab");
       await page.waitForFunction((selector) => !document.querySelector(selector)!.getAnimations().some((animation) => animation.playState === "running"), {}, selector);
       const ring = await page.$eval(selector, (el, theme) => {
@@ -88,7 +88,7 @@ it("rejects native modified button activation and restores input focus after poi
     await page.waitForSelector(".form-column");
     await page.type('input[id$="-name"]', "button draft");
     await launch(page);
-    await page.focus(".command-menu > button");
+    await page.focus(".command-foot > button");
     await page.keyboard.down("Shift"); await page.keyboard.press("Enter"); await page.keyboard.up("Shift");
     expect(await page.$(".command-menu[open]")).toBeTruthy();
     await search(page, "Pause Service 001");
@@ -165,7 +165,7 @@ it.each([ ["dark", 390], ["light", 390], ["dark", 1440], ["light", 1440] ] as co
     const out = process.env.SUBGLANCE_EVIDENCE_DIR;
     if (out) { await mkdir(out, { recursive: true }); await page.screenshot({ path: `${out}/commands-${theme}-${width}.png` }); await writeFile(`${out}/commands-${theme}-${width}.json`, JSON.stringify(shape, null, 2)); }
     await page.keyboard.press("Tab");
-    expect(await page.$eval('.command-menu > button', (el) => el === document.activeElement)).toBe(true);
+    expect(await page.$eval('.command-foot > button', (el) => el === document.activeElement)).toBe(true);
     await page.keyboard.press("Tab");
     expect(await page.$eval('.command-menu input', (el) => el === document.activeElement)).toBe(true);
     await page.keyboard.press("Enter");
@@ -198,5 +198,31 @@ it.each(["dark", "light"])("Escape only closes the top menu over a dirty drawer;
     await page.waitForFunction(() => location.pathname === "/settings");
     expect(prompts).toBe(3);
     expect(await page.$(".form-column")).toBeNull();
+  } finally { await page.close(); }
+});
+
+it.each([390, 1440])("draws groups on the section role, centres each lamp and shows key hints only with a keyboard (%s)", async (width) => {
+  const page = await open("dark", width);
+  try {
+    await launch(page);
+    const shape = await page.evaluate(() => {
+      const menu = document.querySelector(".command-menu")!;
+      const label = menu.querySelector(".command-group")!;
+      const probe = document.createElement("span"); probe.style.fontSize = "var(--type-section)"; menu.append(probe);
+      const section = getComputedStyle(probe).fontSize; probe.remove();
+      const option = menu.querySelector(".command-monitor")!;
+      const lamp = option.querySelector(".led")!.getBoundingClientRect(), row = option.getBoundingClientRect();
+      const keys = menu.querySelector(".command-keys")!;
+      const foot = menu.querySelector(".command-foot")!.getBoundingClientRect();
+      return { label: label.textContent, labelSize: getComputedStyle(label).fontSize, section,
+        lampOffset: Math.abs((lamp.top + lamp.bottom) / 2 - (row.top + row.bottom) / 2),
+        keys: getComputedStyle(keys).display, footFits: foot.left >= 0 && foot.right <= innerWidth,
+      };
+    });
+    expect(shape.label).toBe("Monitors");
+    expect(shape.labelSize).toBe(shape.section);
+    expect(shape.lampOffset).toBeLessThanOrEqual(1);
+    expect(shape.keys).toBe(width < 640 ? "none" : "flex");
+    expect(shape.footFits).toBe(true);
   } finally { await page.close(); }
 });
