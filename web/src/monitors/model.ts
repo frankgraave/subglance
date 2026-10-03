@@ -238,6 +238,21 @@ export function liveTagSelection(
   );
 }
 
+/**
+ * Whether two tag selections name the same pairs, key for key.
+ *
+ * What lets a screen store only its live selection: it compares what it holds
+ * with `liveTagSelection` of it, and writes back only when they differ, so the
+ * write settles after one pass instead of re-rendering on every frame.
+ */
+export function sameTagSelection(a: TagSelection, b: TagSelection): boolean {
+  const keys = Object.keys(a);
+  return (
+    keys.length === Object.keys(b).length &&
+    keys.every((key) => key in b && a[key] === b[key])
+  );
+}
+
 /** The label shown for monitors that do not carry the grouping key at all. */
 export const UNTAGGED_LABEL = "Untagged";
 

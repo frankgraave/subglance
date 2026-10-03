@@ -41,14 +41,15 @@ function renderDetail(options: {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const pause = vi.fn(options.pause ?? (async () => undefined));
   const remove = vi.fn(options.remove ?? (async () => undefined));
-  render(
+  const tree = (id: string) => (
     <LiveMonitorDetailRoot
-      client={client} id="1" beatWidth={400} canWrite={options.canWrite}
+      client={client} id={id} beatWidth={400} canWrite={options.canWrite}
       pause={pause} remove={remove} onBack={options.onBack}
       createEventSource={source}
-    />,
+    />
   );
-  return { client, pause, remove };
+  const view = render(tree("1"));
+  return { client, pause, remove, rerender: (id: string) => view.rerender(tree(id)) };
 }
 
 async function openMore() {
@@ -141,6 +142,19 @@ describe("LiveMonitorDetail actions", () => {
     const choice = (await screen.findByRole("combobox", { name: "Monitor" })) as HTMLSelectElement;
     expect(choice.value).toBe("1");
     expect([...choice.options].map((o) => o.textContent)).toContain("db");
+  });
+
+  it("does not reopen maintenance on returning from another monitor", async () => {
+    const { rerender } = renderDetail({ monitors: [monitor(), monitor({ id: 2, name: "db" })] });
+    await openMore();
+    fireEvent.click(screen.getByRole("menuitem", { name: /Schedule maintenance/ }));
+    await screen.findByRole("dialog", { name: "Maintenance for api" });
+    rerender("2");
+    await screen.findByRole("heading", { name: "db" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    rerender("1");
+    await screen.findByRole("heading", { name: "api" });
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("offers no menu to a viewer", async () => {

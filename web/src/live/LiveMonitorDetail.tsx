@@ -69,6 +69,7 @@ export function LiveMonitorDetail({
   // Leaving a monitor ends its edit session, even when the next id is missing.
   // Clear before children commit so returning cannot reopen or focus a drawer.
   if (editingId !== null && editingId !== id) setEditingId(null);
+  if (maintenanceId !== null && maintenanceId !== id) setMaintenanceId(null);
 
   const detail = useQuery({
     queryKey: detailQueryKey(id),

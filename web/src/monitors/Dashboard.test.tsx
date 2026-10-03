@@ -607,6 +607,24 @@ describe("Dashboard", () => {
       ]);
       expect(rowIds()).toEqual(["monitor-row-api", "monitor-row-db"]);
     });
+
+    it("forgets a dropped selection rather than reapplying it when the value returns", () => {
+      const { rerender } = render(<Harness monitors={tagged()} />);
+      fireEvent.change(facet("env"), { target: { value: "staging" } });
+      expect(rowIds()).toEqual(["monitor-row-cdn"]);
+      rerender(
+        <Harness
+          monitors={[
+            monitor("api", "up", { tags: { env: "prod" } }),
+            monitor("db", "up", { tags: { env: "prod" } }),
+          ]}
+        />,
+      );
+      // "staging" comes back. Nobody chose it again, so it must not filter.
+      rerender(<Harness monitors={tagged()} />);
+      expect(facet("env").value).toBe("");
+      expect(rowIds()).toHaveLength(3);
+    });
   });
 });
 

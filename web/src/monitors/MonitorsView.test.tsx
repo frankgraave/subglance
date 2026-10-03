@@ -529,6 +529,17 @@ describe("finding and arranging the inventory", () => {
     expect(rowNames()).toEqual(["Docs"]);
     expect(screen.getByText("1 of 3 shown")).toBeTruthy();
   });
+
+  it("forgets a tag filter whose value vanished, even when the value returns", () => {
+    const view = render(<MonitorsView monitors={estate} />);
+    fireEvent.change(screen.getByRole("combobox", { name: "env" }), { target: { value: "staging" } });
+    expect(rowNames()).toEqual(["Docs"]);
+    view.rerender(<MonitorsView monitors={estate.map((m) => ({ ...m, tags: { env: "prod" } }))} />);
+    // "staging" comes back. Nobody chose it again, so it must not filter.
+    view.rerender(<MonitorsView monitors={estate} />);
+    expect((screen.getByRole("combobox", { name: "env" }) as HTMLSelectElement).value).toBe("");
+    expect(rowNames()).toHaveLength(3);
+  });
 });
 
 describe("the selection bar", () => {

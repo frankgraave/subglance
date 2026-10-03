@@ -13,7 +13,7 @@ import { MonitorInventoryHead, MonitorInventoryRow } from "./MonitorInventoryRow
 import { AddMonitor } from "./AddMonitor";
 import { EditMonitorForm } from "./EditMonitorForm";
 import { BulkTagDrawer, type TagChange } from "./BulkTagDrawer";
-import { filterByTags, filterMonitors, liveTagSelection, tagFacets } from "./model";
+import { filterByTags, filterMonitors, liveTagSelection, sameTagSelection, tagFacets } from "./model";
 import type { TagSelection } from "./model";
 import { TagFilters } from "./TagFilters";
 import { MaintenanceDrawer } from "./MaintenanceDrawer";
@@ -145,6 +145,9 @@ export function MonitorsView({
   const [tags, setTags] = useState<TagSelection>({});
   const facets = useMemo(() => tagFacets(monitors), [monitors]);
   const liveTags = useMemo(() => liveTagSelection(facets, tags), [facets, tags]);
+  // Pruned, not only masked, as on the dashboard: a pair kept in state would
+  // filter again by itself when its value came back.
+  if (!sameTagSelection(tags, liveTags)) setTags(liveTags);
   const [maintenanceOpen, setMaintenanceOpen] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [tagOpen, setTagOpen] = useState(false);

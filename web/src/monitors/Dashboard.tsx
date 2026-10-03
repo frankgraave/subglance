@@ -23,6 +23,7 @@ import {
   filterByTags,
   filterMonitors,
   liveTagSelection,
+  sameTagSelection,
   summarise,
   tagFacets,
 } from "./model";
@@ -178,6 +179,11 @@ export function Dashboard({
   // only offer values that still exist, so a stale one is unreachable. Both
   // halves of a pair therefore have to be live for it to keep filtering.
   const liveTags = liveTagSelection(facets, tags);
+  // Masking alone is not enough: kept in state, a dropped pair would come back
+  // into force on its own the moment its value reappeared, narrowing the list
+  // with nobody having chosen it again. So the stored selection is pruned to
+  // the live one, during render like any state derived from a prop change.
+  if (!sameTagSelection(tags, liveTags)) setTags(liveTags);
   // A grouping key whose tag has vanished from the data would leave the list
   // headed by a key nothing carries, so it falls back to the flat order for
   // the same reason a stale tag selection is dropped.
