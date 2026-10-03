@@ -92,7 +92,14 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function renderScreen(pages: ApiIncidentFixture[][]) {
+/*
+ * `access` is spread onto the screen rather than passed as one prop, so a test
+ * can leave `canWrite` out entirely and see what an unspecified caller gets.
+ */
+function renderScreen(
+  pages: ApiIncidentFixture[][],
+  access: { canWrite?: boolean } = { canWrite: true },
+) {
   let call = 0;
   const fetchIncidents = vi.fn(async () => {
     const page = pages[Math.min(call, pages.length - 1)];
@@ -139,6 +146,7 @@ function renderScreen(pages: ApiIncidentFixture[][]) {
       }
       ack={ack as unknown as typeof ackIncident}
       createEventSource={() => new FakeSource()}
+      {...access}
     />,
   );
   return { fetchIncidents, ack };
@@ -176,6 +184,16 @@ describe("acknowledging, end to end", () => {
       ).toBe("acked"),
     );
     expect(document.body.textContent).not.toMatch(/Recovered|Resolved/);
+  });
+
+  it("offers no mute button to a caller that does not say it may write", async () => {
+    // Acking needs the editor role. A mount that forgets to pass the session's
+    // permission must fail closed, not hand a viewer a button that answers 403.
+    renderScreen([[apiIncident()]], {});
+    await waitFor(() =>
+      expect(document.querySelector(".inc-row")).not.toBeNull(),
+    );
+    expect(screen.queryByRole("button", { name: /mute repeat/i })).toBeNull();
   });
 
   it("names the monitor from the live list rather than printing an id", async () => {
