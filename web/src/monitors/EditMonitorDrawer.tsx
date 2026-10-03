@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Drawer } from "../components/Drawer";
 import { Panel } from "../components/Card";
-import { EditMonitorForm } from "./EditMonitorForm";
+import { LazyEditMonitorForm } from "./LazyMonitorForms";
 import { fetchMonitorForEdit, patchMonitor } from "./inventoryApi";
 import type { VersionedMonitor } from "./inventoryApi";
 import { detailQueryKey } from "./detail";
@@ -36,7 +36,7 @@ export function EditMonitorDrawer({ id, onClose }: { id: string; onClose: () => 
     <Panel>
       {error ? <><p role="alert" className="field-error">{error}</p><button type="button" className="button" onClick={reload}>Reload latest settings</button></>
         : loaded === null ? <p className="field-help">Loading current settings…</p>
-        : <EditMonitorForm key={revision} monitor={loaded.monitor} onReload={reload} onCancel={onClose} onSave={async (patch) => {
+        : <LazyEditMonitorForm key={revision} monitor={loaded.monitor} onReload={reload} onCancel={onClose} onSave={async (patch) => {
           const controller = saveController.current!;
           await patchMonitor(id, patch, loaded.etag, controller.signal);
           if (controller.signal.aborted) return;

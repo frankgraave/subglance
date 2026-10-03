@@ -6,7 +6,7 @@ import { SessionGate } from "./auth/SessionGate";
 import { useSession } from "./auth/useSession";
 import { canWrite } from "./auth/permissions";
 import { useTheme } from "./theme/useTheme";
-import { AddMonitor } from "./monitors/AddMonitor";
+import { LazyAddMonitor } from "./monitors/LazyMonitorForms";
 import { Drawer } from "./components/Drawer";
 import { Panel } from "./components/Card";
 import { LiveDashboardRoot } from "./live/LiveDashboard";
@@ -511,7 +511,7 @@ export default function App() {
            * drawer's header is the card header this was reaching for.
            */}
           <Panel>
-            <AddMonitor onCreated={onMonitorCreated} onCancel={closeAdd} />
+            <LazyAddMonitor onCreated={onMonitorCreated} onCancel={closeAdd} />
           </Panel>
         </Drawer>
       )}

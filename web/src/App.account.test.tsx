@@ -178,7 +178,7 @@ it("does not prompt after a real create succeeds, reopens pristine, but keeps a 
   expect(window.confirm).not.toHaveBeenCalled();
   await screen.findByText("Saved service");
   fireEvent.click(screen.getByRole("button", { name: /add monitor/i }));
-  expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe("");
+  expect(((await screen.findByLabelText("Name")) as HTMLInputElement).value).toBe("");
   fill(); createStatus = 500;
   fireEvent.click(screen.getByRole("button", { name: "Save monitor" }));
   await screen.findByText(/save refused/);
