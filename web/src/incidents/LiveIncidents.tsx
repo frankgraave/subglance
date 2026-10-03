@@ -55,12 +55,21 @@ export type LiveIncidentsProps = LiveOptions & {
   /** History fetcher seam for tests. */
   fetchHistory?: typeof fetchResolvedIncidents;
   ack?: typeof ackIncident;
+  /**
+   * True only for a role that may write. Acking is a write
+   * (`POST /api/v1/incidents/{id}/ack` needs the editor role), so a viewer is
+   * offered no mute button rather than one that answers 403 — the same rule
+   * the monitor's own page applies to the same button. Omitted means no
+   * button: a caller that forgets to say who is signed in fails closed.
+   */
+  canWrite?: boolean;
 };
 
 export function LiveIncidents({
   fetchIncidents = fetchOpenIncidents,
   fetchHistory = fetchResolvedIncidents,
   ack = ackIncident,
+  canWrite = false,
   ...live
 }: LiveIncidentsProps) {
   const queryClient = useQueryClient();
@@ -210,7 +219,7 @@ export function LiveIncidents({
       now={now}
       loading={incidents.isPending}
       error={incidents.error instanceof Error ? incidents.error : null}
-      onAck={onAck}
+      onAck={canWrite ? onAck : undefined}
       ackingIds={ackingIds}
       ackError={mutation.error instanceof Error ? mutation.error : null}
       /*
