@@ -29,6 +29,15 @@
   cursor: pointer;
 }
 
+/* A disabled select is dimmed and refuses the pointer, as a disabled
+   `.button` is (controls.css), so its caret does not offer a list that will
+   not open. Opacity rather than a fill: a fill would need the `background`
+   shorthand's longhands here, and the field's class owns those. */
+.select:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
 /* Forced colours hand the control back to the platform, as choice.css does:
    Windows High Contrast may drop the painted caret, and a select with no
    arrow reads as a text field. */

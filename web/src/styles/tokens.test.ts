@@ -3669,7 +3669,13 @@ describe("a checkbox or radio is Choice, never a loose input", () => {
  * way the block above refuses a loose checkbox.
  */
 describe("a select or file input is Select or FileInput, never a loose element", () => {
-  /** JSX that writes the element itself. A component named `Select` does not match. */
+  /**
+   * JSX that writes the element itself. A component named `Select` does not match.
+   * A convention check, not a parser: `createElement("select")`, a spread
+   * `{...{ type: "file" }}` or `setAttribute("type", "file")` passes it. No
+   * view here builds markup that way, and a select made so would still fail
+   * native-controls.browser.test.ts on the screens that test opens.
+   */
   const LOOSE_SELECT = /<select(?=[\s>{/])/g;
   const LOOSE_FILE = /\btype\s*=\s*\{?\s*["'`]file["'`]/g;
   /** A stylesheet reaching either native part past its component. */

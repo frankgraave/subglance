@@ -85,6 +85,85 @@ function distance(a: string, b: string): number {
   return Math.max(...x.map((v, i) => Math.abs(v - y[i])));
 }
 
+type Handle = NonNullable<Awaited<ReturnType<Page["$"]>>>;
+
+/** Instant, then two frames: a smooth scroll would still be moving when the compositor is asked what it drew. */
+async function centre(select: Handle): Promise<void> {
+  await select.evaluate(async (el) => {
+    el.scrollIntoView({ block: "center", behavior: "instant" });
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  });
+}
+
+/** A state's border and ring are transitions: let them end before the pixels are read. */
+async function settle(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    await Promise.all(document.getAnimations()
+      .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
+      .map((animation) => animation.finished.catch(() => undefined)));
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  });
+}
+
+/** What is wrong with the select's painted caret where it stands now, or null when it is drawn. */
+async function caretFault(page: Page, select: Handle): Promise<object | null> {
+  const drawn = await select.evaluate((el) => {
+    const s = getComputedStyle(el);
+    const r = el.getBoundingClientRect();
+    const border = parseFloat(s.borderRightWidth);
+    // The second gradient's right edge, read back from what the
+    // browser computed: `right 12px` comes back as
+    // `calc(100% - 12px)`, `right 0` as `100%`.
+    const second = s.backgroundPositionX.split(",")[1]?.trim() ?? "";
+    const offset = /^calc\(100% - ([\d.]+)px\)$/.exec(second);
+    const inset = offset ? parseFloat(offset[1]) : second === "100%" ? 0 : NaN;
+    return {
+      name: el.getAttribute("aria-label") || el.id || el.className,
+      cls: el.className,
+      appearance: s.appearance,
+      image: s.backgroundImage,
+      position: s.backgroundPositionX,
+      // Where the two squares meet, one square (`background-size`)
+      // in from the second one's edge: the caret's middle column.
+      caretX: r.right - border - inset - parseFloat(s.backgroundSize),
+      innerRight: r.right - border,
+      top: r.top,
+      cy: r.top + r.height / 2,
+      padRight: parseFloat(s.paddingRight),
+    };
+  });
+  const gradients = (drawn.image.match(/linear-gradient/g) ?? []).length;
+  // A `background` shorthand resets the size and position too, which leaves
+  // no caret to look for: that is the fault, not a point to sample.
+  if (gradients !== 2 || !Number.isFinite(drawn.caretX)) return drawn;
+  // The painted caret, against the field's own fill two pixels in
+  // from its edge, where nothing is drawn. The caret is 4px tall and
+  // centred, so a short column through its middle crosses it
+  // wherever subpixel rounding puts it.
+  const fill = await colourAt(page, drawn.innerRight - 2, drawn.top + 3);
+  let contrast = 0;
+  let caret = fill;
+  for (const dx of [-1, 0]) {
+    for (const dy of [-3, -2, -1, 0, 1]) {
+      const sample = await colourAt(page, drawn.caretX + dx, drawn.cy + dy);
+      if (distance(sample, fill) > contrast) { contrast = distance(sample, fill); caret = sample; }
+    }
+  }
+  if (!drawn.cls.split(" ").includes("select") || drawn.appearance !== "none" || gradients !== 2
+      || contrast < 40 || drawn.padRight < 16) {
+    return { ...drawn, caret, fill, contrast };
+  }
+  return null;
+}
+
+/*
+ * The states a stylesheet gives a select a rule of its own for. Any of them
+ * can clear what the resting rule painted: a `background` shorthand on
+ * `:hover` or `:disabled` wipes the caret only while the select is in that
+ * state, which a pass at rest never sees.
+ */
+const STATES = ["hover", "focus-visible", "disabled"] as const;
+
 for (const theme of ["dark", "light"]) {
   describe(`the dropdown arrow in ${theme}`, () => {
     it.each(SCREENS)("$name: every select draws the painted caret, not the platform's", async (screen) => {
@@ -95,58 +174,58 @@ for (const theme of ["dark", "light"]) {
         let seen = 0;
         for (const select of selects) {
           if (!(await select.evaluate((el) => el.checkVisibility()))) continue;
-          // Instant, then two frames: a smooth scroll would still be moving
-          // when the compositor is asked what it drew.
-          await select.evaluate(async (el) => {
-            el.scrollIntoView({ block: "center", behavior: "instant" });
-            await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-          });
-          const drawn = await select.evaluate((el) => {
-            const s = getComputedStyle(el);
-            const r = el.getBoundingClientRect();
-            const border = parseFloat(s.borderRightWidth);
-            // The second gradient's right edge, read back from what the
-            // browser computed: `right 12px` comes back as
-            // `calc(100% - 12px)`, `right 0` as `100%`.
-            const second = s.backgroundPositionX.split(",")[1]?.trim() ?? "";
-            const offset = /^calc\(100% - ([\d.]+)px\)$/.exec(second);
-            const inset = offset ? parseFloat(offset[1]) : second === "100%" ? 0 : NaN;
-            return {
-              name: el.getAttribute("aria-label") || el.id || el.className,
-              cls: el.className,
-              appearance: s.appearance,
-              image: s.backgroundImage,
-              position: s.backgroundPositionX,
-              // Where the two squares meet, one square (`background-size`)
-              // in from the second one's edge: the caret's middle column.
-              caretX: r.right - border - inset - parseFloat(s.backgroundSize),
-              innerRight: r.right - border,
-              top: r.top,
-              cy: r.top + r.height / 2,
-              padRight: parseFloat(s.paddingRight),
-            };
-          });
+          await centre(select);
           seen++;
-          const gradients = (drawn.image.match(/linear-gradient/g) ?? []).length;
-          // The painted caret, against the field's own fill two pixels in
-          // from its edge, where nothing is drawn. The caret is 4px tall and
-          // centred, so a short column through its middle crosses it
-          // wherever subpixel rounding puts it.
-          const fill = await colourAt(page, drawn.innerRight - 2, drawn.top + 3);
-          let contrast = 0;
-          let caret = fill;
-          for (const dx of [-1, 0]) {
-            for (const dy of [-3, -2, -1, 0, 1]) {
-              const sample = await colourAt(page, drawn.caretX + dx, drawn.cy + dy);
-              if (distance(sample, fill) > contrast) { contrast = distance(sample, fill); caret = sample; }
-            }
-          }
-          if (!drawn.cls.split(" ").includes("select") || drawn.appearance !== "none" || gradients !== 2
-              || contrast < 40 || drawn.padRight < 16) {
-            faults.push({ ...drawn, caret, fill, contrast });
-          }
+          const fault = await caretFault(page, select);
+          if (fault) faults.push(fault);
         }
         expect(seen, `${screen.name}: visible selects`).toBeGreaterThanOrEqual(screen.minSelects);
+        expect(faults).toEqual([]);
+      } finally {
+        await page.close();
+      }
+    }, 60_000);
+
+    // One select of each kind: the toolbar's own class and a form field's `.input`.
+    it.each(SCREENS.slice(0, 2))("$name: the caret survives hover, keyboard focus and disabled", async (screen) => {
+      const page = await open(screen, theme);
+      try {
+        let select: Handle | undefined;
+        for (const candidate of await page.$$(`${screen.scope} select`)) {
+          if (await candidate.evaluate((el) => el.checkVisibility())) { select = candidate; break; }
+        }
+        expect(select, `${screen.name}: a visible select`).toBeDefined();
+        if (!select) return;
+        await centre(select);
+        const faults: object[] = [];
+        for (const state of STATES) {
+          await select.evaluate((el) => {
+            (el as HTMLSelectElement).disabled = false;
+            (el as HTMLSelectElement).blur();
+          });
+          await page.mouse.move(0, 0);
+          if (state === "hover") await page.mouse.move(...(await select.evaluate((el) => {
+            const r = el.getBoundingClientRect();
+            return [r.left + r.width / 2, r.top + r.height / 2] as [number, number];
+          })));
+          // A key first: script focus after a pointer interaction is not a keyboard focus.
+          if (state === "focus-visible") {
+            await page.keyboard.press("Shift");
+            await select.evaluate((el) => (el as HTMLSelectElement).focus());
+          }
+          if (state === "disabled") await select.evaluate((el) => { (el as HTMLSelectElement).disabled = true; });
+          await settle(page);
+          const style = await select.evaluate((el, s) => ({
+            reached: el.matches(`:${s}`),
+            cursor: getComputedStyle(el).cursor,
+            opacity: Number(getComputedStyle(el).opacity),
+          }), state);
+          expect(style.reached, `${screen.name}: the select is in :${state}`).toBe(true);
+          // Disabled is dimmed and refuses the pointer, as a disabled `.button` does.
+          if (state === "disabled") expect(style).toMatchObject({ cursor: "not-allowed", opacity: 0.5 });
+          const fault = await caretFault(page, select);
+          if (fault) faults.push({ state, ...fault });
+        }
         expect(faults).toEqual([]);
       } finally {
         await page.close();
