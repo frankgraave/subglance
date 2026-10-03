@@ -56,3 +56,25 @@ it("invalidates cached reminder reads after cancelling maintenance", async () =>
  expect(client.getQueryState(["incidents","open"])?.isInvalidated).toBe(true);
  client.clear();
 });
+
+it("puts a weekly duration out of range under the Duration field, not in the form-wide alert", async () => {
+ const fetchSpy=vi.spyOn(globalThis,"fetch").mockResolvedValue(Response.json({maintenance:[]}));
+ render(<LiveMonitorsRoot client={new QueryClient({defaultOptions:{queries:{retry:false}}})} fetchMonitors={async()=>[]} />);
+ fireEvent.click(await screen.findByRole("button",{name:"Maintenance"}));
+ fireEvent.change(await screen.findByLabelText("Schedule"),{target:{value:"weekly"}});
+ const box=screen.getByLabelText("Duration");
+ expect(box.getAttribute("aria-invalid")).toBeNull();
+ fireEvent.change(box,{target:{value:"0"}});
+ const posts=()=>fetchSpy.mock.calls.filter(([,init])=>init?.method==="POST").length;
+ fireEvent.submit(screen.getByRole("form",{name:"Schedule maintenance"}));
+ const message=await screen.findByText("The duration must be between 1 min and 24 h, in whole minutes.");
+ expect(box.getAttribute("aria-invalid")).toBe("true");
+ expect(box.getAttribute("aria-describedby")).toBe(message.id);
+ expect(message.className).toBe("field-error");
+ expect(message.querySelector("svg")).not.toBeNull();
+ expect(message.closest(".field")).toBe(box.closest(".field"));
+ expect(posts()).toBe(0);
+ fireEvent.change(box,{target:{value:"30"}});
+ expect(screen.queryByText("The duration must be between 1 min and 24 h, in whole minutes.")).toBeNull();
+ expect(box.getAttribute("aria-invalid")).toBeNull();
+});
