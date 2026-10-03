@@ -8,7 +8,6 @@ import {
 } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { createQueryClient } from "../live/queryClient";
-import { Maintenance } from "./Maintenance";
 import { MonitorsView } from "./MonitorsView";
 import { changeTags, type TagOperation } from "./bulkTagsApi";
 import {
@@ -350,8 +349,8 @@ export function LiveMonitors({
       rowErrors={rowErrors}
       createOpen={canWrite && createOpen}
       onCreateOpenChange={canWrite ? onCreateOpenChange : undefined}
+      canScheduleMaintenance={canWrite}
     />
-    <Maintenance monitors={monitors.data ?? []} canWrite={canWrite} />
     </>
   );
 }

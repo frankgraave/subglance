@@ -14,6 +14,7 @@
  */
 
 import { fromApi, toUnixMs } from "./types";
+import { byName } from "./model";
 import type { PreviewRequest } from "./preview";
 import type { JsonAssertion } from "./jsonAssertion";
 import type { ApiMonitor, Monitor } from "./types";
@@ -273,4 +274,60 @@ export function describeInventory(monitors: readonly InventoryMonitor[]): string
  */
 export function monitorDeleteConsequence(name: string): string {
   return `${name} and everything recorded about it — heartbeats, uptime history and its incidents, open and past — are removed. This cannot be undone. If you only want it to stop checking, pause it instead: a paused monitor keeps its history.`;
+}
+
+/** The orders the inventory offers. */
+export type InventorySort = "name" | "status" | "type" | "interval";
+
+export const INVENTORY_SORTS: readonly { value: InventorySort; label: string }[] = [
+  { value: "name", label: "Name" },
+  { value: "status", label: "Status" },
+  { value: "type", label: "Type" },
+  { value: "interval", label: "Interval" },
+];
+
+/*
+ * Worst first, so sorting by status answers "what is wrong" from the top of
+ * the list. The same order as the dashboard's status chips. Paused sits just
+ * above up: not broken, but a state somebody chose and may have forgotten,
+ * which on this page is a finding.
+ */
+const STATUS_RANK: Readonly<Record<string, number>> = {
+  down: 0,
+  recovering: 1,
+  warning: 2,
+  pending: 3,
+  waiting: 4,
+  paused: 5,
+  up: 6,
+};
+
+/**
+ * The inventory in the order asked for.
+ *
+ * Every order falls back to the name, then the id, so two monitors that tie
+ * on status or type keep one position between polls. A list that reshuffled
+ * its equal rows every fifteen seconds would move a row out from under the
+ * pointer reaching for its pause button. A copy: the caller's array is the
+ * query cache.
+ */
+export function sortInventory(
+  monitors: readonly InventoryMonitor[],
+  sort: InventorySort,
+): InventoryMonitor[] {
+  const key = (m: InventoryMonitor): number | string =>
+    sort === "status"
+      ? (STATUS_RANK[m.status] ?? STATUS_RANK.up + 1)
+      : sort === "type"
+        ? typeLabel(m.type)
+        : sort === "interval"
+          ? intervalOf(m)
+          : 0;
+  return [...monitors].sort((a, b) => {
+    const ka = key(a);
+    const kb = key(b);
+    if (ka < kb) return -1;
+    if (ka > kb) return 1;
+    return byName(a, b);
+  });
 }

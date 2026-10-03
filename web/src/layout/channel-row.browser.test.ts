@@ -262,16 +262,28 @@ describe("the channel rows", () => {
     }
   });
 
-  it("keeps the red ink on a destructive button under the pointer", async () => {
+  it("rests a row's bin in the neutral ink and turns it red under the pointer", async () => {
     /*
-     * Destructive is carried by the ink (controls.css). `.icon-button:hover`
-     * sets the neutral ink and outranks `.button--danger`, so without a rule
-     * of its own the bin turned grey exactly while the pointer was on it.
+     * A bin on every row was a column of red marks at rest (SUB-198), so it
+     * rests in the secondary ink and the red arrives with the pointer.
+     * `.icon-button:hover` sets the neutral ink and outranks `.button--danger`,
+     * so without a rule of its own the bin stayed grey exactly while the
+     * pointer was on it.
      */
     const page = await openChannels();
     try {
       const selector = ".inv-row .icon-button.button--danger";
       await page.waitForSelector(selector, { timeout: 5_000 });
+      const resting = await page.evaluate((sel: string) => {
+        const button = document.querySelector(sel) as HTMLElement;
+        const probe = document.createElement("span");
+        probe.style.color = "var(--ink-2)";
+        document.body.append(probe);
+        const ink2 = getComputedStyle(probe).color;
+        probe.remove();
+        return { ink: getComputedStyle(button).color, ink2 };
+      }, selector);
+      expect(resting.ink).toBe(resting.ink2);
       await page.hover(selector);
       await page.evaluate(async () => {
         await Promise.all(

@@ -1,6 +1,6 @@
 import { Card, Panel } from "../components/Card";
 import { Legend, type LegendItem } from "../components/Legend";
-import { IconAlert, IconGauge, IconPause, IconPlay, IconPulse, IconTrash } from "../components/icons";
+import { IconAlert, IconClock, IconGauge, IconPause, IconPlay, IconPulse, IconTrash } from "../components/icons";
 import { Menu, type MenuItem } from "../components/Menu";
 import { HeartbeatBar } from "../heartbeat/HeartbeatBar";
 import type { Beat } from "../heartbeat/model";
@@ -139,6 +139,11 @@ export type MonitorDetailProps = {
   onDelete?: () => void;
   /** Why the last pause, resume or delete failed, if it did. */
   actionError?: Error | null;
+  /**
+   * Opens this monitor's maintenance schedule. Absent for read-only users:
+   * from here the point is to plan a window, which is a write.
+   */
+  onMaintenance?: () => void;
 };
 
 /**
@@ -155,8 +160,24 @@ function detailMenuItems(
   busy: boolean,
   onTogglePaused: ((paused: boolean) => void) | undefined,
   onDelete: (() => void) | undefined,
+  onMaintenance: (() => void) | undefined,
 ): MenuItem[] {
   const items: MenuItem[] = [];
+  /*
+   * Maintenance first, above Pause, because it is the answer to the same
+   * question — "stop bothering me about this while I work on it" — and the
+   * one that keeps the history: checks go on, alerts and uptime skip the
+   * window. The descriptions are what lets someone pick between the two.
+   */
+  if (onMaintenance !== undefined) {
+    items.push({
+      key: "maintenance",
+      title: "Schedule maintenance",
+      description: "Suppresses alerts for a planned window. Checks continue.",
+      icon: <IconClock />,
+      onSelect: onMaintenance,
+    });
+  }
   if (onTogglePaused !== undefined) {
     items.push(
       paused
@@ -217,6 +238,7 @@ export function MonitorDetail({
   busy = false,
   onDelete,
   actionError = null,
+  onMaintenance,
 }: MonitorDetailProps) {
   const {
     name,
@@ -231,7 +253,7 @@ export function MonitorDetail({
   const gap = describeGap(lastCheck, now);
   const push = monitor.push;
   const churn = describeChurn(incidents, now);
-  const menuItems = detailMenuItems(status === "paused", busy, onTogglePaused, onDelete);
+  const menuItems = detailMenuItems(status === "paused", busy, onTogglePaused, onDelete, onMaintenance);
 
   return (
     <article

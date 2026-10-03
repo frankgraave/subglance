@@ -319,10 +319,13 @@ function MonitorInventoryRowImpl({
                * names the history about to be destroyed and keeps its button
                * disabled until the monitor's name is typed out.
                *
-               * The row reads better for it: four actions, four glyphs, one
-               * of them red. A single word among icons was louder than the
-               * action deserved at rest and quieter than it deserved at the
-               * moment of pressing.
+               * The row reads better for it: four actions, four glyphs. A
+               * single word among icons was louder than the action deserved
+               * at rest and quieter than it deserved at the moment of
+               * pressing. The bin itself rests in the neutral ink and turns
+               * red under the pointer or the keyboard (controls.css, SUB-198):
+               * red on every row made the list's loudest mark an action
+               * nobody had reached for.
                */}
               <IconTrash />
             </button>

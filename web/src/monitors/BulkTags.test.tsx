@@ -69,7 +69,7 @@ it("has no management surface for a viewer, and clears selection on permission l
   view.rerender(
     <LiveMonitorsRoot client={client} fetchMonitors={fetchMonitors} canWrite />,
   );
-  expect(screen.getByText("0 selected")).toBeTruthy();
+  expect(screen.queryByText(/\d+ selected/)).toBeNull();
 });
 
 it("closes the actual tag owner on accepted navigation while retaining search and selection", () => {
@@ -127,7 +127,7 @@ it("selects only visible rows, preserves hidden selections, and forgets removed 
       <MonitorsView {...props} monitors={[monitors[0], monitors[2]]} />
     </>,
   );
-  expect(screen.getByText("0 selected")).toBeTruthy();
+  expect(screen.queryByText(/\d+ selected/)).toBeNull();
   view.rerender(
     <>
       <ShellSlots />
@@ -147,7 +147,7 @@ it("selects only visible rows, preserves hidden selections, and forgets removed 
   fireEvent.click(screen.getByRole("checkbox", { name: "Select site 2" }));
   expect(screen.getByText("2 selected")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
-  expect(screen.getByText("0 selected")).toBeTruthy();
+  expect(screen.queryByText(/\d+ selected/)).toBeNull();
   view.unmount();
   render(
     <>
@@ -155,7 +155,7 @@ it("selects only visible rows, preserves hidden selections, and forgets removed 
       <MonitorsView {...props} />
     </>,
   );
-  expect(screen.getByText("0 selected")).toBeTruthy();
+  expect(screen.queryByText(/\d+ selected/)).toBeNull();
 });
 
 it("renames globally with explicit merge policy and invalidates dashboard and detail caches", async () => {

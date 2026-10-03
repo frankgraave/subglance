@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { registerNavigationCleanup } from "../shell/leaveGuard";
 import { Card, Panel } from "../components/Card";
 import { PlusIcon, SearchIcon } from "../shell/icons";
-import { IconList, IconPulse } from "../components/icons";
+import { IconClock, IconList, IconPause, IconPlay, IconPulse } from "../components/icons";
 import { ToolbarTools } from "../shell/ToolbarTools";
 import { Drawer } from "../components/Drawer";
 import { ConfirmDelete } from "../components/ConfirmDelete";
@@ -13,9 +13,18 @@ import { MonitorInventoryHead, MonitorInventoryRow } from "./MonitorInventoryRow
 import { AddMonitor } from "./AddMonitor";
 import { EditMonitorForm } from "./EditMonitorForm";
 import { BulkTagDrawer, type TagChange } from "./BulkTagDrawer";
-import { filterMonitors } from "./model";
-import { describeInventory, filterByType, monitorDeleteConsequence } from "./inventory";
-import type { ChannelState, InventoryMonitor } from "./inventory";
+import { filterByTags, filterMonitors, liveTagSelection, tagFacets } from "./model";
+import type { TagSelection } from "./model";
+import { TagFilters } from "./TagFilters";
+import { MaintenanceDrawer } from "./MaintenanceDrawer";
+import {
+  INVENTORY_SORTS,
+  describeInventory,
+  filterByType,
+  monitorDeleteConsequence,
+  sortInventory,
+} from "./inventory";
+import type { ChannelState, InventoryMonitor, InventorySort } from "./inventory";
 import type { CheckOutcome, MonitorPatch } from "./inventoryApi";
 
 /**
@@ -85,6 +94,12 @@ export type MonitorsViewProps = {
   createOpen?: boolean;
   /** Opens or closes the create drawer, and moves the URL with it. */
   onCreateOpenChange?: (open: boolean) => void;
+  /**
+   * Whether this reader may schedule maintenance. A viewer still gets the
+   * schedule, read-only: "is something already planned for tonight" is a
+   * question anybody on the rota asks.
+   */
+  canScheduleMaintenance?: boolean;
 };
 
 const NO_SET: ReadonlySet<string> = new Set();
@@ -112,12 +127,25 @@ export function MonitorsView({
   rowErrors = NO_MAP,
   createOpen = false,
   onCreateOpenChange,
+  canScheduleMaintenance = false,
 }: MonitorsViewProps) {
   const [query, setQuery] = useState("");
   const [type, setType] = useState<string>("");
   /** "" = every monitor, "active", "paused". The default shows everything,
    *  which is precisely where this page differs from the dashboard. */
   const [pausedFilter, setPausedFilter] = useState<string>("");
+  /*
+   * Name by default, where the list used to arrive in the order monitors were
+   * created. Creation order is an accident of history: nobody looks for
+   * "Docs" by remembering it was the fourth one added.
+   */
+  const [sort, setSort] = useState<InventorySort>("name");
+  /* The dashboard's tag filters, from the same component and the same rule
+     for a selection whose tag has since vanished. */
+  const [tags, setTags] = useState<TagSelection>({});
+  const facets = useMemo(() => tagFacets(monitors), [monitors]);
+  const liveTags = useMemo(() => liveTagSelection(facets, tags), [facets, tags]);
+  const [maintenanceOpen, setMaintenanceOpen] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [tagOpen, setTagOpen] = useState(false);
   useEffect(() => registerNavigationCleanup(() => setTagOpen(false)), []);
@@ -141,8 +169,8 @@ export function MonitorsView({
     let out = filterByType(filterMonitors(monitors, query), type);
     if (pausedFilter === "active") out = out.filter((m) => m.enabled);
     if (pausedFilter === "paused") out = out.filter((m) => !m.enabled);
-    return out;
-  }, [monitors, query, type, pausedFilter]);
+    return sortInventory(filterByTags(out, liveTags), sort);
+  }, [monitors, query, type, pausedFilter, sort, liveTags]);
 
   const visibleIds = new Set(visible.map((m) => m.id));
   const hiddenSelectionCount = selectedIds.filter((id) => !visibleIds.has(id)).length;
@@ -150,6 +178,20 @@ export function MonitorsView({
   const allVisibleSelected = visible.length > 0 && visibleSelectedCount === visible.length;
   const someVisibleSelected = visibleSelectedCount > 0 && !allVisibleSelected;
   const deleteTarget = monitors.find((m) => m.id === confirming) ?? null;
+  /*
+   * Bulk pause and resume act on the selection, hidden rows included — the
+   * same set Manage tags acts on, and the count beside the boxes says so.
+   *
+   * Each is a run of the row's own pause or resume, not one request: there is
+   * no bulk endpoint, and a series of independent writes must not present
+   * itself as one success. Each row shows its own busy state and its own
+   * failure, exactly as if it had been pressed by hand. A monitor already in
+   * the asked-for state is left alone, so the count on the button is the
+   * number of monitors it will change.
+   */
+  const selectedMonitors = monitors.filter((m) => selected.has(m.id));
+  const toPause = selectedMonitors.filter((m) => m.enabled && !busyIds.has(m.id));
+  const toResume = selectedMonitors.filter((m) => !m.enabled && !busyIds.has(m.id));
 
   return (
     <section className="mon-detail inv-screen" aria-label="Monitors">
@@ -249,6 +291,31 @@ export function MonitorsView({
             </select>
           </label>
 
+          <TagFilters
+            facets={facets}
+            selected={tags}
+            onChange={(key, value) =>
+              setTags((current) => ({ ...current, [key]: value }))
+            }
+          />
+
+          {/* Order, not a filter: it changes where rows are, never which are
+              shown, so it sits after everything that narrows. */}
+          <label className="tb-field">
+            <span className="tb-label">Sort</span>
+            <select
+              className="tb-select"
+              value={sort}
+              onChange={(event) => setSort(event.target.value as InventorySort)}
+            >
+              {INVENTORY_SORTS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
           <p className="tb-count" role="status">
             {loading
               ? "Loading monitors…"
@@ -269,6 +336,38 @@ export function MonitorsView({
         note={describeInventory(monitors)}
         action={
           <div className="bulk-tags-actions">
+          {/*
+           * Maintenance opens from here, at the top of the page, where it
+           * used to be a collapsed card under every monitor. It is planned
+           * minutes before a change, so it has to be found quickly — and it
+           * is offered to a viewer too, read-only.
+           */}
+          <button
+            type="button"
+            className="button"
+            aria-label="Maintenance"
+            onClick={() => setMaintenanceOpen(true)}
+          >
+            <IconClock />
+            Maintenance
+          </button>
+          {/* Pause and resume for the selection, beside Manage tags, the
+              other action on it. Only while something is selected: at rest
+              they would be two disabled buttons on every visit. */}
+          {onTogglePaused !== undefined && toPause.length > 0 && (
+            <button type="button" className="button" aria-label={`Pause ${toPause.length} selected`}
+              onClick={() => toPause.forEach((m) => onTogglePaused(m.id, true))}>
+              <IconPause />
+              Pause {toPause.length}
+            </button>
+          )}
+          {onTogglePaused !== undefined && toResume.length > 0 && (
+            <button type="button" className="button" aria-label={`Resume ${toResume.length} selected`}
+              onClick={() => toResume.forEach((m) => onTogglePaused(m.id, false))}>
+              <IconPlay />
+              Resume {toResume.length}
+            </button>
+          )}
           {/* Disabled, not hidden, with nothing to tag: the header keeps its
               shape while the list loads, and an empty inventory says why
               right below it. */}
@@ -308,11 +407,15 @@ export function MonitorsView({
             onChange={() => setSelected(allVisibleSelected ? new Set([...selected].filter((id) => !visibleIds.has(id))) : new Set([...selected, ...visible.map((m) => m.id)]))}>
             Select all visible ({visible.length})
           </Checkbox>
-          <button type="button" className="button" disabled={selectedIds.length === 0} onClick={() => setSelected(NO_SET)}>Clear selection</button>
+          {/* The rest of the bar only once there is a selection to describe:
+              "0 selected" and a disabled Clear above every visit to the page
+              said nothing, twice. The live region stays mounted so the count
+              is announced when the first box is ticked. */}
+          {selectedIds.length > 0 && <button type="button" className="button" onClick={() => setSelected(NO_SET)}>Clear selection</button>}
           {/* The same count as the toolbar's "n of m shown", and drawn the
               same: a count about the list is helper text, not a sentence in
               body ink beside the controls it counts for. */}
-          <p className="tb-count" role="status">{selectedIds.length} selected{hiddenSelectionCount > 0 ? ` · ${hiddenSelectionCount} hidden by filters` : ""}</p>
+          <p className="tb-count" role="status">{selectedIds.length === 0 ? "" : `${selectedIds.length} selected${hiddenSelectionCount > 0 ? ` · ${hiddenSelectionCount} hidden by filters` : ""}`}</p>
         </div>}
         {loading || error !== null ? (
           /*
@@ -343,7 +446,7 @@ export function MonitorsView({
             headingLevel={3}
             query={query}
             totalCount={monitors.length}
-            filtered={type !== "" || pausedFilter !== ""}
+            filtered={type !== "" || pausedFilter !== "" || Object.keys(liveTags).length > 0}
           />
         ) : (
           <div className="inv-table">
@@ -371,6 +474,13 @@ export function MonitorsView({
           </div>
         )}
       </Card>
+
+      <MaintenanceDrawer
+        open={maintenanceOpen}
+        onClose={() => setMaintenanceOpen(false)}
+        monitors={monitors}
+        canWrite={canScheduleMaintenance}
+      />
 
       {tagOpen && onTagChange && <BulkTagDrawer selectedIds={selectedIds} onChange={onTagChange} onClose={() => setTagOpen(false)} />}
 

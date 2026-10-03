@@ -1,10 +1,8 @@
 import { useId, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiJSON, apiPost, apiRequest } from "../api/http";
-import { Card } from "../components/Card";
 import { Checkbox } from "../components/Choice";
-import { IconClock } from "../components/icons";
-import type { InventoryMonitor } from "./inventory";
+import { windowCovers, type MaintenanceMonitor } from "./maintenanceScope";
 
 type Window = {
   id: number; name: string; monitor_id?: number; tag_key?: string; tag_value?: string;
@@ -14,17 +12,18 @@ type Window = {
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const KEY = ["maintenance"];
 
-export function Maintenance({ monitors, canWrite }: { monitors: readonly InventoryMonitor[]; canWrite: boolean }) {
-  const [open, setOpen] = useState(false);
-  return <Card title="Scheduled maintenance" icon={<IconClock />} className="maintenance">
-    <details onToggle={(event) => setOpen(event.currentTarget.open)}>
-      <summary className="add-summary">Manage scheduled maintenance</summary>
-      {open ? <MaintenanceManager monitors={monitors} canWrite={canWrite} /> : null}
-    </details>
-  </Card>;
-}
-
-function MaintenanceManager({ monitors, canWrite }: { monitors: readonly InventoryMonitor[]; canWrite: boolean }) {
+/**
+ * The maintenance schedule and the form that adds to it.
+ *
+ * `focus` narrows it to one monitor, for the detail page: the list shows only
+ * the windows that cover that monitor, and the form starts on it. Every other
+ * monitor stays choosable, because "this one and its database" is a normal
+ * thing to be planning when the form is open.
+ *
+ * A default export, loaded with `lazy()`: nobody needs the schedule until a
+ * drawer opens on it, so it does not ride in the bundle every page pays for.
+ */
+export default function MaintenanceManager({ monitors, canWrite, focus }: { monitors: readonly MaintenanceMonitor[]; canWrite: boolean; focus?: MaintenanceMonitor }) {
   const queryClient = useQueryClient();
   const id = useId();
   const [scope, setScope] = useState("monitor");
@@ -37,6 +36,7 @@ function MaintenanceManager({ monitors, canWrite }: { monitors: readonly Invento
     if (!Array.isArray(data.maintenance)) throw new Error("The server did not return maintenance windows.");
     return data.maintenance;
   }, refetchInterval: 15_000 });
+  const shown = focus === undefined ? windows.data : windows.data?.filter((window) => windowCovers(window, focus));
   const refresh = async () => { await Promise.all([
     queryClient.invalidateQueries({ queryKey: KEY }),
     queryClient.invalidateQueries({ queryKey: ["monitors"] }),
@@ -73,8 +73,8 @@ function MaintenanceManager({ monitors, canWrite }: { monitors: readonly Invento
     {windows.error ? <p role="alert">{windows.data === undefined
       ? `Could not load maintenance: ${windows.error.message}`
       : `Could not refresh maintenance: ${windows.error.message}. Showing the last loaded schedules, which may be out of date.`}</p> : null}
-    {windows.data?.length === 0 ? <p>No maintenance windows scheduled.</p> : null}
-    <ul className="maintenance-list">{windows.data?.map((window) => <li key={window.id}>
+    {shown?.length === 0 ? <p>{focus ? `No maintenance windows cover ${focus.name}.` : "No maintenance windows scheduled."}</p> : null}
+    <ul className="maintenance-list">{shown?.map((window) => <li key={window.id}>
       <strong>{window.name}</strong> — {window.active ? "Active now" : "Not active now"}
       <p>{window.monitor_id ? monitors.find((m) => m.id === String(window.monitor_id))?.name ?? `Monitor ${window.monitor_id}` : `${window.tag_key}:${window.tag_value}`}</p>
       <p>{window.timezone ? `${window.weekdays?.map((day) => DAYS[day]).join(", ")} at ${window.local_time} (${window.timezone}), ${window.duration_minutes} minutes`
@@ -85,7 +85,7 @@ function MaintenanceManager({ monitors, canWrite }: { monitors: readonly Invento
       <fieldset disabled={busy} className="maintenance-fields">
         <label className="field">Name<input className="input" name="name" required maxLength={120}/></label>
         <label className="field">Applies to<select className="input" name="scope" value={scope} onChange={(e) => setScope(e.target.value)}><option value="monitor">One monitor</option><option value="tag">Tag group</option></select></label>
-        {scope === "monitor" ? <label className="field">Monitor<select className="input" name="monitor_id" required><option value="">Choose a monitor</option>{monitors.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
+        {scope === "monitor" ? <label className="field">Monitor<select className="input" name="monitor_id" required defaultValue={focus?.id ?? ""}><option value="">Choose a monitor</option>{monitors.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
           : <div className="field-grid"><label className="field">Tag key<input className="input" name="tag_key" required placeholder="env"/></label><label className="field">Tag value<input className="input" name="tag_value" required placeholder="prod"/></label></div>}
         <label className="field">Schedule<select className="input" name="schedule" value={weekly ? "weekly" : "once"} onChange={(e) => setWeekly(e.target.value === "weekly")}><option value="once">One-off</option><option value="weekly">Weekly</option></select></label>
         {weekly ? <>

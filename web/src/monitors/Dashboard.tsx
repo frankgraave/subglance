@@ -1,7 +1,7 @@
 import { useId, useState } from "react";
 import type { ReactNode } from "react";
 import { useCompactViewport } from "../layout/useMediaQuery";
-import { IconGroup, IconTag } from "../components/icons";
+import { IconGroup } from "../components/icons";
 import {
   DEFAULT_LAYOUT,
   effectiveLayout,
@@ -22,9 +22,11 @@ import {
   filterByStatus,
   filterByTags,
   filterMonitors,
+  liveTagSelection,
   summarise,
   tagFacets,
 } from "./model";
+import { TagFilters } from "./TagFilters";
 import type { TagSelection } from "./model";
 import type { Monitor, MonitorStatus } from "./types";
 
@@ -175,15 +177,7 @@ export function Dashboard({
   // silently empty the list with no control left to clear it: the select can
   // only offer values that still exist, so a stale one is unreachable. Both
   // halves of a pair therefore have to be live for it to keep filtering.
-  const liveTags: TagSelection = Object.fromEntries(
-    facets
-      .map((facet) => [facet.key, tags[facet.key] ?? ""] as const)
-      .filter(([key, value]) => {
-        if (value === "") return false;
-        const facet = facets.find((candidate) => candidate.key === key);
-        return facet !== undefined && facet.values.includes(value);
-      }),
-  );
+  const liveTags = liveTagSelection(facets, tags);
   // A grouping key whose tag has vanished from the data would leave the list
   // headed by a key nothing carries, so it falls back to the flat order for
   // the same reason a stale tag selection is dropped.
@@ -299,50 +293,14 @@ export function Dashboard({
             </div>
           )}
 
-          {/*
-           * One native <select> per tag key, and native on purpose: a custom
-           * listbox would have to re-earn keyboard support, screen-reader
-           * semantics and the OS picker on a phone, and these lists are a
-           * handful of values long — the case where a native select is simply
-           * better. The key is the visible label, so the control reads
-           * "env: prod" without a separate legend.
-           */}
-          {facets.map((facet) => (
-            // The key is also the text of an option in the Group by control,
-            // so an explicit attribute — not the visible text — is what
-            // identifies a facet unambiguously.
-            <label
-              key={facet.key}
-              className="tb-field tb-field--framed"
-              data-facet-key={facet.key}
-            >
-              {/* The glyph, and it is decorative: the <label> around the
-                  select is already the control's accessible name, so an icon
-                  that announced itself would make a screen reader say the
-                  filter twice. */}
-              <IconTag />
-              <span className="tb-label">{facet.key}</span>
-              <select
-                className="tb-select mon-facet-select"
-                value={tags[facet.key] ?? ""}
-                onChange={(event) =>
-                  setTags((current) => ({
-                    ...current,
-                    [facet.key]: event.target.value,
-                  }))
-                }
-              >
-                {/* "Any" rather than a blank first option: an empty entry in a
-                    filter reads as a value someone forgot to name. */}
-                <option value="">Any</option>
-                {facet.values.map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ))}
+          {/* One select per tag key, shared with the inventory. */}
+          <TagFilters
+            facets={facets}
+            selected={tags}
+            onChange={(key, value) =>
+              setTags((current) => ({ ...current, [key]: value }))
+            }
+          />
 
           {/*
            * Grouping sits with the filters because it answers a neighbouring
