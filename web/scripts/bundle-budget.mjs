@@ -283,7 +283,7 @@ const budgets = {
    * advanced panel. No new dependency. The note above still holds: this is a
    * raise against the advice it gives, because lazy-loading the forms changes
    * every test that opens a drawer and reads a field in the same tick, which
-   * is a change of its own and is filed as one. 157 leaves 541 bytes.
+   * is a change of its own, filed as SUB-208. 157 leaves 541 bytes.
    */
   js: 157,
   /*
