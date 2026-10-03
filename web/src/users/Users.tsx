@@ -9,7 +9,7 @@ import { ROLES, createUser, deleteUser, fetchUsers, setUserRole, usersKey, type 
 
 const ROLE_HELP: Record<UserRole, string> = {
   viewer: "Viewer: sees monitors, incidents and settings, and changes nothing. Right for someone who only needs to look.",
-  editor: "Editor: also creates and changes monitors, channels and maintenance, and acknowledges incidents.",
+  editor: "Editor: also creates and changes monitors, channels and maintenance, and mutes repeat alerts on incidents.",
   admin: "Admin: also manages accounts and instance-wide settings such as retention.",
 };
 

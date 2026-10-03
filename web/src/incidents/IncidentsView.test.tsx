@@ -136,7 +136,7 @@ describe("acknowledged is not resolved — for the ear", () => {
      */
     const { container } = row({ acked: true, ackedAt: T0 + 420_000 });
     const heard = srOnly(container.querySelector(".inc-row")!);
-    expect(heard).toMatch(/Acknowledged/);
+    expect(heard).toMatch(/Repeat alerts muted/);
     expect(heard).toMatch(/still down/i);
     expect(heard).not.toMatch(/Recovered|Resolved/i);
   });
@@ -156,7 +156,7 @@ describe("acknowledged is not resolved — for the ear", () => {
     ]) {
       const { container } = row(over);
       const item = container.querySelector(".inc-row")!;
-      const seenDown = /still down|Unacked/i.test(visibleOnly(item));
+      const seenDown = /still down|Not muted/i.test(visibleOnly(item));
       const heardDown = /still down|Down since/i.test(srOnly(item));
       expect(seenDown).toBe(heardDown);
       cleanup();
@@ -264,6 +264,14 @@ describe("the detail expands inline, not into a side panel", () => {
   });
 });
 
+/*
+ * The mute control by its accessible name, anchored at the start. The row's
+ * disclosure button is named by the incident's whole sentence, which says
+ * "Repeat alerts not muted." on an open incident, so a bare /mute/ would
+ * find that button too and prove nothing about the control.
+ */
+const MUTE_CONTROL = /^(Mute repeat alerts|Repeat alerts muted|Muting…) for /;
+
 describe("the acknowledge control", () => {
   it("is offered on the row, not behind a detail screen", () => {
     const onAck = vi.fn();
@@ -345,15 +353,36 @@ describe("the acknowledge control", () => {
     ).toMatch(/mute repeat alerts/i);
   });
 
+  it("speaks the same verb as the response column beside it", () => {
+    /*
+     * SUB-190. The button said "Mute repeat alerts" while the column it
+     * changes said "Unacked" and then "Acked, still down": two verbs for one
+     * act, and the reader had to take on trust that they were the same. The
+     * API's "ack" is a wire name; on the screen both say "mute", before the
+     * click and after it, and neither uses the wire's word.
+     */
+    for (const over of [{}, { acked: true, ackedAt: T0 + 60_000 }]) {
+      row(over, { onAck: () => {} });
+      const button = screen.getByRole("button", { name: MUTE_CONTROL });
+      const chip = document.querySelector(".inc-col-ack")!.textContent ?? "";
+      expect(button.getAttribute("aria-label")).toMatch(/\bmut(e|ed|ing)\b/i);
+      expect(chip, `the response column says "${chip}"`).toMatch(/\bmuted\b/i);
+      for (const words of [chip, button.getAttribute("aria-label") ?? ""]) {
+        expect(words).not.toMatch(/\b(un)?ack(ed|nowledged?)?\b/i);
+      }
+      cleanup();
+    }
+  });
+
   it("is not offered on a resolved incident", () => {
     row({ resolved: true, resolvedAt: T0 + 720_000 }, { onAck: () => {} });
-    expect(screen.queryByRole("button", { name: /mute/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: MUTE_CONTROL })).toBeNull();
   });
 
   it("is absent entirely when the viewer may not write", () => {
     // A button that always answers 403 is worse than no button.
     row({});
-    expect(screen.queryByRole("button", { name: /mute/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: MUTE_CONTROL })).toBeNull();
   });
 });
 
@@ -421,7 +450,7 @@ describe("the incidents screen", () => {
       ],
     });
     expect(document.body.textContent).toContain("2 open");
-    expect(document.body.textContent).toContain("1 acknowledged");
+    expect(document.body.textContent).toContain("1 muted");
   });
 
   it("reports a load failure as an alert", () => {
@@ -434,14 +463,16 @@ describe("the incidents screen", () => {
 
   it("reports a failed acknowledgement instead of silently doing nothing", () => {
     view({ incidents: [incident()], ackError: new Error("HTTP 403") });
-    expect(document.body.textContent).toContain("Could not acknowledge");
+    expect(document.body.textContent).toContain("Could not mute repeat alerts");
     expect(document.body.textContent).toContain("HTTP 403");
   });
 
   it("stops claiming an outage is ongoing once the stream is dead", () => {
     view({ incidents: [incident()], stale: true });
     const item = document.querySelector(".inc-row")!;
-    expect(visibleOnly(item)).not.toContain("Unacked");
+    // Case-sensitive on purpose: "Was not muted" is the stale word.
+    expect(visibleOnly(item)).not.toContain("Not muted");
+    expect(visibleOnly(item)).toContain("Was not muted");
     expect(srOnly(item)).toContain("Was down");
   });
 });

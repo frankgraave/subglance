@@ -130,10 +130,10 @@ export function CoverageCard({
               repeat switch: two places for one idea is how a silence stops
               being explainable. */}
           <p className="nt-note nt-cov-repeats">
-            Repeat alerts for an unacknowledged incident go to the monitor's
+            Repeat alerts for an incident nobody has muted go to the monitor's
             current channels and follow those channels' quiet hours.
             Each monitor sets where its repeats start; every gap is four
-            times the last, at most a day, and acknowledging the incident stops
+            times the last, at most a day, and muting the incident stops
             them.
           </p>
         </>

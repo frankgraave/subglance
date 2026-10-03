@@ -465,7 +465,7 @@ export function IncidentsView({
             <span className="mon-detail-note">
               {loading
                 ? "Loading…"
-                : `${shown.length} open · ${ackedCount} acknowledged`}
+                : `${shown.length} open · ${ackedCount} muted`}
             </span>
           }
         >
@@ -485,7 +485,7 @@ export function IncidentsView({
           <div className="inc-body">
             {ackError !== null ? (
               <p role="alert" className="inc-notice">
-                Could not acknowledge: {ackError.message}
+                Could not mute repeat alerts: {ackError.message}
               </p>
             ) : null}
             {error !== null ? (

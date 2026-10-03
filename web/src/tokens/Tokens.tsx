@@ -10,7 +10,7 @@ import { createToken, fetchTokens, revokeToken, rolesWithin, tokensKey, type Api
 const EXPIRY: [string, string][] = [["", "Never"], ["720h", "30 days"], ["2160h", "90 days"], ["8760h", "1 year"]];
 const ROLE_HELP: Record<TokenRole, string> = {
   viewer: "Viewer: reads monitors, incidents and metrics. Right for a dashboard or a badge.",
-  editor: "Editor: also creates and changes monitors and acknowledges incidents. Right for a deploy pipeline.",
+  editor: "Editor: also creates and changes monitors and mutes repeat alerts on incidents. Right for a deploy pipeline.",
   admin: "Admin: also manages accounts. Give a script this only when it has to.",
 };
 

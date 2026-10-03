@@ -114,7 +114,7 @@ it("real Go API persists the edit, previews without history, rejects stale ETags
     await page.reload({ waitUntil: "domcontentloaded" }); await page.waitForSelector('.inc-reminders'); await edit(page);
     expect(await page.$eval('.repeat-field select', (node) => (node as HTMLSelectElement).value)).toBe("off");
     await button(page, "Cancel"); await page.click('button[aria-label^="Mute repeat alerts for"]');
-    await page.waitForFunction(() => document.querySelector('.inc-reminders')?.textContent?.includes("incident acknowledged"));
+    await page.waitForFunction(() => document.querySelector('.inc-reminders')?.textContent?.includes("repeat alerts muted"));
     expect((await f.api(`${path}/incidents`).then((r) => r.json())).incidents[0]).toMatchObject({ reminder_count: 2, reminder_status: "acknowledged", next_reminder_at: null });
   } finally { await context.close(); await f.close(); }
 });
