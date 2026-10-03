@@ -30,6 +30,12 @@ export type ErrorBoundaryProps = {
   onError?: (error: Error, info: ErrorInfo) => void;
   /** Reloads the document. Injected in tests. */
   onReload?: () => void;
+  /**
+   * Runs before "Try again" clears the error. A boundary around a `lazy()`
+   * chunk needs it: `lazy()` keeps a rejected import, so a retry has to swap
+   * in a fresh loader first or it throws the same error again.
+   */
+  onRetry?: () => void;
 };
 
 type ErrorBoundaryState = { error: Error | null };
@@ -55,7 +61,10 @@ export class ErrorBoundary extends Component<
     console.error("render error", error, info.componentStack);
   }
 
-  private readonly retry = () => this.setState({ error: null });
+  private readonly retry = () => {
+    this.props.onRetry?.();
+    this.setState({ error: null });
+  };
 
   private readonly reload = () => {
     const reload = this.props.onReload;
