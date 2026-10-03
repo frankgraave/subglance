@@ -22,16 +22,40 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { chromium, type Browser, type Page } from "./harness/browser";
+import type { ApiMonitor } from "../monitors/types";
 import { LAYOUT_STORAGE_KEY } from "../shell/preferences";
+import { seedEstate } from "./harness/seed";
 import { serveBuild, type Server } from "./harness/server";
 
 /*
  * 320 is the narrowest phone still in use (iPhone SE 1st generation), 375 the
- * most common, 414 the widest that still gets the phone layout. Where the
- * layout switches over is a unit test's business; these are the widths where
- * it must hold.
+ * most common, 390 the current iPhone, 414 the widest that still gets the
+ * phone layout. Where the layout switches over is a unit test's business;
+ * these are the widths where it must hold.
+ *
+ * 390 joined with SUB-192: the dashboard's toolbar ran 4px past it while 375
+ * and 414 were measured green, because a toolbar that wraps fits or misses
+ * by whatever its last line happens to hold, not monotonically with width.
  */
-const WIDTHS = [320, 375, 414];
+const WIDTHS = [320, 375, 390, 414];
+
+/*
+ * The dashboard's own fixture: the demo estate `make seed` creates, read from
+ * the seed catalogue, with every status the filter counts.
+ *
+ * The four monitors the shared harness serves carry three tag keys. The seed
+ * carries six (customer, env, job, region, team, tier), and that is the
+ * toolbar that scrolled sideways at 320 and 390px (SUB-192) while this suite
+ * passed: six tag filters and seven status chips are what a phone has to fit,
+ * and a fixture with fewer measures a narrower bar than anyone runs. Reading
+ * the seed rather than copying it means a seventh key added there is
+ * measured here too.
+ */
+const COUNTED_STATUSES: readonly ApiMonitor["status"][] = ["down", "recovering", "warning", "pending", "up"];
+const ESTATE: ApiMonitor[] = seedEstate().map((monitor, i) =>
+  monitor.enabled ? { ...monitor, status: COUNTED_STATUSES[i % COUNTED_STATUSES.length]! } : monitor,
+);
+const ESTATE_BODY = JSON.stringify({ monitors: ESTATE });
 
 /*
  * What a phone can actually be looking at.
@@ -54,11 +78,14 @@ const WIDTHS = [320, 375, 414];
  * container query on the list (SUB-149), and its name links were 19px tall
  * until `inventory.css` gave them the 24px floor the card names already had.
  */
-const SCREENS = [
-  { name: "dashboard (cards)", layout: "cards", path: "/", ready: "[data-testid^='monitor-card-']" },
-  { name: "dashboard (rows preference)", layout: "rows", path: "/", ready: "[data-testid^='monitor-card-']" },
-  { name: "status wall", layout: "wall", path: "/", ready: ".wall-card" },
-  { name: "monitors", layout: "cards", path: "/monitors", ready: ".inv-list > li" },
+type Screen = { name: string; layout: string; path: string; ready: string; estate?: boolean };
+
+const SCREENS: Screen[] = [
+  { name: "dashboard (cards)", layout: "cards", path: "/", ready: "[data-testid^='monitor-card-']", estate: true },
+  { name: "dashboard (rows preference)", layout: "rows", path: "/", ready: "[data-testid^='monitor-card-']", estate: true },
+  { name: "dashboard (compact preference)", layout: "compact", path: "/", ready: "[data-testid^='monitor-card-']", estate: true },
+  { name: "status wall", layout: "wall", path: "/", ready: ".wall-card", estate: true },
+  { name: "monitors", layout: "cards", path: "/monitors", ready: ".inv-list > li", estate: true },
   { name: "monitor detail", layout: "cards", path: "/monitors/1", ready: ".mon-detail-windows" },
   { name: "incidents", layout: "cards", path: "/incidents", ready: ".inc-line" },
   { name: "notifications", layout: "cards", path: "/notifications", ready: ".inv-row" },
@@ -84,9 +111,20 @@ afterAll(async () => {
  * against the right origin and before any script runs — hence the blank
  * navigation first.
  */
-async function open(width: number, screen: (typeof SCREENS)[number]): Promise<Page> {
+async function open(width: number, screen: Screen): Promise<Page> {
   const page = await browser.newPage();
   await page.setViewport({ width, height: 800, deviceScaleFactor: 1, isMobile: true });
+  if (screen.estate) {
+    await page.setRequestInterception(true);
+    page.on("request", (request) => {
+      const url = new URL(request.url());
+      if (url.pathname === "/api/v1/monitors" && request.method() === "GET") {
+        void request.respond({ status: 200, contentType: "application/json", body: ESTATE_BODY });
+      } else {
+        void request.continue();
+      }
+    });
+  }
   await page.goto(server.url + "/blank-for-storage", { waitUntil: "domcontentloaded" });
   await page.evaluate(
     (key: string, value: string) => window.localStorage.setItem(key, value),
@@ -110,6 +148,30 @@ async function open(width: number, screen: (typeof SCREENS)[number]): Promise<Pa
   );
   return page;
 }
+
+describe("the phone fixture", () => {
+  /*
+   * The point of the estate is its width. If the seed ever loses tag keys
+   * this suite would quietly go back to measuring a narrower bar, so the
+   * floor is asserted rather than assumed.
+   */
+  it("carries at least six tag keys and every counted status", () => {
+    const keys = new Set(ESTATE.flatMap((monitor) => Object.keys(monitor.tags ?? {})));
+    expect(keys.size).toBeGreaterThanOrEqual(6);
+    expect(new Set(ESTATE.map((monitor) => monitor.status))).toEqual(new Set(COUNTED_STATUSES));
+    expect(ESTATE.some((monitor) => !monitor.enabled)).toBe(true);
+  });
+
+  it("puts one tag filter per key in the dashboard's toolbar", async () => {
+    const page = await open(375, SCREENS[0]!);
+    try {
+      const facets = await page.$$eval(".shell-toolbar [data-facet-key]", (els) => els.length);
+      expect(facets).toBeGreaterThanOrEqual(6);
+    } finally {
+      await page.close();
+    }
+  });
+});
 
 describe.each(WIDTHS)("at %ipx", (width) => {
   describe.each(SCREENS)("$name", (screen) => {
