@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { cleanup, render, screen, fireEvent, waitFor, act, within } from "@testing-library/react";
 import { ShellSlots } from "../shell/ShellSlots";
 import { setToolbarSlot } from "../shell/toolbarSlot";
 import { watchdogKey } from "./api";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
 import { Settings } from "../settings/Settings";
+import { readFileSync } from "node:fs";
+import { disabledWatchdog } from "./fixtures";
 
 const success = {
  configured: true, interval_seconds: 300, last_decision_at: "2026-09-20T09:00:00Z",
@@ -86,4 +88,23 @@ it("shows configured state and the actual successful ping time in Settings", asy
  expect(document.querySelector('time[datetime="2026-09-20T09:00:01Z"]')).toBeTruthy();
  expect(fetch).toHaveBeenCalledWith("/api/v1/watchdog", expect.objectContaining({ credentials: "same-origin", cache: "no-store" }));
  client.clear();
+});
+
+it("says what a watchdog is and how to set one when none is configured", async () => {
+ settings(disabledWatchdog);
+ expect(await screen.findByText("Not configured")).toBeTruthy();
+ const card = document.getElementById("self-monitoring")!;
+ expect(card.textContent).toMatch(/outside service that SubGlance pings on a schedule and that raises the alarm when the pings stop/);
+ // The setting it names is the one the configuration reads, and the link is the dashboard notice's.
+ const names = [...card.querySelectorAll("code")].map((el) => el.textContent);
+ expect(names).toEqual(["SUBGLANCE_WATCHDOG_URL"]);
+ expect(readFileSync("../docs/operations.md", "utf8")).toContain("| `--watchdog-url` | `SUBGLANCE_WATCHDOG_URL` |");
+ const link = within(card).getByRole("link", { name: "Read about self-monitoring" });
+ expect(link.getAttribute("href")).toBe("https://github.com/frankgraave/subglance/blob/develop/README.md#self-monitoring");
+});
+
+it("does not explain the setup once a watchdog is configured", async () => {
+ settings(success);
+ await screen.findByText("Configured");
+ expect(document.getElementById("self-monitoring")!.textContent).not.toMatch(/SUBGLANCE_WATCHDOG_URL|outside service/);
 });

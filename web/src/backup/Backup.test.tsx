@@ -7,6 +7,7 @@ import { setToolbarSlot } from "../shell/toolbarSlot";
 import { Settings } from "../settings/Settings";
 import { backupKey } from "./api";
 import { unconfiguredBackup } from "./fixtures";
+import { readFileSync } from "node:fs";
 
 const healthy = {
   configured: true, target: "s3://ops-backups/subglance/",
@@ -58,6 +59,27 @@ it("says plainly when nothing is backed up", async () => {
   mount(unconfiguredBackup);
   expect(await screen.findByText("Not configured. SubGlance has no scheduled backup target.")).toBeTruthy();
   expect(screen.getByRole("link", { name: "Read about backups" }).getAttribute("href")).toContain("operations.md#scheduled-backups");
+});
+
+it("names the settings an unset target needs, not only a link", async () => {
+  mount(unconfiguredBackup);
+  await screen.findByText("Not configured. SubGlance has no scheduled backup target.");
+  const card = document.getElementById("backups")!;
+  const required = [...card.querySelectorAll(".panel-settings dt")].map((el) => el.textContent);
+  expect(required).toEqual(["SUBGLANCE_BACKUP_TARGET", "SUBGLANCE_BACKUP_ACCESS_KEY_ID", "SUBGLANCE_BACKUP_SECRET_ACCESS_KEY_FILE"]);
+  // Every variable the card names is a row of the configuration table, so a
+  // rename in the configuration cannot leave the card naming a dead setting.
+  const named = [...card.querySelectorAll("code")].map((el) => el.textContent ?? "").filter((text) => text.startsWith("SUBGLANCE_"));
+  expect(named).toEqual(expect.arrayContaining([...required, "SUBGLANCE_BACKUP_SECRET_ACCESS_KEY", "SUBGLANCE_BACKUP_REGION", "SUBGLANCE_BACKUP_ENDPOINT"]));
+  const table = readFileSync("../docs/operations.md", "utf8").split("\n").filter((line) => line.startsWith("|"));
+  for (const name of named) expect(table.some((row) => row.includes(`\`${name}\``)), name).toBe(true);
+});
+
+it("does not explain the setup once a target is set", async () => {
+  mount(healthy);
+  await screen.findByText("s3://ops-backups/subglance/");
+  expect(document.querySelector("#backups .panel-settings")).toBeNull();
+  expect(document.getElementById("backups")!.textContent).not.toContain("SUBGLANCE_");
 });
 
 it.each([
