@@ -1792,17 +1792,21 @@ Two rules about the number:
 The icon is decorative: the title already says what the list is, so the glyph
 is `aria-hidden` and the heading is the accessible name.
 
-### 8.4 A toolbar filter is a framed control with a glyph
+### 8.4 A toolbar select is a framed control with a glyph
 
-A filter in the page toolbar — a `<label>`, a key, and a `<select>` — takes the
-same frame as the status filter beside it: 1px `--border-control` at `--r-md`
-over `--surface-2`, with the control inside giving up its own edge and fill. A
-glyph leads the key.
+Every select in the page toolbar — a tag filter, a type or state filter, an
+order, a history window — is `ToolbarSelect` (`web/src/shell/ToolbarSelect.tsx`):
+a `<label>`, a glyph, a key, and a `<select>`, inside the same frame as the
+status filter beside it: 1px `--border-control` at `--r-md` over
+`--surface-2`, with the control inside giving up its own edge and fill.
 
-The reason is legibility of *kind*: the toolbar holds two clusters that do the
+The reason is legibility of *kind*: the toolbar holds clusters that do the
 same job, and before this one was framed and one was three bare form controls,
-so they read as a designed thing sitting next to some leftovers. The geometry
-is the concentric rule (§2.7) and the same 8 − 2 = 6 §7.8 measured.
+so they read as a designed thing sitting next to some leftovers. That was true
+across screens too — the dashboard framed its filters while Monitors and
+Incidents drew a bare key beside a bordered select — so which pattern you got
+depended on where you were. One component draws them all now. The geometry is
+the concentric rule (§2.7) and the same 8 − 2 = 6 §7.8 measured.
 
 **It stays a native `<select>`.** The frame is a box around a real labelled
 control, so the keyboard behaviour, the screen-reader role, the `<label>`
@@ -1811,11 +1815,23 @@ have to re-earn every one of them, and these lists are a handful of values
 long. The select keeps its own `:focus-visible` ring — the frame adds a
 `:focus-within` warming on top, and nothing anywhere writes `outline: none`.
 
+**Width follows the options**, capped at `--size-control-select`. A native
+select is as wide as its widest option whatever is chosen, so a frame does not
+move when a value is picked; a fixed width would leave empty fill after "Any"
+or cut "Open and resolved". A long tag value is data and ends in an ellipsis
+at the cap.
+
 The glyph is `aria-hidden` on the `<svg>` itself rather than on a wrapper, and
-it is the same glyph for every facet: `env`, `team` and `customer` are one kind
-of control, and three pictures for one idea is three symbols to learn. A
-control that does something else — grouping, which reshapes rather than narrows
-— takes a different glyph, because that difference is the one worth drawing.
+one glyph stands for one kind of control: the tag for every tag facet, the
+funnel for every other filter (type, paused, open or resolved), the clock for
+a window of time. `env`, `team` and `customer` are one kind of control, and
+three pictures for one idea is three symbols to learn. A control that does
+something else — grouping or sorting, which reshape rather than narrow — takes
+a different glyph, because that difference is the one worth drawing.
+
+`ToolbarSelect.test.tsx` fails on the toolbar's classes written out anywhere
+else, and `App.masthead.test.tsx` walks every route and fails on a select in
+the rendered toolbar that is not a framed field with a glyph and a key.
 
 ---
 

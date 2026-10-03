@@ -495,7 +495,7 @@ describe("Dashboard", () => {
     it("frames each filter and leads it with a decorative glyph", () => {
       render(<Harness monitors={tagged()} />);
       const frames = [
-        ...document.querySelectorAll<HTMLElement>(".tb-field--framed"),
+        ...document.querySelectorAll<HTMLElement>(".tb-field"),
       ];
       expect(frames.length, "two facets plus Group by").toBe(3);
       for (const frame of frames) {

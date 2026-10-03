@@ -623,31 +623,21 @@
   padding: var(--space-2) 0;
 }
 
-/* Label and control on one baseline, which is the misalignment SUB-134
-   reported: the monitors page put the label on its own line above the field
-   while the selects beside it were inline, so nothing in the row lined up. */
-.tb-field {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.tb-label {
-  @apply caps-legend;
-  white-space: nowrap;
-}
-
 /*
- * A framed filter, so the toolbar reads as one bar instead of a pill cluster
- * beside some loose form controls.
+ * A select in the page toolbar: one framed field, on every screen.
  *
- * The product owner's note on the dashboard toolbar was that the `ENV [Any]`
- * / `GROUP BY [None]` pair is plain beside the `3 down / 2 up` cluster next to
- * it, and asked for icons. That cluster is `.mon-filter`: a 1px
- * `--border-control` frame at `--r-md` over `--surface-2`, 2px of padding,
- * `--r-sm` on the things inside it. This is deliberately the *same* frame and
- * the same geometry — 8 − 2 = 6, concentric by §2.7 — so the two clusters read
- * as siblings rather than as two different ideas of what a toolbar control is.
+ * `ToolbarSelect` draws every one of them — a filter, an order, a history
+ * window — so this is the only toolbar select there is. The dashboard used to
+ * frame its tag filters while the monitors and incidents screens drew a bare
+ * key beside a bordered select; the same bar then held two ideas of what a
+ * toolbar control is, and which one you got depended on the screen
+ * (DESIGN.md §8.4).
+ *
+ * The frame is the status filter's: a 1px `--border-control` frame at
+ * `--r-md` over `--surface-2`, 2px of padding, `--r-sm` on the things inside
+ * it — 8 − 2 = 6, concentric by §2.7 — so the two clusters read as siblings.
+ * Label and control sit on one baseline, which is the misalignment SUB-134
+ * reported.
  *
  * **It is still a native `<select>`.** Nothing here replaces the control: the
  * frame is a box drawn around a real labelled select, so the OS picker on a
@@ -662,7 +652,9 @@
  * on `:focus-within`. Nothing here writes `outline: none`, so the indicator is
  * never removed — only doubled.
  */
-.tb-field--framed {
+.tb-field {
+  display: flex;
+  align-items: center;
   gap: var(--space-2);
   height: var(--size-col-2xs);
   padding: var(--space-0h) var(--space-2h) var(--space-0h) var(--space-2);
@@ -672,8 +664,13 @@
   transition: border-color var(--dur-hover) var(--ease);
 }
 
-.tb-field--framed:hover,
-.tb-field--framed:focus-within { border-color: var(--border-hi); }
+.tb-field:hover,
+.tb-field:focus-within { border-color: var(--border-hi); }
+
+.tb-label {
+  @apply caps-legend;
+  white-space: nowrap;
+}
 
 /*
  * The glyph, ahead of the key.
@@ -685,56 +682,46 @@
  * icons in this set carry no class of their own, so the container sizes them
  * and a mixed set still lands on one optical size.
  */
-.tb-field--framed > svg {
+.tb-field > svg {
   width: var(--size-icon-sm);
   height: var(--size-icon-sm);
   flex: none;
   color: var(--ink-3);
 }
 
-.tb-field--framed:hover > svg,
-.tb-field--framed:focus-within > svg { color: var(--ink-2); }
+.tb-field:hover > svg,
+.tb-field:focus-within > svg { color: var(--ink-2); }
 
 /*
  * Inside the frame the select gives up its own edge and fill.
  *
  * The frame is already the control's box, and a bordered select inside a
  * bordered frame is the double-framing §2.7 removes everywhere else. It keeps
- * its width rung, its type and — this is the part that matters — its focus
- * ring.
+ * its type and — this is the part that matters — its focus ring.
+ *
+ * **Width.** As wide as its widest option, up to `--size-control-select`. A
+ * native select sizes itself to its widest option, not to the chosen one, so a
+ * frame does not change width when a value is picked. One fixed width for
+ * every select no longer lines anything up: each frame also holds its key,
+ * and "Show" and "customer" are not one length. A fixed width would leave a
+ * gutter of empty fill after "Any" or cut "Open and resolved". The cap is for
+ * tag values, which are data: a long one ends in an ellipsis instead of
+ * pushing the rest of the bar along.
  */
-.tb-field--framed .tb-select {
-  height: 100%;
-  border-color: transparent;
-  background: transparent;
-  padding-inline: 0;
-  /* Rung 2 (64px) plus the "Any"/"None" the options actually hold. The
-     unframed rung is `--size-control-select` (148px), sized for "Active only"
-     on the inventory toolbar; inside a frame that leaves a visible gutter of
-     empty fill after a three-letter value. */
-  width: var(--size-col-3);
-}
-
-.tb-field--framed .tb-select:hover { border-color: transparent; }
-
-/* Every select in the bar is the same width, so a row of filters reads as a
-   row rather than as three controls that happen to sit together. The widest
-   option text is what sets it: "All types" and "Active only" are within a
-   character of each other, and a shared rung keeps the next filter in line. */
 .tb-select {
-  width: var(--size-control-select);
+  width: auto;
+  max-width: var(--size-control-select);
+  height: 100%;
   font: inherit;
   text-overflow: ellipsis;
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
-  padding: var(--space-1) var(--space-2);
+  padding: var(--space-1) 0;
   color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--border-control);
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
 }
-
-.tb-select:hover { border-color: var(--border-hi); }
 
 .tb-select:focus-visible {
   border-color: var(--accent-border);
@@ -800,11 +787,22 @@
        back out on blur. Moved here with the class it belongs to — it used to
        live in monitors.css, keyed off `.mon-facet-select`, which meant a
        filter added to any other screen's toolbar silently lost the floor. */
-    width: auto;
     font-size: var(--type-nozoom);
     line-height: var(--lead-nozoom);
-    padding: var(--space-2) var(--space-3);
+    padding-block: var(--space-0h);
+    /* No fixed cap here: the cap is sized for helper type, and at 16px it
+       would cut "Open and resolved". The bar is the cap instead. The group
+       wraps, so the control takes the width its own text needs, up to the
+       width of the bar; a native select sizes itself to its widest option,
+       so one long tag value used to push the whole page sideways. That needs
+       all three links below to give: the select may shrink inside its frame,
+       the frame may be no wider than its group, and the group may be no
+       wider than the bar. */
+    max-width: none;
+    min-width: 0;
   }
+
+  .tb-group { min-width: 0; }
 
   /*
    * The frame gives up its fixed height on a phone, for the same reason
@@ -815,18 +813,10 @@
    * at 375px the value was sheared in half horizontally across the frame's
    * bottom edge — the control was there and its text was not readable, which
    * is worse than either an overflow or a smaller field.
-   *
-   * The frame also stops pinning the select's width here, so the no-zoom
-   * rule's `width: auto` is what applies and the control takes the width its
-   * own text needs on the one screen where width is scarce.
    */
-  .tb-field--framed {
+  .tb-field {
     height: auto;
-    padding-block: var(--space-0h);
-  }
-
-  .tb-field--framed .tb-select {
-    width: auto;
+    max-width: 100%;
     padding-block: var(--space-0h);
   }
 }

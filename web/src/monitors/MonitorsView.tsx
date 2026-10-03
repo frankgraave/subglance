@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { registerNavigationCleanup } from "../shell/leaveGuard";
 import { Card, Panel } from "../components/Card";
 import { PlusIcon, SearchIcon } from "../shell/icons";
-import { IconClock, IconList, IconPause, IconPlay, IconPulse } from "../components/icons";
+import { IconClock, IconFilter, IconList, IconPause, IconPlay, IconPulse, IconSort } from "../components/icons";
 import { ToolbarTools } from "../shell/ToolbarTools";
+import { ToolbarSelect } from "../shell/ToolbarSelect";
 import { Drawer } from "../components/Drawer";
 import { ConfirmDelete } from "../components/ConfirmDelete";
 import { StateChip } from "../components/Chip";
@@ -261,38 +262,26 @@ export function MonitorsView({
             />
           </label>
 
-          <label className="tb-field">
-            <span className="tb-label">Type</span>
-            <select
-              className="tb-select"
-              value={type}
-              onChange={(event) => setType(event.target.value)}
-            >
-              <option value="">All types</option>
-              <option value="http">HTTP</option>
-              <option value="tcp">TCP</option>
-              <option value="ping">Ping</option>
-              <option value="ssl">SSL</option>
-              <option value="push">Push</option>
-            </select>
-          </label>
+          {/* A filter glyph, not the tag one: type and paused narrow the
+              list by a monitor's own settings, not by a tag. */}
+          <ToolbarSelect icon={<IconFilter />} label="Type" value={type} onChange={setType}>
+            <option value="">All types</option>
+            <option value="http">HTTP</option>
+            <option value="tcp">TCP</option>
+            <option value="ping">Ping</option>
+            <option value="ssl">SSL</option>
+            <option value="push">Push</option>
+          </ToolbarSelect>
 
-          <label className="tb-field">
-            <span className="tb-label">Paused</span>
-            <select
-              className="tb-select"
-              value={pausedFilter}
-              onChange={(event) => setPausedFilter(event.target.value)}
-            >
-              {/* "All" first and selected by default. The dashboard hides
-                  paused monitors; this page must show them, because a monitor
-                  someone paused during a deploy and forgot is exactly the
-                  thing an inventory is read to find. */}
-              <option value="">All</option>
-              <option value="active">Active only</option>
-              <option value="paused">Paused only</option>
-            </select>
-          </label>
+          <ToolbarSelect icon={<IconFilter />} label="Paused" value={pausedFilter} onChange={setPausedFilter}>
+            {/* "All" first and selected by default. The dashboard hides
+                paused monitors; this page must show them, because a monitor
+                someone paused during a deploy and forgot is exactly the
+                thing an inventory is read to find. */}
+            <option value="">All</option>
+            <option value="active">Active only</option>
+            <option value="paused">Paused only</option>
+          </ToolbarSelect>
 
           <TagFilters
             facets={facets}
@@ -304,20 +293,18 @@ export function MonitorsView({
 
           {/* Order, not a filter: it changes where rows are, never which are
               shown, so it sits after everything that narrows. */}
-          <label className="tb-field">
-            <span className="tb-label">Sort</span>
-            <select
-              className="tb-select"
-              value={sort}
-              onChange={(event) => setSort(event.target.value as InventorySort)}
-            >
-              {INVENTORY_SORTS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <ToolbarSelect
+            icon={<IconSort />}
+            label="Sort"
+            value={sort}
+            onChange={(value) => setSort(value as InventorySort)}
+          >
+            {INVENTORY_SORTS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </ToolbarSelect>
 
           <p className="tb-count" role="status">
             {loading

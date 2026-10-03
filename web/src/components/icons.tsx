@@ -98,6 +98,39 @@ export function IconGroup() {
   );
 }
 
+/**
+ * A funnel, for a toolbar filter that narrows the list by something other
+ * than a tag: a monitor's type, whether it is paused, whether an incident is
+ * open.
+ *
+ * Not the tag glyph, because a tag filter's picture says what it narrows by,
+ * and a type is not a tag. Still one glyph for every such filter, for the
+ * reason `IconTag` gives: one kind of control, one picture, and the key beside
+ * it says by what.
+ */
+export function IconFilter() {
+  return (
+    <svg {...BASE}>
+      <path d="M3.5 5h17l-6.5 7.5V19l-4 1.5v-8L3.5 5Z" />
+    </svg>
+  );
+}
+
+/**
+ * Order: a long bar over shorter ones, for a toolbar control that changes
+ * where rows sit and never which rows are shown.
+ *
+ * Its own glyph for the reason `IconGroup` has one: a control that looks like
+ * a filter while hiding nothing is the kind of thing people press twice.
+ */
+export function IconSort() {
+  return (
+    <svg {...BASE}>
+      <path d="M4 6h16M4 12h11M4 18h6" />
+    </svg>
+  );
+}
+
 /** Accounts: two heads and shoulders, for a card that lists people. */
 export function IconUsers() {
   return (
