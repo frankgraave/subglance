@@ -5,6 +5,10 @@ import { Checkbox } from "../components/Choice";
 import type { InventoryMonitor } from "./inventory";
 import type { MonitorPatch } from "./inventoryApi";
 import { RepeatAlertField } from "./RepeatAlertField";
+import { AlertingSection } from "./AlertingSection";
+import { DurationField } from "./DurationField";
+import { DAYS_ONLY, DURATION_LIMITS, SECONDS_ONLY, SECONDS_TO_DAYS, SECONDS_TO_HOURS } from "./duration";
+import type { DurationUnit } from "./duration";
 import { validRepeat, REPEAT_ERROR } from "./repeat";
 import { tagsToText, textToTags } from "./tags";
 import { ApiError, describePreview, fingerprintPreview, previewCheck } from "./preview";
@@ -39,13 +43,27 @@ const CHECK_FIELDS = new Set(["target", "timeout_s", "method", "expected_status"
 const controlFor = (field: string) =>
   field.startsWith("json_assertion") ? `json_${field.split(".")[1] ?? "path"}` : field;
 const LABELS: Record<string, string> = {
-  name: "Name", target: "Target", interval_s: "Interval (seconds)", timeout_s: "Timeout (seconds)",
+  name: "Name", target: "Target", interval_s: "Check every", timeout_s: "Give up after",
   method: "HTTP method", expected_status: "Expected status", keyword: "Keyword", keyword_mode: "Keyword rule",
-  headers: "Headers (JSON)", body: "Request body", ssl_warn_days: "Certificate warning (days)",
+  headers: "Headers (JSON)", body: "Request body", ssl_warn_days: "Certificate warning",
   recovery_threshold: "Passing checks to recover",
   json_path: "JSON field", json_operator: "Must", json_expected: "Value",
-  tags: "Tags", push_interval_s: "Should report every (seconds)", push_grace_s: "Allow it to be late by (seconds)",
+  tags: "Tags", push_interval_s: "Should report every", push_grace_s: "Allow it to be late by",
 };
+/**
+ * The settings that are lengths of time, and the units each is offered in.
+ * The words match the create form's, which already named these by what they
+ * do rather than by their unit (DESIGN.md §7.2).
+ */
+const DURATIONS: Record<string, readonly DurationUnit[]> = {
+  interval_s: SECONDS_TO_HOURS, timeout_s: SECONDS_ONLY, ssl_warn_days: DAYS_ONLY,
+  push_interval_s: SECONDS_TO_DAYS, push_grace_s: SECONDS_TO_DAYS,
+};
+/** Whole numbers with a range; the durations' limits live with their units. */
+const RANGES: readonly (readonly [string, number, number, string])[] = [
+  ["recovery_threshold", 1, 10, "Passing checks to recover must be between 1 and 10."],
+  ...Object.entries(DURATION_LIMITS).map(([key, { min, max, message }]) => [key, min, max, message] as const),
+];
 
 /** Only settings actually read from the server become editable values. */
 function valuesFor(monitor: InventoryMonitor): Record<string, string> {
@@ -153,11 +171,11 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
     if (tags === null) { reject("Tags are written key:value, one per line — for example env:prod.", "tags"); return null; }
     const parsed: Record<string, unknown> = { ...values, name: values.name.trim(), tags };
     if (!monitor.push) parsed.target = values.target.trim();
-    for (const [key, min, max] of [["interval_s", 20, 86400], ["recovery_threshold", 1, 10], ["timeout_s", 1, 120], ["push_interval_s", 60, 2592000], ["push_grace_s", 0, 2592000], ["ssl_warn_days", 1, 365]] as const) {
+    for (const [key, min, max, message] of RANGES) {
       if (!(key in values)) continue;
       const number = Number(values[key]);
       if (values[key].trim() === "" || !Number.isInteger(number) || number < min || number > max) {
-        reject(`${LABELS[key]} must be between ${min} and ${max}.`, key); return null;
+        reject(message, key); return null;
       }
       parsed[key] = number;
     }
@@ -239,9 +257,12 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
       onChange: (event: { target: { value: string } }) => update(key, event.target.value),
       "aria-invalid": problem?.field === key ? true as const : undefined,
       "aria-describedby": problem?.field === key ? `${ids}-error` : undefined };
+    const units = DURATIONS[key];
     return <div className="field" key={key}>
       <label className="field-label" htmlFor={props.id}>{LABELS[key]}</label>
-      {options ? <select {...props}>{options.map((op) => <option key={op} value={op}>{op.replace("_", " ")}</option>)}</select>
+      {units ? <DurationField id={props.id} value={props.value} onChange={(value) => update(key, value)} units={units} label={LABELS[key]}
+        inputProps={{ name: key, "aria-invalid": props["aria-invalid"], "aria-describedby": props["aria-describedby"] }} />
+        : options ? <select {...props}>{options.map((op) => <option key={op} value={op}>{op.replace("_", " ")}</option>)}</select>
         : multiline ? <textarea {...props} rows={3} spellCheck={false} /> : <input {...props} autoComplete="off" />}
       {problem?.field === key && <p id={`${ids}-error`} role="alert" className="field-error"><IconAlert />{problem.message}</p>}
     </div>;
@@ -284,14 +305,16 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
       </>}
       {field("tags", true)}
       <p className="field-help">One key:value per line — a value may contain commas and colons. Saving replaces the whole set, so a tag left out here is a tag removed.</p>
-      {"channel_ids" in values ? <ChannelPicker value={channelIdsFromText(values.channel_ids)}
-        onChange={(chosen) => update("channel_ids", channelIdsText(chosen))}
-        rules={monitor.channels.known ? monitor.channels.rules : undefined}
-        error={problem?.field === "channel_ids" ? problem.message : undefined}
-        failedNote="The other settings can still be saved; this monitor's channels are left as they are."
-        load={loadChannels} />
-        : <p className="field-help">This monitor&rsquo;s channels could not be read, so they cannot be changed here. Reload to try again.</p>}
-      {"repeat_after_s" in values ? <RepeatAlertField value={values.repeat_after_s} onChange={(value) => update("repeat_after_s", value)} error={problem?.field === "repeat_after_s" ? problem.message : undefined} /> : <p className="field-help">Repeat alert settings unavailable. Reload to read the current value.</p>}
+      <AlertingSection>
+        {"channel_ids" in values ? <ChannelPicker value={channelIdsFromText(values.channel_ids)}
+          onChange={(chosen) => update("channel_ids", channelIdsText(chosen))}
+          rules={monitor.channels.known ? monitor.channels.rules : undefined}
+          error={problem?.field === "channel_ids" ? problem.message : undefined}
+          failedNote="The other settings can still be saved; this monitor's channels are left as they are."
+          load={loadChannels} />
+          : <p className="field-help">This monitor&rsquo;s channels could not be read, so they cannot be changed here. Reload to try again.</p>}
+        {"repeat_after_s" in values ? <RepeatAlertField value={values.repeat_after_s} onChange={(value) => update("repeat_after_s", value)} error={problem?.field === "repeat_after_s" ? problem.message : undefined} /> : <p className="field-help">Repeat alert settings unavailable. Reload to read the current value.</p>}
+      </AlertingSection>
     </fieldset>
     {problem && !problem.field && <p className="field-error" role="alert"><IconAlert />{problem.message}</p>}
     <div role="status" aria-live="polite">

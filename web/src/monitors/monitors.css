@@ -1128,13 +1128,15 @@
 .add-addon .input { padding-right: var(--space-10); }
 
 /* The unit sits on the field rather than in the label, so the label can say
-   what the number means and the field can say what it is measured in. */
+   what the number means and the field can say what it is measured in.
+   `--ink-2`, not `--ink-3`: drawn over a field inside the dark drawer, the
+   fainter ink measured 4.45:1 at this size, under the 4.5:1 AA floor. */
 .add-unit {
   position: absolute;
   right: var(--space-3);
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
-  color: var(--ink-3);
+  color: var(--ink-2);
   pointer-events: none;
 }
 
@@ -1154,6 +1156,43 @@
 .mon-channels-list {
   display: flex;
   flex-direction: column;
+}
+
+/*
+ * A duration's number and its unit (DurationField.tsx). The box takes what
+ * is left once the unit picker has the width of its longest word, so a field
+ * in the forms' 12rem grid track still shows four digits.
+ */
+.mon-duration {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.mon-duration > .input:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mon-duration > select { flex: none; }
+
+/*
+ * A titled group inside a monitor form: the alerting controls
+ * (AlertingSection.tsx). The rule is the one the advanced panel draws, so the
+ * two read as siblings rather than as one inside the other.
+ */
+.mon-form-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-4);
+}
+
+.mon-form-section-title {
+  font-size: var(--type-row);
+  line-height: var(--lead-row);
+  font-weight: var(--weight-mid);
+  color: var(--ink);
 }
 
 .add-advanced {

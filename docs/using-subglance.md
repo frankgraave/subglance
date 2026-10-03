@@ -397,11 +397,12 @@ The interval is `repeat_after_s` per monitor. It is the delay before the *first*
 reminder; the gaps after it grow from there. Set it to `0` to switch reminders
 off for a monitor.
 
-Use **Repeat alerts** in the create form or the edit drawer.
-Choose **Do not repeat**, or enter any whole-number base from 60 to 86400
-seconds. The form rejects smaller nonzero values before sending a request:
-under one minute, reminders would become too frequent. The default is 900
-seconds. This is an escalating base, not a fixed repeat interval.
+Use **Repeat alerts** in the create form or the edit drawer, under **Alerts**.
+Choose **Do not repeat**, or set **First repeat after** to anything from
+1 minute to 24 hours, in seconds, minutes or hours, as long as it comes to a
+whole number of seconds. The form rejects a shorter delay before sending a
+request: under one minute, reminders would become too frequent. The default is
+15 minutes. This is an escalating base, not a fixed repeat interval.
 
 The detail view shows the next reminder's due time and the number already
 issued for each open incident. Those values come from the server's persisted

@@ -34,7 +34,7 @@ it.each(["1.3", ""])("previews the edited TLS floor %j with a new target and pre
   render(<EditMonitorForm monitor={inventoryFromApi(raw)} onSave={onSave} />);
   change("Target", "https://new.example");
   change("Minimum TLS version", floor);
-  change("Repeat alert base (seconds)", "173");
+  change("First repeat after: unit", "s"); change("First repeat after", "173");
   save(); expect(onSave).not.toHaveBeenCalled();
   testTarget(); await screen.findByText(/connection refused/);
   const request = JSON.parse(fetch.mock.calls[0][1].body);
@@ -53,7 +53,7 @@ it.each(["1.3", ""])("previews the edited TLS floor %j with a new target and pre
 });
 
 it.each([
-  ["Keyword", "changed", "Timeout (seconds)", "20"],
+  ["Keyword", "changed", "Give up after", "20"],
   ["Minimum TLS version", "1.3", "Minimum TLS version", ""],
 ])("invalidates completed and in-flight previews when %s changes", async (first, firstValue, second, secondValue) => {
   let resolve!: (value: Response) => void;
@@ -83,9 +83,12 @@ it("round-trips explicit empty and false settings without resetting untouched fi
 it("edits push reporting windows without a target, poll interval, timeout or preview", async () => {
   const onSave = vi.fn().mockResolvedValue(undefined);
   render(<EditMonitorForm monitor={inventoryFromApi({ ...raw, type: "push", target: "", push_interval_s: 3600, push_grace_s: 60 })} onSave={onSave} />);
-  expect(screen.queryByLabelText("Interval (seconds)")).toBeNull(); expect(screen.queryByLabelText("Target")).toBeNull();
+  expect(screen.queryByLabelText("Check every")).toBeNull(); expect(screen.queryByLabelText("Target")).toBeNull();
   expect(screen.queryByRole("button", { name: /test it/i })).toBeNull();
-  change("Should report every (seconds)", "7200"); change("Allow it to be late by (seconds)", "0"); save();
+  // Stored as 3600 and 60 seconds, shown as 1 hour and 1 minute.
+  expect((screen.getByLabelText("Should report every") as HTMLInputElement).value).toBe("1");
+  expect((screen.getByLabelText("Allow it to be late by: unit") as HTMLSelectElement).value).toBe("min");
+  change("Should report every", "2"); change("Allow it to be late by", "0"); save();
   await waitFor(() => expect(onSave).toHaveBeenCalledWith({ push_interval_s: 7200, push_grace_s: 0 }));
 });
 

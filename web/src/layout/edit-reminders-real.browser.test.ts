@@ -21,6 +21,10 @@ beforeAll(async () => {
 afterAll(async () => { await browser?.close(); if (directory) await rm(directory, { recursive: true, force: true }); });
 
 type Fixture = { url: string; token: string; target: string; monitor_id: number; incident_id: number };
+/** How the edit form shows a stored first-repeat delay: the largest unit that holds it exactly. */
+const SHOWN: Record<number, string> = { 60: "1", 731: "731", 86400: "24" };
+/** Counts the first repeat in seconds, the API's unit, so exact values can be typed. */
+const inSeconds = (page: Page) => page.select('.repeat-field .mon-duration select', "s");
 async function startFixture() {
   const child = spawn(binary, [], { stdio: ["pipe", "pipe", "pipe"] });
   const lines = createInterface({ input: child.stdout });
@@ -72,7 +76,7 @@ it("real Go API persists the edit, previews without history, rejects stale ETags
     expect(await page.$eval(".inc-reminders time", (node) => node.getAttribute("datetime"))).toBe(initial.incidents[0].next_reminder_at);
     expect(await page.$eval(".inc-reminders", (node) => node.textContent)).toContain("2 reminders issued");
     await edit(page);
-    await fill(page, '[data-repeat-input]', "59"); await button(page, "Save changes");
+    await inSeconds(page); await fill(page, '[data-repeat-input]', "59"); await button(page, "Save changes");
     await page.waitForSelector('[data-repeat-input][aria-invalid="true"]');
     expect((await f.api(path).then((r) => r.json())).repeat_after_s).toBe(900);
     await fill(page, '[data-repeat-input]', "731"); await fill(page, 'input[name="name"]', "Real persisted rename");
@@ -125,6 +129,7 @@ it.each([0, 60, 731, 86400])("real Go create persists repeat base %s across relo
     await fill(page, '.form-column input[placeholder^="example.com"]', `${f.target}/created`);
     await page.click('.add-advanced summary');
     await page.select('.add-advanced select', "http");
+    if (value !== 0) await inSeconds(page);
     await fill(page, '[data-repeat-input]', String(value));
     const created = page.waitForResponse((r) => r.request().method() === "POST" && new URL(r.url()).pathname === "/api/v1/monitors");
     await button(page, "Save monitor"); const response = await created;
@@ -133,6 +138,6 @@ it.each([0, 60, 731, 86400])("real Go create persists repeat base %s across relo
     expect((await f.api(path).then((r) => r.json())).repeat_after_s).toBe(value);
     await page.goto(`${f.url}${path}`, { waitUntil: "domcontentloaded" }); await edit(page);
     if (value === 0) expect(await page.$eval('.repeat-field select', (node) => (node as HTMLSelectElement).value)).toBe("off");
-    else expect(await page.$eval('[data-repeat-input]', (node) => (node as HTMLInputElement).value)).toBe(String(value));
+    else expect(await page.$eval('[data-repeat-input]', (node) => (node as HTMLInputElement).value)).toBe(SHOWN[value]);
   } finally { await context.close(); await f.close(); }
 });

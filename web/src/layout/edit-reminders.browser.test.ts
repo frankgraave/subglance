@@ -18,6 +18,10 @@ async function button(page: Page, text: string) {
   const handle = await page.waitForFunction((word) => [...document.querySelectorAll("button")].find((node) => node.textContent?.trim() === word), {}, text);
   await (handle.asElement() as ElementHandle<HTMLButtonElement>).click();
 }
+/** How the edit form shows a stored first-repeat delay: the largest unit that holds it exactly. */
+const SHOWN: Record<number, string> = { 60: "1", 731: "731", 86400: "24" };
+/** Counts the first repeat in seconds, the API's unit, so exact values can be typed. */
+const inSeconds = (page: Page) => page.select('.repeat-field .mon-duration select', "s");
 async function settle(page: Page) {
   await page.evaluate(async () => { await document.fonts.ready; await Promise.all(document.getAnimations().filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).map((a) => a.finished.catch(() => undefined))); });
 }
@@ -112,8 +116,9 @@ for (const theme of ["dark", "light"]) for (const width of [390, 1440]) describe
       await proof(page, `reminders-${theme}-${width}`);
       await page.focus('button[aria-label="Edit monitor"]'); await page.keyboard.press("Enter");
       await page.waitForSelector('input[name="name"]'); await settle(page);
-      expect(await page.$eval('[data-repeat-input]', (node) => (node as HTMLInputElement).value)).toBe("900");
-      await fill(page, '[data-repeat-input]', "59"); await button(page, "Save changes");
+      // 900 seconds, shown as 15 minutes.
+      expect(await page.$eval('[data-repeat-input]', (node) => (node as HTMLInputElement).value)).toBe("15");
+      await inSeconds(page); await fill(page, '[data-repeat-input]', "59"); await button(page, "Save changes");
       await page.waitForSelector('[data-repeat-input][aria-invalid="true"]');
       expect(f.writes).toHaveLength(0);
       expect(await page.$eval('[data-repeat-input]', (node) => node === document.activeElement)).toBe(true);
@@ -168,13 +173,13 @@ it.each([0, 60, 731, 86400])("creates repeat base %s and reads the exact persist
     if (value === 0) {
       await fill(page, '[data-repeat-input]', "0");
       expect(await page.$eval('.repeat-field select', (node) => node === document.activeElement)).toBe(true);
-    } else await fill(page, '[data-repeat-input]', String(value));
+    } else { await inSeconds(page); await fill(page, '[data-repeat-input]', String(value)); }
     await button(page, "Save monitor"); await page.waitForSelector('[role="dialog"]', { hidden: true });
     expect(f.creates[0].repeat_after_s).toBe(value);
     await page.goto(`${server.url}/monitors/1`, { waitUntil: "domcontentloaded" }); await page.waitForSelector('.inc-reminders');
     await button(page, "Edit monitor"); await page.waitForSelector('.repeat-field select');
     if (value === 0) expect(await page.$eval('.repeat-field select', (node) => (node as HTMLSelectElement).value)).toBe("off");
-    else expect(await page.$eval('[data-repeat-input]', (node) => (node as HTMLInputElement).value)).toBe(String(value));
+    else expect(await page.$eval('[data-repeat-input]', (node) => (node as HTMLInputElement).value)).toBe(SHOWN[value]);
   } finally { await f.context.close(); }
 });
 

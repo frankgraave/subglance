@@ -3,6 +3,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiJSON, apiPost, apiRequest } from "../api/http";
 import { Checkbox } from "../components/Choice";
 import { windowCovers, type MaintenanceMonitor } from "./maintenanceScope";
+import { DurationField } from "./DurationField";
+import { MINUTES_TO_HOURS } from "./duration";
 
 type Window = {
   id: number; name: string; monitor_id?: number; tag_key?: string; tag_value?: string;
@@ -28,6 +30,8 @@ export default function MaintenanceManager({ monitors, canWrite, focus }: { moni
   const id = useId();
   const [scope, setScope] = useState("monitor");
   const [weekly, setWeekly] = useState(false);
+  // In minutes, the API's unit; the field shows it in minutes or hours.
+  const [minutes, setMinutes] = useState("60");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -49,6 +53,12 @@ export default function MaintenanceManager({ monitors, canWrite, focus }: { moni
     const form = event.currentTarget;
     const data = new FormData(form);
     const value = (key: string) => String(data.get(key) ?? "");
+    // The number box no longer carries the browser's own min and max, since
+    // it may hold hours; the range is checked here, in the units it is shown in.
+    const length = Number(minutes);
+    if (weekly && !(Number.isInteger(length) && length >= 1 && length <= 1440)) {
+      setMessage(""); setError("The duration must be between 1 min and 24 h, in whole minutes."); return;
+    }
     const body = { name: value("name"),
       ...(scope === "monitor" ? { monitor_id: Number(value("monitor_id")) } : { tag_key: value("tag_key"), tag_value: value("tag_value") }),
       ...(weekly ? { timezone: value("timezone"), local_time: value("local_time"), weekdays: data.getAll("weekdays").map(Number), duration_minutes: Number(value("duration_minutes")) }
@@ -91,7 +101,7 @@ export default function MaintenanceManager({ monitors, canWrite, focus }: { moni
         {weekly ? <>
           <label className="field">Timezone<input className="input" name="timezone" required defaultValue="UTC" aria-describedby={`${id}-dst`} placeholder="Europe/Amsterdam"/></label>
           <fieldset className="maintenance-days"><legend>Weekdays</legend>{DAYS.map((day, index) => <Checkbox key={day} name="weekdays" value={index} defaultChecked={index === 0}>{day}</Checkbox>)}</fieldset>
-          <div className="field-grid"><label className="field">Local start time<input className="input" type="time" name="local_time" required defaultValue="02:00"/></label><label className="field">Duration (minutes)<input className="input" type="number" name="duration_minutes" min={1} max={1440} required defaultValue={60}/></label></div>
+          <div className="field-grid"><label className="field">Local start time<input className="input" type="time" name="local_time" required defaultValue="02:00"/></label><div className="field"><label htmlFor={`${id}-duration`}>Duration</label><DurationField id={`${id}-duration`} value={minutes} onChange={setMinutes} units={MINUTES_TO_HOURS} label="Duration" inputProps={{ required: true }}/><input type="hidden" name="duration_minutes" value={minutes}/></div></div>
           <p id={`${id}-dst`}>Use an IANA timezone. A missing daylight-saving time is skipped; a repeated time starts once, at the earlier occurrence. Duration is elapsed minutes.</p>
         </> : <div className="field-grid"><label className="field">Start (UTC)<input className="input" type="datetime-local" name="starts_at" required/></label><label className="field">End (UTC)<input className="input" type="datetime-local" name="ends_at" required/></label></div>}
       </fieldset>

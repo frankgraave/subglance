@@ -1576,6 +1576,14 @@ default. Every required field costs installs.
 - Errors sit under the field, with an icon, and name the correct format instead
   of just announcing that something is wrong.
 - Units (`sec`, `ms`) belong in an addon on the field, not in the label.
+- A length of time is a number and a unit (`DurationField`). A stored value
+  loads in the largest unit that holds it exactly, so 900 seconds reads
+  15 minutes, the way the rest of the product writes it, and 731 seconds stays
+  731 seconds rather than being rounded into a value nobody chose. A field
+  with one possible unit draws it as the addon above. The unit is a picker
+  beside the number, not a parser inside it: a box that reads "1h30m" is a
+  guess for anyone who does not already know it does, and a picker shows its
+  whole vocabulary. Changing the unit keeps the number.
 - Three or four mutually exclusive options: segmented control, not a dropdown.
   Visible options are cheaper to read than hidden ones.
 
