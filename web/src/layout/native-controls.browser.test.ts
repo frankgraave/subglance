@@ -39,7 +39,9 @@ type Screen = { name: string; path: string; ready: string; scope: string; drawer
  * stops rendering its selects fails here instead of passing on nothing.
  */
 const SCREENS: Screen[] = [
-  { name: "monitors toolbar", path: "/monitors", ready: ".shell-toolbar .tb-select", scope: ".shell-toolbar", minSelects: 2 },
+  // The inventory's filters are radios in its Filter panel since SUB-207;
+  // the incidents screen is the toolbar's last user of a select.
+  { name: "incidents toolbar", path: "/incidents", ready: ".shell-toolbar .tb-select", scope: ".shell-toolbar", minSelects: 2 },
   { name: "add monitor drawer", path: "/monitors", ready: ".inv-list > li", scope: ".drawer-panel", drawer: true, minSelects: 2 },
   { name: "notifications", path: "/notifications", ready: ".inv-row", scope: "main", minSelects: 1 },
   { name: "settings", path: "/settings", ready: "#tokens select", scope: "main", minSelects: 1 },

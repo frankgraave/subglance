@@ -35,6 +35,27 @@ async function titles(page: Page) {
   return page.$$eval(".drawer-title", (els) => els.map((el) => el.textContent));
 }
 const name = '.drawer-panel input[id$="-name"]';
+/*
+ * The inventory's text filter. In its list header at a desktop width; on a
+ * phone it is in the Filter sheet (SUB-207), where the header shows its
+ * query as a chip once the sheet is closed.
+ */
+async function filterFor(page: Page, text: string) {
+  if (await page.$('.inv-board > .card-head input[type="search"]')) {
+    await page.type('.inv-board > .card-head input[type="search"]', text);
+    return;
+  }
+  await page.click('.inv-board button[aria-label^="Filter"]');
+  await page.waitForSelector('.mon-sheet input[type="search"]');
+  await page.type('.mon-sheet input[type="search"]', text);
+  await page.click('.mon-sheet-done');
+  await page.waitForSelector('.mon-sheet', { hidden: true });
+}
+async function filterQuery(page: Page): Promise<string | null> {
+  const field = await page.$('.inv-board > .card-head input[type="search"]');
+  if (field) return field.evaluate((el) => (el as HTMLInputElement).value);
+  return page.$eval('.inv-filter-row', (el) => el.querySelector('[aria-label^="Remove filter name: "]')?.getAttribute('aria-label')?.slice('Remove filter name: '.length) ?? null);
+}
 
 it('opening the current detail route is a no-op that leaves its draft guarded', async () => {
   const page = await open('dark', 1440);
@@ -58,7 +79,7 @@ it('opening the current detail route is a no-op that leaves its draft guarded', 
 it.each([['dark', 390], ['light', 390], ['dark', 1440], ['light', 1440]] as const)('dirty edit cancel/accept tears down exactly the old owner (%s/%s)', async (theme, width) => {
   const page = await open(theme, width);
   try {
-    await page.type('.shell-search-input', 'auth');
+    await filterFor(page, 'auth');
     const inventory = await page.$('.inv-screen');
     await page.click('[aria-label="Edit auth"]');
     await page.waitForSelector(name);
@@ -79,7 +100,7 @@ it.each([['dark', 390], ['light', 390], ['dark', 1440], ['light', 1440]] as cons
     expect(await titles(page)).toEqual(['Add monitor']);
     expect(await draft!.evaluate((el) => el.isConnected)).toBe(false);
     expect(await inventory!.evaluate((el) => el.isConnected)).toBe(true);
-    expect(await page.$eval('.shell-search-input', (el) => (el as HTMLInputElement).value)).toBe('auth');
+    expect(await filterQuery(page)).toBe('auth');
     // The add form is fetched when its drawer opens, so wait for its field.
     await page.waitForSelector(name);
     await page.type(name, 'new draft');
@@ -124,7 +145,7 @@ it('accepting same-route Monitors really removes the edit draft', async () => {
 it.each(['Add monitor', 'Go to Monitors'])('bulk tag owner unmounts for %s while filters/selection survive', async (action) => {
   const page = await open('dark', 1440);
   try {
-    await page.type('.shell-search-input', 'auth');
+    await filterFor(page, 'auth');
     await page.click('.inv-list input[type="checkbox"]');
     await page.click('::-p-text(Manage tags)');
     await page.waitForSelector('.bulk-tags-form');
@@ -134,7 +155,7 @@ it.each(['Add monitor', 'Go to Monitors'])('bulk tag owner unmounts for %s while
     expect(await titles(page)).toEqual(action === 'Add monitor' ? ['Add monitor'] : []);
     expect(await oldForm!.evaluate((el) => el.isConnected)).toBe(false);
     if (action === 'Add monitor') await page.click('.drawer-close');
-    expect(await page.$eval('.shell-search-input', (el) => (el as HTMLInputElement).value)).toBe('auth');
+    expect(await filterQuery(page)).toBe('auth');
     expect(await page.$eval('.inv-list input[type="checkbox"]', (el) => (el as HTMLInputElement).checked)).toBe(true);
     await page.click('::-p-text(Manage tags)');
     await page.waitForSelector('.bulk-tags-form');

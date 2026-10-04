@@ -1647,9 +1647,10 @@ The masthead's search is the launcher (SUB-182): a button drawn as a search
 field, named "Search", carrying the `⌘K` keycap, on every screen including a
 monitor's detail page. It is the only search entry in the masthead; a screen
 that filters its own list does so from a field at the head of that list —
-the dashboard's card of monitors, the Channels card's header, the settings
-index — which the palette leaves untouched. Monitors and Incidents still draw
-theirs in the page toolbar until their list headers take them (SUB-207). On phones the keycap goes and the glyph and the word
+the dashboard's card of monitors, the inventory's card, the Channels card's
+header, the settings index — which the palette leaves untouched. Incidents
+still draws its filter in the page toolbar until its list header takes it
+(SUB-207). On phones the keycap goes and the glyph and the word
 stay. The palette uses an opaque `--surface-float`
 native modal above existing drawers, a bounded scrolling list, and the
 reference's 12px outer / 6px option corners. All matching monitors remain
@@ -1832,6 +1833,25 @@ card, each with its own way to drop it. On a phone the text filter moves
 into the Filter sheet, both buttons become square glyphs at the control
 height (36px, `--control-h`, the rung every phone control here is drawn
 at), and both panels slide up from the bottom edge.
+
+**The monitors inventory heads its card the same way (SUB-207)**, with one
+difference: it keeps its visible title, "Configured monitors" over its
+"4 configured, 1 paused" note, because it has no status tabs to carry the
+count. To the right stand the text filter, a Filter button and a Sort
+button, then the list's own actions — Maintenance as a clock glyph, Manage
+tags and Add monitor. Filter is the dashboard's panel (`FilterPanel`) with
+two more groups ahead of the tags: Type and Paused, each value with the
+number of monitors it would leave. Sort names the current order on its face
+("Name") and opens one radio list. Every control is 32px tall, the
+dashboard header's height, so they share one top and bottom; at a desktop
+width the header is one line. The choices stand as chips under the header
+with Clear all and "n of m shown", which is drawn only while
+something narrows: at rest the note already says how many monitors there
+are. Pause and Resume for a selection moved from the header into the
+selection bar, beside the count of ticked rows they act on, so the header
+keeps one shape whether or not anything is ticked. On a phone the title and
+the two glyph buttons share the first line and the list's actions the
+second.
 
 ### 8.4 A toolbar select is a framed control with a glyph
 

@@ -21,6 +21,65 @@
  */
 
 /*
+ * The inventory card's header is the list's header (SUB-207): the title on
+ * the left, then the text filter, Filter, Sort and the list's actions on the
+ * right — one line at a desktop width.
+ *
+ * The field starts at rung 4 (168px), which still shows its placeholder
+ * whole, and grows to the search field's 280px with whatever the line has
+ * left; starting it at 280 would break the line for room it does not need.
+ * The controls keep `--size-pane-md` (380px) beside the title, the rung
+ * above their first line's 338px (the field at rung 4, Filter and Sort), or
+ * take the line under it — never more than the header itself, which beside
+ * the expanded sidebar at 641px is narrower than that rung; inside, the
+ * list's actions wrap under the filters,
+ * right-aligned. Every control is the 32px the dashboard's header draws, so
+ * they share one top and bottom. Keyed through `.mon-detail`: detail.css
+ * lets that card's action group shrink to nothing and pushes a menu to the
+ * end of its row, which a row of three menus here must not do.
+ */
+.inv-board > .card-head { flex-wrap: wrap; }
+.mon-detail > .inv-board > .card-head > .card-head-action {
+  flex: 1 1 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: min(var(--size-pane-md), 100%);
+}
+.mon-detail > .inv-board > .card-head .menu { margin-left: 0; }
+.inv-board > .card-head .bulk-tags-actions { gap: var(--space-1h); }
+.card-head-action > .inv-head-filter {
+  flex: 1 1 var(--size-col-4);
+  min-width: var(--size-col-4);
+  max-width: var(--size-pane-sm);
+}
+.inv-head-button { height: var(--size-row-md); }
+.inv-head-icon {
+  justify-content: center;
+  width: var(--size-row-md);
+  padding: 0;
+}
+
+/*
+ * Phone: the title and the two glyph buttons, Filter and Sort, share the
+ * first line, as the dashboard's tabs and buttons do; the list's actions
+ * take the second, at the card's right edge. The text filter is in the
+ * Filter sheet. The action group's own box is dissolved so its children
+ * join the header's lines in markup order, and focus moves the way the eye
+ * does. Every control is the 36px phone control height. The literal is the
+ * breakpoint rung (AGENTS.md).
+ */
+@media (max-width: 640px) {
+  .mon-detail > .inv-board > .card-head > .card-head-action { display: contents; }
+  .inv-board > .card-head > .card-head-lead { flex: 1 1 0; }
+  .inv-board > .card-head .bulk-tags-actions {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+  }
+  .inv-head-button { height: var(--control-h); }
+  .inv-head-icon { width: var(--control-h); }
+}
+
+/*
  * The list and its header row (SUB-194). The wrapper is the container the
  * one-line layout below is keyed to: the header sits outside the list, so it
  * cannot ask the list how wide it is. The two are the same width, because

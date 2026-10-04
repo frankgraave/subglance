@@ -32,6 +32,21 @@ async function command(page: Page, text: string) {
 async function titles(page: Page) {
   return page.$$eval(".drawer-title", (els) => els.map((el) => el.textContent));
 }
+/** Narrows the inventory to HTTP from its Filter panel, in the list's header. */
+async function filterHttp(page: Page) {
+  await page.click('.inv-board button[aria-label^="Filter"]');
+  await page.waitForSelector('[role="dialog"][aria-label="Filter monitors"]');
+  // Type is the first group, so its values are what the panel opens on.
+  for (const label of await page.$$('[aria-label="Filter monitors"] .choice-label')) {
+    if ((await label.evaluate((el) => el.textContent ?? "")).startsWith("HTTP")) { await label.click(); break; }
+  }
+  await page.keyboard.press("Escape");
+  await page.waitForSelector('[role="dialog"][aria-label="Filter monitors"]', { hidden: true });
+}
+/** What the Filter button says is narrowing the list. */
+async function filterState(page: Page) {
+  return page.$eval('.inv-board button[aria-label^="Filter"]', (el) => el.getAttribute("aria-label"));
+}
 
 it("repeating Add on its current route keeps the draft guarded without a discard", async () => {
   const page = await open();
@@ -65,13 +80,13 @@ it("ordinary Add preserves the inventory filters and DOM mount", async () => {
   const page = await open();
   try {
     await page.type('.shell-search-input', 'auth');
-    await page.select('.shell-toolbar select', 'http');
+    await filterHttp(page);
     const inventory = await page.$('.inv-screen');
     await page.click('[aria-label="Add monitor"]');
     await page.waitForSelector('.drawer-panel');
     expect(await inventory!.evaluate((el) => el.isConnected)).toBe(true);
     expect(await page.$eval('.shell-search-input', (el) => (el as HTMLInputElement).value)).toBe('auth');
-    expect(await page.$eval('.shell-toolbar select', (el) => (el as HTMLSelectElement).value)).toBe('http');
+    expect(await filterState(page)).toBe('Filter, 1 active');
     await page.click('.drawer-close');
     expect(await inventory!.evaluate((el) => el.isConnected)).toBe(true);
   } finally { await page.close(); }
@@ -81,7 +96,7 @@ it("Add command replaces the clean edit owner instead of stacking drawers", asyn
   const page = await open();
   try {
     await page.type('.shell-search-input', 'auth');
-    await page.select('.shell-toolbar select', 'http');
+    await filterHttp(page);
     await page.click('[aria-label="Edit auth"]');
     await page.waitForFunction(() => document.querySelector('.drawer-title')?.textContent === 'Edit auth');
     await command(page, "Add monitor");
@@ -89,7 +104,7 @@ it("Add command replaces the clean edit owner instead of stacking drawers", asyn
     await page.click('.drawer-close');
     expect(await titles(page)).toEqual([]);
     expect(await page.$eval('.shell-search-input', (el) => (el as HTMLInputElement).value)).toBe('auth');
-    expect(await page.$eval('.shell-toolbar select', (el) => (el as HTMLSelectElement).value)).toBe('http');
+    expect(await filterState(page)).toBe('Filter, 1 active');
     await page.click('[aria-label="Edit auth"]');
     await page.waitForSelector('.drawer-panel input[id$="-name"]');
     expect(await page.$eval('.drawer-panel input[id$="-name"]', (el) => (el as HTMLInputElement).value)).toBe('auth');

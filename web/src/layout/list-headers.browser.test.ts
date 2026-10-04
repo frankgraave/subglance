@@ -3,12 +3,13 @@
  * under the masthead (SUB-207), measured in a real browser.
  *
  * The page toolbar put a third layer between the masthead and the first card:
- * bar, toolbar, card. The dashboard, Notifications and Settings have moved
- * out of it — the dashboard's status tabs, text filter, Filter and View head
- * its one card of monitors, the channel filter is in the Channels card's
- * header beside "Add channel", the settings filter stands at the head of the
- * section index it narrows — and this suite holds them there at a phone, a
- * tablet and a desktop width:
+ * bar, toolbar, card. The dashboard, Monitors, Notifications and Settings
+ * have moved out of it — the dashboard's status tabs, text filter, Filter and
+ * View head its one card of monitors, the inventory's text filter, Filter
+ * and Sort head its card beside its actions, the channel filter is in the
+ * Channels card's header beside "Add channel", the settings filter stands at
+ * the head of the section index it narrows — and this suite holds them there
+ * at a phone, a tablet and a desktop width:
  *
  *  - the page toolbar is collapsed, so nothing stands between the masthead
  *    and the first card;
@@ -17,8 +18,8 @@
  *  - at 1440px the header is one line;
  *  - at 390px nothing scrolls sideways.
  *
- * Monitors and Incidents still fill the toolbar. They are
- * listed below so that the list cannot quietly grow: a migrated screen moves
+ * Incidents still fills the toolbar. It is listed
+ * below so that the list cannot quietly grow: a migrated screen moves
  * from STILL_IN_TOOLBAR to HEADED, and a screen that puts controls back into
  * the toolbar fails the first describe block.
  *
@@ -49,6 +50,8 @@ type Headed = {
   header: string;
   /** The row that must be one line at 1440px: its children share a line. */
   line: string;
+  /** The boxes that must share that line, when not `line`'s children. */
+  parts?: string;
   /**
    * What must stand in the header at a phone width, when it is not the
    * text filter. The dashboard's text filter moves into its Filter sheet
@@ -66,13 +69,23 @@ const HEADED: Headed[] = [
     line: ".mon-board > .card-head",
     phoneControl: "button[aria-haspopup='dialog'][aria-label^='Filter']",
   },
+  {
+    name: "monitors",
+    path: "/monitors",
+    ready: ".inv-list > li",
+    header: ".inv-board > .card-head",
+    line: ".inv-board > .card-head",
+    // The title and every control, not the header's two halves: the action
+    // group wraps inside itself, so its box alone would read as one line.
+    parts: ".inv-board > .card-head :is(.card-head-lead, .card-head-action > .shell-search, .card-head-action > .menu, .bulk-tags-actions > *)",
+    phoneControl: "button[aria-haspopup='dialog'][aria-label^='Filter']",
+  },
   { name: "notifications", path: "/notifications", ready: ".inv-row", header: ".nt-card > .card-head", line: ".nt-card > .card-head" },
   { name: "settings", path: "/settings", ready: 'input[name="current_password"]', header: ".settings-aside", line: ".settings-aside > .shell-search" },
 ];
 
 /** Screens whose controls have not left the page toolbar yet. */
 const STILL_IN_TOOLBAR = [
-  { path: "/monitors", ready: ".inv-list > li" },
   { path: "/incidents", ready: ".inc-line" },
 ];
 
@@ -98,8 +111,8 @@ async function open(path: string, ready: string, width: number): Promise<Page> {
   return page;
 }
 
-async function measure(page: Page, header: string, line = header, control = "input[type='search']") {
-  return page.evaluate((sel: string, lineSel: string, controlSel: string) => {
+async function measure(page: Page, header: string, line = header, control = "input[type='search']", partsSel = "") {
+  return page.evaluate((sel: string, lineSel: string, controlSel: string, partsSel: string) => {
     const box = (el: Element | null) => {
       if (el === null) return null;
       const r = el.getBoundingClientRect();
@@ -116,7 +129,7 @@ async function measure(page: Page, header: string, line = header, control = "inp
       header: box(head),
       filterInHeader: head?.querySelector(controlSel) != null,
       // Each direct child's box, to tell one line from two.
-      parts: [...(document.querySelector(lineSel)?.children ?? [])]
+      parts: [...(partsSel === "" ? (document.querySelector(lineSel)?.children ?? []) : document.querySelectorAll(partsSel))]
         .filter((child) => child.getBoundingClientRect().width > 1)
         .map((child) => box(child)!),
       field: box(head?.querySelector(".shell-search") ?? null),
@@ -125,14 +138,14 @@ async function measure(page: Page, header: string, line = header, control = "inp
       scrollWidth: document.documentElement.scrollWidth,
       clientWidth: document.documentElement.clientWidth,
     };
-  }, header, line, control);
+  }, header, line, control, partsSel);
 }
 
-describe.each(HEADED)("$name", ({ path, ready, header, line, phoneControl }) => {
+describe.each(HEADED)("$name", ({ path, ready, header, line, phoneControl, parts }) => {
   it.each(WIDTHS)("heads its list with its own controls, directly under the masthead, at %ipx", async (width) => {
     const page = await open(path, ready, width);
     try {
-      const m = await measure(page, header, line, width === 390 ? phoneControl : undefined);
+      const m = await measure(page, header, line, width === 390 ? phoneControl : undefined, parts);
       if (m.masthead === null || m.header === null) throw new Error(`no masthead or no ${header}`);
       expect(m.filterInHeader, "the filter stands in the list's header").toBe(true);
       // No bar between: the toolbar is collapsed or gone.

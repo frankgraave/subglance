@@ -3,9 +3,8 @@ import { registerNavigationCleanup } from "../shell/leaveGuard";
 import { Card, Panel } from "../components/Card";
 import { PlusIcon } from "../shell/icons";
 import { FilterField } from "../shell/FilterField";
-import { IconClock, IconFilter, IconList, IconPause, IconPlay, IconPulse, IconSort } from "../components/icons";
-import { ToolbarTools } from "../shell/ToolbarTools";
-import { ToolbarSelect } from "../shell/ToolbarSelect";
+import { IconClock, IconList, IconPause, IconPlay, IconPulse } from "../components/icons";
+import { useCompactViewport } from "../layout/useMediaQuery";
 import { Drawer } from "../components/Drawer";
 import { ConfirmDelete } from "../components/ConfirmDelete";
 import { StateChip } from "../components/Chip";
@@ -14,14 +13,14 @@ import { EmptyState } from "./EmptyState";
 import { MonitorInventoryHead, MonitorInventoryRow } from "./MonitorInventoryRow";
 import { LazyAddMonitor, LazyEditMonitorForm } from "./LazyMonitorForms";
 import { BulkTagDrawer, type TagChange } from "./BulkTagDrawer";
-import { filterByTags, filterMonitors, liveTagSelection, sameTagSelection, tagFacets } from "./model";
+import { liveTagSelection, sameTagSelection, tagFacets } from "./model";
 import type { TagSelection } from "./model";
-import { TagFilters } from "./TagFilters";
+import { FilterPanel } from "./FilterPanel";
+import { SortControl } from "./SortControl";
+import { applyInventoryChoice, inventoryFilterGroups } from "./inventoryFilter";
 import { MaintenanceDrawer } from "./MaintenanceDrawer";
 import {
-  INVENTORY_SORTS,
   describeInventory,
-  filterByType,
   monitorDeleteConsequence,
   sortInventory,
 } from "./inventory";
@@ -169,12 +168,68 @@ export function MonitorsView({
   }
   if (onTagChange === undefined && tagOpen) setTagOpen(false);
 
-  const visible = useMemo(() => {
-    let out = filterByType(filterMonitors(monitors, query), type);
-    if (pausedFilter === "active") out = out.filter((m) => m.enabled);
-    if (pausedFilter === "paused") out = out.filter((m) => !m.enabled);
-    return sortInventory(filterByTags(out, liveTags), sort);
-  }, [monitors, query, type, pausedFilter, sort, liveTags]);
+  const narrow = useCompactViewport();
+  const choice = useMemo(
+    () => ({ query, type, paused: pausedFilter, tags: liveTags }),
+    [query, type, pausedFilter, liveTags],
+  );
+  const visible = useMemo(
+    () => sortInventory(applyInventoryChoice(monitors, choice), sort),
+    [monitors, choice, sort],
+  );
+  /*
+   * The filters are drawn only over a list there is something in. A list
+   * that empties after loading takes its choices with it, so a filter whose
+   * field has gone cannot keep narrowing the list once monitors come back.
+   */
+  const listed = !loading && error === null && monitors.length > 0;
+  if (
+    !loading &&
+    error === null &&
+    monitors.length === 0 &&
+    (query !== "" || type !== "" || pausedFilter !== "" || Object.keys(tags).length > 0)
+  ) {
+    setQuery("");
+    setType("");
+    setPausedFilter("");
+    setTags({});
+  }
+  const clearChoices = () => {
+    setType("");
+    setPausedFilter("");
+    setTags({});
+  };
+  const setTag = (key: string, value: string) =>
+    setTags((current) => {
+      const next: Record<string, string> = { ...current };
+      if (value === "") delete next[key];
+      else next[key] = value;
+      return next;
+    });
+  const groups = inventoryFilterGroups(monitors, facets, choice, {
+    type: setType,
+    paused: setPausedFilter,
+    tag: setTag,
+  });
+  /*
+   * The active choices as chips under the header, each a way to drop it;
+   * on a phone the text filter too, whose field is in the filter sheet there
+   * and out of sight. The same row the dashboard draws.
+   */
+  const chips = [
+    ...groups
+      .filter((group) => group.value !== "")
+      .map((group) => ({
+        key: group.id,
+        label: group.legend,
+        value: group.valueText,
+        clear: () => group.onChange(""),
+      })),
+    ...(narrow && query.trim() !== ""
+      ? [{ key: "query", label: "name", value: query.trim(), clear: () => setQuery("") }]
+      : []),
+  ];
+  const narrowed = query.trim() !== "" || type !== "" || pausedFilter !== "" || Object.keys(liveTags).length > 0;
 
   const visibleIds = new Set(visible.map((m) => m.id));
   const hiddenSelectionCount = selectedIds.filter((id) => !visibleIds.has(id)).length;
@@ -230,81 +285,20 @@ export function MonitorsView({
       )}
 
       {/*
-       * The filter field, the filters and the count, together in the page
-       * toolbar (SUB-182). The masthead keeps one search for the whole
-       * product — the command menu — so this field is named for what it is: a
-       * filter over the list beneath it.
+       * The list's controls head the card they narrow (SUB-207, AGENTS.md
+       * "Where a control belongs"): what you are looking at on the left, the
+       * title and its "n configured" note; how you are looking and what you
+       * can do on the right — the text filter, Filter (type, paused, tags),
+       * Sort, then the list's own actions. Nothing stands between the
+       * masthead and this card.
        *
-       * The counter travels with the filters, and that is not tidiness.
-       * "3 of 3 shown" is the filter's honesty — it says you are looking at a
-       * selection rather than at everything — so it belongs beside the
-       * controls that make the claim true.
-       *
-       * Portalled rather than passed up as props, so the filter state stays
-       * inside the screen that filters. See `ToolbarTools`.
+       * The masthead keeps one search for the whole product — the command
+       * menu — so the field here is named for what it is: a filter over the
+       * list beneath it. On a phone it moves into the Filter sheet, as the
+       * dashboard's does, and Filter and Sort become square glyph buttons.
        */}
-      <ToolbarTools>
-        <div className="tb-group">
-          <FilterField
-            label="Filter monitors"
-            placeholder="Filter monitors…"
-            value={query}
-            onChange={setQuery}
-          />
-
-          {/* A filter glyph, not the tag one: type and paused narrow the
-              list by a monitor's own settings, not by a tag. */}
-          <ToolbarSelect icon={<IconFilter />} label="Type" value={type} onChange={setType}>
-            <option value="">All types</option>
-            <option value="http">HTTP</option>
-            <option value="tcp">TCP</option>
-            <option value="ping">Ping</option>
-            <option value="ssl">SSL</option>
-            <option value="push">Push</option>
-          </ToolbarSelect>
-
-          <ToolbarSelect icon={<IconFilter />} label="Paused" value={pausedFilter} onChange={setPausedFilter}>
-            {/* "All" first and selected by default. The dashboard hides
-                paused monitors; this page must show them, because a monitor
-                someone paused during a deploy and forgot is exactly the
-                thing an inventory is read to find. */}
-            <option value="">All</option>
-            <option value="active">Active only</option>
-            <option value="paused">Paused only</option>
-          </ToolbarSelect>
-
-          <TagFilters
-            facets={facets}
-            selected={tags}
-            onChange={(key, value) =>
-              setTags((current) => ({ ...current, [key]: value }))
-            }
-          />
-
-          {/* Order, not a filter: it changes where rows are, never which are
-              shown, so it sits after everything that narrows. */}
-          <ToolbarSelect
-            icon={<IconSort />}
-            label="Sort"
-            value={sort}
-            onChange={(value) => setSort(value as InventorySort)}
-          >
-            {INVENTORY_SORTS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </ToolbarSelect>
-
-          <p className="tb-count" role="status">
-            {loading
-              ? "Loading monitors…"
-              : `${visible.length} of ${monitors.length} shown`}
-          </p>
-        </div>
-      </ToolbarTools>
-
       <Card
+        className="inv-board"
         title="Configured monitors"
         icon={<IconList />}
         headingLevel={2}
@@ -315,6 +309,35 @@ export function MonitorsView({
          */
         note={describeInventory(monitors)}
         action={
+          <>
+          {listed && !narrow && (
+            <FilterField
+              className="inv-head-filter"
+              label="Filter monitors"
+              placeholder="Filter monitors…"
+              value={query}
+              onChange={setQuery}
+            />
+          )}
+          {listed && (
+            <FilterPanel
+              label="Filter monitors"
+              groups={groups}
+              onClear={clearChoices}
+              clearLabel="Clear filters"
+              query={query}
+              onQueryChange={setQuery}
+              queryLabel="Filter monitors"
+              queryPlaceholder="Filter monitors…"
+              narrow={narrow}
+              visible={visible.length}
+              total={monitors.length}
+              noun="monitor"
+            />
+          )}
+          {listed && (
+            <SortControl value={sort} onChange={setSort} narrow={narrow} />
+          )}
           <div className="bulk-tags-actions">
           {/*
            * Maintenance opens from here, at the top of the page, where it
@@ -324,38 +347,25 @@ export function MonitorsView({
            */}
           <button
             type="button"
-            className="button"
+            className="button button--compact inv-head-button inv-head-icon"
             aria-label="Maintenance"
+            title="Maintenance"
             onClick={() => setMaintenanceOpen(true)}
           >
+            {/* The clock alone, named in the markup and on hover: the
+                header holds the filter, Filter, Sort and two worded actions
+                on one line at a desktop width, and this is the one of them
+                that is planned rather than reached for. */}
             <IconClock />
-            Maintenance
           </button>
-          {/* Pause and resume for the selection, beside Manage tags, the
-              other action on it. Only while something is selected: at rest
-              they would be two disabled buttons on every visit. */}
-          {onTogglePaused !== undefined && toPause.length > 0 && (
-            <button type="button" className="button" aria-label={`Pause ${toPause.length} selected`}
-              onClick={() => toPause.forEach((m) => onTogglePaused(m.id, true))}>
-              <IconPause />
-              Pause {toPause.length}
-            </button>
-          )}
-          {onTogglePaused !== undefined && toResume.length > 0 && (
-            <button type="button" className="button" aria-label={`Resume ${toResume.length} selected`}
-              onClick={() => toResume.forEach((m) => onTogglePaused(m.id, false))}>
-              <IconPlay />
-              Resume {toResume.length}
-            </button>
-          )}
           {/* Disabled, not hidden, with nothing to tag: the header keeps its
               shape while the list loads, and an empty inventory says why
               right below it. */}
-          {onTagChange && <button type="button" className="button" disabled={loading || error !== null || monitors.length === 0} onClick={() => setTagOpen(true)}>Manage tags</button>}
+          {onTagChange && <button type="button" className="button button--compact inv-head-button" disabled={loading || error !== null || monitors.length === 0} onClick={() => setTagOpen(true)}>Manage tags</button>}
           {onCreateOpenChange === undefined ? undefined : (
             <button
               type="button"
-              className="button button--primary"
+              className="button button--primary button--compact inv-head-button"
               /*
                * Named explicitly rather than left to its text content. The
                * button is a glyph plus a word, and what a screen reader makes
@@ -376,8 +386,58 @@ export function MonitorsView({
             </button>
           )}
           </div>
+          </>
         }
       >
+        {/*
+         * What is narrowing the list, inside the card and under its header:
+         * one chip per choice, each a way to drop it, then Clear all and the
+         * count. Drawn only while something narrows: at rest the note under
+         * the title already says how many monitors there are.
+         *
+         * "n of m shown" is the filter's honesty — it says you are looking
+         * at a selection rather than at everything — so it stands beside the
+         * chips that make the claim true. The live region is a second, hidden
+         * copy that stays mounted, so the first narrowing is announced too: a
+         * region that appears with its text in it is not read out.
+         */}
+        <p className="sr-only" role="status">
+          {loading ? "Loading monitors…" : narrowed ? `${visible.length} of ${monitors.length} shown` : ""}
+        </p>
+        {listed && narrowed && (
+          <div className="mon-filter-row inv-filter-row">
+            {chips.map((chip) => (
+              <button
+                key={chip.key}
+                type="button"
+                className="chip chip--meta mon-filter-chip"
+                aria-label={`Remove filter ${chip.label}: ${chip.value}`}
+                onClick={chip.clear}
+              >
+                <span className="chip-label">{chip.label}</span>
+                <span className="chip-value">{chip.value}</span>
+                <span className="mon-filter-chip-x" aria-hidden="true">
+                  ×
+                </span>
+              </button>
+            ))}
+            {chips.length > 0 ? (
+              <button
+                type="button"
+                className="button button--quiet button--compact"
+                onClick={() => {
+                  clearChoices();
+                  if (narrow) setQuery("");
+                }}
+              >
+                Clear all
+              </button>
+            ) : null}
+            <p className="mon-result-count" aria-hidden="true">
+              {visible.length} of {monitors.length} shown
+            </p>
+          </div>
+        )}
         {onTagChange && !loading && error === null && monitors.length > 0 && <div className="bulk-tags-selection">
           {/* One box for the visible rows, in the three states a group box
               has: all of them, none, or some (a dash, announced as "mixed").
@@ -391,10 +451,30 @@ export function MonitorsView({
               "0 selected" and a disabled Clear above every visit to the page
               said nothing, twice. The live region stays mounted so the count
               is announced when the first box is ticked. */}
+          {/* Pause and resume for the selection, in the bar that describes
+              it: they act on the ticked rows, so they stand beside the count
+              of them rather than in the list's header, which keeps one shape
+              whether or not anything is ticked. Only while something is
+              selected: at rest they would be two disabled buttons on every
+              visit. */}
+          {onTogglePaused !== undefined && toPause.length > 0 && (
+            <button type="button" className="button" aria-label={`Pause ${toPause.length} selected`}
+              onClick={() => toPause.forEach((m) => onTogglePaused(m.id, true))}>
+              <IconPause />
+              Pause {toPause.length}
+            </button>
+          )}
+          {onTogglePaused !== undefined && toResume.length > 0 && (
+            <button type="button" className="button" aria-label={`Resume ${toResume.length} selected`}
+              onClick={() => toResume.forEach((m) => onTogglePaused(m.id, false))}>
+              <IconPlay />
+              Resume {toResume.length}
+            </button>
+          )}
           {selectedIds.length > 0 && <button type="button" className="button" onClick={() => setSelected(NO_SET)}>Clear selection</button>}
-          {/* The same count as the toolbar's "n of m shown", and drawn the
-              same: a count about the list is helper text, not a sentence in
-              body ink beside the controls it counts for. */}
+          {/* Drawn as the count under the header is: a count about the list
+              is helper text, not a sentence in body ink beside the controls
+              it counts for. */}
           <p className="tb-count" role="status">{selectedIds.length === 0 ? "" : `${selectedIds.length} selected${hiddenSelectionCount > 0 ? ` · ${hiddenSelectionCount} hidden by filters` : ""}`}</p>
         </div>}
         {loading || error !== null ? (
@@ -427,6 +507,10 @@ export function MonitorsView({
             query={query}
             totalCount={monitors.length}
             filtered={type !== "" || pausedFilter !== "" || Object.keys(liveTags).length > 0}
+            onClearFilters={() => {
+              clearChoices();
+              setQuery("");
+            }}
           />
         ) : (
           <div className="inv-table">

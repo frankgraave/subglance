@@ -64,17 +64,21 @@ screen?**
 - **No** — the head of the list it acts on. A list's filter field, its
   filters and its list actions stand in the header of the card or list they
   narrow, not in a bar across the page: the dashboard's status tabs, text
-  filter, Filter and View head its card of monitors, the channel filter is
-  in the Channels card's header beside "Add channel", and the settings
-  filter stands at the head of the section index it narrows. Adding a monitor is a
+  filter, Filter and View head its card of monitors, the inventory's text
+  filter, Filter (type, paused, tags) and Sort head its card beside
+  "Add monitor", the channel filter is in the Channels card's header beside
+  "Add channel", and the settings filter stands at the head of the section
+  index it narrows. Adding a monitor is a
   monitors action for the same reason; chrome that is also present on
   Notifications while meaning something about monitors is chrome you have
   to re-read.
 
-Monitors and Incidents still put their controls in the page
-toolbar (`web/src/shell/PageToolbar.tsx`, filled through `ToolbarTools`)
-under the masthead, until each moves them into its own list header. Do not
-put a new screen's controls there. `layout/list-headers.browser.test.ts`
+Incidents still puts its controls in the page toolbar
+(`web/src/shell/PageToolbar.tsx`, filled through `ToolbarTools`) under the
+masthead, until it moves them into its own list header. Do not put a new
+screen's controls there. A list's Filter panel is `FilterPanel`
+(`web/src/monitors/FilterPanel.tsx`), which the dashboard and the inventory
+both draw, so a filter reads the same wherever it stands. `layout/list-headers.browser.test.ts`
 lists which screens are on which side: it fails when a moved screen draws a
 bar between the masthead and its first card, when its header does not start
 directly under the masthead, is more than one line at 1440px or scrolls
