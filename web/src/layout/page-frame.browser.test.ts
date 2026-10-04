@@ -1,5 +1,6 @@
 /**
- * One page frame on every route, measured in a real browser (SUB-182).
+ * One page frame on every route, measured in a real browser (SUB-182,
+ * SUB-207).
  *
  * The UI assessment of 1 October found the dashboard using the full width,
  * three screens stopping at about 860px, Settings at about 1050px, three
@@ -9,10 +10,14 @@
  * for itself. This file pins the frame they share, per route and at two
  * widths, so a screen that starts deciding for itself again fails here:
  *
- *  - exactly one `h1`, painted (not visually hidden), on the page type role,
- *    starting at the same left edge on every route;
+ *  - exactly one `h1`, painted (not visually hidden), and it is the
+ *    masthead's: the title role at the heavy weight, one line, starting at
+ *    the same distance after the sidebar toggle on every route (SUB-207);
  *  - the `h1`, the lit sidebar item and the tab title say the same word
- *    (a monitor's page: its name, Monitors lit, "Monitor" in the tab);
+ *    (a monitor's page: its name in the `h1` and the tab, Monitors lit and
+ *    linked before the name);
+ *  - the content starts with the screen's own content: no title above the
+ *    first card any more;
  *  - the column of cards is the reading measure on every screen but the
  *    dashboard, and stays that width when the window grows; the dashboard
  *    takes the whole content column.
@@ -44,8 +49,10 @@ type Route = {
   path: string;
   /** The screen's own content, so the measurement is not of the shell alone. */
   ready: string;
-  /** The page title; `null` for a monitor's page, titled with its name. */
-  title: string | null;
+  /** The page title: a monitor's page is titled with the monitor's name. */
+  title: string;
+  /** The section linked before the title, on a child page. */
+  parent?: string;
   /** The sidebar item lit on this route. */
   lit: string;
   /** What the tab says before the product name. */
@@ -59,7 +66,16 @@ const ROUTES: Route[] = [
   { path: "/incidents", ready: ".inc-line", title: "Incidents", lit: "Incidents", tab: "Incidents", width: "measure" },
   { path: "/notifications", ready: ".inv-row", title: "Notifications", lit: "Notifications", tab: "Notifications", width: "measure" },
   { path: "/settings", ready: "#users li .segmented", title: "Settings", lit: "Settings", tab: "Settings", width: "indexed" },
-  { path: "/monitors/1", ready: ".mon-detail-windows", title: null, lit: "Monitors", tab: "Monitor", width: "measure" },
+  // The fixture estate's monitor 1 (harness/server.ts).
+  {
+    path: "/monitors/1",
+    ready: ".mon-detail-windows",
+    title: "checkout-api-eu-west-1.internal.acme-corporation.example",
+    parent: "Monitors",
+    lit: "Monitors",
+    tab: "checkout-api-eu-west-1.internal.acme-corporation.example",
+    width: "measure",
+  },
 ];
 
 async function open(path: string, ready: string, width: number): Promise<Page> {
@@ -96,6 +112,9 @@ function measure(page: Page) {
       main.getBoundingClientRect().width -
       parseFloat(pad.paddingLeft) -
       parseFloat(pad.paddingRight);
+    const bar = document.querySelector(".shell-topbar")!;
+    const toggle = bar.querySelector(".shell-icon-btn")!.getBoundingClientRect();
+    const heading = bar.querySelector(".shell-heading")?.getBoundingClientRect() ?? null;
     const h1s = [...document.querySelectorAll("h1")].map((h) => {
       const box = h.getBoundingClientRect();
       const style = getComputedStyle(h);
@@ -106,25 +125,35 @@ function measure(page: Page) {
           box.height > 1 &&
           style.clipPath === "none" &&
           style.visibility === "visible",
-        left: Math.round(box.left),
+        inMasthead: bar.contains(h),
+        oneLine: Math.round(box.height) === Math.round(parseFloat(style.lineHeight)),
         size: style.fontSize,
         leading: style.lineHeight,
         weight: style.fontWeight,
       };
     });
+    const crumbs = [...bar.querySelectorAll(".shell-heading a")].map((a) => ({
+      text: a.textContent?.trim() ?? "",
+      href: a.getAttribute("href"),
+    }));
+    /* The first thing in the page frame, so a title drawn above the cards
+       again shows up as the first child rather than as a second `h1` only. */
+    const first = main.querySelector(".page")?.firstElementChild ?? null;
     const cards = [...main.querySelectorAll(".card")].filter(
       (c) => c.getBoundingClientRect().width > 0 && c.closest(".settings-index, .drawer-panel") === null,
     );
-    const contentLeft = main.getBoundingClientRect().left + parseFloat(pad.paddingLeft);
     const pageEl = main.querySelector(".page")!;
     const pageLeft = pageEl.getBoundingClientRect().left;
     const settings = main.querySelector(".settings-sections");
     return {
       measure: px("var(--size-pane-lg)"),
-      pageSize: px("var(--type-page)"),
-      pageLeading: px("var(--lead-page)"),
+      titleSize: px("var(--type-row)"),
+      titleLeading: px("var(--lead-row)"),
+      gap: parseFloat(getComputedStyle(bar).columnGap),
+      afterToggle: heading === null ? null : Math.round(heading.left - toggle.right),
+      crumbs,
+      firstInPage: first === null ? null : first.tagName.toLowerCase(),
       column,
-      contentLeft: Math.round(contentLeft),
       h1s,
       lit: [...document.querySelectorAll(".shell-sidebar [aria-current='page']")].map(
         (a) => a.textContent?.trim() ?? "",
@@ -156,13 +185,20 @@ describe("the page frame", () => {
         expect(m.h1s, where).toHaveLength(1);
         const [h1] = m.h1s;
         expect(h1.painted, `${where}: the h1 is visible`).toBe(true);
-        expect(h1.size, `${where}: the h1 is on the page role`).toBe(`${m.pageSize}px`);
-        expect(h1.leading, where).toBe(`${m.pageLeading}px`);
+        expect(h1.inMasthead, `${where}: the h1 is the masthead's`).toBe(true);
+        expect(h1.oneLine, `${where}: the title is one line`).toBe(true);
+        expect(h1.size, `${where}: the h1 is on the title role`).toBe(`${m.titleSize}px`);
+        expect(h1.leading, where).toBe(`${m.titleLeading}px`);
         expect(h1.weight, where).toBe("600");
-        // Every title starts on the content column's own edge, so moving
-        // between screens does not move the first word you read.
-        expect(h1.left, `${where}: on the content edge`).toBe(m.contentLeft);
-        if (route.title !== null) expect(h1.text, where).toBe(route.title);
+        expect(h1.text, where).toBe(route.title);
+        // Every title starts one gap after the toggle, so moving between
+        // screens does not move the first word you read.
+        expect(m.afterToggle, `${where}: one gap after the toggle`).toBe(m.gap);
+        expect(m.crumbs, `${where}: the breadcrumb`).toEqual(
+          route.parent === undefined ? [] : [{ text: route.parent, href: "/monitors" }],
+        );
+        // Nothing titles the page inside it any more.
+        expect(m.firstInPage, `${where}: the page starts with its content`).not.toBe("h1");
 
         expect(m.lit, `${where}: the rail lights the section`).toEqual([route.lit]);
         expect(m.title, where).toBe(`${route.tab} \u2014 SubGlance`);

@@ -150,16 +150,16 @@ describe("LiveMonitorDetail actions", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: /Schedule maintenance/ }));
     await screen.findByRole("dialog", { name: "Maintenance for api" });
     rerender("2");
-    await screen.findByRole("heading", { name: "db" });
+    await screen.findByRole("article", { name: "db" });
     expect(screen.queryByRole("dialog")).toBeNull();
     rerender("1");
-    await screen.findByRole("heading", { name: "api" });
+    await screen.findByRole("article", { name: "api" });
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("offers no menu to a viewer", async () => {
     renderDetail({ canWrite: false });
-    await screen.findByRole("heading", { name: "api" });
+    await screen.findByRole("article", { name: "api" });
     expect(screen.queryByRole("button", { name: "More actions" })).toBeNull();
   });
 });

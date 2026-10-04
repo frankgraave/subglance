@@ -258,6 +258,9 @@ export function MonitorDetail({
   return (
     <article
       className="mon-detail"
+      /* Named by the monitor, since its heading is the masthead's: the region
+         says which monitor it is about to anything that lists regions. */
+      aria-label={name}
       data-status={status}
       data-conn={stale ? "stale" : "live"}
     >
@@ -274,20 +277,20 @@ export function MonitorDetail({
       </nav>
 
       {/*
-       * Identity and state, in one block.
+       * State and address, in one block.
        *
        * The name, the target and the state used to be three children of a
        * 20px flex column, so the three facts about one monitor read as three
        * unrelated rows with the right half of the screen empty beside them.
        * They are one thing, and they are grouped now.
        *
-       * The state rides on the title line as a pill: it is the second thing
-       * asked for after "which monitor is this", and putting it there answers
-       * both in one glance instead of two.
+       * The name itself is the masthead's title (SUB-207): every page's `h1`
+       * is there, and a second one here would make this the one page with
+       * two. The state leads the block instead — it is the first thing asked
+       * after "which monitor is this", and the masthead has just answered
+       * that.
        */}
       <header className="mon-detail-head">
-        <div className="mon-detail-titlerow">
-          <h1 className="page-title mon-detail-name">{name}</h1>
           {/*
            * Lamp, word and age — never the reason.
            *
@@ -351,7 +354,6 @@ export function MonitorDetail({
               </span>
             ) : null}
           </p>
-        </div>
         {/* Not a link. The target may be an internal host or a host:port that
             is not a URL at all, and a link that sometimes 404s the user into
             their own infrastructure is worse than text they can copy. */}
@@ -597,7 +599,7 @@ export function MonitorDetail({
           ) : (
             /*
              * No `subject` on this page: the monitor's name is the page title
-             * six inches above, and repeating it on every row would spend the
+             * in the masthead, and repeating it on every row would spend the
              * name column on a word the reader already has. The row falls back
              * to stating when the outage began, which is the fact that
              * actually distinguishes one of these rows from the next.

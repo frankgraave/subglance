@@ -2,34 +2,27 @@ import type { ReactNode } from "react";
 import type { PageWidth } from "../shell/pages";
 
 /**
- * The page frame: one visible title and one width rule for every screen
- * (SUB-182).
+ * The page frame: one width rule for every screen (SUB-182).
  *
- * The title is a real, visible `h1` on the page type role. It used to be
- * visually hidden on three screens and a card's title on two more, so the
- * level-one heading was a different size, a different word and sometimes
- * invisible depending on where you were. The cards under it are `h2`.
- *
- * `title={null}` is for a screen that draws its own `h1` — a monitor's page,
- * whose title is the monitor's name and carries its state beside it. That
- * heading wears `page-title` too, so it sits at the same level as every
- * other page's.
+ * It used to draw the page's `h1` as well, at the top of the content. The
+ * title is the masthead's now (SUB-207): a list screen stacked the bar, the
+ * page toolbar and the title before its first card, and the bar had the room
+ * for the title all along. A screen still does not title itself — the
+ * masthead reads the same table this frame reads its width from, so a screen
+ * that drew an `h1` of its own would be the second one on the page.
  *
  * The width is `PageWidth`, set per route in `shell/pages.ts` rather than per
- * screen in its stylesheet; see there for why there are exactly two.
+ * screen in its stylesheet; see there for why there are exactly three.
  */
 export function Page({
-  title,
   width,
   children,
 }: {
-  title: string | null;
   width: PageWidth;
   children: ReactNode;
 }) {
   return (
     <div className="page" data-width={width}>
-      {title !== null && <h1 className="page-title">{title}</h1>}
       {children}
     </div>
   );

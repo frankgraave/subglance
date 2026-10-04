@@ -134,9 +134,10 @@ for (const theme of ["light", "dark"]) {
           const link = await page.waitForSelector('.inv-name a[href="/monitors/1"]');
           await link!.focus();
           await page.keyboard.press("Enter");
-          await page.waitForSelector(".mon-detail-name");
-          expect(await page.$eval(".mon-detail-name", (el) => el.textContent)).toBe(names[0]);
-          const detail = await paintedFonts(page, ".mon-detail-name");
+          // The monitor's name is the masthead's title (SUB-207).
+          await page.waitForSelector(".mon-detail-head");
+          expect(await page.$eval("#shell-title", (el) => el.textContent)).toBe(names[0]);
+          const detail = await paintedFonts(page, "#shell-title");
           expect(detail.some((font) => font.isCustomFont)).toBe(true);
           expect(detail.some((font) => !font.isCustomFont)).toBe(true);
           expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

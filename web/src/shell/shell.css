@@ -213,18 +213,94 @@
   backdrop-filter: blur(var(--blur-bar));
 }
 
+/*
+ * The page's title, and on a child page the section before it (SUB-207).
+ *
+ * After the toggle and a hairline, so the toggle reads as chrome and the
+ * word after it as the name of what is below. The hairline is the bar's own
+ * border role rather than a gap: a gap alone left the title looking like the
+ * toggle's label.
+ *
+ * It shares the bar's slack with the search button (whose own rule says
+ * how), so a page's name stays whole from 641px up and only a monitor's long
+ * name ends in an ellipsis.
+ */
+.shell-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  flex: 0 1 auto;
+  padding-left: var(--space-4);
+  border-left: 1px solid var(--border);
+}
+
+/*
+ * The row role at the heavy weight: a title that is chrome, not a headline.
+ *
+ * 24px was the page role when the title stood alone at the top of the
+ * content. In a 56px bar beside 13px controls it outweighs everything under
+ * it, the cards included, and the bar's job is to be read once and then left
+ * alone. The design asked for 16px; that is not a rung, and the two either
+ * side of it are 15 (row) and 18 (card). 15 is the closer one and keeps the
+ * title under the cards' 18px, which is the relation the design drew; the
+ * heavy weight, which only a title uses, is what makes it the page's name
+ * rather than a row's.
+ */
+.shell-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--type-row);
+  line-height: var(--lead-row);
+  font-weight: var(--weight-heavy);
+  color: var(--ink);
+}
+
+/* The parent section: a real link, a step quieter than the title. `--ink-2`
+   rather than `--ink-3` because it is a control's words and has to clear AA
+   over the translucent bar (§2.3). */
+.shell-crumb {
+  flex: none;
+  /* 2px above and below a 20px line: a 24px target (WCAG 2.5.8). A crumb is
+     a control on its own, not a link inside a sentence. */
+  padding-block: var(--space-0h);
+  font-size: var(--type-row);
+  line-height: var(--lead-row);
+  color: var(--ink-2);
+  text-decoration: none;
+  border-radius: var(--r-xs);
+  white-space: nowrap;
+}
+
+.shell-crumb:hover { color: var(--ink); text-decoration: underline; }
+
+.shell-crumb:focus-visible {
+  outline: var(--outline-ring-w) solid var(--accent-ring);
+  outline-offset: 1px;
+}
+
+.shell-crumb-sep {
+  flex: none;
+  font-size: var(--type-row);
+  line-height: var(--lead-row);
+  color: var(--ink-3);
+}
+
 .shell-topbar-right {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  margin-left: auto;
-  flex-wrap: wrap;
   justify-content: flex-end;
-  /* The right-hand group keeps its width and the search button gives way
-     instead: from 641px up, the theme stays on the bar's one line and the
-     button narrows (SUB-148, SUB-182). */
+  /* The theme keeps its width; the search button before it is what gives way
+     (SUB-148, SUB-182). Pushed right on its own only when there is no search
+     button to do it. */
   flex: none;
+  margin-left: auto;
 }
+
+.shell-command-launcher + .shell-topbar-right { margin-left: 0; }
 
 .shell-icon-btn {
   flex: none;
@@ -317,11 +393,16 @@
 @media (max-width: 640px) {
   .shell { grid-template-columns: 1fr; }
   .shell-content { padding: var(--space-4) var(--space-4) var(--space-12); }
-  .shell-topbar { padding: var(--space-3) var(--space-4); flex-wrap: wrap; }
-  /* On a phone the group may shrink and wrap inside itself again: at 320px
-     it is wider than the whole bar, and its own wrapping is what the phone
-     layout tests pin. `flex: none` above is for the wider bands only. */
-  .shell-topbar-right { flex: 0 1 auto; }
+  /* One line on a phone too: the menu, the title and one magnifier. The theme
+     leaves the bar here (Settings and the command menu both carry it), which
+     is what lets the title have the width between the two buttons. */
+  .shell-topbar { padding: var(--space-3) var(--space-4); gap: var(--space-3); }
+  .shell-heading { flex: 1 1 auto; padding-left: var(--space-3); }
+  /* On a monitor's page the name takes the whole line: the section it
+     belongs to is lit in the navigation drawer, and a hostname needs every
+     character it can get on a 390px screen. */
+  .shell-crumb,
+  .shell-crumb-sep { display: none; }
 }
 
 /* ── Account ───────────────────────────────────────────────────────────── */
@@ -522,13 +603,17 @@
  *
  * It opens the command menu, which has its own input, so it is a button and
  * not a field; it keeps the field's frame because "search" is what it is for
- * and a field is what search looks like. It takes the slack in the bar: from
- * its natural 280px down to whatever the theme leaves it,
- * with the words giving way to an ellipsis before anything wraps.
+ * and a field is what search looks like. From its natural 280px it narrows
+ * beside a long title, and at the tablet rung it becomes one magnifier
+ * (below); the words give way to an ellipsis before anything wraps.
  */
 .shell-command-launcher {
+  /* Pushes itself and the theme to the right edge. It gives way beside a
+     long title, in proportion with it, down to the narrowest field that
+     still holds its word and keycap: rung 4. */
+  margin-left: auto;
   flex: 0 1 auto;
-  min-width: 0;
+  min-width: var(--size-col-4);
   font: inherit;
   text-align: start;
   cursor: pointer;
@@ -752,10 +837,6 @@
     padding: var(--space-2) var(--space-2h);
   }
 
-  /* The masthead's search shares its one line with the toggle and the
-     preferences, so it takes what they leave rather than the full width the
-     toolbar's fields take. */
-  .shell-command-launcher { flex: 1 1 0; width: auto; }
 
   .shell-search-input {
     width: 100%;
@@ -824,6 +905,32 @@
     max-width: 100%;
     padding-block: var(--space-0h);
   }
+}
+
+/*
+ * The masthead's search as one magnifier, at and below the tablet rung
+ * (SUB-207).
+ *
+ * The toggle's size and shape, so the bar holds the title between two square
+ * buttons. Below 900px the page's title and the field's word cannot both have
+ * their room beside the expanded sidebar — at 641px the field had about 60px,
+ * which cut its own keycap in half — and the title is the one the bar is for.
+ * The word and the keycap go; the accessible name ("Search") and the tooltip
+ * stay on the button. After the phone block above, which sizes `.shell-search`
+ * as a full-width field for the toolbar's filters.
+ */
+@media (max-width: 900px) {
+  .shell-command-launcher {
+    flex: none;
+    min-width: 0;
+    justify-content: center;
+    width: var(--size-icon-xl);
+    height: var(--size-icon-xl);
+    padding: 0;
+    color: var(--ink-2);
+  }
+  .shell-command-text,
+  .shell-command-launcher .shell-search-kbd { display: none; }
 }
 
 /*

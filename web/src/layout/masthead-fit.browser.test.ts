@@ -109,23 +109,43 @@ describe.each(BAR_WIDTHS)("masthead at %ipx", (width) => {
    * landed alone on a row of its own, which is how the bar once grew to three
    * rows at 641px.
    */
-  it("keeps the toggle, search and theme on one line", async () => {
+  it("keeps the toggle, title, search and theme on one line", async () => {
     const page = await open(width, ROUTES[0]);
     try {
-      // Centres rather than tops: the three are different heights and the
-      // group centres them, so their tops never agree even on one line.
+      // Centres rather than tops: the four are different heights and the
+      // bar centres them, so their tops never agree even on one line.
       const centres = await page.evaluate(() =>
         Array.from(
           document.querySelectorAll<HTMLElement>(
-            ".shell-topbar > .shell-icon-btn, .shell-command-launcher, .shell-topbar-right > *",
+            ".shell-topbar > .shell-icon-btn, .shell-heading, .shell-command-launcher, .shell-topbar-right > *",
           ),
         ).map((el) => {
           const r = el.getBoundingClientRect();
           return Math.round(r.top + r.height / 2);
         }),
       );
-      expect(centres).toHaveLength(3);
-      expect(centres).toEqual([centres[0], centres[0], centres[0]]);
+      expect(centres).toHaveLength(4);
+      expect(centres).toEqual([centres[0], centres[0], centres[0], centres[0]]);
+    } finally {
+      await page.close();
+    }
+  });
+
+  /*
+   * A page's name is never the thing the bar cuts (SUB-207). The search
+   * button gives way first, down to one magnifier at the tablet rung, so a
+   * title from `PAGE_TITLES` is whole at every width with a sidebar beside
+   * it. Only a monitor's name, which is data, may end in an ellipsis.
+   */
+  it.each(ROUTES)("shows $name's title whole", async (route) => {
+    const page = await open(width, route);
+    try {
+      const cut = await page.evaluate(() => {
+        const h1 = document.querySelector<HTMLElement>(".shell-topbar h1");
+        if (h1 === null) throw new Error("no title in the masthead");
+        return h1.scrollWidth - h1.clientWidth;
+      });
+      expect(cut).toBe(0);
     } finally {
       await page.close();
     }

@@ -14,7 +14,14 @@ import type { NavRoute } from "./Sidebar";
  * rather than a convention to remember.
  */
 
-/** A screen's name: the sidebar label, the visible title and the tab title. */
+/**
+ * The `id` of the masthead's `h1`. It names `<main>`, so a route change that
+ * moves focus there announces the page by name, as the heading inside it used
+ * to; and it is where a monitor's name lands when its row opens.
+ */
+export const PAGE_TITLE_ID = "shell-title";
+
+/** A screen's name: the sidebar label, the masthead's title and the tab title. */
 export const PAGE_TITLES: Readonly<Record<NavRoute, string>> = {
   dashboard: "Dashboard",
   incidents: "Incidents",
@@ -43,9 +50,9 @@ export type PageWidth = "full" | "measure" | "indexed";
 
 export type PageFrame = {
   /**
-   * The visible `h1`. `null` on a monitor's page, which titles itself with
-   * the monitor's name: `App` knows only the id, and the name is behind a
-   * query inside the detail screen.
+   * The masthead's `h1` (SUB-207). `null` on a monitor's page, whose title is
+   * the monitor's name: the table cannot know it, so `App` reads it from the
+   * shared monitor list.
    */
   title: string | null;
   width: PageWidth;
