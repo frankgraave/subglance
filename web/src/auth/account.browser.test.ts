@@ -96,7 +96,7 @@ it("keeps the password card usable on a phone with no horizontal overflow", asyn
   } finally { await page.close(); }
 });
 
-it.each([[false, false], [true, false], [false, true]])("restores the exact draft entry after multi-entry Back across the native skip link (intervening Forward: %s, draft fragment: %s)", async (race, draftHash) => {
+it.each([[false, false], [false, false], [false, false], [false, false], [true, false], [false, true]])("restores the exact draft entry after multi-entry Back across the native skip link (intervening Forward: %s, draft fragment: %s)", async (race, draftHash) => {
   const page = await pageAt("/");
   try {
     const cdp = await page.createCDPSession();
@@ -192,7 +192,7 @@ it("keeps native fragment entries on a dirty form reversible in both directions"
   } finally { await page.close(); }
 });
 
-it.each(["dashboard", "direct"])("protects Escape, close, Cancel, backdrop and history while keeping keyboard focus (%s entry)", async (entry) => {
+it.each(["dashboard", "dashboard", "dashboard", "dashboard", "direct"])("protects Escape, close, Cancel, backdrop and history while keeping keyboard focus (%s entry)", async (entry) => {
   const page = await pageAt(entry === "direct" ? "/monitors/new" : "/");
   try {
     if (entry === "dashboard") {
