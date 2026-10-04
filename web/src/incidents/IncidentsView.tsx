@@ -316,7 +316,7 @@ export function IncidentsView({
    * the lists when incidents come back, with nothing left that shows it or
    * takes it away.
    */
-  const headed = !nothingAtAll || scope !== "all" || query !== "";
+  const headed = !nothingAtAll || scope !== "all" || needle !== "";
   const historyControl =
     onHistoryDaysChange === undefined ? null : (
       /*

@@ -309,4 +309,19 @@ describe("the incidents header holds the controls, and everything in it works", 
     expect(within(header()).getByRole("group", { name: "Filter by state" })).toBeTruthy();
     expect(within(header()).getByRole("searchbox", { name: "Filter incidents by monitor" })).toBeTruthy();
   });
+
+  it("does not keep the header for a filter of only spaces", () => {
+    /*
+     * A query of only spaces narrows nothing (the filter trims it), so it is
+     * not a choice the header has to keep on screen once the lists empty.
+     */
+    const view = render(
+      <IncidentsView incidents={[incident()]} resolved={[]} now={NOW} names={{ "7": "api" }} />,
+    );
+    fireEvent.change(within(header()).getByLabelText("Filter incidents by monitor"), { target: { value: "   " } });
+    view.rerender(<IncidentsView incidents={[]} resolved={[]} now={NOW} names={{ "7": "api" }} />);
+    expect(within(header()).queryByRole("group", { name: "Filter by state" })).toBeNull();
+    expect(within(header()).queryByRole("searchbox")).toBeNull();
+    expect(document.body.textContent).toContain("Nothing is broken right now");
+  });
 });
