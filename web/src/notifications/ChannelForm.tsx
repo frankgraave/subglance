@@ -8,6 +8,7 @@ import {
   hasSecret,
   isMaskedList,
   listEntries,
+  NAME_EXAMPLES,
   typeLabel,
   visibleFields,
 } from "./channels";
@@ -390,7 +391,7 @@ export function ChannelForm({
           className="input"
           value={name}
           onChange={(event) => setName(event.target.value)}
-          placeholder="On-call Slack"
+          placeholder={NAME_EXAMPLES[type]}
           {...(problem?.key === "name"
             ? {
                 "aria-invalid": true as const,

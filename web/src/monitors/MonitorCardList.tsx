@@ -145,7 +145,7 @@ export function MonitorCardList({
         className="mon-cards-section"
         title={
           attention.length > 0
-            ? `All monitors (${rest.length})`
+            ? `Other monitors (${rest.length})`
             : `Monitors (${rest.length})`
         }
         icon={<IconList />}

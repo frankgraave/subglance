@@ -73,7 +73,7 @@ export function ResetInstanceCard() {
             This cannot be undone, and there is no copy unless you made a backup.
           </p>
           <div className="field">
-            <label className="field-label" htmlFor={`${id}-confirm`}>Type <b>{RESET_PHRASE}</b> to enable the button</label>
+            <label className="field-label" htmlFor={`${id}-confirm`}>Type <code className="phrase">{RESET_PHRASE}</code> to enable the button</label>
             <input
               id={`${id}-confirm`} className="input input--inset" type="text" value={typed} disabled={busy}
               autoComplete="off" spellCheck={false} autoCapitalize="off"

@@ -321,7 +321,7 @@ describe("MonitorTable grouped by a tag", () => {
 
   it("falls back to the flat attention/all split without a key", () => {
     render(<MonitorTable monitors={tagged()} beatWidth={WIDTH} />);
-    expect(headings()).toEqual(["Needs attention (1)", "All monitors (3)"]);
+    expect(headings()).toEqual(["Needs attention (1)", "Other monitors (3)"]);
   });
 
   /*
@@ -341,13 +341,13 @@ describe("MonitorTable grouped by a tag", () => {
   });
 
   it("counts every monitor in the title, not one section of them", () => {
-    // The fixture splits 4 into "Needs attention (1)" and "All monitors (3)".
+    // The fixture splits 4 into "Needs attention (1)" and "Other monitors (3)".
     // The card names the whole; a title equal to either section would make the
     // two headings read as alternatives rather than as parts (§8.3).
     render(<MonitorTable monitors={tagged()} beatWidth={WIDTH} />);
     const title = screen.getByRole("heading", { level: 2 }).textContent;
     expect(title).toBe("Monitors (4)");
-    expect(headings()).toEqual(["Needs attention (1)", "All monitors (3)"]);
+    expect(headings()).toEqual(["Needs attention (1)", "Other monitors (3)"]);
   });
 
   it("keeps the title and its count when the table is grouped", () => {

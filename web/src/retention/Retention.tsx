@@ -99,6 +99,9 @@ function AmountField({ label, unit, offLabel, restore, draft, onChange, disabled
           className="input input--inset retention-days" type="number" min={min} step="1" inputMode="numeric"
           aria-label={`${label}, in ${unit}`} aria-describedby={help} aria-invalid={error ? true : undefined}
           value={draft.off ? "" : draft.value} disabled={draft.off}
+          // A dash, not an empty box: switched off, the amount does not apply,
+          // and an empty disabled field read as one that had failed to load.
+          placeholder={draft.off ? "—" : undefined}
           onChange={(event) => onChange({ ...draft, value: event.target.value })}
         />
         <span aria-hidden="true">{unit}</span>

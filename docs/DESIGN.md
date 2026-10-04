@@ -1798,10 +1798,13 @@ Two rules about the number:
 
 - **`N` is the total the card frames, not the length of any one section
   beneath it.** A card reading `Monitors (5)` over sections headed
-  `Needs attention (3)` and `All monitors (2)` is correct and is meant to read
+  `Needs attention (3)` and `Other monitors (2)` is correct and is meant to read
   that way: the card names the whole and the sections partition it. A card
   whose number equalled its first section's would make the two headings look
-  like alternatives.
+  like alternatives. The section under the exception is `Other monitors`,
+  never `All monitors`: a section called "all" that counts fewer than the
+  list reads as a miscount, and the cards layout has no card above it that
+  states the total.
 - **The count comes from the data the card renders**, never from a separate
   prop a caller could let drift. Where a card also has a `note`, the count is
   still in the title — `note` is for qualifiers ("1 paused"), not for the
@@ -2334,6 +2337,33 @@ clock) keep the platform's picker. Their face is already `.input`, and the
 picker inside them is a calendar or a clock that no stylesheet can match
 across browsers; restyling only its icon would change nothing a reader
 notices.
+
+### 8.12 A phrase to retype, and a field that does not apply
+
+**The phrase to retype is a boxed chip, in the case it has to be typed.**
+Before something that cannot be undone, a dialog asks for an exact text:
+"DELETE ALL DATA" on the reset card, the monitor's or the channel's name in
+`ConfirmDelete`. That text sits inside a field label, which is mono caps, so
+a bold word or a mono span inside it took the label's case and ink and could
+not be told from the sentence around it. It also showed a monitor called
+"api" as "API" while the check wants the exact case, which is a sentence that
+contradicts itself. `.phrase` (controls.css) undoes the label's uppercase,
+draws the keycap's frame round the text and takes the full ink, as a
+`<code>`, so it is one object a reader can find and copy.
+
+**A disabled field is dimmed, and a switched-off amount shows a dash.**
+A retention window set to "Forever" or a size set to "No limit" leaves its
+number box disabled. Drawn at full strength and empty, it read as a field
+that had failed to load. `.input:disabled` dims it and refuses the pointer
+as a disabled `.button` and `Select` already did, and the box holds a "—"
+placeholder while the switch is on. The number is not shown greyed out: a
+value the server is not applying, drawn in the field that holds it, reads as
+the setting in force. Switching back restores the last value, as before.
+
+`layout/retype-and-off.browser.test.ts` checks both in the real build: that
+the phrase is painted in its own case with its own frame and ink, on the
+reset card and in the delete dialog, and that each switched-off amount is
+dimmed and holds the dash.
 
 ---
 

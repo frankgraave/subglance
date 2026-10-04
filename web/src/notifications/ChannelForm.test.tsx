@@ -8,7 +8,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { ChannelForm } from "./ChannelForm";
-import { channelFromApi } from "./channels";
+import { CHANNEL_TYPES, channelFromApi, typeLabel } from "./channels";
 
 /*
  * The add/edit form.
@@ -137,6 +137,21 @@ describe("ChannelForm", () => {
     });
     expect(screen.queryByLabelText(/recipient address/i)).toBeNull();
     expect(screen.getByLabelText(/chat id/i)).toBeTruthy();
+  });
+
+  it("suggests a name for the chosen type, not always a Slack one", () => {
+    render(<ChannelForm onSave={async () => {}} />);
+    const name = screen.getByLabelText("Name") as HTMLInputElement;
+    const seen = new Set<string>();
+    for (const type of CHANNEL_TYPES) {
+      // By its label: an SMS channel adds a second select, for the provider.
+      fireEvent.change(screen.getByLabelText("Type"), { target: { value: type } });
+      // The example names the type it is shown for, so an e-mail channel is
+      // never offered "On-call Slack".
+      expect(name.placeholder, type).toContain(typeLabel(type));
+      seen.add(name.placeholder);
+    }
+    expect(seen.size).toBe(CHANNEL_TYPES.length);
   });
 
   it("refuses to change the type of an existing channel, and says why", () => {

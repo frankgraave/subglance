@@ -119,7 +119,7 @@ describe("MonitorCardList", () => {
       screen.getByRole("heading", { name: "Needs attention (1)" }),
     ).toBeTruthy();
     expect(
-      screen.getByRole("heading", { name: "All monitors (2)" }),
+      screen.getByRole("heading", { name: "Other monitors (2)" }),
     ).toBeTruthy();
     // The order across the whole stack, not just within a section: the phone
     // user opened this after an alert and the broken thing must be on top.
@@ -223,7 +223,7 @@ describe("MonitorCardList grouped by a tag", () => {
 
   it("falls back to the flat split without a key", () => {
     render(<MonitorCardList monitors={tagged()} beatWidth={WIDTH} />);
-    expect(headings()).toEqual(["Needs attention (1)", "All monitors (3)"]);
+    expect(headings()).toEqual(["Needs attention (1)", "Other monitors (3)"]);
   });
 });
 

@@ -406,11 +406,40 @@
   @apply face-mono;
 }
 
-/* A literal value inside prose or a row: a masked secret, a token prefix, the
-   name to retype before deleting something. */
+/* A literal value inside prose or a row: a masked secret, a token prefix. */
 .literal {
   @apply face-mono;
   color: var(--ink-3);
+}
+
+/*
+ * The exact text to retype before something that cannot be undone: "DELETE
+ * ALL DATA", a monitor's or a channel's name. It sits inside a field label,
+ * which is mono caps, so as a bare mono word it took the label's case and ink
+ * and could not be told from the sentence around it. Worse, the label's
+ * uppercase showed a monitor called "api" as "API" while the check wants the
+ * exact case. Boxed like the masthead's keycap, in the full ink and in the
+ * case that has to be typed (DESIGN.md §8.12).
+ */
+.phrase {
+  @apply face-mono;
+  text-transform: none;
+  padding: 0 var(--space-1h);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  color: var(--ink);
+  background-color: var(--surface-2);
+}
+
+/*
+ * A disabled field is dimmed and refuses the pointer, as a disabled select
+ * (select.css) and `.button` are. Without it an empty disabled box, such as
+ * a retention window switched to "Forever", read as a field that had failed
+ * to load rather than one that does not apply.
+ */
+.input:disabled {
+  cursor: not-allowed;
+  opacity: .5;
 }
 
 /*
