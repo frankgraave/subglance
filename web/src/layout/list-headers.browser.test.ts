@@ -161,3 +161,32 @@ describe("screens still on the page toolbar", () => {
     }
   });
 });
+
+describe("notifications header", () => {
+  it.each([320, 390, 820, 1440])("reads in focus order at %ipx", async (width) => {
+    /*
+     * Keyboard focus walks the header's controls in markup order: the filter,
+     * then Add channel. Each must stand after the one before it on screen —
+     * on a later line, or further right on the same line — or focus jumps
+     * backwards across the header (CodeRabbit, PR #189).
+     */
+    const page = await open("/notifications", ".inv-row", width);
+    try {
+      const boxes = await page.evaluate(() =>
+        [...document.querySelectorAll(".nt-card > .card-head :is(input, button)")].map((el) => {
+          const r = el.getBoundingClientRect();
+          return { top: r.top, bottom: r.bottom, left: r.left };
+        }),
+      );
+      expect(boxes.length).toBe(2);
+      for (let i = 1; i < boxes.length; i++) {
+        const [prev, next] = [boxes[i - 1]!, boxes[i]!];
+        const laterLine = next.top >= prev.bottom - 1;
+        const sameLineRight = next.top < prev.bottom && prev.top < next.bottom && next.left > prev.left;
+        expect(laterLine || sameLineRight, `control ${i} stands after control ${i - 1}`).toBe(true);
+      }
+    } finally {
+      await page.close();
+    }
+  });
+});

@@ -121,6 +121,16 @@ export function NotificationsView({
 }: NotificationsViewProps) {
   const [query, setQuery] = useState("");
   /*
+   * The query goes with the last channel. The field steps aside on an empty
+   * instance (below), and a query it kept while hidden would hide the next
+   * channel added if that channel did not match it — with no field on screen
+   * to say why. Only on a load that succeeded: a failed or pending one says
+   * nothing about what the list holds.
+   */
+  if (query !== "" && !loading && error === null && channels.length === 0) {
+    setQuery("");
+  }
+  /*
    * Filtering by what a row shows: its name and its type. Not by the secret,
    * obviously, and not by the destination either — the destination is masked
    * for most channel types, so a query would appear to search something the

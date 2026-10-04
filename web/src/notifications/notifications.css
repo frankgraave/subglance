@@ -98,25 +98,25 @@
 }
 
 /*
- * Phone: the title and the button share the first line, and the field takes
- * the whole second one. Beside the button the field had about 120px at
- * 320px, which cut its placeholder; under it, it has the card's width. The
- * action group steps out of the layout so its two children can sit on
- * different lines of the header. At 320px the title and the button do not
- * fit one line either, and the button takes a line of its own: three lines,
- * on the narrowest screen, rather than a title cut before its count.
+ * Phone: the title has the first line, and the field and the button share
+ * the second, in the order they are in the markup, so keyboard focus moves
+ * the way the eye does. An earlier layout put the button beside the title
+ * and the field under both, which sent focus from the lower field back up to
+ * the button. The field keeps rung 4, which shows its placeholder whole;
+ * where that does not fit beside the button (320px), the button wraps to a
+ * line of its own under the field, at the card's right edge: three lines on
+ * the narrowest screen rather than a cut placeholder.
  */
 @media (max-width: 640px) {
   .nt-card > .card-head > .card-head-action {
-    display: contents;
+    flex: 1 1 100%;
+    flex-wrap: wrap;
   }
   .nt-card > .card-head > .card-head-action > .button {
     margin-left: auto;
   }
   .card-head-action > .nt-filter {
-    order: 1;
-    flex: 1 1 100%;
-    min-width: 0;
+    flex: 1 1 var(--size-col-4);
   }
 }
 

@@ -549,6 +549,34 @@ describe("NotificationsView", () => {
     expect(screen.getByRole("button", { name: "Add channel" })).toBeTruthy();
   });
 
+  it("forgets the query with the last channel, so the next one added shows", () => {
+    /*
+     * The field steps aside on an empty instance. A query it kept while
+     * hidden would hide a newly added channel that does not match it, with
+     * no field on screen to say why.
+     */
+    const props = { onCreateOpenChange: () => {}, onSave: async () => {} };
+    const { rerender } = render(<NotificationsView channels={[make()]} {...props} />);
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "slack" } });
+    rerender(<NotificationsView channels={[]} {...props} />);
+    expect(screen.queryByRole("searchbox")).toBeNull();
+    rerender(<NotificationsView channels={[make({ id: 2, name: "Ops mail", type: "email" })]} {...props} />);
+    expect(screen.getByText("Ops mail")).toBeTruthy();
+    expect((screen.getByRole("searchbox") as HTMLInputElement).value).toBe("");
+  });
+
+  it("keeps the query through a failed or pending load", () => {
+    // An empty list that failed or has not arrived says nothing about what
+    // the instance holds, so it must not wipe what the user typed.
+    const props = { onCreateOpenChange: () => {}, onSave: async () => {} };
+    const { rerender } = render(<NotificationsView channels={[make()]} {...props} />);
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "slack" } });
+    rerender(<NotificationsView channels={[]} loading {...props} />);
+    rerender(<NotificationsView channels={[]} error={new Error("boom")} {...props} />);
+    rerender(<NotificationsView channels={[make()]} {...props} />);
+    expect((screen.getByRole("searchbox") as HTMLInputElement).value).toBe("slack");
+  });
+
   it("says what a channel is, not only what happens without one", () => {
     // The empty state is the first thing a new self-hoster reads, and it used
     // to assume they already knew what they were being asked to add.
