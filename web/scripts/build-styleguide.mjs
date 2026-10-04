@@ -780,7 +780,7 @@ const html = `<!doctype html>
      look at. Bounded and clipped because both bars are built to span a
      viewport, and a specimen is not one. */
   .sg-chrome { border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; }
-  .sg-chrome .shell-topbar, .sg-chrome .shell-toolbar { position: static; }
+  .sg-chrome .shell-topbar { position: static; }
   .sg-table th {
     text-align: left;
     font: inherit;

@@ -1,25 +1,20 @@
 /**
- * Where a screen's controls land, measured in a real browser (SUB-136).
+ * Where a screen's controls land, measured in a real browser (SUB-136,
+ * SUB-207).
  *
- * Incidents portals its controls into the shell's page toolbar through
- * `ToolbarTools` — the filter field and everything else that narrows the
- * list (SUB-182). The dashboard, Monitors, Notifications and Settings have
- * moved theirs to the head of the list they act on (SUB-207, SUB-183). The masthead above holds only what works on every screen, search
- * included, which opens the command menu. The unit suite covers the portal
- * wiring with `ShellSlots`, which renders the target as a bare div. That proves the
- * nodes arrive; it cannot prove any of the four things below, because each is
- * decided by layout or by the cascade, and jsdom does neither:
+ * Every screen's controls stand at the head of the list they act on: the
+ * dashboard's, the inventory's and the incidents screen's in their cards'
+ * headers. The masthead above holds only what works on every screen, search
+ * included, which opens the command menu. The page toolbar that used to sit
+ * between the two is gone. jsdom can say which element a control is in; it
+ * cannot say any of the things below, because each is decided by layout or
+ * by the cascade:
  *
- *  - that the two bars are painted in order, masthead first, toolbar under it,
- *    with neither covering the other;
- *  - that a control portalled into a bar is still the thing the pointer hits
- *    and still drives the list it came from — the whole argument for a portal
- *    over hoisted props (see `ToolbarTools`);
- *  - that a screen with no toolbar controls collapses the bar, which is
- *    `.shell-toolbar:has(.shell-toolbar-slot:empty)` in `shell.css` — a
- *    selector jsdom does not evaluate;
- *  - that leaving a screen takes its controls out of both bars, so the next
- *    screen does not inherit a filter for a list it does not show.
+ *  - that a control in a list's header is the thing the pointer hits, and
+ *    drives the list under it;
+ *  - that the masthead's search is not covered by anything;
+ *  - that leaving a screen takes its controls with it, so the next screen
+ *    does not inherit a filter for a list it does not show.
  *
  * Assertions are about element identities and boxes, never screenshots, so a
  * visual change to either bar does not need blessing here.
@@ -70,18 +65,16 @@ async function open(path: string, ready: string): Promise<Page> {
 }
 
 /**
- * Which bar an element sits in, by the landmark the user sees rather than by
- * the slot div it was portalled into: "masthead", "toolbar", "page" (still in
- * the screen's own tree) or "missing".
+ * Where an element sits, by the landmark the user sees: "masthead", the
+ * list's "header", elsewhere on the "page", or "missing".
  */
-async function barOf(page: Page, selector: string): Promise<string> {
-  return page.evaluate((sel: string) => {
-    const el = document.querySelector(sel);
+async function placeOf(page: Page, selector: string, head: string): Promise<string> {
+  return page.evaluate((s: string, h: string) => {
+    const el = document.querySelector(s);
     if (el === null) return "missing";
     if (el.closest(".shell-topbar") !== null) return "masthead";
-    if (el.closest(".shell-toolbar") !== null) return "toolbar";
-    return "page";
-  }, selector);
+    return el.closest(h) !== null ? "header" : "page";
+  }, selector, head);
 }
 
 /**
@@ -103,23 +96,6 @@ async function hittable(page: Page, selector: string): Promise<boolean> {
   }, selector);
 }
 
-/** The two bars' vertical extents, in viewport pixels. */
-async function bars(page: Page) {
-  return page.evaluate(() => {
-    const box = (sel: string) => {
-      const el = document.querySelector(sel);
-      if (el === null) return null;
-      const r = el.getBoundingClientRect();
-      return {
-        top: r.top,
-        bottom: r.bottom,
-        height: r.height,
-        display: getComputedStyle(el).display,
-      };
-    };
-    return { masthead: box(".shell-topbar"), toolbar: box(".shell-toolbar") };
-  });
-}
 
 /** The masthead's search: one button, on every screen. */
 const LAUNCHER = ".shell-topbar .shell-command-launcher";
@@ -137,14 +113,7 @@ describe("the dashboard", () => {
   it("puts its status tabs, filter field, Filter and View in its list header, not in a bar", async () => {
     const page = await open("/", MONITOR_ITEMS);
     try {
-      const where = (sel: string) =>
-        page.evaluate((s: string, head: string) => {
-          const el = document.querySelector(s);
-          if (el === null) return "missing";
-          if (el.closest(".shell-topbar") !== null) return "masthead";
-          if (el.closest(".shell-toolbar") !== null) return "toolbar";
-          return el.closest(head) !== null ? "header" : "page";
-        }, sel, HEAD);
+      const where = (sel: string) => placeOf(page, sel, HEAD);
       expect({
         filter: await where("input[type='search']"),
         status: await where("[role='group'][aria-label='Filter by status']"),
@@ -159,8 +128,6 @@ describe("the dashboard", () => {
         search: "masthead",
       });
 
-      const { toolbar } = await bars(page);
-      expect(toolbar?.height ?? 0, "the page toolbar is collapsed").toBe(0);
       expect(await hittable(page, `${HEAD} input[type='search']`)).toBe(true);
       expect(await hittable(page, LAUNCHER)).toBe(true);
       expect(await hittable(page, "[aria-label='Filter by status'] button")).toBe(true);
@@ -230,14 +197,7 @@ describe("the monitors inventory", () => {
   it("puts its filter field, Filter, Sort and actions in its list header, not in a bar", async () => {
     const page = await open("/monitors", ROWS);
     try {
-      const where = (sel: string) =>
-        page.evaluate((s: string, head: string) => {
-          const el = document.querySelector(s);
-          if (el === null) return "missing";
-          if (el.closest(".shell-topbar") !== null) return "masthead";
-          if (el.closest(".shell-toolbar") !== null) return "toolbar";
-          return el.closest(head) !== null ? "header" : "page";
-        }, sel, HEAD);
+      const where = (sel: string) => placeOf(page, sel, HEAD);
       expect({
         filter: await where("input[type='search']"),
         filters: await where("button[aria-haspopup='dialog'][aria-label^='Filter']"),
@@ -251,8 +211,6 @@ describe("the monitors inventory", () => {
         add: "header",
         search: "masthead",
       });
-      const { toolbar } = await bars(page);
-      expect(toolbar?.height ?? 0, "the page toolbar is collapsed").toBe(0);
       expect(await hittable(page, `${HEAD} input[type='search']`)).toBe(true);
       expect(await hittable(page, `${HEAD} button[aria-label^='Sort']`)).toBe(true);
     } finally {
@@ -301,54 +259,61 @@ describe("the monitors inventory", () => {
 });
 
 describe("the incidents screen", () => {
+  /*
+   * The last screen to leave the toolbar (SUB-207): All · Open · Resolved,
+   * the monitor filter and History head its card. Held from both sides, as
+   * the other lists are.
+   */
+  const HEAD = ".inc-board > .card-head";
   const READY = ".inc-list";
 
-  it("puts its monitor filter, scope and window in the toolbar", async () => {
+  it("puts its tabs, monitor filter and window in its list header, not in a bar", async () => {
     const page = await open("/incidents", READY);
     try {
+      const where = (sel: string) => placeOf(page, sel, HEAD);
       expect({
-        filter: await barOf(page, "input[type='search']"),
-        scope: await barOf(page, ".tb-select"),
-        count: await barOf(page, ".tb-count"),
-      }).toEqual({ filter: "toolbar", scope: "toolbar", count: "toolbar" });
-
-      const labels = await page.evaluate(() =>
-        [...document.querySelectorAll(".shell-toolbar .tb-label")].map(
-          (el) => el.textContent,
-        ),
-      );
-      expect(labels).toEqual(["Show", "History"]);
-
-      const { masthead, toolbar } = await bars(page);
-      if (masthead === null || toolbar === null) throw new Error("a bar is missing");
-      expect(toolbar.display).not.toBe("none");
-      expect(toolbar.top).toBeGreaterThanOrEqual(masthead.bottom - 1);
-      expect(await hittable(page, ".shell-toolbar .tb-select")).toBe(true);
+        filter: await where("input[type='search']"),
+        tabs: await where("[role='group'][aria-label='Filter by state']"),
+        history: await where("button[aria-haspopup='dialog'][aria-label^='History']"),
+        search: await where(".shell-command-launcher"),
+      }).toEqual({ filter: "header", tabs: "header", history: "header", search: "masthead" });
+      expect(await hittable(page, `${HEAD} input[type='search']`)).toBe(true);
+      expect(await hittable(page, `${HEAD} .mon-tab`)).toBe(true);
+      expect(await hittable(page, LAUNCHER)).toBe(true);
     } finally {
       await page.close();
     }
   });
 
-  it("narrows its own cards from the toolbar", async () => {
+  it("narrows its own lists from the header", async () => {
     const page = await open("/incidents", READY);
     try {
       const titles = () =>
         page.evaluate(() =>
-          [...document.querySelectorAll(".card-title")].map((el) => el.textContent),
+          [...document.querySelectorAll(".inc-section-title")].map((el) => el.textContent),
         );
       await page.waitForFunction(
         () =>
-          [...document.querySelectorAll(".card-title")].some(
+          [...document.querySelectorAll(".inc-section-title")].some(
             (el) => el.textContent === "Resolved",
           ),
         { timeout: 10_000 },
       );
       expect(await titles()).toEqual(["Open incidents", "Resolved"]);
 
-      await page.select(".shell-toolbar .tb-select", "resolved");
+      // Found by its word, as a reader finds it: the tab reads "Resolved n".
+      let clicked = false;
+      for (const tab of await page.$$(`${HEAD} .mon-tab`)) {
+        if (/^Resolved\b/.test(await tab.evaluate((el) => el.textContent ?? ""))) {
+          await tab.click();
+          clicked = true;
+          break;
+        }
+      }
+      expect(clicked, "no Resolved tab in the header").toBe(true);
       await page.waitForFunction(
         () =>
-          ![...document.querySelectorAll(".card-title")].some(
+          ![...document.querySelectorAll(".inc-section-title")].some(
             (el) => el.textContent === "Open incidents",
           ),
         { timeout: 5_000 },
@@ -360,20 +325,15 @@ describe("the incidents screen", () => {
   });
 });
 
-describe("a screen with no toolbar controls", () => {
-  it("collapses the toolbar instead of leaving an empty strip, and keeps search", async () => {
+describe("a screen with no list controls", () => {
+  it("keeps search in the masthead, uncovered", async () => {
     /*
-     * A monitor's detail page contributes nothing to the toolbar: it is one
-     * monitor, with nothing to filter or arrange. The collapse is a `:has()`
-     * rule, so this is the only suite in which it is observable. It is also
+     * A monitor's detail page has nothing to filter or arrange. It is also
      * the page that used to lose search, so the masthead's is checked here.
      */
     const page = await open("/monitors/1", ".mon-detail-windows");
     try {
-      const { toolbar } = await bars(page);
-      if (toolbar === null) throw new Error("no .shell-toolbar in the document");
-      expect(toolbar.height).toBe(0);
-      expect(await barOf(page, ".shell-command-launcher")).toBe("masthead");
+      expect(await placeOf(page, ".shell-command-launcher", ".card-head")).toBe("masthead");
       expect(await hittable(page, LAUNCHER)).toBe(true);
     } finally {
       await page.close();
@@ -382,7 +342,7 @@ describe("a screen with no toolbar controls", () => {
 });
 
 describe("leaving a screen", () => {
-  it("takes its controls out of both bars", async () => {
+  it("takes its controls with it", async () => {
     const page = await open("/", MONITOR_ITEMS);
     try {
       // The sidebar is outside the routed region, so its link is not the
@@ -393,22 +353,19 @@ describe("leaving a screen", () => {
       const seen = await page.evaluate(() => ({
         searches: document.querySelectorAll("input[type='search']").length,
         placeholder:
-          document.querySelector<HTMLInputElement>(".shell-toolbar input[type='search']")
-            ?.placeholder ?? null,
+          document.querySelector<HTMLInputElement>("input[type='search']")?.placeholder ?? null,
         statusFilter: document.querySelectorAll("[aria-label='Filter by status']").length,
-        groupBy: document.querySelectorAll(".mon-group-select").length,
+        stateFilter: document.querySelectorAll("[aria-label='Filter by state']").length,
+        view: document.querySelectorAll("button[aria-label^='View']").length,
         layouts: document.querySelectorAll("[aria-label='Dashboard layout']").length,
-        toolbarLabels: [...document.querySelectorAll(".shell-toolbar .tb-label")].map(
-          (el) => el.textContent,
-        ),
       }));
       expect(seen).toEqual({
         searches: 1,
         placeholder: "Filter by monitor…",
         statusFilter: 0,
-        groupBy: 0,
+        stateFilter: 1,
+        view: 0,
         layouts: 0,
-        toolbarLabels: ["Show", "History"],
       });
     } finally {
       await page.close();

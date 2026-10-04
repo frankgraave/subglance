@@ -11,7 +11,7 @@ import { PAGE_TITLE_ID } from "./pages";
  * Sticky, so the controls that are always there are always in reach.
  *
  * **The page title lives here, as the page's only `h1`.** It used to be drawn
- * at the top of the content, under this bar and under the page toolbar, so a
+ * at the top of the content, under this bar and under a page toolbar, so a
  * list screen stacked three layers — chrome, controls, title — before the
  * first card. In the bar it costs no height at all, it is the same word on
  * every route as the sidebar and the tab (all three read `PAGE_TITLES`), and
@@ -80,7 +80,8 @@ export type TopbarProps = {
   /**
    * Anything else genuinely global, which is currently nothing. Kept as the
    * escape hatch for a control that works on every screen and does not fit
-   * the groups below; a control for one screen goes to `PageToolbar`.
+   * the groups below; a control for one screen goes at the head of the list
+   * it acts on (AGENTS.md "Where a control belongs").
    */
   children?: ReactNode;
 };

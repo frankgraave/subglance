@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
 import { LiveIncidentsRoot } from "./LiveIncidents";
-import { setToolbarSlot } from "../shell/toolbarSlot";
 import type { fetchResolvedIncidents } from "./api";
 import type { EventSourceLike } from "../live/connection";
 import type { Incident } from "../monitors/detail";
@@ -54,13 +53,8 @@ const resolvedIncident = (id: string, monitorId: string): Incident => ({
   lastError: "",
 });
 
-let toolbar: HTMLElement;
-
-/** Renders the screen with a toolbar for its controls and a stream that opens. */
+/** Renders the screen with a stream that opens. */
 function renderScreen(fetchHistory: typeof fetchResolvedIncidents) {
-  toolbar = document.createElement("div");
-  document.body.append(toolbar);
-  setToolbarSlot(toolbar);
 
   vi.stubGlobal(
     "fetch",
@@ -87,7 +81,6 @@ function renderScreen(fetchHistory: typeof fetchResolvedIncidents) {
 
 afterEach(() => {
   cleanup();
-  setToolbarSlot(null);
   vi.unstubAllGlobals();
 });
 
@@ -101,9 +94,9 @@ describe("the history is paged through the API's own cursor", () => {
       .toContain("Loading resolved history…");
     expect(document.body.textContent).not.toMatch(/nothing resolved|nothing is broken/i);
 
-    fireEvent.change(within(toolbar).getByLabelText("Show"), {
-      target: { value: "resolved" },
-    });
+    // The Resolved tab in the list's header. Its count is left off while the
+    // history loads, so it is found by its word alone.
+    fireEvent.click(screen.getByRole("button", { name: "Resolved" }));
     expect(document.body.textContent).not.toMatch(/nothing resolved/i);
     expect(screen.getByRole("region", { name: "Resolved" }).textContent)
       .toContain("Loading resolved history…");
@@ -167,9 +160,10 @@ describe("the history is paged through the API's own cursor", () => {
 
     await waitFor(() => expect(windows).toEqual([30]));
 
-    fireEvent.change(within(toolbar).getByLabelText("History"), {
-      target: { value: "90" },
-    });
+    fireEvent.click(screen.getByRole("button", { name: "History: 30 days" }));
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: "Resolved history window" })).getByRole("radio", { name: "90 days" }),
+    );
 
     await waitFor(() => expect(windows).toEqual([30, 90]));
     // And the card says what it actually fetched.

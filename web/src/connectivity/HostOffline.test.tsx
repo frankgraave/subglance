@@ -4,7 +4,6 @@ import { QueryClient } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { LiveDashboardRoot } from "../live/LiveDashboard";
 import type { EventSourceLike } from "../live/connection";
-import { ShellSlots } from "../shell/ShellSlots";
 import { disabledWatchdog } from "../watchdog/fixtures";
 import { parseConnectivity } from "./api";
 import { formatSince } from "./offlineState";
@@ -72,7 +71,6 @@ function dashboard(
   clients.push(client);
   render(
     <>
-      <ShellSlots />
       <LiveDashboardRoot
         client={client}
         layout={layout as "rows" | "wall"}

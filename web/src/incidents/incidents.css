@@ -57,6 +57,75 @@
   gap: var(--space-2);
 }
 
+/*
+ * The incidents card, whose header is the list's header (SUB-207).
+ *
+ * What you are looking at on the left — All, Open and Resolved with their
+ * counts, the dashboard's tabs — and how you are looking on the right: the
+ * monitor filter and the history window. The header's block padding goes, as
+ * the dashboard's does, so the tabs stand its full height and the selected
+ * one draws its mark on the rule under it. Only while there is something to
+ * narrow: with nothing at all to show, the header is a plain card title.
+ */
+.inc-board--listed > .card-head {
+  flex-wrap: wrap;
+  align-items: stretch;
+  padding-block: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.inc-board--listed > .card-head > .card-head-lead { flex: none; max-width: 100%; }
+
+.inc-board > .card-head > .card-head-action {
+  flex: 1 1 0;
+  justify-content: flex-end;
+  align-self: center;
+  min-width: 0;
+}
+
+/* The screen wears `.mon-detail`, whose card headers push a menu to the end
+   of its row; here the History button already stands at the end, after the
+   filter, and an auto margin would pull the two apart. */
+.mon-detail > .inc-board > .card-head .menu { margin-left: 0; }
+
+/* The search field's 280px, giving way to rung 4 (168px), which still shows
+   "Filter by monitor…" whole; 32px tall like the History button beside it. */
+.card-head-action > .inc-head-filter {
+  flex: 0 1 var(--size-pane-sm);
+  min-width: var(--size-col-4);
+}
+
+/*
+ * The two lists inside the one card: open above resolved, each headed by its
+ * own name and count. An `h3` on the row role, under the card's `h2` — the
+ * card's title is the page's lists as a whole, and these name each one. The
+ * open list keeps its "n open · m muted" beside the name, the history its
+ * window, so neither count moved off the list it is the length of.
+ */
+.inc-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1h);
+}
+
+.inc-section + .inc-section { margin-top: var(--space-3); }
+
+.inc-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2h);
+  padding: var(--space-2) var(--space-1) 0;
+}
+
+.inc-section-title {
+  margin: 0;
+  font-size: var(--type-row);
+  line-height: var(--lead-row);
+  font-weight: var(--weight-strong);
+  color: var(--ink);
+}
+
 .inc-reminders {
   flex-basis: 100%;
   padding: var(--space-2) var(--space-4);
@@ -697,6 +766,13 @@
  * widths, below.
  */
 @media (max-width: 640px) {
+  /* The tabs keep the first line and scroll sideways if they must (the
+     dashboard's own rule); the filter takes the second line whole and the
+     History glyph button stands at its end. */
+  .inc-board--listed > .card-head > .card-head-lead { flex: 1 1 100%; min-width: 0; }
+  .inc-board--listed > .card-head > .card-head-action { flex: 1 1 100%; padding-block: var(--space-1h); }
+  .card-head-action > .inc-head-filter { flex: 1 1 auto; min-width: 0; max-width: none; }
+
   .inc-cluster-line > .inc-line-inner { flex-wrap: wrap; row-gap: var(--space-2); }
   .inc-main { flex: 1 1 100%; }
 

@@ -12,7 +12,6 @@ import {
 import { QueryClient } from "@tanstack/react-query";
 import { LiveMonitorsRoot } from "./LiveMonitors";
 import { inventoryFromApi } from "./inventory";
-import { ShellSlots } from "../shell/ShellSlots";
 import { MonitorsView } from "./MonitorsView";
 import { confirmNavigation } from "../shell/leaveGuard";
 
@@ -73,7 +72,7 @@ it("has no management surface for a viewer, and clears selection on permission l
 });
 
 it("closes the actual tag owner on accepted navigation while retaining search and selection", () => {
-  render(<><ShellSlots /><MonitorsView monitors={monitors} onTagChange={vi.fn(async () => counts)} /></>);
+  render(<><MonitorsView monitors={monitors} onTagChange={vi.fn(async () => counts)} /></>);
   const search = screen.getByRole("searchbox", { name: "Filter monitors" });
   fireEvent.change(search, { target: { value: "site 2" } });
   fireEvent.click(screen.getByRole("checkbox", { name: "Select site 2" }));
@@ -93,7 +92,6 @@ it("selects only visible rows, preserves hidden selections, and forgets removed 
   const props = { monitors, onTagChange: vi.fn(async () => counts) };
   const view = render(
     <>
-      <ShellSlots />
       <MonitorsView {...props} />
     </>,
   );
@@ -123,14 +121,12 @@ it("selects only visible rows, preserves hidden selections, and forgets removed 
   ).toBe(true);
   view.rerender(
     <>
-      <ShellSlots />
       <MonitorsView {...props} monitors={[monitors[0], monitors[2]]} />
     </>,
   );
   expect(screen.queryByText(/\d+ selected/)).toBeNull();
   view.rerender(
     <>
-      <ShellSlots />
       <MonitorsView {...props} />
     </>,
   );
@@ -151,7 +147,6 @@ it("selects only visible rows, preserves hidden selections, and forgets removed 
   view.unmount();
   render(
     <>
-      <ShellSlots />
       <MonitorsView {...props} />
     </>,
   );
@@ -180,7 +175,6 @@ it("renames globally with explicit merge policy and invalidates dashboard and de
     );
   render(
     <>
-      <ShellSlots />
       <LiveMonitorsRoot client={client} fetchMonitors={async () => monitors} />
     </>,
   );
@@ -244,7 +238,6 @@ it("selects multiple monitors, previews once and atomically applies with a paire
     );
   render(
     <>
-      <ShellSlots />
       <LiveMonitorsRoot client={client} fetchMonitors={fetchMonitors} />
     </>,
   );

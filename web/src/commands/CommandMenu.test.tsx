@@ -2,7 +2,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import App from "../App";
-import { setToolbarSlot } from "../shell/toolbarSlot";
 
 const monitor = (id: number) => ({ id, name: `Service ${id}`, type: "http", target: `https://service-${id}.example`, enabled: true, status: "up", interval_s: 60, timeout_s: 10, tags: {} });
 let monitors = Array.from({ length: 200 }, (_, i) => monitor(i + 1));
@@ -30,7 +29,7 @@ beforeEach(() => {
     return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
   }));
 });
-afterEach(() => { cleanup(); setToolbarSlot(null); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 async function launch() {
   await screen.findByText("operator@example.com");

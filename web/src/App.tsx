@@ -23,7 +23,6 @@ import { useDocumentTitle } from "./shell/documentTitle";
 import { useRouteFocus } from "./shell/useRouteFocus";
 import { detailTitle, monitorTitleLink, morphNavigation } from "./shell/viewTransition";
 import { AppShell } from "./shell/AppShell";
-import { PageToolbar } from "./shell/PageToolbar";
 import { PAGE_TITLE_ID, PAGE_TITLES, pageFrame } from "./shell/pages";
 import { useMonitorName } from "./live/useMonitorName";
 import { Page } from "./components/Page";
@@ -390,7 +389,6 @@ export default function App() {
           }
         />
       }
-      toolbar={<PageToolbar />}
       mainLabelledBy={PAGE_TITLE_ID}
     >
       {/*

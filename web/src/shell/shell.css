@@ -530,13 +530,13 @@
 }
 
 /* ---------------------------------------------------------------------------
-   The masthead's search, and the page toolbar beneath it (SUB-138).
+   The masthead's search, and every list's filter field (SUB-138, SUB-207).
 
    Both were per-screen before: the dashboard had `.mon-topbar` with its own
    search and the monitors page had `.inv-tools` with another, so two screens
    that search the same kind of list put the field in two places and styled it
-   two ways. These classes are the shared ones, and they live in the shell
-   because the shell is what owns a bar that must look identical everywhere.
+   two ways. These classes are the shared ones: `FilterField` draws every
+   list's filter with them, at the head of the list it narrows.
    --------------------------------------------------------------------------- */
 
 /*
@@ -658,175 +658,6 @@
   color: var(--ink-4);
 }
 
-
-/*
- * The toolbar: the bar under the masthead, whose contents change with the
- * route.
- *
- * It collapses to nothing when a screen contributes no tools — `:empty` on
- * the slot rather than a prop, because the screen portals in after the shell
- * has rendered and the shell cannot know in advance. An always-present strip
- * that is usually empty is a promise the product does not keep.
- */
-.shell-toolbar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  /* 24px, matching `.shell-content` and `.shell-topbar`, not the 20px this
-     used to carry. That four-pixel difference put the toolbar's first control
-     at x=252 while the card below it started at x=256 — measured in Chromium
-     at 1440px — so the two strongest left edges on the dashboard disagreed by
-     less than a character width. A misalignment that small does not read as a
-     second column; it reads as a mistake nobody can name. Every bar in the
-     shell now opens on one line. */
-  padding: 0 var(--space-6);
-  border-bottom: 1px solid var(--border);
-  background: var(--canvas);
-}
-
-.shell-toolbar:has(.shell-toolbar-slot:empty) {
-  display: none;
-}
-
-.shell-toolbar-slot {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex: 1;
-  min-width: 0;
-}
-
-/* A run of related controls. `flex-wrap` so a narrow viewport stacks them
-   rather than clipping the count at the end, which is the one thing in the
-   group that states how much of the list you are looking at. */
-.tb-group {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  min-height: var(--control-h);
-  padding: var(--space-2) 0;
-}
-
-/*
- * A select in the page toolbar: one framed field, on every screen.
- *
- * `ToolbarSelect` draws every one of them — a filter, an order, a history
- * window — so this is the only toolbar select there is. The dashboard used to
- * frame its tag filters while the monitors and incidents screens drew a bare
- * key beside a bordered select; the same bar then held two ideas of what a
- * toolbar control is, and which one you got depended on the screen
- * (DESIGN.md §8.4).
- *
- * The frame is the status filter's: a 1px `--border-control` frame at
- * `--r-md` over `--surface-2`, 2px of padding, `--r-sm` on the things inside
- * it — 8 − 2 = 6, concentric by §2.7 — so the two clusters read as siblings.
- * Label and control sit on one baseline, which is the misalignment SUB-134
- * reported.
- *
- * **It is still a native `<select>`.** Nothing here replaces the control: the
- * frame is a box drawn around a real labelled select, so the OS picker on a
- * phone, the keyboard behaviour, the screen-reader role and the `<label>`
- * association all survive untouched. A custom listbox would have to re-earn
- * every one of those, and these lists are a handful of values long — the case
- * where native is simply better.
- *
- * **Focus.** The select keeps its own `:focus-visible` outline (below): it is
- * drawn outside the select's box, the frame sets no `overflow`, so the ring
- * paints over the frame and stays fully visible. The frame additionally warms
- * on `:focus-within`. Nothing here writes `outline: none`, so the indicator is
- * never removed — only doubled.
- */
-.tb-field {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  height: var(--size-col-2xs);
-  padding: var(--space-0h) var(--space-2h) var(--space-0h) var(--space-2);
-  border: 1px solid var(--border-control);
-  border-radius: var(--r-md);
-  background: var(--surface-2);
-  transition: border-color var(--dur-hover) var(--ease);
-}
-
-.tb-field:hover,
-.tb-field:focus-within { border-color: var(--border-hi); }
-
-.tb-label {
-  @apply caps-legend;
-  white-space: nowrap;
-}
-
-/*
- * The glyph, ahead of the key.
- *
- * `aria-hidden` on the icon component itself: the `<label>` already names the
- * control, and an icon that announces itself makes a screen reader say the
- * filter twice. Selected as the frame's direct `<svg>` child rather than by a
- * class, the same way `.icon-tile > svg` sizes a card header's glyph — the
- * icons in this set carry no class of their own, so the container sizes them
- * and a mixed set still lands on one optical size.
- */
-.tb-field > svg {
-  width: var(--size-icon-sm);
-  height: var(--size-icon-sm);
-  flex: none;
-  color: var(--ink-3);
-}
-
-.tb-field:hover > svg,
-.tb-field:focus-within > svg { color: var(--ink-2); }
-
-/*
- * Inside the frame the select gives up its own edge and fill.
- *
- * The frame is already the control's box, and a bordered select inside a
- * bordered frame is the double-framing §2.7 removes everywhere else. It keeps
- * its type and — this is the part that matters — its focus ring.
- *
- * **Width.** As wide as its widest option, up to `--size-control-select`. A
- * native select sizes itself to its widest option, not to the chosen one, so a
- * frame does not change width when a value is picked. One fixed width for
- * every select no longer lines anything up: each frame also holds its key,
- * and "Show" and "customer" are not one length. A fixed width would leave a
- * gutter of empty fill after "Any" or cut "Open and resolved". The cap is for
- * tag values, which are data: a long one ends in an ellipsis instead of
- * pushing the rest of the bar along.
- */
-.tb-select {
-  width: auto;
-  max-width: var(--size-control-select);
-  height: 100%;
-  font: inherit;
-  text-overflow: ellipsis;
-  font-size: var(--type-helper);
-  line-height: var(--lead-helper);
-  /* The caret (select.css) moves to the frame's inner edge, where the frame's
-     own padding already stands off the border; the text stops `--space-4`
-     short of it, the caret's 8px plus a gap. */
-  padding: var(--space-1) var(--space-4) var(--space-1) 0;
-  background-position: right var(--space-1) center, right 0 center;
-  color: var(--ink);
-  /* A longhand: the shorthand would wipe the painted caret. */
-  background-color: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-}
-
-.tb-select:focus-visible {
-  border-color: var(--accent-border);
-  outline: var(--outline-ring-w) solid var(--accent-ring);
-  outline-offset: 1px;
-}
-
-.tb-count {
-  @apply text-helper;
-  /* A filtered result count is data, including when the count is zero. */
-  color: var(--ink-2);
-  white-space: nowrap;
-  margin: 0;
-}
-
 @media (max-width: 640px) {
   .shell-search {
     /* Full width: a 280px field beside anything on a 375px screen leaves
@@ -866,45 +697,6 @@
   .shell-search-kbd {
     display: none;
   }
-
-  .tb-select {
-    /* Same 16px floor as the search input: iOS Safari zooms the page for any
-       focused form control below it, including a select, and does not zoom
-       back out on blur. Moved here with the class it belongs to — it used to
-       live in monitors.css, keyed off `.mon-facet-select`, which meant a
-       filter added to any other screen's toolbar silently lost the floor. */
-    font-size: var(--type-nozoom);
-    line-height: var(--lead-nozoom);
-    padding-block: var(--space-0h);
-    /* No fixed cap here: the cap is sized for helper type, and at 16px it
-       would cut "Open and resolved". The bar is the cap instead. The group
-       wraps, so the control takes the width its own text needs, up to the
-       width of the bar; a native select sizes itself to its widest option,
-       so one long tag value used to push the whole page sideways. That needs
-       all three links below to give: the select may shrink inside its frame,
-       the frame may be no wider than its group, and the group may be no
-       wider than the bar. */
-    max-width: none;
-    min-width: 0;
-  }
-
-  .tb-group { min-width: 0; }
-
-  /*
-   * The frame gives up its fixed height on a phone, for the same reason
-   * `.shell-search` does two rules up.
-   *
-   * `--size-col-2xs` is 34px, sized for a helper-scale select. The no-zoom
-   * floor above puts a 16px control inside it, which does not fit: measured
-   * at 375px the value was sheared in half horizontally across the frame's
-   * bottom edge — the control was there and its text was not readable, which
-   * is worse than either an overflow or a smaller field.
-   */
-  .tb-field {
-    height: auto;
-    max-width: 100%;
-    padding-block: var(--space-0h);
-  }
 }
 
 /*
@@ -917,7 +709,7 @@
  * which cut its own keycap in half — and the title is the one the bar is for.
  * The word and the keycap go; the accessible name ("Search") and the tooltip
  * stay on the button. After the phone block above, which sizes `.shell-search`
- * as a full-width field for the toolbar's filters.
+ * as a full-width field for the list headers' filters.
  */
 @media (max-width: 900px) {
   .shell-command-launcher {

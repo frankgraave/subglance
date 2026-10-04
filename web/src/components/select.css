@@ -13,8 +13,8 @@
  * would end, and the text stops `--space-8` from the edge so a long option
  * ends before the caret instead of running under it. Longhands only: a
  * `background` shorthand here would reset the fill a field's own class gives
- * it, and one in a field's class resets the caret, which is why `.tb-select`
- * writes `background-color`. `native-controls.browser.test.ts` fails on a
+ * it, and one in a field's class resets the caret, which is why a field's
+ * class writes `background-color`. `native-controls.browser.test.ts` fails on a
  * rendered select whose caret was not painted.
  */
 .select {

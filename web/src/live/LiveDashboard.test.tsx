@@ -17,16 +17,6 @@ import { DEFAULT_PING_INTERVAL_MS, STALE_AFTER_PINGS } from "./connection";
 import { monitorsQueryKey } from "./api";
 import type { Monitor } from "../monitors/types";
 
-import { ShellSlots } from "../shell/ShellSlots";
-
-/*
- * Every render gets the shell's two portal targets (SUB-138).
- *
- * This screen contributes its filter field and its filters to the page
- * toolbar. Without the slot `ToolbarTools` renders null — which is
- * correct for the status wall and wrong here — so the controls would vanish
- * and every assertion about them would pass by not looking.
- */
 /** The status tab for down monitors in the list's header, or null. */
 const downTab = () => screen.queryByRole("button", { name: /^Down \d+$/ });
 
@@ -39,12 +29,7 @@ function render(ui: React.ReactElement) {
       : String(input) === "/api/v1/connectivity"
         ? Promise.resolve(new Response(JSON.stringify(onlineConnectivity)))
         : monitorFetch(input, init));
-  return renderBare(
-    <>
-      <ShellSlots />
-      {ui}
-    </>,
-  );
+  return renderBare(ui);
 }
 
 
@@ -572,7 +557,6 @@ describe("LiveDashboard", () => {
         />,
       );
       expect(screen.getAllByText(/Loading monitors…/).length).toBeGreaterThan(0);
-      expect(document.querySelector(".shell-toolbar-slot")?.childElementCount ?? 0).toBe(0);
       fireEvent.click(view()!);
       fireEvent.click(screen.getByRole("button", { name: "Status wall" }));
       expect(chosen).toEqual(["wall"]);

@@ -168,7 +168,7 @@ describe("the accessibility gate itself", () => {
   });
   it("has no remaining waivers for the repaired secondary text roles", () => {
     expect(WAIVERS.filter((entry) =>
-      /\.(?:inc-sub|tb-count|mon-detail-note)\b/.test(entry.selector),
+      /\.(?:inc-sub|mon-detail-note)\b/.test(entry.selector),
     )).toEqual([]);
     // Remaining auth debt is out of this repair's scope. In particular,
     // do not turn those exact selectors into wildcard useId exemptions.
@@ -309,7 +309,6 @@ describe.each(["light", "dark"])("readable secondary text in %s", (theme) => {
     { screenName: "monitor detail", selector: ".mon-detail-note" },
     { screenName: "incidents", selector: ".inc-sub" },
     { screenName: "incidents", selector: ".mon-detail-note" },
-    { screenName: "incidents", selector: ".tb-count" },
     { screenName: "monitors", selector: ".card-note" },
   ])("$selector on $screenName clears AA without a waiver", async ({ screenName, selector }) => {
     const context = await browser.createBrowserContext();

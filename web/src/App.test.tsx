@@ -13,7 +13,6 @@ import App from "./App";
 import { disabledWatchdog } from "./watchdog/fixtures";
 import { COMPACT_MAX_WIDTH } from "./layout/useMediaQuery";
 import { LAYOUT_STORAGE_KEY } from "./shell/preferences";
-import { setToolbarSlot } from "./shell/toolbarSlot";
 
 /**
  * The shell as a whole. These are the acceptance criteria of SUB-64 rather
@@ -95,18 +94,6 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  /*
-   * The shell's portal slots are module state (SUB-138), so an unmounted
-   * topbar leaves its detached node published. The next test then portals its
-   * search into a node nobody can query, and every assertion that walks the
-   * masthead sees a bar with one control missing — which is exactly the kind
-   * of failure that looks like a product bug and is not.
-   *
-   * React clears them on unmount via the ref callback, but `cleanup()` runs
-   * the unmount after this file's own listeners have already been torn down
-   * in some orderings, so this is belt and braces.
-   */
-  setToolbarSlot(null);
 });
 
 describe("the app shell", () => {

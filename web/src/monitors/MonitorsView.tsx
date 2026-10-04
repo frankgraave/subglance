@@ -475,7 +475,7 @@ export function MonitorsView({
           {/* Drawn as the count under the header is: a count about the list
               is helper text, not a sentence in body ink beside the controls
               it counts for. */}
-          <p className="tb-count" role="status">{selectedIds.length === 0 ? "" : `${selectedIds.length} selected${hiddenSelectionCount > 0 ? ` · ${hiddenSelectionCount} hidden by filters` : ""}`}</p>
+          <p className="bulk-tags-count" role="status">{selectedIds.length === 0 ? "" : `${selectedIds.length} selected${hiddenSelectionCount > 0 ? ` · ${hiddenSelectionCount} hidden by filters` : ""}`}</p>
         </div>}
         {loading || error !== null ? (
           /*

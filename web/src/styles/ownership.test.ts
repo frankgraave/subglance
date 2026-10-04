@@ -35,8 +35,6 @@ const DETAIL_COLUMN =
   "The monitor detail's page column and empty states, which the incidents, notifications and missing-monitor screens take so every screen reads at one measure.";
 const INCIDENT_ROWS =
   "The monitor detail lists that monitor's incidents with the incidents screen's own rows and notices, so the two lists cannot drift apart.";
-const PAGE_TOOLBAR =
-  "The page toolbar is the shell's, and each view fills its portal slot with the shell's own toolbar fields (AGENTS.md, Where a control belongs).";
 const SHELL_ICON =
   "The status wall's exit is the shell's icon button: the wall replaces the shell, and its one control should look like the one it stands in for.";
 const BRAND_LAMP =
@@ -62,8 +60,6 @@ const exceptions = new Map<string, string>([
   ["inc-churn", INCIDENT_ROWS],
   ["inc-list", INCIDENT_ROWS],
   ["inc-notice", INCIDENT_ROWS],
-  ["tb-count", PAGE_TOOLBAR],
-  ["tb-group", PAGE_TOOLBAR],
   ["shell-icon", SHELL_ICON],
   ["shell-icon-btn", SHELL_ICON],
   ["led", BRAND_LAMP],
