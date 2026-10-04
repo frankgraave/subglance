@@ -7,7 +7,7 @@
  */
 
 import { formatDuration } from "./detail";
-import type { Monitor, MonitorStatus, Recovery } from "./types";
+import type { Monitor, MonitorStatus, PushWaitingReason, Recovery } from "./types";
 
 /** How each status is spoken and written. Colour never stands alone (DESIGN.md §2.3). */
 export const STATUS_LABEL: Record<MonitorStatus, string> = {
@@ -127,4 +127,38 @@ export function describePushWindow(intervalS: number, graceS: number): string {
   return graceS > 0
     ? `${every}, ${formatDuration(graceS)} grace`
     : `${every}, no grace`;
+}
+
+/**
+ * Why a push monitor is waiting, in one sentence for its page.
+ *
+ * Three different waits, and each sends the reader somewhere else. A monitor
+ * that has never reported is waiting on somebody to wire up its URL. One that
+ * was resumed, or whose window closed while SubGlance was not running, is
+ * waiting on its job's next run: the earlier window proved nothing, because
+ * reports for a paused monitor are not recorded and a stopped SubGlance
+ * could not receive them, so a fresh one started.
+ *
+ * On a stale stream the sentence is the last known state, not a present-tense
+ * claim, for the same reason the status word beside it turns into "Was
+ * waiting": nothing on the page knows whether the report has arrived since.
+ */
+export function waitingReason(
+  since: PushWaitingReason | undefined,
+  stale = false,
+): string {
+  switch (since) {
+    case "resumed":
+      return stale
+        ? "When last heard, it was waiting for the first report since the monitor was resumed."
+        : "Waiting for the first report since the monitor was resumed.";
+    case "restarted":
+      return stale
+        ? "When last heard, it was waiting for the first report since SubGlance started."
+        : "Waiting for the first report since SubGlance started.";
+    default:
+      return stale
+        ? "When last heard, nothing had reported in yet."
+        : "Nothing has reported in yet.";
+  }
 }

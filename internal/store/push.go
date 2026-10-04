@@ -67,6 +67,64 @@ func (m Monitor) PushDeadline(last time.Time) time.Time {
 	return last.Add(time.Duration(m.PushIntervalS+m.PushGraceS) * time.Second)
 }
 
+// PushWindowReason says why a push monitor's current window starts where it
+// does. The empty value is the ordinary case: the last recorded report, or the
+// moment the monitor was created if it has never had one.
+type PushWindowReason string
+
+const (
+	// PushWindowResumed: the monitor was resumed after its last recorded
+	// report. Reports for a paused monitor are accepted and not recorded,
+	// so the job may well have reported during the pause, and the window
+	// counts from the resume instead.
+	PushWindowResumed PushWindowReason = "resumed"
+
+	// PushWindowRestarted: the window closed while SubGlance was not
+	// running. A job that reported then was refused a connection, so the
+	// silence proves nothing, and the window counts from the moment this
+	// process started listening.
+	PushWindowRestarted PushWindowReason = "restarted"
+)
+
+// PushWindow is the window a push monitor is currently waiting inside.
+type PushWindow struct {
+	// Start is the moment the window is measured from.
+	Start time.Time
+	// Deadline is when silence starts counting as a failure.
+	Deadline time.Time
+	// Reason is why Start is not simply the last report.
+	Reason PushWindowReason
+}
+
+// PushWindow reports the window this monitor is waiting inside, given its
+// last activity (see LastActivity) and the moment this process started
+// listening for push reports. A zero listeningSince disables the restart rule.
+//
+// The rule is that a deadline which passed while SubGlance could not hear the
+// job is not evidence that the job failed:
+//
+//   - After a resume, the window counts from the resume, because reports sent
+//     during the pause were thrown away by design. The job gets one full
+//     window, and no more.
+//   - After a start, the window counts from the start, but only for a deadline
+//     that fell before it. A deadline still ahead of the start is untouched:
+//     a short restart moves nothing, and an instance that restarts every day
+//     still reports a daily job that stopped. Restarting every window from the
+//     start would make such an instance silent forever.
+func (m Monitor) PushWindow(last, listeningSince time.Time) PushWindow {
+	w := PushWindow{Start: last}
+	if m.ResumedAt.After(w.Start) {
+		w.Start, w.Reason = m.ResumedAt, PushWindowResumed
+	}
+	w.Deadline = m.PushDeadline(w.Start)
+
+	if !listeningSince.IsZero() && w.Deadline.Before(listeningSince) {
+		w.Start, w.Reason = listeningSince, PushWindowRestarted
+		w.Deadline = m.PushDeadline(w.Start)
+	}
+	return w
+}
+
 // ListEnabledPushMonitors returns the enabled push monitors, which is the set
 // the watchdog has to keep an eye on.
 func (db *DB) ListEnabledPushMonitors(ctx context.Context) ([]Monitor, error) {

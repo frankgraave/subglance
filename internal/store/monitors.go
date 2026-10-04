@@ -42,6 +42,12 @@ type Monitor struct {
 	SSLWarnDays int
 	Enabled     bool
 
+	// ResumedAt is when the monitor last went from paused to enabled. Zero
+	// when it never has. The push watchdog reads it: reports for a paused
+	// monitor are not recorded, so a window that closed during the pause
+	// proves nothing, and the next window starts here instead.
+	ResumedAt time.Time
+
 	// MinTLSVersion is the lowest TLS version this monitor will negotiate,
 	// as a crypto/tls constant. Zero means the monitor has no opinion and
 	// the checker's default (TLS 1.2) applies.
@@ -133,7 +139,7 @@ const monitorColumns = `
 	method, expected_status, keyword, keyword_mode, follow_redirects,
 	headers_json, body, ssl_warn_days, enabled, capture_response, repeat_after_s,
 	min_tls_version, push_token_prefix, push_interval_s, push_grace_s,
-	json_path, json_operator, json_expected,
+	json_path, json_operator, json_expected, resumed_at,
 	created_at, updated_at`
 
 // queryMonitors runs a monitor SELECT with a caller-supplied WHERE clause.
@@ -214,6 +220,7 @@ func scanMonitor(s scanner) (Monitor, error) {
 		jsonPath    sql.NullString
 		jsonOp      sql.NullString
 		jsonWant    sql.NullString
+		resumed     sql.NullInt64
 		created     int64
 		updated     int64
 	)
@@ -224,7 +231,7 @@ func scanMonitor(s scanner) (Monitor, error) {
 		&m.Method, &m.ExpectedStatus, &keyword, &m.KeywordMode, &m.FollowRedirects,
 		&headersJSON, &body, &m.SSLWarnDays, &m.Enabled, &m.CaptureResponse, &m.RepeatAfterS,
 		&minTLS, &pushPrefix, &pushEvery, &pushGrace,
-		&jsonPath, &jsonOp, &jsonWant,
+		&jsonPath, &jsonOp, &jsonWant, &resumed,
 		&created, &updated,
 	)
 	if err != nil {
@@ -241,6 +248,9 @@ func scanMonitor(s scanner) (Monitor, error) {
 	m.PushGraceS = int(pushGrace.Int64)
 	if jsonPath.Valid && jsonOp.Valid {
 		m.JSONAssertion = &JSONAssertion{Path: jsonPath.String, Operator: jsonOp.String, Expected: jsonWant.String}
+	}
+	if resumed.Valid {
+		m.ResumedAt = time.Unix(resumed.Int64, 0).UTC()
 	}
 	m.CreatedAt = time.Unix(created, 0).UTC()
 	m.UpdatedAt = time.Unix(updated, 0).UTC()
@@ -385,10 +395,25 @@ func (db *DB) DeleteMonitor(ctx context.Context, id int64) error {
 // version stamp behind ETag/If-Match, and at second resolution a pause in the
 // same second as a previous write would leave the stamp equal and let a stale
 // conditional PATCH through.
+//
+// resumed_at moves only on a real transition from paused to enabled; see
+// resumedAtSQL.
+// resumedAtSQL is the assignment that stamps a resume. It takes two
+// parameters: the new enabled value, then the time.
+//
+// The CASE reads `enabled` before the statement's own assignment to it,
+// because SQLite evaluates every right-hand side against the row as it was.
+// So the stamp moves only when a paused row becomes enabled. Resuming a
+// monitor that is already running changes nothing, deliberately: otherwise a
+// repeated resume, or an edit that sends `enabled: true` along with a new
+// name, would quietly push a push monitor's deadline back by a full window.
+const resumedAtSQL = "resumed_at = CASE WHEN ? AND enabled = 0 THEN ? ELSE resumed_at END"
+
 func (db *DB) SetMonitorEnabled(ctx context.Context, id int64, enabled bool) error {
+	now := time.Now().Unix()
 	_, err := db.Writer.ExecContext(ctx,
-		"UPDATE monitors SET enabled = ?, updated_at = MAX(?, updated_at + 1) WHERE id = ?",
-		enabled, time.Now().Unix(), id)
+		"UPDATE monitors SET enabled = ?, "+resumedAtSQL+", updated_at = MAX(?, updated_at + 1) WHERE id = ?",
+		enabled, enabled, now, now, id)
 	if err != nil {
 		return fmt.Errorf("set monitor %d enabled=%v: %w", id, enabled, err)
 	}
@@ -990,6 +1015,7 @@ func (db *DB) updateMonitor(ctx context.Context, m Monitor, expected []int64) (M
 		nullTLSVersion(m.MinTLSVersion),
 		nullInt(m.PushIntervalS), pushGraceValue(m),
 		jsonPath, jsonOp, jsonWant,
+		m.Enabled, next,
 		next, m.ID,
 	}
 
@@ -1074,6 +1100,7 @@ const updateMonitorSetClause = `
 		min_tls_version = ?,
 		push_interval_s = ?, push_grace_s = ?,
 		json_path = ?, json_operator = ?, json_expected = ?,
+		` + resumedAtSQL + `,
 		updated_at = MAX(?, updated_at + 1)
 	WHERE id = ?`
 

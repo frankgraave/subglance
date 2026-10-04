@@ -1,0 +1,18 @@
+-- 0025_push_resumed_at.sql — remember when a monitor was last resumed.
+--
+-- A push monitor measures silence, and a ping for a paused monitor is accepted
+-- and deliberately not recorded. Without this column the watchdog measured a
+-- resumed monitor's deadline from its last report before the pause, so a job
+-- whose window closed while nobody was listening was declared down on the
+-- first sweep after resuming: the evidence was thrown away and the alarm was
+-- raised over its absence.
+--
+-- updated_at cannot stand in for it. It moves on every edit, and it is the
+-- version stamp behind If-Match, so reading it as "resumed at" would let a
+-- rename restart a job's window.
+--
+-- NULL means the monitor has never gone from paused to enabled, which is every
+-- existing row: nothing is backfilled, because no row knows when it was last
+-- resumed and inventing a moment would move deadlines that are correct today.
+-- The column is written for every monitor type and read only for push.
+ALTER TABLE monitors ADD COLUMN resumed_at INTEGER;

@@ -57,7 +57,16 @@ export type PushWindow = {
    * can be told apart. The token itself is never readable again.
    */
   tokenPrefix: string;
+  /**
+   * Why a push monitor that has reported before is waiting again: its
+   * window restarted when it was resumed, or when SubGlance started after
+   * the window had closed. Absent when the last report still stands.
+   */
+  waitingSince?: PushWaitingReason;
 };
+
+/** The server's `push_waiting`: where a push monitor's fresh window began. */
+export type PushWaitingReason = "resumed" | "restarted";
 
 export type Monitor = {
   maintenance?: boolean;
@@ -185,6 +194,8 @@ export type ApiMonitor = {
   push_interval_s?: number;
   push_grace_s?: number;
   push_token_prefix?: string;
+  /** Push only: why a monitor that has reported before is waiting again. */
+  push_waiting?: string;
   heartbeats?: ApiHeartbeat[];
   /** List-only attachments; runtime validation preserves unknown vs empty. */
   channels?: { id: number; name: string }[];
@@ -282,10 +293,16 @@ function sanitiseTags(
  */
 function pushFromApi(api: ApiMonitor): PushWindow | undefined {
   if (api.type !== "push") return undefined;
+  const waiting = api.push_waiting;
   return {
     intervalS: api.push_interval_s ?? 0,
     graceS: api.push_grace_s ?? 0,
     tokenPrefix: api.push_token_prefix ?? "",
+    // Only the two words the server sends; anything else is dropped rather
+    // than rendered as a reason nobody wrote.
+    ...(waiting === "resumed" || waiting === "restarted"
+      ? { waitingSince: waiting }
+      : {}),
   };
 }
 
@@ -298,6 +315,11 @@ function pushFromApi(api: ApiMonitor): PushWindow | undefined {
  * coming. A push monitor has no scheduler behind it, so nothing is coming
  * until somebody wires up the URL, and rendering that as amber "pending" with
  * an empty beat bar reads as a monitor that is failing to start.
+ *
+ * A push monitor that has reported before can be waiting too: after a resume,
+ * or after SubGlance started once its window had closed, the server starts a
+ * fresh window and says so in `push_waiting`. Nothing is overdue and nothing
+ * is coming from SubGlance's side either, so it is the same quiet state.
  */
 function statusFromApi(
   api: ApiMonitor,
@@ -308,7 +330,11 @@ function statusFromApi(
     api.last_check === null ||
     api.last_check === undefined ||
     api.last_check === "";
-  if (push !== undefined && neverReported && api.status === "pending")
+  if (
+    push !== undefined &&
+    api.status === "pending" &&
+    (neverReported || push.waitingSince !== undefined)
+  )
     return "waiting";
   return api.status;
 }

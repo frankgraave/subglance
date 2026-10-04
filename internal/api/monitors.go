@@ -89,6 +89,14 @@ type monitorResponse struct {
 	PushIntervalS int `json:"push_interval_s,omitempty"`
 	PushGraceS    int `json:"push_grace_s,omitempty"`
 
+	// PushWaiting says why a push monitor whose status is "pending" is
+	// waiting although it has reported before: "resumed" when nothing has
+	// been recorded since it was resumed, "restarted" when its window
+	// closed while SubGlance was not running. Omitted otherwise. Without
+	// it, a monitor waiting out its fresh window would read "up" on the
+	// strength of a report from before the gap.
+	PushWaiting string `json:"push_waiting,omitempty"`
+
 	// Tags is a key/value map (`{"env":"prod"}`), omitted when empty so the
 	// response stays byte for byte what it was for untagged monitors.
 	//
@@ -999,6 +1007,7 @@ func (s *Server) describeMonitor(r *http.Request, m store.Monitor) monitorRespon
 		resp.Maintenance = &active
 	}
 	hb, err := s.db.LatestHeartbeat(ctx, m.ID)
+	hasBeat := err == nil
 	switch {
 	case err == nil:
 		// The last heartbeat says what the last probe saw; it does not say
@@ -1056,6 +1065,13 @@ func (s *Server) describeMonitor(r *http.Request, m store.Monitor) monitorRespon
 		s.log.Error("open incident", "monitor_id", m.ID, "error", err)
 	}
 
+	if m.Type == store.TypePush && resp.Status != "down" && resp.Status != "recovering" {
+		if reason := s.pushWaiting(m, hb, hasBeat); reason != "" {
+			resp.Status = "pending"
+			resp.PushWaiting = reason
+		}
+	}
+
 	if stats, err := s.db.Uptime(ctx, m.ID, 24*time.Hour); err == nil {
 		if stats.Total > 0 {
 			resp.Uptime24h = &stats.Percentage
@@ -1065,6 +1081,31 @@ func (s *Server) describeMonitor(r *http.Request, m store.Monitor) monitorRespon
 	}
 
 	return resp
+}
+
+// pushListeningSource is implemented by the runner, which is the only thing
+// that knows when this process started hearing push reports.
+type pushListeningSource interface {
+	PushListeningSince() time.Time
+}
+
+// pushWaiting reports why a push monitor that has reported before is waiting
+// for its next report rather than standing on its last one: the window it is
+// in started after that report, at a resume or at a start of SubGlance. Empty
+// when the last report is still what the monitor stands on, and when it has
+// never reported, which the UI already tells apart by the missing last_check.
+//
+// The rule is the watchdog's own (store.Monitor.PushWindow), so the API cannot
+// call a monitor up that the watchdog is treating as unheard, or the reverse.
+func (s *Server) pushWaiting(m store.Monitor, last store.Heartbeat, hasBeat bool) string {
+	if !hasBeat {
+		return ""
+	}
+	var since time.Time
+	if src, ok := s.pusher.(pushListeningSource); ok {
+		since = src.PushListeningSince()
+	}
+	return string(m.PushWindow(last.TS, since).Reason)
 }
 
 // requireMonitor confirms a monitor exists before a sub-resource is read.

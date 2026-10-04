@@ -10,6 +10,7 @@ import {
   formatLatency,
   formatUptime,
   statusWord,
+  waitingReason,
 } from "./format";
 import { windowCoverageCaveat, type Incident, type UptimeWindow } from "./detail";
 import { Value } from "../components/Value";
@@ -378,7 +379,7 @@ export function MonitorDetail({
         ) : null}
         {status === "waiting" ? (
           <p className="mon-detail-reason mon-detail-reason--quiet">
-            Nothing has reported in yet.
+            {waitingReason(push?.waitingSince, stale)}
           </p>
         ) : null}
       </header>

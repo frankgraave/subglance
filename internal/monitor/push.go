@@ -121,9 +121,17 @@ func (r *Runner) runPushWatchdog(ctx context.Context) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	// Sweep once immediately. After a restart, a monitor that went overdue
-	// while the process was down should be reported now rather than at the
-	// end of the first tick — the outage did not pause because the process did.
+	// The process is listening from here on, unless main already said so
+	// before it started serving; see MarkPushListening.
+	r.MarkPushListening()
+
+	// Sweep once immediately, so the cadence starts with the process rather
+	// than one tick later. It no longer reports deadlines that passed while
+	// the process was down, which it once did on the argument that the
+	// outage did not pause because the process did. That argument missed
+	// that the job's reports could not arrive either: a job that ran on time
+	// was refused a connection, and alarming over that silence is a false
+	// alarm. Such a window starts again now; see store.Monitor.PushWindow.
 	r.sweepOverduePushMonitors(ctx)
 
 	for {
@@ -166,7 +174,8 @@ func (r *Runner) sweepOverduePushMonitors(ctx context.Context) {
 			continue
 		}
 
-		deadline := m.PushDeadline(last)
+		window := m.PushWindow(last, r.PushListeningSince())
+		deadline := window.Deadline
 		if !now.After(deadline) {
 			continue
 		}
@@ -184,14 +193,15 @@ func (r *Runner) sweepOverduePushMonitors(ctx context.Context) {
 			"monitor", m.Name, "monitor_id", m.ID,
 			"expected_every", time.Duration(m.PushIntervalS)*time.Second,
 			"grace", time.Duration(m.PushGraceS)*time.Second,
-			"last_report", last)
+			"last_report", last,
+			"window_start", window.Start)
 
 		r.record(scheduler.Outcome{
 			Monitor: pushCheckerMonitor(m),
 			Result: checker.Result{
 				OK:        false,
 				Kind:      checker.FailPushOverdue,
-				Error:     overdueMessage(m, now.Sub(last)),
+				Error:     overdueMessage(m, window, now),
 				CheckedAt: deadline,
 			},
 		})
@@ -203,8 +213,44 @@ func (r *Runner) sweepOverduePushMonitors(ctx context.Context) {
 // "no report for 3h2m0s, expected every 1h0m0s" beats "monitor is down",
 // because the two sentences prompt different actions: one sends someone to
 // look at the job, the other sends them to look at the network.
-func overdueMessage(m store.Monitor, since time.Duration) string {
-	return fmt.Sprintf("no report for %s, expected every %s",
-		since.Round(time.Second),
-		(time.Duration(m.PushIntervalS) * time.Second).Round(time.Second))
+//
+// When the window did not start at the last report, the sentence says where it
+// did start. "No report for 9 days" about a monitor that was paused for eight
+// of them would be true of the database and false of the job.
+func overdueMessage(m store.Monitor, w store.PushWindow, now time.Time) string {
+	since := now.Sub(w.Start).Round(time.Second)
+	every := (time.Duration(m.PushIntervalS) * time.Second).Round(time.Second)
+	switch w.Reason {
+	case store.PushWindowResumed:
+		return fmt.Sprintf("no report in the %s since the monitor was resumed, expected every %s", since, every)
+	case store.PushWindowRestarted:
+		return fmt.Sprintf("no report in the %s since SubGlance started, expected every %s", since, every)
+	default:
+		return fmt.Sprintf("no report for %s, expected every %s", since, every)
+	}
+}
+
+// MarkPushListening records that this process is listening for push reports
+// from now on. Only the first call counts: the moment SubGlance began hearing
+// reports is a fact about the process, and neither a later call nor a second
+// Run on the same runner moves it.
+//
+// main calls it before the HTTP server or Run starts. Run's watchdog would set
+// it too, but only after restoring incident state, and the API answers
+// requests in that interval: it would read the zero time, skip the restart
+// rule, and call a monitor up on a report from before the downtime while the
+// watchdog is about to treat it as unheard.
+func (r *Runner) MarkPushListening() {
+	r.pushListeningSince.CompareAndSwap(0, r.now().UnixNano())
+}
+
+// PushListeningSince is when this process started listening for push reports,
+// or the zero time before MarkPushListening or Run. The API reads it to say
+// why a push monitor is waiting.
+func (r *Runner) PushListeningSince() time.Time {
+	ns := r.pushListeningSince.Load()
+	if ns == 0 {
+		return time.Time{}
+	}
+	return time.Unix(0, ns)
 }
