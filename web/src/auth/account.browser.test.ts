@@ -104,13 +104,8 @@ it.each([[false, false], [true, false], [false, true]])("restores the exact draf
   page.on("dialog", (d) => L(`DIALOG ${d.type()} ${d.message()}`));
   page.on("console", (c) => L(`CONSOLE ${c.type()} ${c.text().slice(0, 200)}`));
   page.on("pageerror", (e) => L(`PAGEERROR ${String(e).slice(0, 300)}`));
-  await page.evaluate(() => {
-    const w = window as unknown as { __ev: string[] };
-    w.__ev = [];
-    for (const t of ["popstate", "hashchange"]) window.addEventListener(t, () => w.__ev.push(`${t} ${location.pathname}${location.hash} len=${history.length}`), true);
-  });
   const state = () => Promise.race([
-    page.evaluate(() => JSON.stringify({ url: location.href, len: history.length, title: document.title, form: !!document.querySelector(".form-column"), value: (document.querySelector('input[id$="-name"]') as HTMLInputElement | null)?.value, active: document.activeElement?.outerHTML.slice(0, 160), ev: (window as unknown as { __ev: string[] }).__ev, drawer: !!document.querySelector(".drawer-panel"), dialogs: document.querySelectorAll("[role=dialog]").length, h1: Array.from(document.querySelectorAll("h1")).map((h) => h.textContent), alerts: Array.from(document.querySelectorAll("[role=alert]")).map((a) => a.textContent?.slice(0, 120)), body: document.body.innerText.slice(0, 400) })),
+    page.evaluate(() => JSON.stringify({ url: location.href, len: history.length, title: document.title, form: !!document.querySelector(".form-column"), value: (document.querySelector('input[id$="-name"]') as HTMLInputElement | null)?.value, active: document.activeElement?.outerHTML.slice(0, 160), drawer: !!document.querySelector(".drawer-panel"), dialogs: document.querySelectorAll("[role=dialog]").length, h1: Array.from(document.querySelectorAll("h1")).map((h) => h.textContent), alerts: Array.from(document.querySelectorAll("[role=alert]")).map((a) => a.textContent?.slice(0, 120)), body: document.body.innerText.slice(0, 400) })),
     new Promise<string>((r) => setTimeout(() => r("page.evaluate hung"), 2000)),
   ]);
   let timer: ReturnType<typeof setTimeout> | undefined;
