@@ -528,6 +528,14 @@ that pause in the upgrade window and any supervisor startup timeout; subsequent
 starts skip the already-applied migration. Existing rows keep an unknown capture
 reason rather than being classified from today's monitor settings.
 
+Coming from `v0.1.0-rc4` or earlier, expect a step in every HTTP monitor's
+latency chart at the moment of the upgrade. Those releases reused one
+connection between checks; HTTP checks now open a fresh one every time, so the
+recorded latency includes the DNS lookup and the TCP and TLS handshakes it used
+to skip — usually two or three extra round trips to the server. Nothing got
+slower: the chart now measures what a new visitor waits for. Latency recorded
+before and after the upgrade is not directly comparable.
+
 ## Backup and restore
 
 > [!WARNING]

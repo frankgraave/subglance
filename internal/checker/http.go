@@ -55,24 +55,23 @@ const maxBodyRead = 1 << 20
 
 // HTTPChecker probes HTTP and HTTPS endpoints.
 //
-// It is safe for concurrent use and should be shared: the embedded transport
-// pools connections, which matters when hundreds of monitors run on the same
-// interval.
+// It is safe for concurrent use and is shared by every HTTP monitor. Sharing
+// it does not share connections: each check dials its own, see
+// NewHTTPChecker.
 type HTTPChecker struct {
 	client *http.Client
 	guard  *Guard
 	ua     string
 
-	// transport is the shared pool, kept so a monitor asking for a different
-	// TLS floor can be given a clone of it rather than a fresh one built per
-	// check — see minVersionClient.
+	// transport is the shared transport, kept so a monitor asking for a
+	// different TLS floor can be given a clone of it rather than a fresh one
+	// built per check — see minVersionClient.
 	transport *http.Transport
 
-	// minVersionClients caches one client per non-default TLS floor. A
-	// monitor with a lowered floor must not share a connection pool with the
-	// default one: http.Transport keys idle connections on host and scheme,
-	// not on tls.Config, so a reused connection would silently carry the
-	// wrong negotiated terms.
+	// minVersionClients caches one client per non-default TLS floor. The
+	// floor lives in the transport's tls.Config, so a monitor with another
+	// floor needs a transport of its own; the clone keeps every other
+	// setting, including the one that gives each check a fresh connection.
 	minVersionMu      sync.Mutex
 	minVersionClients map[uint16]*http.Client
 }
@@ -82,22 +81,30 @@ type HTTPOptions struct {
 	// Guard enforces the SSRF policy. Required.
 	Guard *Guard
 
-	// MaxIdleConnsPerHost bounds the connection pool. Zero means 2.
-	MaxIdleConnsPerHost int
-
 	// UserAgent identifies SubGlance to the monitored service. Sites that
 	// block unknown agents are a real support burden, and an honest agent
 	// string lets an admin see who is polling them.
 	UserAgent string
 }
 
-// NewHTTPChecker returns a checker sharing one connection pool.
+// NewHTTPChecker returns a checker whose every check opens its own connection.
+//
+// Keep-alive is off on purpose. A check that reuses a warm connection only
+// proves that the server still answers on a socket that was already open, not
+// that a visitor can reach it: a firewall change that blocks new connections,
+// a DNS record pointing at a dead host or a broken TLS reload all leave an
+// established connection working. A reused TLS session also keeps the
+// certificate it was opened with, so a renewed certificate went unseen and
+// its expiry warning stayed up until the connection happened to close. And
+// latency over a warm connection leaves out the DNS lookup and the TCP and TLS
+// handshakes a visitor waits for.
+//
+// The cost is one TCP and one TLS handshake per check: at 500 monitors on a
+// 60-second interval, about eight a second, which is nothing for this host and
+// little for the servers being checked.
 func NewHTTPChecker(opts HTTPOptions) *HTTPChecker {
 	if opts.Guard == nil {
 		opts.Guard = NewGuard(false) // fail closed
-	}
-	if opts.MaxIdleConnsPerHost == 0 {
-		opts.MaxIdleConnsPerHost = 2
 	}
 	if opts.UserAgent == "" {
 		opts.UserAgent = "SubGlance/1.0 (+https://subglance.com)"
@@ -110,10 +117,11 @@ func NewHTTPChecker(opts HTTPOptions) *HTTPChecker {
 	}
 
 	transport := &http.Transport{
-		DialContext:           dialer.DialContext,
-		MaxIdleConns:          100,
-		MaxIdleConnsPerHost:   opts.MaxIdleConnsPerHost,
-		IdleConnTimeout:       90 * time.Second,
+		DialContext: dialer.DialContext,
+		// One connection per request: HTTP/1.1 sends Connection: close and
+		// hangs up after the response, HTTP/2 marks its connection single-use.
+		// A redirect within one check dials again too, even to the same host.
+		DisableKeepAlives:     true,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 		ForceAttemptHTTP2:     true,
@@ -334,18 +342,10 @@ func (c *HTTPChecker) check(ctx context.Context, m Monitor, scope *headerScope) 
 		}
 		return classifyRequestError(start, ctx, err)
 	}
-	// drain is cleared when a bounded body read stops at its limit: the
-	// verdict is already in hand, and draining a stream that is still open
-	// would hold the check until its deadline.
-	drain := true
-	defer func() {
-		// Drain before closing so the connection can be reused; an undrained
-		// body forces a new TCP handshake on every single check.
-		if drain {
-			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxBodyRead))
-		}
-		_ = resp.Body.Close()
-	}()
+	// Closed without reading the rest: the connection is never reused, so
+	// there is nothing to drain it for, and reading on would only spend the
+	// check's time on bytes no verdict depends on.
+	defer func() { _ = resp.Body.Close() }()
 
 	res := Result{
 		OK:         true,
@@ -401,9 +401,6 @@ func (c *HTTPChecker) check(ctx context.Context, m Monitor, scope *headerScope) 
 			}
 			res.Error = fmt.Sprintf("read body: %v", err)
 			return res
-		}
-		if int64(len(buf)) == limit {
-			drain = false
 		}
 		if len(buf) > maxBodyRead {
 			buf, oversize = buf[:maxBodyRead], true
