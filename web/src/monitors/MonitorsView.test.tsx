@@ -624,6 +624,17 @@ describe("the inventory's list header", () => {
       view.unmount();
     }
   });
+
+  it("forgets every choice when the list empties, so none narrows it when monitors return", () => {
+    const view = render(<MonitorsView monitors={estate} />);
+    fireEvent.change(screen.getByRole("searchbox", { name: "Filter monitors" }), { target: { value: "docs" } });
+    pick("env", "staging");
+    expect(rowNames()).toEqual(["Docs"]);
+    view.rerender(<MonitorsView monitors={[]} />);
+    view.rerender(<MonitorsView monitors={estate} />);
+    expect(rowNames()).toHaveLength(3);
+    expect((screen.getByRole("searchbox", { name: "Filter monitors" }) as HTMLInputElement).value).toBe("");
+  });
 });
 
 describe("the selection bar", () => {

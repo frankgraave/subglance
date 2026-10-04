@@ -183,10 +183,16 @@ export function MonitorsView({
    * field has gone cannot keep narrowing the list once monitors come back.
    */
   const listed = !loading && error === null && monitors.length > 0;
-  if (!loading && error === null && monitors.length === 0 && (query !== "" || type !== "" || pausedFilter !== "")) {
+  if (
+    !loading &&
+    error === null &&
+    monitors.length === 0 &&
+    (query !== "" || type !== "" || pausedFilter !== "" || Object.keys(tags).length > 0)
+  ) {
     setQuery("");
     setType("");
     setPausedFilter("");
+    setTags({});
   }
   const clearChoices = () => {
     setType("");
