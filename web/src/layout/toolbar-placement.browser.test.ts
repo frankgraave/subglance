@@ -1,9 +1,10 @@
 /**
  * Where a screen's controls land, measured in a real browser (SUB-136).
  *
- * Every screen portals its controls into the shell's page toolbar through
- * `ToolbarTools` — its filter field and everything else that narrows the list
- * (SUB-182). The masthead above holds only what works on every screen, search
+ * Monitors and Incidents portal their controls into the shell's page
+ * toolbar through `ToolbarTools` — the filter field and everything else that
+ * narrows the list (SUB-182). The dashboard, Notifications and Settings have
+ * moved theirs to the head of the list they act on (SUB-207, SUB-183). The masthead above holds only what works on every screen, search
  * included, which opens the command menu. The unit suite covers the portal
  * wiring with `ShellSlots`, which renders the target as a bare div. That proves the
  * nodes arrive; it cannot prove any of the four things below, because each is
@@ -120,69 +121,72 @@ async function bars(page: Page) {
   });
 }
 
-/** A screen's filter field, which lives in its own toolbar (SUB-182). */
-const SEARCH = ".shell-toolbar input[type='search']";
 /** The masthead's search: one button, on every screen. */
 const LAUNCHER = ".shell-topbar .shell-command-launcher";
 
 describe("the dashboard", () => {
-  it("puts its filter field, filters and layouts in the toolbar, under the masthead's search", async () => {
+  /*
+   * The dashboard has left the toolbar (SUB-183): its status tabs, text
+   * filter, Filter and View head its card of monitors. These two cases hold
+   * the other side of that move — nothing of the dashboard's comes back into
+   * a bar, the toolbar collapses, and the controls in the card's header still
+   * drive the list under them with a real pointer.
+   */
+  const HEAD = ".mon-board > .card-head";
+
+  it("puts its status tabs, filter field, Filter and View in its list header, not in a bar", async () => {
     const page = await open("/", MONITOR_ITEMS);
     try {
+      const where = (sel: string) =>
+        page.evaluate((s: string, head: string) => {
+          const el = document.querySelector(s);
+          if (el === null) return "missing";
+          if (el.closest(".shell-topbar") !== null) return "masthead";
+          if (el.closest(".shell-toolbar") !== null) return "toolbar";
+          return el.closest(head) !== null ? "header" : "page";
+        }, sel, HEAD);
       expect({
-        filter: await barOf(page, "input[type='search']"),
-        status: await barOf(page, "[role='group'][aria-label='Filter by status']"),
-        groupBy: await barOf(page, ".mon-group-select"),
-        layouts: await barOf(page, "[role='group'][aria-label='Dashboard layout']"),
-        search: await barOf(page, ".shell-command-launcher"),
+        filter: await where("input[type='search']"),
+        status: await where("[role='group'][aria-label='Filter by status']"),
+        tags: await where("button[aria-haspopup='dialog'][aria-label^='Filter']"),
+        view: await where("button[aria-haspopup='dialog'][aria-label^='View']"),
+        search: await where(".shell-command-launcher"),
       }).toEqual({
-        filter: "toolbar",
-        status: "toolbar",
-        groupBy: "toolbar",
-        layouts: "toolbar",
+        filter: "header",
+        status: "header",
+        tags: "header",
+        view: "header",
         search: "masthead",
       });
 
-      const { masthead, toolbar } = await bars(page);
-      if (masthead === null || toolbar === null) throw new Error("a bar is missing");
-      expect(toolbar.display).not.toBe("none");
-      expect(toolbar.height).toBeGreaterThan(0);
-      // Stacked, not overlapping: the toolbar starts where the masthead ends.
-      expect(toolbar.top).toBeGreaterThanOrEqual(masthead.bottom - 1);
-
-      expect(await hittable(page, SEARCH)).toBe(true);
+      const { toolbar } = await bars(page);
+      expect(toolbar?.height ?? 0, "the page toolbar is collapsed").toBe(0);
+      expect(await hittable(page, `${HEAD} input[type='search']`)).toBe(true);
       expect(await hittable(page, LAUNCHER)).toBe(true);
-      expect(
-        await hittable(page, "[aria-label='Filter by status'] button"),
-      ).toBe(true);
-      expect(
-        await hittable(page, "[aria-label='Dashboard layout'] button"),
-      ).toBe(true);
+      expect(await hittable(page, "[aria-label='Filter by status'] button")).toBe(true);
     } finally {
       await page.close();
     }
   });
 
-  it("still drives its own list from both bars", async () => {
-    /*
-     * The portal's promise: the node moves, the handler stays with the list.
-     * Four fixture monitors, one of them down and one named "nightly-...".
-     */
+  it("drives its own list from the header", async () => {
+    /* Four fixture monitors, one of them down and one named "nightly-...". */
     const page = await open("/", MONITOR_ITEMS);
+    const field = `${HEAD} input[type='search']`;
     try {
       const count = () =>
         page.evaluate((sel: string) => document.querySelectorAll(sel).length, MONITOR_ITEMS);
       expect(await count()).toBe(4);
 
-      await page.type(SEARCH, "nightly");
+      await page.type(field, "nightly");
       await page.waitForFunction(
         (sel: string) => document.querySelectorAll(sel).length === 1,
         { timeout: 5_000 },
         MONITOR_ITEMS,
       );
 
-      // Clear the query, then narrow from the other bar instead.
-      await page.$eval(SEARCH, (el) => (el as HTMLInputElement).select());
+      // Clear the query, then narrow from the status tabs instead.
+      await page.$eval(field, (el) => (el as HTMLInputElement).select());
       await page.keyboard.press("Backspace");
       await page.waitForFunction(
         (sel: string) => document.querySelectorAll(sel).length === 4,
@@ -190,19 +194,18 @@ describe("the dashboard", () => {
         MONITOR_ITEMS,
       );
 
-      // Found by its words, as a reader finds it: the chip reads "1 down".
-      const chips = await page.$$(".shell-toolbar .mon-count");
+      // Found by its words, as a reader finds it: the tab reads "Down 1".
+      const tabs = await page.$$(`${HEAD} .mon-tab`);
       let clicked = false;
-      for (const chip of chips) {
-        const text = await chip.evaluate((el) => el.textContent ?? "");
-        if (/\bdown\b/.test(text)) {
-          // A real pointer click on the portalled node, not a synthetic one.
-          await chip.click();
+      for (const tab of tabs) {
+        const text = await tab.evaluate((el) => el.textContent ?? "");
+        if (/^Down\b/.test(text)) {
+          await tab.click();
           clicked = true;
           break;
         }
       }
-      expect(clicked, "no down chip in the toolbar").toBe(true);
+      expect(clicked, "no Down tab in the header").toBe(true);
       await page.waitForFunction(
         (sel: string) => document.querySelectorAll(sel).length === 1,
         { timeout: 5_000 },

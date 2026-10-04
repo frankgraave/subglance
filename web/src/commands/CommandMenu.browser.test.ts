@@ -129,7 +129,7 @@ it("dismissal during a committed write still refreshes the dashboard after the r
     await page.keyboard.press("Escape");
     await page.waitForSelector(".command-menu", { hidden: true });
     complete();
-    await page.waitForFunction(() => [...document.querySelectorAll(".mon-count")].some((el) => el.textContent?.includes("1 paused")));
+    await page.waitForFunction(() => [...document.querySelectorAll(".mon-tab")].some((el) => el.textContent?.replace(/\s+/g, " ").trim() === "Paused 1"));
   } finally { await page.close(); }
 });
 

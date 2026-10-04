@@ -63,14 +63,15 @@ screen?**
   `/workbench` with nothing linking to it.
 - **No** — the head of the list it acts on. A list's filter field, its
   filters and its list actions stand in the header of the card or list they
-  narrow, not in a bar across the page: the channel filter is in the
-  Channels card's header beside "Add channel", and the settings filter
-  stands at the head of the section index it narrows. Adding a monitor is a
+  narrow, not in a bar across the page: the dashboard's status tabs, text
+  filter, Filter and View head its card of monitors, the channel filter is
+  in the Channels card's header beside "Add channel", and the settings
+  filter stands at the head of the section index it narrows. Adding a monitor is a
   monitors action for the same reason; chrome that is also present on
   Notifications while meaning something about monitors is chrome you have
   to re-read.
 
-The dashboard, Monitors and Incidents still put their controls in the page
+Monitors and Incidents still put their controls in the page
 toolbar (`web/src/shell/PageToolbar.tsx`, filled through `ToolbarTools`)
 under the masthead, until each moves them into its own list header. Do not
 put a new screen's controls there. `layout/list-headers.browser.test.ts`
@@ -82,7 +83,8 @@ left it without moving across.
 
 A control is in the masthead only on a screen where it does something. The
 layout switcher used to sit there on every route, and on four of them
-pressing it changed nothing on screen; it is the dashboard's now. There is
+pressing it changed nothing on screen; it is in the dashboard's View panel
+now. There is
 one search entry in the masthead — a second, page-bound field beside it is a
 filter, and goes at the head of that page's list.
 
@@ -91,9 +93,15 @@ hand-written `<input type="search">`: it carries the hidden label, the
 search frame and the 16px phone floor, and `FilterField.test.tsx` refuses
 one written anywhere else.
 
+A panel of settings that hangs from a header button — the dashboard's Filter
+and View — is `Popover` (`web/src/components/Popover.tsx`), not `Menu`: a
+menu holds verbs and closes when one is chosen, a popover holds choices made
+several at a time and stays open until Escape, Done or a press outside, then
+hands focus back to its button.
+
 `web/src/App.masthead.test.tsx` walks every route, the detail page included,
 and asserts the masthead holds exactly the global set and that the layout
-switcher appears only in the dashboard's toolbar — so a control that lands in
+switcher appears only in the dashboard's View panel — so a control that lands in
 the wrong bar, or goes missing from one screen, fails the build rather than
 being noticed in review.
 

@@ -80,7 +80,7 @@ it.each([
         expect(borders.live).not.toBe(borders.stale);
       }
       if (layout !== "wall") {
-        const filter = await page.waitForSelector('.mon-count:has([data-state="warn"])');
+        const filter = await page.waitForSelector('.mon-tab:has([data-state="warn"])');
         await filter!.click();
         expect(await filter!.evaluate((el) => el.getAttribute("aria-pressed"))).toBe("true");
       }

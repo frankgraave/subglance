@@ -34,7 +34,11 @@ import { serveBuild, type Server } from "./harness/server";
  * present on every dashboard regardless of preference — the column picker
  * belongs to the Cards layout alone — so it is the stable subject for a claim
  * that is about the shared component rather than about any one of its uses.
+ * It stands in the dashboard's View panel (SUB-183), so the panel is opened
+ * first and stays open: it holds settings, not verbs, and choosing one does
+ * not close it.
  */
+const VIEW = ".mon-board button[aria-haspopup='dialog'][aria-label^='View']";
 const CONTROL = '.segmented[aria-label="Dashboard layout"]';
 const OPTION = `${CONTROL} .segmented-option`;
 
@@ -48,6 +52,7 @@ beforeAll(async () => {
   page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 900, deviceScaleFactor: 1 });
   await page.goto(server.url + "/", { waitUntil: "domcontentloaded" });
+  await (await page.waitForSelector(VIEW, { timeout: 15_000 }))!.click();
   await page.waitForSelector(OPTION, { timeout: 15_000 });
 }, 120_000);
 

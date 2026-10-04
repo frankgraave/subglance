@@ -296,8 +296,19 @@ const budgets = {
    * that, as every raise above went up to one: 147 leaves 1,617 bytes. The
    * room is given back on purpose rather than kept as slack, so the next
    * screen that needs it states the raise beside this note.
+   *
+   * 147 -> 149 KiB gzip for SUB-183 (the dashboard's list header). Develop
+   * at ed0c83c measures 149,171 bytes of entry JS (Node gzip, level 6,
+   * every script index.html loads); this branch measures 151,171, 2,000
+   * more and 643 over 147. That is the status tabs with their counts, the
+   * Filter panel (a key list beside a value list whose counts take the
+   * other filters into account, and the phone's bottom sheet with the text
+   * filter inside), the View panel, the anchored panel both open in, and
+   * the chips that drop one filter each. No new dependency. 148 would leave
+   * 381 bytes, a tripwire by the argument above; 149 leaves 1,405, about
+   * what SUB-208 handed back.
    */
-  js: 147,
+  js: 149,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *
@@ -395,8 +406,17 @@ const budgets = {
    * one, and the phone rule that gives the slot back. Three rules were
    * dropped while measuring because the layout did not need them; the rest
    * is the layout. 18 leaves about 930 bytes.
+   *
+   * 18 -> 19 kB gzip for SUB-183 (the dashboard's list header). Develop at
+   * ed0c83c measures 18,363 bytes of entry CSS; this branch measures 18,909,
+   * 546 more and 477 over 18. They draw the status tabs and their accent
+   * mark, the header that keeps tabs and controls on one line, the two
+   * panels, the filter chips and the phone's bottom sheet. The page
+   * toolbar's own rules cannot go in the same change: Monitors and
+   * Incidents still stand in it. Deleting them when the last screen leaves
+   * is what buys this room back. 19 leaves 547 bytes.
    */
-  css: 18,
+  css: 19,
   fonts: 80,
 };
 
