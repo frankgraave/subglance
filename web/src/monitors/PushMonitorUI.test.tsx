@@ -253,6 +253,30 @@ describe("a push monitor in the list and the detail view", () => {
     expect(text).not.toMatch(/Nothing has reported in yet/i);
   });
 
+  it.each([
+    ["resumed", /When last heard, it was waiting for the first report since the monitor was resumed/],
+    ["restarted", /When last heard, it was waiting for the first report since SubGlance started/],
+    [undefined, /When last heard, nothing had reported in yet/],
+  ] as const)("says the waiting reason in the past on a stale stream: %s", (reason, sentence) => {
+    render(
+      <MonitorDetail
+        monitor={pushMonitor({
+          lastCheck: reason === undefined ? null : 1_699_990_000_000,
+          push: { intervalS: 3600, graceS: 300, tokenPrefix: "sgu_abcd", waitingSince: reason },
+        })}
+        windows={[]}
+        incidents={[]}
+        now={1_700_000_000_000}
+        beatWidth={720}
+        stale
+      />,
+    );
+    const reasonLine = document.querySelector(".mon-detail-reason")?.textContent ?? "";
+    expect(reasonLine).toMatch(sentence);
+    // Nothing on a dead stream may still claim the monitor is waiting now.
+    expect(reasonLine).not.toMatch(/^Waiting|has reported/);
+  });
+
   it("still says checks for a probed monitor", () => {
     render(
       <MonitorDetail

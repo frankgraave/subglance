@@ -220,3 +220,24 @@ func TestRunStartsListeningAndSkipsWindowsThatClosedWhileDown(t *testing.T) {
 		}
 	}
 }
+
+// TestMarkPushListeningKeepsTheFirstMoment: main marks the runner before the
+// API serves, and Run's watchdog marks it again. The second mark must not move
+// the start, or a window that restarted at the first would restart again.
+func TestMarkPushListeningKeepsTheFirstMoment(t *testing.T) {
+	db := testDB(t)
+	r := newPushRunner(t, db, &alertRecorder{})
+	if !r.PushListeningSince().IsZero() {
+		t.Fatal("a new runner claims to be listening already")
+	}
+	r.MarkPushListening()
+	first := r.PushListeningSince()
+	if first.IsZero() {
+		t.Fatal("MarkPushListening left the start unset")
+	}
+	time.Sleep(2 * time.Millisecond)
+	r.MarkPushListening()
+	if got := r.PushListeningSince(); !got.Equal(first) {
+		t.Fatalf("a second mark moved the start from %v to %v", first, got)
+	}
+}

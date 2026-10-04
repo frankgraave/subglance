@@ -379,7 +379,7 @@ export function MonitorDetail({
         ) : null}
         {status === "waiting" ? (
           <p className="mon-detail-reason mon-detail-reason--quiet">
-            {waitingReason(push?.waitingSince)}
+            {waitingReason(push?.waitingSince, stale)}
           </p>
         ) : null}
       </header>

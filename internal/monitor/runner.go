@@ -93,10 +93,11 @@ type Runner struct {
 	// the check is off and every failure counts against its monitor.
 	canary *connectivity.Canary
 
-	// pushListeningSince is when this process started its push watchdog, in
-	// Unix nanoseconds; zero until Run starts it. A push deadline that fell
-	// before this moment fell while nobody could hear the job, so it is not
-	// evidence that the job failed. See store.Monitor.PushWindow.
+	// pushListeningSince is when this process started listening for push
+	// reports, in Unix nanoseconds; zero until MarkPushListening or Run sets
+	// it. A push deadline that fell before this moment fell while nobody
+	// could hear the job, so it is not evidence that the job failed. See
+	// store.Monitor.PushWindow.
 	pushListeningSince atomic.Int64
 }
 

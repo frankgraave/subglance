@@ -138,14 +138,27 @@ export function describePushWindow(intervalS: number, graceS: number): string {
  * waiting on its job's next run: the earlier window proved nothing, because
  * reports for a paused monitor are not recorded and a stopped SubGlance
  * could not receive them, so a fresh one started.
+ *
+ * On a stale stream the sentence is the last known state, not a present-tense
+ * claim, for the same reason the status word beside it turns into "Was
+ * waiting": nothing on the page knows whether the report has arrived since.
  */
-export function waitingReason(since: PushWaitingReason | undefined): string {
+export function waitingReason(
+  since: PushWaitingReason | undefined,
+  stale = false,
+): string {
   switch (since) {
     case "resumed":
-      return "Waiting for the first report since the monitor was resumed.";
+      return stale
+        ? "When last heard, it was waiting for the first report since the monitor was resumed."
+        : "Waiting for the first report since the monitor was resumed.";
     case "restarted":
-      return "Waiting for the first report since SubGlance started.";
+      return stale
+        ? "When last heard, it was waiting for the first report since SubGlance started."
+        : "Waiting for the first report since SubGlance started.";
     default:
-      return "Nothing has reported in yet.";
+      return stale
+        ? "When last heard, nothing had reported in yet."
+        : "Nothing has reported in yet.";
   }
 }

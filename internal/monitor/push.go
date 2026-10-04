@@ -121,10 +121,9 @@ func (r *Runner) runPushWatchdog(ctx context.Context) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	// The process is listening from here on. Only the first start counts:
-	// the moment SubGlance began hearing reports is a fact about the
-	// process, and a second Run on the same runner does not undo it.
-	r.pushListeningSince.CompareAndSwap(0, r.now().UnixNano())
+	// The process is listening from here on, unless main already said so
+	// before it started serving; see MarkPushListening.
+	r.MarkPushListening()
 
 	// Sweep once immediately, so the cadence starts with the process rather
 	// than one tick later. It no longer reports deadlines that passed while
@@ -231,9 +230,23 @@ func overdueMessage(m store.Monitor, w store.PushWindow, now time.Time) string {
 	}
 }
 
+// MarkPushListening records that this process is listening for push reports
+// from now on. Only the first call counts: the moment SubGlance began hearing
+// reports is a fact about the process, and neither a later call nor a second
+// Run on the same runner moves it.
+//
+// main calls it before the HTTP server or Run starts. Run's watchdog would set
+// it too, but only after restoring incident state, and the API answers
+// requests in that interval: it would read the zero time, skip the restart
+// rule, and call a monitor up on a report from before the downtime while the
+// watchdog is about to treat it as unheard.
+func (r *Runner) MarkPushListening() {
+	r.pushListeningSince.CompareAndSwap(0, r.now().UnixNano())
+}
+
 // PushListeningSince is when this process started listening for push reports,
-// or the zero time before Run has started the watchdog. The API reads it to
-// say why a push monitor is waiting.
+// or the zero time before MarkPushListening or Run. The API reads it to say
+// why a push monitor is waiting.
 func (r *Runner) PushListeningSince() time.Time {
 	ns := r.pushListeningSince.Load()
 	if ns == 0 {

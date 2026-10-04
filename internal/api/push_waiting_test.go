@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/frankgraave/subglance/internal/monitor"
 	"github.com/frankgraave/subglance/internal/store"
 )
 
@@ -130,5 +131,29 @@ func TestPushWaitingNeverHidesAnOutage(t *testing.T) {
 	got := readMonitor(t, srv, created.ID)
 	if got.Status != "down" || got.PushWaiting != "" {
 		t.Errorf("status %q push_waiting %q on a monitor with a confirmed incident, want down and none", got.Status, got.PushWaiting)
+	}
+}
+
+// TestPushWaitingHoldsBeforeTheRunnerRuns: main marks the runner as listening
+// before the API serves anything, so a request that lands while Run is still
+// restoring state already gets the restart rule. With the zero time, a report
+// from before the downtime would read "up" while the watchdog is about to
+// treat the monitor as unheard.
+func TestPushWaitingHoldsBeforeTheRunnerRuns(t *testing.T) {
+	srv, db := testServerWithDB(t)
+	ctx := context.Background()
+	runner := monitor.New(monitor.Options{DB: db, Log: testLogger()})
+	// The same composition as cmd/subglance: the runner is the push recorder,
+	// marked as listening, and Run has not started.
+	srv.WithPushRecorder(runner)
+	runner.MarkPushListening()
+
+	created := createPushMonitor(t, srv, pushMonitorBody) // hourly, 5 min grace
+	if err := db.RecordHeartbeat(ctx, store.Heartbeat{MonitorID: created.ID, TS: time.Now().Add(-3 * time.Hour), OK: true}); err != nil {
+		t.Fatalf("record heartbeat: %v", err)
+	}
+	got := readMonitor(t, srv, created.ID)
+	if got.Status != "pending" || got.PushWaiting != "restarted" {
+		t.Fatalf("before Run: status %q push_waiting %q, want pending and restarted", got.Status, got.PushWaiting)
 	}
 }

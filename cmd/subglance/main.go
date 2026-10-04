@@ -286,6 +286,11 @@ func run(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// Push reports can be heard from here on: set the moment before the
+	// API can serve a request, so no response reads the zero time while
+	// Run is still restoring state ahead of its watchdog.
+	runner.MarkPushListening()
+
 	schedulerDone := make(chan struct{})
 	go func() {
 		defer close(schedulerDone)
