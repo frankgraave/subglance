@@ -331,7 +331,8 @@ describe("a card's own class (SUB-171)", () => {
     }
     // A scanner that stops finding cards, or their classes, would pass this
     // test vacuously.
-    expect(cards).toBeGreaterThanOrEqual(30);
+    // 28 since the incidents screen's four cards became one (SUB-207).
+    expect(cards).toBeGreaterThanOrEqual(28);
     expect(named).toBeGreaterThanOrEqual(5);
     expect(borrowed).toEqual([]);
   });

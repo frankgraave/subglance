@@ -183,7 +183,8 @@ describe("acknowledging, end to end", () => {
         document.querySelector(".inc-row")?.getAttribute("data-state"),
       ).toBe("acked"),
     );
-    expect(document.body.textContent).not.toMatch(/Recovered|Resolved/);
+    // The row, not the page: the header names a Resolved tab on every screen.
+    expect(document.querySelector(".inc-row")!.textContent).not.toMatch(/Recovered|Resolved/);
   });
 
   it("offers no mute button to a caller that does not say it may write", async () => {

@@ -39,9 +39,9 @@ type Screen = { name: string; path: string; ready: string; scope: string; drawer
  * stops rendering its selects fails here instead of passing on nothing.
  */
 const SCREENS: Screen[] = [
-  // The inventory's filters are radios in its Filter panel since SUB-207;
-  // the incidents screen is the toolbar's last user of a select.
-  { name: "incidents toolbar", path: "/incidents", ready: ".shell-toolbar .tb-select", scope: ".shell-toolbar", minSelects: 2 },
+  // The list headers' choices are radios in a panel since SUB-207 (the
+  // inventory's Filter and Sort, the incidents screen's History), so every
+  // select left is a form field's.
   { name: "add monitor drawer", path: "/monitors", ready: ".inv-list > li", scope: ".drawer-panel", drawer: true, minSelects: 2 },
   { name: "notifications", path: "/notifications", ready: ".inv-row", scope: "main", minSelects: 1 },
   { name: "settings", path: "/settings", ready: "#tokens select", scope: "main", minSelects: 1 },
@@ -188,7 +188,8 @@ for (const theme of ["dark", "light"]) {
       }
     }, 60_000);
 
-    // One select of each kind: the toolbar's own class and a form field's `.input`.
+    // A form field's `.input` in a drawer and one standing in a card's row:
+    // the two places a select is drawn now that the toolbar's is gone.
     it.each(SCREENS.slice(0, 2))("$name: the caret survives hover, keyboard focus and disabled", async (screen) => {
       const page = await open(screen, theme);
       try {

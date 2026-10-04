@@ -14,22 +14,8 @@ import { LiveMonitorsRoot } from "./LiveMonitors";
 import { inventoryFromApi } from "./inventory";
 import type { VersionedMonitor } from "./inventoryApi";
 
-import { ShellSlots } from "../shell/ShellSlots";
-
-/*
- * Every render gets the shell's two portal targets (SUB-138).
- *
- * This screen's filters head its own card since SUB-207, so it needs neither
- * slot; they stay so the screen is rendered as the shell renders it, beside
- * the masthead's portal targets.
- */
 function render(ui: React.ReactElement) {
-  return renderBare(
-    <>
-      <ShellSlots />
-      {ui}
-    </>,
-  );
+  return renderBare(ui);
 }
 
 

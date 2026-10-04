@@ -40,12 +40,6 @@ export type AppShellProps = {
   /** The masthead, rendered sticky above the content column. */
   topbar: ReactNode;
   /**
-   * The page toolbar, directly under the masthead. Separate from `topbar`
-   * because the two bars have opposite contracts: the masthead never changes
-   * between routes and this one is expected to (SUB-138).
-   */
-  toolbar?: ReactNode;
-  /**
    * The `id` of the page's title, which names `<main>`. The title is in the
    * masthead, outside the region (SUB-207), so without this a route change
    * that focuses `<main>` would announce an unnamed region.
@@ -73,7 +67,6 @@ export function AppShell({
   account,
   onSignOut,
   topbar,
-  toolbar,
   mainLabelledBy,
   mainRef,
   children,
@@ -128,8 +121,14 @@ export function AppShell({
           />
         )}
         <div className="shell-main">
+          {/*
+           * The masthead, and nothing between it and the page: a screen's own
+           * controls stand at the head of the list they act on (SUB-207,
+           * AGENTS.md "Where a control belongs"). There used to be a page
+           * toolbar here, a second bar filled per route; it is gone so that a
+           * screen cannot put its controls in a bar again.
+           */}
           {topbar}
-          {toolbar}
           {/*
            * `<main>` starts here, not around the whole grid: the sidebar is
            * navigation, and including it would make "skip to main content"

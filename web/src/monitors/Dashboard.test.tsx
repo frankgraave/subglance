@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Dashboard } from "./Dashboard";
 import type { Monitor, MonitorStatus } from "./types";
 import type { CardColumns, LayoutId } from "../shell/preferences";
-import { ShellSlots } from "../shell/ShellSlots";
 
 afterEach(() => {
   cleanup();
@@ -59,8 +58,6 @@ function Harness({
   const [columns, setColumns] = useState<CardColumns>(cardColumns ?? "1");
   return (
     <>
-      {/* The page toolbar the screen portals into (SUB-182). */}
-      <ShellSlots />
       <Dashboard
         monitors={monitors}
         layout={layout}
@@ -318,11 +315,11 @@ describe("Dashboard", () => {
     expect(buttons.map((b) => b.getAttribute("aria-pressed"))).toEqual(["true", "false", "false"]);
   });
 
-  it("heads the list's card with its own controls and draws nothing in the page toolbar", () => {
+  it("heads the list's card with its own controls", () => {
     /*
      * Where a control belongs (AGENTS.md, SUB-183): the tabs on the left of
-     * the card's header, the text filter, Filter and View on the right, and
-     * nothing in the page toolbar above it. Asserted by where each lands and
+     * the card's header, the text filter, Filter and View on the right.
+     * Asserted by where each lands and
      * in what order rather than by geometry, because jsdom has no layout.
      */
     render(
@@ -333,7 +330,6 @@ describe("Dashboard", () => {
         withLayouts
       />,
     );
-    expect(document.querySelector(".shell-toolbar-slot")!.childElementCount).toBe(0);
     const head = document.querySelector(".mon-board > .card-head")!;
     expect(head.querySelector(".card-head-lead [aria-label='Filter by status']")).not.toBeNull();
     expect(

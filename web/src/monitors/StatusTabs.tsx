@@ -1,4 +1,5 @@
 import { LED_STATE } from "./ledState";
+import { ListTabs } from "./ListTabs";
 import type { Summary } from "./model";
 import type { MonitorStatus } from "./types";
 
@@ -10,12 +11,8 @@ import type { MonitorStatus } from "./types";
  * own “Monitors (N)” title: All carries the total. The behaviour is the
  * chips', with an explicit All. A tab whose count drops to zero leaves the
  * row unless it is the one selected, because it is then the only control
- * that turns the empty list back into the full one.
- *
- * Buttons with `aria-pressed` in a labelled group, not `role="tab"`: a tab
- * promises a panel of its own, and this narrows one list in place. It is the
- * same choice `SegmentedControl` makes for the same reason, and arrow-key
- * semantics would fight the controls beside it.
+ * that turns the empty list back into the full one. Drawn by `ListTabs`,
+ * which the incidents screen's scope uses too.
  */
 const TABS: readonly { status: MonitorStatus | null; label: string }[] = [
   { status: null, label: "All" },
@@ -28,6 +25,9 @@ const TABS: readonly { status: MonitorStatus | null; label: string }[] = [
   { status: "up", label: "Up" },
 ];
 
+/** All has no status, and a tab needs a key. */
+const ALL = "all";
+
 export function StatusTabs({
   summary,
   status,
@@ -37,40 +37,27 @@ export function StatusTabs({
   status: MonitorStatus | null;
   onChange: (next: MonitorStatus | null) => void;
 }) {
+  const shown = TABS.filter(
+    (tab) => tab.status === null || summary[tab.status] > 0 || tab.status === status,
+  );
   return (
-    <div className="mon-tabs" role="group" aria-label="Filter by status">
-      {TABS.filter(
-        (tab) =>
-          tab.status === null ||
-          summary[tab.status] > 0 ||
-          tab.status === status,
-      ).map((tab) => (
-        <button
-          key={tab.label}
-          type="button"
-          className="mon-tab"
-          aria-pressed={status === tab.status}
-          // Pressing the selected status again is a way back to All, as
-          // pressing the selected chip used to be.
-          onClick={() =>
-            onChange(tab.status === status ? null : tab.status)
-          }
-        >
-          {/* A key to the colour, not a lamp: the word beside it carries the
-              meaning (DESIGN.md §2.3), so it is decorative. All has none. */}
-          {tab.status === null ? null : (
-            <span
-              className="mon-count-dot"
-              data-state={LED_STATE[tab.status]}
-              aria-hidden="true"
-            />
-          )}
-          {tab.label}{" "}
-          <span className="mon-tab-count">
-            {tab.status === null ? summary.total : summary[tab.status]}
-          </span>
-        </button>
-      ))}
-    </div>
+    <ListTabs
+      label="Filter by status"
+      value={status ?? ALL}
+      tabs={shown.map((tab) => ({
+        key: tab.status ?? ALL,
+        label: tab.label,
+        count: tab.status === null ? summary.total : summary[tab.status],
+        // A key to the colour, not a lamp: the word beside it carries the
+        // meaning (DESIGN.md §2.3), so it is decorative. All has none.
+        state: tab.status === null ? undefined : LED_STATE[tab.status],
+      }))}
+      // Pressing the selected status again is a way back to All, as pressing
+      // the selected chip used to be.
+      onPress={(key) => {
+        const pressed = key === ALL ? null : (key as MonitorStatus);
+        onChange(pressed === status ? null : pressed);
+      }}
+    />
   );
 }

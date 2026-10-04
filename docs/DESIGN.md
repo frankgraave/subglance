@@ -1028,8 +1028,8 @@ from the screen:
   (15/20, `--weight-heavy`), one line, cut with an ellipsis rather than
   wrapped. It is the sidebar's word and the tab's word, because all three
   read the same table. Cards are `h2` under it, and a card is named for what
-  it holds rather than for the page — "Open incidents" under "Incidents",
-  not "Incidents" twice. A monitor's page is titled with the monitor's name
+  it holds rather than for the page — "Open and resolved incidents" under
+  "Incidents", not "Incidents" twice. A monitor's page is titled with the monitor's name
   behind a breadcrumb link to Monitors, and the tab says the name as well;
   the shell reads it from the shared monitor list through a selector, so a
   heartbeat does not re-render the shell.
@@ -1436,15 +1436,14 @@ right-aligned group, which slides everything before it sideways — measured at
 moves out from under the cursor is what §10's no-transform rule exists to
 prevent, and it applies to the toolbar too.
 
-**The toolbar is a band of chrome, not a row of controls on the page.** It
-carries the topbar's own fill — an 86% canvas mix behind a 12px blur — its own
-bottom border, and no gap between the two. It shipped once as a bare flex row
-on the page background, and without a surface it read as three controls
-floating in the content rather than as a bar; the fix is the fill and the edge,
-not more spacing. Negative margins pull it out of the content padding so it
-spans the full width like the topbar does. A flat `--surface` fill is wrong
-here for the same reason: against a translucent bar it reads as a lighter strip
-stuck to the frame rather than as more of the frame.
+**There is no longer a toolbar to put it in (SUB-207).** The page toolbar —
+a second band of chrome under the masthead, filled per route — took every
+screen's controls for a while, and every screen has since moved them to the
+head of the list they act on. It is deleted, with the portal that filled
+it, and `layout/list-headers.browser.test.ts` fails on any element between
+the masthead and the page. The paragraphs below about the order and the
+framing of the status filter describe the toolbar the dashboard had; the
+status tabs (§8.3) are what replaced them.
 
 The order is fixed: **search hard left, the status filter and the view tools
 together hard right.** An `auto` margin, not a gap value, is what holds them
@@ -1648,9 +1647,8 @@ field, named "Search", carrying the `⌘K` keycap, on every screen including a
 monitor's detail page. It is the only search entry in the masthead; a screen
 that filters its own list does so from a field at the head of that list —
 the dashboard's card of monitors, the inventory's card, the Channels card's
-header, the settings index — which the palette leaves untouched. Incidents
-still draws its filter in the page toolbar until its list header takes it
-(SUB-207). On phones the keycap goes and the glyph and the word
+header, the incidents card, the settings index — which the palette leaves
+untouched. On phones the keycap goes and the glyph and the word
 stay. The palette uses an opaque `--surface-float`
 native modal above existing drawers, a bounded scrolling list, and the
 reference's 12px outer / 6px option corners. All matching monitors remain
@@ -1853,46 +1851,43 @@ keeps one shape whether or not anything is ticked. On a phone the title and
 the two glyph buttons share the first line and the list's actions the
 second.
 
-### 8.4 A toolbar select is a framed control with a glyph
+**The incidents screen is one card headed by its tabs (SUB-207)**:
+`All 5 · Open 1 · Resolved 4`, the monitor filter, and a History button
+that names the window on its face ("30 days") and opens one radio list.
+Open and resolved used to be two cards with a Show select above both in
+the page toolbar; the select chose between the cards, and a choice belongs
+at the head of what it chooses in, so the two lists are now two sections of
+one card, each headed by its own `h3` and count — "1 open · 0 muted" beside
+the open list, "Last 30 days · grouped by day" beside the history — and the
+tabs choose between them. A tab's count is what pressing it would show
+under the current filter, as the dashboard's are, and a count the screen
+has not measured (the history still loading, or failed) is left off rather
+than drawn as a zero. Pressing the pressed tab goes back to All. When there
+is nothing at all to show, the header drops the tabs and the filter — there
+is nothing to narrow — and keeps History, because a quiet month is when
+somebody asks about the last ninety days.
 
-Every select in the page toolbar — a tag filter, a type or state filter, an
-order, a history window — is `ToolbarSelect` (`web/src/shell/ToolbarSelect.tsx`):
-a `<label>`, a glyph, a key, and a `<select>`, inside the same frame as the
-status filter beside it: 1px `--border-control` at `--r-md` over
-`--surface-2`, with the control inside giving up its own edge and fill.
+### 8.4 A choice in a list header names itself on its face
 
-The reason is legibility of *kind*: the toolbar holds clusters that do the
-same job, and before this one was framed and one was three bare form controls,
-so they read as a designed thing sitting next to some leftovers. That was true
-across screens too — the dashboard framed its filters while Monitors and
-Incidents drew a bare key beside a bordered select — so which pattern you got
-depended on where you were. One component draws them all now. The geometry is
-the concentric rule (§2.7) and the same 8 − 2 = 6 §7.8 measured.
+A control at the head of a list that picks one value — the inventory's
+order, the incidents screen's history window — is `ChoiceControl`
+(`web/src/monitors/ChoiceControl.tsx`): a compact button whose face is the
+current value and a glyph ("Name" and the sort arrows, "30 days" and the
+clock), named "Sort: Name" or "History: 30 days", that opens one radio list
+in a `Popover`. On a phone the face is the glyph alone, 36px square, and
+the list is a sheet from the bottom edge, as the dashboard's Filter and
+View are.
 
-**It stays a native `<select>`.** The frame is a box around a real labelled
-control, so the keyboard behaviour, the screen-reader role, the `<label>`
-association and the OS picker on a phone all survive. A custom listbox would
-have to re-earn every one of them, and these lists are a handful of values
-long. The select keeps its own `:focus-visible` ring — the frame adds a
-`:focus-within` warming on top, and nothing anywhere writes `outline: none`.
+It replaced the page toolbar's framed `<select>` (a glyph, a key and a
+native select inside one frame), which existed so that a row of filters in
+one bar read as one kind of control. The bar is gone (SUB-207), and in a
+list header the button is the kind every other control already is: the
+dashboard's View names its arrangement on its face the same way. A tag
+filter, a type or a paused state are groups in the list's Filter panel
+(`FilterPanel`), not selects of their own.
 
-**Width follows the options**, capped at `--size-control-select`. A native
-select is as wide as its widest option whatever is chosen, so a frame does not
-move when a value is picked; a fixed width would leave empty fill after "Any"
-or cut "Open and resolved". A long tag value is data and ends in an ellipsis
-at the cap.
-
-The glyph is `aria-hidden` on the `<svg>` itself rather than on a wrapper, and
-one glyph stands for one kind of control: the tag for every tag facet, the
-funnel for every other filter (type, paused, open or resolved), the clock for
-a window of time. `env`, `team` and `customer` are one kind of control, and
-three pictures for one idea is three symbols to learn. A control that does
-something else — grouping or sorting, which reshape rather than narrow — takes
-a different glyph, because that difference is the one worth drawing.
-
-`ToolbarSelect.test.tsx` fails on the toolbar's classes written out anywhere
-else, and `App.masthead.test.tsx` walks every route and fails on a select in
-the rendered toolbar that is not a framed field with a glyph and a key.
+One glyph stands for one kind of choice: the funnel for anything that
+narrows, the sort arrows for an order, the clock for a window of time.
 
 ---
 
@@ -2323,7 +2318,7 @@ page at every width:
   starts at the same edge. Inside the name cell the row boxes sat 45px right
   of the group box.
 
-Around the list, the selection count is drawn like the toolbar's "n of m
+Around the list, the selection count is drawn like the header's "n of m
 shown" (helper size, `--ink-2`): both are counts about the list, not
 sentences. *Manage tags* is disabled when there is no monitor to tag. The
 empty state that replaces the list is an `h3` under the card's `h2` (the page
@@ -2345,12 +2340,10 @@ picker on a phone, type-to-find, the label association, the value in
   theme. `select.css` sets `appearance: none` and paints a solid 8 × 4 caret
   in `--ink-2` with two gradients, the construction the mockups' `common.css`
   already uses. The text stops `--space-8` from the edge so a long option
-  ends before the caret. In the toolbar frame (§8.4) the caret moves to the
-  frame's inner edge, because the frame's padding already stands off the
-  border.
+  ends before the caret.
 - **The field's class still says which field it is.** `Select` adds `select`
-  after the caller's class (`input`, `input--fit`, the toolbar's own), so a
-  form field keeps its frame and a toolbar select keeps its borderless one.
+  after the caller's class (`input`, `input--fit`), so a form field keeps
+  its frame.
   A field's class writes `background-color`, never the `background`
   shorthand, which would wipe the caret.
 - **The file chooser's button is a `.button`.** `::file-selector-button` is

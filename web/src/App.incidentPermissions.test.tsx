@@ -3,7 +3,6 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { disabledWatchdog } from "./watchdog/fixtures";
-import { setToolbarSlot } from "./shell/toolbarSlot";
 
 /*
  * The incidents screen's mute button, through the real app shell.
@@ -47,7 +46,6 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
-  setToolbarSlot(null);
   window.history.replaceState(null, "", "/");
 });
 

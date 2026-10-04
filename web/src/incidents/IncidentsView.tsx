@@ -1,11 +1,12 @@
 import { Card, Panel } from "../components/Card";
-import { IconAlert, IconClock, IconFilter } from "../components/icons";
+import { IconAlert, IconClock } from "../components/icons";
 import { IncidentStoryItem } from "./IncidentStoryItem";
 import { IncidentClusterItem } from "./IncidentClusterItem";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { FilterField } from "../shell/FilterField";
-import { ToolbarTools } from "../shell/ToolbarTools";
-import { ToolbarSelect } from "../shell/ToolbarSelect";
+import { useCompactViewport } from "../layout/useMediaQuery";
+import { ChoiceControl } from "../monitors/ChoiceControl";
+import { ListTabs } from "../monitors/ListTabs";
 import { HISTORY_WINDOWS } from "./api";
 import { clusterIncidents } from "./cluster";
 import { describeChurn, incidentState } from "./story";
@@ -17,7 +18,7 @@ import type { Incident } from "../monitors/detail";
 const EMPTY_ACKING: ReadonlySet<string> = new Set();
 
 /**
- * Which of the two cards the reader is asking about.
+ * Which of the two lists the reader is asking about.
  *
  * The scope filter SUB-131 named and SUB-136 left unbuilt. It is a filter over
  * what is already on screen rather than a second query: both lists are already
@@ -38,12 +39,13 @@ export type IncidentScope = "all" | "open" | "resolved";
  * The sidebar has been promising it and `GET /api/v1/incidents` has been
  * answering it since the backend landed.
  *
- * The shape is the approved page proposal's: two cards, open above resolved.
- * They are two cards and not one filtered list because they are read in two
- * different moods. The top one is the 03:00 screen — railed, loud, every row
- * carrying an action. The bottom one is the morning-after screen, quieter by
- * design, where the number that matters is how long each outage lasted rather
- * than how long it has been going on.
+ * The shape is the approved page proposal's: open above resolved. They are
+ * two lists and not one filtered list because they are read in two different
+ * moods. The top one is the 03:00 screen — railed, loud, every row carrying
+ * an action. The bottom one is the morning-after screen, quieter by design,
+ * where the number that matters is how long each outage lasted rather than
+ * how long it has been going on. Since SUB-207 they are two sections of one
+ * card, headed by the tabs that choose between them.
  *
  * Presentational, like `Dashboard` and `MonitorDetail`: it fetches nothing, so
  * it renders from a fixture in a test. `LiveIncidents` above it owns the data.
@@ -66,8 +68,8 @@ export type IncidentsViewProps = {
    * How far back the history card reaches, in days.
    *
    * A prop rather than a constant read here, so the window belongs to the data
-   * owner that fetches it. It is now a control in the toolbar rather than a
-   * fixed 30 (SUB-136) — see `onHistoryDaysChange`.
+   * owner that fetches it. It is a control in the list's header rather than
+   * a fixed 30 (SUB-136, SUB-207) — see `onHistoryDaysChange`.
    */
   historyDays?: number;
   /**
@@ -75,8 +77,8 @@ export type IncidentsViewProps = {
    *
    * Absent for a caller that renders a fixture and has nothing to refetch, and
    * then the control is not rendered at all rather than rendered dead. A
-   * control that promises a function it does not have is worse than an empty
-   * toolbar, which is the whole reason SUB-136 left this slot empty until the
+   * control that promises a function it does not have is worse than no
+   * control, which is the whole reason SUB-136 left it out until the
    * endpoint behind it existed.
    */
   onHistoryDaysChange?: (days: number) => void;
@@ -150,6 +152,9 @@ export function IncidentsView({
 }: IncidentsViewProps) {
   const [query, setQuery] = useState("");
   const [scope, setScope] = useState<IncidentScope>("all");
+  const narrow = useCompactViewport();
+  const openSectionId = useId();
+  const resolvedSectionId = useId();
   /*
    * Chronological, newest first, with clusters folded in where they exist.
    *
@@ -183,18 +188,20 @@ export function IncidentsView({
       .toLowerCase()
       .includes(needle);
   /*
-   * Scope hides a card; it does not filter rows inside one.
+   * Scope hides a list; it does not filter rows inside one.
    *
-   * The two cards answer two different questions, so "open only" means the
-   * history card is not the answer to anything right now — not that it should
-   * be shown empty. An empty Resolved card under a scope that excludes it
-   * would read as "nothing resolved", which is a claim about the instance and
-   * not about the filter.
+   * The two lists answer two different questions, so "open only" means the
+   * history is not the answer to anything right now — not that it should be
+   * shown empty. An empty Resolved list under a scope that excludes it would
+   * read as "nothing resolved", which is a claim about the instance and not
+   * about the filter.
    */
   const showOpen = scope !== "resolved";
   const showResolved = scope !== "open";
-  const shown = showOpen ? incidents.filter(matches) : [];
-  const shownResolved = showResolved ? resolved.filter(matches) : [];
+  const openMatches = incidents.filter(matches);
+  const resolvedMatches = resolved.filter(matches);
+  const shown = showOpen ? openMatches : [];
+  const shownResolved = showResolved ? resolvedMatches : [];
   const entries = clusterIncidents(shown);
   const ackedCount = shown.filter((i) => incidentState(i) === "acked").length;
 
@@ -275,6 +282,65 @@ export function IncidentsView({
     shown.length === 0 &&
     shownResolved.length === 0;
 
+  /*
+   * The tabs' counts are what each tab would show under the current filter,
+   * not what is on screen now: the dashboard's All 14 · Down 3 does not drop
+   * Down to zero when Up is chosen, and neither does this. A count the
+   * screen has not measured — the open list or the history still loading,
+   * or a history that failed — is left off rather than drawn as a zero.
+   */
+  const openKnown = !loading && error === null;
+  const resolvedKnown = !historyLoading && historyError === null;
+  const tabs = [
+    {
+      key: "all" as const,
+      label: "All",
+      count: openKnown && resolvedKnown ? openMatches.length + resolvedMatches.length : undefined,
+    },
+    { key: "open" as const, label: "Open", count: openKnown ? openMatches.length : undefined },
+    { key: "resolved" as const, label: "Resolved", count: resolvedKnown ? resolvedMatches.length : undefined },
+  ];
+  /* What a screen reader hears as the list narrows: the old toolbar count. */
+  const announced = loading
+    ? "Loading incidents…"
+    : showResolved && historyLoading
+      ? `${shown.length} open · loading resolved…`
+      : showResolved && historyError !== null
+        ? `${shown.length} open · resolved unavailable`
+        : `${shown.length} open · ${shownResolved.length} resolved`;
+  /*
+   * The header narrows the lists only while there is something to narrow —
+   * or while a choice is still narrowing them. With nothing at all to show,
+   * the tabs and the filter go; but a scope or a query chosen before the
+   * lists emptied keeps its control on screen, or it would go on narrowing
+   * the lists when incidents come back, with nothing left that shows it or
+   * takes it away.
+   */
+  const headed = !nothingAtAll || scope !== "all" || needle !== "";
+  const historyControl =
+    onHistoryDaysChange === undefined ? null : (
+      /*
+       * Rendered only when somebody is listening to it. A screen rendered
+       * from a fixture has no refetch to trigger, and a control that silently
+       * does nothing is exactly the dead control SUB-136 refused to ship.
+       *
+       * The window is a refetch, and it is only offered because
+       * `GET /api/v1/incidents/resolved` made a longer window cost the same as
+       * a shorter one. The clock: a window of time, the glyph the Resolved
+       * list used to wear for the same subject.
+       */
+      <ChoiceControl
+        label="Resolved history window"
+        name="History"
+        legend="Resolved in the last"
+        icon={<IconClock />}
+        options={HISTORY_WINDOWS.map((window) => ({ value: window.days, label: window.label }))}
+        value={historyDays}
+        onChange={onHistoryDaysChange}
+        narrow={narrow}
+      />
+    );
+
   return (
     /*
      * It wears the detail page's column classes rather than a pair of its own.
@@ -291,113 +357,96 @@ export function IncidentsView({
       aria-label="Incidents"
     >
       {/*
-       * The page toolbar's own controls — the slot SUB-131 opened and SUB-136
-       * left empty, deliberately, because the scope filter it named had
-       * nothing behind it and a control that promises a function it does not
-       * have is worse than an empty bar.
+       * One card, headed by the controls that act on it (SUB-207, AGENTS.md
+       * "Where a control belongs"): what you are looking at on the left, as
+       * All · Open · Resolved with their counts, and how you are looking on
+       * the right — the monitor filter, then the history window. Nothing
+       * stands between the masthead and this card.
        *
-       * Both are real now. Scope is a filter over what is already fetched, so
-       * it cannot fail and cannot be slow. The window is a refetch, and it is
-       * only shipped because `GET /api/v1/incidents/resolved` made a longer
-       * window cost the same as a shorter one — under the per-monitor fan-out
-       * this replaced, offering "90 days" would have been offering to send
-       * several hundred requests.
+       * One card rather than the two it used to be, because the scope is a
+       * choice between the two lists and a choice belongs at the head of the
+       * thing it chooses in. The two moods the cards stood for are kept as
+       * two sections: the 03:00 one on top, railed and loud, every row
+       * carrying an action, and the morning-after one under it, quieter,
+       * grouped by the day things came back.
        *
-       * The window control is rendered only when somebody is listening to it.
-       * A screen rendered from a fixture has no refetch to trigger, and a
-       * select that silently does nothing is exactly the dead control this
-       * ticket refused to ship.
+       * All is first and selected by default: this screen's job is to show
+       * everything that happened, and a list that starts narrowed hides rows
+       * the reader never asked to hide. Pressing the selected tab again goes
+       * back to All, as it does on the dashboard.
        *
-       * The filter field leads (SUB-182). It filters by monitor name, which
-       * is the question this screen is actually read with: "did api go down
-       * again". It does not search incident text, because an incident has
-       * none — inventing a field to search would be a control that looks like
-       * it does more than it does.
+       * The filter matches monitor names, which is the question this screen
+       * is read with: "did api go down again". It does not search incident
+       * text, because an incident has none — inventing a field to search
+       * would be a control that looks like it does more than it does.
+       *
+       * With nothing at all to show there is nothing to narrow, so the header
+       * is the card's plain title and, when it can refetch, the window: a
+       * quiet month is the moment somebody asks about the last ninety days.
        */}
-      <ToolbarTools>
-        <div className="tb-group">
-          <FilterField
-            label="Filter incidents by monitor"
-            placeholder="Filter by monitor…"
-            value={query}
-            onChange={setQuery}
-          />
-
-          <ToolbarSelect
-            icon={<IconFilter />}
-            label="Show"
-            value={scope}
-            onChange={(value) => setScope(value as IncidentScope)}
-          >
-            {/* "All" first and selected by default: this screen's job is to
-                show everything that happened, and a filter that starts
-                narrowed hides rows the reader never asked to hide. */}
-            <option value="all">Open and resolved</option>
-            <option value="open">Open only</option>
-            <option value="resolved">Resolved only</option>
-          </ToolbarSelect>
-
-          {onHistoryDaysChange === undefined ? null : (
-            // The clock: a window of time, the glyph the Resolved card
-            // below it wears for the same subject.
-            <ToolbarSelect
-              icon={<IconClock />}
-              label="History"
-              value={historyDays}
-              onChange={(value) => onHistoryDaysChange(Number(value))}
-            >
-              {HISTORY_WINDOWS.map((window) => (
-                <option key={window.days} value={window.days}>
-                  {window.label}
-                </option>
-              ))}
-            </ToolbarSelect>
-          )}
-
-          <p className="tb-count" role="status">
-            {loading
-              ? "Loading incidents…"
-              : showResolved && historyLoading
-                ? `${shown.length} open · loading resolved…`
-                : showResolved && historyError !== null
-                  ? `${shown.length} open · resolved unavailable`
-                  : `${shown.length} open · ${shownResolved.length} resolved`}
-          </p>
-        </div>
-      </ToolbarTools>
-
-      {/* The page frame's visible `h1` names this screen (SUB-182); the
-          cards below are `h2` under it. */}
-
-      {churn.map(({ monitorId, note }) => (
-        /*
-         * Flapping suppresses the notifications, not the record.
-         *
-         * Without this the screen is at its most misleading exactly when a
-         * service is at its worst: the alerts have gone quiet because the
-         * monitor is oscillating, and a quiet phone above a list of rows
-         * reads as a problem that settled down. The note says which monitor,
-         * how many, and why nobody is being paged.
-         */
-        <p key={monitorId} className="inc-churn" role="status">
-          <strong>{names[monitorId] ?? `Monitor ${monitorId}`}</strong>: {note}
+      <Card
+        className={headed ? "inc-board inc-board--listed" : "inc-board"}
+        title="Open and resolved incidents"
+        icon={<IconAlert />}
+        headingLevel={2}
+        lead={
+          !headed ? undefined : (
+            <ListTabs
+              label="Filter by state"
+              tabs={tabs}
+              value={scope}
+              onPress={(key) => setScope(key === scope ? "all" : key)}
+            />
+          )
+        }
+        action={
+          !headed ? (
+            historyControl ?? undefined
+          ) : (
+            <>
+              <FilterField
+                className="inc-head-filter"
+                label="Filter incidents by monitor"
+                placeholder="Filter by monitor…"
+                value={query}
+                onChange={setQuery}
+              />
+              {historyControl}
+            </>
+          )
+        }
+      >
+        <p className="sr-only" role="status">
+          {announced}
         </p>
-      ))}
 
-      {noMatches ? (
-        /*
-         * A search that matched nothing, which is a different fact.
-         *
-         * It says what was searched and how to get back, and it deliberately
-         * does not count monitors: the instance's health is not what the
-         * reader just asked about, and stating it here is how "zero confirmed
-         * outages" ended up on a screen with an open incident sitting behind
-         * the filter.
-         *
-         * Not titled "Incidents": the page's own `h1` says that right above
-         * it (SUB-182), and the card's name is what it holds.
-         */
-        <Card title="Matching incidents" icon={<IconAlert />} headingLevel={2}>
+        {churn.map(({ monitorId, note }) => (
+          /*
+           * Flapping suppresses the notifications, not the record.
+           *
+           * Without this the screen is at its most misleading exactly when a
+           * service is at its worst: the alerts have gone quiet because the
+           * monitor is oscillating, and a quiet phone above a list of rows
+           * reads as a problem that settled down. The note says which monitor,
+           * how many, and why nobody is being paged. Under the header, inside
+           * the card, so nothing stands between the masthead and the list's
+           * controls.
+           */
+          <p key={monitorId} className="inc-churn" role="status">
+            <strong>{names[monitorId] ?? `Monitor ${monitorId}`}</strong>: {note}
+          </p>
+        ))}
+
+        {noMatches ? (
+          /*
+           * A search that matched nothing, which is a different fact.
+           *
+           * It says what was searched and how to get back, and it deliberately
+           * does not count monitors: the instance's health is not what the
+           * reader just asked about, and stating it here is how "zero confirmed
+           * outages" ended up on a screen with an open incident sitting behind
+           * the filter.
+           */
           <Panel>
             <p className="mon-detail-empty">
               {showResolved && historyHasMore ? "No loaded incidents" : "No incidents"} match “{query.trim()}”
@@ -409,21 +458,16 @@ export function IncidentsView({
                 : "."}
             </p>
           </Panel>
-        </Card>
-      ) : nothingAtAll ? (
-        /*
-         * The whole screen is the good news.
-         *
-         * Headline weight, and no call to action, because there is nothing for
-         * the operator to do — a monitoring tool with nothing to report is the
-         * tool working. The helper line quantifies it: the monitor count is
-         * what proves the silence was measured rather than the result of a
-         * poller that stopped.
-         *
-         * Titled like the card it stands in for, so the slot keeps its name
-         * whether or not anything is open.
-         */
-        <Card title="Open incidents" icon={<IconAlert />} headingLevel={2}>
+        ) : nothingAtAll ? (
+          /*
+           * The whole screen is the good news.
+           *
+           * Headline weight, and no call to action, because there is nothing for
+           * the operator to do — a monitoring tool with nothing to report is the
+           * tool working. The helper line quantifies it: the monitor count is
+           * what proves the silence was measured rather than the result of a
+           * poller that stopped.
+           */
           <Panel>
             <p className="mon-detail-empty">Nothing is broken right now</p>
             <p className="mon-detail-note">
@@ -434,245 +478,225 @@ export function IncidentsView({
                   } watched, zero confirmed outages.`}
             </p>
           </Panel>
-        </Card>
-      ) : !showOpen ? null : (
-        <Card
-          title="Open incidents"
-          icon={<IconAlert />}
-          headingLevel={2}
-          action={
-            /*
-             * The count lives beside the list it is the length of.
-             *
-             * DESIGN.md §12 records why the sidebar's fabricated "2 incidents"
-             * badge was removed: on a monitoring tool an invented number is
-             * indistinguishable from a real alert. Here the number and the
-             * list cannot disagree, because one is the length of the other.
-             * The acked half is stated separately rather than subtracted —
-             * an acked incident is still open, and folding it into a single
-             * number would be the same conflation the rows fight.
-             */
-            <span className="mon-detail-note">
-              {loading
-                ? "Loading…"
-                : `${shown.length} open · ${ackedCount} muted`}
-            </span>
-          }
-        >
-          {/*
-           * No Panel around this list (SUB-133).
-           *
-           * `.inc-row` already draws a border, a radius, a fill and a raised
-           * shadow: a row here IS a panel. Wrapping a list of panels in
-           * another panel is what PR #42 deleted under the name "two
-           * surfaces, not three", and it came back. What it produced was card
-           * fill, panel fill, then a row lifting itself off the panel — three
-           * nested boxes to say one thing, and rows that looked like they
-           * were sitting in a tray inside a tray.
-           *
-           * The card is the surface, the row is what rests on it. Two.
-           */}
-          <div className="inc-body">
-            {ackError !== null ? (
-              <p role="alert" className="inc-notice">
-                Could not mute repeat alerts: {ackError.message}
-              </p>
-            ) : null}
-            {error !== null ? (
-              <p
-                role="alert"
-                className="mon-detail-empty mon-detail-empty--quiet"
-              >
-                Could not load incidents: {error.message}
-              </p>
-            ) : loading ? (
-              <p className="mon-detail-empty mon-detail-empty--quiet">
-                Loading incidents…
-              </p>
-            ) : entries.length === 0 ? (
-              <p className="mon-detail-empty">Everything is up</p>
-            ) : (
-              <ul className="inc-list">
-                {entries.map((entry: IncidentEntry) =>
-                  entry.kind === "cluster" ? (
-                    <IncidentClusterItem
-                      key={entry.key}
-                      cluster={entry}
-                      now={now}
-                      names={names}
-                      onAck={onAck}
-                      ackingIds={ackingIds}
-                      stale={stale}
-                    />
-                  ) : (
-                    <IncidentStoryItem
-                      key={entry.key}
-                      incident={entry.incident}
-                      now={now}
-                      subject={
-                        names[entry.incident.monitorId] ??
-                        `Monitor ${entry.incident.monitorId}`
-                      }
-                      onAck={onAck}
-                      acking={ackingIds.has(entry.incident.id)}
-                      stale={stale}
-                    />
-                  ),
-                )}
-              </ul>
-            )}
-          </div>
-        </Card>
-      )}
-
-      {/*
-       * The card renders whenever there is history to speak about, even when
-       * nothing groups into a day.
-       *
-       * `days.length === 0` used to remove it outright, which took the
-       * truncation notice with it: an instance whose resolved incidents all
-       * failed to load, or arrived without a start date, showed no Resolved
-       * card and therefore no hint that anything was missing. Absence of a
-       * card reads as "nothing happened", and that is the one thing this
-       * screen may never imply by accident. The same reasoning keeps it on
-       * screen for a failed request and for a scope that asked for it
-       * explicitly.
-       */}
-      {!showResolved ||
-      (days.length === 0 &&
-        shownResolved.length === 0 &&
-        scope !== "resolved" &&
-        !historyHasMore &&
-        !historyLoading &&
-        historyError === null) ? null : (
-        <Card
-          title="Resolved"
-          icon={<IconClock />}
-          headingLevel={2}
-          action={
-            <span className="mon-detail-note">
-              Last {historyDays} {historyDays === 1 ? "day" : "days"} · grouped
-              by day
-            </span>
-          }
-        >
-          {/* Same two-surface count as the open card above (SUB-133): the day
-              heading is a heading ON the card, and the rows carry their own
-              surface. A Panel here made the day section read as a card of its
-              own inside the card. */}
-          <div className="inc-body">
-            {historyError !== null ? (
-              /*
-               * A failed history is an error now, not a completeness flag.
+        ) : !showOpen ? null : (
+          <section className="inc-section" aria-labelledby={openSectionId}>
+            <div className="inc-section-head">
+              <h3 id={openSectionId} className="inc-section-title">
+                Open incidents
+              </h3>
+              {/*
+               * The count lives beside the list it is the length of.
                *
-               * It used to be one of three causes folded into `truncated`,
-               * because under the fan-out a single monitor's 500 left the rest
-               * of the card usable and only slightly short. One request means
-               * a failure is total: there is no partial month to caveat, so
-               * saying "this could not be loaded" is both the honest and the
-               * simpler sentence.
-               */
-              <p className="inc-notice" role="alert">
-                Could not load resolved history: {historyError.message}
-              </p>
-            ) : null}
-            {historyLoading && historyError === null ? (
-              <p className="inc-notice" role="status">
-                Loading resolved history…
-              </p>
-            ) : null}
-            {days.length === 0 && historyError === null && !historyLoading ? (
-              /*
-               * An explicit empty state, because a card with nothing in it is
-               * ambiguous: it could mean "a quiet month" or "we failed to
-               * load". Suppressed when there IS an error, because the error
-               * above already says which of the two it is and "nothing
-               * resolved in the last 30 days" under it would be the card
-               * asserting exactly the good news it does not have. The undated
-               * case is stated separately rather than silently dropped —
-               * `groupByDay` cannot place an incident with no resolution time
-               * on any day, and a reader is owed the count rather than a
-               * shorter list.
-               */
-              <p className="inc-notice" role="status">
-                {shownResolved.length === 0
-                  ? resolved.length > 0 || historyHasMore
-                    ? searching
-                      ? "No loaded resolved incidents match this filter."
-                      : "No resolved incidents loaded yet."
-                    : `Nothing resolved in the last ${historyDays} ${
-                        historyDays === 1 ? "day" : "days"
-                      }.`
-                  : `${shownResolved.length} resolved ${
-                      shownResolved.length === 1 ? "incident" : "incidents"
-                    } could not be placed on a day — no resolution time was recorded.`}
-              </p>
-            ) : null}
-            {days.map((day) => (
-              <section key={day.key} className="inc-day">
-                {/*
-                 * The day heading carries its own totals.
-                 *
-                 * "2 incidents · 24m total" is the sentence someone writes in
-                 * a status update the next morning, and having to add up the
-                 * rows to produce it is work the screen can do.
-                 */}
-                <h3 className="inc-day-head">
-                  <span className="inc-label">{day.label}</span>
-                  <span className="mon-detail-note">
-                    {day.items.length}{" "}
-                    {day.items.length === 1 ? "incident" : "incidents"} ·{" "}
-                    {formatDuration(day.totalS)} total
-                  </span>
-                </h3>
-                <ul className="inc-list">
-                  {day.items.map((incident) => (
-                    <IncidentStoryItem
-                      key={incident.id}
-                      incident={incident}
-                      now={now}
-                      subject={
-                        names[incident.monitorId] ??
-                        `Monitor ${incident.monitorId}`
-                      }
-                      stale={stale}
-                      past
-                    />
-                  ))}
-                </ul>
-              </section>
-            ))}
+               * DESIGN.md §12 records why the sidebar's fabricated "2 incidents"
+               * badge was removed: on a monitoring tool an invented number is
+               * indistinguishable from a real alert. Here the number and the
+               * list cannot disagree, because one is the length of the other.
+               * The acked half is stated separately rather than subtracted —
+               * an acked incident is still open, and folding it into a single
+               * number would be the same conflation the rows fight.
+               */}
+              <span className="mon-detail-note">
+                {loading
+                  ? "Loading…"
+                  : `${shown.length} open · ${ackedCount} muted`}
+              </span>
+            </div>
             {/*
-             * What the screen shows when there genuinely is more.
+             * No Panel around this list (SUB-133).
              *
-             * The old card could only confess: it said "this is incomplete"
-             * and left the reader with nowhere to go, because the API had no
-             * way to ask for the rest. `has_more` comes with `next_cursor`, so
-             * the honest statement now has a control attached to it — the
-             * reader learns the list is short *and* can lengthen it.
-             *
-             * Rendered only when the owner passed a loader. A button that says
-             * "load older" and does nothing would be the dead control this
-             * ticket exists to avoid, one notch louder than an empty toolbar.
+             * `.inc-row` already draws a border, a radius, a fill and a raised
+             * shadow: a row here IS a panel. Wrapping a list of panels in
+             * another panel is what PR #42 deleted under the name "two
+             * surfaces, not three", and it came back. The card is the surface,
+             * the row is what rests on it. Two.
              */}
-            {historyHasMore && onLoadMoreHistory !== undefined ? (
-              <p className="inc-more">
-                <button
-                  type="button"
-                  className="button"
-                  onClick={onLoadMoreHistory}
-                  disabled={historyLoadingMore}
+            <div className="inc-body">
+              {ackError !== null ? (
+                <p role="alert" className="inc-notice">
+                  Could not mute repeat alerts: {ackError.message}
+                </p>
+              ) : null}
+              {error !== null ? (
+                <p
+                  role="alert"
+                  className="mon-detail-empty mon-detail-empty--quiet"
                 >
-                  {historyLoadingMore ? "Loading…" : "Load older incidents"}
-                </button>
-                <span className="mon-detail-note" role="status">
-                  More resolved incidents lie inside this window.
-                </span>
-              </p>
-            ) : null}
-          </div>
-        </Card>
-      )}
+                  Could not load incidents: {error.message}
+                </p>
+              ) : loading ? (
+                <p className="mon-detail-empty mon-detail-empty--quiet">
+                  Loading incidents…
+                </p>
+              ) : entries.length === 0 ? (
+                <p className="mon-detail-empty">Everything is up</p>
+              ) : (
+                <ul className="inc-list">
+                  {entries.map((entry: IncidentEntry) =>
+                    entry.kind === "cluster" ? (
+                      <IncidentClusterItem
+                        key={entry.key}
+                        cluster={entry}
+                        now={now}
+                        names={names}
+                        onAck={onAck}
+                        ackingIds={ackingIds}
+                        stale={stale}
+                      />
+                    ) : (
+                      <IncidentStoryItem
+                        key={entry.key}
+                        incident={entry.incident}
+                        now={now}
+                        subject={
+                          names[entry.incident.monitorId] ??
+                          `Monitor ${entry.incident.monitorId}`
+                        }
+                        onAck={onAck}
+                        acking={ackingIds.has(entry.incident.id)}
+                        stale={stale}
+                      />
+                    ),
+                  )}
+                </ul>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/*
+         * The history renders whenever there is history to speak about, even
+         * when nothing groups into a day.
+         *
+         * `days.length === 0` used to remove it outright, which took the
+         * truncation notice with it: an instance whose resolved incidents all
+         * failed to load, or arrived without a start date, showed no Resolved
+         * list and therefore no hint that anything was missing. Absence reads
+         * as "nothing happened", and that is the one thing this screen may
+         * never imply by accident. The same reasoning keeps it on screen for a
+         * failed request and for a scope that asked for it explicitly.
+         */}
+        {!showResolved ||
+        (days.length === 0 &&
+          shownResolved.length === 0 &&
+          scope !== "resolved" &&
+          !historyHasMore &&
+          !historyLoading &&
+          historyError === null) ? null : (
+          <section className="inc-section" aria-labelledby={resolvedSectionId}>
+            <div className="inc-section-head">
+              <h3 id={resolvedSectionId} className="inc-section-title">
+                Resolved
+              </h3>
+              <span className="mon-detail-note">
+                Last {historyDays} {historyDays === 1 ? "day" : "days"} · grouped
+                by day
+              </span>
+            </div>
+            {/* Same two-surface count as the open list above (SUB-133): the
+                day heading is a heading ON the card, and the rows carry their
+                own surface. */}
+            <div className="inc-body">
+              {historyError !== null ? (
+                /*
+                 * A failed history is an error, not a completeness flag. One
+                 * request means a failure is total: there is no partial month
+                 * to caveat, so saying "this could not be loaded" is both the
+                 * honest and the simpler sentence.
+                 */
+                <p className="inc-notice" role="alert">
+                  Could not load resolved history: {historyError.message}
+                </p>
+              ) : null}
+              {historyLoading && historyError === null ? (
+                <p className="inc-notice" role="status">
+                  Loading resolved history…
+                </p>
+              ) : null}
+              {days.length === 0 && historyError === null && !historyLoading ? (
+                /*
+                 * An explicit empty state, because an empty list is ambiguous:
+                 * it could mean "a quiet month" or "we failed to load".
+                 * Suppressed when there IS an error, because the error above
+                 * already says which of the two it is. The undated case is
+                 * stated separately rather than silently dropped —
+                 * `groupByDay` cannot place an incident with no resolution
+                 * time on any day, and a reader is owed the count rather than
+                 * a shorter list.
+                 */
+                <p className="inc-notice" role="status">
+                  {shownResolved.length === 0
+                    ? resolved.length > 0 || historyHasMore
+                      ? searching
+                        ? "No loaded resolved incidents match this filter."
+                        : "No resolved incidents loaded yet."
+                      : `Nothing resolved in the last ${historyDays} ${
+                          historyDays === 1 ? "day" : "days"
+                        }.`
+                    : `${shownResolved.length} resolved ${
+                        shownResolved.length === 1 ? "incident" : "incidents"
+                      } could not be placed on a day — no resolution time was recorded.`}
+                </p>
+              ) : null}
+              {days.map((day) => (
+                <section key={day.key} className="inc-day">
+                  {/*
+                   * The day heading carries its own totals.
+                   *
+                   * "2 incidents · 24m total" is the sentence someone writes in
+                   * a status update the next morning, and having to add up the
+                   * rows to produce it is work the screen can do. An `h4`,
+                   * under the section's `h3`.
+                   */}
+                  <h4 className="inc-day-head">
+                    <span className="inc-label">{day.label}</span>
+                    <span className="mon-detail-note">
+                      {day.items.length}{" "}
+                      {day.items.length === 1 ? "incident" : "incidents"} ·{" "}
+                      {formatDuration(day.totalS)} total
+                    </span>
+                  </h4>
+                  <ul className="inc-list">
+                    {day.items.map((incident) => (
+                      <IncidentStoryItem
+                        key={incident.id}
+                        incident={incident}
+                        now={now}
+                        subject={
+                          names[incident.monitorId] ??
+                          `Monitor ${incident.monitorId}`
+                        }
+                        stale={stale}
+                        past
+                      />
+                    ))}
+                  </ul>
+                </section>
+              ))}
+              {/*
+               * What the screen shows when there genuinely is more: `has_more`
+               * comes with `next_cursor`, so the honest statement has a control
+               * attached to it — the reader learns the list is short *and* can
+               * lengthen it. Rendered only when the owner passed a loader.
+               */}
+              {historyHasMore && onLoadMoreHistory !== undefined ? (
+                <p className="inc-more">
+                  <button
+                    type="button"
+                    className="button"
+                    onClick={onLoadMoreHistory}
+                    disabled={historyLoadingMore}
+                  >
+                    {historyLoadingMore ? "Loading…" : "Load older incidents"}
+                  </button>
+                  <span className="mon-detail-note" role="status">
+                    More resolved incidents lie inside this window.
+                  </span>
+                </p>
+              ) : null}
+            </div>
+          </section>
+        )}
+      </Card>
     </section>
   );
 }

@@ -31,3 +31,12 @@
   border-block-start: 1px solid var(--border);
   padding-block-start: var(--space-3);
 }
+
+/* The number of ticked rows: a count about the list, so helper text in data
+   ink rather than a sentence in body ink beside the buttons it counts for. */
+.bulk-tags-count {
+  @apply text-helper;
+  color: var(--ink-2);
+  white-space: nowrap;
+  margin: 0;
+}

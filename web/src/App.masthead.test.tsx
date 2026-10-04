@@ -22,7 +22,6 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { disabledWatchdog } from "./watchdog/fixtures";
-import { setToolbarSlot } from "./shell/toolbarSlot";
 
 /** jsdom has neither matchMedia nor EventSource. */
 class FakeSource {
@@ -112,18 +111,6 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  /*
-   * The shell's portal slots are module state (SUB-138), so an unmounted
-   * topbar leaves its detached node published. The next test then portals its
-   * search into a node nobody can query, and every assertion that walks the
-   * masthead sees a bar with one control missing — which is exactly the kind
-   * of failure that looks like a product bug and is not.
-   *
-   * React clears them on unmount via the ref callback, but `cleanup()` runs
-   * the unmount after this file's own listeners have already been torn down
-   * in some orderings, so this is belt and braces.
-   */
-  setToolbarSlot(null);
 });
 
 /** The masthead's controls by accessible name, in order. */
@@ -136,11 +123,6 @@ const mastheadNames = () =>
       : `${el.tagName.toLowerCase()}:${el.getAttribute("type") ?? ""}`,
   );
 
-/** The page toolbar's controls by accessible name, in order. */
-const toolbarNames = () =>
-  [...document.querySelectorAll(".shell-toolbar button, .shell-toolbar input, .shell-toolbar select")].map(
-    (el) => el.getAttribute("aria-label") ?? el.textContent ?? el.tagName,
-  );
 
 /*
  * What works on every screen. Written out rather than read off the dashboard,
@@ -277,7 +259,6 @@ describe("the masthead", () => {
      */
     render(<App />);
     await screen.findByText("api");
-    expect(toolbarNames(), "the dashboard draws nothing in the page toolbar").toEqual([]);
     fireEvent.click(screen.getByRole("button", { name: /^View: / }));
     const panel = screen.getByRole("dialog", { name: "View" });
     for (const layout of LAYOUTS) expect(within(panel).getByRole("button", { name: layout })).toBeTruthy();
@@ -285,7 +266,7 @@ describe("the masthead", () => {
 
     for (const route of ROUTES.slice(1)) {
       await visit(route);
-      const here = [...mastheadNames(), ...toolbarNames()];
+      const here = mastheadNames();
       for (const layout of LAYOUTS) expect(here, `${layout} on ${route.path}`).not.toContain(layout);
       expect(screen.queryByRole("button", { name: /^View: / }), route.path).toBeNull();
     }
@@ -294,7 +275,7 @@ describe("the masthead", () => {
   it("offers one search entry per bar, never two side by side", async () => {
     /*
      * The masthead's search is the command menu, on every screen. A screen
-     * that filters its list does it from its own toolbar, so the masthead
+     * that filters its list does it from that list's header, so the masthead
      * never carries a second, page-bound field beside the global one.
      */
     render(<App />);
@@ -335,32 +316,25 @@ describe("the masthead", () => {
 
 
 
-  it("draws every select in the page toolbar as one framed field, on every screen", async () => {
+  it("draws no bar between the masthead and the page, on any screen", async () => {
     /*
-     * The dashboard framed its tag filters with a glyph while Monitors and
-     * Incidents drew a bare key beside a bordered select, so one bar held two
-     * patterns depending on the screen. Checked on the rendered bar of every
-     * route, because a select portalled into the toolbar is invisible to a
-     * scan of its source file.
+     * The page toolbar is gone (SUB-207): every screen's controls stand at
+     * the head of the list they act on. Walked over every route, the detail
+     * page included, because a bar is something a screen renders, and the
+     * shell drawing nothing proves nothing about the route that brings one
+     * back.
      */
     render(<App />);
     await screen.findByText("api");
-    let seen = 0;
     for (const route of ROUTES) {
       if (route.path !== "/") await visit(route);
-      for (const select of document.querySelectorAll<HTMLSelectElement>(".shell-toolbar select")) {
-        seen++;
-        const frame = select.closest("label");
-        const where = `${route.path}: ${frame?.textContent ?? select.outerHTML}`;
-        expect(frame?.classList.contains("tb-field"), where).toBe(true);
-        expect(select.classList.contains("tb-select"), where).toBe(true);
-        expect(frame?.querySelector(":scope > svg[aria-hidden='true']"), where).not.toBeNull();
-        expect(frame?.querySelector(".tb-label")?.textContent?.trim(), where).toBeTruthy();
-      }
+      const shellMain = document.querySelector(".shell-main")!;
+      const between = [...shellMain.children]
+        .filter((el) => !el.matches(".shell-topbar, main"))
+        .map((el) => el.className || el.tagName);
+      expect(between, route.path).toEqual([]);
+      expect(document.querySelectorAll(".shell-toolbar, .shell-toolbar-slot").length, route.path).toBe(0);
     }
-    // Incidents (show, history) at least, so the walk cannot pass on a
-    // toolbar that rendered no selects. Monitors left the toolbar (SUB-207).
-    expect(seen).toBeGreaterThanOrEqual(2);
   });
 
   it("keeps every pressed-state control in the masthead the same on every screen", async () => {

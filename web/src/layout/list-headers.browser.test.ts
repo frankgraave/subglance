@@ -2,26 +2,26 @@
  * A screen's controls stand at the head of the list they act on, not in a bar
  * under the masthead (SUB-207), measured in a real browser.
  *
- * The page toolbar put a third layer between the masthead and the first card:
- * bar, toolbar, card. The dashboard, Monitors, Notifications and Settings
- * have moved out of it — the dashboard's status tabs, text filter, Filter and
- * View head its one card of monitors, the inventory's text filter, Filter
- * and Sort head its card beside its actions, the channel filter is in the
- * Channels card's header beside "Add channel", the settings filter stands at
- * the head of the section index it narrows — and this suite holds them there
+ * There used to be a page toolbar: a third layer between the masthead and the
+ * first card — bar, toolbar, card. Every screen has moved out of it and it is
+ * gone: the dashboard's status tabs, text filter, Filter and View head its
+ * one card of monitors, the inventory's text filter, Filter and Sort head its
+ * card beside its actions, the incidents screen's All · Open · Resolved tabs,
+ * monitor filter and History head its card, the channel filter is in the
+ * Channels card's header beside "Add channel", and the settings filter stands
+ * at the head of the section index it narrows. This suite holds them there
  * at a phone, a tablet and a desktop width:
  *
- *  - the page toolbar is collapsed, so nothing stands between the masthead
- *    and the first card;
+ *  - nothing stands between the masthead and the first card: no element sits
+ *    in that band at all, toolbar or otherwise;
  *  - the header holding the filter starts directly under the masthead, one
  *    content gutter and one card edge below it at most;
  *  - at 1440px the header is one line;
  *  - at 390px nothing scrolls sideways.
  *
- * Incidents still fills the toolbar. It is listed
- * below so that the list cannot quietly grow: a migrated screen moves
- * from STILL_IN_TOOLBAR to HEADED, and a screen that puts controls back into
- * the toolbar fails the first describe block.
+ * A last block walks every route, the detail page included, and fails on a
+ * bar between the masthead and `<main>`, so a new screen cannot bring one
+ * back under another name.
  *
  * @vitest-environment node
  */
@@ -80,13 +80,17 @@ const HEADED: Headed[] = [
     parts: ".inv-board > .card-head :is(.card-head-lead, .card-head-action > .shell-search, .card-head-action > .menu, .bulk-tags-actions > *)",
     phoneControl: "button[aria-haspopup='dialog'][aria-label^='Filter']",
   },
+  {
+    name: "incidents",
+    path: "/incidents",
+    ready: ".inc-line",
+    header: ".inc-board > .card-head",
+    line: ".inc-board > .card-head",
+    // The tabs, the filter and History, not the header's two halves.
+    parts: ".inc-board > .card-head :is(.mon-tabs, .shell-search, button[aria-haspopup='dialog'])",
+  },
   { name: "notifications", path: "/notifications", ready: ".inv-row", header: ".nt-card > .card-head", line: ".nt-card > .card-head" },
   { name: "settings", path: "/settings", ready: 'input[name="current_password"]', header: ".settings-aside", line: ".settings-aside > .shell-search" },
-];
-
-/** Screens whose controls have not left the page toolbar yet. */
-const STILL_IN_TOOLBAR = [
-  { path: "/incidents", ready: ".inc-line" },
 ];
 
 const WIDTHS = [390, 820, 1440];
@@ -125,7 +129,10 @@ async function measure(page: Page, header: string, line = header, control = "inp
       el === null ? 0 : parseFloat(getComputedStyle(el)[prop]);
     return {
       masthead: box(document.querySelector(".shell-topbar")),
-      toolbar: box(document.querySelector(".shell-toolbar")),
+      // Whatever stands between the masthead and the content column.
+      between: [...(document.querySelector(".shell-main")?.children ?? [])]
+        .filter((el) => !el.matches(".shell-topbar, main"))
+        .map((el) => el.className || el.tagName),
       header: box(head),
       filterInHeader: head?.querySelector(controlSel) != null,
       // Each direct child's box, to tell one line from two.
@@ -148,8 +155,8 @@ describe.each(HEADED)("$name", ({ path, ready, header, line, phoneControl, parts
       const m = await measure(page, header, line, width === 390 ? phoneControl : undefined, parts);
       if (m.masthead === null || m.header === null) throw new Error(`no masthead or no ${header}`);
       expect(m.filterInHeader, "the filter stands in the list's header").toBe(true);
-      // No bar between: the toolbar is collapsed or gone.
-      expect(m.toolbar?.height ?? 0, "page toolbar height").toBe(0);
+      // No bar between: nothing stands between the masthead and <main>.
+      expect(m.between, "elements between the masthead and the content").toEqual([]);
       expect(m.header.top).toBeGreaterThanOrEqual(m.masthead.bottom);
       expect(m.header.top, "header starts one gutter and one card edge under the masthead").toBeLessThanOrEqual(
         m.masthead.bottom + m.gutter + m.cardEdge + 1,
@@ -173,17 +180,40 @@ describe.each(HEADED)("$name", ({ path, ready, header, line, phoneControl, parts
   });
 });
 
-describe("screens still on the page toolbar", () => {
-  it.each(STILL_IN_TOOLBAR)("$path still fills it, until its controls move into its list header", async ({ path, ready }) => {
-    /*
-     * The other half of the ratchet. When one of these moves its controls,
-     * this fails, and the screen moves to HEADED above with a header to
-     * measure — rather than leaving a stale entry that proves nothing.
-     */
+describe("no screen draws a bar under the masthead", () => {
+  /*
+   * The page toolbar is deleted, and this is what keeps it deleted: on every
+   * route, the monitor's page and the workbench included, the masthead is
+   * followed directly by `<main>`, and the first thing in the page starts
+   * one content gutter under the masthead. A new bar — by any class name —
+   * fails here before anyone has to notice it in review.
+   */
+  it.each([
+    { path: "/", ready: "[data-testid^='monitor-row-'], [data-testid^='monitor-card-']" },
+    { path: "/monitors", ready: ".inv-list > li" },
+    { path: "/monitors/1", ready: ".mon-detail-windows" },
+    { path: "/incidents", ready: ".inc-line" },
+    { path: "/notifications", ready: ".inv-row" },
+    { path: "/settings", ready: 'input[name="current_password"]' },
+    { path: "/workbench", ready: ".chip--status" },
+  ])("$path", async ({ path, ready }) => {
     const page = await open(path, ready, 1440);
     try {
-      const { toolbar } = await measure(page, "body");
-      expect(toolbar?.height ?? 0).toBeGreaterThan(0);
+      const seen = await page.evaluate(() => {
+        const main = document.querySelector("main")!;
+        const masthead = document.querySelector(".shell-topbar")!.getBoundingClientRect();
+        return {
+          between: [...(document.querySelector(".shell-main")?.children ?? [])]
+            .filter((el) => !el.matches(".shell-topbar, main"))
+            .map((el) => el.className || el.tagName),
+          gap: main.getBoundingClientRect().top - masthead.bottom,
+          toolbar: document.querySelectorAll(".shell-toolbar, .shell-toolbar-slot, [data-testid='page-toolbar']").length,
+        };
+      });
+      expect(seen.between).toEqual([]);
+      expect(seen.toolbar).toBe(0);
+      // `<main>` starts at the masthead's bottom edge, give or take a pixel.
+      expect(Math.abs(seen.gap)).toBeLessThanOrEqual(1);
     } finally {
       await page.close();
     }

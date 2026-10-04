@@ -66,24 +66,28 @@ screen?**
   narrow, not in a bar across the page: the dashboard's status tabs, text
   filter, Filter and View head its card of monitors, the inventory's text
   filter, Filter (type, paused, tags) and Sort head its card beside
-  "Add monitor", the channel filter is in the Channels card's header beside
-  "Add channel", and the settings filter stands at the head of the section
-  index it narrows. Adding a monitor is a
+  "Add monitor", the incidents screen's All · Open · Resolved tabs, monitor
+  filter and History head its card, the channel filter is in the Channels
+  card's header beside "Add channel", and the settings filter stands at the
+  head of the section index it narrows. Adding a monitor is a
   monitors action for the same reason; chrome that is also present on
   Notifications while meaning something about monitors is chrome you have
   to re-read.
 
-Incidents still puts its controls in the page toolbar
-(`web/src/shell/PageToolbar.tsx`, filled through `ToolbarTools`) under the
-masthead, until it moves them into its own list header. Do not put a new
-screen's controls there. A list's Filter panel is `FilterPanel`
-(`web/src/monitors/FilterPanel.tsx`), which the dashboard and the inventory
-both draw, so a filter reads the same wherever it stands. `layout/list-headers.browser.test.ts`
-lists which screens are on which side: it fails when a moved screen draws a
-bar between the masthead and its first card, when its header does not start
-directly under the masthead, is more than one line at 1440px or scrolls
-sideways at 390px, and when a screen still listed as on the toolbar has
-left it without moving across.
+There is no bar between the masthead and the page. The page toolbar that
+used to stand there is deleted, with the portal that filled it, so a
+screen's controls have nowhere to go but the head of their list. The parts
+are shared, so a header reads the same wherever it stands: tabs with counts
+are `ListTabs` (`web/src/monitors/ListTabs.tsx`), a list's Filter panel is
+`FilterPanel` (`web/src/monitors/FilterPanel.tsx`), and a button that names
+one current choice and opens a radio list — Sort, History — is
+`ChoiceControl` (`web/src/monitors/ChoiceControl.tsx`).
+`layout/list-headers.browser.test.ts` measures every list screen at 390, 820
+and 1440px and fails when anything stands between the masthead and its
+first card, when its header does not start directly under the masthead, is
+more than one line at 1440px or scrolls sideways at 390px; and it walks
+every route, the detail page and the workbench included, failing on any
+element between the masthead and `<main>`.
 
 A control is in the masthead only on a screen where it does something. The
 layout switcher used to sit there on every route, and on four of them
@@ -145,7 +149,7 @@ title, tab, rail and `<main>` label. The reasoning is in DESIGN.md §2.16.
 
 A card on a titled page is named for what it holds, not for the page: the
 page's `h1` already says "Incidents", so the card under it says "Open
-incidents". When the frame took over the title, do not drop what a card
+and resolved incidents". When the frame took over the title, do not drop what a card
 title was carrying — the Monitors card's "4 configured, 1 paused" lives in
 its `note` prop, which is what `Card` grew that prop for.
 
