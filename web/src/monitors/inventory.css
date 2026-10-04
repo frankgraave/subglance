@@ -30,7 +30,9 @@
  * left; starting it at 280 would break the line for room it does not need.
  * The controls keep `--size-pane-md` (380px) beside the title, the rung
  * above their first line's 338px (the field at rung 4, Filter and Sort), or
- * take the line under it; inside, the list's actions wrap under the filters,
+ * take the line under it — never more than the header itself, which beside
+ * the expanded sidebar at 641px is narrower than that rung; inside, the
+ * list's actions wrap under the filters,
  * right-aligned. Every control is the 32px the dashboard's header draws, so
  * they share one top and bottom. Keyed through `.mon-detail`: detail.css
  * lets that card's action group shrink to nothing and pushes a menu to the
@@ -41,7 +43,7 @@
   flex: 1 1 0;
   flex-wrap: wrap;
   justify-content: flex-end;
-  min-width: var(--size-pane-md);
+  min-width: min(var(--size-pane-md), 100%);
 }
 .mon-detail > .inv-board > .card-head .menu { margin-left: 0; }
 .inv-board > .card-head .bulk-tags-actions { gap: var(--space-1h); }
