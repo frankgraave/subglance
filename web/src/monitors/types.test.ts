@@ -197,4 +197,21 @@ describe("push monitors", () => {
   it("keeps paused ahead of waiting, because a person decided it", () => {
     expect(fromApi(push({ enabled: false })).status).toBe("paused");
   });
+
+  it.each(["resumed", "restarted"] as const)(
+    "renders a push monitor whose window restarted (%s) as waiting, with the reason",
+    (reason) => {
+      // It has reported before, so last_check is set; the server still says
+      // pending, because the window it is in started after that report.
+      const m = fromApi(push({ status: "pending", last_check: "2026-09-11T12:00:00Z", push_waiting: reason }));
+      expect(m.status).toBe("waiting");
+      expect(m.push?.waitingSince).toBe(reason);
+    },
+  );
+
+  it("drops a push_waiting word the client does not know", () => {
+    const m = fromApi(push({ status: "up", last_check: "2026-09-11T12:00:00Z", push_waiting: "sleeping" }));
+    expect(m.push?.waitingSince).toBeUndefined();
+    expect(m.status).toBe("up");
+  });
 });

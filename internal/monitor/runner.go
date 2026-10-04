@@ -92,6 +92,12 @@ type Runner struct {
 	// canary tells a monitor's outage apart from the host's own. Nil means
 	// the check is off and every failure counts against its monitor.
 	canary *connectivity.Canary
+
+	// pushListeningSince is when this process started its push watchdog, in
+	// Unix nanoseconds; zero until Run starts it. A push deadline that fell
+	// before this moment fell while nobody could hear the job, so it is not
+	// evidence that the job failed. See store.Monitor.PushWindow.
+	pushListeningSince atomic.Int64
 }
 
 // Alert is a state change worth telling someone about.

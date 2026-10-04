@@ -7,7 +7,7 @@
  */
 
 import { formatDuration } from "./detail";
-import type { Monitor, MonitorStatus, Recovery } from "./types";
+import type { Monitor, MonitorStatus, PushWaitingReason, Recovery } from "./types";
 
 /** How each status is spoken and written. Colour never stands alone (DESIGN.md §2.3). */
 export const STATUS_LABEL: Record<MonitorStatus, string> = {
@@ -127,4 +127,25 @@ export function describePushWindow(intervalS: number, graceS: number): string {
   return graceS > 0
     ? `${every}, ${formatDuration(graceS)} grace`
     : `${every}, no grace`;
+}
+
+/**
+ * Why a push monitor is waiting, in one sentence for its page.
+ *
+ * Three different waits, and each sends the reader somewhere else. A monitor
+ * that has never reported is waiting on somebody to wire up its URL. One that
+ * was resumed, or whose window closed while SubGlance was not running, is
+ * waiting on its job's next run: the earlier window proved nothing, because
+ * reports for a paused monitor are not recorded and a stopped SubGlance
+ * could not receive them, so a fresh one started.
+ */
+export function waitingReason(since: PushWaitingReason | undefined): string {
+  switch (since) {
+    case "resumed":
+      return "Waiting for the first report since the monitor was resumed.";
+    case "restarted":
+      return "Waiting for the first report since SubGlance started.";
+    default:
+      return "Nothing has reported in yet.";
+  }
 }

@@ -232,6 +232,27 @@ describe("a push monitor in the list and the detail view", () => {
     expect(text).toMatch(/5 min grace/i);
   });
 
+  it.each([
+    ["resumed", /since the monitor was resumed/i],
+    ["restarted", /since SubGlance started/i],
+  ] as const)("says why a monitor that reported before is waiting again: %s", (reason, sentence) => {
+    render(
+      <MonitorDetail
+        monitor={pushMonitor({
+          lastCheck: 1_699_990_000_000,
+          push: { intervalS: 3600, graceS: 300, tokenPrefix: "sgu_abcd", waitingSince: reason },
+        })}
+        windows={[]}
+        incidents={[]}
+        now={1_700_000_000_000}
+        beatWidth={720}
+      />,
+    );
+    const text = document.body.textContent ?? "";
+    expect(text).toMatch(sentence);
+    expect(text).not.toMatch(/Nothing has reported in yet/i);
+  });
+
   it("still says checks for a probed monitor", () => {
     render(
       <MonitorDetail

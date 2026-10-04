@@ -309,6 +309,24 @@ interval, so an hourly job with five minutes of grace is late at 65 minutes. It
 defaults to 60 seconds rather than 0, because cron drifts and a zero tolerance
 turns ordinary jitter into a 3am alert.
 
+Two kinds of silence are not held against a job, because SubGlance could not
+have heard it:
+
+- **While the monitor was paused.** A report for a paused monitor is accepted
+  and not recorded. When you resume it, the window starts again at the resume:
+  the job gets one full window (interval plus grace) to report before it counts
+  as late.
+- **While SubGlance itself was not running.** A job that reported during an
+  upgrade or a host reboot got a refused connection. If its deadline fell inside
+  that gap, the window starts again when SubGlance starts. A deadline that falls
+  after the start is left alone, so a short restart moves nothing, and an
+  instance that restarts every day still reports a daily job that has stopped.
+
+Until the job reports, the monitor shows as waiting, with the reason on its
+page, rather than as up on the strength of a report from before the gap. The
+cost is deliberate: a job that genuinely stopped during the pause is reported
+one window later than it otherwise would be.
+
 > [!WARNING]
 > **What a push monitor does and does not tell you.** It proves your script
 > reached the line with the `curl` on it. It does not prove the work succeeded.

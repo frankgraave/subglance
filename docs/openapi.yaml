@@ -4951,7 +4951,9 @@ components:
       description: |
         The monitor's current state. `up` means the last check succeeded,
         `down` means a *confirmed* incident is open, `warning` means an
-        unconfirmed failure without an alert, and `pending` means never checked yet.
+        unconfirmed failure without an alert, and `pending` means never checked yet
+        (or, for a push monitor, nothing reported since its window restarted;
+        see `push_waiting`).
         A single failed check is deliberately not `down`: the dashboard and the
         notifications must agree on what an outage is.
 
@@ -5637,6 +5639,21 @@ components:
             failure. Added to `push_interval_s`, not subtracted from it: an
             hourly job with 300 seconds of grace is late at 65 minutes.
           example: 300
+        push_waiting:
+          type: string
+          enum: [resumed, restarted]
+          description: |
+            Push monitors only: why a monitor that has reported before is
+            `pending` again. Its window restarted, and nothing has been
+            recorded since. `resumed`: the monitor was resumed after its last
+            report, and reports for a paused monitor are not recorded.
+            `restarted`: the window closed while SubGlance was not running,
+            so the job could not have reached it. Either way the monitor gets
+            one full window (`push_interval_s` + `push_grace_s`) from that
+            moment before silence counts as failure. Omitted otherwise,
+            including for a monitor that has never reported, and never sent
+            alongside `down` or `recovering`.
+          example: resumed
         created_at:
           type: string
           format: date-time
