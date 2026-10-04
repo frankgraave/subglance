@@ -34,6 +34,9 @@ it("requires an explicit role review for every new 4px caller", () => {
     // The menu's own keycaps: the masthead keycap's role, inside the menu it opens.
     "web/src/commands/commands.css: .command-menu kbd",
     "web/src/components/choice.css: .choice::before, .choice::after",
+    // The phrase to retype before a delete: drawn as the masthead keycap is,
+    // a small boxed annotation inside a label (DESIGN.md §8.12).
+    "web/src/components/controls.css: .phrase",
     "web/src/components/panellist.css: .panel-row :is(a, button):focus-visible",
     "web/src/shell/shell.css: .shell-nav-soon",
     "web/src/shell/shell.css: .shell-search-kbd",
