@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/frankgraave/subglance/internal/monitor"
+	"github.com/frankgraave/subglance/internal/notifier"
 )
 
 // fakeMetrics is the only double in these tests, and it doubles the *source*
@@ -134,5 +135,36 @@ func TestMetricsWithoutACheckerPipeline(t *testing.T) {
 
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Errorf("status = %d, want 503", rec.Code)
+	}
+}
+
+type fakeDeliveries []notifier.DeliveryCount
+
+func (f fakeDeliveries) DeliveryCounts() []notifier.DeliveryCount { return f }
+
+func TestMetricsCountsDeliveriesByChannelTypeAndOutcome(t *testing.T) {
+	srv, _ := testServerWithDB(t)
+	srv.WithMetrics(fakeMetrics{}).WithDeliveryCounts(fakeDeliveries{
+		{ChannelType: "slack", Outcome: "delivered", Count: 12},
+		{ChannelType: "slack", Outcome: "failed", Count: 3},
+		{ChannelType: "slack", Outcome: "retried", Count: 0},
+	})
+
+	rec := httptest.NewRecorder()
+	authedHandler(srv).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	body := rec.Body.String()
+	for _, want := range []string{
+		"# TYPE subglance_notification_deliveries_total counter\n",
+		`subglance_notification_deliveries_total{channel_type="slack",outcome="delivered"} 12` + "\n",
+		`subglance_notification_deliveries_total{channel_type="slack",outcome="failed"} 3` + "\n",
+		// A zero series is written, so rate() sees the first failure.
+		`subglance_notification_deliveries_total{channel_type="slack",outcome="retried"} 0` + "\n",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("/metrics is missing %q:\n%s", want, body)
+		}
+	}
+	if strings.Count(body, "# HELP subglance_notification_deliveries_total") != 1 {
+		t.Error("one HELP line for the labelled series, not one per sample")
 	}
 }

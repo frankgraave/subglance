@@ -112,6 +112,9 @@ func (a Alert) Title() string {
 	if a.Event == EventLocalNetworkRestored {
 		return "SubGlance is back online"
 	}
+	if a.Event == EventChannelFailing {
+		return fmt.Sprintf("SubGlance cannot deliver alerts to %s", a.Target)
+	}
 
 	switch state.Event(a.Event) {
 	case state.EventIncidentResolved:
@@ -140,6 +143,15 @@ func (a Alert) Body() string {
 			"Checks that failed on a network error in that time were not counted as outages.",
 			durationWords(a.At.Sub(a.StartedAt)),
 			a.StartedAt.UTC().Format("2006-01-02 15:04 UTC"), a.At.UTC().Format("15:04 UTC"))
+	}
+	if a.Event == EventChannelFailing {
+		out := fmt.Sprintf("An alert to %s gave up at %s, and none has arrived there since.",
+			a.Target, a.StartedAt.UTC().Format("2006-01-02 15:04 UTC"))
+		if a.LastError != "" {
+			out += "\n" + a.LastError
+		}
+		return out + "\nMonitors that alert only through that channel reach nobody. " +
+			"This is said once: the next alert that arrives there ends it."
 	}
 
 	out := a.Target

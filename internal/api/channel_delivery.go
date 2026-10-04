@@ -1,13 +1,10 @@
 package api
 
 import (
-	"cmp"
 	"context"
-	"regexp"
-	"slices"
-	"strings"
 	"time"
 
+	"github.com/frankgraave/subglance/internal/notifier"
 	"github.com/frankgraave/subglance/internal/store"
 )
 
@@ -47,7 +44,33 @@ type channelDelivery struct {
 	// LastError is the newest failure's message with the channel's
 	// credentials taken out; see redactDeliveryError.
 	LastError string `json:"last_error"`
+
+	// FailingSince is set while the channel is in a spell of failures: an
+	// alert through it gave up at this moment and none has arrived since.
+	// Unlike State it has no window, so a channel that failed forty days
+	// ago and was never needed again still says so. It ends when an alert
+	// or a test arrives.
+	FailingSince *time.Time `json:"failing_since"`
+	// NoticeSentAt and NoticeChannelID say when, and through which other
+	// channel, the channel_failing notice about this spell went out. Both
+	// are null while it has not; the channel id is also null when the
+	// channel that carried it has since been deleted.
+	NoticeSentAt    *time.Time `json:"notice_sent_at"`
+	NoticeChannelID *int64     `json:"notice_channel_id"`
+	// Notice is where that notice stands, null while the channel is not
+	// failing: "sent"; "waiting", when another channel could carry it but
+	// none has yet (quiet hours, or the next check is under a minute
+	// away); or "no_other_channel", when every other channel is disabled
+	// or failing too, and only this record says it.
+	Notice *string `json:"notice"`
 }
+
+// Where a failing channel's notice stands; see channelDelivery.Notice.
+const (
+	noticeSent           = "sent"
+	noticeWaiting        = "waiting"
+	noticeNoOtherChannel = "no_other_channel"
+)
 
 // deliveryState decides which of the four states a channel is in.
 //
@@ -68,7 +91,7 @@ func deliveryState(h store.ChannelHealth) string {
 	}
 }
 
-func toChannelDelivery(h store.ChannelHealth, ch store.Channel) *channelDelivery {
+func toChannelDelivery(h store.ChannelHealth, f *store.ChannelFailure, hasOther bool, ch store.Channel) *channelDelivery {
 	d := &channelDelivery{
 		State:      deliveryState(h),
 		WindowDays: int(store.DeliveryLogRetention / (24 * time.Hour)),
@@ -85,7 +108,37 @@ func toChannelDelivery(h store.ChannelHealth, ch store.Channel) *channelDelivery
 		t := h.LastFailedAt
 		d.LastFailedAt = &t
 	}
+	if f != nil {
+		since := f.FailedAt
+		d.FailingSince = &since
+		if !f.NoticedAt.IsZero() {
+			sent := f.NoticedAt
+			d.NoticeSentAt = &sent
+		}
+		if f.NoticeChannelID != 0 {
+			via := f.NoticeChannelID
+			d.NoticeChannelID = &via
+		}
+		notice := noticeWaiting
+		switch {
+		case !f.NoticedAt.IsZero():
+			notice = noticeSent
+		case !hasOther:
+			notice = noticeNoOtherChannel
+		}
+		d.Notice = &notice
+	}
 	return d
+}
+
+// deliveryRecords is what every channel's delivery record is built from: the
+// outbox's outcomes and the spells of failure the notifier keeps.
+type deliveryRecords struct {
+	health   map[int64]store.ChannelHealth
+	failures map[int64]store.ChannelFailure
+	// hasOther holds, per failing channel, whether another channel could
+	// carry its notice: the notifier's own rule, store.NoticeCandidates.
+	hasOther map[int64]bool
 }
 
 // channelDeliveries reads every channel's delivery record, or nil when the
@@ -95,88 +148,51 @@ func toChannelDelivery(h store.ChannelHealth, ch store.Channel) *channelDelivery
 // the request. The list is also where channels are edited, and an outbox
 // that cannot be read is no reason to stop someone fixing a channel; null
 // reads as "not known", which is what it is, and never as healthy.
-func (s *Server) channelDeliveries(ctx context.Context) map[int64]store.ChannelHealth {
+//
+// Both reads or neither: a record built from the outbox alone would leave
+// failing_since null on a channel that is failing, which reads as healthy.
+func (s *Server) channelDeliveries(ctx context.Context) *deliveryRecords {
 	health, err := s.db.ChannelHealthSince(ctx, time.Now().Add(-store.DeliveryLogRetention))
 	if err != nil {
 		s.log.Error("read channel delivery health", "error", err)
 		return nil
 	}
-	return health
+	failures, err := s.db.ChannelFailures(ctx)
+	if err != nil {
+		s.log.Error("read failing channels", "error", err)
+		return nil
+	}
+	recs := &deliveryRecords{health: health, failures: failures, hasOther: map[int64]bool{}}
+	if len(failures) == 0 {
+		return recs
+	}
+	channels, err := s.db.ListChannels(ctx)
+	if err != nil {
+		s.log.Error("list channels for delivery records", "error", err)
+		return nil
+	}
+	for id := range failures {
+		recs.hasOther[id] = len(store.NoticeCandidates(channels, failures, id)) > 0
+	}
+	return recs
 }
 
-// withDelivery fills a response's delivery record from health. A nil map is
-// a read that failed, and leaves the record null.
-func withDelivery(resp *channelResponse, ch store.Channel, health map[int64]store.ChannelHealth) {
-	if health == nil {
+// withDelivery fills a response's delivery record. Nil records are a read
+// that failed, and leave the record null.
+func withDelivery(resp *channelResponse, ch store.Channel, recs *deliveryRecords) {
+	if recs == nil {
 		return
 	}
-	resp.Delivery = toChannelDelivery(health[ch.ID], ch)
+	var failure *store.ChannelFailure
+	if f, ok := recs.failures[ch.ID]; ok {
+		failure = &f
+	}
+	resp.Delivery = toChannelDelivery(recs.health[ch.ID], failure, recs.hasOther[ch.ID], ch)
 }
 
-// urlInText finds the URLs in a delivery error.
-var urlInText = regexp.MustCompile(`(?i)\bhttps?://[^\s"'<>]+`)
-
-// minRedactLen is the shortest credential replaced in an error message.
-// Shorter values would match ordinary words and shred the message, and a
-// credential that short is not one an error message can meaningfully leak.
-const minRedactLen = 4
-
-// redactDeliveryError takes a channel's credentials out of a delivery error.
-//
-// The notifier stores errors as the transport wrote them, and Go's HTTP
-// client writes the whole request URL into every one: Post
-// "https://hooks.slack.com/services/…": dial tcp …. For Slack, Discord
-// and a plain webhook that URL is the credential, which the config mask
-// exists to keep from anybody reading this list, viewers included.
-//
-// Two passes, because either alone has a gap. Every masked config value is
-// replaced by its own mask wherever it appears, which catches a token
-// embedded in a longer string and hides a stored URL as a whole, exactly as
-// the config mask does. Then every URL that is left keeps its scheme and host
-// and loses its path and query, which catches a credential a sender put into
-// a URL it built, such as Telegram's bot token in the API path. The host is
-// what diagnoses "no such host" or "connection refused"; the path is what
-// grants access.
+// redactDeliveryError takes a channel's credentials out of a delivery error;
+// see notifier.RedactError, which holds the rules so that the notice about a
+// failing channel is masked exactly as this list is.
 func redactDeliveryError(msg string, ch store.Channel) string {
-	if msg == "" {
-		return ""
-	}
-	// Longest first: a shorter value inside a longer one would otherwise be
-	// replaced first, depending on map order, and leave the rest of the
-	// longer value in the message unmasked.
-	var vals []string
-	for k, v := range ch.Config {
-		if publicKeys[k] || len(strings.TrimSpace(v)) < minRedactLen {
-			continue
-		}
-		vals = append(vals, v)
-		if t := strings.TrimSpace(v); t != v {
-			vals = append(vals, t)
-		}
-	}
-	slices.SortFunc(vals, func(a, b string) int { return cmp.Compare(len(b), len(a)) })
-	for _, v := range vals {
-		msg = strings.ReplaceAll(msg, v, maskValue(v))
-	}
-	return urlInText.ReplaceAllStringFunc(msg, trimURL)
-}
-
-// trimURL keeps a URL's scheme and host, and marks that more was there.
-func trimURL(raw string) string {
-	scheme, rest, ok := strings.Cut(raw, "://")
-	if !ok {
-		return raw
-	}
-	host, tail := rest, ""
-	if end := strings.IndexAny(rest, "/?#"); end >= 0 {
-		host, tail = rest[:end], rest[end:]
-	}
-	// Userinfo is a credential too: "https://user:pass@host/".
-	if at := strings.LastIndex(host, "@"); at >= 0 {
-		host = host[at+1:]
-	}
-	if tail == "" || tail == "/" {
-		return scheme + "://" + host + tail
-	}
-	return scheme + "://" + host + "/…"
+	return notifier.RedactError(msg, ch.Config)
 }

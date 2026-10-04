@@ -126,6 +126,9 @@ type Server struct {
 	// rest: an API assembled without a checker pipeline must still serve
 	// everything else.
 	metrics MetricsSource
+	// deliveries counts alert deliveries for /metrics; nil leaves the
+	// series out, as in a build without a notifier.
+	deliveries DeliveryCounter
 
 	// streamPing overrides the SSE keepalive interval. Zero means the
 	// default. It exists so a test can assert the ping behaviour in
