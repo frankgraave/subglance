@@ -19,10 +19,9 @@ import { ShellSlots } from "../shell/ShellSlots";
 /*
  * Every render gets the shell's two portal targets (SUB-138).
  *
- * This screen contributes its filter field and its filters to the page
- * toolbar. Without the slot `ToolbarTools` renders null — which is
- * correct for the status wall and wrong here — so the controls would vanish
- * and every assertion about them would pass by not looking.
+ * This screen's filters head its own card since SUB-207, so it needs neither
+ * slot; they stay so the screen is rendered as the shell renders it, beside
+ * the masthead's portal targets.
  */
 function render(ui: React.ReactElement) {
   return renderBare(

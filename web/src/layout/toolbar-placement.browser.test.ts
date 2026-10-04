@@ -1,9 +1,9 @@
 /**
  * Where a screen's controls land, measured in a real browser (SUB-136).
  *
- * Monitors and Incidents portal their controls into the shell's page
- * toolbar through `ToolbarTools` — the filter field and everything else that
- * narrows the list (SUB-182). The dashboard, Notifications and Settings have
+ * Incidents portals its controls into the shell's page toolbar through
+ * `ToolbarTools` — the filter field and everything else that narrows the
+ * list (SUB-182). The dashboard, Monitors, Notifications and Settings have
  * moved theirs to the head of the list they act on (SUB-207, SUB-183). The masthead above holds only what works on every screen, search
  * included, which opens the command menu. The unit suite covers the portal
  * wiring with `ShellSlots`, which renders the target as a bare div. That proves the
@@ -211,6 +211,89 @@ describe("the dashboard", () => {
         { timeout: 5_000 },
         MONITOR_ITEMS,
       );
+    } finally {
+      await page.close();
+    }
+  });
+});
+
+describe("the monitors inventory", () => {
+  /*
+   * The inventory has left the toolbar too (SUB-207): its text filter,
+   * Filter (type, paused, tags) and Sort head its card beside its actions.
+   * Held from both sides, as the dashboard is: nothing comes back into a
+   * bar, and the header's controls still drive the list with a real pointer.
+   */
+  const HEAD = ".inv-board > .card-head";
+  const ROWS = ".inv-list > li";
+
+  it("puts its filter field, Filter, Sort and actions in its list header, not in a bar", async () => {
+    const page = await open("/monitors", ROWS);
+    try {
+      const where = (sel: string) =>
+        page.evaluate((s: string, head: string) => {
+          const el = document.querySelector(s);
+          if (el === null) return "missing";
+          if (el.closest(".shell-topbar") !== null) return "masthead";
+          if (el.closest(".shell-toolbar") !== null) return "toolbar";
+          return el.closest(head) !== null ? "header" : "page";
+        }, sel, HEAD);
+      expect({
+        filter: await where("input[type='search']"),
+        filters: await where("button[aria-haspopup='dialog'][aria-label^='Filter']"),
+        sort: await where("button[aria-haspopup='dialog'][aria-label^='Sort']"),
+        add: await where("button[aria-label='Add monitor']"),
+        search: await where(".shell-command-launcher"),
+      }).toEqual({
+        filter: "header",
+        filters: "header",
+        sort: "header",
+        add: "header",
+        search: "masthead",
+      });
+      const { toolbar } = await bars(page);
+      expect(toolbar?.height ?? 0, "the page toolbar is collapsed").toBe(0);
+      expect(await hittable(page, `${HEAD} input[type='search']`)).toBe(true);
+      expect(await hittable(page, `${HEAD} button[aria-label^='Sort']`)).toBe(true);
+    } finally {
+      await page.close();
+    }
+  });
+
+  it("drives its own list from the header", async () => {
+    /* Four fixture monitors: three HTTP, one TCP, which is also paused. */
+    const page = await open("/monitors", ROWS);
+    const count = () => page.evaluate((sel: string) => document.querySelectorAll(sel).length, ROWS);
+    const settle = (n: number) =>
+      page.waitForFunction((sel: string, want: number) => document.querySelectorAll(sel).length === want, { timeout: 5_000 }, ROWS, n);
+    try {
+      expect(await count()).toBe(4);
+      await page.type(`${HEAD} input[type='search']`, "auth");
+      await settle(1);
+      await page.$eval(`${HEAD} input[type='search']`, (el) => (el as HTMLInputElement).select());
+      await page.keyboard.press("Backspace");
+      await settle(4);
+
+      // Filter > Type opens first; TCP leaves the one monitor it counts.
+      await page.click(`${HEAD} button[aria-label^='Filter']`);
+      const panel = "[role='dialog'][aria-label='Filter monitors']";
+      await page.waitForSelector(panel);
+      let picked = false;
+      for (const label of await page.$$(`${panel} .choice-label`)) {
+        const text = await label.evaluate((el) => el.textContent ?? "");
+        if (/^TCP\s*1$/.test(text)) {
+          await label.click();
+          picked = true;
+          break;
+        }
+      }
+      expect(picked, "no 'TCP 1' value in the Type group").toBe(true);
+      await settle(1);
+      await page.keyboard.press("Escape");
+      expect(await page.$eval(`${HEAD} button[aria-label^='Filter']`, (el) => el.getAttribute("aria-label"))).toBe("Filter, 1 active");
+      // The chip under the header drops it again.
+      await page.click(".inv-filter-row button[aria-label='Remove filter Type: TCP']");
+      await settle(4);
     } finally {
       await page.close();
     }

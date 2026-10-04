@@ -7,9 +7,7 @@ import {
   screen,
   within,
 } from "@testing-library/react";
-import type { ReactElement } from "react";
 import { MonitorsView } from "./MonitorsView";
-import { setToolbarSlot } from "../shell/toolbarSlot";
 import { inventoryFromApi } from "./inventory";
 import type { InventoryMonitor } from "./inventory";
 
@@ -39,36 +37,39 @@ function make(over: Record<string, unknown> = {}): InventoryMonitor {
   } as Parameters<typeof inventoryFromApi>[0]);
 }
 
-/**
- * Renders the screen with a toolbar to put its controls in.
- *
- * Since SUB-134 the filter field, the two filters and the "n of m shown"
- * counter are portalled out of the Card into the shell's page toolbar (since
- * SUB-182 all of them; between SUB-138 and SUB-182 the field sat in the
- * masthead).
- * That is the behaviour under test in several assertions below, and a bare
- * `render` has neither bar — so the controls would have nowhere to go and
- * every assertion about them would fail for an absence the product does not
- * have.
- *
- * A stand-in slot rather than mounting the real `Topbar`: what these tests are
- * about is the inventory, and dragging the whole shell in would make a change
- * to the theme toggle able to fail a test about type filters. `App.test.tsx`
- * is where the two are asserted together.
+/*
+ * The filter field, Filter, Sort and the list's actions head the inventory
+ * card itself since SUB-207, so a bare render holds every control under test;
+ * the page toolbar they were portalled into until then is gone.
  */
-function render(ui: ReactElement) {
-  const toolbar = document.createElement("div");
-  document.body.append(toolbar);
-  setToolbarSlot(toolbar);
-  return renderBare(ui);
+const render = renderBare;
+
+afterEach(cleanup);
+
+/** Opens the Filter panel, which holds type, paused and the tags. */
+const openFilter = () =>
+  fireEvent.click(screen.getByRole("button", { name: /^Filter/ }));
+
+/** Chooses one value of a filter group in the Filter panel, opening it first. */
+function pick(group: string, value: string) {
+  if (screen.queryByRole("dialog", { name: "Filter monitors" }) === null) openFilter();
+  const panel = screen.getByRole("dialog", { name: "Filter monitors" });
+  fireEvent.click(within(panel).getByRole("button", { name: new RegExp(`^${group} `) }));
+  const values = within(panel).getByRole("group", { name: group });
+  fireEvent.click(within(values).getByRole("radio", { name: new RegExp(`^${value}\\b`) }));
 }
 
-afterEach(() => {
-  cleanup();
-  // Otherwise the next test portals into the previous test's detached slot,
-  // and its controls are rendered into a node nobody can query.
-  setToolbarSlot(null);
-});
+/** Chooses an order from the Sort panel. */
+function sortBy(label: string) {
+  if (screen.queryByRole("dialog", { name: "Sort monitors" }) === null) {
+    fireEvent.click(screen.getByRole("button", { name: /^Sort: / }));
+  }
+  const panel = screen.getByRole("dialog", { name: "Sort monitors" });
+  fireEvent.click(within(panel).getByRole("radio", { name: label }));
+}
+
+/** The visible "n of m shown" beside the chips. */
+const shownCount = () => document.querySelector(".inv-filter-row .mon-result-count")?.textContent;
 
 describe("MonitorsView", () => {
   it("shows the settings the dashboard refuses to show", () => {
@@ -322,11 +323,9 @@ describe("MonitorsView", () => {
         monitors={[make(), make({ id: 2, name: "db", type: "tcp", target: "db:5432" })]}
       />,
     );
-    fireEvent.change(screen.getByRole("combobox", { name: /type/i }), {
-      target: { value: "tcp" },
-    });
+    pick("Type", "TCP");
     expect(screen.queryByText("auth")).toBeNull();
-    expect(screen.getByText("1 of 2 shown")).toBeTruthy();
+    expect(shownCount()).toBe("1 of 2 shown");
   });
 
   it("never shows the empty state for a list that failed to load", () => {
@@ -508,7 +507,7 @@ describe("finding and arranging the inventory", () => {
     make({ id: 3, name: "Docs", status: "up", tags: { env: "staging" } }),
   ];
   const rowNames = () =>
-    screen.getAllByRole("listitem").map((row) => within(row).getAllByRole("link")[0].textContent);
+    [...document.querySelectorAll(".inv-list > li")].map((row) => within(row as HTMLElement).getAllByRole("link")[0].textContent);
 
   it("lists monitors by name, not in the order they were created", () => {
     render(<MonitorsView monitors={estate} />);
@@ -517,28 +516,113 @@ describe("finding and arranging the inventory", () => {
 
   it("sorts by status with the worst first", () => {
     render(<MonitorsView monitors={estate} />);
-    fireEvent.change(screen.getByRole("combobox", { name: "Sort" }), { target: { value: "status" } });
+    sortBy("Status");
     expect(rowNames()[0]).toBe("API checkout");
-    fireEvent.change(screen.getByRole("combobox", { name: "Sort" }), { target: { value: "type" } });
+    expect(screen.getByRole("button", { name: "Sort: Status" })).toBeTruthy();
+    sortBy("Type");
     expect(rowNames()).toEqual(["Docs", "Marketing site", "API checkout"]);
   });
 
   it("offers the dashboard's tag filters", () => {
     render(<MonitorsView monitors={estate} />);
-    fireEvent.change(screen.getByRole("combobox", { name: "env" }), { target: { value: "staging" } });
+    pick("env", "staging");
     expect(rowNames()).toEqual(["Docs"]);
-    expect(screen.getByText("1 of 3 shown")).toBeTruthy();
+    expect(shownCount()).toBe("1 of 3 shown");
   });
 
   it("forgets a tag filter whose value vanished, even when the value returns", () => {
     const view = render(<MonitorsView monitors={estate} />);
-    fireEvent.change(screen.getByRole("combobox", { name: "env" }), { target: { value: "staging" } });
+    pick("env", "staging");
     expect(rowNames()).toEqual(["Docs"]);
     view.rerender(<MonitorsView monitors={estate.map((m) => ({ ...m, tags: { env: "prod" } }))} />);
     // "staging" comes back. Nobody chose it again, so it must not filter.
     view.rerender(<MonitorsView monitors={estate} />);
-    expect((screen.getByRole("combobox", { name: "env" }) as HTMLSelectElement).value).toBe("");
+    expect(screen.getByRole("button", { name: "Filter" })).toBeTruthy();
     expect(rowNames()).toHaveLength(3);
+  });
+});
+
+describe("the inventory's list header", () => {
+  const estate = [
+    make({ id: 1, name: "Marketing site", tags: { env: "prod" } }),
+    make({ id: 2, name: "API checkout", type: "tcp", target: "api.example.com:443", tags: { env: "prod" } }),
+    make({ id: 3, name: "Docs", enabled: false, status: "paused", tags: { env: "staging" } }),
+  ];
+  const rowNames = () =>
+    [...document.querySelectorAll(".inv-list > li")].map((row) => within(row as HTMLElement).getAllByRole("link")[0].textContent);
+  const head = () => document.querySelector(".inv-board > .card-head") as HTMLElement;
+
+  it("heads the card with the filter, Filter and Sort, ahead of the list's actions", () => {
+    render(<MonitorsView monitors={estate} onCreateOpenChange={vi.fn()} onTagChange={vi.fn()} />);
+    // In markup order, which is focus order: what narrows, then what acts.
+    const controls = [...head().querySelectorAll("input, button")].map(
+      (el) => el.getAttribute("aria-label") ?? el.getAttribute("placeholder") ?? el.textContent,
+    );
+    expect(controls).toEqual([
+      "Filter monitors…",
+      "Filter",
+      "Sort: Name",
+      "Maintenance",
+      "Manage tags",
+      "Add monitor",
+    ]);
+    expect(within(head()).getByRole("searchbox", { name: "Filter monitors" })).toBeTruthy();
+  });
+
+  it("counts what each value would leave, with the other choices applied", () => {
+    render(<MonitorsView monitors={estate} />);
+    pick("Paused", "Active only");
+    const panel = screen.getByRole("dialog", { name: "Filter monitors" });
+    fireEvent.click(within(panel).getByRole("button", { name: /^Type / }));
+    const type = within(panel).getByRole("group", { name: "Type" });
+    expect(within(type).getByRole("radio", { name: "Any 2" })).toBeTruthy();
+    expect(within(type).getByRole("radio", { name: "HTTP 1" })).toBeTruthy();
+    expect(within(type).getByRole("radio", { name: "TCP 1" })).toBeTruthy();
+    expect(within(type).getByRole("radio", { name: "Ping 0" })).toBeTruthy();
+    // The key column says each group's current choice.
+    expect(within(panel).getByRole("button", { name: "Paused Active only" })).toBeTruthy();
+  });
+
+  it("states every choice as a chip that drops it, and Clear all drops them all", () => {
+    render(<MonitorsView monitors={estate} />);
+    expect(document.querySelector(".inv-filter-row")).toBeNull();
+    pick("Type", "HTTP");
+    pick("env", "prod");
+    expect(rowNames()).toEqual(["Marketing site"]);
+    expect(screen.getByRole("button", { name: "Filter, 2 active" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Remove filter Type: HTTP" }));
+    expect(rowNames()).toEqual(["API checkout", "Marketing site"]);
+    expect(shownCount()).toBe("2 of 3 shown");
+    fireEvent.click(screen.getByRole("button", { name: "Clear all" }));
+    expect(rowNames()).toHaveLength(3);
+    expect(document.querySelector(".inv-filter-row")).toBeNull();
+  });
+
+  it("says how many are shown while the text filter narrows, without a chip for it", () => {
+    render(<MonitorsView monitors={estate} />);
+    fireEvent.change(screen.getByRole("searchbox", { name: "Filter monitors" }), { target: { value: "docs" } });
+    expect(shownCount()).toBe("1 of 3 shown");
+    expect(screen.queryByRole("button", { name: /^Remove filter/ })).toBeNull();
+    // The hidden live region says it too, so the narrowing is announced.
+    expect(document.querySelector(".inv-board [role='status'].sr-only")?.textContent).toBe("1 of 3 shown");
+  });
+
+  it("offers a way back from a filter that empties the list", () => {
+    render(<MonitorsView monitors={estate} />);
+    pick("Type", "Ping");
+    expect(screen.getByText("No monitors match these filters")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Clear all filters" }));
+    expect(rowNames()).toHaveLength(3);
+  });
+
+  it("draws no filter or sort over a list with nothing in it", () => {
+    for (const props of [{ monitors: [] }, { monitors: estate, loading: true }, { monitors: estate, error: new Error("boom") }]) {
+      const view = render(<MonitorsView {...props} />);
+      expect(screen.queryByRole("searchbox")).toBeNull();
+      expect(screen.queryByRole("button", { name: /^Filter/ })).toBeNull();
+      expect(screen.queryByRole("button", { name: /^Sort/ })).toBeNull();
+      view.unmount();
+    }
   });
 });
 

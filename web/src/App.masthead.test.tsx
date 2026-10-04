@@ -358,9 +358,9 @@ describe("the masthead", () => {
         expect(frame?.querySelector(".tb-label")?.textContent?.trim(), where).toBeTruthy();
       }
     }
-    // Monitors (type, paused, sort) and Incidents (show, history) at least,
-    // so the walk cannot pass on a toolbar that rendered no selects.
-    expect(seen).toBeGreaterThanOrEqual(5);
+    // Incidents (show, history) at least, so the walk cannot pass on a
+    // toolbar that rendered no selects. Monitors left the toolbar (SUB-207).
+    expect(seen).toBeGreaterThanOrEqual(2);
   });
 
   it("keeps every pressed-state control in the masthead the same on every screen", async () => {

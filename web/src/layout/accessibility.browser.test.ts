@@ -309,7 +309,8 @@ describe.each(["light", "dark"])("readable secondary text in %s", (theme) => {
     { screenName: "monitor detail", selector: ".mon-detail-note" },
     { screenName: "incidents", selector: ".inc-sub" },
     { screenName: "incidents", selector: ".mon-detail-note" },
-    { screenName: "monitors", selector: ".tb-count" },
+    { screenName: "incidents", selector: ".tb-count" },
+    { screenName: "monitors", selector: ".card-note" },
   ])("$selector on $screenName clears AA without a waiver", async ({ screenName, selector }) => {
     const context = await browser.createBrowserContext();
     const page = await context.newPage();
