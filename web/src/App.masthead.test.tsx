@@ -268,21 +268,26 @@ describe("the masthead", () => {
     expect(mastheadNames(), "/monitors/1").toEqual(GLOBAL);
   });
 
-  it("puts the layout switcher in the dashboard's toolbar and on no other screen", async () => {
+  it("puts the layout switcher in the dashboard's View panel and on no other screen", async () => {
     /*
      * The four layouts are four ways of drawing the dashboard. In the masthead
      * the switcher sat on Monitors, Incidents, Notifications and Settings,
-     * where pressing it changed nothing on screen.
+     * where pressing it changed nothing on screen. It is in the View panel at
+     * the head of the dashboard's list now (SUB-183).
      */
     render(<App />);
     await screen.findByText("api");
-    const onDashboard = toolbarNames();
-    for (const layout of LAYOUTS) expect(onDashboard).toContain(layout);
+    expect(toolbarNames(), "the dashboard draws nothing in the page toolbar").toEqual([]);
+    fireEvent.click(screen.getByRole("button", { name: /^View: / }));
+    const panel = screen.getByRole("dialog", { name: "View" });
+    for (const layout of LAYOUTS) expect(within(panel).getByRole("button", { name: layout })).toBeTruthy();
+    fireEvent.keyDown(panel, { key: "Escape" });
 
     for (const route of ROUTES.slice(1)) {
       await visit(route);
       const here = [...mastheadNames(), ...toolbarNames()];
       for (const layout of LAYOUTS) expect(here, `${layout} on ${route.path}`).not.toContain(layout);
+      expect(screen.queryByRole("button", { name: /^View: / }), route.path).toBeNull();
     }
   });
 
@@ -389,7 +394,7 @@ describe("the masthead", () => {
     /*
      * The Display section on /settings is a second view of the preferences
      * App owns, not a second copy of them: a choice made there has to show
-     * in the masthead and the dashboard's toolbar at once and be what the
+     * in the masthead and the dashboard's View panel at once and be what the
      * next visit reads back.
      */
     render(<App />);
@@ -414,7 +419,8 @@ describe("the masthead", () => {
 
     fireEvent.click(screen.getByRole("link", { name: "Dashboard" }));
     await screen.findByText("api");
-    const toolbar = document.querySelector<HTMLElement>(".shell-toolbar")!;
-    expect(pressed(toolbar, "Dashboard layout", "Compact")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "View: Compact" }));
+    const view = screen.getByRole("dialog", { name: "View" });
+    expect(pressed(view, "Dashboard layout", "Compact")).toBe("true");
   });
 });

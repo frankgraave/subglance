@@ -1,9 +1,8 @@
 import type { CSSProperties } from "react";
-import { Card } from "../components/Card";
-import { IconAlert, IconList } from "../components/icons";
 import type { CardColumns } from "../shell/preferences";
 import { CARD_BEAT_WIDTH, MonitorCard } from "./MonitorCard";
 import { EmptyState } from "./EmptyState";
+import { MonitorGroup } from "./MonitorGroup";
 import { partition, sectionsByTag } from "./model";
 import type { Monitor } from "./types";
 
@@ -44,6 +43,8 @@ export type MonitorCardListProps = {
   onOpen?: (id: string) => void;
   /** Opens the add form from the empty state; see EmptyState. */
   onAddMonitor?: () => void;
+  /** Clears every filter, from the empty state of a narrowed list. */
+  onClearFilters?: () => void;
   /**
    * True when the live stream is dead. Forwarded to every card so its status
    * word moves into the past tense (DESIGN.md §6).
@@ -61,6 +62,7 @@ export function MonitorCardList({
   columns = "1",
   onOpen,
   onAddMonitor,
+  onClearFilters,
   stale = false,
 }: MonitorCardListProps) {
   const total = totalCount ?? monitors.length;
@@ -89,6 +91,8 @@ export function MonitorCardList({
         totalCount={total}
         filtered={filtered}
         onAddMonitor={onAddMonitor}
+        onClearFilters={onClearFilters}
+        headingLevel={3}
       />
     );
   }
@@ -104,21 +108,20 @@ export function MonitorCardList({
       />
     ));
 
+  // The sections are parts of the dashboard's one card, headed in the legend
+  // register, not cards of their own (see MonitorGroup).
   if (groupKey !== null) {
     return (
       <div className="mon-cards">
         {sectionsByTag(monitors, groupKey).map((section) => (
-          <Card
+          <MonitorGroup
             key={section.id}
-            className="mon-cards-section"
             title={`${section.label} (${section.monitors.length})`}
-            icon={<IconList />}
-            headingLevel={3}
           >
             <ul className="mon-card-stack" {...stackProps}>
               {cards(section.monitors)}
             </ul>
-          </Card>
+          </MonitorGroup>
         ))}
       </div>
     );
@@ -126,35 +129,31 @@ export function MonitorCardList({
 
   const { attention, rest } = partition(monitors);
 
-  return (
-    <div className="mon-cards">
-      {attention.length > 0 && (
-        <Card
-          className="mon-cards-section"
-          title={`Needs attention (${attention.length})`}
-          icon={<IconAlert />}
-          headingLevel={3}
-        >
-          <ul className="mon-card-stack" {...stackProps}>
-            {cards(attention)}
-          </ul>
-        </Card>
-      )}
-
-      <Card
-        className="mon-cards-section"
-        title={
-          attention.length > 0
-            ? `Other monitors (${rest.length})`
-            : `Monitors (${rest.length})`
-        }
-        icon={<IconList />}
-        headingLevel={3}
-      >
+  // With nothing needing attention the list is one run, and the card's own
+  // heading already names it: a second "Monitors" over the same cards would
+  // say it twice.
+  if (attention.length === 0) {
+    return (
+      <div className="mon-cards">
         <ul className="mon-card-stack" {...stackProps}>
           {cards(rest)}
         </ul>
-      </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mon-cards">
+      <MonitorGroup title={`Needs attention (${attention.length})`}>
+        <ul className="mon-card-stack" {...stackProps}>
+          {cards(attention)}
+        </ul>
+      </MonitorGroup>
+      <MonitorGroup title={`Other monitors (${rest.length})`}>
+        <ul className="mon-card-stack" {...stackProps}>
+          {cards(rest)}
+        </ul>
+      </MonitorGroup>
     </div>
   );
 }

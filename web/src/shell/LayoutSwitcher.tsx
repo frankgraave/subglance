@@ -25,17 +25,28 @@ export type LayoutSwitcherProps = {
    * admits the narrow viewport won.
    */
   effective?: LayoutId;
+  /**
+   * The layouts to offer, when not all four can be drawn here. A phone draws
+   * Rows and Compact as cards (`effectiveLayout`), so offering them there is
+   * a control that changes nothing on screen (SUB-183).
+   */
+  only?: readonly LayoutId[];
 };
 
 export function LayoutSwitcher({
   layout,
   onChange,
   effective,
+  only,
 }: LayoutSwitcherProps) {
   return (
     <SegmentedControl
       label="Dashboard layout"
-      options={LAYOUTS}
+      options={
+        only === undefined
+          ? LAYOUTS
+          : LAYOUTS.filter((option) => only.includes(option.id))
+      }
       value={effective ?? layout}
       onChange={onChange}
     />

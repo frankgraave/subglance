@@ -99,6 +99,21 @@ export function IconGroup() {
 }
 
 /**
+ * View: a frame split into panes, for the dashboard's View button — how the
+ * list is drawn and arranged, never which monitors are in it. Not the column
+ * glyphs: those are the options inside the panel, and the button that opens
+ * it should not look like one of them.
+ */
+export function IconLayout() {
+  return (
+    <svg {...BASE}>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="1.5" />
+      <path d="M3.5 10h17M10 10v9.5" />
+    </svg>
+  );
+}
+
+/**
  * A funnel, for a toolbar filter that narrows the list by something other
  * than a tag: a monitor's type, whether it is paused, whether an incident is
  * open.

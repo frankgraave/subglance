@@ -1,6 +1,3 @@
-import type { ReactNode } from "react";
-import { Card } from "../components/Card";
-import { IconList } from "../components/icons";
 import { EmptyState } from "./EmptyState";
 import { MonitorRow, ROW_BEAT_WIDTH } from "./MonitorRow";
 import { partition, sectionsByTag } from "./model";
@@ -44,6 +41,8 @@ export type MonitorTableProps = {
   onOpen?: (id: string) => void;
   /** Opens the add form from the empty state; see EmptyState. */
   onAddMonitor?: () => void;
+  /** Clears every filter, from the empty state of a narrowed list. */
+  onClearFilters?: () => void;
   /**
    * True when the live stream is dead. Handed straight to every row, which
    * puts the last known status into the past tense (DESIGN.md §6). The table
@@ -108,6 +107,7 @@ export function MonitorTable({
   groupKey = null,
   onOpen,
   onAddMonitor,
+  onClearFilters,
   stale = false,
 }: MonitorTableProps) {
   const total = totalCount ?? monitors.length;
@@ -119,6 +119,8 @@ export function MonitorTable({
         totalCount={total}
         filtered={filtered}
         onAddMonitor={onAddMonitor}
+        onClearFilters={onClearFilters}
+        headingLevel={3}
       />
     );
   }
@@ -137,42 +139,18 @@ export function MonitorTable({
   const sections = groupKey === null ? null : sectionsByTag(monitors, groupKey);
 
   /*
-   * The card that names the list, and counts it.
-   *
-   * The rows layout was the one list screen whose card had no icon and no
-   * title: the compact layout says "Monitors (N)" with an `IconList` tile, the
-   * cards layout titles every section, the inventory says "Configured
-   * monitors" — and the rows layout, which is the default, opened on an
-   * unlabelled frame. The product owner's note was exactly that: icon and
-   * title missing relative to the other views, keep it consistent, so
-   * "Monitors (5)".
-   *
-   * The count is `monitors.length` — every monitor this table draws, before
-   * the attention/rest split. It is deliberately not the sum of the two
-   * section headings read as alternatives: "Needs attention (3)" and "Other
-   * monitors (2)" are two parts of one list of 5, and the card names the
-   * whole. The second heading is "Other monitors", not "All monitors": "All
-   * monitors (2)" over a list of 5 reads as a miscount, and in the cards
-   * layout, where no card above it states the total, nothing corrects it.
-   *
-   * `headingLevel` is 2: the dashboard's `h1` is its own visually hidden
-   * "Monitors" heading, and this card sits inside that section.
+   * No card of its own (SUB-183). The dashboard draws one card around
+   * whichever layout is on screen and heads it with the status tabs, which
+   * carry the count — so the table is the card's content, as the card and
+   * compact lists are. It used to be titled "Monitors (N)" in a card of its
+   * own, because the rows layout was then the one list screen with an
+   * unlabelled frame; the frame and its label are the dashboard's now.
    */
-  const card = (children: ReactNode) => (
-    <Card
-      title={`Monitors (${monitors.length})`}
-      icon={<IconList />}
-      headingLevel={2}
-    >
-      {children}
-    </Card>
-  );
-
   if (sections !== null) {
     // The caption states the arrangement, because a sighted reader infers it
     // from the headings and someone using a screen reader cannot.
     const caption = `${monitors.length} monitors, grouped by ${groupKey}. Monitors needing attention are listed first.`;
-    return card(
+    return (
       <table className="mon-table">
         <caption className="sr-only">{caption}</caption>
         <Columns />
@@ -197,7 +175,7 @@ export function MonitorTable({
             {rows(section.monitors)}
           </tbody>
         ))}
-      </table>,
+      </table>
     );
   }
 
@@ -207,7 +185,7 @@ export function MonitorTable({
       ? `${monitors.length} monitors. ${attention.length} needing attention are listed first, the rest alphabetically by name.`
       : `${monitors.length} monitors, alphabetically by name.`;
 
-  return card(
+  return (
     <table className="mon-table">
       {/* Visually hidden, but the table's accessible name and the one place
           the ordering rule is stated for someone who cannot see it. */}
@@ -242,6 +220,6 @@ export function MonitorTable({
         )}
         {rows(rest)}
       </tbody>
-    </table>,
+    </table>
   );
 }

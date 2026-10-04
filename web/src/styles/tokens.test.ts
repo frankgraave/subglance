@@ -3420,8 +3420,15 @@ describe("the card pattern is the only way to frame a group of panels", () => {
     //
     // `.wall-title` is a full-screen display read from across a room. It has
     // no card to inherit from and is not a document heading.
+    //
+    // `.mon-group-title` heads a section *inside* the dashboard's one card
+    // (SUB-183): the attention run or one tag value, in the cards and compact
+    // layouts. It is the same legend `.mon-section-title` is in the rows
+    // layout, so it takes the same role; a card title there would be a
+    // second card heading inside the card.
     const allowed = new Set([
       "web/src/monitors/monitors.css | .mon-section-title",
+      "web/src/monitors/monitors.css | .mon-group-title",
       "web/src/wall/wall.css | .wall-title",
     ]);
     expect(

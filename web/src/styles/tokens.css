@@ -416,6 +416,13 @@
      only its paint is a state. */
   --size-status-rail: 2px;
 
+  /* The mark under the selected status tab on the dashboard's list header
+     (SUB-183): a painted bar on the header's rule saying "this one is
+     chosen". Its own rung for the reason the rail above has one: it is the
+     same 2px today by coincidence, and the rail is a status signal while this
+     is a selection, so widening one must not move the other. */
+  --size-tab-mark: 2px;
+
   /* The keyboard outline and its offset. A different mechanism from the
      ring above (outline, not shadow) and deliberately thinner: it draws
      outside the box where the ring draws inside it. */

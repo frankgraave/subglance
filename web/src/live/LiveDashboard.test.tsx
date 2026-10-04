@@ -27,6 +27,9 @@ import { ShellSlots } from "../shell/ShellSlots";
  * correct for the status wall and wrong here — so the controls would vanish
  * and every assertion about them would pass by not looking.
  */
+/** The status tab for down monitors in the list's header, or null. */
+const downTab = () => screen.queryByRole("button", { name: /^Down \d+$/ });
+
 function render(ui: React.ReactElement) {
   // Keep monitor fetch counters scoped to monitors while settling the new read.
   const monitorFetch = globalThis.fetch;
@@ -158,8 +161,9 @@ describe("LiveDashboard", () => {
   it("turns a monitor red from a status frame, without refetching", async () => {
     const { fetchMock } = renderLive();
     await screen.findByText("api");
-    // The count sits in its own <b>, so the label is the stable handle.
-    expect(screen.queryByText("down", { exact: true })).toBeNull();
+    // The Down tab appears with its first down monitor (SUB-183): a status
+    // with no monitors has no tab.
+    expect(downTab()).toBeNull();
 
     act(() => {
       FakeSource.last?.open();
@@ -173,8 +177,7 @@ describe("LiveDashboard", () => {
 
     // The acceptance criterion: visible on the dashboard, no reload.
     await waitFor(() => {
-      const label = screen.getByText("down", { exact: true });
-      expect(label.parentElement?.textContent).toContain("1");
+      expect(downTab()?.textContent).toContain("1");
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -319,7 +322,7 @@ describe("LiveDashboard", () => {
       FakeSource.last!.fail();
       FakeSource.last!.open();
     });
-    await waitFor(() => expect(screen.getByText("down", { exact: true })).toBeTruthy());
+    await waitFor(() => expect(downTab()).not.toBeNull());
     expect(document.querySelector('[role="status"][aria-atomic="true"]')!.textContent).toBe("");
   });
 
@@ -336,7 +339,7 @@ describe("LiveDashboard", () => {
       await screen.findByText("api");
       act(() => FakeSource.last!.open());
       await act(async () => { down(); FakeSource.last!.fail(); });
-      await waitFor(() => expect(screen.getByText("down", { exact: true })).toBeTruthy());
+      await waitFor(() => expect(downTab()).not.toBeNull());
       expect(region().textContent).toBe("");
       expect(screen.getByText(/Connection lost/)).toBeTruthy();
     });
@@ -357,7 +360,7 @@ describe("LiveDashboard", () => {
       await act(async () => {
         client.setQueryData<Monitor[]>(monitorsQueryKey, (held) => held!.map((m) => ({ ...m, status: "down" })));
       });
-      await waitFor(() => expect(screen.getByText("down", { exact: true })).toBeTruthy());
+      await waitFor(() => expect(downTab()).not.toBeNull());
       expect(region().textContent).toBe("");
       act(() => FakeSource.last!.open());
       expect(region().textContent).toBe("");
@@ -371,7 +374,7 @@ describe("LiveDashboard", () => {
         client.setQueryData<Monitor[]>(monitorsQueryKey, (held) => held!.map((m) => ({ ...m, status: "down" })));
         FakeSource.last!.open();
       });
-      await waitFor(() => expect(screen.getByText("down", { exact: true })).toBeTruthy());
+      await waitFor(() => expect(downTab()).not.toBeNull());
       expect(region().textContent).toBe("");
     });
 
@@ -551,13 +554,13 @@ describe("LiveDashboard", () => {
      * switcher only came with the list, those two moments would leave no way
      * to the status wall — the layout that is built to carry the sentence.
      */
-    const switcher = () =>
-      document
-        .querySelector(".shell-toolbar-slot")
-        ?.querySelector('[role="group"][aria-label="Dashboard layout"]') ??
-      null;
+    /*
+     * It is in the View panel at the head of the card the list will arrive
+     * in (SUB-183), so the button is what is there before the list is.
+     */
+    const view = () => screen.queryByRole("button", { name: /^View: / });
 
-    it("is in the page toolbar while the first load is in flight", () => {
+    it("is in the list's header while the first load is in flight", () => {
       vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise(() => {})));
       const chosen: string[] = [];
       render(
@@ -569,12 +572,13 @@ describe("LiveDashboard", () => {
         />,
       );
       expect(screen.getAllByText(/Loading monitors…/).length).toBeGreaterThan(0);
-      expect(switcher()).not.toBeNull();
+      expect(document.querySelector(".shell-toolbar-slot")?.childElementCount ?? 0).toBe(0);
+      fireEvent.click(view()!);
       fireEvent.click(screen.getByRole("button", { name: "Status wall" }));
       expect(chosen).toEqual(["wall"]);
     });
 
-    it("is in the page toolbar when the first load fails", async () => {
+    it("is in the list's header when the first load fails", async () => {
       vi.stubGlobal(
         "fetch",
         vi
@@ -592,7 +596,7 @@ describe("LiveDashboard", () => {
         />,
       );
       expect(await screen.findByRole("alert")).toBeTruthy();
-      expect(switcher()).not.toBeNull();
+      expect(view()).not.toBeNull();
     });
   });
 
@@ -744,7 +748,7 @@ describe("LiveDashboard", () => {
         });
       });
       await waitFor(() =>
-        expect(screen.getByText("down", { exact: true })).toBeTruthy(),
+        expect(downTab()).not.toBeNull(),
       );
       // The whole point of the stream: no request for a row it already has.
       expect(fetchMock).toHaveBeenCalledTimes(1);

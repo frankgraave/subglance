@@ -187,7 +187,7 @@ describe("MonitorCompactList grouped by a tag", () => {
   ];
 
   const headings = () =>
-    [...document.querySelectorAll(".card-title")].map((h) => h.textContent);
+    [...document.querySelectorAll(".mon-group-title")].map((h) => h.textContent);
 
   it("heads one section per tag value, untagged last", () => {
     render(<MonitorCompactList monitors={tagged()} groupKey="env" />);
@@ -204,7 +204,7 @@ describe("MonitorCompactList grouped by a tag", () => {
     expect(lines()).toHaveLength(4);
   });
 
-  it("puts the lines straight on the card, with no panel between", () => {
+  it("puts the lines straight on the dashboard's card, with no panel between", () => {
     /*
      * The nesting rule, as a test, because it was found by eye.
      *
@@ -215,23 +215,14 @@ describe("MonitorCompactList grouped by a tag", () => {
      * where the reference puts it at 61px — the 6px inset spent twice, once by
      * the card and once by the wrapper.
      *
-     * Checked in the DOM rather than in CSS: the wrapper's cost is structural,
-     * and a rule about which elements exist has to read the elements.
+     * The card is the dashboard's now (SUB-183), so the list is rendered here
+     * without one and nothing between it and its caller may be a panel or a
+     * card.
      */
     const { container } = render(<MonitorCompactList monitors={tagged()} />);
-
-    const card = container.querySelector(".card");
-    expect(card, "the list still lives in a card").not.toBeNull();
-    expect(
-      card?.querySelector(".panel"),
-      "a line is the panel; a panel around the list is one surface too many",
-    ).toBeNull();
-
+    expect(container.querySelector(".panel, .card")).toBeNull();
     const list = container.querySelector(".mon-line-stack");
-    expect(
-      list?.parentElement,
-      "the list hangs off the card itself, not off a wrapper",
-    ).toBe(card);
+    expect(list?.parentElement, "the list is the component's root").toBe(container);
   });
 
   it("spends the six-pixel inset once, on the card", () => {
@@ -248,13 +239,10 @@ describe("MonitorCompactList grouped by a tag", () => {
 
   it("stays one flat list without a grouping key", () => {
     render(<MonitorCompactList monitors={tagged()} />);
-    // One card, not none. The ungrouped list used to carry its label on the
-    // PanelList itself, which meant the flat layout was the only screen in the
-    // product with no card around its content — visible as a list floating on
-    // the page while every other list sat in a frame. It now gets the same
-    // card as the grouped case; what makes it "flat" is that there is exactly
-    // one of them.
-    expect(headings()).toEqual(["Monitors (4)"]);
+    // No section heading at all: the one run of lines stands under the
+    // dashboard card's own heading (SUB-183), and what makes it "flat" is
+    // that there is exactly one list.
+    expect(headings()).toEqual([]);
     expect(document.querySelectorAll("ul")).toHaveLength(1);
   });
 });

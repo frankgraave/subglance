@@ -59,7 +59,6 @@ const exceptions = new Map<string, string>([
   ["mon-detail-empty--quiet", DETAIL_COLUMN],
   ["mon-detail-nav", DETAIL_COLUMN],
   ["mon-detail-note", DETAIL_COLUMN],
-  ["mon-result-count", DETAIL_COLUMN],
   ["inc-churn", INCIDENT_ROWS],
   ["inc-list", INCIDENT_ROWS],
   ["inc-notice", INCIDENT_ROWS],

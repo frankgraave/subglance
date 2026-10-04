@@ -25,89 +25,110 @@
 }
 
 /*
- * The status filter, framed like the segmented control beside it.
+ * The dashboard's card, whose header is the list's header (SUB-183).
  *
- * The shell is what makes the two clusters read as siblings rather than as
- * loose toggles next to a framed thing. It is deliberately the *same* frame:
- * 2px of padding inside `--r-md`, leaving `--r-sm` on the chips, which is the
- * concentric rule (§2.7) and the geometry §7.8 measured.
- *
- * It is not a segmented control and must not become one. These are
- * independent toggles — none selected is a real state, and pressing the
- * active chip is how you get back to the full list — where a segmented
- * control is one-of-N. The frame is a visual family, not a promise.
+ * What you are looking at stands on the left — the status tabs with their
+ * counts — and how you are looking on the right: the text filter, Filter and
+ * View. One line with a rule under it, on the card header's own 46px: the
+ * spec asked for 52, which is not a rung, and a dashboard card whose header
+ * sat on a different height from every other card's would be the one card
+ * that does. The block padding goes so the tabs can stand the full height of
+ * the header and the selected one can draw its mark on the rule itself.
  */
-.mon-filter {
-  display: inline-flex;
-  align-items: center;
-  /*
-   * The chips wrap inside the frame instead of pushing it past the screen.
-   *
-   * Each chip is `nowrap` and the frame used not to wrap, so the whole cluster
-   * was one unbreakable box: seven statuses measure about 680px, and on a
-   * phone that box set the page's width — 703px of scroll at 320px, the
-   * status counts and every tag filter after them off screen (SUB-192). The
-   * toolbar around it already wraps (`.tb-group`), which only helps a child
-   * that can become narrower than one line. `max-width` is what lets this one
-   * do that: without it a flex item never shrinks below its content.
-   *
-   * Not phone-only. The cluster is as wide as the statuses in the estate, not
-   * as the viewport, so a tablet beside the sidebar overflows the same way.
-   */
+.mon-board > .card-head {
   flex-wrap: wrap;
-  max-width: 100%;
-  gap: 1px;
-  padding: var(--space-0h);
-  border: 1px solid var(--border-control);
-  border-radius: var(--r-md);
-  background: var(--surface-2);
+  align-items: stretch;
+  padding-block: 0;
+  border-bottom: 1px solid var(--border);
 }
+
+/* The tabs keep their line; the controls give way first, then wrap under
+   them (two lines at a tablet width, never more). */
+.mon-board > .card-head > .card-head-lead { flex: none; max-width: 100%; }
+
+.mon-board > .card-head > .card-head-action {
+  flex: 1 1 0;
+  justify-content: flex-end;
+  align-self: center;
+  min-width: 0;
+}
+
+/* The text filter: the search field's 280px, giving way to rung 4 (168px),
+   which still shows its placeholder whole. 32px tall, and the two buttons
+   beside it take the same height so the three share one top and bottom. */
+.card-head-action > .mon-head-filter {
+  flex: 0 1 var(--size-pane-sm);
+  min-width: var(--size-col-4);
+}
+
+.mon-head-button { height: var(--size-row-md); }
+
+/* The active-filter count on the Filter button. */
+.mon-head-badge { margin-inline-start: var(--space-0h); }
 
 /*
- * A filter chip, shaped like a segment of the control beside it.
+ * The status tabs. Buttons with `aria-pressed` in a labelled group, not tabs:
+ * they narrow one list in place rather than switching panels (StatusTabs).
  *
- * `--r-sm` inside the frame's `--r-md` and its 2px of padding: 8 − 2 = 6,
- * concentric by §2.7. The transparent border is declared at rest so the box
- * never changes size when a chip is pressed or hovered — the same reason
- * `.segmented-option` carries one.
+ * The selected tab is the ink at the heavier weight with a 2px accent mark on
+ * the header's rule — position and weight carry it as well as the colour
+ * (§2.3). The mark is a pseudo-element rather than a border so the tab's box
+ * does not change when the selection moves.
  */
-.mon-count {
+.mon-tabs {
+  display: flex;
+  align-self: stretch;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.mon-tab {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  height: var(--size-square-compact);
-  padding: 0 var(--space-2h);
+  gap: var(--space-1h);
+  padding: 0 var(--space-2);
   font: inherit;
-  font-size: var(--type-helper);
-  line-height: var(--lead-helper);
-  color: var(--ink-3);
-  background: none;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background-color var(--dur-hover) var(--ease),
-              border-color var(--dur-hover) var(--ease),
-              color var(--dur-hover) var(--ease);
-}
-
-.mon-count:hover {
+  font-size: var(--type-body);
+  line-height: var(--lead-body);
   color: var(--ink-2);
-  border-color: var(--border-hi);
+  background: none;
+  border: 0;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--dur-hover) var(--ease);
 }
 
-/* Pressed is carried by the filled surface AND by aria-pressed, never by
-   colour alone (DESIGN.md §9). */
-.mon-count[aria-pressed="true"] {
-  background: var(--surface-hi);
-  border-color: var(--border-hi);
+.mon-tab:hover { color: var(--ink); }
+
+.mon-tab[aria-pressed="true"] {
   color: var(--ink);
-}
-
-.mon-count-value {
-  @apply face-mono;
   font-weight: var(--weight-strong);
-  color: var(--ink);
+}
+
+.mon-tab[aria-pressed="true"]::after {
+  content: "";
+  position: absolute;
+  left: var(--space-2);
+  right: var(--space-2);
+  bottom: -1px;
+  height: var(--size-tab-mark);
+  background: var(--accent);
+}
+
+/* Inside the tab, because the row of tabs scrolls on a phone and would clip
+   a ring drawn outside it. */
+.mon-tab:focus-visible {
+  outline: var(--outline-ring-w) solid var(--accent-ring);
+  outline-offset: calc(var(--outline-ring-w) * -1);
+}
+
+.mon-tab-count {
+  @apply face-mono;
+  font-size: var(--type-section);
+  line-height: var(--lead-section);
+  font-weight: var(--weight-plain);
+  color: var(--ink-3);
 }
 
 /*
@@ -135,44 +156,226 @@
 .mon-count-dot[data-state="idle"] { background: var(--idle); }
 .mon-count-dot[data-state="off"]  { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-2); }
 
-/* One labelled native select per tag key. Native because these lists are
-   short and a custom listbox would have to re-earn keyboard support, the
-   screen-reader contract and the OS picker on a phone. Wrapping in a <label>
-   means the key text is the accessible name, so no visually hidden legend is
-   needed and the key stays clickable. */
-.mon-facets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  align-items: center;
-}
-
-.mon-facet {
-  display: inline-flex;
-  align-items: center;
+/*
+ * The Filter and View panels hang from their buttons on the menu's floating
+ * surface (`Popover`). Filter is two columns: the tag keys, each with its
+ * current value, and the chosen key's values as one radio list with the
+ * number of monitors each would leave.
+ */
+.mon-panel {
   gap: var(--space-2);
-  font-size: var(--type-helper);
-  line-height: var(--lead-helper);
-  color: var(--ink-3);
+  padding: var(--space-2);
 }
 
-.mon-facet-key {
-  font-weight: var(--weight-strong);
+.mon-filter-panel {
+  width: var(--size-pane-md);
+  max-width: none;
+}
+
+.mon-filter-cols {
+  display: grid;
+  grid-template-columns: var(--size-col-4) minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+.mon-filter-keys {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mon-filter-key {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--size-row-md);
+  padding: 0 var(--space-2);
+  font: inherit;
+  font-size: var(--type-body);
+  line-height: var(--lead-body);
+  color: var(--ink);
+  text-align: left;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+.mon-filter-key:hover,
+.mon-filter-key[aria-pressed="true"] { background: var(--surface-2); }
+
+.mon-filter-key[aria-pressed="true"] { border-color: var(--border-hi); }
+
+.mon-filter-key-value,
+.mon-option-count {
+  @apply face-mono;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--type-section);
+  line-height: var(--lead-section);
   color: var(--ink-2);
 }
 
+/* One key's values: Any first, then each value with its count. A long list
+   scrolls inside the panel rather than past the screen. */
+.mon-values {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-height: var(--size-pane-scroll);
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.mon-values-key {
+  @apply caps-legend;
+  padding: 0 0 var(--space-1);
+}
+
+.mon-option {
+  display: flex;
+  flex: 1;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.mon-option-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A value no monitor would survive: still offered, one step quieter. */
+.mon-option[data-empty="true"] { color: var(--ink-2); }
+
+.mon-panel-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+.mon-panel-count {
+  margin-inline: auto;
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  color: var(--ink-2);
+}
+
+/* View: a label column beside the choices. */
+.mon-view-grid {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1);
+}
+
+.mon-view-label { @apply caps-legend; }
+
+/* The chosen tags as chips under the header, each a button that drops it,
+   then Clear all and the sentence saying what is left. */
+.mon-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2) 0;
+}
+
+.mon-filter-chip {
+  min-height: var(--size-row-sm);
+  font: inherit;
+  background: none;
+  cursor: pointer;
+}
+
+.mon-filter-chip:hover { border-color: var(--border-hi); }
+
+.mon-filter-chip-x {
+  padding: 0 var(--space-2) 0 0;
+  color: var(--ink-2);
+}
+
+/* A section of the list: the attention run, a tag value. Headed in the
+   legend register the table's own section rows use, because it is part of
+   the dashboard's one card and not a card of its own (MonitorGroup). */
+.mon-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1h);
+}
+
+.mon-group-title {
+  @apply caps-legend;
+  margin: 0;
+  padding: var(--space-2) var(--space-3) 0;
+}
+
 /*
- * The facet and group selects are `.tb-select` now (SUB-138).
- *
- * They used to restate its padding, type, fill and border here, which is how
- * the dashboard's filters ended up a different width from the monitors page's
- * — same intent, two declarations, one of them edited. The shared class is in
- * shell.css because the bar it sits in is the shell's.
- *
- * The two names survive for one reason each: `.mon-facet-select` marks a
- * control that narrows the list and `.mon-group-select` one that does not,
- * and `Dashboard.test.tsx` tells them apart by exactly that.
+ * Phone: the tabs scroll sideways under the menu and title, Filter and View
+ * are square icon buttons at the control height (36px, the rung every phone
+ * control here is drawn at; the 44px in the design is not a rung), and both
+ * panels are sheets from the bottom edge. The literal width is the
+ * breakpoint rung: a custom property never matches in a media query
+ * (AGENTS.md).
  */
+@media (max-width: 640px) {
+  .mon-board > .card-head { flex-wrap: nowrap; }
+  .mon-board > .card-head > .card-head-lead { flex: 1 1 auto; min-width: 0; }
+  .mon-board > .card-head > .card-head-action { flex: none; }
+  .mon-tabs { overflow-x: auto; scrollbar-width: none; }
+
+  .mon-head-button {
+    justify-content: center;
+    width: var(--control-h);
+    height: var(--control-h);
+    padding: 0;
+  }
+
+  .menu-panel.mon-sheet[data-align] {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-width: none;
+    max-height: 85vh;
+    overflow-y: auto;
+    z-index: var(--z-overlay);
+    gap: var(--space-4);
+    padding: var(--space-4);
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+    animation: mon-sheet-in var(--dur-panel) var(--ease);
+  }
+
+  /* Rows a thumb can hit, and the whole width for the values. */
+  .mon-sheet .choice-label { min-height: var(--size-row-lg); }
+  .mon-sheet .mon-values { max-height: none; overflow: visible; }
+  .mon-sheet-done { justify-content: center; }
+}
+
+@keyframes mon-sheet-in {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-panel.mon-sheet[data-align] { animation: none; }
+}
 
 .mon-result-count {
   font-size: var(--type-helper);
