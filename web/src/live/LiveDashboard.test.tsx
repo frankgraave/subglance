@@ -28,7 +28,9 @@ function render(ui: React.ReactElement) {
       ? Promise.resolve(new Response(JSON.stringify(disabledWatchdog)))
       : String(input) === "/api/v1/connectivity"
         ? Promise.resolve(new Response(JSON.stringify(onlineConnectivity)))
-        : monitorFetch(input, init));
+        : String(input) === "/api/v1/channels"
+          ? Promise.resolve(new Response(JSON.stringify({ channels: [] })))
+          : monitorFetch(input, init));
   return renderBare(ui);
 }
 

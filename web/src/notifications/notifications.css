@@ -512,3 +512,18 @@
 
 .nt-quiet-grid { margin-top: 0; }
 
+
+/* ── A channel that stopped delivering, on the dashboard (SUB-212) ──────────
+ *
+ * The shared warn note draws it; this only clears the paragraph margin, which
+ * the dashboard's own gap replaces, and raises the link to the 24px target
+ * floor without moving the text, as the watchdog notice does.
+ */
+.nt-failing { margin: 0; }
+
+.nt-failing a {
+  display: inline-block;
+  min-height: var(--size-row-sm);
+  color: inherit;
+  text-decoration: underline;
+}

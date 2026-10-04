@@ -307,8 +307,17 @@ const budgets = {
    * the chips that drop one filter each. No new dependency. 148 would leave
    * 381 bytes, a tripwire by the argument above; 149 leaves 1,405, about
    * what SUB-208 handed back.
+   *
+   * 149 -> 150 KiB gzip for SUB-212 (the dashboard's line for a channel that
+   * stopped delivering). Develop at fb55cc9 measures 152,460 bytes of entry
+   * JS (Node gzip, level 6), 116 under 149; this branch measures 152,699,
+   * 239 more and 123 over. That is one sentence that names the failing
+   * channels and whether another channel carried the notice, its link, and
+   * reading the new fields of the delivery record. No new dependency, and
+   * no new query: it shares the notifications screen's channel list. 150
+   * leaves 901 bytes.
    */
-  js: 149,
+  js: 150,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *

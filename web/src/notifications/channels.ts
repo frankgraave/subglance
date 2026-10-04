@@ -87,6 +87,10 @@ export type ApiDelivery = {
   pending?: number;
   retrying?: number;
   last_error?: string;
+  failing_since?: string | null;
+  notice_sent_at?: string | null;
+  notice_channel_id?: number | null;
+  notice?: string | null;
 };
 
 export type Channel = {
@@ -728,6 +732,20 @@ export type ChannelHistory = {
   retrying: number;
   /** The newest failure, credentials already taken out by the server. */
   lastError: string;
+  /**
+   * When the channel's current spell of failures began: an alert through it
+   * gave up then and none has arrived since. Null when it is not failing,
+   * whatever the 30-day counts say, because the spell has no window.
+   */
+  failingSince: number | null;
+  /**
+   * Where the notice about that spell stands. `sent`: another channel
+   * carried it. `waiting`: one could, and has not yet. `none`: no other
+   * channel can, so the screen is the only place it is said.
+   */
+  notice: "sent" | "waiting" | "none" | null;
+  noticeSentAt: number | null;
+  noticeChannelId: string | null;
 };
 
 export const HISTORY_UNKNOWN: ChannelHistory = {
@@ -739,6 +757,10 @@ export const HISTORY_UNKNOWN: ChannelHistory = {
   pending: 0,
   retrying: 0,
   lastError: "",
+  failingSince: null,
+  notice: null,
+  noticeSentAt: null,
+  noticeChannelId: null,
 };
 
 const HISTORY_STATES = new Set(["delivered", "failed", "retrying", "none"]);
@@ -761,7 +783,66 @@ export function historyFromApi(
     pending: count(api.pending),
     retrying: count(api.retrying),
     lastError: typeof api.last_error === "string" ? api.last_error : "",
+    ...failingFromApi(api),
   };
+}
+
+/*
+ * The spell of failures, or nothing. A server older than the field sends
+ * none, which reads as "not known to be failing" rather than as a claim:
+ * the 30-day state beside it still says Failed when it is.
+ */
+function failingFromApi(
+  api: ApiDelivery,
+): Pick<ChannelHistory, "failingSince" | "notice" | "noticeSentAt" | "noticeChannelId"> {
+  const failingSince = toUnixMs(api.failing_since);
+  if (failingSince === null) {
+    return { failingSince: null, notice: null, noticeSentAt: null, noticeChannelId: null };
+  }
+  const notice =
+    api.notice === "sent" ? "sent" : api.notice === "no_other_channel" ? "none" : "waiting";
+  return {
+    failingSince,
+    notice,
+    noticeSentAt: toUnixMs(api.notice_sent_at),
+    noticeChannelId:
+      typeof api.notice_channel_id === "number" ? String(api.notice_channel_id) : null,
+  };
+}
+
+/**
+ * The channels that are failing now, oldest spell first: the dashboard's
+ * line and the order it names them in.
+ */
+export function failingChannels(channels: readonly Channel[]): Channel[] {
+  return channels
+    .filter((c) => c.enabled && c.history.failingSince !== null)
+    .sort((a, b) => (a.history.failingSince ?? 0) - (b.history.failingSince ?? 0));
+}
+
+/**
+ * What the row says about the notice for a failing channel, or null when it
+ * is not failing. `names` resolves the channel that carried it.
+ */
+export function describeFailureNotice(
+  history: ChannelHistory,
+  names: ReadonlyMap<string, string>,
+): string | null {
+  switch (history.notice) {
+    case "sent": {
+      const via =
+        history.noticeChannelId === null ? undefined : names.get(history.noticeChannelId);
+      return via === undefined
+        ? `Reported through another channel ${longDate(history.noticeSentAt)}`
+        : `Reported through ${via} ${longDate(history.noticeSentAt)}`;
+    }
+    case "waiting":
+      return "Not reported yet: the other channels are in their quiet hours or about to be tried";
+    case "none":
+      return "No other channel to report this through";
+    default:
+      return null;
+  }
 }
 
 function count(n: number | undefined): number {
@@ -816,6 +897,12 @@ export function historyMoment(history: ChannelHistory): string | null {
  * the cell's title, where the counts and the error have room.
  */
 export function describeHistory(history: ChannelHistory): string {
+  const notice = describeFailureNotice(history, new Map());
+  const base = describeWindow(history);
+  return notice === null ? base : `${base}. ${notice}`;
+}
+
+function describeWindow(history: ChannelHistory): string {
   const window = `in the last ${history.windowDays} days`;
   const error = history.lastError === "" ? "" : `: ${history.lastError}`;
   switch (history.state) {
