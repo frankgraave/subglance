@@ -63,6 +63,64 @@
 }
 
 /*
+ * The channel filter, in the header beside the add button (SUB-207).
+ *
+ * One line while the title, the field and the button fit: the field gives way
+ * first, from the search field's natural 280px down to rung 4 (168px), which
+ * still shows its placeholder whole. Below that the header wraps and the
+ * controls take a line of their own under the title, right-aligned, rather
+ * than squeezing the title to an ellipsis. Keyed through `.card-head-action`
+ * so it outranks the field's own width in `shell.css`, which is imported
+ * later.
+ */
+.nt-card > .card-head {
+  flex-wrap: wrap;
+}
+
+.nt-card > .card-head > .card-head-action {
+  flex: 1 1 0;
+  justify-content: flex-end;
+}
+
+/* The button keeps its words on one line; the field is what gives way. */
+.nt-card > .card-head > .card-head-action > .button {
+  flex: none;
+}
+
+/* As tall as the button beside it rather than the masthead field's 32px:
+   two controls sharing a line share its top and bottom edge. */
+.card-head-action > .nt-filter {
+  flex: 0 1 var(--size-pane-sm);
+  min-width: var(--size-col-4);
+  align-self: stretch;
+  width: auto;
+  height: auto;
+}
+
+/*
+ * Phone: the title has the first line, and the field and the button share
+ * the second, in the order they are in the markup, so keyboard focus moves
+ * the way the eye does. An earlier layout put the button beside the title
+ * and the field under both, which sent focus from the lower field back up to
+ * the button. The field keeps rung 4, which shows its placeholder whole;
+ * where that does not fit beside the button (320px), the button wraps to a
+ * line of its own under the field, at the card's right edge: three lines on
+ * the narrowest screen rather than a cut placeholder.
+ */
+@media (max-width: 640px) {
+  .nt-card > .card-head > .card-head-action {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+  }
+  .nt-card > .card-head > .card-head-action > .button {
+    margin-left: auto;
+  }
+  .card-head-action > .nt-filter {
+    flex: 1 1 var(--size-col-4);
+  }
+}
+
+/*
  * The type column, widened for the one label this page can produce that the
  * monitors inventory cannot.
  *

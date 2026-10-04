@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { registerNavigationCleanup } from "../shell/leaveGuard";
 import { Card, Panel } from "../components/Card";
-import { PlusIcon, SearchIcon } from "../shell/icons";
+import { PlusIcon } from "../shell/icons";
+import { FilterField } from "../shell/FilterField";
 import { IconClock, IconFilter, IconList, IconPause, IconPlay, IconPulse, IconSort } from "../components/icons";
 import { ToolbarTools } from "../shell/ToolbarTools";
 import { ToolbarSelect } from "../shell/ToolbarSelect";
@@ -244,22 +245,12 @@ export function MonitorsView({
        */}
       <ToolbarTools>
         <div className="tb-group">
-          <label className="shell-search">
-            <span className="sr-only">Filter monitors</span>
-            <SearchIcon />
-            <input
-              type="search"
-              /* `shell-search-input` pins the 16px minimum at every width.
-                 `.input` drops to 14px above 640px, which is fine for a
-                 form nobody types into on a phone in landscape and wrong for a
-                 search box: iOS Safari zooms the page on focus below 16px and
-                 leaves the reader scrolled sideways (DESIGN.md §13). */
-              className="shell-search-input"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Filter monitors…"
-            />
-          </label>
+          <FilterField
+            label="Filter monitors"
+            placeholder="Filter monitors…"
+            value={query}
+            onChange={setQuery}
+          />
 
           {/* A filter glyph, not the tag one: type and paused narrow the
               list by a monitor's own settings, not by a tag. */}

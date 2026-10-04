@@ -28,10 +28,19 @@
   align-items: start;
 }
 
-.settings-index {
+/* The filter and the index it narrows, one column that sticks as a unit
+   (SUB-207), so the field is still in reach halfway down the page. */
+.settings-aside {
   position: sticky;
   top: var(--settings-top);
+  display: grid;
+  /* One track the column's width, not `auto`: an auto track grows to the
+     field's natural 280px and pushed the index 88px into the cards. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  min-width: 0;
 }
+.settings-aside > .shell-search { width: 100%; }
 .settings-index ul {
   list-style: none;
   margin: 0;
@@ -55,10 +64,11 @@
 
 /* One column below the tablet rung, where the page is too narrow for a side
    column. The index becomes a wrapping row above the cards and stops
-   sticking: pinned there, it would cover the first lines of every card. */
+   sticking: pinned there, it would cover the first lines of every card. The
+   filter stays above it. */
 @media (max-width: 900px) {
   .settings-layout { grid-template-columns: minmax(0, 1fr); }
-  .settings-index { position: static; }
+  .settings-aside { position: static; }
   .settings-index ul { flex-direction: row; flex-wrap: wrap; }
 }
 

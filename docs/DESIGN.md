@@ -1643,8 +1643,10 @@ after.
 The masthead's search is the launcher (SUB-182): a button drawn as a search
 field, named "Search", carrying the `⌘K` keycap, on every screen including a
 monitor's detail page. It is the only search entry in the masthead; a screen
-that filters its own list does so from a field in its page toolbar, which the
-palette leaves untouched. On phones the keycap goes and the glyph and the word
+that filters its own list does so from a field at the head of that list —
+the Channels card's header, the settings index — which the palette leaves
+untouched. The dashboard, Monitors and Incidents still draw theirs in the
+page toolbar until their list headers take them (SUB-207). On phones the keycap goes and the glyph and the word
 stay. The palette uses an opaque `--surface-float`
 native modal above existing drawers, a bounded scrolling list, and the
 reference's 12px outer / 6px option corners. All matching monitors remain

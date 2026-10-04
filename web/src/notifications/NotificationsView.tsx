@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Card } from "../components/Card";
 import { IconSend } from "../components/icons";
-import { PlusIcon, SearchIcon } from "../shell/icons";
-import { ToolbarTools } from "../shell/ToolbarTools";
+import { PlusIcon } from "../shell/icons";
+import { FilterField } from "../shell/FilterField";
 import { Drawer } from "../components/Drawer";
 import { ConfirmDelete } from "../components/ConfirmDelete";
 import { StateChip } from "../components/Chip";
@@ -121,6 +121,16 @@ export function NotificationsView({
 }: NotificationsViewProps) {
   const [query, setQuery] = useState("");
   /*
+   * The query goes with the last channel. The field steps aside on an empty
+   * instance (below), and a query it kept while hidden would hide the next
+   * channel added if that channel did not match it — with no field on screen
+   * to say why. Only on a load that succeeded: a failed or pending one says
+   * nothing about what the list holds.
+   */
+  if (query !== "" && !loading && error === null && channels.length === 0) {
+    setQuery("");
+  }
+  /*
    * Filtering by what a row shows: its name and its type. Not by the secret,
    * obviously, and not by the destination either — the destination is masked
    * for most channel types, so a query would appear to search something the
@@ -143,35 +153,46 @@ export function NotificationsView({
   const defaultChannel = channels.find((c) => c.isDefault) ?? null;
   const canWrite = onSave !== undefined;
 
+  /*
+   * The filter and the add button live in the Channels card's header, beside
+   * the list they act on (SUB-207). They used to sit in a page toolbar between
+   * the masthead and the card, so the screen stacked three layers — bar,
+   * toolbar, card — to show one list, and the field that narrows the rows was
+   * the furthest thing from them. It filters by channel name and by type, the
+   * two things written on a row.
+   *
+   * The field steps aside on an empty instance, as the add button does: with
+   * nothing to narrow, a filter is a control that can only ever match nothing.
+   */
+  const filter =
+    channels.length === 0 && !loading ? null : (
+      <FilterField
+        className="nt-filter"
+        label="Filter channels by name or type"
+        placeholder="Filter channels…"
+        value={query}
+        onChange={setQuery}
+      />
+    );
+  const add =
+    onCreateOpenChange === undefined ||
+    (!loading && error === null && channels.length === 0) ? null : (
+      <button
+        type="button"
+        className="button button--primary"
+        // Named here rather than by its text content, for the same
+        // reason as Add monitor: an unnamed inline <svg> leaves the
+        // button's accessible name up to the screen reader.
+        aria-label="Add channel"
+        onClick={() => onCreateOpenChange(true)}
+      >
+        <PlusIcon aria-hidden="true" />
+        Add channel
+      </button>
+    );
+
   return (
     <section className="mon-detail inv-screen" aria-label="Notifications">
-      {/*
-       * The filter field, in this page's toolbar like every other list
-       * screen's (SUB-182). It filters by channel name and by type, which are
-       * the two things written on a row. It is the toolbar's only control, so
-       * the bar appears here for one field: the alternative, a field in the
-       * masthead, was a second search entry beside the command menu.
-       */}
-      <ToolbarTools>
-        <div className="tb-group">
-          <label className="shell-search">
-            <span className="sr-only">Filter channels by name or type</span>
-            <SearchIcon />
-            <input
-              type="search"
-              className="shell-search-input"
-              value={query}
-              placeholder="Filter channels…"
-              autoComplete="off"
-              spellCheck={false}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-          </label>
-        </div>
-      </ToolbarTools>
-
-      {/* The page frame's visible `h1` names this screen (SUB-182). */}
-
       {error !== null && (
         <p className="inc-notice" role="alert">
           {error.message}
@@ -215,7 +236,7 @@ export function NotificationsView({
          * off. That is strictly more than the header line carried — the chip
          * names *which* channel is silent, where "1 disabled" only told you
          * that one of them was and left you to find it — and it is the only
-         * one of the two that stays true under the masthead filter, which
+         * one of the two that stays true under the channel filter, which
          * hides rows without changing `channels.length`.
          */
         title={
@@ -244,20 +265,11 @@ export function NotificationsView({
          * only way to add a channel and must not vanish.
          */
         action={
-          onCreateOpenChange === undefined ||
-          (!loading && error === null && channels.length === 0) ? undefined : (
-            <button
-              type="button"
-              className="button button--primary"
-              // Named here rather than by its text content, for the same
-              // reason as Add monitor: an unnamed inline <svg> leaves the
-              // button's accessible name up to the screen reader.
-              aria-label="Add channel"
-              onClick={() => onCreateOpenChange(true)}
-            >
-              <PlusIcon aria-hidden="true" />
-              Add channel
-            </button>
+          filter === null && add === null ? undefined : (
+            <>
+              {filter}
+              {add}
+            </>
           )
         }
       >
@@ -324,7 +336,7 @@ export function NotificationsView({
              * A filter that matched nothing is not an empty instance.
              *
              * Previously the two shared one branch, so typing "zz" into the
-             * masthead filter on an instance with four working channels
+             * channel filter on an instance with four working channels
              * produced "Alerts are going nowhere." — the page's single most
              * alarming sentence, fired by a search box. The distinction costs
              * one comparison and prevents the screen from lying about the

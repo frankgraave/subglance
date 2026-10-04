@@ -24,6 +24,7 @@ import {
 import { IconFilter, IconPause, IconPencil, IconPulse, IconRefresh, IconTag, IconTrash } from "./components/icons";
 import { PlusIcon, SearchIcon, SidebarIcon } from "./shell/icons";
 import { ToolbarSelect } from "./shell/ToolbarSelect";
+import { FilterField } from "./shell/FilterField";
 import { IconTile } from "./components/IconTile";
 import { Checkbox, Radio } from "./components/Choice";
 import { PanelList, PanelRow } from "./components/PanelList";
@@ -204,9 +205,9 @@ export const specimens: Specimen[] = [
   {
     id: "chrome",
     title: "Masthead and toolbar",
-    source: "web/src/shell/Topbar.tsx, web/src/shell/PageToolbar.tsx, web/src/shell/ToolbarSelect.tsx",
+    source: "web/src/shell/Topbar.tsx, web/src/shell/PageToolbar.tsx, web/src/shell/ToolbarSelect.tsx, web/src/shell/FilterField.tsx",
     rule:
-      "Two bars, and which one a control belongs in is decided by a single question: does it do something on every screen? The masthead holds what does — the sidebar toggle, search, the theme — and, after the toggle, the page's title: the page's only h1, on the row role at the heavy weight, one line. Its controls never change as you navigate, so the bar stays readable without being re-read. The toolbar below holds what is true of this screen only, and disappears on screens with nothing to put in it rather than sitting there empty. An action that operates on one kind of thing fails the question: adding a monitor is a monitors action, so it lives in the header of the card it adds to, not in chrome that is also present on Notifications. Every select in the toolbar is one framed field with a glyph, on every screen: a filter, an order and a window look like one kind of control because they are one.",
+      "Two bars, and which one a control belongs in is decided by a single question: does it do something on every screen? The masthead holds what does — the sidebar toggle, search, the theme — and, after the toggle, the page's title: the page's only h1, on the row role at the heavy weight, one line. Its controls never change as you navigate, so the bar stays readable without being re-read. A control that is true of one screen only stands at the head of the list it acts on — a filter in its card's header, beside that card's own action. The toolbar below still holds the dashboard's, the monitors' and the incidents' controls until their list headers take them, and disappears on screens with nothing to put in it rather than sitting there empty. Every filter field is FilterField. An action that operates on one kind of thing fails the question: adding a monitor is a monitors action, so it lives in the header of the card it adds to, not in chrome that is also present on Notifications. Every select in the toolbar is one framed field with a glyph, on every screen: a filter, an order and a window look like one kind of control because they are one.",
     node: (
       <div className="sg-chrome">
         <div className="shell-topbar">
@@ -235,16 +236,7 @@ export const specimens: Specimen[] = [
         <div className="shell-toolbar">
           <div className="shell-toolbar-slot">
             <div className="tb-group">
-              <label className="shell-search">
-                <SearchIcon />
-                <input
-                  type="search"
-                  className="shell-search-input"
-                  aria-label="Filter monitors"
-                  placeholder="Filter monitors…"
-                  readOnly
-                />
-              </label>
+              <FilterField label="Filter monitors" placeholder="Filter monitors…" value="" onChange={() => {}} />
               <ToolbarSelect icon={<IconFilter />} label="Type" value="" onChange={() => {}}>
                 <option value="">All types</option>
               </ToolbarSelect>

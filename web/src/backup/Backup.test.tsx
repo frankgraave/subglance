@@ -2,8 +2,6 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
-import { ShellSlots } from "../shell/ShellSlots";
-import { setToolbarSlot } from "../shell/toolbarSlot";
 import { Settings } from "../settings/Settings";
 import { backupKey } from "./api";
 import { unconfiguredBackup } from "./fixtures";
@@ -16,7 +14,7 @@ const healthy = {
 };
 
 const clients: QueryClient[] = [];
-afterEach(() => { cleanup(); for (const client of clients.splice(0)) client.clear(); setToolbarSlot(null); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); for (const client of clients.splice(0)) client.clear(); vi.unstubAllGlobals(); });
 
 function mount(body: unknown, { status = 200, canAdmin = true } = {}) {
   // Every other card on the page gets the same body; only the backup card is under test.
@@ -24,7 +22,7 @@ function mount(body: unknown, { status = 200, canAdmin = true } = {}) {
   vi.stubGlobal("fetch", fetcher);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(client);
-  render(<QueryClientProvider client={client}><ShellSlots /><Settings client={client} canAdmin={canAdmin} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><Settings client={client} canAdmin={canAdmin} /></QueryClientProvider>);
   return { client, fetcher };
 }
 
