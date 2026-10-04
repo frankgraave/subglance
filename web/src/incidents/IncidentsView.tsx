@@ -3,7 +3,7 @@ import { IconAlert, IconClock, IconFilter } from "../components/icons";
 import { IncidentStoryItem } from "./IncidentStoryItem";
 import { IncidentClusterItem } from "./IncidentClusterItem";
 import { useState } from "react";
-import { SearchIcon } from "../shell/icons";
+import { FilterField } from "../shell/FilterField";
 import { ToolbarTools } from "../shell/ToolbarTools";
 import { ToolbarSelect } from "../shell/ToolbarSelect";
 import { HISTORY_WINDOWS } from "./api";
@@ -316,19 +316,12 @@ export function IncidentsView({
        */}
       <ToolbarTools>
         <div className="tb-group">
-          <label className="shell-search">
-            <span className="sr-only">Filter incidents by monitor</span>
-            <SearchIcon />
-            <input
-              type="search"
-              className="shell-search-input"
-              value={query}
-              placeholder="Filter by monitor…"
-              autoComplete="off"
-              spellCheck={false}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-          </label>
+          <FilterField
+            label="Filter incidents by monitor"
+            placeholder="Filter by monitor…"
+            value={query}
+            onChange={setQuery}
+          />
 
           <ToolbarSelect
             icon={<IconFilter />}

@@ -49,8 +49,8 @@ cannot quietly rot into a list of justified-sounding lies.
 
 ### Where a control belongs
 
-Two bars, and one question decides between them: **does this control do
-something on every screen?**
+One question decides first: **does this control do something on every
+screen?**
 
 - **Yes** — the masthead (`web/src/shell/Topbar.tsx`). The sidebar toggle,
   search (which opens the command menu), the theme. Because each of them
@@ -61,21 +61,35 @@ something on every screen?**
   Working everywhere is necessary, not sufficient: the component workbench
   worked everywhere too, and is a developer tool, so it lives at
   `/workbench` with nothing linking to it.
-- **No** — the page toolbar (`web/src/shell/PageToolbar.tsx`), filled through
-  a portal slot (`ToolbarTools`) by whichever view is mounted. A list's
-  filter field, its filters and counts, and the dashboard's layout switcher
-  live here. It hides itself on screens with nothing to put in it rather than
-  sitting there empty.
-- **Neither** — an action that operates on one kind of thing belongs in the
-  header of the card it acts on. Adding a monitor is a monitors action; it is
-  not chrome, because chrome that is also present on Notifications while
-  meaning something about monitors is chrome you have to re-read.
+- **No** — the head of the list it acts on. A list's filter field, its
+  filters and its list actions stand in the header of the card or list they
+  narrow, not in a bar across the page: the channel filter is in the
+  Channels card's header beside "Add channel", and the settings filter
+  stands at the head of the section index it narrows. Adding a monitor is a
+  monitors action for the same reason; chrome that is also present on
+  Notifications while meaning something about monitors is chrome you have
+  to re-read.
+
+The dashboard, Monitors and Incidents still put their controls in the page
+toolbar (`web/src/shell/PageToolbar.tsx`, filled through `ToolbarTools`)
+under the masthead, until each moves them into its own list header. Do not
+put a new screen's controls there. `layout/list-headers.browser.test.ts`
+lists which screens are on which side: it fails when a moved screen draws a
+bar between the masthead and its first card, when its header does not start
+directly under the masthead, is more than one line at 1440px or scrolls
+sideways at 390px, and when a screen still listed as on the toolbar has
+left it without moving across.
 
 A control is in the masthead only on a screen where it does something. The
 layout switcher used to sit there on every route, and on four of them
 pressing it changed nothing on screen; it is the dashboard's now. There is
 one search entry in the masthead — a second, page-bound field beside it is a
-filter, and goes in that page's toolbar.
+filter, and goes at the head of that page's list.
+
+A filter field is `FilterField` (`web/src/shell/FilterField.tsx`), never a
+hand-written `<input type="search">`: it carries the hidden label, the
+search frame and the 16px phone floor, and `FilterField.test.tsx` refuses
+one written anywhere else.
 
 `web/src/App.masthead.test.tsx` walks every route, the detail page included,
 and asserts the masthead holds exactly the global set and that the layout

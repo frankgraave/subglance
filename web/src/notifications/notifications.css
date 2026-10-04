@@ -63,6 +63,64 @@
 }
 
 /*
+ * The channel filter, in the header beside the add button (SUB-207).
+ *
+ * One line while the title, the field and the button fit: the field gives way
+ * first, from the search field's natural 280px down to rung 4 (168px), which
+ * still shows its placeholder whole. Below that the header wraps and the
+ * controls take a line of their own under the title, right-aligned, rather
+ * than squeezing the title to an ellipsis. Keyed through `.card-head-action`
+ * so it outranks the field's own width in `shell.css`, which is imported
+ * later.
+ */
+.nt-card > .card-head {
+  flex-wrap: wrap;
+}
+
+.nt-card > .card-head > .card-head-action {
+  flex: 1 1 0;
+  justify-content: flex-end;
+}
+
+/* The button keeps its words on one line; the field is what gives way. */
+.nt-card > .card-head > .card-head-action > .button {
+  flex: none;
+}
+
+/* As tall as the button beside it rather than the masthead field's 32px:
+   two controls sharing a line share its top and bottom edge. */
+.card-head-action > .nt-filter {
+  flex: 0 1 var(--size-pane-sm);
+  min-width: var(--size-col-4);
+  align-self: stretch;
+  width: auto;
+  height: auto;
+}
+
+/*
+ * Phone: the title and the button share the first line, and the field takes
+ * the whole second one. Beside the button the field had about 120px at
+ * 320px, which cut its placeholder; under it, it has the card's width. The
+ * action group steps out of the layout so its two children can sit on
+ * different lines of the header. At 320px the title and the button do not
+ * fit one line either, and the button takes a line of its own: three lines,
+ * on the narrowest screen, rather than a title cut before its count.
+ */
+@media (max-width: 640px) {
+  .nt-card > .card-head > .card-head-action {
+    display: contents;
+  }
+  .nt-card > .card-head > .card-head-action > .button {
+    margin-left: auto;
+  }
+  .card-head-action > .nt-filter {
+    order: 1;
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+}
+
+/*
  * The type column, widened for the one label this page can produce that the
  * monitors inventory cannot.
  *

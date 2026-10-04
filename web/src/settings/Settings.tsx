@@ -4,8 +4,8 @@ import { createQueryClient } from "../live/queryClient";
 import { Card, Panel } from "../components/Card";
 import { IconDatabase, IconGlobe, IconTransfer } from "../components/icons";
 import { ChangePassword } from "../auth/ChangePassword";
-import { SearchIcon, SettingsIcon } from "../shell/icons";
-import { ToolbarTools } from "../shell/ToolbarTools";
+import { SettingsIcon } from "../shell/icons";
+import { FilterField } from "../shell/FilterField";
 import { WatchdogCard } from "../watchdog/Watchdog";
 import { DiagnosticsCard } from "../diagnostics/Diagnostics";
 import { BackupCard } from "../backup/Backup";
@@ -207,19 +207,7 @@ export function Settings({ client, canAdmin = false, role = canAdmin ? "admin" :
   const shown = sections.filter((section) => section.keywords.includes(needle));
   const [current, setCurrent] = useCurrentSection(shown.map((section) => section.id));
   useInitialFragment();
-  return <>
-    {/* A filter over the sections below, so it sits in this page's toolbar
-        (SUB-182): the masthead's one search is the command menu. */}
-    <ToolbarTools>
-      <div className="tb-group">
-        <label className="shell-search">
-          <SearchIcon />
-          <input type="search" className="shell-search-input" aria-label="Filter settings" placeholder="Filter settings…"
-            autoComplete="off" spellCheck={false}
-            value={query} onChange={(event) => setQuery(event.target.value)} />
-        </label>
-      </div>
-    </ToolbarTools>
+  return (
     <div className="settings-layout">
       {/*
        * The index is navigation, not state: every link is a real fragment, so
@@ -231,16 +219,27 @@ export function Settings({ client, canAdmin = false, role = canAdmin ? "admin" :
        * paint is the sidebar's own current-destination rule, reached through
        * the same `data-state`, so "you are here" looks the same at both levels.
        */}
-      {shown.length > 0 && <nav className="settings-index" aria-label="Settings sections">
-        <ul>
-          {shown.map((section) => <li key={section.id}>
-            <a className="shell-nav-item" href={`#${section.id}`}
-              aria-current={current === section.id ? "true" : undefined}
-              data-state={current === section.id ? "current" : undefined}
-              onClick={() => setCurrent(section.id)}>{section.label}</a>
-          </li>)}
-        </ul>
-      </nav>}
+      {/*
+       * The filter stands above the index it narrows, in the index's own
+       * column (SUB-207): it filters the list of sections, so it belongs at
+       * the head of that list rather than in a bar across the page. The two
+       * stick together, so the field is still in reach after scrolling
+       * halfway down, and the field stays when nothing matches: a filter
+       * that vanished with its last result could not be cleared.
+       */}
+      <div className="settings-aside">
+        <FilterField label="Filter settings" placeholder="Filter settings…" value={query} onChange={setQuery} />
+        {shown.length > 0 && <nav className="settings-index" aria-label="Settings sections">
+          <ul>
+            {shown.map((section) => <li key={section.id}>
+              <a className="shell-nav-item" href={`#${section.id}`}
+                aria-current={current === section.id ? "true" : undefined}
+                data-state={current === section.id ? "current" : undefined}
+                onClick={() => setCurrent(section.id)}>{section.label}</a>
+            </li>)}
+          </ul>
+        </nav>}
+      </div>
       <div className="settings-sections">
         {/* Filtering hides, rather than unmounts, so a query never discards input. */}
         {sections.map((section) => <div key={section.id} id={section.id} className="settings-section"
@@ -248,5 +247,5 @@ export function Settings({ client, canAdmin = false, role = canAdmin ? "admin" :
         {shown.length === 0 && <p role="status">No settings match “{query}”.</p>}
       </div>
     </div>
-  </>;
+  );
 }

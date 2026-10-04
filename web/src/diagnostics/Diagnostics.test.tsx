@@ -5,8 +5,6 @@ import { fileURLToPath } from "node:url";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
-import { ShellSlots } from "../shell/ShellSlots";
-import { setToolbarSlot } from "../shell/toolbarSlot";
 import { Settings } from "../settings/Settings";
 import { disabledWatchdog } from "../watchdog/fixtures";
 import { diagnosticsText, formatBytes, formatUptime } from "./format";
@@ -26,10 +24,10 @@ function settings(diagnostics: unknown, { canAdmin = true, status = 200 } = {}) 
   vi.stubGlobal("fetch", fetcher);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(client);
-  render(<QueryClientProvider client={client}><ShellSlots /><Settings client={client} canAdmin={canAdmin} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><Settings client={client} canAdmin={canAdmin} /></QueryClientProvider>);
   return fetcher;
 }
-afterEach(() => { cleanup(); for (const c of clients.splice(0)) c.clear(); setToolbarSlot(null); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); for (const c of clients.splice(0)) c.clear(); vi.unstubAllGlobals(); });
 
 const card = () => document.getElementById("instance") as HTMLElement;
 const reading = (label: string) => within(card()).getByText(label).nextElementSibling as HTMLElement;

@@ -63,8 +63,6 @@ const exceptions = new Map<string, string>([
   ["inc-churn", INCIDENT_ROWS],
   ["inc-list", INCIDENT_ROWS],
   ["inc-notice", INCIDENT_ROWS],
-  ["shell-search", PAGE_TOOLBAR],
-  ["shell-search-input", PAGE_TOOLBAR],
   ["tb-count", PAGE_TOOLBAR],
   ["tb-group", PAGE_TOOLBAR],
   ["shell-icon", SHELL_ICON],

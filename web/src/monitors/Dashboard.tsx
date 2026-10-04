@@ -11,7 +11,7 @@ import {
 import { LED_STATE } from "./ledState";
 import { CardColumnsSwitcher } from "../shell/CardColumnsSwitcher";
 import { LayoutSwitcher } from "../shell/LayoutSwitcher";
-import { SearchIcon } from "../shell/icons";
+import { FilterField } from "../shell/FilterField";
 import { ToolbarTools } from "../shell/ToolbarTools";
 import { ToolbarSelect } from "../shell/ToolbarSelect";
 import { MonitorCardList } from "./MonitorCardList";
@@ -229,22 +229,13 @@ export function Dashboard({
        */}
       <ToolbarTools>
         <div className="tb-group">
-          <label className="shell-search">
-            {/* A real <label>, hidden. Placeholder-as-label disappears the
-                moment someone types, which is when they most need it. */}
-            <span className="sr-only">Filter monitors by name or target</span>
-            <SearchIcon />
-            <input
-              id={searchId}
-              type="search"
-              className="shell-search-input"
-              value={query}
-              placeholder="Filter monitors…"
-              autoComplete="off"
-              spellCheck={false}
-              onChange={(event) => onQueryChange(event.target.value)}
-            />
-          </label>
+          <FilterField
+            id={searchId}
+            label="Filter monitors by name or target"
+            placeholder="Filter monitors…"
+            value={query}
+            onChange={onQueryChange}
+          />
 
           {/*
            * The status filter.

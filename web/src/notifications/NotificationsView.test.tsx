@@ -3,12 +3,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   cleanup,
   fireEvent,
-  render as renderBare,
+  render,
   screen,
   within,
 } from "@testing-library/react";
-import type { ReactElement } from "react";
-import { setToolbarSlot } from "../shell/toolbarSlot";
 import { NotificationsView } from "./NotificationsView";
 import { channelFromApi } from "./channels";
 import type { Channel } from "./channels";
@@ -35,29 +33,7 @@ function make(over: Record<string, unknown> = {}): Channel {
   });
 }
 
-/*
- * A stand-in toolbar slot, so the screen's filter field has somewhere to
- * portal to (SUB-182). `ToolbarTools` renders nothing when no slot is
- * registered, which is correct behaviour — the status wall has no chrome —
- * but it means a test file that never registers one cannot see the filter at
- * all, and an assertion about filtering would fail for an absence the product
- * does not have. A bare node rather than the real `Topbar`: these tests are
- * about channels, and mounting the shell would let a change to the theme
- * toggle fail one.
- */
-function render(ui: ReactElement) {
-  const toolbar = document.createElement("div");
-  document.body.append(toolbar);
-  setToolbarSlot(toolbar);
-  return renderBare(ui);
-}
-
-afterEach(() => {
-  cleanup();
-  // Otherwise the next test portals into the previous test's detached slot,
-  // and its controls are rendered into a node nobody can query.
-  setToolbarSlot(null);
-});
+afterEach(cleanup);
 
 describe("NotificationsView", () => {
   it("says plainly when unrouted monitors reach nobody", () => {
@@ -519,6 +495,42 @@ describe("NotificationsView", () => {
     expect(
       screen.getAllByRole("button", { name: /add (a )?channel/i }),
     ).toHaveLength(1);
+  });
+
+  it("puts the filter in the Channels card's header, beside the add button", () => {
+    /*
+     * The filter used to sit in a page toolbar between the masthead and this
+     * card. It narrows the card's rows, so it stands in the card's header
+     * with the card's other action (SUB-207).
+     */
+    render(
+      <NotificationsView
+        channels={[make(), make({ id: 2, name: "Ops mail", type: "email" })]}
+        onCreateOpenChange={() => {}}
+        onSave={async () => {}}
+      />,
+    );
+    const card = screen.getByRole("region", { name: /^Channels/ });
+    const head = card.querySelector(":scope > .card-head")!;
+    const search = within(head as HTMLElement).getByRole("searchbox", { name: "Filter channels by name or type" });
+    const add = within(head as HTMLElement).getByRole("button", { name: "Add channel" });
+    // Field first, then the button: the button stays at the card's edge.
+    expect(search.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.change(search, { target: { value: "mail" } });
+    expect(within(card).queryByText("On-call Slack")).toBeNull();
+    expect(within(card).getByText("Ops mail")).toBeTruthy();
+  });
+
+  it("offers no filter on an instance with no channels", () => {
+    // Nothing to narrow: a field there could only ever match nothing.
+    render(<NotificationsView channels={[]} onCreateOpenChange={() => {}} onSave={async () => {}} />);
+    expect(screen.queryByRole("searchbox")).toBeNull();
+  });
+
+  it("keeps the filter for a viewer, who has no add button", () => {
+    render(<NotificationsView channels={[make()]} />);
+    expect(screen.getByRole("searchbox", { name: "Filter channels by name or type" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Add channel" })).toBeNull();
   });
 
   it("keeps the header's add button on a list filtered down to nothing", () => {

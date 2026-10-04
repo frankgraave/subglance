@@ -2,8 +2,6 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { ShellSlots } from "../shell/ShellSlots";
-import { setToolbarSlot } from "../shell/toolbarSlot";
 import { Settings } from "./Settings";
 import type { DisplayPreferences } from "./DisplayCard";
 
@@ -14,7 +12,7 @@ function renderSettings() {
   vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => new Response("{}", { status: 404 })));
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(client);
-  render(<QueryClientProvider client={client}><ShellSlots /><Settings client={client} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><Settings client={client} /></QueryClientProvider>);
 }
 const index = () => screen.getByRole("navigation", { name: "Settings sections" });
 const current = () => within(index()).getAllByRole("link").filter((link) => link.getAttribute("aria-current") === "true").map((link) => link.textContent);
@@ -28,7 +26,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   for (const client of clients.splice(0)) client.clear();
-  setToolbarSlot(null);
+ 
   vi.unstubAllGlobals();
   window.history.replaceState(null, "", "/");
 });
@@ -90,6 +88,20 @@ it("keeps a section chosen by the address until the reader scrolls by hand", () 
   expect(current()).toEqual(["API tokens"]);
 });
 
+it("puts the filter at the head of the index it narrows, and keeps it when nothing matches", () => {
+  // It used to sit in a page toolbar across the top of the screen (SUB-207).
+  window.history.replaceState(null, "", "/settings");
+  renderSettings();
+  const search = screen.getByRole("searchbox", { name: "Filter settings" });
+  const aside = search.closest(".settings-aside")!;
+  expect(aside).not.toBeNull();
+  expect(search.compareDocumentPosition(index()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(aside.contains(index())).toBe(true);
+  fireEvent.change(search, { target: { value: "no such setting" } });
+  // The index goes; the field that emptied it stays, so it can be cleared.
+  expect(screen.getByRole("searchbox", { name: "Filter settings" })).toBe(search);
+});
+
 it("lists only the sections the search leaves visible, and hides the index when none match", () => {
   window.history.replaceState(null, "", "/settings");
   renderSettings();
@@ -129,7 +141,7 @@ it("offers the display preferences as a section, saying they belong to this brow
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(client);
   const prefs = displayPrefs();
-  render(<QueryClientProvider client={client}><ShellSlots /><Settings client={client} display={prefs} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><Settings client={client} display={prefs} /></QueryClientProvider>);
   // Second in the index, beside the account: both are about the person at
   // this browser, everything after them about the instance.
   expect(within(index()).getAllByRole("link").map((link) => link.textContent).slice(0, 2)).toEqual(["Account", "Display"]);
@@ -158,7 +170,7 @@ it("finds the display section by what it controls", () => {
   vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => new Response("{}", { status: 404 })));
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(client);
-  render(<QueryClientProvider client={client}><ShellSlots /><Settings client={client} display={displayPrefs()} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><Settings client={client} display={displayPrefs()} /></QueryClientProvider>);
   const search = screen.getByRole("searchbox", { name: "Filter settings" });
   for (const word of ["theme", "dark", "layout", "columns"]) {
     fireEvent.change(search, { target: { value: word } });
@@ -173,10 +185,10 @@ it("offers status pages to an administrator only, beside Users", async () => {
   vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => new Response("{}", { status: 404 })));
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(client);
-  const { unmount } = render(<QueryClientProvider client={client}><ShellSlots /><Settings client={client} /></QueryClientProvider>);
+  const { unmount } = render(<QueryClientProvider client={client}><Settings client={client} /></QueryClientProvider>);
   expect(within(index()).queryByRole("link", { name: "Status pages" })).toBeNull();
   unmount();
-  render(<QueryClientProvider client={client}><ShellSlots /><Settings client={client} canAdmin /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><Settings client={client} canAdmin /></QueryClientProvider>);
   const links = within(index()).getAllByRole("link").map((link) => link.textContent);
   expect(links.indexOf("Status pages")).toBe(links.indexOf("Users") + 1);
   // The editor arrives as its own chunk; the unavailable list is its answer to the 404.
@@ -195,17 +207,17 @@ it("offers import and export to editors and administrators, beside Backups", asy
   vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => new Response("{}", { status: 404 })));
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(client);
-  const { unmount } = render(<QueryClientProvider client={client}><ShellSlots /><Settings client={client} {...{ role: "viewer" }} /></QueryClientProvider>);
+  const { unmount } = render(<QueryClientProvider client={client}><Settings client={client} {...{ role: "viewer" }} /></QueryClientProvider>);
   expect(within(index()).queryByRole("link", { name: "Import & export" })).toBeNull();
   expect(document.getElementById("configuration")).toBeNull();
   unmount();
-  const second = render(<QueryClientProvider client={client}><ShellSlots /><Settings client={client} {...{ role: "editor" }} /></QueryClientProvider>);
+  const second = render(<QueryClientProvider client={client}><Settings client={client} {...{ role: "editor" }} /></QueryClientProvider>);
   let links = within(index()).getAllByRole("link").map((link) => link.textContent);
   expect(links.indexOf("Import & export")).toBe(links.indexOf("API tokens") - 1);
   // The card arrives as its own chunk.
   expect(await screen.findByRole("button", { name: "Download configuration" })).toBeTruthy();
   second.unmount();
-  render(<QueryClientProvider client={client}><ShellSlots /><Settings client={client} canAdmin /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><Settings client={client} canAdmin /></QueryClientProvider>);
   links = within(index()).getAllByRole("link").map((link) => link.textContent);
   expect(links.indexOf("Import & export")).toBe(links.indexOf("Backups") + 1);
   fireEvent.change(screen.getByRole("searchbox", { name: "Filter settings" }), { target: { value: "yaml" } });

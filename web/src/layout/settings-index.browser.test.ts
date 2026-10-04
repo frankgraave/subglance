@@ -58,10 +58,16 @@ describe("at a desktop width", () => {
       await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
       await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
       expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+      // The filter and the index stick as one column (SUB-207), so the
+      // field is in reach halfway down the page and the index under it.
       const bar = await box(page, ".shell-topbar");
-      const stuck = await box(page, ".settings-index");
+      const stuck = await box(page, ".settings-aside");
       expect(stuck.top).toBeGreaterThanOrEqual(bar.bottom);
       expect(stuck.top).toBeLessThan(bar.bottom + 40);
+      const field = await box(page, ".settings-aside .shell-search");
+      const list = await box(page, ".settings-index");
+      expect(field.top).toBe(stuck.top);
+      expect(list.top).toBeGreaterThanOrEqual(field.bottom);
     } finally {
       await page.close();
     }
