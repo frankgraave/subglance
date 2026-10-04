@@ -3,10 +3,12 @@
  * under the masthead (SUB-207), measured in a real browser.
  *
  * The page toolbar put a third layer between the masthead and the first card:
- * bar, toolbar, card. Notifications and Settings have moved out of it — the
- * channel filter is in the Channels card's header beside "Add channel", the
- * settings filter stands at the head of the section index it narrows — and
- * this suite holds them there at a phone, a tablet and a desktop width:
+ * bar, toolbar, card. The dashboard, Notifications and Settings have moved
+ * out of it — the dashboard's status tabs, text filter, Filter and View head
+ * its one card of monitors, the channel filter is in the Channels card's
+ * header beside "Add channel", the settings filter stands at the head of the
+ * section index it narrows — and this suite holds them there at a phone, a
+ * tablet and a desktop width:
  *
  *  - the page toolbar is collapsed, so nothing stands between the masthead
  *    and the first card;
@@ -15,7 +17,7 @@
  *  - at 1440px the header is one line;
  *  - at 390px nothing scrolls sideways.
  *
- * The dashboard, Monitors and Incidents still fill the toolbar. They are
+ * Monitors and Incidents still fill the toolbar. They are
  * listed below so that the list cannot quietly grow: a migrated screen moves
  * from STILL_IN_TOOLBAR to HEADED, and a screen that puts controls back into
  * the toolbar fails the first describe block.
@@ -47,16 +49,29 @@ type Headed = {
   header: string;
   /** The row that must be one line at 1440px: its children share a line. */
   line: string;
+  /**
+   * What must stand in the header at a phone width, when it is not the
+   * text filter. The dashboard's text filter moves into its Filter sheet
+   * there, so the header carries the button that opens it.
+   */
+  phoneControl?: string;
 };
 
 const HEADED: Headed[] = [
+  {
+    name: "dashboard",
+    path: "/",
+    ready: "[data-testid^='monitor-row-'], [data-testid^='monitor-card-']",
+    header: ".mon-board > .card-head",
+    line: ".mon-board > .card-head",
+    phoneControl: "button[aria-haspopup='dialog'][aria-label^='Filter']",
+  },
   { name: "notifications", path: "/notifications", ready: ".inv-row", header: ".nt-card > .card-head", line: ".nt-card > .card-head" },
   { name: "settings", path: "/settings", ready: 'input[name="current_password"]', header: ".settings-aside", line: ".settings-aside > .shell-search" },
 ];
 
 /** Screens whose controls have not left the page toolbar yet. */
 const STILL_IN_TOOLBAR = [
-  { path: "/", ready: "[data-testid^='monitor-row-'], [data-testid^='monitor-card-']" },
   { path: "/monitors", ready: ".inv-list > li" },
   { path: "/incidents", ready: ".inc-line" },
 ];
@@ -83,8 +98,8 @@ async function open(path: string, ready: string, width: number): Promise<Page> {
   return page;
 }
 
-async function measure(page: Page, header: string, line = header) {
-  return page.evaluate((sel: string, lineSel: string) => {
+async function measure(page: Page, header: string, line = header, control = "input[type='search']") {
+  return page.evaluate((sel: string, lineSel: string, controlSel: string) => {
     const box = (el: Element | null) => {
       if (el === null) return null;
       const r = el.getBoundingClientRect();
@@ -99,7 +114,7 @@ async function measure(page: Page, header: string, line = header) {
       masthead: box(document.querySelector(".shell-topbar")),
       toolbar: box(document.querySelector(".shell-toolbar")),
       header: box(head),
-      filterInHeader: head?.querySelector("input[type='search']") != null,
+      filterInHeader: head?.querySelector(controlSel) != null,
       // Each direct child's box, to tell one line from two.
       parts: [...(document.querySelector(lineSel)?.children ?? [])]
         .filter((child) => child.getBoundingClientRect().width > 1)
@@ -110,14 +125,14 @@ async function measure(page: Page, header: string, line = header) {
       scrollWidth: document.documentElement.scrollWidth,
       clientWidth: document.documentElement.clientWidth,
     };
-  }, header, line);
+  }, header, line, control);
 }
 
-describe.each(HEADED)("$name", ({ path, ready, header, line }) => {
+describe.each(HEADED)("$name", ({ path, ready, header, line, phoneControl }) => {
   it.each(WIDTHS)("heads its list with its own controls, directly under the masthead, at %ipx", async (width) => {
     const page = await open(path, ready, width);
     try {
-      const m = await measure(page, header, line);
+      const m = await measure(page, header, line, width === 390 ? phoneControl : undefined);
       if (m.masthead === null || m.header === null) throw new Error(`no masthead or no ${header}`);
       expect(m.filterInHeader, "the filter stands in the list's header").toBe(true);
       // No bar between: the toolbar is collapsed or gone.
@@ -156,6 +171,73 @@ describe("screens still on the page toolbar", () => {
     try {
       const { toolbar } = await measure(page, "body");
       expect(toolbar?.height ?? 0).toBeGreaterThan(0);
+    } finally {
+      await page.close();
+    }
+  });
+});
+
+describe("dashboard header", () => {
+  /*
+   * The dashboard's own acceptance widths (SUB-183): its header holds more
+   * than any other — status tabs, the text filter, Filter and View — so the
+   * generic one-line check above is not the whole claim. Lines are counted
+   * over the header's controls, not its two halves, because the half on the
+   * right can wrap inside itself and still look like one box.
+   */
+  const READY = "[data-testid^='monitor-row-'], [data-testid^='monitor-card-']";
+  const CONTROLS = ".mon-board > .card-head :is(.mon-tabs, .shell-search, button[aria-haspopup='dialog'])";
+
+  async function lines(page: Page): Promise<number> {
+    const tops = await page.evaluate((sel: string) =>
+      [...document.querySelectorAll(sel)]
+        .map((el) => el.getBoundingClientRect())
+        .filter((r) => r.width > 1)
+        .map((r) => ({ top: r.top, bottom: r.bottom })),
+    CONTROLS);
+    // Two controls share a line when their boxes overlap vertically.
+    const rows: { top: number; bottom: number }[] = [];
+    for (const box of tops) {
+      const row = rows.find((r) => box.top < r.bottom && r.top < box.bottom);
+      if (row === undefined) rows.push({ ...box });
+      else Object.assign(row, { top: Math.min(row.top, box.top), bottom: Math.max(row.bottom, box.bottom) });
+    }
+    return rows.length;
+  }
+
+  it.each([1280, 1440])("is one line at %ipx", async (width) => {
+    const page = await open("/", READY, width);
+    try {
+      expect(await lines(page)).toBe(1);
+    } finally {
+      await page.close();
+    }
+  });
+
+  it("breaks into two lines at most at 820px", async () => {
+    const page = await open("/", READY, 820);
+    try {
+      expect(await lines(page)).toBeLessThanOrEqual(2);
+    } finally {
+      await page.close();
+    }
+  });
+
+  it("starts the first monitor in the top quarter of a 390px phone", async () => {
+    const page = await browser.newPage();
+    try {
+      await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1, isMobile: true });
+      await page.goto(server.url + "/", { waitUntil: "domcontentloaded" });
+      await page.waitForSelector(READY, { timeout: 15_000 });
+      await page.evaluate(() => document.fonts.ready.then(() => undefined));
+      const seen = await page.evaluate((sel: string) => ({
+        first: document.querySelector(sel)!.getBoundingClientRect().top,
+        quarter: innerHeight / 4,
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      }), READY);
+      expect(seen.first, "first monitor's top edge").toBeLessThanOrEqual(seen.quarter);
+      expect(seen.scrollWidth, "no sideways scroll").toBe(seen.clientWidth);
     } finally {
       await page.close();
     }

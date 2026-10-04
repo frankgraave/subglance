@@ -1421,7 +1421,10 @@ layout rather than the stored one: a setting visible while it governs nothing
 teaches people it does nothing. The count is stored under its own key so it
 survives a trip through Rows and back.
 
-**It lives in the dashboard's toolbar, not in the shell's topbar.** The topbar
+**It lives with the dashboard, not in the shell's topbar.** Since SUB-183 that
+means the View panel at the head of the dashboard's list; before it, the page
+toolbar under the masthead. The argument for leaving the topbar is the same
+either way. The topbar
 holds what works on every screen — the sidebar toggle, search, the theme —
 and a second bar under it holds what belongs to *this* screen: the
 filter field, the status filter, the layout switcher and whatever the current
@@ -1644,9 +1647,9 @@ The masthead's search is the launcher (SUB-182): a button drawn as a search
 field, named "Search", carrying the `⌘K` keycap, on every screen including a
 monitor's detail page. It is the only search entry in the masthead; a screen
 that filters its own list does so from a field at the head of that list —
-the Channels card's header, the settings index — which the palette leaves
-untouched. The dashboard, Monitors and Incidents still draw theirs in the
-page toolbar until their list headers take them (SUB-207). On phones the keycap goes and the glyph and the word
+the dashboard's card of monitors, the Channels card's header, the settings
+index — which the palette leaves untouched. Monitors and Incidents still draw
+theirs in the page toolbar until their list headers take them (SUB-207). On phones the keycap goes and the glyph and the word
 stay. The palette uses an opaque `--surface-float`
 native modal above existing drawers, a bounded scrolling list, and the
 reference's 12px outer / 6px option corners. All matching monitors remain
@@ -1814,6 +1817,21 @@ Two rules about the number:
 
 The icon is decorative: the title already says what the list is, so the glyph
 is `aria-hidden` and the heading is the accessible name.
+
+**One exception: the dashboard's card of monitors (SUB-183).** Its header
+leads with status tabs — `All 14 · Down 3 · Warning 1 · Paused 1 · Up 9` —
+and `All` is the total, so printing `Monitors (14)` beside it would state the
+same number twice in one line. The card passes the tabs as `Card`'s `lead`,
+which keeps "Monitors" as a visually hidden `h2`: the outline and a screen
+reader still get the heading, the eye gets the count once. The rest of the
+header is how the list is being looked at: a text filter, a Filter button
+that opens the tag keys and their values with the number of monitors each
+would leave, and a View button that names the current arrangement
+("Rows · by team"). Chosen tags stand as chips under the header, inside the
+card, each with its own way to drop it. On a phone the text filter moves
+into the Filter sheet, both buttons become square glyphs at the control
+height (36px, `--control-h`, the rung every phone control here is drawn
+at), and both panels slide up from the bottom edge.
 
 ### 8.4 A toolbar select is a framed control with a glyph
 

@@ -124,7 +124,7 @@
    specificity is what makes this work rather than the order: this selector
    carries three classes plus an attribute against the bare `.mon-error`'s
    one, so it wins wherever the two stylesheets land in the bundle. */
-.mon-dashboard[data-conn="stale"] .mon-count-value,
+.mon-dashboard[data-conn="stale"] .mon-tab-count,
 .mon-dashboard[data-conn="stale"] .mon-line-num,
 .mon-dashboard[data-conn="stale"] .mon-error,
 .mon-dashboard[data-conn="stale"] .mon-card-error,

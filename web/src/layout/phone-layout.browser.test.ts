@@ -149,6 +149,10 @@ async function open(width: number, screen: Screen): Promise<Page> {
   return page;
 }
 
+/** The dashboard's Filter button, and the tag keys its sheet lists. */
+const FILTER_BUTTON = ".mon-board button[aria-haspopup='dialog'][aria-label^='Filter']";
+const SHEET_KEYS = ".mon-sheet fieldset[data-facet-key]";
+
 describe("the phone fixture", () => {
   /*
    * The point of the estate is its width. If the seed ever loses tag keys
@@ -162,10 +166,12 @@ describe("the phone fixture", () => {
     expect(ESTATE.some((monitor) => !monitor.enabled)).toBe(true);
   });
 
-  it("puts one tag filter per key in the dashboard's toolbar", async () => {
+  it("lists one tag filter per key in the dashboard's Filter sheet", async () => {
     const page = await open(375, SCREENS[0]!);
     try {
-      const facets = await page.$$eval(".shell-toolbar [data-facet-key]", (els) => els.length);
+      await (await page.waitForSelector(FILTER_BUTTON, { timeout: 15_000 }))!.click();
+      await page.waitForSelector(SHEET_KEYS, { timeout: 5_000 });
+      const facets = await page.$$eval(SHEET_KEYS, (els) => els.length);
       expect(facets).toBeGreaterThanOrEqual(6);
     } finally {
       await page.close();
@@ -176,12 +182,12 @@ describe("the phone fixture", () => {
 /*
  * A tag value is data, and nothing caps how long it is.
  *
- * A native select sizes itself to its widest option, not to the chosen one,
- * and on a phone the toolbar select drops its fixed cap so "Open and
- * resolved" stays whole at the 16px no-zoom floor. Without a second limit,
- * one long value in any monitor's tags made its filter as wide as that value
- * and pushed the whole page sideways. The seed estate has no such value, so
- * the sweep below cannot see it; this case adds one.
+ * The tag filters used to be native selects in the page toolbar, and a
+ * native select sizes itself to its widest option: one long value in any
+ * monitor's tags pushed the whole page sideways. They are a list of radios
+ * in the dashboard's Filter sheet now (SUB-183), where a value is one line
+ * cut with an ellipsis. The seed estate has no such value, so the sweep
+ * below cannot see it; this case adds one and opens the sheet.
  */
 describe("a long tag value", () => {
   const LONG_VALUE = "customer-with-an-unreasonably-long-tag-value-for-a-phone";
@@ -191,7 +197,7 @@ describe("a long tag value", () => {
     ),
   });
 
-  it.each(WIDTHS)("stays inside the toolbar at %ipx", async (width) => {
+  it.each(WIDTHS)("stays inside the Filter sheet at %ipx", async (width) => {
     const page = await browser.newPage();
     try {
       await page.setViewport({ width, height: 800, deviceScaleFactor: 1, isMobile: true });
@@ -205,22 +211,29 @@ describe("a long tag value", () => {
         }
       });
       await page.goto(server.url + "/", { waitUntil: "domcontentloaded" });
-      await page.waitForSelector('.shell-toolbar [data-facet-key="customer"] .tb-select', { timeout: 15_000 });
+      await (await page.waitForSelector(FILTER_BUTTON, { timeout: 15_000 }))!.click();
+      await page.waitForSelector('.mon-sheet fieldset[data-facet-key="customer"]', { timeout: 5_000 });
       await page.evaluate(
         () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
       );
       const seen = await page.evaluate(() => {
-        const select = document.querySelector('.shell-toolbar [data-facet-key="customer"] .tb-select');
-        const bar = document.querySelector(".shell-toolbar");
-        if (select === null || bar === null) throw new Error("no customer filter in the toolbar");
+        const values = document.querySelector('.mon-sheet fieldset[data-facet-key="customer"]');
+        const sheet = document.querySelector(".mon-sheet");
+        if (values === null || sheet === null) throw new Error("no customer filter in the Filter sheet");
+        const right = (el: Element) => Math.round(el.getBoundingClientRect().right);
         return {
           scrollWidth: document.documentElement.scrollWidth,
           clientWidth: document.documentElement.clientWidth,
-          selectInsideBar:
-            Math.round(select.getBoundingClientRect().right) <= Math.round(bar.getBoundingClientRect().right),
+          valuesInsideSheet: [...values.querySelectorAll("label")].every((label) => right(label) <= right(sheet)),
+          sheetInsideViewport: right(sheet) <= document.documentElement.clientWidth,
         };
       });
-      expect(seen).toEqual({ scrollWidth: seen.clientWidth, clientWidth: seen.clientWidth, selectInsideBar: true });
+      expect(seen).toEqual({
+        scrollWidth: seen.clientWidth,
+        clientWidth: seen.clientWidth,
+        valuesInsideSheet: true,
+        sheetInsideViewport: true,
+      });
     } finally {
       await page.close();
     }

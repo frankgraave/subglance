@@ -47,6 +47,14 @@ export type CardProps = {
   /** Optional control on the header's right: a link, a button, a menu. */
   action?: ReactNode;
   /**
+   * What the header's left holds after the tile, in place of the visible
+   * title: the dashboard's status tabs. A list whose header says what you
+   * are looking at with counted tabs does not need its name printed beside
+   * them, but a screen reader still needs the heading, so the title stays
+   * in the outline, visually hidden (SUB-183).
+   */
+  lead?: ReactNode;
+  /**
    * A quiet line under the title: a count, a qualifier, a caveat.
    *
    * It exists so a card that *is* a page heading can carry what used to sit
@@ -70,6 +78,7 @@ export function Card({
   title,
   icon,
   action,
+  lead,
   note,
   children,
   headingLevel = 2,
@@ -91,14 +100,23 @@ export function Card({
       <div className="card-head">
         <div className="card-head-lead">
           <IconTile>{icon}</IconTile>
-          <div className="card-head-text">
-            <Heading id={headingId} className="card-title">
-              {title}
-            </Heading>
-            {note === undefined ? null : (
-              <p className="card-note">{note}</p>
-            )}
-          </div>
+          {lead === undefined ? (
+            <div className="card-head-text">
+              <Heading id={headingId} className="card-title">
+                {title}
+              </Heading>
+              {note === undefined ? null : (
+                <p className="card-note">{note}</p>
+              )}
+            </div>
+          ) : (
+            <>
+              <Heading id={headingId} className="sr-only">
+                {title}
+              </Heading>
+              {lead}
+            </>
+          )}
         </div>
         {action ? <div className="card-head-action">{action}</div> : null}
       </div>

@@ -137,7 +137,9 @@ describe("MonitorCardList", () => {
     expect(
       screen.queryByRole("heading", { name: /Needs attention/ }),
     ).toBeNull();
-    expect(screen.getByRole("heading", { name: "Monitors (1)" })).toBeTruthy();
+    // Nor a second "Monitors" over the one run: the dashboard's card already
+    // names the list (SUB-183).
+    expect(document.querySelector(".mon-group-title")).toBeNull();
   });
 
   it("tells 'nothing matched' apart from 'nothing exists'", () => {
@@ -182,11 +184,10 @@ describe("MonitorCardList grouped by a tag", () => {
     monitor("legacy", "up", {}),
   ];
 
-  // Section headings come from the shared Card component now, so they carry
-  // its class rather than a per-layout one — which is the point of moving the
-  // pattern into a component: one selector, one treatment, every screen.
+  // Section headings come from the shared MonitorGroup now: parts of the
+  // dashboard's one card, not cards of their own (SUB-183).
   const headings = () =>
-    [...document.querySelectorAll(".card-title")].map((h) => h.textContent);
+    [...document.querySelectorAll(".mon-group-title")].map((h) => h.textContent);
 
   it("heads one section per tag value, untagged last", () => {
     render(
@@ -204,11 +205,9 @@ describe("MonitorCardList grouped by a tag", () => {
     render(
       <MonitorCardList monitors={tagged()} groupKey="env" beatWidth={WIDTH} />,
     );
-    const ids = [...document.querySelectorAll(".card-title")].map((h) => h.id);
+    const ids = [...document.querySelectorAll(".mon-group-title")].map((h) => h.id);
     expect(new Set(ids).size).toBe(ids.length);
-    for (const section of document.querySelectorAll(
-      "section.mon-cards-section",
-    )) {
+    for (const section of document.querySelectorAll("section.mon-group")) {
       const labelledBy = section.getAttribute("aria-labelledby")!;
       expect(document.getElementById(labelledBy)).not.toBeNull();
     }

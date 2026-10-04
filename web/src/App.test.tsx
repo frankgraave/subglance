@@ -125,24 +125,22 @@ describe("the app shell", () => {
   it("remembers the chosen layout across a reload", async () => {
     const { unmount } = render(<App />);
     await screen.findByText("api");
+    // The layouts are in the View panel at the head of the list (SUB-183).
+    fireEvent.click(screen.getByRole("button", { name: /^View: / }));
     fireEvent.click(screen.getByRole("button", { name: "Compact" }));
     expect(window.localStorage.getItem(LAYOUT_STORAGE_KEY)).toBe("compact");
     unmount();
 
-    // A fresh mount is what a reload looks like from here.
+    // A fresh mount is what a reload looks like from here: the View button
+    // names the layout it opens on.
     render(<App />);
-    await waitFor(() =>
-      expect(
-        screen
-          .getByRole("button", { name: "Compact" })
-          .getAttribute("aria-pressed"),
-      ).toBe("true"),
-    );
+    expect(await screen.findByRole("button", { name: "View: Compact" })).toBeTruthy();
   });
 
   it("drops both sidebar and topbar on the status wall, and Esc brings them back", async () => {
     render(<App />);
     await screen.findByText("api");
+    fireEvent.click(screen.getByRole("button", { name: /^View: / }));
     fireEvent.click(screen.getByRole("button", { name: "Status wall" }));
 
     await waitFor(() => expect(document.querySelector(".wall")).toBeTruthy());

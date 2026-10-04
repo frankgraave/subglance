@@ -1,19 +1,17 @@
 import { useId, useState } from "react";
 import type { ReactNode } from "react";
 import { useCompactViewport } from "../layout/useMediaQuery";
-import { IconGroup } from "../components/icons";
+import { Card } from "../components/Card";
+import { IconList } from "../components/icons";
 import {
   DEFAULT_LAYOUT,
   effectiveLayout,
   type CardColumns,
   type LayoutId,
 } from "../shell/preferences";
-import { LED_STATE } from "./ledState";
-import { CardColumnsSwitcher } from "../shell/CardColumnsSwitcher";
-import { LayoutSwitcher } from "../shell/LayoutSwitcher";
 import { FilterField } from "../shell/FilterField";
-import { ToolbarTools } from "../shell/ToolbarTools";
-import { ToolbarSelect } from "../shell/ToolbarSelect";
+import { DashboardFilter } from "./DashboardFilter";
+import { DashboardView } from "./DashboardView";
 import { MonitorCardList } from "./MonitorCardList";
 import { MonitorCompactList } from "./MonitorCompactList";
 import { MonitorTable } from "./MonitorTable";
@@ -28,7 +26,7 @@ import {
   summarise,
   tagFacets,
 } from "./model";
-import { TagFilters } from "./TagFilters";
+import { StatusTabs } from "./StatusTabs";
 import type { TagSelection } from "./model";
 import type { Monitor, MonitorStatus } from "./types";
 
@@ -68,8 +66,8 @@ export type DashboardProps = {
   layout?: LayoutId;
   /**
    * Changes the layout. Its presence is what puts the layout switcher in the
-   * page toolbar: the workbench draws the dashboard with a switcher of its
-   * own, and two switchers for one setting would be one too many.
+   * View panel: the workbench draws the dashboard with a switcher of its own,
+   * and two switchers for one setting would be one too many.
    */
   onLayoutChange?: (next: LayoutId) => void;
   /** How many cards per row, in the Cards layout. See CardColumnsSwitcher. */
@@ -122,16 +120,6 @@ export type DashboardProps = {
    */
   onAddMonitor?: () => void;
 };
-
-const COUNTED: { status: MonitorStatus; label: string }[] = [
-  { status: "down", label: "down" },
-  { status: "recovering", label: "recovering" },
-  { status: "warning", label: "warning" },
-  { status: "pending", label: "pending" },
-  { status: "waiting", label: "waiting" },
-  { status: "paused", label: "paused" },
-  { status: "up", label: "up" },
-];
 
 export function Dashboard({
   monitors,
@@ -208,155 +196,54 @@ export function Dashboard({
     liveTags,
   );
 
+  // Every narrowing at once, for the empty state's one way back. Not the
+  // grouping or the layout: those arrange the list and hide nothing.
+  const clearFilters = () => {
+    setStatus(null);
+    setTags({});
+    onQueryChange("");
+  };
+  // The chips under the header: one per chosen tag, and on a phone the text
+  // filter too, whose field is in the filter sheet there and out of sight.
+  const chips: { key: string; label: string; value: string; clear: () => void }[] = [
+    ...Object.entries(liveTags).map(([key, value]) => ({
+      key: `tag:${key}`,
+      label: key,
+      value,
+      clear: () =>
+        setTags((current) =>
+          Object.fromEntries(
+            Object.entries(current).filter(([other]) => other !== key),
+          ),
+        ),
+    })),
+    ...(narrow && query.trim() !== ""
+      ? [{ key: "query", label: "name", value: query.trim(), clear: () => onQueryChange("") }]
+      : []),
+  ];
+  const listProps = {
+    monitors: visible,
+    query,
+    totalCount: monitors.length,
+    filtered: narrowed,
+    groupKey: liveGroupKey,
+    onOpen: onOpenMonitor,
+    onAddMonitor,
+    onClearFilters: clearFilters,
+    stale,
+  };
+
   return (
     <section
       className="mon-dashboard"
       data-conn={stale ? "stale" : "live"}
     >
-      {/* Above the counts, not below the list: a warning that the numbers are
-          frozen has to be read *before* the numbers, not after scrolling past
-          them. */}
+      {/* Above the list, not below it: a warning that the numbers are frozen
+          has to be read *before* the numbers, not after scrolling past them. */}
       {banner}
 
-      {/* No heading of its own: the page frame's visible `h1` names this
-          screen (SUB-182), and the cards below are `h2` under it. */}
-
       {/*
-       * Everything that narrows, arranges or redraws this list is in the page
-       * toolbar (SUB-182), the filter field first. The masthead above it keeps
-       * one search for the whole product — the command menu — so the field
-       * here says what it is: a filter over the list beneath it.
-       */}
-      <ToolbarTools>
-        <div className="tb-group">
-          <FilterField
-            id={searchId}
-            label="Filter monitors by name or target"
-            placeholder="Filter monitors…"
-            value={query}
-            onChange={onQueryChange}
-          />
-
-          {/*
-           * The status filter.
-           *
-           * `role="group"` and `aria-pressed`, never a radio group: these are
-           * independent toggles and "none selected" is a real state. The
-           * frame is a visual family, not a promise of one-of-N; pressing the
-           * active chip is the way back to the full list.
-           */}
-          {summary.total > 0 && (
-            <div className="mon-filter" role="group" aria-label="Filter by status">
-              {COUNTED
-                // A chip whose count drops to zero while it is the active
-                // filter has to stay: it is the only control that turns the
-                // now-empty list back into the full one.
-                .filter(
-                  (counted) =>
-                    summary[counted.status] > 0 || counted.status === status,
-                )
-                .map((counted) => (
-                  <button
-                    key={counted.status}
-                    type="button"
-                    className="mon-count"
-                    aria-pressed={status === counted.status}
-                    onClick={() =>
-                      setStatus((current) =>
-                        current === counted.status ? null : counted.status,
-                      )
-                    }
-                  >
-                    {/*
-                     * A round lamp, not the 20x7 bar.
-                     *
-                     * §3 fixes the bar's size so a wall of them stays
-                     * scannable, and that argument is about lamps reporting a
-                     * monitor's state. This is a filter chip: the dot is a key
-                     * to the colour, at the scale of the text beside it, and
-                     * the word next to it is what carries the meaning
-                     * (§2.3) — which is why it is safe for it to be small.
-                     */}
-                    <span
-                      className="mon-count-dot"
-                      data-state={LED_STATE[counted.status]}
-                      aria-hidden="true"
-                    />
-                    <b className="mon-count-value">
-                      {summary[counted.status]}
-                    </b>{" "}
-                    {counted.label}
-                  </button>
-                ))}
-            </div>
-          )}
-
-          {/* One select per tag key, shared with the inventory. */}
-          <TagFilters
-            facets={facets}
-            selected={tags}
-            onChange={(key, value) =>
-              setTags((current) => ({ ...current, [key]: value }))
-            }
-          />
-
-          {/*
-           * Grouping sits with the filters because it answers a neighbouring
-           * question about the same tags, but it is labelled "Group by" rather
-           * than given a key of its own: it does not narrow the list, and a
-           * control that looks like a filter while changing nothing about what
-           * is visible is the kind of thing people press twice.
-           */}
-          {facets.length > 0 && (
-            // A different glyph from the facets, because it is a different
-            // kind of control: rows gathered under headings, not a filter.
-            // Its own select class, not `mon-facet-select`: it looks the same
-            // but it is not a facet, and one selector must not match both.
-            <ToolbarSelect
-              icon={<IconGroup />}
-              label="Group by"
-              selectClassName="mon-group-select"
-              value={groupKey ?? ""}
-              onChange={(value) => setGroupKey(value || null)}
-            >
-              <option value="">None</option>
-              {facets.map((facet) => (
-                <option key={facet.key} value={facet.key}>
-                  {facet.key}
-                </option>
-              ))}
-            </ToolbarSelect>
-          )}
-
-          {/*
-           * The layout switcher, at the end with the other view tool: it
-           * changes how this list is drawn, never which monitors are in it,
-           * and it does nothing on any other screen — so it is not chrome.
-           */}
-          {onLayoutChange !== undefined && (
-            <LayoutSwitcher layout={shown} onChange={onLayoutChange} />
-          )}
-
-          {/*
-           * View tools, empty for three of the four layouts.
-           *
-           * Keyed off the layout actually on screen rather than the stored
-           * preference — on a narrow viewport the preference may be Rows while
-           * Cards is what renders, and the control has to follow what the user
-           * can see. It sits after the layout switcher, at the end of the bar,
-           * so appearing and disappearing never moves a control before it.
-           */}
-          {shown === "cards" && onCardColumnsChange !== undefined && (
-            <CardColumnsSwitcher
-              value={cardColumns}
-              onChange={onCardColumnsChange}
-            />
-          )}
-        </div>
-      </ToolbarTools>
-
-      {/*
-       * The single live region, and it lives *outside* the table
+       * The single live region, and it lives *outside* the list
        * (research note 3). `aria-live` on the table itself would make a
        * screen reader re-read rows on every heartbeat tick, which is both
        * unusable and drowns out the one announcement that matters. This region
@@ -366,55 +253,125 @@ export function Dashboard({
         {announcement ?? ""}
       </div>
 
-      {/* Filtering is not announced through the live region: a result count
-          that updates as you type belongs next to the input, where it does not
-          interrupt. */}
-      {filterNote !== null && monitors.length > 0 && (
-        <p className="mon-result-count">{filterNote}</p>
-      )}
-
       {/*
-       * Two components, one breakpoint. Rendering both and hiding one with CSS
-       * would keep 200 rows *and* 200 cards in the DOM, double every heartbeat
-       * bar's ResizeObserver, and hand a screen reader the same monitor twice.
+       * One card around the list, whichever layout draws it, headed by the
+       * controls that act on it (SUB-183, AGENTS.md "Where a control
+       * belongs"): what you are looking at on the left, as status tabs with
+       * their counts, and how you are looking on the right — the text
+       * filter, the tag filter and the view. Nothing stands between the
+       * masthead and this card. The heading is "Monitors", kept for a screen
+       * reader and not printed: All carries the count it used to print.
        */}
-      {shown === "cards" ? (
-        <MonitorCardList
-          monitors={visible}
-          query={query}
-          totalCount={monitors.length}
-          filtered={narrowed}
-          groupKey={liveGroupKey}
-          beatWidth={beatWidth}
-          columns={cardColumns}
-          onOpen={onOpenMonitor}
-          onAddMonitor={onAddMonitor}
-          stale={stale}
-        />
-      ) : shown === "compact" ? (
-        <MonitorCompactList
-          monitors={visible}
-          query={query}
-          totalCount={monitors.length}
-          filtered={narrowed}
-          groupKey={liveGroupKey}
-          onOpen={onOpenMonitor}
-          onAddMonitor={onAddMonitor}
-          stale={stale}
-        />
-      ) : (
-        <MonitorTable
-          monitors={visible}
-          query={query}
-          totalCount={monitors.length}
-          filtered={narrowed}
-          groupKey={liveGroupKey}
-          beatWidth={beatWidth ?? ROW_BEAT_WIDTH}
-          onOpen={onOpenMonitor}
-          onAddMonitor={onAddMonitor}
-          stale={stale}
-        />
-      )}
+      <Card
+        className="mon-board"
+        title="Monitors"
+        icon={<IconList />}
+        lead={
+          summary.total > 0 ? (
+            <StatusTabs summary={summary} status={status} onChange={setStatus} />
+          ) : undefined
+        }
+        action={
+          <>
+            {narrow || summary.total === 0 ? null : (
+              <FilterField
+                id={searchId}
+                className="mon-head-filter"
+                label="Filter monitors by name or address"
+                placeholder="Name or address"
+                value={query}
+                onChange={onQueryChange}
+              />
+            )}
+            {summary.total === 0 || (facets.length === 0 && !narrow) ? null : (
+              <DashboardFilter
+                monitors={monitors}
+                facets={facets}
+                selected={liveTags}
+                onSelect={(key, value) =>
+                  setTags((current) => {
+                    const next: Record<string, string> = { ...current };
+                    if (value === "") delete next[key];
+                    else next[key] = value;
+                    return next;
+                  })
+                }
+                onClearTags={() => setTags({})}
+                status={status}
+                query={query}
+                onQueryChange={onQueryChange}
+                narrow={narrow}
+                visible={visible.length}
+              />
+            )}
+            <DashboardView
+              shown={shown}
+              onLayoutChange={onLayoutChange}
+              cardColumns={cardColumns}
+              onCardColumnsChange={onCardColumnsChange}
+              grouping={{ facets, value: liveGroupKey, onChange: setGroupKey }}
+            />
+          </>
+        }
+      >
+        {/* Active filters, inside the card and under its header, each with a
+            way to drop it; and the sentence that says what is left. Filtering
+            is not announced through the live region: a result count that
+            updates as you type belongs next to the input, where it does not
+            interrupt. */}
+        {(chips.length > 0 || (filterNote !== null && monitors.length > 0)) && (
+          <div className="mon-filter-row">
+            {chips.map((chip) => (
+              <button
+                key={chip.key}
+                type="button"
+                className="chip chip--meta mon-filter-chip"
+                aria-label={`Remove filter ${chip.label}: ${chip.value}`}
+                onClick={chip.clear}
+              >
+                <span className="chip-label">{chip.label}</span>
+                <span className="chip-value">{chip.value}</span>
+                <span className="mon-filter-chip-x" aria-hidden="true">
+                  ×
+                </span>
+              </button>
+            ))}
+            {chips.length > 0 ? (
+              <button
+                type="button"
+                className="button button--quiet button--compact"
+                onClick={() => {
+                  setTags({});
+                  if (narrow) onQueryChange("");
+                }}
+              >
+                Clear all
+              </button>
+            ) : null}
+            {filterNote !== null && monitors.length > 0 ? (
+              <p className="mon-result-count">{filterNote}</p>
+            ) : null}
+          </div>
+        )}
+
+        {/*
+         * Two components, one breakpoint. Rendering both and hiding one with
+         * CSS would keep 200 rows *and* 200 cards in the DOM, double every
+         * heartbeat bar's ResizeObserver, and hand a screen reader the same
+         * monitor twice.
+         */}
+        {shown === "cards" ? (
+          <MonitorCardList
+            {...listProps}
+            beatWidth={beatWidth}
+            columns={cardColumns}
+          />
+        ) : shown === "compact" ? (
+          <MonitorCompactList {...listProps} />
+        ) : (
+          <MonitorTable {...listProps} beatWidth={beatWidth ?? ROW_BEAT_WIDTH} />
+        )}
+      </Card>
     </section>
   );
 }

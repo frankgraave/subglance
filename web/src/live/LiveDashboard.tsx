@@ -11,9 +11,8 @@ import { ConnectionBadge } from "./ConnectionBadge";
 import { useLiveMonitors } from "./useLiveMonitors";
 import { useNow } from "./useNow";
 import { StatusWall } from "../wall/StatusWall";
-import { LayoutSwitcher } from "../shell/LayoutSwitcher";
-import { ToolbarTools } from "../shell/ToolbarTools";
-import { DEFAULT_LAYOUT } from "../shell/preferences";
+import { DashboardNotice } from "../monitors/DashboardNotice";
+import { DEFAULT_CARD_COLUMNS, DEFAULT_LAYOUT } from "../shell/preferences";
 import type { CardColumns, LayoutId } from "../shell/preferences";
 import type { LiveOptions } from "./useLiveMonitors";
 
@@ -30,7 +29,7 @@ export type LiveDashboardProps = LiveOptions & {
   beatWidth?: number;
   /** The user's layout setting, already vetoed by the viewport if need be. */
   layout?: LayoutId;
-  /** Changes the layout; shows the switcher in the page toolbar. */
+  /** Changes the layout; shows the switcher in the list's View panel. */
   onLayoutChange?: (next: LayoutId) => void;
   /** How many cards per row, in the Cards layout. */
   cardColumns?: CardColumns;
@@ -123,34 +122,13 @@ export function LiveDashboard({
 
   if (notice !== undefined) {
     return (
-      <section className="mon-dashboard">
-        {/*
-         * The layout switcher survives the notice (SUB-182). It used to live
-         * in the masthead, which rendered whatever this screen was doing; in
-         * the page toolbar it is `Dashboard`'s, and `Dashboard` is not drawn
-         * while the first load is pending or has failed. Without this the
-         * slowest moment of the screen is the one with no way to the status
-         * wall — which is built to carry exactly this sentence in its frame.
-         * Only the switcher: a filter over a list that has not arrived has
-         * nothing to narrow.
-         */}
-        {onLayoutChange !== undefined && (
-          <ToolbarTools>
-            <div className="tb-group">
-              <LayoutSwitcher
-                layout={layout ?? DEFAULT_LAYOUT}
-                onChange={onLayoutChange}
-              />
-            </div>
-          </ToolbarTools>
-        )}
-        <p
-          role={error !== null ? "alert" : undefined}
-          className="mon-result-count"
-        >
-          {notice}
-        </p>
-      </section>
+      <DashboardNotice
+        notice={notice}
+        failed={error !== null}
+        layout={layout ?? DEFAULT_LAYOUT}
+        onLayoutChange={onLayoutChange}
+        cardColumns={cardColumns ?? DEFAULT_CARD_COLUMNS}
+      />
     );
   }
 

@@ -68,6 +68,22 @@ async function press(page: Page, name: string) {
   );
   await button!.click();
 }
+/**
+ * Opens one of the dashboard's header panels — "Filter" or "View" — where the
+ * tag keys and the grouping choice live (SUB-183), and waits for it.
+ */
+async function openPanel(page: Page, name: "Filter" | "View") {
+  const button = await page.waitForSelector(
+    `.mon-board button[aria-haspopup="dialog"][aria-label^="${name}"]`,
+  );
+  await button!.click();
+  await page.waitForSelector('.mon-panel[role="dialog"]');
+}
+/** Closes the open header panel the way a keyboard reader would. */
+async function closePanel(page: Page) {
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(() => !document.querySelector('.mon-panel[role="dialog"]'));
+}
 async function fill(page: Page, name: string, value: string) {
   await page.waitForSelector(".bulk-tags-form");
   // Chromium derives these names from the rendered uppercase field labels.
@@ -130,7 +146,9 @@ it.each([
         theme,
       );
       await page.goto(fixture.url, { waitUntil: "domcontentloaded" });
-      await page.waitForSelector(`[data-facet-key="${oldKey}"]`);
+      await openPanel(page, "Filter");
+      await page.waitForSelector(`.mon-panel [data-facet-key="${oldKey}"]`);
+      await closePanel(page);
       // Seed the infinite-stale dashboard query BEFORE editing and keep this same
       // document alive throughout. Navigation is not a reload or an HTTP fixture.
       await page.evaluate(() => {
@@ -284,14 +302,18 @@ it.each([
       );
       if (width === 390) await press(page, "Open navigation");
       await (await page.waitForSelector('a[href="/"]'))!.click();
+      await openPanel(page, "Filter");
       await page.waitForFunction(
         (key) =>
-          !document.querySelector(`[data-facet-key="${key}"]`) &&
-          !!document.querySelector(".mon-group-select"),
+          !document.querySelector(`.mon-panel [data-facet-key="${key}"]`) &&
+          !!document.querySelector(".mon-panel [data-facet-key]"),
         {},
         oldKey,
       );
-      expect(await page.$(`[data-facet-key="${newKey}"]`)).not.toBeNull();
+      expect(await page.$(`.mon-panel [data-facet-key="${newKey}"]`)).not.toBeNull();
+      await closePanel(page);
+      await openPanel(page, "View");
+      await page.waitForSelector(".mon-group-select");
       const groupOptions = await page.$$eval(
         ".mon-group-select option",
         (options) =>

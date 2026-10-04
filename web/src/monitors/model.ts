@@ -253,6 +253,48 @@ export function sameTagSelection(a: TagSelection, b: TagSelection): boolean {
   );
 }
 
+/** How many monitors each value of one tag key would leave on screen. */
+export type FacetCount = {
+  /** What "Any" leaves: every monitor the other filters let through. */
+  any: number;
+  /** Per value of the key; a value no remaining monitor carries is absent. */
+  values: ReadonlyMap<string, number>;
+};
+
+/**
+ * The counts beside one tag key's values in the dashboard's filter panel.
+ *
+ * Each count answers "how many would I see if I picked this", so it is taken
+ * over the list the *other* narrowing leaves: the status tab, the text filter
+ * and every other key's choice, but not this key's own. Counting against the
+ * key's own choice would print 0 beside every value but the chosen one, which
+ * says nothing about where switching would land.
+ *
+ * Pure and separate from the panel so the arithmetic can be asserted without
+ * mounting anything.
+ */
+export function facetCounts(
+  monitors: readonly Monitor[],
+  key: string,
+  status: MonitorStatus | null,
+  query: string,
+  selected: TagSelection,
+): FacetCount {
+  const others = Object.fromEntries(
+    Object.entries(selected).filter(([other]) => other !== key),
+  );
+  const pool = filterMonitors(
+    filterByTags(filterByStatus(monitors, status), others),
+    query,
+  );
+  const values = new Map<string, number>();
+  for (const monitor of pool) {
+    const value = monitor.tags[key];
+    if (value !== undefined) values.set(value, (values.get(value) ?? 0) + 1);
+  }
+  return { any: pool.length, values };
+}
+
 /** The label shown for monitors that do not carry the grouping key at all. */
 export const UNTAGGED_LABEL = "Untagged";
 

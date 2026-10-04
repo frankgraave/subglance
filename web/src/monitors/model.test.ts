@@ -3,6 +3,7 @@ import {
   describeFilter,
   describeTransitions,
   describeTags,
+  facetCounts,
   filterByStatus,
   filterByTags,
   liveTagSelection,
@@ -392,6 +393,51 @@ describe("filterByTags", () => {
     expect(
       filterByTags([...list, untagged], { env: "prod" }).map((m) => m.id),
     ).toEqual(["api", "db"]);
+  });
+});
+
+describe("facetCounts", () => {
+  const estate = [
+    monitor("api", "up", { tags: { env: "prod", customer: "acme" } }),
+    monitor("db", "down", { tags: { env: "prod", customer: "globex" } }),
+    monitor("cdn", "up", { tags: { env: "staging", customer: "acme" } }),
+    monitor("bare", "up"),
+  ];
+  const counts = (c: ReturnType<typeof facetCounts>) => ({
+    any: c.any,
+    values: Object.fromEntries(c.values),
+  });
+
+  it("counts every value over the whole list when nothing narrows it", () => {
+    expect(counts(facetCounts(estate, "env", null, "", {}))).toEqual({
+      any: 4,
+      values: { prod: 2, staging: 1 },
+    });
+  });
+
+  it("ignores the key's own choice, so a value says where switching lands", () => {
+    expect(counts(facetCounts(estate, "env", null, "", { env: "staging" }))).toEqual({
+      any: 4,
+      values: { prod: 2, staging: 1 },
+    });
+  });
+
+  it("takes every other key's choice into account", () => {
+    expect(counts(facetCounts(estate, "env", null, "", { customer: "acme" }))).toEqual({
+      any: 2,
+      values: { prod: 1, staging: 1 },
+    });
+  });
+
+  it("takes the status tab and the text filter into account", () => {
+    expect(counts(facetCounts(estate, "env", "up", "", {}))).toEqual({
+      any: 3,
+      values: { prod: 1, staging: 1 },
+    });
+    expect(counts(facetCounts(estate, "env", null, "cdn", {}))).toEqual({
+      any: 1,
+      values: { staging: 1 },
+    });
   });
 });
 

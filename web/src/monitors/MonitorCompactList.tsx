@@ -1,9 +1,8 @@
 import { memo } from "react";
-import { Card } from "../components/Card";
-import { IconList } from "../components/icons";
 import { PanelList, PanelRow } from "../components/PanelList";
 import { Value } from "../components/Value";
 import { EmptyState } from "./EmptyState";
+import { MonitorGroup } from "./MonitorGroup";
 import { describeTarget, formatLatency, formatUptime } from "./format";
 import { Led } from "./Led";
 import { MonitorLink } from "./MonitorLink";
@@ -62,6 +61,8 @@ export type MonitorCompactListProps = {
   onOpen?: (id: string) => void;
   /** Opens the add form from the empty state; see EmptyState. */
   onAddMonitor?: () => void;
+  /** Clears every filter, from the empty state of a narrowed list. */
+  onClearFilters?: () => void;
   /**
    * True when the live stream is dead. Forwarded to every line so its status
    * word moves into the past tense (DESIGN.md §6). It matters most here: this
@@ -157,6 +158,7 @@ export function MonitorCompactList({
   groupKey = null,
   onOpen,
   onAddMonitor,
+  onClearFilters,
   stale = false,
 }: MonitorCompactListProps) {
   const total = totalCount ?? monitors.length;
@@ -167,6 +169,8 @@ export function MonitorCompactList({
         totalCount={total}
         filtered={filtered}
         onAddMonitor={onAddMonitor}
+        onClearFilters={onClearFilters}
+        headingLevel={3}
       />
     );
   }
@@ -185,7 +189,7 @@ export function MonitorCompactList({
     return (
       <div className="mon-lines">
         {sectionsByTag(monitors, groupKey).map((section) => (
-          <Card
+          <MonitorGroup
             key={section.id}
             className={
               section.attention
@@ -193,35 +197,26 @@ export function MonitorCompactList({
                 : "mon-line-group"
             }
             title={`${section.label} (${section.monitors.length})`}
-            icon={<IconList />}
-            headingLevel={3}
           >
-            {/* The rows sit straight on the card: a line IS the panel, so a
-                wrapper around them would be a third surface framing a second
-                one. See `.mon-line-stack` for the measurement. */}
+            {/* The rows sit straight on the dashboard's card: a line IS the
+                panel, so a wrapper around them would be a third surface
+                framing a second one. See `.mon-line-stack`. */}
             <PanelList className="mon-line-stack">
               {lines(section.monitors)}
             </PanelList>
-          </Card>
+          </MonitorGroup>
         ))}
       </div>
     );
   }
 
   // `partition` orders the list — down first, then alphabetical — and that is
-  // all it does here: without a grouping key this layout stays flat.
+  // all it does here: without a grouping key this layout stays flat, one run
+  // of lines under the dashboard card's own heading.
   const { attention, rest } = partition(monitors);
-  const ordered = [...attention, ...rest];
-
   return (
-    <div className="mon-lines">
-      <Card
-        title={`Monitors (${ordered.length})`}
-        icon={<IconList />}
-        headingLevel={2}
-      >
-        <PanelList className="mon-line-stack">{lines(ordered)}</PanelList>
-      </Card>
-    </div>
+    <PanelList className="mon-line-stack">
+      {lines([...attention, ...rest])}
+    </PanelList>
   );
 }

@@ -1014,6 +1014,14 @@
         <td><code>--size-status-rail</code></td>
         <td class="sg-value"><code>2px</code></td>
         <td class="sg-why">The status rail: the coloured leading edge that marks a row, card, compact line or incident as needing attention (SUB-142). Its own rung because it is a *status mark*, and no existing rung is one. <details class="sg-more"><summary>more</summary>Every caller used to write this decision twice over in two shapes that could not be kept in step: the incidents rail read `width: var(--outline-w)` -- a token that names the keyboard FOCUS outline below -- and the dashboard's three edges wrote a bare `2px` inside a `border-left` shorthand, where the size guard cannot see it (a standalone `width: 2px` would be refused). They are the same 2px today only by coincidence, so widening the focus outline for a keyboard-accessibility reason would silently have moved a status indicator on two screens. Not `--outline-w` (a focus affordance, drawn outside the box, changed for accessibility reasons), not `--size-icon-*` (those size glyphs, and the smallest is 7px), and not a `--space-*` rung (this is a painted mark, not a gap). 2px rather than 1 so the row's contents do not shift one pixel right the moment a monitor goes down -- the space is reserved at rest and only its paint is a state.</details></td>
+      </tr>
+      <tr>
+        <td class="sg-cell-swatch">
+          <span class="sg-bar" style="width: var(--size-tab-mark)"></span>
+        </td>
+        <td><code>--size-tab-mark</code></td>
+        <td class="sg-value"><code>2px</code></td>
+        <td class="sg-why">The mark under the selected status tab on the dashboard's list header (SUB-183): a painted bar on the header's rule saying &quot;this one is chosen&quot;. <details class="sg-more"><summary>more</summary>Its own rung for the reason the rail above has one: it is the same 2px today by coincidence, and the rail is a status signal while this is a selection, so widening one must not move the other.</details></td>
       </tr></tbody>
     </table>
 </section>

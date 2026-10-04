@@ -1,13 +1,16 @@
 // @vitest-environment jsdom
 import { useState } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Dashboard } from "./Dashboard";
 import type { Monitor, MonitorStatus } from "./types";
 import type { CardColumns, LayoutId } from "../shell/preferences";
 import { ShellSlots } from "../shell/ShellSlots";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 /** jsdom has no layout, so the heartbeat bar needs an explicit width. */
 const WIDTH = 168;
@@ -81,6 +84,27 @@ const rowIds = () =>
 const search = () =>
   screen.getByRole("searchbox", { name: /filter monitors/i });
 
+/** A status tab by its word, whatever its count: "Down 1". */
+const tab = (word: string) =>
+  screen.getByRole("button", { name: new RegExp(`^${word} \\d+$`) });
+
+/** Opens the Filter panel, which holds the tag filters (SUB-183). */
+const openFilter = () =>
+  fireEvent.click(screen.getByRole("button", { name: /^Filter/ }));
+
+/** Opens the View panel: layout, cards per row, grouping. */
+const openView = () =>
+  fireEvent.click(screen.getByRole("button", { name: /^View: / }));
+
+/** Chooses one value of a tag key in the Filter panel, opening it first. */
+function pick(key: string, value: string) {
+  if (screen.queryByRole("dialog", { name: "Filter monitors" }) === null) openFilter();
+  const panel = screen.getByRole("dialog", { name: "Filter monitors" });
+  fireEvent.click(within(panel).getByRole("button", { name: new RegExp(`^${key}`) }));
+  const values = panel.querySelector(`fieldset[data-facet-key="${key}"]`) as HTMLElement;
+  fireEvent.click(within(values).getByRole("radio", { name: new RegExp(`^${value === "" ? "Any" : value}\\b`) }));
+}
+
 describe("Dashboard", () => {
   it("filters rows out of the DOM as you search", () => {
     render(
@@ -129,7 +153,7 @@ describe("Dashboard", () => {
     expect(screen.getByText(/No monitors match/)).toBeTruthy();
   });
 
-  it("narrows the list to one status when its count chip is pressed", () => {
+  it("narrows the list to one status when its tab is pressed", () => {
     render(
       <Harness
         monitors={[
@@ -139,24 +163,29 @@ describe("Dashboard", () => {
         ]}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /1 down/ }));
+    fireEvent.click(tab("Down"));
     expect(rowIds()).toEqual(["monitor-row-db"]);
     expect(screen.getByText(/1 of 3 monitors is down/)).toBeTruthy();
   });
 
-  it("clears the status filter when the pressed chip is pressed again", () => {
+  it("clears the status filter when the pressed tab is pressed again, or All", () => {
     render(
       <Harness monitors={[monitor("api", "up"), monitor("db", "down")]} />,
     );
-    const chip = () => screen.getByRole("button", { name: /1 down/ });
-    fireEvent.click(chip());
-    expect(chip().getAttribute("aria-pressed")).toBe("true");
-    fireEvent.click(chip());
-    expect(chip().getAttribute("aria-pressed")).toBe("false");
+    expect(tab("All").getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(tab("Down"));
+    expect(tab("Down").getAttribute("aria-pressed")).toBe("true");
+    expect(tab("All").getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(tab("Down"));
+    expect(tab("Down").getAttribute("aria-pressed")).toBe("false");
+    expect(rowIds()).toHaveLength(2);
+    fireEvent.click(tab("Down"));
+    fireEvent.click(tab("All"));
+    expect(tab("All").getAttribute("aria-pressed")).toBe("true");
     expect(rowIds()).toHaveLength(2);
   });
 
-  it("combines the status chip with the search box", () => {
+  it("combines the status tab with the search box", () => {
     render(
       <Harness
         monitors={[
@@ -166,7 +195,7 @@ describe("Dashboard", () => {
         ]}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /2 down/ }));
+    fireEvent.click(tab("Down"));
     fireEvent.change(search(), { target: { value: "api" } });
     expect(rowIds()).toEqual(["monitor-row-api"]);
     expect(
@@ -175,34 +204,52 @@ describe("Dashboard", () => {
   });
 
   it("keeps the counts whole while a status is filtered", () => {
-    // The chips are the map of the whole list; recomputing them from the
+    // The tabs are the map of the whole list; recomputing them from the
     // filtered list would erase every other status the moment you pressed one,
     // leaving no way back and no idea what else is going on.
     render(
       <Harness monitors={[monitor("api", "up"), monitor("db", "down")]} />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /1 down/ }));
-    expect(screen.getByRole("button", { name: /1 up/ })).toBeTruthy();
+    fireEvent.click(tab("Down"));
+    expect(screen.getByRole("button", { name: "Up 1" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "All 2" })).toBeTruthy();
   });
 
-  it("keeps the pressed chip when a live update empties its status", () => {
+  it("keeps the pressed tab when a live update empties its status", () => {
     // A data update, not a click: the last down monitor recovers while "down"
-    // is the active filter. Drop the chip and the list is empty with no way
-    // back; keep it and one press restores the full list.
+    // is the active filter. Drop the tab and the list is empty with one way
+    // back less; keep it and one press restores the full list.
     const { rerender } = render(
       <Harness monitors={[monitor("api", "up"), monitor("db", "down")]} />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /1 down/ }));
+    fireEvent.click(tab("Down"));
     expect(rowIds()).toEqual(["monitor-row-db"]);
 
     rerender(
       <Harness monitors={[monitor("api", "up"), monitor("db", "up")]} />,
     );
-    const chip = screen.getByRole("button", { name: /0 down/ });
-    expect(chip.getAttribute("aria-pressed")).toBe("true");
+    const down = screen.getByRole("button", { name: "Down 0" });
+    expect(down.getAttribute("aria-pressed")).toBe("true");
 
-    fireEvent.click(chip);
+    fireEvent.click(down);
     expect(rowIds()).toHaveLength(2);
+  });
+
+  it("drops a tab whose count is zero unless it is the one selected", () => {
+    render(<Harness monitors={[monitor("api", "up"), monitor("db", "up")]} />);
+    expect(screen.queryByRole("button", { name: /^Down / })).toBeNull();
+    expect(screen.getByRole("button", { name: "All 2" })).toBeTruthy();
+  });
+
+  it("offers one way back from an empty filtered list", () => {
+    render(<Harness monitors={[monitor("api", "up"), monitor("db", "down")]} />);
+    fireEvent.click(tab("Down"));
+    fireEvent.change(search(), { target: { value: "api" } });
+    expect(rowIds()).toEqual([]);
+    fireEvent.click(screen.getByRole("button", { name: "Clear all filters" }));
+    expect(rowIds()).toHaveLength(2);
+    expect(tab("All").getAttribute("aria-pressed")).toBe("true");
+    expect((search() as HTMLInputElement).value).toBe("");
   });
 
   it("restores every row when the search is cleared", () => {
@@ -238,7 +285,7 @@ describe("Dashboard", () => {
     expect(screen.getByRole("status").textContent).toBe("");
   });
 
-  it("summarises the counts in the toolbar's status filter", () => {
+  it("counts every status in its tab, All first with the total", () => {
     render(
       <Harness
         monitors={[
@@ -249,76 +296,54 @@ describe("Dashboard", () => {
         ]}
       />,
     );
-    // `.mon-filter` since the counts moved out of a page heading and into the
-    // toolbar, where they are the status filter rather than a summary line.
-    const counts = document.querySelector(".mon-filter")!.textContent ?? "";
-    expect(counts).toContain("1 down");
-    expect(counts).toContain("2 up");
-    expect(counts).toContain("1 paused");
-    // No pending monitors, so no "0 pending" noise.
-    expect(counts).not.toContain("pending");
+    const tabs = within(screen.getByRole("group", { name: "Filter by status" }))
+      .getAllByRole("button")
+      .map((button) => button.textContent);
+    // No pending monitors, so no "Pending 0" noise.
+    expect(tabs).toEqual(["All 4", "Down 1", "Paused 1", "Up 2"]);
   });
 
-  it("keeps the filter a set of toggles, not a radio group", () => {
+  it("keeps the tabs a set of toggles, not a radio group or a tablist", () => {
     /*
-     * The filter is framed like the segmented control beside it so the two
-     * read as siblings. That frame is the one thing about this design that
-     * could mislead: a segmented control means one-of-N, and this is not.
-     * "None selected" is a real state and pressing the active chip is how you
-     * get back to the full list, so the chips must stay buttons carrying
-     * aria-pressed — never role="radio", never a required selection.
+     * They narrow one list in place, so they are not tabs that switch panels
+     * (no `role="tab"`) and not radios either: the chips' behaviour carried
+     * over, and pressing the selected one is a way back to All.
      */
     render(
       <Harness monitors={[monitor("a", "up"), monitor("c", "down")]} />,
     );
-    const filter = document.querySelector(".mon-filter")!;
-    expect(filter.getAttribute("role")).toBe("group");
-    expect(filter.querySelectorAll('[role="radio"]')).toHaveLength(0);
-
-    const chips = [...filter.querySelectorAll("button")];
-    expect(chips.length).toBeGreaterThan(1);
-    // Nothing is pressed until the user presses something.
-    expect(chips.every((c) => c.getAttribute("aria-pressed") === "false")).toBe(
-      true,
-    );
-
-    fireEvent.click(chips[0]);
-    expect(chips[0].getAttribute("aria-pressed")).toBe("true");
-    // ...and pressing it again clears the filter rather than leaving one
-    // option stuck on, which is what a radio group would do.
-    fireEvent.click(chips[0]);
-    expect(chips[0].getAttribute("aria-pressed")).toBe("false");
+    const group = screen.getByRole("group", { name: "Filter by status" });
+    expect(group.querySelectorAll('[role="radio"], [role="tab"]')).toHaveLength(0);
+    const buttons = within(group).getAllByRole("button");
+    expect(buttons.map((b) => b.getAttribute("aria-pressed"))).toEqual(["true", "false", "false"]);
   });
 
-  it("puts the filter field, the filters and the view tools in the page toolbar", () => {
+  it("heads the list's card with its own controls and draws nothing in the page toolbar", () => {
     /*
-     * Everything that narrows or redraws this list belongs to this screen
-     * alone, so all of it is in the page toolbar (SUB-182) — the filter field
-     * first, the layout switcher and the column count last. Asserted by which
-     * bar each lands in and in what order rather than by geometry, because
-     * jsdom has no layout — and which bar is the thing that was wrong, not the
-     * pixels.
+     * Where a control belongs (AGENTS.md, SUB-183): the tabs on the left of
+     * the card's header, the text filter, Filter and View on the right, and
+     * nothing in the page toolbar above it. Asserted by where each lands and
+     * in what order rather than by geometry, because jsdom has no layout.
      */
     render(
       <Harness
-        monitors={[monitor("a", "up")]}
+        monitors={[monitor("a", "up", { tags: { env: "prod" } })]}
         layout="cards"
         cardColumns="2"
         withLayouts
       />,
     );
-    const toolbar = document.querySelector(".shell-toolbar-slot")!;
-    const group = toolbar.querySelector(".tb-group")!;
+    expect(document.querySelector(".shell-toolbar-slot")!.childElementCount).toBe(0);
+    const head = document.querySelector(".mon-board > .card-head")!;
+    expect(head.querySelector(".card-head-lead [aria-label='Filter by status']")).not.toBeNull();
     expect(
-      [...group.children].map(
-        (el) => el.getAttribute("aria-label") ?? el.className.split(" ")[0],
+      [...head.querySelector(".card-head-action")!.querySelectorAll("input, button")].map(
+        (el) => el.getAttribute("aria-label") ?? el.getAttribute("type"),
       ),
-    ).toEqual([
-      "shell-search",
-      "Filter by status",
-      "Dashboard layout",
-      "Cards per row",
-    ]);
+    ).toEqual(["search", "Filter", "View: Cards"]);
+    // The card is still headed for a screen reader, by a heading it does not
+    // print: All carries the count it used to show.
+    expect(screen.getByRole("heading", { level: 2, name: "Monitors" }).className).toBe("sr-only");
   });
 
   it("offers no layout switcher when nothing can change the layout", () => {
@@ -328,12 +353,13 @@ describe("Dashboard", () => {
      * the layout: two switchers for one setting would be one too many.
      */
     render(<Harness monitors={[monitor("a", "up")]} />);
+    expect(screen.queryByRole("button", { name: /^View: / })).toBeNull();
     expect(
       screen.queryByRole("group", { name: "Dashboard layout" }),
     ).toBeNull();
   });
 
-  it("reports the layout chosen in its own toolbar", () => {
+  it("reports the layout chosen in its View panel", () => {
     const chosen: LayoutId[] = [];
     render(
       <Harness
@@ -342,8 +368,114 @@ describe("Dashboard", () => {
         onLayoutChange={(next) => chosen.push(next)}
       />,
     );
+    openView();
     fireEvent.click(screen.getByRole("button", { name: "Compact" }));
     expect(chosen).toEqual(["compact"]);
+  });
+
+  it("names the view on its button, grouping included", () => {
+    render(
+      <Harness
+        monitors={[monitor("a", "up", { tags: { team: "core" } })]}
+        layout="rows"
+        withLayouts
+      />,
+    );
+    expect(screen.getByRole("button", { name: "View: Rows" }).textContent).toContain("Rows");
+    openView();
+    fireEvent.change(screen.getByRole("combobox", { name: "Group by" }), {
+      target: { value: "team" },
+    });
+    expect(
+      screen.getByRole("button", { name: "View: Rows, grouped by team" }).textContent,
+    ).toContain("Rows \u00b7 by team");
+  });
+
+  it("offers cards per row only while Cards is on screen", () => {
+    const { unmount } = render(
+      <Harness monitors={[monitor("a", "up")]} layout="rows" cardColumns="2" withLayouts />,
+    );
+    openView();
+    expect(screen.queryByRole("group", { name: "Cards per row" })).toBeNull();
+    unmount();
+    render(<Harness monitors={[monitor("a", "up")]} layout="cards" cardColumns="2" withLayouts />);
+    openView();
+    expect(screen.getByRole("group", { name: "Cards per row" })).toBeTruthy();
+  });
+
+  describe("the Filter and View panels", () => {
+    it("close on Escape and hand focus back to their button", () => {
+      render(
+        <Harness monitors={[monitor("a", "up", { tags: { env: "prod" } })]} withLayouts />,
+      );
+      for (const [open, name] of [[openFilter, /^Filter/], [openView, /^View: /]] as const) {
+        open();
+        const dialog = screen.getByRole("dialog");
+        expect(dialog.contains(document.activeElement)).toBe(true);
+        fireEvent.keyDown(dialog, { key: "Escape" });
+        expect(screen.queryByRole("dialog")).toBeNull();
+        expect(document.activeElement).toBe(screen.getByRole("button", { name }));
+      }
+    });
+
+    it("close on a press outside them, without taking focus back", () => {
+      render(<Harness monitors={[monitor("a", "up", { tags: { env: "prod" } })]} />);
+      openFilter();
+      expect(screen.getByRole("dialog")).toBeTruthy();
+      fireEvent.mouseDown(document.body);
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+
+    it("say they open a dialog, and whether it is open", () => {
+      render(<Harness monitors={[monitor("a", "up", { tags: { env: "prod" } })]} />);
+      const button = screen.getByRole("button", { name: /^Filter/ });
+      expect(button.getAttribute("aria-haspopup")).toBe("dialog");
+      expect(button.getAttribute("aria-expanded")).toBe("false");
+      openFilter();
+      expect(button.getAttribute("aria-expanded")).toBe("true");
+      expect(button.getAttribute("aria-controls")).toBe(screen.getByRole("dialog").id);
+    });
+  });
+
+  describe("on a phone", () => {
+    function phone() {
+      vi.stubGlobal("matchMedia", (query: string) => ({
+        matches: query.includes("max-width: 640px"),
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }));
+    }
+
+    it("moves the text filter into the Filter sheet and counts it on the badge", () => {
+      phone();
+      render(<Harness monitors={[monitor("api", "up"), monitor("db", "up")]} />);
+      // Not in the header: there is no room for it beside the tabs.
+      expect(document.querySelector(".mon-board > .card-head input")).toBeNull();
+      openFilter();
+      fireEvent.change(search(), { target: { value: "api" } });
+      expect(rowIds().length + document.querySelectorAll("[data-testid^='monitor-card-']").length).toBe(1);
+      expect(screen.getByRole("button", { name: "Filter, 1 active" })).toBeTruthy();
+      // The sheet's own way out says how many monitors it leaves.
+      expect(screen.getByRole("button", { name: "Show 1 monitor" })).toBeTruthy();
+      // And the query stands as a chip under the header, out of the sheet.
+      fireEvent.click(screen.getByRole("button", { name: "Show 1 monitor" }));
+      expect(screen.getByRole("button", { name: "Remove filter name: api" })).toBeTruthy();
+    });
+
+    it("offers only the layouts a phone can draw", () => {
+      phone();
+      render(
+        <Harness monitors={[monitor("api", "up")]} layout="rows" cardColumns="2" withLayouts />,
+      );
+      openView();
+      const layouts = within(screen.getByRole("group", { name: "Dashboard layout" }))
+        .getAllByRole("button")
+        .map((button) => button.textContent);
+      expect(layouts).toEqual(["Cards", "Status wall"]);
+      // One column is all a phone fits, whatever is chosen.
+      expect(screen.queryByRole("group", { name: "Cards per row" })).toBeNull();
+    });
   });
 
   it("has a real label on the search field, not just a placeholder", () => {
@@ -455,128 +587,140 @@ describe("Dashboard", () => {
       monitor("cdn", "up", { tags: { env: "staging", customer: "acme" } }),
     ];
 
-    const facet = (key: string) =>
-      document.querySelector<HTMLSelectElement>(
-        `[data-facet-key="${key}"] .mon-facet-select`,
-      )!;
+    /** A key's value radios in the open panel, as "value count". */
+    const values = (key: string) => {
+      const panel = screen.getByRole("dialog", { name: "Filter monitors" });
+      fireEvent.click(within(panel).getByRole("button", { name: new RegExp(`^${key}`) }));
+      return [...panel.querySelectorAll(`fieldset[data-facet-key="${key}"] .mon-option`)].map(
+        (option) => option.textContent,
+      );
+    };
 
     /*
-     * SUB-140: the framed filter (DESIGN.md §8.4).
-     *
-     * The product owner asked for something better-looking than the bare
-     * `ENV [Any] / GROUP BY [None]` pair, with icons. The frame and the glyph
-     * are CSS and markup; what must not change is that these are still native
-     * labelled `<select>`s. A "nicer filter" that quietly became a div with a
-     * click handler is the failure mode this guards.
+     * SUB-183: one Filter button instead of a select per key. What must not
+     * change from the selects it replaces is that each choice is a native,
+     * labelled control: a radio per value inside a fieldset named by its key.
      */
-    it("keeps every toolbar filter a native select inside a real label", () => {
+    it("keeps every value a native radio inside a labelled group", () => {
       render(<Harness monitors={tagged()} />);
-      const controls = [
-        ...document.querySelectorAll<HTMLElement>(
-          ".mon-facet-select, .mon-group-select",
-        ),
-      ];
-      expect(controls.length, "env, customer and group by").toBe(3);
-      for (const control of controls) {
-        // A real select: the OS picker, the keyboard behaviour and the
-        // listbox role all come free, and none of them can be re-earned by a
-        // div without writing them out.
-        expect(control.tagName).toBe("SELECT");
-        // Named by a wrapping <label>, so the key text IS the accessible name
-        // and no visually hidden legend is needed.
-        const label = control.closest("label");
-        expect(label, "a filter must be inside its <label>").not.toBeNull();
-        expect((label?.textContent ?? "").trim().length).toBeGreaterThan(0);
-        // Focusable from the keyboard without a tabindex of its own.
-        expect(control.hasAttribute("disabled")).toBe(false);
-      }
+      openFilter();
+      values("env");
+      const group = screen.getByRole("group", { name: "env" });
+      const radios = within(group).getAllByRole("radio");
+      expect(radios.map((radio) => radio.tagName)).toEqual(["INPUT", "INPUT", "INPUT"]);
+      for (const radio of radios) expect(radio.closest("label")).not.toBeNull();
     });
 
-    it("frames each filter and leads it with a decorative glyph", () => {
+    it("lists every key with its current value, and Any first under each", () => {
       render(<Harness monitors={tagged()} />);
-      const frames = [
-        ...document.querySelectorAll<HTMLElement>(".tb-field"),
-      ];
-      expect(frames.length, "two facets plus Group by").toBe(3);
-      for (const frame of frames) {
-        const glyph = frame.querySelector("svg");
-        expect(glyph, "a framed filter leads with a glyph").not.toBeNull();
-        // The <label> already names the control; a glyph that announced
-        // itself would make a screen reader say the filter twice.
-        expect(glyph?.getAttribute("aria-hidden")).toBe("true");
-      }
+      openFilter();
+      const keys = [...document.querySelectorAll(".mon-filter-key")].map((k) => k.textContent);
+      expect(keys).toEqual(["customer Any", "env Any"]);
+      expect(values("env")).toEqual(["Any 3", "prod 2", "staging 1"]);
     });
 
-    it("offers one select per tag key, with Any first", () => {
+    it("counts each value against the other filters, not against its own key", () => {
       render(<Harness monitors={tagged()} />);
-      const selects = [...document.querySelectorAll(".mon-facet-select")];
-      expect(selects).toHaveLength(2);
-      expect([...facet("env").options].map((o) => o.value)).toEqual([
-        "",
-        "prod",
-        "staging",
-      ]);
+      pick("customer", "acme");
+      // acme leaves api (prod) and cdn (staging): one each, and Any is both.
+      expect(values("env")).toEqual(["Any 2", "prod 1", "staging 1"]);
+      // Its own key is counted without its own choice, so switching to globex
+      // says where it would land.
+      expect(values("customer")).toEqual(["Any 3", "acme 2", "globex 1"]);
+      fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+      fireEvent.click(tab("All"));
+      fireEvent.change(search(), { target: { value: "cdn" } });
+      openFilter();
+      expect(values("env")).toEqual(["Any 1", "prod 0", "staging 1"]);
+      // A value that would empty the list is still offered, marked empty.
+      expect(document.querySelector('.mon-option[data-empty="true"]')?.textContent).toBe("prod 0");
     });
 
-    it("renders no facets at all when nothing is tagged", () => {
+    it("opens on the first key that is filtering", () => {
+      render(<Harness monitors={tagged()} />);
+      pick("env", "prod");
+      fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+      openFilter();
+      expect(document.querySelector('.mon-filter-key[aria-pressed="true"]')?.textContent).toBe("env prod");
+    });
+
+    it("renders no Filter button at all when nothing is tagged", () => {
       render(<Harness monitors={[monitor("api", "up")]} />);
-      expect(document.querySelector(".mon-facets")).toBeNull();
+      expect(screen.queryByRole("button", { name: /^Filter/ })).toBeNull();
     });
 
     it("narrows the list to the chosen value", () => {
       render(<Harness monitors={tagged()} />);
-      fireEvent.change(facet("env"), { target: { value: "staging" } });
+      pick("env", "staging");
       expect(rowIds()).toEqual(["monitor-row-cdn"]);
     });
 
     it("ANDs two keys together", () => {
       render(<Harness monitors={tagged()} />);
-      fireEvent.change(facet("env"), { target: { value: "prod" } });
-      fireEvent.change(facet("customer"), { target: { value: "acme" } });
+      pick("env", "prod");
+      pick("customer", "acme");
       expect(rowIds()).toEqual(["monitor-row-api"]);
+      expect(screen.getByRole("button", { name: "Filter, 2 active" })).toBeTruthy();
     });
 
     it("keeps offering every value of a key after one is chosen", () => {
       render(<Harness monitors={tagged()} />);
-      fireEvent.change(facet("env"), { target: { value: "prod" } });
+      pick("env", "prod");
       // The facets come from the unfiltered list, so "staging" must still be
       // reachable — otherwise choosing it once removes the way back.
-      expect([...facet("env").options].map((o) => o.value)).toEqual([
-        "",
-        "prod",
-        "staging",
-      ]);
+      expect(values("env").map((v) => v?.replace(/ \d+$/, ""))).toEqual(["Any", "prod", "staging"]);
     });
 
-    it("returns to the full list via Any", () => {
+    it("returns to the full list via Any, and via Clear tags", () => {
       render(<Harness monitors={tagged()} />);
-      fireEvent.change(facet("env"), { target: { value: "staging" } });
-      fireEvent.change(facet("env"), { target: { value: "" } });
+      pick("env", "staging");
+      pick("env", "");
+      expect(rowIds()).toHaveLength(3);
+      pick("env", "staging");
+      fireEvent.click(screen.getByRole("button", { name: "Clear tags" }));
       expect(rowIds()).toHaveLength(3);
     });
 
-    it("names the tag filter in the sentence under the search box", () => {
+    it("shows each chosen tag as a chip under the header that drops it", () => {
       render(<Harness monitors={tagged()} />);
-      fireEvent.change(facet("env"), { target: { value: "prod" } });
+      pick("env", "prod");
+      pick("customer", "acme");
+      fireEvent.click(screen.getByRole("button", { name: "Done" }));
+      expect(screen.queryByRole("dialog")).toBeNull();
+      const chips = [...document.querySelectorAll(".mon-filter-chip")].map((c) => c.getAttribute("aria-label"));
+      // In the keys' own order, as the panel lists them, not in the order
+      // they were chosen: a row of chips that reorders itself is re-read.
+      expect(chips).toEqual(["Remove filter customer: acme", "Remove filter env: prod"]);
+      fireEvent.click(screen.getByRole("button", { name: "Remove filter env: prod" }));
+      expect(rowIds()).toEqual(["monitor-row-api", "monitor-row-cdn"]);
+      fireEvent.click(screen.getByRole("button", { name: "Clear all" }));
+      expect(rowIds()).toHaveLength(3);
+      expect(document.querySelector(".mon-filter-chip")).toBeNull();
+    });
+
+    it("names the tag filter in the sentence under the header", () => {
+      render(<Harness monitors={tagged()} />);
+      pick("env", "prod");
       expect(document.querySelector(".mon-result-count")!.textContent).toBe(
         "2 of 3 monitors are tagged env:prod",
       );
+      expect(document.querySelector(".mon-panel-count")!.textContent).toBe("2 of 3 monitors");
     });
 
     it("says the filter is empty, not that there are no monitors", () => {
       render(<Harness monitors={tagged()} />);
-      fireEvent.change(facet("env"), { target: { value: "prod" } });
-      fireEvent.change(facet("customer"), { target: { value: "globex" } });
-      fireEvent.change(facet("env"), { target: { value: "staging" } });
+      pick("env", "prod");
+      pick("customer", "globex");
+      pick("env", "staging");
       expect(rowIds()).toEqual([]);
       expect(document.querySelector(".mon-empty-title")!.textContent).toBe(
-        "No monitors match this filter",
+        "No monitors match these filters",
       );
     });
 
     it("drops a selection whose key disappears from the data", () => {
       const { rerender } = render(<Harness monitors={tagged()} />);
-      fireEvent.change(facet("env"), { target: { value: "staging" } });
+      pick("env", "staging");
       expect(rowIds()).toEqual(["monitor-row-cdn"]);
       // A live update strips the tags. The stale selection must not survive
       // and hide every monitor with no control left to clear it.
@@ -588,11 +732,8 @@ describe("Dashboard", () => {
 
     it("drops a selection whose value disappears while the key stays", () => {
       const { rerender } = render(<Harness monitors={tagged()} />);
-      fireEvent.change(facet("env"), { target: { value: "staging" } });
+      pick("env", "staging");
       expect(rowIds()).toEqual(["monitor-row-cdn"]);
-      // The key survives, so the select stays on screen, but it no longer
-      // offers "staging". A filter you cannot see or clear must not keep
-      // hiding rows.
       rerender(
         <Harness
           monitors={[
@@ -601,16 +742,13 @@ describe("Dashboard", () => {
           ]}
         />,
       );
-      expect([...facet("env").options].map((o) => o.value)).toEqual([
-        "",
-        "prod",
-      ]);
+      expect(values("env")).toEqual(["Any 2", "prod 2"]);
       expect(rowIds()).toEqual(["monitor-row-api", "monitor-row-db"]);
     });
 
     it("forgets a dropped selection rather than reapplying it when the value returns", () => {
       const { rerender } = render(<Harness monitors={tagged()} />);
-      fireEvent.change(facet("env"), { target: { value: "staging" } });
+      pick("env", "staging");
       expect(rowIds()).toEqual(["monitor-row-cdn"]);
       rerender(
         <Harness
@@ -622,8 +760,8 @@ describe("Dashboard", () => {
       );
       // "staging" comes back. Nobody chose it again, so it must not filter.
       rerender(<Harness monitors={tagged()} />);
-      expect(facet("env").value).toBe("");
       expect(rowIds()).toHaveLength(3);
+      expect(screen.getByRole("button", { name: "Filter" })).toBeTruthy();
     });
   });
 });
@@ -635,8 +773,10 @@ describe("Dashboard grouping", () => {
     monitor("legacy", "up", {}),
   ];
 
-  const groupSelect = () =>
-    document.querySelector<HTMLSelectElement>(".mon-group-select")!;
+  const groupSelect = () => {
+    if (screen.queryByRole("dialog", { name: "View" }) === null) openView();
+    return screen.getByRole("combobox", { name: "Group by" }) as HTMLSelectElement;
+  };
   const headings = () =>
     [...document.querySelectorAll(".mon-section-title")].map(
       (h) => h.textContent,
@@ -662,12 +802,7 @@ describe("Dashboard grouping", () => {
   it("groups only what the filters left visible", () => {
     render(<Harness monitors={tagged()} />);
     fireEvent.change(groupSelect(), { target: { value: "env" } });
-    fireEvent.change(
-      document.querySelector<HTMLSelectElement>(
-        '[data-facet-key="env"] .mon-facet-select',
-      )!,
-      { target: { value: "prod" } },
-    );
+    pick("env", "prod");
     expect(headings()).toEqual(["prod (1)"]);
     expect(rowIds()).toEqual(["monitor-row-api"]);
   });
@@ -683,5 +818,15 @@ describe("Dashboard grouping", () => {
     );
     expect(headings()).toEqual([]);
     expect(rowIds()).toHaveLength(2);
+  });
+
+  it("heads the sections of the card and compact layouts inside the one card", () => {
+    render(<Harness monitors={tagged()} layout="cards" />);
+    fireEvent.change(groupSelect(), { target: { value: "env" } });
+    // One card around the whole list; the sections are parts of it.
+    expect(document.querySelectorAll(".card")).toHaveLength(1);
+    expect(
+      [...document.querySelectorAll(".mon-group-title")].map((h) => [h.tagName, h.textContent]),
+    ).toEqual([["H3", "prod (1)"], ["H3", "staging (1)"], ["H3", "Untagged (1)"]]);
   });
 });

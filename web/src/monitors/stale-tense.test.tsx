@@ -396,11 +396,14 @@ describe("the dashboard hands the stream's state to whichever layout is up", () 
           stale
         />,
       );
-      // Scoped past the toolbar: the status filter chips are labelled "up",
-      // "down" and so on in lower case, which is a control naming a filter
-      // rather than a claim about a monitor — and the guard is anchored on
-      // the capital letter precisely so the two do not collide.
-      expect(presentTenseClaims(container)).toEqual([]);
+      // Scoped past the status tabs in the list's header (SUB-183). "Down 3"
+      // there is a control naming a filter, not a claim about a monitor, and
+      // it is spelled the way a tab is spelled. Everything else in the card
+      // — every row, card and line — is still walked.
+      const list = container.cloneNode(true) as Element;
+      list.querySelectorAll(".mon-tabs").forEach((tabs) => tabs.remove());
+      expect(list.querySelectorAll("[data-testid^='monitor-']").length).toBeGreaterThan(0);
+      expect(presentTenseClaims(list)).toEqual([]);
       expect(container.textContent).toContain("Was up");
     });
   }

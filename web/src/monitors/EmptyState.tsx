@@ -14,6 +14,7 @@ export function EmptyState({
   totalCount,
   filtered = false,
   onAddMonitor,
+  onClearFilters,
   headingLevel = 2,
 }: {
   query: string;
@@ -21,9 +22,9 @@ export function EmptyState({
   /** True when a status or tag filter is on, even with an empty query. */
   filtered?: boolean;
   /**
-   * One level under whatever heads the list it replaces: 2 on the dashboard,
-   * where it stands in for the cards under the page's `h1`, and 3 in the
-   * inventory, where it sits inside the `h2` Monitors card.
+   * One level under whatever heads the list it replaces: 3 on the dashboard
+   * and in the inventory, where it sits inside an `h2` card. 2 is the default
+   * for a caller that draws it straight under the page's `h1`.
    */
   headingLevel?: 2 | 3;
   /**
@@ -36,6 +37,14 @@ export function EmptyState({
    * can take it and where, rather than as a control this reader does not have.
    */
   onAddMonitor?: () => void;
+  /**
+   * Clears every filter at once, offered under “no monitors match”.
+   *
+   * The way back from an empty result is a control rather than directions to
+   * several: the tab, the tag panel and the text field each hold part of the
+   * narrowing, and naming all three is a sentence nobody acts on (SUB-183).
+   */
+  onClearFilters?: () => void;
 }) {
   const needle = query.trim();
   // A filter that hides every monitor used to render "No monitors yet", which
@@ -59,16 +68,27 @@ export function EmptyState({
         <>
           <Heading className="mon-empty-title">
             {needle === ""
-              ? "No monitors match this filter"
+              ? "No monitors match these filters"
               : `No monitors match \u201C${needle}\u201D`}
           </Heading>
           <p className="mon-empty-body">
             {needle === ""
-              ? `Clear the status or tag filter to see all ${totalCount} monitors.`
+              ? `Clear the status tab and the tag filters to see all ${totalCount} monitors.`
               : filtered
                 ? `Search looks at monitor names and targets. Check the spelling, or clear the search and the active filters to see all ${totalCount} monitors.`
                 : `Search looks at monitor names and targets. Check the spelling, or clear the search to see all ${totalCount} monitors.`}
           </p>
+          {onClearFilters === undefined ? null : (
+            <p className="mon-empty-action">
+              <button
+                type="button"
+                className="button"
+                onClick={onClearFilters}
+              >
+                Clear all filters
+              </button>
+            </p>
+          )}
         </>
       ) : (
         <>

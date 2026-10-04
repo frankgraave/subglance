@@ -325,49 +325,18 @@ describe("MonitorTable grouped by a tag", () => {
   });
 
   /*
-   * SUB-140: the card that frames this table names and counts the list.
-   *
-   * The rows layout was the one list screen with no icon and no title on its
-   * frame, next to a compact layout that already said "Monitors (N)" — which
-   * is the inconsistency the product owner named. DESIGN.md §8.3 fixes the
-   * form as `Name (N)`.
+   * The table has no card of its own (SUB-183): the dashboard draws one card
+   * around whichever layout is up, and its header's status tabs carry the
+   * count the table's "Monitors (N)" title used to. A second card here would
+   * be a frame inside a frame.
    */
-  it("heads the table with a card titled `Monitors (N)`", () => {
-    render(<MonitorTable monitors={tagged()} beatWidth={WIDTH} />);
-    expect(
-      screen.getByRole("heading", { name: "Monitors (4)", level: 2 }),
-      "the frame around the rows layout needs the same titled card every other list screen has",
-    ).toBeTruthy();
-  });
-
-  it("counts every monitor in the title, not one section of them", () => {
-    // The fixture splits 4 into "Needs attention (1)" and "Other monitors (3)".
-    // The card names the whole; a title equal to either section would make the
-    // two headings read as alternatives rather than as parts (§8.3).
-    render(<MonitorTable monitors={tagged()} beatWidth={WIDTH} />);
-    const title = screen.getByRole("heading", { level: 2 }).textContent;
-    expect(title).toBe("Monitors (4)");
-    expect(headings()).toEqual(["Needs attention (1)", "Other monitors (3)"]);
-  });
-
-  it("keeps the title and its count when the table is grouped", () => {
-    render(
-      <MonitorTable monitors={tagged()} groupKey="env" beatWidth={WIDTH} />,
-    );
-    expect(
-      screen.getByRole("heading", { name: "Monitors (4)", level: 2 }),
-    ).toBeTruthy();
-  });
-
-  it("gives the card header a decorative glyph, not a second accessible name", () => {
+  it("draws no card of its own, only the table", () => {
     const { container } = render(
       <MonitorTable monitors={tagged()} beatWidth={WIDTH} />,
     );
-    const glyph = container.querySelector(".icon-tile svg");
-    expect(glyph, "the card header needs its icon tile").not.toBeNull();
-    // The heading already says what the list is; a glyph that announces itself
-    // makes a screen reader say it twice (§8.3, AGENTS.md).
-    expect(glyph?.getAttribute("aria-hidden")).toBe("true");
+    expect(container.querySelector(".card")).toBeNull();
+    expect(container.firstElementChild?.tagName).toBe("TABLE");
+    expect(screen.queryByRole("heading", { level: 2 })).toBeNull();
   });
 });
 
