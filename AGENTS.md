@@ -149,7 +149,7 @@ title, tab, rail and `<main>` label. The reasoning is in DESIGN.md §2.16.
 
 A card on a titled page is named for what it holds, not for the page: the
 page's `h1` already says "Incidents", so the card under it says "Open
-incidents". When the frame took over the title, do not drop what a card
+and resolved incidents". When the frame took over the title, do not drop what a card
 title was carrying — the Monitors card's "4 configured, 1 paused" lives in
 its `note` prop, which is what `Card` grew that prop for.
 

@@ -1028,8 +1028,8 @@ from the screen:
   (15/20, `--weight-heavy`), one line, cut with an ellipsis rather than
   wrapped. It is the sidebar's word and the tab's word, because all three
   read the same table. Cards are `h2` under it, and a card is named for what
-  it holds rather than for the page — "Open incidents" under "Incidents",
-  not "Incidents" twice. A monitor's page is titled with the monitor's name
+  it holds rather than for the page — "Open and resolved incidents" under
+  "Incidents", not "Incidents" twice. A monitor's page is titled with the monitor's name
   behind a breadcrumb link to Monitors, and the tab says the name as well;
   the shell reads it from the shared monitor list through a selector, so a
   heartbeat does not re-render the shell.
