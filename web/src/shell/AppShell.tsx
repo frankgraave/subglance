@@ -46,6 +46,12 @@ export type AppShellProps = {
    */
   toolbar?: ReactNode;
   /**
+   * The `id` of the page's title, which names `<main>`. The title is in the
+   * masthead, outside the region (SUB-207), so without this a route change
+   * that focuses `<main>` would announce an unnamed region.
+   */
+  mainLabelledBy?: string;
+  /**
    * Focus target for a client-side navigation, put on `<main>`.
    *
    * `App` owns it because `App` owns the route: the shell does not know that
@@ -68,6 +74,7 @@ export function AppShell({
   onSignOut,
   topbar,
   toolbar,
+  mainLabelledBy,
   mainRef,
   children,
 }: AppShellProps) {
@@ -138,6 +145,7 @@ export function AppShell({
             id="shell-main"
             ref={mainRef}
             tabIndex={-1}
+            aria-labelledby={mainLabelledBy}
             className="shell-content"
           >
             {children}

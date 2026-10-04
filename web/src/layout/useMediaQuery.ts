@@ -52,6 +52,14 @@ export function useMediaQuery(query: string): boolean {
  */
 export const COMPACT_MAX_WIDTH = 640;
 
+/**
+ * The tablet rung, `--bp-tablet`. No component switches on it; it is named
+ * here so the stylesheet's one use of it in the shell (the masthead's search
+ * becoming a magnifier, SUB-207) is asserted against a number rather than
+ * excused by a comment.
+ */
+export const TABLET_MAX_WIDTH = 900;
+
 /** True when the viewport is too narrow for the row layout. */
 export function useCompactViewport(): boolean {
   return useMediaQuery(`(max-width: ${COMPACT_MAX_WIDTH}px)`);

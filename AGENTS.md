@@ -56,6 +56,8 @@ something on every screen?**
   search (which opens the command menu), the theme. Because each of them
   works everywhere, the bar is the same on every route, including a
   monitor's detail page — it can be read once instead of re-read per screen.
+  It also carries the page's title (see the page frame below), which is not
+  a control and is the one thing in it that changes per route.
   Working everywhere is necessary, not sufficient: the component workbench
   worked everywhere too, and is a developer tool, so it lives at
   `/workbench` with nothing linking to it.
@@ -84,18 +86,21 @@ being noticed in review.
 ### The page frame: one title, one width rule
 
 Every route is drawn inside one frame, `Page` (`web/src/components/Page.tsx`),
-and the frame takes its title and width from one table,
-`web/src/shell/pages.ts`. A screen does not choose either for itself.
+under one masthead, and both take what they draw from one table,
+`web/src/shell/pages.ts`. A screen does not choose its title or its width.
 
-- **Title.** The frame draws the page's only `h1`, visible, on the page type
-  role. It is the same word as the sidebar label and the tab title, because
-  all three read `PAGE_TITLES`. A screen's cards are `h2` under it; a screen
-  does not render an `h1` of its own, visually hidden or otherwise. The one
-  exception is a monitor's page, whose title is the monitor's name: the
-  frame gets `title={null}` and the detail view's own `h1` wears
-  `page-title`, so it sits at the same level as every other page's. The rail
-  lights the section an address belongs to — `/monitors/{id}` lights
-  Monitors.
+- **Title.** The page's only `h1` is in the masthead, after the sidebar
+  toggle: the row role at the heavy weight, one line, cut with an ellipsis
+  rather than wrapped. It is the same word as the sidebar label and the tab
+  title, because all three read `PAGE_TITLES`. Nothing titles the page inside
+  the content — the first thing in it is the screen's first card. A screen's
+  cards are `h2`; a screen does not render an `h1` of its own, visually
+  hidden or otherwise. A monitor's page is titled with the monitor's name,
+  which `App` reads from the shared monitor list, behind a breadcrumb link to
+  Monitors; the tab says the name too. The rail lights the section an
+  address belongs to — `/monitors/{id}` lights Monitors. `<main>` is
+  labelled by the masthead's `h1`, so focusing it on a route change still
+  announces the page by name.
 - **Width.** Three page types, one rule: *the column of cards is
   `--size-pane-lg` on every screen but the dashboard.* `full` is the
   dashboard's (an overview that is watched, and offers to fill the width);
@@ -105,10 +110,12 @@ and the frame takes its title and width from one table,
   how the product had three right edges.
 
 `layout/page-frame.browser.test.ts` measures every route at two widths and
-fails on a second `h1`, a hidden one, a title off the page role or off the
-content edge, a title that disagrees with the rail or the tab, or a column
-of cards that is not its page type's width. The reasoning is in DESIGN.md
-§2.16.
+fails on a second `h1`, a hidden one, one outside the masthead, a title off
+its role or more than one line, a title that does not start one gap after
+the toggle, a title that disagrees with the rail or the tab, a missing or
+stray breadcrumb, or a column of cards that is not its page type's width.
+`App.masthead.test.tsx` walks the routes in jsdom and asserts the same
+title, tab, rail and `<main>` label. The reasoning is in DESIGN.md §2.16.
 
 A card on a titled page is named for what it holds, not for the page: the
 page's `h1` already says "Incidents", so the card under it says "Open

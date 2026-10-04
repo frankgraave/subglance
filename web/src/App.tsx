@@ -17,14 +17,15 @@ import { LiveNotificationsRoot } from "./notifications/LiveNotifications";
 import { createQueryClient } from "./live/queryClient";
 import { ErrorBoundary } from "./shell/ErrorBoundary";
 import { useRoute } from "./shell/useRoute";
-import { routePath } from "./shell/route";
+import { MONITORS_PATH, routePath } from "./shell/route";
 import type { NavRoute } from "./shell/Sidebar";
 import { useDocumentTitle } from "./shell/documentTitle";
 import { useRouteFocus } from "./shell/useRouteFocus";
 import { detailTitle, monitorTitleLink, morphNavigation } from "./shell/viewTransition";
 import { AppShell } from "./shell/AppShell";
 import { PageToolbar } from "./shell/PageToolbar";
-import { pageFrame } from "./shell/pages";
+import { PAGE_TITLE_ID, PAGE_TITLES, pageFrame } from "./shell/pages";
+import { useMonitorName } from "./live/useMonitorName";
 import { Page } from "./components/Page";
 import { Topbar } from "./shell/Topbar";
 import { useShellPreferences } from "./shell/useShellPreferences";
@@ -189,18 +190,22 @@ export default function App() {
    * so the identity of a fresh `{ name: "dashboard" }` on every render cannot
    * re-fire them.
    *
-   * The tab title and the visible page title are the same word, read from
-   * one table (`shell/pages.ts`, SUB-182) that the sidebar's labels agree
-   * with. On a monitor's page the tab says "Monitor": `App` knows the id,
-   * and the name lives behind a query inside `LiveMonitorDetailRoot`.
-   * Naming the tab after the id would be worse than naming it after the
-   * screen, and threading the name up here would make the whole shell
-   * re-render on every heartbeat.
+   * The tab title and the masthead's title are the same word, read from one
+   * table (`shell/pages.ts`, SUB-182) that the sidebar's labels agree with.
+   * On a monitor's page both are the monitor's name (SUB-207), read from the
+   * shared list through a selector so a heartbeat does not re-render the
+   * shell; "Monitor" while the list loads or when the id names nothing.
    */
   const path = routePath(route);
   const frame = pageFrame(route);
-  const pageTitle = frame.title;
-  useDocumentTitle(pageTitle ?? "Monitor");
+  // Signed in only: the sign-in screen has no list to read, and a request
+  // made under it would answer 401 into a session that already knows.
+  const monitorName = useMonitorName(
+    queryClient,
+    route.name === "monitor" && session.state === "signedIn" ? route.id : null,
+  );
+  const pageTitle = frame.title ?? monitorName ?? "Monitor";
+  useDocumentTitle(pageTitle);
   useRouteFocus(path, mainRef);
 
   /*
@@ -375,9 +380,18 @@ export default function App() {
           themePreference={preference}
           onThemeChange={setPreference}
           onOpenCommands={() => setCommandOpen(true)}
+          title={pageTitle}
+          /* A monitor's page sits under Monitors: the rail lights it, and the
+             breadcrumb's link is the way up a level. */
+          parent={
+            onDetail
+              ? { label: PAGE_TITLES.monitors, href: MONITORS_PATH, onNavigate: () => goTo("monitors") }
+              : undefined
+          }
         />
       }
       toolbar={<PageToolbar />}
+      mainLabelledBy={PAGE_TITLE_ID}
     >
       {/*
        * A second boundary, inside the shell rather than around it.
@@ -393,12 +407,10 @@ export default function App() {
        */}
       {/*
        * The page frame sits outside the boundary, so a screen that crashes
-       * still says which screen it was (SUB-182).
+       * keeps its width; the masthead above still says which screen it was
+       * (SUB-182, SUB-207).
        */}
-      <Page
-        title={pageTitle}
-        width={frame.width}
-      >
+      <Page width={frame.width}>
       <ErrorBoundary
         key={boundaryKey}
         title="Something broke while drawing this screen."

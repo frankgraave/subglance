@@ -125,28 +125,23 @@ describe("the status sentence", () => {
     expect(document.body.textContent).toContain("checked 2 min ago");
   });
 
-  it("keeps the state on the title line, grouped with the name", () => {
+  it("leaves the name to the masthead and leads with the state", () => {
     /*
-     * The header used to be three children of the page's 20px flex column —
-     * name, target, status — so a monitor's own status sat as far from its
-     * hostname as the whole block sat from the first card, and the three facts
-     * read as three unrelated rows.
+     * The name is the page's title, and every page's `h1` is the masthead's
+     * (SUB-207). A heading here would be the second `h1` on the one page
+     * that used to draw its own. What stays is the block the name used to
+     * head: the state first, then the address, grouped in one header so the
+     * facts about one monitor do not read as unrelated rows.
      *
-     * Asserted structurally rather than by looking at pixels: the pill has to
-     * be *inside* the title row for the grouping to survive a refactor that
-     * only moves CSS around.
+     * The article is still named by the monitor, so the region says which
+     * one it is about without a heading inside it.
      */
     const { container } = view({ monitor: monitor("up") });
-    const row = container.querySelector(".mon-detail-titlerow");
-    expect(row, "the header needs a title row").not.toBeNull();
-    expect(
-      row?.querySelector(".mon-detail-name"),
-      "the name belongs on that row",
-    ).not.toBeNull();
-    expect(
-      row?.querySelector(".mon-detail-status"),
-      "so does the state — that is the whole point of the row",
-    ).not.toBeNull();
+    expect(container.querySelectorAll("h1")).toHaveLength(0);
+    const article = screen.getByRole("article", { name: "api.example.com" });
+    const head = article.querySelector(".mon-detail-head");
+    expect(head?.firstElementChild?.classList.contains("mon-detail-status"), "the state leads the block").toBe(true);
+    expect(head?.querySelector(".mon-detail-target"), "the address is in the same block").not.toBeNull();
   });
 
   it("keeps the reason out of the pill and gives it its own line", () => {

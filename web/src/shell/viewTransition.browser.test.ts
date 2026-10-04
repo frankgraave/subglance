@@ -119,7 +119,7 @@ it.each([375, 1440])(
       await watchTransitions(page);
 
       await page.click(link);
-      await page.waitForSelector(".mon-detail-name", { timeout: 15_000 });
+      await page.waitForSelector(".mon-detail-head", { timeout: 15_000 });
       const opened = await settle(page);
       expect(opened.started).toBe(1);
       expect(opened.skipped).toBe(0);
@@ -135,7 +135,7 @@ it.each([375, 1440])(
       await page.click(".mon-detail-back");
       await page.waitForSelector(link, { visible: true, timeout: 15_000 });
       await page.click(link);
-      await page.waitForSelector(".mon-detail-name", { timeout: 15_000 });
+      await page.waitForSelector(".mon-detail-head", { timeout: 15_000 });
       const again = await settle(page);
       expect(again.started).toBe(2);
       expect(again.skipped).toBe(0);
@@ -203,7 +203,7 @@ it("swaps instantly under reduced motion", async () => {
     await watchTransitions(page);
 
     await page.click(link);
-    await page.waitForSelector(".mon-detail-name", { timeout: 15_000 });
+    await page.waitForSelector(".mon-detail-head", { timeout: 15_000 });
     const seen = await settle(page);
     expect(seen.started).toBe(0);
     expect(await namedElements(page)).toBe(0);

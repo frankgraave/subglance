@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   COMPACT_MAX_WIDTH,
+  TABLET_MAX_WIDTH,
   RAIL_VETO_MAX_WIDTH,
   RAIL_WIDTH,
   SIDEBAR_VETO_MAX_WIDTH,
@@ -21,23 +22,30 @@ describe("the breakpoint", () => {
   // number rather than trusting a comment. shell.css is in the list because
   // the phone drops the sidebar rail at exactly this width; a stylesheet that
   // drifted would leave a gap where the rail is gone and the drawer is not
-  // reachable. components/page.css is in it because the page title steps
-  // down to the card size on the phone layout; a different number would give
-  // a width where the rail is gone and the title still takes two lines. (It
-  // replaced monitors.css, whose only phone query styled the dashboard's
-  // former toolbar and went with it.)
+  // reachable.
+  //
+  // components/page.css used to be in the list too, for the page title's
+  // phone size. The title is the masthead's now (SUB-207) and its phone rule
+  // is in shell.css's phone block, so the file has no query to agree with.
   const here = fileURLToPath(new URL(".", import.meta.url));
-
-  it.each([
-    ["components", "page.css"],
-    ["shell", "shell.css"],
-  ])("agrees with the media queries in %s.css", (dir, file) => {
-    const css = readFileSync(join(here, "..", dir, file), "utf8");
-    const widths = [...css.matchAll(/@media\s*\(max-width:\s*(\d+)px\)/g)].map((m) =>
+  const queries = (dir: string, file: string) =>
+    [...readFileSync(join(here, "..", dir, file), "utf8").matchAll(/@media\s*\(max-width:\s*(\d+)px\)/g)].map((m) =>
       Number(m[1]),
     );
-    expect(widths.length).toBeGreaterThan(0);
-    for (const width of widths) expect(width).toBe(COMPACT_MAX_WIDTH);
+
+  it("agrees with the phone media queries in shell.css", () => {
+    const widths = queries("shell", "shell.css");
+    expect(widths).toContain(COMPACT_MAX_WIDTH);
+    // One other width is allowed, and it is named: the tablet rung, where
+    // the masthead's search becomes one magnifier (SUB-207). That is not the
+    // phone decision, so it does not have to agree with it — but a phone
+    // query that drifted to 639 or 641 is neither, and still fails here.
+    for (const width of widths) expect([COMPACT_MAX_WIDTH, TABLET_MAX_WIDTH]).toContain(width);
+  });
+
+  it("names the tablet rung tokens.css documents", () => {
+    const tokens = readFileSync(join(here, "..", "styles", "tokens.css"), "utf8");
+    expect(Number(/--bp-tablet:\s*(\d+)px/.exec(tokens)?.[1])).toBe(TABLET_MAX_WIDTH);
   });
 
   // The rows veto (SUB-149, SUB-194) is computed from two widths the shell's

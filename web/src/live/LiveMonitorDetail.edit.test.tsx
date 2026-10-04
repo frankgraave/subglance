@@ -84,7 +84,7 @@ it.each([null, "", "*", "junk", 'W/""'])("cannot save without a usable paired va
 
 it("does not expose editing or read request secrets to viewers", async () => {
   const f = fixture('W/"1"', false);
-  await screen.findByText("Stale list name");
+  await screen.findByRole("article", { name: "Stale list name" });
   expect(screen.queryByRole("button", { name: "Edit monitor" })).toBeNull();
   expect(f.fetch.mock.calls.some(([url]) => url === "/api/v1/monitors/1")).toBe(false);
 });
@@ -113,7 +113,7 @@ it.each(["draft", "conflict", "missing destination"])("ends a %s edit session ac
   f.rerender(state === "missing destination" ? "99" : "2");
   if (state === "missing destination") await screen.findByText(/does not exist/i);
   else {
-    await screen.findByText("Other monitor");
+    await screen.findByRole("article", { name: "Other monitor" });
     // Keep the component mounted; replacing StrictMode would hide this bug.
     expect(document.querySelector(".mon-detail")).toBe(detail);
   }
@@ -121,7 +121,7 @@ it.each(["draft", "conflict", "missing destination"])("ends a %s edit session ac
   const back = screen.getByRole("button", { name: /All monitors/ });
   back.focus();
   f.rerender("1");
-  await screen.findByText("Stale list name");
+  await screen.findByRole("article", { name: "Stale list name" });
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(settingsReads()).toBe(reads);
   if (state !== "missing destination") await waitFor(() => expect(document.activeElement).toBe(back));
@@ -149,7 +149,7 @@ it("ends a loading edit across A → B → A and ignores its canceled settings r
   expect(pending).toHaveLength(reads);
   expect(screen.getByText("Loading current settings…")).toBeTruthy();
   f.rerender("2");
-  await screen.findByText("Other monitor");
+  await screen.findByRole("article", { name: "Other monitor" });
   expect(pending.every(({ signal }) => signal.aborted)).toBe(true);
   f.rerender("1");
   expect(screen.queryByRole("dialog")).toBeNull();

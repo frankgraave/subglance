@@ -171,6 +171,78 @@ async function visit(route: (typeof ROUTES)[number]) {
   await route.ready();
 }
 
+/*
+ * The page's title is the masthead's (SUB-207). Read off the rendered app
+ * rather than the table, so a screen that draws an `h1` of its own, or a
+ * route that forgets to pass its title up, fails here.
+ */
+function titleState() {
+  const masthead = document.querySelector(".shell-topbar")!;
+  const h1s = [...document.querySelectorAll("h1")];
+  const main = document.querySelector("main")!;
+  return {
+    count: h1s.length,
+    inMasthead: h1s.every((h) => masthead.contains(h)),
+    text: h1s[0]?.textContent ?? null,
+    tab: document.title,
+    lit: [...document.querySelectorAll(".shell-sidebar [aria-current='page']")].map(
+      (a) => a.textContent?.trim() ?? "",
+    ),
+    mainName: main.getAttribute("aria-labelledby") === h1s[0]?.id,
+  };
+}
+
+describe("the masthead's title", () => {
+  it("is the page's only h1 on every route, the same word as the tab and the rail", async () => {
+    render(<App />);
+    await screen.findByText("api");
+    for (const route of ROUTES) {
+      if (route.path !== "/") await visit(route);
+      const word = route.link!;
+      expect(titleState(), route.path).toEqual({
+        count: 1,
+        inMasthead: true,
+        text: word,
+        tab: `${word} \u2014 SubGlance`,
+        lit: [word],
+        mainName: true,
+      });
+    }
+  });
+
+  it("names a monitor's page after the monitor, under a link to Monitors", async () => {
+    render(<App />);
+    fireEvent.click(await screen.findByRole("link", { name: "api" }));
+    await waitFor(() => expect(window.location.pathname).toBe("/monitors/1"));
+    await screen.findByRole("article", { name: "api" });
+    expect(titleState()).toEqual({
+      count: 1,
+      inMasthead: true,
+      text: "api",
+      tab: "api \u2014 SubGlance",
+      lit: ["Monitors"],
+      mainName: true,
+    });
+
+    // The breadcrumb's parent is a real link to the section, and following
+    // it is a navigation like the rail's.
+    const masthead = document.querySelector<HTMLElement>(".shell-topbar")!;
+    const up = within(masthead).getByRole("link", { name: "Monitors" });
+    expect(up.getAttribute("href")).toBe("/monitors");
+    fireEvent.click(up);
+    await waitFor(() => expect(window.location.pathname).toBe("/monitors"));
+    expect(titleState().text).toBe("Monitors");
+    expect(within(masthead).queryByRole("link")).toBeNull();
+  });
+
+  it("says Monitor while the id names no monitor", async () => {
+    window.history.replaceState(null, "", "/monitors/99");
+    render(<App />);
+    await screen.findByText("That monitor does not exist, or has been deleted.");
+    expect(titleState()).toMatchObject({ count: 1, inMasthead: true, text: "Monitor", tab: "Monitor \u2014 SubGlance" });
+  });
+});
+
 describe("the masthead", () => {
   it("holds the global set, and only the global set, on every route", async () => {
     /*

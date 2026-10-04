@@ -206,7 +206,7 @@ export const specimens: Specimen[] = [
     title: "Masthead and toolbar",
     source: "web/src/shell/Topbar.tsx, web/src/shell/PageToolbar.tsx, web/src/shell/ToolbarSelect.tsx",
     rule:
-      "Two bars, and which one a control belongs in is decided by a single question: does it do something on every screen? The masthead holds what does — the sidebar toggle, search, the theme. It never changes as you navigate, so it stays readable without being re-read. The toolbar below holds what is true of this screen only, and disappears on screens with nothing to put in it rather than sitting there empty. An action that operates on one kind of thing fails the question: adding a monitor is a monitors action, so it lives in the header of the card it adds to, not in chrome that is also present on Notifications. Every select in the toolbar is one framed field with a glyph, on every screen: a filter, an order and a window look like one kind of control because they are one.",
+      "Two bars, and which one a control belongs in is decided by a single question: does it do something on every screen? The masthead holds what does — the sidebar toggle, search, the theme — and, after the toggle, the page's title: the page's only h1, on the row role at the heavy weight, one line. Its controls never change as you navigate, so the bar stays readable without being re-read. The toolbar below holds what is true of this screen only, and disappears on screens with nothing to put in it rather than sitting there empty. An action that operates on one kind of thing fails the question: adding a monitor is a monitors action, so it lives in the header of the card it adds to, not in chrome that is also present on Notifications. Every select in the toolbar is one framed field with a glyph, on every screen: a filter, an order and a window look like one kind of control because they are one.",
     node: (
       <div className="sg-chrome">
         <div className="shell-topbar">
@@ -217,6 +217,9 @@ export const specimens: Specimen[] = [
           >
             <SidebarIcon />
           </button>
+          <div className="shell-heading">
+            <span className="shell-title">Monitors</span>
+          </div>
           <button
             type="button"
             className="shell-search shell-command-launcher"

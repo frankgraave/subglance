@@ -43,7 +43,7 @@ describe("detail Check now in Chromium", () => {
           await page.goto(server.url + "/monitors/1", { waitUntil: "domcontentloaded" });
           expect((await historyResponse).status()).toBe(200);
           await page.waitForFunction(() => document.querySelector(".response-history")?.textContent?.includes("No failed checks in the recent history."));
-          await page.waitForSelector(".mon-detail-name");
+          await page.waitForSelector(".mon-detail-head");
           const button = await page.$(".card-head-action .mon-check-now");
           expect(button, "a probed monitor must offer Check now").not.toBeNull();
           expect(await button?.evaluate((node) => node.textContent)).toBe("Check now");
@@ -95,7 +95,7 @@ describe("detail Check now in Chromium", () => {
         } else void request.continue();
       });
       await page.goto(server.url + "/monitors/1", { waitUntil: "domcontentloaded" });
-      await page.waitForSelector(".mon-detail-name");
+      await page.waitForSelector(".mon-detail-head");
       expect(await page.$(".card-head-action .mon-check-now")).toBeNull();
     } finally { await page.close(); }
   });
