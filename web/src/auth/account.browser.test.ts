@@ -44,6 +44,35 @@ async function confirmAction(page: Page, action: () => Promise<unknown>, accept:
   expect(dialogs, "exactly one discard decision per action").toBe(1);
 }
 
+async function withDiag(page: Page, body: (L: (m: string) => void) => Promise<void>): Promise<void> {
+  const t0 = Date.now();
+  const marks: string[] = [];
+  const L = (m: string) => { marks.push(`${Date.now() - t0} ${m}`); };
+  page.on("dialog", (d) => L(`DIALOG ${d.type()}`));
+  page.on("console", (c) => L(`CONSOLE ${c.type()} ${c.text().slice(0, 200)}`));
+  page.on("pageerror", (e) => L(`PAGEERROR ${String(e).slice(0, 300)}`));
+  page.on("requestfailed", (r) => L(`REQFAIL ${r.url()} ${r.failure()?.errorText}`));
+  const state = () => Promise.race([
+    page.evaluate(() => JSON.stringify({
+      url: location.href, len: history.length, title: document.title,
+      form: !!document.querySelector(".form-column"), drawer: !!document.querySelector(".drawer-panel"),
+      anims: Array.from(document.querySelector(".drawer-panel")?.getAnimations() ?? []).map((a) => `${a.playState} ${a.currentTime}`),
+      vis: document.visibilityState,
+      value: (document.querySelector('input[id$="-name"]') as HTMLInputElement | null)?.value,
+      active: document.activeElement?.outerHTML.slice(0, 160),
+      h1: Array.from(document.querySelectorAll("h1")).map((h) => h.textContent),
+      alerts: Array.from(document.querySelectorAll("[role=alert]")).map((a) => a.textContent?.slice(0, 120)),
+      body: document.body.innerText.slice(0, 400),
+    })),
+    new Promise<string>((r) => setTimeout(() => r("page.evaluate hung"), 2000)),
+  ]);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const watchdog = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => { void state().then((st) => reject(new Error(`DIAG marks=${JSON.stringify(marks)} state=${st}`))); }, 24000);
+  });
+  try { await Promise.race([watchdog, body(L)]); } finally { clearTimeout(timer); }
+}
+
 it.each(["dark", "light"])("changes a password through the real browser fetcher, correcting the old password without losing the session (%s)", async (theme) => {
   const page = await pageAt("/", theme);
   const requests: unknown[] = [];
@@ -96,7 +125,7 @@ it("keeps the password card usable on a phone with no horizontal overflow", asyn
   } finally { await page.close(); }
 });
 
-it.each([[false, false], [true, false], [false, true]])("restores the exact draft entry after multi-entry Back across the native skip link (intervening Forward: %s, draft fragment: %s)", async (race, draftHash) => {
+it.each([[false, false], [false, false], [false, false], [true, false], [false, true]])("restores the exact draft entry after multi-entry Back across the native skip link (intervening Forward: %s, draft fragment: %s)", async (race, draftHash) => {
   const page = await pageAt("/");
   const t0 = Date.now();
   const marks: string[] = [];
@@ -105,7 +134,7 @@ it.each([[false, false], [true, false], [false, true]])("restores the exact draf
   page.on("console", (c) => L(`CONSOLE ${c.type()} ${c.text().slice(0, 200)}`));
   page.on("pageerror", (e) => L(`PAGEERROR ${String(e).slice(0, 300)}`));
   const state = () => Promise.race([
-    page.evaluate(() => JSON.stringify({ url: location.href, len: history.length, title: document.title, form: !!document.querySelector(".form-column"), value: (document.querySelector('input[id$="-name"]') as HTMLInputElement | null)?.value, active: document.activeElement?.outerHTML.slice(0, 160), drawer: !!document.querySelector(".drawer-panel"), dialogs: document.querySelectorAll("[role=dialog]").length, h1: Array.from(document.querySelectorAll("h1")).map((h) => h.textContent), alerts: Array.from(document.querySelectorAll("[role=alert]")).map((a) => a.textContent?.slice(0, 120)), body: document.body.innerText.slice(0, 400) })),
+    page.evaluate(() => JSON.stringify({ url: location.href, len: history.length, title: document.title, form: !!document.querySelector(".form-column"), value: (document.querySelector('input[id$="-name"]') as HTMLInputElement | null)?.value, active: document.activeElement?.outerHTML.slice(0, 160), drawer: !!document.querySelector(".drawer-panel"), anims: Array.from(document.querySelector(".drawer-panel")?.getAnimations() ?? []).map((a) => `${a.playState} ${a.currentTime}`), vis: document.visibilityState, dialogs: document.querySelectorAll("[role=dialog]").length, h1: Array.from(document.querySelectorAll("h1")).map((h) => h.textContent), alerts: Array.from(document.querySelectorAll("[role=alert]")).map((a) => a.textContent?.slice(0, 120)), body: document.body.innerText.slice(0, 400) })),
     new Promise<string>((r) => setTimeout(() => r("page.evaluate hung"), 2000)),
   ]);
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -206,25 +235,25 @@ it("keeps native fragment entries on a dirty form reversible in both directions"
   } finally { await page.close(); }
 });
 
-it.each(["dashboard", "direct"])("protects Escape, close, Cancel, backdrop and history while keeping keyboard focus (%s entry)", async (entry) => {
+it.each(["dashboard", "dashboard", "dashboard", "dashboard", "direct"])("protects Escape, close, Cancel, backdrop and history while keeping keyboard focus (%s entry)", async (entry) => {
   const page = await pageAt(entry === "direct" ? "/monitors/new" : "/");
-  try {
+  try { await withDiag(page, async (L) => {
     if (entry === "dashboard") {
-      await (await page.waitForSelector('a[href="/monitors"]'))!.click();
-      await (await page.waitForSelector('button[aria-label="Add monitor"]'))!.click();
+      await (await page.waitForSelector('a[href="/monitors"]'))!.click(); L("clicked monitors");
+      await (await page.waitForSelector('button[aria-label="Add monitor"]'))!.click(); L("clicked add");
     }
     await readyAddForm(page);
-    const name = 'input[id$="-name"]';
-    await page.type(name, "browser draft");
+    const name = 'input[id$="-name"]'; L("form ready");
+    await page.type(name, "browser draft"); L("typed");
     for (const [label, action] of [
       ["Escape", () => page.keyboard.press("Escape")],
       ["close", () => page.click('.drawer-close')],
       ["Cancel", () => page.click('.button--quiet')],
       ["backdrop", () => page.click('.drawer-scrim', { offset: { x: 2, y: 100 } })],
     ] as const) {
-      await page.focus(name);
+      await page.focus(name); L("focused");
       try {
-        await confirmAction(page, action, false);
+        await confirmAction(page, action, false); L(`dismissed ${label}`);
       } catch (error) {
         throw new Error(`Discard action failed: ${label}`, { cause: error });
       }
@@ -237,18 +266,18 @@ it.each(["dashboard", "direct"])("protects Escape, close, Cancel, backdrop and h
       await dialog.dismiss(); unloaded = true; resolve();
     }));
     await Promise.all([page.evaluate(() => location.reload()), unloadDecision]);
-    expect(unloaded).toBe(true);
+    expect(unloaded).toBe(true); L("reload dismissed");
     expect(await page.$eval(name, (el) => (el as HTMLInputElement).value)).toBe("browser draft");
     // The existing focus trap still wraps the last control back to Close.
     await page.focus('.button--quiet'); await page.keyboard.press("Tab");
     expect(await page.evaluate(() => document.activeElement?.className)).toBe("drawer-close");
     if (entry === "dashboard") {
       await confirmAction(page, () => page.evaluate(() => history.back()), false);
-      await page.waitForFunction(() => location.pathname === "/monitors/new");
+      await page.waitForFunction(() => location.pathname === "/monitors/new"); L("back dismissed");
       expect(await page.$eval(name, (el) => (el as HTMLInputElement).value)).toBe("browser draft");
     }
-    await confirmAction(page, () => page.keyboard.press("Escape"), true);
-    await page.waitForFunction(() => !document.querySelector(".form-column"));
+    await confirmAction(page, () => page.keyboard.press("Escape"), true); L("escape accepted");
+    await page.waitForFunction(() => !document.querySelector(".form-column")); L("closed");
     await (await page.waitForSelector('button[aria-label="Add monitor"]'))!.click();
     await readyAddForm(page);
     expect(await page.$eval(name, (el) => (el as HTMLInputElement).value)).toBe("");
@@ -257,5 +286,5 @@ it.each(["dashboard", "direct"])("protects Escape, close, Cancel, backdrop and h
     await page.keyboard.press("Escape");
     expect(unexpected).toBe(0);
     expect(await page.$(".form-column")).toBeNull();
-  } finally { await page.close(); }
+  }); } finally { await page.close(); }
 });
