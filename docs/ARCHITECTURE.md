@@ -94,7 +94,10 @@ type Checker interface {
 ```
 
 Implementations in v0.1: `http`, `tcp`, `ping`, `ssl`. Every check has a hard
-timeout and a shared `http.Client` with connection pooling.
+timeout. HTTP monitors share one `http.Client`, but not its connections:
+keep-alive is off, so every check dials, resolves and handshakes afresh, the
+way a new visitor does. A reused connection keeps answering after the server
+stops accepting new ones, and keeps the certificate it was opened with.
 
 ### State engine
 The part that separates SubGlance from "curl in a loop". It handles:

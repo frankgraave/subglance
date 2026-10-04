@@ -182,6 +182,14 @@ an endpoint needs more judgement than one field can carry, a small health
 route that does the judging and answers with one field is the better tool,
 and it keeps the logic next to the service that knows what healthy means.
 
+Every HTTP check opens a new connection and closes it afterwards, so it goes
+through the same DNS lookup, TCP handshake and TLS handshake as a new visitor.
+A check that reused the previous check's connection would stay green while the
+server refused new connections — after a firewall change, a DNS record moved
+to a dead host or a broken TLS reload — and would keep reporting a certificate
+that had already been renewed. The recorded response time therefore includes
+setting up the connection, not only the server's answer.
+
 A TCP check completes the handshake and hangs up without sending a payload —
 speaking a protocol badly is a good way to end up in someone's fail2ban rules.
 
