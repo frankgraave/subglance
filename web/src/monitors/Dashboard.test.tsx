@@ -397,7 +397,7 @@ describe("Dashboard", () => {
     it("renders compact as one ungrouped list, not headed sections", () => {
       // DESIGN.md §7 grouping waits for tags to exist (§12). Until then the
       // layout is one dense stack, ordered by the shared partition — headed
-      // "Needs attention" / "All monitors" sections would be grouping by
+      // "Needs attention" / "Other monitors" sections would be grouping by
       // another name.
       render(
         <Harness

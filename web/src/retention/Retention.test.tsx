@@ -38,6 +38,10 @@ it("shows measured table sizes and the windows in force", async () => {
   const forever = screen.getAllByLabelText("Forever") as HTMLInputElement[];
   expect(forever[0].checked).toBe(false);
   expect(forever[1].checked).toBe(true);
+  // Switched off, the amount box holds a dash rather than reading as empty.
+  const rollup = screen.getByLabelText("Keep hourly summaries and resolved incidents, in days") as HTMLInputElement;
+  expect(rollup).toMatchObject({ disabled: true, value: "", placeholder: "—" });
+  expect(raw.placeholder).toBe("");
   // A forever window has no steady state, so it is stated as a yearly rate.
   expect(screen.getByText(/Grows about .* a year at today's rate\./)).toBeTruthy();
 });

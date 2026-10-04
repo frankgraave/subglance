@@ -149,12 +149,11 @@ export function MonitorTable({
    *
    * The count is `monitors.length` — every monitor this table draws, before
    * the attention/rest split. It is deliberately not the sum of the two
-   * section headings read as alternatives: "Needs attention (3)" and "All
+   * section headings read as alternatives: "Needs attention (3)" and "Other
    * monitors (2)" are two parts of one list of 5, and the card names the
-   * whole. That is also why the second heading stays "All monitors" rather
-   * than becoming "The rest" — it is the section that is not the exception,
-   * and it reads correctly under a card that has already said how many there
-   * are in total.
+   * whole. The second heading is "Other monitors", not "All monitors": "All
+   * monitors (2)" over a list of 5 reads as a miscount, and in the cards
+   * layout, where no card above it states the total, nothing corrects it.
    *
    * `headingLevel` is 2: the dashboard's `h1` is its own visually hidden
    * "Monitors" heading, and this card sits inside that section.
@@ -237,7 +236,7 @@ export function MonitorTable({
         {attention.length > 0 && (
           <tr className="mon-section-head">
             <th scope="rowgroup" colSpan={5} className="mon-section-title">
-              All monitors ({rest.length})
+              Other monitors ({rest.length})
             </th>
           </tr>
         )}

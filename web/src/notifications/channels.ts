@@ -196,6 +196,23 @@ function toUnixMs(value: string | null | undefined): number | null {
   return Number.isFinite(ms) ? ms : null;
 }
 
+/**
+ * The example in an empty Name field, per type. It used to be "On-call Slack"
+ * whatever type was chosen, so an e-mail channel was offered a Slack name.
+ * Each example carries the type's own label, which the form test holds every
+ * type to, so a ninth type cannot ship with another type's example.
+ */
+export const NAME_EXAMPLES: Readonly<Record<ChannelType, string>> = {
+  email: "On-call Email",
+  slack: "On-call Slack",
+  discord: "Ops Discord",
+  telegram: "On-call Telegram",
+  ntfy: "Phone via ntfy",
+  gotify: "Home server Gotify",
+  sms: "On-call SMS",
+  webhook: "Incident Webhook",
+};
+
 /** How a type is written in the interface. Unknown stays honest. */
 export function typeLabel(type: string): string {
   switch (type) {

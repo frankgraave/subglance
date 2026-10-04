@@ -101,7 +101,7 @@ export function ConfirmDelete({
       <p className="field-help">{consequence}</p>
       <div className="field">
         <label className="field-label" htmlFor={inputId}>
-          Type <span className="literal">{name}</span> to confirm
+          Type <code className="phrase">{name}</code> to confirm
         </label>
         <input
           id={inputId}
