@@ -1,5 +1,6 @@
 import { flushSync } from "react-dom";
 import { monitorPath } from "./route";
+import { PAGE_TITLE_ID } from "./pages";
 
 /**
  * The name a monitor's title carries across a dashboard <-> detail change.
@@ -119,7 +120,12 @@ export function monitorTitleLink(root: Element | null, id: string): Element | nu
   return null;
 }
 
-/** The detail page's heading: the monitor's name, as the page title. */
+/**
+ * The detail page's heading: the monitor's name, as the page title.
+ *
+ * In the masthead since SUB-207, so it is looked up in the document rather
+ * than inside the screen region the caller holds.
+ */
 export function detailTitle(root: Element | null): Element | null {
-  return root?.querySelector(".mon-detail-name") ?? null;
+  return root?.ownerDocument.getElementById(PAGE_TITLE_ID) ?? null;
 }

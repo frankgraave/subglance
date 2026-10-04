@@ -38,6 +38,9 @@ it("requires an explicit role review for every new 4px caller", () => {
     // a small boxed annotation inside a label (DESIGN.md §8.12).
     "web/src/components/controls.css: .phrase",
     "web/src/components/panellist.css: .panel-row :is(a, button):focus-visible",
+    // The masthead's breadcrumb link: a word-sized link, so its focus ring is
+    // the inline-focus corner rather than a control's.
+    "web/src/shell/shell.css: .shell-crumb",
     "web/src/shell/shell.css: .shell-nav-soon",
     "web/src/shell/shell.css: .shell-search-kbd",
   ]);

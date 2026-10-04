@@ -1023,13 +1023,30 @@ The fix is one frame, `Page`, drawn by the shell around every route, which
 takes the title and the width from one table (`shell/pages.ts`) rather than
 from the screen:
 
-- **One visible `h1` per page, on the page role** (24/32, `--weight-heavy`;
-  18/24 on a phone). It is the sidebar's word and the tab's word, because all
-  three read the same table. Cards are `h2` under it, and a card is named
-  for what it holds rather than for the page — "Open incidents" under
-  "Incidents", not "Incidents" twice. A monitor's page is titled with the
-  monitor's name: the shell does not know the name, so the detail view draws
-  the `h1` itself and wears the same class.
+- **One visible `h1` per page, in the masthead** (SUB-207). It sits after
+  the sidebar toggle and a hairline, on the row role at the heavy weight
+  (15/20, `--weight-heavy`), one line, cut with an ellipsis rather than
+  wrapped. It is the sidebar's word and the tab's word, because all three
+  read the same table. Cards are `h2` under it, and a card is named for what
+  it holds rather than for the page — "Open incidents" under "Incidents",
+  not "Incidents" twice. A monitor's page is titled with the monitor's name
+  behind a breadcrumb link to Monitors, and the tab says the name as well;
+  the shell reads it from the shared monitor list through a selector, so a
+  heartbeat does not re-render the shell.
+
+  The title used to be the first thing in the content, at the page role
+  (24/32). On a list screen that made three layers before the first card —
+  the masthead, the page toolbar, then the title — while the masthead had
+  the room all along. In the bar 24px outweighed everything under it; the
+  design asked for 16px, which is not a rung, and the row role is the
+  nearer of the two either side of it. It keeps the title under the cards'
+  18px, which is what a title that is chrome should be, and the heavy
+  weight — used by no other text — keeps it the page's name. On a phone the
+  breadcrumb's parent and the theme leave the bar so the title has its
+  width: the bar is the menu, the title and one magnifier. From 900px down
+  the search button is that magnifier at every width, beside the sidebar
+  as well, because at 641px the field had about 60px and cut its own
+  keycap.
 - **Three page types, one width rule: the column of cards is
   `--size-pane-lg` everywhere but the dashboard.** About 70 characters of
   target and error text; past that the eye loses the line on the way back,
@@ -1043,8 +1060,9 @@ from the screen:
   address bar gives.
 
 Measured, not assumed: `layout/page-frame.browser.test.ts` opens every route at
-1440 and 1920 and checks the `h1` count, visibility, role, left edge and word,
-the lit rail item, the tab title, and the reach of the cards against the
+1440 and 1920 and checks the `h1` count, visibility, place in the masthead,
+role, single line, distance from the toggle and word, the breadcrumb, the
+lit rail item, the tab title, and the reach of the cards against the
 token. The token is read through the cascade, so changing the measure moves
 the test with it, and an ad hoc `max-width` in a feature stylesheet does not.
 

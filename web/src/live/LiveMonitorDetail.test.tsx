@@ -174,7 +174,7 @@ describe("LiveMonitorDetail", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Check now" }));
     await waitFor(() => expect(check).toHaveBeenCalledWith("1"));
     mounted.rerender(<LiveMonitorDetailRoot client={client} id="2" check={check} createEventSource={() => new FakeSource()} />);
-    await screen.findByRole("heading", { name: "cdn" });
+    await screen.findByRole("article", { name: "cdn" });
     fireEvent.click(screen.getByRole("button", { name: "Check now" }));
     await waitFor(() => expect(check).toHaveBeenCalledWith("2"));
     await act(async () => resolvers["1"]({ ok: true, latencyMs: 123, recorded: true }));
@@ -228,13 +228,13 @@ describe("LiveMonitorDetail", () => {
 
   it.each(["push", "viewer"])("does not offer an impossible check: %s", async (kind) => {
     renderDetail({ monitors: [apiMonitor(kind === "push" ? { type: "push", push_interval_s: 3600 } : {})], canWrite: kind !== "viewer" });
-    await screen.findByText("api");
+    await screen.findByRole("article", { name: "api" });
     expect(screen.queryByRole("button", { name: "Check now" })).toBeNull();
   });
 
   it("shows the monitor with its uptime and incident history", async () => {
     renderDetail();
-    expect(await screen.findByText("api")).toBeTruthy();
+    expect(await screen.findByRole("article", { name: "api" })).toBeTruthy();
     expect(await screen.findByText("24h", { selector: "dt" })).toBeTruthy();
     await waitFor(() => {
       // SUB-34 turned the log line into a sentence: "Down from …, 1 h.
@@ -266,7 +266,7 @@ describe("LiveMonitorDetail", () => {
     // than fetched from /monitors/:id. If this breaks, the page shows a
     // heartbeat bar advancing beside a status line that never changes.
     const { fetchMock } = renderDetail();
-    await screen.findByText("api");
+    await screen.findByRole("article", { name: "api" });
     expect(screen.queryByText("Down")).toBeNull();
 
     const before = fetchMock.mock.calls.length;
@@ -290,7 +290,7 @@ describe("LiveMonitorDetail", () => {
     // The monitor can arrive from the shared cache before the SSE connection
     // is up. Showing live colours then presents cached data as current truth.
     renderDetail();
-    await screen.findByText("api");
+    await screen.findByRole("article", { name: "api" });
     expect(
       document.querySelector(".mon-detail")?.getAttribute("data-conn"),
     ).toBe("stale");
@@ -306,7 +306,7 @@ describe("LiveMonitorDetail", () => {
 
   it("drains the colour when the stream drops, like the dashboard does", async () => {
     renderDetail();
-    await screen.findByText("api");
+    await screen.findByRole("article", { name: "api" });
     act(() => {
       FakeSource.last?.open();
     });
@@ -352,7 +352,7 @@ describe("LiveMonitorDetail latency", () => {
 
   it("asks for no latency on a push monitor, which is reported to rather than probed", async () => {
     const { fetchMock } = renderDetail({ monitors: [apiMonitor({ type: "push", push_interval_s: 3600 })] });
-    await screen.findByText("api");
+    await screen.findByRole("article", { name: "api" });
     expect(screen.queryByRole("group", { name: "Latency window" })).toBeNull();
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/latency"))).toBe(false);
   });

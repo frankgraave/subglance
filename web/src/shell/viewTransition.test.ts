@@ -60,10 +60,10 @@ function screen() {
   document.body.innerHTML = `
     <main>
       <a id="row" href="/monitors/7">api</a>
-      <h1 id="title" class="mon-detail-name">api</h1>
+      <h1 id="shell-title">api</h1>
     </main>`;
   const row = document.getElementById("row")!;
-  const title = document.getElementById("title")!;
+  const title = document.getElementById("shell-title")!;
   box(row);
   box(title);
   return { row, title };
@@ -103,7 +103,7 @@ describe("morphNavigation", () => {
     morphNavigation(() => {}, { from: () => row, to: () => title });
     // Old screen: only the row. New screen: only the heading. Two holders of
     // one name on a screen make the browser skip the transition entirely.
-    expect(browser.namesDuringUpdate).toEqual([["title"]]);
+    expect(browser.namesDuringUpdate).toEqual([["shell-title"]]);
     expect(names()).toEqual(["", TITLE_MORPH]);
 
     browser.finish();

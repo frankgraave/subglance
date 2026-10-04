@@ -23,31 +23,3 @@
 .page[data-width="indexed"] {
   max-width: calc(var(--size-col-4) + var(--space-6) + var(--size-pane-lg));
 }
-
-/*
- * The page title, on the page role and the heavy weight that only it uses
- * (DESIGN.md §2.5). A monitor's own `h1` wears this class too, so every
- * screen's level-one heading is the same size, leading and weight.
- */
-.page-title {
-  font-size: var(--type-page);
-  line-height: var(--lead-page);
-  font-weight: var(--weight-heavy);
-  color: var(--ink);
-}
-
-/* Space under the frame's own title. Not on `.page-title` itself: a monitor's
-   page draws its `h1` inside a header that spaces its own children. */
-.page > .page-title {
-  margin-bottom: var(--space-5);
-}
-
-/* Phone: the card size, as the monitor's title already did. 24px across a
-   375px screen costs a hostname two lines that fit on one at 18px, and the
-   other titles drop with it so the level stays one level. */
-@media (max-width: 640px) {
-  .page-title {
-    font-size: var(--type-card);
-    line-height: var(--lead-card);
-  }
-}

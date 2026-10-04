@@ -204,6 +204,39 @@ describe("Topbar", () => {
     const button = screen.getByRole("button", { name: /expand sidebar/i });
     expect(button.getAttribute("aria-expanded")).toBe("false");
   });
+
+  /*
+   * The page's title is the masthead's `h1` (SUB-207), and on a child page
+   * the section before it is a link that navigates like the rail does: a
+   * plain click goes through the app, a modified one is left to the browser
+   * so it can open a tab.
+   */
+  it("draws the page's title as its h1, after the toggle", () => {
+    render(topbar({ title: "Incidents" }));
+    const heading = screen.getByRole("heading", { level: 1, name: "Incidents" });
+    expect(heading.id).toBe("shell-title");
+    expect(screen.queryByRole("link")).toBeNull();
+  });
+
+  it("puts a child page's section before its title as a link", () => {
+    const onNavigate = vi.fn();
+    render(topbar({ title: "api", parent: { label: "Monitors", href: "/monitors", onNavigate } }));
+    const up = screen.getByRole("link", { name: "Monitors" });
+    expect(up.getAttribute("href")).toBe("/monitors");
+    expect(fireEvent.click(up, { ctrlKey: true })).toBe(true);
+    expect(onNavigate).not.toHaveBeenCalled();
+    expect(fireEvent.click(up)).toBe(false);
+    expect(onNavigate).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("api");
+  });
+
+  it("leaves the theme to Settings on a phone, so the title keeps the bar", () => {
+    render(topbar({ title: "Dashboard", narrow: true }));
+    expect(screen.queryByRole("group", { name: "Colour theme" })).toBeNull();
+    cleanup();
+    render(topbar({ title: "Dashboard" }));
+    expect(screen.getByRole("group", { name: "Colour theme" })).toBeTruthy();
+  });
 });
 
 describe("AppShell", () => {
