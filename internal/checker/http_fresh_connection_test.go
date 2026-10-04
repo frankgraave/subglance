@@ -94,7 +94,11 @@ func TestHTTPEachCheckOpensItsOwnConnection(t *testing.T) {
 	// either way, so it could not tell the two apart.
 	t.Run("own TLS floor", func(t *testing.T) {
 		var conns connCounter
-		srv := httptest.NewUnstartedServer(ok)
+		var protos sync.Map
+		srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			protos.Store(r.Proto, true)
+			ok(w, r)
+		}))
 		srv.EnableHTTP2 = true
 		srv.Config.ConnState = conns.track
 		srv.StartTLS()
@@ -109,6 +113,9 @@ func TestHTTPEachCheckOpensItsOwnConnection(t *testing.T) {
 			if res := c.Check(context.Background(), m); !res.OK {
 				t.Fatalf("check %d failed: %s", i+1, res.Error)
 			}
+		}
+		if _, h2 := protos.Load("HTTP/2.0"); !h2 {
+			t.Fatal("the checks did not negotiate HTTP/2, so this case tests nothing")
 		}
 		if got := conns.n.Load(); got != 2 {
 			t.Errorf("two checks opened %d connections, want 2", got)
