@@ -1829,8 +1829,9 @@ that opens the tag keys and their values with the number of monitors each
 would leave, and a View button that names the current arrangement
 ("Rows · by team"). Chosen tags stand as chips under the header, inside the
 card, each with its own way to drop it. On a phone the text filter moves
-into the Filter sheet, both buttons become 44px glyphs, and both panels slide
-up from the bottom edge.
+into the Filter sheet, both buttons become square glyphs at the control
+height (36px, `--control-h`, the rung every phone control here is drawn
+at), and both panels slide up from the bottom edge.
 
 ### 8.4 A toolbar select is a framed control with a glyph
 
