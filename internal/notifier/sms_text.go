@@ -197,6 +197,8 @@ func smsText(a Alert, zone string, limit int) string {
 		reason = "this is a test message from the Send test button. No monitor is down."
 	case a.Event == EventBackupFailed:
 		status, name, reason = "FAILED", "SubGlance backup:", a.LastError
+	case a.Event == EventChannelFailing:
+		status, name, reason = "FAILING", "SubGlance channel "+a.Target+":", a.LastError
 	case a.Event == EventLocalNetworkRestored:
 		status, name = "ONLINE", "SubGlance"
 		tail = fmt.Sprintf(" again after %s without a connection", smsDuration(a.At.Sub(a.StartedAt)))

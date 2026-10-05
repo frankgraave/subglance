@@ -6611,7 +6611,7 @@ components:
         A channel's recent delivery outcomes. Outcomes count when the delivery
         finished, inside a window equal to the delivery log's retention; a
         queued delivery counts whatever its age.
-      required: [state, window_days, last_delivered_at, last_failed_at, failed, pending, retrying, last_error]
+      required: [state, window_days, last_delivered_at, last_failed_at, failed, pending, retrying, last_error, failing_since, notice_sent_at, notice_channel_id, notice]
       properties:
         state:
           type: string
@@ -6649,6 +6649,31 @@ components:
             The newest failure's message, from a delivery that gave up or one
             being retried. The channel's masked config values are replaced by
             their masks, and any other URL keeps only its scheme and host.
+        failing_since:
+          type: [string, 'null']
+          format: date-time
+          description: |
+            Set while the channel is failing: an alert through it gave up at
+            this moment and none has arrived since, by alert or by test. It
+            has no window, unlike `state`, so a channel that failed long ago
+            and was never needed again still says so.
+        notice_sent_at:
+          type: [string, 'null']
+          format: date-time
+          description: When the `channel_failing` notice about this spell went out through another channel; null while it has not.
+        notice_channel_id:
+          type: [integer, 'null']
+          description: The channel that carried that notice; null while none has, or when that channel was deleted since.
+        notice:
+          type: [string, 'null']
+          enum: [sent, waiting, no_other_channel, null]
+          description: |
+            Where the notice about a failing channel stands, null when the
+            channel is not failing. `sent`: another channel carried it.
+            `waiting`: one could, and has not yet, because it is in its quiet
+            hours or the next check is under a minute away.
+            `no_other_channel`: every other channel is disabled or failing
+            too, so this record is the only place the failure is said.
     ChannelList:
       type: object
       required: [channels]

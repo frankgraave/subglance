@@ -240,6 +240,7 @@ func run(args []string) error {
 	apiSrv, err := api.New(log, db).WithBus(bus).
 		WithProber(runner).WithPushRecorder(runner).
 		WithChannelTester(notify).
+		WithDeliveryCounts(notify).
 		// The same runner that records checks reports the counters, so
 		// /metrics cannot disagree with what actually happened.
 		WithMetrics(runner).

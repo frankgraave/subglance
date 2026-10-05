@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/frankgraave/subglance/internal/monitor"
+	"github.com/frankgraave/subglance/internal/notifier"
 )
 
 // MetricsSource supplies the operational counters served on /metrics.
@@ -20,6 +21,18 @@ type MetricsSource interface {
 // WithMetrics attaches a metrics source, enabling GET /metrics.
 func (s *Server) WithMetrics(m MetricsSource) *Server {
 	s.metrics = m
+	return s
+}
+
+// DeliveryCounter supplies the alert delivery counters served on /metrics.
+// Separate from MetricsSource because the notifier, not the runner, delivers.
+type DeliveryCounter interface {
+	DeliveryCounts() []notifier.DeliveryCount
+}
+
+// WithDeliveryCounts attaches the notifier's delivery counters to /metrics.
+func (s *Server) WithDeliveryCounts(d DeliveryCounter) *Server {
+	s.deliveries = d
 	return s
 }
 
@@ -85,6 +98,7 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	gauge(&b, "subglance_monitors_scheduled",
 		"Monitors currently on the schedule.", uint64(m.Scheduled))
 	s.writeBackupMetrics(&b)
+	s.writeDeliveryMetrics(&b)
 
 	// Not application/json, so writeJSON is the wrong helper here. The
 	// version parameter is what Prometheus itself sends and expects back.
@@ -116,4 +130,25 @@ func writeMetric(b *strings.Builder, name, help, kind string, v uint64) {
 	fmt.Fprintf(b, "# HELP %s %s\n", name, help)
 	fmt.Fprintf(b, "# TYPE %s %s\n", name, kind)
 	fmt.Fprintf(b, "%s %d\n", name, v)
+}
+
+// writeDeliveryMetrics adds the alert delivery counter, one series per channel
+// type and outcome.
+//
+// The one metric here with labels, and the reason the format is still written
+// by hand: two fixed labels with values from a closed set need one HELP line,
+// one TYPE line and a sample per pair, which is no more than the counters
+// above. "failed" is the outcome to alert on: an alert that gave up reached
+// nobody through that channel.
+func (s *Server) writeDeliveryMetrics(b *strings.Builder) {
+	if s.deliveries == nil {
+		return
+	}
+	const name = "subglance_notification_deliveries_total"
+	fmt.Fprintf(b, "# HELP %s %s\n", name,
+		"Alert deliveries by channel type and outcome: delivered, failed (gave up) or retried (an attempt failed and another is scheduled).")
+	fmt.Fprintf(b, "# TYPE %s counter\n", name)
+	for _, c := range s.deliveries.DeliveryCounts() {
+		fmt.Fprintf(b, "%s{channel_type=%q,outcome=%q} %d\n", name, c.ChannelType, c.Outcome, c.Count)
+	}
 }

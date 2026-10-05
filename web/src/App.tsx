@@ -482,6 +482,7 @@ export default function App() {
             cardColumns={cardColumns}
             onCardColumnsChange={setCardColumns}
             onOpenMonitor={openMonitor}
+            onOpenNotifications={() => goTo("notifications")}
             /* The empty dashboard's one next step opens the same form the
                Monitors card does, at its own address. A viewer gets no
                button: the server would refuse the save. */

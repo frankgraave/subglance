@@ -41,6 +41,39 @@ Its last error has the channel's masked settings replaced by their masks,
 and any other URL cut to its host, so it never shows a viewer a credential
 the settings hide.
 
+## A channel that stops delivering
+
+A webhook that is revoked, a bot removed from its group or a mail password
+that expired all fail without anyone changing SubGlance, and the next outage
+would then be confirmed and told to nobody. So when a real alert gives up on a
+channel, refused outright or out of retries, SubGlance says so in three
+places:
+
+- **Another channel** gets one message, with `event` `channel_failing`: the
+  default channel, or when that is the one failing or is disabled, the oldest
+  other channel that is enabled and not failing itself. It names the channel,
+  when its alert gave up, and the error with the credentials taken out. It is
+  sent within a minute, and once: further failures on the same channel send
+  nothing more until an alert or a **Send test** arrives there, after which a
+  new failure is news again. Like the backup notice, it waits for the
+  channel's quiet hours to end rather than going out inside them.
+- **The dashboard** shows a line above the monitors naming the channel and
+  whether the message went out, with a link to the Notifications screen.
+- **`/metrics`** counts it in `subglance_notification_deliveries_total`; see
+  [Metrics](operations.md#metrics).
+
+With only one channel, or with every other one disabled or failing, there is
+nowhere to send the message; the dashboard line and the channel's `delivery`
+record (`notice` is `no_other_channel`) are then where it is said. A failed
+**Send test** never starts any of this: it shows its error to the person who
+pressed it, at the moment they did. Nor does a disabled channel.
+
+In `GET /api/v1/channels`, `delivery.failing_since` is when the failure began
+and stays set until the channel delivers again, however long ago that was;
+`notice` says whether the message went out (`sent`, `waiting`,
+`no_other_channel`), and `notice_sent_at` and `notice_channel_id` when and
+through which channel.
+
 ## Which monitors use a channel
 
 A monitor's own channels are chosen under **Channels** in its add and edit
@@ -247,9 +280,9 @@ in `headers`, and this body:
 
 A monitor's alerts carry `incident_confirmed` (it is down), `incident_reminder`
 (it is still down and nobody has acknowledged it) or `incident_resolved` (it is
-back up). Messages about SubGlance itself carry `backup_failed` or
-`local_network_restored`, with `monitor_id` 0 and `monitor_name`
-`SubGlance`; a quiet-hours summary carries `quiet_hours_digest`. Ignore an
+back up). Messages about SubGlance itself carry `backup_failed`,
+`local_network_restored` or `channel_failing`, with `monitor_id` 0 and
+`monitor_name` `SubGlance`; a quiet-hours summary carries `quiet_hours_digest`. Ignore an
 `event` you do not recognise rather than treating it as an outage: a newer
 version may add one.
 
@@ -264,7 +297,9 @@ level: read each monitor's failure from its entry in `members`. A quiet-hours
 digest also lists its alerts in `members`.
 
 `started_at` is `0001-01-01T00:00:00Z` when there is no outage behind the
-message: the **Send test** button, a backup notice and a digest. The test
+message: the **Send test** button, a backup notice and a digest. In a
+`channel_failing` message, `target` is the failing channel's name and type,
+`started_at` is when its alert gave up and `last_error` is why. The test
 message is shaped like a recovery (`event` is `incident_resolved`) with
 `monitor_id` 0 and `monitor_name` `SubGlance test`, so a receiver that acts on
 recoveries should check the `monitor_id` first.

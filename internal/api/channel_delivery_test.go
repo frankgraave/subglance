@@ -98,6 +98,19 @@ func TestRedactDeliveryErrorTakesOutTheCredential(t *testing.T) {
 	}
 }
 
+// A credential under four characters is still a credential: an ntfy server
+// that echoes a short topic in its 4xx body must not hand it to a viewer of
+// the channel list. It goes only where it stands alone, so the words that
+// happen to contain it stay readable.
+func TestRedactDeliveryErrorMasksAShortCredentialAsAToken(t *testing.T) {
+	ch := store.Channel{Type: store.ChannelNtfy, Config: map[string]string{"topic": " ops ", "priority_up": "3"}}
+	got := redactDeliveryError("endpoint rejected the alert (403): topic ops is reserved; priority 3; retrying stops here", ch)
+	const want = "endpoint rejected the alert (403): topic *** is reserved; priority 3; retrying stops here"
+	if got != want {
+		t.Errorf("short credential:\n got %q\nwant %q", got, want)
+	}
+}
+
 func TestChannelListCarriesTheDeliveryRecord(t *testing.T) {
 	srv, db := testServerWithDB(t)
 	ctx := t.Context()
@@ -194,4 +207,68 @@ func TestChannelResponsesAlwaysCarryTheRecord(t *testing.T) {
 func jsonID(id int64) string {
 	b, _ := json.Marshal(id)
 	return string(b)
+}
+
+func TestChannelListSaysWhenAChannelIsFailingAndWhetherItWasReported(t *testing.T) {
+	srv, db := testServerWithDB(t)
+	ctx := t.Context()
+
+	broken := createSlackChannel(t, srv, "ops", "https://hooks.slack.com/services/T000/B000/verysecret")
+	other := createSlackChannel(t, srv, "mail", "https://hooks.slack.com/services/T000/B000/othersecret")
+	at := time.Now().Add(-40 * 24 * time.Hour).Truncate(time.Second)
+	if err := db.RecordChannelFailure(ctx, broken.ID, at, "endpoint rejected the alert (404)"); err != nil {
+		t.Fatal(err)
+	}
+
+	read := func() map[int64]*channelDelivery {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		authedHandler(srv).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/channels", nil))
+		var body struct {
+			Channels []channelResponse `json:"channels"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		out := map[int64]*channelDelivery{}
+		for _, c := range body.Channels {
+			out[c.ID] = c.Delivery
+		}
+		return out
+	}
+
+	// Older than the 30-day window, and still failing: the spell has no
+	// window, so the record still says so.
+	d := read()[broken.ID]
+	if d.FailingSince == nil || !d.FailingSince.Equal(at) {
+		t.Fatalf("failing_since = %v, want %v", d.FailingSince, at)
+	}
+	if d.Notice == nil || *d.Notice != noticeWaiting || d.NoticeSentAt != nil {
+		t.Errorf("notice = %v, want waiting", d.Notice)
+	}
+	if o := read()[other.ID]; o.FailingSince != nil || o.Notice != nil {
+		t.Errorf("a working channel reads failing: %+v", o)
+	}
+
+	// With every other channel disabled there is nowhere to report it.
+	off, err := db.GetChannel(ctx, other.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	off.Enabled = false
+	if _, err := db.UpdateChannel(ctx, off); err != nil {
+		t.Fatal(err)
+	}
+	if d := read()[broken.ID]; d.Notice == nil || *d.Notice != noticeNoOtherChannel {
+		t.Errorf("notice = %v, want no_other_channel", d.Notice)
+	}
+
+	f, _ := db.ChannelFailures(ctx)
+	if err := db.MarkChannelFailureNoticed(ctx, f[broken.ID], other.ID, at.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	d = read()[broken.ID]
+	if d.Notice == nil || *d.Notice != noticeSent || d.NoticeChannelID == nil || *d.NoticeChannelID != other.ID {
+		t.Errorf("after the notice: %+v", d)
+	}
 }

@@ -416,6 +416,7 @@ subglance_check_queue_depth                dispatched checks waiting for a worke
 subglance_check_workers                    current worker pool size
 subglance_check_workers_busy               workers inside a check at the moment of the scrape
 subglance_monitors_scheduled               monitors on the schedule
+subglance_notification_deliveries_total    alert deliveries, labelled channel_type and outcome (delivered, failed, retried)
 ```
 
 With [scheduled backups](#scheduled-backups-to-s3-compatible-storage) on,
@@ -432,6 +433,16 @@ three `subglance_backup_*` series join them.
 Read it beside `subglance_checks_recorded_total`: both climbing is healthy,
 write failures climbing while recorded checks are flat is a full or read-only
 disk, and both flat is a wedged scheduler.
+
+`subglance_notification_deliveries_total{outcome="failed"}` counts alerts that
+gave up on their channel, refused outright or out of retries, and so reached
+nobody through it. Every channel type in the build has all three series from
+start, at zero, so `increase(subglance_notification_deliveries_total{outcome="failed"}[15m]) > 0`
+fires on the first failure. `retried` is an attempt that failed with another
+scheduled; it is normal in small numbers. Test sends and the messages
+SubGlance sends about itself are not counted. SubGlance also reports a failing
+channel without Prometheus: see
+[a channel that stops delivering](channels.md#a-channel-that-stops-delivering).
 
 ## Shutdown
 

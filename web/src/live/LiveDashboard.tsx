@@ -6,6 +6,7 @@ import { createQueryClient } from "./queryClient";
 import { Dashboard } from "../monitors/Dashboard";
 import { WatchdogNotice } from "../watchdog/Watchdog";
 import { HostOfflineNotice } from "../connectivity/HostOffline";
+import { ChannelFailingNotice } from "../notifications/ChannelFailingNotice";
 import { hostOfflineText, useHostOfflineSince } from "../connectivity/offlineState";
 import { ConnectionBadge } from "./ConnectionBadge";
 import { useLiveMonitors } from "./useLiveMonitors";
@@ -42,6 +43,8 @@ export type LiveDashboardProps = LiveOptions & {
   onOpenMonitor?: (id: string) => void;
   /** Opens the add form from the empty dashboard; absent for a viewer. */
   onAddMonitor?: () => void;
+  /** Opens the notifications screen, from the failing-channel line. */
+  onOpenNotifications?: () => void;
   /** Route-change focus target, forwarded to the wall's own `<main>`. */
   mainRef?: RefObject<HTMLElement | null>;
 };
@@ -56,6 +59,7 @@ export function LiveDashboard({
   onExitWall,
   onOpenMonitor,
   onAddMonitor,
+  onOpenNotifications,
   mainRef,
   ...live
 }: LiveDashboardProps) {
@@ -156,6 +160,7 @@ export function LiveDashboard({
             onReconnect={reconnect}
           />
           <HostOfflineNotice since={hostOfflineSince} />
+          <ChannelFailingNotice onOpen={onOpenNotifications} />
         </>
       }
     />

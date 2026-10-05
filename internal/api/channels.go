@@ -47,48 +47,10 @@ func toChannelResponse(c store.Channel, admin bool) channelResponse {
 	}
 }
 
-// publicKeys are the config fields that may be read back in full.
-//
-// Deny by default, which is the opposite of how this started. The first
-// version listed the secret keys instead, and that could not hold: a config
-// accepts any key name, so the mask only ever covered the names someone had
-// thought of. A channel carrying "authorization" or "secret" handed those
-// straight to any viewer — the role that exists specifically to look without
-// touching.
-//
-// Listing what is safe is a smaller and more checkable claim than listing what
-// is dangerous. A new channel type that needs another public field has to say
-// so here, and until it does its value is masked: the failure mode of
-// forgetting is an over-masked field in the interface, not a leaked
-// credential.
-var publicKeys = map[string]bool{
-	// Where a message goes, rather than what proves the right to send it.
-	"to":       true,
-	"from":     true,
-	"chat_id":  true,
-	"channel":  true,
-	"username": true,
-	"host":     true,
-	"port":     true,
-	// Gotify priorities: how loud an alert is, not who may send one.
-	//
-	// ntfy's `topic` is deliberately NOT here. On a server without access
-	// control the topic name is the whole credential: whoever knows it can
-	// subscribe to the alerts and post fake ones.
-	"priority_down": true,
-	"priority_up":   true,
-	// SMS: which provider, how numbers without a country code are read,
-	// the hourly limit, whether recoveries are sent, and the zone the times
-	// in a message are written in. A Twilio account SID names the account,
-	// like a username; the auth token is what proves the right to use it,
-	// and stays masked. The numbers are masked by role, see smsNumbersView.
-	"provider":     true,
-	"country_code": true,
-	"hourly_limit": true,
-	"recoveries":   true,
-	"timezone":     true,
-	"account_sid":  true,
-}
+// publicKeys are the config fields that may be read back in full. The list
+// and its reasoning live in the notifier, which masks a failing channel's
+// error with the same rules before it reports it through another channel.
+var publicKeys = notifier.PublicConfigKeys
 
 func maskConfig(typ string, cfg map[string]string, admin bool) map[string]string {
 	out := make(map[string]string, len(cfg))
@@ -129,17 +91,9 @@ func readerIsAdmin(r *http.Request) bool {
 	return ok && u.Role.CanAdmin()
 }
 
-// maskValue keeps enough of a value to recognise it without revealing it.
-//
-// The tail is shown rather than the head because that is the part that differs
-// between two Slack webhooks; their prefixes are identical.
-func maskValue(v string) string {
-	const keep = 4
-	if len(v) <= keep {
-		return strings.Repeat("*", len(v))
-	}
-	return "****" + v[len(v)-keep:]
-}
+// maskValue keeps enough of a value to recognise it without revealing it; see
+// notifier.MaskValue.
+func maskValue(v string) string { return notifier.MaskValue(v) }
 
 type channelRequest struct {
 	Name    string            `json:"name"`
@@ -311,7 +265,7 @@ func (s *Server) handleCreateChannel(w http.ResponseWriter, r *http.Request) {
 	resp := toChannelResponse(created, readerIsAdmin(r))
 	// A channel created a moment ago has sent nothing, which is a fact and
 	// not a read that could fail: no outbox query for it.
-	resp.Delivery = toChannelDelivery(store.ChannelHealth{}, created)
+	resp.Delivery = toChannelDelivery(store.ChannelHealth{}, nil, false, created)
 	writeJSON(w, http.StatusCreated, resp)
 }
 

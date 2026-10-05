@@ -9,6 +9,7 @@ import (
 	"math"
 	"math/big"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/frankgraave/subglance/internal/checker"
@@ -91,6 +92,21 @@ type Notifier struct {
 	mu      sync.Mutex
 	grouper *Grouper
 	batches map[string]*pending
+
+	// counts holds the delivery counters /metrics serves, one set per
+	// channel type. Built once in New and never written after, so reading
+	// the map needs no lock; the counters themselves are atomic.
+	counts map[string]*deliveryCounts
+
+	// nextFailureCheck is when reportFailures next reads the failing
+	// channels, in Unix nanoseconds. A delivery that gives up sets it to
+	// zero, so the notice about it goes out on the next pass of the loop.
+	nextFailureCheck atomic.Int64
+
+	// unreported remembers, per channel, the spell the log has already
+	// said there is no other channel for. Touched only by reportFailures,
+	// on the loop's own goroutine.
+	unreported map[int64]time.Time
 }
 
 // Options configures New.
@@ -166,6 +182,11 @@ func New(opts Options) *Notifier {
 		now = time.Now
 	}
 
+	counts := make(map[string]*deliveryCounts, len(senders))
+	for typ := range senders {
+		counts[typ] = &deliveryCounts{}
+	}
+
 	return &Notifier{
 		db:       opts.DB,
 		log:      log,
@@ -175,6 +196,9 @@ func New(opts Options) *Notifier {
 		now:      now,
 		grouper:  newGrouper(opts.GroupWindow, now),
 		batches:  make(map[string]*pending),
+		counts:   counts,
+
+		unreported: make(map[int64]time.Time),
 	}
 }
 
@@ -328,6 +352,10 @@ func (n *Notifier) Run(ctx context.Context) {
 			n.log.Error("notification sweep failed", "error", err)
 		}
 
+		// After the sweep, so a delivery that gave up on this pass is
+		// reported on this pass too.
+		n.reportFailures(ctx)
+
 		// A sweep that did work looks again straight away: a backlog
 		// should drain at the speed of the endpoints, not the speed of
 		// the poll interval.
@@ -459,8 +487,14 @@ func (n *Notifier) attempt(ctx context.Context, d store.Delivery) error {
 
 	err = sender.Send(sendCtx, ch.Config, alert)
 	if err == nil {
+		n.count(ch.Type, outcomeDelivered)
 		if err := n.db.MarkDelivered(ctx, d.ID); err != nil {
 			n.log.Error("delivery sent but not recorded", "delivery", d.ID, "error", err)
+		}
+		// An alert arrived, so whatever spell of failures this channel
+		// was in is over, and the next one deserves a notice of its own.
+		if err := n.db.ClearChannelFailure(ctx, ch.ID); err != nil {
+			n.log.Error("could not clear channel failure", "channel", ch.Name, "error", err)
 		}
 		n.log.Info("alert delivered",
 			"monitor", alert.MonitorName, "channel", ch.Name, "event", alert.Event)
@@ -472,7 +506,7 @@ func (n *Notifier) attempt(ctx context.Context, d store.Delivery) error {
 		// Permanent: a bad URL, a revoked token, a rejected body.
 		n.log.Error("alert rejected",
 			"monitor", alert.MonitorName, "channel", ch.Name, "error", err)
-		n.fail(ctx, d, err.Error())
+		n.giveUp(ctx, d, ch, err.Error())
 		return nil
 	}
 
@@ -481,10 +515,11 @@ func (n *Notifier) attempt(ctx context.Context, d store.Delivery) error {
 		n.log.Error("alert gave up after retries",
 			"monitor", alert.MonitorName, "channel", ch.Name,
 			"attempts", next, "error", err)
-		n.fail(ctx, d, fmt.Sprintf("gave up after %d attempts: %s", next, err))
+		n.giveUp(ctx, d, ch, fmt.Sprintf("gave up after %d attempts: %s", next, err))
 		return nil
 	}
 
+	n.count(ch.Type, outcomeRetried)
 	delay := backoff(next)
 
 	n.log.Warn("alert delivery failed, will retry",
@@ -512,6 +547,24 @@ func (n *Notifier) fail(ctx context.Context, d store.Delivery, cause string) {
 	if err := n.db.MarkFailed(ctx, d.ID, cause); err != nil {
 		n.log.Error("could not record delivery failure", "delivery", d.ID, "error", err)
 	}
+}
+
+// giveUp dead-letters a delivery that its channel could not take, and records
+// the channel as failing so that reportFailures tells someone through another
+// one.
+//
+// Only a failure of the channel itself comes here: a permanent rejection, or
+// retries run out. A delivery to a channel that was deleted or disabled goes
+// to fail alone, because nothing is wrong with a channel the operator turned
+// off.
+func (n *Notifier) giveUp(ctx context.Context, d store.Delivery, ch store.Channel, cause string) {
+	n.count(ch.Type, outcomeFailed)
+	n.fail(ctx, d, cause)
+	if err := n.db.RecordChannelFailure(ctx, ch.ID, n.now(), cause); err != nil {
+		n.log.Error("could not record channel failure", "channel", ch.Name, "error", err)
+		return
+	}
+	n.nextFailureCheck.Store(0)
 }
 
 // Validate checks a channel config without sending anything.
@@ -547,5 +600,15 @@ func (n *Notifier) Test(ctx context.Context, ch store.Channel) error {
 
 	sendCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()
-	return sender.Send(sendCtx, ch.Config, alert)
+	if err := sender.Send(sendCtx, ch.Config, alert); err != nil {
+		return err
+	}
+	// A test that arrived proves the channel delivers again, which is what
+	// an operator who has just fixed a revoked webhook presses it for. A
+	// failed test changes nothing: it is reported to the person who
+	// pressed the button, at the moment they pressed it.
+	if err := n.db.ClearChannelFailure(ctx, ch.ID); err != nil {
+		n.log.Error("could not clear channel failure", "channel", ch.Name, "error", err)
+	}
+	return nil
 }
