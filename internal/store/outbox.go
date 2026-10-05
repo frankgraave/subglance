@@ -180,6 +180,8 @@ type Replaced struct {
 //
 // Every write is conditional on the row still pending, so a row that was
 // delivered or gave up in the meantime is left as it is.
+// If the recovery itself is no longer pending, nothing is written and
+// ErrNotFound is reported.
 func (db *DB) ReplaceWithRecovery(ctx context.Context, recovery int64, payload string, from Delivery, replaced []Replaced) error {
 	tx, err := db.Writer.BeginTx(ctx, nil)
 	if err != nil {
@@ -188,12 +190,23 @@ func (db *DB) ReplaceWithRecovery(ctx context.Context, recovery int64, payload s
 	defer func() { _ = tx.Rollback() }()
 
 	now := time.Now().Unix()
-	if _, err := tx.ExecContext(ctx, `
+	res, err := tx.ExecContext(ctx, `
 		UPDATE notif_outbox
 		   SET payload_json = ?, attempts = ?, last_error = ?, next_attempt_at = ?, updated_at = ?
 		 WHERE id = ? AND status = ?`,
-		payload, from.Attempts, from.LastError, from.NextAttemptAt.Unix(), now, recovery, OutboxPending); err != nil {
+		payload, from.Attempts, from.LastError, from.NextAttemptAt.Unix(), now, recovery, OutboxPending)
+	if err != nil {
 		return fmt.Errorf("replace with recovery %d: %w", recovery, err)
+	}
+	// The alerts are closed only because the recovery carries their news. A
+	// recovery that is gone, deleted with its monitor or sent meanwhile,
+	// carries nothing, so they stay as they are.
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("replace with recovery %d: %w", recovery, err)
+	}
+	if n == 0 {
+		return fmt.Errorf("replace with recovery %d: %w: no pending recovery", recovery, ErrNotFound)
 	}
 	for _, r := range replaced {
 		if r.Payload != "" {

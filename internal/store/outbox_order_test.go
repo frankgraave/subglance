@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
@@ -145,5 +146,48 @@ func TestReplaceWithRecoveryTakesOverTheAlert(t *testing.T) {
 	}
 	if got := get(sent.ID); got.Status != OutboxDelivered || got.Payload != `{"event":"incident_reminder"}` {
 		t.Errorf("a row that went out meanwhile was changed: status %s, payload %s", got.Status, got.Payload)
+	}
+}
+
+// TestReplaceWithRecoveryNeedsTheRecovery: a grouped recovery's row belongs
+// to one monitor. If that monitor is deleted between reading the alerts and
+// merging, the row goes with it, and the alert about another monitor in the
+// group must not be closed in favour of a message that no longer exists.
+func TestReplaceWithRecoveryNeedsTheRecovery(t *testing.T) {
+	ctx := context.Background()
+	db := openTestDB(t)
+	first := seedMonitor(t, db, "api")
+	other := seedMonitor(t, db, "web")
+	ch := healthChannel(t, db, "ops")
+
+	alert, err := db.EnqueueDelivery(ctx, Delivery{ChannelID: ch, MonitorID: other, Event: "incident_confirmed", Payload: `{"event":"incident_confirmed"}`})
+	if err != nil {
+		t.Fatalf("EnqueueDelivery: %v", err)
+	}
+	recovery, err := db.EnqueueDelivery(ctx, Delivery{ChannelID: ch, MonitorID: first, Event: "incident_resolved", Payload: `{"members":[1,2]}`})
+	if err != nil {
+		t.Fatalf("EnqueueDelivery: %v", err)
+	}
+	if err := db.DeleteMonitor(ctx, first); err != nil {
+		t.Fatalf("DeleteMonitor: %v", err)
+	}
+
+	err = db.ReplaceWithRecovery(ctx, recovery.ID, `{"merged":true}`, alert, []Replaced{{ID: alert.ID}})
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("ReplaceWithRecovery without its recovery row = %v, want ErrNotFound", err)
+	}
+	got, err := db.GetDelivery(ctx, alert.ID)
+	if err != nil {
+		t.Fatalf("GetDelivery: %v", err)
+	}
+	if got.Status != OutboxPending || got.LastError != "" {
+		t.Errorf("alert = status %s, error %q; want it still queued as it was", got.Status, got.LastError)
+	}
+	due, err := db.DueDeliveries(ctx, time.Now().Add(time.Second), 10)
+	if err != nil {
+		t.Fatalf("DueDeliveries: %v", err)
+	}
+	if len(due) != 1 || due[0].ID != alert.ID {
+		t.Errorf("due = %v, want only the alert %d: it was closed for a recovery that is gone", due, alert.ID)
 	}
 }
