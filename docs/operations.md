@@ -6,6 +6,7 @@ how to take a backup that actually restores.
 - [Configuration](#configuration)
 - [Which build is this](#which-build-is-this)
 - [Worker sizing](#worker-sizing)
+- [Memory](#memory)
 - [Metrics](#metrics)
 - [Shutdown](#shutdown)
 - [Watching the watcher](#watching-the-watcher)
@@ -396,6 +397,29 @@ flight at once when everything you watch is down. Watch
 `/metrics` to see whether the pool is keeping up. The same readings, plus how
 many workers are busy right now, are on the instance card at
 `/settings#instance` for an administrator.
+
+## Memory
+
+Measured on Linux amd64 with the dashboard built in, 20 HTTP monitors checked
+every 30 seconds and no one signed in, SubGlance holds about 22 MB resident.
+
+Signing in costs more for a moment. Passwords are hashed with argon2id at
+64 MiB a hash, which is what makes a stolen hash expensive to crack. One
+sign-in briefly takes the process to about 90 MB; forty at once, which queue
+four at a time, took it to between 450 and 590 MB in the same setup. When the
+last hash in flight finishes, that memory goes back to the operating system
+within seconds instead of the minutes the Go runtime would otherwise take: a
+single sign-in is back at 22 MB within a second, and setup followed straight
+away by the first sign-in within five. The hand-back runs at most once every
+two seconds, so a stream of sign-ins does not buy a full garbage collection
+each.
+
+To measure it yourself, read `VmRSS` from `/proc/<pid>/status` (on Linux):
+that is the resident figure the numbers above are. The memory column of
+`docker stats` is a different metric, the container's cgroup memory usage
+with the page cache taken off, so it will not match `VmRSS` exactly. It shows
+the same rise and fall around a sign-in, and is fine for watching that, but
+compare `VmRSS` with the figures here.
 
 ## Metrics
 

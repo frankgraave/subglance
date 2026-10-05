@@ -62,7 +62,9 @@ getting:
   host itself loses its connection, that is recorded as one outage of the host
   rather than one of every monitor.
 - **Light enough to forget about.** A single static binary with SQLite, not a
-  stack of services.
+  stack of services. About 22 MB resident with 20 HTTP monitors checked every
+  30 seconds, and back there within seconds of a sign-in; the setup and what
+  a sign-in costs are in [Memory](docs/operations.md#memory).
 
 ## Self-monitoring
 

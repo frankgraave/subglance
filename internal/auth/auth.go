@@ -25,8 +25,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"strings"
+	"sync"
 	"sync/atomic"
+	"time"
 
 	"golang.org/x/crypto/argon2"
 )
@@ -110,8 +113,9 @@ const maxConcurrentHashes = 4
 // refused because someone else is flooding is the attacker winning.
 var hashSem = make(chan struct{}, maxConcurrentHashes)
 
-// inFlightHashes is what the concurrency test observes. It is maintained only
-// so the ceiling can be asserted rather than assumed.
+// inFlightHashes counts the argon2 calls holding a slot. The concurrency test
+// reads it to assert the ceiling, and the call that takes it back to zero
+// schedules the release of their memory.
 var inFlightHashes atomic.Int64
 
 // idKey runs argon2id with the concurrency ceiling applied.
@@ -119,10 +123,81 @@ func idKey(password, salt []byte, t, memory uint32, threads uint8, keyLen uint32
 	hashSem <- struct{}{}
 	inFlightHashes.Add(1)
 	defer func() {
-		inFlightHashes.Add(-1)
+		if inFlightHashes.Add(-1) == 0 {
+			scheduleRelease()
+		}
 		<-hashSem
 	}()
 	return argon2.IDKey(password, salt, t, memory, threads, keyLen)
+}
+
+// # Handing argon2's memory back
+//
+// The 64 MiB an argon2 call allocates is garbage the moment the call returns,
+// but the Go runtime does not give it back to the operating system then. It
+// waits for the next collection to free it and for the background scavenger
+// to return it, and on an otherwise quiet server that takes minutes. Measured
+// on a server with 20 monitors: 21 MB resident before a login, 88 MB for two
+// minutes after it, 23 MB only after five. The peak is the price of the hash;
+// the plateau after it is not, and it is what anyone reading docker stats
+// sees, because the moment they look is right after signing in.
+//
+// So when the last argon2 call in flight finishes, a release is scheduled:
+// debug.FreeOSMemory, which collects and returns freed memory at once. It runs
+// on a timer goroutine, never on the request that hashed, and at most once per
+// releaseInterval, because it forces a full collection and a flood of logins
+// must not buy one per attempt. A release asked for inside the interval is not
+// dropped but deferred to its end, so the memory of the last login in a burst
+// is returned too.
+
+// releaseInterval is the least time between two releases. Two seconds keeps a
+// flood of logins at one forced collection per two seconds at most, while a
+// single login, or setup followed by the first sign-in, is back to its idle
+// footprint within a few seconds.
+var releaseInterval = 2 * time.Second
+
+// releaseMemory returns freed memory to the operating system. It is a variable
+// so tests can count and hold the calls; it and releaseInterval are read and
+// written under releaser.mu.
+var releaseMemory = debug.FreeOSMemory
+
+// releaser holds the one pending release and when the last one started.
+var releaser struct {
+	mu      sync.Mutex
+	pending *time.Timer
+	last    time.Time
+}
+
+// scheduleRelease arranges for releaseMemory to run once the interval since
+// the previous release has passed: at once if it has, at its end if not. A
+// release already pending absorbs the request.
+func scheduleRelease() {
+	releaser.mu.Lock()
+	defer releaser.mu.Unlock()
+	if releaser.pending != nil {
+		return
+	}
+	delay := max(time.Until(releaser.last.Add(releaseInterval)), 0)
+	releaser.pending = time.AfterFunc(delay, runRelease)
+}
+
+// runRelease is the pending release firing. If argon2 calls are running again
+// by now it does nothing: the one that ends last schedules its own release,
+// and freeing memory that is about to be allocated again buys nothing.
+func runRelease() {
+	releaser.mu.Lock()
+	releaser.pending = nil
+	if inFlightHashes.Load() != 0 {
+		releaser.mu.Unlock()
+		return
+	}
+	// Stamped before the release rather than after, so a request arriving
+	// while it runs waits out a full interval instead of starting a second
+	// collection beside this one.
+	releaser.last = time.Now()
+	release := releaseMemory
+	releaser.mu.Unlock()
+	release()
 }
 
 // VerifyPassword reports whether the password matches the encoded hash.
