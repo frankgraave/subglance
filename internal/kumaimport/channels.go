@@ -136,7 +136,9 @@ func convertChannel(n row, res *Result) (configfile.Channel, bool) {
 			secret("headers")
 		}
 		if ct := get("webhookContentType"); ct == "custom" {
-			note("Kuma posted a custom body; SubGlance posts its own JSON payload, so the receiver has to read that instead")
+			// Kuma's body is a Liquid template, which SubGlance's {{name}}
+			// placeholders do not read, so it is not carried over.
+			note("Kuma posted a custom body; SubGlance posts its own JSON payload until the channel is given a body template of its own")
 		} else {
 			note("SubGlance posts its own JSON payload, not Kuma's; a receiver written for Kuma's fields has to be changed")
 		}

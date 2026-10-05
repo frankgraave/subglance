@@ -165,3 +165,42 @@ func TestWebhookPayloadDocNamesEveryField(t *testing.T) {
 		t.Errorf("%s: the webhook payload table describes %q, which the payload does not have", channelsPath, name)
 	}
 }
+
+// TestWebhookBodyDocMatchesTheTemplates ties the "A body of your own" section
+// of docs/channels.md to the code: its table names exactly the placeholders a
+// template may use, and every JSON example in it is one the API accepts. The
+// examples are what people paste into the form; one that the save refuses is
+// a support question before anyone has seen an alert.
+func TestWebhookBodyDocMatchesTheTemplates(t *testing.T) {
+	doc := readDoc(t, channelsPath)
+	const heading = "\n## A body of your own\n"
+	start := strings.Index(doc, heading)
+	if start == -1 {
+		t.Fatalf("%s has no %q section; the check is broken", channelsPath, strings.TrimSpace(heading))
+	}
+	section := doc[start+len(heading):]
+	if next := strings.Index(section, "\n## "); next != -1 {
+		section = section[:next]
+	}
+
+	var documented []string
+	for _, row := range regexp.MustCompile(`(?m)^\| ([^|]+) \|`).FindAllStringSubmatch(section, -1) {
+		for _, name := range regexp.MustCompile(`\{\{([a-z_]+)\}\}`).FindAllStringSubmatch(row[1], -1) {
+			documented = append(documented, name[1])
+		}
+	}
+	slices.Sort(documented)
+	if want := WebhookPlaceholderNames(); !slices.Equal(documented, want) {
+		t.Errorf("%s placeholder table names %v; a template may use %v", channelsPath, documented, want)
+	}
+
+	examples := regexp.MustCompile("(?s)```json\n(.*?)```").FindAllStringSubmatch(section, -1)
+	if len(examples) < 3 {
+		t.Fatalf("%s: %d JSON examples in the body section, want Teams, Matrix and Pushover", channelsPath, len(examples))
+	}
+	for i, ex := range examples {
+		if err := validateWebhookBody(ex[1], true); err != nil {
+			t.Errorf("%s: body example %d is refused: %v\n%s", channelsPath, i+1, err, ex[1])
+		}
+	}
+}

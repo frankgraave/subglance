@@ -88,8 +88,9 @@ A value that proves the right to send or read something is written as
 `<fill in after import>`:
 
 - every channel setting except the ones that say where a message goes (`to`,
-  `from`, `chat_id`, `channel`, `username`, `host`, `port`), which is the same
-  rule the channel API uses when it masks a read;
+  `from`, `chat_id`, `channel`, `username`, `host`, `port`) and a webhook's
+  `method` and `body` template, which is the same rule the channel API uses
+  when it masks a read;
 - the value of every request header an HTTP monitor sends (the header names
   stay, so the file still says which headers are sent);
 - an HTTP monitor's request body.
@@ -298,7 +299,9 @@ addresses, recipients and chat ids come over as they are.
 - An email channel's Cc recipients become ordinary recipients. Bcc recipients
   are left out rather than shown to everyone, and listed.
 - A webhook channel receives [SubGlance's payload](channels.md#the-webhook-payload),
-  not Kuma's.
+  not Kuma's. A custom body is not carried over, because Kuma's templates are
+  written in another language; give the channel
+  [a body of its own](channels.md#a-body-of-your-own).
 
 ### What does not come over
 

@@ -210,18 +210,74 @@ describe("ChannelForm", () => {
   });
 
   it("offers no field the notifier does not read", () => {
-    // The mockup draws a Slack channel label, an HTTP method and a signing
-    // secret. Saving any of them would store a value nothing would ever use.
+    // The mockup draws a Slack channel label and a signing secret. Saving
+    // either would store a value nothing would ever use.
     render(<ChannelForm onSave={async () => {}} />);
-    fireEvent.change(screen.getByRole("combobox"), {
+    fireEvent.change(screen.getByLabelText("Type"), {
       target: { value: "webhook" },
     });
-    expect(screen.queryByLabelText(/method/i)).toBeNull();
     expect(screen.queryByLabelText(/signing secret/i)).toBeNull();
-    fireEvent.change(screen.getByRole("combobox"), {
+    fireEvent.change(screen.getByLabelText("Type"), {
       target: { value: "slack" },
     });
     expect(screen.queryByLabelText(/channel label/i)).toBeNull();
+    expect(screen.queryByLabelText(/method/i)).toBeNull();
+  });
+});
+
+describe("ChannelForm, webhook body", () => {
+  it("sends the method and the body template exactly as typed", async () => {
+    // The server reports a JSON mistake by line and column, so the template
+    // keeps its line breaks and indentation; trimming it would move them.
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<ChannelForm onSave={onSave} />);
+    fireEvent.change(screen.getByLabelText("Type"), { target: { value: "webhook" } });
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Matrix" } });
+    fireEvent.change(screen.getByLabelText("Endpoint URL"), {
+      target: { value: "https://m.example/send/{{txn_id}}" },
+    });
+    fireEvent.change(screen.getByLabelText("Method (optional)"), { target: { value: "PUT" } });
+    const body = '{\n  "msgtype": "m.text",\n  "body": "{{summary}}"\n}\n';
+    fireEvent.change(screen.getByLabelText("Body (optional)"), { target: { value: body } });
+    fireEvent.click(screen.getByRole("button", { name: /add channel/i }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave.mock.calls[0][0].config).toEqual({
+      url: "https://m.example/send/{{txn_id}}",
+      method: "PUT",
+      body,
+    });
+  });
+
+  it("reads a stored template back into an editable field", () => {
+    // Not a secret: a template that came back masked could not be corrected,
+    // and the API reads it back in full.
+    const channel = channelFromApi({
+      id: 4,
+      name: "Teams",
+      type: "webhook",
+      config: { url: "****abcd", method: "POST", body: '{"text": "{{summary}}"}' },
+      enabled: true,
+    });
+    render(<ChannelForm channel={channel} onSave={async () => {}} />);
+    const field = screen.getByLabelText("Body (optional)") as HTMLTextAreaElement;
+    expect(field.value).toBe('{"text": "{{summary}}"}');
+  });
+
+  it("leaves out a template that is only whitespace", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<ChannelForm onSave={onSave} />);
+    fireEvent.change(screen.getByLabelText("Type"), { target: { value: "webhook" } });
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Hook" } });
+    fireEvent.change(screen.getByLabelText("Endpoint URL"), {
+      target: { value: "https://h.example/hook" },
+    });
+    fireEvent.change(screen.getByLabelText("Body (optional)"), { target: { value: "  \n " } });
+    fireEvent.click(screen.getByRole("button", { name: /add channel/i }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave.mock.calls[0][0].config).toEqual({
+      url: "https://h.example/hook",
+      method: "POST",
+    });
   });
 });
 

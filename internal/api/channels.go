@@ -163,6 +163,12 @@ func validateChannel(req channelRequest) string {
 	}
 
 	for k, v := range req.Config {
+		// A webhook's body template is the one value that is a document
+		// rather than a setting, and has a ceiling of its own, checked
+		// with the template.
+		if req.Type == store.ChannelWebhook && k == "body" {
+			continue
+		}
 		if len(k) > 64 || len(v) > 2048 {
 			return "config keys must be 64 characters or fewer and values 2048 or fewer"
 		}
@@ -554,8 +560,8 @@ func (s *Server) handleSetMonitorChannels(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]any{"channels": out})
 }
 
-// validatePushChannel checks the settings ntfy, Gotify and SMS need beyond their
-// required key. The notifier validates the same things again before every
+// validatePushChannel checks the settings ntfy, Gotify, SMS and webhook need
+// beyond their required key. The notifier validates the same things again before every
 // send; checking here as well is what puts the message on the form.
 func validatePushChannel(req channelRequest) string {
 	cfg := req.Config
@@ -577,6 +583,12 @@ func validatePushChannel(req channelRequest) string {
 		}
 		if (cfg["username"] == "") != (cfg["password"] == "") {
 			return "config.username and config.password must be set together"
+		}
+	case store.ChannelWebhook:
+		// The method, the headers and the body template, with the rules
+		// the sender applies before every delivery.
+		if err := notifier.ValidateWebhookConfig(cfg); err != nil {
+			return "config." + err.Error()
 		}
 	case store.ChannelSMS:
 		// One rule set, shared with the sender, so the form and the

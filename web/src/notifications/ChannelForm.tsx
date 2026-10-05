@@ -203,12 +203,22 @@ export function ChannelForm({
         continue;
       }
       const raw = shown(spec);
+      /*
+       * A template is sent as typed, its line breaks and indentation
+       * included: the server reports a JSON mistake by line and column, and
+       * those have to be the ones on screen. One that holds only whitespace
+       * is no template at all.
+       */
       const value =
         spec.key === "headers"
           ? raw
-          : spec.control === "list"
-            ? listEntries(raw).join(", ")
-            : raw.trim();
+          : spec.control === "template"
+            ? raw.trim() === ""
+              ? ""
+              : raw
+            : spec.control === "list"
+              ? listEntries(raw).join(", ")
+              : raw.trim();
       if (spec.required && value === "") {
         const label = typeLabel(type);
         const article = /^(SMS|[AEIOU])/.test(label) ? "an" : "a";
@@ -289,6 +299,22 @@ export function ChannelForm({
             </option>
           ))}
         </Select>
+      );
+    }
+    if (spec.control === "template") {
+      return (
+        <textarea
+          {...common}
+          className="input input--code"
+          rows={6}
+          spellCheck={false}
+          autoComplete="off"
+          value={shown(spec)}
+          onChange={(event) => edit(spec, event.target.value)}
+          {...(spec.placeholder !== undefined
+            ? { placeholder: spec.placeholder }
+            : {})}
+        />
       );
     }
     if (spec.control === "list") {
@@ -559,9 +585,9 @@ export function ChannelForm({
        * What this form does not offer, and why.
        *
        * The settings shown are the ones the senders in `internal/notifier`
-       * actually read. The design mockup also draws a Slack channel label, an
-       * HTTP method and a webhook signing secret; none of those exist on the
-       * wire, so offering them would store values nothing would ever use. That
+       * actually read. The design mockup also draws a Slack channel label and
+       * a webhook signing secret; neither exists on the wire, so offering
+       * them would store values nothing would ever use. That
        * reasoning stays here, for the next person comparing the two: the
        * sentence on screen used to carry it, and a package path and a mockup
        * mean nothing to the person filling in the form (SUB-193).

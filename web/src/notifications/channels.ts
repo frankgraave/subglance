@@ -263,9 +263,10 @@ export type FieldSpec = {
   /**
    * The control that takes the value. Text by default. Every kind still
    * stores a string, because that is all a channel's config holds: a
-   * checkbox writes "true" or "false", a list writes one entry per line.
+   * checkbox writes "true" or "false", a list writes one entry per line, a
+   * template is a document kept exactly as typed.
    */
-  control?: "select" | "checkbox" | "list";
+  control?: "select" | "checkbox" | "list" | "template";
   /** The choices of a select; the first is the default. */
   options?: readonly { value: string; label: string }[];
   /**
@@ -288,11 +289,11 @@ export type FieldSpec = {
  * The fields each type needs, taken from the senders in `internal/notifier/`
  * and the validation in `internal/api/channels.go` — not from the mockup.
  *
- * The mockup draws a Slack "channel label", a webhook HTTP method and a
- * webhook signing secret. None of the three exist: `SlackSender` reads only
- * `url`, `WebhookSender` reads `url` and `headers` and always POSTs, and there
- * is no signing anywhere in the notifier. Offering them would be a form that
- * saves settings nothing reads.
+ * The mockup draws a Slack "channel label" and a webhook signing secret.
+ * Neither exists: `SlackSender` reads only `url`, and there is no signing
+ * anywhere in the notifier. Offering them would be a form that saves settings
+ * nothing reads. The webhook's method and body template do exist, since
+ * SUB-211: they are what Teams, Matrix and Pushover need.
  */
 export const FIELDS: Readonly<Record<ChannelType, readonly FieldSpec[]>> = {
   email: [
@@ -542,7 +543,35 @@ export const FIELDS: Readonly<Record<ChannelType, readonly FieldSpec[]>> = {
       label: "Extra headers",
       secret: true,
       required: false,
-      help: "One Name: value per line. Masked on read because a header is where an API key goes.",
+      help: "One Name: value per line. Masked on read because a header is where an API key goes. A Content-Type here also says how the body below is sent.",
+    },
+    {
+      key: "method",
+      label: "Method",
+      secret: false,
+      required: false,
+      control: "select",
+      options: [
+        { value: "POST", label: "POST" },
+        { value: "PUT", label: "PUT" },
+      ],
+      help: "POST suits nearly every receiver. A Matrix room takes PUT.",
+    },
+    {
+      key: "body",
+      label: "Body",
+      secret: false,
+      required: false,
+      control: "template",
+      /*
+       * The placeholder names are the published contract in
+       * internal/notifier/webhook_body.go and docs/channels.md; the API
+       * refuses one that is not on that list, so this sentence only has to
+       * say how to use them. Not a credential: it is read back in full so it
+       * can be corrected, and the help says to keep keys out of it.
+       */
+      help: "Empty sends SubGlance's own JSON. Otherwise the text sent instead, with {{summary}}, {{status}}, {{monitor_name}}, {{target}}, {{last_error}} and the other placeholders filled in. Values are escaped, so in JSON put each one between quotes. Keep tokens in the URL or a header: this text is shown to everyone who can read channels.",
+      placeholder: '{"text": "{{summary}}"}',
     },
   ],
 };

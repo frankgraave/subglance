@@ -50,6 +50,13 @@ var PublicConfigKeys = map[string]bool{
 	"recoveries":   true,
 	"timezone":     true,
 	"account_sid":  true,
+	// Webhook: the HTTP method, and the body template. The template is
+	// written and corrected by hand, which a masked value cannot be, so it
+	// is configuration rather than a credential; channels.md tells the
+	// operator to keep credentials in the URL or a header instead. The
+	// headers stay masked: they are where an API key goes.
+	"method": true,
+	"body":   true,
 }
 
 // MaskValue keeps enough of a value to recognise it without revealing it.

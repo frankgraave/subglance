@@ -2527,6 +2527,12 @@ paths:
         name of up to 11 letters and digits). Optional for sms:
         `hourly_limit` (1 to 100, default 10), `recoveries` (`false` sends
         outages only) and `timezone` (IANA, for the times in a message).
+        A webhook accepts `headers` (one `Name: value` per line), `method`
+        (`POST`, the default, or `PUT`) and `body`, a template of up to 8192
+        characters sent instead of the alert JSON, with `{{name}}`
+        placeholders filled in; an unknown placeholder, or a body that is not
+        JSON while the Content-Type is, is a 400 naming the line and column.
+        The webhook `url` may end in `{{txn_id}}`.
         See docs/channels.md.
         Types are validated in Go rather than left to the database CHECK
         constraint, so an unknown type is a 400 and not a 500.
@@ -6559,9 +6565,10 @@ components:
           description: |
             Type-specific settings. Only destination and presentation keys
             (`to`, `from`, `chat_id`, `channel`, `username`, `host`, `port`,
-            `priority_down`, `priority_up`, and for sms `provider`,
+            `priority_down`, `priority_up`, for sms `provider`,
             `account_sid`, `country_code`, `hourly_limit`, `recoveries`,
-            `timezone`) are echoed in full. Every other
+            `timezone`, and for a webhook `method` and `body`) are echoed in
+            full. Every other
             value, including `url`, `token`, `password`, `bot_token`,
             `auth_token` and the
             ntfy `topic`, is replaced with `****` followed by the last four
