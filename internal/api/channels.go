@@ -241,8 +241,8 @@ func (s *Server) handleCreateChannel(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
-	if msg := validateChannel(req); msg != "" {
-		writeError(w, http.StatusBadRequest, msg)
+	if p := channelProblem(req); !p.ok() {
+		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
 	if msg := s.checkChannelTarget(r.Context(), req); msg != "" {
@@ -332,8 +332,8 @@ func (s *Server) handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if msg := validateChannel(req); msg != "" {
-		writeError(w, http.StatusBadRequest, msg)
+	if p := channelProblem(req); !p.ok() {
+		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
 	// Edit is guarded as well as create. A channel that was saved before
@@ -558,6 +558,28 @@ func (s *Server) handleSetMonitorChannels(w http.ResponseWriter, r *http.Request
 	}
 	s.log.Info("monitor channels updated", "monitor_id", id, "count", len(out))
 	writeJSON(w, http.StatusOK, map[string]any{"channels": out})
+}
+
+// channelProblem is validateChannel's verdict with the request field it is
+// about, when the validator knows it, so the form can put the sentence under
+// the control that has to change rather than below the whole form.
+//
+// Only a webhook's own settings carry a field so far: the notifier names the
+// key in the error, and nothing here reads it out of the sentence.
+func channelProblem(req channelRequest) problem {
+	msg := validateChannel(req)
+	if msg == "" {
+		return problem{}
+	}
+	if req.Type == store.ChannelWebhook {
+		// Only when the webhook check is what refused it: an earlier rule,
+		// such as the URL's scheme, says something else and stays global.
+		err := notifier.ValidateWebhookConfig(req.Config)
+		if key := notifier.ConfigKey(err); key != "" && msg == "config."+err.Error() {
+			return fieldProblem("config."+key, msg)
+		}
+	}
+	return bodyProblem(msg)
 }
 
 // validatePushChannel checks the settings ntfy, Gotify, SMS and webhook need

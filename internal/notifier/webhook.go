@@ -43,21 +43,21 @@ func (s *WebhookSender) Validate(cfg map[string]string) error {
 // sentence a delivery would fail with.
 func ValidateWebhookConfig(cfg map[string]string) error {
 	if err := validateWebhookURL(cfg["url"]); err != nil {
-		return err
+		return onKey("url", err)
 	}
 	if _, err := webhookMethod(cfg); err != nil {
-		return err
+		return onKey("method", err)
 	}
 	// A header line that does not parse would be dropped silently at send
 	// time, and an operator who added an auth header would never learn why
 	// their endpoint kept answering 401.
 	for _, line := range splitHeaderLines(cfg["headers"]) {
 		if _, _, ok := strings.Cut(line, ":"); !ok {
-			return &configError{fmt.Sprintf("header %q is not in Name: value form", line)}
+			return onKey("headers", &configError{fmt.Sprintf("header %q is not in Name: value form", line)})
 		}
 	}
 	if strings.TrimSpace(cfg["body"]) != "" {
-		return validateWebhookBody(cfg["body"], isJSONType(webhookContentType(cfg)))
+		return onKey("body", validateWebhookBody(cfg["body"], isJSONType(webhookContentType(cfg))))
 	}
 	return nil
 }
@@ -69,7 +69,7 @@ func (s *WebhookSender) Send(ctx context.Context, cfg map[string]string, a Alert
 		return err
 	}
 	target := cfg["url"]
-	txnID := webhookTxnID(target, a)
+	txnID := webhookTxnID(ctx, target, a)
 	target = placeholderPattern.ReplaceAllLiteralString(target, txnID)
 
 	var req *http.Request

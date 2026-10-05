@@ -6749,7 +6749,8 @@ components:
         config:
           type: object
           description: |
-            Keys are at most 64 characters and values at most 2048. The type's
+            Keys are at most 64 characters and values at most 2048, except a
+            webhook's `body` template, which may be up to 8192. The type's
             required key must be present and non-blank; a `url` must parse and
             use http or https with a host.
           additionalProperties:

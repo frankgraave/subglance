@@ -2,6 +2,7 @@ package notifier
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -15,6 +16,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/frankgraave/subglance/internal/store"
 )
 
 // A webhook's body template.
@@ -214,15 +217,76 @@ func jsonText(s string) string {
 // webhookTxnID names one delivery for a receiver that deduplicates, as
 // Matrix does with the transaction id in its URL.
 //
-// Derived from the URL and the alert rather than drawn at random, so a retry
-// of the same alert carries the same id and a receiver that already took the
-// first attempt treats the second as a repeat. The URL is part of it because
-// a Matrix transaction id is scoped to the access token, not the room: two
-// rooms reached with one token would otherwise swallow each other's copy.
-func webhookTxnID(rawURL string, a Alert) string {
-	payload, _ := json.Marshal(a) // an Alert always encodes
-	sum := sha256.Sum256(append([]byte(rawURL+"\n"), payload...))
+// Derived rather than drawn at random, so a retry carries the same id and a
+// receiver that already took the first attempt treats the second as a
+// repeat. A queued delivery is named by its outbox row (see
+// withDeliveryKey), not by what it says: maintenance is applied again before
+// every attempt and can take a member out of a grouped alert, and a retry
+// whose id followed the content would then post the same delivery twice. A
+// send outside the outbox, the channel's test, has no row and is named by its
+// alert, which carries the moment the test was pressed.
+//
+// The URL is part of it because a Matrix transaction id is scoped to the
+// access token, not the room: two rooms reached with one token would
+// otherwise swallow each other's copy.
+func webhookTxnID(ctx context.Context, rawURL string, a Alert) string {
+	seed := []byte(rawURL + "\n")
+	if key := deliveryKey(ctx); key != "" {
+		seed = append(seed, "delivery "+key...)
+	} else {
+		payload, _ := json.Marshal(a) // an Alert always encodes
+		seed = append(seed, payload...)
+	}
+	sum := sha256.Sum256(seed)
 	return "subglance-" + hex.EncodeToString(sum[:12])
+}
+
+// deliveryKeyCtx is the context key for the outbox row a send belongs to.
+type deliveryKeyCtx struct{}
+
+// withDeliveryKey tells a sender which outbox row it is sending, for a
+// receiver that deduplicates by an id of the sender's choosing.
+//
+// The row id with its creation time, because SQLite may hand a deleted row's
+// id to a new row once the outbox has been pruned: the pair is never reused.
+// Passed in the context rather than on the Sender interface because only the
+// webhook uses it, and the channel's test has no row to name.
+func withDeliveryKey(ctx context.Context, d store.Delivery) context.Context {
+	return context.WithValue(ctx, deliveryKeyCtx{}, fmt.Sprintf("%d-%d", d.ID, d.CreatedAt.Unix()))
+}
+
+// deliveryKey is the key withDeliveryKey set, or "" outside the outbox.
+func deliveryKey(ctx context.Context) string {
+	key, _ := ctx.Value(deliveryKeyCtx{}).(string)
+	return key
+}
+
+// fieldError is a configuration error about one config key, so the API can
+// say which field to correct and a form can put the sentence under it.
+type fieldError struct {
+	key string
+	err error
+}
+
+func (e *fieldError) Error() string { return e.err.Error() }
+func (e *fieldError) Unwrap() error { return e.err }
+
+// onKey marks err as being about the config key, leaving nil as nil.
+func onKey(key string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return &fieldError{key: key, err: err}
+}
+
+// ConfigKey names the config key a validation error is about, or "" when the
+// error is not about a single key.
+func ConfigKey(err error) string {
+	var f *fieldError
+	if errors.As(err, &f) {
+		return f.key
+	}
+	return ""
 }
 
 // webhookMethod is the HTTP method a webhook sends with: POST unless the

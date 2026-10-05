@@ -7,6 +7,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
+import { ApiError } from "../api/http";
 import { ChannelForm } from "./ChannelForm";
 import { CHANNEL_TYPES, channelFromApi, typeLabel } from "./channels";
 
@@ -278,6 +279,51 @@ describe("ChannelForm, webhook body", () => {
       url: "https://h.example/hook",
       method: "POST",
     });
+  });
+
+  it("puts a template the server refused under the Body field", async () => {
+    // The server names the field it refused; the sentence goes beside the
+    // textarea that has to change, which takes the focus.
+    const onSave = vi
+      .fn()
+      .mockRejectedValue(
+        new ApiError(
+          400,
+          "config.body has an unknown placeholder {{monitor}} at line 1, column 11",
+          null,
+          "config.body",
+        ),
+      );
+    render(<ChannelForm onSave={onSave} />);
+    fireEvent.change(screen.getByLabelText("Type"), { target: { value: "webhook" } });
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Teams" } });
+    fireEvent.change(screen.getByLabelText("Endpoint URL"), {
+      target: { value: "https://h.example/hook" },
+    });
+    const field = screen.getByLabelText("Body (optional)");
+    fireEvent.change(field, { target: { value: '{"text": "{{monitor}}"}' } });
+    fireEvent.click(screen.getByRole("button", { name: /add channel/i }));
+    await waitFor(() => expect(field.getAttribute("aria-invalid")).toBe("true"));
+    const error = document.getElementById(field.getAttribute("aria-describedby") ?? "");
+    expect(error?.textContent).toContain("unknown placeholder {{monitor}}");
+    expect(document.activeElement).toBe(field);
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+  });
+
+  it("keeps a refusal about no field it shows below the form", async () => {
+    const onSave = vi
+      .fn()
+      .mockRejectedValue(new ApiError(400, "config.url must use http or https"));
+    render(<ChannelForm onSave={onSave} />);
+    fireEvent.change(screen.getByLabelText("Type"), { target: { value: "webhook" } });
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Teams" } });
+    fireEvent.change(screen.getByLabelText("Endpoint URL"), {
+      target: { value: "https://h.example/hook" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /add channel/i }));
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toBe("config.url must use http or https");
+    expect(screen.getByLabelText("Body (optional)").getAttribute("aria-invalid")).toBeNull();
   });
 });
 

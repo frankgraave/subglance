@@ -254,6 +254,48 @@ func TestWebhookPutWithTransactionID(t *testing.T) {
 	}
 }
 
+// TestWebhookTransactionIDFollowsTheDelivery: maintenance is applied again
+// before every attempt and can take a member out of a grouped alert, so a
+// retry of one outbox row may say less than its first attempt did. The id
+// must stay the row's, or a receiver that took the first attempt posts the
+// retry as a second message. Two rows that say the same thing are two
+// deliveries and get two ids.
+func TestWebhookTransactionIDFollowsTheDelivery(t *testing.T) {
+	srv, got := recordingEndpoint(t)
+	cfg := map[string]string{
+		"url":    srv.URL + "/send/{{txn_id}}",
+		"method": "PUT", "body": `{"body": "{{summary}}"}`,
+	}
+	s := NewWebhookSender(nil)
+	created := time.Date(2026, 10, 5, 10, 0, 0, 0, time.UTC)
+	row := withDeliveryKey(context.Background(), store.Delivery{ID: 41, CreatedAt: created})
+	other := withDeliveryKey(context.Background(), store.Delivery{ID: 42, CreatedAt: created})
+	both := hostileAlert()
+	both.Members = []Alert{hostileAlert(), hostileAlert()}
+	both.Members[1].MonitorName = "db"
+	trimmed := both
+	trimmed.Members = both.Members[:1]
+	for _, send := range []struct {
+		ctx context.Context
+		a   Alert
+	}{{row, both}, {row, trimmed}, {other, trimmed}} {
+		if err := s.Send(send.ctx, cfg, send.a); err != nil {
+			t.Fatalf("send: %v", err)
+		}
+	}
+	reqs := got()
+	ids := make([]string, len(reqs))
+	for i, r := range reqs {
+		ids[i] = r.path[strings.LastIndex(r.path, "/")+1:]
+	}
+	if ids[0] != ids[1] {
+		t.Errorf("a retry of one delivery changed its transaction id when maintenance trimmed it: %s then %s", ids[0], ids[1])
+	}
+	if ids[1] == ids[2] {
+		t.Errorf("two deliveries shared transaction id %s", ids[1])
+	}
+}
+
 // TestWebhookWithoutABodyIsUnchanged: an existing webhook, one without the new
 // settings, still posts the documented payload as JSON.
 func TestWebhookWithoutABodyIsUnchanged(t *testing.T) {

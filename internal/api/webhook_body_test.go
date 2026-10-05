@@ -48,6 +48,40 @@ func TestWebhookBodyTemplateIsValidatedOnSave(t *testing.T) {
 	}
 }
 
+// TestWebhookConfigRefusalNamesItsField: the form puts a refused template
+// under the Body field, which it can only do when the 400 says which field
+// it was. A rule that is not about one webhook setting names none.
+func TestWebhookConfigRefusalNamesItsField(t *testing.T) {
+	srv, _ := testServerWithDB(t)
+	cases := map[string]struct {
+		cfg   map[string]string
+		field string
+	}{
+		"body":    {map[string]string{"url": "https://example.com/hook", "body": `{"text": "{{monitor}}"}`}, "config.body"},
+		"method":  {map[string]string{"url": "https://example.com/hook", "method": "DELETE"}, "config.method"},
+		"headers": {map[string]string{"url": "https://example.com/hook", "headers": "Authorization"}, "config.headers"},
+		"scheme":  {map[string]string{"url": "ftp://example.com/hook", "body": `{"text": "{{monitor}}"}`}, ""},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			rec := doJSON(t, srv, http.MethodPost, "/api/v1/channels", webhookBody(t, tc.cfg))
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400: %s", rec.Code, rec.Body.String())
+			}
+			var resp struct {
+				Error string `json:"error"`
+				Field string `json:"field"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+				t.Fatal(err)
+			}
+			if resp.Field != tc.field {
+				t.Errorf("field = %q, want %q (error %q)", resp.Field, tc.field, resp.Error)
+			}
+		})
+	}
+}
+
 func TestWebhookBodyTemplateIsReadBackInFull(t *testing.T) {
 	srv, _ := testServerWithDB(t)
 	// Longer than the 2048 characters other settings may hold: an adaptive

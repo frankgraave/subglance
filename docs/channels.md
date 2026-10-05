@@ -250,9 +250,10 @@ Delivery column, and is not retried: a refused address stays refused.
 
 ## The webhook payload
 
-A `webhook` channel sends one `POST` per alert with `Content-Type:
-application/json`, a `User-Agent` starting with `SubGlance/`, any headers set
-in `headers`, and this body:
+A `webhook` channel sends one request per alert: a `POST`, or a `PUT` when
+its `method` says so. Every request carries a `User-Agent` starting with
+`SubGlance/` and any headers set in `headers`. Without a `body` of its own
+(see below) it is sent with `Content-Type: application/json` and this body:
 
 ```json
 {

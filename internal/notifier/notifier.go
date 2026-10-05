@@ -511,7 +511,9 @@ func (n *Notifier) attempt(ctx context.Context, d store.Delivery) error {
 		}
 	}
 
-	sendCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
+	// The row rides along so a sender can name this delivery the same way
+	// on every attempt, whatever maintenance has since taken out of it.
+	sendCtx, cancel := context.WithTimeout(withDeliveryKey(ctx, d), defaultTimeout)
 	defer cancel()
 
 	err = sender.Send(sendCtx, ch.Config, alert)
