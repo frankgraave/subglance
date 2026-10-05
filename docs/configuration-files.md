@@ -15,6 +15,7 @@ neither are credentials. For a full copy of an instance, see
 - [What never leaves the instance](#what-never-leaves-the-instance)
 - [Keys](#keys)
 - [The format](#the-format)
+- [Coming from Uptime Kuma](#coming-from-uptime-kuma)
 
 ## Exporting
 
@@ -217,3 +218,88 @@ A few points specific to the file:
   the file and importing it adds the edited window next to the old one; delete
   the old one in the interface.
 - The file is limited to 4 MiB.
+
+## Coming from Uptime Kuma
+
+`subglance import uptime-kuma` reads an Uptime Kuma database and writes a
+configuration file in the format above. It does not touch SubGlance: you read
+the file, then import it like any other, with the dry run first. Kuma 1.23 and
+2.x are supported, as long as Kuma keeps its data in SQLite (`kuma.db`); a
+Kuma 2 installation set up with MariaDB has no such file.
+
+The database is opened read-only and nothing is written beside it, so Kuma can
+keep running while you convert, and a read-only mount is enough. Give it
+`kuma.db` or the data directory that holds it:
+
+```sh
+subglance import uptime-kuma /path/to/uptime-kuma/data -o kuma.yaml
+```
+
+With Docker, mount Kuma's volume into the SubGlance image (Kuma's compose file
+names it `uptime-kuma`, mounted at `/app/data`):
+
+```sh
+docker run --rm -v uptime-kuma:/kuma:ro ghcr.io/frankgraave/subglance \
+  import uptime-kuma /kuma > kuma.yaml
+```
+
+Without `-o` the file goes to standard output and the summary to standard
+error. The file ends with two lists, as comments: what was **not imported**,
+each with its name and the reason, and what was **imported with a change to
+check**. Nothing is left out without being named there.
+
+### What comes over
+
+| Kuma | SubGlance |
+|---|---|
+| HTTP(s) | `http` |
+| HTTP(s) - Keyword, with *Invert Keyword* | `http` with `keyword` and `keyword_mode: must_contain` (`must_not_contain`) |
+| HTTP(s) - Json Query | `http` with a `json_assertion`: `==`, `!=`, `<` and `>` on a plain path such as `data.items[0].status` |
+| TCP Port | `tcp`, `host:port` |
+| Ping | `ping` |
+| Push | `push`; Kuma's heartbeat interval becomes `push_interval_s` |
+| Heartbeat interval, retries, request timeout | `interval_s`, `retries`, `timeout_s` |
+| Accepted status codes, method, *Max. Redirects* | `expected_status`, `method`, `follow_redirects` (off when Kuma allowed none) |
+| Request headers and body, basic or bearer auth | `headers` and `body`, auth as an `Authorization` header, all with withheld values |
+| Paused | `enabled: false` |
+| Tags | `tags`; a tag without a value becomes `yes`, and a monitor inside a group gets the tag `group` with the group's name |
+| Notifications: Discord, Slack, Telegram, SMTP, ntfy, Gotify, Webhook | channels of the same type, assigned to the same monitors |
+
+Credentials stay out of the file, exactly as in an export: webhook URLs, bot
+tokens, passwords, ntfy topics, header values and request bodies are written as
+`<fill in after import>`. The import creates those channels and monitors
+**switched off** and lists the missing values under `needs_secrets`. Fill them
+in, in the file or in the interface afterwards, and switch them on. Server
+addresses, recipients and chat ids come over as they are.
+
+### What changes on the way
+
+- An interval below 20 seconds becomes 20, and values outside SubGlance's other
+  limits (retries up to 10, timeout up to 120 seconds) are moved inside them.
+  Each one is listed.
+- A push monitor gets a **new push URL**, shown once in the import report.
+  Point the job that calls Kuma's push URL at it.
+- Kuma repeats an alert every *n* checks; SubGlance repeats after a time, so
+  *n* times the interval becomes `repeat_after_s`. Kuma's default of 0 (never
+  repeat) is left out, and the monitor gets SubGlance's default of a reminder
+  every 15 minutes while an outage is unacknowledged. Set `repeat_after_s: 0`
+  if you want none.
+- Kuma compares a JSON query's result as text, so `42` matches the number and
+  the string. SubGlance compares typed values: an expected value that reads as
+  a number, `true`, `false` or `null` is written as that value, and listed, in
+  case the field holds a string.
+- *Ignore TLS/SSL errors* has no equivalent. SubGlance verifies every
+  certificate, so a self-signed or expired one fails the check.
+- An email channel's Cc recipients become ordinary recipients. Bcc recipients
+  are left out rather than shown to everyone, and listed.
+- A webhook channel receives [SubGlance's payload](channels.md#the-webhook-payload),
+  not Kuma's.
+
+### What does not come over
+
+Monitor types SubGlance has no check for (DNS, Docker, gRPC, MQTT, databases,
+game servers and the rest), groups themselves, monitors in *Upside Down Mode*
+(imported as they are, they would report the opposite state), JSON queries that
+use JSONata beyond a plain path, other authentication methods (NTLM, OAuth2,
+mTLS), notification types SubGlance has no channel for, status pages and
+maintenance windows. History stays in Kuma.
