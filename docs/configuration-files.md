@@ -235,11 +235,16 @@ keep running while you convert, and a read-only mount is enough. Give it
 subglance import uptime-kuma /path/to/uptime-kuma/data -o kuma.yaml
 ```
 
-With Docker, mount Kuma's volume into the SubGlance image (Kuma's compose file
-names it `uptime-kuma`, mounted at `/app/data`):
+With Docker, mount Kuma's data into the SubGlance image, read-only. Kuma's own
+`docker run` instructions keep it in a volume named `uptime-kuma`; its compose
+file uses the `data` directory beside the compose file instead:
 
 ```sh
-docker run --rm -v uptime-kuma:/kuma:ro ghcr.io/frankgraave/subglance \
+docker run --rm -v uptime-kuma:/kuma:ro ghcr.io/frankgraave/subglance:edge \
+  import uptime-kuma /kuma > kuma.yaml
+
+# Kuma started with its compose file
+docker run --rm -v "$PWD/data:/kuma:ro" ghcr.io/frankgraave/subglance:edge \
   import uptime-kuma /kuma > kuma.yaml
 ```
 
