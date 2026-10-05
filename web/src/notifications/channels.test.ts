@@ -161,11 +161,16 @@ describe("describeDelivery", () => {
 
 describe("fieldsFor", () => {
   it("offers only the settings the senders actually read", () => {
-    // The mockup draws a Slack channel label, an HTTP method and a webhook
-    // signing secret. SlackSender reads `url` and nothing else; WebhookSender
-    // reads `url` and `headers` and always POSTs; nothing signs anything.
+    // The mockup draws a Slack channel label and a webhook signing secret.
+    // SlackSender reads `url` and nothing else; nothing signs anything.
+    // WebhookSender reads `url`, `headers`, `method` and `body`.
     expect(fieldsFor("slack").map((f) => f.key)).toEqual(["url"]);
-    expect(fieldsFor("webhook").map((f) => f.key)).toEqual(["url", "headers"]);
+    expect(fieldsFor("webhook").map((f) => f.key)).toEqual([
+      "url",
+      "headers",
+      "method",
+      "body",
+    ]);
     expect(fieldsFor("telegram").map((f) => f.key)).toEqual([
       "bot_token",
       "chat_id",

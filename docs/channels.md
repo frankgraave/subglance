@@ -7,7 +7,7 @@ same settings can be written through `POST /api/v1/channels` (see
 
 | Type | Required | Optional |
 |---|---|---|
-| `webhook` | `url` | `headers` (one `Name: value` per line) |
+| `webhook` | `url` | `headers` (one `Name: value` per line), `method` (`POST` or `PUT`), `body` (see [a body of your own](#a-body-of-your-own)) |
 | `discord` | `url` (the channel webhook) | — |
 | `slack` | `url` (the incoming webhook) | — |
 | `telegram` | `bot_token`, `chat_id` | — |
@@ -17,7 +17,9 @@ same settings can be written through `POST /api/v1/channels` (see
 | `sms` | `numbers`, `provider`, and per provider: `url`, `username`, `password` (`android-gateway`) or `account_sid`, `auth_token`, `from` (`twilio`) | `country_code`, `hourly_limit` (default 10), `recoveries` (default `true`), `timezone` |
 
 Every value that is not a plain destination is masked when it is read back:
-`****` plus the last four characters. That includes the ntfy `topic`: on a
+`****` plus the last four characters. A webhook's `method` and `body` are the
+exception: they are written and corrected by hand, so they are read back in
+full, and a credential belongs in the URL or a header instead. That includes the ntfy `topic`: on a
 server without access control the topic name is the credential, since anyone
 who knows it can read the alerts and post fake ones. Use a topic nobody would
 guess, or an access token.
@@ -248,9 +250,10 @@ Delivery column, and is not retried: a refused address stays refused.
 
 ## The webhook payload
 
-A `webhook` channel sends one `POST` per alert with `Content-Type:
-application/json`, a `User-Agent` starting with `SubGlance/`, any headers set
-in `headers`, and this body:
+A `webhook` channel sends one request per alert: a `POST`, or a `PUT` when
+its `method` says so. Every request carries a `User-Agent` starting with
+`SubGlance/` and any headers set in `headers`. Without a `body` of its own
+(see below) it is sent with `Content-Type: application/json` and this body:
 
 ```json
 {
@@ -331,6 +334,117 @@ alert gives up for good, the recovery is sent anyway, without it. An SMS
 channel set to `recoveries: false` still sends a recovery with
 `replaces_alert`, since it is the only message about that outage.
 
+## A body of your own
+
+Teams, Matrix, Pushover and most chat services do not read the payload above;
+each wants its own JSON. Give the webhook a `body` and it sends that instead,
+with placeholders filled in from the alert. An empty `body` sends the payload
+above, so a webhook without one is unchanged.
+
+| Placeholder | What it holds |
+|---|---|
+| `{{summary}}` | The one-line headline a phone shows: "api is down", "3 monitors are down", "api was down for 3 minutes, now back up" |
+| `{{details}}` | The lines under it: target, cause, error and times; one line per monitor for a grouped alert or a quiet-hours summary |
+| `{{status}}` | `down` or `up` |
+| `{{event}}` | The `event` of the payload above |
+| `{{monitor_name}}`, `{{monitor_type}}`, `{{target}}` | The monitor; the first one's in a grouped alert |
+| `{{cause}}`, `{{last_error}}` | Why the check failed; empty in a grouped alert |
+| `{{started_at}}`, `{{at}}` | When the outage began and when this alert fired, RFC 3339 in UTC; `{{started_at}}` is empty when there is no outage behind the message |
+| `{{txn_id}}` | An id that is the same on every retry of one alert and differs between alerts. The only placeholder the `url` may use |
+
+A placeholder is replaced by its value and nothing else: there are no
+conditions, loops or includes, and none will be added, since a template
+language that can read files is a way to read them off the server. Spaces
+inside the braces are allowed: `{{ summary }}`.
+
+Each value is escaped for the body's `Content-Type`, which is
+`application/json` unless `headers` sets another:
+
+- **JSON** (`application/json`, or any `+json` type): a value is inserted as
+  the text of a JSON string, quotes and line breaks escaped, so put every
+  placeholder between quotes. A name with a `"` in it cannot break the
+  document.
+- **A form** (`application/x-www-form-urlencoded`): a value is form-encoded,
+  so an `&` in a monitor name does not start a new field.
+- **Anything else**: as it is.
+
+Saving refuses a body with a placeholder not in the table, a `{{` that is not
+closed, or, when the type is JSON, a document that does not parse; the
+message names the line and column. **Send test** fills the body in, so it
+shows what an alert will look like.
+
+The body is read back in full to everyone who can read channels, and is
+written as it is into an [exported configuration
+file](configuration-files.md). Keep tokens out of it: in each example below
+the credential is in the URL or a header, which are masked.
+
+### Microsoft Teams
+
+In the Teams channel, open **Workflows** and choose the template **Send
+webhook alerts to a channel**. Use the URL it gives you as `url`, and this
+`body`:
+
+```json
+{
+  "type": "message",
+  "attachments": [
+    {
+      "contentType": "application/vnd.microsoft.card.adaptive",
+      "content": {
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "type": "AdaptiveCard",
+        "version": "1.2",
+        "body": [
+          { "type": "TextBlock", "text": "{{summary}}", "weight": "Bolder", "size": "Medium", "wrap": true },
+          { "type": "FactSet", "facts": [
+            { "title": "Target", "value": "{{target}}" },
+            { "title": "Error", "value": "{{last_error}}" },
+            { "title": "At", "value": "{{at}}" }
+          ] }
+        ]
+      }
+    }
+  ]
+}
+```
+
+The workflow answers `202` to anything, and a body without `attachments`
+fails inside the flow afterwards, where SubGlance cannot see it. Press **Send
+test** and check that the card arrives in Teams, not only that the test
+passed.
+
+### Matrix
+
+Create an account for SubGlance on your homeserver, invite it to the room,
+and take its access token. Then:
+
+- `url`: `https://matrix.example.org/_matrix/client/v3/rooms/!roomid:example.org/send/m.room.message/{{txn_id}}`
+- `method`: `PUT`
+- `headers`: `Authorization: Bearer <the access token>`
+- `body`:
+
+```json
+{ "msgtype": "m.text", "body": "{{summary}}\n{{details}}" }
+```
+
+Matrix treats a second request with the same transaction id as a repeat, so
+a retried alert appears in the room once.
+
+### Pushover
+
+Pushover reads its application token and user key from the query string as
+well as from the body, so they go in the masked URL:
+
+- `url`: `https://api.pushover.net/1/messages.json?token=<application token>&user=<user key>`
+- `body`:
+
+```json
+{ "title": "{{summary}}", "message": "{{details}}" }
+```
+
+Pushover accepts at most 1,024 characters in `message`, which a long
+quiet-hours summary can exceed; `{{summary}}` alone always fits.
+
 ## Which channels get added
 
 A new channel type is maintenance for as long as the upstream API exists, so
@@ -341,6 +455,7 @@ second.
 
 For anything else (Teams, Matrix, Pushover and so on), use the `webhook`
 channel. It posts the alert as a stable JSON object, described under
-[the webhook payload](#the-webhook-payload), and custom headers cover most
-authentication schemes. A request for a new type is judged against the bar
+[the webhook payload](#the-webhook-payload), or, with
+[a body of your own](#a-body-of-your-own), in the shape the service wants;
+custom headers cover most authentication schemes. A request for a new type is judged against the bar
 above, not against whether another tool has it.

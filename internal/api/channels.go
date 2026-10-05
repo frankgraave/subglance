@@ -163,6 +163,12 @@ func validateChannel(req channelRequest) string {
 	}
 
 	for k, v := range req.Config {
+		// A webhook's body template is the one value that is a document
+		// rather than a setting, and has a ceiling of its own, checked
+		// with the template.
+		if req.Type == store.ChannelWebhook && k == "body" {
+			continue
+		}
 		if len(k) > 64 || len(v) > 2048 {
 			return "config keys must be 64 characters or fewer and values 2048 or fewer"
 		}
@@ -235,8 +241,8 @@ func (s *Server) handleCreateChannel(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
-	if msg := validateChannel(req); msg != "" {
-		writeError(w, http.StatusBadRequest, msg)
+	if p := channelProblem(req); !p.ok() {
+		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
 	if msg := s.checkChannelTarget(r.Context(), req); msg != "" {
@@ -326,8 +332,8 @@ func (s *Server) handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if msg := validateChannel(req); msg != "" {
-		writeError(w, http.StatusBadRequest, msg)
+	if p := channelProblem(req); !p.ok() {
+		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
 	// Edit is guarded as well as create. A channel that was saved before
@@ -554,8 +560,30 @@ func (s *Server) handleSetMonitorChannels(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]any{"channels": out})
 }
 
-// validatePushChannel checks the settings ntfy, Gotify and SMS need beyond their
-// required key. The notifier validates the same things again before every
+// channelProblem is validateChannel's verdict with the request field it is
+// about, when the validator knows it, so the form can put the sentence under
+// the control that has to change rather than below the whole form.
+//
+// Only a webhook's own settings carry a field so far: the notifier names the
+// key in the error, and nothing here reads it out of the sentence.
+func channelProblem(req channelRequest) problem {
+	msg := validateChannel(req)
+	if msg == "" {
+		return problem{}
+	}
+	if req.Type == store.ChannelWebhook {
+		// Only when the webhook check is what refused it: an earlier rule,
+		// such as the URL's scheme, says something else and stays global.
+		err := notifier.ValidateWebhookConfig(req.Config)
+		if key := notifier.ConfigKey(err); key != "" && msg == "config."+err.Error() {
+			return fieldProblem("config."+key, msg)
+		}
+	}
+	return bodyProblem(msg)
+}
+
+// validatePushChannel checks the settings ntfy, Gotify, SMS and webhook need
+// beyond their required key. The notifier validates the same things again before every
 // send; checking here as well is what puts the message on the form.
 func validatePushChannel(req channelRequest) string {
 	cfg := req.Config
@@ -577,6 +605,12 @@ func validatePushChannel(req channelRequest) string {
 		}
 		if (cfg["username"] == "") != (cfg["password"] == "") {
 			return "config.username and config.password must be set together"
+		}
+	case store.ChannelWebhook:
+		// The method, the headers and the body template, with the rules
+		// the sender applies before every delivery.
+		if err := notifier.ValidateWebhookConfig(cfg); err != nil {
+			return "config." + err.Error()
 		}
 	case store.ChannelSMS:
 		// One rule set, shared with the sender, so the form and the

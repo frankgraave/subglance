@@ -7,6 +7,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
+import { ApiError } from "../api/http";
 import { ChannelForm } from "./ChannelForm";
 import { CHANNEL_TYPES, channelFromApi, typeLabel } from "./channels";
 
@@ -210,18 +211,119 @@ describe("ChannelForm", () => {
   });
 
   it("offers no field the notifier does not read", () => {
-    // The mockup draws a Slack channel label, an HTTP method and a signing
-    // secret. Saving any of them would store a value nothing would ever use.
+    // The mockup draws a Slack channel label and a signing secret. Saving
+    // either would store a value nothing would ever use.
     render(<ChannelForm onSave={async () => {}} />);
-    fireEvent.change(screen.getByRole("combobox"), {
+    fireEvent.change(screen.getByLabelText("Type"), {
       target: { value: "webhook" },
     });
-    expect(screen.queryByLabelText(/method/i)).toBeNull();
     expect(screen.queryByLabelText(/signing secret/i)).toBeNull();
-    fireEvent.change(screen.getByRole("combobox"), {
+    fireEvent.change(screen.getByLabelText("Type"), {
       target: { value: "slack" },
     });
     expect(screen.queryByLabelText(/channel label/i)).toBeNull();
+    expect(screen.queryByLabelText(/method/i)).toBeNull();
+  });
+});
+
+describe("ChannelForm, webhook body", () => {
+  it("sends the method and the body template exactly as typed", async () => {
+    // The server reports a JSON mistake by line and column, so the template
+    // keeps its line breaks and indentation; trimming it would move them.
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<ChannelForm onSave={onSave} />);
+    fireEvent.change(screen.getByLabelText("Type"), { target: { value: "webhook" } });
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Matrix" } });
+    fireEvent.change(screen.getByLabelText("Endpoint URL"), {
+      target: { value: "https://m.example/send/{{txn_id}}" },
+    });
+    fireEvent.change(screen.getByLabelText("Method (optional)"), { target: { value: "PUT" } });
+    const body = '{\n  "msgtype": "m.text",\n  "body": "{{summary}}"\n}\n';
+    fireEvent.change(screen.getByLabelText("Body (optional)"), { target: { value: body } });
+    fireEvent.click(screen.getByRole("button", { name: /add channel/i }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave.mock.calls[0][0].config).toEqual({
+      url: "https://m.example/send/{{txn_id}}",
+      method: "PUT",
+      body,
+    });
+  });
+
+  it("reads a stored template back into an editable field", () => {
+    // Not a secret: a template that came back masked could not be corrected,
+    // and the API reads it back in full.
+    const channel = channelFromApi({
+      id: 4,
+      name: "Teams",
+      type: "webhook",
+      config: { url: "****abcd", method: "POST", body: '{"text": "{{summary}}"}' },
+      enabled: true,
+    });
+    render(<ChannelForm channel={channel} onSave={async () => {}} />);
+    const field = screen.getByLabelText("Body (optional)") as HTMLTextAreaElement;
+    expect(field.value).toBe('{"text": "{{summary}}"}');
+  });
+
+  it("leaves out a template that is only whitespace", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<ChannelForm onSave={onSave} />);
+    fireEvent.change(screen.getByLabelText("Type"), { target: { value: "webhook" } });
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Hook" } });
+    fireEvent.change(screen.getByLabelText("Endpoint URL"), {
+      target: { value: "https://h.example/hook" },
+    });
+    fireEvent.change(screen.getByLabelText("Body (optional)"), { target: { value: "  \n " } });
+    fireEvent.click(screen.getByRole("button", { name: /add channel/i }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave.mock.calls[0][0].config).toEqual({
+      url: "https://h.example/hook",
+      method: "POST",
+    });
+  });
+
+  it("puts a template the server refused under the Body field", async () => {
+    // The server names the field it refused; the sentence goes beside the
+    // textarea that has to change, which takes the focus.
+    const onSave = vi
+      .fn()
+      .mockRejectedValue(
+        new ApiError(
+          400,
+          "config.body has an unknown placeholder {{monitor}} at line 1, column 11",
+          null,
+          "config.body",
+        ),
+      );
+    render(<ChannelForm onSave={onSave} />);
+    fireEvent.change(screen.getByLabelText("Type"), { target: { value: "webhook" } });
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Teams" } });
+    fireEvent.change(screen.getByLabelText("Endpoint URL"), {
+      target: { value: "https://h.example/hook" },
+    });
+    const field = screen.getByLabelText("Body (optional)");
+    fireEvent.change(field, { target: { value: '{"text": "{{monitor}}"}' } });
+    fireEvent.click(screen.getByRole("button", { name: /add channel/i }));
+    await waitFor(() => expect(field.getAttribute("aria-invalid")).toBe("true"));
+    const error = document.getElementById(field.getAttribute("aria-describedby") ?? "");
+    expect(error?.textContent).toContain("unknown placeholder {{monitor}}");
+    expect(document.activeElement).toBe(field);
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+  });
+
+  it("keeps a refusal about no field it shows below the form", async () => {
+    const onSave = vi
+      .fn()
+      .mockRejectedValue(new ApiError(400, "config.url must use http or https"));
+    render(<ChannelForm onSave={onSave} />);
+    fireEvent.change(screen.getByLabelText("Type"), { target: { value: "webhook" } });
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Teams" } });
+    fireEvent.change(screen.getByLabelText("Endpoint URL"), {
+      target: { value: "https://h.example/hook" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /add channel/i }));
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toBe("config.url must use http or https");
+    expect(screen.getByLabelText("Body (optional)").getAttribute("aria-invalid")).toBeNull();
   });
 });
 

@@ -99,6 +99,18 @@
   max-width: 100%;
 }
 
+/*
+ * A field that holds code rather than prose: a webhook's body template, typed
+ * as JSON. Mono so the braces, quotes and indentation line up, and so the
+ * line and column a refusal names can be counted on screen. The family only:
+ * the size, leading and no-zoom floor stay the field's own. Written here
+ * rather than as a `face-mono` class beside `.input`, whose `font: inherit`
+ * wins over the utility.
+ */
+.input--code {
+  @apply face-mono;
+}
+
 /* The control accent, not the blue browser glow and not status green (§2.8):
    a focused field is a control you are driving, not a healthy monitor. */
 .input:focus-visible {
