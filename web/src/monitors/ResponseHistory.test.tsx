@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { afterEach, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ResponseHistory } from "./ResponseHistory";
+import type { ResponseHeartbeat } from "./responseHistory";
 
 afterEach(cleanup);
 
@@ -81,8 +82,10 @@ it("does not turn loading or a failed history request into an empty-history clai
 
 it("never draws an empty disclosure for missing snapshots or successful checks", () => {
   const { container } = render(<ResponseHistory heartbeats={[
-    { id: "10", ts: "2026-09-19T12:00:00Z", ok: false },
-    { id: "11", ts: "2026-09-19T12:01:00Z", ok: false, response: null, response_capture_reason: "disabled" },
+    // Two different errors, so the two failures stay two rows and each states
+    // its own reason in the single-check wording.
+    { id: "10", ts: "2026-09-19T12:00:00Z", ok: false, error: "first" },
+    { id: "11", ts: "2026-09-19T12:01:00Z", ok: false, error: "second", response: null, response_capture_reason: "disabled" },
     { id: "12", ts: "2026-09-19T12:02:00Z", ok: true, response: { body: "must not show" } },
   ]} />);
   expect(container.querySelector("details, pre")).toBeNull();
@@ -126,3 +129,106 @@ it.each([["status", "unexpected status code"], ["dns", "DNS failure"], ["new-kin
     expect(screen.getByText(words)).toBeTruthy();
   },
 );
+
+describe("consecutive identical failures (SUB-184)", () => {
+  // Newest first, a minute apart, as the API returns them.
+  const same = (count: number, over: Partial<ResponseHeartbeat> = {}, start = 0): ResponseHeartbeat[] =>
+    Array.from({ length: count }, (_, i) => ({
+      id: String(1000 - start - i),
+      ts: new Date(Date.parse("2026-09-19T14:00:00Z") - (start + i) * 60_000).toISOString(),
+      ok: false,
+      assessment: "down" as const,
+      failure_kind: "status",
+      status_code: 502,
+      error: "unexpected status 502",
+      ...over,
+    }));
+
+  it("tells forty identical failures in one row with their count and span", () => {
+    const { container } = render(<ResponseHistory heartbeats={same(40)} />);
+    const rows = container.querySelectorAll(".response-history-beat");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].textContent).toContain("40 checks in a row");
+    // The span runs from the oldest check to the newest, machine-readably.
+    const times = [...rows[0].querySelectorAll(".response-history-check time")].map((t) => t.getAttribute("dateTime"));
+    expect(times).toEqual(["2026-09-19T13:21:00.000Z", "2026-09-19T14:00:00.000Z"]);
+    // The error and the missing-capture reason are said once, not forty times.
+    expect(screen.getAllByText("unexpected status 502")).toHaveLength(1);
+    expect(screen.getByText("No captured response for 40 of these checks. Reason not recorded.")).toBeTruthy();
+    expect(screen.queryByText("No captured response. Reason not recorded.")).toBeNull();
+  });
+
+  it("starts a new row when anything the row prints differs", () => {
+    // Each run differs from the plain one beside it in exactly one field, so
+    // every field is what splits on its own.
+    const changes: Partial<ResponseHeartbeat>[] = [
+      { status_code: 503 },
+      { error: "connection reset" },
+      { assessment: "warning" },
+      { maintenance: true },
+      { failure_kind: "timeout" },
+    ];
+    const heartbeats = changes.flatMap((change, i) => [
+      ...same(2, {}, i * 4),
+      ...same(2, change, i * 4 + 2),
+    ]);
+    const { container } = render(<ResponseHistory heartbeats={heartbeats} />);
+    expect([...container.querySelectorAll(".response-history-beat")].map((row) => row.getAttribute("data-count")))
+      .toEqual(Array(10).fill("2"));
+  });
+
+  it("keeps two outages apart when a passed check stands between them", () => {
+    const [a, b, c, d] = same(4);
+    const { container } = render(<ResponseHistory heartbeats={[a, b, { ...c, ok: true }, d]} />);
+    expect([...container.querySelectorAll(".response-history-beat")].map((row) => row.getAttribute("data-count")))
+      .toEqual(["2", "1"]);
+  });
+
+  it("keeps every captured response, each behind its own disclosure", () => {
+    const beats = same(5);
+    beats[0] = { ...beats[0], response: { body: "newest body" } };
+    beats[3] = { ...beats[3], response: { body: "older body" } };
+    beats[4] = { ...beats[4], response_capture_reason: "budget" };
+    const { container } = render(<ResponseHistory heartbeats={beats} />);
+    expect(container.querySelectorAll(".response-history-beat")).toHaveLength(1);
+    expect(container.querySelectorAll("details")).toHaveLength(2);
+    expect([...container.querySelectorAll("pre")].map((pre) => pre.textContent)).toEqual(["newest body", "older body"]);
+    // The checks without a response are counted by the reason recorded for them.
+    expect(screen.getByText("No captured response for 2 of these checks. Reason not recorded.")).toBeTruthy();
+    expect(screen.getByText("This incident's response capture allowance had been used; no response was stored for 1 of these checks.")).toBeTruthy();
+  });
+
+  it("keeps an open response's element while the run grows and slides", () => {
+    // A long outage: every poll adds a failure at the front and, past the
+    // hundred-check window, drops one at the back. No member of the run is on
+    // screen for the whole outage, and the open disclosure must survive that.
+    // IDs grow with time, newest first.
+    const first = same(6).map((hb, i) => ({ ...hb, id: String(20 - i) }));
+    first[3] = { ...first[3], response: { body: "kept open" } };
+    const { container, rerender } = render(<ResponseHistory heartbeats={first} />);
+    const disclosure = container.querySelector("details")!;
+    fireEvent.click(disclosure.querySelector("summary")!);
+    expect(disclosure.open).toBe(true);
+    // Next poll: id 21 is new at the front, id 15 has aged out at the back.
+    const next = [{ ...first[0], id: "21" }, ...first.slice(0, 5).map((hb) => JSON.parse(JSON.stringify(hb)))];
+    rerender(<ResponseHistory heartbeats={next} />);
+    // And again: neither end of the first render's run is on screen now.
+    const after = [{ ...first[0], id: "22" }, ...next.slice(0, 5).map((hb) => JSON.parse(JSON.stringify(hb)))];
+    rerender(<ResponseHistory heartbeats={after} />);
+    expect(container.querySelectorAll(".response-history-beat")).toHaveLength(1);
+    expect(container.querySelector("details")).toBe(disclosure);
+    expect(disclosure.open).toBe(true);
+  });
+
+  it("keeps an open response's element when a lone failure becomes a run", () => {
+    const [only] = same(1);
+    const first = { ...only, id: "50", response: { body: "lone body" } };
+    const { container, rerender } = render(<ResponseHistory heartbeats={[first]} />);
+    const disclosure = container.querySelector("details")!;
+    fireEvent.click(disclosure.querySelector("summary")!);
+    rerender(<ResponseHistory heartbeats={[{ ...first, id: "51", response: null }, { ...first }]} />);
+    expect(container.querySelector(".response-history-beat")?.getAttribute("data-count")).toBe("2");
+    expect(container.querySelector("details")).toBe(disclosure);
+    expect(disclosure.open).toBe(true);
+  });
+});

@@ -19,7 +19,8 @@ import { describeChurn } from "../incidents/story";
 import { Led } from "./Led";
 import { Unknown } from "./Unknown";
 import type { Monitor } from "./types";
-import { ResponseHistory, type ResponseHistoryProps } from "./ResponseHistory";
+import type { ResponseHistoryProps } from "./ResponseHistory";
+import { LazyResponseHistory } from "./LazyResponseHistory";
 import { LatencyChart, type LatencyChartProps } from "./LatencyChart";
 import type { CheckOutcome } from "./inventoryApi";
 
@@ -35,8 +36,9 @@ const EMPTY_ACKING: ReadonlySet<string> = new Set();
  *
  * The order down the page is the order the questions get asked, and it is not
  * the order of the API: what is it, is it up and why not, what has it looked
- * like recently, how reliable is it over real windows, and what has already
- * gone wrong. Reference data (interval, type) stays on the inventory screen;
+ * like recently, how reliable is it over real windows, is it getting slower,
+ * what has already gone wrong — and only then the raw failed checks behind
+ * those answers. Reference data (interval, type) stays on the inventory screen;
  * this screen uses the existing live list rather than a separate settings read.
  *
  * Presentational, like `Dashboard`: it fetches nothing. `MonitorDetailRoute`
@@ -477,8 +479,6 @@ export function MonitorDetail({
         </Panel>
       </Card>
 
-      {responseHistory ? <ResponseHistory key={monitor.id} {...responseHistory} /> : null}
-
       <Card title="Uptime" icon={<IconGauge />} headingLevel={2}>
         {monitor.maintenance ? (
           <p role="status">
@@ -487,7 +487,6 @@ export function MonitorDetail({
               : "Scheduled maintenance — checks continue; alerts suppressed."}
           </p>
         ) : null}
-        <p className="mon-detail-uptime-note">Only confirmed downtime counts. Warnings, maintenance checks and history without a recorded assessment are excluded. This is a sample ratio, not elapsed time.</p>
         <Panel>
           {error !== null && loaded ? (
             <p role="alert" className="mon-detail-note">
@@ -548,6 +547,17 @@ export function MonitorDetail({
               ))}
             </dl>
           )}
+          {/*
+           * How the figures are counted, under them and closed (SUB-184).
+           * Always open above the numbers, it was the first thing read on a
+           * card somebody opens for three percentages. It stays one press
+           * away rather than gone: "why is my 24h uptime 100% when it was
+           * failing" is answered here and nowhere else on the page.
+           */}
+          <details className="mon-detail-uptime-note">
+            <summary>How uptime is counted</summary>
+            <p>Only confirmed downtime counts. Warnings, maintenance checks and history without a recorded assessment are excluded. This is a sample ratio, not elapsed time.</p>
+          </details>
         </Panel>
       </Card>
 
@@ -622,6 +632,15 @@ export function MonitorDetail({
           )}
         </Panel>
       </Card>
+
+      {/*
+       * Last, after the incidents (SUB-184). These are the raw failed checks
+       * behind the summaries above them: evidence somebody digs into once the
+       * uptime, the trend and the incident have said what happened. Above
+       * Uptime, a monitor that had been down for forty minutes pushed every
+       * summary on the page below forty rows of the same error.
+       */}
+      {responseHistory ? <LazyResponseHistory key={monitor.id} {...responseHistory} /> : null}
     </article>
   );
 }

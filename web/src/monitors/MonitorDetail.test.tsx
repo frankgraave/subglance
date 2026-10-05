@@ -419,3 +419,48 @@ it("counts warning checks separately in the detail legend", () => {
   expect(value("Failed")).toBe("1");
   expect(value("Warnings (unconfirmed)")).toBe("1");
 });
+
+describe("the page's order (SUB-184)", () => {
+  it("puts the summaries before the raw failed checks", () => {
+    // The overview used to sit under the failure list: a monitor down for
+    // forty minutes pushed Uptime, Latency and Incidents six thousand pixels
+    // down the page.
+    view({
+      windows: [window_()],
+      responseHistory: { heartbeats: [] },
+      latency: { window: "24h", onWindowChange: () => {} },
+    });
+    const headings = [...document.querySelectorAll("h2")].map((h) => h.textContent);
+    expect(headings).toEqual(["Recent checks", "Uptime", "Latency", "Incidents", "Failure responses"]);
+  });
+
+  it("keeps how uptime is counted one press away, under the figures", () => {
+    view({ windows: [window_()] });
+    const note = document.querySelector<HTMLDetailsElement>(".mon-detail-uptime-note")!;
+    expect(note.tagName).toBe("DETAILS");
+    expect(note.open).toBe(false);
+    expect(note.querySelector("summary")?.textContent).toBe("How uptime is counted");
+    expect(note.textContent).toContain("This is a sample ratio, not elapsed time.");
+    // Under the figures, not above them: the numbers are what the card is for.
+    const figures = document.querySelector(".mon-detail-windows")!;
+    expect(figures.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("draws every card's no-data finding in one face", async () => {
+    view({
+      windows: [],
+      incidents: [],
+      responseHistory: { heartbeats: [] },
+      latency: { window: "24h", onWindowChange: () => {} },
+    });
+    // The failure card loads as its own chunk, after the rest of the page.
+    await screen.findByText("No failed checks in the recent history.");
+    const empties = [
+      "No uptime data yet.",
+      "Nothing has gone wrong yet.",
+      "No failed checks in the recent history.",
+      "No checks in the last 24h.",
+    ].map((text) => screen.getByText(text).className);
+    expect(empties).toEqual(Array(4).fill("mon-detail-empty"));
+  });
+});
