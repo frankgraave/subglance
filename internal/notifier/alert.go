@@ -71,6 +71,14 @@ type Alert struct {
 	// the ones on the reader's own clock.
 	Digest     bool   `json:"digest,omitempty"`
 	DigestZone string `json:"digest_timezone,omitempty"`
+
+	// ReplacesAlert marks a recovery that stands in for the alert about
+	// the same outage: that alert was still waiting to reach this channel
+	// when the monitor came back up, so the channel gets one message about
+	// the whole outage instead of a "down" for something that is already
+	// over, followed by an "up". On a grouped message it is set when every
+	// member replaces its alert.
+	ReplacesAlert bool `json:"replaces_alert,omitempty"`
 }
 
 // Grouped reports whether this alert covers more than one monitor.
@@ -118,6 +126,13 @@ func (a Alert) Title() string {
 
 	switch state.Event(a.Event) {
 	case state.EventIncidentResolved:
+		if a.ReplacesAlert {
+			// The reader never heard it go down: the title says both.
+			if a.StartedAt.IsZero() {
+				return fmt.Sprintf("%s was down and is back up", a.MonitorName)
+			}
+			return fmt.Sprintf("%s was down for %s, now back up", a.MonitorName, durationWords(a.At.Sub(a.StartedAt)))
+		}
 		return fmt.Sprintf("%s is back up", a.MonitorName)
 	case state.EventIncidentReminder:
 		return fmt.Sprintf("%s is still down", a.MonitorName)
@@ -161,7 +176,11 @@ func (a Alert) Body() string {
 	if a.LastError != "" {
 		out += "\n" + a.LastError
 	}
-	if !a.StartedAt.IsZero() && !a.Down() {
+	if !a.StartedAt.IsZero() && !a.Down() && a.ReplacesAlert {
+		// No alert gave the start time, so this message does.
+		out += fmt.Sprintf("\nDown from %s to %s", a.StartedAt.UTC().Format("2006-01-02 15:04 UTC"),
+			a.At.UTC().Format("15:04 UTC"))
+	} else if !a.StartedAt.IsZero() && !a.Down() {
 		out += fmt.Sprintf("\nDown for %s", durationWords(a.At.Sub(a.StartedAt)))
 	} else if !a.StartedAt.IsZero() {
 		out += fmt.Sprintf("\nSince %s", a.StartedAt.UTC().Format("2006-01-02 15:04 UTC"))

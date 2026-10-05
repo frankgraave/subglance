@@ -210,8 +210,18 @@ func smsText(a Alert, zone string, limit int) string {
 		}
 		switch state.Event(a.Event) {
 		case state.EventIncidentResolved:
-			status, reason = "UP", ""
-			if !a.StartedAt.IsZero() {
+			// A recovery that replaces its alert keeps the reason:
+			// the alert never arrived, so this text says what failed
+			// and for how long.
+			status = "UP"
+			if !a.ReplacesAlert {
+				reason = ""
+			}
+			switch {
+			case a.StartedAt.IsZero():
+			case a.ReplacesAlert:
+				tail = " (down " + smsDuration(a.At.Sub(a.StartedAt)) + ")"
+			default:
 				tail = " after " + smsDuration(a.At.Sub(a.StartedAt))
 			}
 		case state.EventIncidentReminder:

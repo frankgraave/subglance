@@ -209,7 +209,9 @@ func smsDestination(cfg map[string]string, numbers []string) string {
 // only, and the hourly limit. Every alert withheld by the limit is counted,
 // and the next message that does go out says how many there were.
 func (s *SMSSender) Withhold(cfg map[string]string, a Alert, now time.Time) string {
-	if strings.TrimSpace(cfg["recoveries"]) == "false" && !a.Down() {
+	// A recovery that replaces its alert is the only word of that outage
+	// the channel gets, so an outages-only channel sends it.
+	if strings.TrimSpace(cfg["recoveries"]) == "false" && !a.Down() && !replacesAnAlert(a) {
 		return "not sent: this SMS channel sends outages only"
 	}
 	if ValidateSMSConfig(cfg) != nil {
