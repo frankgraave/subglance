@@ -763,6 +763,10 @@ function groupByDay(incidents: readonly Incident[], now: number): Day[] {
  */
 function dayLabel(date: Date, now: number): string {
   if (sameDay(date.getTime(), now)) return "Today";
-  if (sameDay(date.getTime(), now - 86_400_000)) return "Yesterday";
+  // The calendar day before, not 24 hours before: a day that gains or loses
+  // an hour to daylight saving is 23 or 25 hours long in the reader's zone.
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (sameDay(date.getTime(), yesterday.getTime())) return "Yesterday";
   return formatDay(date.getTime());
 }

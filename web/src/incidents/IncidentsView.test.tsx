@@ -1047,6 +1047,41 @@ describe("the screen does not claim more than it knows", () => {
     expect(head.textContent).not.toMatch(/today|yesterday/i);
   });
 
+  it("heads the calendar day before as Yesterday across a daylight-saving change", () => {
+    /*
+     * 29 March 2026 is 23 hours long in Amsterdam. Half an hour into the
+     * 30th, 24 hours back lands on the 28th, so a fixed day of milliseconds
+     * headed an incident resolved on the 29th with a plain date.
+     */
+    const zone = process.env.TZ;
+    process.env.TZ = "Europe/Amsterdam";
+    try {
+      const now = Date.UTC(2026, 2, 29, 22, 30); // 30 March, 00:30 CEST
+      const resolvedAt = Date.UTC(2026, 2, 29, 10, 0); // 29 March, 12:00 CEST
+      render(
+        <IncidentsView
+          incidents={[]}
+          resolved={[
+            incident({
+              id: "r",
+              startedAt: resolvedAt - 600_000,
+              resolved: true,
+              resolvedAt,
+              durationS: 600,
+            }),
+          ]}
+          now={now}
+          names={{ "7": "api" }}
+        />,
+      );
+      const head = document.querySelector(".inc-day-head")!;
+      expect(head.textContent).toMatch(/yesterday/i);
+    } finally {
+      if (zone === undefined) delete process.env.TZ;
+      else process.env.TZ = zone;
+    }
+  });
+
   it("does not announce a monitor count it does not have", () => {
     // "0 monitors watched, zero confirmed outages" is an all-clear about a
     // population we failed to read. Without a count it must claim nothing.
