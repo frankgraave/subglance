@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChannelFailingNotice } from "./ChannelFailingNotice";
+import { channelsQueryKey } from "./channelsApi";
 import { describeHistory, historyFromApi } from "./channels";
 
 /*
@@ -43,16 +44,21 @@ const channel = (id: number, name: string, over: Record<string, unknown> = {}, e
 });
 
 function show(channels: unknown, onOpen?: () => void) {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () => new Response(JSON.stringify(channels))),
-  );
+  const fetchMock = vi.fn(async () => new Response(JSON.stringify(channels)));
+  vi.stubGlobal("fetch", fetchMock);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const view = render(
     <QueryClientProvider client={client}>
       <ChannelFailingNotice onOpen={onOpen} />
     </QueryClientProvider>,
   );
+  return { view, client, fetchMock };
+}
+
+/** Waits until the list has been fetched and the query has settled. */
+async function settled({ client, fetchMock }: ReturnType<typeof show>) {
+  await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+  await waitFor(() => expect(client.isFetching()).toBe(0));
 }
 
 describe("ChannelFailingNotice", () => {
@@ -106,19 +112,30 @@ describe("ChannelFailingNotice", () => {
 
   it("draws nothing for a 30-day failure that has since ended, a disabled channel, or a list it could not read", async () => {
     // Failed inside the window but delivered since: failing_since is null.
-    const { unmount } = show({
+    const quiet = show({
       channels: [
         channel(1, "recovered", { failing_since: null }),
         channel(2, "switched-off", { failing_since: "2026-10-05T03:00:00Z", notice: "waiting" }, false),
       ],
     });
-    await new Promise((r) => setTimeout(r, 20));
+    await settled(quiet);
     expect(screen.queryByRole("status")).toBeNull();
-    unmount();
+    quiet.view.unmount();
 
-    show({ error: "no list" });
-    await new Promise((r) => setTimeout(r, 20));
+    await settled(show({ error: "no list" }));
     expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("takes the line down when a later fetch of the list fails, rather than repeating the last answer", async () => {
+    const shown = show({
+      channels: [channel(1, "ops-slack", { failing_since: "2026-10-05T03:00:00Z", notice: "no_other_channel" })],
+    });
+    await screen.findByRole("status");
+
+    shown.fetchMock.mockImplementation(async () => new Response("", { status: 503 }));
+    await shown.client.refetchQueries({ queryKey: channelsQueryKey });
+    expect(shown.client.getQueryState(channelsQueryKey)?.status).toBe("error");
+    await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
   });
 });
 

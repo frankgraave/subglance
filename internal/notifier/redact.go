@@ -67,9 +67,12 @@ func MaskValue(v string) string {
 // urlInText finds the URLs in a delivery error.
 var urlInText = regexp.MustCompile(`(?i)\bhttps?://[^\s"'<>]+`)
 
-// minRedactLen is the shortest credential replaced in an error message.
-// Shorter values would match ordinary words and shred the message, and a
-// credential that short is not one an error message can meaningfully leak.
+// minRedactLen is the length from which a credential is replaced wherever it
+// appears in an error message. A shorter value is still a credential, and an
+// ntfy server that echoes a three-letter topic in its 4xx body would read it
+// out to every viewer, so it is replaced too, but only where it stands as a
+// token of its own: replaced everywhere, a two-character password would
+// shred every word that happens to contain it.
 const minRedactLen = 4
 
 // RedactError takes a channel's credentials out of a delivery error.
@@ -96,21 +99,61 @@ func RedactError(msg string, cfg map[string]string) string {
 	// Longest first: a shorter value inside a longer one would otherwise be
 	// replaced first, depending on map order, and leave the rest of the
 	// longer value in the message unmasked.
-	var vals []string
+	var vals, short []string
 	for k, v := range cfg {
-		if PublicConfigKeys[k] || len(strings.TrimSpace(v)) < minRedactLen {
+		t := strings.TrimSpace(v)
+		if PublicConfigKeys[k] || t == "" {
+			continue
+		}
+		if len(t) < minRedactLen {
+			short = append(short, t)
 			continue
 		}
 		vals = append(vals, v)
-		if t := strings.TrimSpace(v); t != v {
+		if t != v {
 			vals = append(vals, t)
 		}
 	}
-	slices.SortFunc(vals, func(a, b string) int { return cmp.Compare(len(b), len(a)) })
+	longestFirst := func(a, b string) int { return cmp.Compare(len(b), len(a)) }
+	slices.SortFunc(vals, longestFirst)
 	for _, v := range vals {
 		msg = strings.ReplaceAll(msg, v, MaskValue(v))
 	}
+	slices.SortFunc(short, longestFirst)
+	for _, v := range short {
+		msg = replaceToken(msg, v, MaskValue(v))
+	}
 	return urlInText.ReplaceAllStringFunc(msg, trimURL)
+}
+
+// replaceToken replaces v in msg wherever it is not part of a longer word:
+// the byte on either side of it, if there is one, is not a letter or digit.
+func replaceToken(msg, v, mask string) string {
+	var b strings.Builder
+	from, last := 0, 0
+	for {
+		i := strings.Index(msg[from:], v)
+		if i < 0 {
+			break
+		}
+		i += from
+		end := i + len(v)
+		if (i == 0 || !isWordByte(msg[i-1])) && (end == len(msg) || !isWordByte(msg[end])) {
+			b.WriteString(msg[last:i])
+			b.WriteString(mask)
+			last, from = end, end
+			continue
+		}
+		from = i + 1
+	}
+	b.WriteString(msg[last:])
+	return b.String()
+}
+
+// isWordByte reports whether c can be part of a word. Any byte of a
+// multi-byte character counts, so a value never splits a non-ASCII word.
+func isWordByte(c byte) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c >= 0x80
 }
 
 // trimURL keeps a URL's scheme and host, and marks that more was there.

@@ -98,6 +98,19 @@ func TestRedactDeliveryErrorTakesOutTheCredential(t *testing.T) {
 	}
 }
 
+// A credential under four characters is still a credential: an ntfy server
+// that echoes a short topic in its 4xx body must not hand it to a viewer of
+// the channel list. It goes only where it stands alone, so the words that
+// happen to contain it stay readable.
+func TestRedactDeliveryErrorMasksAShortCredentialAsAToken(t *testing.T) {
+	ch := store.Channel{Type: store.ChannelNtfy, Config: map[string]string{"topic": " ops ", "priority_up": "3"}}
+	got := redactDeliveryError("endpoint rejected the alert (403): topic ops is reserved; priority 3; retrying stops here", ch)
+	const want = "endpoint rejected the alert (403): topic *** is reserved; priority 3; retrying stops here"
+	if got != want {
+		t.Errorf("short credential:\n got %q\nwant %q", got, want)
+	}
+}
+
 func TestChannelListCarriesTheDeliveryRecord(t *testing.T) {
 	srv, db := testServerWithDB(t)
 	ctx := t.Context()

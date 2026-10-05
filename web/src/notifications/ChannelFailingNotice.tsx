@@ -20,7 +20,8 @@ import { NOTIFICATIONS_PATH } from "../shell/route";
  *    another channel, or that there is none to report it through, which is
  *    the case where this line is the only place it is said.
  * 4. **Only what the server vouches for.** A channel list that failed to load
- *    draws nothing: this line never guesses, in either direction.
+ *    draws nothing, and so does one whose latest refetch failed, even with an
+ *    older answer still cached: this line never guesses, in either direction.
  * 5. **A real link** to the notifications screen, for the reasons
  *    `MonitorLink` gives; the handler only swaps the page load for a route
  *    change on a plain left click.
@@ -31,13 +32,15 @@ export function ChannelFailingNotice({
   /** Opens the notifications screen without a page load. */
   onOpen?: () => void;
 }) {
-  const { data } = useQuery({
+  const { data, isError } = useQuery({
     queryKey: channelsQueryKey,
     queryFn: ({ signal }) => fetchChannels(signal),
     refetchInterval: 60_000,
   });
   const failing = data === undefined ? [] : failingChannels(data);
-  if (data === undefined || failing.length === 0) return null;
+  // A refetch that failed keeps the last answer in `data`; the line says
+  // only what the latest answer vouches for (point 4).
+  if (data === undefined || isError || failing.length === 0) return null;
 
   const names = new Map(data.map((c) => [c.id, c.name]));
   const first = failing[0];
