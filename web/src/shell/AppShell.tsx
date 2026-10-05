@@ -31,7 +31,7 @@ export type AppShellProps = {
   navReturnFocusRef?: RefObject<HTMLElement | null>;
   instance?: string;
   /** Which built destination is on screen; lights the matching nav item. */
-  current?: NavRoute | "monitor" | "workbench";
+  current?: NavRoute | "monitor" | "workbench" | "notFound";
   /** Client-side navigation from the sidebar and the drawer. */
   onNavigate?: (route: NavRoute) => void;
   /** The signed-in address, shown in the navigation footer. */

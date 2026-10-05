@@ -196,6 +196,7 @@ describe("no screen draws a bar under the masthead", () => {
     { path: "/notifications", ready: ".inv-row" },
     { path: "/settings", ready: 'input[name="current_password"]' },
     { path: "/workbench", ready: ".chip--status" },
+    { path: "/this-does-not-exist", ready: ".page .card a[href='/']" },
   ])("$path", async ({ path, ready }) => {
     const page = await open(path, ready, 1440);
     try {

@@ -53,8 +53,8 @@ type Route = {
   title: string;
   /** The section linked before the title, on a child page. */
   parent?: string;
-  /** The sidebar item lit on this route. */
-  lit: string;
+  /** The sidebar item lit on this route; none on an address of no section. */
+  lit?: string;
   /** What the tab says before the product name. */
   tab: string;
   width: "full" | "measure" | "indexed";
@@ -74,6 +74,15 @@ const ROUTES: Route[] = [
     parent: "Monitors",
     lit: "Monitors",
     tab: "checkout-api-eu-west-1.internal.acme-corporation.example",
+    width: "measure",
+  },
+  // An address that names no screen (SUB-177): titled, framed at the
+  // measure, and lighting nothing, because it belongs to no section.
+  {
+    path: "/this-does-not-exist",
+    ready: ".page .card a[href='/']",
+    title: "Page not found",
+    tab: "Page not found",
     width: "measure",
   },
 ];
@@ -200,7 +209,9 @@ describe("the page frame", () => {
         // Nothing titles the page inside it any more.
         expect(m.firstInPage, `${where}: the page starts with its content`).not.toBe("h1");
 
-        expect(m.lit, `${where}: the rail lights the section`).toEqual([route.lit]);
+        expect(m.lit, `${where}: the rail lights the section`).toEqual(
+          route.lit === undefined ? [] : [route.lit],
+        );
         expect(m.title, where).toBe(`${route.tab} \u2014 SubGlance`);
 
         if (route.width === "full") {

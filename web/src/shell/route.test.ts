@@ -14,7 +14,7 @@ describe("parseRoute", () => {
   it("reads the real settings route", () => {
     expect(parseRoute("/settings")).toEqual({ name: "settings" });
     expect(parseRoute("/settings/")).toEqual({ name: "settings" });
-    expect(parseRoute("/settings/unknown")).toEqual({ name: "dashboard" });
+    expect(parseRoute("/settings/unknown")).toEqual({ name: "notFound", path: "/settings/unknown" });
   });
   it("reads a monitor id out of the path", () => {
     expect(parseRoute("/monitors/42")).toEqual({ name: "monitor", id: "42" });
@@ -29,10 +29,10 @@ describe("parseRoute", () => {
     expect(parseRoute(monitorPath(id))).toEqual({ name: "monitor", id });
   });
 
-  it("falls back to the dashboard on a malformed escape rather than throwing", () => {
+  it("reads a malformed escape as not found rather than throwing", () => {
     // decodeURIComponent throws on this, and a hand-typed URL can contain it.
     // An exception here would take the whole app down on a typo.
-    expect(parseRoute("/monitors/%zz")).toEqual({ name: "dashboard" });
+    expect(parseRoute("/monitors/%zz")).toEqual({ name: "notFound", path: "/monitors/%zz" });
   });
 
   it("reads the incidents screen, which an alert links people to", () => {
@@ -45,13 +45,28 @@ describe("parseRoute", () => {
   it("does not mistake a deeper incidents path for the screen", () => {
     // No per-incident route exists, and silently showing the list for
     // /incidents/42 would claim a screen that is not there.
-    expect(parseRoute("/incidents/42")).toEqual({ name: "dashboard" });
+    expect(parseRoute("/incidents/42")).toEqual({ name: "notFound", path: "/incidents/42" });
   });
 
-  it("treats an unknown path as the dashboard, not as a crash", () => {
-    expect(parseRoute("/nope")).toEqual({ name: "dashboard" });
+  it("reads an unknown path as not found, keeping the path that was typed", () => {
+    // SUB-177: the dashboard used to stand in for any unknown address, so a
+    // stale link looked as though it worked. The path is kept so the address
+    // bar is not rewritten under the user.
+    expect(parseRoute("/this-does-not-exist")).toEqual({
+      name: "notFound",
+      path: "/this-does-not-exist",
+    });
+    expect(parseRoute("/monitors/1/extra")).toEqual({
+      name: "notFound",
+      path: "/monitors/1/extra",
+    });
+    expect(parseRoute("/dashboard")).toEqual({ name: "notFound", path: "/dashboard" });
+  });
+
+  it("reads the root, and only the root, as the dashboard", () => {
     expect(parseRoute("/")).toEqual({ name: "dashboard" });
-    expect(parseRoute("/monitors/1/extra")).toEqual({ name: "dashboard" });
+    expect(parseRoute("")).toEqual({ name: "dashboard" });
+    expect(parseRoute("//")).toEqual({ name: "dashboard" });
   });
 
   it("refuses an empty id, which would otherwise select monitor ''", () => {
@@ -109,9 +124,10 @@ describe("parseRoute", () => {
   it("does not mistake a deeper notifications path for the screen", () => {
     // There is no per-channel route, and rendering the list for
     // /notifications/42 would claim an address that promises one channel.
-    expect(parseRoute("/notifications/42")).toEqual({ name: "dashboard" });
+    expect(parseRoute("/notifications/42")).toEqual({ name: "notFound", path: "/notifications/42" });
     expect(parseRoute("/notifications/new/extra")).toEqual({
-      name: "dashboard",
+      name: "notFound",
+      path: "/notifications/new/extra",
     });
   });
 
@@ -130,15 +146,15 @@ describe("the workbench address", () => {
   it("reads /workbench as the workbench and nothing deeper", () => {
     // SUB-193: the only way in now that the masthead button is gone, so the
     // address is the feature. A deeper path promises a screen that is not
-    // there and falls through like any other unknown path.
+    // there and is not found, like any other unknown path.
     expect(parseRoute("/workbench")).toEqual({ name: "workbench" });
     expect(parseRoute("/workbench/")).toEqual({ name: "workbench" });
-    expect(parseRoute("/workbench/sizes")).toEqual({ name: "dashboard" });
+    expect(parseRoute("/workbench/sizes")).toEqual({ name: "notFound", path: "/workbench/sizes" });
   });
 });
 
 describe("routePath", () => {
-  it("inverts parseRoute for both routes", () => {
+  it("inverts parseRoute for every route", () => {
     for (const route of [
       { name: "dashboard" },
       { name: "settings" },
@@ -149,8 +165,19 @@ describe("routePath", () => {
       { name: "notifications", create: false },
       { name: "notifications", create: true },
       { name: "workbench" },
+      { name: "notFound", path: "/no-such-page" },
     ] as const) {
       expect(parseRoute(routePath(route))).toEqual(route);
     }
+  });
+});
+
+describe("an address that names no screen", () => {
+  it("keeps its own path, so the address bar is not rewritten", () => {
+    // Two different wrong addresses are two different places: focus and
+    // history compare `routePath`, and a shared path would make a move from
+    // one to the other look like no navigation at all.
+    expect(routePath(parseRoute("/a"))).toBe("/a");
+    expect(routePath(parseRoute("/b/c"))).toBe("/b/c");
   });
 });
