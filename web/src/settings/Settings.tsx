@@ -2,14 +2,13 @@ import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "rea
 import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { createQueryClient } from "../live/queryClient";
 import { Card, Panel } from "../components/Card";
-import { IconDatabase, IconGlobe, IconTransfer } from "../components/icons";
+import { IconAlert, IconDatabase, IconGlobe, IconTransfer } from "../components/icons";
 import { ChangePassword } from "../auth/ChangePassword";
 import { SettingsIcon } from "../shell/icons";
 import { FilterField } from "../shell/FilterField";
 import { WatchdogCard } from "../watchdog/Watchdog";
 import { DiagnosticsCard } from "../diagnostics/Diagnostics";
 import { BackupCard } from "../backup/Backup";
-import { ResetInstanceCard } from "../reset/ResetInstance";
 import { UsersCard } from "../users/Users";
 import { TokensCard } from "../tokens/Tokens";
 import { DisplayCard, type DisplayPreferences } from "./DisplayCard";
@@ -34,6 +33,13 @@ const ConfigFilesCard = lazy(() => import("../configfile/ConfigFiles").then((mod
  * raising the budget for everyone.
  */
 const RetentionCard = lazy(() => import("../retention/Retention").then((module) => ({ default: module.RetentionCard })));
+/*
+ * And for the reset: administrators only, last on the page, and pressed once
+ * in an instance's life if at all. It went out of the entry chunk when the
+ * not-found screen (SUB-177) took the entry to its ceiling, so a screen every
+ * visitor can reach paid for itself with one almost nobody does.
+ */
+const ResetInstanceCard = lazy(() => import("../reset/ResetInstance").then((module) => ({ default: module.ResetInstanceCard })));
 
 /**
  * One settings section: the anchor it answers to, the name the index shows,
@@ -201,7 +207,9 @@ export function Settings({ client, canAdmin = false, role = canAdmin ? "admin" :
     // search for "reset" by anyone else finds nothing rather than a card they
     // could not use.
     ...(canAdmin ? [{ id: "reset", label: "Reset instance", keywords: "reset danger delete all data erase wipe instance",
-      body: provide(<ResetInstanceCard />) }] : []),
+      body: provide(<Suspense fallback={<Card title="Reset this instance" icon={<IconAlert />}><Panel><p>Loading the reset…</p></Panel></Card>}>
+        <ResetInstanceCard />
+      </Suspense>) }] : []),
   ];
   const needle = query.trim().toLowerCase();
   const shown = sections.filter((section) => section.keywords.includes(needle));

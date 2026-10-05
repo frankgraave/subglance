@@ -25,3 +25,23 @@ export type Session =
    * the failure.
    */
   | { state: "error"; message: string };
+
+/**
+ * What the tab says while the session gate, not the app, is on screen: the
+ * same words as the gate screen's own heading. `null` while the session is
+ * still being asked for, because that screen is a wait, not a page.
+ */
+export function sessionPageTitle(session: Session): string | null {
+  switch (session.state) {
+    case "unknown":
+      return null;
+    case "setup":
+      return "Set up this instance";
+    case "anonymous":
+      return "Sign in";
+    case "error":
+      return "Cannot reach this instance";
+    case "signedIn":
+      return null;
+  }
+}

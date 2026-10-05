@@ -47,6 +47,7 @@ const ROUTES: { path: string; ready: string }[] = [
   { path: "/notifications", ready: ".inv-row" },
   { path: "/notifications/new", ready: ".drawer-panel form" },
   { path: "/settings", ready: "#users li .segmented" },
+  { path: "/this-does-not-exist", ready: ".page .card a[href='/']" },
 ];
 
 /** Ticket numbers, source paths, and the design prototype. */

@@ -56,7 +56,9 @@ it("opens the password card from the sidebar for a viewer and keeps settings out
   render(<App />);
   const input = await screen.findByLabelText("Current password");
   expect(screen.getByRole("link", { name: "Settings" }).getAttribute("aria-current")).toBe("page");
-  expect(document.title).toMatch(/Settings/);
+  // Waited for: the tab names the screen once the session has resolved, in
+  // the effect after that commit, and says the gate's screen before it.
+  await waitFor(() => expect(document.title).toMatch(/Settings/));
   expect(document.querySelector(".shell-topbar")).toBeTruthy();
   await screen.findByText("Not configured");
   // Account, display, self-monitoring, retention and API tokens. Not import

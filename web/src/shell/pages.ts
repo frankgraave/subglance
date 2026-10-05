@@ -30,6 +30,9 @@ export const PAGE_TITLES: Readonly<Record<NavRoute, string>> = {
   settings: "Settings",
 };
 
+/** The masthead's title and the tab's for an address that names no screen. */
+export const NOT_FOUND_TITLE = "Page not found";
+
 /**
  * The page types, by width. One rule underneath all three: **the column of
  * cards is `--size-pane-lg` on every screen but the dashboard.** Adding a
@@ -64,6 +67,9 @@ export function pageFrame(route: Route): PageFrame {
   // Not a screen of the product, so not in `PAGE_TITLES` or the rail. Full
   // width because its galleries lay states side by side.
   if (route.name === "workbench") return { title: "Workbench", width: "full" };
+  // Not a screen either, and it lights no section of the rail: the address
+  // belongs to none of them. Measure, because it is one card read once.
+  if (route.name === "notFound") return { title: NOT_FOUND_TITLE, width: "measure" };
   return {
     title: PAGE_TITLES[route.name],
     width:

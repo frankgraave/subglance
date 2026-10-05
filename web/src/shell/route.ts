@@ -35,7 +35,14 @@ export type Route =
    * nothing in the product links to it, and a person who never types it
    * never meets fixture data that looks like their own.
    */
-  | { name: "workbench" };
+  | { name: "workbench" }
+  /**
+   * An address that names no screen. It carries the path it was reached at,
+   * so `routePath` stays the inverse of `parseRoute`: the address bar keeps
+   * what was typed, and two different wrong addresses stay two different
+   * places to the focus and history logic, which compare paths.
+   */
+  | { name: "notFound"; path: string };
 
 export const DASHBOARD_PATH = "/";
 
@@ -92,14 +99,19 @@ export function monitorPath(id: string): string {
 /**
  * Reads a route out of a pathname.
  *
- * Anything unrecognised is the dashboard rather than a 404 screen. The server
- * already hands the SPA shell to every non-API path it does not know, so a
- * typo'd URL arrives here; showing the dashboard is both the honest answer
- * ("that page does not exist, here is the one that does") and the one that
- * leaves the user somewhere useful.
+ * Anything unrecognised is the not-found screen. The server hands the SPA
+ * shell to every non-API path it does not know, so a typo'd or stale URL
+ * arrives here. Drawing the dashboard for it, as this function used to, left
+ * the wrong address in the bar under a tab that said "Dashboard": the link
+ * looked as though it worked, so nobody corrected it, and whoever followed it
+ * never learned that the screen it promised was not there. The not-found
+ * screen says so and links to the dashboard, so the user is still one press
+ * from somewhere useful.
  */
 export function parseRoute(pathname: string): Route {
   const segments = pathname.split("/").filter((segment) => segment !== "");
+  const notFound: Route = { name: "notFound", path: pathname };
+  if (segments.length === 0) return { name: "dashboard" };
   if (segments.length === 1 && segments[0] === "settings") return { name: "settings" };
   if (segments.length === 1 && segments[0] === "workbench") return { name: "workbench" };
   if (segments.length === 1 && segments[0] === "incidents") {
@@ -114,8 +126,8 @@ export function parseRoute(pathname: string): Route {
   /*
    * `/notifications/new` opens the add drawer, and nothing else under
    * `/notifications` is a place. There is no per-channel route — a channel has
-   * no detail view — so a deeper path falls through to the dashboard rather
-   * than quietly rendering the list for an address that promises one channel.
+   * no detail view — so a deeper path is not found, rather than quietly
+   * rendering the list for an address that promises one channel.
    */
   if (
     segments.length === 2 &&
@@ -146,12 +158,12 @@ export function parseRoute(pathname: string): Route {
     try {
       id = decodeURIComponent(segments[1]);
     } catch {
-      return { name: "dashboard" };
+      return notFound;
     }
-    if (id === "") return { name: "dashboard" };
+    if (id === "") return notFound;
     return { name: "monitor", id };
   }
-  return { name: "dashboard" };
+  return notFound;
 }
 
 /** The path a route lives at. Inverse of `parseRoute` for known routes. */
@@ -164,5 +176,6 @@ export function routePath(route: Route): string {
   if (route.name === "incidents") return INCIDENTS_PATH;
   if (route.name === "settings") return SETTINGS_PATH;
   if (route.name === "workbench") return WORKBENCH_PATH;
+  if (route.name === "notFound") return route.path;
   return DASHBOARD_PATH;
 }

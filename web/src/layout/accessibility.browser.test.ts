@@ -33,6 +33,7 @@ const SCREENS: Screen[] = [
   { name: "monitors", path: "/monitors", ready: ".inv-list > li" },
   { name: "incidents", path: "/incidents", ready: ".inc-line" },
   { name: "notifications", path: "/notifications", ready: ".inv-row" },
+  { name: "not found", path: "/this-does-not-exist", ready: ".page .card a[href='/']" },
   { name: "setup", path: "/", auth: "setup", ready: ".auth-card input[type='password']" },
   { name: "login", path: "/", auth: "login", ready: ".auth-card input[type='password']" },
   // Waits for the users list, which arrives after the password card, so the

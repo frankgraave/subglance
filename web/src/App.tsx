@@ -20,6 +20,8 @@ import { useRoute } from "./shell/useRoute";
 import { MONITORS_PATH, routePath } from "./shell/route";
 import type { NavRoute } from "./shell/Sidebar";
 import { useDocumentTitle } from "./shell/documentTitle";
+import { NotFound } from "./shell/NotFound";
+import { sessionPageTitle } from "./auth/session";
 import { useRouteFocus } from "./shell/useRouteFocus";
 import { detailTitle, monitorTitleLink, morphNavigation } from "./shell/viewTransition";
 import { AppShell } from "./shell/AppShell";
@@ -165,6 +167,7 @@ export default function App() {
   const onMonitors = route.name === "monitors";
   const onNotifications = route.name === "notifications";
   const onSettings = route.name === "settings";
+  const onNotFound = route.name === "notFound";
   /*
    * Opening and closing the create drawer is a navigation, not a boolean.
    *
@@ -204,7 +207,13 @@ export default function App() {
     route.name === "monitor" && session.state === "signedIn" ? route.id : null,
   );
   const pageTitle = frame.title ?? monitorName ?? "Monitor";
-  useDocumentTitle(pageTitle);
+  // Signed out, the tab names the gate's screen rather than the route behind
+  // it: a sign-in form under a tab that said "Dashboard" was SUB-177's second
+  // finding. Here and not in the gate, because a child's title effect runs
+  // before this one and would be overwritten by it.
+  useDocumentTitle(
+    session.state === "signedIn" ? pageTitle : sessionPageTitle(session),
+  );
   useRouteFocus(path, mainRef);
 
   /*
@@ -219,7 +228,8 @@ export default function App() {
     !onIncidents &&
     !onMonitors &&
     !onNotifications &&
-    !onSettings;
+    !onSettings &&
+    !onNotFound;
   /*
    * What "a different screen" means for the inner error boundary: the route,
    * the workbench included. Changing it remounts the boundary and so clears a
@@ -320,7 +330,7 @@ export default function App() {
           ? () => setCreateOpen(false)
           : isWall
           ? leaveWall
-          : onDetail || onIncidents || workbenchOpen
+          : onDetail || onIncidents || workbenchOpen || onNotFound
               ? // Last in the queue, because these are places rather than
                 // overlays: anything layered on top of one must be dismissed
                 // before Esc means "leave this screen". All land on the
@@ -455,6 +465,8 @@ export default function App() {
               session.state === "signedIn" && canWrite(session.user)
             }
           />
+        ) : route.name === "notFound" ? (
+          <NotFound path={route.path} onGoToDashboard={() => goTo("dashboard")} />
         ) : route.name === "monitor" ? (
           <LiveMonitorDetailRoot
             client={queryClient}

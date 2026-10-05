@@ -43,7 +43,7 @@ export type NavDrawerProps = {
    */
   returnFocusRef?: RefObject<HTMLElement | null>;
   instance?: string;
-  current?: NavRoute | "monitor" | "workbench";
+  current?: NavRoute | "monitor" | "workbench" | "notFound";
   /**
    * Client-side navigation. The drawer closes itself on the way out: a phone
    * has no room to leave an overlay standing over the screen it just opened.
