@@ -125,6 +125,56 @@ func (db *DB) DueDeliveries(ctx context.Context, now time.Time, limit int) ([]De
 	return out, rows.Err()
 }
 
+// PendingBefore returns a channel's deliveries that were queued before the
+// one with the given id and have not gone out yet, oldest first.
+//
+// A row held for quiet hours or waiting for a retry is included: it is still
+// going to be sent. A suppressed row is not, since it never will be, and nor
+// is a failed one. That is how an alert that gave up stops holding back the
+// recovery queued after it.
+//
+// Queue order is row order. Rows are written in the order the notifier
+// flushes them, and it flushes a channel's alerts before its recoveries.
+func (db *DB) PendingBefore(ctx context.Context, channelID, id int64) ([]Delivery, error) {
+	rows, err := db.Reader.QueryContext(ctx, `
+		SELECT `+deliveryColumns+`
+		  FROM notif_outbox
+		 WHERE channel_id = ? AND id < ? AND status = ? AND suppressed = 0
+		 ORDER BY id`, channelID, id, OutboxPending)
+	if err != nil {
+		return nil, fmt.Errorf("query earlier deliveries: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []Delivery
+	for rows.Next() {
+		d, err := scanDelivery(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
+// PostponeDelivery moves a pending delivery's next attempt to until, and
+// changes nothing else.
+//
+// It is for a delivery that is waiting its turn rather than failing: no
+// attempt is charged, and last_error is left alone, so a recovery that waits
+// behind its alert does not show up as a channel error, and one that had
+// already failed keeps saying why.
+func (db *DB) PostponeDelivery(ctx context.Context, id int64, until time.Time) error {
+	_, err := db.Writer.ExecContext(ctx, `
+		UPDATE notif_outbox
+		   SET next_attempt_at = ?, updated_at = ?
+		 WHERE id = ? AND status = ?`, until.Unix(), time.Now().Unix(), id, OutboxPending)
+	if err != nil {
+		return fmt.Errorf("postpone delivery %d: %w", id, err)
+	}
+	return nil
+}
+
 // GetDelivery returns one delivery. It reports ErrNotFound when absent.
 func (db *DB) GetDelivery(ctx context.Context, id int64) (Delivery, error) {
 	row := db.Reader.QueryRowContext(ctx,

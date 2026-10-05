@@ -306,6 +306,9 @@ func (n *Notifier) flushAll(ctx context.Context) {
 		delete(n.batches, key)
 	}
 	n.mu.Unlock()
+	// Alerts before recoveries: the outbox keeps a channel's messages in
+	// the order they are written.
+	sortBatches(all)
 
 	for _, b := range all {
 		n.flush(ctx, b)
@@ -464,6 +467,18 @@ func (n *Notifier) attempt(ctx context.Context, d store.Delivery) error {
 		return n.retryMaintenance(ctx, d, err)
 	}
 	if handled {
+		return nil
+	}
+
+	// A recovery does not overtake its own alert. After quiet hours, so a
+	// recovery that arrives in the night is held and folded into the
+	// morning's digest with its alert rather than waiting on it here.
+	wait, err := n.waitForEarlier(ctx, d, alert)
+	if err != nil {
+		n.log.Error("could not check delivery order", "delivery", d.ID, "error", err)
+		return n.retryMaintenance(ctx, d, err)
+	}
+	if wait {
 		return nil
 	}
 

@@ -309,6 +309,13 @@ retried, six attempts in all spread over about twenty minutes, before the
 alert is marked failed; any other `4xx` fails it at once, because retrying
 cannot fix a request the receiver refuses.
 
+A channel hears about an outage in the order it happened. A recovery waits
+while the alert it closes is still queued for the same channel, being retried
+or held for quiet hours, and goes out after it; waiting costs it none of its
+attempts. Each channel keeps its own order: a channel that took the alert
+gets the recovery at once, whatever another channel is still retrying. If the
+alert gives up, the recovery is sent anyway, without it.
+
 ## Which channels get added
 
 A new channel type is maintenance for as long as the upstream API exists, so
