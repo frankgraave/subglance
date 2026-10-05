@@ -44,7 +44,10 @@ class Server:
 
     def start(self, network, run_id, alias=None):
         self.container = "%s-%s" % (run_id, self.name)
-        cmd = ["docker", "run", "--rm", "--no-healthcheck", "--name", self.container, "--network", network,
+        # 1 GiB and no swap for every container, as the README states: a
+        # memory-swap equal to the memory limit leaves no room to page out.
+        cmd = ["docker", "run", "--rm", "--no-healthcheck", "--memory", "1g", "--memory-swap", "1g",
+               "--name", self.container, "--network", network,
                "-p", "127.0.0.1:%d:%d" % (self.host_port, self.container_port)]
         if alias:
             cmd += ["--network-alias", alias]
@@ -177,8 +180,9 @@ def summarise(servers, rows, start, counts):
                                         "p95_per_minute": round(pct(per_min, 95), 2) if per_min else 0},
             "checks_answered": counts.get(s.name, 0),
             "data_dir_mib": round(s.disk_bytes() / mib, 1),
-            # The compressed size, what a pull downloads.
-            "image_download_mib": round(int(sh("docker", "image", "inspect", "--format", "{{.Size}}", s.image) or 0) / mib, 1),
+            # The unpacked size on local disk, which is larger than what a
+            # pull downloads (the layers travel compressed).
+            "image_size_mib": round(int(sh("docker", "image", "inspect", "--format", "{{.Size}}", s.image) or 0) / mib, 1),
         }
     return out
 
@@ -284,6 +288,13 @@ def main():
         csv.write("t,server,rss,docker_stats,swap,cpu_usec\n")
         last_summary = start
         while time.time() < end:
+            # Before sampling: once a --rm container has exited its cgroup is
+            # gone, and reading it would raise past the summary below.
+            for s in everything:
+                if s.proc.poll() is not None:
+                    if rows:
+                        write_summary(servers, rows, start, target_port)
+                    raise SystemExit("%s exited early, see %s.log" % (s.name, s.name))
             row = {"t": time.time()}
             for s in servers:
                 m = s.sample()
@@ -294,9 +305,6 @@ def main():
             if time.time() - last_summary >= 600:
                 write_summary(servers, rows, start, target_port)
                 last_summary = time.time()
-            for s in everything:
-                if s.proc.poll() is not None:
-                    raise SystemExit("%s exited early, see %s.log" % (s.name, s.name))
             time.sleep(max(0, row["t"] + ARGS.sample - time.time()))
         write_summary(servers, rows, start, target_port, final=True)
         print(open(os.path.join(OUT, "summary.json")).read())

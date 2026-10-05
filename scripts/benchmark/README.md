@@ -25,7 +25,7 @@ watch the same monitors at the same interval", not which tool is better.
    - **CPU**: the cgroup's `usage_usec`.
 5. At the end writes `summary.json`: median, 95th percentile and maximum of
    memory, CPU time as a share of one core, the data directory's size, the
-   image's download size, and how many checks each server actually made, as
+   image's size on disk, and how many checks each server actually made, as
    counted by the target. A server that falls behind its interval shows it
    there. `samples.csv` holds every sample.
 
