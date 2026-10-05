@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, Panel } from "../components/Card";
 import { IconArchive } from "../components/icons";
 import { formatBytes } from "../retention/format";
+import { formatMomentIso } from "../format/format";
 import { backupKey, fetchBackup } from "./api";
 
 // Setup for scheduled backups, and the restore procedure for them.
@@ -18,7 +19,7 @@ const backupSettings: [string, ReactNode][] = [
 ];
 
 function When({ value }: { value: string }) {
-  return <time dateTime={value}>{new Date(value).toLocaleString(undefined, { timeZoneName: "short" })}</time>;
+  return <time dateTime={value}>{formatMomentIso(value)}</time>;
 }
 
 /**

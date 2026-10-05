@@ -20,7 +20,7 @@ import {
 } from "./model";
 import { Tooltip, type TooltipRow } from "../components/Tooltip";
 import { Chart } from "../components/Chart";
-import { floorPercent } from "../monitors/format";
+import { formatDayTime, formatUptime } from "../format/format";
 import type { ChipStatus } from "../components/Chip";
 import type { ReactNode } from "react";
 
@@ -86,14 +86,7 @@ export type HeartbeatBarProps = {
   legend?: ReactNode;
 };
 
-const formatTime = (ts: number) =>
-  new Date(ts).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
+const formatTime = (ts: number) => formatDayTime(ts, true);
 
 /**
  * The corner times under a framed track.
@@ -104,13 +97,7 @@ const formatTime = (ts: number) =>
  * routinely spans midnight, and "23:58 → 00:04" with no date is a range that
  * could be six minutes or thirty hours.
  */
-const formatCorner = (ts: number) =>
-  new Date(ts).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+const formatCorner = (ts: number) => formatDayTime(ts);
 
 const formatLatency = (ms: number | null) =>
   ms === null
@@ -492,7 +479,7 @@ export function HeartbeatBar({
   const pct =
     eligible.length === 0
       ? "—"
-      : `${floorPercent((eligible.filter((b) => b.assessment === "up").length / eligible.length) * 100, 2)}%`;
+      : formatUptime((eligible.filter((b) => b.assessment === "up").length / eligible.length) * 100);
 
   // The chrome states the window it is drawing, not the clock: a bar showing
   // yesterday's history must not label itself with now.

@@ -4,11 +4,10 @@ import { IconAlert, IconClock, IconGauge, IconPause, IconPlay, IconPulse, IconTr
 import { Menu, type MenuItem } from "../components/Menu";
 import { HeartbeatBar } from "../heartbeat/HeartbeatBar";
 import type { Beat } from "../heartbeat/model";
-import { describeAge, describeGap } from "../live/age";
+import { describeAge, describeGap, formatUptime } from "../format/format";
 import {
   describePushWindow,
   formatLatency,
-  formatUptime,
   statusWord,
   waitingReason,
 } from "./format";

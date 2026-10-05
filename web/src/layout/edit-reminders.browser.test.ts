@@ -5,6 +5,7 @@ import { mkdir } from "node:fs/promises";
 import { chromium, type Browser, type Page } from "./harness/browser";
 import { serveBuild, type Server } from "./harness/server";
 import { THEME_STORAGE_KEY } from "../theme/theme";
+import { formatMomentIso } from "../format/format";
 
 let browser: Browser; let server: Server;
 beforeAll(async () => { server = await serveBuild(); browser = await chromium(); });
@@ -103,14 +104,9 @@ for (const theme of ["dark", "light"]) for (const width of [390, 1440]) describe
     try {
       expect(await page.$eval(".mon-detail-windows", (node) => node.textContent)).not.toContain("undefined");
       expect(await page.$eval(".inc-reminders time", (node) => node.getAttribute("datetime"))).toBe("2026-09-20T12:37:17Z");
-      const timestamp = await page.$eval(".inc-reminders time", (node) => ({
-        text: node.textContent,
-        // The shared incident format, in this browser's own locale and zone.
-        expected: new Date(node.getAttribute("datetime")!).toLocaleString(undefined, {
-          year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-        }),
-      }));
-      expect(timestamp.text).toBe(timestamp.expected);
+      // The shared moment format. Node and the browser it launched share this
+      // host's zone, so the two sides agree on the local time.
+      expect(await page.$eval(".inc-reminders time", (node) => node.textContent)).toBe(formatMomentIso("2026-09-20T12:37:17Z"));
       expect(await page.$eval(".inc-reminders", (node) => node.textContent)).toContain("2 reminders issued");
       await auditNewSurface(page, ".inc-reminders");
       await proof(page, `reminders-${theme}-${width}`);

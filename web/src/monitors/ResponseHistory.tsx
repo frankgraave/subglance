@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { causeWords } from "../incidents/story";
 import { Card } from "../components/Card";
 import { IconResponse } from "../components/icons";
-import { formatMoment } from "./detail";
+import { formatMoment, formatMomentFrom } from "../format/format";
 import { toUnixMs } from "./types";
 import { failureRuns, type ResponseHeartbeat } from "./responseHistory";
 
@@ -133,11 +133,7 @@ function FailureRunItem({ beats }: { beats: readonly ResponseHeartbeat[] }) {
  * because repeating the date makes the line twice as long to say nothing.
  */
 function formatSpanEnd(start: number | null, end: number | null): string | null {
-  if (start === null || end === null) return formatMoment(end);
-  const a = new Date(start);
-  const b = new Date(end);
-  if (a.toDateString() !== b.toDateString()) return formatMoment(end);
-  return b.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  return formatMomentFrom(end, start);
 }
 
 function captureReasonText(reason: ResponseHeartbeat["response_capture_reason"]): string {

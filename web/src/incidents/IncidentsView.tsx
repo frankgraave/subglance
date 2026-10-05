@@ -10,7 +10,7 @@ import { ListTabs } from "../monitors/ListTabs";
 import { HISTORY_WINDOWS } from "./api";
 import { clusterIncidents } from "./cluster";
 import { describeChurn, incidentState } from "./story";
-import { formatDuration } from "../monitors/detail";
+import { formatDay, formatDuration, sameDay } from "../format/format";
 import type { IncidentEntry } from "./cluster";
 import type { Incident } from "../monitors/detail";
 
@@ -762,13 +762,11 @@ function groupByDay(incidents: readonly Incident[], now: number): Day[] {
  * describing: two clocks in one view, disagreeing.
  */
 function dayLabel(date: Date, now: number): string {
-  const today = new Date(now);
-  const sameDay = (a: Date, b: Date) =>
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate();
-  if (sameDay(date, today)) return "Today";
-  const yesterday = new Date(today.getTime() - 86_400_000);
-  if (sameDay(date, yesterday)) return "Yesterday";
-  return date.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  if (sameDay(date.getTime(), now)) return "Today";
+  // The calendar day before, not 24 hours before: a day that gains or loses
+  // an hour to daylight saving is 23 or 25 hours long in the reader's zone.
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (sameDay(date.getTime(), yesterday.getTime())) return "Yesterday";
+  return formatDay(date.getTime());
 }

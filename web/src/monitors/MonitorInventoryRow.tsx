@@ -11,7 +11,7 @@ import {
   IconPlay,
   IconRefresh,
 } from "../components/icons";
-import { formatDuration } from "./detail";
+import { formatDuration } from "../format/format";
 import { describeTarget, statusWord } from "./format";
 import {
   canCheckNow,

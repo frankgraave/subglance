@@ -29,7 +29,7 @@ import type { ConnectionStatus } from "./connection";
  *    flight would recreate exactly that wait.
  */
 
-import { describeAge } from "./age";
+import { describeAge } from "../format/format";
 
 export type ConnectionBadgeProps = {
   status: ConnectionStatus;

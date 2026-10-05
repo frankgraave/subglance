@@ -1,4 +1,5 @@
 import type { Diagnostics } from "./api";
+import { formatDuration } from "../format/format";
 
 export function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -6,11 +7,6 @@ export function formatBytes(n: number): string {
   let v = n / 1024, i = 0;
   while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
   return `${v < 10 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
-}
-
-export function formatUptime(seconds: number): string {
-  const d = Math.floor(seconds / 86_400), h = Math.floor(seconds % 86_400 / 3_600), m = Math.floor(seconds % 3_600 / 60);
-  return d > 0 ? `${d} d ${h} h ${m} m` : h > 0 ? `${h} h ${m} m` : `${m} m`;
 }
 
 /**
@@ -28,7 +24,7 @@ export function diagnosticsText(d: Diagnostics, staleSince?: Date): string {
     ...(staleSince ? [`stale: last successful reading at ${staleSince.toISOString()}; the latest refresh failed or is overdue`] : []),
     `subglance ${d.version}${d.commit ? ` (${d.commit})` : ""}`,
     `runtime ${d.go_version} ${d.platform}`,
-    `uptime ${formatUptime(d.uptime_seconds)} (started ${d.started_at})`,
+    `uptime ${formatDuration(d.uptime_seconds)} (started ${d.started_at})`,
     `database ${formatBytes(d.database.bytes)}, wal ${formatBytes(d.database.wal_bytes)}, journal ${d.database.journal_mode}`,
     s === null ? "scheduler not attached"
       : `workers ${s.busy}/${s.workers} busy, queue ${s.queue_depth}, monitors ${s.scheduled}, skipped ${s.skipped_checks}, recorded ${s.checks_recorded}, write failures ${s.heartbeat_write_failures}`,

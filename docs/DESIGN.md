@@ -528,9 +528,46 @@ comparing them, you're reading them.
 reading people take to mean "never down", printed above the line that counts
 the outage. Every uptime figure (dashboard, detail windows, the heartbeat
 chart's headline, the public status page) is therefore floored at its
-precision, and "100%" appears only when no check in the window was confirmed
-down. `formatUptime` and `floorPercent` in `web/src/monitors/format.ts` and
-`Uptime` in `internal/statuspage/history.go` carry the rule.
+precision, and "100.00%" appears only when no check in the window was
+confirmed down. `formatUptime` in `web/src/format/format.ts` and `Uptime` in
+`internal/statuspage/history.go` carry the rule.
+
+**Uptime has one precision: two decimals, everywhere.** The app wrote one
+figure four ways — 59.60% on the heartbeat chart, 97.2% on the dashboard,
+100% on the detail page, 100.00% on the status page — so the same window
+could read 99.9% on one screen and 99.95% on the next. Two decimals, because
+that is the precision uptime is talked about in: one confirmed-down minute in
+a month is 99.99% at two places and 99.9% at one, rounded down, which is the
+difference between an availability target that held and one that did not.
+The exact ends keep their decimals too ("100.00%", "0.00%"), so a column of
+figures lines up on the point.
+
+**Dates and times have one shape per kind.** About a dozen `toLocale*` calls
+with their own options wrote four date shapes side by side ("Oct 1, 2026,
+01:59 PM", "10/1/2026, 1:59:44 PM GMT+2", "Oct 1, 12:20 PM", "created Oct 1,
+2026"). `web/src/format/format.ts` now writes every one, and
+`format/format.guard.test.ts` fails on a date, time, count or percentage
+formatted anywhere else:
+
+| Kind | Shape | Used for |
+| -- | -- | -- |
+| Moment | `1 Oct 2026, 13:59` | an absolute point to line up against a log: incident starts, captured responses, backups, the last ping |
+| Date | `1 Oct 2026` | a day with no time worth stating: created, expires, last used |
+| Day | `1 Oct` | a day in a recent list: the incident history's groups, a channel's last delivery |
+| Day and time | `1 Oct, 13:59` | chart corners and readouts, inside a window of days (`:44` seconds in the heartbeat readout) |
+| Clock | `13:59` | a time on a day the sentence already names ("recovered at 14:15") |
+| Relative | `4 min ago` | how old the newest data is, and only that |
+| Duration | `3 h 41 min` | how long something lasted, to the unit that matters |
+| Count | `43,138` | grouped thousands |
+
+English month names and a 24-hour clock, whatever the browser's locale: the
+interface is English, so a date in the browser's language was a second
+language on the line, and a 12-hour clock put "PM" into columns sized for
+"13:59". Day before month, because "1 Oct" cannot be misread and "10/1" can.
+Times are in the reader's own zone and the zone is not printed — four cards
+named one and twenty did not, which said the twenty were in some other zone.
+The public status page is the exception that proves the rule: it is read by
+strangers, so it is drawn in the page's configured zone, by the server.
 
 **A face is a configuration, not a family name.** Naming the family got the
 shapes and nothing else, so every property that decides how those shapes render

@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { formatClock } from "../format/format";
 
 /**
  * A one-second clock as an external store.
@@ -57,13 +58,10 @@ export function useSecondsClock(): number {
 /**
  * The clock face: 24-hour, zero-padded, with seconds.
  *
- * A fixed en-GB locale rather than the visitor's: a wall display is often a
- * shared screen whose browser locale is nobody's in particular, and 24-hour
- * time with seconds is unambiguous everywhere. Formatting is pure so the
- * padding can be tested without a browser.
+ * The app's own clock format (`format/format.ts`) with the seconds added: a
+ * wall display is often a shared screen whose browser locale is nobody's in
+ * particular, and 24-hour time with seconds is unambiguous everywhere.
  */
-export function formatClock(ms: number): string {
-  const d = new Date(ms);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+export function formatWallClock(ms: number): string {
+  return formatClock(ms, true);
 }

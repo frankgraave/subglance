@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { formatDayTime } from "../format/format";
 import {
   cleanup,
   fireEvent,
@@ -339,13 +340,7 @@ describe("HeartbeatBar, framed", () => {
   it("states the window's start and end in the two bottom corners", () => {
     const series = beats(5);
     render(<HeartbeatBar beats={series} label="API" width={WIDTH} framed />);
-    const corner = (ts: number) =>
-      new Date(ts).toLocaleString(undefined, {
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
+    const corner = (ts: number) => formatDayTime(ts);
     expect(screen.getByTestId("chart-start").textContent).toBe(
       corner(series[0].ts),
     );
@@ -358,12 +353,7 @@ describe("HeartbeatBar, framed", () => {
     // The series is historic. A chrome that reached for Date.now() would put
     // today's date under a bar drawn from last year's checks.
     render(<HeartbeatBar beats={beats(5)} label="API" width={WIDTH} framed />);
-    const now = new Date().toLocaleString(undefined, {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const now = formatDayTime(Date.now());
     expect(screen.getByTestId("chart-end").textContent).not.toBe(now);
     expect(screen.getByTestId("chart-start").textContent).not.toBe(now);
   });

@@ -33,7 +33,7 @@
  * at 14:10 — still down."
  */
 
-import { formatDuration, formatMoment } from "../monitors/detail";
+import { formatClock, formatDuration, formatMoment, formatMomentFrom } from "../format/format";
 import type { Incident } from "../monitors/detail";
 
 /**
@@ -156,27 +156,6 @@ export function causeWords(cause: string | undefined): string | null {
   return CAUSE_WORDS[cause] ?? cause;
 }
 
-/** A wall-clock time, for an ending that shares a day with its beginning. */
-export function formatClock(ms: number | null): string | null {
-  if (ms === null) return null;
-  const date = new Date(ms);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function sameDay(a: number, b: number): boolean {
-  const x = new Date(a);
-  const y = new Date(b);
-  return (
-    x.getFullYear() === y.getFullYear() &&
-    x.getMonth() === y.getMonth() &&
-    x.getDate() === y.getDate()
-  );
-}
-
 /**
  * An ending, dated only as much as it needs to be.
  *
@@ -185,10 +164,7 @@ function sameDay(a: number, b: number): boolean {
  * a day is a sentence that quietly loses twenty-four hours.
  */
 function endingMoment(startedAt: number | null, endedAt: number): string | null {
-  if (startedAt !== null && sameDay(startedAt, endedAt)) {
-    return formatClock(endedAt);
-  }
-  return formatMoment(endedAt);
+  return formatMomentFrom(endedAt, startedAt);
 }
 
 export type IncidentStory = {

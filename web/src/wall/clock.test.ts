@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatClock } from "./clock";
+import { formatWallClock as formatClock } from "./clock";
 
 describe("the wall clock", () => {
   it("is 24-hour and zero-padded, so the width never jumps", () => {

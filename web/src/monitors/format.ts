@@ -6,7 +6,7 @@
  * Pure strings in, pure strings out — the components decide where they go.
  */
 
-import { formatDuration } from "./detail";
+import { formatDuration } from "../format/format";
 import type { Monitor, MonitorStatus, PushWaitingReason, Recovery } from "./types";
 
 /** How each status is spoken and written. Colour never stands alone (DESIGN.md §2.3). */
@@ -74,39 +74,6 @@ export const statusWord = (
 
 export const formatLatency = (ms: number) =>
   ms >= 1000 ? `${(ms / 1000).toFixed(2)} s` : `${Math.round(ms)} ms`;
-
-/**
- * A share written to `decimals` places, rounded down, never up.
- *
- * Uptime is a claim, and rounding to nearest lets it claim more than happened:
- * 21 confirmed-down checks out of 43,138 is 99.951%, which `toFixed` turns
- * into "100%" at one place and "99.95%" at two. The first is the number
- * people read as "never down", printed right above the line that counts the
- * outages. Rounding down keeps every digit shown true: "99.9%" understates by
- * a hair, "100%" contradicts the page.
- *
- * So 100 is reserved for exactly 100, which only happens with zero down
- * checks (the API divides up by total, and n / n is exactly 1). The tiny
- * epsilon absorbs float noise: 29 of 100 comes out of up / total * 100 as
- * 28.999999999999996, which a bare floor would print as 28.9. The clamp
- * catches the one case the epsilon can push the wrong way, a share a
- * billionth short of 100.
- */
-export function floorPercent(pct: number, decimals: number): string {
-  if (pct >= 100) return (100).toFixed(decimals);
-  const scale = 10 ** decimals;
-  const floored = Math.floor(pct * scale + 1e-9) / scale;
-  return Math.min(floored, 100 - 1 / scale).toFixed(decimals);
-}
-
-/**
- * Uptime as the dashboard and the detail page write it: one decimal, rounded
- * down (see `floorPercent`), with the two exact ends as whole numbers. "100%"
- * therefore means no confirmed-down check in the window, and "0%" means no
- * passing one; anything in between keeps its decimal, so 99.95% reads "99.9%".
- */
-export const formatUptime = (pct: number) =>
-  pct >= 100 || pct <= 0 ? `${pct >= 100 ? 100 : 0}%` : `${floorPercent(pct, 1)}%`;
 
 /**
  * What a monitor watches, in one line.

@@ -7,6 +7,7 @@ import { RoleChoice } from "../components/RoleChoice";
 import { IconTrash, IconUsers } from "../components/icons";
 import { ApiError, MIN_PASSWORD_LENGTH } from "../auth/api";
 import { createUser, deleteUser, fetchUsers, setUserRole, usersKey, type Account, type UserRole } from "./api";
+import { formatDateIso } from "../format/format";
 
 const ROLE_HELP: Record<UserRole, string> = {
   viewer: "Viewer: sees monitors, incidents and settings, and changes nothing. Right for someone who only needs to look.",
@@ -15,7 +16,7 @@ const ROLE_HELP: Record<UserRole, string> = {
 };
 
 const withArticle = (role: UserRole) => `${role === "viewer" ? "a" : "an"} ${role}`;
-const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+const day = formatDateIso;
 
 type Rejection = { field?: string; message: string };
 const rejectionOf = (error: unknown): Rejection => error instanceof ApiError

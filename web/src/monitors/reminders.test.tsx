@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import { formatMoment, incidentFromApi } from "./detail";
+import { incidentFromApi } from "./detail";
+import { formatMoment } from "../format/format";
 import { MonitorDetail } from "./MonitorDetail";
 import { fromApi } from "./types";
 

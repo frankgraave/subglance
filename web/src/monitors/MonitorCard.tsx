@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { HeartbeatBar } from "../heartbeat/HeartbeatBar";
-import { describeTarget, formatLatency, formatUptime } from "./format";
+import { describeTarget, formatLatency } from "./format";
+import { formatUptime } from "../format/format";
 import { Led } from "./Led";
 import { MonitorLink } from "./MonitorLink";
 import { Unknown } from "./Unknown";

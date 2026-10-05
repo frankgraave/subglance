@@ -13,7 +13,7 @@
  * Pure, so every branch is a table test rather than a render.
  */
 
-import { formatDuration } from "../monitors/detail";
+import { formatDuration } from "../format/format";
 import type { InventoryMonitor } from "../monitors/inventory";
 import type { Channel } from "./channels";
 

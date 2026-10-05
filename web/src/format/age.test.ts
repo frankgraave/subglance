@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeAge, describeGap } from "./age";
+import { describeAge, describeGap } from "./format";
 
 const now = Date.parse("2026-09-11T12:00:00Z");
 const ago = (ms: number) => now - ms;

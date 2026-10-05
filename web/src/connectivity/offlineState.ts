@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNow } from "../live/useNow";
+import { formatClock, formatDayTime, sameDay } from "../format/format";
 import { connectivityKey, fetchConnectivity } from "./api";
 
 /*
@@ -52,15 +53,7 @@ export function useHostOfflineSince(): number | null {
  * most need to know about.
  */
 export function formatSince(since: number, now: number): string {
-  const at = new Date(since);
-  const today = new Date(now);
-  const time = at.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-  const sameDay =
-    at.getFullYear() === today.getFullYear() &&
-    at.getMonth() === today.getMonth() &&
-    at.getDate() === today.getDate();
-  if (sameDay) return time;
-  return `${at.toLocaleDateString(undefined, { day: "numeric", month: "short" })}, ${time}`;
+  return sameDay(since, now) ? formatClock(since) : formatDayTime(since);
 }
 
 /** The sentence, shared by the dashboard banner and the status wall. */

@@ -1,5 +1,5 @@
 import type { ReminderInfo, ReminderStatus } from "./reminders";
-import { formatMoment } from "../monitors/detail";
+import { formatMoment } from "../format/format";
 
 const REASON: Record<Exclude<ReminderStatus, "scheduled">, string> = {
   unconfirmed: "Reminders wait for incident confirmation.",

@@ -10,6 +10,7 @@ import {
 } from "./api";
 import { Maintenance } from "./Maintenance";
 import { formatBytes } from "./format";
+import { formatCount } from "../format/format";
 
 const DAY = 86_400;
 
@@ -20,7 +21,6 @@ const TABLE_NAMES: Record<RetentionTable["name"], string> = {
   incidents: "Resolved incidents",
 };
 
-const count = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 
 /** Bytes a row of this table costs today, or null before there is anything to measure. */
 function bytesPerRow(table: RetentionTable | undefined): number | null {
@@ -163,7 +163,7 @@ function RunAtField({ data, value, onChange, disabled, error }: {
         aria-describedby={`${id}-help${error ? ` ${id}-error` : ""}`} onChange={(event) => onChange(event.target.value)} />
       <p className="panel-note" id={`${id}-help`}>
         {pin.source === "pinned" ? `Set by ${pin.pinned_by} to ${pin.value}; change it there.`
-          : "In the server's time zone (its TZ variable, UTC without one). A new time never starts a pass by itself."}
+          : "In the server's time zone (its TZ variable, UTC without one); the times on this card are in yours. A new time never starts a pass by itself."}
       </p>
       {error && <p className="field-error" id={`${id}-error`} role="alert">{error}</p>}
     </div>
@@ -284,7 +284,7 @@ function RetentionForm({ data, canAdmin, outcome, setOutcome }: {
         <p className="panel-note" role="status">
           {preview.isError ? "Could not count what this change removes."
             : !impact || preview.isFetching ? "Counting what this change removes…"
-            : removes ? `The next daily pass will fold ${count.format(impact.heartbeats)} raw heartbeats into hourly summaries and delete ${count.format(impact.hourly_buckets)} hourly summaries and ${count.format(impact.incidents)} resolved incidents.`
+            : removes ? `The next daily pass will fold ${formatCount(impact.heartbeats)} raw heartbeats into hourly summaries and delete ${formatCount(impact.hourly_buckets)} hourly summaries and ${formatCount(impact.incidents)} resolved incidents.`
             : "Nothing is old enough to be removed by this change yet."}
         </p>
       )}
@@ -330,9 +330,9 @@ export function RetentionCard({ canAdmin }: { canAdmin: boolean }) {
               {data.tables.map((table) => (
                 <tr key={table.name}>
                   <th scope="row">{TABLE_NAMES[table.name]}</th>
-                  <td>{count.format(table.rows)}</td>
+                  <td>{formatCount(table.rows)}</td>
                   <td>{table.bytes === null ? "—" : formatBytes(table.bytes)}</td>
-                  <td>{count.format(table.rows_per_day)}</td>
+                  <td>{formatCount(table.rows_per_day)}</td>
                 </tr>
               ))}
             </tbody>

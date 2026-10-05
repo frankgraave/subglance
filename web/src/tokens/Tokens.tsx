@@ -7,6 +7,7 @@ import { RoleChoice } from "../components/RoleChoice";
 import { ApiError } from "../api/http";
 import { createToken, fetchTokens, revokeToken, rolesWithin, tokensKey, type ApiToken, type TokenRole } from "./api";
 import { Select } from "../components/Select";
+import { formatDateIso } from "../format/format";
 
 const EXPIRY: [string, string][] = [["", "Never"], ["720h", "30 days"], ["2160h", "90 days"], ["8760h", "1 year"]];
 const ROLE_HELP: Record<TokenRole, string> = {
@@ -18,7 +19,7 @@ const ROLE_HELP: Record<TokenRole, string> = {
 /** setTimeout's ceiling: a longer delay overflows and fires at once. */
 const MAX_TIMER_MS = 2_147_483_647;
 
-const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+const day = formatDateIso;
 
 /**
  * The secret, shown once.
