@@ -126,6 +126,13 @@ func Summarise(alerts []Alert) Alert {
 		GroupedNames: names,
 		GroupedCause: sharedCause(sorted),
 	}
+	// A batch of recoveries that each replace their alert keeps saying so
+	// when it is summarised again, as maintenance filtering does on every
+	// attempt.
+	out.ReplacesAlert = true
+	for _, a := range sorted {
+		out.ReplacesAlert = out.ReplacesAlert && a.ReplacesAlert
+	}
 	return out
 }
 
@@ -245,7 +252,11 @@ func sortBatches(batches []*pending) {
 // n<=1 case here would be infinite recursion rather than a fallback.
 func GroupedTitle(a Alert) string {
 	verb := "are down"
-	if !a.Down() {
+	switch {
+	case a.Down():
+	case a.ReplacesAlert:
+		verb = "were down and are back up"
+	default:
 		verb = "are back up"
 	}
 	return fmt.Sprintf("%d monitors %s", len(a.GroupedNames), verb)

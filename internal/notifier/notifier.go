@@ -107,6 +107,12 @@ type Notifier struct {
 	// said there is no other channel for. Touched only by reportFailures,
 	// on the loop's own goroutine.
 	unreported map[int64]time.Time
+
+	// rewritten holds the rows a recovery merged into or closed during the
+	// current sweep. The sweep loaded them before that write, so it skips
+	// them; the next sweep reads them as they are now. Touched only on the
+	// loop's own goroutine, and emptied at the start of every sweep.
+	rewritten map[int64]bool
 }
 
 // Options configures New.
@@ -199,6 +205,7 @@ func New(opts Options) *Notifier {
 		counts:   counts,
 
 		unreported: make(map[int64]time.Time),
+		rewritten:  make(map[int64]bool),
 	}
 }
 
@@ -391,6 +398,7 @@ func (n *Notifier) sweep(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	clear(n.rewritten)
 
 	for _, d := range due {
 		if ctx.Err() != nil {
@@ -405,6 +413,11 @@ func (n *Notifier) sweep(ctx context.Context) (int, error) {
 
 // attempt performs one delivery and records the outcome.
 func (n *Notifier) attempt(ctx context.Context, d store.Delivery) error {
+	if n.rewritten[d.ID] {
+		// A recovery earlier in this sweep took this row's news (see
+		// mergeEarlier); what was loaded is no longer what it says.
+		return nil
+	}
 	if d.QuietHeld {
 		// Loaded in the same batch as a row that has since folded this
 		// one into a digest: its content is already on its way.
@@ -470,15 +483,16 @@ func (n *Notifier) attempt(ctx context.Context, d store.Delivery) error {
 		return nil
 	}
 
-	// A recovery does not overtake its own alert. After quiet hours, so a
-	// recovery that arrives in the night is held and folded into the
-	// morning's digest with its alert rather than waiting on it here.
-	wait, err := n.waitForEarlier(ctx, d, alert)
+	// A recovery does not overtake its own alert: it replaces it. After
+	// quiet hours, so a recovery that arrives in the night is held and
+	// folded into the morning's digest with its alert rather than merged
+	// here.
+	merged, err := n.mergeEarlier(ctx, d, alert)
 	if err != nil {
 		n.log.Error("could not check delivery order", "delivery", d.ID, "error", err)
 		return n.retryMaintenance(ctx, d, err)
 	}
-	if wait {
+	if merged {
 		return nil
 	}
 

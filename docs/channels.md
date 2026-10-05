@@ -170,7 +170,9 @@ fail together into one alert before the limit counts it.
 Two channels that send to the same numbers through the same account share
 one limit. The count lives in memory, so a restart starts a fresh hour.
 
-`recoveries: false` sends outages only. Quiet hours work as on every other
+`recoveries: false` sends outages only (a recovery that replaces an alert
+which never got through is still sent: see
+[the webhook payload](#the-webhook-payload)). Quiet hours work as on every other
 channel, but think twice: holding an SMS until morning usually defeats the
 reason for choosing SMS.
 
@@ -277,6 +279,7 @@ in `headers`, and this body:
 | `reminder_count` | Which repeat of an unanswered alert this is; left out on the first |
 | `grouped_names`, `grouped_cause`, `members` | Set when several alerts were sent as one: see below |
 | `digest`, `digest_timezone` | Set on the summary a channel receives when its quiet hours end |
+| `replaces_alert` | Set on a recovery whose alert never reached this channel: see below |
 
 A monitor's alerts carry `incident_confirmed` (it is down), `incident_reminder`
 (it is still down and nobody has acknowledged it) or `incident_resolved` (it is
@@ -309,12 +312,24 @@ retried, six attempts in all spread over about twenty minutes, before the
 alert is marked failed; any other `4xx` fails it at once, because retrying
 cannot fix a request the receiver refuses.
 
-A channel hears about an outage in the order it happened. A recovery waits
-while the alert it closes is still queued for the same channel, being retried
-or held for quiet hours, and goes out after it; waiting costs it none of its
-attempts. Each channel keeps its own order: a channel that took the alert
-gets the recovery at once, whatever another channel is still retrying. If the
-alert gives up, the recovery is sent anyway, without it.
+A channel hears about an outage in the order it happened, and never hears
+"down" for an outage that is already over. When a monitor recovers while its
+alert is still queued for a channel (the receiver was away and the alert is
+being retried), the recovery replaces the alert: the channel gets one message,
+"api was down for 3 minutes, now back up", with `event` `incident_resolved`
+and `replaces_alert` set, and the alert is not sent. The merged message takes
+over the alert's place in the retry schedule, so it arrives when the alert
+would have and gives up when the alert would have. A reminder still queued
+for the outage goes the same way. When several monitors were alerted in one
+grouped message, only the ones that recovered leave it; the rest are still
+reported down. A grouped recovery sets `replaces_alert` at the top only when
+every member does; each entry in `members` carries its own.
+
+Each channel keeps its own order: a channel that took the alert gets an
+ordinary recovery at once, whatever another channel is still retrying. If the
+alert gives up for good, the recovery is sent anyway, without it. An SMS
+channel set to `recoveries: false` still sends a recovery with
+`replaces_alert`, since it is the only message about that outage.
 
 ## Which channels get added
 

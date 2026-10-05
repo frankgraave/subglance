@@ -157,22 +157,78 @@ func (db *DB) PendingBefore(ctx context.Context, channelID, id int64) ([]Deliver
 	return out, rows.Err()
 }
 
-// PostponeDelivery moves a pending delivery's next attempt to until, and
-// changes nothing else.
+// Replaced is an earlier delivery a recovery stands in for, in part or whole.
 //
-// It is for a delivery that is waiting its turn rather than failing: no
-// attempt is charged, and last_error is left alone, so a recovery that waits
-// behind its alert does not show up as a channel error, and one that had
-// already failed keeps saying why.
-func (db *DB) PostponeDelivery(ctx context.Context, id int64, until time.Time) error {
-	_, err := db.Writer.ExecContext(ctx, `
-		UPDATE notif_outbox
-		   SET next_attempt_at = ?, updated_at = ?
-		 WHERE id = ? AND status = ?`, until.Unix(), time.Now().Unix(), id, OutboxPending)
+// Payload is what the row still has to say once the outage that recovered is
+// taken out of it. Empty means nothing is left, and the row is closed.
+type Replaced struct {
+	ID      int64
+	Payload string
+}
+
+// ReplaceWithRecovery folds a recovery and the alerts it closes into one
+// delivery, in one transaction.
+//
+// The recovery takes the payload given and the retry state of from, the
+// alert it replaces: its attempts, its last error and its next attempt, so
+// the merged message is tried when the alert would have been and gives up
+// when the alert would have, instead of starting a schedule of its own. Each
+// replaced row keeps what it still has to say, or is closed, marked with
+// where its news went, the way a quiet-hours digest closes the rows it
+// folds. A crash cannot leave the merged recovery queued with the alert
+// still queued beside it.
+//
+// Every write is conditional on the row still pending, so a row that was
+// delivered or gave up in the meantime is left as it is.
+// If the recovery itself is no longer pending, nothing is written and
+// ErrNotFound is reported.
+func (db *DB) ReplaceWithRecovery(ctx context.Context, recovery int64, payload string, from Delivery, replaced []Replaced) error {
+	tx, err := db.Writer.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("postpone delivery %d: %w", id, err)
+		return fmt.Errorf("replace with recovery %d: %w", recovery, err)
 	}
-	return nil
+	defer func() { _ = tx.Rollback() }()
+
+	now := time.Now().Unix()
+	res, err := tx.ExecContext(ctx, `
+		UPDATE notif_outbox
+		   SET payload_json = ?, attempts = ?, last_error = ?, next_attempt_at = ?, updated_at = ?
+		 WHERE id = ? AND status = ?`,
+		payload, from.Attempts, from.LastError, from.NextAttemptAt.Unix(), now, recovery, OutboxPending)
+	if err != nil {
+		return fmt.Errorf("replace with recovery %d: %w", recovery, err)
+	}
+	// The alerts are closed only because the recovery carries their news. A
+	// recovery that is gone, deleted with its monitor or sent meanwhile,
+	// carries nothing, so they stay as they are.
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("replace with recovery %d: %w", recovery, err)
+	}
+	if n == 0 {
+		return fmt.Errorf("replace with recovery %d: %w: no pending recovery", recovery, ErrNotFound)
+	}
+	for _, r := range replaced {
+		if r.Payload != "" {
+			if _, err := tx.ExecContext(ctx, `
+				UPDATE notif_outbox
+				   SET payload_json = ?, updated_at = ?
+				 WHERE id = ? AND status = ? AND suppressed = 0`,
+				r.Payload, now, r.ID, OutboxPending); err != nil {
+				return fmt.Errorf("replace with recovery %d: %w", recovery, err)
+			}
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE notif_outbox
+			   SET suppressed = 1, last_error = ?, updated_at = ?
+			 WHERE id = ? AND status = ? AND suppressed = 0`,
+			fmt.Sprintf("sent as part of recovery %d: the monitor was back up before this alert went out", recovery),
+			now, r.ID, OutboxPending); err != nil {
+			return fmt.Errorf("replace with recovery %d: %w", recovery, err)
+		}
+	}
+	return tx.Commit()
 }
 
 // GetDelivery returns one delivery. It reports ErrNotFound when absent.
