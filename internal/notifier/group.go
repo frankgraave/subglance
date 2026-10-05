@@ -47,7 +47,9 @@ const GroupingDisabled time.Duration = -1
 //
 // What it does not do is delay a recovery. A grouped outage ends with one
 // summary, but the summary is assembled the moment the last member resolves,
-// not after another window — nobody needs their good news rate-limited.
+// not after another window — nobody needs their good news rate-limited. The
+// one exception is a recovery whose own alert is still waiting in an open
+// batch: it waits for that batch to close, so it cannot arrive first (see due).
 type Grouper struct {
 	window time.Duration
 	now    func() time.Time
@@ -159,6 +161,9 @@ type pending struct {
 
 	monitorID  int64
 	incidentID int64
+
+	// down is the direction of the news, the other half of the key.
+	down bool
 }
 
 // Add records an alert against its batch and reports whether the batch is now
@@ -173,6 +178,7 @@ func (g *Grouper) add(batches map[string]*pending, channelID, monitorID int64, a
 			channel:   channelID,
 			deadline:  g.now().Add(g.window),
 			monitorID: monitorID,
+			down:      a.Down(),
 		}
 		batches[key] = b
 	}
@@ -184,19 +190,53 @@ func (g *Grouper) add(batches map[string]*pending, channelID, monitorID int64, a
 }
 
 // due reports the batches whose window has closed.
+//
+// A batch of recoveries also waits for its channel's batch of alerts when
+// that one carries an alert about the same incident and has not closed yet.
+// Without that, a recovery that joined a batch opened before its own alert
+// was sent first; with it, the two close together and go out alert first.
+// The wait is at most one window.
 func (g *Grouper) due(batches map[string]*pending) []*pending {
 	now := g.now()
 	var out []*pending
 	for key, b := range batches {
-		if !now.Before(b.deadline) {
-			out = append(out, b)
-			delete(batches, key)
+		if now.Before(b.deadline) || b.overtakes(batches[GroupKey(b.channel, true)], now) {
+			continue
+		}
+		out = append(out, b)
+		delete(batches, key)
+	}
+	sortBatches(out)
+	return out
+}
+
+// overtakes reports whether b, a batch of recoveries, would go out before
+// alerts, a batch that is still open, while the two share an incident.
+func (b *pending) overtakes(alerts *pending, now time.Time) bool {
+	if b.down || alerts == nil || !now.Before(alerts.deadline) {
+		return false
+	}
+	open := map[int64]bool{}
+	for _, a := range alerts.alerts {
+		if a.IncidentID != 0 {
+			open[a.IncidentID] = true
 		}
 	}
-	// Deterministic order so a test can rely on it and a log reads the
-	// same way twice.
-	sort.Slice(out, func(i, j int) bool { return out[i].key < out[j].key })
-	return out
+	for _, a := range b.alerts {
+		if open[a.IncidentID] {
+			return true
+		}
+	}
+	return false
+}
+
+// sortBatches orders batches by key, which puts each channel's alerts before
+// its recoveries ("down" sorts before "up"). The outbox keeps a channel's
+// messages in the order they are written, so this order is the one the
+// channel hears them in. It also lets a test rely on the order, and makes a
+// log read the same way twice.
+func sortBatches(batches []*pending) {
+	sort.Slice(batches, func(i, j int) bool { return batches[i].key < batches[j].key })
 }
 
 // GroupedTitle renders the one-line summary for a batch.
