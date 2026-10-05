@@ -39,6 +39,9 @@ web/coverage/
 *.db
 *.db-shm
 *.db-wal
+# The Uptime Kuma importer is tested against databases Kuma wrote itself;
+# they are fixtures, not local state.
+!internal/kumaimport/testdata/*.db
 
 # Frontend build output. It is built straight into the Go package that embeds
 # it, so the build artefacts are ignored but the directory itself is not: the
