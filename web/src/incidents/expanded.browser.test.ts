@@ -31,9 +31,9 @@ const ago = (ms: number) => new Date(NOW - ms).toISOString();
 /**
  * Three open incidents, pinned to the worst content each field can hold.
  *
- * `01:59 PM`-shaped clocks rather than a 24-hour reading, because the screen
- * renders a 12-hour clock and the meridiem suffix is what overflowed the
- * column. A duration in the `7 h 24 min` shape for the same reason: it is the
+ * The screen used to render a 12-hour clock, and the meridiem suffix is what
+ * overflowed the column; the clock is 24-hour now, and the widths stay pinned
+ * against a regression. A duration in the `7 h 24 min` shape: it is the
  * widest form `formatDuration` produces below a day.
  */
 const OPEN_INCIDENTS = {

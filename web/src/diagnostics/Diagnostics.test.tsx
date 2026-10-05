@@ -7,7 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
 import { Settings } from "../settings/Settings";
 import { disabledWatchdog } from "../watchdog/fixtures";
-import { diagnosticsText, formatBytes, formatUptime } from "./format";
+import { diagnosticsText, formatBytes } from "./format";
 import { steadyDiagnostics } from "./fixtures";
 import { diagnosticsKey } from "./api";
 
@@ -40,7 +40,8 @@ it("shows the pool, the database and the build an administrator asked about", as
   expect(reading("Path").textContent).toBe("/var/lib/subglance/subglance.db");
   expect(reading("Size").textContent).toBe("24 MiB + 4.0 MiB write-ahead log");
   expect(reading("Journal mode").textContent).toBe("WAL");
-  expect(reading("Uptime").textContent).toBe("1 h 0 m");
+  // The app's one duration shape, the same as an outage's length.
+  expect(reading("Uptime").textContent).toBe("1 h");
   for (const label of ["Uptime", "Started"]) expect(reading(label).querySelector(".value"), label).not.toBeNull();
   expect(reading("Monitors scheduled").textContent).toBe("62");
 });
@@ -138,7 +139,5 @@ it("formats the readings the way an operator reads them", () => {
   expect(formatBytes(512)).toBe("512 B");
   expect(formatBytes(1536)).toBe("1.5 KiB");
   expect(formatBytes(241 * 1024 * 1024)).toBe("241 MiB");
-  expect(formatUptime(18 * 86_400 + 4 * 3_600 + 12 * 60)).toBe("18 d 4 h 12 m");
-  expect(formatUptime(59)).toBe("0 m");
   expect(diagnosticsText({ ...steadyDiagnostics, commit: "", scheduler: null })).toMatch(/^subglance 0\.1\.0\n[\s\S]*scheduler not attached$/);
 });

@@ -15,7 +15,7 @@
  * a value nobody chose on the first unrelated edit.
  */
 
-import { formatDuration } from "./detail";
+import { formatDuration } from "../format/format";
 
 export type DurationUnit = {
   id: string;

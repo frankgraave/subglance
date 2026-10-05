@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  formatDuration,
-  formatMoment,
   incidentFromApi,
   windowCoverageCaveat,
   windowFromApi,
@@ -140,43 +138,5 @@ describe("incidentFromApi", () => {
     const incident = incidentFromApi({ ...base, resolved: false });
     expect(incident.resolved).toBe(false);
     expect(incident.resolvedAt).toBeNull();
-  });
-});
-
-describe("formatDuration", () => {
-  it("keeps seconds only below a minute, where they are the whole story", () => {
-    expect(formatDuration(0)).toBe("0 s");
-    expect(formatDuration(59)).toBe("59 s");
-  });
-
-  it("drops seconds above a minute rather than reading out three units", () => {
-    expect(formatDuration(60)).toBe("1 min");
-    expect(formatDuration(3599)).toBe("59 min");
-  });
-
-  it("gives hours a minute remainder, and drops it when it is zero", () => {
-    expect(formatDuration(3600)).toBe("1 h");
-    expect(formatDuration(3600 + 41 * 60 + 12)).toBe("1 h 41 min");
-  });
-
-  it("rolls over to days", () => {
-    expect(formatDuration(86400)).toBe("1 d");
-    expect(formatDuration(86400 + 7200)).toBe("1 d 2 h");
-  });
-
-  it("says unknown rather than printing a negative or NaN duration", () => {
-    expect(formatDuration(-5)).toBe("unknown");
-    expect(formatDuration(Number.NaN)).toBe("unknown");
-  });
-});
-
-describe("formatMoment", () => {
-  it("returns null for a missing instant instead of Invalid Date", () => {
-    expect(formatMoment(null)).toBeNull();
-    expect(formatMoment(Number.NaN)).toBeNull();
-  });
-
-  it("renders a real instant as text", () => {
-    expect(formatMoment(Date.parse("2026-09-13T04:00:00Z"))).toBeTruthy();
   });
 });

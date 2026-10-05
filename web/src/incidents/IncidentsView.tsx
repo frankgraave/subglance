@@ -10,7 +10,7 @@ import { ListTabs } from "../monitors/ListTabs";
 import { HISTORY_WINDOWS } from "./api";
 import { clusterIncidents } from "./cluster";
 import { describeChurn, incidentState } from "./story";
-import { formatDuration } from "../monitors/detail";
+import { formatDay, formatDuration, sameDay } from "../format/format";
 import type { IncidentEntry } from "./cluster";
 import type { Incident } from "../monitors/detail";
 
@@ -762,13 +762,7 @@ function groupByDay(incidents: readonly Incident[], now: number): Day[] {
  * describing: two clocks in one view, disagreeing.
  */
 function dayLabel(date: Date, now: number): string {
-  const today = new Date(now);
-  const sameDay = (a: Date, b: Date) =>
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate();
-  if (sameDay(date, today)) return "Today";
-  const yesterday = new Date(today.getTime() - 86_400_000);
-  if (sameDay(date, yesterday)) return "Yesterday";
-  return date.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  if (sameDay(date.getTime(), now)) return "Today";
+  if (sameDay(date.getTime(), now - 86_400_000)) return "Yesterday";
+  return formatDay(date.getTime());
 }

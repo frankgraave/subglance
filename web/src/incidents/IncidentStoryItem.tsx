@@ -4,8 +4,8 @@ import { StatusChip } from "../components/Chip";
 import { IconBellOff } from "../components/icons";
 import { Value } from "../components/Value";
 import { Led } from "../monitors/Led";
-import { formatClock, incidentStory, incidentTimeline, STATE_TONE } from "./story";
-import { formatDuration } from "../monitors/detail";
+import { incidentStory, incidentTimeline, STATE_TONE } from "./story";
+import { formatClock, formatDuration } from "../format/format";
 import type { Incident } from "../monitors/detail";
 
 /**

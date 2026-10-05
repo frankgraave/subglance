@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, Panel } from "../components/Card";
 import { IconPulse } from "../components/icons";
 import { useNow } from "../live/useNow";
+import { formatMomentIso } from "../format/format";
 import { fetchWatchdog, watchdogKey, type WatchdogState } from "./api";
 
 function useWatchdog() {
@@ -11,7 +12,7 @@ function useWatchdog() {
 }
 
 function PingTime({ value }: { value: string | null }) {
-  return value === null ? <>None since this process started</> : <time dateTime={value}>{new Date(value).toLocaleString(undefined, { timeZoneName: "short" })}</time>;
+  return value === null ? <>None since this process started</> : <time dateTime={value}>{formatMomentIso(value)}</time>;
 }
 
 function resultText(data: WatchdogState): string {

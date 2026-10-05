@@ -1,7 +1,7 @@
 import { useId, useState } from "react";
 import { IncidentStoryItem } from "./IncidentStoryItem";
 import { describeCluster } from "./cluster";
-import { formatClock } from "./story";
+import { formatClock } from "../format/format";
 import { Value } from "../components/Value";
 import type { IncidentCluster } from "./cluster";
 import type { Incident } from "../monitors/detail";

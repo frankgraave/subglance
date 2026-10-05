@@ -17,6 +17,7 @@ import { reminderFromApi, type ReminderInfo } from "../incidents/reminders";
 import { apiFetch } from "../api/http";
 import { PARTIAL_COVERAGE } from "../heartbeat/model";
 import { toUnixMs } from "./types";
+import { formatDuration } from "../format/format";
 
 /** One uptime window as GET /api/v1/monitors/:id/uptime returns it. */
 export type ApiUptimeWindow = {
@@ -201,29 +202,6 @@ export async function fetchMonitorDetail(id: string, signal?: AbortSignal): Prom
 }
 
 /**
- * A duration in seconds as the shortest sentence that is still exact enough.
- *
- * An outage is judged by order of magnitude — "4 min" and "3 h" lead to
- * different conversations, "3 h 41 min 12 s" leads to the same one as "3 h"
- * while taking longer to read. Seconds only survive below a minute, where
- * they are the whole story.
- */
-export function formatDuration(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) return "unknown";
-  if (seconds < 60) return `${Math.floor(seconds)} s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) {
-    const rest = minutes % 60;
-    return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
-  }
-  const days = Math.floor(hours / 24);
-  const rest = hours % 24;
-  return rest === 0 ? `${days} d` : `${days} d ${rest} h`;
-}
-
-/**
  * The caveat on an uptime window that is longer than the monitor has existed,
  * or undefined when the figure covers its whole window.
  *
@@ -258,23 +236,3 @@ export function windowCoverageCaveat(
   return `the monitor was added ${age} ago, so this covers ${age}, not the whole window`;
 }
 
-/**
- * An absolute timestamp, in the reader's own locale and zone.
- *
- * Absolute rather than relative, unlike the dashboard's "2 min ago": the
- * detail view is where you reconstruct what happened and line it up against
- * a deploy log or somebody else's screenshot, and "2 min ago" is unusable for
- * that the moment the page has been open for a while.
- */
-export function formatMoment(ms: number | null): string | null {
-  if (ms === null) return null;
-  const date = new Date(ms);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}

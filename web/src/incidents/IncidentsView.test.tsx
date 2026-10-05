@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { formatClock } from "../format/format";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { IncidentsView } from "./IncidentsView";
@@ -427,11 +428,7 @@ describe("the incidents screen", () => {
      * what it returns.
      */
     expect(times.length).toBe(2);
-    const clock = (at: number) =>
-      new Date(at).toLocaleTimeString(undefined, {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
+    const clock = (at: number) => formatClock(at);
     expect(times[0]).toBe(clock(T0));
     expect(times[1]).toBe(clock(T0 - 60 * 60_000));
   });

@@ -32,7 +32,7 @@
  * cluster and get the four rows, unchanged.
  */
 
-import { formatDuration } from "../monitors/detail";
+import { formatDuration } from "../format/format";
 import type { Incident } from "../monitors/detail";
 
 /**

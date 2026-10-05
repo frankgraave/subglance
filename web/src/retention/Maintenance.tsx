@@ -4,23 +4,16 @@ import { Panel } from "../components/Card";
 import { ApiError } from "../api/http";
 import { previewRetention, retentionKey, startRetentionAction, type CompactPlan, type Retention, type RetentionPass, type SizeCap } from "./api";
 import { formatBytes } from "./format";
+import { formatCount, formatDateIso, formatMomentIso, formatRunTime } from "../format/format";
 
 const DAY_MS = 86_400_000;
-const count = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 
 function When({ value }: { value: string }) {
-  return <time dateTime={value}>{new Date(value).toLocaleString(undefined, { timeZoneName: "short" })}</time>;
+  return <time dateTime={value}>{formatMomentIso(value)}</time>;
 }
 
 function plural(n: number, one: string, many: string) {
-  return `${count.format(n)} ${n === 1 ? one : many}`;
-}
-
-/** A length of time as a person would say it: 0.4 s, 12 s, 3 min. */
-function formatDuration(ms: number): string {
-  if (ms < 10_000) return `${(ms / 1000).toFixed(1)} s`;
-  if (ms < 120_000) return `${Math.round(ms / 1000)} s`;
-  return `${Math.round(ms / 60_000)} min`;
+  return `${formatCount(n)} ${n === 1 ? one : many}`;
 }
 
 const TRIGGERS: Record<RetentionPass["trigger"], string> = {
@@ -50,7 +43,7 @@ function capNotice(cap: SizeCap | null, startedAt: string): string | null {
   const days = (since: string) => Math.max(1, Math.round((Date.parse(startedAt) - Date.parse(since)) / DAY_MS));
   const parts: string[] = [];
   if (cap.raw_since) parts.push(`Shortened to ${plural(days(cap.raw_since), "day", "days")} of raw data to stay under ${limit}.`);
-  if (cap.hourly_since) parts.push(`Hourly summaries now start ${new Date(cap.hourly_since).toLocaleDateString()}.`);
+  if (cap.hourly_since) parts.push(`Hourly summaries now start ${formatDateIso(cap.hourly_since)}.`);
   if (parts.length === 0) parts.push(`Removed history beyond the windows to stay under ${limit}.`);
   if (cap.at_floor) parts.push(`Still over ${limit} (${formatBytes(cap.after_bytes)}): only the last day and the incidents are left, and the limit never removes those.`);
   return parts.join(" ");
@@ -65,7 +58,7 @@ function LastPass({ pass }: { pass: RetentionPass }) {
     {notice && <p>{notice}</p>}
     <dl className="panel-facts">
       <div><dt>Started</dt><dd><When value={pass.started_at} /></dd></div>
-      <div><dt>Took</dt><dd className="face-mono">{formatDuration(pass.duration_ms)}</dd></div>
+      <div><dt>Took</dt><dd className="face-mono">{formatRunTime(pass.duration_ms)}</dd></div>
       <div><dt>Freed</dt><dd className="face-mono">{formatBytes(pass.freed_bytes)}</dd></div>
       <div><dt>Trigger</dt><dd>{TRIGGERS[pass.trigger]}</dd></div>
     </dl>
@@ -181,7 +174,7 @@ function Compact({ plan, canAdmin }: { plan: CompactPlan; canAdmin: boolean }) {
   return <Panel label="Database file" spacing="form">
     {last && (last.error !== null
       ? <p className="warn-note">The last compaction failed: {last.error}</p>
-      : <p>Compacted <When value={last.finished_at} /> in {formatDuration(last.duration_ms)}: {formatBytes(last.before_bytes)} to {formatBytes(last.after_bytes)}.
+      : <p>Compacted <When value={last.finished_at} /> in {formatRunTime(last.duration_ms)}: {formatBytes(last.before_bytes)} to {formatBytes(last.after_bytes)}.
         {last.shrink_pending && " The file reaches that size at the next checkpoint."}</p>)}
     {plan.running ? <p role="status">Compacting the database. Checks keep running; their results are recorded when it finishes.</p>
       : plan.recommended && <>

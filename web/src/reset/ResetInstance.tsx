@@ -5,11 +5,10 @@ import { ApiError } from "../api/http";
 import { Card, Panel } from "../components/Card";
 import { IconAlert } from "../components/icons";
 import { RESET_PHRASE, resetInstance, type ResetResult } from "./api";
-
-const count = new Intl.NumberFormat("en");
+import { formatCount } from "../format/format";
 
 function plural(n: number, one: string, many: string) {
-  return `${count.format(n)} ${n === 1 ? one : many}`;
+  return `${formatCount(n)} ${n === 1 ? one : many}`;
 }
 
 function describe(result: ResetResult | null) {

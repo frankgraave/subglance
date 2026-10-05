@@ -2,7 +2,7 @@ import type { RefObject } from "react";
 import { partition, summarise } from "../monitors/model";
 import { Led } from "../monitors/Led";
 import type { Monitor } from "../monitors/types";
-import { formatClock, useSecondsClock } from "./clock";
+import { formatWallClock, useSecondsClock } from "./clock";
 
 /**
  * The wall display: lamp and name, nothing else (DESIGN.md §7).
@@ -76,7 +76,7 @@ export function StatusWall({
   // The hook cannot be skipped, so the clock always runs and the override
   // wins afterwards — the same shape `Dashboard` uses for its media query.
   const tick = useSecondsClock();
-  const clock = formatClock(now ?? tick);
+  const clock = formatWallClock(now ?? tick);
 
   const summary = summarise(monitors);
   // Down first, then alphabetical: the same `partition` the row and card

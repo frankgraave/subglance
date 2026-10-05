@@ -6,6 +6,7 @@ import { SegmentedControl } from "../components/SegmentedControl";
 import { Tooltip } from "../components/Tooltip";
 import { tooltipLeft } from "../heartbeat/model";
 import { formatLatency } from "./format";
+import { formatDay, formatDayTime } from "../format/format";
 import {
   LATENCY_GRID_LINES,
   LATENCY_WINDOWS,
@@ -75,10 +76,9 @@ const WINDOW_LABELS: Record<LatencyWindow, string> = {
 const VIEW_W = 1000;
 const VIEW_H = 100;
 
+/** A daily step is named by its day; anything finer by its day and time. */
 const formatCorner = (ms: number, stepMs: number) =>
-  new Date(ms).toLocaleString(undefined, stepMs >= 86_400_000
-    ? { month: "short", day: "numeric" }
-    : { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  stepMs >= 86_400_000 ? formatDay(ms) : formatDayTime(ms);
 
 function describeStep(p: LatencyPoint, stepMs: number): string {
   return `${formatCorner(p.t, stepMs)} – ${formatCorner(p.t + stepMs, stepMs)}`;

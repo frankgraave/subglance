@@ -193,8 +193,8 @@ describe("uptime windows", () => {
     });
     const windows = document.querySelector(".mon-detail-windows");
     expect(windows?.textContent).toContain("21 of 43138 confirmed down");
-    expect(windows?.textContent).toContain("99.9%");
-    expect(windows?.textContent).not.toContain("100%");
+    expect(windows?.textContent).toContain("99.95%");
+    expect(windows?.textContent).not.toContain("100.00%");
   });
 
   it("renders an unknown uptime as unknown, never as 0%", () => {
@@ -249,7 +249,7 @@ describe("uptime windows", () => {
 
   it("still renders a real 0 percent as a number", () => {
     view({ windows: [window_({ total: 10, up: 0, down: 10, uptime: 0 })] });
-    expect(screen.getByText("0%")).toBeTruthy();
+    expect(screen.getByText("0.00%")).toBeTruthy();
   });
 });
 

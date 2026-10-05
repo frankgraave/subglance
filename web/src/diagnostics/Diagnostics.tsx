@@ -5,7 +5,8 @@ import { IconServer } from "../components/icons";
 import { Value } from "../components/Value";
 import { useNow } from "../live/useNow";
 import { diagnosticsKey, fetchDiagnostics } from "./api";
-import { diagnosticsText, formatBytes, formatUptime } from "./format";
+import { diagnosticsText, formatBytes } from "./format";
+import { formatCount, formatDuration, formatMomentIso } from "../format/format";
 
 /**
  * The instance card: what is running, on what database, and whether the check
@@ -25,7 +26,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 function Count({ n, warning }: { n: number; warning?: string }) {
-  return <Value value={n} {...(n > 0 && warning ? { warning } : {})}>{n.toLocaleString()}</Value>;
+  return <Value value={n} {...(n > 0 && warning ? { warning } : {})}>{formatCount(n)}</Value>;
 }
 
 export function DiagnosticsCard() {
@@ -58,8 +59,8 @@ export function DiagnosticsCard() {
           <Row label="Runtime">{d.go_version} {d.platform}</Row>
         </dl></Panel>
         <Panel label="Process"><dl>
-          <Row label="Uptime"><Value>{formatUptime(d.uptime_seconds)}</Value></Row>
-          <Row label="Started"><Value><time dateTime={d.started_at}>{new Date(d.started_at).toLocaleString(undefined, { timeZoneName: "short" })}</time></Value></Row>
+          <Row label="Uptime"><Value>{formatDuration(d.uptime_seconds)}</Value></Row>
+          <Row label="Started"><Value><time dateTime={d.started_at}>{formatMomentIso(d.started_at)}</time></Value></Row>
         </dl></Panel>
         <Panel label="Database"><dl>
           <Row label="Path"><code>{d.database.path}</code></Row>

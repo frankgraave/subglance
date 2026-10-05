@@ -59,7 +59,7 @@ describe("MonitorCompactList", () => {
     expect(within(el).getByText("Up")).toBeTruthy();
     expect(within(el).getByText("api")).toBeTruthy();
     expect(within(el).getByText("https://api.example.com")).toBeTruthy();
-    expect(numbers(el)).toEqual(["87 ms", "99.9%"]);
+    expect(numbers(el)).toEqual(["87 ms", "99.95%"]);
   });
 
   it("orders down monitors first, then alphabetically", () => {

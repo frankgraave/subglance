@@ -20,6 +20,8 @@
  * exactly what "assume healthy until told otherwise" produces.
  */
 
+import { formatDay, formatMoment } from "../format/format";
+
 /** The eight types `store` accepts, mirroring its CHECK constraint. */
 export type ChannelType =
   | "webhook"
@@ -953,20 +955,9 @@ function plural(n: number, word: string): string {
 }
 
 function shortDate(ms: number | null): string | null {
-  if (ms === null) return null;
-  return new Date(ms).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
+  return ms === null ? null : formatDay(ms);
 }
 
 function longDate(ms: number | null): string {
-  if (ms === null) return "at an unknown time";
-  return new Date(ms).toLocaleString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatMoment(ms) ?? "at an unknown time";
 }

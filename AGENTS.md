@@ -168,6 +168,13 @@ any rendered text whose size and leading are not a pair from the scale. Pick
 the role by what the text is, not by how big it should look. The reasoning is
 in DESIGN.md §2.5.
 
+A date, time, duration, count or percentage on screen is written by
+`web/src/format/format.ts`, never by a `toLocale*` call, an `Intl` formatter
+or a `toFixed` in place: one shape per kind (`1 Oct 2026, 13:59`, `1 Oct`,
+`13:59`, `4 min ago`, `3 h 41 min`, `43,138`, `99.95%`), 24-hour, English
+months, the reader's own zone. `format/format.guard.test.ts` refuses one
+written anywhere else. The table is in DESIGN.md §2.5.
+
 A checkbox or radio is `Checkbox` or `Radio` from
 `web/src/components/Choice.tsx`, never a hand-written `<input type="checkbox">`
 and never `accent-color`: `tokens.test.ts` refuses both outside that component
