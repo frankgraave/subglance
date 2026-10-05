@@ -290,6 +290,10 @@ var withheldStandIn = map[string]string{
 	"numbers":    "+10000000000",
 	"password":   "withheld",
 	"auth_token": "withheld",
+	// ntfy's topic and Gotify's application token are withheld too, and each
+	// is the field its channel type cannot work without.
+	"topic": "withheld",
+	"token": "withheld",
 }
 
 func (s *Server) planChannel(ctx context.Context, p *importPlan, ex existingConfig, path string, c configfile.Channel) error {

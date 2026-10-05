@@ -86,7 +86,7 @@ explains it and how to choose other targets or turn it off.
 | **[Installing SubGlance](docs/installation.md)** | Docker Compose, Docker, a downloaded binary with signature verification, building from source, running the tests |
 | **[Using SubGlance](docs/using-subglance.md)** | First run, your first monitor, authentication, the five check types, push monitors, how a failure becomes an alert, repeat alerts, the API |
 | **[Notification channels](docs/channels.md)** | The settings each of the eight channel types needs, the Delivery column, SMS limits, private addresses, and the webhook payload |
-| **[Configuration files](docs/configuration-files.md)** | Export and import monitors, channels, routing rules and maintenance windows as YAML, without credentials |
+| **[Configuration files](docs/configuration-files.md)** | Export and import monitors, channels, routing rules and maintenance windows as YAML, without credentials; convert an Uptime Kuma database |
 | **[Managing tags](docs/tags.md)** | Bulk assignment/removal, instance-wide renames, collision policy and conditional API writes |
 | **[Running SubGlance](docs/operations.md)** | The configuration table, worker sizing, metrics, shutdown, the dead man's switch, backup and restore |
 | [Architecture](docs/ARCHITECTURE.md) · [Design](docs/DESIGN.md) · [Style guide](docs/styleguide/index.html) | How it is built, and the tokens the interface is drawn from |
@@ -112,6 +112,7 @@ what has not reached a release yet is listed under
 | Maintenance windows — one-off and weekly, by monitor or tag | ✅ Working |
 | Public status pages | ✅ Working |
 | Configuration files — YAML export and import | ✅ Working |
+| Moving from Uptime Kuma — `subglance import uptime-kuma` | ✅ Working |
 | Scheduled backups to S3-compatible storage, and restore | ✅ Working |
 | Latency chart on the detail view — 24h, 7d and 30d | ✅ Working |
 | Settings — account, display, users, status pages, self-monitoring, retention, backups, import and export, API tokens, instance diagnostics, reset | ✅ Working |

@@ -53,10 +53,11 @@ func main() {
 		return
 	}
 
-	// Subcommands, and deliberately only these three: the shipped image is
-	// distroless with no shell, so a container HEALTHCHECK and an operator
-	// taking or restoring a backup have nothing to invoke except this binary.
-	// Everything else stays flags-only.
+	// Subcommands, and deliberately only these four: the shipped image is
+	// distroless with no shell, so a container HEALTHCHECK, an operator
+	// taking or restoring a backup, and someone converting a Kuma database
+	// that lives in a Docker volume have nothing to invoke except this
+	// binary. Everything else stays flags-only.
 	if len(args) > 0 {
 		switch args[0] {
 		case "healthcheck":
@@ -67,6 +68,9 @@ func main() {
 			return
 		case "restore":
 			runSubcommand("restore", runRestore, args[1:])
+			return
+		case "import":
+			runSubcommand("import", runImport, args[1:])
 			return
 		}
 	}
