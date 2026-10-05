@@ -84,7 +84,10 @@ it.each(["dark", "light"] as const)("polling preserves disclosed identity, body 
     for (const [index, advance] of [0, 1000].entries()) {
       const ts = new Date(Date.parse(initial[0].ts) + advance).toISOString();
       child.stdin!.write(`${JSON.stringify({ ts })}\n`);
-      await page.waitForFunction((count) => document.querySelectorAll(".response-history-beat").length === count, {}, initial.length + index + 1);
+      // Identical failures form one run (SUB-184); each stored response keeps
+      // its own disclosure inside it, so the disclosures are what is counted.
+      await page.waitForFunction((count) => document.querySelectorAll(".response-history details").length === count, {}, initial.length + index + 1);
+      expect(await page.$$eval(".response-history-beat", (rows) => rows.length)).toBe(1);
       const state = await body!.evaluate((el, position) => {
         const disclosures = Array.from(document.querySelectorAll<HTMLDetailsElement>(".response-history details"));
         return {
@@ -130,8 +133,13 @@ it.each([
     // visibility, not its rectangle, is the user-visible contract.
     expect(await page.$eval(".response-history pre", (el) => el.checkVisibility())).toBe(false);
     const text = await page.$eval(".response-history", (el) => el.textContent ?? "");
-    expect(text).toContain("Capture stopped while this monitor was flapping");
-    expect(text).toContain("Capture was switched off for this check.");
+    // The fixture's two newest failures are alike in everything the row
+    // prints, so they are one run (SUB-184) and each states its recorded
+    // reason as a count; the passed check before them keeps the captured
+    // failure on its own row.
+    expect(await page.$$eval(".response-history-beat", (rows) => rows.map((row) => row.getAttribute("data-count")))).toEqual(["2", "1", "1"]);
+    expect(text).toContain("Capture stopped while this monitor was flapping; no response was stored for 1 of these checks.");
+    expect(text).toContain("Capture was switched off for 1 of these checks.");
     expect(text).toContain("No captured response. Reason not recorded.");
     expect(text).toContain("Truncated — only the beginning");
     expect(text).not.toContain("must-not-store");
@@ -165,7 +173,8 @@ it.each([
     }));
     expect(metrics.overflow).toBeLessThanOrEqual(1);
     expect(metrics.css).toBe("pre-wrap");
-    expect(metrics.headings.slice(0, 4)).toEqual(["Recent checks", "Failure responses", "Uptime", "Latency"]);
+    // The raw evidence comes after the summaries it backs (SUB-184).
+    expect(metrics.headings).toEqual(["Recent checks", "Uptime", "Latency", "Incidents", "Failure responses"]);
     expect(errors).toEqual([]);
     if (process.env.SNAPSHOT_BROWSER_PROOF_DIR) {
       await page.$eval(".response-history pre", (el) => { el.scrollTop = 0; });

@@ -176,17 +176,101 @@ export function xOf(series: LatencySeries, t: number): number {
 }
 
 /**
+ * The latency plot's vertical scale: the range it draws and the round values
+ * its gridlines stand at.
+ *
+ * It used to run from zero to the peak step average. That kept the scale
+ * readable from the "peak" figure without an axis, and it put a service that
+ * answers in 120 to 170 ms into the top quarter of the plot, flat, under three
+ * gridlines that named no value (SUB-184). Now the range is fitted to the data
+ * and the gridlines are labelled, so a slope is visible and can be read.
+ */
+export type LatencyScale = {
+  /** The value at the plot's bottom edge, in ms. */
+  min: number;
+  /** The value at the plot's top edge, in ms. */
+  max: number;
+  /** The gridlines' values, top to bottom, evenly spaced inside the range. */
+  ticks: number[];
+};
+
+/** Gridlines inside the plot: the chart chrome's default of three. */
+export const LATENCY_GRID_LINES = 3;
+
+/**
+ * Round steps, as 1, 2, 2.5 and 5 per decade. Never below 1 ms, and 2.5 only
+ * from 25 ms up: the labels are whole milliseconds, and a 2.5 ms step would
+ * print "3 ms" on a line that stands at 2.5.
+ */
+const NICE = [1, 2, 2.5, 5];
+
+/**
+ * Fits round gridlines around the measured step averages.
+ *
+ * The range is `lines + 1` equal steps from a multiple of the step, so the
+ * gridlines the chrome spaces evenly land exactly on round values. The step is
+ * the smallest round one that holds the data with a little room underneath,
+ * which keeps the line's lowest point off the down ticks along the bottom.
+ *
+ * A flat series is given a band a fifth of its value wide, centred on it.
+ * Without that, a service steady at 120 ms would be drawn on a 2 ms scale and
+ * its noise would fill the plot as if it were a trend.
+ */
+export function latencyScale(
+  lowMs: number,
+  peakMs: number,
+  lines = LATENCY_GRID_LINES,
+): LatencyScale {
+  const intervals = lines + 1;
+  let low = Math.max(Math.min(lowMs, peakMs), 0);
+  let high = Math.max(lowMs, peakMs);
+  // At least one millisecond per interval, so every label is a different
+  // whole number.
+  const minimumSpan = Math.max(high * 0.2, intervals);
+  if (high - low < minimumSpan) {
+    const centre = (high + low) / 2;
+    low = Math.max(centre - minimumSpan / 2, 0);
+    high = low + minimumSpan;
+  } else {
+    low = Math.max(low - (high - low) * 0.05, 0);
+  }
+  // The span is at least one millisecond per interval, so the first decade is
+  // at least 1 and the search ends within a few decades. Bounded all the same:
+  // a scale is not worth an endless loop on a value nobody expected.
+  const raw = (high - low) / intervals;
+  let step = 0;
+  let min = 0;
+  let decade = raw >= 1 && Number.isFinite(raw) ? 10 ** Math.floor(Math.log10(raw)) : 1;
+  for (let tries = 0; step === 0 && tries < 32; tries += 1, decade *= 10) {
+    for (const nice of NICE) {
+      const candidate = nice * decade;
+      if (!Number.isInteger(candidate)) continue;
+      const start = Math.floor(low / candidate) * candidate;
+      if (start + intervals * candidate >= high) {
+        step = candidate;
+        min = start;
+        break;
+      }
+    }
+  }
+  if (step === 0) {
+    step = Math.max(Math.ceil(raw), 1);
+    min = Math.floor(low);
+  }
+  const ticks = Array.from({ length: lines }, (_, i) => min + (lines - i) * step);
+  return { min, max: min + intervals * step, ticks };
+}
+
+/**
  * Vertical position of a latency, 0 at the top and 1 at the baseline.
  *
- * The ceiling is the peak step average, so the highest point of the line
- * touches the top of the plot and the breakdown's "peak" figure *is* the
- * scale — the chart chrome draws no axis, so the scale has to be readable
- * from a number that is already on screen. Values above it (a step's max)
- * clamp to the top instead of escaping the plot.
+ * Values outside the scale (a step's slowest check, in the readout) clamp to
+ * its edge instead of escaping the plot.
  */
-export function yOf(ms: number, ceiling: number): number {
-  if (!(ceiling > 0)) return 1;
-  return 1 - Math.min(Math.max(ms / ceiling, 0), 1);
+export function yOf(ms: number, scale: Pick<LatencyScale, "min" | "max">): number {
+  const span = scale.max - scale.min;
+  if (!(span > 0)) return 1;
+  return 1 - Math.min(Math.max((ms - scale.min) / span, 0), 1);
 }
 
 /** The step index nearest to a horizontal fraction of the plot. */

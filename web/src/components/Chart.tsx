@@ -15,7 +15,10 @@ import type { ReactNode } from "react";
  *   axis labels, no ticks, no frame. Axes and frames are ink that is not data,
  *   and on a dashboard somebody stares at all day every line costs attention
  *   it never pays back. The gridlines stay because they are what makes two
- *   heights comparable without a scale beside them.
+ *   heights comparable without a scale beside them. A chart whose scale is not
+ *   from zero, or not otherwise on screen, names each line's value at its left
+ *   end (`gridLabels`): the label sits on the line it reads, so it is still no
+ *   axis, no ticks and no frame.
  * - **The time range sits in the two bottom corners instead of an x-axis.**
  *   A row of tick labels spends a dozen glyphs to say what two do. Both are
  *   mono, so they carry tabular figures and a slashed zero (§2.5) and a
@@ -44,6 +47,14 @@ export type ChartProps = {
    */
   gridLines?: number;
   /**
+   * What each gridline stands at, top line first: one label per line, printed
+   * at its left end. Optional, because a gridline only has to give a height
+   * something to be compared against; a chart whose scale is not otherwise on
+   * screen names its lines here. Purely visual — the caller's own table or
+   * readout carries the numbers to a screen reader.
+   */
+  gridLabels?: readonly string[];
+  /**
    * The legend slot, below the plot. Deliberately a slot rather than a list of
    * items: which marks need naming is something only the caller knows, and a
    * legend built in here would be a second legend component in the product.
@@ -60,6 +71,7 @@ export function Chart({
   start,
   end,
   gridLines = 3,
+  gridLabels,
   legend,
   children,
   className,
@@ -90,12 +102,16 @@ export function Chart({
         {/* Decorative by definition: the gridlines carry no value a reader
             could name, and the plot's own content states the numbers. */}
         <div className="chart-grid" aria-hidden="true" data-testid="chart-grid">
-          {lines.map((top) => (
+          {lines.map((top, index) => (
             <span
               className="chart-gridline"
               key={top}
               style={{ top: `${top}%` }}
-            />
+            >
+              {gridLabels?.[index] !== undefined && (
+                <span className="chart-gridlabel">{gridLabels[index]}</span>
+              )}
+            </span>
           ))}
         </div>
         <div className="chart-marks">{children}</div>

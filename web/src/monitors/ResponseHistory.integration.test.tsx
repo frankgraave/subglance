@@ -24,13 +24,13 @@ it("rejects an old server's unidentified refetch without replacing disclosed his
   const { container, unmount } = render(<LiveMonitorDetailRoot client={client} id="7" beatWidth={400} createEventSource={source} />);
   try {
     fireEvent.click(await screen.findByText("Captured response"));
-    const disclosure = container.querySelector("details")!;
-    const body = container.querySelector("pre")!;
+    const disclosure = container.querySelector<HTMLDetailsElement>(".response-history details")!;
+    const body = container.querySelector<HTMLElement>(".response-history pre")!;
     body.focus();
     legacy = true;
     await act(() => client.invalidateQueries({ queryKey: responseHistoryQueryKey("7") }));
     expect(await screen.findByText(/Invalid heartbeat history identity/)).toBeTruthy();
-    expect(container.querySelector("details")).toBe(disclosure);
+    expect(container.querySelector<HTMLDetailsElement>(".response-history details")).toBe(disclosure);
     expect(disclosure.open).toBe(true);
     expect(document.activeElement).toBe(body);
     expect(screen.queryByText("No failed checks in the recent history.")).toBeNull();
@@ -50,10 +50,12 @@ it("mounts raw captured responses in the actual live detail through the authenti
   vi.stubGlobal("fetch", fetch);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const { container } = render(<LiveMonitorDetailRoot client={client} id="7" beatWidth={400} createEventSource={source} />);
-  const summary = await screen.findByText("Captured response");
-  expect(container.querySelector("details")?.open).toBe(false);
+  // Two failures alike in everything the row prints form one run, so the
+  // stored response is named by its time.
+  const summary = await screen.findByText(/^Captured response/);
+  expect(container.querySelector<HTMLDetailsElement>(".response-history details")?.open).toBe(false);
   fireEvent.click(summary);
-  expect(container.querySelector("pre")?.textContent).toBe(raw);
+  expect(container.querySelector<HTMLElement>(".response-history pre")?.textContent).toBe(raw);
   expect(container.querySelector("pre script, pre img")).toBeNull();
   expect(screen.getByText(/Capture stopped while this monitor was flapping/)).toBeTruthy();
   expect(screen.getByText(/Truncated/)).toBeTruthy();
@@ -68,5 +70,5 @@ it("shows capture-off history without a response disclosure", async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const { container } = render(<LiveMonitorDetailRoot client={client} id="7" beatWidth={400} createEventSource={source} />);
   expect(await screen.findByText("Capture was switched off for this check.")).toBeTruthy();
-  expect(container.querySelector("details")).toBeNull();
+  expect(container.querySelector<HTMLDetailsElement>(".response-history details")).toBeNull();
 });

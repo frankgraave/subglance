@@ -64,6 +64,20 @@
   background: var(--border);
 }
 
+/* A gridline's value, standing on the line at its left end. Mono for the
+   tabular figures, helper size and --ink-2 for the same reason as the corner
+   times: it is text, and owes 4.5:1. Under the marks, so the line is never cut
+   by its own scale. */
+.chart-gridlabel {
+  @apply face-mono;
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  font-size: var(--type-helper);
+  line-height: var(--lead-helper);
+  color: var(--ink-2);
+}
+
 /* The marks sit above the gridlines, so a bar is never cut by one. */
 .chart-marks {
   position: relative;

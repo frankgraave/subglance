@@ -2139,9 +2139,26 @@ stopped updating.
 
 ### 8.7 Failure responses on HTTP monitor details
 
-The **Failure responses** card follows **Recent checks** and precedes **Uptime**.
-It shows failed checks from the latest 100 raw heartbeats, not every failure in
-an incident. The authenticated per-monitor endpoint supplies the evidence;
+The **Failure responses** card is the last on the page, after **Incidents**.
+It is the raw evidence behind the summaries above it, and is read once those
+have said what happened; above **Uptime**, a monitor down for forty minutes
+pushed every summary on the page below forty rows of one error. It loads as its
+own chunk with its own error boundary, so a failed load leaves the page above
+it standing. It shows failed checks from the latest 100 raw heartbeats, not
+every failure in an incident.
+
+**Consecutive identical failures are one row.** Failures that agree on
+everything the row prints — assessment, maintenance, failure kind, status code
+and error text — and follow each other with no passed check between them are
+told once: the span from the oldest to the newest, "N checks in a row", and the
+error. Any difference starts a new row, so grouping never hides a detail a
+member would have shown alone; a passed check between two identical failures
+ends the run, because those are two outages. Each stored response in a run
+keeps its own disclosure, named by its time; the checks without one are counted
+by their recorded reason. A run keeps its React key across refreshes while any
+of its members is still on screen, because a long outage adds checks at the
+newest end and drops them at the oldest on the same poll, and an open
+disclosure must not close under the reader. The authenticated per-monitor endpoint supplies the evidence;
 dashboard bulk reads and the live stream carry no response bodies. Polling and
 a recorded **Check now** refresh this history without replacing an open
 disclosure: each row is keyed by its persisted heartbeat ID, never its timestamp

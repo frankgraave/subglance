@@ -51,6 +51,28 @@ describe("the chart draws no axis furniture", () => {
     }
   });
 
+  it("names each gridline's value when the caller gives one, top first", () => {
+    render(
+      <Chart headline="140 ms" gridLabels={["150 ms", "125 ms", "100 ms"]}>
+        <div />
+      </Chart>,
+    );
+    const lines = [...screen.getByTestId("chart-grid").children];
+    expect(lines.map((line) => line.textContent)).toEqual(["150 ms", "125 ms", "100 ms"]);
+    // Ascending `top`, so the first label is the highest line.
+    const tops = lines.map((line) => Number.parseFloat((line as HTMLElement).style.top));
+    expect([...tops].sort((a, b) => a - b)).toEqual(tops);
+  });
+
+  it("draws bare gridlines when there is nothing to name", () => {
+    render(
+      <Chart headline="99.98%">
+        <div />
+      </Chart>,
+    );
+    expect(screen.getByTestId("chart-grid").querySelector(".chart-gridlabel")).toBeNull();
+  });
+
   it("puts no border, outline or background on the plot", () => {
     // Asserted against the stylesheet rather than against computed style,
     // because jsdom applies no stylesheet — and this is the rule most likely

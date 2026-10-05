@@ -43,6 +43,29 @@ describe("LatencyChart", () => {
     expect(screen.getByTestId("chart-breakdown").textContent).toBe("peak 300 ms · 120 checks");
   });
 
+  it("labels its gridlines and spreads the line over the plot (SUB-184)", () => {
+    // A service between 120 and 170 ms. From zero, its line sat in the top
+    // quarter of the plot under three gridlines that named no value.
+    render(
+      <LatencyChart
+        window="24h"
+        onWindowChange={() => {}}
+        series={makeSeries([point(0, 120), point(1, 170), point(2, 140)])}
+        width={400}
+      />,
+    );
+    const labels = [...document.querySelectorAll(".chart-gridlabel")].map((l) => l.textContent);
+    expect(labels).toHaveLength(3);
+    for (const label of labels) expect(label).toMatch(/^\d+ ms$/);
+    // Top line first: the values fall down the plot.
+    const values = labels.map((l) => Number.parseInt(l!, 10));
+    expect([...values].sort((a, b) => b - a)).toEqual(values);
+    // The line's highest and lowest points are more than half the plot apart.
+    const ys = screen.getByTestId("lat-run").getAttribute("d")!
+      .match(/,(-?[\d.]+)/g)!.map((m) => Number.parseFloat(m.slice(1)));
+    expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(50);
+  });
+
   it("breaks the line at an outage and marks the outage on the baseline", () => {
     render(
       <LatencyChart

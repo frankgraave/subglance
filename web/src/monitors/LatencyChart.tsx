@@ -7,13 +7,16 @@ import { Tooltip } from "../components/Tooltip";
 import { tooltipLeft } from "../heartbeat/model";
 import { formatLatency } from "./format";
 import {
+  LATENCY_GRID_LINES,
   LATENCY_WINDOWS,
+  latencyScale,
   measuredRuns,
   nearestPoint,
   summariseLatency,
   xOf,
   yOf,
   type LatencyPoint,
+  type LatencyScale,
   type LatencySeries,
   type LatencyWindow,
 } from "./latency";
@@ -39,9 +42,11 @@ import {
  *   failed, ends the line; the next measured step starts a new one. Bridging
  *   the gap would draw a latency nobody measured — across an outage, it would
  *   draw the service as answering when it was not.
- * - **The scale is the peak.** The chrome draws no axis, so the top of the
- *   plot is the highest step average, and that number is on screen in the
- *   breakdown. A fixed scale would flatten a 40ms service into the floor.
+ * - **The scale fits the data, and says so.** The range runs between round
+ *   values just outside the lowest and highest step averages, and each
+ *   gridline is labelled with the value it stands at. A scale from zero would
+ *   flatten a service that answers in 120 to 170 ms into the top quarter of
+ *   the plot, and unlabelled gridlines would leave its slope unreadable.
  * - **The previous window stays up while the next one loads.** Switching
  *   from 24h to 7d swaps the line in place instead of blanking the card to a
  *   loading line and back, which is what makes the switch read as the same
@@ -79,20 +84,20 @@ function describeStep(p: LatencyPoint, stepMs: number): string {
   return `${formatCorner(p.t, stepMs)} – ${formatCorner(p.t + stepMs, stepMs)}`;
 }
 
-function runPath(run: LatencyPoint[], series: LatencySeries, ceiling: number): string {
+function runPath(run: LatencyPoint[], series: LatencySeries, scale: LatencyScale): string {
   const step = xOf(series, series.from + series.stepMs) - xOf(series, series.from);
   if (run.length === 1) {
     // One measured step between two gaps: a path through a single point
     // draws nothing, so the step gets a flat segment across its own width.
     const p = run[0];
     const x0 = xOf(series, p.t) * VIEW_W;
-    const y = yOf(p.avgMs ?? 0, ceiling) * VIEW_H;
+    const y = yOf(p.avgMs ?? 0, scale) * VIEW_H;
     return `M${x0.toFixed(1)},${y.toFixed(1)}H${(x0 + step * VIEW_W).toFixed(1)}`;
   }
   return run
     .map((p, i) => {
       const x = (xOf(series, p.t) + step / 2) * VIEW_W;
-      const y = yOf(p.avgMs ?? 0, ceiling) * VIEW_H;
+      const y = yOf(p.avgMs ?? 0, scale) * VIEW_H;
       return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
     })
     .join("");
@@ -127,7 +132,6 @@ export function LatencyChart({
   const active = found >= 0 ? found : null;
   const setActive = (index: number | null) => setActiveT(index === null ? null : (points[index]?.t ?? null));
   const summary = series ? summariseLatency(series) : null;
-  const ceiling = summary?.peakMs ?? 0;
   const activePoint = active !== null ? points[active] : undefined;
 
   const plotWidth = () => plotRef.current?.getBoundingClientRect().width || width || 0;
@@ -201,12 +205,17 @@ export function LatencyChart({
         Could not refresh latency: {error.message}. The last loaded window ({shown}) had no checks.
       </p>
     ) : (
-      <p className="mon-detail-note">
-        {refreshing ? "Loading latency…" : `No checks in the last ${shown}.`}
-      </p>
+      // The page's one empty-state face (SUB-184): no checks in the window is a
+      // finding about the monitor, like "nothing has gone wrong yet".
+      refreshing
+        ? <p className="mon-detail-note">Loading latency…</p>
+        : <p className="mon-detail-empty">No checks in the last {shown}.</p>
     );
   } else {
     const runs = measuredRuns(series);
+    const scale = summary!.peakMs === null || summary!.lowMs === null
+      ? null
+      : latencyScale(summary!.lowMs, summary!.peakMs);
     const stepFraction = series.stepMs / (series.to - series.from);
     const breakdown = summary!.peakMs === null
       ? `${summary!.checks} checks · no latency measured`
@@ -221,6 +230,8 @@ export function LatencyChart({
           breakdown={breakdown}
           start={formatCorner(series.from, series.stepMs)}
           end={formatCorner(series.to, series.stepMs)}
+          gridLines={LATENCY_GRID_LINES}
+          gridLabels={scale?.ticks.map(formatLatency)}
         >
           {/* A focusable group, the same contract as the heartbeat track: arrow
               keys step through the readout, and the figcaption table carries
@@ -256,7 +267,7 @@ export function LatencyChart({
                   key={run[0].t}
                   className="lat-line"
                   data-testid="lat-run"
-                  d={runPath(run, series, ceiling)}
+                  d={runPath(run, series, scale!)}
                   vectorEffect="non-scaling-stroke"
                 />
               ))}

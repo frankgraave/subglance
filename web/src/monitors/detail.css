@@ -319,7 +319,32 @@
   }
 }
 
+/* How uptime is counted: a closed disclosure under the figures. Helper size,
+   because it qualifies the numbers above it rather than stating one. The
+   summary is padded to the 24px target floor (WCAG 2.5.8): a 16px line is a
+   small thing to aim a thumb at. */
 .mon-detail-uptime-note {
+  margin-top: var(--space-4);
+  font-size: var(--type-helper);
+  line-height: var(--lead-prose);
   color: var(--ink-2);
-  margin-bottom: var(--space-4);
+}
+
+.mon-detail-uptime-note > summary {
+  width: fit-content;
+  padding-block: var(--space-0h);
+  cursor: pointer;
+}
+
+.mon-detail-uptime-note > summary:hover { color: var(--ink); }
+
+.mon-detail-uptime-note > summary:focus-visible {
+  outline: var(--outline-w) solid var(--accent-border);
+  outline-offset: var(--outline-offset);
+  border-radius: var(--r-sm);
+}
+
+.mon-detail-uptime-note > p {
+  margin-top: var(--space-1);
+  max-width: 62ch;
 }
