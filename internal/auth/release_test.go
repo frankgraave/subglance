@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"runtime/debug"
 	"runtime/metrics"
 	"sync"
 	"testing"
@@ -158,6 +159,27 @@ func TestArgon2ReleaseIsRateLimited(t *testing.T) {
 	}
 }
 
+// waitFired waits for the pending release to fire and reports whether it
+// released. The release clears pending and makes its decision under
+// releaser.mu, and one that goes ahead stamps last before letting go of the
+// lock, so once pending is nil the decision is visible: last is set if and
+// only if it released. useRecorder starts every test with last at zero.
+func waitFired(t *testing.T) bool {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		releaser.mu.Lock()
+		fired, stamped := releaser.pending == nil, !releaser.last.IsZero()
+		releaser.mu.Unlock()
+		if fired {
+			return stamped
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("the scheduled release did not fire within 2s")
+	return false
+}
+
 // TestArgon2ReleaseWaitsForCallsInFlight: a release that comes due while a
 // call holds a slot does nothing, and the call that finishes last schedules
 // the one that counts.
@@ -165,14 +187,25 @@ func TestArgon2ReleaseWaitsForCallsInFlight(t *testing.T) {
 	const interval = 30 * time.Millisecond
 	r := useRecorder(t, interval, nil)
 
-	inFlightHashes.Add(1) // a hash still running
+	// A hash still running. It stays in flight until the release has fired
+	// and decided, and is let go on every way out so the cleanup does not
+	// wait on it.
+	inFlightHashes.Add(1)
+	held := true
+	defer func() {
+		if held {
+			inFlightHashes.Add(-1)
+		}
+	}()
 	scheduleRelease()
-	time.Sleep(5 * interval)
+	if waitFired(t) {
+		t.Fatal("the release ran while a hash was in flight, want it skipped")
+	}
 	if got := r.snapshot(); len(got) != 0 {
-		inFlightHashes.Add(-1)
 		t.Fatalf("released %d times while a hash was in flight, want 0", len(got))
 	}
 	inFlightHashes.Add(-1)
+	held = false
 
 	cheapKey()
 	if got := r.waitCount(1, 2*time.Second); len(got) != 1 {
@@ -197,6 +230,10 @@ func retained() uint64 {
 // few seconds instead of the minutes the background scavenger takes.
 func TestArgon2MemoryIsReturned(t *testing.T) {
 	waitQuiet(t)
+	// Hand back whatever earlier tests left free in the heap first. Memory
+	// the runtime still holds could take the hash's allocation, and then the
+	// retained figure would stay flat without any release having run.
+	debug.FreeOSMemory()
 	before := retained()
 
 	if _, err := HashPassword("correct-horse-battery-staple"); err != nil {

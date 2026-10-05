@@ -414,8 +414,12 @@ away by the first sign-in within five. The hand-back runs at most once every
 two seconds, so a stream of sign-ins does not buy a full garbage collection
 each.
 
-To measure it yourself, read `VmRSS` from `/proc/<pid>/status` (on Linux),
-or the memory column of `docker stats` for the container.
+To measure it yourself, read `VmRSS` from `/proc/<pid>/status` (on Linux):
+that is the resident figure the numbers above are. The memory column of
+`docker stats` is a different metric, the container's cgroup memory usage
+with the page cache taken off, so it will not match `VmRSS` exactly. It shows
+the same rise and fall around a sign-in, and is fine for watching that, but
+compare `VmRSS` with the figures here.
 
 ## Metrics
 
