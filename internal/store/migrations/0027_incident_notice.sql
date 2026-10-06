@@ -1,0 +1,13 @@
+-- 0027_incident_notice.sql — tell a certificate notice from an outage.
+--
+-- A certificate that is valid but expires inside the monitor's warning window
+-- opens an incident and alerts, so someone renews it in time. It is not an
+-- outage: the checks pass, and they are stored as up. This column marks such
+-- an incident, so the dashboard, the public status page and the alert wording
+-- can say "expires soon" where they would otherwise say "down", and so a
+-- status page's outage history leaves it out.
+--
+-- A notice is confirmed from the start (confirmed_at = started_at): the date on
+-- a certificate does not change between two checks, so there is no blip to
+-- wait out. Existing incidents are outages, which is what the default says.
+ALTER TABLE incidents ADD COLUMN notice INTEGER NOT NULL DEFAULT 0 CHECK (notice IN (0, 1));

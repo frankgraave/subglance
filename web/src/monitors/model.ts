@@ -491,6 +491,7 @@ export const SUMMARY_ORDER: readonly MonitorStatus[] = [
   "down",
   "recovering",
   "warning",
+  "expiring",
   "pending",
   "waiting",
   "paused",
@@ -503,6 +504,7 @@ export function summarise(monitors: readonly Monitor[]): Summary {
     up: 0,
     down: 0,
     recovering: 0,
+    expiring: 0,
     warning: 0,
     pending: 0,
     paused: 0,
@@ -554,7 +556,7 @@ export function describeTransitions(
   });
   if (changed.length === 0) return null;
 
-  const { down, recovering, up, warning, pending, paused, total } = summarise(next);
+  const { down, recovering, up, warning, expiring, pending, paused, total } = summarise(next);
   const downNames = names(next.filter((m) => m.status === "down").sort(byName));
 
   if (down > 0) {
@@ -564,6 +566,7 @@ export function describeTransitions(
     ];
     if (recovering > 0) parts.push(`${recovering} recovering.`);
     if (warning > 0) parts.push(`${warning} warning.`);
+    if (expiring > 0) parts.push(`${expiring} expiring soon.`);
     if (pending > 0) parts.push(`${pending} pending.`);
     return parts.join(" ");
   }
@@ -571,6 +574,14 @@ export function describeTransitions(
   // completes, so "No monitors down" alone would read as an all-clear.
   if (recovering > 0) {
     const parts = [`No monitors down. ${recovering} recovering, ${up} up.`];
+    if (warning > 0) parts.push(`${warning} warning.`);
+    if (expiring > 0) parts.push(`${expiring} expiring soon.`);
+    return parts.join(" ");
+  }
+  // A certificate about to run out is not an outage, but "All up" would
+  // let it be missed.
+  if (expiring > 0) {
+    const parts = [`No monitors down. ${up} up, ${expiring} expiring soon.`];
     if (warning > 0) parts.push(`${warning} warning.`);
     return parts.join(" ");
   }

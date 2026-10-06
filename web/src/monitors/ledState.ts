@@ -24,6 +24,9 @@ export const LED_STATE: Record<MonitorStatus, LedState> = {
   // "look, but not an alarm", and the word carries the difference from a
   // plain warning (DESIGN.md §2.3).
   recovering: "warn",
+  // Amber: worth a look, not an alarm. The service answers; its
+  // certificate needs renewing. The word separates it from a warning.
+  expiring: "warn",
   warning: "warn",
   // Pending is amber, not grey: it is a monitor we are waiting on, which is
   // worth a glance.

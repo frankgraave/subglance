@@ -716,6 +716,48 @@ func (db *DB) CountFailedHeartbeatsSince(ctx context.Context, monitorID int64, s
 	return n, nil
 }
 
+// FailedStreakAfterLastPass reports the failed heartbeats a monitor recorded
+// after its latest passing one, counting from a given moment, and when the
+// first of them was.
+//
+// A certificate notice needs this rather than CountFailedHeartbeatsSince. A
+// notice can stay open for weeks, and every blip in that time is a failed
+// heartbeat since it opened; counting them all would confirm an outage on
+// the first failure after a restart. Only the failures that no passing check
+// has ended yet are a streak, and only those are counted.
+//
+// The count is capped by limit, like CountFailedHeartbeatsSince, and the time
+// is zero when there is no such failure. Failures filed under
+// FailureKindLocalNetwork are left out for the same reason as there.
+func (db *DB) FailedStreakAfterLastPass(ctx context.Context, monitorID int64, since time.Time, limit int) (int, time.Time, error) {
+	if limit <= 0 {
+		return 0, time.Time{}, nil
+	}
+	var (
+		n     int
+		first sql.NullInt64
+	)
+	err := db.Reader.QueryRowContext(ctx, `
+		SELECT count(*), min(ts) FROM (
+			SELECT ts
+			FROM heartbeats
+			WHERE monitor_id = ? AND ts >= ? AND ok = 0 AND failure_kind != ?
+			  AND ts > coalesce((
+				SELECT max(ts) FROM heartbeats
+				WHERE monitor_id = ? AND ts >= ? AND ok = 1
+			  ), 0)
+			ORDER BY ts DESC
+			LIMIT ?
+		)`, monitorID, since.Unix(), FailureKindLocalNetwork, monitorID, since.Unix(), limit).Scan(&n, &first)
+	if err != nil {
+		return 0, time.Time{}, fmt.Errorf("count failed streak for monitor %d: %w", monitorID, err)
+	}
+	if !first.Valid {
+		return n, time.Time{}, nil
+	}
+	return n, time.Unix(first.Int64, 0).UTC(), nil
+}
+
 // RecentHeartbeatsForAll returns the most recent perMonitor heartbeats for
 // every monitor that has any, keyed by monitor id and newest first — the same
 // order as ListHeartbeats.

@@ -127,7 +127,8 @@ what has not reached a release yet is listed under
 <summary><strong>What "working" covers, in detail</strong></summary>
 
 - **HTTP(S), TCP, ping and SSL checks**, including keyword matching, response
-  time, and certificate expiry warnings
+  time, and certificate expiry warnings — a certificate that expires soon
+  alerts as *expiring* without counting as downtime; an expired one is down
 - **Push monitors** for jobs that cannot be reached from outside — a backup, a
   cron script, a queue worker reports in and silence is what raises the alarm
 - **Failure classification** — a DNS failure, a refused connection and an expired

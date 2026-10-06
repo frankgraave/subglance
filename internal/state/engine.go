@@ -56,6 +56,19 @@ const (
 	// recovering side of the same rule: the incident stays open and nobody
 	// is told anything until the recovery threshold is met.
 	StatusRecovering Status = "recovering"
+
+	// StatusExpiring means the checks pass, but the certificate they were
+	// served expires inside the monitor's warning window.
+	//
+	// It is not an outage, and it is not Warning either: Warning means a
+	// failure that is not confirmed yet, and an expiring certificate is a
+	// fact read off the certificate, not a probe that might have been
+	// unlucky. Counting it as down put a reachable site at 0% uptime and in
+	// red on a public status page for the weeks before its renewal. The
+	// notice still opens an incident and alerts, because a warning nobody
+	// reads is how certificates expire on a Sunday; only the downtime goes.
+	// An expired certificate fails the check, and that is Down.
+	StatusExpiring Status = "expiring"
 )
 
 // Confirmed reports whether a status belongs to a confirmed, still-open
@@ -101,9 +114,16 @@ type Observation struct {
 	OK        bool
 	At        time.Time
 
-	// Kind and Error describe the failure. Ignored when OK.
+	// Kind and Error describe the failure. Ignored when OK, except on an
+	// Expiring observation, where they carry the notice.
 	Kind  string
 	Error string
+
+	// Expiring marks a passing check whose certificate expires inside the
+	// monitor's warning window. It is ignored unless OK is set: a check
+	// that failed for any other reason is a failure, whatever the
+	// certificate says. See StatusExpiring.
+	Expiring bool
 
 	// FailureThreshold is how many consecutive failures confirm an incident.
 	// It comes from the monitor's `retries` column, so it is per-monitor
@@ -206,6 +226,24 @@ type Transition struct {
 	// incident record and the notification body.
 	Cause string
 	Error string
+
+	// Notice says the incident this transition is about is a certificate
+	// notice (StatusExpiring) rather than an outage: the one open after it,
+	// including while an unconfirmed failure is counted against it, or the
+	// one it resolved. The caller uses it to open the incident as a notice,
+	// and to keep a failure's text off one: an unconfirmed failure must not
+	// relabel what the notice said.
+	Notice bool
+
+	// Replaces says Event applies to a new incident that starts at
+	// StartedAt: the incident that was open before this check is closed at
+	// that moment first, without anyone being told. It is set when a
+	// failure is confirmed against an open certificate notice, because an
+	// outage that began this morning is not the notice that began two
+	// weeks ago, and reporting it as such would date the outage from the
+	// notice.
+	Replaces  bool
+	StartedAt time.Time
 }
 
 // Options configures an Engine.
@@ -267,6 +305,13 @@ type monitorState struct {
 	// resolved. It survives the pending→down promotion.
 	incidentOpen      bool
 	incidentConfirmed bool
+
+	// notice marks the open, confirmed incident as a certificate notice
+	// rather than an outage, and failingSince is the first failure of a
+	// streak counted against it, which is when an outage confirmed from
+	// that streak began. Both are zero outside a notice.
+	notice       bool
+	failingSince time.Time
 
 	// changes holds the times of recent confirmed status changes, oldest
 	// first. Only up↔down counts; pending is not a change anyone sees.
@@ -331,6 +376,8 @@ func (e *Engine) Observe(o Observation) Transition {
 	}
 
 	switch {
+	case o.OK && o.Expiring:
+		e.observeExpiring(ms, &t, o)
 	case o.OK:
 		e.observeSuccess(ms, &t, o)
 	case o.LocalNetwork && !ms.status.Confirmed():
@@ -342,6 +389,7 @@ func (e *Engine) Observe(o Observation) Transition {
 	t.ConsecutiveFails = ms.consecutiveFails
 	t.ConsecutiveOKs = ms.consecutiveOKs
 	t.SnapshotsSpent = ms.snapshotsSpent
+	t.Notice = t.Notice || ms.notice
 
 	// Flapping is evaluated after the transition so a monitor that just
 	// flipped counts its own flip. Suppression applies to the transition that
@@ -370,6 +418,37 @@ func (e *Engine) observeFailure(ms *monitorState, t *Transition, o Observation) 
 		// Already down. The error text may have changed (a connection error
 		// becoming a 500 is useful detail), but there is nothing to announce.
 		return
+
+	case ms.notice && ms.consecutiveFails >= o.FailureThreshold:
+		// A failure confirmed while a certificate notice is open. The
+		// outage is a new incident, dated from the first failure of this
+		// streak; the notice it replaces closes without a message, since
+		// the alert about the outage is the news.
+		t.Replaces = true
+		t.StartedAt = ms.failingSince
+		if t.StartedAt.IsZero() {
+			t.StartedAt = t.At
+		}
+		ms.notice = false
+		ms.failingSince = time.Time{}
+		ms.incidentOpen = true
+		ms.incidentConfirmed = true
+		ms.status = StatusDown
+		ms.recordChange(t.At, e.flapWindow)
+
+		t.To = StatusDown
+		t.Event = EventIncidentConfirmed
+		t.Notify = true
+
+	case ms.notice:
+		// Failing against an open notice, not yet confirmed. The notice
+		// stays open, and nothing is said: like any unconfirmed failure,
+		// this may be a blip.
+		if ms.failingSince.IsZero() {
+			ms.failingSince = t.At
+		}
+		ms.status = StatusWarning
+		t.To = StatusWarning
 
 	case ms.consecutiveFails >= o.FailureThreshold:
 		// Confirmed. Open the incident first if the threshold is 1, so an
@@ -432,12 +511,61 @@ func (e *Engine) WouldConfirm(monitorID int64, failureThreshold int) bool {
 	return !ms.status.Confirmed() && ms.consecutiveFails+1 >= failureThreshold
 }
 
+// observeExpiring records a passing check whose certificate expires inside the
+// warning window. See StatusExpiring.
+//
+// The notice is confirmed at once, without the failure threshold: the date on
+// a certificate does not change between two checks, so there is no blip to
+// wait out. It is one incident and one alert for as long as it lasts, however
+// many checks see the same certificate.
+//
+// During an outage the check is a pass like any other: it counts towards the
+// recovery streak, and the outage resolves as usual. One transition carries
+// one event, so the caller observes the same check again once the resolution
+// is applied, and that second observation opens the notice: "back up" first,
+// then the notice, rather than one message that has to say both.
+func (e *Engine) observeExpiring(ms *monitorState, t *Transition, o Observation) {
+	switch {
+	case ms.notice:
+		// The notice is open already, and a streak of unconfirmed
+		// failures against it is over.
+		ms.consecutiveFails = 0
+		ms.failingSince = time.Time{}
+		ms.status = StatusExpiring
+		t.To = StatusExpiring
+
+	case ms.incidentOpen:
+		// An outage, confirmed or not, is open. This check ends it or
+		// counts towards ending it, as any passing check would.
+		e.observeSuccess(ms, t, o)
+
+	default:
+		ms.consecutiveFails = 0
+		ms.snapshotsSpent = 0
+		ms.incidentOpen = true
+		ms.incidentConfirmed = true
+		ms.notice = true
+		ms.status = StatusExpiring
+
+		// No flip is recorded: the flapping window counts outages starting
+		// and ending, and a certificate's date does not oscillate. While a
+		// monitor does flap, applyFlapping holds this alert back like any
+		// other.
+		t.To = StatusExpiring
+		t.Event = EventIncidentConfirmed
+		t.Notify = true
+	}
+}
+
 // observeSuccess resets the failure streak and resolves any open incident
 // once the recovery threshold allows it.
 func (e *Engine) observeSuccess(ms *monitorState, t *Transition, o Observation) {
 	ms.consecutiveFails = 0
 
-	if ms.incidentOpen && ms.incidentConfirmed {
+	// A renewed certificate closes its notice on the first check that sees
+	// it. The recovery threshold guards against a half-broken service's
+	// lucky pass; a new expiry date is not luck.
+	if ms.incidentOpen && ms.incidentConfirmed && !ms.notice {
 		// A confirmed incident has to earn its all-clear the same way it
 		// earned its alert: with a streak, not one sample.
 		if ms.consecutiveOKs == 0 {
@@ -473,18 +601,27 @@ func (e *Engine) observeSuccess(ms *monitorState, t *Transition, o Observation) 
 		return
 	}
 
-	wasConfirmed := ms.incidentConfirmed
+	wasConfirmed, wasNotice := ms.incidentConfirmed, ms.notice
 	ms.incidentOpen = false
 	ms.incidentConfirmed = false
+	ms.notice = false
+	ms.failingSince = time.Time{}
 	ms.status = StatusUp
 	t.To = StatusUp
 	t.Event = EventIncidentResolved
+	t.Notice = wasNotice
 
 	if wasConfirmed {
 		// Only a confirmed incident produced an alert, so only a confirmed
 		// incident gets an all-clear. Recovering from a single failed probe
 		// nobody heard about must stay silent.
-		ms.recordChange(t.At, e.flapWindow)
+		//
+		// A renewed certificate is not a flip for the flapping window: the
+		// window counts outages starting and ending, and a notice is
+		// neither.
+		if !wasNotice {
+			ms.recordChange(t.At, e.flapWindow)
+		}
 		t.Notify = true
 	}
 }
@@ -669,6 +806,16 @@ type RestoredState struct {
 	// The database count is authoritative here for the same reason: it is a
 	// count of rows that exist, not of failures that happened.
 	SnapshotsSpent int
+
+	// Notice marks the open, confirmed incident as a certificate notice
+	// rather than an outage. The caller restores Status as StatusExpiring
+	// with it.
+	Notice bool
+
+	// FailingSince is the first failure of a streak counted against a
+	// restored notice, so an outage confirmed from that streak is dated from
+	// it. Zero without a streak, and ignored outside a notice.
+	FailingSince time.Time
 }
 
 // Restore seeds a monitor's state from the database at startup.
@@ -698,11 +845,16 @@ func (e *Engine) Restore(monitorID int64, rs RestoredState) {
 		rs.Status = StatusDown
 	}
 
-	e.state[monitorID] = &monitorState{
+	ms := &monitorState{
 		status:            rs.Status,
 		incidentOpen:      rs.IncidentOpen,
 		incidentConfirmed: rs.IncidentConfirmed,
 		consecutiveFails:  rs.ConsecutiveFails,
 		snapshotsSpent:    rs.SnapshotsSpent,
+		notice:            rs.Notice && rs.IncidentOpen && rs.IncidentConfirmed,
 	}
+	if ms.notice && ms.consecutiveFails > 0 {
+		ms.failingSince = rs.FailingSince
+	}
+	e.state[monitorID] = ms
 }

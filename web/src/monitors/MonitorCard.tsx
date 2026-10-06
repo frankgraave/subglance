@@ -108,7 +108,7 @@ function MonitorCardImpl({
         />
       </div>
 
-      {status === "down" && error ? (
+      {(status === "down" || status === "expiring") && error ? (
         <p className="mon-card-error">{error}</p>
       ) : null}
 

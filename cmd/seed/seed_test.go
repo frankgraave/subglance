@@ -43,6 +43,11 @@ func TestHistoryAgreesWithIncidents(t *testing.T) {
 		for _, hb := range h.beats {
 			covered := false
 			for _, inc := range h.incidents {
+				// A certificate notice covers no failing stretch: its
+				// checks pass.
+				if inc.Notice {
+					continue
+				}
 				if !hb.TS.Before(inc.StartedAt) &&
 					(inc.ResolvedAt.IsZero() || hb.TS.Before(inc.ResolvedAt)) {
 					covered = true

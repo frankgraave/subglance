@@ -63,6 +63,12 @@ export type HeartbeatEvent = {
    * a live client reading it as the end of the outage.
    */
   recovery?: Recovery;
+  /**
+   * Set on a pass that leaves the monitor's certificate notice open. The
+   * pass is assessed `up`, so this is what keeps a live client from reading
+   * it as a plain up.
+   */
+  expiring?: boolean;
 };
 
 /** A monitor changing state. Rare, and the only frame worth announcing. */
@@ -75,6 +81,8 @@ export type StatusEvent = {
   error?: string;
   /** The incident's cause, which classifies `error` the way a kind does. */
   cause?: string;
+  /** The event is about a certificate notice, not an outage. */
+  notice?: boolean;
 };
 
 export type LiveEvent = HelloEvent | PingEvent | LaggedEvent | HeartbeatEvent | StatusEvent;
@@ -147,6 +155,7 @@ export function parseEvent(type: string, data: string): LiveEvent | null {
         error: str(payload.error),
         failureKind: str(payload.failure_kind),
         recovery: recoveryFromWire(payload.recovery),
+        ...(payload.expiring === true ? { expiring: true } : {}),
       };
     }
     case "status": {
@@ -159,6 +168,7 @@ export function parseEvent(type: string, data: string): LiveEvent | null {
         event: str(payload.event) ?? "",
         error: str(payload.error),
         cause: str(payload.cause),
+        ...(payload.notice === true ? { notice: true } : {}),
       };
     }
     default:

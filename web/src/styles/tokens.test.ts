@@ -2082,9 +2082,10 @@ const statusBorders = new Set<string>([
    */
   'web/src/monitors/detail.css | .mon-detail-status[data-status="down"] | border-color: var(--down)',
   'web/src/monitors/detail.css | .mon-detail-status[data-status="pending"] | border-color: var(--warn)',
-  // Warning is an unconfirmed failure, and recovering a confirmed one whose checks pass again (SUB-157):
-  // both use the warning role for their status rail, draining when stale.
-  'web/src/monitors/detail.css | .mon-detail-status[data-status="warning"], .mon-detail-status[data-status="recovering"] | border-color: var(--warn)',
+  // Warning is an unconfirmed failure, recovering a confirmed one whose checks pass again (SUB-157),
+  // and expiring a passing check whose certificate runs out soon (SUB-186): all three use the
+  // warning role for their status rail, draining when stale.
+  'web/src/monitors/detail.css | .mon-detail-status[data-status="warning"], .mon-detail-status[data-status="recovering"], .mon-detail-status[data-status="expiring"] | border-color: var(--warn)',
   'web/src/monitors/detail.css | .mon-detail-status[data-status="waiting"] | border-color: var(--idle)',
   "web/src/live/connection.css | .conn-badge | border: 1px solid var(--warn)",
   /*
@@ -2119,9 +2120,10 @@ const statusBorders = new Set<string>([
    */
   'web/src/monitors/monitors.css | .mon-row[data-status="down"] > :first-child | border-left-color: var(--down)',
   'web/src/monitors/monitors.css | .mon-row[data-status="pending"] > :first-child | border-left-color: var(--warn)',
-  // Warning is an unconfirmed failure, and recovering a confirmed one whose checks pass again (SUB-157):
-  // both use the warning role for their status rail, draining when stale.
-  'web/src/monitors/monitors.css | .mon-row[data-status="warning"] > :first-child, .mon-row[data-status="recovering"] > :first-child | border-left-color: var(--warn)',
+  // Warning is an unconfirmed failure, recovering a confirmed one whose checks pass again (SUB-157),
+  // and expiring a passing check whose certificate runs out soon (SUB-186): all three use the
+  // warning role for their status rail, draining when stale.
+  'web/src/monitors/monitors.css | .mon-row[data-status="warning"] > :first-child, .mon-row[data-status="recovering"] > :first-child, .mon-row[data-status="expiring"] > :first-child | border-left-color: var(--warn)',
   'web/src/monitors/monitors.css | .mon-row[data-status="paused"] > :first-child | border-left-color: var(--ink-3)',
   'web/src/monitors/monitors.css | .mon-row[data-status="waiting"] > :first-child | border-left-color: var(--ink-3)',
   /*
@@ -2150,16 +2152,18 @@ const statusBorders = new Set<string>([
   "web/src/monitors/monitors.css | .mon-section-title | border-left: var(--size-status-rail) solid transparent",
   'web/src/monitors/monitors.css | .mon-card[data-status="down"] | border-left: var(--size-status-rail) solid var(--down)',
   'web/src/monitors/monitors.css | .mon-card[data-status="pending"] | border-left: var(--size-status-rail) solid var(--warn)',
-  // Warning is an unconfirmed failure, and recovering a confirmed one whose checks pass again (SUB-157):
-  // both use the warning role for their status rail, draining when stale.
-  'web/src/monitors/monitors.css | .mon-card[data-status="warning"], .mon-card[data-status="recovering"] | border-left: var(--size-status-rail) solid var(--warn)',
+  // Warning is an unconfirmed failure, recovering a confirmed one whose checks pass again (SUB-157),
+  // and expiring a passing check whose certificate runs out soon (SUB-186): all three use the
+  // warning role for their status rail, draining when stale.
+  'web/src/monitors/monitors.css | .mon-card[data-status="warning"], .mon-card[data-status="recovering"], .mon-card[data-status="expiring"] | border-left: var(--size-status-rail) solid var(--warn)',
   'web/src/monitors/monitors.css | .mon-card[data-status="paused"] | border-left: var(--size-status-rail) dotted var(--ink-3)',
   'web/src/monitors/monitors.css | .mon-card[data-status="waiting"] | border-left: var(--size-status-rail) solid var(--ink-3)',
   'web/src/monitors/monitors.css | .mon-line[data-status="down"] | border-left: var(--size-status-rail) solid var(--down)',
   'web/src/monitors/monitors.css | .mon-line[data-status="pending"] | border-left: var(--size-status-rail) solid var(--warn)',
-  // Warning is an unconfirmed failure, and recovering a confirmed one whose checks pass again (SUB-157):
-  // both use the warning role for their status rail, draining when stale.
-  'web/src/monitors/monitors.css | .mon-line[data-status="warning"], .mon-line[data-status="recovering"] | border-left: var(--size-status-rail) solid var(--warn)',
+  // Warning is an unconfirmed failure, recovering a confirmed one whose checks pass again (SUB-157),
+  // and expiring a passing check whose certificate runs out soon (SUB-186): all three use the
+  // warning role for their status rail, draining when stale.
+  'web/src/monitors/monitors.css | .mon-line[data-status="warning"], .mon-line[data-status="recovering"], .mon-line[data-status="expiring"] | border-left: var(--size-status-rail) solid var(--warn)',
   'web/src/monitors/monitors.css | .mon-line[data-status="paused"] | border-left: var(--size-status-rail) dotted var(--ink-3)',
   'web/src/monitors/monitors.css | .mon-line[data-status="waiting"] | border-left: var(--size-status-rail) solid var(--ink-3)',
   "web/src/components/controls.css | .warn-note | border-left: var(--size-status-rail) solid var(--warn)",
@@ -2175,9 +2179,10 @@ const statusBorders = new Set<string>([
   'web/src/components/controls.css | .input[aria-invalid="true"]:focus | border-color: var(--down)',
   'web/src/wall/wall.css | .wall-card[data-status="down"] | border-color: color-mix(in srgb, var(--down) 40%, var(--border))',
   'web/src/wall/wall.css | .wall-card[data-status="pending"] | border-color: color-mix(in srgb, var(--warn) 34%, var(--border))',
-  // Warning is an unconfirmed failure, and recovering a confirmed one whose checks pass again (SUB-157):
-  // both use the warning role for their status rail, draining when stale.
-  'web/src/wall/wall.css | .wall-card[data-status="warning"], .wall-card[data-status="recovering"] | border-color: color-mix(in srgb, var(--warn) 34%, var(--border))',
+  // Warning is an unconfirmed failure, recovering a confirmed one whose checks pass again (SUB-157),
+  // and expiring a passing check whose certificate runs out soon (SUB-186): all three use the
+  // warning role for their status rail, draining when stale.
+  'web/src/wall/wall.css | .wall-card[data-status="warning"], .wall-card[data-status="recovering"], .wall-card[data-status="expiring"] | border-color: color-mix(in srgb, var(--warn) 34%, var(--border))',
   /*
    * The same status edges, no longer asserting (SUB-140, DESIGN.md §6).
    *
@@ -2196,14 +2201,16 @@ const statusBorders = new Set<string>([
    */
   'web/src/live/connection.css | .mon-dashboard[data-conn="stale"] .mon-row[data-status="down"] > :first-child, .mon-dashboard[data-conn="stale"] .mon-card[data-status="down"], .mon-dashboard[data-conn="stale"] .mon-line[data-status="down"] | border-left-color: var(--down-drained)',
   'web/src/live/connection.css | .mon-dashboard[data-conn="stale"] .mon-row[data-status="pending"] > :first-child, .mon-dashboard[data-conn="stale"] .mon-card[data-status="pending"], .mon-dashboard[data-conn="stale"] .mon-line[data-status="pending"] | border-left-color: var(--warn-drained)',
-  // Warning is an unconfirmed failure, and recovering a confirmed one whose checks pass again (SUB-157):
-  // both use the warning role for their status rail, draining when stale.
-  'web/src/live/connection.css | .mon-dashboard[data-conn="stale"] .mon-row[data-status="warning"] > :first-child, .mon-dashboard[data-conn="stale"] .mon-card[data-status="warning"], .mon-dashboard[data-conn="stale"] .mon-line[data-status="warning"], .mon-dashboard[data-conn="stale"] .mon-row[data-status="recovering"] > :first-child, .mon-dashboard[data-conn="stale"] .mon-card[data-status="recovering"], .mon-dashboard[data-conn="stale"] .mon-line[data-status="recovering"] | border-left-color: var(--warn-drained)',
+  // Warning is an unconfirmed failure, recovering a confirmed one whose checks pass again (SUB-157),
+  // and expiring a passing check whose certificate runs out soon (SUB-186): all three use the
+  // warning role for their status rail, draining when stale.
+  'web/src/live/connection.css | .mon-dashboard[data-conn="stale"] .mon-row[data-status="warning"] > :first-child, .mon-dashboard[data-conn="stale"] .mon-card[data-status="warning"], .mon-dashboard[data-conn="stale"] .mon-line[data-status="warning"], .mon-dashboard[data-conn="stale"] .mon-row[data-status="recovering"] > :first-child, .mon-dashboard[data-conn="stale"] .mon-card[data-status="recovering"], .mon-dashboard[data-conn="stale"] .mon-line[data-status="recovering"], .mon-dashboard[data-conn="stale"] .mon-row[data-status="expiring"] > :first-child, .mon-dashboard[data-conn="stale"] .mon-card[data-status="expiring"], .mon-dashboard[data-conn="stale"] .mon-line[data-status="expiring"] | border-left-color: var(--warn-drained)',
   'web/src/live/connection.css | .mon-detail[data-conn="stale"] .mon-detail-status[data-status="down"] | border-color: var(--down-drained)',
   'web/src/live/connection.css | .mon-detail[data-conn="stale"] .mon-detail-status[data-status="pending"] | border-color: var(--warn-drained)',
-  // Warning is an unconfirmed failure, and recovering a confirmed one whose checks pass again (SUB-157):
-  // both use the warning role for their status rail, draining when stale.
-  'web/src/live/connection.css | .mon-detail[data-conn="stale"] .mon-detail-status[data-status="warning"], .mon-detail[data-conn="stale"] .mon-detail-status[data-status="recovering"] | border-color: var(--warn-drained)',
+  // Warning is an unconfirmed failure, recovering a confirmed one whose checks pass again (SUB-157),
+  // and expiring a passing check whose certificate runs out soon (SUB-186): all three use the
+  // warning role for their status rail, draining when stale.
+  'web/src/live/connection.css | .mon-detail[data-conn="stale"] .mon-detail-status[data-status="warning"], .mon-detail[data-conn="stale"] .mon-detail-status[data-status="recovering"], .mon-detail[data-conn="stale"] .mon-detail-status[data-status="expiring"] | border-color: var(--warn-drained)',
   /*
    * The public status page's rows (docs/design/status-page.md §2). The same
    * rail as the dashboard's rows and cards, for the same reason: trouble

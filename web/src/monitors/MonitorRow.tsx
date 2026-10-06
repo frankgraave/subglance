@@ -54,8 +54,11 @@ function MonitorRowImpl({
   // The why, said short: the failure kind in the words the incident row uses.
   // A failure the server did not class falls back to its own message, which
   // the chip clips; the full message is in the title and on the monitor's page.
+  // An expiring monitor says why in the same place: "certificate expiring".
   const cause =
-    status === "down" && error ? (causeWords(monitor.failureKind) ?? error) : null;
+    (status === "down" || status === "expiring") && error
+      ? (causeWords(monitor.failureKind) ?? error)
+      : null;
 
   return (
     <tr

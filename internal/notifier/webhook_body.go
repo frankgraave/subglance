@@ -69,10 +69,27 @@ func WebhookPlaceholderNames() []string {
 	return names
 }
 
-// alertStatus is "down" or "up": the one-word answer a template without
-// conditions needs to tell bad news from good.
+// alertStatus is "down", "expiring" or "up": the one-word answer a template
+// without conditions needs to tell bad news from good.
 func alertStatus(a Alert) string {
-	if a.Down() {
+	switch {
+	case a.Digest:
+		// The digest itself is not a notice, but it can carry one. A night
+		// that left only a certificate notice open is "expiring": Down()
+		// is true for it, and "down" would call it an outage.
+		entries := digestEntries(a)
+		switch {
+		case digestStillDown(entries) > 0:
+			return "down"
+		case digestNoticeOpen(entries):
+			return "expiring"
+		}
+		return "up"
+	case a.Notice && a.Down():
+		// Not "down": the service answers. A template that prints the
+		// status has to be able to say so.
+		return "expiring"
+	case a.Down():
 		return "down"
 	}
 	return "up"

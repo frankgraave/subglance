@@ -154,14 +154,15 @@ func TestHTTPSeesARenewedCertificateOnTheNextCheck(t *testing.T) {
 	m.SSLWarnDays = 14
 
 	before := c.Check(context.Background(), m)
-	if before.OK || before.Kind != FailCertExpiry {
-		t.Fatalf("before renewal: ok %v kind %q (%s), want a cert_expiry failure", before.OK, before.Kind, before.Error)
+	if !before.OK || !before.Expiring || before.Kind != FailCertExpiry {
+		t.Fatalf("before renewal: ok %v expiring %v kind %q (%s), want a pass marked expiring",
+			before.OK, before.Expiring, before.Kind, before.Error)
 	}
 
 	current.Store(&renewed)
 	after := c.Check(context.Background(), m)
-	if !after.OK {
-		t.Fatalf("the check after renewal still failed: %s (kind %q)", after.Error, after.Kind)
+	if !after.OK || after.Expiring {
+		t.Fatalf("the check after renewal: ok %v expiring %v: %s (kind %q)", after.OK, after.Expiring, after.Error, after.Kind)
 	}
 	if !after.CertExpiry.Equal(renewed.Leaf.NotAfter) {
 		t.Errorf("reported expiry %v, want the renewed certificate's %v", after.CertExpiry, renewed.Leaf.NotAfter)

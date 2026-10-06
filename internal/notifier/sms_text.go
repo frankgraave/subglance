@@ -210,6 +210,11 @@ func smsText(a Alert, zone string, limit int) string {
 		}
 		switch state.Event(a.Event) {
 		case state.EventIncidentResolved:
+			if a.Notice {
+				// Nothing was down, so there is no outage to time.
+				status, reason = "CERT OK", ""
+				break
+			}
 			// A recovery that replaces its alert keeps the reason:
 			// the alert never arrived, so this text says what failed
 			// and for how long.
@@ -226,12 +231,18 @@ func smsText(a Alert, zone string, limit int) string {
 			}
 		case state.EventIncidentReminder:
 			status = "STILL DOWN"
+			if a.Notice {
+				status = "CERT EXPIRING"
+			}
 		case state.EventIncidentOpened:
 			status = "MAYBE DOWN"
 		default:
 			status = "DOWN"
+			if a.Notice {
+				status = "CERT EXPIRING"
+			}
 		}
-		if status != "UP" && !a.StartedAt.IsZero() {
+		if status != "UP" && status != "CERT OK" && !a.Notice && !a.StartedAt.IsZero() {
 			tail = " (since " + clock(a.StartedAt) + ")"
 		}
 	}

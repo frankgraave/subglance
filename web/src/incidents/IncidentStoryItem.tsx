@@ -167,7 +167,7 @@ export function IncidentStoryItem({
            * repeats it would have a screen reader say "down" twice.
            */}
           <Led
-            status={story.state === "resolved" ? "up" : incident.confirmed ? "down" : "warning"}
+            status={story.state === "resolved" ? "up" : incident.notice ? "expiring" : incident.confirmed ? "down" : "warning"}
             labelled={false}
             className="inc-led"
           />

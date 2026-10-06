@@ -375,7 +375,7 @@ export function MonitorDetail({
          * Below the target it gets the column's full reading width, which is
          * what a sentence someone has to act on needs.
          */}
-        {status === "down" && lastError ? (
+        {(status === "down" || status === "expiring") && lastError ? (
           <p className="mon-detail-reason">{lastError}</p>
         ) : null}
         {status === "waiting" ? (

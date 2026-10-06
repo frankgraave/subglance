@@ -381,3 +381,40 @@ describe("flapping suppresses the alerts, not the record", () => {
     expect(describeChurn(ahead, T0)).toBeNull();
   });
 });
+
+describe("a certificate notice is never worded as an outage", () => {
+  // The checks pass while a certificate runs out: the incident alerts so it
+  // gets renewed, but nothing on screen may call the service down.
+  const notice = (over: Partial<Incident> = {}) =>
+    incident({ notice: true, confirmedAt: T0, cause: "cert_expiry", ...over });
+
+  it("has its own state and badge, muted or not", () => {
+    expect(incidentState(notice())).toBe("notice");
+    expect(incidentState(notice({ acked: true, ackedAt: T0 + 60_000 }))).toBe("notice");
+    expect(incidentState(notice({ resolved: true, resolvedAt: T0 + 720_000 }))).toBe("resolved");
+    expect(stateBadge("notice")).toBe("Expiring soon");
+    expect(stateBadge("notice", true)).toBe("Was expiring soon");
+    expect(STATE_TONE.notice).toBe("warn");
+  });
+
+  it("says expiring and not down, open or resolved", () => {
+    const open = incidentStory(notice(), T0 + 720_000).sentence;
+    expect(open).toContain("Certificate expiring soon since");
+    expect(open).toContain("not counted as downtime");
+    expect(open).not.toMatch(/\bdown\b/i);
+
+    const muted = incidentStory(notice({ acked: true, ackedAt: T0 + 60_000 }), T0 + 720_000).sentence;
+    expect(muted).toContain("certificate still expiring soon");
+    expect(muted).not.toMatch(/\bdown\b/i);
+
+    const renewed = incidentStory(notice({ resolved: true, resolvedAt: T0 + 720_000 }), T0 + 900_000).sentence;
+    expect(renewed).toContain("No longer expiring soon at");
+    expect(renewed).not.toMatch(/recovered|\bdown\b/i);
+  });
+
+  it("has one opening step, because a notice is confirmed as it opens", () => {
+    const steps = incidentTimeline(notice({ resolved: true, resolvedAt: T0 + 720_000 }));
+    expect(steps.map((s) => s.key)).toEqual(["started", "resolved"]);
+    expect(steps.map((s) => s.what).join(" ")).not.toMatch(/failure|recovered/i);
+  });
+});

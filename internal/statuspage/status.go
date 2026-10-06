@@ -15,6 +15,10 @@ type Live struct {
 	// Recovering is true while that incident sees passing checks but has
 	// not met its recovery threshold yet.
 	Recovering bool
+	// Notice is true while the open incident is a certificate notice: the
+	// service answers, and its certificate expires soon. It is never an
+	// outage, so Confirmed is false with it.
+	Notice bool
 }
 
 // PublicStatus maps a monitor's live state to its public word (design §1.3).
