@@ -67,7 +67,8 @@ it("puts a weekly duration out of range under the Duration field, not in the for
  fireEvent.change(box,{target:{value:"0"}});
  const posts=()=>fetchSpy.mock.calls.filter(([,init])=>init?.method==="POST").length;
  fireEvent.submit(screen.getByRole("form",{name:"Schedule maintenance"}));
- const message=await screen.findByText("The duration must be between 1 min and 24 h, in whole minutes.");
+ // The words sit in their own span beside the glyph; the refusal is the paragraph around them.
+ const message=(await screen.findByText("The duration must be between 1 min and 24 h, in whole minutes.")).closest("p")!;
  expect(box.getAttribute("aria-invalid")).toBe("true");
  expect(box.getAttribute("aria-describedby")).toBe(message.id);
  expect(message.className).toBe("field-error");

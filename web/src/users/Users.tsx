@@ -8,6 +8,7 @@ import { IconTrash, IconUsers } from "../components/icons";
 import { ApiError, MIN_PASSWORD_LENGTH } from "../auth/api";
 import { createUser, deleteUser, fetchUsers, setUserRole, usersKey, type Account, type UserRole } from "./api";
 import { formatDateIso } from "../format/format";
+import { FieldError } from "../components/FieldError";
 
 const ROLE_HELP: Record<UserRole, string> = {
   viewer: "Viewer: sees monitors, incidents and settings, and changes nothing. Right for someone who only needs to look.",
@@ -82,7 +83,7 @@ function CreateForm({ onCreated, onCancel }: { onCreated: (account: Account) => 
         At least {MIN_PASSWORD_LENGTH} characters. Hand it over yourself; the new user can change it under Account.
       </p>
       <p className="panel-note" id={`${id}-role-help`}>{ROLE_HELP[role]}</p>
-      {error && <p className="field-error" role="alert" id={`${id}-error`}>{error.message}</p>}
+      {error && <FieldError id={`${id}-error`}>{error.message}</FieldError>}
       <div className="button-row">
         <button className="button-solid" type="submit" disabled={!ready || saving}>{saving ? "Adding…" : "Add user"}</button>
         <button className="button" type="button" onClick={onCancel}>Cancel</button>
@@ -126,7 +127,7 @@ function UserRow({ account, you, onChanged }: { account: Account; you: boolean; 
       <div className="control-row-main">
         <p><strong>{account.email}</strong></p>
         <p className="panel-note">created {day(account.created_at)}</p>
-        {error && <p className="field-error" role="alert">{error}</p>}
+        {error && <FieldError>{error}</FieldError>}
       </div>
       {you ? <>
         {/* No role picker and no Remove on your own row: the one administrator

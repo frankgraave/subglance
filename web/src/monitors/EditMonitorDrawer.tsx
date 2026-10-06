@@ -7,6 +7,7 @@ import { fetchMonitorForEdit, patchMonitor } from "./inventoryApi";
 import type { VersionedMonitor } from "./inventoryApi";
 import { detailQueryKey } from "./detail";
 import { openIncidentsQueryKey } from "../incidents/api";
+import { FieldError } from "../components/FieldError";
 
 /** Mounted per edit session. A reload replaces both values and validator;
  * canceled reads and writes cannot close or populate a later session. */
@@ -34,7 +35,7 @@ export function EditMonitorDrawer({ id, onClose }: { id: string; onClose: () => 
   }, []);
   return <Drawer open onClose={onClose} title={loaded ? `Edit ${loaded.monitor.name}` : "Edit monitor"}>
     <Panel>
-      {error ? <><p role="alert" className="field-error">{error}</p><button type="button" className="button" onClick={reload}>Reload latest settings</button></>
+      {error ? <><FieldError>{error}</FieldError><button type="button" className="button" onClick={reload}>Reload latest settings</button></>
         : loaded === null ? <p className="field-help">Loading current settings…</p>
         : <LazyEditMonitorForm key={revision} monitor={loaded.monitor} onReload={reload} onCancel={onClose} onSave={async (patch) => {
           const controller = saveController.current!;

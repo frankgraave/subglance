@@ -90,9 +90,9 @@ function Report({ report }: { report: ImportReport }) {
 }
 
 function Refusal({ problem, applied }: { problem: Problem; applied: boolean }) {
-  // The push reveal's caveat box, not `.field-error`: --down text on a card
-  // panel measures under 4.5:1 in both themes, and this sentence is the whole
-  // answer, so it is set in full ink behind a rail instead.
+  // The push reveal's caveat box, not a FieldError: a refused import is the
+  // whole answer, several sentences long and pointing into the file, so it
+  // stands behind a rail rather than as a line under the file chooser.
   return <div role="alert" className="warn-note field">
     {problem.path && <p>In the file at <code>{problem.path}</code></p>}
     <p>{problem.message}</p>

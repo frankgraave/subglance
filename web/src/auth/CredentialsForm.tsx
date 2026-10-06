@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import { MIN_PASSWORD_LENGTH } from "./api";
 import { describeStrength, passwordStrength } from "./password";
+import { FieldError } from "../components/FieldError";
 
 /**
  * The email-and-password form, shared by sign-in and first-run setup.
@@ -170,9 +171,9 @@ export function CredentialsForm({
          * submission and is the reason nothing happened; a passive region
          * would let a screen-reader user press the button and hear silence.
          */
-        <p className="field-error" id={errorId} role="alert">
+        <FieldError id={errorId}>
           {rejection.message}
-        </p>
+        </FieldError>
       )}
 
       <button className="button-solid" type="submit" disabled={disabled}>

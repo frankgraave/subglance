@@ -9,7 +9,6 @@ import { ChannelPicker } from "./ChannelPicker";
 import { channelIdsFromText, channelIdsText } from "./channelChoice";
 import type { Channel } from "../notifications/channels";
 import { validRepeat, REPEAT_ERROR } from "./repeat";
-import { IconAlert } from "../components/icons";
 import { isPush } from "./push";
 import { TlsFloorField } from "./TlsFloorField";
 import { TLS_FLOOR_UNSET } from "./tlsFloor";
@@ -17,6 +16,7 @@ import type { PreviewResult, PreviewState } from "./preview";
 import { describePreview, suggestName } from "./preview";
 import { JSON_HELP, JSON_OPERATORS } from "./jsonAssertion";
 import { Select } from "../components/Select";
+import { FieldError } from "../components/FieldError";
 
 /**
  * Add a monitor in under sixty seconds (DESIGN.md §7.2, product principle 2).
@@ -374,7 +374,7 @@ export function AddMonitorForm({
         ) : (
           <input {...props} placeholder={placeholder} autoComplete="off" spellCheck={false} />
         )}
-        <FieldError control={control} badControl={badControl} rejection={rejection} ids={ids} />
+        <ControlRefusal control={control} badControl={badControl} rejection={rejection} ids={ids} />
       </div>
     );
   };
@@ -468,7 +468,7 @@ export function AddMonitorForm({
             A URL, a hostname, or a host and port. A bare hostname is checked
             over HTTPS.
           </p>
-          <FieldError
+          <ControlRefusal
             control="target"
             badControl={badControl}
             rejection={rejection}
@@ -491,7 +491,7 @@ export function AddMonitorForm({
           required={push}
           {...invalidProps("name", `${ids}-name-help`)}
         />
-        <FieldError
+        <ControlRefusal
           control="name"
           badControl={badControl}
           rejection={rejection}
@@ -521,7 +521,7 @@ export function AddMonitorForm({
             <p id={`${ids}-push-interval-help`} className="field-help">
               How often the job runs: 1 hour for an hourly job, 1 day for a nightly one.
             </p>
-            <FieldError
+            <ControlRefusal
               control="push-interval"
               badControl={badControl}
               rejection={rejection}
@@ -539,7 +539,7 @@ export function AddMonitorForm({
               Silence past the interval plus this is a failure. A backup that
               usually takes a few minutes longer needs room here.
             </p>
-            <FieldError
+            <ControlRefusal
               control="push-grace"
               badControl={badControl}
               rejection={rejection}
@@ -591,7 +591,7 @@ export function AddMonitorForm({
               <option value="ssl">TLS certificate</option>
               <option value="push">Push — the job reports in</option>
             </Select>
-            <FieldError
+            <ControlRefusal
               control="type"
               badControl={badControl}
               rejection={rejection}
@@ -606,7 +606,7 @@ export function AddMonitorForm({
                   Check every
                 </label>
                 {duration("interval", "intervalS", SECONDS_TO_HOURS, "Check every", errorProps("interval"))}
-                <FieldError
+                <ControlRefusal
                   control="interval"
                   badControl={badControl}
                   rejection={rejection}
@@ -619,7 +619,7 @@ export function AddMonitorForm({
                   Give up after
                 </label>
                 {duration("timeout", "timeoutS", SECONDS_ONLY, "Give up after", errorProps("timeout"))}
-                <FieldError
+                <ControlRefusal
                   control="timeout"
                   badControl={badControl}
                   rejection={rejection}
@@ -655,7 +655,7 @@ export function AddMonitorForm({
                   Passing checks in a row before an incident closes and
                   “resolved” is sent.
                 </p>
-                <FieldError
+                <ControlRefusal
                   control="recovery"
                   badControl={badControl}
                   rejection={rejection}
@@ -674,7 +674,7 @@ export function AddMonitorForm({
                   ? { errorId: `${ids}-field-error` }
                   : {})}
               >
-                <FieldError
+                <ControlRefusal
                   control="min-tls"
                   badControl={badControl}
                   rejection={rejection}
@@ -711,7 +711,7 @@ export function AddMonitorForm({
                     badControl === "keyword" ? `${ids}-field-error` : undefined
                   }
                 />
-                <FieldError
+                <ControlRefusal
                   control="keyword"
                   badControl={badControl}
                   rejection={rejection}
@@ -829,7 +829,7 @@ export function AddMonitorForm({
  * `aria-describedby`, and only one can be on screen at a time — the server
  * rejects on the first problem it finds, so a second id would never resolve.
  */
-function FieldError({
+function ControlRefusal({
   control,
   badControl,
   rejection,
@@ -842,10 +842,9 @@ function FieldError({
 }) {
   if (badControl !== control || rejection === null) return null;
   return (
-    <p id={`${ids}-field-error`} role="alert" className="field-error">
-      <IconAlert />
+    <FieldError id={`${ids}-field-error`}>
       {rejection.message}
-    </p>
+    </FieldError>
   );
 }
 

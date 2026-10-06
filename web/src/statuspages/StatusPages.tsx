@@ -16,6 +16,7 @@ import {
   type EntryInput, type Selection, type StatusPage, type StatusPageSettings,
 } from "./api";
 import { Select } from "../components/Select";
+import { FieldError } from "../components/FieldError";
 
 type Rejection = { field?: string; message: string };
 const rejectionOf = (error: unknown): Rejection => error instanceof ApiError
@@ -48,7 +49,7 @@ function Field({ id, label, help, error, children }: {
     <label className="field-label" htmlFor={id}>{label}</label>
     {children}
     {help && <p className="panel-note" id={`${id}-help`}>{help}</p>}
-    {error && <p className="field-error" role="alert" id={`${id}-error`}>{error}</p>}
+    {error && <FieldError id={`${id}-error`}>{error}</FieldError>}
   </div>;
 }
 
@@ -166,7 +167,7 @@ function SettingsForm({ page, onSaved, onCancel }: {
     <Checkbox checked={draft.indexable} onChange={(event) => set("indexable", event.target.checked)}>
       Let search engines list it
     </Checkbox>
-    {general && error && <p className="field-error" role="alert">{error.message}</p>}
+    {general && error && <FieldError>{error.message}</FieldError>}
     <div className="button-row">
       <button className="button-solid" type="submit" disabled={!ready || saving}>
         {saving ? "Saving…" : page ? "Save settings" : "Create page"}
@@ -291,7 +292,7 @@ function ServicesForm({ page, monitors, onSaved, onCancel }: {
       </div>
       <button type="button" className="button" disabled={adding === ""} onClick={() => add(Number(adding))}>Add</button>
     </div>}
-    {error && <p className="field-error" role="alert" id={`${id}-error`}>{error}</p>}
+    {error && <FieldError id={`${id}-error`}>{error}</FieldError>}
     <div className="button-row">
       <button className="button-solid" type="submit" disabled={saving || !dirty}>{saving ? "Saving…" : "Save services"}</button>
       <button className="button" type="button" onClick={onCancel}>Cancel</button>
@@ -328,7 +329,7 @@ function PageRow({ page, onEdit, onServices, onDeleted }: {
     <div className="control-row-main">
       <p><strong>{page.title}</strong></p>
       <p className="panel-note">{facts.join(" · ")}</p>
-      {error && <p className="field-error" role="alert">{error}</p>}
+      {error && <FieldError>{error}</FieldError>}
     </div>
     <StateChip>{page.enabled ? "published" : "off"}</StateChip>
     <span className="button-row">

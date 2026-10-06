@@ -1662,7 +1662,15 @@ default. Every required field costs installs.
 - Focus is a green border plus a 3px ring at 14% opacity — visible without the
   blue browser glow.
 - Errors sit under the field, with an icon, and name the correct format instead
-  of just announcing that something is wrong.
+  of just announcing that something is wrong. Every one is `FieldError`
+  (`web/src/components/FieldError.tsx`): the words in `--ink`, the alert glyph
+  in `--down`. The red is the glyph's alone because at the helper size a red
+  sentence measured 4.49:1 on a light settings panel and 4.28:1 on a dark one,
+  under the 4.5:1 text needs, while a glyph needs 3:1 and clears it. The field
+  still turns red and carries `aria-invalid`, so the colour is not lost, only
+  moved off the words. `FieldError.test.tsx` refuses the class written by hand
+  or restyled in a feature stylesheet, and `layout/field-refusals.browser.test.ts`
+  drives every settings card with a field to a refusal and measures both.
 - Units (`sec`, `ms`) belong in an addon on the field, not in the label.
 - A length of time is a number and a unit (`DurationField`). A stored value
   loads in the largest unit that holds it exactly, so 900 seconds reads

@@ -2,11 +2,11 @@ import { useId, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiJSON, apiPost, apiRequest } from "../api/http";
 import { Checkbox } from "../components/Choice";
-import { IconAlert } from "../components/icons";
 import { windowCovers, type MaintenanceMonitor } from "./maintenanceScope";
 import { DurationField } from "./DurationField";
 import { MINUTES_TO_HOURS } from "./duration";
 import { Select } from "../components/Select";
+import { FieldError } from "../components/FieldError";
 
 type Window = {
   id: number; name: string; monitor_id?: number; tag_key?: string; tag_value?: string;
@@ -110,7 +110,7 @@ export default function MaintenanceManager({ monitors, canWrite, focus }: { moni
           <div className="field-grid"><label className="field">Local start time<input className="input" type="time" name="local_time" required defaultValue="02:00"/></label><div className="field"><label htmlFor={`${id}-duration`}>Duration</label><DurationField id={`${id}-duration`} value={minutes} onChange={(next) => { setMinutes(next); setDurationError(""); }} units={MINUTES_TO_HOURS} label="Duration"
             inputProps={{ required: true, "aria-invalid": durationError ? true : undefined, "aria-describedby": durationError ? `${id}-duration-error` : undefined }}/>
             <input type="hidden" name="duration_minutes" value={minutes}/>
-            {durationError ? <p id={`${id}-duration-error`} role="alert" className="field-error"><IconAlert />{durationError}</p> : null}</div></div>
+            {durationError ? <FieldError id={`${id}-duration-error`}>{durationError}</FieldError> : null}</div></div>
           <p id={`${id}-dst`}>Use an IANA timezone. A missing daylight-saving time is skipped; a repeated time starts once, at the earlier occurrence. Duration is elapsed minutes.</p>
         </> : <div className="field-grid"><label className="field">Start (UTC)<input className="input" type="datetime-local" name="starts_at" required/></label><label className="field">End (UTC)<input className="input" type="datetime-local" name="ends_at" required/></label></div>}
       </fieldset>
