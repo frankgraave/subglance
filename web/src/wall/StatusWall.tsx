@@ -1,8 +1,11 @@
 import type { RefObject } from "react";
+import { formatCount } from "../format/format";
 import { partition, summarise } from "../monitors/model";
 import { Led } from "../monitors/Led";
 import type { Monitor } from "../monitors/types";
 import { formatWallClock, useSecondsClock } from "./clock";
+import { wallCounts } from "./counts";
+import { useWallZoom } from "./useWallZoom";
 
 /**
  * The wall display: lamp and name, nothing else (DESIGN.md §7).
@@ -28,7 +31,14 @@ import { formatWallClock, useSecondsClock } from "./clock";
  * in `--ink-3`, because if the room can read the header at a glance it is
  * competing with the lamps, which are the actual signal. Not `--ink-4`: that
  * is the placeholder tone, 1.9:1, and the time is text someone reads.
+ *
+ * **The board fills the screen.** Header and tiles are magnified together to
+ * the largest size at which every monitor still fits without scrolling, up to
+ * a ceiling set by the screen (`fit.ts`). The type scale stays the product's;
+ * what changes with the screen is the zoom, so a 4K panel on a wall reads the
+ * way a 1080p one does.
  */
+
 
 export type StatusWallProps = {
   monitors: readonly Monitor[];
@@ -79,6 +89,20 @@ export function StatusWall({
   const clock = formatWallClock(now ?? tick);
 
   const summary = summarise(monitors);
+  const counts = wallCounts(summary);
+  // Whatever can change the board's height: how many tiles, and the header
+  // line, which wraps when it grows a count or a suffix. A check result that
+  // changes no count changes none of these, so the stream does not refit.
+  const { board, stage } = useWallZoom(
+    [
+      monitors.length,
+      instance,
+      notice,
+      stale,
+      hostOffline,
+      ...counts.map((count) => count.text),
+    ].join("|"),
+  );
   // Down first, then alphabetical: the same `partition` the row and card
   // layouts call, so "needs attention" means one thing across the product.
   const { attention, rest } = partition(monitors);
@@ -91,99 +115,108 @@ export function StatusWall({
       className="wall"
       data-stale={stale ? "true" : "false"}
     >
-      <div className="wall-stage">
-        <header className="wall-head">
-          <h1 className="wall-title">
-            {instance !== undefined && instance !== "" ? instance : "SubGlance"}
-          </h1>
-          <p className="wall-meta">
-            {notice !== undefined ? (
-              notice
-            ) : (
-              <>
-                {summary.total} {summary.total === 1 ? "monitor" : "monitors"}
-                {summary.down > 0 && (
-                  <>
-                    {" · "}
-                    {/*
-                     * While the stream is stale the count is history, not news,
-                     * and it is labelled as such. A wall that keeps announcing
-                     * "1 down" in the present tense after it stopped hearing
-                     * anything is exactly the confident lie §6 forbids — the
-                     * number may have been fixed, or nine more may have joined
-                     * it.
-                     */}
-                    {stale ? (
+      <div className="wall-stage" ref={stage}>
+        <div className="wall-board" ref={board}>
+          <header className="wall-head">
+            <h1 className="wall-title">
+              {instance !== undefined && instance !== "" ? instance : "SubGlance"}
+            </h1>
+            <p className="wall-meta">
+              {notice !== undefined ? (
+                notice
+              ) : (
+                <>
+                  {formatCount(summary.total)} {summary.total === 1 ? "monitor" : "monitors"}
+                  {counts.length > 0 && " · "}
+                  {/*
+                   * While the stream is stale the counts are history, not news,
+                   * and they are labelled as such. A wall that keeps announcing
+                   * "1 down" in the present tense after it stopped hearing
+                   * anything is exactly the confident lie §6 forbids — the
+                   * number may have been fixed, or nine more may have joined
+                   * it.
+                   */}
+                  {stale ? (
+                    counts.length > 0 && (
                       <span className="wall-meta-lastknown">
-                        {summary.down} down, last known
+                        {counts.map((count) => count.text).join(" · ")}, last known
                       </span>
-                    ) : (
-                      <b className="wall-meta-down">{summary.down} down</b>
-                    )}
-                  </>
-                )}
-              </>
-            )}
-            {/*
-             * The stale suffix, not a banner. There is no chrome to put a
-             * banner in, and growing one here would defeat the layout — so
-             * the warning rides the line that is already there, next to a
-             * warm border around the viewport.
-             */}
-            {stale && (
-              <span className="wall-meta-stale">
-                {" "}
-                · connection lost, not updating
-              </span>
-            )}
-            {/*
-             * Not while stale: the stream is gone, so the server's own state
-             * is not known either, and "connection lost" already says so.
-             */}
-            {!stale && hostOffline !== undefined && (
-              <span className="wall-meta-stale"> · {hostOffline}</span>
-            )}
-          </p>
-          <p className="wall-clock" aria-hidden="true">
-            {/*
-             * Hidden from assistive technology: a value that changes every
-             * second would make a screen reader recite the time forever, and
-             * the proof-of-life it offers is purely visual anyway.
-             */}
-            {clock}
-          </p>
-        </header>
+                    )
+                  ) : (
+                    counts.map((count, i) => (
+                      <span key={count.status}>
+                        {i > 0 && " · "}
+                        {count.status === "down" ? (
+                          <b className="wall-meta-down">{count.text}</b>
+                        ) : (
+                          count.text
+                        )}
+                      </span>
+                    ))
+                  )}
+                </>
+              )}
+              {/*
+               * The stale suffix, not a banner. There is no chrome to put a
+               * banner in, and growing one here would defeat the layout — so
+               * the warning rides the line that is already there, next to a
+               * warm border around the viewport.
+               */}
+              {stale && (
+                <span className="wall-meta-stale">
+                  {" "}
+                  · connection lost, not updating
+                </span>
+              )}
+              {/*
+               * Not while stale: the stream is gone, so the server's own state
+               * is not known either, and "connection lost" already says so.
+               */}
+              {!stale && hostOffline !== undefined && (
+                <span className="wall-meta-stale"> · {hostOffline}</span>
+              )}
+            </p>
+            <p className="wall-clock" aria-hidden="true">
+              {/*
+               * Hidden from assistive technology: a value that changes every
+               * second would make a screen reader recite the time forever, and
+               * the proof-of-life it offers is purely visual anyway.
+               */}
+              {clock}
+            </p>
+          </header>
 
-        {ordered.length === 0 ? (
-          <p className="wall-empty">{notice ?? "Nothing being watched yet."}</p>
-        ) : (
-          <ul className="wall-grid">
-            {ordered.map((monitor) => (
-              <li
-                key={monitor.id}
-                className="wall-card"
-                data-status={monitor.status}
-              >
-                {/*
-                 * The lamp's word goes past tense with the rest of the screen.
-                 * It is `sr-only` here — the wall is read from across a room,
-                 * and a word per card at that distance is unreadable noise —
-                 * which is exactly why the CSS treatment the border and the
-                 * header line get cannot reach it. Without this the card still
-                 * announced "Up" to a screen reader while the header beside it
-                 * said the connection was lost (SUB-111).
-                 */}
-                <Led
-                  status={monitor.status}
-                  stale={stale}
-                  recovery={monitor.recovery}
-                  className="wall-card-led"
-                />
-                <span className="wall-card-name">{monitor.name}</span>
-              </li>
-            ))}
-          </ul>
-        )}
+          {ordered.length === 0 ? (
+            <p className="wall-empty">{notice ?? "Nothing being watched yet."}</p>
+          ) : (
+            <ul className="wall-grid">
+              {ordered.map((monitor) => (
+                <li
+                  key={monitor.id}
+                  className="wall-card"
+                  data-status={monitor.status}
+                >
+                  {/*
+                   * The lamp's word goes past tense with the rest of the screen.
+                   * It is `sr-only` here — the wall is read from across a room,
+                   * and a word per card at that distance is unreadable noise —
+                   * which is exactly why the CSS treatment the border and the
+                   * header line get cannot reach it. Without this the card still
+                   * announced "Up" to a screen reader while the header beside it
+                   * said the connection was lost (SUB-111).
+                   */}
+                  <Led
+                    status={monitor.status}
+                    stale={stale}
+                    recovery={monitor.recovery}
+                    className="wall-card-led"
+                  />
+                  <span className="wall-card-name">{monitor.name}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
 
       {onExit !== undefined && (

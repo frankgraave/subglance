@@ -1445,6 +1445,30 @@ In Status wall, broken cards get a **warm border**, not a coloured fill. A wall
 full of coloured cards is noise; a wall of quiet cards with two warm borders is
 information.
 
+**The whispered line counts what the dashboard counts.** Every status with a
+monitor in it, worst first, in the order of the dashboard's status tabs: "26
+monitors · 3 down · 2 warning · 1 paused · 20 up". Only the down count takes
+`--down`. A line that named only what was down told the room everything else
+was fine while two monitors were warning and one had been switched off and
+forgotten. Both read one list, `SUMMARY_ORDER` in `web/src/monitors/model.ts`.
+
+**The wall fills the screen it is on, by magnifying, not by resizing type.**
+At the type scale a name is 15px, unreadable on a television across a room
+and half that again on a 4K panel. No fixed size is right for both a laptop
+and a 4K television, and raising the wall's own sizes would take it off the
+scale every other screen is measured against. So the board (header line and
+tiles) keeps the scale and is drawn with CSS `zoom`, at the largest factor at
+which every monitor still fits without scrolling: nobody is at a wall to
+scroll it. The factor has a ceiling, so four monitors do not become road
+signs: the board always lays out in at least 960 × 540 of its own pixels,
+the reference size Android TV designs at, which is 2x on a 1080p screen and
+4x on a 4K one. At 2x a name is 30px on 1080p, between the 24px minimum and
+the 36px default that reference gives for text read from about three metres.
+The floor is 1: an estate too large for the screen keeps the product's sizes
+and scrolls rather than shrinking below them, and a phone is never magnified.
+`layout/wall-scale.browser.test.ts` measures it at 1920 × 1080 and
+3840 × 2160.
+
 **Cards chooses its own column count.** At one card per row the layout spent
 most of a wide screen on nothing: the heartbeat was pushed against the right
 edge with a dashed rule crossing the empty middle. The toolbar offers 1, 2, 3
