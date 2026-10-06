@@ -274,7 +274,7 @@ func run(args []string, logOut io.Writer) error {
 	// must stop the process before that, with one error and a non-zero exit,
 	// rather than after the scheduler and notifier have begun and the
 	// deferred database close pulls the store out from under them.
-	ln, err := listen(openCtx, cfg.Addr)
+	ln, err := listen(cfg.Addr)
 	if err != nil {
 		return err
 	}
@@ -480,16 +480,19 @@ func run(args []string, logOut io.Writer) error {
 // listen binds the HTTP address. A port that is already taken gets a hint on
 // how to choose another, because that is the one bind failure an operator is
 // likely to meet and the system's wording does not say where to change it.
-// Windows reports the condition under its own error number, so there the
-// error arrives without the hint; it still stops the process the same way.
-func listen(ctx context.Context, addr string) (net.Listener, error) {
-	// The context bounds resolving the address only; the listener outlives it.
+func listen(addr string) (net.Listener, error) {
+	// Its own bounded context rather than the startup one: setup before the
+	// bind can use up most of that deadline, and an expired context fails
+	// resolving a host name even when the port is free. It bounds resolving
+	// the address only; the listener outlives it.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	var lc net.ListenConfig
 	ln, err := lc.Listen(ctx, "tcp", addr)
 	if err == nil {
 		return ln, nil
 	}
-	if errors.Is(err, syscall.EADDRINUSE) {
+	if addrInUse(err) {
 		return nil, fmt.Errorf("http server: %w; another process is using this address, choose another with --addr or SUBGLANCE_ADDR", err)
 	}
 	return nil, fmt.Errorf("http server: %w", err)

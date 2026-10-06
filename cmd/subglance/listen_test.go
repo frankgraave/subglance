@@ -2,11 +2,9 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"net"
 	"strings"
 	"sync"
-	"syscall"
 	"testing"
 	"time"
 )
@@ -34,16 +32,17 @@ func TestServerRefusesATakenPortBeforeStarting(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		t.Fatal("the server kept running on a port another process holds")
 	}
-	if !errors.Is(runErr, syscall.EADDRINUSE) {
+	if !addrInUse(runErr) {
 		t.Fatalf("run: err = %v, want address already in use", runErr)
 	}
 	if !strings.Contains(runErr.Error(), "--addr") {
 		t.Errorf("run: err = %q, want it to name --addr as the fix", runErr)
 	}
 
-	// Anything started before the bind would log after run returned and the
-	// database closed; give it the moment it would need.
-	time.Sleep(200 * time.Millisecond)
+	// Read as soon as run returns, with no wait. "http server listening" is
+	// written on run's own goroutine, so its absence is exact. The other two
+	// come from goroutines that a bind moved below them would start; they
+	// are a cheap extra net, not the proof, and cannot fail spuriously.
 	out := logs.String()
 	for _, line := range []string{"http server listening", "notifier started", "restored open incidents"} {
 		if strings.Contains(out, line) {
