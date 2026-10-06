@@ -223,3 +223,31 @@ it("offers import and export to editors and administrators, beside Backups", asy
   fireEvent.change(screen.getByRole("searchbox", { name: "Filter settings" }), { target: { value: "yaml" } });
   expect(within(index()).getAllByRole("link").map((link) => link.textContent)).toEqual(["Import & export"]);
 });
+
+// The endpoint answers administrators only, and its addresses can name hosts
+// on the operator's own network, so nobody else is offered the card or makes
+// the request.
+it("offers the connectivity check to an administrator only, beside self-monitoring", async () => {
+  window.history.replaceState(null, "", "/settings");
+  const fetcher = vi.fn().mockImplementation(async () => new Response("{}", { status: 404 }));
+  vi.stubGlobal("fetch", fetcher);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  clients.push(client);
+  const asked = () => fetcher.mock.calls.some(([url]) => String(url) === "/api/v1/settings/connectivity");
+  for (const who of ["viewer", "editor"]) {
+    const { unmount } = render(<QueryClientProvider client={client}><Settings client={client} {...{ role: who }} /></QueryClientProvider>);
+    expect(within(index()).queryByRole("link", { name: "Connectivity check" })).toBeNull();
+    expect(document.getElementById("connectivity")).toBeNull();
+    unmount();
+  }
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+  expect(asked()).toBe(false);
+  render(<QueryClientProvider client={client}><Settings client={client} canAdmin /></QueryClientProvider>);
+  const links = within(index()).getAllByRole("link").map((link) => link.textContent);
+  expect(links.indexOf("Connectivity check")).toBe(links.indexOf("Self-monitoring") + 1);
+  // The card arrives as its own chunk; the 404 is its unavailable state.
+  expect(await screen.findByText("Connectivity settings unavailable.")).toBeTruthy();
+  expect(asked()).toBe(true);
+  fireEvent.change(screen.getByRole("searchbox", { name: "Filter settings" }), { target: { value: "gateway" } });
+  expect(within(index()).getAllByRole("link").map((link) => link.textContent)).toEqual(["Connectivity check"]);
+});

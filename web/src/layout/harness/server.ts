@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 import type { ApiHeartbeat, ApiMonitor } from "../../monitors/types";
 import type { ApiIncident } from "../../monitors/detail";
 import { disabledWatchdog } from "../../watchdog/fixtures";
-import { onlineConnectivity } from "../../connectivity/fixtures";
+import { defaultConnectivitySettings, onlineConnectivity } from "../../connectivity/fixtures";
 import { steadyDiagnostics } from "../../diagnostics/fixtures";
 import { defaultRetention } from "../../retention/fixtures";
 import { unconfiguredBackup } from "../../backup/fixtures";
@@ -310,6 +310,14 @@ export async function serveBuild(): Promise<Server> {
 
     // Every dashboard asks whether the server can see out (SUB-151). Online
     // renders nothing, which keeps the layout fixtures what they were.
+    // An administrator's /settings reads the connectivity check's settings;
+    // unstubbed, axe would audit the card's loading state instead of its form.
+    if (url.pathname === "/api/v1/settings/connectivity") {
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8", ETag: 'W/"1"' });
+      res.end(JSON.stringify(defaultConnectivitySettings));
+      return;
+    }
+
     if (url.pathname === "/api/v1/connectivity") {
       res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
       res.end(JSON.stringify(onlineConnectivity));

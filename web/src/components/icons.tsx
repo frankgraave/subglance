@@ -253,6 +253,21 @@ export function IconServer() {
 }
 
 /**
+ * The connectivity check: this host above the addresses it dials, for a card
+ * about the instance's own uplink rather than about any monitor.
+ */
+export function IconNetwork() {
+  return (
+    <svg {...BASE}>
+      <rect x="9" y="3.5" width="6" height="5" rx="1" />
+      <path d="M12 8.5v4M6 12.5h12M6 12.5v3M18 12.5v3" />
+      <rect x="3" y="15.5" width="6" height="5" rx="1" />
+      <rect x="15" y="15.5" width="6" height="5" rx="1" />
+    </svg>
+  );
+}
+
+/**
  * Failure responses: a page of text, for the bodies a failing check returned.
  *
  * Not the warning triangle, which heads Incidents on the same monitor screen:

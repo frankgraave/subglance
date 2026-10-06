@@ -97,11 +97,11 @@ describe("every card has an icon tile", () => {
     expect(untiled).toEqual([]);
   });
 
-  it("on settings, all eleven administrator cards", async () => {
-    // The screen this ticket was filed against. Eleven, not "more than
+  it("on settings, all twelve administrator cards", async () => {
+    // The screen this ticket was filed against. Twelve, not "more than
     // zero": a lazy card still on its fallback would otherwise pass.
     const { cards, untiled } = await census("/settings");
-    expect(cards).toBe(11);
+    expect(cards).toBe(12);
     expect(untiled).toEqual([]);
   });
 });
