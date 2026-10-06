@@ -72,7 +72,12 @@ func WebhookPlaceholderNames() []string {
 // alertStatus is "down" or "up": the one-word answer a template without
 // conditions needs to tell bad news from good.
 func alertStatus(a Alert) string {
-	if a.Down() {
+	switch {
+	case a.Notice && a.Down():
+		// Not "down": the service answers. A template that prints the
+		// status has to be able to say so.
+		return "expiring"
+	case a.Down():
 		return "down"
 	}
 	return "up"

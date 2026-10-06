@@ -95,13 +95,14 @@ type IncidentSpan struct {
 //
 // Unconfirmed incidents are left out: a failure that never crossed the
 // threshold was never an outage, and a public page only states confirmed
-// facts. The span starts at the incident's first failed check, not at its
+// facts. Certificate notices are left out too: the service answered
+// throughout, so there was no outage to list. The span starts at the incident's first failed check, not at its
 // confirmation, because that is when the outage began.
 func (db *DB) ConfirmedIncidentSpans(ctx context.Context, monitorID int64, since time.Time) ([]IncidentSpan, error) {
 	rows, err := db.Reader.QueryContext(ctx, `
 		SELECT started_at, resolved_at
 		FROM incidents
-		WHERE monitor_id = ? AND confirmed_at IS NOT NULL
+		WHERE monitor_id = ? AND confirmed_at IS NOT NULL AND notice = 0
 		  AND (resolved_at IS NULL OR resolved_at >= ?)
 		ORDER BY started_at, id`, monitorID, since.Unix())
 	if err != nil {

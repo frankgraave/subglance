@@ -49,7 +49,7 @@ type monitorResponse struct {
 	// and one that says "1.2" does not.
 	MinTLSVersion string `json:"min_tls_version,omitempty"`
 
-	Status     string     `json:"status"` // up, pending, warning, down, or recovering
+	Status     string     `json:"status"` // up, pending, warning, down, recovering, or expiring
 	LastCheck  *time.Time `json:"last_check,omitempty"`
 	LatencyMS  int        `json:"latency_ms,omitempty"`
 	StatusCode int        `json:"status_code,omitempty"`
@@ -1043,7 +1043,15 @@ func (s *Server) describeMonitor(r *http.Request, m store.Monitor) monitorRespon
 	case err == nil:
 		resp.IncidentID = inc.ID
 		resp.IncidentSince = &inc.StartedAt
-		if inc.Confirmed() {
+		switch {
+		case inc.Notice:
+			// A certificate notice is not an outage. The monitor is
+			// expiring while its checks pass; a failure that is not
+			// confirmed yet is still the heartbeat's warning.
+			if hasBeat && hb.OK {
+				resp.Status = "expiring"
+			}
+		case inc.Confirmed():
 			resp.Status = "down"
 			// Recovering is still a confirmed, open incident, so it is
 			// only ever a refinement of down: the engine is asked only

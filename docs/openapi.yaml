@@ -4968,7 +4968,15 @@ components:
         incident is still open and no all-clear has been sent; `recovery`
         carries the streak. A failure while recovering returns the monitor to
         `down` within the same incident.
-      enum: [up, pending, warning, down, recovering]
+
+        `expiring` means the checks pass, but the certificate they were
+        served is valid and expires within `ssl_warn_days`. It is not an
+        outage: the checks are assessed `up` and uptime is untouched. The
+        open incident is a notice (`notice: true` on the incident), which
+        alerts and reminds like an outage and resolves on the first check
+        that sees a certificate expiring later. An expired certificate fails
+        the check and is `down`.
+      enum: [up, pending, warning, down, recovering, expiring]
       example: up
     TagMap:
       type: object
@@ -5211,7 +5219,7 @@ components:
                 format: int64
     PublicStatusPageEntry:
       type: object
-      required: [key, name, status, in_maintenance, uptime_90d, uptime_30d, days]
+      required: [key, name, status, in_maintenance, certificate_expiring, uptime_90d, uptime_30d, days]
       properties:
         key:
           type: string
@@ -5225,8 +5233,16 @@ components:
           description: |
             Confirmed state only: a failed check that is not yet confirmed
             shows as `up`, and a monitor that is recovering as `degraded`.
+            A monitor whose certificate expires soon is `up`, with
+            `certificate_expiring` set.
         in_maintenance:
           type: boolean
+        certificate_expiring:
+          type: boolean
+          description: |
+            The service's certificate is valid but expires inside the
+            operator's warning window. Set only beside `up`. It never says
+            when: the date stays private, like every other TLS detail.
         uptime_90d:
           type: [number, 'null']
           description: Percentage over 90 days, maintenance excluded, rounded down to two decimals so that 100 means no confirmed-down check; `null` without data.
@@ -5998,7 +6014,7 @@ components:
       additionalProperties: false
     Heartbeat:
       type: object
-      description: One recorded check result. Assessment is immutable even if a later check confirms the incident. SSE heartbeat data carries the same assessment and failure_kind fields (with at in the envelope instead of ts), plus current_maintenance evaluated at publish time. A passing check that leaves a confirmed incident open (the monitor is recovering) is assessed up, since it is not downtime, and its SSE data carries recovery ({passes, threshold}) so a live client does not read it as the end of the outage. current_maintenance is omitted when schedule state could not be read; it does not change the historical maintenance exclusion.
+      description: One recorded check result. Assessment is immutable even if a later check confirms the incident. SSE heartbeat data carries the same assessment and failure_kind fields (with at in the envelope instead of ts), plus current_maintenance evaluated at publish time. A passing check that leaves a confirmed incident open (the monitor is recovering) is assessed up, since it is not downtime, and its SSE data carries recovery ({passes, threshold}) so a live client does not read it as the end of the outage. A passing check whose certificate expires soon is assessed up as well, and its SSE data carries expiring: true while the monitor's certificate notice is open; status frames about a notice carry notice: true. current_maintenance is omitted when schedule state could not be read; it does not change the historical maintenance exclusion.
       required: [ts, ok, latency_ms, assessment]
       properties:
         maintenance:
@@ -6451,6 +6467,13 @@ components:
         acked:
           type: boolean
           example: false
+        notice:
+          type: boolean
+          description: |
+            Present and true on a certificate notice: the checks passed, but
+            the certificate expires within `ssl_warn_days`. A notice is
+            confirmed from the start, alerts like an outage and is never
+            downtime. Omitted on an outage.
         duration_s:
           type: integer
           description: Seconds from `started_at` to resolution, or to now while open.

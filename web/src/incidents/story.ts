@@ -44,10 +44,16 @@ import type { Incident } from "../monitors/detail";
  * collapses to `resolved`. What must never collapse is `acked` into
  * `resolved`: see the note at the top of the file.
  */
-export type IncidentState = "open" | "acked" | "resolved" | "warning";
+export type IncidentState = "open" | "acked" | "resolved" | "warning" | "notice";
 
+/*
+ * A certificate notice is its own state, whether muted or not: "Not muted"
+ * and "Muted, still down" both stand beside an outage, and nothing about a
+ * notice is down. Muting still works on it; the badge just does not say it.
+ */
 export function incidentState(incident: Incident): IncidentState {
   if (incident.resolved) return "resolved";
+  if (incident.notice) return "notice";
   if (!incident.confirmed) return "warning";
   return incident.acked ? "acked" : "open";
 }
@@ -84,6 +90,7 @@ export function incidentState(incident: Incident): IncidentState {
  */
 export const STATE_BADGE: Record<IncidentState, string> = {
   warning: "Warning",
+  notice: "Expiring soon",
   open: "Not muted",
   acked: "Muted, still down",
   resolved: "Resolved",
@@ -91,6 +98,7 @@ export const STATE_BADGE: Record<IncidentState, string> = {
 
 export const STATE_BADGE_LAST_KNOWN: Record<IncidentState, string> = {
   warning: "Was warning",
+  notice: "Was expiring soon",
   open: "Was not muted",
   acked: "Muted, was still down",
   resolved: "Resolved",
@@ -110,6 +118,7 @@ export const stateBadge = (state: IncidentState, stale = false): string =>
  */
 export const STATE_TONE: Record<IncidentState, "down" | "warn" | "idle"> = {
   warning: "warn",
+  notice: "warn",
   open: "down",
   acked: "warn",
   resolved: "idle",
@@ -227,9 +236,11 @@ export function incidentStory(
   const live = open && !stale;
 
   const startMoment = formatMoment(incident.startedAt);
-  const opening = !incident.confirmed
-    ? stale ? "Was warning from" : open ? "Warning since" : "Warning from"
-    : stale ? "Was down from" : open ? "Down since" : "Down from";
+  const opening = incident.notice
+    ? stale ? "Certificate was expiring soon from" : open ? "Certificate expiring soon since" : "Certificate expiring soon from"
+    : !incident.confirmed
+      ? stale ? "Was warning from" : open ? "Warning since" : "Warning from"
+      : stale ? "Was down from" : open ? "Down since" : "Down from";
   const began =
     startMoment === null
       ? `${opening.replace(/ (since|from)$/, "")}, start time unknown`
@@ -268,7 +279,8 @@ export function incidentStory(
       ? null
       : (() => {
           const moment = endingMoment(incident.startedAt, incident.resolvedAt);
-          return moment === null ? null : `Recovered at ${moment}`;
+          if (moment === null) return null;
+          return incident.notice ? `No longer expiring soon at ${moment}` : `Recovered at ${moment}`;
         })();
 
   /*
@@ -294,9 +306,11 @@ export function incidentStory(
    * arrive. It is the button's own wording, so the sentence a screen reader
    * hears names the act by the word the control used (SUB-190).
    */
-  const stillDown = stale ? "was still down" : "still down";
+  const stillDown = incident.notice
+    ? stale ? "certificate was still expiring soon" : "certificate still expiring soon"
+    : stale ? "was still down" : "still down";
   const acked =
-    state === "acked"
+    state === "acked" || (state === "notice" && incident.acked)
       ? ackMoment === null
         ? `Repeat alerts muted — ${stillDown}`
         : `Repeat alerts muted at ${ackMoment} — ${stillDown}`
@@ -305,11 +319,12 @@ export function incidentStory(
   const parts = [
     `${began}, ${lasted}.`,
     !incident.confirmed ? "Unconfirmed failure. No alert; excluded from uptime." : null,
+    incident.notice ? "Checks passed throughout; not counted as downtime." : null,
     cause === null ? null : `${capitalise(cause)}.`,
     ended === null ? null : `${ended}.`,
     acked === null ? null : `${acked}.`,
     // Muting is known; delivery and maintenance suppression are not.
-    state === "open"
+    state === "open" || (state === "notice" && !incident.acked)
       ? stale
         ? "Repeat alerts not muted when we lost contact."
         : "Repeat alerts not muted."
@@ -380,9 +395,12 @@ export function incidentTimeline(
    * collapsed line was never the point; not claiming current status is.
    */
   const steps: TimelineStep[] = [
-    { key: "started", at: incident.startedAt, what: "First failure observed" },
+    incident.notice
+      ? { key: "started", at: incident.startedAt, what: "Certificate seen expiring soon — alerted" }
+      : { key: "started", at: incident.startedAt, what: "First failure observed" },
   ];
-  if (incident.confirmed) {
+  // A notice is confirmed as it opens, so its first step says both.
+  if (incident.confirmed && !incident.notice) {
     steps.push({
       key: "confirmed",
       at: incident.confirmedAt,
@@ -406,11 +424,13 @@ export function incidentTimeline(
   }
   steps.push(
     incident.resolved
-      ? { key: "resolved", at: incident.resolvedAt, what: "Recovered" }
+      ? { key: "resolved", at: incident.resolvedAt, what: incident.notice ? "No longer expiring soon" : "Recovered" }
       : {
           key: "open",
           at: null,
-          what: stale ? "Not recovered when we last heard" : "Not recovered",
+          what: incident.notice
+            ? stale ? "Still expiring soon when we last heard" : "Still expiring soon"
+            : stale ? "Not recovered when we last heard" : "Not recovered",
           pending: true,
         },
   );

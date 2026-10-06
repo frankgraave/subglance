@@ -45,6 +45,8 @@ export type ApiIncident = {
   confirmed: boolean;
   resolved: boolean;
   acked: boolean;
+  /** A certificate notice rather than an outage; absent on an outage. */
+  notice?: boolean;
   duration_s: number;
   cause?: string;
   last_error?: string;
@@ -103,6 +105,12 @@ export type Incident = {
   confirmed: boolean;
   resolved: boolean;
   acked: boolean;
+  /**
+   * A certificate notice: the checks passed, the certificate expires soon.
+   * It alerts like an outage and is never downtime, so nothing that says
+   * "down" may be said about it. Absent means an outage.
+   */
+  notice?: boolean;
   /** Seconds to resolution, or so far when still open. */
   durationS: number;
   cause?: string;
@@ -163,6 +171,7 @@ export function incidentFromApi(api: ApiIncident): Incident {
     confirmed: api.confirmed,
     resolved: api.resolved,
     acked: api.acked,
+    notice: api.notice === true,
     durationS: api.duration_s,
     cause: api.cause,
     lastError: api.last_error,

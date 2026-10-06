@@ -46,6 +46,7 @@ Per entry, in the page's `entries` list (one per monitor on the page):
 | `name` | `status_page_entries.display_name` | Required. Never falls back to the internal name |
 | `status` | derived, see §1.3 | One of `up`, `degraded`, `down`, `no_data`, `not_monitored` |
 | `in_maintenance` | maintenance windows | Boolean only; the window's name is not shown |
+| `certificate_expiring` | open certificate notice | Boolean only, and only beside `up`; see §1.3 |
 | `uptime_90d` | hourly rollup | Percentage, rounded down to 2 decimals (100 only with no confirmed-down check), `null` when there is no data |
 | `uptime_30d` | hourly rollup | The same over the last 30 days, the period a phone draws (§2) |
 | `days` | hourly rollup | 90 entries, oldest first: `{ "date", "state", "down_minutes" }` |
@@ -65,7 +66,8 @@ error body:
 - the monitor's **internal name**, **id**, **type** or **target** (URL, host,
   port, push token);
 - anything from a check: **failure body**, **response headers**, **status
-  code**, **error text**, **latency**, TLS details, the certificate's subject;
+  code**, **error text**, **latency**, TLS details, the certificate's subject
+  or its expiry date (`certificate_expiring` says *soon*, never when);
 - an incident's **cause**, **last error**, **acknowledgement** or anything
   about who was notified;
 - **tags** — they are selection criteria, not labels (`customer:acme` is
@@ -109,6 +111,18 @@ on, and a blip that is over is a fact rather than an alarm.
 *Recovering shows as degraded, not up.* Until the recovery threshold is met the
 outage is not over, and the page must not say so before the operator's own
 channels do.
+
+*An expiring certificate shows as up, with a note.* A certificate that is valid
+but expires inside the monitor's warning window is not an outage: the service
+answers, and a visitor's browser accepts it today. The dashboard shows the
+monitor as `expiring` and the operator is alerted; the page keeps the lamp at
+up and adds the chip "Certificate expires soon", which is `certificate_expiring`
+in the JSON. It says *soon* and nothing else: the date and the number of days
+stay with the operator, like every other TLS detail (§1.2). Beside a status
+other than up the note is left out, since "expires soon" next to Down would
+read as the reason. An expired certificate fails the check, and that is down.
+A notice is never listed under `outages` and is never downtime in `days` or
+the uptime figures, because its checks are stored as up.
 
 ### 1.4 The daily history
 

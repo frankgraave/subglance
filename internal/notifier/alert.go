@@ -72,6 +72,14 @@ type Alert struct {
 	Digest     bool   `json:"digest,omitempty"`
 	DigestZone string `json:"digest_timezone,omitempty"`
 
+	// Notice marks an alert about a certificate notice rather than an
+	// outage: the monitor answers, but its certificate expires inside the
+	// warning window. The event is the one an outage would carry —
+	// incident_confirmed when the notice opens, incident_reminder while it
+	// stays open, incident_resolved when the certificate is renewed — and
+	// this field is what changes the wording from "down" to "expires soon".
+	Notice bool `json:"notice,omitempty"`
+
 	// ReplacesAlert marks a recovery that stands in for the alert about
 	// the same outage: that alert was still waiting to reach this channel
 	// when the monitor came back up, so the channel gets one message about
@@ -91,9 +99,11 @@ func (a Alert) Grouped() bool { return len(a.GroupedNames) > 1 }
 // starting, being confirmed, or refusing to go away.
 func (a Alert) Down() bool {
 	if a.Digest {
-		// A digest is bad news only if something in it is still broken;
-		// a night that fixed itself should not arrive in red.
-		return digestStillDown(digestEntries(a)) > 0
+		// A digest is bad news only if something in it is still broken
+		// or a certificate still needs renewing; a night that fixed itself
+		// should not arrive in red.
+		entries := digestEntries(a)
+		return digestStillDown(entries) > 0 || digestNoticeOpen(entries)
 	}
 	if a.Event == EventLocalNetworkRestored {
 		// The notice arrives when the connection is back: good news.
@@ -122,6 +132,10 @@ func (a Alert) Title() string {
 	}
 	if a.Event == EventChannelFailing {
 		return fmt.Sprintf("SubGlance cannot deliver alerts to %s", a.Target)
+	}
+
+	if a.Notice {
+		return noticeTitle(a)
 	}
 
 	switch state.Event(a.Event) {
@@ -176,6 +190,15 @@ func (a Alert) Body() string {
 	if a.LastError != "" {
 		out += "\n" + a.LastError
 	}
+	if a.Notice {
+		// Nothing was down, so there is no outage to time. The notice
+		// says when it was first seen, which is how long renewal has
+		// been waiting.
+		if !a.StartedAt.IsZero() && a.Down() {
+			out += fmt.Sprintf("\nNoticed %s", a.StartedAt.UTC().Format("2006-01-02 15:04 UTC"))
+		}
+		return out
+	}
 	if !a.StartedAt.IsZero() && !a.Down() && a.ReplacesAlert {
 		// No alert gave the start time, so this message does.
 		out += fmt.Sprintf("\nDown from %s to %s", a.StartedAt.UTC().Format("2006-01-02 15:04 UTC"),
@@ -186,6 +209,23 @@ func (a Alert) Body() string {
 		out += fmt.Sprintf("\nSince %s", a.StartedAt.UTC().Format("2006-01-02 15:04 UTC"))
 	}
 	return out
+}
+
+// noticeTitle is the title of an alert about a certificate notice. None of
+// them says "down": the service answered every check the notice covers.
+//
+// The renewal title does not say "renewed". The notice also ends when
+// someone lowers the monitor's warning window below the days left, and the
+// certificate was not renewed then.
+func noticeTitle(a Alert) string {
+	switch state.Event(a.Event) {
+	case state.EventIncidentResolved:
+		return fmt.Sprintf("%s: certificate no longer expires soon", a.MonitorName)
+	case state.EventIncidentReminder:
+		return fmt.Sprintf("%s: certificate still expires soon", a.MonitorName)
+	default:
+		return fmt.Sprintf("%s: certificate expires soon", a.MonitorName)
+	}
 }
 
 // durationWords renders a gap the way a person would say it.
@@ -283,5 +323,6 @@ func AlertFromStore(m store.Monitor, inc store.Incident, event state.Event, at t
 		Cause:         inc.Cause,
 		LastError:     inc.LastError,
 		ReminderCount: inc.ReminderCount,
+		Notice:        inc.Notice,
 	}
 }

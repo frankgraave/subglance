@@ -55,6 +55,7 @@ var publicFields = []string{
 	"summary", "summary.up", "summary.degraded", "summary.down", "summary.unmonitored",
 	"entries",
 	"entries[].key", "entries[].name", "entries[].status", "entries[].in_maintenance",
+	"entries[].certificate_expiring",
 	"entries[].uptime_90d", "entries[].uptime_30d", "entries[].days",
 	"entries[].days[].date", "entries[].days[].state", "entries[].days[].down_minutes",
 	"maintenance", "maintenance[].starts_at", "maintenance[].ends_at", "maintenance[].keys",

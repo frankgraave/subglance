@@ -157,6 +157,11 @@ type outageSpec struct {
 	cause   string
 	message string
 
+	// notice marks a certificate notice rather than an outage: the checks
+	// pass, so the heartbeats stay up, and the incident is a notice that is
+	// confirmed as it opens. cause and message are the notice's.
+	notice bool
+
 	// unconfirmed marks an outage that never reached the failure threshold:
 	// the incident opened and closed without anyone being told. It is the
 	// difference between "a check failed" and "you were woken up", and the
@@ -406,8 +411,9 @@ func monitors() []monitorSpec {
 			profile:    profile{baseLatency: 65, spread: 20},
 		},
 		{
-			// A certificate running out is a failure that is nobody's outage:
-			// the service is up, the clock is the problem.
+			// A certificate running out is nobody's outage: the service is
+			// up, the clock is the problem. It is a notice, so the monitor
+			// reads as expiring with every check up.
 			monitor: store.Monitor{
 				Name: "TLS — api", Type: string(checker.TypeSSL),
 				Target: "api.example.com:443", IntervalS: 3600, TimeoutS: 10, Retries: 1,
@@ -419,7 +425,7 @@ func monitors() []monitorSpec {
 			profile: profile{
 				baseLatency: 70, spread: 20,
 				outages: []outageSpec{
-					{ago: 30 * hour, cause: string(checker.FailCertExpiry), message: errCert},
+					{ago: 30 * hour, cause: string(checker.FailCertExpiry), message: errCert, notice: true},
 				},
 			},
 		},

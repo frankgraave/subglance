@@ -216,7 +216,10 @@
 .mon-dashboard[data-conn="stale"] .mon-line[data-status="warning"],
 .mon-dashboard[data-conn="stale"] .mon-row[data-status="recovering"] > :first-child,
 .mon-dashboard[data-conn="stale"] .mon-card[data-status="recovering"],
-.mon-dashboard[data-conn="stale"] .mon-line[data-status="recovering"] {
+.mon-dashboard[data-conn="stale"] .mon-line[data-status="recovering"],
+.mon-dashboard[data-conn="stale"] .mon-row[data-status="expiring"] > :first-child,
+.mon-dashboard[data-conn="stale"] .mon-card[data-status="expiring"],
+.mon-dashboard[data-conn="stale"] .mon-line[data-status="expiring"] {
   border-left-color: var(--warn-drained);
   transition: border-left-color var(--dur-withdraw) var(--ease);
 }

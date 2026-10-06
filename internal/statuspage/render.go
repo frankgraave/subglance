@@ -132,6 +132,7 @@ type maintenanceView struct{ Label, When, Affects string }
 type serviceView struct {
 	Name, Lamp, Word, Rail string
 	InMaintenance          bool
+	CertificateExpiring    bool
 	Days                   []string
 	History                string
 	Oldest, OldestPhone    string
@@ -276,12 +277,14 @@ func serviceRow(e Entry) serviceView {
 		Lamp:          lamp[0],
 		Word:          lamp[1],
 		InMaintenance: e.InMaintenance,
-		Days:          make([]string, len(e.Days)),
-		History:       historyText(e.Days),
-		Oldest:        fmt.Sprintf("%d days ago", len(e.Days)),
-		OldestPhone:   fmt.Sprintf("%d days ago", min(phoneDays, len(e.Days))),
-		Uptime:        uptimeText(e.Uptime90d, HistoryDays, false),
-		UptimePhone:   uptimeText(e.Uptime30d, phoneDays, e.Uptime90d != nil),
+		// The note, not the lamp: the service is up.
+		CertificateExpiring: e.CertificateExpiring,
+		Days:                make([]string, len(e.Days)),
+		History:             historyText(e.Days),
+		Oldest:              fmt.Sprintf("%d days ago", len(e.Days)),
+		OldestPhone:         fmt.Sprintf("%d days ago", min(phoneDays, len(e.Days))),
+		Uptime:              uptimeText(e.Uptime90d, HistoryDays, false),
+		UptimePhone:         uptimeText(e.Uptime30d, phoneDays, e.Uptime90d != nil),
 	}
 	switch e.Status {
 	case StatusDown:

@@ -33,6 +33,11 @@ type incidentResponse struct {
 	Resolved  bool `json:"resolved"`
 	Acked     bool `json:"acked"`
 
+	// Notice marks a certificate notice rather than an outage: the checks
+	// pass, but the certificate expires inside the warning window. It is
+	// confirmed from the start and is never downtime.
+	Notice bool `json:"notice,omitempty"`
+
 	DurationS int `json:"duration_s"`
 
 	Cause     string `json:"cause,omitempty"`
@@ -65,6 +70,7 @@ func (s *Server) toIncidentResponse(detail store.IncidentDetails) incidentRespon
 		Confirmed:      inc.Confirmed(),
 		Resolved:       inc.Resolved(),
 		Acked:          !inc.AckedAt.IsZero(),
+		Notice:         inc.Notice,
 		DurationS:      int(inc.Duration().Seconds()),
 		Cause:          inc.Cause,
 		LastError:      inc.LastError,

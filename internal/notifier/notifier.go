@@ -275,6 +275,18 @@ func (n *Notifier) Enqueue(ctx context.Context, m store.Monitor, inc store.Incid
 			continue
 		}
 
+		if alert.Notice {
+			// A certificate notice is not batched. Grouping exists for an
+			// outage seen by twenty monitors at once, and a notice is one
+			// certificate's date: it would only make "3 monitors are down"
+			// out of one outage and two certificates.
+			n.flush(ctx, &pending{
+				key: GroupKey(ch.ID, alert.Down()), channel: ch.ID, monitorID: m.ID,
+				incidentID: alert.IncidentID, down: alert.Down(), alerts: []Alert{alert},
+			})
+			continue
+		}
+
 		b := n.grouper.add(n.batches, ch.ID, m.ID, alert)
 		if !n.grouper.enabled() {
 			// Grouping off: send it now and keep nothing.

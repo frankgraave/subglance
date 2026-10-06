@@ -135,6 +135,23 @@ type digestEntry struct {
 	startedAt time.Time
 	endedAt   time.Time
 	cause     string
+
+	// notice says the night carried news about this monitor's certificate
+	// notice, and noticeOpen whether the notice was still open at the end
+	// of it. A notice is not an outage: it is never counted as down.
+	notice     bool
+	noticeOpen bool
+}
+
+// outage reports whether the night saw this monitor go down at all.
+func (e *digestEntry) outage() bool { return e.down || !e.endedAt.IsZero() }
+
+// noticeLine is what the digest says about a certificate notice.
+func (e *digestEntry) noticeLine() string {
+	if e.noticeOpen {
+		return "certificate expires soon"
+	}
+	return "certificate no longer expires soon"
 }
 
 // digestEntries folds a digest's members into one entry per monitor, in the
@@ -154,6 +171,14 @@ func digestEntries(a Alert) []*digestEntry {
 			order = append(order, e)
 		}
 
+		if m.Notice {
+			// News about a date, not an outage: the notice opened or
+			// stayed open, or it ended. It leaves an outage's times
+			// alone.
+			e.notice = true
+			e.noticeOpen = state.Event(m.Event) != state.EventIncidentResolved
+			continue
+		}
 		started := m.StartedAt
 		if started.IsZero() {
 			started = m.At
@@ -192,19 +217,44 @@ func digestStillDown(entries []*digestEntry) int {
 	return n
 }
 
+// digestNoticeOpen reports whether a digest leaves a certificate notice open.
+func digestNoticeOpen(entries []*digestEntry) bool {
+	for _, e := range entries {
+		if e.noticeOpen {
+			return true
+		}
+	}
+	return false
+}
+
 // DigestTitle leads with the one fact that decides whether to get up.
+//
+// Its counts are of outages. A certificate notice has a line of its own in
+// the body, and counting it here would turn "1 monitor went down" into "2".
 func DigestTitle(a Alert) string {
 	entries := digestEntries(a)
 	down := digestStillDown(entries)
+	outages := 0
+	for _, e := range entries {
+		if e.outage() {
+			outages++
+		}
+	}
 	switch {
 	case len(entries) == 1 && down == 1:
 		return fmt.Sprintf("%s is still down after quiet hours", entries[0].name)
+	case len(entries) == 1 && outages == 0:
+		return fmt.Sprintf("%s: %s", entries[0].name, entries[0].noticeLine())
 	case len(entries) == 1:
 		return fmt.Sprintf("%s went down and recovered during quiet hours", entries[0].name)
+	case outages == 0:
+		return fmt.Sprintf("Certificate notices for %d monitors during quiet hours", len(entries))
 	case down > 0:
-		return fmt.Sprintf("%d of %d monitors still down after quiet hours", down, len(entries))
+		return fmt.Sprintf("%d of %d monitors still down after quiet hours", down, outages)
+	case outages == 1:
+		return "1 monitor went down and recovered during quiet hours"
 	default:
-		return fmt.Sprintf("%d monitors went down and recovered during quiet hours", len(entries))
+		return fmt.Sprintf("%d monitors went down and recovered during quiet hours", outages)
 	}
 }
 
@@ -227,17 +277,23 @@ func DigestBody(a Alert) string {
 	}
 	for _, e := range shown {
 		start := e.startedAt.In(loc)
-		if e.down {
+		switch {
+		case !e.outage():
+			fmt.Fprintf(&b, "• %s: %s", e.name, e.noticeLine())
+		case e.down:
 			fmt.Fprintf(&b, "• %s: down since %s", e.name, start.Format("15:04 MST"))
 			if e.cause != "" {
 				b.WriteString(" — " + e.cause)
 			}
-			b.WriteString("\n")
-			continue
+		default:
+			fmt.Fprintf(&b, "• %s: down %s–%s, back up after %s", e.name,
+				start.Format("15:04"), e.endedAt.In(loc).Format("15:04 MST"),
+				durationWords(e.endedAt.Sub(e.startedAt)))
 		}
-		fmt.Fprintf(&b, "• %s: down %s–%s, back up after %s\n", e.name,
-			start.Format("15:04"), e.endedAt.In(loc).Format("15:04 MST"),
-			durationWords(e.endedAt.Sub(e.startedAt)))
+		if e.outage() && e.noticeOpen {
+			b.WriteString("; certificate expires soon")
+		}
+		b.WriteString("\n")
 	}
 	if rest := len(entries) - len(shown); rest > 0 {
 		fmt.Fprintf(&b, "… and %d more\n", rest)

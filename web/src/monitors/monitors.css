@@ -612,7 +612,8 @@
 
 .mon-row[data-status="pending"] > :first-child { border-left-color: var(--warn); }
 .mon-row[data-status="warning"] > :first-child,
-.mon-row[data-status="recovering"] > :first-child { border-left-color: var(--warn); }
+.mon-row[data-status="recovering"] > :first-child,
+.mon-row[data-status="expiring"] > :first-child { border-left-color: var(--warn); }
 /* Grey, not amber: nothing is in flight for a monitor nobody has pinged.
    --ink-3 rather than --idle: the idle grey measures 1.7:1 (light) and 2.1:1
    (dark) as a rail, under the 3:1 non-text floor. The paused rail uses the
@@ -1077,7 +1078,8 @@
 
 .mon-card[data-status="pending"] { border-left: var(--size-status-rail) solid var(--warn); }
 .mon-card[data-status="warning"],
-.mon-card[data-status="recovering"] { border-left: var(--size-status-rail) solid var(--warn); }
+.mon-card[data-status="recovering"],
+.mon-card[data-status="expiring"] { border-left: var(--size-status-rail) solid var(--warn); }
 .mon-card[data-status="waiting"] { border-left: var(--size-status-rail) solid var(--ink-3); }
 .mon-card[data-status="paused"] {
   border-left: var(--size-status-rail) dotted var(--ink-3);
@@ -1243,7 +1245,8 @@
 .mon-line[data-status="down"] { border-left: var(--size-status-rail) solid var(--down); }
 .mon-line[data-status="pending"] { border-left: var(--size-status-rail) solid var(--warn); }
 .mon-line[data-status="warning"],
-.mon-line[data-status="recovering"] { border-left: var(--size-status-rail) solid var(--warn); }
+.mon-line[data-status="recovering"],
+.mon-line[data-status="expiring"] { border-left: var(--size-status-rail) solid var(--warn); }
 .mon-line[data-status="waiting"] { border-left: var(--size-status-rail) solid var(--ink-3); }
 .mon-line[data-status="paused"] {
   border-left: var(--size-status-rail) dotted var(--ink-3);

@@ -148,9 +148,13 @@ func (b Builder) entry(ctx context.Context, m store.Monitor, se store.StatusPage
 		Name:          se.DisplayName,
 		Status:        PublicStatus(live),
 		InMaintenance: inMaintenance,
-		Uptime90d:     Uptime(hours),
-		Uptime30d:     UptimeFrom(hours, RecentSince(now, loc)),
-		Days:          Days(History{Hours: hours, Incidents: incidents, Maintenance: past}, now, loc),
+		// Only beside up: a monitor that is down or not watched has a
+		// louder thing to say, and "expires soon" next to it would read
+		// as the reason.
+		CertificateExpiring: live.Notice && PublicStatus(live) == StatusUp,
+		Uptime90d:           Uptime(hours),
+		Uptime30d:           UptimeFrom(hours, RecentSince(now, loc)),
+		Days:                Days(History{Hours: hours, Incidents: incidents, Maintenance: past}, now, loc),
 	}, incidents, nil
 }
 
@@ -170,7 +174,8 @@ func (b Builder) live(ctx context.Context, m store.Monitor) (Live, error) {
 	inc, err := b.DB.OpenIncidentFor(ctx, m.ID)
 	switch {
 	case err == nil:
-		l.Confirmed = inc.Confirmed()
+		l.Notice = inc.Notice
+		l.Confirmed = inc.Confirmed() && !inc.Notice
 	case !errors.Is(err, store.ErrNoOpenIncident):
 		return Live{}, fmt.Errorf("open incident for monitor %d: %w", m.ID, err)
 	}

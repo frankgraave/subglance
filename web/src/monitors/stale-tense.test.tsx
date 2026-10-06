@@ -65,6 +65,7 @@ const IDS: Record<MonitorStatus, string> = {
   down: "bravo",
   warning: "foxtrot",
   recovering: "golf",
+  expiring: "hotel",
   pending: "charlie",
   paused: "delta",
   waiting: "echo",

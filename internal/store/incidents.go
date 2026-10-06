@@ -37,6 +37,12 @@ type Incident struct {
 	// incident were new.
 	RemindedAt    time.Time // zero while no reminder has been sent
 	ReminderCount int
+
+	// Notice marks a certificate notice rather than an outage: the monitor's
+	// checks pass, but its certificate expires inside the warning window.
+	// A notice is confirmed from the moment it opens, alerts and reminds
+	// like an outage, and is never downtime. See OpenNotice.
+	Notice bool
 }
 
 // Confirmed reports whether this incident passed the failure threshold.
@@ -72,7 +78,8 @@ var ErrIncidentAlreadyOpen = errors.New("store: an incident is already open for 
 const incidentColumns = `
 	incidents.id, incidents.monitor_id, incidents.started_at, incidents.confirmed_at,
 	incidents.resolved_at, incidents.acked_at, incidents.cause, incidents.last_error,
-	incidents.reminded_at, incidents.reminder_count, incidents.maintenance_pending`
+	incidents.reminded_at, incidents.reminder_count, incidents.maintenance_pending,
+	incidents.notice`
 
 // OpenIncident creates an unconfirmed incident for a monitor.
 //
@@ -106,6 +113,41 @@ func (db *DB) OpenIncident(ctx context.Context, monitorID int64, at time.Time, c
 		StartedAt: at.UTC().Truncate(time.Second),
 		Cause:     cause,
 		LastError: lastError,
+	}, nil
+}
+
+// OpenNotice creates a certificate notice for a monitor: an incident that is
+// confirmed as it opens and is not an outage (see Incident.Notice).
+//
+// It shares the partial unique index with OpenIncident, so a monitor has at
+// most one open incident of either kind, and a collision is reported as
+// ErrIncidentAlreadyOpen in the same way.
+func (db *DB) OpenNotice(ctx context.Context, monitorID int64, at time.Time, cause, lastError string) (Incident, error) {
+	res, err := db.Writer.ExecContext(ctx, `
+		INSERT INTO incidents (monitor_id, started_at, confirmed_at, cause, last_error, notice)
+		VALUES (?, ?, ?, ?, ?, 1)`,
+		monitorID, at.Unix(), at.Unix(), cause, lastError)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return Incident{}, fmt.Errorf("%w (monitor %d)", ErrIncidentAlreadyOpen, monitorID)
+		}
+		return Incident{}, fmt.Errorf("open notice for monitor %d: %w", monitorID, err)
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return Incident{}, fmt.Errorf("last insert id: %w", err)
+	}
+
+	started := at.UTC().Truncate(time.Second)
+	return Incident{
+		ID:          id,
+		MonitorID:   monitorID,
+		StartedAt:   started,
+		ConfirmedAt: started,
+		Cause:       cause,
+		LastError:   lastError,
+		Notice:      true,
 	}, nil
 }
 
@@ -416,6 +458,7 @@ func scanIncidentWith(s scanner, extra ...any) (Incident, error) {
 		&confirmed, &resolved, &acked,
 		&inc.Cause, &inc.LastError,
 		&reminded, &inc.ReminderCount, &inc.MaintenancePending,
+		&inc.Notice,
 	}
 	err := s.Scan(append(dest, extra...)...)
 	if err != nil {

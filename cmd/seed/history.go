@@ -31,10 +31,13 @@ type outage struct {
 	unconfirmed bool
 	acked       bool
 	reminders   int
+	notice      bool
 }
 
+// covers reports whether t falls in a failing stretch. A notice has none: its
+// checks pass.
 func (o outage) covers(t time.Time) bool {
-	if t.Before(o.start) {
+	if o.notice || t.Before(o.start) {
 		return false
 	}
 	return o.end.IsZero() || t.Before(o.end)
@@ -175,7 +178,8 @@ func resolveOutages(p profile, start, end time.Time, interval time.Duration, ret
 		o := outage{
 			cause: spec.cause, message: spec.message, status: spec.status,
 			unconfirmed: spec.unconfirmed, acked: spec.acked, reminders: spec.reminders,
-			start: end.Add(-spec.ago),
+			notice: spec.notice,
+			start:  end.Add(-spec.ago),
 		}
 		if spec.dur > 0 {
 			o.end = o.start.Add(spec.dur)
@@ -250,6 +254,12 @@ func incidentFor(monitorID int64, o outage, m store.Monitor, interval time.Durat
 	}
 
 	confirmed := inc.StartedAt.Add(time.Duration(max(1, m.Retries)-1) * interval)
+	if o.notice {
+		// A notice is confirmed as it opens: the date on a certificate
+		// does not change between two checks.
+		inc.Notice = true
+		confirmed = inc.StartedAt
+	}
 	// Confirmation belongs to the Nth observed failure, with the first
 	// failure already counting as one. Recovery at that sample prevents it.
 	if inc.ResolvedAt.IsZero() || confirmed.Before(inc.ResolvedAt) {

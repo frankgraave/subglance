@@ -25,6 +25,7 @@ export type MonitorStatus =
   | "up"
   | "down"
   | "recovering"
+  | "expiring"
   | "warning"
   | "pending"
   | "paused"
@@ -177,7 +178,7 @@ export type ApiMonitor = {
   /** Detail read only: the JSON body assertion, null when there is none. */
   json_assertion?: { path: string; operator: string; expected?: unknown } | null;
   enabled: boolean;
-  status: "up" | "pending" | "warning" | "down" | "recovering";
+  status: "up" | "pending" | "warning" | "down" | "recovering" | "expiring";
   /** The passing streak; the server sends it only with `recovering`. */
   recovery?: { passes?: unknown; threshold?: unknown };
   last_check?: string | null;

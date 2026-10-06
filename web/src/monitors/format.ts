@@ -14,6 +14,10 @@ export const STATUS_LABEL: Record<MonitorStatus, string> = {
   up: "Up",
   down: "Down",
   recovering: "Recovering",
+  // Not "Warning": a warning is a failure that is not confirmed yet, and an
+  // expiring certificate is a fact read off the certificate while every
+  // check passes. Not "Down" either, which it used to be.
+  expiring: "Expiring soon",
   warning: "Warning",
   pending: "Pending",
   paused: "Paused",
@@ -44,6 +48,7 @@ export const STATUS_LABEL_LAST_KNOWN: Record<MonitorStatus, string> = {
   up: "Was up",
   down: "Was down",
   recovering: "Was recovering",
+  expiring: "Was expiring soon",
   warning: "Was warning",
   pending: "Was pending",
   paused: "Was paused",

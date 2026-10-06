@@ -283,10 +283,21 @@ its `method` says so. Every request carries a `User-Agent` starting with
 | `grouped_names`, `grouped_cause`, `members` | Set when several alerts were sent as one: see below |
 | `digest`, `digest_timezone` | Set on the summary a channel receives when its quiet hours end |
 | `replaces_alert` | Set on a recovery whose alert never reached this channel: see below |
+| `notice` | Set on an alert about a certificate that expires soon, not an outage: see below |
 
 A monitor's alerts carry `incident_confirmed` (it is down), `incident_reminder`
 (it is still down and nobody has acknowledged it) or `incident_resolved` (it is
-back up). Messages about SubGlance itself carry `backup_failed`,
+back up).
+
+A certificate that is still valid but expires inside the monitor's
+`ssl_warn_days` is not an outage: the service answers, its checks are stored as
+up and its uptime is untouched. It is still worth a message, so it carries the
+same three events with `notice` set: `incident_confirmed` when the notice opens
+("api: certificate expires soon"), `incident_reminder` while nobody has
+acknowledged it, and `incident_resolved` once a check sees a certificate that no
+longer expires soon. `cause` is `cert_expiry`, and `last_error` says how many
+days are left. A notice is never grouped with outages. An expired certificate is
+an outage like any other: `incident_confirmed` without `notice`. Messages about SubGlance itself carry `backup_failed`,
 `local_network_restored` or `channel_failing`, with `monitor_id` 0 and
 `monitor_name` `SubGlance`; a quiet-hours summary carries `quiet_hours_digest`. Ignore an
 `event` you do not recognise rather than treating it as an outage: a newer
@@ -345,7 +356,7 @@ above, so a webhook without one is unchanged.
 |---|---|
 | `{{summary}}` | The one-line headline a phone shows: "api is down", "3 monitors are down", "api was down for 3 minutes, now back up" |
 | `{{details}}` | The lines under it: target, cause, error and times; one line per monitor for a grouped alert or a quiet-hours summary |
-| `{{status}}` | `down` or `up` |
+| `{{status}}` | `down`, `up`, or `expiring` for a certificate that expires soon |
 | `{{event}}` | The `event` of the payload above |
 | `{{monitor_name}}`, `{{monitor_type}}`, `{{target}}` | The monitor; the first one's in a grouped alert |
 | `{{cause}}`, `{{last_error}}` | Why the check failed; empty in a grouped alert |

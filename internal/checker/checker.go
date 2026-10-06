@@ -150,12 +150,23 @@ type Result struct {
 	// StatusCode is the HTTP status, or 0 for non-HTTP checks.
 	StatusCode int
 
-	// Kind classifies the failure; empty when OK.
+	// Kind classifies the failure; empty when OK, except on an Expiring
+	// result, where it is FailCertExpiry.
 	Kind FailureKind
 
 	// Error is a human-readable failure description, safe to show in the UI.
-	// Empty when OK.
+	// Empty when OK, except on an Expiring result, where it is the notice
+	// ("certificate expires in 6 days (on 2026-10-12)").
 	Error string
+
+	// Expiring marks a passing check whose certificate expires within the
+	// monitor's SSLWarnDays. The target answered and the certificate is
+	// valid, so OK is true: a certificate running out is nobody's outage
+	// yet, and counting it as one put reachable sites at 0% uptime and in
+	// red on public status pages. The state engine turns it into a notice
+	// that alerts without counting as downtime. An expired certificate is
+	// a failure, not this.
+	Expiring bool
 
 	// CertExpiry is the certificate's expiry time for TLS-capable checks,
 	// zero otherwise. Reported even when the check passes so the UI can warn

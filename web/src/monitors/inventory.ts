@@ -296,10 +296,11 @@ const STATUS_RANK: Readonly<Record<string, number>> = {
   down: 0,
   recovering: 1,
   warning: 2,
-  pending: 3,
-  waiting: 4,
-  paused: 5,
-  up: 6,
+  expiring: 3,
+  pending: 4,
+  waiting: 5,
+  paused: 6,
+  up: 7,
 };
 
 /**

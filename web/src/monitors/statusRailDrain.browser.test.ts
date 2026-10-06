@@ -45,6 +45,7 @@ const ALL_STATUSES = [
   "up",
   "down",
   "recovering",
+  "expiring",
   "warning",
   "pending",
   "paused",
@@ -416,13 +417,15 @@ describe("the status rail stops asserting when the stream dies", () => {
    *   down    — "this is failing"          → drains
    *   recovering — "failing, on its way back" → drains, like the warning
    *             edge it shares
+   *   expiring — "its certificate runs out soon" → drains: a present-tense
+   *             claim about the served certificate, on the warning edge
    *   pending — "a check is in flight"     → drains
    *   up      — carries no coloured edge at all, so there is nothing to
    *             drain; asserted as unchanged so a rule growing one is caught
    *   waiting — "no data yet": a fact about our own configuration → holds
    *   paused  — "somebody switched this off": likewise → holds
    */
-  const DRAINING_STATUSES = ["down", "recovering", "warning", "pending"] as const;
+  const DRAINING_STATUSES = ["down", "recovering", "expiring", "warning", "pending"] as const;
   const HOLDING_STATUSES = ["up", "waiting", "paused"] as const;
 
   for (const theme of ["dark", "light"] as const) {

@@ -63,16 +63,24 @@ export function statusAfterHeartbeat(current: MonitorStatus, ok: boolean): Monit
 function heartbeatStatus(m: Monitor, e: HeartbeatEvent): Pick<Monitor, "status" | "recovery"> {
   if (m.status === "paused") return { status: "paused" };
   if (e.recovery !== undefined) return { status: "recovering", recovery: e.recovery };
+  // The server's word that the certificate notice is open; the assessment
+  // beside it is `up`, because the check passed.
+  if (e.expiring === true) return { status: "expiring" };
   if (e.ok && confirmedOutage(m.status)) return { status: m.status, recovery: m.recovery };
   return { status: e.assessment || statusAfterHeartbeat(m.status, e.ok) };
 }
 
-/** The status a state-engine event implies, or null when it implies nothing. */
-export function statusAfterEvent(event: string): MonitorStatus | null {
+/**
+ * The status a state-engine event implies, or null when it implies nothing.
+ *
+ * `notice` marks an event about a certificate notice: confirming one is
+ * "expiring", not "down", and resolving one is "up" like any resolution.
+ */
+export function statusAfterEvent(event: string, notice = false): MonitorStatus | null {
   switch (event) {
     // The failure threshold was crossed. This, and only this, is "down".
     case "incident_confirmed":
-      return "down";
+      return notice ? "expiring" : "down";
     // Recovery: the incident closed, so the monitor is answering again.
     case "incident_resolved":
       return "up";
@@ -113,10 +121,12 @@ export function applyHeartbeat(monitors: readonly Monitor[], e: HeartbeatEvent):
     maintenance: e.currentMaintenance ?? m.maintenance,
     latencyMs: e.latencyMs,
     lastCheck: e.at,
-    error: e.ok ? undefined : e.error,
+    // An expiring pass keeps the notice's text: it is the reason the row
+    // is amber, and the pass did not change it.
+    error: e.ok ? (e.expiring === true ? m.error : undefined) : e.error,
     // The kind belongs to this error, so it is replaced with it, never kept
     // from an earlier failure that said something else.
-    failureKind: e.ok ? undefined : e.failureKind,
+    failureKind: e.ok ? (e.expiring === true ? m.failureKind : undefined) : e.failureKind,
     beats: [...m.beats, {
       ts: e.at,
       ok: e.ok,
@@ -138,7 +148,7 @@ export function applyHeartbeat(monitors: readonly Monitor[], e: HeartbeatEvent):
  * is honest; a locally invented one is not.
  */
 export function applyStatus(monitors: readonly Monitor[], e: StatusEvent): Monitor[] {
-  const status = statusAfterEvent(e.event);
+  const status = statusAfterEvent(e.event, e.notice === true);
   if (status === null) return monitors as Monitor[];
   return replace(monitors, e.monitorId, (m) => ({
     // Every status event ends a recovery streak: it either closes the

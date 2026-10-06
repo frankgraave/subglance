@@ -51,7 +51,7 @@
 <div class="sp-list">
 {{- range .Services}}
 <div class="sp-row sp-service"{{with .Rail}} data-status="{{.}}"{{end}}>
-<div class="sp-line"><span class="sp-name">{{.Name}}</span>{{if .InMaintenance}}<span class="chip chip--state">Maintenance</span>{{end}}<span class="led-wrap"><span class="led" data-state="{{.Lamp}}" aria-hidden="true"></span><span class="led-label">{{.Word}}</span></span></div>
+<div class="sp-line"><span class="sp-name">{{.Name}}</span>{{if .InMaintenance}}<span class="chip chip--state">Maintenance</span>{{end}}{{if .CertificateExpiring}}<span class="chip chip--state">Certificate expires soon</span>{{end}}<span class="led-wrap"><span class="led" data-state="{{.Lamp}}" aria-hidden="true"></span><span class="led-label">{{.Word}}</span></span></div>
 <div class="sp-days" aria-hidden="true">{{range .Days}}<i data-s="{{.}}"></i>{{end}}</div>
 <p class="sr-only sp-history">{{.History}}</p>
 <div class="sp-axis"><span class="sp-axis-desk">{{.Oldest}}</span><span class="sp-axis-phone">{{.OldestPhone}}</span><span class="sp-uptime sp-mono sp-axis-desk">{{.Uptime}}</span><span class="sp-uptime sp-mono sp-axis-phone">{{.UptimePhone}}</span><span>Today</span></div>

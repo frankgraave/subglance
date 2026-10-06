@@ -197,8 +197,9 @@ func TestSSLCheckNotYetValid(t *testing.T) {
 	}
 }
 
-// A certificate that is still valid but close to expiry should fail, so it
-// becomes an incident while there is time to renew.
+// A certificate that is still valid but close to expiry passes, marked as
+// expiring: the target is up, and the state engine turns the mark into a
+// notice that alerts without counting as downtime.
 func TestSSLCheckWarnsBeforeExpiry(t *testing.T) {
 	now := time.Now()
 	cert, pool := newTestCert(t, certOpts{
@@ -213,16 +214,18 @@ func TestSSLCheckWarnsBeforeExpiry(t *testing.T) {
 	res := c.Check(context.Background(), Monitor{
 		Type: TypeSSL, Target: addr, Timeout: 5 * time.Second, SSLWarnDays: 3,
 	})
-	if !res.OK {
-		t.Errorf("5 days left with a 3-day threshold should pass, got: %s", res.Error)
+	if !res.OK || res.Expiring || res.Kind != FailNone || res.Error != "" {
+		t.Errorf("5 days left with a 3-day threshold should pass unmarked, got ok %v expiring %v kind %q: %s",
+			res.OK, res.Expiring, res.Kind, res.Error)
 	}
 
-	// Threshold above the remaining days: warn.
+	// Threshold above the remaining days: a passing check, marked expiring.
 	res = c.Check(context.Background(), Monitor{
 		Type: TypeSSL, Target: addr, Timeout: 5 * time.Second, SSLWarnDays: 14,
 	})
-	if res.OK {
-		t.Fatal("5 days left with a 14-day threshold should fail")
+	if !res.OK || !res.Expiring {
+		t.Fatalf("5 days left with a 14-day threshold: ok %v expiring %v, want a pass marked expiring (%s)",
+			res.OK, res.Expiring, res.Error)
 	}
 	if res.Kind != FailCertExpiry {
 		t.Errorf("kind = %q, want %q", res.Kind, FailCertExpiry)

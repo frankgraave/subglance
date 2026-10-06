@@ -476,6 +476,21 @@ func (r *Runner) restore(ctx context.Context) error {
 		if inc.Confirmed() {
 			status = state.StatusDown
 		}
+		if inc.Notice {
+			// A certificate notice is restored as one, with no failure
+			// streak. Counting the failures since it opened, as an
+			// outage does, would add up every blip of the weeks a notice
+			// can last, and the first failure after a restart would then
+			// confirm an outage that is not there. A restart in the middle
+			// of a real streak costs that streak's checks instead.
+			r.engine.Restore(inc.MonitorID, state.RestoredState{
+				Status:            state.StatusExpiring,
+				IncidentOpen:      true,
+				IncidentConfirmed: true,
+				Notice:            true,
+			})
+			continue
+		}
 
 		// The alert streak has to come from the failures this outage
 		// recorded, not from the snapshots it stored: capture is optional per
@@ -719,7 +734,7 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 	// worth storing. Observe only touches in-memory state, so moving it ahead
 	// of the heartbeat write changes nothing about what either one decides.
 	localNetwork := r.localNetworkFailure(ctx, o)
-	tr := r.engine.Observe(state.Observation{
+	obs := state.Observation{
 		MonitorID:        o.Monitor.ID,
 		OK:               o.Result.OK,
 		At:               hb.TS,
@@ -727,12 +742,31 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 		Error:            o.Result.Error,
 		FailureThreshold: o.Monitor.Retries,
 		LocalNetwork:     localNetwork,
+		Expiring:         o.Result.OK && o.Result.Expiring,
 
 		RecoveryThreshold: o.Monitor.RecoveryThreshold,
-	})
+	}
+	tr := r.engine.Observe(obs)
+	// A transition carries one event. A check that ends an outage while
+	// its certificate is expiring has two: the outage is over, and the
+	// notice begins. The same check is observed again once the first is
+	// settled, so the channel hears "back up" and then the notice, each
+	// worded for what it is. See state.Engine.observeExpiring.
+	trs := []state.Transition{tr}
+	if obs.Expiring && tr.Event == state.EventIncidentResolved && !tr.Notice {
+		trs = append(trs, r.engine.Observe(obs))
+	}
+	final := trs[len(trs)-1]
 
-	hb.Assessment = heartbeatAssessment(tr.To)
+	hb.Assessment = heartbeatAssessment(final.To)
 	hb.FailureKind = string(o.Result.Kind)
+	if o.Result.OK {
+		// A passing check is a pass. An expiring certificate's notice is
+		// kept on its incident, where it is current for as long as it
+		// lasts, not on each heartbeat as if the check had failed.
+		hb.FailureKind = ""
+		hb.Error = ""
+	}
 	if localNetwork {
 		// The bar keeps the checker's error text, which is what actually
 		// happened, but is filed under the cause that explains it.
@@ -743,7 +777,7 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 	// A recovering monitor keeps the fast outage cadence: the passes that
 	// close its incident should come at the pace the failures did, not at
 	// the relaxed healthy interval.
-	r.sch.SetDown(o.Monitor.ID, tr.To.Confirmed())
+	r.sch.SetDown(o.Monitor.ID, final.To.Confirmed())
 
 	var captureReason store.CaptureReason
 	hb.Response, captureReason = snapshotToStore(o.Result, tr.SnapshotsSpent, tr.Flapping)
@@ -802,10 +836,15 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 			StatusCode:         hb.StatusCode,
 			Error:              hb.Error,
 			Recovery:           recoveryFor(tr),
+			Expiring:           final.To == state.StatusExpiring,
 		},
 	})
 
-	return errors.Join(hbErr, r.applyTransition(ctx, o, tr, maintained))
+	errs := []error{hbErr}
+	for _, t := range trs {
+		errs = append(errs, r.applyTransition(ctx, o, t, maintained))
+	}
+	return errors.Join(errs...)
 }
 
 // localNetworkFailure reports whether a failed check is explained by the host
@@ -886,8 +925,11 @@ func snapshotToStore(res checker.Result, snapshotsSpent int, flapping bool) (*st
 // first pass of the streak that closes the incident, so counting it as
 // anything else would charge the confirmation checks to downtime. The
 // recovering state lives on the monitor, not on the sample.
+//
+// An expiring check is stored as up for a plainer reason: it passed, and the
+// service answered. The certificate's notice lives on its incident.
 func heartbeatAssessment(s state.Status) string {
-	if s == state.StatusRecovering {
+	if s == state.StatusRecovering || s == state.StatusExpiring {
 		return string(state.StatusUp)
 	}
 	return string(s)
@@ -914,6 +956,12 @@ type heartbeatPayload struct {
 	// so without this field a live client would read the pass as the end of
 	// the outage and paint the row green before the all-clear went out.
 	Recovery *recoveryPayload `json:"recovery,omitempty"`
+
+	// Expiring is set on a passing check that leaves the monitor expiring:
+	// its certificate's notice is open. The assessment is "up" for the same
+	// reason as Recovery's, and without this a live client would read the
+	// pass as a plain up.
+	Expiring bool `json:"expiring,omitempty"`
 }
 
 // recoveryPayload is a recovering monitor's passing streak.
@@ -939,6 +987,10 @@ type statusPayload struct {
 	// Suppressed marks a transition the flapping filter decided not to
 	// alert on. The dashboard still shows it; a human just is not paged.
 	Suppressed bool `json:"suppressed,omitempty"`
+	// Notice marks an event about a certificate notice rather than an
+	// outage: incident_confirmed opens one, incident_resolved closes it.
+	// A live client reads the first as "expiring", not as "down".
+	Notice bool `json:"notice,omitempty"`
 }
 
 // publish sends an event if anyone is listening. Nil bus is the normal case in
@@ -970,7 +1022,14 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 		// flapping status can change on a check that produced no event, and
 		// swallowing that would leave the log claiming a monitor is still
 		// flapping long after it settled.
-		if !o.Result.OK {
+		// An open notice keeps its own text through a failure that is not
+		// confirmed, and is brought up to date by each check that sees the
+		// certificate, so "expires in 6 days" does not stay 6 for a week.
+		refresh := !o.Result.OK && !tr.Notice
+		if tr.To == state.StatusExpiring {
+			refresh = true
+		}
+		if refresh {
 			if err := r.db.UpdateIncidentError(ctx, o.Monitor.ID, tr.Cause, tr.Error); err != nil {
 				r.log.Error("failed to update incident error", "monitor_id", o.Monitor.ID, "error", err)
 				persistErr = fmt.Errorf("update incident error: %w", err)
@@ -990,35 +1049,22 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 			"cause", tr.Cause)
 
 	case state.EventIncidentConfirmed:
-		// With a threshold of 1 there was no pending phase, so the incident
-		// may not exist yet.
-		if err := r.db.ConfirmIncident(ctx, o.Monitor.ID, tr.At, tr.Cause, tr.Error); errors.Is(err, store.ErrNoOpenIncident) {
-			if _, err := r.db.OpenIncident(ctx, o.Monitor.ID, tr.At, tr.Cause, tr.Error); err != nil {
-				r.log.Error("failed to open incident on confirm", "monitor_id", o.Monitor.ID, "error", err)
-				return fmt.Errorf("open incident on confirm: %w", err)
+		if !tr.Notice {
+			inc, err = r.confirmOutage(ctx, o, tr)
+			if err != nil {
+				return err
 			}
-			if err := r.db.ConfirmIncident(ctx, o.Monitor.ID, tr.At, tr.Cause, tr.Error); err != nil {
-				r.log.Error("failed to confirm incident", "monitor_id", o.Monitor.ID, "error", err)
-				return fmt.Errorf("confirm incident: %w", err)
-			}
-		} else if err != nil {
-			r.log.Error("failed to confirm incident", "monitor_id", o.Monitor.ID, "error", err)
-			return fmt.Errorf("confirm incident: %w", err)
+			break
 		}
-
-		// Read the incident back rather than reusing whatever the branch above
-		// happened to produce. ConfirmIncident is an UPDATE and returns no
-		// row, so without this the alert would carry a zero-valued incident —
-		// no start time, no cause — which is exactly the detail the person
-		// being paged needs.
+		if _, err := r.db.OpenNotice(ctx, o.Monitor.ID, tr.At, tr.Cause, tr.Error); err != nil {
+			r.log.Error("failed to open certificate notice", "monitor_id", o.Monitor.ID, "error", err)
+			return fmt.Errorf("open certificate notice: %w", err)
+		}
 		if inc, err = r.db.OpenIncidentFor(ctx, o.Monitor.ID); err != nil {
-			r.log.Error("failed to reload confirmed incident", "monitor_id", o.Monitor.ID, "error", err)
-			// Carry on: an alert with thin detail beats no alert at all.
+			r.log.Error("failed to reload certificate notice", "monitor_id", o.Monitor.ID, "error", err)
 		}
-
-		r.log.Warn("incident confirmed",
+		r.log.Warn("certificate expires soon",
 			"monitor", o.Monitor.Name,
-			"cause", tr.Cause,
 			"error", tr.Error,
 			"suppressed", tr.Suppressed)
 
@@ -1037,7 +1083,8 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 		r.log.Info("incident resolved",
 			"monitor", o.Monitor.Name,
 			"duration", inc.Duration().Round(time.Second),
-			"was_confirmed", inc.Confirmed())
+			"was_confirmed", inc.Confirmed(),
+			"notice", inc.Notice)
 	}
 
 	// Remember a confirmation held by maintenance across restart. Recovery
@@ -1047,7 +1094,9 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 			return err
 		}
 	}
-	if !maintained && tr.To == state.StatusDown && tr.Event == state.EventNone {
+	// A notice confirmed in maintenance is announced the same way, by the
+	// first check after it that still sees the certificate.
+	if !maintained && (tr.To == state.StatusDown || tr.To == state.StatusExpiring) && tr.Event == state.EventNone {
 		pending, err := r.db.OpenIncidentFor(ctx, o.Monitor.ID)
 		if err != nil {
 			return err
@@ -1094,6 +1143,7 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 				Cause:      tr.Cause,
 				Error:      tr.Error,
 				Suppressed: tr.Suppressed,
+				Notice:     tr.Notice,
 			},
 		})
 	}
@@ -1122,6 +1172,61 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 
 	r.notify(Alert{Monitor: m, Incident: inc, Event: tr.Event, At: tr.At})
 	return persistErr
+}
+
+// confirmOutage writes the confirmation of an outage and reads the incident
+// back for the alert.
+func (r *Runner) confirmOutage(ctx context.Context, o scheduler.Outcome, tr state.Transition) (store.Incident, error) {
+	var (
+		inc store.Incident
+		err error
+	)
+	if tr.Replaces {
+		// An outage confirmed while a certificate notice was open. The
+		// notice ends where the outage began, without a message: the
+		// alert about the outage is the news. The outage is a new
+		// incident, so it is dated from its own first failure.
+		if _, err := r.db.ResolveIncident(ctx, o.Monitor.ID, tr.StartedAt); err != nil && !errors.Is(err, store.ErrNoOpenIncident) {
+			r.log.Error("failed to close certificate notice", "monitor_id", o.Monitor.ID, "error", err)
+			return store.Incident{}, fmt.Errorf("close certificate notice: %w", err)
+		}
+		if _, err := r.db.OpenIncident(ctx, o.Monitor.ID, tr.StartedAt, tr.Cause, tr.Error); err != nil {
+			r.log.Error("failed to open incident after a certificate notice", "monitor_id", o.Monitor.ID, "error", err)
+			return store.Incident{}, fmt.Errorf("open incident after notice: %w", err)
+		}
+	}
+	// With a threshold of 1 there was no pending phase, so the incident
+	// may not exist yet.
+	if err := r.db.ConfirmIncident(ctx, o.Monitor.ID, tr.At, tr.Cause, tr.Error); errors.Is(err, store.ErrNoOpenIncident) {
+		if _, err := r.db.OpenIncident(ctx, o.Monitor.ID, tr.At, tr.Cause, tr.Error); err != nil {
+			r.log.Error("failed to open incident on confirm", "monitor_id", o.Monitor.ID, "error", err)
+			return store.Incident{}, fmt.Errorf("open incident on confirm: %w", err)
+		}
+		if err := r.db.ConfirmIncident(ctx, o.Monitor.ID, tr.At, tr.Cause, tr.Error); err != nil {
+			r.log.Error("failed to confirm incident", "monitor_id", o.Monitor.ID, "error", err)
+			return store.Incident{}, fmt.Errorf("confirm incident: %w", err)
+		}
+	} else if err != nil {
+		r.log.Error("failed to confirm incident", "monitor_id", o.Monitor.ID, "error", err)
+		return store.Incident{}, fmt.Errorf("confirm incident: %w", err)
+	}
+
+	// Read the incident back rather than reusing whatever the branch above
+	// happened to produce. ConfirmIncident is an UPDATE and returns no
+	// row, so without this the alert would carry a zero-valued incident —
+	// no start time, no cause — which is exactly the detail the person
+	// being paged needs.
+	if inc, err = r.db.OpenIncidentFor(ctx, o.Monitor.ID); err != nil {
+		r.log.Error("failed to reload confirmed incident", "monitor_id", o.Monitor.ID, "error", err)
+		// Carry on: an alert with thin detail beats no alert at all.
+	}
+
+	r.log.Warn("incident confirmed",
+		"monitor", o.Monitor.Name,
+		"cause", tr.Cause,
+		"error", tr.Error,
+		"suppressed", tr.Suppressed)
+	return inc, nil
 }
 
 // ErrUnsupportedType is returned when a monitor names a check type that has no

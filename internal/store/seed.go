@@ -205,11 +205,11 @@ func (db *DB) SeedIncident(ctx context.Context, inc Incident) (Incident, error) 
 	res, err := db.Writer.ExecContext(ctx, `
 		INSERT INTO incidents (
 			monitor_id, started_at, confirmed_at, resolved_at, acked_at,
-			cause, last_error, reminded_at, reminder_count
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			cause, last_error, reminded_at, reminder_count, notice
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		inc.MonitorID, inc.StartedAt.Unix(),
 		seedTime(inc.ConfirmedAt), seedTime(inc.ResolvedAt), seedTime(inc.AckedAt),
-		inc.Cause, inc.LastError, seedTime(inc.RemindedAt), inc.ReminderCount)
+		inc.Cause, inc.LastError, seedTime(inc.RemindedAt), inc.ReminderCount, inc.Notice)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return Incident{}, fmt.Errorf("%w (monitor %d)", ErrIncidentAlreadyOpen, inc.MonitorID)

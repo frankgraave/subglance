@@ -195,8 +195,19 @@ speaking a protocol badly is a good way to end up in someone's fail2ban rules.
 
 The SSL check verifies the certificate itself rather than letting the handshake
 fail, so an expired certificate still reports *when* it expired and by how much.
-Set `ssl_warn_days` to fail the check while there is still time to renew, instead
-of at the moment the site breaks.
+Set `ssl_warn_days` to hear about it while there is still time to renew, instead
+of at the moment the site breaks. A certificate that is valid but expires within
+that many days puts the monitor in its own state, **expiring** ("Expiring soon"
+on the dashboard). It is not an outage: the check passes, it counts as up in
+every uptime figure, and a public status page shows the service as up with the
+note "Certificate expires soon" and no date. It still alerts, once, as
+"api: certificate expires soon", repeats on the monitor's reminder schedule until
+someone acknowledges it, and sends "certificate no longer expires soon" on the
+first check that sees a renewed certificate. The same applies to an `http`
+monitor with an `https` target, at the same threshold. A failure while a
+monitor is expiring is judged like any other failure: one is a warning, and
+reaching the retry threshold confirms an outage, which is down and is its own
+incident. An expired certificate fails the check and is down.
 
 SSL monitors also check the **leaf certificate's OCSP revocation status** after
 validating its chain. A fresh, authenticated stapled response takes precedence;

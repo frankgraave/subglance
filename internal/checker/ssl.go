@@ -148,13 +148,14 @@ func (c *SSLChecker) Check(ctx context.Context, m Monitor) Result {
 		}
 	}
 
-	// A certificate that is valid but about to expire fails on purpose. A
-	// warning nobody reads is how certificates expire on a Sunday; an incident
-	// gets someone's attention while there is still time to renew.
+	// A certificate that is valid but about to expire passes, marked as
+	// expiring. A warning nobody reads is how certificates expire on a
+	// Sunday, so it still opens an incident and alerts; it just does not
+	// count as downtime, because the service is up. See Result.Expiring.
 	if m.SSLWarnDays > 0 {
 		remaining := leaf.NotAfter.Sub(now)
 		if remaining < time.Duration(m.SSLWarnDays)*24*time.Hour {
-			res.OK = false
+			res.Expiring = true
 			res.Kind = FailCertExpiry
 			res.Error = fmt.Sprintf("certificate expires in %d days (on %s)",
 				int(remaining.Hours()/24), leaf.NotAfter.Format(time.DateOnly))

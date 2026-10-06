@@ -451,17 +451,20 @@ func (c *HTTPChecker) check(ctx context.Context, m Monitor, scope *headerScope) 
 		}
 	}
 
-	// Certificate about to expire fails the check, so it surfaces as an
-	// incident rather than a detail nobody reads until the site breaks.
+	// A certificate about to expire passes, marked as expiring, so it
+	// surfaces as a notice rather than a detail nobody reads until the site
+	// breaks, without counting as downtime while the site answers. One that
+	// has expired fails: visitors' browsers refuse it.
 	if m.SSLWarnDays > 0 && !res.CertExpiry.IsZero() {
 		remaining := time.Until(res.CertExpiry)
 		if remaining < time.Duration(m.SSLWarnDays)*24*time.Hour {
 			res.Latency = time.Since(start)
-			res.OK = false
 			res.Kind = FailCertExpiry
 			if remaining <= 0 {
+				res.OK = false
 				res.Error = fmt.Sprintf("TLS certificate expired on %s", res.CertExpiry.Format(time.DateOnly))
 			} else {
+				res.Expiring = true
 				res.Error = fmt.Sprintf("TLS certificate expires in %d days (on %s)",
 					int(remaining.Hours()/24), res.CertExpiry.Format(time.DateOnly))
 			}

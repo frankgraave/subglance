@@ -60,11 +60,15 @@ type Summary struct {
 // Entry is one monitor on the page, under its public name only.
 type Entry struct {
 	// Key is the entry's random public key, never the monitor id.
-	Key           string   `json:"key"`
-	Name          string   `json:"name"`
-	Status        Status   `json:"status"`
-	InMaintenance bool     `json:"in_maintenance"`
-	Uptime90d     *float64 `json:"uptime_90d"`
+	Key           string `json:"key"`
+	Name          string `json:"name"`
+	Status        Status `json:"status"`
+	InMaintenance bool   `json:"in_maintenance"`
+	// CertificateExpiring says the service's certificate expires soon. It
+	// is a note beside an up service, not a state: the service answers,
+	// and a visitor's browser accepts the certificate today.
+	CertificateExpiring bool     `json:"certificate_expiring"`
+	Uptime90d           *float64 `json:"uptime_90d"`
 	// Uptime30d is the same figure over the last RecentDays days, the
 	// period a phone's shorter history bar draws.
 	Uptime30d *float64 `json:"uptime_30d"`
