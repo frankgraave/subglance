@@ -186,9 +186,13 @@ what has not reached a release yet is listed under
 
 ### Newer than the latest release
 
-Nothing yet: everything listed as working above is in `v0.1.0-rc5`, its
-release archives and the `:0.1.0-rc5` image. Work merged after that tag is
-listed here until the next release carries it.
+These work on the `:edge` image, which follows `develop`, but arrived after
+`v0.1.0-rc5` was tagged: the release archives and the `:0.1.0-rc5` image do not
+have them.
+
+- **`subglance reset-password`**: an owner locked out of their own instance
+  sets a new password from the data directory, with the server stopped; see
+  [Locked out](docs/operations.md#locked-out)
 
 ### Not working yet
 

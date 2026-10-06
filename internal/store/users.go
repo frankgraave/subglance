@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/frankgraave/subglance/internal/auth"
@@ -243,6 +244,62 @@ func (db *DB) UpdatePassword(ctx context.Context, userID int64, newPassword stri
 		return fmt.Errorf("update password: %w", err)
 	}
 	return nil
+}
+
+// ResetPassword replaces an account's password from outside the web UI, for
+// an owner who no longer knows it. It is what `subglance reset-password` runs.
+//
+// In one transaction it sets the new password, ends every session of the
+// account and clears the failed-sign-in record kept for its address. The
+// sessions go because a reset after a suspected compromise must sign out
+// whoever else is in; the failed attempts go because someone who locked
+// themselves out has usually also tripped the sign-in limit, and should not
+// be told to wait a quarter of an hour after proving they hold the data.
+// API tokens are left alone, as they are on a password change in the UI: a
+// token is not derived from the password, and revoking one is a decision of
+// its own under Settings.
+//
+// It returns how many sessions it ended. An unknown id is ErrNotFound.
+func (db *DB) ResetPassword(ctx context.Context, userID int64, newPassword string) (int64, error) {
+	hash, err := auth.HashPassword(newPassword)
+	if err != nil {
+		return 0, err
+	}
+	tx, err := db.Writer.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("begin password reset: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var email string
+	err = tx.QueryRowContext(ctx, "SELECT email FROM users WHERE id = ?", userID).Scan(&email)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, ErrNotFound
+	}
+	if err != nil {
+		return 0, fmt.Errorf("look up user %d: %w", userID, err)
+	}
+	if _, err := tx.ExecContext(ctx,
+		"UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?",
+		hash, time.Now().Unix(), userID); err != nil {
+		return 0, fmt.Errorf("update password: %w", err)
+	}
+	res, err := tx.ExecContext(ctx, "DELETE FROM sessions WHERE user_id = ?", userID)
+	if err != nil {
+		return 0, fmt.Errorf("end sessions of user %d: %w", userID, err)
+	}
+	ended, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("rows affected: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx,
+		"DELETE FROM login_attempts WHERE identifier = ?", LoginAttemptEmailKey(email)); err != nil {
+		return 0, fmt.Errorf("clear sign-in attempts: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("commit password reset: %w", err)
+	}
+	return ended, nil
 }
 
 // ErrLastAdmin is returned when a change would leave no administrator.
@@ -564,6 +621,13 @@ func (db *DB) RevokeAPIToken(ctx context.Context, id, userID int64) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// LoginAttemptEmailKey is the identifier failed sign-ins are counted under
+// for an address. The address is lowered so that "Ann@" and "ann@" share one
+// count, as they share one account.
+func LoginAttemptEmailKey(email string) string {
+	return "email:" + strings.ToLower(email)
 }
 
 // RecordLoginAttempt logs a failed login for rate limiting.

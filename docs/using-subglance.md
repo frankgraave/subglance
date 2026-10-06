@@ -27,6 +27,11 @@ is what makes a password hard to crack, and demanding a digit and a symbol
 mostly produces predictable substitutions, so a few ordinary words beat a
 short cryptic one. Everything is stored on your own machine.
 
+There is no emailed reset link, and an administrator cannot set another
+account's password: a password is its owner's to know. Whoever can stop the
+server and reach its data directory can set a new one with
+`subglance reset-password`; see [Locked out](operations.md#locked-out).
+
 The same thing can be done from a terminal, which is what an unattended
 install wants:
 
