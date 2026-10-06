@@ -4,7 +4,7 @@ import { Card } from "../components/Card";
 import { IconResponse } from "../components/icons";
 import { formatMoment, formatMomentFrom } from "../format/format";
 import { toUnixMs } from "./types";
-import { failureRuns, type ResponseHeartbeat } from "./responseHistory";
+import { failureRuns, type ResponseHeartbeat } from "./responseHistoryModel";
 
 export type ResponseHistoryProps = {
   heartbeats: readonly ResponseHeartbeat[];

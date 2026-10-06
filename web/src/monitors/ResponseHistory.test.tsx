@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ResponseHistory } from "./ResponseHistory";
-import type { ResponseHeartbeat } from "./responseHistory";
+import type { ResponseHeartbeat } from "./responseHistoryModel";
 
 afterEach(cleanup);
 
