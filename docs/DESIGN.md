@@ -2596,8 +2596,12 @@ Just as important as the rest, because these are the ones that keep coming back:
 - **No pulsing animations at rest.** See rule 2.
 - **No off-the-shelf chart library.** The heartbeat bar is the brand mark;
   generic charts look generic.
-- **No default shadcn look.** shadcn/ui is the starting point, not the finish
-  line. If it looks like every other shadcn dashboard, it failed.
+- **No component-kit look.** There is no UI kit underneath: every control is
+  SubGlance's own, in `web/src/components`, drawn from the tokens in §2. That
+  is not purity for its own sake. A kit's defaults (its radius, its grey card
+  on a grey page, its ruled table) are the look every other dashboard shares,
+  and each one would be a second source of values to override. If a screen
+  could pass for a stock admin template, it failed, whatever it is built from.
 - **No colour fills for status where a border does the job.** See §6.
 - **No setting that only works in one view.** I tried an S/M/L density slider
   and removed it: it only did anything in Status wall, and a control that usually
