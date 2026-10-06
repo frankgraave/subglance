@@ -1647,9 +1647,22 @@ See `docs/mockups/components.html` for a working version of everything below.
 | `ghost` | Cancel, close, anything that takes the user back |
 | `danger` | Delete and other irreversible actions |
 
-**Destructive is a red outline, not a red fill.** A bright red button sitting on
+**Destructive is a red bin, not a red fill.** A bright red button sitting on
 screen permanently becomes wallpaper — and then somebody clicks it by accident.
-The fill only arrives on hover, once the intent is already there.
+A worded Delete is `DangerButton` (`web/src/components/DangerButton.tsx`): the
+neutral button's edge and surface, the word in `--ink`, and a bin glyph in
+`--down` beside it. The red is the glyph's alone for the same reason as a
+refusal's (§7.2): a red label measured 3.9:1 on the button's surface in the
+dark theme, under the 4.5:1 a word needs, while a glyph needs 3:1 and clears
+it in both themes. The edge stays neutral because §2.9 gives borders to three
+role tokens, and a red edge would make a control read as a monitor that is
+down. Hover answers as on every button, with the raised surface and the
+stronger edge. A row's bin (`.icon-button.button--danger`) rests in the
+secondary ink and turns red under the pointer, because a list of red bins at
+rest is a column of alarms nobody raised. `DangerButton.test.tsx` refuses the
+worded class written anywhere else, and `layout/danger-buttons.browser.test.ts`
+enables the reset card's button and the delete drawer's and measures both, in
+both themes.
 
 Loading state: the button keeps its width and swaps the label for a spinner. That
 way the layout doesn't jump the instant you click.

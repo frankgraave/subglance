@@ -7,6 +7,7 @@ import { IconAlert } from "../components/icons";
 import { RESET_PHRASE, resetInstance, type ResetResult } from "./api";
 import { formatCount } from "../format/format";
 import { FieldError } from "../components/FieldError";
+import { DangerButton } from "../components/DangerButton";
 
 function plural(n: number, one: string, many: string) {
   return `${formatCount(n)} ${n === 1 ? one : many}`;
@@ -21,8 +22,9 @@ function describe(result: ResetResult | null) {
 /**
  * Reset this instance: the one action on the settings page with no undo.
  *
- * Outlined, gated and last. The button is a border and a word, never a filled
- * red block: filled red at rest stops being read after the third visit. The
+ * Outlined, gated and last. The button is a border, a word and a red bin,
+ * never a filled red block: filled red at rest stops being read after the
+ * third visit. The
  * typed phrase is the real guard. It is the only interaction on the page that
  * a mis-aimed click cannot complete, and it is compared exactly — the server
  * checks the same string, so the API cannot be emptied by a stray request
@@ -87,9 +89,9 @@ export function ResetInstanceCard() {
           </div>
           {error && <FieldError>{error}</FieldError>}
           <div>
-            <button className="button button--danger" type="submit" disabled={!matches || busy}>
+            <DangerButton type="submit" disabled={!matches || busy}>
               {busy ? "Deleting…" : "Delete all data"}
-            </button>
+            </DangerButton>
           </div>
           {done && <p role="status">{done}</p>}
         </form>
