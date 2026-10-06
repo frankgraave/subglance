@@ -41,6 +41,7 @@ class Server:
         self.cgroup = None
         self.container = None
         self.pid = None
+        self.image_bytes = None
 
     def start(self, network, run_id, alias=None):
         self.container = "%s-%s" % (run_id, self.name)
@@ -152,6 +153,22 @@ def pct(values, p):
     return values[min(len(values) - 1, int(round(p / 100 * (len(values) - 1))))]
 
 
+def unpacked_size(image):
+    """The size of the image's files once unpacked, in bytes.
+
+    `docker image inspect` does not give this everywhere: with the containerd
+    image store its Size is the compressed download for the host's platform,
+    with the classic overlay2 store it is the unpacked size. A container
+    created from the image and never started reports the size of its root
+    filesystem, which is the unpacked image, the same way under both.
+    """
+    container = sh("docker", "create", image)
+    try:
+        return int(sh("docker", "container", "inspect", "--size", "--format", "{{.SizeRootFs}}", container) or 0)
+    finally:
+        sh("docker", "rm", container, check=False)
+
+
 def summarise(servers, rows, start, counts):
     """Steady-state figures from the samples taken after the warm-up."""
     mib = 1024 * 1024
@@ -180,9 +197,9 @@ def summarise(servers, rows, start, counts):
                                         "p95_per_minute": round(pct(per_min, 95), 2) if per_min else 0},
             "checks_answered": counts.get(s.name, 0),
             "data_dir_mib": round(s.disk_bytes() / mib, 1),
-            # The unpacked size on local disk, which is larger than what a
-            # pull downloads (the layers travel compressed).
-            "image_size_mib": round(int(sh("docker", "image", "inspect", "--format", "{{.Size}}", s.image) or 0) / mib, 1),
+            # The image's files unpacked, which is larger than what a pull
+            # downloads (the layers travel compressed).
+            "image_size_mib": round((s.image_bytes or 0) / mib, 1),
         }
     return out
 
@@ -278,6 +295,10 @@ def main():
                                check=False) for s in servers}
         with open(os.path.join(OUT, "images.json"), "w") as f:
             json.dump(versions, f, indent=2)
+        # Before the warm-up, so that creating a container does not land in
+        # the measured window.
+        for s in servers:
+            s.image_bytes = unpacked_size(s.image)
         print("seeded; warming up for %ds" % ARGS.warmup, flush=True)
         time.sleep(ARGS.warmup)
         # Reset the target's counts so they cover the measured window only.

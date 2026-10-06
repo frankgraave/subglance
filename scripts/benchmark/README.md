@@ -25,7 +25,9 @@ watch the same monitors at the same interval", not which tool is better.
    - **CPU**: the cgroup's `usage_usec`.
 5. At the end writes `summary.json`: median, 95th percentile and maximum of
    memory, CPU time as a share of one core, the data directory's size, the
-   image's size on disk, and how many checks each server actually made, as
+   image's size once unpacked (the root filesystem of a container created
+   from it, which reads the same under the classic and the containerd image
+   store), and how many checks each server actually made, as
    counted by the target. A server that falls behind its interval shows it
    there. `samples.csv` holds every sample.
 
@@ -54,6 +56,10 @@ summary of what was measured; a summary of the run so far is also rewritten
 every ten minutes. `images.json` records the exact image digests.
 
 ## Reading the result
+
+The figures from the 24-hour run of 5 and 6 October 2026, with what to make
+of them, are in
+[Compared with Uptime Kuma](../../docs/operations.md#compared-with-uptime-kuma).
 
 All servers run at the same time, so anything else on the host disturbs them
 together: compare them with each other, not with a number from another

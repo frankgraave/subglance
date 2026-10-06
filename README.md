@@ -62,9 +62,13 @@ getting:
   host itself loses its connection, that is recorded as one outage of the host
   rather than one of every monitor.
 - **Light enough to forget about.** A single static binary with SQLite, not a
-  stack of services. About 22 MB resident with 20 HTTP monitors checked every
-  30 seconds, and back there within seconds of a sign-in; the setup and what
-  a sign-in costs are in [Memory](docs/operations.md#memory).
+  stack of services. Measured for 24 hours beside Uptime Kuma on one host, with
+  50 HTTP monitors checked every 30 seconds: about 20 MiB resident against
+  Kuma's 105 MiB (1.23) and 134 MiB (2.5), a fifth to a quarter of its CPU
+  time per check, and an 8 MiB image download against 146 and 174 MiB. The
+  memory a sign-in takes is handed back within seconds; the setup, the caveats
+  and what a sign-in costs are in [Compared with Uptime Kuma](docs/operations.md#compared-with-uptime-kuma)
+  and [Memory](docs/operations.md#memory).
 
 ## Self-monitoring
 
