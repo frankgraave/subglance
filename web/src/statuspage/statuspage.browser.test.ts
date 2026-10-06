@@ -8,6 +8,9 @@
  * with the Content-Security-Policy the renderer states, at /status/<name>, so
  * its relative font URLs resolve the way they do behind the product.
  *
+ * The server lives in layout/harness/statusPages.ts, shared with the axe gate
+ * in layout/accessibility.browser.test.ts.
+ *
  * Beyond the prototype's checks it asserts what only the real page can get
  * wrong: that the inline stylesheet and theme script survive the policy (a
  * hash mismatch fails silently, as an unstyled page), that both faces load
@@ -18,55 +21,23 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import axe from "axe-core";
-import { execFile } from "node:child_process";
-import { createServer, type Server } from "node:http";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
 import { chromium, type Browser, type Page } from "../layout/harness/browser";
+import { serveStatusPages, type StatusPages } from "../layout/harness/statusPages";
 
-const root = fileURLToPath(new URL("../../../", import.meta.url));
-const fonts = fileURLToPath(new URL("../../public/fonts/", import.meta.url));
 const PHONE = [320, 375, 414];
 const WIDER = [768, 1440];
 const SCENARIOS = ["outage", "allup", "maintenance"];
 
-let dir: string, browser: Browser, server: Server, base: string, csp: string;
+let browser: Browser, pages: StatusPages;
 
 beforeAll(async () => {
-  dir = await mkdtemp(join(tmpdir(), "status-page-"));
-  await promisify(execFile)("go", ["run", "./internal/statuspage/preview", "-out", dir], { cwd: root });
-  csp = await readFile(join(dir, "csp.txt"), "utf8");
-  server = createServer(async (req, res) => {
-    const path = new URL(req.url ?? "/", "http://localhost").pathname;
-    try {
-      if (path.startsWith("/status/fonts/")) {
-        const body = await readFile(join(fonts, basename(path)));
-        res.writeHead(200, { "content-type": "font/woff2" }).end(body);
-        return;
-      }
-      const name = /^\/status\/([a-z]+)$/.exec(path)?.[1];
-      if (name) {
-        const body = await readFile(join(dir, `${name}.html`));
-        res.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-security-policy": csp }).end(body);
-        return;
-      }
-    } catch { /* fall through to 404 */ }
-    res.writeHead(404).end();
-  });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const addr = server.address();
-  if (!addr || typeof addr === "string") throw new Error("no port");
-  base = `http://127.0.0.1:${addr.port}`;
+  pages = await serveStatusPages();
   browser = await chromium();
 }, 180_000);
 
 afterAll(async () => {
   await browser?.close();
-  await new Promise<void>((resolve) => (server ? server.close(() => resolve()) : resolve()));
-  if (dir) await rm(dir, { recursive: true, force: true });
+  await pages?.close();
 });
 
 async function open(width: number, theme: string, scenario: string): Promise<{ page: Page; blocked: string[] }> {
@@ -76,7 +47,7 @@ async function open(width: number, theme: string, scenario: string): Promise<{ p
   page.on("requestfailed", (req) => blocked.push(`failed: ${req.url()}`));
   await page.setViewport({ width, height: 900, deviceScaleFactor: 1 });
   await page.emulateMediaFeatures([{ name: "prefers-color-scheme", value: theme }]);
-  await page.goto(`${base}/status/${scenario}`, { waitUntil: "load" });
+  await page.goto(`${pages.url}/status/${scenario}`, { waitUntil: "load" });
   await page.evaluate(() => document.fonts.ready);
   return { page, blocked };
 }

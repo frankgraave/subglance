@@ -4,12 +4,16 @@
  * No disabled rules. Existing contrast debt is listed by exact rule, selector,
  * screen and theme in accessibility-waivers.json; stale waivers fail too.
  * Findings name the rule and offending markup so a red CI run is actionable.
+ * The public status page is held to the same gate and the same empty waiver
+ * list (SUB-205): it is rendered by the Go side, not the bundle, but it reads
+ * the same tokens, so an ink that fails there fails here.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import axe from "axe-core";
 import baseline from "./accessibility-waivers.json";
 import { chromium, type Browser, type Page } from "./harness/browser";
 import { serveBuild, type Server } from "./harness/server";
+import { serveStatusPages, type StatusPages } from "./harness/statusPages";
 import { LAYOUT_STORAGE_KEY } from "../shell/preferences";
 import { THEME_STORAGE_KEY } from "../theme/theme";
 import type { ApiIncident } from "../monitors/detail";
@@ -22,6 +26,13 @@ type Screen = {
   auth?: "setup" | "login";
   drawer?: "add" | "navigation";
   passwordError?: boolean;
+  /*
+   * The public status page: served by the preview harness rather than the
+   * bundle, themed by prefers-color-scheme rather than storage, and under its
+   * own Content-Security-Policy.
+   */
+  statusPage?: boolean;
+  width?: number;
 };
 
 const SCREENS: Screen[] = [
@@ -42,23 +53,39 @@ const SCREENS: Screen[] = [
   { name: "settings password error", path: "/settings", ready: 'input[name="current_password"]', passwordError: true },
   { name: "add monitor", path: "/monitors", ready: ".inv-list > li", drawer: "add" },
   { name: "navigation drawer", path: "/", ready: "[data-testid^='monitor-card-']", drawer: "navigation" },
+  // The page a visitor without an account reads. It shares tokens.css with the
+  // product, so an ink change reaches it without passing through any screen
+  // above. Every scenario the preview renders: each draws a different set of
+  // chips and notes (an outage, all up, a maintenance window, no services).
+  // Outage again on a phone, where the history shortens and the rows reflow.
+  { name: "status page outage", path: "/status/outage", ready: ".sp-service", statusPage: true },
+  { name: "status page outage phone", path: "/status/outage", ready: ".sp-service", statusPage: true, width: 375 },
+  { name: "status page all up", path: "/status/allup", ready: ".sp-service", statusPage: true },
+  { name: "status page maintenance", path: "/status/maintenance", ready: ".sp-service", statusPage: true },
+  { name: "status page empty", path: "/status/empty", ready: "main", statusPage: true },
 ];
 
 let server: Server;
+let statusPages: StatusPages;
 let browser: Browser;
 
 beforeAll(async () => {
   server = await serveBuild();
+  statusPages = await serveStatusPages();
   browser = await chromium();
-});
+}, 180_000);
 
 afterAll(async () => {
   await browser?.close();
   await server?.close();
+  await statusPages?.close();
 });
 
 async function openScreen(page: Page, screen: Screen, theme: string, incidentIdOffset = 0): Promise<void> {
-  await page.setViewport({ width: screen.drawer === "navigation" ? 375 : 1440, height: 900 });
+  await page.setViewport({ width: screen.width ?? (screen.drawer === "navigation" ? 375 : 1440), height: 900 });
+  const origin = screen.statusPage ? statusPages.url : server.url;
+  // The status page has no theme control: it follows the visitor's system.
+  if (screen.statusPage) await page.emulateMediaFeatures([{ name: "prefers-color-scheme", value: theme }]);
   await page.evaluateOnNewDocument((layoutKey, layout, themeKey, chosenTheme) => {
     localStorage.setItem(layoutKey, layout);
     localStorage.setItem(themeKey, chosenTheme);
@@ -69,7 +96,7 @@ async function openScreen(page: Page, screen: Screen, theme: string, incidentIdO
   await page.setRequestInterception(true);
   page.on("request", async (request) => {
     const url = new URL(request.url());
-    if (url.origin !== server.url) {
+    if (url.origin !== origin) {
       void request.abort("blockedbyclient");
     } else if (screen.passwordError && url.pathname === "/api/v1/auth/password") {
       void request.respond({ status: 401, contentType: "application/json", body: JSON.stringify({ error: "current password is incorrect" }) });
@@ -88,7 +115,7 @@ async function openScreen(page: Page, screen: Screen, theme: string, incidentIdO
       void request.continue();
     }
   });
-  await page.goto(server.url + screen.path, { waitUntil: "domcontentloaded" });
+  await page.goto(origin + screen.path, { waitUntil: "domcontentloaded" });
   await page.waitForSelector(screen.ready, { visible: true, timeout: 15_000 });
   if (screen.passwordError) {
     await page.type('input[name="current_password"]', "wrong example password");
@@ -119,6 +146,13 @@ async function openScreen(page: Page, screen: Screen, theme: string, incidentIdO
     await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
   });
   expect(await page.$eval("html", (el) => el.getAttribute("data-theme"))).toBe(theme);
+  if (screen.statusPage) {
+    // A stylesheet the page's policy refuses fails silently, as black text on
+    // a transparent page, which axe would pass. The theme script above is
+    // allowed by the same policy; this is the stylesheet's half.
+    expect(await page.$eval("body", (el) => getComputedStyle(el).backgroundColor), "status page styled")
+      .not.toBe("rgba(0, 0, 0, 0)");
+  }
 }
 
 type Waiver = { rule: string; selector: string; scopes: string[]; reason: string };
@@ -136,7 +170,10 @@ const WAIVERS: readonly Waiver[] = baseline.entries as Waiver[];
 const WAIVER_CEILING = { entries: 0, scopes: 0 };
 
 async function audit(page: Page, scope = "light: login", waivers: readonly Waiver[] = WAIVERS): Promise<void> {
-  await page.addScriptTag({ content: axe.source });
+  // Evaluated over DevTools rather than added as a <script>: the status page's
+  // policy rightly refuses an injected script, and the gate must not loosen
+  // the policy of the page it audits.
+  await page.evaluate(axe.source);
   const violations = await page.evaluate(async () => {
     const result = await (window as typeof window & { axe: typeof axe }).axe.run(document, {
       runOnly: { type: "tag", values: ["wcag2a", "wcag2aa"] },
@@ -270,6 +307,34 @@ describe("the accessibility gate itself", () => {
       });
       await page.$eval(".inc-sub + .inc-sub", (element) => element.remove());
       await audit(page, `${theme}: monitor detail`);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it.each(["light", "dark"])("rejects a contrast regression on the public status page in %s, then passes when restored", async (theme) => {
+    const context = await browser.createBrowserContext();
+    const page = await context.newPage();
+    try {
+      const screen = SCREENS.find((screen) => screen.name === "status page outage")!;
+      await openScreen(page, screen, theme);
+      await audit(page, `${theme}: ${screen.name}`);
+      // --ink-4, the placeholder tone, as a note under a service: the shared
+      // token reaches this page, so a faint ink here must fail the gate too.
+      await page.$eval(".sp-service", (row) => {
+        const faint = document.createElement("p");
+        faint.id = "deliberate-status-page-regression";
+        faint.textContent = "Deliberately faint status note";
+        faint.style.cssText = "color: var(--ink-4); transition: none; animation: none";
+        row.append(faint);
+      });
+      await expect(audit(page, `${theme}: ${screen.name}`)).rejects.toMatchObject({
+        actual: expect.arrayContaining([expect.objectContaining({
+          id: "color-contrast", html: expect.stringContaining("Deliberately faint status note"),
+        })]),
+      });
+      await page.$eval("#deliberate-status-page-regression", (element) => element.remove());
+      await audit(page, `${theme}: ${screen.name}`);
     } finally {
       await context.close();
     }
