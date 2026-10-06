@@ -61,11 +61,34 @@ function isKit(name: string): boolean {
   );
 }
 
+/**
+ * How a document would write a kit's name: every entry in KITS by its package
+ * name (scope mark and slash dropped, a hyphen read as a hyphen, a space or
+ * nothing), plus the names the projects go by that no package spells.
+ */
+const KIT_PROSE = [
+  ...KITS.map((kit) =>
+    kit.replace(/^@/, "").replace(/\/$/, "").split("-").join("[- ]?"),
+  ),
+  "radix",
+  "headless ?ui",
+  "material[- ]ui",
+  "chakra",
+  "mantine",
+  "ant design",
+  "nextui",
+  "daisy ?ui",
+  "react aria",
+];
+const kitNamed = new RegExp(`\\b(?:${KIT_PROSE.join("|")})\\b`, "i");
+
 /** One section of a markdown document, from its heading to the next. */
 function section(doc: string, heading: string): string {
-  const start = doc.indexOf(`\n${heading}\n`);
+  // A checkout with core.autocrlf writes CRLF; the delimiters below are LF.
+  const text = doc.replace(/\r\n/g, "\n");
+  const start = text.indexOf(`\n${heading}\n`);
   if (start === -1) throw new Error(`no section ${heading}; the check is broken`);
-  const body = doc.slice(start + heading.length + 2);
+  const body = text.slice(start + heading.length + 2);
   const next = body.indexOf("\n## ");
   return next === -1 ? body : body.slice(0, next);
 }
@@ -93,14 +116,41 @@ describe("the controls are SubGlance's own", () => {
     expect(rules).not.toMatch(/starting point/i);
   });
 
-  it("names no UI kit anywhere in DESIGN.md as a base", () => {
+  it("names no UI kit anywhere in DESIGN.md", () => {
     // The design document describes what is built. A kit's name in it is how
-    // the stale claim got there, so none is named at all.
+    // the stale claim got there, so none is named at all: telling a claim
+    // that a kit is the base from a passing mention is not something a
+    // pattern does reliably, and a missed claim is the failure this exists for.
     const named = designMd
-      .split("\n")
+      .split(/\r?\n/)
       .map((line, i) => ({ line: i + 1, text: line }))
-      .filter(({ text }) => /shadcn|radix|headless ?ui|material ui|chakra|mantine/i.test(text));
+      .filter(({ text }) => kitNamed.test(text));
     expect(named).toEqual([]);
+  });
+
+  it("recognises every listed kit by name", () => {
+    for (const kit of KITS) {
+      const name = kit.replace(/^@/, "").replace(/\/$/, "");
+      expect(kitNamed.test(`Built on ${name}.`), kit).toBe(true);
+    }
+    const prose = [
+      "shadcn/ui",
+      "Radix UI",
+      "Headless UI",
+      "Material UI",
+      "Ant Design",
+      "NextUI",
+      "daisyUI",
+    ];
+    for (const name of prose) {
+      expect(kitNamed.test(`Starts from ${name}.`), name).toBe(true);
+    }
+    expect(kitNamed.test("A status badge drawn from the tokens.")).toBe(false);
+  });
+
+  it("finds a section in a CRLF checkout", () => {
+    const doc = "intro\r\n## A\r\nbody\r\n## B\r\nrest";
+    expect(section(doc, "## A")).toBe("body");
   });
 
   it("says so in ARCHITECTURE.md's stack table", () => {
