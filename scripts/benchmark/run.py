@@ -166,7 +166,8 @@ def unpacked_size(image):
     try:
         return int(sh("docker", "container", "inspect", "--size", "--format", "{{.SizeRootFs}}", container) or 0)
     finally:
-        sh("docker", "rm", container, check=False)
+        # -v: an image that declares a VOLUME gets an anonymous one on create.
+        sh("docker", "rm", "-v", container, check=False)
 
 
 def summarise(servers, rows, start, counts):
