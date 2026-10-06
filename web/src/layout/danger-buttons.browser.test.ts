@@ -13,6 +13,12 @@
  * - the bin glyph, a graphic, at least 3:1, and that it is drawn at all,
  *   since the words are no longer the coloured part.
  *
+ * The monitor detail page's action menu has the same verb in a third shape:
+ * a menu item titled "Delete" beside a bin. Its title was drawn in the same
+ * red, at about 4.1:1 on the dark float surface, and the accessibility gate
+ * never opens the menu. So the last block opens it, at rest and with the
+ * item under the cursor keys, and holds its title to 4.5:1 and its bin to 3:1.
+ *
  * Does not run with `npm test`: needs a built bundle and a browser.
  *
  * @vitest-environment node
@@ -170,4 +176,83 @@ describe.each(["light", "dark"])("%s theme", (theme) => {
       await page.close();
     }
   });
+});
+
+/**
+ * A danger menu item's title and bin, each against what is really behind it:
+ * the opaque float panel at rest, the hover step over it when the item is
+ * active.
+ */
+const MEASURE_ITEM = `(selector) => {
+  const luminance = ${LUMINANCE};
+  const backdrop = ${BACKDROP};
+  const over = ${OVER_BACKDROP};
+  const ratio = (a, b) => {
+    const x = luminance(a);
+    const y = luminance(b);
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+  };
+  const item = document.querySelector(selector);
+  const title = item.querySelector(".menu-item-title");
+  const words = over(title, getComputedStyle(title).color);
+  const painted = (el) => {
+    if (getComputedStyle(el).visibility !== "visible") return false;
+    let opacity = 1;
+    for (let node = el; node; node = node.parentElement) {
+      opacity *= Number(getComputedStyle(node).opacity);
+    }
+    return opacity > 0;
+  };
+  const svg = item.querySelector(".menu-item-icon > svg");
+  const box = svg && svg.getBoundingClientRect();
+  const glyph = box && box.width >= 1 && box.height >= 1 && painted(svg) ? svg : null;
+  const style = glyph && getComputedStyle(glyph);
+  const mark = glyph && over(glyph, style.stroke === "none" ? style.color : style.stroke);
+  // The bin is now the only thing that says "destructive", so it must be the
+  // failure red, not merely legible: a neutral bin would pass 3:1 and leave the
+  // item looking like Pause.
+  const red = document.createElement("span");
+  red.style.color = "var(--down)";
+  item.append(red);
+  const down = getComputedStyle(red).color;
+  red.remove();
+  return {
+    title: title.textContent,
+    red: glyph !== null && style.color === down,
+    disabled: item.disabled,
+    active: item.dataset.active === "true",
+    words: words ? ratio(words, backdrop(title)) : 0,
+    glyph: mark ? ratio(mark, backdrop(glyph)) : 0,
+  };
+}`;
+
+const DANGER_ITEM = '[role="menu"] [role="menuitem"][data-tone="danger"]';
+
+describe.each(["light", "dark"])("%s theme, the monitor action menu", (theme) => {
+  // At rest the first item holds focus; End moves it onto Delete, the last,
+  // which paints the hover step behind it.
+  it.each([["at rest", false], ["under the cursor keys", true]] as const)(
+    "draws the Delete item legibly %s", async (_, active) => {
+      const page = await open(theme, "/monitors/1");
+      try {
+        await page.waitForSelector('button[aria-label="More actions"]', { visible: true, timeout: 15_000 });
+        await page.click('button[aria-label="More actions"]');
+        await page.waitForSelector(DANGER_ITEM, { visible: true, timeout: 10_000 });
+        if (active) await page.keyboard.press("End");
+        await settle(page);
+        const seen = await page.evaluate(`(${MEASURE_ITEM})(${JSON.stringify(DANGER_ITEM)})`) as
+          { title: string; disabled: boolean; active: boolean; red: boolean; words: number; glyph: number };
+        expect(seen.title).toBe("Delete");
+        expect(seen.disabled).toBe(false);
+        expect(seen.active).toBe(active);
+        // The title is a word at the body size: 4.5:1. The bin is the graphic
+        // that marks the item as destructive: 3:1, and drawn.
+        expect(seen.words, "words").toBeGreaterThanOrEqual(4.5);
+        expect(seen.glyph, "glyph").toBeGreaterThanOrEqual(3);
+        expect(seen.red, "the bin is the failure red").toBe(true);
+        expect(await audit(page, DANGER_ITEM)).toEqual([]);
+      } finally {
+        await page.close();
+      }
+    });
 });

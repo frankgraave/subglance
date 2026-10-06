@@ -120,10 +120,14 @@
   white-space: normal;
 }
 
-/* A destructive item states itself in its title colour. The description stays
-   neutral: the warning belongs on the verb, and colouring both would make the
-   whole item read as an error message. */
-.menu-item[data-tone="danger"] .menu-item-title,
+/* A destructive item states itself in its glyph: the bin is red, the title and
+   the description keep their own inks. A red title measured 4.1:1 on the dark
+   float panel and 3.5:1 once the hover step sat behind it, under the 4.5:1 a
+   word needs; the bin is a graphic, needs 3:1, and clears it in both themes and
+   both states. Same split as a worded Delete (DangerButton) and a refusal
+   (FieldError), so destructive reads one way wherever it appears (DESIGN.md
+   §7.1). layout/danger-buttons.browser.test.ts opens the monitor action menu
+   and measures both. */
 .menu-item[data-tone="danger"] .menu-item-icon {
   color: var(--down);
 }
