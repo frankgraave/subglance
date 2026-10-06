@@ -354,8 +354,8 @@ Warning/up oscillation does not count as confirmed flapping. Pausing closes any
 open incident without a recovery notification and clears the failure streak;
 resuming starts a new streak. Restarting an active warning restores its streak.
 
-Confirmed Down monitors use `min(interval_s, 60s)` with the existing ±10% jitter
-and worker queue. This also applies on restart. It is a target cadence, not a
+Confirmed Down monitors use `min(interval_s, 60s)` with the existing jitter (up
+to 10% later) and worker queue. This also applies on restart. It is a target cadence, not a
 latency guarantee: check duration and worker saturation can delay it. Push
 monitors retain their configured reporting deadline; nothing polls a push job.
 
@@ -423,6 +423,60 @@ that is the resident figure the numbers above are. The memory column of
 with the page cache taken off, so it will not match `VmRSS` exactly. It shows
 the same rise and fall around a sign-in, and is fine for watching that, but
 compare `VmRSS` with the figures here.
+
+### Compared with Uptime Kuma
+
+Measured on 5 and 6 October 2026 with
+[`scripts/benchmark/run.py`](../scripts/benchmark/README.md): SubGlance, Uptime
+Kuma 1.23.16 and Uptime Kuma 2.5.5 (`-slim`, SQLite) running at the same time on
+one host, each in its own container with its own copy of the same 50 HTTP
+monitors, checked every 30 seconds with a 10-second timeout against one shared
+target. The figures cover 24 hours after a 10-minute warm-up; nobody signed in
+during them. Memory is the summed `VmRSS` of the container's processes, the
+same figure as above.
+
+| | SubGlance | Kuma 1.23.16 | Kuma 2.5.5 |
+|---|---|---|---|
+| Resident memory, median | 20.1 MiB | 105.0 MiB | 134.1 MiB |
+| Resident memory, 95th percentile | 26.9 MiB | 153.9 MiB | 191.4 MiB |
+| Resident memory, highest | 27.8 MiB | 157.0 MiB | 192.2 MiB |
+| Swapped out, median | 1.3 MiB | 25.7 MiB | 28.8 MiB |
+| `docker stats` memory, median | 16.6 MiB | 109.2 MiB | 123.1 MiB |
+| CPU, mean share of one core | 0.33% | 1.61% | 1.32% |
+| CPU time per check | 2.1 ms | 9.7 ms | 7.9 ms |
+| Checks made | 137,153 | 143,950 | 144,000 |
+| Data directory after 24 hours | 11.2 MiB | 24.9 MiB | 26.5 MiB |
+| Image download, linux/amd64 | 7.9 MiB | 146.3 MiB | 173.6 MiB |
+| Image unpacked | 22.8 MiB | 531.3 MiB | 636.4 MiB |
+
+How to read it:
+
+- **SubGlance made 4.8% fewer checks.** Each next run is spread by up to 10%
+  of the interval so that monitors added together do not stay in lockstep,
+  which makes the average gap about 31.5 seconds instead of 30. The CPU time
+  per check takes that out: it is total CPU time divided by the checks the
+  target counted, and SubGlance's is a fifth of Kuma 1.23's and about a quarter
+  of Kuma 2.5's.
+- **The host swapped some of each out.** This run's containers had no memory
+  limit and no swap cap: the script's 1 GiB, no-swap limit landed after the run
+  had started. The host has 2 cores and 3.7 GiB of memory and was doing other
+  work. Resident memory leaves out what is in swap; counting it back in, the
+  medians are 21.3, 131.2 and 162.9 MiB, so the gap gets wider, not narrower.
+  The swap figures are medians over every sample in the window.
+- **The image figures are for linux/amd64.** The download is the compressed
+  image a pull fetches; unpacked is the root filesystem of a container created
+  from the image.
+- **This is a comparison, not a forecast.** The three ran side by side so that
+  the host's noise fell on all of them; compare them with each other, not with
+  a figure from another machine. The target answered plain HTTP on the same
+  host, so the cost measured is the monitor's own, not the network's.
+
+Images: SubGlance `ghcr.io/frankgraave/subglance@sha256:2fa19abc511947a625940d013c8dfb23f16a128919d80b96bd245159912c95a8`
+(the `develop` build of 5 October 2026), Kuma 1.23.16
+`louislam/uptime-kuma@sha256:431fee3be822b04861cf0e35daf4beef6b7cb37391c5f26c3ad6e12ce280fe18`,
+Kuma 2.5.5-slim
+`louislam/uptime-kuma@sha256:9c56a772a7df53f444a404c579e87a27bd0c201375d00d6745a75bf8138f4342`.
+Docker 29.1.3 with the containerd image store, Linux 7.0.
 
 ## Metrics
 

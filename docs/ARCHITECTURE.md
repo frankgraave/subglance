@@ -27,9 +27,12 @@ product and Go is measurably stronger and leaner there. Two languages normally
 costs velocity, but the contract between them is just OpenAPI and the frontend
 is a standalone SPA.
 
-**Target to beat:** Uptime Kuma uses ~150–250MB RAM. The target is an image
-under 30MB and an idle footprint under 40MB at 100 monitors — small enough to
-sit on a Raspberry Pi alongside everything else already running there.
+**Target to beat:** Uptime Kuma, measured on the same host with 50 HTTP
+monitors, holds 105–134 MiB resident at the median and up to 192 MiB
+([Compared with Uptime Kuma](operations.md#compared-with-uptime-kuma)). The
+target is an image under 30MB and an idle footprint under 40MB at 100
+monitors — small enough to sit on a Raspberry Pi alongside everything else
+already running there.
 
 ## 2. Components
 
