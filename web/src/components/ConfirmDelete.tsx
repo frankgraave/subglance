@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import { DangerButton } from "./DangerButton";
 import { Drawer } from "./Drawer";
 
 /**
@@ -78,23 +79,21 @@ export function ConfirmDelete({
           <button type="button" className="button" onClick={close}>
             Keep it
           </button>
-          <button
-            type="button"
-            className="button button--danger"
+          <DangerButton
             disabled={!matches}
             /*
              * The name is in the accessible name as well as the visible label:
              * "Delete auth" tells a screen-reader user which thing this button
              * destroys, where a bare "Delete" in a list of similar dialogs
-             * does not. The visible text is a prefix of it (WCAG 2.5.3).
+             * does not. The visible text is the same string (WCAG 2.5.3).
              */
             onClick={() => {
               setTyped("");
               onConfirm();
             }}
           >
-            Delete {name}
-          </button>
+            {`Delete ${name}`}
+          </DangerButton>
         </>
       }
     >

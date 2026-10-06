@@ -266,9 +266,8 @@ describe("the channel rows", () => {
     /*
      * A bin on every row was a column of red marks at rest (SUB-198), so it
      * rests in the secondary ink and the red arrives with the pointer.
-     * `.icon-button:hover` sets the neutral ink and outranks `.button--danger`,
-     * so without a rule of its own the bin stayed grey exactly while the
-     * pointer was on it.
+     * `.icon-button:hover` sets the neutral ink, so without a rule of its own
+     * the bin stayed grey exactly while the pointer was on it.
      */
     const page = await openChannels();
     try {

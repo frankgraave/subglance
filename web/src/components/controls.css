@@ -315,16 +315,23 @@
   .icon-button[data-busy="true"] > svg { animation: none; }
 }
 
-/* Destructive is outlined, never filled: a filled red button is the one a
-   hand lands on by accident. The red is in the *ink*, not in the edge —
-   §2.9 gives borders to three role tokens, and spending a status colour on
-   an edge would make a control look like a monitor that is down. On a
-   .button or an .icon-button alike. */
-.button--danger { color: var(--down); }
+/*
+ * Destructive is outlined, never filled: a filled red button is the one a
+ * hand lands on by accident. The red is not in the edge either — §2.9 gives
+ * borders to three role tokens, and spending a status colour on an edge would
+ * make a control look like a monitor that is down.
+ *
+ * On a worded button (`DangerButton`) the red is the bin's alone and the word
+ * keeps the body ink. A red word measured 3.9:1 on the button's surface in the
+ * dark theme, under the 4.5:1 a label needs; a glyph is a graphic, held to
+ * 3:1, and the same red clears that in both themes. The same split as a
+ * refusal's (`.field-error`).
+ */
+.button.button--danger > svg { color: var(--down); }
 
 /*
- * A row's bin rests in the neutral ink and turns red when a pointer or the
- * keyboard reaches it.
+ * A row's bin rests in the neutral ink of every icon button and turns red
+ * when a pointer or the keyboard reaches it.
  *
  * Every row of a list carries one, so at rest a list of twenty-six monitors
  * was a column of twenty-six red marks: the loudest thing on the page was an
@@ -333,14 +340,13 @@
  * nothing depends on the hue (§2.3), and the red arrives at the moment it is
  * information — when this button is the one about to be pressed. The
  * deliberate pause stays one step later, in the confirmation that names what
- * is destroyed. A text Delete (`.button.button--danger`) is unchanged: it is
- * the commitment itself, not one of many.
+ * is destroyed. A worded Delete (`DangerButton`) keeps its bin red at rest: it
+ * is the commitment itself, not one of many.
+ *
+ * `.icon-button:hover` sets the neutral ink, so the hover needs its own rule
+ * to turn the bin red. The edge and the surface answer the hover as on every
+ * icon button.
  */
-.icon-button.button--danger { color: var(--ink-2); }
-
-/* `.icon-button:hover` sets the neutral ink and outranks the line above, so
-   the hover needs its own rule to turn the bin red. The edge and the surface
-   answer the hover as on every icon button. */
 .icon-button.button--danger:hover:not(:disabled),
 .icon-button.button--danger:focus-visible { color: var(--down); }
 
