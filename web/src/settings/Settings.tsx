@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "rea
 import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { createQueryClient } from "../live/queryClient";
 import { Card, Panel } from "../components/Card";
-import { IconAlert, IconDatabase, IconGlobe, IconTransfer } from "../components/icons";
+import { IconAlert, IconDatabase, IconGlobe, IconNetwork, IconTransfer } from "../components/icons";
 import { ChangePassword } from "../auth/ChangePassword";
 import { SettingsIcon } from "../shell/icons";
 import { FilterField } from "../shell/FilterField";
@@ -33,6 +33,12 @@ const ConfigFilesCard = lazy(() => import("../configfile/ConfigFiles").then((mod
  * raising the budget for everyone.
  */
 const RetentionCard = lazy(() => import("../retention/Retention").then((module) => ({ default: module.RetentionCard })));
+/*
+ * And for the connectivity check's editor: administrators only, and changed
+ * once when an instance is set up if at all. A form, its validation and its
+ * conflict handling are not worth carrying in every visitor's entry chunk.
+ */
+const ConnectivityCard = lazy(() => import("../connectivity/ConnectivityCard").then((module) => ({ default: module.ConnectivityCard })));
 /*
  * And for the reset: administrators only, last on the page, and pressed once
  * in an instance's life if at all. It went out of the entry chunk when the
@@ -75,11 +81,24 @@ function fragment(): string {
  * to show the tokens on. Hand input is wheel, touch or key; a programmatic
  * scroll is none of those.
  *
+ * The same choice holds the section in place while the cards above it are
+ * still loading. Scroll anchoring cannot be relied on for that: when a lazy
+ * card above the target resolves in the same frame as the target's own, the
+ * node the browser anchored to is replaced, and the target was measured
+ * 294px down the page after following its index link (SUB-168). So every
+ * change in a section's size while the choice stands scrolls the chosen
+ * section back to the top. Hand input of any kind ends it, a press included:
+ * a click inside a card that grows it, or on the page's scroll bar, is the
+ * reader taking the page back.
+ *
  * `ids` are the sections the search leaves visible. When the current section
  * is filtered out, its pin is released and the answer is derived again from
  * what is left, so the index never marks nothing, and clearing the search
  * does not bring back a section the reader had already left.
  */
+/** What the reader does with their own hand: a scroll that follows one is theirs. */
+const HAND_INPUT = ["wheel", "touchstart", "keydown", "pointerdown"];
+
 function useCurrentSection(ids: string[]): [string | undefined, (id: string) => void] {
   const [current, setCurrent] = useState<string | undefined>(() => {
     const hash = fragment();
@@ -110,6 +129,11 @@ function useCurrentSection(ids: string[]): [string | undefined, (id: string) => 
       setCurrent(found);
     };
     const release = () => { pinned.current = false; };
+    // Absent in jsdom, which lays nothing out to hold.
+    const hold = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => {
+      if (pinned.current && latest.current !== undefined) document.getElementById(latest.current)?.scrollIntoView({ block: "start" });
+    });
+    for (const node of visible()) hold?.observe(node);
     const onHash = () => {
       const hash = fragment();
       if (!key.split(" ").includes(hash)) return;
@@ -118,7 +142,7 @@ function useCurrentSection(ids: string[]): [string | undefined, (id: string) => 
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("hashchange", onHash);
-    for (const type of ["wheel", "touchstart", "keydown"]) window.addEventListener(type, release, { passive: true });
+    for (const type of HAND_INPUT) window.addEventListener(type, release, { passive: true });
     if (latest.current === undefined || !key.split(" ").includes(latest.current)) {
       pinned.current = false;
       onScroll();
@@ -126,7 +150,8 @@ function useCurrentSection(ids: string[]): [string | undefined, (id: string) => 
     return () => {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("hashchange", onHash);
-      for (const type of ["wheel", "touchstart", "keydown"]) window.removeEventListener(type, release);
+      for (const type of HAND_INPUT) window.removeEventListener(type, release);
+      hold?.disconnect();
     };
   }, [key]);
   const choose = (id: string) => { pinned.current = true; setCurrent(id); };
@@ -139,8 +164,8 @@ function useCurrentSection(ids: string[]): [string | undefined, (id: string) => 
  * The browser only scrolls to a fragment that exists when the document loads,
  * and this page is drawn by script after that, so the jump is made here once
  * the sections are mounted. Cards above the target that finish loading later
- * do not pull it away again: scroll anchoring keeps the viewport on the
- * element it was showing.
+ * do not pull it away again: `useCurrentSection` holds the section the
+ * address chose until the reader takes over.
  */
 function useInitialFragment() {
   useEffect(() => {
@@ -183,6 +208,14 @@ export function Settings({ client, canAdmin = false, role = canAdmin ? "admin" :
       </Suspense>) }] : []),
     { id: "self-monitoring", label: "Self-monitoring", keywords: "self-monitoring watchdog last ping success rejection outage",
       body: provide(<WatchdogCard />) },
+    // Admin-only like the endpoint: an address can name a host on the
+    // operator's own network. Beside self-monitoring, the other card about
+    // how the instance judges its own health.
+    ...(canAdmin ? [{ id: "connectivity", label: "Connectivity check",
+      keywords: "connectivity check network uplink offline outbound targets addresses gateway host port dns local",
+      body: provide(<Suspense fallback={<Card title="Connectivity check" icon={<IconNetwork />}><Panel><p>Loading connectivity settings…</p></Panel></Card>}>
+        <ConnectivityCard />
+      </Suspense>) }] : []),
     { id: "retention", label: "Retention & storage", keywords: "retention storage database history heartbeats summaries incidents disk size",
       body: provide(<Suspense fallback={<Card title="Retention & storage" icon={<IconDatabase />}><Panel><p>Loading retention settings…</p></Panel></Card>}>
         <RetentionCard canAdmin={canAdmin} />

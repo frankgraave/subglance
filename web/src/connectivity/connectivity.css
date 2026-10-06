@@ -1,0 +1,19 @@
+/*
+ * A refusal under a connectivity field (SUB-168). The words take the body ink
+ * and the alert glyph carries the error colour, as on the password form: the
+ * shared error red measured 4.49:1 on the light panel and 4.28:1 on the dark
+ * one at the helper size, under the 4.5:1 a sentence needs. The field's red
+ * border and aria-invalid still mark which field it is.
+ */
+.connectivity-error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1h);
+  color: var(--ink);
+}
+
+.connectivity-error > svg {
+  flex: none;
+  margin-right: 0;
+  color: var(--down);
+}

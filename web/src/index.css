@@ -109,6 +109,7 @@
 @import "./watchdog/watchdog.css";
 @import "./diagnostics/diagnostics.css";
 @import "./retention/retention.css";
+@import "./connectivity/connectivity.css";
 @import "./wall/wall.css";
 
 /*

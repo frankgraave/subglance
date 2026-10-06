@@ -316,7 +316,9 @@ that do not share a failure with your monitors. To turn the check off, set
 `SUBGLANCE_CONNECTIVITY_CHECK=false`; then an outage of this host is reported
 as an outage of every monitor, as it was before this check existed.
 
-An administrator can make the same two changes over the API, with
+An administrator can make the same two changes on the **Settings** page,
+under *Connectivity check* (one `host:port` per line, with a button that puts
+the default addresses back), or over the API with
 `PUT /api/v1/settings/connectivity` (see the [API reference](openapi.yaml)).
 They are stored in the database, apply to the running check at once without a
 restart, and survive one. A change of targets forgets what the old ones said:
@@ -324,7 +326,8 @@ an ongoing "no outbound connection" spell ends without a notice, and the next
 suspected outage is judged against the new list. A flag or environment
 variable wins over what is saved there, and the API refuses to change a
 setting one of them fixes, naming it — so leave both unset if you want to
-manage the check over the API.
+manage the check from Settings or the API. The card shows a fixed setting
+read-only, with the flag or variable that fixes it.
 
 ## Which build is this
 

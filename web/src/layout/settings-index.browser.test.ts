@@ -86,6 +86,23 @@ describe("at a desktop width", () => {
     }
   });
 
+  // Retention is a lazy card under two more (status pages, the
+  // connectivity check), and they resolve in the same frame. Scroll
+  // anchoring lost the target there and left it 294px down (SUB-168).
+  it("lands a deep link to a lazy card at the top, after the cards above it load", async () => {
+    const page = await open(1280, 600, "#retention");
+    try {
+      await page.waitForFunction(() => !document.querySelector(".settings-sections")?.textContent?.includes("Loading"), { timeout: 10_000 });
+      await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+      const bar = await box(page, ".shell-topbar");
+      const retention = await box(page, "#retention");
+      expect(retention.top).toBeGreaterThanOrEqual(bar.bottom);
+      expect(retention.top).toBeLessThan(bar.bottom + 40);
+    } finally {
+      await page.close();
+    }
+  });
+
   it("scrolls to a section when its index link is followed", async () => {
     const page = await open(1280, 600);
     try {

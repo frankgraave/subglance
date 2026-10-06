@@ -5,6 +5,7 @@ import App from "./App";
 import { disabledWatchdog } from "./watchdog/fixtures";
 import { defaultRetention } from "./retention/fixtures";
 import { steadyDiagnostics } from "./diagnostics/fixtures";
+import { defaultConnectivitySettings } from "./connectivity/fixtures";
 import { LAYOUT_STORAGE_KEY } from "./shell/preferences";
 
 const user = { id: 1, email: "operator@example.test", role: "viewer", created_at: "2026-09-01T00:00:00Z" };
@@ -26,6 +27,7 @@ beforeEach(() => {
     if (path === "/api/v1/users") return json({ users: [{ ...user, role }] });
     if (path === "/api/v1/settings/retention") return json(defaultRetention);
     if (path === "/api/v1/diagnostics") return json(steadyDiagnostics);
+    if (path === "/api/v1/settings/connectivity") return json(defaultConnectivitySettings);
     if (path === "/api/v1/auth/me") return json({ ...user, role });
     if (path === "/api/v1/setup") return json({ setup_required: false });
     if (path === "/api/v1/auth/password" || path === "/api/v1/auth/logout") return new Response(null, { status: 204 });
@@ -81,9 +83,9 @@ it("shows the users card to an administrator, with their own account marked", as
   render(<App />);
   expect(await screen.findByText("you")).toBeTruthy();
   expect(screen.getByRole("heading", { name: "Users (1)" })).toBeTruthy();
-  // Account, display, users, status pages, self-monitoring, retention,
-  // backups, import & export, API tokens, instance and reset.
-  expect(screen.getAllByRole("region")).toHaveLength(11);
+  // Account, display, users, status pages, self-monitoring, connectivity,
+  // retention, backups, import & export, API tokens, instance and reset.
+  expect(screen.getAllByRole("region")).toHaveLength(12);
   fireEvent.change(screen.getByRole("searchbox", { name: "Filter settings" }), { target: { value: "roles" } });
   expect(screen.getByRole("heading", { name: "Users (1)" }).closest("[hidden]")).toBeNull();
   expect(screen.getByRole("heading", { name: "Retention & storage", hidden: true }).closest("[hidden]")).toBeTruthy();
