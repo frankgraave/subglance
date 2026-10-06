@@ -18,6 +18,13 @@
   padding: var(--space-16) clamp(var(--space-6), 5vw, var(--size-col-gutter)) var(--space-16);
 }
 
+/* The board is everything the room reads: the header line and the tiles. It
+   carries the zoom `useWallZoom` writes, so both grow together and the header
+   keeps whispering at the same proportion to the lamps (see `fit.ts`). Layout
+   inside it is in the product's own pixels; only the stage around it is in
+   the screen's. */
+.wall-board { min-width: 0; }
+
 .wall-head {
   display: flex;
   align-items: baseline;

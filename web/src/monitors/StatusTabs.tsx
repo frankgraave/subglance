@@ -1,6 +1,7 @@
 import { LED_STATE } from "./ledState";
 import { ListTabs } from "./ListTabs";
-import type { Summary } from "./model";
+import { STATUS_LABEL } from "./format";
+import { SUMMARY_ORDER, type Summary } from "./model";
 import type { MonitorStatus } from "./types";
 
 /**
@@ -16,13 +17,7 @@ import type { MonitorStatus } from "./types";
  */
 const TABS: readonly { status: MonitorStatus | null; label: string }[] = [
   { status: null, label: "All" },
-  { status: "down", label: "Down" },
-  { status: "recovering", label: "Recovering" },
-  { status: "warning", label: "Warning" },
-  { status: "pending", label: "Pending" },
-  { status: "waiting", label: "Waiting" },
-  { status: "paused", label: "Paused" },
-  { status: "up", label: "Up" },
+  ...SUMMARY_ORDER.map((status) => ({ status, label: STATUS_LABEL[status] })),
 ];
 
 /** All has no status, and a tab needs a key. */

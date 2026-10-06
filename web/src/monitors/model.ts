@@ -478,6 +478,25 @@ export function describeFilter(
 
 export type Summary = Record<MonitorStatus, number> & { total: number };
 
+/**
+ * The statuses in the order their counts are read: worst first, up last.
+ *
+ * The dashboard's status tabs and the status wall's header both walk this
+ * list, so the two cannot disagree about which counts there are or in which
+ * order. They did: the wall used to count only what was down, so a screen
+ * with two warnings and a paused monitor said "3 down" while the dashboard
+ * beside it said "3 down · 2 warning · 1 paused · 20 up" (SUB-199).
+ */
+export const SUMMARY_ORDER: readonly MonitorStatus[] = [
+  "down",
+  "recovering",
+  "warning",
+  "pending",
+  "waiting",
+  "paused",
+  "up",
+];
+
 /** Counts per status for the heading. */
 export function summarise(monitors: readonly Monitor[]): Summary {
   const summary: Summary = {

@@ -89,7 +89,9 @@ describe("StatusWall", () => {
     // have been fixed, or nine more may have joined it.
     render(<StatusWall monitors={monitors} stale now={NOON} />);
     expect(screen.queryByText("1 down")).toBeNull();
-    expect(screen.getByText(/1 down, last known/)).toBeTruthy();
+    expect(screen.getByText("1 down · 1 up, last known")).toBeTruthy();
+    // Not in the alarm colour either: a count nobody can vouch for.
+    expect(document.querySelector(".wall-meta-down")).toBeNull();
   });
 
   it("renders its own frame around a first-load notice, not a bare sentence", () => {
@@ -125,6 +127,44 @@ describe("StatusWall", () => {
       screen.getByRole("button", { name: /leave the status wall/i }),
     );
     expect(exit).toHaveBeenCalledTimes(1);
+  });
+
+  it("counts every status the dashboard counts, worst first", () => {
+    // The wall used to say "3 down" while the dashboard beside it said
+    // "3 down · 2 warning · 1 paused · 20 up": two warnings and a monitor
+    // someone switched off were invisible from across the room (SUB-199).
+    render(
+      <StatusWall
+        monitors={[
+          monitor("a", "up"),
+          monitor("b", "paused"),
+          monitor("c", "warning"),
+          monitor("d", "down"),
+          monitor("e", "up"),
+          monitor("f", "recovering"),
+          monitor("g", "pending"),
+          monitor("h", "waiting"),
+        ]}
+        now={NOON}
+      />,
+    );
+    expect(document.querySelector(".wall-meta")!.textContent).toBe(
+      "8 monitors · 1 down · 1 recovering · 1 warning · 1 pending · 1 waiting · 1 paused · 2 up",
+    );
+    // Down alone keeps the alarm colour; the rest whisper with the line.
+    expect(document.querySelector(".wall-meta-down")!.textContent).toBe("1 down");
+  });
+
+  it("leaves out a status nobody is in", () => {
+    render(
+      <StatusWall
+        monitors={[monitor("a", "up"), monitor("b", "up"), monitor("c", "paused")]}
+        now={NOON}
+      />,
+    );
+    expect(document.querySelector(".wall-meta")!.textContent).toBe(
+      "3 monitors · 1 paused · 2 up",
+    );
   });
 
   it("counts what is down in the whispered header", () => {
