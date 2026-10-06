@@ -117,10 +117,19 @@ const MEASURE = `(selector) => {
   const words = over(probe, getComputedStyle(probe).color);
   const wordsRatio = words ? ratio(words, backdrop(probe)) : 0;
   probe.remove();
-  // A glyph that is not drawn marks nothing, whatever colour it computes to.
+  // A glyph that is not drawn marks nothing, whatever colour it computes to:
+  // one hidden, or faded out by itself or an ancestor, keeps its box.
+  const painted = (el) => {
+    if (getComputedStyle(el).visibility !== "visible") return false;
+    let opacity = 1;
+    for (let node = el; node; node = node.parentElement) {
+      opacity *= Number(getComputedStyle(node).opacity);
+    }
+    return opacity > 0;
+  };
   const svg = button.querySelector(":scope > svg");
   const box = svg && svg.getBoundingClientRect();
-  const glyph = box && box.width >= 1 && box.height >= 1 ? svg : null;
+  const glyph = box && box.width >= 1 && box.height >= 1 && painted(svg) ? svg : null;
   const style = glyph && getComputedStyle(glyph);
   const mark = glyph && over(glyph, style.stroke === "none" ? style.color : style.stroke);
   return {
