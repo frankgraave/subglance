@@ -151,7 +151,7 @@ Select-String subglance_VERSION_windows_amd64.zip SHA256SUMS
 ```
 
 > [!NOTE]
-> The newest published version is `v0.1.0-rc4`, a release candidate. It is a
+> The newest published version is `v0.1.0-rc5`, a release candidate. It is a
 > real, signed build with archives for all five platforms — but a candidate,
 > not v0.1: pin it deliberately rather than treating it as stable.
 

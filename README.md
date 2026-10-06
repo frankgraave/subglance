@@ -21,7 +21,7 @@ everything is running, what is broken, and since when.
 > **Status: early development.** The engine works end to end — monitors are
 > scheduled, checked, confirmed into incidents, streamed to a live dashboard and
 > delivered to a human over eight notification channels. The latest release is
-> **`v0.1.0-rc4`**, a signed release candidate with binaries for five platforms;
+> **`v0.1.0-rc5`**, a signed release candidate with binaries for five platforms;
 > the `:edge` image carries everything merged since, listed under
 > [newer than the latest release](#newer-than-the-latest-release).
 
@@ -110,7 +110,7 @@ what has not reached a release yet is listed under
 | REST API v1 + OpenAPI 3.1 specification | ✅ Working |
 | Authentication — sessions, API tokens, three roles | ✅ Working |
 | Dashboard, monitor detail, incidents, monitors, notifications screens | ✅ Working |
-| Signed multi-platform release builds | ✅ Working (`v0.1.0-rc4`) |
+| Signed multi-platform release builds | ✅ Working (`v0.1.0-rc5`) |
 | Maintenance windows — one-off and weekly, by monitor or tag | ✅ Working |
 | Public status pages | ✅ Working |
 | Configuration files — YAML export and import | ✅ Working |
@@ -182,24 +182,9 @@ what has not reached a release yet is listed under
 
 ### Newer than the latest release
 
-These work on the `:edge` image, which follows `develop`, but arrived after
-`v0.1.0-rc4` was tagged: the release archives and the `:0.1.0-rc4` image do not
-have them.
-
-- **Public status pages** at `/status/<slug>`, managed under Settings
-- **Configuration files**: export and import monitors, channels, routing rules
-  and maintenance windows as YAML
-- **The ntfy, Gotify and SMS channels**, and the **Delivery** column that shows
-  what happened to each channel's recent alerts
-- **JSON assertions** on HTTP checks: fail when a field of the response does
-  not match
-- **Holding off outages while the host itself is offline**, and saying so on
-  the dashboard
-- **Retention controls**: a database size limit, the time of day the pass runs,
-  running it now, and compacting the database
-- **The Display section** in Settings, and pausing, resuming and deleting a
-  monitor from its detail page
-- **Choosing a monitor's channels** in its add and edit forms
+Nothing yet: everything listed as working above is in `v0.1.0-rc5`, its
+release archives and the `:0.1.0-rc5` image. Work merged after that tag is
+listed here until the next release carries it.
 
 ### Not working yet
 
