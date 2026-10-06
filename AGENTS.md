@@ -180,6 +180,13 @@ A checkbox or radio is `Checkbox` or `Radio` from
 and never `accent-color`: `tokens.test.ts` refuses both outside that component
 and its `choice.css`. Pass the label as children. The reasoning is in
 DESIGN.md §8.9.
+A refusal under a field or a form is `FieldError` from
+`web/src/components/FieldError.tsx`, never a hand-written
+`<p className="field-error">`: it draws the words in body ink and the alert
+glyph in red, because a red sentence fails 4.5:1 on a settings panel.
+`FieldError.test.tsx` refuses the class written or restyled anywhere else, and
+`layout/field-refusals.browser.test.ts` fails on a settings card with a field
+whose refusal it has not measured. The reasoning is in DESIGN.md §7.2.
 A dropdown is `Select` and a file chooser is `FileInput`, both from
 `web/src/components/`, never a hand-written `<select>` or
 `<input type="file">`; `tokens.test.ts` refuses either elsewhere. Give

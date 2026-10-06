@@ -8,6 +8,7 @@ import { ApiError } from "../api/http";
 import { createToken, fetchTokens, revokeToken, rolesWithin, tokensKey, type ApiToken, type TokenRole } from "./api";
 import { Select } from "../components/Select";
 import { formatDateIso } from "../format/format";
+import { FieldError } from "../components/FieldError";
 
 const EXPIRY: [string, string][] = [["", "Never"], ["720h", "30 days"], ["2160h", "90 days"], ["8760h", "1 year"]];
 const ROLE_HELP: Record<TokenRole, string> = {
@@ -100,7 +101,7 @@ function CreateForm({ role, onCreated }: { role: string; onCreated: (token: stri
           <span className="field-label" aria-hidden="true">Role</span>
           <RoleChoice label="Role" value={scope} onChange={setScope} roles={roles}
             describedBy={roleError ? `${id}-role-help ${id}-error` : `${id}-role-help`} />
-          {roleError && <p className="field-error" role="alert" id={`${id}-error`}>{error.message}</p>}
+          {roleError && <FieldError id={`${id}-error`}>{error.message}</FieldError>}
         </div>
         <div className="field">
           <label className="field-label" htmlFor={`${id}-expiry`}>Expires</label>
@@ -110,7 +111,7 @@ function CreateForm({ role, onCreated }: { role: string; onCreated: (token: stri
         </div>
       </div>
       <p className="panel-note" id={`${id}-role-help`}>{ROLE_HELP[scope]}</p>
-      {error && !roleError && <p className="field-error" role="alert" id={`${id}-error`}>{error.message}</p>}
+      {error && !roleError && <FieldError id={`${id}-error`}>{error.message}</FieldError>}
       <div><button className="button-solid" type="submit" disabled={!name.trim() || saving}>{saving ? "Creating…" : "Create token"}</button></div>
     </form>
   );
@@ -160,7 +161,7 @@ function TokenRow({ token, now, onRevoked }: { token: ApiToken; now: number; onR
       <div className="tokens-main">
         <p><strong>{token.name}</strong> <span className="literal">{token.prefix}…</span></p>
         <p className="panel-note">{facts.join(" · ")}</p>
-        {error && <p className="field-error" role="alert">{error}</p>}
+        {error && <FieldError>{error}</FieldError>}
       </div>
       <StateChip>{live ? token.role : token.revoked_at ? "revoked" : "expired"}</StateChip>
       {live && (confirming ? (

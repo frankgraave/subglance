@@ -66,10 +66,9 @@ function LastPass({ pass }: { pass: RetentionPass }) {
 }
 
 /*
- * Failures here wear the caveat style (a warn rail, `--ink` text), not the
- * form's `.field-error`: its `--down` text measures under 4.5:1 on a card
- * panel (Retention.browser.test.ts). A failed pass is a caveat the reader
- * must not skim past, which is what that style is for.
+ * Failures here wear the caveat style (a warn rail, `--ink` text), not a
+ * FieldError: a failed pass is not a refusal of something the reader typed,
+ * it is a caveat they must not skim past, which is what that style is for.
  */
 
 /** Why a request to start something was refused, in words the card can show. */

@@ -2,6 +2,7 @@ import { useId } from "react";
 import { Checkbox, Radio } from "../components/Choice";
 import { knownTimezones } from "./quietHours";
 import type { QuietDraft } from "./quietHours";
+import { FieldError } from "../components/FieldError";
 
 /**
  * The quiet-hours part of the channel form (SUB-124).
@@ -161,9 +162,9 @@ export function QuietHoursField({
       </p>
 
       {error !== null && (
-        <p className="field-error" id={`${ids}-error`} role="alert">
+        <FieldError id={`${ids}-error`}>
           {error}
-        </p>
+        </FieldError>
       )}
     </fieldset>
   );

@@ -1,6 +1,7 @@
 import { AuthScreen } from "./AuthScreen";
 import type { User } from "./api";
 import type { Session } from "./session";
+import { FieldError } from "../components/FieldError";
 
 /**
  * Decides what the whole app is, given the session.
@@ -60,9 +61,9 @@ export function SessionGate({
               SubGlance is running in your browser, but the server behind it did
               not answer, so there is no way to tell whether you are signed in.
             </p>
-            <p className="field-error" role="alert">
+            <FieldError>
               {session.message}
-            </p>
+            </FieldError>
             <button className="button-solid" type="button" onClick={onRetry}>
               Try again
             </button>

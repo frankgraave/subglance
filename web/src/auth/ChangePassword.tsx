@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
-import type { FormEvent, ReactNode } from "react";
-import { IconAlert } from "../components/icons";
+import type { FormEvent } from "react";
+import { FieldError } from "../components/FieldError";
 import { ApiError, changePassword } from "./api";
 import type { Rejection } from "./CredentialsForm";
 import { passwordStrength, describeStrength } from "./password";
@@ -11,12 +11,6 @@ const FIELDS = [
   ["new_password", "New password"],
   ["confirmation", "Confirm new password"],
 ] as const;
-
-function PasswordError({ id, children }: { id?: string; children: ReactNode }) {
-  return <p className="field-error auth-password-error" role="alert" id={id}>
-    <IconAlert /><span>{children}</span>
-  </p>;
-}
 
 /** Passwords live only in this mounted form, never in a cache or storage. */
 export function ChangePassword() {
@@ -86,12 +80,12 @@ export function ChangePassword() {
             <p className="auth-intro" id={`${id}-strength`}>{describeStrength(values.new_password)}</p>
           )}
           {rejection?.field === field && (
-            <PasswordError id={`${id}-error`}>{rejection.message}</PasswordError>
+            <FieldError id={`${id}-error`}>{rejection.message}</FieldError>
           )}
         </div>
       ))}
       {rejection && !FIELDS.some(([field]) => field === rejection.field) && (
-        <PasswordError>{rejection.message}</PasswordError>
+        <FieldError>{rejection.message}</FieldError>
       )}
       <div>
         <button className="button-solid" disabled={saving || incomplete} type="submit">

@@ -18,6 +18,7 @@ import type { ChannelInput } from "./channelsApi";
 import { QuietHoursField } from "./QuietHoursField";
 import { draftFrom, quietChange, quietProblem } from "./quietHours";
 import { Select } from "../components/Select";
+import { FieldError } from "../components/FieldError";
 
 /**
  * Adding or editing one channel.
@@ -433,9 +434,9 @@ export function ChannelForm({
             : {})}
         />
         {problem?.key === "name" && (
-          <p className="field-error" id={`${ids}-name-error`} role="alert">
+          <FieldError id={`${ids}-name-error`}>
             {problem.message}
-          </p>
+          </FieldError>
         )}
       </div>
 
@@ -540,13 +541,9 @@ export function ChannelForm({
               <>
                 {renderControl(spec, inputId, invalid)}
                 {invalid && (
-                  <p
-                    className="field-error"
-                    id={`${inputId}-error`}
-                    role="alert"
-                  >
+                  <FieldError id={`${inputId}-error`}>
                     {problem.message}
-                  </p>
+                  </FieldError>
                 )}
                 {stored && (
                   <div className="button-row">
@@ -612,9 +609,9 @@ export function ChannelForm({
       </p>
 
       {problem !== null && problem.key === null && (
-        <p className="field-error" role="alert">
+        <FieldError>
           {problem.message}
-        </p>
+        </FieldError>
       )}
 
       <div className="button-row">

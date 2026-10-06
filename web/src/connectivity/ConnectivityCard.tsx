@@ -1,8 +1,9 @@
-import { useId, useState, type FormEvent, type ReactNode } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, Panel } from "../components/Card";
 import { Checkbox } from "../components/Choice";
-import { IconAlert, IconNetwork } from "../components/icons";
+import { FieldError } from "../components/FieldError";
+import { IconNetwork } from "../components/icons";
 import { ApiError } from "../api/http";
 import {
   connectivitySettingsKey, fetchConnectivitySettings, parseTargets, saveConnectivitySettings,
@@ -11,11 +12,6 @@ import {
 import { connectivityKey } from "./api";
 
 type Outcome = "saved" | "stale" | null;
-
-/** The server's refusal, under the field it names or under the form. */
-function Refusal({ id, children }: { id?: string; children: ReactNode }) {
-  return <p className="field-error connectivity-error" role="alert" id={id}><IconAlert /><span>{children}</span></p>;
-}
 
 const sameList = (a: string[], b: string[]) => a.length === b.length && a.every((item, i) => item === b[i]);
 
@@ -95,7 +91,7 @@ function ConnectivityForm({ data, outcome, setOutcome }: {
             : enabled ? "When every address below fails as well, the failure is this host's: it is kept as a warning, and no incident or alert follows."
             : "Off: when this host loses its connection, every monitor is reported down and alerts once the connection is back."}
         </p>
-        {enabledError && <Refusal id={`${id}-enabled-help-error`}>{enabledError}</Refusal>}
+        {enabledError && <FieldError id={`${id}-enabled-help-error`}>{enabledError}</FieldError>}
       </div>
       <div className="field">
         <label className="field-label" htmlFor={`${id}-targets`}>Addresses to dial</label>
@@ -108,7 +104,7 @@ function ConnectivityForm({ data, outcome, setOutcome }: {
           {targetsPinned ? `Set by ${data.targets.pinned_by}; change it there.`
             : `One host:port per line, at most ${data.max_targets}. Choose addresses that do not share a failure with your monitors, such as your gateway. Saving new addresses ends an ongoing offline spell without a notice.`}
         </p>
-        {targetsError && <Refusal id={`${id}-targets-help-error`}>{targetsError}</Refusal>}
+        {targetsError && <FieldError id={`${id}-targets-help-error`}>{targetsError}</FieldError>}
         {!targetsPinned && (
           <div>
             <button className="button button--compact" type="button" disabled={isDefault || saving}
@@ -116,7 +112,7 @@ function ConnectivityForm({ data, outcome, setOutcome }: {
           </div>
         )}
       </div>
-      {rejection && !rejection.field && <Refusal>{rejection.message}</Refusal>}
+      {rejection && !rejection.field && <FieldError>{rejection.message}</FieldError>}
       {enabledPinned && targetsPinned
         ? <p className="panel-note">Both settings are fixed by the server's configuration.</p>
         : <div>

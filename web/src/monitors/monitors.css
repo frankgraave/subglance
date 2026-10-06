@@ -1318,9 +1318,7 @@
 .edit-form .field-help,
 .edit-form .button--quiet,
 .repeat-field .field-help { color: var(--ink-2); }
-.edit-form .field-error,
-.edit-form .result,
-.repeat-field .field-error { color: var(--ink); }
+.edit-form .result { color: var(--ink); }
 
 .add-addon {
   position: relative;

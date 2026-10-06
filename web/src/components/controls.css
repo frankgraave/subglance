@@ -135,31 +135,44 @@
 }
 
 /*
- * The message for the input directly above it, or for the form.
+ * The message for the input directly above it, or for the form: a refusal,
+ * always drawn by `FieldError` (components/FieldError.tsx).
  *
  * Same size as the help text and directly beneath it, so the field reads as
- * one block rather than as a box with something shouting under it. Colour is
- * the only difference, and colour is deliberately not the only signal: the
- * input itself carries aria-invalid and a red border, so this still works for
- * anyone who cannot tell --down from --ink-3 (DESIGN.md §3.1).
+ * one block rather than as a box with something shouting under it.
+ *
+ * The words are the body ink and only the alert glyph is red. At the helper
+ * size the failure red measured 4.49:1 on a light settings panel and 4.28:1
+ * on a dark one, under the 4.5:1 a sentence needs (WCAG 1.4.3); the glyph is a
+ * graphic, held to 3:1 (1.4.11), which the same red clears on every surface.
+ * Colour was never the only signal and still is not: the input carries
+ * aria-invalid and a red border, and the glyph marks the line as a refusal
+ * for anyone who cannot tell --down from --ink (DESIGN.md §3.1, §7.2).
  *
  * It takes the prose leading rather than the single-line pair: the message is
  * a sentence, not a word — "press Test it first, or pick a type…" wraps at any
- * realistic field width — which is the case --lead-prose exists for.
+ * realistic field width — which is the case --lead-prose exists for. The
+ * glyph is centred on the first line, so a wrapped sentence hangs beside it
+ * rather than running back under it.
  */
 .field-error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-1h);
   font-size: var(--type-helper);
   line-height: var(--lead-prose);
-  color: var(--down);
+  color: var(--ink);
 }
 
 .field-error > svg {
-  display: inline-block;
+  flex: none;
   width: var(--size-icon-sm);
   height: var(--size-icon-sm);
-  margin-right: var(--space-1);
-  vertical-align: middle;
+  margin-block: calc((var(--lead-prose) - var(--size-icon-sm)) / 2);
+  color: var(--down);
 }
+
+.field-error > span { min-width: 0; }
 
 /* Fields side by side while they fit, one per line when they do not. */
 .field-grid {

@@ -6,6 +6,7 @@ import { Card, Panel } from "../components/Card";
 import { IconAlert } from "../components/icons";
 import { RESET_PHRASE, resetInstance, type ResetResult } from "./api";
 import { formatCount } from "../format/format";
+import { FieldError } from "../components/FieldError";
 
 function plural(n: number, one: string, many: string) {
   return `${formatCount(n)} ${n === 1 ? one : many}`;
@@ -84,7 +85,7 @@ export function ResetInstanceCard() {
                 : "The button stays disabled until the phrase matches exactly, including case."}
             </p>
           </div>
-          {error && <p className="field-error" role="alert">{error}</p>}
+          {error && <FieldError>{error}</FieldError>}
           <div>
             <button className="button button--danger" type="submit" disabled={!matches || busy}>
               {busy ? "Deleting…" : "Delete all data"}

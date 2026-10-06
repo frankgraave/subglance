@@ -1,9 +1,9 @@
 import { useId } from "react";
 import { Checkbox } from "../components/Choice";
-import { IconAlert } from "../components/icons";
 import type { Channel } from "../notifications/channels";
 import type { RuleRoute } from "./inventory";
 import { channelOptionLabel, describeRouting, useChannelOptions } from "./channelChoice";
+import { FieldError } from "../components/FieldError";
 
 export type ChannelPickerProps = {
   /** The chosen channel ids. */
@@ -55,7 +55,7 @@ export function ChannelPicker({ value, onChange, rules = [], error, failedNote, 
     <legend className="field-label">Channels</legend>
     {options.phase === "loading" && <p className="field-help">Loading channels…</p>}
     {/* Not an alert: nothing the user did failed, and the form still works. */}
-    {options.phase === "failed" && <p className="field-error"><IconAlert />Could not load channels: {options.message}. {failedNote}</p>}
+    {options.phase === "failed" && <FieldError announce={false}>Could not load channels: {options.message}. {failedNote}</FieldError>}
     {options.phase === "ready" && channels.length === 0 &&
       <p id={`${ids}-help`} className="warn-note">No notification channels exist yet, so nobody is alerted about this monitor. Add one under Notifications.</p>}
     {channels.length > 0 && <div className="mon-channels-list">
@@ -64,6 +64,6 @@ export function ChannelPicker({ value, onChange, rules = [], error, failedNote, 
         aria-invalid={error === undefined ? undefined : true}>{channelOptionLabel(channel)}</Checkbox>)}
     </div>}
     {routing !== null && <p id={`${ids}-help`} className={routing.warn ? "warn-note" : "field-help"}>{routing.text}</p>}
-    {error !== undefined && <p id={`${ids}-error`} className="field-error" role="alert"><IconAlert />{error}</p>}
+    {error !== undefined && <FieldError id={`${ids}-error`}>{error}</FieldError>}
   </fieldset>;
 }

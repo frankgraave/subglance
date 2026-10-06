@@ -1,6 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { IconAlert } from "../components/icons";
 import { Checkbox } from "../components/Choice";
 import type { InventoryMonitor } from "./inventory";
 import type { MonitorPatch } from "./inventoryApi";
@@ -20,6 +19,7 @@ import { channelIdsFromText, channelIdsText } from "./channelChoice";
 import type { Channel } from "../notifications/channels";
 import { JSON_HELP, JSON_OPERATORS, assertionFrom, expectedProblem, expectedText } from "./jsonAssertion";
 import { Select } from "../components/Select";
+import { FieldError } from "../components/FieldError";
 
 export type EditMonitorFormProps = {
   /** Values and validator must come from the same detail response. */
@@ -265,7 +265,7 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
         inputProps={{ name: key, "aria-invalid": props["aria-invalid"], "aria-describedby": props["aria-describedby"] }} />
         : options ? <Select {...props}>{options.map((op) => <option key={op} value={op}>{op.replace("_", " ")}</option>)}</Select>
         : multiline ? <textarea {...props} rows={3} spellCheck={false} /> : <input {...props} autoComplete="off" />}
-      {problem?.field === key && <p id={`${ids}-error`} role="alert" className="field-error"><IconAlert />{problem.message}</p>}
+      {problem?.field === key && <FieldError id={`${ids}-error`}>{problem.message}</FieldError>}
     </div>;
   };
   return <form ref={form} className="form-column edit-form" onSubmit={submit} noValidate aria-label="Edit monitor settings">
@@ -281,7 +281,7 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
           <Checkbox name="follow_redirects" checked={values.follow_redirects === "true"} onChange={(event) => update("follow_redirects", String(event.target.checked))}
             aria-invalid={problem?.field === "follow_redirects" ? true : undefined}
             aria-describedby={problem?.field === "follow_redirects" ? `${ids}-error` : undefined}>Follow redirects</Checkbox>
-          {problem?.field === "follow_redirects" && <p id={`${ids}-error`} role="alert" className="field-error"><IconAlert />{problem.message}</p>}
+          {problem?.field === "follow_redirects" && <FieldError id={`${ids}-error`}>{problem.message}</FieldError>}
         </div>}
         {field("headers", true)}{field("body", true)}{field("ssl_warn_days")}
         {"json_path" in values && <>
@@ -298,7 +298,7 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
               onChange={(value) => update("min_tls_version", value)}
               invalid={problem?.field === "min_tls_version"}
               errorId={problem?.field === "min_tls_version" ? `${ids}-error` : undefined}>
-              {problem?.field === "min_tls_version" && <p id={`${ids}-error`} role="alert" className="field-error"><IconAlert />{problem.message}</p>}
+              {problem?.field === "min_tls_version" && <FieldError id={`${ids}-error`}>{problem.message}</FieldError>}
             </TlsFloorField>
           </div>
         </details>
@@ -317,7 +317,7 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
         {"repeat_after_s" in values ? <RepeatAlertField value={values.repeat_after_s} onChange={(value) => update("repeat_after_s", value)} error={problem?.field === "repeat_after_s" ? problem.message : undefined} /> : <p className="field-help">Repeat alert settings unavailable. Reload to read the current value.</p>}
       </AlertingSection>
     </fieldset>
-    {problem && !problem.field && <p className="field-error" role="alert"><IconAlert />{problem.message}</p>}
+    {problem && !problem.field && <FieldError>{problem.message}</FieldError>}
     <div role="status" aria-live="polite">
       {preview.phase === "checking" && <p className="result">Checking…</p>}
       {preview.phase === "done" && <p className={`result ${preview.result.ok ? "result--good" : "result--bad"}`}>{describePreview(preview.result)}</p>}

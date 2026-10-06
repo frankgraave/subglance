@@ -11,6 +11,7 @@ import {
 import { Maintenance } from "./Maintenance";
 import { formatBytes } from "./format";
 import { formatCount } from "../format/format";
+import { FieldError } from "../components/FieldError";
 
 const DAY = 86_400;
 
@@ -109,7 +110,7 @@ function AmountField({ label, unit, offLabel, restore, draft, onChange, disabled
           onChange={(event) => onChange({ value: draft.value || restore, off: event.target.checked })}>{offLabel}</Checkbox>
       </div>
       <p className="panel-note" id={`${id}-help`}>{note}</p>
-      {error && <p className="field-error" id={`${id}-error`} role="alert">{error}</p>}
+      {error && <FieldError id={`${id}-error`}>{error}</FieldError>}
     </fieldset>
   );
 }
@@ -165,7 +166,7 @@ function RunAtField({ data, value, onChange, disabled, error }: {
         {pin.source === "pinned" ? `Set by ${pin.pinned_by} to ${pin.value}; change it there.`
           : "In the server's time zone (its TZ variable, UTC without one); the times on this card are in yours. A new time never starts a pass by itself."}
       </p>
-      {error && <p className="field-error" id={`${id}-error`} role="alert">{error}</p>}
+      {error && <FieldError id={`${id}-error`}>{error}</FieldError>}
     </div>
   );
 }
@@ -288,7 +289,7 @@ function RetentionForm({ data, canAdmin, outcome, setOutcome }: {
             : "Nothing is old enough to be removed by this change yet."}
         </p>
       )}
-      {rejection && !rejection.field && <p className="field-error" role="alert">{rejection.message}</p>}
+      {rejection && !rejection.field && <FieldError>{rejection.message}</FieldError>}
       {canAdmin && (
         <div>
           <button className="button-solid" type="submit" disabled={!changed || !valid || saving || !previewReady}>

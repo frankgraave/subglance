@@ -2,6 +2,7 @@ import { useId, useRef } from "react";
 import { DurationField } from "./DurationField";
 import { SECONDS_TO_HOURS } from "./duration";
 import { Select } from "../components/Select";
+import { FieldError } from "../components/FieldError";
 
 const isNumericZero = (value: string) => value.trim() !== "" && Number(value) === 0;
 
@@ -43,6 +44,6 @@ export function RepeatAlertField({ value, onChange, error }: {
         }} />
     </>}
     <p id={`${id}-help`} className="field-help">Each later repeat waits four times as long as the one before, up to once a day. At least 1 minute keeps reminders from becoming too frequent. Muting the incident stops repeats.</p>
-    {error && <p id={`${id}-error`} className="field-error" role="alert">{error}</p>}
+    {error && <FieldError id={`${id}-error`}>{error}</FieldError>}
   </div>;
 }
