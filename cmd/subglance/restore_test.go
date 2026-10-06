@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -105,24 +106,10 @@ func TestServerRefusesADataDirAnotherServerHolds(t *testing.T) {
 	}
 	defer func() { _ = first.Release() }()
 
-	// run loads the configuration before it takes the lock, so an inherited
-	// backup variable would fail validation and the test would never reach
-	// the held lock. Clear every one of them.
-	for _, key := range []string{
-		"SUBGLANCE_BACKUP_TARGET",
-		"SUBGLANCE_BACKUP_ENDPOINT",
-		"SUBGLANCE_BACKUP_REGION",
-		"SUBGLANCE_BACKUP_INTERVAL",
-		"SUBGLANCE_BACKUP_KEEP",
-		"SUBGLANCE_BACKUP_ACCESS_KEY_ID",
-		"SUBGLANCE_BACKUP_SECRET_ACCESS_KEY",
-		"SUBGLANCE_BACKUP_SECRET_ACCESS_KEY_FILE",
-	} {
-		t.Setenv(key, "")
-	}
+	clearBackupEnv(t)
 	addr := freeAddr(t)
 	done := make(chan error, 1)
-	go func() { done <- run([]string{"--data-dir", dataDir, "--addr", addr}) }()
+	go func() { done <- run([]string{"--data-dir", dataDir, "--addr", addr}, io.Discard) }()
 	select {
 	case err := <-done:
 		if err == nil || !strings.Contains(err.Error(), datalock.Path(dataDir)) {
@@ -143,4 +130,24 @@ func freeAddr(t *testing.T) string {
 	addr := ln.Addr().String()
 	_ = ln.Close()
 	return addr
+}
+
+// clearBackupEnv empties every backup variable for the test. run loads the
+// configuration before it takes the lock or binds the port, so an inherited
+// backup variable would fail validation and the test would never reach the
+// condition it is about.
+func clearBackupEnv(t *testing.T) {
+	t.Helper()
+	for _, key := range []string{
+		"SUBGLANCE_BACKUP_TARGET",
+		"SUBGLANCE_BACKUP_ENDPOINT",
+		"SUBGLANCE_BACKUP_REGION",
+		"SUBGLANCE_BACKUP_INTERVAL",
+		"SUBGLANCE_BACKUP_KEEP",
+		"SUBGLANCE_BACKUP_ACCESS_KEY_ID",
+		"SUBGLANCE_BACKUP_SECRET_ACCESS_KEY",
+		"SUBGLANCE_BACKUP_SECRET_ACCESS_KEY_FILE",
+	} {
+		t.Setenv(key, "")
+	}
 }

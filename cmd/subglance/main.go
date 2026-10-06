@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -75,7 +76,7 @@ func main() {
 		}
 	}
 
-	if err := run(args); err != nil {
+	if err := run(args, os.Stdout); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return // the user asked for usage; not a failure
 		}
@@ -97,13 +98,15 @@ func runSubcommand(name string, fn func([]string, io.Writer) error, args []strin
 	}
 }
 
-func run(args []string) error {
+// run is the server. Its log goes to logOut, which is standard output in the
+// shipped binary and a buffer in the tests that read what it said.
+func run(args []string, logOut io.Writer) error {
 	cfg, err := config.Load(args)
 	if err != nil {
 		return err
 	}
 
-	log := logging.New(os.Stdout, cfg.LogLevel, cfg.LogFormat)
+	log := logging.New(logOut, cfg.LogLevel, cfg.LogFormat)
 	log.Info("starting subglance",
 		"version", buildinfo.Short(),
 		"addr", cfg.Addr,
@@ -265,8 +268,23 @@ func run(args []string) error {
 		return err
 	}
 
+	// Bind before anything starts. Everything above is setup that either
+	// completes or returns an error; from here on goroutines are started
+	// that check monitors and deliver alerts. A port that is already taken
+	// must stop the process before that, with one error and a non-zero exit,
+	// rather than after the scheduler and notifier have begun and the
+	// deferred database close pulls the store out from under them.
+	ln, err := listen(cfg.Addr)
+	if err != nil {
+		return err
+	}
+	// Serve takes ownership on the normal path and Shutdown closes it; this
+	// covers a return between here and Serve. Closing twice is harmless.
+	defer func() { _ = ln.Close() }()
+	// Said once the socket is bound, so the line is true when it is read.
+	log.Info("http server listening", "addr", cfg.Addr)
+
 	srv := &http.Server{
-		Addr: cfg.Addr,
 		// The runner doubles as the API's prober, so a manual check uses
 		// the same checkers, the same SSRF guard and the same recording
 		// path as a scheduled one.
@@ -383,8 +401,7 @@ func run(args []string) error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		log.Info("http server listening", "addr", cfg.Addr)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- fmt.Errorf("http server: %w", err)
 			return
 		}
@@ -458,6 +475,27 @@ func run(args []string) error {
 
 	log.Info("shutdown complete")
 	return nil
+}
+
+// listen binds the HTTP address. A port that is already taken gets a hint on
+// how to choose another, because that is the one bind failure an operator is
+// likely to meet and the system's wording does not say where to change it.
+func listen(addr string) (net.Listener, error) {
+	// Its own bounded context rather than the startup one: setup before the
+	// bind can use up most of that deadline, and an expired context fails
+	// resolving a host name even when the port is free. It bounds resolving
+	// the address only; the listener outlives it.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	var lc net.ListenConfig
+	ln, err := lc.Listen(ctx, "tcp", addr)
+	if err == nil {
+		return ln, nil
+	}
+	if addrInUse(err) {
+		return nil, fmt.Errorf("http server: %w; another process is using this address, choose another with --addr or SUBGLANCE_ADDR", err)
+	}
+	return nil, fmt.Errorf("http server: %w", err)
 }
 
 // awaitScheduler blocks until the check pipeline has stopped.
