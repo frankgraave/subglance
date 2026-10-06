@@ -121,12 +121,19 @@ export function applyHeartbeat(monitors: readonly Monitor[], e: HeartbeatEvent):
     maintenance: e.currentMaintenance ?? m.maintenance,
     latencyMs: e.latencyMs,
     lastCheck: e.at,
-    // An expiring pass keeps the notice's text: it is the reason the row
-    // is amber, and the pass did not change it.
-    error: e.ok ? (e.expiring === true ? m.error : undefined) : e.error,
+    // An expiring pass carries the notice's text: it is the reason the row
+    // is amber, and it replaces a blip's error that came before it. A server
+    // that sends no text leaves the row's own.
+    error: e.ok ? (e.expiring === true ? (e.error ?? m.error) : undefined) : e.error,
     // The kind belongs to this error, so it is replaced with it, never kept
     // from an earlier failure that said something else.
-    failureKind: e.ok ? (e.expiring === true ? m.failureKind : undefined) : e.failureKind,
+    failureKind: e.ok
+      ? e.expiring === true
+        ? e.error !== undefined
+          ? e.failureKind
+          : m.failureKind
+        : undefined
+      : e.failureKind,
     beats: [...m.beats, {
       ts: e.at,
       ok: e.ok,

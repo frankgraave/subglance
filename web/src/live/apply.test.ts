@@ -85,6 +85,22 @@ describe("applyHeartbeat", () => {
     expect(failed.status).toBe("warning");
   });
 
+  it("puts the notice back, not the blip's error, on the expiring pass after a blip", () => {
+    // The live row must say what the monitor API says once the blip is over:
+    // the certificate notice, not the connection failure before it.
+    const notice = monitor({ status: "expiring", error: "certificate expires in 6 days", failureKind: "cert_expiry" });
+    const [blip] = applyHeartbeat(
+      [notice],
+      beat({ ok: false, assessment: "warning", error: "connection refused", failureKind: "connection" }),
+    );
+    expect(blip).toMatchObject({ status: "warning", error: "connection refused", failureKind: "connection" });
+    const [back] = applyHeartbeat(
+      [blip],
+      beat({ ok: true, assessment: "up", expiring: true, error: "certificate expires in 5 days", failureKind: "cert_expiry" }),
+    );
+    expect(back).toMatchObject({ status: "expiring", error: "certificate expires in 5 days", failureKind: "cert_expiry" });
+  });
+
   it("leaves a paused monitor paused", () => {
     expect(applyHeartbeat([monitor({ status: "paused" })], beat())[0].status).toBe("paused");
     expect(statusAfterHeartbeat("paused", false)).toBe("paused");

@@ -114,8 +114,17 @@ func TestADigestCountsANoticeApart(t *testing.T) {
 	if !only.Down() {
 		t.Error("a digest with an open notice is not marked as needing attention")
 	}
+	if got := alertStatus(only); got != "expiring" {
+		t.Errorf("{{status}} of a digest of one notice = %q, want expiring", got)
+	}
 
+	if got := alertStatus(BuildDigest([]Alert{outage, notice}, "UTC", notice.At)); got != "down" {
+		t.Errorf("{{status}} of a digest with an outage still open = %q, want down", got)
+	}
 	mixed := BuildDigest([]Alert{outage, back, notice}, "UTC", notice.At)
+	if got := alertStatus(mixed); got != "expiring" {
+		t.Errorf("{{status}} of a digest whose outage ended and whose notice is open = %q, want expiring", got)
+	}
 	if got := mixed.Title(); got != "1 monitor went down and recovered during quiet hours" {
 		t.Errorf("title = %q, want only the outage counted", got)
 	}

@@ -477,17 +477,35 @@ func (r *Runner) restore(ctx context.Context) error {
 			status = state.StatusDown
 		}
 		if inc.Notice {
-			// A certificate notice is restored as one, with no failure
-			// streak. Counting the failures since it opened, as an
-			// outage does, would add up every blip of the weeks a notice
-			// can last, and the first failure after a restart would then
-			// confirm an outage that is not there. A restart in the middle
-			// of a real streak costs that streak's checks instead.
+			// A certificate notice is restored as one, with the failures
+			// after its latest passing check as the streak. Counting every
+			// failure since it opened, as an outage does, would add up the
+			// blips of the weeks a notice can last, and the first failure
+			// after a restart would confirm an outage that is not there.
+			// Restoring no streak at all would cost a real streak in
+			// progress the checks it had already failed.
+			fails, since, err := r.db.FailedStreakAfterLastPass(ctx, inc.MonitorID, inc.StartedAt, maxRestoredFailStreak)
+			if err != nil {
+				// The notice is restored without a streak: the outage, if
+				// there is one, confirms a few checks late rather than early
+				// on a count that could not be read.
+				r.log.Warn("could not count the failed streak against a certificate notice; restoring it without one",
+					"monitor_id", inc.MonitorID, "error", err)
+				fails, since = 0, time.Time{}
+			}
+			status := state.StatusExpiring
+			if fails > 0 {
+				// Failing against the notice, not yet confirmed: what the
+				// engine said before the restart.
+				status = state.StatusWarning
+			}
 			r.engine.Restore(inc.MonitorID, state.RestoredState{
-				Status:            state.StatusExpiring,
+				Status:            status,
 				IncidentOpen:      true,
 				IncidentConfirmed: true,
 				Notice:            true,
+				ConsecutiveFails:  fails,
+				FailingSince:      since,
 			})
 			continue
 		}
@@ -820,6 +838,13 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 	if active, err := r.db.InMaintenance(ctx, o.Monitor.ID, r.now()); err == nil {
 		currentMaintenance = &active
 	}
+	// An expiring frame carries the notice's text, which the stored pass
+	// does not: a live row that showed a blip against the notice puts the
+	// notice back from it, rather than keeping the blip's error.
+	frameError, frameKind := hb.Error, hb.FailureKind
+	if final.To == state.StatusExpiring {
+		frameError, frameKind = o.Result.Error, string(o.Result.Kind)
+	}
 	// Publish before applying the transition so the dashboard paints the new
 	// bar immediately, rather than waiting on incident bookkeeping.
 	r.publish(events.Event{
@@ -831,10 +856,10 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 			Assessment:         hb.Assessment,
 			Maintenance:        hb.Maintenance,
 			CurrentMaintenance: currentMaintenance,
-			FailureKind:        hb.FailureKind,
+			FailureKind:        frameKind,
 			LatencyMS:          hb.LatencyMS,
 			StatusCode:         hb.StatusCode,
-			Error:              hb.Error,
+			Error:              frameError,
 			Recovery:           recoveryFor(tr),
 			Expiring:           final.To == state.StatusExpiring,
 		},
@@ -960,7 +985,8 @@ type heartbeatPayload struct {
 	// Expiring is set on a passing check that leaves the monitor expiring:
 	// its certificate's notice is open. The assessment is "up" for the same
 	// reason as Recovery's, and without this a live client would read the
-	// pass as a plain up.
+	// pass as a plain up. Error and FailureKind then carry the notice's
+	// text and cause, although the stored heartbeat has neither.
 	Expiring bool `json:"expiring,omitempty"`
 }
 

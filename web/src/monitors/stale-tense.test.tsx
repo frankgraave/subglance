@@ -51,7 +51,7 @@ const T0 = 1_700_000_000_000;
 const NOW = T0 + 240_000;
 const WIDTH = 168;
 
-const ALL: MonitorStatus[] = ["up", "down", "recovering", "warning", "pending", "paused", "waiting"];
+const ALL: MonitorStatus[] = ["up", "down", "recovering", "warning", "expiring", "pending", "paused", "waiting"];
 
 /**
  * Names and targets that contain no status word.

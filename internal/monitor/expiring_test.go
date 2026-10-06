@@ -2,10 +2,12 @@ package monitor
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/frankgraave/subglance/internal/checker"
+	"github.com/frankgraave/subglance/internal/events"
 	"github.com/frankgraave/subglance/internal/scheduler"
 	"github.com/frankgraave/subglance/internal/state"
 	"github.com/frankgraave/subglance/internal/store"
@@ -135,7 +137,8 @@ func TestAnExpiringCertificateIsUpInTheRollups(t *testing.T) {
 
 // A notice is restored as a notice across a restart: no second alert, still
 // expiring, and the first failure afterwards is a warning rather than an
-// outage confirmed from a streak counted over the notice's lifetime.
+// outage confirmed from a streak counted over the notice's lifetime. The blip
+// before the restart was ended by a pass, so it is no streak.
 func TestANoticeSurvivesARestart(t *testing.T) {
 	ctx := context.Background()
 	db := testDB(t)
@@ -148,6 +151,9 @@ func TestANoticeSurvivesARestart(t *testing.T) {
 	}
 	// A blip during the notice leaves a failed heartbeat behind it.
 	if err := first.recordOutcome(at(outcomeFor(m, m.Target, false), start.Add(time.Minute))); err != nil {
+		t.Fatal(err)
+	}
+	if err := first.recordOutcome(expiringOutcome(m, start.Add(90*time.Second))); err != nil {
 		t.Fatal(err)
 	}
 
@@ -170,6 +176,105 @@ func TestANoticeSurvivesARestart(t *testing.T) {
 	}
 	if got := rec.events(); len(got) != 0 {
 		t.Errorf("alerts = %v, want none: the notice was already announced", got)
+	}
+}
+
+// A restart in the middle of a streak against a notice keeps that streak:
+// the failures after the latest passing check count, and an older blip that a
+// pass already ended does not.
+func TestANoticeRestoresAStreakInProgress(t *testing.T) {
+	ctx := context.Background()
+	db := testDB(t)
+	m := expiringMonitor(t, db)
+	start := time.Now().Add(-time.Hour).Truncate(time.Second)
+	failedAt := start.Add(3 * time.Minute)
+
+	first := New(Options{DB: db, Log: quietLogger()})
+	for _, o := range []scheduler.Outcome{
+		expiringOutcome(m, start),
+		at(outcomeFor(m, m.Target, false), start.Add(time.Minute)),
+		expiringOutcome(m, start.Add(2*time.Minute)),
+		at(outcomeFor(m, m.Target, false), failedAt),
+	} {
+		if err := first.recordOutcome(o); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	rec := &alertRecorder{}
+	second := New(Options{DB: db, Log: quietLogger(), Notify: rec.record})
+	if err := second.restore(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := second.Engine().Status(m.ID); got != state.StatusWarning {
+		t.Errorf("restored status = %q, want warning: a streak was running", got)
+	}
+	if err := second.recordOutcome(at(outcomeFor(m, m.Target, false), start.Add(4*time.Minute))); err != nil {
+		t.Fatal(err)
+	}
+	if got := rec.events(); len(got) != 1 || got[0] != state.EventIncidentConfirmed || rec.alerts[0].Incident.Notice {
+		t.Fatalf("alerts = %v, want the outage confirmed on the second failure of the streak", got)
+	}
+	outage, err := db.OpenIncidentFor(ctx, m.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outage.Notice || !outage.StartedAt.Equal(failedAt.UTC()) {
+		t.Errorf("outage = %+v, want an outage starting at the streak's first failure %v", outage, failedAt.UTC())
+	}
+}
+
+// An expiring pass streams the notice's text and cause, so a live row that
+// showed a blip against the notice gets the notice back. The stored
+// heartbeat stays a plain pass.
+func TestAnExpiringHeartbeatCarriesTheNotice(t *testing.T) {
+	ctx := context.Background()
+	db := testDB(t)
+	bus := events.NewBus(8)
+	sub := bus.Subscribe()
+	defer sub.Close()
+	r := New(Options{DB: db, Log: quietLogger(), Bus: bus})
+	m := expiringMonitor(t, db)
+	start := time.Now().Add(-time.Hour).Truncate(time.Second)
+
+	frame := func(o scheduler.Outcome) map[string]any {
+		t.Helper()
+		if err := r.recordOutcome(o); err != nil {
+			t.Fatal(err)
+		}
+		for {
+			e := <-sub.C()
+			if e.Kind != events.KindHeartbeat {
+				continue
+			}
+			data, err := json.Marshal(e.Payload)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var payload map[string]any
+			if err := json.Unmarshal(data, &payload); err != nil {
+				t.Fatal(err)
+			}
+			return payload
+		}
+	}
+
+	frame(expiringOutcome(m, start))
+	if got := frame(at(outcomeFor(m, m.Target, false), start.Add(time.Minute))); got["expiring"] != nil {
+		t.Errorf("a failing check carries expiring %v", got["expiring"])
+	}
+	got := frame(expiringOutcome(m, start.Add(2*time.Minute)))
+	if got["expiring"] != true || got["assessment"] != "up" ||
+		got["error"] != "certificate expires in 6 days (on 2026-10-12)" ||
+		got["failure_kind"] != string(checker.FailCertExpiry) {
+		t.Errorf("expiring frame = %v, want expiring, assessed up, with the notice's text and cause", got)
+	}
+	hb, err := db.LatestHeartbeat(ctx, m.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hb.Error != "" || hb.FailureKind != "" {
+		t.Errorf("heartbeat = %+v, want a plain pass with no error stored", hb)
 	}
 }
 

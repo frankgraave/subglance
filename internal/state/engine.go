@@ -811,6 +811,11 @@ type RestoredState struct {
 	// rather than an outage. The caller restores Status as StatusExpiring
 	// with it.
 	Notice bool
+
+	// FailingSince is the first failure of a streak counted against a
+	// restored notice, so an outage confirmed from that streak is dated from
+	// it. Zero without a streak, and ignored outside a notice.
+	FailingSince time.Time
 }
 
 // Restore seeds a monitor's state from the database at startup.
@@ -840,7 +845,7 @@ func (e *Engine) Restore(monitorID int64, rs RestoredState) {
 		rs.Status = StatusDown
 	}
 
-	e.state[monitorID] = &monitorState{
+	ms := &monitorState{
 		status:            rs.Status,
 		incidentOpen:      rs.IncidentOpen,
 		incidentConfirmed: rs.IncidentConfirmed,
@@ -848,4 +853,8 @@ func (e *Engine) Restore(monitorID int64, rs RestoredState) {
 		snapshotsSpent:    rs.SnapshotsSpent,
 		notice:            rs.Notice && rs.IncidentOpen && rs.IncidentConfirmed,
 	}
+	if ms.notice && ms.consecutiveFails > 0 {
+		ms.failingSince = rs.FailingSince
+	}
+	e.state[monitorID] = ms
 }
