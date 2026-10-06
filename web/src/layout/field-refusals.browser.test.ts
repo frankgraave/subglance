@@ -126,6 +126,19 @@ const EXEMPT: Record<string, string> = {
     "which ConfigFiles.browser.test.ts audits with axe in both themes on the refused step.",
 };
 
+/**
+ * Cards with no field to refuse: nothing on them is typed and submitted.
+ * Listed by name rather than inferred, because a card that keeps its form
+ * behind a button shows no field at rest; only a list that names every card
+ * makes a new one say whether it is driven, exempt or fieldless.
+ */
+const FIELDLESS: Record<string, string> = {
+  display: "Its choices apply the moment they are pressed; nothing is submitted, so nothing is refused.",
+  "self-monitoring": "Read-only: the watchdog's last ping and its outcome.",
+  backups: "Read-only: the backup target and the last snapshot.",
+  instance: "Read-only diagnostics; its one button copies them.",
+};
+
 const settle = (page: Page) => page.evaluate(async () => {
   await document.fonts.ready;
   await Promise.all(document.getAnimations()
@@ -184,7 +197,8 @@ const MEASURE = `(scope) => {
   const ratio = (a, b) => {
     const x = luminance(a);
     const y = luminance(b);
-    return Math.round(((Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)) * 100) / 100;
+    // Unrounded: a 4.496:1 rounded to two places would pass the 4.5:1 floor.
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
   };
   return [...document.querySelectorAll(scope + " .field-error")].map((el) => {
     // A glyph that is not drawn marks nothing, whatever colour it computes to.
@@ -231,15 +245,18 @@ it("drives every settings card with a field to a refusal, or says why not", asyn
     // Every lazily loaded card has arrived and left its loading line.
     await page.waitForFunction(() => [...document.querySelectorAll(".settings-section")]
       .every((section) => !/Loading/.test(section.textContent ?? "")), { timeout: 15_000 });
-    // A card whose fields stand on the page at rest. Users and status pages
-    // keep theirs behind a button (a form, a drawer), so they are not found
-    // here; both are driven above all the same.
-    const withFields = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".settings-section")]
-      .filter((section) => section.querySelector("input, textarea, select") !== null)
-      .map((section) => section.id));
+    const sections = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".settings-section")]
+      .map((section) => ({ id: section.id, fields: section.querySelector("input, textarea, select") !== null })));
+    const every = sections.map((section) => section.id);
+    // Fields that stand on the page at rest. Users and status pages keep
+    // theirs behind a button (a form, a drawer), so they are not found here;
+    // that is why every card, not only these, has to be named in a list.
+    const withFields = sections.filter((section) => section.fields).map((section) => section.id);
     const covered = CARDS.map((card) => card.section);
-    expect(withFields.filter((id) => !covered.includes(id) && !(id in EXEMPT))).toEqual([]);
+    expect(every.filter((id) => !covered.includes(id) && !(id in EXEMPT) && !(id in FIELDLESS))).toEqual([]);
     expect(Object.keys(EXEMPT).filter((id) => !withFields.includes(id))).toEqual([]);
+    // A fieldless card that grows a field is driven or exempted instead.
+    expect(Object.keys(FIELDLESS).filter((id) => !every.includes(id) || withFields.includes(id))).toEqual([]);
   } finally {
     await page.close();
   }
