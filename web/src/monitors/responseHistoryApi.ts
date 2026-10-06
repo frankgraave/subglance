@@ -1,5 +1,5 @@
 import { apiJSON } from "../api/http";
-import type { ResponseHeartbeat } from "./responseHistory";
+import type { ResponseHeartbeat } from "./responseHistoryModel";
 import { detailQueryKey } from "./detail";
 
 export const RESPONSE_HISTORY_LIMIT = 100;

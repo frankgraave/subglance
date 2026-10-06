@@ -223,6 +223,13 @@ screen reader makes of an unnamed inline `<svg>` is not fixed — some skip it,
 some announce "graphic" — so leaving the name to text content makes it depend
 on the reader. Name it in the markup, order the glyph in CSS.
 
+No two files under `web/src` may have names that differ only in case, and no
+two TypeScript modules may differ only in case once the extension is dropped:
+`Foo.tsx` beside `foo.ts` is one import on macOS and Windows, which ignore
+case, while Linux CI tells them apart and stays green. `moduleResolution.test.ts`
+refuses both. Name a component's types and logic for what they are
+(`responseHistoryModel.ts`), not for the component.
+
 ### Three facts that will save you an hour
 
 1. **A CSS custom property does not work inside a media query.** Verified in
