@@ -161,8 +161,19 @@ describe("summarise", () => {
         monitor("e", "paused"),
         monitor("f", "waiting"),
         monitor("g", "warning"),
+        monitor("h", "expiring"),
       ]),
-    ).toEqual({ up: 2, down: 1, recovering: 0, warning: 1, pending: 1, paused: 1, waiting: 1, total: 7 });
+    ).toEqual({
+      up: 2,
+      down: 1,
+      recovering: 0,
+      warning: 1,
+      expiring: 1,
+      pending: 1,
+      paused: 1,
+      waiting: 1,
+      total: 8,
+    });
   });
 
   it("returns zeroes for an empty list", () => {
@@ -171,6 +182,7 @@ describe("summarise", () => {
       down: 0,
       recovering: 0,
       warning: 0,
+      expiring: 0,
       pending: 0,
       paused: 0,
       waiting: 0,
@@ -277,6 +289,24 @@ describe("describeTransitions", () => {
     const before = [monitor("api", "up")];
     const after = [monitor("api", "paused")];
     expect(describeTransitions(before, after)).toBe("All 1 monitor paused.");
+  });
+
+  it("does not call a monitor whose certificate expires soon either up or down", () => {
+    // The checks pass, so it is not down; "All 2 monitors up" would let the
+    // renewal be missed.
+    const before = [monitor("api", "up"), monitor("db", "up")];
+    const after = [monitor("api", "expiring"), monitor("db", "up")];
+    expect(describeTransitions(before, after)).toBe(
+      "No monitors down. 1 up, 1 expiring soon.",
+    );
+  });
+
+  it("counts an expiring certificate beside an outage", () => {
+    const before = [monitor("api", "up"), monitor("db", "up")];
+    const after = [monitor("api", "down"), monitor("db", "expiring")];
+    expect(describeTransitions(before, after)).toBe(
+      "1 monitor down: api. 0 up. 1 expiring soon.",
+    );
   });
 });
 

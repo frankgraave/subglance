@@ -100,6 +100,39 @@ func TestAnExpiringCertificateAlertsWithoutDowntime(t *testing.T) {
 	}
 }
 
+// The 7- and 30-day figures read the hourly rollup once raw heartbeats age
+// out, so a notice has to count as up there as well, not only in the raw
+// rows the 24-hour figure reads.
+func TestAnExpiringCertificateIsUpInTheRollups(t *testing.T) {
+	ctx := context.Background()
+	db := testDB(t)
+	r := New(Options{DB: db, Log: quietLogger(), Notify: (&alertRecorder{}).record})
+	m := expiringMonitor(t, db)
+
+	start := time.Now().Add(-72 * time.Hour).Truncate(time.Hour)
+	for i := range 5 {
+		if err := r.recordOutcome(expiringOutcome(m, start.Add(time.Duration(i)*time.Minute))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rolled, err := db.RollupHeartbeats(ctx, 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rolled.Heartbeats != 5 {
+		t.Fatalf("rolled up %d heartbeats, want all 5", rolled.Heartbeats)
+	}
+	for _, window := range []time.Duration{7 * 24 * time.Hour, 30 * 24 * time.Hour} {
+		stats, err := db.Uptime(ctx, m.ID, window)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if stats.Up != 5 || stats.Down != 0 || stats.Percentage != 100 {
+			t.Errorf("uptime over %v = %+v, want five checks up and 100%%", window, stats)
+		}
+	}
+}
+
 // A notice is restored as a notice across a restart: no second alert, still
 // expiring, and the first failure afterwards is a warning rather than an
 // outage confirmed from a streak counted over the notice's lifetime.

@@ -74,6 +74,17 @@ describe("applyHeartbeat", () => {
     expect(applyStatus([passed], status({ event: "incident_resolved" }))[0].status).toBe("up");
   });
 
+  it("keeps a monitor expiring, with its notice text, on a pass the server marks expiring", () => {
+    // The pass is assessed up, because it is not downtime; `expiring` is
+    // what keeps it from reading as a plain up.
+    const notice = monitor({ status: "expiring", error: "certificate expires in 6 days", failureKind: "cert_expiry" });
+    const [m] = applyHeartbeat([notice], beat({ ok: true, assessment: "up", expiring: true }));
+    expect(m).toMatchObject({ status: "expiring", error: "certificate expires in 6 days", failureKind: "cert_expiry" });
+    // A failure against it is judged like any other: a warning first.
+    const [failed] = applyHeartbeat([m], beat({ ok: false, assessment: "warning", error: "timeout" }));
+    expect(failed.status).toBe("warning");
+  });
+
   it("leaves a paused monitor paused", () => {
     expect(applyHeartbeat([monitor({ status: "paused" })], beat())[0].status).toBe("paused");
     expect(statusAfterHeartbeat("paused", false)).toBe("paused");
@@ -122,6 +133,12 @@ describe("applyStatus", () => {
     const [m] = applyStatus([down], status({ event: "incident_resolved" }));
     expect(m.status).toBe("up");
     expect(m.error).toBeUndefined();
+  });
+
+  it("confirms a certificate notice as expiring, not down, and resolves it to up", () => {
+    const [expiring] = applyStatus([monitor()], status({ notice: true, error: "certificate expires in 6 days" }));
+    expect(expiring.status).toBe("expiring");
+    expect(applyStatus([expiring], status({ event: "incident_resolved", notice: true }))[0].status).toBe("up");
   });
 
   it("treats an opened but unconfirmed incident as warning", () => {

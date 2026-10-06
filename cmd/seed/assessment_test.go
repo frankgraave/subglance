@@ -155,8 +155,16 @@ func TestSeedCatalogueAssessmentsMatchEngine(t *testing.T) {
 			engine := state.New(state.Options{})
 			confirmations := map[time.Time]bool{}
 			for _, hb := range h.beats {
-				tr := engine.Observe(state.Observation{MonitorID: 1, At: hb.TS, OK: hb.OK, FailureThreshold: m.Retries})
-				if hb.Assessment != string(tr.To) {
+				// A check inside a certificate notice passes and is marked
+				// expiring, as the checker reports it; the engine says
+				// expiring and the stored assessment is up.
+				expiring := hb.OK && insideNotice(h.incidents, hb.TS)
+				tr := engine.Observe(state.Observation{MonitorID: 1, At: hb.TS, OK: hb.OK, Expiring: expiring, FailureThreshold: m.Retries})
+				to := tr.To
+				if to == state.StatusExpiring {
+					to = state.StatusUp
+				}
+				if hb.Assessment != string(to) {
 					t.Fatalf("at %s: seed=%s engine=%s", hb.TS, hb.Assessment, tr.To)
 				}
 				if tr.Event == state.EventIncidentConfirmed {
@@ -251,4 +259,14 @@ func TestSeedUnconfirmedScenarioStaysBelowThreshold(t *testing.T) {
 			}
 		})
 	}
+}
+
+// insideNotice reports whether t falls inside a seeded certificate notice.
+func insideNotice(incidents []store.Incident, t time.Time) bool {
+	for _, inc := range incidents {
+		if inc.Notice && !t.Before(inc.StartedAt) && (inc.ResolvedAt.IsZero() || t.Before(inc.ResolvedAt)) {
+			return true
+		}
+	}
+	return false
 }
