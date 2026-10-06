@@ -1664,6 +1664,14 @@ worded class written anywhere else, and `layout/danger-buttons.browser.test.ts`
 enables the reset card's button and the delete drawer's and measures both, in
 both themes.
 
+A destructive menu item (`tone: "danger"` in `Menu`) follows the same split:
+the title stays in `--ink`, the description in `--ink-2`, and the bin in its
+glyph column is the red. A red title measured 4.1:1 on the dark float panel and
+3.5:1 with the hover step behind it, and 4.3:1 in the light theme under the
+hover step. The same file opens the monitor detail page's action menu in both
+themes, at rest and with Delete under the cursor keys, and holds the title to
+4.5:1 and the bin to 3:1.
+
 Loading state: the button keeps its width and swaps the label for a spinner. That
 way the layout doesn't jump the instant you click.
 

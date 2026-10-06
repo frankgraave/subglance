@@ -23,7 +23,7 @@ export type MenuItem = {
   /** What the verb does. Required on purpose: see the note above. */
   description: string;
   icon?: ReactNode;
-  /** `danger` colours the verb, not the sentence. */
+  /** `danger` colours the glyph, not the words: a red title fails 4.5:1 in the dark theme. */
   tone?: "neutral" | "danger";
   disabled?: boolean;
   onSelect?: () => void;
