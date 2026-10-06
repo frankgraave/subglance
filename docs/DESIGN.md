@@ -120,6 +120,13 @@ size, weight and face, which cost nothing in contrast.
 disabled state, never text meant to be read. `accessibility-waivers.json`
 can only shrink — the gate fails when it grows past its recorded count.
 
+The public status page is in the same gate, in both themes, under the same
+empty waiver list. It is rendered by the server rather than the bundle, but
+it reads these tokens, so an ink chosen for the product reaches a visitor
+without passing through any screen of the product. The gate audits it as
+served, under its own Content-Security-Policy, and never loosens that policy
+to get axe in.
+
 Light isn't dark flipped. `--canvas` is a warm grey (`#fbfbfa`), not white;
 cards *are* white. That way cards sit in front of the page instead of
 disappearing into it. The status colours are darker and more saturated in light
