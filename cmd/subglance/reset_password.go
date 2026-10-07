@@ -42,10 +42,10 @@ func runResetPassword(args []string, out io.Writer) error {
 // resetPassword is runResetPassword with the password source passed in.
 //
 // The trust boundary is the data directory. Whoever can read and write it
-// already holds every monitor, channel secret and account in it, so being
-// able to run this command against it proves nothing less than an emailed
-// link would; and a self-hosted instance often has no mail set up to send
-// one.
+// already holds every monitor and account in it (and every channel secret
+// not encrypted under --secret-key), so being able to run this command
+// against it proves nothing less than an emailed link would; and a
+// self-hosted instance often has no mail set up to send one.
 //
 // It refuses while a server is running, with the same two guards as
 // `subglance restore`: the data directory lock, which --force never

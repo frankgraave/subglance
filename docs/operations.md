@@ -852,11 +852,13 @@ that check. It refuses a data directory without a `subglance.db` in it rather
 than creating an empty database there, since that almost always means the
 wrong `--data-dir`.
 
-Anyone who can run this can already read every monitor, channel secret and
-account in the data directory, so the command asks for nothing more than that
-access. Keep the data directory as private as the passwords in it. The
-command does not need `--secret-key`: it never reads a channel's
-configuration.
+Anyone who can run this can already read every monitor and account in the
+data directory, so the command asks for nothing more than that access. Keep
+the data directory as private as the passwords in it. Channel secrets are
+readable there too unless they are [encrypted at
+rest](#encrypting-channel-configuration); with a `--secret-key` set, reading
+them still takes that key, and a reset does not change that. The command
+does not need `--secret-key`: it never reads a channel's configuration.
 
 ## Public status pages
 
