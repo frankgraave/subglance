@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AddMonitor } from "./AddMonitor";
-import { withType } from "./AddMonitorForm";
+import { withType } from "./checkTypeChange";
 import type { AddMonitorValues } from "./AddMonitorForm";
 import { ApiError, describePreview } from "./preview";
 import type { PreviewResult } from "./preview";
@@ -95,18 +95,18 @@ describe("withType", () => {
   const base = { type: "http", intervalS: 60 } as AddMonitorValues;
 
   it("lifts an interval under six hours to a day for a domain monitor", () => {
-    expect(withType(base, "domain").intervalS).toBe(86400);
-    expect(withType({ ...base, intervalS: 21599 }, "domain").intervalS).toBe(86400);
+    expect(withType(base, "domain", 60).intervalS).toBe(86400);
+    expect(withType({ ...base, intervalS: 21599 }, "domain", 60).intervalS).toBe(86400);
   });
 
   it("keeps an interval a domain monitor accepts", () => {
-    expect(withType({ ...base, intervalS: 21600 }, "domain").intervalS).toBe(21600);
+    expect(withType({ ...base, intervalS: 21600 }, "domain", 60).intervalS).toBe(21600);
   });
 
   it("puts the form's default back only when the day was the domain type's", () => {
-    expect(withType({ ...base, type: "domain", intervalS: 86400 }, "http").intervalS).toBe(60);
-    expect(withType({ ...base, type: "domain", intervalS: 43200 }, "http").intervalS).toBe(43200);
-    expect(withType({ ...base, type: "ssl", intervalS: 86400 }, "http").intervalS).toBe(86400);
+    expect(withType({ ...base, type: "domain", intervalS: 86400 }, "http", 60).intervalS).toBe(60);
+    expect(withType({ ...base, type: "domain", intervalS: 43200 }, "http", 60).intervalS).toBe(43200);
+    expect(withType({ ...base, type: "ssl", intervalS: 86400 }, "http", 60).intervalS).toBe(86400);
   });
 });
 

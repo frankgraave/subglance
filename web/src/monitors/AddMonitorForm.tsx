@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { RepeatAlertField } from "./RepeatAlertField";
+import { withType } from "./checkTypeChange";
 import { AlertingSection } from "./AlertingSection";
 import { DurationField } from "./DurationField";
 import { durationAllowed, DURATION_LIMITS, SECONDS_ONLY, SECONDS_TO_DAYS, SECONDS_TO_HOURS } from "./duration";
@@ -707,7 +708,7 @@ export function AddMonitorForm({
               className="input"
               value={values.type}
               onChange={(event) =>
-                setValues((v) => withType(v, event.target.value))
+                setValues((v) => withType(v, event.target.value, DEFAULTS.intervalS))
               }
               aria-invalid={badControl === "type" ? true : undefined}
               aria-describedby={
@@ -1026,29 +1027,6 @@ function PreviewSummary({ result }: { result: PreviewResult }) {
     </p>
   );
 }
-
-/**
- * The values after choosing a check type.
- *
- * A domain monitor refuses an interval under six hours, so choosing it moves
- * a shorter one to a day, the server's own default, rather than letting the
- * save fail on a field the user never touched. Leaving it puts the day back
- * to the form's default, because a day is not what anyone expects of an
- * HTTP check they did not configure.
- */
-export function withType(values: AddMonitorValues, type: string): AddMonitorValues {
-  if (type === "domain" && values.intervalS < DOMAIN_MIN_INTERVAL_S) {
-    return { ...values, type, intervalS: DOMAIN_INTERVAL_S };
-  }
-  if (values.type === "domain" && type !== "domain" && values.intervalS === DOMAIN_INTERVAL_S) {
-    return { ...values, type, intervalS: DEFAULTS.intervalS };
-  }
-  return { ...values, type };
-}
-
-/** The shortest interval the API takes for a domain monitor, and its default. */
-const DOMAIN_MIN_INTERVAL_S = 6 * 3600;
-const DOMAIN_INTERVAL_S = 86400;
 
 function labelForType(type: string): string {
   switch (type) {

@@ -121,6 +121,9 @@ func rawMonitorRowsWithDNS(t *testing.T, db *DB) [][]string {
 		}
 		rows[i] = append(rows[i], a, b, c)
 	}
+	if err := r.Err(); err != nil {
+		t.Fatal(err)
+	}
 	return rows
 }
 

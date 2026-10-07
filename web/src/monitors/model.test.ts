@@ -162,6 +162,7 @@ describe("summarise", () => {
         monitor("f", "waiting"),
         monitor("g", "warning"),
         monitor("h", "expiring"),
+        monitor("i", "unknown"),
       ]),
     ).toEqual({
       up: 2,
@@ -169,10 +170,11 @@ describe("summarise", () => {
       recovering: 0,
       warning: 1,
       expiring: 1,
+      unknown: 1,
       pending: 1,
       paused: 1,
       waiting: 1,
-      total: 8,
+      total: 9,
     });
   });
 
@@ -183,6 +185,7 @@ describe("summarise", () => {
       recovering: 0,
       warning: 0,
       expiring: 0,
+      unknown: 0,
       pending: 0,
       paused: 0,
       waiting: 0,

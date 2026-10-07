@@ -184,9 +184,10 @@ func (c *DomainChecker) check(ctx context.Context, m Monitor, start time.Time) R
 		res.OK = false
 		res.Kind = FailDomainExpiry
 		res.Error = fmt.Sprintf("domain registration of %s expired on %s", domain, expiry.Format(time.DateOnly))
-	case m.DomainWarnDays > 0 && remaining < time.Duration(m.DomainWarnDays)*24*time.Hour:
+	case remaining < time.Duration(m.DomainWarnDays)*24*time.Hour:
 		// Like a certificate about to expire: the domain still resolves,
 		// so this is a notice that alerts without counting as downtime.
+		// A threshold of 0 never gets here: remaining is positive.
 		res.Expiring = true
 		res.Kind = FailDomainExpiry
 		res.Error = fmt.Sprintf("domain registration of %s expires in %d days (on %s)",
