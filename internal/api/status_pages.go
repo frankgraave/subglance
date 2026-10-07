@@ -32,6 +32,13 @@ type statusPageRequest struct {
 	TagValue    string `json:"tag_value"`
 	Indexable   bool   `json:"indexable"`
 	Enabled     bool   `json:"enabled"`
+	// Language is "en" or "nl"; empty is "en".
+	Language string `json:"language"`
+	// Accent is #rrggbb or empty for none.
+	Accent string `json:"accent"`
+	// HideCredit is negative on purpose: an omitted boolean is false, and a
+	// client that predates the setting must keep the credit it showed.
+	HideCredit bool `json:"hide_credit"`
 }
 
 type statusPageEntryRequest struct {
@@ -62,8 +69,13 @@ type statusPageResponse struct {
 	TagValue    string `json:"tag_value"`
 	Indexable   bool   `json:"indexable"`
 	Enabled     bool   `json:"enabled"`
-	CreatedAt   string `json:"created_at"`
-	UpdatedAt   string `json:"updated_at"`
+	Language    string `json:"language"`
+	Accent      string `json:"accent"`
+	HideCredit  bool   `json:"hide_credit"`
+	// Logo describes the uploaded logo, or is null.
+	Logo      *statusPageLogoResponse `json:"logo"`
+	CreatedAt string                  `json:"created_at"`
+	UpdatedAt string                  `json:"updated_at"`
 
 	// Entries is every entry in page order, including those a tag page
 	// does not show right now because the monitor lost the tag.
@@ -89,6 +101,8 @@ func (s *Server) statusPageView(r *http.Request, p store.StatusPage) (statusPage
 		ID: p.ID, Slug: p.Slug, Title: p.Title, Description: p.Description,
 		Timezone: p.Timezone, Selection: p.Selection, TagKey: p.TagKey, TagValue: p.TagValue,
 		Indexable: p.Indexable, Enabled: p.Enabled,
+		Language: p.Language, Accent: p.Accent, HideCredit: p.HideCredit,
+		Logo:              logoResponse(p),
 		CreatedAt:         p.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:         p.UpdatedAt.Format(time.RFC3339),
 		Entries:           make([]statusPageEntryResponse, 0, len(entries)),
@@ -156,6 +170,7 @@ func decodeStatusPage(w http.ResponseWriter, r *http.Request) (store.StatusPage,
 		Slug: req.Slug, Title: req.Title, Description: req.Description, Timezone: req.Timezone,
 		Selection: req.Selection, TagKey: req.TagKey, TagValue: req.TagValue,
 		Indexable: req.Indexable, Enabled: req.Enabled,
+		Language: req.Language, Accent: req.Accent, HideCredit: req.HideCredit,
 	}, true
 }
 

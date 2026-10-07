@@ -79,6 +79,9 @@ type publicPageAnswer struct {
 	etag      string
 	indexable bool
 	expires   time.Time
+	// csp is the HTML document's own policy, which depends on the page:
+	// an accent adds its stylesheet's hash. Empty for JSON.
+	csp string
 }
 
 // publicPageSlot holds one page's cached answer. Its mutex is held while the
@@ -97,6 +100,9 @@ type publicPages struct {
 
 	mu    sync.Mutex
 	slots map[publicPageKey]*publicPageSlot
+
+	// logos caches the logo files the pages link to (status_page_logo.go).
+	logos publicLogos
 
 	now func() time.Time
 }
@@ -148,6 +154,7 @@ func (pp *publicPages) forget() {
 	pp.mu.Lock()
 	pp.slots = nil
 	pp.mu.Unlock()
+	pp.logos.forget()
 }
 
 // statusPageRenderer is built once, from the stylesheet embedded in this
@@ -254,6 +261,7 @@ func (s *Server) renderPublicStatusPage(r *http.Request, p store.StatusPage, for
 		return nil, err
 	}
 	var body []byte
+	var csp string
 	switch format {
 	case formatJSON:
 		body, err = json.Marshal(built)
@@ -262,6 +270,7 @@ func (s *Server) renderPublicStatusPage(r *http.Request, p store.StatusPage, for
 		var rnd *statuspage.Renderer
 		if rnd, err = statusPageRenderer(); err == nil {
 			body, err = rnd.Render(built)
+			csp = rnd.ContentSecurityPolicyFor(built)
 		}
 	}
 	if err != nil {
@@ -275,6 +284,7 @@ func (s *Server) renderPublicStatusPage(r *http.Request, p store.StatusPage, for
 		etag:      `"` + base64.RawURLEncoding.EncodeToString(sum[:18]) + `"`,
 		indexable: p.Indexable,
 		expires:   now.Add(statusPageCacheFor),
+		csp:       csp,
 	}, nil
 }
 
@@ -288,13 +298,11 @@ func writePublicAnswer(w http.ResponseWriter, r *http.Request, format publicForm
 	if !a.indexable {
 		h.Set("X-Robots-Tag", "noindex")
 	}
-	if format == formatHTML {
-		// The page's own policy: its inline stylesheet and theme script by
-		// hash, fonts from beside it, and no framing. It replaces the API's
-		// default-src 'none', which would block the stylesheet.
-		if rnd, err := statusPageRenderer(); err == nil {
-			h.Set("Content-Security-Policy", rnd.ContentSecurityPolicy())
-		}
+	if format == formatHTML && a.csp != "" {
+		// The page's own policy: its inline stylesheets and theme script by
+		// hash, fonts and logo from beside it, and no framing. It replaces
+		// the API's default-src 'none', which would block the stylesheet.
+		h.Set("Content-Security-Policy", a.csp)
 	}
 	if inm := r.Header.Get("If-None-Match"); inm != "" && etagListMatches(inm, a.etag) {
 		w.WriteHeader(http.StatusNotModified)

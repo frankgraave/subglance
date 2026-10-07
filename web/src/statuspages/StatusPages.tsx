@@ -12,11 +12,14 @@ import { browserTimezone, knownTimezones } from "../notifications/quietHours";
 import { fetchInventory, inventoryQueryKey } from "../monitors/inventoryApi";
 import type { InventoryMonitor } from "../monitors/inventory";
 import {
-  createStatusPage, deleteStatusPage, fetchStatusPages, setStatusPageEntries, slugFrom, statusPagesKey, updateStatusPage,
-  type EntryInput, type Selection, type StatusPage, type StatusPageSettings,
+  createStatusPage, deleteStatusPage, fetchStatusPages, logoPreviewURL, MAX_LOGO_BYTES, removeStatusPageLogo,
+  setStatusPageEntries, slugFrom, statusPagesKey, updateStatusPage, uploadStatusPageLogo,
+  type EntryInput, type Language, type Selection, type StatusPage, type StatusPageSettings,
 } from "./api";
 import { Select } from "../components/Select";
 import { FieldError } from "../components/FieldError";
+import { FileInput } from "../components/FileInput";
+import "./statuspages.css";
 
 type Rejection = { field?: string; message: string };
 const rejectionOf = (error: unknown): Rejection => error instanceof ApiError
@@ -53,7 +56,8 @@ function Field({ id, label, help, error, children }: {
   </div>;
 }
 
-const SETTINGS = ["slug", "title", "description", "timezone", "selection", "tag_key", "tag_value", "indexable", "enabled"] as const;
+const SETTINGS = ["slug", "title", "description", "timezone", "selection", "tag_key", "tag_value", "indexable", "enabled",
+  "language", "accent", "hide_credit"] as const;
 const settingsOf = (page: StatusPage) => Object.fromEntries(SETTINGS.map((key) => [key, page[key]])) as StatusPageSettings;
 
 /**
@@ -63,15 +67,15 @@ const settingsOf = (page: StatusPage) => Object.fromEntries(SETTINGS.map((key) =
  * and reads an omitted boolean as false. A form that sent only what changed
  * would take a published page offline the first time someone fixed a typo.
  */
-function SettingsForm({ page, onSaved, onCancel }: {
-  page: StatusPage | null; onSaved: (page: StatusPage) => void; onCancel: () => void;
+function SettingsForm({ page, onSaved, onLogo, onCancel }: {
+  page: StatusPage | null; onSaved: (page: StatusPage) => void; onLogo: (page: StatusPage) => void; onCancel: () => void;
 }) {
   const id = useId();
   // Only the settings, never the whole page: the server refuses unknown
   // fields, and `id` or `entries` in the body would be one.
   const initial: StatusPageSettings = page ? settingsOf(page) : {
     slug: "", title: "", description: "", timezone: browserTimezone(), selection: "monitors",
-    tag_key: "", tag_value: "", indexable: false, enabled: false,
+    tag_key: "", tag_value: "", indexable: false, enabled: false, language: "en", accent: "", hide_credit: false,
   };
   const [draft, setDraft] = useState<StatusPageSettings>(initial);
   // On a new page the address follows the title until it is typed in by hand.
@@ -112,7 +116,7 @@ function SettingsForm({ page, onSaved, onCancel }: {
 
   // A tag error has no input of its own while the page selects monitors,
   // so it falls back to the form's general region.
-  const placed = ["slug", "title", "description", "timezone", "selection", "tag_key", "tag_value"];
+  const placed = ["slug", "title", "description", "timezone", "selection", "tag_key", "tag_value", "language", "accent"];
   const general = error && !(error.field && placed.includes(error.field) && (draft.selection === "tag" || !error.field.startsWith("tag_")));
 
   return <form ref={form} className="stack" aria-label={page ? `Settings for ${page.title}` : "New status page"} onSubmit={submit}>
@@ -157,6 +161,26 @@ function SettingsForm({ page, onSaved, onCancel }: {
           onChange={(event) => set("tag_value", event.target.value)} />
       </Field>
     </div>}
+    {/* The page's own look (docs/design/status-page.md §2.1). */}
+    <Field id={`${id}-language`} label="Language" help="The language of the page's fixed texts: status words, dates, headings."
+      error={fieldError("language")}>
+      <Select {...input("language", true)} value={draft.language} onChange={(event) => set("language", event.target.value as Language)}>
+        <option value="en">English</option>
+        <option value="nl" lang="nl">Nederlands</option>
+      </Select>
+    </Field>
+    {/* A text field, not a colour picker: an operator has the brand's code to
+        paste, and a picker cannot be empty, which is how "no accent" is said. */}
+    <Field id={`${id}-accent`} label="Accent colour (optional)" error={fieldError("accent")}
+      help="The title's colour, written as #rrggbb. It has to read on both the light and the dark page, since the page follows each visitor's theme.">
+      <input {...input("accent", true)} value={draft.accent} maxLength={7} autoComplete="off" spellCheck={false}
+        onChange={(event) => set("accent", event.target.value)} />
+    </Field>
+    {page ? <LogoField page={page} onChanged={onLogo} />
+      : <p className="panel-note">A logo can be added once the page is created.</p>}
+    <Checkbox checked={!draft.hide_credit} onChange={(event) => set("hide_credit", !event.target.checked)}>
+      Show &ldquo;Monitored with SubGlance&rdquo; in the footer
+    </Checkbox>
     <Checkbox checked={draft.enabled} aria-describedby={`${id}-enabled-help`}
       onChange={(event) => set("enabled", event.target.checked)}>
       Published
@@ -175,6 +199,64 @@ function SettingsForm({ page, onSaved, onCancel }: {
       <button className="button" type="button" onClick={onCancel}>Cancel</button>
     </div>
   </form>;
+}
+
+/**
+ * The page's logo: shown, replaced or removed at once rather than on "Save
+ * settings", because a file is not a draft value that can be typed back.
+ *
+ * The file is checked for size here only to save a pointless upload; the
+ * server decides what the file is, from its bytes.
+ */
+function LogoField({ page, onChanged }: { page: StatusPage; onChanged: (page: StatusPage) => void }) {
+  const id = useId();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [inputVersion, setInputVersion] = useState(0);
+  const logo = page.logo;
+
+  async function run(action: () => Promise<StatusPage>) {
+    setBusy(true);
+    setError(null);
+    try {
+      onChanged(await action());
+    } catch (err) {
+      setError(rejectionOf(err).message);
+    } finally {
+      setBusy(false);
+      setInputVersion((v) => v + 1);
+    }
+  }
+
+  function choose(file: File | undefined) {
+    if (!file) return;
+    if (file.size > MAX_LOGO_BYTES) {
+      setError(`The logo is larger than ${MAX_LOGO_BYTES / 1024} KB.`);
+      setInputVersion((v) => v + 1);
+      return;
+    }
+    void run(() => uploadStatusPageLogo(page.slug, file));
+  }
+
+  return <div className="field">
+    <label className="field-label" htmlFor={`${id}-file`}>{logo ? "Replace logo" : "Logo (optional)"}</label>
+    {logo && <div className="control-row">
+      <img className="sp-logo-preview" src={logoPreviewURL(page.slug, logo)} width={logo.width} height={logo.height}
+        alt={`Current logo of ${page.title}`} />
+      <button type="button" className="button" disabled={busy} onClick={() => void run(() => removeStatusPageLogo(page.slug))}>
+        Remove logo
+      </button>
+    </div>}
+    <FileInput key={inputVersion} id={`${id}-file`} accept="image/png,image/jpeg,image/webp" disabled={busy}
+      aria-describedby={[`${id}-help`, error ? `${id}-error` : ""].filter(Boolean).join(" ")}
+      aria-invalid={error ? true : undefined} onChange={(event) => choose(event.target.files?.[0])} />
+    <p className="panel-note" id={`${id}-help`}>
+      PNG, JPEG or WebP, up to {MAX_LOGO_BYTES / 1024} KB. Shown above the title; use one that reads on a light and a
+      dark background. It changes as soon as it is chosen.
+    </p>
+    <div role="status" aria-live="polite" className="result-region">{busy && <p className="panel-note">Uploading…</p>}</div>
+    {error && <FieldError id={`${id}-error`}>{error}</FieldError>}
+  </div>;
 }
 
 type Draft = { monitor_id: number; display_name: string };
@@ -399,7 +481,7 @@ export function StatusPagesCard() {
         become the drawer's containing block. */}
     <Drawer open={settingsOpen} onClose={close} title={current ? `Settings for ${current.title}` : "New status page"}>
       <Panel>
-        {settingsOpen && <SettingsForm key={editing.pageId ?? "new"} page={current} onCancel={close}
+        {settingsOpen && <SettingsForm key={editing.pageId ?? "new"} page={current} onCancel={close} onLogo={store}
           onSaved={(page) => {
             store(page);
             if (editing.pageId === null) {

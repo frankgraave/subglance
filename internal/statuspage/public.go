@@ -38,14 +38,31 @@ const (
 
 // Page is the whole public answer for one status page.
 type Page struct {
-	Title       string        `json:"title"`
-	Description string        `json:"description"`
-	GeneratedAt time.Time     `json:"generated_at"`
-	Timezone    string        `json:"timezone"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	GeneratedAt time.Time `json:"generated_at"`
+	Timezone    string    `json:"timezone"`
+	// Language is the language of the page's fixed texts ("en", "nl").
+	Language string `json:"language"`
+	// Accent is the title's colour as #rrggbb, or "" for the default ink.
+	Accent string `json:"accent"`
+	// CreditShown says whether the footer names SubGlance.
+	CreditShown bool `json:"show_credit"`
+	// Logo is the page's logo, or nil.
+	Logo        *Logo         `json:"logo"`
 	Summary     Summary       `json:"summary"`
 	Entries     []Entry       `json:"entries"`
 	Maintenance []Maintenance `json:"maintenance"`
 	Outages     []Outage      `json:"outages"`
+}
+
+// Logo is where a page's logo is served and its intrinsic size. The path
+// is on this server, from its root; the file's name is random, never the
+// name it was uploaded under.
+type Logo struct {
+	Path   string `json:"path"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
 }
 
 // Summary counts the entries by public state. no_data and not_monitored

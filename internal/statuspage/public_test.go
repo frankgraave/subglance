@@ -17,6 +17,8 @@ func fullPage() Page {
 	pct := 99.5
 	return Page{
 		Title: "t", Description: "d", GeneratedAt: at, Timezone: "UTC",
+		Language: "en", Accent: "#3b82f6", CreditShown: true,
+		Logo:    &Logo{Path: "/status/logos/0123456789abcdef.png", Width: 1, Height: 1},
 		Summary: Summary{Up: 1},
 		Entries: []Entry{{
 			Key: "k", Name: "n", Status: StatusUp, InMaintenance: true, Uptime90d: &pct, Uptime30d: &pct,
@@ -52,6 +54,7 @@ func keyPaths(prefix string, v any, out map[string]bool) {
 // design document, in a diff a reviewer reads.
 var publicFields = []string{
 	"title", "description", "generated_at", "timezone",
+	"language", "accent", "show_credit", "logo", "logo.path", "logo.width", "logo.height",
 	"summary", "summary.up", "summary.degraded", "summary.down", "summary.unmonitored",
 	"entries",
 	"entries[].key", "entries[].name", "entries[].status", "entries[].in_maintenance",

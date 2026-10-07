@@ -281,10 +281,11 @@ type route struct {
 // generated client. TestOpenAPIMatchesRoutes skips undocumented routes.
 func (rt route) documented() bool {
 	switch rt.Pattern {
-	case webUIPattern, statusPageSlashPattern, statusPageFontPattern, statusPageNestedFontPattern:
-		// The status page's font files and its trailing-slash alias are
-		// files and a second address for a documented page, for the
-		// browser and the reverse proxy rather than for a client.
+	case webUIPattern, statusPageSlashPattern, statusPageFontPattern, statusPageNestedFontPattern,
+		statusPageLogoPattern, statusPageNestedLogoPattern:
+		// The status page's font and logo files and its trailing-slash
+		// alias are files and a second address for a documented page, for
+		// the browser and the reverse proxy rather than for a client.
 		return false
 	}
 	return true
@@ -301,6 +302,9 @@ const (
 	statusPageSlashPattern      = "/status/{slug}/{$}"
 	statusPageFontPattern       = "/status/fonts/{file}"
 	statusPageNestedFontPattern = "/status/{slug}/fonts/{file}"
+	// The logo, beside the page for the same reason (statuspage.LogoPath).
+	statusPageLogoPattern       = "/status/logos/{file}"
+	statusPageNestedLogoPattern = "/status/{slug}/logos/{file}"
 )
 
 // webUIPattern is the catch-all path that serves the dashboard. It is also
@@ -355,6 +359,8 @@ func (s *Server) routes() []route {
 		{http.MethodGet, statusPageSlashPattern, accessPublic},
 		{http.MethodGet, statusPageFontPattern, accessPublic},
 		{http.MethodGet, statusPageNestedFontPattern, accessPublic},
+		{http.MethodGet, statusPageLogoPattern, accessPublic},
+		{http.MethodGet, statusPageNestedLogoPattern, accessPublic},
 		{http.MethodGet, "/api/v1/status-pages/{slug}", accessPublic},
 
 		// Authenticated: any role.
@@ -536,6 +542,9 @@ func (s *Server) routes() []route {
 		{http.MethodPut, "/api/v1/status-pages/{slug}", accessAdmin},
 		{http.MethodDelete, "/api/v1/status-pages/{slug}", accessAdmin},
 		{http.MethodPut, "/api/v1/status-pages/{slug}/entries", accessAdmin},
+		{http.MethodGet, "/api/v1/status-pages/{slug}/logo", accessAdmin},
+		{http.MethodPut, "/api/v1/status-pages/{slug}/logo", accessAdmin},
+		{http.MethodDelete, "/api/v1/status-pages/{slug}/logo", accessAdmin},
 
 		// A reset deletes every monitor, channel and token on the instance.
 		// Nothing about it is scoped to the caller, so it is an
@@ -580,6 +589,8 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 		return s.handlePublicStatusPageHTML
 	case "GET " + statusPageFontPattern, "GET " + statusPageNestedFontPattern:
 		return s.handleStatusPageFont
+	case "GET " + statusPageLogoPattern, "GET " + statusPageNestedLogoPattern:
+		return s.handlePublicStatusPageLogo
 	case "GET /api/v1/status-pages/{slug}":
 		return s.handlePublicStatusPageJSON
 
@@ -737,6 +748,12 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 		return s.handleDeleteStatusPage
 	case "PUT /api/v1/status-pages/{slug}/entries":
 		return s.handleSetStatusPageEntries
+	case "GET /api/v1/status-pages/{slug}/logo":
+		return s.handleGetStatusPageLogo
+	case "PUT /api/v1/status-pages/{slug}/logo":
+		return s.handleSetStatusPageLogo
+	case "DELETE /api/v1/status-pages/{slug}/logo":
+		return s.handleDeleteStatusPageLogo
 
 	case "POST /api/v1/instance/reset":
 		return s.handleResetInstance

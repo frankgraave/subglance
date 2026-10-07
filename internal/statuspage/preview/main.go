@@ -1,6 +1,8 @@
 // Command preview renders the public status page for a fixed set of
 // scenarios, with the stylesheet embedded in this build, and writes each one
-// to a file together with the Content-Security-Policy the server would send.
+// to a file together with the Content-Security-Policy the server would send
+// for it (<name>.csp.txt; a page with an accent has a policy of its own), and
+// the branded scenario's logo under logos/.
 //
 // It exists for the browser test (web/src/statuspage/statuspage.browser.test.ts),
 // which measures the real rendered page rather than a copy of it, and for
@@ -53,6 +55,15 @@ func run(out string) error {
 		if err := os.WriteFile(filepath.Join(out, name+".html"), html, 0o600); err != nil {
 			return err
 		}
+		if err := os.WriteFile(filepath.Join(out, name+".csp.txt"), []byte(r.ContentSecurityPolicyFor(page)), 0o600); err != nil {
+			return err
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(out, "logos"), 0o750); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(out, "logos", statuspage.PreviewLogoFile), statuspage.PreviewLogo(), 0o600); err != nil {
+		return err
 	}
 	return os.WriteFile(filepath.Join(out, "csp.txt"), []byte(r.ContentSecurityPolicy()), 0o600)
 }

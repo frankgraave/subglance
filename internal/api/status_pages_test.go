@@ -192,6 +192,9 @@ func TestStatusPagesAreAdminOnly(t *testing.T) {
 		{http.MethodPut, "/api/v1/status-pages/acme"},
 		{http.MethodDelete, "/api/v1/status-pages/acme"},
 		{http.MethodPut, "/api/v1/status-pages/acme/entries"},
+		{http.MethodGet, "/api/v1/status-pages/acme/logo"},
+		{http.MethodPut, "/api/v1/status-pages/acme/logo"},
+		{http.MethodDelete, "/api/v1/status-pages/acme/logo"},
 	}
 	do := func(token, method, path string) int {
 		req := httptest.NewRequest(method, path, strings.NewReader(`{}`))

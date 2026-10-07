@@ -473,7 +473,7 @@ func TestPublicStatusPageJSONShape(t *testing.T) {
 	for k := range got {
 		keys = append(keys, k)
 	}
-	want := "description,entries,generated_at,maintenance,outages,summary,timezone,title"
+	want := "accent,description,entries,generated_at,language,logo,maintenance,outages,show_credit,summary,timezone,title"
 	sort.Strings(keys)
 	if g := strings.Join(keys, ","); g != want {
 		t.Errorf("top-level fields = %s, want %s", g, want)

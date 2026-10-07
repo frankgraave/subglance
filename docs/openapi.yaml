@@ -4380,6 +4380,118 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
       x-subglance-access: admin
+  /api/v1/status-pages/{slug}/logo:
+    parameters:
+      - $ref: '#/components/parameters/StatusPageSlug'
+    get:
+      tags: [Status pages]
+      operationId: getStatusPageLogo
+      summary: Read a status page's logo
+      description: |
+        Administrators only. The stored image, whether or not the page is
+        published, so the settings form can show it before the page goes
+        out. Visitors load the same file from the `path` in the page's
+        `logo`, and only while the page is published.
+      responses:
+        '200':
+          description: The image, as the type decided when it was uploaded.
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenAdmin'
+        '404':
+          description: No status page with this slug, or the page has no logo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: admin
+    put:
+      tags: [Status pages]
+      operationId: setStatusPageLogo
+      summary: Upload a status page's logo
+      description: |
+        Administrators only. The request body is the image itself. Its type
+        is read from the bytes, never from the Content-Type header or a file
+        name, and the whole image is decoded before it is stored: PNG, JPEG
+        or WebP, at most 256 KB and 2048 pixels on each side. SVG is refused,
+        because it can carry script. A new upload replaces the old logo under
+        a new random file name, so a cache never serves the old image at the
+        new address.
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: The page, with its new `logo`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusPage'
+        '400':
+          description: |
+            Not a PNG, JPEG or WebP image, an image that does not decode, or
+            one larger than 2048 pixels on a side. Carries `field: logo`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: the logo must be a PNG, JPEG or WebP image; SVG is not accepted, because it can carry script
+                field: logo
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenAdmin'
+        '404':
+          $ref: '#/components/responses/StatusPageNotFound'
+        '413':
+          description: 'The file is larger than 256 KB. Carries `field: logo`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: admin
+    delete:
+      tags: [Status pages]
+      operationId: deleteStatusPageLogo
+      summary: Remove a status page's logo
+      description: Administrators only. The page shows its title alone again.
+      responses:
+        '200':
+          description: The page, with `logo` null.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenAdmin'
+        '404':
+          description: No status page with this slug, or the page has no logo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: admin
 components:
   securitySchemes:
     sessionCookie:
@@ -5324,7 +5436,8 @@ components:
           description: |
             Lowercase letters, digits and dashes, starting with a letter or
             digit, at most 63 characters, so it is also a valid DNS label.
-            Capitals are lowercased. `api`, `assets` and `fonts` are reserved.
+            Capitals are lowercased. `api`, `assets`, `fonts` and `logos` are
+            reserved.
           pattern: '^[A-Za-z0-9][A-Za-z0-9-]{0,62}$'
           example: status
         title:
@@ -5361,6 +5474,25 @@ components:
         enabled:
           type: boolean
           description: Makes the page reachable. Omitted means false.
+        language:
+          type: string
+          enum: ['', en, nl]
+          description: The language of the page's fixed texts. Empty or omitted means `en`.
+        accent:
+          type: string
+          description: |
+            The colour of the page title as `#rrggbb`, or empty for the
+            default ink. Lowercased on save. It must reach a contrast of 3:1
+            against the page in both the dark and the light theme, because
+            the page follows each visitor's own theme; a colour that does not
+            is refused with both measured ratios (`field: accent`).
+          example: '#3b82f6'
+        hide_credit:
+          type: boolean
+          description: |
+            Hides "Monitored with SubGlance" in the footer. Omitted means
+            false, so the credit stays. The time zone on the same line
+            always stays.
     StatusPageEntry:
       type: object
       required: [monitor_id, public_key, display_name]
@@ -5382,7 +5514,8 @@ components:
     StatusPage:
       type: object
       required: [id, slug, title, description, timezone, selection, tag_key, tag_value,
-        indexable, enabled, created_at, updated_at, entries, unnamed_monitor_ids]
+        indexable, enabled, language, accent, hide_credit, logo, created_at, updated_at, entries,
+        unnamed_monitor_ids]
       properties:
         id:
           type: integer
@@ -5408,6 +5541,37 @@ components:
           type: boolean
         enabled:
           type: boolean
+        language:
+          type: string
+          enum: [en, nl]
+        accent:
+          type: string
+          description: '`#rrggbb`, or empty for none.'
+        hide_credit:
+          type: boolean
+        logo:
+          description: The uploaded logo, or null.
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [content_type, width, height, bytes, path, updated_at]
+              properties:
+                content_type:
+                  type: string
+                  enum: [image/png, image/jpeg, image/webp]
+                width:
+                  type: integer
+                height:
+                  type: integer
+                bytes:
+                  type: integer
+                path:
+                  type: string
+                  description: Where visitors load it while the page is published.
+                  example: /status/logos/3f9a0c1d5e7b2a48.png
+                updated_at:
+                  type: string
+                  format: date-time
         created_at:
           type: string
           format: date-time
@@ -5436,7 +5600,8 @@ components:
         A status page as its visitors see it (docs/design/status-page.md
         section 1.1). Times are UTC; `timezone` is the zone the HTML page
         shows them in.
-      required: [title, description, generated_at, timezone, summary, entries, maintenance, outages]
+      required: [title, description, generated_at, timezone, language, accent, show_credit, logo,
+        summary, entries, maintenance, outages]
       properties:
         title:
           type: string
@@ -5449,6 +5614,32 @@ components:
         timezone:
           type: string
           example: Europe/Amsterdam
+        language:
+          type: string
+          enum: [en, nl]
+          description: The language of the HTML page's fixed texts.
+        accent:
+          type: string
+          description: The title's colour as `#rrggbb`, or empty for the default.
+        show_credit:
+          type: boolean
+          description: Whether the HTML page's footer names SubGlance.
+        logo:
+          description: |
+            The page's logo, or null. The path is on this server and its file
+            name is random, never the name it was uploaded under.
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [path, width, height]
+              properties:
+                path:
+                  type: string
+                  example: /status/logos/3f9a0c1d5e7b2a48.png
+                width:
+                  type: integer
+                height:
+                  type: integer
         summary:
           type: object
           required: [up, degraded, down, unmonitored]

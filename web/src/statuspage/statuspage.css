@@ -35,6 +35,17 @@ body {
   gap: var(--space-1h);
   padding-top: var(--space-2);
 }
+/* The operator's logo, above the title. Its height is capped and its width
+   follows the image, so a wide wordmark and a square mark both sit at one
+   height; the width and height attributes reserve its box before it loads. */
+.sp-logo {
+  align-self: flex-start;
+  width: auto;
+  height: auto;
+  max-width: min(var(--size-pane-sm), 100%);
+  max-height: var(--size-row-lg);
+  object-fit: contain;
+}
 .sp-head h1 {
   font-size: var(--type-page);
   line-height: var(--lead-page);

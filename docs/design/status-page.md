@@ -36,6 +36,10 @@ Per page:
 | `description` | `status_pages.description` | Same; optional, plain text, no HTML |
 | `generated_at` | server clock | Says how fresh the answer is |
 | `timezone` | `status_pages.timezone` | Chosen for the audience, not the server's |
+| `language` | `status_pages.language` | `en` or `nl`: the language of the page's fixed texts |
+| `accent` | `status_pages.accent` | `#rrggbb` for the title, or `""`; held to 3:1 on both canvases on save (§2.1) |
+| `show_credit` | `status_pages.hide_credit`, inverted | Whether the footer says "Monitored with SubGlance" |
+| `logo` | `status_page_logos` | `null`, or `{ "path", "width", "height" }`: a random file name on this server, never the uploaded one |
 | `summary` | counted from the entries | `{ "up": 4, "degraded": 0, "down": 1, "unmonitored": 0 }` |
 
 Per entry, in the page's `entries` list (one per monitor on the page):
@@ -186,6 +190,39 @@ Decisions it draws:
   relative to it, and a page read from a cache or an open tab is read on a
   later day than the one it was built on.
 
+### 2.1 A page of the operator's own
+
+An operator who gives the page to customers can make it theirs (SUB-189).
+All four settings are per page, and each is kept to what cannot break the
+page's guarantees:
+
+- **Language: English or Dutch.** Every fixed word on the page, the date
+  abbreviations and the decimal separator come from one table per language
+  (`internal/statuspage/texts.go`), and `lang` follows it. The template
+  writes no word of its own, and a test fails on a table with a missing text
+  or a format whose numbers differ from English's.
+- **Accent colour.** It colours the page title, nothing else: the lamps and
+  bars keep the status colours, because a brand red beside a down red would
+  make the state ambiguous. The title is large text, so the floor is WCAG
+  AA's 3:1, and it has to hold on **both** canvases, because the page follows
+  each visitor's theme. A colour that misses is refused on save with both
+  measured ratios. It reaches the page as a one-rule stylesheet whose hash
+  is added to the page's policy; no inline style is allowed.
+- **Footer credit.** "Monitored with SubGlance" is on by default and can be
+  switched off. The time zone on the same line stays: the page's times mean
+  nothing without it.
+- **Logo.** Uploaded, stored in the database, served from this server beside
+  the page (`logos/<random>.<ext>`, relative, like the fonts), so the page
+  loads nothing from a third party and `img-src 'self'` is the only rule the
+  policy gains. PNG, JPEG or WebP, at most 256 KB and 2048 px a side; the
+  type is read from the bytes and the whole image is decoded before it is
+  stored. SVG is refused, because it can carry script. The file name is
+  random and new on every upload, so a cache can keep a logo forever and
+  still never show an old one. A switched-off page's logo answers the same
+  404 as a file that never existed. The image has an empty `alt`: the title
+  beside it already names the page, and a screen reader would otherwise
+  read the name twice.
+
 ---
 
 ## 3. Threat model
@@ -276,7 +313,7 @@ Two tables, in a new migration. Both `STRICT`, like the rest of the schema.
 | Column | Type | Rule |
 |---|---|---|
 | `id` | INTEGER PRIMARY KEY AUTOINCREMENT | |
-| `slug` | TEXT NOT NULL UNIQUE COLLATE NOCASE | `^[a-z0-9][a-z0-9-]{0,62}$`; reserved words refused (`api`, `assets`, `fonts`) |
+| `slug` | TEXT NOT NULL UNIQUE COLLATE NOCASE | `^[a-z0-9][a-z0-9-]{0,62}$`; reserved words refused (`api`, `assets`, `fonts`, `logos`) |
 | `title` | TEXT NOT NULL | 1–120 characters |
 | `description` | TEXT NOT NULL DEFAULT '' | ≤ 500 characters, plain text |
 | `timezone` | TEXT NOT NULL DEFAULT 'UTC' | IANA name, validated like maintenance windows |
@@ -284,6 +321,9 @@ Two tables, in a new migration. Both `STRICT`, like the rest of the schema.
 | `tag_key`, `tag_value` | TEXT | Both set when `selection = 'tag'`, both NULL otherwise (CHECK) |
 | `indexable` | INTEGER NOT NULL DEFAULT 0 | 0/1; drives `X-Robots-Tag` |
 | `enabled` | INTEGER NOT NULL DEFAULT 0 | 0/1; **off by default**, so saving a draft publishes nothing |
+| `language` | TEXT NOT NULL DEFAULT 'en' | `en` or `nl` (CHECK), migration 0031 |
+| `accent` | TEXT NOT NULL DEFAULT '' | `''` or lowercase `#rrggbb` (CHECK); contrast checked in Go (§2.1) |
+| `hide_credit` | INTEGER NOT NULL DEFAULT 0 | 0/1; the credit is shown unless switched off |
 | `created_at`, `updated_at` | INTEGER NOT NULL | Unix seconds, as elsewhere |
 
 ### `status_page_entries`
@@ -305,6 +345,15 @@ one is listed in the editor as "not shown until named", never published under
 its internal name. That keeps the one rule that matters — internal names do
 not leak — true for both selection modes, at the cost of one extra step when a
 tag gains a monitor.
+
+### `status_page_logos` (migration 0031)
+
+One row per page with a logo: `page_id` (primary key, cascades with the
+page), `content_type` (`image/png`, `image/jpeg` or `image/webp`, CHECK),
+`width`, `height`, `file_key` (16 random hex characters, UNIQUE, new on
+every upload), `data` (BLOB, 1 byte to 256 KB, CHECK) and `updated_at`. It is
+a table of its own so the many reads of a page's settings never carry the
+image.
 
 No new tables for maintenance or outages: the page reads the existing
 maintenance windows and incidents through the entries.

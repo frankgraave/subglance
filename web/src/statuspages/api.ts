@@ -14,6 +14,20 @@ export interface StatusPageEntry {
   display_name: string;
 }
 
+/** The languages a page's fixed texts exist in. */
+export type Language = "en" | "nl";
+
+/** An uploaded logo, as the admin API describes it. */
+export interface StatusPageLogo {
+  content_type: string;
+  width: number;
+  height: number;
+  bytes: number;
+  /** Where visitors load it while the page is published. */
+  path: string;
+  updated_at: string;
+}
+
 export interface StatusPage {
   id: number;
   slug: string;
@@ -25,6 +39,12 @@ export interface StatusPage {
   tag_value: string;
   indexable: boolean;
   enabled: boolean;
+  language: Language;
+  /** The title's colour as #rrggbb, or "" for the default. */
+  accent: string;
+  /** Hides "Monitored with SubGlance" in the public page's footer. */
+  hide_credit: boolean;
+  logo: StatusPageLogo | null;
   created_at: string;
   updated_at: string;
   entries: StatusPageEntry[];
@@ -34,7 +54,8 @@ export interface StatusPage {
 
 /** The settings a create or an update sends. Every field, every time. */
 export type StatusPageSettings = Pick<StatusPage,
-  "slug" | "title" | "description" | "timezone" | "selection" | "tag_key" | "tag_value" | "indexable" | "enabled">;
+  "slug" | "title" | "description" | "timezone" | "selection" | "tag_key" | "tag_value" | "indexable" | "enabled" |
+  "language" | "accent" | "hide_credit">;
 
 export type EntryInput = { monitor_id: number; display_name: string };
 
@@ -49,12 +70,21 @@ function validEntry(value: unknown): value is StatusPageEntry {
   return id(e.monitor_id) && text(e.public_key) && text(e.display_name);
 }
 
+function validLogo(value: unknown): value is StatusPageLogo | null {
+  if (value === null) return true;
+  if (!value || typeof value !== "object") return false;
+  const l = value as Record<string, unknown>;
+  return [l.content_type, l.path, l.updated_at].every(text) &&
+    [l.width, l.height, l.bytes].every((n) => typeof n === "number" && Number.isInteger(n) && n > 0);
+}
+
 function validPage(value: unknown): value is StatusPage {
   if (!value || typeof value !== "object") return false;
   const p = value as Record<string, unknown>;
-  return id(p.id) && [p.slug, p.title, p.description, p.timezone, p.tag_key, p.tag_value, p.created_at, p.updated_at].every(text) &&
-    (p.selection === "monitors" || p.selection === "tag") &&
-    typeof p.indexable === "boolean" && typeof p.enabled === "boolean" &&
+  return id(p.id) && [p.slug, p.title, p.description, p.timezone, p.tag_key, p.tag_value, p.accent, p.created_at, p.updated_at].every(text) &&
+    (p.selection === "monitors" || p.selection === "tag") && (p.language === "en" || p.language === "nl") &&
+    typeof p.indexable === "boolean" && typeof p.enabled === "boolean" && typeof p.hide_credit === "boolean" &&
+    validLogo(p.logo) &&
     Array.isArray(p.entries) && p.entries.every(validEntry) &&
     Array.isArray(p.unnamed_monitor_ids) && p.unnamed_monitor_ids.every(id);
 }
@@ -92,6 +122,31 @@ export async function updateStatusPage(slug: string, settings: StatusPageSetting
 export async function setStatusPageEntries(slug: string, entries: EntryInput[]): Promise<StatusPage> {
   return page(await (await put(`${path(slug)}/entries`, { entries })).json());
 }
+
+/** The largest logo the server accepts, so the form can refuse before uploading. */
+export const MAX_LOGO_BYTES = 256 * 1024;
+
+/**
+ * Uploads `file` as the page's logo. The body is the file's bytes; the
+ * server decides the type from them, not from the name or this header.
+ */
+export async function uploadStatusPageLogo(slug: string, file: Blob): Promise<StatusPage> {
+  return page(await (await apiRequest(`${path(slug)}/logo`, {
+    method: "PUT", headers: { "Content-Type": "application/octet-stream" }, body: file,
+  })).json());
+}
+
+export async function removeStatusPageLogo(slug: string): Promise<StatusPage> {
+  return page(await (await apiRequest(`${path(slug)}/logo`, { method: "DELETE" })).json());
+}
+
+/**
+ * The address the dashboard previews a page's logo from: the admin route,
+ * which answers whether or not the page is published. The key in the query
+ * changes with every upload, so the preview never shows a replaced image.
+ */
+export const logoPreviewURL = (slug: string, logo: StatusPageLogo) =>
+  `${path(slug)}/logo?v=${encodeURIComponent(logo.path.slice(logo.path.lastIndexOf("/") + 1))}`;
 
 export async function deleteStatusPage(slug: string): Promise<void> {
   await apiRequest(path(slug), { method: "DELETE" });

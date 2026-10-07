@@ -1,0 +1,12 @@
+/*
+ * The status page editor's own rule: the preview of a page's logo in its
+ * settings drawer, drawn at the height the public page gives it (the public
+ * page's .sp-logo), so what the operator sees is what visitors get.
+ */
+.sp-logo-preview {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: var(--size-row-lg);
+  object-fit: contain;
+}
