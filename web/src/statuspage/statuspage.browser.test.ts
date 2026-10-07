@@ -152,6 +152,35 @@ for (const theme of ["dark", "light"]) {
         } finally { await page.close(); }
       });
     }
+    // The operator's own page: in Dutch, with a logo from beside the page and
+    // an accent title, both allowed by the page's own policy and nothing more.
+    it.each([375, 1440])("branded: %ipx loads its logo, colours its title and passes axe", async (width) => {
+      const { page, blocked } = await open(width, theme, "branded");
+      try {
+        const m = await measure(page);
+        expectRenderedAsDesigned(m, theme, blocked);
+        expect(m.rows).toBe(5);
+        const seen = await page.evaluate(() => {
+          const logo = document.querySelector<HTMLImageElement>(".sp-logo");
+          const title = document.querySelector<HTMLElement>(".sp-head h1");
+          const box = logo?.getBoundingClientRect();
+          return {
+            lang: document.documentElement.lang,
+            loaded: logo ? logo.complete && logo.naturalWidth > 0 : false,
+            alt: logo?.getAttribute("alt"),
+            height: box?.height ?? 0,
+            beforeTitle: !!(logo && title && box && box.bottom <= title.getBoundingClientRect().top + 1),
+            title: title ? getComputedStyle(title).color : "",
+            footer: document.querySelector(".sp-foot")?.textContent,
+          };
+        });
+        expect(seen).toEqual({
+          lang: "nl", loaded: true, alt: "", height: 40, beforeTitle: true,
+          title: "rgb(59, 130, 246)", footer: "Tijden in Europe/Amsterdam",
+        });
+        expect(await audit(page)).toEqual([]);
+      } finally { await page.close(); }
+    });
     it("empty: says so, and passes axe", async () => {
       const { page, blocked } = await open(375, theme, "empty");
       try {

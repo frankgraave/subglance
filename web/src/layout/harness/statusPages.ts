@@ -4,9 +4,10 @@
  *
  * `go run ./internal/statuspage/preview` renders every preview scenario with
  * the stylesheet from this build. Each document is served at
- * /status/<scenario> with the Content-Security-Policy the renderer states, so
- * its relative font URLs resolve the way they do behind the product and a
- * script or style the policy refuses fails here as it would in production.
+ * /status/<scenario> with the Content-Security-Policy the renderer states for
+ * it, so its relative font and logo URLs resolve the way they do behind the
+ * product and a script or style the policy refuses fails here as it would in
+ * production.
  *
  * Shared by statuspage.browser.test.ts, which measures the page's layout, and
  * accessibility.browser.test.ts, which holds it to the same axe gate as every
@@ -26,7 +27,7 @@ const FONTS = fileURLToPath(new URL("../../../public/fonts/", import.meta.url));
 export interface StatusPages {
   /** Origin of the server; a scenario is at `${url}/status/<name>`. */
   url: string;
-  /** The policy every page is served with, as the renderer states it. */
+  /** The policy of a page without an accent, as the renderer states it. */
   csp: string;
   /** The scenarios the preview command rendered, by name. */
   scenarios: string[];
@@ -60,10 +61,16 @@ export async function serveStatusPages(): Promise<StatusPages> {
           res.writeHead(200, { "content-type": "font/woff2" }).end(body);
           return;
         }
+        if (path.startsWith("/status/logos/")) {
+          const body = await readFile(join(dir, "logos", basename(path)));
+          res.writeHead(200, { "content-type": "image/png" }).end(body);
+          return;
+        }
         const name = /^\/status\/([a-z]+)$/.exec(path)?.[1];
         if (name && scenarios.includes(name)) {
           const body = await readFile(join(dir, `${name}.html`));
-          res.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-security-policy": csp }).end(body);
+          const policy = await readFile(join(dir, `${name}.csp.txt`), "utf8");
+          res.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-security-policy": policy }).end(body);
           return;
         }
       } catch { /* fall through to 404 */ }

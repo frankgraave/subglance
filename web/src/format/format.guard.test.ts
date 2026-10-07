@@ -88,6 +88,9 @@ describe("dates, times, counts and percentages are written by format/format.ts",
 describe("the status page writes uptime to the app's precision", () => {
   it("formats its figure with as many decimals as formatUptime", () => {
     const render = readFileSync(join(webSrc, "..", "..", "internal", "statuspage", "render.go"), "utf8");
-    expect(render).toContain(`"%.${UPTIME_DECIMALS}f%% uptime, %d days"`);
+    // The figure is formatted with a named precision, since the words around
+    // it now come from a per-language table (internal/statuspage/texts.go).
+    expect(render).toContain(`const uptimeDecimals = ${UPTIME_DECIMALS}\n`);
+    expect(render).toContain("strconv.FormatFloat(*pct, 'f', uptimeDecimals, 64)");
   });
 });

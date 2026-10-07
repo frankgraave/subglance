@@ -1,10 +1,37 @@
 package statuspage
 
-import "time"
+import (
+	"bytes"
+	"image"
+	"image/color"
+	"image/png"
+	"time"
+)
+
+// PreviewLogoFile is the file name the branded scenario's logo is linked
+// under, beside the page at LogoPath, as a stored logo would be.
+const PreviewLogoFile = "0123456789abcdef.png"
+
+// PreviewLogo draws the branded scenario's logo: a 120x40 PNG, a mid-grey
+// bar on a transparent ground, so it reads on both themes like the logo an
+// operator is asked to upload.
+func PreviewLogo() []byte {
+	img := image.NewNRGBA(image.Rect(0, 0, 120, 40))
+	grey := color.NRGBA{R: 128, G: 128, B: 128, A: 255}
+	for y := 8; y < 32; y++ {
+		for x := 4; x < 116; x++ {
+			img.SetNRGBA(x, y, grey)
+		}
+	}
+	var buf bytes.Buffer
+	_ = png.Encode(&buf, img) // an in-memory image of fixed size cannot fail to encode
+	return buf.Bytes()
+}
 
 // PreviewScenarios returns the public pages the design prototype draws
 // (docs/mockups/pages/status.html: an outage, all up, maintenance), plus a
-// page with no services, as of now. They feed the preview command and the
+// page with no services and the outage as an operator's own page (Dutch, an
+// accent, a logo, no credit), as of now. They feed the preview command and the
 // browser test that holds the rendered page to the prototype's layout claims.
 //
 // Fixed data, never read from a database: a scenario is a picture of a state,
@@ -23,6 +50,8 @@ func PreviewScenarios(now time.Time) map[string]Page {
 			Description: "Live status of the services Example Co runs for its customers.",
 			GeneratedAt: now.UTC(),
 			Timezone:    zone,
+			Language:    "en",
+			CreditShown: true,
 			Entries:     []Entry{},
 			Maintenance: []Maintenance{},
 			Outages:     []Outage{},
@@ -82,7 +111,14 @@ func PreviewScenarios(now time.Time) map[string]Page {
 	maintenance.Maintenance = []Maintenance{{StartsAt: now.Add(-14 * time.Minute).UTC(), EndsAt: now.Add(46 * time.Minute).UTC(), Keys: []string{"a2"}}}
 	maintenance.Summary = Summarise(maintenance.Entries)
 
+	// The accent is a mid blue that clears 3:1 on both canvases, the floor
+	// the store holds an accent to; the accessibility gate measures it.
+	branded := outage
+	branded.Language, branded.Accent, branded.CreditShown = "nl", "#3b82f6", false
+	branded.Logo = &Logo{Path: LogoRoot + LogoPath + PreviewLogoFile, Width: 120, Height: 40}
+
 	return map[string]Page{
+		"branded":     branded,
 		"outage":      outage,
 		"allup":       allUp,
 		"maintenance": maintenance,

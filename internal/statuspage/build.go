@@ -70,9 +70,15 @@ func (b Builder) Build(ctx context.Context, p store.StatusPage, now time.Time) (
 		Description: p.Description,
 		GeneratedAt: now.UTC(),
 		Timezone:    p.Timezone,
+		Language:    p.Language,
+		Accent:      p.Accent,
+		CreditShown: !p.HideCredit,
 		Entries:     []Entry{},
 		Maintenance: []Maintenance{},
 		Outages:     []Outage{},
+	}
+	if p.Logo != nil {
+		page.Logo = &Logo{Path: LogoRoot + LogoPath + p.Logo.FileName(), Width: p.Logo.Width, Height: p.Logo.Height}
 	}
 	announced := map[spanKey][]string{}
 	for _, se := range shown {

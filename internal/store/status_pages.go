@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -51,7 +52,9 @@ var statusPageSlug = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 // reservedStatusPageSlugs would shadow a path the server or the web UI
 // already serves under the same prefix.
-var reservedStatusPageSlugs = map[string]bool{"api": true, "assets": true, "fonts": true}
+// "logos" is where a page's logo is served beside it, as "fonts" is for its
+// typefaces.
+var reservedStatusPageSlugs = map[string]bool{"api": true, "assets": true, "fonts": true, "logos": true}
 
 // ErrStatusPageSlugTaken is returned when another page already uses the slug.
 var ErrStatusPageSlugTaken = errors.New("store: a status page with this slug already exists")
@@ -87,6 +90,17 @@ type StatusPage struct {
 	// Enabled makes the page reachable. Off by default, so a draft
 	// publishes nothing.
 	Enabled bool
+
+	// Language is the language of the page's fixed texts: StatusPageLanguages.
+	Language string
+	// Accent is "" or a #rrggbb colour for the page title, which
+	// NormaliseStatusPage holds to a contrast floor in both themes.
+	Accent string
+	// HideCredit drops "Monitored with SubGlance" from the footer.
+	HideCredit bool
+	// Logo is the uploaded logo's description, or nil. It is read with the
+	// page but written only by SetStatusPageLogo and DeleteStatusPageLogo.
+	Logo *StatusPageLogo
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -174,6 +188,19 @@ func NormaliseStatusPage(p StatusPage) (StatusPage, error) {
 		return p, invalidStatusPage("timezone", "unknown IANA timezone %q", p.Timezone)
 	}
 
+	p.Language = strings.ToLower(strings.TrimSpace(p.Language))
+	if p.Language == "" {
+		p.Language = StatusPageLanguageEnglish
+	}
+	if !slices.Contains(StatusPageLanguages, p.Language) {
+		return p, invalidStatusPage("language", "language must be one of %s", strings.Join(StatusPageLanguages, ", "))
+	}
+	accent, err := NormaliseAccent(p.Accent)
+	if err != nil {
+		return p, invalidStatusPage("accent", "%s", err.Error())
+	}
+	p.Accent = accent
+
 	switch p.Selection {
 	case StatusPageSelectMonitors:
 		if p.TagKey != "" || p.TagValue != "" {
@@ -205,23 +232,37 @@ func tagField(key string) string {
 	return "tag_value"
 }
 
-const statusPageColumns = `id, slug, title, description, timezone, selection, tag_key, tag_value,
-	indexable, enabled, created_at, updated_at`
+// statusPageColumns reads a page with its logo's description, never the
+// logo's bytes: statusPageFrom must follow it.
+const statusPageColumns = `p.id, p.slug, p.title, p.description, p.timezone, p.selection, p.tag_key, p.tag_value,
+	p.indexable, p.enabled, p.language, p.accent, p.hide_credit, p.created_at, p.updated_at,
+	l.content_type, l.width, l.height, l.file_key, length(l.data), l.updated_at`
+
+const statusPageFrom = ` FROM status_pages p LEFT JOIN status_page_logos l ON l.page_id = p.id`
 
 func scanStatusPage(row interface{ Scan(...any) error }) (StatusPage, error) {
 	var (
-		p                  StatusPage
-		tagKey, tagValue   sql.NullString
-		indexable, enabled int
-		created, updated   int64
+		p                              StatusPage
+		tagKey, tagValue               sql.NullString
+		indexable, enabled, hideCredit int
+		created, updated               int64
+		logoType, logoKey              sql.NullString
+		logoW, logoH, logoSize, logoAt sql.NullInt64
 	)
 	if err := row.Scan(&p.ID, &p.Slug, &p.Title, &p.Description, &p.Timezone, &p.Selection,
-		&tagKey, &tagValue, &indexable, &enabled, &created, &updated); err != nil {
+		&tagKey, &tagValue, &indexable, &enabled, &p.Language, &p.Accent, &hideCredit, &created, &updated,
+		&logoType, &logoW, &logoH, &logoKey, &logoSize, &logoAt); err != nil {
 		return StatusPage{}, err
 	}
 	p.TagKey, p.TagValue = tagKey.String, tagValue.String
-	p.Indexable, p.Enabled = indexable == 1, enabled == 1
+	p.Indexable, p.Enabled, p.HideCredit = indexable == 1, enabled == 1, hideCredit == 1
 	p.CreatedAt, p.UpdatedAt = time.Unix(created, 0).UTC(), time.Unix(updated, 0).UTC()
+	if logoKey.Valid {
+		p.Logo = &StatusPageLogo{
+			ContentType: logoType.String, Width: int(logoW.Int64), Height: int(logoH.Int64),
+			Key: logoKey.String, Bytes: int(logoSize.Int64), UpdatedAt: time.Unix(logoAt.Int64, 0).UTC(),
+		}
+	}
 	return p, nil
 }
 
@@ -243,7 +284,7 @@ func boolInt(b bool) int {
 
 // ListStatusPages returns every page, oldest first.
 func (db *DB) ListStatusPages(ctx context.Context) ([]StatusPage, error) {
-	rows, err := db.Reader.QueryContext(ctx, "SELECT "+statusPageColumns+" FROM status_pages ORDER BY id")
+	rows, err := db.Reader.QueryContext(ctx, "SELECT "+statusPageColumns+statusPageFrom+" ORDER BY p.id")
 	if err != nil {
 		return nil, fmt.Errorf("query status pages: %w", err)
 	}
@@ -262,7 +303,7 @@ func (db *DB) ListStatusPages(ctx context.Context) ([]StatusPage, error) {
 // GetStatusPage returns one page by id, or ErrNotFound.
 func (db *DB) GetStatusPage(ctx context.Context, id int64) (StatusPage, error) {
 	p, err := scanStatusPage(db.Reader.QueryRowContext(ctx,
-		"SELECT "+statusPageColumns+" FROM status_pages WHERE id = ?", id))
+		"SELECT "+statusPageColumns+statusPageFrom+" WHERE p.id = ?", id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return StatusPage{}, fmt.Errorf("%w: status page %d", ErrNotFound, id)
 	}
@@ -278,7 +319,7 @@ func (db *DB) GetStatusPage(ctx context.Context, id int64) (StatusPage, error) {
 // with the same 404 (design §3.1).
 func (db *DB) GetStatusPageBySlug(ctx context.Context, slug string) (StatusPage, error) {
 	p, err := scanStatusPage(db.Reader.QueryRowContext(ctx,
-		"SELECT "+statusPageColumns+" FROM status_pages WHERE slug = ?", slug))
+		"SELECT "+statusPageColumns+statusPageFrom+" WHERE p.slug = ?", slug))
 	if errors.Is(err, sql.ErrNoRows) {
 		return StatusPage{}, fmt.Errorf("%w: status page %q", ErrNotFound, slug)
 	}
@@ -299,10 +340,10 @@ func (db *DB) CreateStatusPage(ctx context.Context, p StatusPage) (StatusPage, e
 	now := time.Now().Unix()
 	res, err := db.Writer.ExecContext(ctx, `
 		INSERT INTO status_pages (slug, title, description, timezone, selection, tag_key, tag_value,
-			indexable, enabled, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			indexable, enabled, language, accent, hide_credit, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		p.Slug, p.Title, p.Description, p.Timezone, p.Selection, nullIfEmpty(p.TagKey), nullIfEmpty(p.TagValue),
-		boolInt(p.Indexable), boolInt(p.Enabled), now, now)
+		boolInt(p.Indexable), boolInt(p.Enabled), p.Language, p.Accent, boolInt(p.HideCredit), now, now)
 	if isUniqueViolation(err) {
 		return StatusPage{}, fmt.Errorf("%w: %s", ErrStatusPageSlugTaken, p.Slug)
 	}
@@ -325,10 +366,11 @@ func (db *DB) UpdateStatusPage(ctx context.Context, p StatusPage) (StatusPage, e
 	}
 	res, err := db.Writer.ExecContext(ctx, `
 		UPDATE status_pages SET slug = ?, title = ?, description = ?, timezone = ?, selection = ?,
-			tag_key = ?, tag_value = ?, indexable = ?, enabled = ?, updated_at = ?
+			tag_key = ?, tag_value = ?, indexable = ?, enabled = ?, language = ?, accent = ?, hide_credit = ?,
+			updated_at = ?
 		WHERE id = ?`,
 		p.Slug, p.Title, p.Description, p.Timezone, p.Selection, nullIfEmpty(p.TagKey), nullIfEmpty(p.TagValue),
-		boolInt(p.Indexable), boolInt(p.Enabled), time.Now().Unix(), p.ID)
+		boolInt(p.Indexable), boolInt(p.Enabled), p.Language, p.Accent, boolInt(p.HideCredit), time.Now().Unix(), p.ID)
 	if isUniqueViolation(err) {
 		return StatusPage{}, fmt.Errorf("%w: %s", ErrStatusPageSlugTaken, p.Slug)
 	}

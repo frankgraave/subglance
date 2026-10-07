@@ -226,7 +226,7 @@ func TestUptimeFollowsTheDaysTheBarDraws(t *testing.T) {
 		{Entry{Uptime90d: ptr(99.5)}, "99.50% uptime, 90 days", "No uptime data, 30 days"},
 		{Entry{Uptime90d: ptr(99.5), Uptime30d: ptr(100)}, "99.50% uptime, 90 days", "100.00% uptime, 30 days"},
 	} {
-		row := serviceRow(c.e)
+		row := serviceRow(c.e, &english)
 		if row.Uptime != c.desk || row.UptimePhone != c.ph {
 			t.Errorf("%+v: got %q / %q, want %q / %q", c.e, row.Uptime, row.UptimePhone, c.desk, c.ph)
 		}
@@ -298,7 +298,7 @@ func TestSummaryStatesACount(t *testing.T) {
 		{e(StatusNoData, StatusNotMonitored), "idle", "1 with no data yet · 1 not monitored"},
 		{nil, "idle", "No services on this page yet."},
 	} {
-		got := summarise(tc.entries)
+		got := summarise(tc.entries, &english)
 		if got.Lamp != tc.lamp || got.Text != tc.text {
 			t.Errorf("%v: got %q/%q, want %q/%q", tc.entries, got.Lamp, got.Text, tc.lamp, tc.text)
 		}
@@ -307,15 +307,15 @@ func TestSummaryStatesACount(t *testing.T) {
 
 func TestEveryStatusHasALampAndAWord(t *testing.T) {
 	for _, st := range []Status{StatusUp, StatusDegraded, StatusDown, StatusNoData, StatusNotMonitored} {
-		row := serviceRow(Entry{Status: st})
+		row := serviceRow(Entry{Status: st}, &english)
 		if row.Lamp == "" || row.Word == "" {
 			t.Errorf("%s: lamp %q, word %q", st, row.Lamp, row.Word)
 		}
 	}
-	if row := serviceRow(Entry{Status: StatusDown}); row.Rail != "down" {
+	if row := serviceRow(Entry{Status: StatusDown}, &english); row.Rail != "down" {
 		t.Errorf("a down row carries the down rail, got %q", row.Rail)
 	}
-	if row := serviceRow(Entry{Status: StatusUp}); row.Rail != "" {
+	if row := serviceRow(Entry{Status: StatusUp}, &english); row.Rail != "" {
 		t.Errorf("an up row carries no rail, got %q", row.Rail)
 	}
 }
@@ -325,7 +325,7 @@ func TestEveryStatusHasALampAndAWord(t *testing.T) {
 func TestHistoryTextAccountsForEveryDay(t *testing.T) {
 	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
 	days := previewDays(now, time.UTC, []int{0, 9}, []int{1}, 80)
-	got := historyText(days)
+	got := english.historyText(days)
 	want := "Last 90 days: 77 up, 1 degraded, 2 down, 10 no data. Down today, 9 days ago. Degraded 1 day ago."
 	if got != want {
 		t.Errorf("got  %q\nwant %q", got, want)
@@ -336,19 +336,19 @@ func TestOutageWording(t *testing.T) {
 	loc, _ := time.LoadLocation("Europe/Amsterdam")
 	now := time.Date(2026, 9, 29, 14, 32, 0, 0, loc)
 	start := time.Date(2026, 9, 29, 9, 41, 0, 0, loc)
-	ongoing := outageRow(Outage{StartedAt: start.UTC(), DurationS: int64(now.Sub(start) / time.Second)}, "API", now)
+	ongoing := outageRow(Outage{StartedAt: start.UTC(), DurationS: int64(now.Sub(start) / time.Second)}, "API", now, &english)
 	if !ongoing.Ongoing || ongoing.Text != "Down since 09:41 today · 4 h 51 min so far" {
 		t.Errorf("ongoing: %+v", ongoing)
 	}
 	s := time.Date(2026, 9, 19, 14, 2, 0, 0, loc)
 	e := s.Add(23 * time.Minute)
-	done := outageRow(Outage{StartedAt: s.UTC(), ResolvedAt: &e, DurationS: 23 * 60}, "API", now)
+	done := outageRow(Outage{StartedAt: s.UTC(), ResolvedAt: &e, DurationS: 23 * 60}, "API", now, &english)
 	if done.Ongoing || done.Text != "Down 23 min · Sat 19 Sep, 14:02–14:25" {
 		t.Errorf("resolved: %+v", done)
 	}
 	s = time.Date(2026, 9, 28, 23, 50, 0, 0, loc)
 	e = s.Add(20 * time.Minute)
-	overnight := outageRow(Outage{StartedAt: s.UTC(), ResolvedAt: &e, DurationS: 20 * 60}, "API", now)
+	overnight := outageRow(Outage{StartedAt: s.UTC(), ResolvedAt: &e, DurationS: 20 * 60}, "API", now, &english)
 	if overnight.Text != "Down 20 min · Yesterday, 23:50 – Today, 00:10" {
 		t.Errorf("across midnight: %q", overnight.Text)
 	}
@@ -364,7 +364,7 @@ func TestDuration(t *testing.T) {
 		24 * time.Hour:                  "1 d",
 		51*time.Hour + 30*time.Minute:   "2 d 3 h",
 	} {
-		if got := duration(d); got != want {
+		if got := english.duration(d); got != want {
 			t.Errorf("duration(%s) = %q, want %q", d, got, want)
 		}
 	}
@@ -375,7 +375,7 @@ func TestDuration(t *testing.T) {
 func TestOutageWithoutItsEntryIsLeftOut(t *testing.T) {
 	p := previewPage(t, "outage")
 	p.Outages = append(p.Outages, Outage{Key: "gone", StartedAt: p.GeneratedAt.Add(-time.Hour)})
-	v := newView(p, time.UTC, "")
+	v := newView(p, time.UTC, "", &english)
 	if len(v.Outages) != 2 {
 		t.Errorf("outages = %d, want the 2 with a named entry", len(v.Outages))
 	}

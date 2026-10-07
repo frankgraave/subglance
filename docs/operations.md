@@ -926,11 +926,33 @@ What to expect once a page is public:
   what the public sees.
 - **The page cannot be framed** by another site.
 
+### A page of your own
+
+Each page's settings also decide how it looks to the people you give it to:
+
+- **Language.** English or Dutch, for every fixed text on the page: the status
+  words, headings, dates and the decimal separator.
+- **Accent colour.** An optional `#rrggbb` colour for the page title. The page
+  follows each visitor's light or dark theme, so the colour has to reach a
+  contrast of 3:1 against both; one that does not is refused on save, with
+  both measured ratios. The status lamps and bars keep their own colours.
+- **Footer credit.** "Monitored with SubGlance" is shown unless you switch it
+  off. The time zone on the same line stays.
+- **Logo.** A PNG, JPEG or WebP image of at most 256 KB and 2048 pixels on a
+  side, shown above the title. It is stored in the database and served from
+  this server beside the page, so the page still loads nothing from anywhere
+  else. The type is read from the file itself, not its name, and SVG is
+  refused because it can carry script. Pick a logo that reads on both a light
+  and a dark background. Each upload gets a new random address, so a cache in
+  front never shows an old logo; a page that is off answers 404 for its logo
+  too.
+
 ### A page on its own subdomain
 
-A page loads nothing but its two fonts, and asks for them relative to itself,
-so a reverse proxy can serve it at the root of a domain of its own. Map `/` to
-`/status/<slug>/` (with the trailing slash) and `/fonts/` to `/status/fonts/`.
+A page loads nothing but its two fonts and its logo, and asks for them
+relative to itself, so a reverse proxy can serve it at the root of a domain of
+its own. Map `/` to `/status/<slug>/` (with the trailing slash), `/fonts/` to
+`/status/fonts/` and `/logos/` to `/status/logos/`.
 Everything else on that domain can stay unanswered: the dashboard and the rest
 of the API do not need to be reachable there.
 
@@ -942,7 +964,8 @@ status.example.com {
 		rewrite * /status/acme/
 		reverse_proxy 127.0.0.1:8080
 	}
-	handle /fonts/* {
+	@assets path /fonts/* /logos/*
+	handle @assets {
 		rewrite * /status{path}
 		reverse_proxy 127.0.0.1:8080
 	}
@@ -970,6 +993,9 @@ server {
     }
     location /fonts/ {
         proxy_pass http://127.0.0.1:8080/status/fonts/;
+    }
+    location /logos/ {
+        proxy_pass http://127.0.0.1:8080/status/logos/;
     }
     location / {
         return 404;

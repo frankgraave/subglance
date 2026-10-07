@@ -27,7 +27,7 @@ function mount(pages: StatusPage[] = samplePages, onRequest?: Handler) {
     const slug = decodeURIComponent(url.split("/")[4] ?? "");
     const found = list.find((p) => p.slug === slug);
     if (init?.method === "POST") {
-      const created: StatusPage = { ...body, id: nextId++, created_at: "2026-09-29T00:00:00Z", updated_at: "2026-09-29T00:00:00Z", entries: [], unnamed_monitor_ids: [] };
+      const created: StatusPage = { ...body, id: nextId++, logo: null, created_at: "2026-09-29T00:00:00Z", updated_at: "2026-09-29T00:00:00Z", entries: [], unnamed_monitor_ids: [] };
       list = [...list, created];
       return json(created, 201);
     }
@@ -100,7 +100,11 @@ it("suggests the address from the title until it is typed by hand, and creates t
   expect(screen.getByText("Café was created. Add the services it shows, then publish it.")).toBeTruthy();
   const body = sent(fetcher, "POST");
   expect(body).toMatchObject({ slug: "cafe", title: "Café", selection: "monitors", enabled: false, indexable: false, tag_key: "", tag_value: "" });
-  expect(Object.keys(body).sort()).toEqual(["description", "enabled", "indexable", "selection", "slug", "tag_key", "tag_value", "timezone", "title"]);
+  expect(body).toMatchObject({ language: "en", accent: "", hide_credit: false });
+  expect(Object.keys(body).sort()).toEqual(["accent", "description", "enabled", "hide_credit", "indexable", "language", "selection",
+    "slug", "tag_key", "tag_value", "timezone", "title"]);
+  // A logo needs a page to belong to; the new-page form says so instead.
+  expect(screen.queryByLabelText("Logo (optional)")).toBeNull();
 });
 
 // The server replaces every setting and reads an omitted boolean as false,
@@ -117,7 +121,7 @@ it("sends every setting on an update, so fixing the title keeps the page publish
   expect(calls(fetcher, "PUT")[0][0]).toBe("/api/v1/status-pages/status");
   expect(sent(fetcher, "PUT")).toEqual({
     slug: "status", title: "Acme status", description: "", timezone: "Europe/Amsterdam", selection: "monitors",
-    tag_key: "", tag_value: "", indexable: false, enabled: true,
+    tag_key: "", tag_value: "", indexable: false, enabled: true, language: "en", accent: "", hide_credit: false,
   });
   expect(screen.queryByRole("form", { name: /Settings for/ })).toBeNull();
 });
@@ -128,7 +132,8 @@ it("warns that shared links break before a published page's address changes", as
   const form = screen.getByRole("form", { name: "Settings for Acme services" });
   expect(within(form).queryByText(/stop working/)).toBeNull();
   fireEvent.change(within(form).getByLabelText("Address"), { target: { value: "health" } });
-  expect(within(form).getByRole("status").textContent).toBe("Links already shared to /status/status stop working when you save.");
+  expect(within(form).getAllByRole("status").map((region) => region.textContent))
+    .toContain("Links already shared to /status/status stop working when you save.");
 });
 
 it("draws a refusal under the field the server blamed, and keeps the input", async () => {
@@ -256,6 +261,81 @@ it("refuses a list it cannot read rather than guessing at a page's state", async
   const { enabled: _, ...broken } = samplePages[0];
   mount(samplePages, (url, init) => url === "/api/v1/status-pages" && !init?.method ? json({ pages: [broken] }) : undefined);
   expect(await screen.findByText("Status pages unavailable.")).toBeTruthy();
+});
+
+it("sends the language, the accent and the footer credit with the other settings", async () => {
+  const fetcher = mount();
+  fireEvent.click(await screen.findByRole("button", { name: "Settings for Acme for customers" }));
+  const form = screen.getByRole("form", { name: "Settings for Acme for customers" });
+  expect((within(form).getByLabelText("Language") as HTMLSelectElement).value).toBe("nl");
+  const credit = within(form).getByRole("checkbox", { name: /Monitored with SubGlance/ }) as HTMLInputElement;
+  // The checkbox says what is shown; the setting stores what is hidden.
+  expect(credit.checked).toBe(false);
+  fireEvent.click(credit);
+  fireEvent.change(within(form).getByLabelText("Language"), { target: { value: "en" } });
+  fireEvent.change(within(form).getByLabelText("Accent colour (optional)"), { target: { value: "#2563eb" } });
+  fireEvent.click(within(form).getByRole("button", { name: "Save settings" }));
+  await waitFor(() => expect(calls(fetcher, "PUT")).toHaveLength(1));
+  expect(sent(fetcher, "PUT")).toMatchObject({ language: "en", accent: "#2563eb", hide_credit: false });
+});
+
+it("draws the server's contrast refusal under the accent field", async () => {
+  const message = "accent #ffff00 measures 13.80:1 against the dark page and 1.03:1 against the light page; the title needs 3.00:1 on both";
+  mount(samplePages, (url, init) => init?.method === "PUT" && !String(url).endsWith("/entries")
+    ? json({ error: message, field: "accent" }, 400) : undefined);
+  fireEvent.click(await screen.findByRole("button", { name: "Settings for Acme services" }));
+  const form = screen.getByRole("form", { name: "Settings for Acme services" });
+  const accent = within(form).getByLabelText("Accent colour (optional)") as HTMLInputElement;
+  fireEvent.change(accent, { target: { value: "#ffff00" } });
+  fireEvent.click(within(form).getByRole("button", { name: "Save settings" }));
+  const alert = await within(form).findByRole("alert");
+  expect(alert.textContent).toBe(message);
+  expect(accent.getAttribute("aria-invalid")).toBe("true");
+  expect(accent.getAttribute("aria-describedby")).toContain(alert.id);
+});
+
+it("uploads a chosen logo as its bytes, shows it, and removes it", async () => {
+  const fetcher = mount(samplePages, (url, init) => {
+    if (!String(url).endsWith("/logo")) return undefined;
+    const page = samplePages[0];
+    if (init?.method === "PUT") {
+      return json({ ...page, logo: { content_type: "image/png", width: 80, height: 20, bytes: 3, path: "/status/logos/aaaaaaaaaaaaaaaa.png", updated_at: "2026-10-07T00:00:00Z" } });
+    }
+    if (init?.method === "DELETE") return json({ ...page, logo: null });
+    return undefined;
+  });
+  fireEvent.click(await screen.findByRole("button", { name: "Settings for Acme services" }));
+  const form = screen.getByRole("form", { name: "Settings for Acme services" });
+  const file = new File([new Uint8Array([1, 2, 3])], "logo.svg", { type: "image/svg+xml" });
+  fireEvent.change(within(form).getByLabelText("Logo (optional)"), { target: { files: [file] } });
+  const preview = await within(form).findByRole("img", { name: "Current logo of Acme services" });
+  expect(preview.getAttribute("src")).toBe("/api/v1/status-pages/status/logo?v=aaaaaaaaaaaaaaaa.png");
+  const [url, init] = calls(fetcher, "PUT")[0] as [string, RequestInit];
+  expect(url).toBe("/api/v1/status-pages/status/logo");
+  // The server reads the type from the bytes; the form sends neither the
+  // name nor the type the browser guessed.
+  expect(init.body).toBe(file);
+  expect((init.headers as Record<string, string>)["Content-Type"]).toBe("application/octet-stream");
+
+  fireEvent.click(within(form).getByRole("button", { name: "Remove logo" }));
+  await waitFor(() => expect(within(form).queryByRole("img")).toBeNull());
+  expect(calls(fetcher, "DELETE")[0][0]).toBe("/api/v1/status-pages/status/logo");
+});
+
+it("refuses a logo over the size limit without uploading it, and shows the server's refusal", async () => {
+  const fetcher = mount(samplePages, (url, init) => String(url).endsWith("/logo") && init?.method === "PUT"
+    ? json({ error: "the logo must be a PNG, JPEG or WebP image; SVG is not accepted, because it can carry script", field: "logo" }, 400)
+    : undefined);
+  fireEvent.click(await screen.findByRole("button", { name: "Settings for Acme services" }));
+  const form = screen.getByRole("form", { name: "Settings for Acme services" });
+  const input = within(form).getByLabelText("Logo (optional)");
+  fireEvent.change(input, { target: { files: [new File([new Uint8Array(256 * 1024 + 1)], "big.png")] } });
+  expect((await within(form).findByRole("alert")).textContent).toBe("The logo is larger than 256 KB.");
+  expect(calls(fetcher, "PUT")).toHaveLength(0);
+
+  fireEvent.change(within(form).getByLabelText("Logo (optional)"), { target: { files: [new File(["<svg/>"], "x.png")] } });
+  await waitFor(() => expect(within(form).getByRole("alert").textContent).toContain("SVG is not accepted"));
+  expect(within(form).getByLabelText("Logo (optional)").getAttribute("aria-invalid")).toBe("true");
 });
 
 it("suggests slugs a person would type", () => {

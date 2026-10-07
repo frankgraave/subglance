@@ -63,6 +63,10 @@ const SCREENS: Screen[] = [
   { name: "status page all up", path: "/status/allup", ready: ".sp-service", statusPage: true },
   { name: "status page maintenance", path: "/status/maintenance", ready: ".sp-service", statusPage: true },
   { name: "status page empty", path: "/status/empty", ready: "main", statusPage: true },
+  // An operator's own page: Dutch, a logo and an accent title, which the
+  // contrast rule measures against the canvas in both themes.
+  { name: "status page branded", path: "/status/branded", ready: ".sp-service", statusPage: true },
+  { name: "status page branded phone", path: "/status/branded", ready: ".sp-service", statusPage: true, width: 375 },
 ];
 
 let server: Server;

@@ -18,6 +18,7 @@ export const samplePages: StatusPage[] = [
   {
     id: 1, slug: "status", title: "Acme services", description: "", timezone: "Europe/Amsterdam", selection: "monitors",
     tag_key: "", tag_value: "", indexable: false, enabled: true,
+    language: "en", accent: "", hide_credit: false, logo: null,
     created_at: "2026-09-20T08:00:00Z", updated_at: "2026-09-21T08:00:00Z",
     entries: [{ monitor_id: 1, public_key: "3f9a0c1d5e7b2a48", display_name: "API" }],
     unnamed_monitor_ids: [],
@@ -25,6 +26,8 @@ export const samplePages: StatusPage[] = [
   {
     id: 2, slug: "acme", title: "Acme for customers", description: "", timezone: "UTC", selection: "tag",
     tag_key: "customer", tag_value: "acme", indexable: false, enabled: false,
+    language: "nl", accent: "", hide_credit: true,
+    logo: { content_type: "image/png", width: 120, height: 40, bytes: 2048, path: "/status/logos/0123456789abcdef.png", updated_at: "2026-09-22T08:00:00Z" },
     created_at: "2026-09-22T08:00:00Z", updated_at: "2026-09-22T08:00:00Z",
     entries: [{ monitor_id: 1, public_key: "8b1e22c0f4d39a67", display_name: "API" }],
     unnamed_monitor_ids: [2],
