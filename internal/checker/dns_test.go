@@ -470,6 +470,17 @@ func TestDNSCheckerTimesOut(t *testing.T) {
 	}
 }
 
+// The socket deadline is the context's deadline, and the read can return
+// before the context's timer fires. Pinned without a race: the context here
+// is still live while the error says the deadline passed.
+func TestDNSSocketDeadlineReadsAsATimeout(t *testing.T) {
+	err := &net.OpError{Op: "read", Net: "udp", Err: os.ErrDeadlineExceeded}
+	res := classifyResolverError(time.Now(), context.Background(), "127.0.0.1:53", err)
+	if res.OK || res.Kind != FailTimeout {
+		t.Fatalf("got OK=%v kind=%q error=%q, want a timeout", res.OK, res.Kind, res.Error)
+	}
+}
+
 func TestDNSCheckerRefusesWhatItCannotAsk(t *testing.T) {
 	c := openChecker()
 	for _, m := range []Monitor{

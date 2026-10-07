@@ -223,7 +223,7 @@ func (c *DNSChecker) Check(ctx context.Context, m Monitor) Result {
 	for i, s := range servers {
 		answer, err = exchange(ctx, dialer, s, name, qtype)
 		server = s
-		if err == nil || ctx.Err() != nil || i == len(servers)-1 {
+		if err == nil || ctx.Err() != nil || errors.Is(err, os.ErrDeadlineExceeded) || i == len(servers)-1 {
 			break
 		}
 	}
@@ -264,6 +264,12 @@ func (c *DNSChecker) servers(resolver string) ([]string, *net.Dialer, error) {
 // refusal and a timeout read the same as on every other check; anything else
 // is a resolver that could not be asked, which is a DNS failure.
 func classifyResolverError(start time.Time, ctx context.Context, server string, err error) Result {
+	// The socket carries the context's deadline, so its read can give up a
+	// moment before the context's own timer has fired and ctx.Err() says so.
+	// That is the same timeout, and must read as one.
+	if errors.Is(err, os.ErrDeadlineExceeded) {
+		return fail(start, FailTimeout, "timed out after %s", time.Since(start).Truncate(time.Millisecond))
+	}
 	if errors.Is(err, ErrPrivateTarget) || errors.Is(err, context.DeadlineExceeded) ||
 		ctx.Err() != nil || errors.Is(err, context.Canceled) {
 		return classifyRequestError(start, ctx, err)
