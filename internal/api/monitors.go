@@ -50,7 +50,7 @@ type monitorResponse struct {
 	// and one that says "1.2" does not.
 	MinTLSVersion string `json:"min_tls_version,omitempty"`
 
-	Status     string     `json:"status"` // up, pending, warning, down, recovering, or expiring
+	Status     string     `json:"status"` // up, pending, warning, down, recovering, expiring, or unknown
 	LastCheck  *time.Time `json:"last_check,omitempty"`
 	LatencyMS  int        `json:"latency_ms,omitempty"`
 	StatusCode int        `json:"status_code,omitempty"`
@@ -170,6 +170,9 @@ type monitorDetailResponse struct {
 	// DNS is a dns monitor's record, expected values and resolver. Omitted
 	// for every other type.
 	DNS *dnsCheckWire `json:"dns,omitempty"`
+	// DomainWarnDays is a domain monitor's warning threshold in days.
+	// Omitted for every other type; 0 is a value ("never warn").
+	DomainWarnDays *int `json:"domain_warn_days,omitempty"`
 }
 
 // recoveryResponse is a recovering monitor's passing streak.
@@ -280,6 +283,9 @@ type createMonitorRequest struct {
 	JSONAssertion *jsonAssertionWire `json:"json_assertion"`
 	// DNS is required for a dns monitor and refused for every other type.
 	DNS *dnsCheckWire `json:"dns"`
+	// DomainWarnDays is a domain monitor's warning threshold, 0 to 365;
+	// omitted means checker.DefaultDomainWarnDays. Refused for other types.
+	DomainWarnDays *int `json:"domain_warn_days"`
 	// ChannelIDs attaches the monitor's own channels as it is created.
 	// Omitted or empty means none, so its alerts go to the routing rules
 	// its tags match, or to the default.
@@ -513,6 +519,20 @@ func (s *Server) handleCreateMonitor(w http.ResponseWriter, r *http.Request) {
 	// Validated above as well.
 	m.JSONAssertion, _ = jsonAssertionFromWire(req.JSONAssertion)
 	m.DNS, _ = dnsCheckFromWire(req.DNS)
+	if req.Type == store.TypeDomain {
+		m.DomainWarnDays = checker.DefaultDomainWarnDays
+		if req.DomainWarnDays != nil {
+			m.DomainWarnDays = *req.DomainWarnDays
+		}
+		// An expiry date read off the registry is a fact, not a probe that
+		// might have been unlucky, so the first failure confirms: with a
+		// six-hour floor, two retries would sit on an expired domain for
+		// half a day. A registry that does not answer is "unknown", not a
+		// failure, so this does not make a flaky RDAP server page anyone.
+		if req.Retries == nil {
+			m.Retries = 0
+		}
+	}
 
 	if req.Type == store.TypePush {
 		m.PushIntervalS = *req.PushIntervalS
@@ -563,7 +583,7 @@ func validateCreateMonitor(req createMonitorRequest) problem {
 		return fieldProblem("target", "a push monitor has no target; it is reported to, not probed")
 	}
 	switch req.Type {
-	case "http", "tcp", "ping", "ssl", store.TypeDNS, store.TypePush:
+	case "http", "tcp", "ping", "ssl", store.TypeDNS, store.TypeDomain, store.TypePush:
 	case "":
 		return fieldProblem("type", "type is required")
 	default:
@@ -618,6 +638,12 @@ func validateCreateMonitor(req createMonitorRequest) problem {
 		return p
 	}
 	if p := dnsCheckTypeProblem(req.Type, d); !p.ok() {
+		return p
+	}
+	if p := validateDomainWarnDays(req.DomainWarnDays); !p.ok() {
+		return p
+	}
+	if p := domainTypeProblem(req.Type, req.IntervalS, req.DomainWarnDays); !p.ok() {
 		return p
 	}
 	return problem{}
@@ -824,6 +850,21 @@ func validateTargetForType(typ, target string) problem {
 			return bad("a dns monitor takes a domain name such as example.com or _dmarc.example.com")
 		}
 
+	case store.TypeDomain:
+		// A registration belongs to a name, so as for dns the target is a
+		// name: say which part to drop rather than "invalid target".
+		name := strings.TrimSpace(target)
+		if strings.Contains(name, "://") {
+			return bad("a domain monitor takes a domain name, not a URL — use " + hostOnly(name))
+		}
+		if _, err := netip.ParseAddr(name); err == nil {
+			return bad("a domain monitor takes a domain name, not an IP address")
+		}
+		if host, port, err := checker.ParseHostPort(name, 0); err == nil && port != 0 {
+			return bad("a domain monitor takes a domain name without a port — use " + host)
+		}
+		return validateDomainTarget(name, bad)
+
 	case "ping":
 		// ICMP has no ports. A URL or a host:port here means the user picked
 		// the wrong check type, so say which one they wanted rather than
@@ -912,6 +953,10 @@ func (s *Server) handleGetMonitor(w http.ResponseWriter, r *http.Request) {
 		SSLWarnDays:       m.SSLWarnDays,
 		JSONAssertion:     jsonAssertionToWire(m.JSONAssertion),
 		DNS:               dnsCheckToWire(m.DNS),
+	}
+	if m.Type == store.TypeDomain {
+		days := m.DomainWarnDays
+		resp.DomainWarnDays = &days
 	}
 	// A viewer can inspect check rules but must not gain reusable credentials
 	// merely because edit settings became readable. Never mask secrets into an
@@ -1101,7 +1146,14 @@ func (s *Server) describeMonitor(r *http.Request, m store.Monitor) monitorRespon
 			resp.FailureKind = inc.Cause
 		}
 	case errors.Is(err, store.ErrNoOpenIncident):
-		// Nothing wrong.
+		// Nothing wrong, as far as the checks that found out can tell. A
+		// domain monitor's latest check may not have found out at all;
+		// then that is what the monitor says. An open incident keeps its
+		// own status instead: an expired or expiring registration does not
+		// stop being one because the registry is slow today.
+		if m.Type == store.TypeDomain {
+			s.applyUnknownCheck(ctx, m.ID, &resp)
+		}
 	default:
 		s.log.Error("open incident", "monitor_id", m.ID, "error", err)
 	}
@@ -1241,6 +1293,9 @@ type patchMonitorRequest struct {
 	// DNS replaces a dns monitor's settings as a whole when present. Not
 	// nullable: a dns monitor cannot be without them.
 	DNS *dnsCheckWire `json:"dns"`
+
+	// DomainWarnDays sets a domain monitor's warning threshold, 0 to 365.
+	DomainWarnDays *int `json:"domain_warn_days"`
 
 	// ChannelIDs replaces the monitor's own channels when present, in the
 	// same write as every other field, so the If-Match that guards the row
@@ -1391,6 +1446,7 @@ func writeConflict(w http.ResponseWriter, id int64) {
 // type of an existing monitor can invalidate a target that was never touched,
 // and that combination has to be rejected just as firmly as a bad create.
 func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
+	wasType := m.Type
 	if req.Name != nil {
 		if strings.TrimSpace(*req.Name) == "" {
 			return fieldProblem("name", "name cannot be empty")
@@ -1409,7 +1465,7 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 				"a monitor cannot be converted to or from push; create a new one instead")
 		}
 		switch *req.Type {
-		case "http", "tcp", "ping", "ssl", store.TypeDNS, store.TypePush:
+		case "http", "tcp", "ping", "ssl", store.TypeDNS, store.TypeDomain, store.TypePush:
 			m.Type = *req.Type
 		default:
 			return fieldProblem("type", "unknown type "+*req.Type)
@@ -1555,6 +1611,9 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 		if p := dnsCheckTypeProblem(m.Type, m.DNS); !p.ok() {
 			return p
 		}
+	}
+	if p := applyDomainPatch(m, wasType, req); !p.ok() {
+		return p
 	}
 	if req.PushIntervalS != nil || req.PushGraceS != nil {
 		if m.Type != store.TypePush {

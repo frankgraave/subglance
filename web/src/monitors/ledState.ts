@@ -28,6 +28,11 @@ export const LED_STATE: Record<MonitorStatus, LedState> = {
   // certificate needs renewing. The word separates it from a warning.
   expiring: "warn",
   warning: "warn",
+  // Grey and filled, like waiting: there is no reading. A domain monitor
+  // whose registry runs no RDAP, or did not answer, has not learnt anything
+  // about the domain, and amber would claim there is something to look at
+  // on the monitored side. The word beside it says why.
+  unknown: "idle",
   // Pending is amber, not grey: it is a monitor we are waiting on, which is
   // worth a glance.
   pending: "warn",

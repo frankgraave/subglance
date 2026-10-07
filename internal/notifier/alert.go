@@ -221,21 +221,31 @@ func (a Alert) Body() string {
 	return out
 }
 
-// noticeTitle is the title of an alert about a certificate notice. None of
-// them says "down": the service answered every check the notice covers.
+// noticeTitle is the title of an alert about an expiry notice. None of them
+// says "down": the service answered every check the notice covers.
 //
 // The renewal title does not say "renewed". The notice also ends when
 // someone lowers the monitor's warning window below the days left, and the
-// certificate was not renewed then.
+// certificate or the registration was not renewed then.
 func noticeTitle(a Alert) string {
+	what := noticeSubject(a)
 	switch state.Event(a.Event) {
 	case state.EventIncidentResolved:
-		return fmt.Sprintf("%s: certificate no longer expires soon", a.MonitorName)
+		return fmt.Sprintf("%s: %s no longer expires soon", a.MonitorName, what)
 	case state.EventIncidentReminder:
-		return fmt.Sprintf("%s: certificate still expires soon", a.MonitorName)
+		return fmt.Sprintf("%s: %s still expires soon", a.MonitorName, what)
 	default:
-		return fmt.Sprintf("%s: certificate expires soon", a.MonitorName)
+		return fmt.Sprintf("%s: %s expires soon", a.MonitorName, what)
 	}
+}
+
+// noticeSubject names what an expiry notice is about: a domain monitor's
+// registration, or a certificate on every other type.
+func noticeSubject(a Alert) string {
+	if a.MonitorType == store.TypeDomain {
+		return "domain registration"
+	}
+	return "certificate"
 }
 
 // durationWords renders a gap the way a person would say it.

@@ -56,7 +56,7 @@ function MonitorRowImpl({
   // the chip clips; the full message is in the title and on the monitor's page.
   // An expiring monitor says why in the same place: "certificate expiring".
   const cause =
-    (status === "down" || status === "expiring") && error
+    (status === "down" || status === "expiring" || status === "unknown") && error
       ? (causeWords(monitor.failureKind) ?? error)
       : null;
 

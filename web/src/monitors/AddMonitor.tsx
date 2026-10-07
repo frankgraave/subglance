@@ -263,7 +263,13 @@ function bodyFor(
       : {}),
     ...jsonAssertionField(values),
     ...dnsField(values),
+    ...domainField(values),
   };
+}
+
+/** The warning threshold, sent only for a domain monitor, as dns is. */
+function domainField(values: AddMonitorValues): { domain_warn_days?: number } {
+  return values.type === "domain" ? { domain_warn_days: values.domainWarnDays } : {};
 }
 
 /**
@@ -316,6 +322,7 @@ function previewRequestFor(values: AddMonitorValues): PreviewRequest {
       : {}),
     ...jsonAssertionField(values),
     ...dnsField(values),
+    ...domainField(values),
   };
 }
 

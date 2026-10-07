@@ -25,9 +25,9 @@ import type { ApiMonitor, Monitor } from "./types";
  * older or newer server sent that this build has no column for, kept rather
  * than coerced so the row still says something true.
  */
-export type CheckType = "http" | "tcp" | "ping" | "ssl" | "dns" | "push";
+export type CheckType = "http" | "tcp" | "ping" | "ssl" | "dns" | "domain" | "push";
 
-const CHECK_TYPES: readonly string[] = ["http", "tcp", "ping", "ssl", "dns", "push"];
+const CHECK_TYPES: readonly string[] = ["http", "tcp", "ping", "ssl", "dns", "domain", "push"];
 
 export type InventoryMonitor = Monitor & {
   /**
@@ -65,6 +65,8 @@ export type InventoryMonitor = Monitor & {
   jsonAssertion?: JsonAssertion | null;
   /** Detail read only, dns monitors only: the record, values and resolver. */
   dns?: DnsCheck;
+  /** Detail read only, domain monitors only: days of warning before expiry. */
+  domainWarnDays?: number;
   checkSettings?: Omit<PreviewRequest, "type" | "target" | "timeout_s">;
 };
 
@@ -94,6 +96,7 @@ export function inventoryFromApi(api: ApiMonitor & {
     ...(api.recovery_threshold !== undefined ? { recoveryThreshold: api.recovery_threshold } : {}),
     ...(api.json_assertion !== undefined ? { jsonAssertion: api.json_assertion } : {}),
     ...(api.dns !== undefined ? { dns: api.dns } : {}),
+    ...(api.domain_warn_days !== undefined ? { domainWarnDays: api.domain_warn_days } : {}),
     checkSettings: Object.fromEntries(
       (["method", "expected_status", "keyword", "keyword_mode", "follow_redirects", "headers", "body", "ssl_warn_days", "min_tls_version"] as const)
         .filter((key) => api[key] !== undefined).map((key) => [key, api[key]]),

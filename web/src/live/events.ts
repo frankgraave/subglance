@@ -69,6 +69,12 @@ export type HeartbeatEvent = {
    * it as a plain up.
    */
   expiring?: boolean;
+  /**
+   * Set on a domain check that could not read the expiry date. It was not
+   * stored and is not a check result: no bar is drawn for it, and the
+   * monitor reads "unknown" with `error` as the reason.
+   */
+  unknown?: boolean;
 };
 
 /** A monitor changing state. Rare, and the only frame worth announcing. */
@@ -156,6 +162,7 @@ export function parseEvent(type: string, data: string): LiveEvent | null {
         failureKind: str(payload.failure_kind),
         recovery: recoveryFromWire(payload.recovery),
         ...(payload.expiring === true ? { expiring: true } : {}),
+        ...(payload.unknown === true ? { unknown: true } : {}),
       };
     }
     case "status": {

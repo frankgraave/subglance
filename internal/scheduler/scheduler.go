@@ -715,11 +715,16 @@ func (h *jobHeap) Pop() any {
 
 // cadence keeps already-fast monitors fast. Recovery uses the same queue,
 // jitter and bounded workers as ordinary checks.
+//
+// A type with a floor of its own never goes below it, down or not: a domain
+// monitor's registry does not answer faster for an expired domain, and asking
+// it every minute is what gets an instance rate-limited.
 func (j Job) cadence() time.Duration {
+	interval := j.Interval
 	if j.Down {
-		return min(j.Interval, time.Minute)
+		interval = min(interval, time.Minute)
 	}
-	return j.Interval
+	return max(interval, checker.MinInterval(j.Monitor.Type))
 }
 
 // SetDown applies a confirmed transition immediately, before the next reload.
