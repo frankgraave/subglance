@@ -191,3 +191,19 @@ it("refuses a list it cannot read rather than guessing at roles", async () => {
   mount(twoUsers, () => json({ users: [{ id: 1, email: "x@example.com", role: "owner", created_at: "2026-01-01T00:00:00Z" }] }));
   expect(await screen.findByText("Users unavailable.")).toBeTruthy();
 });
+
+// Your own sessions are under Account; this is for another account's.
+it("opens another account's sessions under its row, and not on your own", async () => {
+  const fetcher = mount(twoUsers, (url) => url === "/api/v1/users/2/sessions" ? json({ sessions: [] }) : undefined);
+  await screen.findByText("oncall@example.com");
+  expect(screen.queryByRole("button", { name: "Sessions of operator@example.com" })).toBeNull();
+  const toggle = screen.getByRole("button", { name: "Sessions of oncall@example.com" });
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(toggle);
+  expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  expect(await screen.findByText("Not signed in anywhere.")).toBeTruthy();
+  expect(document.getElementById(toggle.getAttribute("aria-controls")!)).toBeTruthy();
+  expect(fetcher.mock.calls.some(([url]) => url === "/api/v1/users/2/sessions")).toBe(true);
+  fireEvent.click(toggle);
+  expect(screen.queryByText("Not signed in anywhere.")).toBeNull();
+});

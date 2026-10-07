@@ -1,0 +1,4 @@
+/* An account's sessions open under its row. The row is a wrapping
+   .control-row, so the list takes a line of its own below the address and
+   the row's buttons rather than squeezing in beside them. */
+.users-sessions { flex-basis: 100%; }
