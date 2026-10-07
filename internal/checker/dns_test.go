@@ -156,9 +156,21 @@ func (f *fakeDNS) serveUDP(pc net.PacketConn) {
 		decoy := f.decoyFirst
 		f.mu.Unlock()
 		if decoy {
-			wrong := append([]byte(nil), out...)
-			binary.BigEndian.PutUint16(wrong, id+1)
-			_, _ = pc.WriteTo(wrong, from)
+			// Another ID and other records: believed, it would fail the
+			// check, which is what makes the test bite.
+			var q dnsmessage.Message
+			_ = q.Unpack(buf[:n])
+			fake := dnsmessage.Message{
+				Header:    dnsmessage.Header{ID: id + 1, Response: true},
+				Questions: q.Questions,
+				Answers: []dnsmessage.Resource{{
+					Header: dnsmessage.ResourceHeader{Name: q.Questions[0].Name, Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET},
+					Body:   a4("198.51.100.66"),
+				}},
+			}
+			if wrong, err := fake.Pack(); err == nil {
+				_, _ = pc.WriteTo(wrong, from)
+			}
 		}
 		_, _ = pc.WriteTo(out, from)
 	}
