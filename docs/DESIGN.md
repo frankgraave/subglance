@@ -2607,7 +2607,10 @@ truncated from the right), and moves focus to `<main>`, which carries
 where the browser put it. A visually-hidden skip link is the first focusable
 element on every screen, clipped rather than `display: none` so it can still take
 focus, and withdrawn while the drawer is open because there is nothing to skip
-to.
+to. It says "Skip to main content" on every screen rather than naming one: it is
+the same link everywhere, the wording is the one users already know from other
+sites, and the screen it lands on is announced by name, because `<main>` is
+labelled by the masthead's title.
 
 `jsx-a11y` runs in CI as part of `npm run lint`, which fails on a warning.
 `prefer-tag-over-role` is off: it asks for `<output>` where the code has
