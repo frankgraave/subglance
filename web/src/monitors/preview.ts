@@ -9,6 +9,7 @@
 
 import { apiJSON } from "../api/http";
 import type { JsonAssertion } from "./jsonAssertion";
+import type { DnsCheck } from "./dnsCheck";
 
 /*
  * `ApiError` is re-exported rather than re-declared: it moved to the shared
@@ -41,6 +42,8 @@ export type PreviewRequest = {
   min_tls_version?: string;
   /** One condition on a field of a JSON body; see jsonAssertion.ts. */
   json_assertion?: JsonAssertion;
+  /** Required for a dns monitor; see dnsCheck.ts. */
+  dns?: DnsCheck;
 };
 
 /** POST /api/v1/monitors/preview, as the server returns it. */
@@ -109,6 +112,8 @@ export function fingerprintPreview(req: PreviewRequest): PreviewFingerprint {
     req.min_tls_version ?? "",
     // A preview that passed says nothing about a different assertion.
     req.json_assertion ?? null,
+    // Nor about a different record, value or resolver.
+    req.dns ?? null,
   ]);
 }
 

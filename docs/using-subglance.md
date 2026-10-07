@@ -134,6 +134,7 @@ tokens too. Without a role, a token acts with the creator's role.
 | `tcp` | `db.example.com:5432` | A TCP handshake completes within the timeout |
 | `ping` | `example.com` or `192.0.2.10` | ICMP echo reply |
 | `ssl` | `example.com` (port optional, defaults to 443) | Certificate validity, hostname match, chain of trust, days until expiry, OCSP revocation when available |
+| `dns` | `example.com` (a domain name, no scheme or port) | The A, AAAA, CNAME, MX or TXT records hold the expected values |
 | `push` | none — the job reports in | That the job reported inside its window |
 
 Creating or editing a monitor rejects whitespace inside its hostname, including
@@ -259,6 +260,48 @@ Ping needs either unprivileged ICMP sockets or `CAP_NET_RAW`. SubGlance tries th
 unprivileged socket first and falls back to the raw one; when neither is allowed
 the error names both fixes. If ICMP is blocked entirely on your network, a TCP
 check against a known port answers the same question more reliably.
+
+### Checking a DNS record
+
+A domain move that went wrong, or a zone someone else now controls, usually
+shows up only once the site itself fails. A `dns` monitor asks for one record
+type of one name and compares the answer with the values it expects:
+
+```json
+{"type": "dns", "target": "example.com",
+ "dns": {"record_type": "A", "expected": ["192.0.2.10", "192.0.2.11"], "resolver": "1.1.1.1"}}
+```
+
+- **`record_type`** is one of `A`, `AAAA`, `CNAME`, `MX` and `TXT`.
+- **`expected`** lists the values, written as a DNS tool prints them: an
+  address for A and AAAA, a host name for CNAME, `mail.example.com` or
+  `10 mail.example.com` for MX (without the number the preference is not
+  compared), and the full text for TXT. Names compare without case or
+  trailing dot. An empty list passes on any record of the type.
+- **`resolver`** is optional: a host or an IP address with an optional port.
+  Without it the check asks the resolver of the host SubGlance runs on, the
+  one in `/etc/resolv.conf`. Set one, such as `1.1.1.1` or the zone's own name
+  server, to see past a local cache. A resolver set on the monitor is reached
+  through the same private-address guard as every target; the host's own is
+  not, because inside a container it is a loopback address.
+
+For A, AAAA, CNAME and MX the answer must hold exactly the expected values, in
+any order: an extra address is what a hijacked zone looks like. For TXT each
+expected value must be present and other TXT records are allowed, because one
+name's TXT records serve unrelated purposes such as SPF and site verification.
+
+A CNAME check compares the record the zone holds, not the address the alias
+chain ends at, so `www` pointing at a CDN's name passes even though the CDN
+answers with its own internal names.
+
+An answer with other records than expected fails with the cause
+`dns_mismatch`, and the error names both sides:
+`A records for example.com: expected 192.0.2.10, got 192.0.2.9`. A name that does not
+exist (NXDOMAIN), a resolver that answers with an error and a resolver that
+cannot be reached fail with the cause `dns`, the same as an HTTP check whose
+host cannot be resolved; a resolver that stays silent past the monitor's
+timeout fails with `timeout`. An answer too large for one UDP datagram is
+asked again over TCP.
 
 ## Choosing a TLS floor
 

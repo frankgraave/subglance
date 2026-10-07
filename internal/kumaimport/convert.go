@@ -39,7 +39,7 @@ const (
 // reason, so a type added by a later Kuma release is still listed.
 var unsupportedType = map[string]string{
 	"group":             "a group is not a check; the monitors in it carry the tag group",
-	"dns":               "SubGlance has no DNS record check",
+	"dns":               "not converted yet; create a dns monitor for it by hand",
 	"docker":            "SubGlance has no Docker container check",
 	"real-browser":      "SubGlance has no browser check; an http monitor on the same URL is the closest",
 	"grpc-keyword":      "SubGlance has no gRPC check",

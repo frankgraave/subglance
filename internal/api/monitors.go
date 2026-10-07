@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
@@ -166,6 +167,9 @@ type monitorDetailResponse struct {
 	// JSONAssertion is null when the monitor has none, rather than omitted,
 	// so an editor can tell "no assertion" from "an older server".
 	JSONAssertion *jsonAssertionWire `json:"json_assertion"`
+	// DNS is a dns monitor's record, expected values and resolver. Omitted
+	// for every other type.
+	DNS *dnsCheckWire `json:"dns,omitempty"`
 }
 
 // recoveryResponse is a recovering monitor's passing streak.
@@ -274,6 +278,8 @@ type createMonitorRequest struct {
 	PushGraceS        *int              `json:"push_grace_s"`
 	// JSONAssertion is optional; omitted or null means none.
 	JSONAssertion *jsonAssertionWire `json:"json_assertion"`
+	// DNS is required for a dns monitor and refused for every other type.
+	DNS *dnsCheckWire `json:"dns"`
 	// ChannelIDs attaches the monitor's own channels as it is created.
 	// Omitted or empty means none, so its alerts go to the routing rules
 	// its tags match, or to the default.
@@ -506,6 +512,7 @@ func (s *Server) handleCreateMonitor(w http.ResponseWriter, r *http.Request) {
 	m.Tags, _ = store.NormaliseTags(req.Tags)
 	// Validated above as well.
 	m.JSONAssertion, _ = jsonAssertionFromWire(req.JSONAssertion)
+	m.DNS, _ = dnsCheckFromWire(req.DNS)
 
 	if req.Type == store.TypePush {
 		m.PushIntervalS = *req.PushIntervalS
@@ -556,7 +563,7 @@ func validateCreateMonitor(req createMonitorRequest) problem {
 		return fieldProblem("target", "a push monitor has no target; it is reported to, not probed")
 	}
 	switch req.Type {
-	case "http", "tcp", "ping", "ssl", store.TypePush:
+	case "http", "tcp", "ping", "ssl", store.TypeDNS, store.TypePush:
 	case "":
 		return fieldProblem("type", "type is required")
 	default:
@@ -605,6 +612,13 @@ func validateCreateMonitor(req createMonitorRequest) problem {
 		if _, p := jsonAssertionFromWire(req.JSONAssertion); !p.ok() {
 			return p
 		}
+	}
+	d, p := dnsCheckFromWire(req.DNS)
+	if !p.ok() {
+		return p
+	}
+	if p := dnsCheckTypeProblem(req.Type, d); !p.ok() {
+		return p
 	}
 	return problem{}
 }
@@ -792,6 +806,24 @@ func validateTargetForType(typ, target string) problem {
 			return bad("target has no host")
 		}
 
+	case store.TypeDNS:
+		// A dns monitor asks about a name, so the target is the name and
+		// nothing else: a URL, a port or an address is a monitor of another
+		// type, and saying which one beats "invalid target".
+		name := strings.TrimSpace(target)
+		if strings.Contains(name, "://") {
+			return bad("a dns monitor takes a domain name, not a URL — use " + hostOnly(name))
+		}
+		if _, err := netip.ParseAddr(name); err == nil {
+			return bad("a dns monitor takes a domain name, not an IP address; use a ping or tcp monitor to watch an address")
+		}
+		if host, port, err := checker.ParseHostPort(name, 0); err == nil && port != 0 {
+			return bad("a dns monitor takes a domain name without a port — use " + host)
+		}
+		if !checker.ValidDNSName(name) {
+			return bad("a dns monitor takes a domain name such as example.com or _dmarc.example.com")
+		}
+
 	case "ping":
 		// ICMP has no ports. A URL or a host:port here means the user picked
 		// the wrong check type, so say which one they wanted rather than
@@ -879,6 +911,7 @@ func (s *Server) handleGetMonitor(w http.ResponseWriter, r *http.Request) {
 		RecoveryThreshold: m.RecoveryThreshold,
 		SSLWarnDays:       m.SSLWarnDays,
 		JSONAssertion:     jsonAssertionToWire(m.JSONAssertion),
+		DNS:               dnsCheckToWire(m.DNS),
 	}
 	// A viewer can inspect check rules but must not gain reusable credentials
 	// merely because edit settings became readable. Never mask secrets into an
@@ -1205,6 +1238,10 @@ type patchMonitorRequest struct {
 	// null, and here the two mean "leave it" and "remove it".
 	JSONAssertion json.RawMessage `json:"json_assertion"`
 
+	// DNS replaces a dns monitor's settings as a whole when present. Not
+	// nullable: a dns monitor cannot be without them.
+	DNS *dnsCheckWire `json:"dns"`
+
 	// ChannelIDs replaces the monitor's own channels when present, in the
 	// same write as every other field, so the If-Match that guards the row
 	// guards them too. `[]` removes them all; omitted or null leaves them.
@@ -1372,7 +1409,7 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 				"a monitor cannot be converted to or from push; create a new one instead")
 		}
 		switch *req.Type {
-		case "http", "tcp", "ping", "ssl", store.TypePush:
+		case "http", "tcp", "ping", "ssl", store.TypeDNS, store.TypePush:
 			m.Type = *req.Type
 		default:
 			return fieldProblem("type", "unknown type "+*req.Type)
@@ -1499,6 +1536,23 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 	// same mistake.
 	if m.JSONAssertion != nil && (len(req.JSONAssertion) > 0 || req.Type != nil) {
 		if p := jsonAssertionTypeProblem(m.Type); !p.ok() {
+			return p
+		}
+	}
+	if req.DNS != nil {
+		d, p := dnsCheckFromWire(req.DNS)
+		if !p.ok() {
+			return p
+		}
+		m.DNS = d
+	}
+	// A type change away from dns drops its settings, which mean nothing
+	// to another type; a change to dns has to bring them.
+	if req.Type != nil && m.Type != store.TypeDNS && req.DNS == nil {
+		m.DNS = nil
+	}
+	if req.Type != nil || req.DNS != nil {
+		if p := dnsCheckTypeProblem(m.Type, m.DNS); !p.ok() {
 			return p
 		}
 	}

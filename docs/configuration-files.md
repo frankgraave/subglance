@@ -172,6 +172,19 @@ monitors:
     tags:
       env: prod
     channels: [ops-slack, on-call]
+  - key: www-dns
+    name: www address
+    type: dns
+    target: www.example.com
+    enabled: true
+    interval_s: 300
+    timeout_s: 10
+    dns:
+      record_type: A
+      expected: ["192.0.2.10"]
+    tags:
+      env: prod
+    channels: [ops-slack]
   - key: nightly-backup
     name: Nightly backup
     type: push
@@ -210,6 +223,10 @@ A few points specific to the file:
 - `json_assertion: null` removes a monitor's assertion; leaving the field out
   keeps it. `expected` is a plain YAML value, and its type matters: `1` is the
   number and `"1"` the string, exactly as in the API.
+- `dns` is written for every `dns` monitor and holds `record_type`,
+  `expected` and, when one is set, `resolver`. An import that leaves it out of
+  an existing dns monitor keeps what the monitor has; a new dns monitor needs
+  it.
 - `default: true` on a channel makes it the instance default. An import never
   clears the default, so a file that does not mention one leaves it as it is.
 - A reference (`channels`, `exclude`, a maintenance window's `monitor`) may name
@@ -305,8 +322,9 @@ addresses, recipients and chat ids come over as they are.
 
 ### What does not come over
 
-Monitor types SubGlance has no check for (DNS, Docker, gRPC, MQTT, databases,
-game servers and the rest), groups themselves, monitors in *Upside Down Mode*
+Monitor types SubGlance has no check for (Docker, gRPC, MQTT, databases, game
+servers and the rest), Kuma DNS monitors (create them as `dns` monitors by
+hand), groups themselves, monitors in *Upside Down Mode*
 (imported as they are, they would report the opposite state), JSON queries that
 use JSONata beyond a plain path, other authentication methods (NTLM, OAuth2,
 mTLS), notification types SubGlance has no channel for, status pages and

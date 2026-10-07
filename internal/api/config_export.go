@@ -169,6 +169,10 @@ func exportMonitor(m store.Monitor) configfile.Monitor {
 	case "ssl":
 		out.SSLWarnDays = ptr(m.SSLWarnDays)
 		out.MinTLSVersion = ptr(checker.TLSVersionLabel(m.MinTLSVersion))
+	case store.TypeDNS:
+		if w := dnsCheckToWire(m.DNS); w != nil {
+			out.DNS = &configfile.DNSCheck{RecordType: w.RecordType, Expected: w.Expected, Resolver: w.Resolver}
+		}
 	case store.TypePush:
 		out.PushIntervalS = ptr(m.PushIntervalS)
 		out.PushGraceS = ptr(m.PushGraceS)

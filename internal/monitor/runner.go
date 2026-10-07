@@ -192,6 +192,7 @@ func New(opts Options) *Runner {
 			checker.TypeTCP:  checker.NewTCPChecker(guard),
 			checker.TypeSSL:  checker.NewSSLChecker(guard),
 			checker.TypePing: checker.NewPingChecker(guard),
+			checker.TypeDNS:  checker.NewDNSChecker(guard),
 		},
 		OnResult:       r.record,
 		Workers:        opts.Workers,
@@ -640,7 +641,7 @@ func (r *Runner) closeOrphanedIncidents(ctx context.Context, live map[int64]stru
 
 // toCheckerMonitor maps the stored shape onto what a checker needs.
 func toCheckerMonitor(m store.Monitor) checker.Monitor {
-	return checker.Monitor{
+	cm := checker.Monitor{
 		ID:              m.ID,
 		Name:            m.Name,
 		Type:            checker.Type(m.Type),
@@ -661,6 +662,12 @@ func toCheckerMonitor(m store.Monitor) checker.Monitor {
 
 		RecoveryThreshold: m.RecoveryThreshold,
 	}
+	if m.DNS != nil {
+		cm.DNSRecordType = m.DNS.RecordType
+		cm.DNSExpected = m.DNS.Expected
+		cm.DNSResolver = m.DNS.Resolver
+	}
+	return cm
 }
 
 // toCheckerAssertion carries a stored JSON assertion over to the checker. The

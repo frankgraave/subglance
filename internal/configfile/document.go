@@ -93,6 +93,11 @@ type Monitor struct {
 	SSLWarnDays   *int    `yaml:"ssl_warn_days,omitempty"`
 	MinTLSVersion *string `yaml:"min_tls_version,omitempty"`
 
+	// DNS only: the record a dns monitor compares. Export writes it for
+	// every dns monitor; an import that leaves it out keeps what the
+	// monitor has.
+	DNS *DNSCheck `yaml:"dns,omitempty"`
+
 	// Push only. The push URL itself is a credential and is never written:
 	// a push monitor created by an import is issued a new one.
 	PushIntervalS *int `yaml:"push_interval_s,omitempty"`
@@ -106,6 +111,14 @@ type Monitor struct {
 	// replacing its current assignments when present; `[]` clears them.
 	// Omitted keeps what the instance has. Export always writes it.
 	Channels []string `yaml:"channels"`
+}
+
+// DNSCheck is a dns monitor's settings as they appear in a file: the same
+// three fields, under the same names, as the API's `dns` object.
+type DNSCheck struct {
+	RecordType string   `yaml:"record_type"`
+	Expected   []string `yaml:"expected"`
+	Resolver   string   `yaml:"resolver,omitempty"`
 }
 
 // Channel is a notification channel as it appears in a file.

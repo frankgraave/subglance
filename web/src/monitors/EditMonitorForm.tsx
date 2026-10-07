@@ -18,6 +18,7 @@ import { ChannelPicker } from "./ChannelPicker";
 import { channelIdsFromText, channelIdsText } from "./channelChoice";
 import type { Channel } from "../notifications/channels";
 import { JSON_HELP, JSON_OPERATORS, assertionFrom, expectedProblem, expectedText } from "./jsonAssertion";
+import { DNS_EMPTY_HELP, DNS_EXPECTED_HELP, DNS_RECORD_TYPES, DNS_RESOLVER_HELP, dnsExpectedText, dnsFrom } from "./dnsCheck";
 import { Select } from "../components/Select";
 import { FieldError } from "../components/FieldError";
 
@@ -35,20 +36,25 @@ export type EditMonitorFormProps = {
 type Problem = { message: string; field?: string } | null;
 // These edits require a preview to save. TLS-only saves retain the existing
 // contract, but a TLS change must still invalidate any preview already shown.
-const CHECK_FIELDS = new Set(["target", "timeout_s", "method", "expected_status", "keyword", "keyword_mode", "follow_redirects", "headers", "body", "ssl_warn_days", "json_assertion"]);
+const CHECK_FIELDS = new Set(["target", "timeout_s", "method", "expected_status", "keyword", "keyword_mode", "follow_redirects", "headers", "body", "ssl_warn_days", "json_assertion", "dns"]);
 /**
  * The control a server problem field belongs to. `json_assertion.expected`
  * is the `json_expected` control; the bare `json_assertion` (wrong monitor
  * type, malformed object) points at the path, where the assertion starts.
  */
 const controlFor = (field: string) =>
-  field.startsWith("json_assertion") ? `json_${field.split(".")[1] ?? "path"}` : field;
+  field.startsWith("json_assertion") ? `json_${field.split(".")[1] ?? "path"}`
+    : field.startsWith("dns") ? `dns_${field.split(".")[1] ?? "record_type"}` : field;
+/** The draft keys that are one API field each: a change to any sends it whole. */
+const wireFor = (key: string) =>
+  key.startsWith("json_") ? "json_assertion" : key.startsWith("dns_") ? "dns" : key;
 const LABELS: Record<string, string> = {
   name: "Name", target: "Target", interval_s: "Check every", timeout_s: "Give up after",
   method: "HTTP method", expected_status: "Expected status", keyword: "Keyword", keyword_mode: "Keyword rule",
   headers: "Headers (JSON)", body: "Request body", ssl_warn_days: "Certificate warning",
   recovery_threshold: "Passing checks to recover",
   json_path: "JSON field", json_operator: "Must", json_expected: "Value",
+  dns_record_type: "Record type", dns_expected: "Expected values", dns_resolver: "Resolver",
   tags: "Tags", push_interval_s: "Should report every", push_grace_s: "Allow it to be late by",
 };
 /**
@@ -94,7 +100,15 @@ function valuesFor(monitor: InventoryMonitor): Record<string, string> {
       values.json_operator = assertion?.operator ?? "equals";
       values.json_expected = expectedText(assertion?.expected);
     }
-    for (const [key, value] of Object.entries(monitor.checkSettings ?? {})) {
+    // Editable only when the detail read carried them, like the assertion.
+    if (monitor.type === "dns" && monitor.dns !== undefined) {
+      values.dns_record_type = monitor.dns.record_type;
+      values.dns_expected = dnsExpectedText(monitor.dns.expected);
+      values.dns_resolver = monitor.dns.resolver ?? "";
+    }
+    // The detail read sends the HTTP settings for every type; a DNS query
+    // reads none of them, so a dns monitor is not offered them.
+    for (const [key, value] of Object.entries(monitor.type === "dns" ? {} : monitor.checkSettings ?? {})) {
       if (key === "min_tls_version") continue; // The dedicated floor value also represents absence.
       values[key] = key === "headers" ? JSON.stringify(value, null, 2) : String(value);
     }
@@ -144,7 +158,7 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
   const update = (key: string, value: string) => {
     setValues((old) => ({ ...old, [key]: value }));
     if (!conflict) setProblem(null);
-    if (CHECK_FIELDS.has(key) || key === "min_tls_version" || key.startsWith("json_")) {
+    if (CHECK_FIELDS.has(wireFor(key)) || key === "min_tls_version") {
       inFlight.current?.abort();
       setPreview({ phase: "idle" });
     }
@@ -198,17 +212,19 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
       if (unsendable !== null) { reject(unsendable, "json_expected"); return null; }
       parsed.json_assertion = assertionFrom(values.json_path, values.json_operator, values.json_expected);
     }
+    if ("dns_record_type" in values) parsed.dns = dnsFrom(values.dns_record_type, values.dns_expected, values.dns_resolver);
     const patch: MonitorPatch = {};
     for (const key of Object.keys(values)) {
       // The three json_ controls are one API field: a change to any of them
-      // sends it whole, and a cleared path sends null, which removes it.
-      const wire = key.startsWith("json_") ? "json_assertion" : key;
+      // sends it whole, and a cleared path sends null, which removes it. The
+      // three dns_ controls are one field the same way.
+      const wire = wireFor(key);
       if (values[key] !== initial[key]) Object.assign(patch, { [wire]: parsed[wire] });
     }
     // Normalised no-ops need no write; zero, false and empty remain explicit.
     if (parsed.name === monitor.name) delete patch.name;
     if (tagsToText(tags) === initial.tags) delete patch.tags;
-    const request: PreviewRequest = { ...monitor.checkSettings, type: monitor.type, target: values.target?.trim() ?? "" };
+    const request: PreviewRequest = { ...(monitor.type === "dns" ? {} : monitor.checkSettings), type: monitor.type, target: values.target?.trim() ?? "" };
     for (const key of CHECK_FIELDS) if (key in parsed) Object.assign(request, { [key]: parsed[key] });
     // Preview has no stored assertion to clear: absence means none.
     if (request.json_assertion === null) delete request.json_assertion;
@@ -284,6 +300,14 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
           {problem?.field === "follow_redirects" && <FieldError id={`${ids}-error`}>{problem.message}</FieldError>}
         </div>}
         {field("headers", true)}{field("body", true)}{field("ssl_warn_days")}
+        {"dns_record_type" in values && <>
+          <div className="field-grid">
+            {field("dns_record_type", false, DNS_RECORD_TYPES)}{field("dns_resolver")}
+          </div>
+          <p className="field-help">{DNS_RESOLVER_HELP}</p>
+          {field("dns_expected", true)}
+          <p className="field-help">One value per line. {DNS_EXPECTED_HELP[values.dns_record_type]} {DNS_EMPTY_HELP}</p>
+        </>}
         {"json_path" in values && <>
           <div className="field-grid">
             {field("json_path")}{field("json_operator", false, JSON_OPERATORS)}
@@ -291,7 +315,7 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
           </div>
           <p className="field-help">{JSON_HELP}</p>
         </>}
-        <details className="add-advanced">
+        {monitor.type !== "dns" && <details className="add-advanced">
           <summary className="add-summary">Advanced options</summary>
           <div className="field-grid">
             <TlsFloorField id={`${ids}-min-tls`} value={values.min_tls_version}
@@ -301,7 +325,7 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
               {problem?.field === "min_tls_version" && <FieldError id={`${ids}-error`}>{problem.message}</FieldError>}
             </TlsFloorField>
           </div>
-        </details>
+        </details>}
         <p className="field-help">Test it probes these settings without saving, recording history or sending alerts. A failed check can still be saved.</p>
       </>}
       {field("tags", true)}

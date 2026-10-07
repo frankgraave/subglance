@@ -5119,7 +5119,11 @@ components:
         `push_interval_s` + `push_grace_s` is what counts as failure. It takes
         no `target`, cannot be checked on demand, and cannot be converted to
         or from another type.
-      enum: [http, tcp, ping, ssl, push]
+
+        `dns` takes a domain name as `target` (no scheme, port or path) and
+        needs a `dns` object: the record type to ask for, the values the
+        answer must hold, and optionally the resolver to ask.
+      enum: [http, tcp, ping, ssl, push, dns]
       example: http
     KeywordMode:
       type: string
@@ -5169,6 +5173,53 @@ components:
             Required for every operator except `exists`, which refuses it.
             Must be a number for `less_than` and `greater_than`.
           example: up
+    DNSCheck:
+      type: object
+      additionalProperties: false
+      description: |
+        What a `dns` monitor asks and expects. The check sends one query for
+        `record_type` to the resolver and compares the records in the answer
+        with `expected`. A name that does not exist, a resolver that answers
+        with an error, and a resolver that does not answer fail with kind
+        `dns`; an answer with other records than expected fails with kind
+        `dns_mismatch`, and the error lists both, for example
+        `A records for example.com: expected 192.0.2.1, got 192.0.2.9`.
+
+        For A, AAAA, CNAME and MX the answer must hold exactly the expected
+        values, in any order: an extra address is how a hijacked zone looks.
+        For TXT each expected value must be present and other TXT records are
+        allowed, because a name's TXT records are shared by unrelated uses
+        such as SPF and site verification.
+      required: [record_type, expected]
+      properties:
+        record_type:
+          type: string
+          enum: [A, AAAA, CNAME, MX, TXT]
+          example: A
+        expected:
+          type: array
+          maxItems: 20
+          description: |
+            The values the answer must hold, each written as a DNS tool
+            prints it: an address for A and AAAA, a host name for CNAME, a
+            mail host or a preference and a mail host for MX (`10
+            mail.example.com`; without the number the preference is not
+            compared), and the full text for TXT, with strings of a long
+            record joined. Names compare without case or trailing dot. Empty
+            means any record of the type passes. Optional on a request, where
+            it defaults to empty; always present on a read.
+          items:
+            type: string
+            maxLength: 2048
+          example: ['192.0.2.1']
+        resolver:
+          type: string
+          description: |
+            Host or IP address of the resolver to ask, with an optional port
+            (53 assumed). Omitted means the resolver of the host SubGlance
+            runs on. A resolver set here is dialled through the same
+            private-address guard as every target.
+          example: 1.1.1.1
     MinTLSVersion:
       type: string
       enum: ['1.0', '1.1', '1.2', '1.3']
@@ -5629,6 +5680,9 @@ components:
               oneOf:
                 - $ref: '#/components/schemas/JSONAssertion'
                 - type: 'null'
+            dns:
+              $ref: '#/components/schemas/DNSCheck'
+              description: Present for `dns` monitors only.
     MaintenanceWindow:
       type: object
       additionalProperties: false
@@ -6004,6 +6058,9 @@ components:
         json_assertion:
           $ref: '#/components/schemas/JSONAssertion'
           description: Optional; only for `http` monitors. Omitted or `null` means none.
+        dns:
+          $ref: '#/components/schemas/DNSCheck'
+          description: Required for `dns` monitors, refused for every other type.
         channel_ids:
           type: array
           description: |
@@ -6166,6 +6223,12 @@ components:
           oneOf:
             - $ref: '#/components/schemas/JSONAssertion'
             - type: 'null'
+        dns:
+          $ref: '#/components/schemas/DNSCheck'
+          description: |
+            Replaces a `dns` monitor's settings as a whole; omitting the key
+            leaves them alone. Required when `type` changes to `dns`, and
+            dropped when it changes away from it.
         channel_ids:
           type: array
           description: |
@@ -6476,8 +6539,8 @@ components:
       type: string
       description: What class of problem a failed check hit. Absent when the check succeeded.
       enum:
-        [dns, connection, tls, timeout, status, keyword, assertion, cert_expiry,
-         internal, push_overdue, push_reported]
+        [dns, dns_mismatch, connection, tls, timeout, status, keyword, assertion,
+         cert_expiry, internal, push_overdue, push_reported]
       example: timeout
     PreviewCheckRequest:
       type: object
@@ -6489,10 +6552,10 @@ components:
       properties:
         type:
           type: string
-          enum: [http, tcp, ping, ssl]
+          enum: [http, tcp, ping, ssl, dns]
           description: |
-            Omit to let the server infer it from `target`. An explicit value is
-            always obeyed.
+            Omit to let the server infer it from `target`; `dns` is never
+            inferred. An explicit value is always obeyed.
         target:
           type: string
           description: A URL, a hostname, or a host:port.
@@ -6517,6 +6580,9 @@ components:
           description: |
             Validated exactly as on create and used by the probe, so the
             preview says whether the assertion holds right now.
+        dns:
+          $ref: '#/components/schemas/DNSCheck'
+          description: Required when `type` is `dns`, as on create.
         follow_redirects:
           type: boolean
         headers:
@@ -6577,7 +6643,7 @@ components:
           description: Certificate expiry, for checks that inspected one.
         type:
           type: string
-          enum: [http, tcp, ping, ssl]
+          enum: [http, tcp, ping, ssl, dns]
           description: The check type that was used, after inference.
           example: http
         target:
