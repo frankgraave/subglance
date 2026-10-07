@@ -221,9 +221,19 @@ func (c *DNSChecker) Check(ctx context.Context, m Monitor) Result {
 		server string
 	)
 	for i, s := range servers {
-		answer, err = exchange(ctx, dialer, s, name, qtype)
+		// Each resolver but the last gets an even share of what is left of
+		// the budget, the way the libc resolver splits its timeout, so a
+		// silent first nameserver cannot spend all of it and leave a working
+		// second one unasked. The check's own deadline stays the bound.
+		attempt, cancelAttempt := ctx, context.CancelFunc(func() {})
+		if deadline, ok := ctx.Deadline(); ok && i < len(servers)-1 {
+			share := time.Until(deadline) / time.Duration(len(servers)-i)
+			attempt, cancelAttempt = context.WithTimeout(ctx, share)
+		}
+		answer, err = exchange(attempt, dialer, s, name, qtype)
+		cancelAttempt()
 		server = s
-		if err == nil || ctx.Err() != nil || errors.Is(err, os.ErrDeadlineExceeded) || i == len(servers)-1 {
+		if err == nil || ctx.Err() != nil || i == len(servers)-1 {
 			break
 		}
 	}

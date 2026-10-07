@@ -455,6 +455,27 @@ func TestDNSCheckerTriesTheNextSystemResolver(t *testing.T) {
 	}
 }
 
+// A first nameserver that never answers must not use up the whole timeout:
+// the second one in resolv.conf still gets asked within the same check.
+func TestDNSCheckerTriesTheNextSystemResolverAfterASilentOne(t *testing.T) {
+	f := newFakeDNS(t)
+	f.add("example.test", a4("192.0.2.1"))
+	silent, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = silent.Close() })
+
+	c := openChecker()
+	c.systemServers = func() ([]string, error) { return []string{silent.LocalAddr().String(), f.addr}, nil }
+	m := f.monitor("example.test", DNSRecordA, "192.0.2.1")
+	m.DNSResolver = ""
+	m.Timeout = time.Second
+	if res := c.Check(context.Background(), m); !res.OK {
+		t.Fatalf("second system resolver was not asked after a silent first: kind=%q error=%q", res.Kind, res.Error)
+	}
+}
+
 func TestDNSCheckerTimesOut(t *testing.T) {
 	// Bound but never answered.
 	silent, err := net.ListenPacket("udp", "127.0.0.1:0")
