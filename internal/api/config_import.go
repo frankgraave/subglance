@@ -428,7 +428,17 @@ func monitorPatch(m configfile.Monitor) patchMonitorRequest {
 		tags := m.Tags
 		req.Tags = &tags
 	}
+	req.DNS = dnsFromFile(m.DNS)
 	return req
+}
+
+// dnsFromFile is a file's dns settings in the API's shape, so an import is
+// checked by the same rules as a form.
+func dnsFromFile(d *configfile.DNSCheck) *dnsCheckWire {
+	if d == nil {
+		return nil
+	}
+	return &dnsCheckWire{RecordType: d.RecordType, Expected: d.Expected, Resolver: d.Resolver}
 }
 
 func planMonitor(p *importPlan, ex existingConfig, path string, m configfile.Monitor) error {
@@ -459,6 +469,7 @@ func planMonitor(p *importPlan, ex existingConfig, path string, m configfile.Mon
 			SSLWarnDays: m.SSLWarnDays, RepeatAfterS: m.RepeatAfterS, Enabled: m.Enabled,
 			CaptureResponse: m.CaptureResponse, MinTLSVersion: tls, Tags: m.Tags,
 			PushIntervalS: m.PushIntervalS, PushGraceS: m.PushGraceS,
+			DNS: dnsFromFile(m.DNS),
 		}
 		if a, set, err := m.Assertion(sub(path, "json_assertion")); err != nil {
 			return err

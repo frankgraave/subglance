@@ -42,6 +42,10 @@ type Monitor struct {
 	SSLWarnDays int
 	Enabled     bool
 
+	// DNS is the record a dns monitor compares. Nil for every other type,
+	// and never nil for a dns monitor: the schema refuses either mismatch.
+	DNS *DNSCheck
+
 	// ResumedAt is when the monitor last went from paused to enabled. Zero
 	// when it never has. The push watchdog reads it: reports for a paused
 	// monitor are not recorded, so a window that closed during the pause
@@ -117,6 +121,23 @@ type JSONAssertion struct {
 	Expected string
 }
 
+// TypeDNS is the monitor type that compares a DNS record with the values it
+// should hold.
+const TypeDNS = "dns"
+
+// DNSCheck is a dns monitor's stored settings. The store keeps them as text;
+// the record types and value shapes are checked in internal/checker, which
+// the API calls before saving.
+type DNSCheck struct {
+	// RecordType is A, AAAA, CNAME, MX or TXT.
+	RecordType string
+	// Expected lists the values the answer must hold. Empty means any record
+	// of the type passes.
+	Expected []string
+	// Resolver is host or host:port, empty for the host's own resolver.
+	Resolver string
+}
+
 // ListMonitors returns all monitors, newest first.
 func (db *DB) ListMonitors(ctx context.Context) ([]Monitor, error) {
 	return db.queryMonitors(ctx, "")
@@ -140,6 +161,7 @@ const monitorColumns = `
 	headers_json, body, ssl_warn_days, enabled, capture_response, repeat_after_s,
 	min_tls_version, push_token_prefix, push_interval_s, push_grace_s,
 	json_path, json_operator, json_expected, resumed_at,
+	dns_record_type, dns_expected_json, dns_resolver,
 	created_at, updated_at`
 
 // queryMonitors runs a monitor SELECT with a caller-supplied WHERE clause.
@@ -221,6 +243,9 @@ func scanMonitor(s scanner) (Monitor, error) {
 		jsonOp      sql.NullString
 		jsonWant    sql.NullString
 		resumed     sql.NullInt64
+		dnsType     sql.NullString
+		dnsWant     sql.NullString
+		dnsResolver sql.NullString
 		created     int64
 		updated     int64
 	)
@@ -232,6 +257,7 @@ func scanMonitor(s scanner) (Monitor, error) {
 		&headersJSON, &body, &m.SSLWarnDays, &m.Enabled, &m.CaptureResponse, &m.RepeatAfterS,
 		&minTLS, &pushPrefix, &pushEvery, &pushGrace,
 		&jsonPath, &jsonOp, &jsonWant, &resumed,
+		&dnsType, &dnsWant, &dnsResolver,
 		&created, &updated,
 	)
 	if err != nil {
@@ -248,6 +274,14 @@ func scanMonitor(s scanner) (Monitor, error) {
 	m.PushGraceS = int(pushGrace.Int64)
 	if jsonPath.Valid && jsonOp.Valid {
 		m.JSONAssertion = &JSONAssertion{Path: jsonPath.String, Operator: jsonOp.String, Expected: jsonWant.String}
+	}
+	if dnsType.Valid {
+		m.DNS = &DNSCheck{RecordType: dnsType.String, Resolver: dnsResolver.String}
+		if dnsWant.Valid && dnsWant.String != "" {
+			// Written by dnsColumns, so it parses; a row that does not is
+			// read as "any record" rather than taking the listing down.
+			_ = json.Unmarshal([]byte(dnsWant.String), &m.DNS.Expected)
+		}
 	}
 	if resumed.Valid {
 		m.ResumedAt = time.Unix(resumed.Int64, 0).UTC()
@@ -279,6 +313,10 @@ func (db *DB) CreateMonitor(ctx context.Context, m Monitor) (Monitor, error) {
 		headersJSON = string(b)
 	}
 	jsonPath, jsonOp, jsonWant := jsonAssertionColumns(m.JSONAssertion)
+	dnsType, dnsWant, dnsResolver, err := dnsColumns(m.DNS)
+	if err != nil {
+		return Monitor{}, err
+	}
 
 	// Monitor row and tag rows go in together: a monitor that briefly exists
 	// without the tags it was created with would be shown ungrouped on any
@@ -311,14 +349,16 @@ func (db *DB) CreateMonitor(ctx context.Context, m Monitor) (Monitor, error) {
 			headers_json, body, ssl_warn_days, enabled, capture_response, repeat_after_s,
 			min_tls_version, push_token_hash, push_token_prefix, push_interval_s, push_grace_s,
 			json_path, json_operator, json_expected,
+			dns_record_type, dns_expected_json, dns_resolver,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		m.Name, m.Type, m.Target, m.IntervalS, m.TimeoutS, m.Retries, m.RecoveryThreshold,
 		m.Method, m.ExpectedStatus, nullString(m.Keyword), m.KeywordMode, m.FollowRedirects,
 		headersJSON, nullString(m.Body), m.SSLWarnDays, m.Enabled, m.CaptureResponse, m.RepeatAfterS,
 		nullTLSVersion(m.MinTLSVersion), tokenHash, nullString(m.PushTokenPrefix),
 		nullInt(m.PushIntervalS), pushGraceValue(m),
 		jsonPath, jsonOp, jsonWant,
+		dnsType, dnsWant, dnsResolver,
 		now, now,
 	)
 	if err != nil {
@@ -953,6 +993,23 @@ func jsonAssertionColumns(a *JSONAssertion) (path, op, expected any) {
 	return a.Path, a.Operator, nullString(a.Expected)
 }
 
+// dnsColumns spreads a dns monitor's settings over their three columns, all
+// NULL when there are none. No expected values are stored as NULL rather than
+// "[]", so "any record" has one spelling in the database.
+func dnsColumns(d *DNSCheck) (recordType, expected, resolver any, err error) {
+	if d == nil {
+		return nil, nil, nil, nil
+	}
+	if len(d.Expected) > 0 {
+		b, err := json.Marshal(d.Expected)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("encode expected DNS values: %w", err)
+		}
+		expected = string(b)
+	}
+	return d.RecordType, expected, nullString(d.Resolver), nil
+}
+
 func nullInt(i int) any {
 	if i == 0 {
 		return nil
@@ -1043,6 +1100,10 @@ func (db *DB) updateMonitor(ctx context.Context, m Monitor, expected []int64) (M
 		headersJSON = string(b)
 	}
 	jsonPath, jsonOp, jsonWant := jsonAssertionColumns(m.JSONAssertion)
+	dnsType, dnsWant, dnsResolver, err := dnsColumns(m.DNS)
+	if err != nil {
+		return Monitor{}, err
+	}
 
 	// The token columns are absent on purpose: an update writes everything
 	// mutable, and a push token is not. Rotating one is a separate,
@@ -1057,6 +1118,7 @@ func (db *DB) updateMonitor(ctx context.Context, m Monitor, expected []int64) (M
 		nullTLSVersion(m.MinTLSVersion),
 		nullInt(m.PushIntervalS), pushGraceValue(m),
 		jsonPath, jsonOp, jsonWant,
+		dnsType, dnsWant, dnsResolver,
 		m.Enabled, next,
 		next, m.ID,
 	}
@@ -1142,6 +1204,7 @@ const updateMonitorSetClause = `
 		min_tls_version = ?,
 		push_interval_s = ?, push_grace_s = ?,
 		json_path = ?, json_operator = ?, json_expected = ?,
+		dns_record_type = ?, dns_expected_json = ?, dns_resolver = ?,
 		` + resumedAtSQL + `,
 		updated_at = MAX(?, updated_at + 1)
 	WHERE id = ?`

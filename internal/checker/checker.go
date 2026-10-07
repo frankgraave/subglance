@@ -24,6 +24,7 @@ const (
 	TypeTCP  Type = "tcp"
 	TypePing Type = "ping"
 	TypeSSL  Type = "ssl"
+	TypeDNS  Type = "dns"
 
 	// TypePush has no Checker and never will. It is listed here because it
 	// is a monitor type the rest of the system has to recognise, and
@@ -89,6 +90,14 @@ type Monitor struct {
 	// green for a server no browser will open.
 	MinTLSVersion uint16
 
+	// DNS-specific. DNSRecordType is one of DNSRecordTypes. DNSExpected
+	// lists the values the answer must hold; empty means any record of the
+	// type passes. DNSResolver is host or host:port, empty for the host's
+	// own resolver.
+	DNSRecordType string
+	DNSExpected   []string
+	DNSResolver   string
+
 	// CaptureResponse allows a failed HTTP check to keep the beginning of the
 	// response body. It is off for a monitor whose responses may carry a
 	// session token or personal data; see ResponseSnapshot.
@@ -129,6 +138,13 @@ const (
 	FailAssertion  FailureKind = "assertion"
 	FailCertExpiry FailureKind = "cert_expiry"
 	FailInternal   FailureKind = "internal"
+
+	// FailDNSMismatch is a DNS query that was answered, with records other
+	// than the ones the monitor expects. It is kept apart from FailDNS, which
+	// is a name that could not be resolved at all: there the resolver or the
+	// zone is broken, here the zone works and says something else, which is
+	// what a migration gone wrong or a hijacked zone looks like.
+	FailDNSMismatch FailureKind = "dns_mismatch"
 
 	// FailPushOverdue is a push monitor whose job did not report inside its
 	// window. Nothing was dialled, so none of the kinds above apply: the

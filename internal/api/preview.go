@@ -61,6 +61,8 @@ type previewRequest struct {
 	// JSONAssertion is checked exactly as a saved monitor would check it, so
 	// a preview answers "would this assertion pass right now".
 	JSONAssertion *jsonAssertionWire `json:"json_assertion"`
+	// DNS is required when type is dns, as on create.
+	DNS *dnsCheckWire `json:"dns"`
 }
 
 // previewResponse is a check result plus the settings it was run with.
@@ -174,6 +176,14 @@ func (s *Server) handlePreviewCheck(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
+	dns, p := dnsCheckFromWire(req.DNS)
+	if p.ok() {
+		p = dnsCheckTypeProblem(typ, dns)
+	}
+	if !p.ok() {
+		writeProblem(w, http.StatusBadRequest, p)
+		return
+	}
 
 	// Keyed by user, because there is no monitor to key on. An unauthenticated
 	// request never reaches here — the route is accessWrite — so the lookup
@@ -209,6 +219,7 @@ func (s *Server) handlePreviewCheck(w http.ResponseWriter, r *http.Request) {
 		Headers:         req.Headers,
 		Body:            req.Body,
 		JSONAssertion:   assertion,
+		DNS:             dns,
 		// One attempt. Retries are a rule about when a failure becomes an
 		// incident, and a preview does not open incidents — repeating a probe
 		// that has already answered the user's question would only make the
@@ -288,7 +299,7 @@ func resolveTarget(typ, target string) (resolvedType, resolvedTarget string, bad
 				"; give a URL like https://example.com, a host:port like db.example.com:5432, "+
 				"or set type explicitly")
 		}
-	case "http", "tcp", "ping", "ssl":
+	case "http", "tcp", "ping", "ssl", store.TypeDNS:
 	default:
 		return "", "", fieldProblem("type", "unknown type "+typ)
 	}
