@@ -393,6 +393,11 @@ func serviceRow(e Entry, tx *texts) serviceView {
 	return s
 }
 
+// uptimeDecimals is how many decimals an uptime figure carries: the
+// dashboard's formatUptime precision, which web/src/format/format.guard.test.ts
+// holds this constant to.
+const uptimeDecimals = 2
+
 // uptimeText is an uptime figure with the period it covers, which is the
 // period of the bar drawn above it: 90 days, or 30 on a phone. older says
 // there is data from before that period, so an empty one is not "yet": a
@@ -400,7 +405,7 @@ func serviceRow(e Entry, tx *texts) serviceView {
 func (tx *texts) uptimeText(pct *float64, days int, older bool) string {
 	switch {
 	case pct != nil:
-		figure := strings.Replace(strconv.FormatFloat(*pct, 'f', 2, 64), ".", tx.DecimalSeparator, 1) + "%"
+		figure := strings.Replace(strconv.FormatFloat(*pct, 'f', uptimeDecimals, 64), ".", tx.DecimalSeparator, 1) + "%"
 		return fmt.Sprintf(tx.Uptime, figure, days)
 	case older:
 		return fmt.Sprintf(tx.NoUptimeOlder, days)

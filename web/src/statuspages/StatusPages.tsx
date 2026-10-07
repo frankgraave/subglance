@@ -19,7 +19,6 @@ import {
 import { Select } from "../components/Select";
 import { FieldError } from "../components/FieldError";
 import { FileInput } from "../components/FileInput";
-import "./statuspages.css";
 
 type Rejection = { field?: string; message: string };
 const rejectionOf = (error: unknown): Rejection => error instanceof ApiError

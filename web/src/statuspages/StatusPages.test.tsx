@@ -27,7 +27,7 @@ function mount(pages: StatusPage[] = samplePages, onRequest?: Handler) {
     const slug = decodeURIComponent(url.split("/")[4] ?? "");
     const found = list.find((p) => p.slug === slug);
     if (init?.method === "POST") {
-      const created: StatusPage = { ...body, id: nextId++, created_at: "2026-09-29T00:00:00Z", updated_at: "2026-09-29T00:00:00Z", entries: [], unnamed_monitor_ids: [] };
+      const created: StatusPage = { ...body, id: nextId++, logo: null, created_at: "2026-09-29T00:00:00Z", updated_at: "2026-09-29T00:00:00Z", entries: [], unnamed_monitor_ids: [] };
       list = [...list, created];
       return json(created, 201);
     }
@@ -132,7 +132,8 @@ it("warns that shared links break before a published page's address changes", as
   const form = screen.getByRole("form", { name: "Settings for Acme services" });
   expect(within(form).queryByText(/stop working/)).toBeNull();
   fireEvent.change(within(form).getByLabelText("Address"), { target: { value: "health" } });
-  expect(within(form).getByRole("status").textContent).toBe("Links already shared to /status/status stop working when you save.");
+  expect(within(form).getAllByRole("status").map((region) => region.textContent))
+    .toContain("Links already shared to /status/status stop working when you save.");
 });
 
 it("draws a refusal under the field the server blamed, and keeps the input", async () => {
