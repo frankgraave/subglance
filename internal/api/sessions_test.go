@@ -169,6 +169,32 @@ func TestEndingTheCurrentSessionSignsOut(t *testing.T) {
 	}
 }
 
+// A session list that cannot be read must not end the session blind: had it
+// been the caller's own, the browser would keep a cookie for a session that
+// no longer exists, after an answer that said it was signed out.
+func TestEndSessionStopsWhenTheCurrentSessionCannotBeRead(t *testing.T) {
+	srv, db := testServerWithDB(t)
+	h := srv.Handler()
+	if _, err := db.CreateUser(t.Context(), "user@example.com", "correct-horse-battery-staple", store.RoleViewer); err != nil {
+		t.Fatal(err)
+	}
+	here := signInFrom(t, h, "user@example.com", firefoxMac)
+	sessions := listSessionsWith(t, h, here, "/api/v1/sessions")
+
+	// The list reads the ip column; signing in and ending a session do not.
+	if _, err := db.Writer.ExecContext(t.Context(), "ALTER TABLE sessions RENAME COLUMN ip TO ip_gone"); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := withCookie(h, here, http.MethodDelete, "/api/v1/sessions/"+sessions[0].ID)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("DELETE with an unreadable session list: %d %s, want 500", rec.Code, rec.Body)
+	}
+	if !stillSignedIn(h, here) {
+		t.Error("the session was ended although the handler could not tell whether it was the caller's own")
+	}
+}
+
 // Knowing another account's session id must not be enough to end it, and the
 // answer must not confirm that the id exists.
 func TestCannotEndAnotherAccountsSession(t *testing.T) {

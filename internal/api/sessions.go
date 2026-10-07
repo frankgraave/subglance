@@ -93,14 +93,22 @@ func (s *Server) handleEndSession(w http.ResponseWriter, r *http.Request) {
 	// caller's own cookie. The scope is the caller's sessions only: an id
 	// from another account is "not found", which neither ends it nor
 	// confirms that it exists.
+	//
+	// A failed read stops here rather than ending the session blind: the
+	// session could be the caller's own, and ending it without clearing the
+	// cookie would leave the browser holding a dead cookie after a 204.
 	current := false
 	if token := sessionToken(r); token != "" {
-		if sessions, err := s.db.ListSessions(r.Context(), user.ID); err == nil {
-			hash := auth.HashToken(token)
-			for _, sess := range sessions {
-				if sess.ID == id && sess.TokenHash == hash {
-					current = true
-				}
+		sessions, err := s.db.ListSessions(r.Context(), user.ID)
+		if err != nil {
+			s.log.Error("list sessions", "user_id", user.ID, "error", err)
+			writeError(w, http.StatusInternalServerError, "could not end the session")
+			return
+		}
+		hash := auth.HashToken(token)
+		for _, sess := range sessions {
+			if sess.ID == id && sess.TokenHash == hash {
+				current = true
 			}
 		}
 	}
