@@ -1,0 +1,1 @@
+{"text": "Checkout API is back up", "details": "https://shop.example.com/health\ntimeout\nno response within 10s\nDown for 5 minutes", "status": "up"}

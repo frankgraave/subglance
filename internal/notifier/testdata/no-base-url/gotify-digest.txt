@@ -1,0 +1,1 @@
+{"message":"• Search: down since 05:12 CEST — timeout\n• Checkout API: down 05:12–05:18 CEST, back up after 5 minutes","priority":8,"title":"1 of 2 monitors still down after quiet hours"}

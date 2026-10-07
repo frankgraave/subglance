@@ -1,0 +1,1 @@
+{"embeds":[{"color":15026253,"description":"https://shop.example.com/health\ncert_expiry\ncertificate expires in 9 days\nNoticed 2026-10-02 03:12 UTC","timestamp":"2026-10-02T03:14:10Z","title":"Checkout API: certificate expires soon"}],"username":"SubGlance"}

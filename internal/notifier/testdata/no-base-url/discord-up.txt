@@ -1,0 +1,1 @@
+{"embeds":[{"color":3187820,"description":"https://shop.example.com/health\ntimeout\nno response within 10s\nDown for 5 minutes","timestamp":"2026-10-02T03:18:10Z","title":"Checkout API is back up"}],"username":"SubGlance"}

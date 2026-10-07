@@ -1,0 +1,1 @@
+{"monitor_id":7,"monitor_name":"Checkout API","monitor_type":"http","target":"https://shop.example.com/health","event":"incident_resolved","incident_id":312,"started_at":"2026-10-02T03:12:40Z","at":"2026-10-02T03:18:10Z","cause":"timeout","last_error":"no response within 10s"}

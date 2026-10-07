@@ -1,0 +1,15 @@
+From: SubGlance <subglance@example.com>
+To: ops@example.com
+Subject: 2 monitors are down
+Date: Fri, 02 Oct 2026 03:14:10 +0000
+Content-Type: text/plain; charset=utf-8
+MIME-Version: 1.0
+References: <incident-312@subglance.local>
+In-Reply-To: <incident-312@subglance.local>
+
+2 monitors are down
+
+timeout
+
+• Checkout API
+• Search

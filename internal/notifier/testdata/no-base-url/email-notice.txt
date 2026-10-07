@@ -1,0 +1,15 @@
+From: SubGlance <subglance@example.com>
+To: ops@example.com
+Subject: Checkout API: certificate expires soon
+Date: Fri, 02 Oct 2026 03:14:10 +0000
+Content-Type: text/plain; charset=utf-8
+MIME-Version: 1.0
+References: <incident-312@subglance.local>
+In-Reply-To: <incident-312@subglance.local>
+
+Checkout API: certificate expires soon
+
+https://shop.example.com/health
+cert_expiry
+certificate expires in 9 days
+Noticed 2026-10-02 03:12 UTC

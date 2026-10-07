@@ -1,0 +1,1 @@
+DOWN Checkout API: no response within 10s (since 05:12)
