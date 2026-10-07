@@ -15,6 +15,7 @@ import { TLS_FLOOR_UNSET } from "./tlsFloor";
 import type { PreviewResult, PreviewState } from "./preview";
 import { describePreview, suggestName } from "./preview";
 import { JSON_HELP, JSON_OPERATORS } from "./jsonAssertion";
+import { DNS_EMPTY_HELP, DNS_EXPECTED_HELP, DNS_EXPECTED_PLACEHOLDER, DNS_RECORD_TYPES, DNS_RESOLVER_HELP } from "./dnsCheck";
 import { Select } from "../components/Select";
 import { FieldError } from "../components/FieldError";
 
@@ -68,6 +69,10 @@ export type AddMonitorValues = {
   jsonPath: string;
   jsonOperator: string;
   jsonExpected: string;
+  /** DNS monitors only: the record to ask for, the values one per line, and the resolver. */
+  dnsRecordType: string;
+  dnsExpected: string;
+  dnsResolver: string;
   /**
    * The monitor's own channels, as sorted comma-joined ids: text rather than
    * an array so ticking a box and unticking it again reads as no change.
@@ -115,6 +120,10 @@ const FIELD_CONTROL: Record<string, string> = {
   "json_assertion.path": "json-path",
   "json_assertion.operator": "json-operator",
   "json_assertion.expected": "json-expected",
+  dns: "dns-type",
+  "dns.record_type": "dns-type",
+  "dns.expected": "dns-expected",
+  "dns.resolver": "dns-resolver",
   channel_ids: "channels",
 };
 
@@ -196,6 +205,9 @@ const DEFAULTS: AddMonitorValues = {
   jsonPath: "",
   jsonOperator: "equals",
   jsonExpected: "",
+  dnsRecordType: "A",
+  dnsExpected: "",
+  dnsResolver: "",
   channelIds: "",
 };
 
@@ -244,6 +256,7 @@ export function AddMonitorForm({
   useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
 
   const push = isPush(values);
+  const dns = values.type === "dns";
   const targetEmpty = values.target.trim() === "";
   /*
    * What blocks the save.
@@ -458,15 +471,16 @@ export function AddMonitorForm({
             className="input"
             value={values.target}
             onChange={(event) => setTarget(event.target.value)}
-            placeholder="example.com, https://example.com/health, or db.example.com:5432"
+            placeholder={dns ? "example.com" : "example.com, https://example.com/health, or db.example.com:5432"}
             autoComplete="off"
             spellCheck={false}
             required
             {...invalidProps("target", `${ids}-target-help`)}
           />
           <p id={`${ids}-target-help`} className="field-help">
-            A URL, a hostname, or a host and port. A bare hostname is checked
-            over HTTPS.
+            {dns
+              ? "The domain name whose record is checked, without https:// or a port."
+              : "A URL, a hostname, or a host and port. A bare hostname is checked over HTTPS."}
           </p>
           <ControlRefusal
             control="target"
@@ -550,6 +564,77 @@ export function AddMonitorForm({
       )}
 
       {/*
+       * The record sits outside the advanced panel for the same reason the
+       * push window does: for a dns monitor it is the definition, and the
+       * API refuses one without a record type.
+       */}
+      {dns && (
+        <div className="field-grid">
+          <div className="field">
+            <label className="field-label" htmlFor={`${ids}-dns-type`}>
+              Record type
+            </label>
+            <Select
+              id={`${ids}-dns-type`}
+              className="input"
+              value={values.dnsRecordType}
+              onChange={(event) =>
+                setValues((v) => ({ ...v, dnsRecordType: event.target.value }))
+              }
+              {...errorProps("dns-type")}
+            >
+              {DNS_RECORD_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </Select>
+            <ControlRefusal control="dns-type" badControl={badControl} rejection={rejection} ids={ids} />
+          </div>
+
+          <div className="field">
+            <label className="field-label" htmlFor={`${ids}-dns-resolver`}>
+              Resolver
+            </label>
+            <input
+              id={`${ids}-dns-resolver`}
+              className="input"
+              value={values.dnsResolver}
+              onChange={(event) =>
+                setValues((v) => ({ ...v, dnsResolver: event.target.value }))
+              }
+              placeholder="The server’s own"
+              autoComplete="off"
+              spellCheck={false}
+              {...invalidProps("dns-resolver", `${ids}-dns-resolver-help`)}
+            />
+            <p id={`${ids}-dns-resolver-help`} className="field-help">
+              {DNS_RESOLVER_HELP}
+            </p>
+            <ControlRefusal control="dns-resolver" badControl={badControl} rejection={rejection} ids={ids} />
+          </div>
+
+          <div className="field field-wide">
+            <label className="field-label" htmlFor={`${ids}-dns-expected`}>
+              Expected values
+            </label>
+            <textarea
+              id={`${ids}-dns-expected`}
+              className="input"
+              rows={3}
+              value={values.dnsExpected}
+              onChange={(event) =>
+                setValues((v) => ({ ...v, dnsExpected: event.target.value }))
+              }
+              placeholder={DNS_EXPECTED_PLACEHOLDER[values.dnsRecordType]}
+              spellCheck={false}
+              {...invalidProps("dns-expected", `${ids}-dns-expected-help`)}
+            />
+            <p id={`${ids}-dns-expected-help`} className="field-help">
+              {DNS_EXPECTED_HELP[values.dnsRecordType]} {DNS_EMPTY_HELP}
+            </p>
+            <ControlRefusal control="dns-expected" badControl={badControl} rejection={rejection} ids={ids} />
+          </div>
+        </div>
+      )}
+
+      {/*
        * Collapsed, and collapsed by default. The fields below are real — a
        * keyword check is the difference between "the server is up" and "the
        * site works" — but every one of them shown up front is a question asked
@@ -589,6 +674,7 @@ export function AddMonitorForm({
               <option value="tcp">TCP</option>
               <option value="ping">Ping</option>
               <option value="ssl">TLS certificate</option>
+              <option value="dns">DNS record</option>
               <option value="push">Push — the job reports in</option>
             </Select>
             <ControlRefusal
@@ -663,6 +749,8 @@ export function AddMonitorForm({
                 />
               </div>
 
+              {/* A DNS query has no TLS and no body to read. */}
+              {!dns && <>
               <TlsFloorField
                 id={`${ids}-min-tls`}
                 value={values.minTlsVersion}
@@ -718,6 +806,7 @@ export function AddMonitorForm({
                   ids={ids}
                 />
               </div>
+              </>}
 
               {/* Only an HTTP check reads a body; an unset type is inferred and may be one. */}
               {(values.type === "" || values.type === "http") && <>
@@ -902,6 +991,8 @@ function labelForType(type: string): string {
       return "a ping";
     case "ssl":
       return "a TLS certificate check";
+    case "dns":
+      return "a DNS query";
     default:
       return type;
   }

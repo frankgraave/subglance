@@ -177,6 +177,8 @@ export type ApiMonitor = {
   recovery_threshold?: number;
   /** Detail read only: the JSON body assertion, null when there is none. */
   json_assertion?: { path: string; operator: string; expected?: unknown } | null;
+  /** Detail read only, dns monitors only. */
+  dns?: { record_type: string; expected: string[]; resolver?: string };
   enabled: boolean;
   status: "up" | "pending" | "warning" | "down" | "recovering" | "expiring";
   /** The passing streak; the server sends it only with `recovering`. */

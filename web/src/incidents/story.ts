@@ -141,6 +141,7 @@ export const STATE_TONE: Record<IncidentState, "down" | "warn" | "idle"> = {
  */
 const CAUSE_WORDS: Record<string, string> = {
   dns: "DNS failure",
+  dns_mismatch: "DNS record changed",
   connection: "connection refused",
   tls: "TLS failure",
   timeout: "timed out",

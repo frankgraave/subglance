@@ -6,6 +6,8 @@ import type { AddMonitorValues } from "./AddMonitorForm";
 import { PushUrlReveal } from "./PushUrlReveal";
 import { assertionFrom, expectedProblem } from "./jsonAssertion";
 import type { JsonAssertion } from "./jsonAssertion";
+import { dnsFrom } from "./dnsCheck";
+import type { DnsCheck } from "./dnsCheck";
 import {
   ApiError,
   createMonitor,
@@ -260,7 +262,18 @@ function bodyFor(
       ? { keyword: values.keyword, keyword_mode: values.keywordMode }
       : {}),
     ...jsonAssertionField(values),
+    ...dnsField(values),
   };
+}
+
+/**
+ * The dns settings as a request field, sent only for a dns monitor: the API
+ * refuses them on every other type, and values typed before switching away
+ * must not come back as a rejection about controls no longer on screen.
+ */
+function dnsField(values: AddMonitorValues): { dns?: DnsCheck } {
+  if (values.type !== "dns") return {};
+  return { dns: dnsFrom(values.dnsRecordType, values.dnsExpected, values.dnsResolver) };
 }
 
 /**
@@ -302,6 +315,7 @@ function previewRequestFor(values: AddMonitorValues): PreviewRequest {
       ? { keyword: values.keyword, keyword_mode: values.keywordMode }
       : {}),
     ...jsonAssertionField(values),
+    ...dnsField(values),
   };
 }
 

@@ -197,7 +197,7 @@ func TestRenderWithholdsEveryCredential(t *testing.T) {
 				t.Error("the rendered file has no monitors")
 			}
 			if !bytes.Contains(out, []byte("# Not imported from Uptime Kuma:")) ||
-				!bytes.Contains(out, []byte(`monitor "DNS example.com" (dns): SubGlance has no DNS record check`)) {
+				!bytes.Contains(out, []byte(`monitor "DNS example.com" (dns): not converted yet; create a dns monitor for it by hand`)) {
 				t.Errorf("the report is missing from the file:\n%s", out)
 			}
 		})

@@ -13,6 +13,7 @@ import { inventoryFromApi, inventoryFromPayload } from "./inventory";
 import type { InventoryMonitor } from "./inventory";
 import type { ApiMonitor } from "./types";
 import type { JsonAssertion } from "./jsonAssertion";
+import type { DnsCheck } from "./dnsCheck";
 
 export const inventoryQueryKey = ["monitors", "inventory"] as const;
 
@@ -154,6 +155,8 @@ export type MonitorPatch = {
   min_tls_version?: string;
   /** Replaces the assertion; `null` removes it. */
   json_assertion?: JsonAssertion | null;
+  /** Replaces a dns monitor's record, values and resolver as a whole. */
+  dns?: DnsCheck;
   /**
    * Replaces the monitor's own channels, in the same conditional write as
    * the rest; `[]` removes them all.
