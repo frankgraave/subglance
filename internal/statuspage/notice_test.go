@@ -55,6 +55,36 @@ func TestAnExpiringCertificateIsUpWithANote(t *testing.T) {
 	}
 }
 
+// A domain monitor's notice is about the registration, not a certificate:
+// the entry is up without the certificate note, and the page says nothing
+// about expiry at all.
+func TestADomainNoticeIsUpWithoutTheCertificateNote(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	f := seed(t, now)
+	m := f.monitor
+	m.Type, m.Target, m.IntervalS, m.DomainWarnDays = "domain", "example.com", 86400, 30
+	m.Headers = nil
+	if _, err := f.db.UpdateMonitor(t.Context(), m); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.db.OpenNotice(t.Context(), m.ID, now.Add(-time.Hour), "domain_expiry",
+		"domain registration of example.com expires in 12 days (on 2026-10-19)"); err != nil {
+		t.Fatal(err)
+	}
+	f.beat(t, now.Add(-time.Minute), true, "up")
+
+	page := f.build(t, nil, now)
+	if e := page.Entries[0]; e.Status != StatusUp || e.CertificateExpiring {
+		t.Fatalf("entry = status %q, certificate_expiring %v; want up and no certificate note", e.Status, e.CertificateExpiring)
+	}
+	html := render(t, page)
+	for _, leak := range []string{"Certificate expires soon", "2026-10-19", "12 days", "registration"} {
+		if strings.Contains(html, leak) {
+			t.Errorf("the page says %q", leak)
+		}
+	}
+}
+
 // The note is left out beside anything but up: "expires soon" next to a
 // paused service would read as the reason it is not watched.
 func TestTheNoteIsOnlyBesideUp(t *testing.T) {

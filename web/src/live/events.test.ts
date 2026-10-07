@@ -26,6 +26,19 @@ describe("parseEvent", () => {
     });
   });
 
+  it("carries the unknown flag of a check that could not find out", () => {
+    const e = parseEvent(
+      "heartbeat",
+      frame({
+        kind: "heartbeat", monitor_id: 7, at: "2026-09-11T08:30:00Z", seq: 13,
+        data: { ok: false, unknown: true, failure_kind: "unknown", error: "no RDAP service" },
+      }),
+    );
+    expect(e).toMatchObject({ kind: "heartbeat", ok: false, unknown: true, failureKind: "unknown", error: "no RDAP service" });
+    const plain = parseEvent("heartbeat", frame({ kind: "heartbeat", monitor_id: 7, at: "2026-09-11T08:30:00Z", data: { ok: false } }));
+    expect(plain).not.toHaveProperty("unknown");
+  });
+
   it("keeps a missing latency null rather than zero", () => {
     const e = parseEvent(
       "heartbeat",

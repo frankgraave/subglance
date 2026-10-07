@@ -2086,7 +2086,9 @@ const statusBorders = new Set<string>([
   // and expiring a passing check whose certificate runs out soon (SUB-186): all three use the
   // warning role for their status rail, draining when stale.
   'web/src/monitors/detail.css | .mon-detail-status[data-status="warning"], .mon-detail-status[data-status="recovering"], .mon-detail-status[data-status="expiring"] | border-color: var(--warn)',
-  'web/src/monitors/detail.css | .mon-detail-status[data-status="waiting"] | border-color: var(--idle)',
+  // Unknown (a domain monitor whose registry could not say) shares waiting's grey: neither
+  // is a reading of the service, so neither is drawn as trouble.
+  'web/src/monitors/detail.css | .mon-detail-status[data-status="waiting"], .mon-detail-status[data-status="unknown"] | border-color: var(--idle)',
   "web/src/live/connection.css | .conn-badge | border: 1px solid var(--warn)",
   /*
    * The two notes above the incidents list.
@@ -2125,7 +2127,8 @@ const statusBorders = new Set<string>([
   // warning role for their status rail, draining when stale.
   'web/src/monitors/monitors.css | .mon-row[data-status="warning"] > :first-child, .mon-row[data-status="recovering"] > :first-child, .mon-row[data-status="expiring"] > :first-child | border-left-color: var(--warn)',
   'web/src/monitors/monitors.css | .mon-row[data-status="paused"] > :first-child | border-left-color: var(--ink-3)',
-  'web/src/monitors/monitors.css | .mon-row[data-status="waiting"] > :first-child | border-left-color: var(--ink-3)',
+  // Unknown shares waiting's grey rail: no reading of the service, so not trouble.
+  'web/src/monitors/monitors.css | .mon-row[data-status="waiting"] > :first-child, .mon-row[data-status="unknown"] > :first-child | border-left-color: var(--ink-3)',
   /*
    * The resting edge those four colour in. 2px rather than 1 so the row's
    * contents do not move one pixel right the moment a monitor goes down —
@@ -2157,7 +2160,7 @@ const statusBorders = new Set<string>([
   // warning role for their status rail, draining when stale.
   'web/src/monitors/monitors.css | .mon-card[data-status="warning"], .mon-card[data-status="recovering"], .mon-card[data-status="expiring"] | border-left: var(--size-status-rail) solid var(--warn)',
   'web/src/monitors/monitors.css | .mon-card[data-status="paused"] | border-left: var(--size-status-rail) dotted var(--ink-3)',
-  'web/src/monitors/monitors.css | .mon-card[data-status="waiting"] | border-left: var(--size-status-rail) solid var(--ink-3)',
+  'web/src/monitors/monitors.css | .mon-card[data-status="waiting"], .mon-card[data-status="unknown"] | border-left: var(--size-status-rail) solid var(--ink-3)',
   'web/src/monitors/monitors.css | .mon-line[data-status="down"] | border-left: var(--size-status-rail) solid var(--down)',
   'web/src/monitors/monitors.css | .mon-line[data-status="pending"] | border-left: var(--size-status-rail) solid var(--warn)',
   // Warning is an unconfirmed failure, recovering a confirmed one whose checks pass again (SUB-157),
@@ -2165,7 +2168,7 @@ const statusBorders = new Set<string>([
   // warning role for their status rail, draining when stale.
   'web/src/monitors/monitors.css | .mon-line[data-status="warning"], .mon-line[data-status="recovering"], .mon-line[data-status="expiring"] | border-left: var(--size-status-rail) solid var(--warn)',
   'web/src/monitors/monitors.css | .mon-line[data-status="paused"] | border-left: var(--size-status-rail) dotted var(--ink-3)',
-  'web/src/monitors/monitors.css | .mon-line[data-status="waiting"] | border-left: var(--size-status-rail) solid var(--ink-3)',
+  'web/src/monitors/monitors.css | .mon-line[data-status="waiting"], .mon-line[data-status="unknown"] | border-left: var(--size-status-rail) solid var(--ink-3)',
   "web/src/components/controls.css | .warn-note | border-left: var(--size-status-rail) solid var(--warn)",
   /*
    * The coverage list on the notifications page marks a paused monitor with

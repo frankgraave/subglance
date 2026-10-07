@@ -133,3 +133,39 @@ func TestADigestCountsANoticeApart(t *testing.T) {
 		t.Errorf("body = %q, want a line for each", body)
 	}
 }
+
+// A domain monitor's notice names the registration, not a certificate, in
+// every place a certificate notice names the certificate: the title, the
+// text message, and the quiet-hours digest.
+func TestADomainNoticeNamesTheRegistration(t *testing.T) {
+	cases := []struct {
+		event     state.Event
+		title     string
+		smsStatus string
+	}{
+		{state.EventIncidentConfirmed, "example.com: domain registration expires soon", "DOMAIN EXPIRING"},
+		{state.EventIncidentReminder, "example.com: domain registration still expires soon", "DOMAIN EXPIRING"},
+		{state.EventIncidentResolved, "example.com: domain registration no longer expires soon", "DOMAIN OK"},
+	}
+	for _, c := range cases {
+		t.Run(string(c.event), func(t *testing.T) {
+			a := noticeAlert(c.event)
+			a.MonitorName, a.MonitorType, a.Target = "example.com", "domain", "example.com"
+			a.Cause, a.LastError = "domain_expiry", "domain registration of example.com expires in 12 days (on 2026-10-19)"
+			if got := a.Title(); got != c.title {
+				t.Errorf("title = %q, want %q", got, c.title)
+			}
+			if sms := smsText(a, "UTC", 160); !strings.HasPrefix(sms, c.smsStatus+" ") || strings.Contains(sms, "CERT") {
+				t.Errorf("sms = %q, want it to start with %q", sms, c.smsStatus)
+			}
+		})
+	}
+
+	notice := noticeAlert(state.EventIncidentConfirmed)
+	notice.MonitorID, notice.MonitorName, notice.MonitorType = 4, "example.com", "domain"
+	cert := noticeAlert(state.EventIncidentConfirmed)
+	body := BuildDigest([]Alert{cert, notice}, "UTC", notice.At).Body()
+	if !strings.Contains(body, "• example.com: domain registration expires soon") || !strings.Contains(body, "• api: certificate expires soon") {
+		t.Errorf("digest body = %q, want each notice named for what it is", body)
+	}
+}

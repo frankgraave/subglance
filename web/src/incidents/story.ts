@@ -149,6 +149,10 @@ const CAUSE_WORDS: Record<string, string> = {
   keyword: "keyword missing",
   assertion: "JSON field did not match",
   cert_expiry: "certificate expiring",
+  domain_expiry: "domain registration expiring",
+  // Not a failure: a domain monitor whose registry could not say. It is
+  // never an incident's cause, only a monitor's latest word.
+  unknown: "expiry date unknown",
   internal: "internal error",
   push_overdue: "no report received",
   push_reported: "the job reported a failure",

@@ -112,6 +112,7 @@ function replace(
 
 /** Folds one completed check into the list. */
 export function applyHeartbeat(monitors: readonly Monitor[], e: HeartbeatEvent): Monitor[] {
+  if (e.unknown === true) return applyUnknown(monitors, e);
   return replace(monitors, e.monitorId, (m) => ({
     // The streak is dropped on every frame and put back only by a frame that
     // leaves the monitor recovering, so it cannot outlive its status.
@@ -144,6 +145,32 @@ export function applyHeartbeat(monitors: readonly Monitor[], e: HeartbeatEvent):
       error: e.error,
     }].slice(-MAX_LIVE_BEATS),
   }));
+}
+
+/**
+ * Folds a check that could not find out into the list: a domain monitor
+ * whose registry runs no RDAP or did not answer.
+ *
+ * It is not a check result. The server stored nothing, so no beat is added;
+ * the monitor reads "unknown" with the reason, as `describeMonitor` reports
+ * it after a reload. An open outage or notice keeps its status, as it does on
+ * the server: the registry being slow today does not close or relabel it.
+ */
+function applyUnknown(monitors: readonly Monitor[], e: HeartbeatEvent): Monitor[] {
+  return replace(monitors, e.monitorId, (m) => {
+    if (m.status === "paused" || m.status === "down" || m.status === "recovering" || m.status === "expiring") {
+      return m;
+    }
+    return {
+      ...m,
+      recovery: undefined,
+      status: "unknown",
+      lastCheck: e.at,
+      latencyMs: null,
+      error: e.error,
+      failureKind: e.failureKind,
+    };
+  });
 }
 
 /**

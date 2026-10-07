@@ -26,6 +26,9 @@ const (
 	TypeSSL  Type = "ssl"
 	TypeDNS  Type = "dns"
 
+	// TypeDomain reads a domain's registration expiry date over RDAP.
+	TypeDomain Type = "domain"
+
 	// TypePush has no Checker and never will. It is listed here because it
 	// is a monitor type the rest of the system has to recognise, and
 	// because its absence from the checker map is load-bearing: the
@@ -98,6 +101,11 @@ type Monitor struct {
 	DNSExpected   []string
 	DNSResolver   string
 
+	// DomainWarnDays is how many days before a domain's registration
+	// expires a domain monitor reports it as expiring. Zero never warns;
+	// an expired registration still fails.
+	DomainWarnDays int
+
 	// CaptureResponse allows a failed HTTP check to keep the beginning of the
 	// response body. It is off for a monitor whose responses may carry a
 	// session token or personal data; see ResponseSnapshot.
@@ -146,6 +154,20 @@ const (
 	// what a migration gone wrong or a hijacked zone looks like.
 	FailDNSMismatch FailureKind = "dns_mismatch"
 
+	// FailDomainExpiry is a domain whose registration expires inside the
+	// monitor's warning window (an Expiring pass) or has expired (a
+	// failure). The certificate's FailCertExpiry is kept apart because the
+	// fix is: a certificate renews itself or is replaced by an operator, a
+	// domain is renewed at the registrar.
+	FailDomainExpiry FailureKind = "domain_expiry"
+
+	// FailUnknown is a check that could not find out: the registry offers
+	// no RDAP, or its server did not answer. It is not a failure of the
+	// monitored target, so it opens no incident, confirms nothing and
+	// resolves nothing; the monitor shows "unknown" with the reason until a
+	// check gets an answer.
+	FailUnknown FailureKind = "unknown"
+
 	// FailPushOverdue is a push monitor whose job did not report inside its
 	// window. Nothing was dialled, so none of the kinds above apply: the
 	// distinction the person reading it needs is "your job did not run"
@@ -188,6 +210,10 @@ type Result struct {
 	// zero otherwise. Reported even when the check passes so the UI can warn
 	// ahead of time.
 	CertExpiry time.Time
+
+	// DomainExpiry is a domain monitor's registration expiry date, zero for
+	// every other check and when the date could not be read.
+	DomainExpiry time.Time
 
 	// CheckedAt is when the probe started.
 	CheckedAt time.Time

@@ -157,6 +157,8 @@ export type MonitorPatch = {
   json_assertion?: JsonAssertion | null;
   /** Replaces a dns monitor's record, values and resolver as a whole. */
   dns?: DnsCheck;
+  /** A domain monitor's days of warning before its registration expires. */
+  domain_warn_days?: number;
   /**
    * Replaces the monitor's own channels, in the same conditional write as
    * the rest; `[]` removes them all.

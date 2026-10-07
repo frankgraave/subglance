@@ -141,6 +141,10 @@ type digestEntry struct {
 	// of it. A notice is not an outage: it is never counted as down.
 	notice     bool
 	noticeOpen bool
+
+	// subject is what the notice is about: "certificate", or "domain
+	// registration" for a domain monitor. See noticeSubject.
+	subject string
 }
 
 // outage reports whether the night saw this monitor go down at all.
@@ -149,9 +153,17 @@ func (e *digestEntry) outage() bool { return e.down || !e.endedAt.IsZero() }
 // noticeLine is what the digest says about a certificate notice.
 func (e *digestEntry) noticeLine() string {
 	if e.noticeOpen {
-		return "certificate expires soon"
+		return e.noticeSubject() + " expires soon"
 	}
-	return "certificate no longer expires soon"
+	return e.noticeSubject() + " no longer expires soon"
+}
+
+// noticeSubject is the entry's subject, "certificate" when none was set.
+func (e *digestEntry) noticeSubject() string {
+	if e.subject == "" {
+		return "certificate"
+	}
+	return e.subject
 }
 
 // digestEntries folds a digest's members into one entry per monitor, in the
@@ -177,6 +189,7 @@ func digestEntries(a Alert) []*digestEntry {
 			// alone.
 			e.notice = true
 			e.noticeOpen = state.Event(m.Event) != state.EventIncidentResolved
+			e.subject = noticeSubject(m)
 			continue
 		}
 		started := m.StartedAt
@@ -291,7 +304,7 @@ func DigestBody(a Alert) string {
 				durationWords(e.endedAt.Sub(e.startedAt)))
 		}
 		if e.outage() && e.noticeOpen {
-			b.WriteString("; certificate expires soon")
+			b.WriteString("; " + e.noticeSubject() + " expires soon")
 		}
 		b.WriteString("\n")
 	}

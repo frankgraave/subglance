@@ -151,7 +151,8 @@
 .mon-detail-status[data-status="warning"],
 .mon-detail-status[data-status="recovering"],
 .mon-detail-status[data-status="expiring"] { border-color: var(--warn); }
-.mon-detail-status[data-status="waiting"] { border-color: var(--idle); }
+.mon-detail-status[data-status="waiting"],
+.mon-detail-status[data-status="unknown"] { border-color: var(--idle); }
 
 /* The lamp sits inside the pill now, so the old baseline nudge is gone: the
    flex row centres it against the word. */

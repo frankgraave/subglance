@@ -8,6 +8,7 @@
  */
 
 import { apiJSON } from "../api/http";
+import { formatDateIso } from "../format/format";
 import type { JsonAssertion } from "./jsonAssertion";
 import type { DnsCheck } from "./dnsCheck";
 
@@ -44,6 +45,8 @@ export type PreviewRequest = {
   json_assertion?: JsonAssertion;
   /** Required for a dns monitor; see dnsCheck.ts. */
   dns?: DnsCheck;
+  /** Domain monitors only: days of warning before the registration expires. */
+  domain_warn_days?: number;
 };
 
 /** POST /api/v1/monitors/preview, as the server returns it. */
@@ -55,6 +58,8 @@ export type PreviewResult = {
   kind?: string;
   error?: string;
   cert_expiry?: string;
+  /** The registration expiry date a domain check read. */
+  domain_expiry?: string;
   /** What was really probed, after the server's inference. May differ. */
   type: string;
   target: string;
@@ -114,6 +119,8 @@ export function fingerprintPreview(req: PreviewRequest): PreviewFingerprint {
     req.json_assertion ?? null,
     // Nor about a different record, value or resolver.
     req.dns ?? null,
+    // Nor, for a domain, about another warning window.
+    req.domain_warn_days ?? null,
   ]);
 }
 
@@ -201,6 +208,7 @@ export function suggestName(target: string): string {
  * has to interpret is not an answer.
  */
 export function describePreview(result: PreviewResult): string {
+  if (result.type === "domain") return describeDomainPreview(result);
   if (result.ok) {
     const code = result.status_code !== undefined ? ` HTTP ${result.status_code},` : "";
     return `${result.target} answered:${code} ${result.latency_ms} ms.`;
@@ -211,4 +219,23 @@ export function describePreview(result: PreviewResult): string {
   return result.error !== undefined && result.error !== ""
     ? `${result.target} did not answer: ${result.error}`
     : `${result.target} did not answer.`;
+}
+
+/**
+ * A domain lookup in a sentence. "Answered in 140 ms" would describe the
+ * registry, not the domain: what the reader wants is the date, and whether
+ * the monitor would already be warning about it.
+ */
+function describeDomainPreview(result: PreviewResult): string {
+  if (result.kind === "unknown") {
+    return `The expiry date of ${result.target} could not be read: ${result.error ?? "no answer"}.`;
+  }
+  if (!result.ok) {
+    return result.error ?? `${result.target} could not be checked.`;
+  }
+  const until = result.domain_expiry === undefined ? null : formatDateIso(result.domain_expiry);
+  const registered = until === null ? `${result.target} is registered.` : `${result.target} is registered until ${until}.`;
+  return result.kind === "domain_expiry"
+    ? `${registered} That is inside the warning window, so this monitor would alert now.`
+    : registered;
 }

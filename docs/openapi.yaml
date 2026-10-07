@@ -5123,7 +5123,19 @@ components:
         `dns` takes a domain name as `target` (no scheme, port or path) and
         needs a `dns` object: the record type to ask for, the values the
         answer must hold, and optionally the resolver to ask.
-      enum: [http, tcp, ping, ssl, push, dns]
+
+        `domain` takes a domain name as `target` and reads the registration
+        expiry date of the domain it belongs to (`www.example.co.uk` is
+        checked as `example.co.uk`) over RDAP, with the server for the
+        top-level domain taken from IANA's bootstrap registry. Within
+        `domain_warn_days` of that date the monitor is `expiring`; after it,
+        the check fails with kind `domain_expiry`. When the registry offers
+        no RDAP or does not answer, the monitor is `unknown` with the reason
+        in `error`: nothing is recorded as a heartbeat and no incident is
+        opened. It is checked at most every 6 hours (`interval_s` 21600 or
+        more), once a day by default, and confirms on the first failure
+        unless `retries` says otherwise.
+      enum: [http, tcp, ping, ssl, push, dns, domain]
       example: http
     KeywordMode:
       type: string
@@ -5260,8 +5272,15 @@ components:
         open incident is a notice (`notice: true` on the incident), which
         alerts and reminds like an outage and resolves on the first check
         that sees a certificate expiring later. An expired certificate fails
-        the check and is `down`.
-      enum: [up, pending, warning, down, recovering, expiring]
+        the check and is `down`. A `domain` monitor is `expiring` the same
+        way, for its registration and `domain_warn_days`.
+
+        `unknown` is a `domain` monitor whose latest check could not read the
+        expiry date: its registry runs no RDAP service, or the server did not
+        answer. `error` says which, `failure_kind` is `unknown`, and
+        `last_check` is when it was tried. It is not an outage and not a
+        pass; an open notice or outage keeps its own status instead.
+      enum: [up, pending, warning, down, recovering, expiring, unknown]
       example: up
     TagMap:
       type: object
@@ -5683,6 +5702,11 @@ components:
             dns:
               $ref: '#/components/schemas/DNSCheck'
               description: Present for `dns` monitors only.
+            domain_warn_days:
+              type: integer
+              minimum: 0
+              maximum: 365
+              description: Present for `domain` monitors only. 0 never warns.
     MaintenanceWindow:
       type: object
       additionalProperties: false
@@ -6011,7 +6035,9 @@ components:
           example: https://example.com/health
         interval_s:
           type: integer
-          description: 0 or omitted means the server default of 60.
+          description: |
+            0 or omitted means the server default of 60, or 86400 for a
+            `domain` monitor, which refuses anything under 21600.
           minimum: 20
           maximum: 86400
           example: 60
@@ -6025,10 +6051,12 @@ components:
           type: integer
           description: |
             Consecutive failures required before an incident is confirmed —
-            "no false alarms" in numeric form.
+            "no false alarms" in numeric form. Omitted means 2, or 0 for a
+            `domain` monitor: an expiry date read off the registry is not a
+            blip, and a registry that does not answer is `unknown` rather
+            than a failure.
           minimum: 0
           maximum: 10
-          default: 2
         recovery_threshold:
           type: integer
           description: |
@@ -6061,6 +6089,14 @@ components:
         dns:
           $ref: '#/components/schemas/DNSCheck'
           description: Required for `dns` monitors, refused for every other type.
+        domain_warn_days:
+          type: integer
+          minimum: 0
+          maximum: 365
+          description: |
+            For `domain` monitors only: how many days before the registration
+            expires the monitor is `expiring`. Omitted means 30; 0 never warns
+            and only fails once the registration has expired.
         channel_ids:
           type: array
           description: |
@@ -6229,6 +6265,14 @@ components:
             Replaces a `dns` monitor's settings as a whole; omitting the key
             leaves them alone. Required when `type` changes to `dns`, and
             dropped when it changes away from it.
+        domain_warn_days:
+          type: integer
+          minimum: 0
+          maximum: 365
+          description: |
+            For `domain` monitors only. A monitor that becomes a `domain`
+            monitor without one gets 30, and must bring an `interval_s` of
+            21600 or more.
         channel_ids:
           type: array
           description: |
@@ -6311,7 +6355,7 @@ components:
       additionalProperties: false
     Heartbeat:
       type: object
-      description: One recorded check result. Assessment is immutable even if a later check confirms the incident. SSE heartbeat data carries the same assessment and failure_kind fields (with at in the envelope instead of ts), plus current_maintenance evaluated at publish time. A passing check that leaves a confirmed incident open (the monitor is recovering) is assessed up, since it is not downtime, and its SSE data carries recovery ({passes, threshold}) so a live client does not read it as the end of the outage. A passing check whose certificate expires soon is assessed up as well, and its SSE data sets expiring to true while the monitor's certificate notice is open, with error and failure_kind carrying the notice's text and cause although the stored heartbeat has neither; status frames about a notice set notice to true. current_maintenance is omitted when schedule state could not be read; it does not change the historical maintenance exclusion.
+      description: One recorded check result. Assessment is immutable even if a later check confirms the incident. SSE heartbeat data carries the same assessment and failure_kind fields (with at in the envelope instead of ts), plus current_maintenance evaluated at publish time. A passing check that leaves a confirmed incident open (the monitor is recovering) is assessed up, since it is not downtime, and its SSE data carries recovery ({passes, threshold}) so a live client does not read it as the end of the outage. A passing check whose certificate expires soon is assessed up as well, and its SSE data sets expiring to true while the monitor's certificate notice is open, with error and failure_kind carrying the notice's text and cause although the stored heartbeat has neither; status frames about a notice set notice to true. A domain check that could not read the expiry date is not stored at all; its SSE data has unknown set to true, ok false, no assessment, failure_kind unknown and the reason in error, and a live client must not draw it as a check. current_maintenance is omitted when schedule state could not be read; it does not change the historical maintenance exclusion.
       required: [ts, ok, latency_ms, assessment]
       properties:
         maintenance:
@@ -6540,7 +6584,8 @@ components:
       description: What class of problem a failed check hit. Absent when the check succeeded.
       enum:
         [dns, dns_mismatch, connection, tls, timeout, status, keyword, assertion,
-         cert_expiry, internal, push_overdue, push_reported]
+         cert_expiry, domain_expiry, unknown, internal, push_overdue,
+         push_reported]
       example: timeout
     PreviewCheckRequest:
       type: object
@@ -6552,10 +6597,10 @@ components:
       properties:
         type:
           type: string
-          enum: [http, tcp, ping, ssl, dns]
+          enum: [http, tcp, ping, ssl, dns, domain]
           description: |
-            Omit to let the server infer it from `target`; `dns` is never
-            inferred. An explicit value is always obeyed.
+            Omit to let the server infer it from `target`; `dns` and `domain`
+            are never inferred. An explicit value is always obeyed.
         target:
           type: string
           description: A URL, a hostname, or a host:port.
@@ -6583,6 +6628,11 @@ components:
         dns:
           $ref: '#/components/schemas/DNSCheck'
           description: Required when `type` is `dns`, as on create.
+        domain_warn_days:
+          type: integer
+          minimum: 0
+          maximum: 365
+          description: For `domain` only, as on create.
         follow_redirects:
           type: boolean
         headers:
@@ -6641,9 +6691,13 @@ components:
           type: string
           format: date-time
           description: Certificate expiry, for checks that inspected one.
+        domain_expiry:
+          type: string
+          format: date-time
+          description: Registration expiry, for a `domain` check that read one.
         type:
           type: string
-          enum: [http, tcp, ping, ssl, dns]
+          enum: [http, tcp, ping, ssl, dns, domain]
           description: The check type that was used, after inference.
           example: http
         target:
@@ -6716,6 +6770,10 @@ components:
           type: string
           format: date-time
           description: Certificate expiry, for checks that inspected one.
+        domain_expiry:
+          type: string
+          format: date-time
+          description: Registration expiry, for a `domain` check that read one.
         recorded:
           type: boolean
           description: |
@@ -6770,8 +6828,9 @@ components:
         notice:
           type: boolean
           description: |
-            Present and true on a certificate notice: the checks passed, but
-            the certificate expires within `ssl_warn_days`. A notice is
+            Present and true on an expiry notice: the checks passed, but the
+            certificate expires within `ssl_warn_days`, or a `domain`
+            monitor's registration within `domain_warn_days`. A notice is
             confirmed from the start, alerts like an outage and is never
             downtime. Omitted on an outage.
         duration_s:

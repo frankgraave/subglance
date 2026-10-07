@@ -26,6 +26,7 @@ export type MonitorStatus =
   | "down"
   | "recovering"
   | "expiring"
+  | "unknown"
   | "warning"
   | "pending"
   | "paused"
@@ -179,8 +180,10 @@ export type ApiMonitor = {
   json_assertion?: { path: string; operator: string; expected?: unknown } | null;
   /** Detail read only, dns monitors only. */
   dns?: { record_type: string; expected: string[]; resolver?: string };
+  /** Detail read only, domain monitors only. */
+  domain_warn_days?: number;
   enabled: boolean;
-  status: "up" | "pending" | "warning" | "down" | "recovering" | "expiring";
+  status: "up" | "pending" | "warning" | "down" | "recovering" | "expiring" | "unknown";
   /** The passing streak; the server sends it only with `recovering`. */
   recovery?: { passes?: unknown; threshold?: unknown };
   last_check?: string | null;

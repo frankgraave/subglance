@@ -101,6 +101,31 @@ describe("applyHeartbeat", () => {
     expect(back).toMatchObject({ status: "expiring", error: "certificate expires in 5 days", failureKind: "cert_expiry" });
   });
 
+  it("reads a check that could not find out as unknown, without drawing a beat", () => {
+    // The server stored nothing: a registry outage says nothing about the
+    // domain, so it is neither a red bar nor a pass.
+    const [m] = applyHeartbeat(
+      [monitor({ beats: [{ ts: 1_000, ok: true, latencyMs: 30 }] })],
+      beat({ ok: false, unknown: true, latencyMs: 80, error: "no RDAP service", failureKind: "unknown" }),
+    );
+    expect(m).toMatchObject({ status: "unknown", error: "no RDAP service", failureKind: "unknown", lastCheck: 2_000, latencyMs: null });
+    expect(m.beats).toHaveLength(1);
+  });
+
+  it("keeps an open notice or outage as it is on a check that could not find out", () => {
+    for (const status of ["expiring", "down", "recovering", "paused"] as const) {
+      const before = monitor({ status, error: "kept" });
+      const [m] = applyHeartbeat([before], beat({ ok: false, unknown: true, error: "timed out", failureKind: "unknown" }));
+      expect(m, status).toBe(before);
+    }
+  });
+
+  it("lets the next check that found out replace unknown", () => {
+    const [m] = applyHeartbeat([monitor({ status: "unknown", error: "timed out", failureKind: "unknown" })], beat());
+    expect(m.status).toBe("up");
+    expect(m.error).toBeUndefined();
+  });
+
   it("leaves a paused monitor paused", () => {
     expect(applyHeartbeat([monitor({ status: "paused" })], beat())[0].status).toBe("paused");
     expect(statusAfterHeartbeat("paused", false)).toBe("paused");

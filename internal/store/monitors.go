@@ -46,6 +46,11 @@ type Monitor struct {
 	// and never nil for a dns monitor: the schema refuses either mismatch.
 	DNS *DNSCheck
 
+	// DomainWarnDays is how many days before its registration expires a
+	// domain monitor reports it as expiring. Meaningful only for a domain
+	// monitor; stored as NULL for every other type.
+	DomainWarnDays int
+
 	// ResumedAt is when the monitor last went from paused to enabled. Zero
 	// when it never has. The push watchdog reads it: reports for a paused
 	// monitor are not recorded, so a window that closed during the pause
@@ -125,6 +130,18 @@ type JSONAssertion struct {
 // should hold.
 const TypeDNS = "dns"
 
+// TypeDomain is the monitor type that reads a domain's registration expiry
+// date over RDAP.
+const TypeDomain = "domain"
+
+// MinDomainIntervalS is the shortest interval a domain monitor is checked at,
+// in seconds. The schema refuses less; see checker.MinDomainInterval.
+const MinDomainIntervalS = 6 * 60 * 60
+
+// DefaultDomainIntervalS is a domain monitor's interval when none is given:
+// once a day.
+const DefaultDomainIntervalS = 24 * 60 * 60
+
 // DNSCheck is a dns monitor's stored settings. The store keeps them as text;
 // the record types and value shapes are checked in internal/checker, which
 // the API calls before saving.
@@ -161,7 +178,7 @@ const monitorColumns = `
 	headers_json, body, ssl_warn_days, enabled, capture_response, repeat_after_s,
 	min_tls_version, push_token_prefix, push_interval_s, push_grace_s,
 	json_path, json_operator, json_expected, resumed_at,
-	dns_record_type, dns_expected_json, dns_resolver,
+	dns_record_type, dns_expected_json, dns_resolver, domain_warn_days,
 	created_at, updated_at`
 
 // queryMonitors runs a monitor SELECT with a caller-supplied WHERE clause.
@@ -246,6 +263,7 @@ func scanMonitor(s scanner) (Monitor, error) {
 		dnsType     sql.NullString
 		dnsWant     sql.NullString
 		dnsResolver sql.NullString
+		domainWarn  sql.NullInt64
 		created     int64
 		updated     int64
 	)
@@ -257,7 +275,7 @@ func scanMonitor(s scanner) (Monitor, error) {
 		&headersJSON, &body, &m.SSLWarnDays, &m.Enabled, &m.CaptureResponse, &m.RepeatAfterS,
 		&minTLS, &pushPrefix, &pushEvery, &pushGrace,
 		&jsonPath, &jsonOp, &jsonWant, &resumed,
-		&dnsType, &dnsWant, &dnsResolver,
+		&dnsType, &dnsWant, &dnsResolver, &domainWarn,
 		&created, &updated,
 	)
 	if err != nil {
@@ -283,6 +301,7 @@ func scanMonitor(s scanner) (Monitor, error) {
 			_ = json.Unmarshal([]byte(dnsWant.String), &m.DNS.Expected)
 		}
 	}
+	m.DomainWarnDays = int(domainWarn.Int64)
 	if resumed.Valid {
 		m.ResumedAt = time.Unix(resumed.Int64, 0).UTC()
 	}
@@ -349,16 +368,16 @@ func (db *DB) CreateMonitor(ctx context.Context, m Monitor) (Monitor, error) {
 			headers_json, body, ssl_warn_days, enabled, capture_response, repeat_after_s,
 			min_tls_version, push_token_hash, push_token_prefix, push_interval_s, push_grace_s,
 			json_path, json_operator, json_expected,
-			dns_record_type, dns_expected_json, dns_resolver,
+			dns_record_type, dns_expected_json, dns_resolver, domain_warn_days,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		m.Name, m.Type, m.Target, m.IntervalS, m.TimeoutS, m.Retries, m.RecoveryThreshold,
 		m.Method, m.ExpectedStatus, nullString(m.Keyword), m.KeywordMode, m.FollowRedirects,
 		headersJSON, nullString(m.Body), m.SSLWarnDays, m.Enabled, m.CaptureResponse, m.RepeatAfterS,
 		nullTLSVersion(m.MinTLSVersion), tokenHash, nullString(m.PushTokenPrefix),
 		nullInt(m.PushIntervalS), pushGraceValue(m),
 		jsonPath, jsonOp, jsonWant,
-		dnsType, dnsWant, dnsResolver,
+		dnsType, dnsWant, dnsResolver, domainWarnColumn(m),
 		now, now,
 	)
 	if err != nil {
@@ -396,6 +415,9 @@ func (db *DB) CreateMonitor(ctx context.Context, m Monitor) (Monitor, error) {
 // once saved, and a second copy of these numbers in the API package would
 // drift from this one the first time a default changed.
 func ApplyMonitorDefaults(m *Monitor) {
+	if m.IntervalS == 0 && m.Type == TypeDomain {
+		m.IntervalS = DefaultDomainIntervalS
+	}
 	if m.IntervalS == 0 {
 		m.IntervalS = 60
 	}
@@ -1010,6 +1032,15 @@ func dnsColumns(d *DNSCheck) (recordType, expected, resolver any, err error) {
 	return d.RecordType, expected, nullString(d.Resolver), nil
 }
 
+// domainWarnColumn is a domain monitor's warning threshold, NULL for every
+// other type. Zero is a value here ("never warn"), so it is not nullInt.
+func domainWarnColumn(m Monitor) any {
+	if m.Type != TypeDomain {
+		return nil
+	}
+	return m.DomainWarnDays
+}
+
 func nullInt(i int) any {
 	if i == 0 {
 		return nil
@@ -1118,7 +1149,7 @@ func (db *DB) updateMonitor(ctx context.Context, m Monitor, expected []int64) (M
 		nullTLSVersion(m.MinTLSVersion),
 		nullInt(m.PushIntervalS), pushGraceValue(m),
 		jsonPath, jsonOp, jsonWant,
-		dnsType, dnsWant, dnsResolver,
+		dnsType, dnsWant, dnsResolver, domainWarnColumn(m),
 		m.Enabled, next,
 		next, m.ID,
 	}
@@ -1205,6 +1236,7 @@ const updateMonitorSetClause = `
 		push_interval_s = ?, push_grace_s = ?,
 		json_path = ?, json_operator = ?, json_expected = ?,
 		dns_record_type = ?, dns_expected_json = ?, dns_resolver = ?,
+		domain_warn_days = ?,
 		` + resumedAtSQL + `,
 		updated_at = MAX(?, updated_at + 1)
 	WHERE id = ?`

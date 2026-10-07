@@ -68,6 +68,8 @@ const IDS: Record<MonitorStatus, string> = {
   warning: "foxtrot",
   recovering: "golf",
   expiring: "hotel",
+  // A domain monitor whose registry could not say: the other grey lamp.
+  unknown: "india",
   pending: "charlie",
   paused: "delta",
   // A push monitor that has never reported. It shares the grey idle lamp with
@@ -75,7 +77,7 @@ const IDS: Record<MonitorStatus, string> = {
   waiting: "echo",
 };
 
-const ALL: MonitorStatus[] = ["up", "down", "recovering", "warning", "expiring", "pending", "paused", "waiting"];
+const ALL: MonitorStatus[] = ["up", "down", "recovering", "warning", "expiring", "unknown", "pending", "paused", "waiting"];
 
 /** Text a sighted reader can actually see: `sr-only` text is excluded. */
 function visibleText(el: Element): string {

@@ -53,6 +53,10 @@ type checkResponse struct {
 
 	CertExpiry *time.Time `json:"cert_expiry,omitempty"`
 
+	// DomainExpiry is a domain's registration expiry date, when the
+	// registry gave one.
+	DomainExpiry *time.Time `json:"domain_expiry,omitempty"`
+
 	// Recorded says whether this result became part of the monitor's
 	// history. It is false for paused monitors, and the UI needs to know:
 	// a green result that did not move the dashboard would otherwise look
@@ -141,6 +145,10 @@ func (s *Server) handleCheckMonitor(w http.ResponseWriter, r *http.Request) {
 	if !res.CertExpiry.IsZero() {
 		expiry := res.CertExpiry
 		resp.CertExpiry = &expiry
+	}
+	if !res.DomainExpiry.IsZero() {
+		expiry := res.DomainExpiry
+		resp.DomainExpiry = &expiry
 	}
 	if resp.CheckedAt.IsZero() {
 		resp.CheckedAt = time.Now()

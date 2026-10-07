@@ -1,6 +1,13 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { RepeatAlertField } from "./RepeatAlertField";
+import {
+  DOMAIN_INTERVAL_MESSAGE,
+  DOMAIN_MIN_INTERVAL_S,
+  DOMAIN_WARN_DAYS_MESSAGE,
+  domainWarnDaysAllowed,
+  withType,
+} from "./checkTypeChange";
 import { AlertingSection } from "./AlertingSection";
 import { DurationField } from "./DurationField";
 import { durationAllowed, DURATION_LIMITS, SECONDS_ONLY, SECONDS_TO_DAYS, SECONDS_TO_HOURS } from "./duration";
@@ -74,6 +81,12 @@ export type AddMonitorValues = {
   dnsExpected: string;
   dnsResolver: string;
   /**
+   * Domain monitors only: days of warning before the registration expires.
+   * Text, so an emptied box stays empty instead of reading as 0, which
+   * means "warn only once it has expired".
+   */
+  domainWarnDays: string;
+  /**
    * The monitor's own channels, as sorted comma-joined ids: text rather than
    * an array so ticking a box and unticking it again reads as no change.
    */
@@ -124,6 +137,7 @@ const FIELD_CONTROL: Record<string, string> = {
   "dns.record_type": "dns-type",
   "dns.expected": "dns-expected",
   "dns.resolver": "dns-resolver",
+  domain_warn_days: "domain-warn",
   channel_ids: "channels",
 };
 
@@ -159,6 +173,23 @@ const PUSH_DURATIONS: readonly (readonly [string, DurationKey])[] = [
   ["push_interval_s", "pushIntervalS"],
   ["push_grace_s", "pushGraceS"],
 ];
+
+/**
+ * What a domain monitor's own limits refuse, checked before a probe as well
+ * as a save. Choosing the type lifts a short interval, but the interval can
+ * be shortened again afterwards; and an emptied warning must not reach the
+ * API as 0.
+ */
+function domainProblem(values: AddMonitorValues): { field: string; message: string } | null {
+  if (values.type !== "domain") return null;
+  if (values.intervalS < DOMAIN_MIN_INTERVAL_S) {
+    return { field: "interval_s", message: DOMAIN_INTERVAL_MESSAGE };
+  }
+  if (!domainWarnDaysAllowed(values.domainWarnDays)) {
+    return { field: "domain_warn_days", message: DOMAIN_WARN_DAYS_MESSAGE };
+  }
+  return null;
+}
 
 export type AddMonitorFormProps = {
   /** Runs a preview. The caller reports the outcome back through `preview`. */
@@ -208,6 +239,9 @@ const DEFAULTS: AddMonitorValues = {
   dnsRecordType: "A",
   dnsExpected: "",
   dnsResolver: "",
+  // The server's default: a renewal can need a person with the registrar
+  // login and a card, which is more lead time than a certificate needs.
+  domainWarnDays: "30",
   channelIds: "",
 };
 
@@ -257,6 +291,7 @@ export function AddMonitorForm({
 
   const push = isPush(values);
   const dns = values.type === "dns";
+  const domain = values.type === "domain";
   const targetEmpty = values.target.trim() === "";
   /*
    * What blocks the save.
@@ -404,9 +439,13 @@ export function AddMonitorForm({
     setLocalError(null);
     const outOfRange = (push ? PUSH_DURATIONS : PROBE_DURATIONS)
       .find(([field, key]) => !durationAllowed(field, values[key]));
-    if (outOfRange === undefined) return true;
-    const [field] = outOfRange;
-    setLocalError({ field, message: DURATION_LIMITS[field].message });
+    const problem =
+      outOfRange !== undefined
+        ? { field: outOfRange[0], message: DURATION_LIMITS[outOfRange[0]].message }
+        : domainProblem(values);
+    if (problem === null) return true;
+    const { field } = problem;
+    setLocalError(problem);
     const control = document.getElementById(`${ids}-${FIELD_CONTROL[field]}`);
     const panel = control?.closest("details");
     if (panel) panel.open = true;
@@ -471,7 +510,7 @@ export function AddMonitorForm({
             className="input"
             value={values.target}
             onChange={(event) => setTarget(event.target.value)}
-            placeholder={dns ? "example.com" : "example.com, https://example.com/health, or db.example.com:5432"}
+            placeholder={dns || domain ? "example.com" : "example.com, https://example.com/health, or db.example.com:5432"}
             autoComplete="off"
             spellCheck={false}
             required
@@ -480,7 +519,9 @@ export function AddMonitorForm({
           <p id={`${ids}-target-help`} className="field-help">
             {dns
               ? "The domain name whose record is checked, without https:// or a port."
-              : "A URL, a hostname, or a host and port. A bare hostname is checked over HTTPS."}
+              : domain
+                ? "The domain whose registration is checked. A name under it, such as www.example.com, checks example.com."
+                : "A URL, a hostname, or a host and port. A bare hostname is checked over HTTPS."}
           </p>
           <ControlRefusal
             control="target"
@@ -560,6 +601,42 @@ export function AddMonitorForm({
               ids={ids}
             />
           </div>
+        </div>
+      )}
+
+      {/*
+       * The warning sits outside the advanced panel for the reason the dns
+       * record does below: for a domain monitor it is the one setting that
+       * decides when anyone hears about it.
+       */}
+      {domain && (
+        <div className="field">
+          <label className="field-label" htmlFor={`${ids}-domain-warn`}>
+            Warn before it expires
+          </label>
+          <div className="add-addon">
+            <input
+              id={`${ids}-domain-warn`}
+              className="input"
+              type="number"
+              min={0}
+              max={365}
+              value={values.domainWarnDays}
+              onChange={(event) =>
+                setValues((v) => ({ ...v, domainWarnDays: event.target.value }))
+              }
+              {...invalidProps("domain-warn", `${ids}-domain-warn-help`)}
+            />
+            <span className="add-unit" aria-hidden="true">
+              days
+            </span>
+          </div>
+          <p id={`${ids}-domain-warn-help`} className="field-help">
+            The expiry date is read from the registry, once a day by default.
+            Within this many days of it you are alerted, without it counting
+            as downtime; 0 alerts only once it has expired.
+          </p>
+          <ControlRefusal control="domain-warn" badControl={badControl} rejection={rejection} ids={ids} />
         </div>
       )}
 
@@ -662,7 +739,7 @@ export function AddMonitorForm({
               className="input"
               value={values.type}
               onChange={(event) =>
-                setValues((v) => ({ ...v, type: event.target.value }))
+                setValues((v) => withType(v, event.target.value, DEFAULTS.intervalS))
               }
               aria-invalid={badControl === "type" ? true : undefined}
               aria-describedby={
@@ -675,6 +752,7 @@ export function AddMonitorForm({
               <option value="ping">Ping</option>
               <option value="ssl">TLS certificate</option>
               <option value="dns">DNS record</option>
+              <option value="domain">Domain registration</option>
               <option value="push">Push — the job reports in</option>
             </Select>
             <ControlRefusal
@@ -749,8 +827,8 @@ export function AddMonitorForm({
                 />
               </div>
 
-              {/* A DNS query has no TLS and no body to read. */}
-              {!dns && <>
+              {/* A DNS query and a registry lookup have no TLS and no body to read. */}
+              {!dns && !domain && <>
               <TlsFloorField
                 id={`${ids}-min-tls`}
                 value={values.minTlsVersion}
@@ -993,6 +1071,8 @@ function labelForType(type: string): string {
       return "a TLS certificate check";
     case "dns":
       return "a DNS query";
+    case "domain":
+      return "a domain registration lookup";
     default:
       return type;
   }

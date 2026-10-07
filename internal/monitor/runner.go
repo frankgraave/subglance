@@ -193,6 +193,8 @@ func New(opts Options) *Runner {
 			checker.TypeSSL:  checker.NewSSLChecker(guard),
 			checker.TypePing: checker.NewPingChecker(guard),
 			checker.TypeDNS:  checker.NewDNSChecker(guard),
+
+			checker.TypeDomain: checker.NewDomainChecker(guard),
 		},
 		OnResult:       r.record,
 		Workers:        opts.Workers,
@@ -661,6 +663,7 @@ func toCheckerMonitor(m store.Monitor) checker.Monitor {
 		JSONAssertion:   toCheckerAssertion(m.JSONAssertion),
 
 		RecoveryThreshold: m.RecoveryThreshold,
+		DomainWarnDays:    m.DomainWarnDays,
 	}
 	if m.DNS != nil {
 		cm.DNSRecordType = m.DNS.RecordType
@@ -734,6 +737,10 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	if o.Result.Kind == checker.FailUnknown {
+		return r.recordUnknown(ctx, o)
+	}
 
 	hb := store.Heartbeat{
 		MonitorID:  o.Monitor.ID,
@@ -873,10 +880,58 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 	})
 
 	errs := []error{hbErr}
+	if o.Monitor.Type == checker.TypeDomain && hbErr == nil {
+		// This check found out, so an earlier one that could not is no
+		// longer the monitor's latest word. Only once its heartbeat is
+		// stored: cleared without it, an older heartbeat would become the
+		// latest word instead.
+		if err := r.db.ClearUnknownCheck(ctx, o.Monitor.ID); err != nil {
+			r.log.Error("failed to clear unknown check", "monitor_id", o.Monitor.ID, "error", err)
+			errs = append(errs, err)
+		}
+	}
 	for _, t := range trs {
 		errs = append(errs, r.applyTransition(ctx, o, t, maintained))
 	}
 	return errors.Join(errs...)
+}
+
+// recordUnknown stores a check that could not find out: a domain whose
+// registry runs no RDAP, or whose RDAP server did not answer.
+//
+// It is not a heartbeat and not an observation. A registry's outage says
+// nothing about the domain, so it must not count in uptime, draw a red bar,
+// open or confirm an incident, or count as a pass that resolves one. The
+// monitor shows "unknown" with the reason until a check gets an answer.
+func (r *Runner) recordUnknown(ctx context.Context, o scheduler.Outcome) error {
+	at := o.Result.CheckedAt
+	if at.IsZero() {
+		at = time.Now()
+	}
+	if err := r.db.RecordUnknownCheck(ctx, store.UnknownCheck{
+		MonitorID: o.Monitor.ID, At: at, Reason: o.Result.Error,
+	}); err != nil {
+		r.hbFailures.Add(1)
+		r.log.Error("failed to record unknown check", "monitor_id", o.Monitor.ID, "error", err)
+		return fmt.Errorf("record unknown check: %w", err)
+	}
+	// The check ran and its result was stored, which is what the liveness
+	// counter vouches for.
+	r.checks.Add(1)
+	r.log.Info("check could not find out", "monitor", o.Monitor.Name, "reason", o.Result.Error)
+	r.publish(events.Event{
+		Kind:      events.KindHeartbeat,
+		MonitorID: o.Monitor.ID,
+		At:        at,
+		Payload: heartbeatPayload{
+			OK:          false,
+			Unknown:     true,
+			FailureKind: string(checker.FailUnknown),
+			LatencyMS:   int(o.Result.Latency.Milliseconds()),
+			Error:       o.Result.Error,
+		},
+	})
+	return nil
 }
 
 // localNetworkFailure reports whether a failed check is explained by the host
@@ -995,6 +1050,12 @@ type heartbeatPayload struct {
 	// pass as a plain up. Error and FailureKind then carry the notice's
 	// text and cause, although the stored heartbeat has neither.
 	Expiring bool `json:"expiring,omitempty"`
+
+	// Unknown marks a check that could not find out (see recordUnknown).
+	// It is not stored as a heartbeat, so a live client must not draw a bar
+	// for it or read OK false as a failure: the monitor is "unknown", and
+	// Error says why.
+	Unknown bool `json:"unknown,omitempty"`
 }
 
 // recoveryPayload is a recovering monitor's passing streak.
@@ -1096,7 +1157,8 @@ func (r *Runner) applyTransition(ctx context.Context, o scheduler.Outcome, tr st
 		if inc, err = r.db.OpenIncidentFor(ctx, o.Monitor.ID); err != nil {
 			r.log.Error("failed to reload certificate notice", "monitor_id", o.Monitor.ID, "error", err)
 		}
-		r.log.Warn("certificate expires soon",
+		r.log.Warn("expiry notice opened",
+			"cause", tr.Cause,
 			"monitor", o.Monitor.Name,
 			"error", tr.Error,
 			"suppressed", tr.Suppressed)

@@ -150,8 +150,10 @@ func (b Builder) entry(ctx context.Context, m store.Monitor, se store.StatusPage
 		InMaintenance: inMaintenance,
 		// Only beside up: a monitor that is down or not watched has a
 		// louder thing to say, and "expires soon" next to it would read
-		// as the reason.
-		CertificateExpiring: live.Notice && PublicStatus(live) == StatusUp,
+		// as the reason. Only for a certificate: a domain monitor's notice
+		// is about the registration, which visitors cannot see fail until
+		// it lapses, and the page has no word for it but "up".
+		CertificateExpiring: live.Notice && PublicStatus(live) == StatusUp && m.Type != store.TypeDomain,
 		Uptime90d:           Uptime(hours),
 		Uptime30d:           UptimeFrom(hours, RecentSince(now, loc)),
 		Days:                Days(History{Hours: hours, Incidents: incidents, Maintenance: past}, now, loc),
