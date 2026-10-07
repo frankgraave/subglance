@@ -140,6 +140,10 @@ type Server struct {
 	// read-only and refuses to store a value over them.
 	retentionPins store.RetentionPins
 
+	// baseURL is the address alerts link to (--base-url), shown on the
+	// settings page; "" when alerts carry no links.
+	baseURL string
+
 	// passes starts a retention pass on request, and background bounds the
 	// passes and compactions the settings page starts: they outlive the
 	// request that asked for them, but not the server. Both nil means the

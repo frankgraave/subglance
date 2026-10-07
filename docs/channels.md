@@ -248,6 +248,50 @@ the address and this setting. A channel saved earlier and delivered after the
 setting was turned off fails the same way, in the test button and in the
 Delivery column, and is not retried: a refused address stays refused.
 
+## Links back to SubGlance
+
+Started with `--base-url` (or `SUBGLANCE_BASE_URL`) set to the address people
+open SubGlance at, every alert about a monitor links to its incident and to
+the monitor's page:
+
+```
+subglance --base-url https://status.example.com
+# behind a proxy that serves it under a path:
+SUBGLANCE_BASE_URL=https://example.com/subglance
+```
+
+The incident link is `<base>/incidents#incident-<id>`: the incidents screen,
+scrolled to that incident with its row open. The monitor link is
+`<base>/monitors/<id>`. An alert about several monitors at once (a grouped
+alert, or the summary at the end of quiet hours) links to `<base>/incidents`,
+where all of them are. A message about SubGlance itself (a failed backup, a
+channel that stopped delivering, the **Send test** button) has no monitor and
+no links.
+
+The address has to be an absolute `http://` or `https://` URL. A path prefix
+is kept and a trailing slash does not matter; a user name, a password, a query
+string or a `#fragment` is refused at start-up, because it would be copied
+into every link in every message. Without the setting, every message is
+exactly what it was before links existed. The settings page shows the address
+in use under **Instance**, or that none is set; it cannot be changed there,
+because it belongs to the proxy in front of SubGlance rather than to anything
+edited in it.
+
+How each channel carries the links:
+
+| Type | Links |
+|---|---|
+| `webhook` | `incident_url` and `monitor_url` in the payload, and `{{incident_url}}` and `{{monitor_url}}` for a body of your own |
+| `slack` | A last line, "Open the incident · Open the monitor" |
+| `discord` | The title opens the incident; the description ends with both links |
+| `telegram`, `email` | Two lines after the message, `Incident:` and `Monitor:` |
+| `ntfy` | Tapping the notification opens the incident; a button for each link |
+| `gotify` | Two lines after the message; tapping it in the app opens the incident |
+| `sms` | The incident link only, after the text, which is shortened to make room. A link that would leave the alert less than half of the 160 characters, or that has a character outside the SMS alphabet, is left out |
+
+The address is added when the message is sent, not when the alert is queued,
+so an alert being retried after the setting changed links to the new address.
+
 ## The webhook payload
 
 A `webhook` channel sends one request per alert: a `POST`, or a `PUT` when
@@ -284,6 +328,7 @@ its `method` says so. Every request carries a `User-Agent` starting with
 | `digest`, `digest_timezone` | Set on the summary a channel receives when its quiet hours end |
 | `replaces_alert` | Set on a recovery whose alert never reached this channel: see below |
 | `notice` | Set on an alert about a certificate that expires soon, not an outage: see below |
+| `incident_url`, `monitor_url` | Links to the incident and the monitor in SubGlance; left out unless `--base-url` is set (see [links back to SubGlance](#links-back-to-subglance)). A grouped alert or a digest has an `incident_url` to the incidents screen at the top and each member's own links in `members` |
 
 A monitor's alerts carry `incident_confirmed` (it is down), `incident_reminder`
 (it is still down and nobody has acknowledged it) or `incident_resolved` (it is
@@ -361,6 +406,7 @@ above, so a webhook without one is unchanged.
 | `{{monitor_name}}`, `{{monitor_type}}`, `{{target}}` | The monitor; the first one's in a grouped alert |
 | `{{cause}}`, `{{last_error}}` | Why the check failed; empty in a grouped alert |
 | `{{started_at}}`, `{{at}}` | When the outage began and when this alert fired, RFC 3339 in UTC; `{{started_at}}` is empty when there is no outage behind the message |
+| `{{incident_url}}`, `{{monitor_url}}` | Links to the incident and the monitor in SubGlance; empty unless `--base-url` is set. For a grouped alert or a digest, `{{incident_url}}` is the incidents screen and `{{monitor_url}}` is empty |
 | `{{txn_id}}` | An id that is the same on every retry of one alert and differs between alerts. The only placeholder the `url` may use |
 
 A placeholder is replaced by its value and nothing else: there are no

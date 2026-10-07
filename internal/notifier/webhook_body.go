@@ -55,6 +55,9 @@ var webhookPlaceholders = map[string]func(Alert) string{
 	"last_error":   func(a Alert) string { return a.LastError },
 	"started_at":   func(a Alert) string { return timestamp(a.StartedAt) },
 	"at":           func(a Alert) string { return timestamp(a.At) },
+	// Empty unless --base-url is set; see links.go.
+	"incident_url": func(a Alert) string { return a.IncidentURL },
+	"monitor_url":  func(a Alert) string { return a.MonitorURL },
 	// txn_id is filled in by the sender, which knows the URL it is for.
 	"txn_id": nil,
 }

@@ -214,6 +214,7 @@ func run(args []string, logOut io.Writer) error {
 		Log:         log,
 		Guard:       guard,
 		GroupWindow: cfg.NotifierGroupWindow(),
+		BaseURL:     cfg.BaseURL,
 	})
 
 	canary, err := newCanary(openCtx, cfg, db, notify, log)
@@ -260,6 +261,9 @@ func run(args []string, logOut io.Writer) error {
 		// The same pins the maintenance loop resolves against, so the
 		// settings page shows exactly the windows a pass will apply.
 		WithRetentionPins(cfg.RetentionPins()).
+		// The address alerts link to, shown read-only on the settings
+		// page so an administrator can see what the links say.
+		WithBaseURL(cfg.BaseURL).
 		// The same guard the notifier delivers through, so the save-time
 		// refusal and the delivery-time refusal cannot disagree about
 		// what --allow-private-targets permits. A channel the operator

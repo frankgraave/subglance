@@ -203,6 +203,9 @@ func buildMessage(from string, to []string, a Alert) string {
 
 	b.WriteString(a.Title() + "\r\n\r\n")
 	b.WriteString(strings.ReplaceAll(a.Body(), "\n", "\r\n") + "\r\n")
+	if links := linkLines(a); links != "" {
+		b.WriteString("\r\n" + strings.ReplaceAll(links, "\n", "\r\n") + "\r\n")
+	}
 	return b.String()
 }
 

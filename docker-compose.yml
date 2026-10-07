@@ -68,6 +68,12 @@ services:
       # Set to 0 to deliver every alert immediately; that suits a handful of
       # services, where there is nothing to group and the wait is pure delay.
       # SUBGLANCE_ALERT_GROUP_WINDOW: 90s
+      # The address this instance is reached at, as people open it in a
+      # browser: behind a reverse proxy, the proxy's address and any path
+      # prefix. Set, every alert links to its incident and its monitor; unset,
+      # alerts carry no links. SubGlance cannot work this out by itself,
+      # because the proxy decides the host, the scheme and the prefix.
+      # SUBGLANCE_BASE_URL: https://status.example.com
       # SubGlance cannot report its own death: if this container is killed or
       # the host goes down, nothing turns red — the dashboard just stops
       # existing. Point this at a dead man's switch (Healthchecks.io, Dead

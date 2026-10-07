@@ -576,10 +576,47 @@ func smsWithheldNote(n int) string {
 
 // smsMessage is the text of one alert SMS, with the note about held-back
 // alerts when there were any. It is always one GSM-7 part.
+//
+// With a base URL it also carries one link, the incident's, after the text
+// and before the note. The text is shortened to make room rather than the
+// message split in two, and a link that would shorten it below
+// smsTextMinWithLink septets is left out: the alert is what the message is
+// for, and the incident is one tap away in SubGlance.
 func smsMessage(a Alert, zone string, withheld int) string {
-	if withheld <= 0 {
-		return smsText(a, zone, smsSeptets)
+	note := ""
+	if withheld > 0 {
+		note = smsWithheldNote(withheld)
 	}
-	note := smsWithheldNote(withheld)
-	return smsText(a, zone, smsSeptets-len(note)) + note
+	room := smsSeptets - len(note)
+	text := smsText(a, zone, room)
+	link := smsLink(a)
+	if link == "" {
+		return text + note
+	}
+	beside := room - smsSeptetLen(link) - 1
+	switch {
+	case smsSeptetLen(text) <= beside:
+		return text + " " + link + note
+	case beside >= smsTextMinWithLink:
+		return smsText(a, zone, beside) + " " + link + note
+	}
+	return text + note
+}
+
+// smsTextMinWithLink is the least room an alert's text keeps beside a link:
+// half a message, which holds the status, a monitor name and most of a
+// reason.
+const smsTextMinWithLink = smsSeptets / 2
+
+// smsLink is the one link an SMS carries, or "" when there is none or it
+// cannot be written in GSM-7 as it is. A link is not transliterated like the
+// text: a changed character is a link to somewhere else.
+func smsLink(a Alert) string {
+	link := primaryLink(a)
+	for _, r := range link {
+		if _, ok := septets(r); !ok {
+			return ""
+		}
+	}
+	return link
 }

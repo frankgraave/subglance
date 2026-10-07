@@ -50,14 +50,22 @@ func (s *DiscordSender) Send(ctx context.Context, cfg map[string]string, a Alert
 		colour = discordRed
 	}
 
+	embed := map[string]any{
+		"title":       a.Title(),
+		"description": a.Body(),
+		"color":       colour,
+		"timestamp":   a.At.UTC().Format("2006-01-02T15:04:05Z"),
+	}
+	// The title is the link Discord draws most plainly, so it goes to the
+	// incident; the description ends with both, named, for the monitor.
+	if link := primaryLink(a); link != "" {
+		embed["url"] = link
+		embed["description"] = a.Body() + "\n\n" + discordLinks(a)
+	}
+
 	payload := map[string]any{
 		"username": "SubGlance",
-		"embeds": []map[string]any{{
-			"title":       a.Title(),
-			"description": a.Body(),
-			"color":       colour,
-			"timestamp":   a.At.UTC().Format("2006-01-02T15:04:05Z"),
-		}},
+		"embeds":   []map[string]any{embed},
 	}
 
 	req, err := jsonRequest(ctx, cfg["url"], payload)
@@ -72,3 +80,19 @@ func (s *DiscordSender) Send(ctx context.Context, cfg map[string]string, a Alert
 type configError struct{ msg string }
 
 func (e *configError) Error() string { return e.msg }
+
+// discordLinks is the links as Discord markdown.
+func discordLinks(a Alert) string {
+	var parts []string
+	if a.IncidentURL != "" {
+		label := "Open the incident"
+		if len(a.Members) > 0 {
+			label = "Open the incidents"
+		}
+		parts = append(parts, "["+label+"]("+a.IncidentURL+")")
+	}
+	if a.MonitorURL != "" {
+		parts = append(parts, "[Open the monitor]("+a.MonitorURL+")")
+	}
+	return strings.Join(parts, " · ")
+}

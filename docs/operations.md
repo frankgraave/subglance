@@ -38,6 +38,7 @@ five-minute dead man's switch, or LAN monitoring, and having neither.
 | `--shutdown-timeout` | `SUBGLANCE_SHUTDOWN_TIMEOUT` | `15s` | Grace period for in-flight HTTP requests |
 | `--check-workers` | `SUBGLANCE_CHECK_WORKERS` | `0` (auto) | Maximum concurrent checks |
 | `--allow-private-targets` | `SUBGLANCE_ALLOW_PRIVATE_TARGETS` | `false` | Permit monitoring private/loopback addresses |
+| `--base-url` | `SUBGLANCE_BASE_URL` | empty (no links) | The address SubGlance is reached at, such as `https://status.example.com` or `https://example.com/subglance`, so every alert links to its incident and its monitor. An absolute `http(s)` address; a path prefix is kept and a trailing slash does not matter. Shown read-only under Instance on the settings page. See [Links back to SubGlance](channels.md#links-back-to-subglance) |
 | `--trusted-proxies` | `SUBGLANCE_TRUSTED_PROXIES` | empty (none) | Addresses or CIDR blocks whose `X-Forwarded-For` may be believed |
 | `--alert-group-window` | `SUBGLANCE_ALERT_GROUP_WINDOW` | `90s` | How long an alert waits for others so one outage sends one message (`0` = send immediately) |
 | `--watchdog-url` | `SUBGLANCE_WATCHDOG_URL` | empty (off) | External dead man's switch to ping while checks are running |
