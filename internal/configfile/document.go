@@ -98,6 +98,10 @@ type Monitor struct {
 	// monitor has.
 	DNS *DNSCheck `yaml:"dns,omitempty"`
 
+	// Domain only: how many days before its registration expires a domain
+	// monitor warns. 0 never warns.
+	DomainWarnDays *int `yaml:"domain_warn_days,omitempty"`
+
 	// Push only. The push URL itself is a credential and is never written:
 	// a push monitor created by an import is issued a new one.
 	PushIntervalS *int `yaml:"push_interval_s,omitempty"`

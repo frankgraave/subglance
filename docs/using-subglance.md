@@ -135,6 +135,7 @@ tokens too. Without a role, a token acts with the creator's role.
 | `ping` | `example.com` or `192.0.2.10` | ICMP echo reply |
 | `ssl` | `example.com` (port optional, defaults to 443) | Certificate validity, hostname match, chain of trust, days until expiry, OCSP revocation when available |
 | `dns` | `example.com` (a domain name, no scheme or port) | The A, AAAA, CNAME, MX or TXT records hold the expected values |
+| `domain` | `example.com` (a domain name, no scheme or port) | The domain's registration has not expired, with a warning a number of days before |
 | `push` | none — the job reports in | That the job reported inside its window |
 
 Creating or editing a monitor rejects whitespace inside its hostname, including
@@ -302,6 +303,46 @@ cannot be reached fail with the cause `dns`, the same as an HTTP check whose
 host cannot be resolved; a resolver that stays silent past the monitor's
 timeout fails with `timeout`. An answer too large for one UDP datagram is
 asked again over TCP.
+
+### Checking when a domain expires
+
+A domain whose registration lapses takes a site offline as completely as a
+broken server, and none of the other checks see it coming: the site answers
+until the day the registry stops publishing the name. A `domain` monitor reads
+the registration's expiry date and warns ahead of it:
+
+```json
+{"type": "domain", "target": "example.com", "domain_warn_days": 30}
+```
+
+- **`target`** is a domain name. A name under a registered domain is checked
+  as that domain, so `www.example.co.uk` reads the date of `example.co.uk`.
+  An internationalised name is written in its `xn--` form.
+- **`domain_warn_days`** is how many days before the expiry date the monitor
+  starts warning, 0 to 365. Left out it is 30: renewing a domain can need a
+  person with the registrar login and a payment method, which is more lead
+  time than a certificate needs. 0 never warns and only fails once the
+  registration has expired.
+
+Inside the warning window the monitor is `expiring`: it alerts with the
+cause `domain_expiry`, without counting as downtime, the same way a
+certificate about to expire does. Once the date has passed the check fails
+and the monitor is down.
+
+The date comes from RDAP, the JSON protocol registries publish registration
+data in, with the server for each top-level domain taken from IANA's
+bootstrap registry. WHOIS is not read: it is free text in a different layout
+per registry. Not every country-code registry runs RDAP, and a registry's
+server can be down or limiting requests. When the date cannot be read the
+monitor is `unknown`, with the reason as its error. That is not an outage:
+nothing is recorded in its history, no incident opens and no alert is sent,
+and an alert already open stays as it was.
+
+A domain monitor is checked once a day unless its `interval_s` says otherwise,
+and never more often than every 6 hours (`interval_s` 21600), also while it
+is down: the date moves once a year, and registries limit clients that ask
+often. Its first failure confirms, because a date read off the registry is not
+a blip; set `retries` to wait for more.
 
 ## Choosing a TLS floor
 

@@ -173,6 +173,8 @@ func exportMonitor(m store.Monitor) configfile.Monitor {
 		if w := dnsCheckToWire(m.DNS); w != nil {
 			out.DNS = &configfile.DNSCheck{RecordType: w.RecordType, Expected: w.Expected, Resolver: w.Resolver}
 		}
+	case store.TypeDomain:
+		out.DomainWarnDays = ptr(m.DomainWarnDays)
 	case store.TypePush:
 		out.PushIntervalS = ptr(m.PushIntervalS)
 		out.PushGraceS = ptr(m.PushGraceS)

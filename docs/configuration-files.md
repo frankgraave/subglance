@@ -185,6 +185,17 @@ monitors:
     tags:
       env: prod
     channels: [ops-slack]
+  - key: example-domain
+    name: example.com registration
+    type: domain
+    target: example.com
+    enabled: true
+    interval_s: 86400
+    timeout_s: 10
+    retries: 0
+    domain_warn_days: 30
+    tags: {}
+    channels: [ops-slack]
   - key: nightly-backup
     name: Nightly backup
     type: push
@@ -227,6 +238,9 @@ A few points specific to the file:
   `expected` and, when one is set, `resolver`. An import that leaves it out of
   an existing dns monitor keeps what the monitor has; a new dns monitor needs
   it.
+- `domain_warn_days` is written for every `domain` monitor. A new domain
+  monitor without it warns 30 days ahead; an import that leaves it out of an
+  existing one keeps what the monitor has.
 - `default: true` on a channel makes it the instance default. An import never
   clears the default, so a file that does not mention one leaves it as it is.
 - A reference (`channels`, `exclude`, a maintenance window's `monitor`) may name

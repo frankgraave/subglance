@@ -22,6 +22,7 @@ export const INVENTORY_TYPES: readonly { value: string; text: string }[] = [
   { value: "ping", text: "Ping" },
   { value: "ssl", text: "SSL" },
   { value: "dns", text: "DNS" },
+  { value: "domain", text: "Domain" },
   { value: "push", text: "Push" },
 ];
 

@@ -19,6 +19,9 @@ export const STATUS_LABEL: Record<MonitorStatus, string> = {
   // check passes. Not "Down" either, which it used to be.
   expiring: "Expiring soon",
   warning: "Warning",
+  // A domain monitor whose registry could not say. Not "Pending": a check
+  // ran, and the next one may well get no further.
+  unknown: "Unknown",
   pending: "Pending",
   paused: "Paused",
   waiting: "Waiting",
@@ -50,6 +53,7 @@ export const STATUS_LABEL_LAST_KNOWN: Record<MonitorStatus, string> = {
   recovering: "Was recovering",
   expiring: "Was expiring soon",
   warning: "Was warning",
+  unknown: "Was unknown",
   pending: "Was pending",
   paused: "Was paused",
   waiting: "Was waiting",

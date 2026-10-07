@@ -9,6 +9,7 @@ import { DurationField } from "./DurationField";
 import { DAYS_ONLY, DURATION_LIMITS, SECONDS_ONLY, SECONDS_TO_DAYS, SECONDS_TO_HOURS } from "./duration";
 import type { DurationUnit } from "./duration";
 import { validRepeat, REPEAT_ERROR } from "./repeat";
+import { DOMAIN_INTERVAL_MESSAGE, DOMAIN_MIN_INTERVAL_S, DOMAIN_WARN_DAYS_MESSAGE } from "./checkTypeChange";
 import { tagsToText, textToTags } from "./tags";
 import { ApiError, describePreview, fingerprintPreview, previewCheck } from "./preview";
 import type { PreviewRequest, PreviewState } from "./preview";
@@ -36,7 +37,7 @@ export type EditMonitorFormProps = {
 type Problem = { message: string; field?: string } | null;
 // These edits require a preview to save. TLS-only saves retain the existing
 // contract, but a TLS change must still invalidate any preview already shown.
-const CHECK_FIELDS = new Set(["target", "timeout_s", "method", "expected_status", "keyword", "keyword_mode", "follow_redirects", "headers", "body", "ssl_warn_days", "json_assertion", "dns"]);
+const CHECK_FIELDS = new Set(["target", "timeout_s", "method", "expected_status", "keyword", "keyword_mode", "follow_redirects", "headers", "body", "ssl_warn_days", "json_assertion", "dns", "domain_warn_days"]);
 /**
  * The control a server problem field belongs to. `json_assertion.expected`
  * is the `json_expected` control; the bare `json_assertion` (wrong monitor
@@ -55,6 +56,7 @@ const LABELS: Record<string, string> = {
   recovery_threshold: "Passing checks to recover",
   json_path: "JSON field", json_operator: "Must", json_expected: "Value",
   dns_record_type: "Record type", dns_expected: "Expected values", dns_resolver: "Resolver",
+  domain_warn_days: "Warn before it expires (days)",
   tags: "Tags", push_interval_s: "Should report every", push_grace_s: "Allow it to be late by",
 };
 /**
@@ -69,8 +71,12 @@ const DURATIONS: Record<string, readonly DurationUnit[]> = {
 /** Whole numbers with a range; the durations' limits live with their units. */
 const RANGES: readonly (readonly [string, number, number, string])[] = [
   ["recovery_threshold", 1, 10, "Passing checks to recover must be between 1 and 10."],
+  ["domain_warn_days", 0, 365, DOMAIN_WARN_DAYS_MESSAGE],
   ...Object.entries(DURATION_LIMITS).map(([key, { min, max, message }]) => [key, min, max, message] as const),
 ];
+
+/** Types whose check reads none of the HTTP and TLS settings. */
+const withoutHttp = (type: string) => type === "dns" || type === "domain";
 
 /** Only settings actually read from the server become editable values. */
 function valuesFor(monitor: InventoryMonitor): Record<string, string> {
@@ -106,9 +112,12 @@ function valuesFor(monitor: InventoryMonitor): Record<string, string> {
       values.dns_expected = dnsExpectedText(monitor.dns.expected);
       values.dns_resolver = monitor.dns.resolver ?? "";
     }
+    if (monitor.type === "domain" && monitor.domainWarnDays !== undefined) {
+      values.domain_warn_days = String(monitor.domainWarnDays);
+    }
     // The detail read sends the HTTP settings for every type; a DNS query
-    // reads none of them, so a dns monitor is not offered them.
-    for (const [key, value] of Object.entries(monitor.type === "dns" ? {} : monitor.checkSettings ?? {})) {
+    // and a registry lookup read none of them, so neither is offered them.
+    for (const [key, value] of Object.entries(withoutHttp(monitor.type) ? {} : monitor.checkSettings ?? {})) {
       if (key === "min_tls_version") continue; // The dedicated floor value also represents absence.
       values[key] = key === "headers" ? JSON.stringify(value, null, 2) : String(value);
     }
@@ -194,6 +203,11 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
       }
       parsed[key] = number;
     }
+    // The general limit lets an interval under six hours through; a domain
+    // monitor's does not, and the server would refuse it after the preview.
+    if (monitor.type === "domain" && "interval_s" in values && Number(parsed.interval_s) < DOMAIN_MIN_INTERVAL_S) {
+      reject(DOMAIN_INTERVAL_MESSAGE, "interval_s"); return null;
+    }
     if ("repeat_after_s" in values) {
       if (!validRepeat(values.repeat_after_s)) { reject(REPEAT_ERROR, "repeat_after_s"); return null; }
       parsed.repeat_after_s = Number(values.repeat_after_s);
@@ -224,7 +238,7 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
     // Normalised no-ops need no write; zero, false and empty remain explicit.
     if (parsed.name === monitor.name) delete patch.name;
     if (tagsToText(tags) === initial.tags) delete patch.tags;
-    const request: PreviewRequest = { ...(monitor.type === "dns" ? {} : monitor.checkSettings), type: monitor.type, target: values.target?.trim() ?? "" };
+    const request: PreviewRequest = { ...(withoutHttp(monitor.type) ? {} : monitor.checkSettings), type: monitor.type, target: values.target?.trim() ?? "" };
     for (const key of CHECK_FIELDS) if (key in parsed) Object.assign(request, { [key]: parsed[key] });
     // Preview has no stored assertion to clear: absence means none.
     if (request.json_assertion === null) delete request.json_assertion;
@@ -308,6 +322,10 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
           {field("dns_expected", true)}
           <p className="field-help">One value per line. {DNS_EXPECTED_HELP[values.dns_record_type]} {DNS_EMPTY_HELP}</p>
         </>}
+        {"domain_warn_days" in values && <>
+          {field("domain_warn_days")}
+          <p className="field-help">The expiry date is read from the registry. Within this many days of it you are alerted, without it counting as downtime; 0 alerts only once it has expired. A domain is checked at most every 6 hours.</p>
+        </>}
         {"json_path" in values && <>
           <div className="field-grid">
             {field("json_path")}{field("json_operator", false, JSON_OPERATORS)}
@@ -315,7 +333,7 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
           </div>
           <p className="field-help">{JSON_HELP}</p>
         </>}
-        {monitor.type !== "dns" && <details className="add-advanced">
+        {!withoutHttp(monitor.type) && <details className="add-advanced">
           <summary className="add-summary">Advanced options</summary>
           <div className="field-grid">
             <TlsFloorField id={`${ids}-min-tls`} value={values.min_tls_version}

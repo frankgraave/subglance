@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/frankgraave/subglance/internal/checker"
 	"github.com/frankgraave/subglance/internal/configfile"
 	"github.com/frankgraave/subglance/internal/store"
 )
@@ -414,6 +415,7 @@ func monitorPatch(m configfile.Monitor) patchMonitorRequest {
 		FollowRedirects: m.FollowRedirects, SSLWarnDays: m.SSLWarnDays,
 		RepeatAfterS: m.RepeatAfterS, Enabled: m.Enabled, CaptureResponse: m.CaptureResponse,
 		MinTLSVersion: m.MinTLSVersion, PushIntervalS: m.PushIntervalS, PushGraceS: m.PushGraceS,
+		DomainWarnDays: m.DomainWarnDays,
 	}
 	if m.Name != "" {
 		req.Name = &m.Name
@@ -469,7 +471,7 @@ func planMonitor(p *importPlan, ex existingConfig, path string, m configfile.Mon
 			SSLWarnDays: m.SSLWarnDays, RepeatAfterS: m.RepeatAfterS, Enabled: m.Enabled,
 			CaptureResponse: m.CaptureResponse, MinTLSVersion: tls, Tags: m.Tags,
 			PushIntervalS: m.PushIntervalS, PushGraceS: m.PushGraceS,
-			DNS: dnsFromFile(m.DNS),
+			DNS: dnsFromFile(m.DNS), DomainWarnDays: m.DomainWarnDays,
 		}
 		if a, set, err := m.Assertion(sub(path, "json_assertion")); err != nil {
 			return err
@@ -486,6 +488,14 @@ func planMonitor(p *importPlan, ex existingConfig, path string, m configfile.Mon
 		}
 		if m.Type == store.TypePush {
 			next.PushGraceS = store.DefaultPushGraceS
+		}
+		if m.Type == store.TypeDomain {
+			// As on create: the default threshold, and a date read off the
+			// registry confirms at once.
+			next.DomainWarnDays = checker.DefaultDomainWarnDays
+			if m.Retries == nil {
+				next.Retries = 0
+			}
 		}
 		store.ApplyMonitorDefaults(&next)
 	}

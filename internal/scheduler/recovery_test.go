@@ -90,3 +90,22 @@ func TestDownTransitionDoesNotPostponeAlreadyFastCheck(t *testing.T) {
 		t.Fatalf("repeated down postponed check: %v, want %v", got, due)
 	}
 }
+
+// A type with a floor keeps it while down: a domain monitor's registry is not
+// asked every minute because the registration has lapsed.
+func TestRecoveryCadenceKeepsATypesFloor(t *testing.T) {
+	now := time.Now()
+	job := Job{Monitor: checker.Monitor{ID: 1, Type: checker.TypeDomain}, Interval: 24 * time.Hour}
+	s := New(Options{Registry: RegistryFunc(func(context.Context) ([]Job, error) { return []Job{job}, nil }), Now: func() time.Time { return now }, JitterFraction: -1})
+	if err := s.Reload(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	s.SetDown(1, true)
+	if got := (*s.queue)[0].next.Sub(now); got != checker.MinDomainInterval {
+		t.Fatalf("down next = %v, want the %v floor", got, checker.MinDomainInterval)
+	}
+	short := Job{Monitor: checker.Monitor{ID: 1, Type: checker.TypeDomain}, Interval: time.Minute}
+	if got := short.cadence(); got != checker.MinDomainInterval {
+		t.Errorf("cadence of a domain job set to a minute = %v, want the floor", got)
+	}
+}

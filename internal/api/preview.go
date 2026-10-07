@@ -63,6 +63,8 @@ type previewRequest struct {
 	JSONAssertion *jsonAssertionWire `json:"json_assertion"`
 	// DNS is required when type is dns, as on create.
 	DNS *dnsCheckWire `json:"dns"`
+	// DomainWarnDays is a domain monitor's threshold, as on create.
+	DomainWarnDays *int `json:"domain_warn_days"`
 }
 
 // previewResponse is a check result plus the settings it was run with.
@@ -82,6 +84,10 @@ type previewResponse struct {
 	Error      string `json:"error,omitempty"`
 
 	CertExpiry *time.Time `json:"cert_expiry,omitempty"`
+
+	// DomainExpiry is a domain's registration expiry date, when the
+	// registry gave one.
+	DomainExpiry *time.Time `json:"domain_expiry,omitempty"`
 
 	// Type and Target are what the probe actually used, after inference and
 	// normalisation. They may differ from what was sent.
@@ -180,6 +186,12 @@ func (s *Server) handlePreviewCheck(w http.ResponseWriter, r *http.Request) {
 	if p.ok() {
 		p = dnsCheckTypeProblem(typ, dns)
 	}
+	if p.ok() {
+		p = validateDomainWarnDays(req.DomainWarnDays)
+	}
+	if p.ok() {
+		p = domainTypeProblem(typ, 0, req.DomainWarnDays)
+	}
 	if !p.ok() {
 		writeProblem(w, http.StatusBadRequest, p)
 		return
@@ -233,6 +245,12 @@ func (s *Server) handlePreviewCheck(w http.ResponseWriter, r *http.Request) {
 	if req.SSLWarnDays != nil {
 		m.SSLWarnDays = *req.SSLWarnDays
 	}
+	if typ == store.TypeDomain {
+		m.DomainWarnDays = checker.DefaultDomainWarnDays
+		if req.DomainWarnDays != nil {
+			m.DomainWarnDays = *req.DomainWarnDays
+		}
+	}
 	if req.MinTLSVersion != nil {
 		m.MinTLSVersion, _ = checker.ParseTLSVersion(*req.MinTLSVersion)
 	}
@@ -264,6 +282,10 @@ func (s *Server) handlePreviewCheck(w http.ResponseWriter, r *http.Request) {
 	if !res.CertExpiry.IsZero() {
 		expiry := res.CertExpiry
 		resp.CertExpiry = &expiry
+	}
+	if !res.DomainExpiry.IsZero() {
+		expiry := res.DomainExpiry
+		resp.DomainExpiry = &expiry
 	}
 	if resp.CheckedAt.IsZero() {
 		resp.CheckedAt = time.Now()
@@ -299,7 +321,7 @@ func resolveTarget(typ, target string) (resolvedType, resolvedTarget string, bad
 				"; give a URL like https://example.com, a host:port like db.example.com:5432, "+
 				"or set type explicitly")
 		}
-	case "http", "tcp", "ping", "ssl", store.TypeDNS:
+	case "http", "tcp", "ping", "ssl", store.TypeDNS, store.TypeDomain:
 	default:
 		return "", "", fieldProblem("type", "unknown type "+typ)
 	}

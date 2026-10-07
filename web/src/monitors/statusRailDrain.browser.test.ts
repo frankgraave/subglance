@@ -50,6 +50,7 @@ const ALL_STATUSES = [
   "pending",
   "paused",
   "waiting",
+  "unknown",
 ] as const satisfies readonly MonitorStatus[];
 
 /**
@@ -426,7 +427,10 @@ describe("the status rail stops asserting when the stream dies", () => {
    *   paused  — "somebody switched this off": likewise → holds
    */
   const DRAINING_STATUSES = ["down", "recovering", "expiring", "warning", "pending"] as const;
-  const HOLDING_STATUSES = ["up", "waiting", "paused"] as const;
+  // `unknown` holds like `waiting`: it claims nothing about the service, only
+  // that the last check could not find out, which stays true when the stream
+  // goes stale.
+  const HOLDING_STATUSES = ["up", "waiting", "unknown", "paused"] as const;
 
   for (const theme of ["dark", "light"] as const) {
     it(`drains exactly the statuses that make a claim, and no others (${theme})`, async () => {

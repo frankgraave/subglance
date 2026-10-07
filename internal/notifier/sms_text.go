@@ -7,6 +7,7 @@ import (
 	"unicode"
 
 	"github.com/frankgraave/subglance/internal/state"
+	"github.com/frankgraave/subglance/internal/store"
 )
 
 // smsSeptets is the size of one SMS part in the GSM 7-bit alphabet.
@@ -212,7 +213,7 @@ func smsText(a Alert, zone string, limit int) string {
 		case state.EventIncidentResolved:
 			if a.Notice {
 				// Nothing was down, so there is no outage to time.
-				status, reason = "CERT OK", ""
+				status, reason = smsNoticeWord(a)+" OK", ""
 				break
 			}
 			// A recovery that replaces its alert keeps the reason:
@@ -232,17 +233,17 @@ func smsText(a Alert, zone string, limit int) string {
 		case state.EventIncidentReminder:
 			status = "STILL DOWN"
 			if a.Notice {
-				status = "CERT EXPIRING"
+				status = smsNoticeWord(a) + " EXPIRING"
 			}
 		case state.EventIncidentOpened:
 			status = "MAYBE DOWN"
 		default:
 			status = "DOWN"
 			if a.Notice {
-				status = "CERT EXPIRING"
+				status = smsNoticeWord(a) + " EXPIRING"
 			}
 		}
-		if status != "UP" && status != "CERT OK" && !a.Notice && !a.StartedAt.IsZero() {
+		if status != "UP" && !a.Notice && !a.StartedAt.IsZero() {
 			tail = " (since " + clock(a.StartedAt) + ")"
 		}
 	}
@@ -291,4 +292,13 @@ func smsDuration(d time.Duration) string {
 		}
 		return fmt.Sprintf("%d d", int(d.Hours())/24)
 	}
+}
+
+// smsNoticeWord is the one-word subject of an expiry notice in a text
+// message: DOMAIN for a domain monitor's registration, CERT otherwise.
+func smsNoticeWord(a Alert) string {
+	if a.MonitorType == store.TypeDomain {
+		return "DOMAIN"
+	}
+	return "CERT"
 }
