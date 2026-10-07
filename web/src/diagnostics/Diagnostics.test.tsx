@@ -44,6 +44,14 @@ it("shows the pool, the database and the build an administrator asked about", as
   expect(reading("Uptime").textContent).toBe("1 h");
   for (const label of ["Uptime", "Started"]) expect(reading(label).querySelector(".value"), label).not.toBeNull();
   expect(reading("Monitors scheduled").textContent).toBe("62");
+  expect(reading("Base URL").textContent).toBe("https://status.example.com");
+});
+
+it("says where to set the base URL when alerts carry no links", async () => {
+  settings({ ...steadyDiagnostics, base_url: "" });
+  await screen.findByText("2 / 16 busy");
+  expect(reading("Base URL").textContent).toBe(
+    "Not set. Alerts carry no links back to SubGlance; start it with --base-url or SUBGLANCE_BASE_URL to add them.");
 });
 
 it("dims a zero queue and marks a real one without relying on colour", async () => {
@@ -78,6 +86,7 @@ it.each([
   { ...steadyDiagnostics, scheduler: { ...steadyDiagnostics.scheduler!, queue_depth: -1 } },
   { ...steadyDiagnostics, database: { ...steadyDiagnostics.database, bytes: null } },
   { ...steadyDiagnostics, started_at: "yesterday" },
+  { ...steadyDiagnostics, base_url: null },
 ])("refuses a malformed body rather than drawing it as healthy zeros: %s", async (body) => {
   settings(body);
   expect(await within(card()).findByText("Diagnostics unavailable.")).toBeTruthy();

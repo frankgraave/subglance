@@ -1,0 +1,1 @@
+{"blocks":[{"text":{"text":":red_circle: *Checkout API is down*","type":"mrkdwn"},"type":"section"},{"text":{"text":"https://shop.example.com/health\ntimeout\nno response within 10s\nSince 2026-10-02 03:12 UTC","type":"mrkdwn"},"type":"section"}],"text":"Checkout API is down"}

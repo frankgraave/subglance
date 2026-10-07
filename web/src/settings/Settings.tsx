@@ -2,12 +2,11 @@ import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "rea
 import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { createQueryClient } from "../live/queryClient";
 import { Card, Panel } from "../components/Card";
-import { IconAlert, IconDatabase, IconGlobe, IconNetwork, IconTransfer } from "../components/icons";
+import { IconAlert, IconDatabase, IconGlobe, IconNetwork, IconServer, IconTransfer } from "../components/icons";
 import { ChangePassword } from "../auth/ChangePassword";
 import { SettingsIcon } from "../shell/icons";
 import { FilterField } from "../shell/FilterField";
 import { WatchdogCard } from "../watchdog/Watchdog";
-import { DiagnosticsCard } from "../diagnostics/Diagnostics";
 import { BackupCard } from "../backup/Backup";
 import { UsersCard } from "../users/Users";
 import { TokensCard } from "../tokens/Tokens";
@@ -45,6 +44,13 @@ const ConnectivityCard = lazy(() => import("../connectivity/ConnectivityCard").t
  * not-found screen (SUB-177) took the entry to its ceiling, so a screen every
  * visitor can reach paid for itself with one almost nobody does.
  */
+/*
+ * And for the instance card: administrators only, near the end of the page,
+ * and read when something seems wrong rather than on every visit. It went out
+ * of the entry chunk when alert links (SUB-187) gave it a row and took the
+ * entry past its ceiling.
+ */
+const DiagnosticsCard = lazy(() => import("../diagnostics/Diagnostics").then((module) => ({ default: module.DiagnosticsCard })));
 const ResetInstanceCard = lazy(() => import("../reset/ResetInstance").then((module) => ({ default: module.ResetInstanceCard })));
 
 /**
@@ -235,7 +241,9 @@ export function Settings({ client, canAdmin = false, role = canAdmin ? "admin" :
       body: provide(<TokensCard role={role} />) },
     // Administrators only: the card names the database path, and the API refuses anyone else.
     ...(canAdmin ? [{ id: "instance", label: "Instance", keywords: "instance diagnostics version build runtime uptime database size wal journal workers pool queue skipped",
-      body: provide(<DiagnosticsCard />) }] : []),
+      body: provide(<Suspense fallback={<Card title="Instance" icon={<IconServer />}><Panel><p>Loading diagnostics…</p></Panel></Card>}>
+        <DiagnosticsCard />
+      </Suspense>) }] : []),
     // Last on the page: the one action here with no undo. Admin-only, so a
     // search for "reset" by anyone else finds nothing rather than a card they
     // could not use.

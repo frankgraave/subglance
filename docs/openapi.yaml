@@ -3407,6 +3407,10 @@ paths:
 
         `scheduler` is null when no check pipeline is attached. It is never a
         block of zeros, because zero busy workers is a healthy reading.
+
+        `base_url` is the address alerts link to, set at start-up with
+        `--base-url` or `SUBGLANCE_BASE_URL`, and empty when alerts carry no
+        links. It cannot be changed through the API.
       x-subglance-access: admin
       responses:
         '200':
@@ -3419,7 +3423,7 @@ paths:
               schema:
                 type: object
                 additionalProperties: false
-                required: [version, commit, go_version, platform, started_at, uptime_seconds, database, scheduler]
+                required: [version, commit, go_version, platform, started_at, uptime_seconds, database, base_url, scheduler]
                 properties:
                   version:
                     type: string
@@ -3448,6 +3452,9 @@ paths:
                       journal_mode:
                         type: string
                         description: What SQLite reports, which differs from `wal` on filesystems that cannot do WAL.
+                  base_url:
+                    type: string
+                    description: The address alerts link to, without a trailing slash, or empty when alerts carry no links.
                   scheduler:
                     type: [object, 'null']
                     additionalProperties: false
@@ -3481,6 +3488,7 @@ paths:
                   bytes: 25165824
                   wal_bytes: 4194304
                   journal_mode: wal
+                base_url: https://status.example.com
                 scheduler:
                   workers: 16
                   busy: 2

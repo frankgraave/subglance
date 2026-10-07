@@ -1,0 +1,1 @@
+{"message":"https://shop.example.com/health\ntimeout\nno response within 10s\nDown for 5 minutes","priority":3,"tags":["white_check_mark"],"title":"Checkout API is back up","topic":"alerts"}

@@ -1,0 +1,1 @@
+{"chat_id":"42","disable_web_page_preview":true,"text":"🔴 1 of 2 monitors still down after quiet hours\n\n• Search: down since 05:12 CEST — timeout\n• Checkout API: down 05:12–05:18 CEST, back up after 5 minutes"}

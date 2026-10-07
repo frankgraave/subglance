@@ -56,6 +56,17 @@ type Config struct {
 	// WatchdogInterval is the gap between watchdog pings.
 	WatchdogInterval time.Duration
 
+	// BaseURL is the address SubGlance is reached at, such as
+	// https://status.example.com or https://example.com/subglance behind a
+	// reverse proxy. Alerts link to the incident and the monitor under it.
+	// Empty means alerts carry no links, and is the default.
+	//
+	// A start-up setting, not a field on the settings page, because the
+	// address belongs to the installation: it changes when the proxy in
+	// front changes, not when someone edits SubGlance. After Load it is in
+	// the form notifier.ParseBaseURL returns, without a trailing slash.
+	BaseURL string
+
 	// AllowPrivateTargets permits monitoring of private/loopback/link-local
 	// addresses. Off by default: without it, a user-supplied URL turns
 	// SubGlance into an SSRF proxy into the host network (see SUB-18).
@@ -342,6 +353,7 @@ func Load(args []string) (Config, error) {
 	c.WatchdogURL = envStr("SUBGLANCE_WATCHDOG_URL", c.WatchdogURL)
 	c.WatchdogInterval = env.dur("SUBGLANCE_WATCHDOG_INTERVAL", c.WatchdogInterval)
 	c.AllowPrivateTargets = env.bool("SUBGLANCE_ALLOW_PRIVATE_TARGETS", c.AllowPrivateTargets)
+	c.BaseURL = envStr("SUBGLANCE_BASE_URL", c.BaseURL)
 	c.RawRetention = env.dur("SUBGLANCE_RAW_RETENTION", c.RawRetention)
 	c.RawRetentionPinnedBy = envSetBy("SUBGLANCE_RAW_RETENTION")
 	c.RollupRetention = env.dur("SUBGLANCE_ROLLUP_RETENTION", c.RollupRetention)
@@ -383,6 +395,9 @@ func Load(args []string) (Config, error) {
 		"how often to ping the watchdog URL")
 	fs.BoolVar(&c.AllowPrivateTargets, "allow-private-targets", c.AllowPrivateTargets,
 		"allow monitoring private/loopback addresses (SSRF risk, off by default)")
+	fs.StringVar(&c.BaseURL, "base-url", c.BaseURL,
+		"the address SubGlance is reached at, such as https://status.example.com, so alerts link "+
+			"to the incident and the monitor (empty = alerts carry no links)")
 	fs.DurationVar(&c.RawRetention, "raw-retention", c.RawRetention,
 		"how long raw heartbeats are kept before being rolled up into hourly buckets (0 = forever; "+
 			"setting it here locks the settings page field)")
@@ -443,6 +458,9 @@ func Load(args []string) (Config, error) {
 	if err := c.validate(); err != nil {
 		return Config{}, err
 	}
+	// Validated above, so this cannot fail; it writes the address in the
+	// one form links are built from.
+	c.BaseURL, _ = notifier.ParseBaseURL(c.BaseURL)
 	return c, nil
 }
 
@@ -468,6 +486,9 @@ func (c Config) validate() error {
 	}
 	if c.CheckWorkers < 0 {
 		return fmt.Errorf("check-workers must not be negative, got %d", c.CheckWorkers)
+	}
+	if _, err := notifier.ParseBaseURL(c.BaseURL); err != nil {
+		return fmt.Errorf("invalid base-url: %w", err)
 	}
 	if err := c.validateRetention(); err != nil {
 		return err

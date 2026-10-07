@@ -83,6 +83,21 @@ func TestDiagnosticsReportsThePoolAndTheDatabase(t *testing.T) {
 	if _, ok := body["started_at"].(string); !ok {
 		t.Errorf("started_at = %v, want a timestamp", body["started_at"])
 	}
+	// Present and empty without --base-url, so the card can say "not set"
+	// rather than guess from a missing field.
+	if v, present := body["base_url"]; !present || v != "" {
+		t.Errorf("base_url = %v (present %v), want an empty string without --base-url", v, present)
+	}
+}
+
+// The address alerts link to is shown as the server was started with it.
+func TestDiagnosticsShowsTheBaseURL(t *testing.T) {
+	srv, _ := testServerWithDB(t)
+	srv.WithBaseURL("https://status.example.com/sg")
+	_, body := getDiagnostics(t, authedHandler(srv), "")
+	if body["base_url"] != "https://status.example.com/sg" {
+		t.Errorf("base_url = %v, want the configured address", body["base_url"])
+	}
 }
 
 // Without a pipeline the pool is unknown, and unknown must not read as the

@@ -1,0 +1,1 @@
+{"message":"https://shop.example.com/health\ntimeout\nno response within 10s\nSince 2026-10-02 03:12 UTC","priority":8,"title":"Checkout API is down"}

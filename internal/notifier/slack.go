@@ -3,6 +3,7 @@ package notifier
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/frankgraave/subglance/internal/checker"
 )
@@ -52,9 +53,34 @@ func (s *SlackSender) Send(ctx context.Context, cfg map[string]string, a Alert) 
 		},
 	}
 
+	if links := slackLinks(a); links != "" {
+		payload["blocks"] = append(payload["blocks"].([]map[string]any), map[string]any{
+			"type": "section",
+			"text": map[string]string{"type": "mrkdwn", "text": links},
+		})
+	}
+
 	req, err := jsonRequest(ctx, cfg["url"], payload)
 	if err != nil {
 		return err
 	}
 	return httpSend(ctx, s.client, req)
+}
+
+// slackLinks is the links as Slack mrkdwn, "" when the alert has none. A
+// named link rather than the bare address: a Slack message is read on a
+// phone, where a long URL wraps over three lines and says nothing.
+func slackLinks(a Alert) string {
+	var parts []string
+	if a.IncidentURL != "" {
+		label := "Open the incident"
+		if len(a.Members) > 0 {
+			label = "Open the incidents"
+		}
+		parts = append(parts, "<"+a.IncidentURL+"|"+label+">")
+	}
+	if a.MonitorURL != "" {
+		parts = append(parts, "<"+a.MonitorURL+"|Open the monitor>")
+	}
+	return strings.Join(parts, " · ")
 }

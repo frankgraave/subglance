@@ -94,6 +94,8 @@ func TestWebhookBodyValuesCannotBreakTheJSON(t *testing.T) {
 // field it promises, so a placeholder wired to the wrong field is caught.
 func TestWebhookBodyFillsEveryPlaceholder(t *testing.T) {
 	a := hostileAlert()
+	a.IncidentURL = "https://status.example.com/incidents#incident-312"
+	a.MonitorURL = "https://status.example.com/monitors/7"
 	names := WebhookPlaceholderNames()
 	parts := make([]string, len(names))
 	for i, n := range names {
@@ -108,7 +110,8 @@ func TestWebhookBodyFillsEveryPlaceholder(t *testing.T) {
 		"summary": a.Title(), "details": a.Body(), "status": "down", "event": "incident_confirmed",
 		"monitor_name": a.MonitorName, "monitor_type": "http", "target": a.Target, "cause": "timeout",
 		"last_error": a.LastError, "started_at": "2026-10-02T03:12:40Z", "at": "2026-10-02T03:14:10Z",
-		"txn_id": "txn-1",
+		"txn_id":       "txn-1",
+		"incident_url": a.IncidentURL, "monitor_url": a.MonitorURL,
 	}
 	for _, n := range names {
 		w, ok := want[n]

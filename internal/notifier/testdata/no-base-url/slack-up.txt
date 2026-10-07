@@ -1,0 +1,1 @@
+{"blocks":[{"text":{"text":":large_green_circle: *Checkout API is back up*","type":"mrkdwn"},"type":"section"},{"text":{"text":"https://shop.example.com/health\ntimeout\nno response within 10s\nDown for 5 minutes","type":"mrkdwn"},"type":"section"}],"text":"Checkout API is back up"}

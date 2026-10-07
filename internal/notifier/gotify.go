@@ -93,11 +93,22 @@ func (s *GotifySender) Send(ctx context.Context, cfg map[string]string, a Alert)
 		return &configError{err.Error()}
 	}
 
-	req, err := jsonRequest(ctx, endpoint, map[string]any{
+	payload := map[string]any{
 		"title":    a.Title(),
 		"message":  a.Body(),
 		"priority": priority,
-	})
+	}
+	if link := primaryLink(a); link != "" {
+		// The Gotify apps open the click URL when the notification is
+		// tapped; the links in the text are for the web client, which
+		// does not.
+		payload["message"] = a.Body() + "\n\n" + linkLines(a)
+		payload["extras"] = map[string]any{
+			"client::notification": map[string]any{"click": map[string]string{"url": link}},
+		}
+	}
+
+	req, err := jsonRequest(ctx, endpoint, payload)
 	if err != nil {
 		return err
 	}

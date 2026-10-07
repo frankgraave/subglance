@@ -22,6 +22,10 @@ type diagnosticsResponse struct {
 
 	Database diagnosticsDatabase `json:"database"`
 
+	// BaseURL is the address alerts link to, from --base-url, or "" when
+	// alerts carry no links. Read-only here: it is a start-up setting.
+	BaseURL string `json:"base_url"`
+
 	// Scheduler is null when no check pipeline is attached, rather than a
 	// block of zeros: zero workers busy is a healthy reading, and an API
 	// without a scheduler behind it must not report one.
@@ -77,6 +81,7 @@ func (s *Server) handleDiagnostics(w http.ResponseWriter, r *http.Request) {
 			WALBytes:    file.WALBytes,
 			JournalMode: file.JournalMode,
 		},
+		BaseURL: s.baseURL,
 	}
 	if s.metrics != nil {
 		m := s.metrics.Metrics()
@@ -91,4 +96,12 @@ func (s *Server) handleDiagnostics(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// WithBaseURL records the address alerts link to, so the settings page can
+// show it. It does not change what the API serves or where: the server
+// answers on whatever address reaches it.
+func (s *Server) WithBaseURL(baseURL string) *Server {
+	s.baseURL = baseURL
+	return s
 }

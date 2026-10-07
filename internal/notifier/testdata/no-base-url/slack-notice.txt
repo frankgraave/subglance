@@ -1,0 +1,1 @@
+{"blocks":[{"text":{"text":":red_circle: *Checkout API: certificate expires soon*","type":"mrkdwn"},"type":"section"},{"text":{"text":"https://shop.example.com/health\ncert_expiry\ncertificate expires in 9 days\nNoticed 2026-10-02 03:12 UTC","type":"mrkdwn"},"type":"section"}],"text":"Checkout API: certificate expires soon"}

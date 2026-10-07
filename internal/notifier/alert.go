@@ -87,6 +87,16 @@ type Alert struct {
 	// over, followed by an "up". On a grouped message it is set when every
 	// member replaces its alert.
 	ReplacesAlert bool `json:"replaces_alert,omitempty"`
+
+	// IncidentURL and MonitorURL link back to SubGlance: the incident and
+	// the monitor's page, or the incidents screen for an alert about
+	// several monitors. Set only when the instance knows the address it is
+	// reached at (--base-url), and only at send time, so they are never in
+	// the outbox and a changed address reaches a retry too. Without one
+	// they are left out, and every message is what it was before links
+	// existed.
+	IncidentURL string `json:"incident_url,omitempty"`
+	MonitorURL  string `json:"monitor_url,omitempty"`
 }
 
 // Grouped reports whether this alert covers more than one monitor.

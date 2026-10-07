@@ -1,0 +1,1 @@
+{"message":"https://shop.example.com/health\ncert_expiry\ncertificate expires in 9 days\nNoticed 2026-10-02 03:12 UTC","priority":4,"tags":["rotating_light"],"title":"Checkout API: certificate expires soon","topic":"alerts"}

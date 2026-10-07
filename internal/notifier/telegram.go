@@ -65,9 +65,16 @@ func (s *TelegramSender) Send(ctx context.Context, cfg map[string]string, a Aler
 		marker = "🔴"
 	}
 
+	text := fmt.Sprintf("%s %s\n\n%s", marker, a.Title(), a.Body())
+	if links := linkLines(a); links != "" {
+		// Bare addresses: the text is sent without a parse mode, and
+		// Telegram makes a URL in plain text clickable by itself.
+		text += "\n\n" + links
+	}
+
 	payload := map[string]any{
 		"chat_id": cfg["chat_id"],
-		"text":    fmt.Sprintf("%s %s\n\n%s", marker, a.Title(), a.Body()),
+		"text":    text,
 		// Plain text, not Markdown or HTML: a monitor name containing an
 		// underscore or an angle bracket would otherwise either break the
 		// parse or, worse, be silently reformatted. The name has to

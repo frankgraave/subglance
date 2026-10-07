@@ -1,0 +1,11 @@
+From: SubGlance <subglance@example.com>
+To: ops@example.com
+Subject: 1 of 2 monitors still down after quiet hours
+Date: Fri, 02 Oct 2026 07:14:10 +0000
+Content-Type: text/plain; charset=utf-8
+MIME-Version: 1.0
+
+1 of 2 monitors still down after quiet hours
+
+• Search: down since 05:12 CEST — timeout
+• Checkout API: down 05:12–05:18 CEST, back up after 5 minutes

@@ -113,6 +113,10 @@ type Notifier struct {
 	// them; the next sweep reads them as they are now. Touched only on the
 	// loop's own goroutine, and emptied at the start of every sweep.
 	rewritten map[int64]bool
+
+	// baseURL is the address the instance is reached at, from ParseBaseURL,
+	// or "" when alerts carry no links.
+	baseURL string
 }
 
 // Options configures New.
@@ -150,6 +154,12 @@ type Options struct {
 	// the delivery tests use, since they are about retries and failures
 	// rather than about batching.
 	GroupWindow time.Duration
+
+	// BaseURL is the address SubGlance is reached at, as ParseBaseURL
+	// returns it. When set, every alert about a monitor links to its
+	// incident and to the monitor; empty sends every message without links,
+	// exactly as before links existed.
+	BaseURL string
 }
 
 // New builds a Notifier with the standard set of channels.
@@ -206,6 +216,7 @@ func New(opts Options) *Notifier {
 
 		unreported: make(map[int64]time.Time),
 		rewritten:  make(map[int64]bool),
+		baseURL:    opts.BaseURL,
 	}
 }
 
@@ -528,7 +539,10 @@ func (n *Notifier) attempt(ctx context.Context, d store.Delivery) error {
 	sendCtx, cancel := context.WithTimeout(withDeliveryKey(ctx, d), defaultTimeout)
 	defer cancel()
 
-	err = sender.Send(sendCtx, ch.Config, alert)
+	// Links are added here, at the last moment, rather than stored with
+	// the alert: what is in the outbox stays the alert itself, and a
+	// retry after the address changed links to where SubGlance is now.
+	err = sender.Send(sendCtx, ch.Config, withLinks(alert, n.baseURL))
 	if err == nil {
 		n.count(ch.Type, outcomeDelivered)
 		if err := n.db.MarkDelivered(ctx, d.ID); err != nil {

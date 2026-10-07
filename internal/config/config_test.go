@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"flag"
+	"strings"
 	"testing"
 	"time"
 
@@ -345,6 +346,38 @@ func TestMaxDatabaseSize(t *testing.T) {
 	for _, bad := range []string{"2048", "1MB", "2 zettabytes", "-5GB"} {
 		if _, err := Load([]string{"--max-database-size=" + bad}); err == nil {
 			t.Errorf("Load accepted --max-database-size=%s", bad)
+		}
+	}
+}
+
+// TestBaseURL covers the address alerts link to: off by default, set by the
+// variable or the flag (the flag winning), written in one form whatever
+// trailing slash or case it was given, and refused at start-up when it could
+// not be the root of a link.
+func TestBaseURL(t *testing.T) {
+	c, err := Load(nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if c.BaseURL != "" {
+		t.Fatalf("BaseURL = %q, want links off by default", c.BaseURL)
+	}
+
+	t.Setenv("SUBGLANCE_BASE_URL", "https://status.example.com/")
+	if c, err = Load(nil); err != nil || c.BaseURL != "https://status.example.com" {
+		t.Fatalf("from the environment: BaseURL = %q, %v", c.BaseURL, err)
+	}
+	if c, err = Load([]string{"--base-url", "HTTPS://example.com/subglance/"}); err != nil || c.BaseURL != "https://example.com/subglance" {
+		t.Fatalf("the flag should beat the environment and keep the prefix: BaseURL = %q, %v", c.BaseURL, err)
+	}
+
+	for _, bad := range []string{"status.example.com", "https://status.example.com/?x=1", "https://u:p@status.example.com"} {
+		_, err := Load([]string{"--base-url", bad})
+		if err == nil || !strings.Contains(err.Error(), "base-url") {
+			t.Errorf("--base-url %q: error = %v, want a start-up error naming base-url", bad, err)
+		}
+		if err != nil && strings.Contains(err.Error(), ":p@") {
+			t.Errorf("--base-url %q: error = %q repeats the password", bad, err)
 		}
 	}
 }

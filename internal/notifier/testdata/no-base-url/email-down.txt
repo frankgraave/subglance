@@ -1,0 +1,15 @@
+From: SubGlance <subglance@example.com>
+To: ops@example.com
+Subject: Checkout API is down
+Date: Fri, 02 Oct 2026 03:14:10 +0000
+Content-Type: text/plain; charset=utf-8
+MIME-Version: 1.0
+References: <incident-312@subglance.local>
+In-Reply-To: <incident-312@subglance.local>
+
+Checkout API is down
+
+https://shop.example.com/health
+timeout
+no response within 10s
+Since 2026-10-02 03:12 UTC

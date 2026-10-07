@@ -108,6 +108,13 @@ func (s *NtfySender) Send(ctx context.Context, cfg map[string]string, a Alert) e
 		"tags": []string{tag},
 	}
 
+	if link := primaryLink(a); link != "" {
+		// Tapping the notification opens the incident, and a button
+		// per link opens either page without opening the ntfy app.
+		payload["click"] = link
+		payload["actions"] = ntfyActions(a)
+	}
+
 	req, err := jsonRequest(ctx, server, payload)
 	if err != nil {
 		return err
@@ -122,4 +129,20 @@ func (s *NtfySender) Send(ctx context.Context, cfg map[string]string, a Alert) e
 		req.SetBasicAuth(cfg["username"], cfg["password"])
 	}
 	return httpSend(ctx, s.client, req)
+}
+
+// ntfyActions is one "view" button per link.
+func ntfyActions(a Alert) []map[string]string {
+	var actions []map[string]string
+	if a.IncidentURL != "" {
+		label := "Incident"
+		if len(a.Members) > 0 {
+			label = "Incidents"
+		}
+		actions = append(actions, map[string]string{"action": "view", "label": label, "url": a.IncidentURL})
+	}
+	if a.MonitorURL != "" {
+		actions = append(actions, map[string]string{"action": "view", "label": "Monitor", "url": a.MonitorURL})
+	}
+	return actions
 }

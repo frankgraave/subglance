@@ -1,0 +1,1 @@
+{"text": "Checkout API: certificate expires soon", "details": "https://shop.example.com/health\ncert_expiry\ncertificate expires in 9 days\nNoticed 2026-10-02 03:12 UTC", "status": "expiring"}
