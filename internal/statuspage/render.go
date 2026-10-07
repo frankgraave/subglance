@@ -247,7 +247,7 @@ func newView(p Page, loc *time.Location, css template.CSS, tx *texts) view {
 		ThemeScript: template.JS(themeScript), //nolint:gosec // G203: constant
 	}
 	if p.CreditShown {
-		v.Footer += " · " + tx.Credit
+		v.Footer += " · " + tx.Attribution
 	}
 	if p.Logo != nil && strings.HasPrefix(p.Logo.Path, LogoRoot+LogoPath) {
 		v.Logo = &logoView{Src: strings.TrimPrefix(p.Logo.Path, LogoRoot), Width: p.Logo.Width, Height: p.Logo.Height}

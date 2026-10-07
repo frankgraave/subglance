@@ -73,7 +73,9 @@ type texts struct {
 
 	// Footer.
 	TimesIn string // "Times in %s"
-	Credit  string
+	// Attribution is the "Monitored with SubGlance" line an operator may
+	// hide (Page.CreditShown).
+	Attribution string
 }
 
 var english = texts{
@@ -125,8 +127,8 @@ var english = texts{
 	DownSince:   "Down since %s · %s so far",
 	DownFor:     "Down %s · %s",
 
-	TimesIn: "Times in %s",
-	Credit:  "Monitored with SubGlance",
+	TimesIn:     "Times in %s",
+	Attribution: "Monitored with SubGlance",
 }
 
 // dutch follows the conventions of Dutch status pages: "storing" for an
@@ -163,7 +165,7 @@ var dutch = texts{
 	Affects:     "Betreft %s",
 
 	ServicesHeading:     "Diensten (%d)",
-	CertificateExpiring: "Certificaat verloopt binnenkort",
+	CertificateExpiring: "Certificaat verloopt binnenkort", //nolint:misspell // Dutch, not a misspelled "Certificate"
 	DaysAgo:             "%d dagen geleden",
 	DayAgo:              "1 dag geleden",
 	TodayAxis:           "Vandaag",
@@ -181,8 +183,8 @@ var dutch = texts{
 	DownSince:   "Storing sinds %s · %s tot nu toe",
 	DownFor:     "Storing van %s · %s",
 
-	TimesIn: "Tijden in %s",
-	Credit:  "Bewaakt met SubGlance",
+	TimesIn:     "Tijden in %s",
+	Attribution: "Bewaakt met SubGlance",
 }
 
 // languages holds every table by its store.StatusPageLanguages code.
