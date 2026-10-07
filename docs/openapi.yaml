@@ -3388,6 +3388,126 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
       x-subglance-access: read
+  /api/v1/sessions:
+    get:
+      tags: [Auth]
+      operationId: listSessions
+      summary: List the caller's browser sessions
+      description: |
+        Every browser session of the authenticated account that has not
+        expired, the most recently used first. Each carries a random `id` to
+        end it by; the session token and its stored hash are never returned,
+        and the id is not derived from either.
+
+        `browser` and `platform` are read from the User-Agent header the
+        browser sent when it signed in, which a client can set to anything:
+        they are labels to recognise a session by, not evidence. Either is
+        empty when the header is not one the server recognises; `user_agent`
+        holds the header itself. `ip` is the address the sign-in came from,
+        resolved through `--trusted-proxies`.
+
+        `last_seen_at` moves at most once an hour, so it names the hour a
+        session was last used in. `current` marks the session that made this
+        request; a request made with an API token has none.
+      responses:
+        '200':
+          description: The caller's sessions.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: 'private, no-store' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessions]
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Session'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: The sessions could not be listed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: read
+  /api/v1/sessions/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: The session's id, as `listSessions` returns it.
+        schema:
+          type: string
+          pattern: '^[0-9a-f]{32}$'
+        example: 3f2b9c1e8a7d4b6c9e0f1a2b3c4d5e6f
+    delete:
+      tags: [Auth]
+      operationId: endSession
+      summary: Sign one of the caller's sessions out
+      description: |
+        The session stops working on its next request. Scoped to the caller's
+        own sessions, so an id that belongs to another account is reported as
+        404, exactly like one that does not exist: it is neither ended nor
+        confirmed. Ending the session that made the request is a sign-out, and
+        the response clears its cookie.
+      responses:
+        '204':
+          description: The session is ended.
+        '400':
+          description: The id is not a session id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: invalid session id
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: No such session belonging to the caller.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: session not found
+        '500':
+          description: The session could not be ended.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: read
+  /api/v1/sessions/end-others:
+    post:
+      tags: [Auth]
+      operationId: endOtherSessions
+      summary: Sign the caller out everywhere else
+      description: |
+        Ends every session of the caller's account except the one that made
+        this request. A request made with an API token holds no session, so
+        for it every session is another. API tokens are not touched; revoke
+        those under `/api/v1/tokens`.
+      responses:
+        '200':
+          description: How many sessions were ended.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndedSessions'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: The sessions could not be ended.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: read
   /api/v1/diagnostics:
     get:
       tags: [Health]
@@ -3804,6 +3924,112 @@ paths:
                 error: user not found
         '500':
           description: The account could not be deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: admin
+  /api/v1/users/{id}/sessions:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: The account's numeric id.
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+        example: 2
+    get:
+      tags: [Users]
+      operationId: listUserSessions
+      summary: List an account's browser sessions
+      description: |
+        Administrators only: another account's sessions name where that
+        person signs in from. The same shape as `listSessions`, including the
+        IP address. `current` is true only for the administrator's own
+        session, when the account is their own.
+      responses:
+        '200':
+          description: The account's sessions.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: 'private, no-store' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessions]
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Session'
+        '400':
+          description: The path id was not a positive integer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: invalid user id
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenAdmin'
+        '404':
+          description: No such account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: user not found
+        '500':
+          description: The sessions could not be listed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: admin
+    delete:
+      tags: [Users]
+      operationId: endUserSessions
+      summary: Sign an account out everywhere
+      description: |
+        Administrators only. Every session of the account ends on its next
+        request. The account and its API tokens stay: this answers a lost or
+        shared device, where the person keeps their access and signs in
+        again. Deleting the account is what takes the access away.
+      responses:
+        '200':
+          description: How many sessions were ended.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndedSessions'
+        '400':
+          description: The path id was not a positive integer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: invalid user id
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenAdmin'
+        '404':
+          description: No such account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: user not found
+        '500':
+          description: The sessions could not be ended.
           content:
             application/json:
               schema:
@@ -6851,6 +7077,57 @@ components:
           type: string
           format: date-time
           description: Present once the token has been revoked.
+    Session:
+      type: object
+      description: |
+        A browser session. Neither the session token nor its stored hash is
+        part of it; `id` is a separate random name.
+      required: [id, created_at, last_seen_at, expires_at, browser, platform, user_agent, ip, current]
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9a-f]{32}$'
+          description: Random, not derived from the token. Used to end the session.
+        created_at:
+          type: string
+          format: date-time
+          description: When the session signed in.
+        last_seen_at:
+          type: string
+          format: date-time
+          description: The last request it made, to the hour.
+        expires_at:
+          type: string
+          format: date-time
+          description: When it ends if it is not used again.
+        browser:
+          type: string
+          description: Read from the User-Agent header; empty when not recognised.
+          example: Firefox
+        platform:
+          type: string
+          description: Read from the User-Agent header; empty when not recognised.
+          example: macOS
+        user_agent:
+          type: string
+          maxLength: 255
+          description: The User-Agent header the session signed in with.
+        ip:
+          type: string
+          description: The address it signed in from.
+          example: 2001:db8::1
+        current:
+          type: boolean
+          description: Whether this is the session that made the request.
+    EndedSessions:
+      type: object
+      required: [ended]
+      properties:
+        ended:
+          type: integer
+          minimum: 0
+          description: How many sessions were ended.
+          example: 2
     CreateTokenRequest:
       type: object
       required: [name]
