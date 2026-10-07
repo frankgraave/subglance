@@ -431,6 +431,13 @@ func (s *Server) routes() []route {
 		{http.MethodGet, "/api/v1/tokens", accessRead},
 		{http.MethodDelete, "/api/v1/tokens/{id}", accessRead},
 
+		// The same for browser sessions: every role may see where it is
+		// signed in and end any of it. A viewer who could not end a session
+		// on a lost laptop would have to change the password to do it.
+		{http.MethodGet, "/api/v1/sessions", accessRead},
+		{http.MethodDelete, "/api/v1/sessions/{id}", accessRead},
+		{http.MethodPost, "/api/v1/sessions/end-others", accessRead},
+
 		// Instance diagnostics name the database path and the runtime: facts
 		// about the host, not about the monitors a viewer is there to watch.
 		{http.MethodGet, "/api/v1/diagnostics", accessAdmin},
@@ -495,6 +502,12 @@ func (s *Server) routes() []route {
 		{http.MethodPost, "/api/v1/users", accessAdmin},
 		{http.MethodPatch, "/api/v1/users/{id}", accessAdmin},
 		{http.MethodDelete, "/api/v1/users/{id}", accessAdmin},
+		// Another account's sessions name where that person signs in from,
+		// so seeing them is an administrator's business like the account
+		// list itself. Ending them all is the answer to a lost device that
+		// does not take the account away.
+		{http.MethodGet, "/api/v1/users/{id}/sessions", accessAdmin},
+		{http.MethodDelete, "/api/v1/users/{id}/sessions", accessAdmin},
 
 		// Retention decides what history survives, for every user of the
 		// instance at once, and a shorter window deletes rows on the next
@@ -702,6 +715,17 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 		return s.handleUpdateUser
 	case "DELETE /api/v1/users/{id}":
 		return s.handleDeleteUser
+	case "GET /api/v1/users/{id}/sessions":
+		return s.handleListUserSessions
+	case "DELETE /api/v1/users/{id}/sessions":
+		return s.handleEndUserSessions
+
+	case "GET /api/v1/sessions":
+		return s.handleListSessions
+	case "DELETE /api/v1/sessions/{id}":
+		return s.handleEndSession
+	case "POST /api/v1/sessions/end-others":
+		return s.handleEndOtherSessions
 
 	case "GET /api/v1/status-pages":
 		return s.handleListStatusPages

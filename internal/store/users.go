@@ -366,7 +366,12 @@ func (db *DB) explainUnchanged(ctx context.Context, res sql.Result, id int64) er
 
 // Session is a browser login.
 type Session struct {
-	TokenHash  string
+	// TokenHash is the storage key. It never leaves the server: a caller
+	// compares it with the hash of the cookie it holds, nothing more.
+	TokenHash string
+	// ID names the session to its owner and to an administrator. It is
+	// random, not derived from the token, so showing it gives nothing away.
+	ID         string
 	UserID     int64
 	CreatedAt  time.Time
 	ExpiresAt  time.Time
@@ -386,12 +391,17 @@ func (db *DB) CreateSession(ctx context.Context, userID int64, userAgent, ip str
 		return "", err
 	}
 
+	publicID, err := newSessionID()
+	if err != nil {
+		return "", err
+	}
+
 	now := time.Now()
 	_, err = db.Writer.ExecContext(ctx, `
-		INSERT INTO sessions (token_hash, user_id, created_at, expires_at, last_seen_at, user_agent, ip)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		INSERT INTO sessions (token_hash, user_id, created_at, expires_at, last_seen_at, user_agent, ip, public_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		auth.HashToken(token), userID, now.Unix(), now.Add(SessionTTL).Unix(), now.Unix(),
-		truncate(userAgent, 255), truncate(ip, 64))
+		truncate(userAgent, 255), truncate(ip, 64), publicID)
 	if err != nil {
 		return "", fmt.Errorf("insert session: %w", err)
 	}

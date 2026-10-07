@@ -259,8 +259,8 @@ caller name its own address — and the login rate limiter keys on that address,
 so a fresh value per request is credential guessing with the limit switched off.
 
 If SubGlance runs behind nginx, Caddy, Traefik or a load balancer, name it here
-and real client addresses reappear in the rate limiters and in the log lines
-that name a caller:
+and real client addresses reappear in the rate limiters, in the session list
+under Settings → Account, and in the log lines that name a caller:
 
 ```
 --trusted-proxies 127.0.0.1,172.16.0.0/12
@@ -806,6 +806,32 @@ It is careful in four ways:
   files, are renamed with a `.before-restore-<time>` suffix, so restoring the
   wrong backup can be undone. Remove them once the restored instance looks
   right.
+
+## Signed-in sessions
+
+Settings → Account lists every browser signed in to your account: the browser
+and platform its User-Agent header names, the address it signed in from, when
+it signed in and when it was last used. "Sign out" beside a session ends that
+one on its next request; "Sign out everywhere else" ends all but the browser
+you are using. Neither touches API tokens, which are revoked on their own card.
+
+An administrator also sees each account's sessions under Users, with
+addresses, and can sign an account out everywhere. The account keeps its
+password, role and tokens; that is for a lost or shared device. Removing the
+account is what takes its access away. Other roles see only their own
+sessions.
+
+Two things to read with care:
+
+- **The address is the one SubGlance saw.** Behind a reverse proxy that is the
+  proxy's, unless it is named in [`--trusted-proxies`](#trusted-proxies).
+- **The browser name is a claim.** A User-Agent header is whatever the client
+  sends. It is there to tell your laptop from your phone, not to prove which
+  device a session is on. "Last seen" moves at most once an hour, so it names
+  the hour, not the minute.
+
+Changing the password, or `subglance reset-password` below, still signs every
+other session out at once.
 
 ## Locked out
 

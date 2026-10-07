@@ -13,6 +13,14 @@ import { TokensCard } from "../tokens/Tokens";
 import { DisplayCard, type DisplayPreferences } from "./DisplayCard";
 
 /*
+ * The session list is the Account card's second panel. It loads as its own
+ * chunk, shared with the Users card's per-account list: it is read when
+ * something is wrong (a lost laptop, a shared browser), not on every visit,
+ * and the entry chunk is at its ceiling.
+ */
+const SessionsPanel = lazy(() => import("../sessions/Sessions").then((module) => ({ default: module.SessionsPanel })));
+
+/*
  * The status page editor loads when an administrator opens Settings, not with
  * the app. Nobody else ever sees it, and most administrator sessions never
  * change a page, so shipping it in the entry chunk would make every visitor
@@ -194,10 +202,13 @@ export function Settings({ client, canAdmin = false, role = canAdmin ? "admin" :
   const [query, setQuery] = useState("");
   const provide = (node: ReactNode) => <QueryClientProvider client={client ?? fallback}>{node}</QueryClientProvider>;
   const sections: Section[] = [
-    { id: "account", label: "Account", keywords: "account password current new confirm sessions security",
-      body: <Card title="Account" icon={<SettingsIcon />} headingLevel={2}>
+    { id: "account", label: "Account", keywords: "account password current new confirm sessions security sign out devices browsers signed in",
+      body: provide(<Card title="Account" icon={<SettingsIcon />} headingLevel={2}>
         <Panel label="Password"><ChangePassword /></Panel>
-      </Card> },
+        <Panel label="Sessions">
+          <Suspense fallback={<p>Loading sessions…</p>}><SessionsPanel /></Suspense>
+        </Panel>
+      </Card>) },
     // Second, beside the account: both are about the person at this browser,
     // and every section after them is about the instance.
     ...(display ? [{ id: "display", label: "Display", keywords: "display appearance theme light dark auto system layout rows cards compact wall columns per row browser preferences",

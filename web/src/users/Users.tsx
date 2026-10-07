@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from "react";
+import { lazy, Suspense, useId, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, Panel } from "../components/Card";
 import { StateChip } from "../components/Chip";
@@ -15,6 +15,12 @@ const ROLE_HELP: Record<UserRole, string> = {
   editor: "Editor: also creates and changes monitors, channels and maintenance, and mutes repeat alerts on incidents.",
   admin: "Admin: also manages accounts and instance-wide settings such as retention.",
 };
+
+/*
+ * Shared with the Account card's own list and loaded with it, on demand: an
+ * administrator opens an account's sessions when a device is lost.
+ */
+const AccountSessions = lazy(() => import("../sessions/Sessions").then((module) => ({ default: module.AccountSessions })));
 
 const withArticle = (role: UserRole) => `${role === "viewer" ? "a" : "an"} ${role}`;
 const day = formatDateIso;
@@ -97,6 +103,8 @@ function UserRow({ account, you, onChanged }: { account: Account; you: boolean; 
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showSessions, setShowSessions] = useState(false);
+  const sessionsId = useId();
 
   async function run(action: () => Promise<string>) {
     setBusy(true);
@@ -129,6 +137,12 @@ function UserRow({ account, you, onChanged }: { account: Account; you: boolean; 
         <p className="panel-note">created {day(account.created_at)}</p>
         {error && <FieldError>{error}</FieldError>}
       </div>
+      {/* Your own sessions are under Account, with a button per session;
+          this is for someone else's lost device. A disclosure rather than a
+          dialog: the list is read in place, beside the row it belongs to. */}
+      {!you && <button type="button" className="button button--compact" aria-expanded={showSessions}
+        aria-controls={sessionsId} aria-label={`Sessions of ${account.email}`}
+        onClick={() => setShowSessions((open) => !open)}>Sessions</button>}
       {you ? <>
         {/* No role picker and no Remove on your own row: the one administrator
             on the page is the one person who could not undo either. */}
@@ -161,6 +175,9 @@ function UserRow({ account, you, onChanged }: { account: Account; you: boolean; 
           consequence={`${account.email} is removed, signed out everywhere, and its API tokens are revoked. This cannot be undone.`}
           onConfirm={() => { setConfirming(false); void remove(); }} />
       )}
+      {showSessions && <div id={sessionsId} className="users-sessions">
+        <Suspense fallback={<p>Loading sessions…</p>}><AccountSessions userId={account.id} email={account.email} /></Suspense>
+      </div>}
     </li>
   );
 }

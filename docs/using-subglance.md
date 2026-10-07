@@ -109,6 +109,12 @@ curl -H "Authorization: Bearer $SUBGLANCE_TOKEN" http://localhost:8080/api/v1/mo
 A token's plaintext is shown once and stored only as a hash; it cannot be
 recovered, only replaced.
 
+Browser sessions are listed at `GET /api/v1/sessions` and under Settings →
+Account, where one can be signed out (`DELETE /api/v1/sessions/{id}`) or all
+but the current one (`POST /api/v1/sessions/end-others`). Administrators read
+and end another account's at `/api/v1/users/{id}/sessions`. See
+[Signed-in sessions](operations.md#signed-in-sessions).
+
 Three roles decide what a credential may do to monitors and incidents:
 **viewer** (read-only), **editor** (manage monitors, acknowledge incidents) and
 **admin** (also manages users). Tokens are scoped a little differently, because

@@ -24,6 +24,7 @@ import { defaultRetention } from "../../retention/fixtures";
 import { unconfiguredBackup } from "../../backup/fixtures";
 import { twoUsers } from "../../users/fixtures";
 import { sampleTokens } from "../../tokens/fixtures";
+import { sampleSessions } from "../../sessions/fixtures";
 import { samplePages } from "../../statuspages/fixtures";
 
 /*
@@ -321,6 +322,14 @@ export async function serveBuild(): Promise<Server> {
     if (url.pathname === "/api/v1/connectivity") {
       res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
       res.end(JSON.stringify(onlineConnectivity));
+      return;
+    }
+
+    // The Account card lists the session's own sessions; unstubbed, axe
+    // would audit its loading state instead of the rows.
+    if (url.pathname === "/api/v1/sessions") {
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ sessions: sampleSessions }));
       return;
     }
 
