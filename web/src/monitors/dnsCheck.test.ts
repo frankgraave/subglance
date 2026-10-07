@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DNS_EXPECTED_HELP, DNS_EXPECTED_PLACEHOLDER, DNS_RECORD_TYPES, dnsExpectedText, dnsFrom } from "./dnsCheck";
+import { fingerprintPreview } from "./preview";
 
 describe("dnsFrom", () => {
   it("splits on lines only, trims each and drops blanks", () => {
@@ -19,4 +20,15 @@ it("has help and a placeholder for every record type", () => {
     expect(DNS_EXPECTED_HELP[t], t).toBeTruthy();
     expect(DNS_EXPECTED_PLACEHOLDER[t], t).toBeTruthy();
   }
+});
+
+it("gives a preview of other dns settings another fingerprint", () => {
+  // A passing preview says nothing about a different record, value or
+  // resolver, so a save must not reuse it.
+  const base = { type: "dns", target: "example.com" };
+  const one = fingerprintPreview({ ...base, dns: dnsFrom("A", "192.0.2.1", "") });
+  expect(fingerprintPreview({ ...base, dns: dnsFrom("A", "192.0.2.2", "") })).not.toBe(one);
+  expect(fingerprintPreview({ ...base, dns: dnsFrom("AAAA", "192.0.2.1", "") })).not.toBe(one);
+  expect(fingerprintPreview({ ...base, dns: dnsFrom("A", "192.0.2.1", "1.1.1.1") })).not.toBe(one);
+  expect(fingerprintPreview({ ...base, dns: dnsFrom("A", "192.0.2.1", "") })).toBe(one);
 });
