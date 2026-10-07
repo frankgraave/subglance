@@ -56,6 +56,35 @@ func TestParseBaseURL(t *testing.T) {
 	}
 }
 
+// TestParseBaseURLKeepsCredentialsOutOfErrors: the refusal is printed at
+// start-up, so it must not repeat the password it refuses, whichever check
+// catches the address first.
+func TestParseBaseURLKeepsCredentialsOutOfErrors(t *testing.T) {
+	bad := map[string]string{
+		"https://admin:s3cret@status.example.com":       "password",
+		"https://admin:s3cret@status example.com":       "not a URL",
+		"https://admin:s3c#ret@status.example.com":      "not a URL",
+		"ftp://admin:s3cret@status.example.com":         "absolute",
+		"admin:s3cret@status.example.com":               "absolute",
+		"https://admin:s3cret@status.example.com/?a=1":  "password",
+		"https://admin:s3cret@status.example.com/#top":  "password",
+		"https://admin:s3c%zzret@status.example.com/sg": "not a URL",
+		// A slash in the password ends the host early, and the parser
+		// then names the rest of the password as a bad port.
+		"https://admin:s3c/ret@status.example.com": "not a URL",
+	}
+	for in, want := range bad {
+		_, err := ParseBaseURL(in)
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("ParseBaseURL(%q) error = %v; want one mentioning %q", in, err, want)
+			continue
+		}
+		if strings.Contains(err.Error(), "s3c") {
+			t.Errorf("ParseBaseURL(%q) error = %q; it repeats the password", in, err)
+		}
+	}
+}
+
 func TestWithLinks(t *testing.T) {
 	a := goldenAlerts()
 

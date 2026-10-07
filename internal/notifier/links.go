@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -30,24 +31,47 @@ func ParseBaseURL(raw string) (string, error) {
 	if raw == "" {
 		return "", nil
 	}
+	quoted := strconv.Quote(shown(raw))
 	u, err := url.Parse(raw)
 	if err != nil {
-		return "", fmt.Errorf("%q is not a URL: %w", raw, errors.Unwrap(err))
+		if shown(raw) != raw {
+			// The parser's own reason can quote the user part back: a
+			// password after the colon is read as a port, for one.
+			return "", fmt.Errorf("%s is not a URL", quoted)
+		}
+		return "", fmt.Errorf("%s is not a URL: %w", quoted, errors.Unwrap(err))
 	}
 	scheme := strings.ToLower(u.Scheme)
 	switch {
 	case scheme != "http" && scheme != "https":
-		return "", fmt.Errorf("%q must be an absolute http:// or https:// address, such as https://status.example.com", raw)
+		return "", fmt.Errorf("%s must be an absolute http:// or https:// address, such as https://status.example.com", quoted)
 	case u.Host == "" || u.Opaque != "":
-		return "", fmt.Errorf("%q has no host; write it as https://status.example.com", raw)
+		return "", fmt.Errorf("%s has no host; write it as https://status.example.com", quoted)
 	case u.User != nil:
-		return "", fmt.Errorf("%q contains a user name or password, which every alert would carry to its channel", raw)
+		return "", fmt.Errorf("%s contains a user name or password, which every alert would carry to its channel", quoted)
 	case u.RawQuery != "" || u.ForceQuery:
-		return "", fmt.Errorf("%q has a query string; give the address only, with any path prefix", raw)
+		return "", fmt.Errorf("%s has a query string; give the address only, with any path prefix", quoted)
 	case u.Fragment != "" || strings.Contains(raw, "#"):
-		return "", fmt.Errorf("%q has a #fragment; give the address only, with any path prefix", raw)
+		return "", fmt.Errorf("%s has a #fragment; give the address only, with any path prefix", quoted)
 	}
 	return scheme + "://" + u.Host + strings.TrimRight(u.EscapedPath(), "/"), nil
+}
+
+// shown is raw as an error may print it. A start-up error ends up in a log
+// or on a terminal, so everything before the last @ that could be a user
+// name and password is left out, after the scheme where there is one. That
+// also covers an address that failed to parse, whose user part Go could not
+// pick out, and a password with a # in it, which Go reads as a fragment.
+func shown(raw string) string {
+	at := strings.LastIndex(raw, "@")
+	if at < 0 {
+		return raw
+	}
+	start := 0
+	if i := strings.Index(raw, "//"); i >= 0 && i < at {
+		start = i + 2
+	}
+	return raw[:start] + "***" + raw[at:]
 }
 
 // withLinks returns the alert with IncidentURL and MonitorURL filled in from

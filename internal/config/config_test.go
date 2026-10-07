@@ -376,5 +376,8 @@ func TestBaseURL(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "base-url") {
 			t.Errorf("--base-url %q: error = %v, want a start-up error naming base-url", bad, err)
 		}
+		if err != nil && strings.Contains(err.Error(), ":p@") {
+			t.Errorf("--base-url %q: error = %q repeats the password", bad, err)
+		}
 	}
 }
