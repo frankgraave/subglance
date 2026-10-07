@@ -201,9 +201,15 @@ func (db *DB) SetStatusPageLogo(ctx context.Context, pageID int64, logo StatusPa
 
 // DeleteStatusPageLogo removes a page's logo. It reports ErrNotFound when
 // the page has none, so a second press does not claim to have done
-// something.
+// something. The removal and the page's new updated_at commit together, as
+// they do in SetStatusPageLogo: an error means nothing changed.
 func (db *DB) DeleteStatusPageLogo(ctx context.Context, pageID int64) error {
-	res, err := db.Writer.ExecContext(ctx, "DELETE FROM status_page_logos WHERE page_id = ?", pageID)
+	tx, err := db.Writer.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	res, err := tx.ExecContext(ctx, "DELETE FROM status_page_logos WHERE page_id = ?", pageID)
 	if err != nil {
 		return fmt.Errorf("delete status page logo: %w", err)
 	}
@@ -214,8 +220,13 @@ func (db *DB) DeleteStatusPageLogo(ctx context.Context, pageID int64) error {
 	if n == 0 {
 		return fmt.Errorf("%w: logo of status page %d", ErrNotFound, pageID)
 	}
-	_, err = db.Writer.ExecContext(ctx, "UPDATE status_pages SET updated_at = ? WHERE id = ?", time.Now().Unix(), pageID)
-	return err
+	if _, err := tx.ExecContext(ctx, "UPDATE status_pages SET updated_at = ? WHERE id = ?", time.Now().Unix(), pageID); err != nil {
+		return fmt.Errorf("touch status page %d: %w", pageID, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+	return nil
 }
 
 // StatusPageLogoData returns a page's logo and its bytes, or ErrNotFound,

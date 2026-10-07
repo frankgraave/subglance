@@ -216,6 +216,18 @@ type publicLogo struct {
 type publicLogos struct {
 	mu    sync.Mutex
 	files map[string]publicLogo
+	// generation counts forget calls. A request takes it before it reads
+	// the database and hands it to put, which drops the file when forget
+	// ran in between: that read may be a logo just removed, replaced or
+	// switched off, and caching it would serve it until it expires.
+	generation uint64
+}
+
+// current returns the generation a request hands back to put.
+func (pl *publicLogos) current() uint64 {
+	pl.mu.Lock()
+	defer pl.mu.Unlock()
+	return pl.generation
 }
 
 func (pl *publicLogos) get(name string, now time.Time) (publicLogo, bool) {
@@ -228,9 +240,12 @@ func (pl *publicLogos) get(name string, now time.Time) (publicLogo, bool) {
 	return f, true
 }
 
-func (pl *publicLogos) put(name string, f publicLogo) {
+func (pl *publicLogos) put(name string, f publicLogo, generation uint64) {
 	pl.mu.Lock()
 	defer pl.mu.Unlock()
+	if generation != pl.generation {
+		return
+	}
 	if pl.files == nil {
 		pl.files = map[string]publicLogo{}
 	}
@@ -240,6 +255,7 @@ func (pl *publicLogos) put(name string, f publicLogo) {
 func (pl *publicLogos) forget() {
 	pl.mu.Lock()
 	pl.files = nil
+	pl.generation++
 	pl.mu.Unlock()
 }
 
@@ -267,6 +283,7 @@ func (s *Server) handlePublicStatusPageLogo(w http.ResponseWriter, r *http.Reque
 		writeLogoNotFound(w)
 		return
 	}
+	generation := pp.logos.current()
 	logo, data, err := s.db.PublishedStatusPageLogo(r.Context(), name)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
@@ -278,7 +295,7 @@ func (s *Server) handlePublicStatusPageLogo(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusServiceUnavailable, "this logo cannot be shown right now")
 		return
 	}
-	pp.logos.put(name, publicLogo{contentType: logo.ContentType, data: data, expires: now.Add(statusPageCacheFor)})
+	pp.logos.put(name, publicLogo{contentType: logo.ContentType, data: data, expires: now.Add(statusPageCacheFor)}, generation)
 	writeLogo(w, logo.ContentType, data, cache)
 }
 

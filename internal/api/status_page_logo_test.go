@@ -281,3 +281,22 @@ func TestCachedLogoDoesNotSpendTheRateLimit(t *testing.T) {
 		t.Error("uncached logo requests are never rate limited")
 	}
 }
+
+// A logo read before an administrator's change and stored after it must not
+// be cached: forget ran in between, so the read may be the file that was
+// just removed, replaced or switched off.
+func TestLogoCacheDropsAReadThatForgetOvertook(t *testing.T) {
+	var pl publicLogos
+	now := time.Now()
+	f := publicLogo{contentType: "image/png", data: []byte("old"), expires: now.Add(time.Minute)}
+	before := pl.current()
+	pl.forget()
+	pl.put("a.png", f, before)
+	if _, ok := pl.get("a.png", now); ok {
+		t.Error("a read taken before forget was cached after it")
+	}
+	pl.put("a.png", f, pl.current())
+	if _, ok := pl.get("a.png", now); !ok {
+		t.Error("a read taken after the last forget was not cached")
+	}
+}

@@ -242,3 +242,24 @@ func TestLogosIsAReservedSlug(t *testing.T) {
 		t.Errorf("slug logos: err = %v; it would shadow the logo files beside every page", err)
 	}
 }
+
+// Removing a logo also touches its page. When the touch fails the logo must
+// still be there, or the caller is told the removal failed after it happened.
+func TestLogoRemovalRollsBackWhenThePageTouchFails(t *testing.T) {
+	db := openTestDB(t)
+	ctx := t.Context()
+	p := seedStatusPage(t, db, StatusPage{Slug: "acme", Title: "Acme", Selection: StatusPageSelectMonitors})
+	if _, err := db.SetStatusPageLogo(ctx, p.ID, StatusPageLogoUpload{ContentType: "image/png", Width: 1, Height: 1, Data: []byte("x")}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Writer.ExecContext(ctx, "CREATE TRIGGER refuse_touch BEFORE UPDATE OF updated_at ON status_pages "+
+		"BEGIN SELECT RAISE(ABORT, 'touch refused'); END"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.DeleteStatusPageLogo(ctx, p.ID); err == nil {
+		t.Fatal("removal reported success though the page touch failed")
+	}
+	if _, data, err := db.StatusPageLogoData(ctx, p.ID); err != nil || string(data) != "x" {
+		t.Errorf("logo after a failed removal = %q, %v; want it kept", data, err)
+	}
+}
