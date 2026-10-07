@@ -70,6 +70,16 @@ export function DiagnosticsCard() {
             <Value {...(d.database.journal_mode === "wal" ? {} : { warning: "not WAL: readers and the writer block each other" })}>{d.database.journal_mode.toUpperCase()}</Value>
           </Row>
         </dl></Panel>
+        {/*
+         * Read-only: the address is a start-up setting, because it belongs to
+         * the proxy in front of SubGlance rather than to anything edited here.
+         * Unset, the row says what that costs and where it is set, since the
+         * only other trace of it is an alert without a link.
+         */}
+        <Panel label="Alert links"><dl>
+          <Row label="Base URL">{d.base_url ? <code>{d.base_url}</code>
+            : <>Not set. Alerts carry no links back to SubGlance; start it with <code>--base-url</code> or <code>SUBGLANCE_BASE_URL</code> to add them.</>}</Row>
+        </dl></Panel>
         <Panel label="Checks">{!s ? <p>No check pipeline is attached to this process.</p> : <dl>
           <Row label="Worker pool"><Value value={s.busy}>{`${s.busy} / ${s.workers} busy`}</Value></Row>
           <Row label="Queue depth"><Count n={s.queue_depth} warning="checks are waiting for a free worker" /></Row>

@@ -2,6 +2,7 @@ import { useId, useState } from "react";
 import { IncidentStoryItem } from "./IncidentStoryItem";
 import { describeCluster } from "./cluster";
 import { formatClock } from "../format/format";
+import { isLinkedIncident } from "./anchor";
 import { Value } from "../components/Value";
 import type { IncidentCluster } from "./cluster";
 import type { Incident } from "../monitors/detail";
@@ -58,10 +59,11 @@ export function IncidentClusterItem({
    * A collapsed group during a live incident would answer "what is happening"
    * with a summary and make the reader click for the facts — at exactly the
    * moment they can least afford it. Once everything in the group has
-   * recovered it is history, and history may start folded.
+   * recovered it is history, and history may start folded — unless an
+   * alert's link names one of its incidents, which must not arrive hidden.
    */
   const [open, setOpen] = useState(() =>
-    cluster.items.some((incident) => !incident.resolved),
+    cluster.items.some((incident) => !incident.resolved || isLinkedIncident(incident.id)),
   );
   const detailId = useId();
   const count = cluster.items.length;

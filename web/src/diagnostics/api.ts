@@ -8,6 +8,8 @@ export interface Diagnostics {
   started_at: string;
   uptime_seconds: number;
   database: { path: string; bytes: number; wal_bytes: number; journal_mode: string };
+  /** The address alerts link to (--base-url), or "" when they carry no links. */
+  base_url: string;
   /** Null when no check pipeline is attached: unknown, not idle. */
   scheduler: {
     workers: number; busy: number; queue_depth: number; scheduled: number;
@@ -33,7 +35,7 @@ const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v ===
 
 function valid(d: unknown): d is Diagnostics {
   if (!record(d) || !record(d.database)) return false;
-  if (![d.version, d.commit, d.go_version, d.platform, d.database.path, d.database.journal_mode].every(text)) return false;
+  if (![d.version, d.commit, d.go_version, d.platform, d.database.path, d.database.journal_mode, d.base_url].every(text)) return false;
   if (!text(d.started_at) || !Number.isFinite(Date.parse(d.started_at as string))) return false;
   if (![d.uptime_seconds, d.database.bytes, d.database.wal_bytes].every(count)) return false;
   if (d.scheduler === null) return true;

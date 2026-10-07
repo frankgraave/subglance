@@ -1,11 +1,12 @@
 import { ReminderSummary } from "./ReminderSummary";
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { StatusChip } from "../components/Chip";
 import { IconBellOff } from "../components/icons";
 import { Value } from "../components/Value";
 import { Led } from "../monitors/Led";
 import { incidentStory, incidentTimeline, STATE_TONE } from "./story";
 import { formatClock, formatDuration } from "../format/format";
+import { incidentAnchor, isLinkedIncident } from "./anchor";
 import type { Incident } from "../monitors/detail";
 
 /**
@@ -84,7 +85,19 @@ export function IncidentStoryItem({
   showReminders = false,
 }: IncidentStoryItemProps) {
   const story = incidentStory(incident, now, stale);
-  const [open, setOpen] = useState(false);
+  /*
+   * An alert's link names one incident (see anchor.ts). That row arrives open
+   * and in view, because whoever followed the link came for its timeline and
+   * error, not for a list to find it in. The browser cannot do the scrolling
+   * itself: the row is drawn after the data arrives, long after the page load
+   * that would have jumped to it.
+   */
+  const [linked] = useState(() => isLinkedIncident(incident.id));
+  const [open, setOpen] = useState(linked);
+  const rowRef = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (linked) rowRef.current?.scrollIntoView?.({ block: "center" });
+  }, [linked]);
   const detailId = useId();
 
   /*
@@ -123,6 +136,8 @@ export function IncidentStoryItem({
 
   return (
     <li
+      ref={rowRef}
+      id={incidentAnchor(incident.id)}
       className={past ? "inc-row inc-row--past" : "inc-row"}
       data-state={story.state}
       data-open={open ? "true" : "false"}
