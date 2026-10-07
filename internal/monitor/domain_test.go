@@ -93,6 +93,31 @@ func TestAnUnknownDomainCheckIsNeitherUpNorDown(t *testing.T) {
 	}
 }
 
+// A check that found out but whose heartbeat could not be stored leaves the
+// unknown record in place: removed, an older heartbeat would become the
+// monitor's latest word in its place.
+func TestAFailedHeartbeatWriteKeepsTheUnknownCheck(t *testing.T) {
+	ctx := context.Background()
+	db := testDB(t)
+	r := New(Options{DB: db, Log: quietLogger(), Notify: (&alertRecorder{}).record})
+	m := domainMonitorFor(t, db)
+	now := time.Now().Truncate(time.Second)
+
+	if err := r.recordOutcome(domainOutcome(m, now, unknownResult("HTTP 429"))); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Writer.ExecContext(ctx, `CREATE TRIGGER refuse_heartbeats BEFORE INSERT ON heartbeats
+		BEGIN SELECT RAISE(ABORT, 'disk is full'); END`); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.recordOutcome(domainOutcome(m, now.Add(time.Hour), checker.Result{OK: true})); err == nil {
+		t.Fatal("recordOutcome reported no error for a heartbeat that was not stored")
+	}
+	if _, found, err := db.LatestUnknownCheck(ctx, m.ID); err != nil || !found {
+		t.Errorf("unknown check found=%v err=%v, want it kept while the heartbeat is missing", found, err)
+	}
+}
+
 // An unknown check during an open notice neither resolves it nor confirms
 // anything: the registry being slow today says nothing about the date.
 func TestAnUnknownDomainCheckLeavesTheNoticeOpen(t *testing.T) {

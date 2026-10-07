@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"strings"
@@ -172,7 +173,18 @@ func (c *DomainChecker) check(ctx context.Context, m Monitor, start time.Time) R
 		return unknown(fmt.Sprintf("the .%s registry publishes no RDAP service, so the expiry date of %s cannot be read", tld, domain))
 	}
 
-	expiry, err := c.expiry(ctx, bases[0], domain)
+	// The bootstrap can list more than one server for a TLD. One that cannot
+	// be reached, or answers with a server error, says nothing about the
+	// domain, so the next one is asked; an answer about the domain itself (a
+	// record, no such domain, slow down) ends the search.
+	var expiry time.Time
+	for _, base := range bases {
+		var tryNext bool
+		expiry, tryNext, err = c.expiry(ctx, base, domain)
+		if err == nil || !tryNext {
+			break
+		}
+	}
 	if err != nil {
 		return unknown(err.Error())
 	}
@@ -190,8 +202,15 @@ func (c *DomainChecker) check(ctx context.Context, m Monitor, start time.Time) R
 		// A threshold of 0 never gets here: remaining is positive.
 		res.Expiring = true
 		res.Kind = FailDomainExpiry
-		res.Error = fmt.Sprintf("domain registration of %s expires in %d days (on %s)",
-			domain, int(remaining.Hours()/24), expiry.Format(time.DateOnly))
+		// Rounded up: with hours left the registration still holds, and
+		// "expires in 0 days" would read as already gone.
+		days := int(math.Ceil(remaining.Hours() / 24))
+		unit := "days"
+		if days == 1 {
+			unit = "day"
+		}
+		res.Error = fmt.Sprintf("domain registration of %s expires in %d %s (on %s)",
+			domain, days, unit, expiry.Format(time.DateOnly))
 	}
 	return res
 }
@@ -285,7 +304,10 @@ func (c *DomainChecker) fetchBootstrap(ctx context.Context) ([]rdapService, erro
 }
 
 // expiry asks one RDAP server for the domain and reads its expiration event.
-func (c *DomainChecker) expiry(ctx context.Context, base, domain string) (time.Time, error) {
+// tryNext is true when the failure is the server's rather than an answer
+// about the domain: it could not be reached, or it answered with an error
+// status other than 404 and 429. Another server for the TLD may then answer.
+func (c *DomainChecker) expiry(ctx context.Context, base, domain string) (expiry time.Time, tryNext bool, err error) {
 	host := base
 	if i := strings.Index(host, "://"); i >= 0 {
 		host = host[i+3:]
@@ -293,15 +315,17 @@ func (c *DomainChecker) expiry(ctx context.Context, base, domain string) (time.T
 	host = strings.TrimSuffix(host, "/")
 	body, status, err := c.get(ctx, base+"domain/"+domain, "application/rdap+json")
 	if err != nil {
-		return time.Time{}, fmt.Errorf("no answer from the RDAP server %s: %w", host, err)
+		// Not when the check's own deadline is spent: there is no time left
+		// to ask anyone else.
+		return time.Time{}, ctx.Err() == nil, fmt.Errorf("no answer from the RDAP server %s: %w", host, err)
 	}
 	switch {
 	case status == http.StatusNotFound:
-		return time.Time{}, fmt.Errorf("the RDAP server %s has no record of %s; it may not be registered", host, domain)
+		return time.Time{}, false, fmt.Errorf("the RDAP server %s has no record of %s; it may not be registered", host, domain)
 	case status == http.StatusTooManyRequests:
-		return time.Time{}, fmt.Errorf("the RDAP server %s is limiting requests (HTTP 429); the next check will try again", host)
+		return time.Time{}, false, fmt.Errorf("the RDAP server %s is limiting requests (HTTP 429); the next check will try again", host)
 	case status != http.StatusOK:
-		return time.Time{}, fmt.Errorf("the RDAP server %s answered HTTP %d", host, status)
+		return time.Time{}, true, fmt.Errorf("the RDAP server %s answered HTTP %d", host, status)
 	}
 	var doc struct {
 		Events []struct {
@@ -310,7 +334,7 @@ func (c *DomainChecker) expiry(ctx context.Context, base, domain string) (time.T
 		} `json:"events"`
 	}
 	if err := json.Unmarshal(body, &doc); err != nil {
-		return time.Time{}, fmt.Errorf("the RDAP server %s sent an answer that is not RDAP JSON", host)
+		return time.Time{}, false, fmt.Errorf("the RDAP server %s sent an answer that is not RDAP JSON", host)
 	}
 	for _, e := range doc.Events {
 		if e.Action != "expiration" {
@@ -318,11 +342,11 @@ func (c *DomainChecker) expiry(ctx context.Context, base, domain string) (time.T
 		}
 		t, err := time.Parse(time.RFC3339, e.Date)
 		if err != nil {
-			return time.Time{}, fmt.Errorf("the RDAP server %s gave an expiry date that is not a date: %q", host, e.Date)
+			return time.Time{}, false, fmt.Errorf("the RDAP server %s gave an expiry date that is not a date: %q", host, e.Date)
 		}
-		return t.UTC(), nil
+		return t.UTC(), false, nil
 	}
-	return time.Time{}, fmt.Errorf("the RDAP server %s does not publish an expiry date for %s", host, domain)
+	return time.Time{}, false, fmt.Errorf("the RDAP server %s does not publish an expiry date for %s", host, domain)
 }
 
 // get fetches a URL and returns at most maxRDAPBody bytes of its body.

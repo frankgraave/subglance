@@ -9,6 +9,7 @@ import { DurationField } from "./DurationField";
 import { DAYS_ONLY, DURATION_LIMITS, SECONDS_ONLY, SECONDS_TO_DAYS, SECONDS_TO_HOURS } from "./duration";
 import type { DurationUnit } from "./duration";
 import { validRepeat, REPEAT_ERROR } from "./repeat";
+import { DOMAIN_INTERVAL_MESSAGE, DOMAIN_MIN_INTERVAL_S, DOMAIN_WARN_DAYS_MESSAGE } from "./checkTypeChange";
 import { tagsToText, textToTags } from "./tags";
 import { ApiError, describePreview, fingerprintPreview, previewCheck } from "./preview";
 import type { PreviewRequest, PreviewState } from "./preview";
@@ -70,7 +71,7 @@ const DURATIONS: Record<string, readonly DurationUnit[]> = {
 /** Whole numbers with a range; the durations' limits live with their units. */
 const RANGES: readonly (readonly [string, number, number, string])[] = [
   ["recovery_threshold", 1, 10, "Passing checks to recover must be between 1 and 10."],
-  ["domain_warn_days", 0, 365, "The warning before expiry must be between 0 and 365 days."],
+  ["domain_warn_days", 0, 365, DOMAIN_WARN_DAYS_MESSAGE],
   ...Object.entries(DURATION_LIMITS).map(([key, { min, max, message }]) => [key, min, max, message] as const),
 ];
 
@@ -201,6 +202,11 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
         reject(message, key); return null;
       }
       parsed[key] = number;
+    }
+    // The general limit lets an interval under six hours through; a domain
+    // monitor's does not, and the server would refuse it after the preview.
+    if (monitor.type === "domain" && "interval_s" in values && Number(parsed.interval_s) < DOMAIN_MIN_INTERVAL_S) {
+      reject(DOMAIN_INTERVAL_MESSAGE, "interval_s"); return null;
     }
     if ("repeat_after_s" in values) {
       if (!validRepeat(values.repeat_after_s)) { reject(REPEAT_ERROR, "repeat_after_s"); return null; }

@@ -53,6 +53,20 @@ it("needs a preview to save a new threshold, and sends no HTTP settings with it"
   await waitFor(() => expect(onSave).toHaveBeenCalledWith({ domain_warn_days: 60 }));
 });
 
+it("refuses an interval under six hours before asking the server", () => {
+  const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+  const onSave = vi.fn();
+  render(<EditMonitorForm monitor={inventoryFromApi(raw)} onSave={onSave} />);
+  // A day reads as 24 hours; 1 hour is more often than a registry is asked.
+  change("Check every", "1");
+  testIt();
+  save();
+  expect(screen.getByText(/registries limit clients that ask more often/)).toBeTruthy();
+  expect(screen.getByLabelText("Check every").getAttribute("aria-invalid")).toBe("true");
+  expect(fetch).not.toHaveBeenCalled();
+  expect(onSave).not.toHaveBeenCalled();
+});
+
 it("refuses a threshold outside 0 to 365 before asking the server", () => {
   const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
   render(<EditMonitorForm monitor={inventoryFromApi(raw)} onSave={vi.fn()} />);

@@ -880,9 +880,11 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 	})
 
 	errs := []error{hbErr}
-	if o.Monitor.Type == checker.TypeDomain {
+	if o.Monitor.Type == checker.TypeDomain && hbErr == nil {
 		// This check found out, so an earlier one that could not is no
-		// longer the monitor's latest word.
+		// longer the monitor's latest word. Only once its heartbeat is
+		// stored: cleared without it, an older heartbeat would become the
+		// latest word instead.
 		if err := r.db.ClearUnknownCheck(ctx, o.Monitor.ID); err != nil {
 			r.log.Error("failed to clear unknown check", "monitor_id", o.Monitor.ID, "error", err)
 			errs = append(errs, err)

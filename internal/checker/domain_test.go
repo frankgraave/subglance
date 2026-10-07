@@ -21,6 +21,8 @@ type fakeRDAP struct {
 	domains map[string]string
 	// status, when set, is returned for every domain lookup instead.
 	status int
+	// before lists RDAP base URLs the bootstrap names ahead of this server.
+	before []string
 
 	bootstrapStatus atomic.Int32
 	bootstrapHits   atomic.Int32
@@ -44,8 +46,13 @@ func newFakeRDAP(t *testing.T, tlds ...string) *fakeRDAP {
 			for i, tld := range tlds {
 				quoted[i] = fmt.Sprintf("%q", tld)
 			}
-			_, _ = fmt.Fprintf(w, `{"version":"1.0","services":[[[%s],["%s/rdap/"]],[["other"],["https://rdap.invalid/"]]]}`,
-				strings.Join(quoted, ","), f.srv.URL)
+			urls := make([]string, 0, len(f.before)+1)
+			for _, u := range f.before {
+				urls = append(urls, fmt.Sprintf("%q", u))
+			}
+			urls = append(urls, fmt.Sprintf("%q", f.srv.URL+"/rdap/"))
+			_, _ = fmt.Fprintf(w, `{"version":"1.0","services":[[[%s],[%s]],[["other"],["https://rdap.invalid/"]]]}`,
+				strings.Join(quoted, ","), strings.Join(urls, ","))
 		case strings.HasPrefix(r.URL.Path, "/rdap/domain/"):
 			f.lookups.Add(1)
 			f.lastAccept.Store(r.Header.Get("Accept"))
@@ -120,6 +127,67 @@ func TestDomainCheckerWarnsInsideTheWindow(t *testing.T) {
 	}
 	if want := "domain registration of example.com expires in 12 days (on 2026-10-19)"; res.Error != want {
 		t.Errorf("Error = %q, want %q", res.Error, want)
+	}
+}
+
+// Hours before the date the registration still holds, so the notice must not
+// say it expires in 0 days.
+func TestDomainCheckerRoundsTheLastDayUp(t *testing.T) {
+	f := newFakeRDAP(t, "com")
+	f.domains["example.com"] = rdapDomain("2026-10-07T17:00:00Z")
+
+	res := f.checker(domainNow).Check(context.Background(), domainMonitor("example.com", 30))
+	if !res.OK || !res.Expiring {
+		t.Fatalf("result = %+v, want an expiring pass", res)
+	}
+	if want := "domain registration of example.com expires in 1 day (on 2026-10-07)"; res.Error != want {
+		t.Errorf("Error = %q, want %q", res.Error, want)
+	}
+}
+
+// A TLD can list more than one RDAP server. One that is down or answers with
+// a server error says nothing about the domain, so the next one is asked; an
+// answer about the domain from the first ends the search.
+func TestDomainCheckerTriesTheNextServerOnlyWhenOneFails(t *testing.T) {
+	var brokenHits atomic.Int32
+	broken := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		brokenHits.Add(1)
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	t.Cleanup(broken.Close)
+	gone := httptest.NewServer(http.NotFoundHandler())
+	goneURL := gone.URL + "/"
+	gone.Close()
+
+	f := newFakeRDAP(t, "com")
+	f.domains["example.com"] = rdapDomain("2027-08-13T04:00:00Z")
+	f.before = []string{goneURL, broken.URL + "/"}
+
+	res := f.checker(domainNow).Check(context.Background(), domainMonitor("example.com", 30))
+	if !res.OK || res.Kind != FailNone {
+		t.Fatalf("result = %+v, want the pass the third server gives", res)
+	}
+	if brokenHits.Load() != 1 || f.lookups.Load() != 1 {
+		t.Errorf("asked the failing server %d times and the answering one %d, want 1 and 1", brokenHits.Load(), f.lookups.Load())
+	}
+
+	// A 404 from the first server is an answer about the domain.
+	var asked atomic.Int32
+	notFound := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked.Add(1)
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(notFound.Close)
+	g := newFakeRDAP(t, "com")
+	g.domains["example.com"] = rdapDomain("2027-08-13T04:00:00Z")
+	g.before = []string{notFound.URL + "/"}
+
+	res = g.checker(domainNow).Check(context.Background(), domainMonitor("example.com", 30))
+	if res.Kind != FailUnknown || !strings.Contains(res.Error, "has no record of example.com") {
+		t.Fatalf("result = %+v, want the first server's answer", res)
+	}
+	if asked.Load() != 1 || g.lookups.Load() != 0 {
+		t.Errorf("asked the first server %d times and the second %d, want 1 and 0", asked.Load(), g.lookups.Load())
 	}
 }
 

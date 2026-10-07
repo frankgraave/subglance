@@ -26,5 +26,18 @@ export function withType<T extends { type: string; intervalS: number }>(
 /** The shortest interval the API takes for a domain monitor. */
 export const DOMAIN_MIN_INTERVAL_S = 6 * 3600;
 
+/** Said under the interval when a domain monitor's is shorter than that. */
+export const DOMAIN_INTERVAL_MESSAGE =
+  "A domain monitor is checked at most every 6 hours; registries limit clients that ask more often.";
+
+/** Said under the warning when it is empty or not a whole number of days. */
+export const DOMAIN_WARN_DAYS_MESSAGE = "The warning before expiry must be between 0 and 365 days.";
+
+/** Whether the typed warning is one the API takes: a whole 0 to 365. */
+export function domainWarnDaysAllowed(text: string): boolean {
+  const days = Number(text);
+  return text.trim() !== "" && Number.isInteger(days) && days >= 0 && days <= 365;
+}
+
 /** A domain monitor's interval when none is given: once a day. */
 export const DOMAIN_INTERVAL_S = 86400;

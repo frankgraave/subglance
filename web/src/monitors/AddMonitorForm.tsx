@@ -1,7 +1,13 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { RepeatAlertField } from "./RepeatAlertField";
-import { withType } from "./checkTypeChange";
+import {
+  DOMAIN_INTERVAL_MESSAGE,
+  DOMAIN_MIN_INTERVAL_S,
+  DOMAIN_WARN_DAYS_MESSAGE,
+  domainWarnDaysAllowed,
+  withType,
+} from "./checkTypeChange";
 import { AlertingSection } from "./AlertingSection";
 import { DurationField } from "./DurationField";
 import { durationAllowed, DURATION_LIMITS, SECONDS_ONLY, SECONDS_TO_DAYS, SECONDS_TO_HOURS } from "./duration";
@@ -74,8 +80,12 @@ export type AddMonitorValues = {
   dnsRecordType: string;
   dnsExpected: string;
   dnsResolver: string;
-  /** Domain monitors only: days of warning before the registration expires. */
-  domainWarnDays: number;
+  /**
+   * Domain monitors only: days of warning before the registration expires.
+   * Text, so an emptied box stays empty instead of reading as 0, which
+   * means "warn only once it has expired".
+   */
+  domainWarnDays: string;
   /**
    * The monitor's own channels, as sorted comma-joined ids: text rather than
    * an array so ticking a box and unticking it again reads as no change.
@@ -164,6 +174,23 @@ const PUSH_DURATIONS: readonly (readonly [string, DurationKey])[] = [
   ["push_grace_s", "pushGraceS"],
 ];
 
+/**
+ * What a domain monitor's own limits refuse, checked before a probe as well
+ * as a save. Choosing the type lifts a short interval, but the interval can
+ * be shortened again afterwards; and an emptied warning must not reach the
+ * API as 0.
+ */
+function domainProblem(values: AddMonitorValues): { field: string; message: string } | null {
+  if (values.type !== "domain") return null;
+  if (values.intervalS < DOMAIN_MIN_INTERVAL_S) {
+    return { field: "interval_s", message: DOMAIN_INTERVAL_MESSAGE };
+  }
+  if (!domainWarnDaysAllowed(values.domainWarnDays)) {
+    return { field: "domain_warn_days", message: DOMAIN_WARN_DAYS_MESSAGE };
+  }
+  return null;
+}
+
 export type AddMonitorFormProps = {
   /** Runs a preview. The caller reports the outcome back through `preview`. */
   onPreview: (values: AddMonitorValues) => void;
@@ -214,7 +241,7 @@ const DEFAULTS: AddMonitorValues = {
   dnsResolver: "",
   // The server's default: a renewal can need a person with the registrar
   // login and a card, which is more lead time than a certificate needs.
-  domainWarnDays: 30,
+  domainWarnDays: "30",
   channelIds: "",
 };
 
@@ -412,9 +439,13 @@ export function AddMonitorForm({
     setLocalError(null);
     const outOfRange = (push ? PUSH_DURATIONS : PROBE_DURATIONS)
       .find(([field, key]) => !durationAllowed(field, values[key]));
-    if (outOfRange === undefined) return true;
-    const [field] = outOfRange;
-    setLocalError({ field, message: DURATION_LIMITS[field].message });
+    const problem =
+      outOfRange !== undefined
+        ? { field: outOfRange[0], message: DURATION_LIMITS[outOfRange[0]].message }
+        : domainProblem(values);
+    if (problem === null) return true;
+    const { field } = problem;
+    setLocalError(problem);
     const control = document.getElementById(`${ids}-${FIELD_CONTROL[field]}`);
     const panel = control?.closest("details");
     if (panel) panel.open = true;
@@ -592,7 +623,7 @@ export function AddMonitorForm({
               max={365}
               value={values.domainWarnDays}
               onChange={(event) =>
-                setValues((v) => ({ ...v, domainWarnDays: Number(event.target.value) }))
+                setValues((v) => ({ ...v, domainWarnDays: event.target.value }))
               }
               {...invalidProps("domain-warn", `${ids}-domain-warn-help`)}
             />

@@ -6057,7 +6057,6 @@ components:
             than a failure.
           minimum: 0
           maximum: 10
-          default: 2
         recovery_threshold:
           type: integer
           description: |

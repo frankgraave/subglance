@@ -84,6 +84,59 @@ describe("adding a domain monitor", () => {
       expect(screen.getByLabelText(/warn before it expires/i).getAttribute("aria-invalid")).toBe("true"));
   });
 
+  it("keeps an emptied warning empty, and refuses it before asking the server", () => {
+    const preview = vi.fn();
+    const create = vi.fn();
+    render(<AddMonitor api={{ preview, create }} />);
+    chooseDomain();
+    setField(/what should be watched/i, "example.com");
+    setField(/warn before it expires/i, "");
+    const warn = screen.getByLabelText(/warn before it expires/i) as HTMLInputElement;
+    expect(warn.value).toBe("");
+    click(/test it/i);
+    click(/save monitor/i);
+    expect(preview).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+    expect(warn.getAttribute("aria-invalid")).toBe("true");
+    expect(document.body.textContent).toMatch(/between 0 and 365 days/);
+  });
+
+  it("refuses an interval under six hours before asking the server", () => {
+    const preview = vi.fn();
+    const create = vi.fn();
+    render(<AddMonitor api={{ preview, create }} />);
+    chooseDomain();
+    setField(/what should be watched/i, "example.com");
+    // The day the type brought along reads as 24 hours; 1 hour is too often.
+    setField(/^check every$/i, "1");
+    click(/test it/i);
+    click(/save monitor/i);
+    expect(preview).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/^check every$/i).getAttribute("aria-invalid")).toBe("true");
+    expect(document.body.textContent).toMatch(/at most every 6 hours/);
+  });
+
+  it("sends neither the TLS floor nor the keyword typed before choosing it", async () => {
+    const preview = vi.fn().mockResolvedValue(result());
+    const create = vi.fn().mockResolvedValue({ id: "9" });
+    render(<AddMonitor api={{ preview, create }} />);
+    setField(/check type/i, "http");
+    setField(/minimum tls version/i, "1.2");
+    setField(/body must contain/i, "Welcome");
+    chooseDomain();
+    setField(/what should be watched/i, "example.com");
+    click(/test it/i);
+    await waitFor(() => expect(preview).toHaveBeenCalled());
+    click(/save monitor/i);
+    await waitFor(() => expect(create).toHaveBeenCalled());
+    for (const sent of [preview.mock.calls[0][0], create.mock.calls[0][0]]) {
+      expect(sent).not.toHaveProperty("min_tls_version");
+      expect(sent).not.toHaveProperty("keyword");
+      expect(sent).not.toHaveProperty("keyword_mode");
+    }
+  });
+
   it("says what a name under the domain checks", () => {
     render(<AddMonitor api={{ preview: vi.fn(), create: vi.fn() }} />);
     chooseDomain();

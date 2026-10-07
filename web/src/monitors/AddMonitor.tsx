@@ -251,25 +251,42 @@ function bodyFor(
     interval_s: values.intervalS,
     timeout_s: values.timeoutS,
     recovery_threshold: values.recoveryThreshold,
-    // Omitted entirely when the user expressed no opinion. The API rejects an
-    // empty string on create precisely so a client cannot store a floor it
-    // never chose, and the nullable column is what lets such a monitor follow
-    // the default if it ever moves.
-    ...(values.minTlsVersion !== ""
-      ? { min_tls_version: values.minTlsVersion }
-      : {}),
-    ...(values.keyword !== ""
-      ? { keyword: values.keyword, keyword_mode: values.keywordMode }
-      : {}),
+    ...httpFields(values),
     ...jsonAssertionField(values),
     ...dnsField(values),
     ...domainField(values),
   };
 }
 
+/**
+ * The TLS floor and the keyword, sent only for a type that reads them: the
+ * form hides both for a dns or domain monitor, and a value typed before
+ * switching must not be stored on a monitor that never uses it.
+ *
+ * The floor is omitted entirely when the user expressed no opinion. The API
+ * rejects an empty string on create precisely so a client cannot store a
+ * floor it never chose, and the nullable column is what lets such a monitor
+ * follow the default if it ever moves.
+ */
+function httpFields(values: AddMonitorValues): {
+  min_tls_version?: string;
+  keyword?: string;
+  keyword_mode?: string;
+} {
+  if (values.type === "dns" || values.type === "domain") return {};
+  return {
+    ...(values.minTlsVersion !== ""
+      ? { min_tls_version: values.minTlsVersion }
+      : {}),
+    ...(values.keyword !== ""
+      ? { keyword: values.keyword, keyword_mode: values.keywordMode }
+      : {}),
+  };
+}
+
 /** The warning threshold, sent only for a domain monitor, as dns is. */
 function domainField(values: AddMonitorValues): { domain_warn_days?: number } {
-  return values.type === "domain" ? { domain_warn_days: values.domainWarnDays } : {};
+  return values.type === "domain" ? { domain_warn_days: Number(values.domainWarnDays) } : {};
 }
 
 /**
@@ -314,12 +331,7 @@ function previewRequestFor(values: AddMonitorValues): PreviewRequest {
     target: values.target.trim(),
     ...(values.type !== "" ? { type: values.type } : {}),
     timeout_s: values.timeoutS,
-    ...(values.minTlsVersion !== ""
-      ? { min_tls_version: values.minTlsVersion }
-      : {}),
-    ...(values.keyword !== ""
-      ? { keyword: values.keyword, keyword_mode: values.keywordMode }
-      : {}),
+    ...httpFields(values),
     ...jsonAssertionField(values),
     ...dnsField(values),
     ...domainField(values),
