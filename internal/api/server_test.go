@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -35,18 +34,19 @@ var (
 
 // testServerWithDB returns a Server backed by a real temporary database, with
 // an admin account already seeded.
+//
+// The database is a copy of a template built once per test binary (see
+// template_db_test.go): the same schema, the same admin account and a working
+// token, without paying for the migrations and the password hash again.
 func testServerWithDB(t *testing.T) (*Server, *store.DB) {
 	t.Helper()
-	db, err := store.Open(context.Background(), store.Options{
-		Path: filepath.Join(t.TempDir(), "api.db"),
-	})
-	if err != nil {
-		t.Fatalf("open store: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
+	tpl := templates(t)
+	db := openCopy(t, tpl.seeded, "api.db")
 
 	srv := New(testLogger(), db)
-	seedUser(t, srv, db, "admin@example.com", store.RoleAdmin)
+	testCredentialsMu.Lock()
+	testCredentials[srv] = tpl.token
+	testCredentialsMu.Unlock()
 
 	t.Cleanup(func() {
 		testCredentialsMu.Lock()
@@ -98,14 +98,7 @@ func authedHandler(srv *Server) http.Handler {
 // openEmptyDB returns a database with no users, for testing the setup flow.
 func openEmptyDB(t *testing.T) *store.DB {
 	t.Helper()
-	db, err := store.Open(context.Background(), store.Options{
-		Path: filepath.Join(t.TempDir(), "empty.db"),
-	})
-	if err != nil {
-		t.Fatalf("open store: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-	return db
+	return openCopy(t, templates(t).empty, "empty.db")
 }
 
 // jsonRequest builds a request with a JSON body and the matching content type.
