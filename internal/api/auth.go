@@ -292,7 +292,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	// attacker spray many addresses from one host; IP alone lets a botnet
 	// grind a single account.
 	ip := s.clientIP(r)
-	for _, key := range []string{"email:" + strings.ToLower(req.Email), "ip:" + ip} {
+	for _, key := range []string{store.LoginAttemptEmailKey(req.Email), "ip:" + ip} {
 		n, err := s.db.CountRecentLoginAttempts(ctx, key, loginAttemptWindow)
 		if err != nil {
 			s.log.Error("count login attempts", "error", err)
@@ -323,7 +323,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for _, key := range []string{"email:" + strings.ToLower(req.Email), "ip:" + ip} {
+	for _, key := range []string{store.LoginAttemptEmailKey(req.Email), "ip:" + ip} {
 		if err := s.db.ClearLoginAttempts(ctx, key); err != nil {
 			s.log.Error("clear login attempts", "error", err)
 		}
@@ -344,7 +344,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 const dummyHash = "$argon2id$v=19$m=65536,t=2,p=1$c29tZXNhbHR2YWx1ZTEyMw$Gk8fVzE2xJZ0qKQyR5vNhM3wL7pT9cX1bY4dA6eF8gI"
 
 func (s *Server) recordFailedLogin(ctx context.Context, email, ip string) {
-	for _, key := range []string{"email:" + strings.ToLower(email), "ip:" + ip} {
+	for _, key := range []string{store.LoginAttemptEmailKey(email), "ip:" + ip} {
 		if err := s.db.RecordLoginAttempt(ctx, key); err != nil {
 			s.log.Error("record login attempt", "error", err)
 		}

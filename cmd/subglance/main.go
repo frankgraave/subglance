@@ -2,12 +2,14 @@
 //
 //	subglance --addr :8080 --data-dir /data
 //
-// It also answers three subcommands, because the shipped image is distroless and
-// has no shell to run anything else:
+// It also answers a few subcommands, because the shipped image is distroless
+// and has no shell to run anything else:
 //
 //	subglance healthcheck [--addr :8080]
 //	subglance backup <path> [--data-dir /data]
 //	subglance restore [--from NAME] [--data-dir /data]
+//	subglance import uptime-kuma <path> [-o FILE]
+//	subglance reset-password --email ADDRESS [--generate] [--force] [--data-dir /data]
 //
 // and it answers --version without loading configuration at all.
 //
@@ -54,11 +56,12 @@ func main() {
 		return
 	}
 
-	// Subcommands, and deliberately only these four: the shipped image is
+	// Subcommands, and deliberately only these: the shipped image is
 	// distroless with no shell, so a container HEALTHCHECK, an operator
-	// taking or restoring a backup, and someone converting a Kuma database
-	// that lives in a Docker volume have nothing to invoke except this
-	// binary. Everything else stays flags-only.
+	// taking or restoring a backup, someone converting a Kuma database that
+	// lives in a Docker volume and an owner locked out of their own instance
+	// have nothing to invoke except this binary. Everything else stays
+	// flags-only.
 	if len(args) > 0 {
 		switch args[0] {
 		case "healthcheck":
@@ -72,6 +75,9 @@ func main() {
 			return
 		case "import":
 			runSubcommand("import", runImport, args[1:])
+			return
+		case "reset-password":
+			runSubcommand("reset-password", runResetPassword, args[1:])
 			return
 		}
 	}

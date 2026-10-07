@@ -13,6 +13,7 @@ how to take a backup that actually restores.
 - [Upgrading](#upgrading)
 - [Backup and restore](#backup-and-restore), including
   [scheduled backups to S3](#scheduled-backups-to-s3-compatible-storage)
+- [Locked out](#locked-out)
 - [Public status pages](#public-status-pages), including
   [a page on its own subdomain](#a-page-on-its-own-subdomain)
 
@@ -804,6 +805,60 @@ It is careful in four ways:
   files, are renamed with a `.before-restore-<time>` suffix, so restoring the
   wrong backup can be undone. Remove them once the restored instance looks
   right.
+
+## Locked out
+
+Forgot the password, and nobody else with an administrator account can sign
+in? `subglance reset-password` sets a new one from the data directory:
+
+```sh
+docker compose stop subglance
+docker compose run --rm subglance reset-password --email you@example.com
+docker compose start subglance
+```
+
+Or, running from source:
+
+```sh
+subglance reset-password --email you@example.com --data-dir /var/lib/subglance
+```
+
+It asks for the new password twice without showing it, and applies the same
+rule as the sign-in page: at least 12 characters. There is deliberately no flag
+or environment variable to pass the password in, because both end up in the
+shell history or the process list. Where there is no terminal to ask on — a
+script, or `docker run` without `-it` — `--generate` makes up a password,
+sets it and prints it once. Copy it, sign in, and change it in Settings.
+
+What else it does:
+
+- **It signs the account out everywhere.** Every session of that account
+  ends, as it does after a password change in Settings, so a reset after a
+  suspected compromise also locks out whoever else was signed in. The
+  account's API tokens keep working; revoke them in Settings if they are part
+  of the problem.
+- **It lifts the sign-in limit for that address.** Ten failed attempts within
+  15 minutes block an address for a while, and someone who has forgotten the
+  password has usually tripped that. The count for the reset address is
+  cleared; every other address and every client IP keeps its own.
+- **It touches one account.** An unknown address is refused, and the refusal
+  does not list the accounts that do exist.
+
+It refuses while SubGlance runs, the same way [`subglance
+restore`](#restoring-from-s3) does: the server holds the lock on
+`subglance.lock` in the data directory, and `--force` never overrides it. It
+also refuses while something answers on `--addr`, and `--force` skips only
+that check. It refuses a data directory without a `subglance.db` in it rather
+than creating an empty database there, since that almost always means the
+wrong `--data-dir`.
+
+Anyone who can run this can already read every monitor and account in the
+data directory, so the command asks for nothing more than that access. Keep
+the data directory as private as the passwords in it. Channel secrets are
+readable there too unless they are [encrypted at
+rest](#encrypting-channel-configuration); with a `--secret-key` set, reading
+them still takes that key, and a reset does not change that. The command
+does not need `--secret-key`: it never reads a channel's configuration.
 
 ## Public status pages
 
