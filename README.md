@@ -108,7 +108,7 @@ what has not reached a release yet is listed under
 
 | Area | State |
 |---|---|
-| Checks — HTTP(S), TCP, ping, SSL, DNS, push | ✅ Working |
+| Checks — HTTP(S), TCP, ping, SSL, DNS, domain expiry, push | ✅ Working |
 | Scheduler, state engine, flapping suppression | ✅ Working |
 | Notifications — webhook, Discord, Slack, Telegram, email, ntfy, Gotify, SMS | ✅ Working |
 | REST API v1 + OpenAPI 3.1 specification | ✅ Working |
@@ -198,6 +198,9 @@ have them.
   TXT records of a name with the values it expects, through the host's
   resolver or one set on the monitor; see
   [Checking a DNS record](docs/using-subglance.md#checking-a-dns-record)
+- **Domain expiry checks**: a `domain` monitor reads a domain's registration
+  expiry date over RDAP and warns a set number of days ahead; see
+  [Checking when a domain expires](docs/using-subglance.md#checking-when-a-domain-expires)
 
 ### Not working yet
 

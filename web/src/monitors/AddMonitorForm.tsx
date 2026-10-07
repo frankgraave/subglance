@@ -600,9 +600,9 @@ export function AddMonitorForm({
             </span>
           </div>
           <p id={`${ids}-domain-warn-help`} className="field-help">
-            The expiry date is read from the registry once a day. Within this
-            many days of it you are alerted, without it counting as
-            downtime; 0 alerts only once it has expired.
+            The expiry date is read from the registry, once a day by default.
+            Within this many days of it you are alerted, without it counting
+            as downtime; 0 alerts only once it has expired.
           </p>
           <ControlRefusal control="domain-warn" badControl={badControl} rejection={rejection} ids={ids} />
         </div>
