@@ -120,6 +120,15 @@ it("refuses an off-shape list rather than guessing which row is this browser", a
   expect(screen.queryByRole("list", { name: "Your sessions" })).toBeNull();
 });
 
+// Without `current`, every row would look like someone else's and offer
+// "Sign out" on the browser the reader is using.
+it("refuses a list that does not say which session is this browser", async () => {
+  const unmarked = sampleSessions.map(({ current: _current, ...rest }) => rest);
+  mountOwn(undefined, (_url, init) => !init?.method ? json({ sessions: unmarked }) : undefined);
+  expect(await screen.findByText("Sessions unavailable.")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /^Sign out Firefox on macOS/ })).toBeNull();
+});
+
 it("shows an administrator another account's sessions, with addresses, and signs it out everywhere", async () => {
   const others = sampleSessions.map((s) => ({ ...s, current: false }));
   const fetcher = mountAccount(others);
