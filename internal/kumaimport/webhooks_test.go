@@ -71,19 +71,41 @@ func fillIn(cfg map[string]string, values map[string]string) map[string]string {
 }
 
 func TestTeamsBecomesAWebhookWithACard(t *testing.T) {
-	c, notes := convertKuma(t, `{"type":"teams","webhookUrl":"https://example.webhook.office.com/kuma-secret","teamsEnableTags":true}`)
-	if c.Type != "webhook" || c.Config["url"] != configfile.Placeholder || c.Config["body"] != teamsBody ||
-		c.Config["method"] != "" || c.Config["headers"] != "" {
-		t.Errorf("channel = %+v", c)
+	cases := []struct {
+		name   string
+		config string
+		notes  []string
+		absent []string
+	}{
+		{"tags listed on Kuma's card", `{"type":"teams","webhookUrl":"https://example.webhook.office.com/kuma-secret","teamsEnableTags":true}`,
+			[]string{"Teams Workflows", "Send test", "tags were listed"}, nil},
+		{"tags not listed", `{"type":"teams","webhookUrl":"https://example.webhook.office.com/kuma-secret","teamsEnableTags":false}`,
+			[]string{"Teams Workflows", "Send test"}, []string{"tags were listed"}},
+		{"tags setting absent", `{"type":"teams","webhookUrl":"https://example.webhook.office.com/kuma-secret"}`,
+			[]string{"Teams Workflows", "Send test"}, []string{"tags were listed"}},
 	}
-	for _, want := range []string{"Teams Workflows", "Send test", "tags were listed"} {
-		if !strings.Contains(notes, want) {
-			t.Errorf("notes = %q, want %q", notes, want)
-		}
-	}
-	cfg := fillIn(c.Config, map[string]string{"url": "https://example.webhook.office.com/workflows/1"})
-	if err := notifier.NewWebhookSender(nil).Validate(cfg); err != nil {
-		t.Errorf("the filled-in channel is refused: %v", err)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c, notes := convertKuma(t, tc.config)
+			if c.Type != "webhook" || c.Config["url"] != configfile.Placeholder || c.Config["body"] != teamsBody ||
+				c.Config["method"] != "" || c.Config["headers"] != "" {
+				t.Errorf("channel = %+v", c)
+			}
+			for _, want := range tc.notes {
+				if !strings.Contains(notes, want) {
+					t.Errorf("notes = %q, want %q", notes, want)
+				}
+			}
+			for _, unwanted := range tc.absent {
+				if strings.Contains(notes, unwanted) {
+					t.Errorf("notes = %q, should not say %q", notes, unwanted)
+				}
+			}
+			cfg := fillIn(c.Config, map[string]string{"url": "https://example.webhook.office.com/workflows/1"})
+			if err := notifier.NewWebhookSender(nil).Validate(cfg); err != nil {
+				t.Errorf("the filled-in channel is refused: %v", err)
+			}
+		})
 	}
 }
 
