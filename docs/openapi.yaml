@@ -49,7 +49,7 @@ tags:
   - name: Settings
     description: Instance-wide settings, such as how long history is kept.
   - name: Configuration
-    description: Export and import monitors, channels, routing rules and maintenance windows as YAML.
+    description: Export and import monitors, channels, routing rules, maintenance windows and status pages as YAML.
   - name: Status pages
     description: Public status pages, managed by administrators.
 security:
@@ -3634,9 +3634,11 @@ paths:
       summary: Export the configuration as YAML
       description: |
         One YAML document with every monitor, channel, routing rule and
-        maintenance window on the instance. History, users and API tokens are
-        not included, and neither are one-off maintenance windows that have
-        already ended. The format is described in `docs/configuration-files.md`.
+        maintenance window on the instance, and, for an administrator, every
+        status page. History, users and API tokens are not included, and
+        neither are one-off maintenance windows that have already ended or a
+        status page's logo. The format is described in
+        `docs/configuration-files.md`.
 
         No credential is ever written. Channel settings follow the same
         allowlist as the masked channel read, and every other value, every
@@ -3678,9 +3680,13 @@ paths:
       description: |
         Reads a document in the format `GET /api/v1/config/export` writes and
         creates or updates what it describes. Monitors and channels are
-        matched by `key`, routing rules by their tag pair, and maintenance
-        windows by all of their fields, so importing the same file twice
-        changes nothing the second time.
+        matched by `key`, routing rules by their tag pair, maintenance
+        windows by all of their fields and status pages by `slug`, so
+        importing the same file twice changes nothing the second time.
+
+        Status pages are administered by administrators only: a file with
+        `status_pages` imported by an editor is refused with 403 at the field
+        `status_pages`, and nothing is written.
 
         It never deletes. An object on the instance that the file does not
         mention is left alone, and a field the file omits keeps its current
@@ -5008,7 +5014,7 @@ components:
             invalid, and that is therefore not in force. Null normally.
     ImportReport:
       type: object
-      required: [dry_run, channels, monitors, routing_rules, maintenance, summary]
+      required: [dry_run, channels, monitors, routing_rules, maintenance, status_pages, summary]
       properties:
         dry_run:
           type: boolean
@@ -5025,6 +5031,10 @@ components:
           items:
             $ref: '#/components/schemas/ImportItem'
         maintenance:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportItem'
+        status_pages:
           type: array
           items:
             $ref: '#/components/schemas/ImportItem'
@@ -5050,7 +5060,7 @@ components:
       properties:
         key:
           type: string
-          description: The monitor or channel key. Absent for routing rules and maintenance windows.
+          description: The monitor or channel key, or a status page's slug. Absent for routing rules and maintenance windows.
         name:
           type: string
           description: The object's name; `key=value` for a routing rule.

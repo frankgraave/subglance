@@ -14,7 +14,8 @@ export const dryRunReport: ImportReport = {
   ],
   routing_rules: [{ name: "team=web", action: "create" }],
   maintenance: [],
-  summary: { create: 3, update: 1, unchanged: 2, needs_secrets: 1 },
+  status_pages: [{ key: "acme", name: "Acme services", action: "update", changes: ["monitors"] }],
+  summary: { create: 3, update: 2, unchanged: 2, needs_secrets: 1 },
 };
 
 /** The same file applied: the created push monitor carries its URL, once. */
@@ -32,5 +33,6 @@ export const unchangedReport: ImportReport = {
   monitors: [{ key: "api", name: "API", action: "unchanged" }],
   routing_rules: [],
   maintenance: [],
+  status_pages: [],
   summary: { create: 0, update: 0, unchanged: 2, needs_secrets: 0 },
 };

@@ -72,7 +72,7 @@ it("checks a chosen file with a dry run and lists only what would change", async
   expect(url).toBe("/api/v1/config/import?dry_run=true");
   expect(init.body).toBe(yaml);
   expect(new Headers(init.headers).get("Content-Type")).toBe("application/yaml");
-  expect(within(report).getByText("3 to create, 1 to update, 2 unchanged.")).toBeTruthy();
+  expect(within(report).getByText("3 to create, 2 to update, 2 unchanged.")).toBeTruthy();
   const monitors = within(report).getByRole("list", { name: "Monitors" });
   expect(within(monitors).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
     "Update Webshop shopChanges name, interval_s",
@@ -83,6 +83,8 @@ it("checks a chosen file with a dry run and lists only what would change", async
   expect(within(report).queryByText("Pager")).toBeNull();
   expect(within(report).getByRole("list", { name: "Routing rules" }).textContent).toContain("team=web");
   expect(within(report).queryByRole("list", { name: "Maintenance windows" })).toBeNull();
+  // A status page is named with its slug and what changes on it.
+  expect(within(report).getByRole("list", { name: "Status pages" }).textContent).toBe("Update Acme services acmeChanges monitors");
   // Nothing is written until the reader confirms.
   expect(posts(fetcher)).toHaveLength(1);
   expect(screen.getByRole("button", { name: "Import subglance.yaml" })).toBeTruthy();
@@ -108,7 +110,7 @@ it("applies the checked file only on confirmation, then reports what was importe
   const [url, init] = posts(fetcher)[1] as [string, RequestInit];
   expect(url).toBe("/api/v1/config/import");
   expect(init.body).toBe(yaml);
-  expect(screen.getByText("3 created, 1 updated, 2 unchanged.")).toBeTruthy();
+  expect(screen.getByText("3 created, 2 updated, 2 unchanged.")).toBeTruthy();
   expect(screen.getByText(/One object is now switched off/)).toBeTruthy();
   expect(screen.queryByRole("button", { name: /^Import / })).toBeNull();
   // Monitors and channels on other screens are stale after an import.
