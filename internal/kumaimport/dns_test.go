@@ -41,16 +41,18 @@ func TestDNSMonitorsComeOver(t *testing.T) {
 			"example.com", "A", []string{}, "2606:4700:4700::1111", ""},
 		{"bracketed IPv6 resolver on another port", dnsRow(row{"dns_resolve_server": "[2606:4700:4700::1111]", "port": int64(5353)}),
 			"example.com", "A", []string{}, "[2606:4700:4700::1111]:5353", ""},
-		{"resolver by host name", dnsRow(row{"dns_resolve_server": "adguard"}), "example.com", "A", []string{}, "adguard", ""},
+		{"resolver by host name", dnsRow(row{"dns_resolve_server": "adguard"}), "example.com", "A", []string{}, "adguard",
+			"adguard is a host name; if it resolves to a private address, SubGlance asks it only when started with --allow-private-targets"},
 		{"several resolvers", dnsRow(row{"dns_resolve_server": " 1.1.1.1, 8.8.8.8,9.9.9.9 "}), "example.com", "A", []string{}, "1.1.1.1",
 			"Kuma tried 3 resolvers in turn; a dns monitor asks one, so 1.1.1.1 is kept and 8.8.8.8, 9.9.9.9 left out"},
 		{"private resolver", dnsRow(row{"dns_resolve_server": "192.168.1.2"}), "example.com", "A", []string{}, "192.168.1.2",
 			"--allow-private-targets"},
-		{"no resolver", dnsRow(row{"dns_resolve_server": ""}), "example.com", "A", []string{}, "",
-			"the resolver of the host SubGlance runs on"},
 		{"CNAME equals", dnsRow(row{"dns_resolve_type": "CNAME", "hostname": "www.example.com",
 			"conditions": `[{"type":"expression","andOr":"and","variable":"record","operator":"equals","value":"example.netlify.app"}]`}),
 			"www.example.com", "CNAME", []string{"example.netlify.app"}, "1.1.1.1", ""},
+		{"TXT equals with a numeric value", dnsRow(row{"dns_resolve_type": "TXT",
+			"conditions": `[{"type":"expression","variable":"record","operator":"equals","value":42}]`}),
+			"example.com", "TXT", []string{"42"}, "1.1.1.1", ""},
 		{"TXT equals", dnsRow(row{"dns_resolve_type": "TXT", "hostname": "_dmarc.example.com",
 			"conditions": `[{"type":"expression","variable":"record","operator":"equals","value":"v=DMARC1; p=reject"}]`}),
 			"_dmarc.example.com", "TXT", []string{"v=DMARC1; p=reject"}, "1.1.1.1", ""},
@@ -116,6 +118,17 @@ func TestDNSMonitorsThatCannotComeOver(t *testing.T) {
 		{"value that is not an address", dnsRow(row{"conditions": cond("equals", "example.com")}), "is not an IPv4 address"},
 		{"resolver that is a URL", dnsRow(row{"dns_resolve_server": "https://dns.example/dns-query"}), "is not an IP address or a host name"},
 		{"resolver port out of range", dnsRow(row{"port": int64(70000)}), "is not a port"},
+		{"A equals with a resolver that cannot come over", dnsRow(row{"dns_resolve_server": "https://dns.example/dns-query",
+			"conditions": cond("equals", "93.184.215.14")}), "is not an IP address or a host name"},
+		{"MX equals with a port out of range", dnsRow(row{"dns_resolve_type": "MX", "port": int64(70000),
+			"conditions": cond("equals", "mx1.example.com")}), "is not a port"},
+		{"no resolver", dnsRow(row{"dns_resolve_server": ""}), "Kuma had no resolver set"},
+		{"no resolver column value", dnsRow(row{"dns_resolve_server": nil}), "Kuma had no resolver set"},
+		{"only separators as resolver", dnsRow(row{"dns_resolve_server": " , "}), "Kuma had no resolver set"},
+		{"TXT value with a leading space", dnsRow(row{"dns_resolve_type": "TXT", "conditions": cond("equals", " v=spf1 -all")}),
+			"starts or ends with spaces"},
+		{"TXT value with a trailing space", dnsRow(row{"dns_resolve_type": "TXT", "conditions": cond("equals", "v=spf1 -all ")}),
+			"starts or ends with spaces"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -125,6 +138,10 @@ func TestDNSMonitorsThatCannotComeOver(t *testing.T) {
 			}
 			if len(res.Skipped) != 1 || !strings.Contains(res.Skipped[0].Reason, tc.reason) {
 				t.Errorf("skipped = %v, want a reason containing %q", res.Skipped, tc.reason)
+			}
+			// A skipped monitor is not also reported as imported with a change.
+			if len(res.Changed) != 0 {
+				t.Errorf("changed = %v, want nothing for a skipped monitor", res.Changed)
 			}
 		})
 	}

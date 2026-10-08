@@ -337,7 +337,8 @@ addresses, recipients and chat ids come over as they are.
   is kept, with Kuma's port when it is not 53, and the rest are listed. A
   resolver on a private address, such as a Pi-hole or AdGuard Home on the local
   network, is listed as well: SubGlance asks it only when started with
-  [`--allow-private-targets`](operations.md#private-targets).
+  [`--allow-private-targets`](operations.md#private-targets). So is a resolver
+  given by host name, which may resolve to such an address.
 - An email channel's Cc recipients become ordinary recipients. Bcc recipients
   are left out rather than shown to everyone, and listed.
 - A webhook channel receives [SubGlance's payload](channels.md#the-webhook-payload),
@@ -350,7 +351,9 @@ addresses, recipients and chat ids come over as they are.
 Monitor types SubGlance has no check for (Docker, gRPC, MQTT, databases, game
 servers and the rest), DNS monitors on CAA, NS, PTR, SOA or SRV records, DNS
 monitors whose conditions are more than one *record equals* (a *contains* or
-an *or* has no counterpart in a list of expected values), groups themselves,
+an *or* has no counterpart in a list of expected values), DNS monitors with
+no resolver (Kuma never ran their check) or with a TXT value that starts or
+ends with a space (Kuma compared it exactly), groups themselves,
 monitors in *Upside Down Mode* (imported as they are, they would report the
 opposite state), JSON queries that
 use JSONata beyond a plain path, other authentication methods (NTLM, OAuth2,

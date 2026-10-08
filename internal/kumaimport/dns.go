@@ -53,17 +53,19 @@ func convertDNS(m row, out *configfile.Monitor, res *Result, name, typ string) b
 		return skip("its name " + strconv.Quote(host) + " is not a domain name")
 	}
 
-	expected, reason, ok := dnsExpected(m.str("conditions"), recordType)
+	expected, expectNote, ok := dnsExpected(m.str("conditions"), recordType)
 	if !ok {
-		return skip(reason)
-	}
-	if reason != "" {
-		note(reason)
+		return skip(expectNote)
 	}
 
 	resolver, notes, reason := dnsResolver(m.str("dns_resolve_server"), m)
 	if reason != "" {
 		return skip(reason)
+	}
+	// Notes are written only once the monitor is certain to come over, so a
+	// skipped monitor is not also listed as imported with a change.
+	if expectNote != "" {
+		note(expectNote)
 	}
 	for _, n := range notes {
 		note(n)
@@ -106,6 +108,13 @@ func dnsExpected(raw, recordType string) (expected []string, reason string, ok b
 			"; a dns monitor compares records for equality only", false
 	}
 	value := conditionValue(c.Value)
+	// Kuma compares a TXT record with the value exactly, spaces included; a
+	// dns monitor's expected TXT value is trimmed. A value with spaces at
+	// either end would match a different record after the import.
+	if s, isText := c.Value.(string); isText && recordType == checker.DNSRecordTXT && s != value {
+		return nil, "its condition value " + strconv.Quote(s) +
+			" starts or ends with spaces, which Kuma compared and a dns monitor's expected TXT value cannot hold", false
+	}
 	if err := checker.ValidateDNSExpected(recordType, value); err != nil {
 		return nil, "its condition value cannot be an expected " + recordType + " record: " + err.Error(), false
 	}
@@ -139,7 +148,7 @@ func conditionValue(v any) string {
 // kept and the rest are listed. Kuma keeps the port in its own column.
 //
 // A non-empty skip means the resolver cannot be written as a SubGlance
-// resolver at all.
+// resolver at all, or that Kuma had none.
 func dnsResolver(raw string, m row) (resolver string, notes []string, skip string) {
 	var servers []string
 	for _, s := range strings.Split(raw, ",") {
@@ -154,7 +163,10 @@ func dnsResolver(raw string, m row) (resolver string, notes []string, skip strin
 		}
 	}
 	if len(servers) == 0 {
-		return "", []string{"Kuma had no resolver set; the monitor asks the resolver of the host SubGlance runs on"}, ""
+		// Kuma refuses to check without a resolver, so the monitor was down
+		// there. A dns monitor without one asks the host's resolver and
+		// could pass where Kuma failed.
+		return "", nil, "Kuma had no resolver set, so its check never ran; a dns monitor without one asks the resolver of the host SubGlance runs on"
 	}
 
 	first := servers[0]
@@ -180,8 +192,14 @@ func dnsResolver(raw string, m row) (resolver string, notes []string, skip strin
 		notes = append(notes, fmt.Sprintf("Kuma tried %d resolvers in turn; a dns monitor asks one, so %s is kept and %s left out",
 			len(servers), first, strings.Join(servers[1:], ", ")))
 	}
-	if isAddr && checker.NewGuard(false).CheckAddr(addr) != nil {
+	switch {
+	case isAddr && checker.NewGuard(false).CheckAddr(addr) != nil:
 		notes = append(notes, "the resolver "+first+" is a private or reserved address; SubGlance asks it only when started with --allow-private-targets")
+	case !isAddr:
+		// Kuma looks the name up and asks whatever address it gets; a name
+		// such as "adguard" usually stands for a machine on the local
+		// network, which the guard refuses at connect time.
+		notes = append(notes, "the resolver "+first+" is a host name; if it resolves to a private address, SubGlance asks it only when started with --allow-private-targets")
 	}
 	return resolver, notes, ""
 }
