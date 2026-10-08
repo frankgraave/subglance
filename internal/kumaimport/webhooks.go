@@ -11,8 +11,8 @@ import (
 	"github.com/frankgraave/subglance/internal/configfile"
 )
 
-// Teams, Matrix, Pushover, Mattermost, Rocket.Chat and Google Chat have no
-// channel type of their own in SubGlance:
+// Teams, Matrix, Pushover, Mattermost, Rocket.Chat, Google Chat and Home
+// Assistant have no channel type of their own in SubGlance:
 // docs/channels.md sends them to a webhook with a body of its own, and gives
 // the URL, method, headers and body for each. The converter writes exactly
 // those, so a Kuma notification of one of these types comes over as the
