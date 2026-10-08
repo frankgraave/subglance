@@ -85,10 +85,17 @@ export function AppShell({
        * focus vanish for one stop — and it is outside the `inert` wrapper
        * below on purpose: while the drawer is open there is nothing to skip
        * to, and a link into an inert region does nothing.
+       *
+       * It names no screen, because it is the same link on every screen: it
+       * used to say "Skip to monitors" on Settings too, a promise the page
+       * behind it did not keep. "Main content" is the wording keyboard and
+       * screen-reader users already know from other sites, and where it lands
+       * is announced by name, since `<main>` is labelled by the masthead's
+       * title.
        */}
       {!drawerOpen && (
         <a className="shell-skip" href="#shell-main">
-          Skip to monitors
+          Skip to main content
         </a>
       )}
       <div

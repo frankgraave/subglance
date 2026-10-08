@@ -117,6 +117,14 @@ describe("the skip link", () => {
     expect(container.querySelector("main")?.id).toBe("shell-main");
   });
 
+  it("names no screen, because it is the same link on every screen", () => {
+    // It said "Skip to monitors" on Settings and Notifications too. The
+    // destination's own name is announced on arrival: `<main>` is labelled
+    // by the masthead's title.
+    shell();
+    expect(screen.getByRole("link", { name: "Skip to main content" })).toBeTruthy();
+  });
+
   it("gives main a focus target that is not a tab stop of its own", () => {
     const { container } = shell();
     expect(container.querySelector("main")?.getAttribute("tabindex")).toBe(
