@@ -39,7 +39,6 @@ const (
 // reason, so a type added by a later Kuma release is still listed.
 var unsupportedType = map[string]string{
 	"group":             "a group is not a check; the monitors in it carry the tag group",
-	"dns":               "not converted yet; create a dns monitor for it by hand",
 	"docker":            "SubGlance has no Docker container check",
 	"real-browser":      "SubGlance has no browser check; an http monitor on the same URL is the closest",
 	"grpc-keyword":      "SubGlance has no gRPC check",
@@ -80,7 +79,7 @@ func convertMonitor(m row, res *Result) (configfile.Monitor, bool) {
 	note := func(reason string) { changed(res, "monitor", name, typ, reason) }
 
 	switch typ {
-	case "http", "keyword", "json-query", "port", "ping", "push":
+	case "http", "keyword", "json-query", "port", "ping", "push", "dns":
 	default:
 		reason, ok := unsupportedType[typ]
 		if !ok {
@@ -120,6 +119,10 @@ func convertMonitor(m row, res *Result) (configfile.Monitor, bool) {
 			return configfile.Monitor{}, false
 		}
 		out.Type, out.Target = "ping", host
+	case "dns":
+		if ok := convertDNS(m, &out, res, name, typ); !ok {
+			return configfile.Monitor{}, false
+		}
 	case "push":
 		// Kuma's interval on a push monitor is how often the job reports,
 		// which is what push_interval_s means. The grace period keeps

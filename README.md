@@ -196,7 +196,8 @@ have them.
   [Locked out](docs/operations.md#locked-out)
 - **DNS record checks**: a `dns` monitor compares the A, AAAA, CNAME, MX or
   TXT records of a name with the values it expects, through the host's
-  resolver or one set on the monitor; see
+  resolver or one set on the monitor, and `subglance import uptime-kuma`
+  converts Kuma's DNS monitors to them; see
   [Checking a DNS record](docs/using-subglance.md#checking-a-dns-record)
 - **Domain expiry checks**: a `domain` monitor reads a domain's registration
   expiry date over RDAP and warns a set number of days ahead; see
