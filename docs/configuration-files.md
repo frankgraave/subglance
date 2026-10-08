@@ -302,7 +302,7 @@ check**. Nothing is left out without being named there.
 | Paused | `enabled: false` |
 | Tags | `tags`; a tag without a value becomes `yes`, and a monitor inside a group gets the tag `group` with the group's name |
 | Notifications: Discord, Slack, Telegram, SMTP, ntfy, Gotify, Webhook | channels of the same type, assigned to the same monitors |
-| Notifications: Microsoft Teams, Matrix, Pushover | `webhook` channels with [a body of their own](channels.md#a-body-of-your-own), the one the channel documentation gives for that service |
+| Notifications: Microsoft Teams, Matrix, Pushover, Mattermost, Rocket.Chat, Google Chat | `webhook` channels with [a body of their own](channels.md#a-body-of-your-own), the one the channel documentation gives for that service |
 
 Credentials stay out of the file, exactly as in an export: webhook URLs, bot
 tokens, passwords, ntfy topics, header values and request bodies are written as
@@ -355,6 +355,13 @@ addresses, recipients and chat ids come over as they are.
   message lifetime are written into the body. Kuma's card tags, Matrix
   message template, Pushover title and separate recovery sound have no
   counterpart, and each one that was set is listed.
+- Mattermost, Rocket.Chat and Google Chat become webhooks that post a text
+  message, as [the channel documentation](channels.md#mattermost-rocketchat-and-google-chat)
+  describes, each listed with its incoming-webhook URL to fill in. A
+  Mattermost or Rocket.Chat channel Kuma posted to is written into the body,
+  so the message still goes there. Kuma's sender name and icon and its
+  Google Chat message template have no counterpart, and each one that was set
+  is listed.
 
 ### What does not come over
 
