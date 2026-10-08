@@ -42,6 +42,7 @@ func TestTwilioBecomesAnSMSChannel(t *testing.T) {
 		{"messaging service", kumaTwilio(`"twilioMessagingServiceSID":"MG0123"`), "+12025550100",
 			[]string{"messaging service"}, []string{"API key"}},
 		{"sender name", kumaTwilio(`"twilioFromNumber":"Ops Alerts"`), "Ops Alerts", nil, nil},
+		{"sender name starting with 00", kumaTwilio(`"twilioFromNumber":"00Ops"`), "00Ops", nil, nil},
 		{"00 for the plus", kumaTwilio(`"twilioFromNumber":"0044 7700 900123"`), "+447700900123", nil, nil},
 		{"no recipient", kumaTwilio(`"twilioToNumber":""`), "+12025550100",
 			[]string{"fill in numbers with the phone number to send to"}, []string{"••••"}},

@@ -349,10 +349,11 @@ tokens, passwords, ntfy topics, Twilio auth tokens, header values and request
 bodies are written as `<fill in after import>`. The import creates those
 channels and monitors **switched off** and lists the missing values under
 `needs_secrets`. Fill them in, in the file or in the interface afterwards, and
-switch them on. Server addresses, email recipients and chat ids come over as
-they are. Phone numbers do not: they are personal data, so an SMS channel's
-`numbers` is withheld too, and the report shows the number Kuma sent to in
-masked form (`+31 6 •••• 5678`).
+switch them on. Server addresses, email recipients, chat ids and a Twilio
+sender come over as they are, so a sender that is a phone number stays visible
+in `from`. Recipient numbers do not: they are personal data, so an SMS
+channel's `numbers` is withheld too, and the report shows the number Kuma sent
+to in masked form (`+31 6 •••• 5678`).
 
 ### Status pages
 

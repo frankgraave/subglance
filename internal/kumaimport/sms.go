@@ -83,7 +83,13 @@ func twilioFrom(raw string) string {
 		return r
 	}, s)
 	if strings.HasPrefix(s, "00") {
-		s = "+" + s[2:]
+		// 00 stands for the plus only in front of a number: 00Ops is a
+		// sender name, and comes over as it was typed.
+		rest := s[2:]
+		if rest == "" || strings.Trim(rest, "0123456789") != "" {
+			return strings.TrimSpace(raw)
+		}
+		s = "+" + rest
 	}
 	return s
 }
