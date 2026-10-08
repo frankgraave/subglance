@@ -148,6 +148,12 @@ func convertChannel(n row, res *Result) (configfile.Channel, bool) {
 		convertMatrix(get, &out, note)
 	case "pushover":
 		convertPushover(get, &out, note)
+	case "mattermost":
+		convertMattermost(get, &out, note)
+	case "rocket.chat":
+		convertRocketChat(get, &out, note)
+	case "GoogleChat":
+		convertGoogleChat(get, &out, note)
 	default:
 		return skip("SubGlance has no " + typ + " channel")
 	}

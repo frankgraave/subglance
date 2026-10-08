@@ -11,7 +11,8 @@ import (
 	"github.com/frankgraave/subglance/internal/configfile"
 )
 
-// Teams, Matrix and Pushover have no channel type of their own in SubGlance:
+// Teams, Matrix, Pushover, Mattermost, Rocket.Chat and Google Chat have no
+// channel type of their own in SubGlance:
 // docs/channels.md sends them to a webhook with a body of its own, and gives
 // the URL, method, headers and body for each. The converter writes exactly
 // those, so a Kuma notification of one of these types comes over as the
@@ -51,6 +52,11 @@ const matrixBody = `{ "msgtype": "m.text", "body": "{{summary}}\n{{details}}" }
 const pushoverBody = `{ "title": "{{summary}}", "message": "{{details}}" }
 `
 
+// chatBody is the message from "Mattermost, Rocket.Chat and Google Chat" in
+// docs/channels.md. Each of the three reads text as the message.
+const chatBody = `{ "text": "{{summary}}\n{{details}}" }
+`
+
 // pushoverURL is where Pushover takes a message. The application token and
 // the user key go in its query string, which is withheld as a whole.
 const pushoverURL = "https://api.pushover.net/1/messages.json?token=<application token>&user=<user key>"
@@ -61,6 +67,14 @@ const pushoverURL = "https://api.pushover.net/1/messages.json?token=<application
 var (
 	pushoverSound  = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 	pushoverDevice = regexp.MustCompile(`^[A-Za-z0-9_-]{1,25}(,[A-Za-z0-9_-]{1,25})*$`)
+
+	// A Mattermost channel is named by its lowercase handle, with or
+	// without a leading # (Mattermost drops it), a person by @ and a user
+	// name. A Rocket.Chat channel is #name, a person @name, and a room may
+	// also be given by its id; a workspace can allow letters beyond ASCII
+	// in its channel names, so any letter or digit is accepted there.
+	mattermostChannel = regexp.MustCompile(`^[#@]?[a-z0-9._-]{1,64}$`)
+	rocketChannel     = regexp.MustCompile(`^[#@]?[\p{L}\p{M}\p{N}._-]{1,64}$`)
 )
 
 // convertTeams turns a Kuma Teams notification into a webhook. Its only
@@ -160,6 +174,69 @@ func convertPushover(get func(string) string, out *configfile.Channel, note func
 		note("Kuma's message title was replaced by the alert's one-line summary")
 	}
 	out.Config["body"] = withFields(pushoverBody, extra)
+}
+
+// chatWebhook makes a webhook that posts chatBody to an incoming-webhook URL,
+// which is the credential for all three chat services that take one.
+func chatWebhook(out *configfile.Channel, note func(string), where string) {
+	out.Type = "webhook"
+	out.Config["url"] = configfile.Placeholder
+	out.Config["body"] = chatBody
+	note("now a webhook channel that posts a text message; fill in the url of " + where)
+}
+
+// senderNote is listed when Kuma posted under a name or an icon of its own.
+// The webhook's own name and icon are the right ones for SubGlance's alerts,
+// so these are not carried over.
+const senderNote = "Kuma posted under its own name and icon; SubGlance's alerts arrive under the webhook's"
+
+// convertMattermost turns a Kuma Mattermost notification into a webhook.
+// Kuma's channel override says where a message goes, so it comes over in the
+// body: a webhook that is not locked to its channel posts there.
+func convertMattermost(get func(string) string, out *configfile.Channel, note func(string)) {
+	chatWebhook(out, note, "a Mattermost incoming webhook")
+	var extra []jsonField
+	if ch := get("mattermostchannel"); ch != "" {
+		// Kuma sent the channel in lowercase, which is how Mattermost
+		// names one; the same is written here.
+		if lower := strings.ToLower(ch); mattermostChannel.MatchString(lower) {
+			extra = append(extra, jsonField{"channel", lower})
+		} else {
+			note("the channel " + strconv.Quote(ch) + " is not a Mattermost channel name and was left out; messages go to the webhook's own channel")
+		}
+	}
+	if get("mattermostusername") != "" || get("mattermosticonurl") != "" || get("mattermosticonemo") != "" {
+		note(senderNote)
+	}
+	out.Config["body"] = withFields(chatBody, extra)
+}
+
+// convertRocketChat turns a Kuma Rocket.Chat notification into a webhook,
+// with Kuma's channel override in the body as for Mattermost. Kuma could
+// only have sent it to an integration that allows overriding the channel.
+func convertRocketChat(get func(string) string, out *configfile.Channel, note func(string)) {
+	chatWebhook(out, note, "a Rocket.Chat incoming integration")
+	var extra []jsonField
+	if ch := get("rocketchannel"); ch != "" {
+		if rocketChannel.MatchString(ch) {
+			extra = append(extra, jsonField{"channel", ch})
+		} else {
+			note("the channel " + strconv.Quote(ch) + " is not a Rocket.Chat channel, user or room id and was left out; messages go to the integration's own channel")
+		}
+	}
+	if get("rocketusername") != "" || get("rocketiconemo") != "" {
+		note(senderNote)
+	}
+	out.Config["body"] = withFields(chatBody, extra)
+}
+
+// convertGoogleChat turns a Kuma Google Chat notification into a webhook.
+// Its only setting is the space's webhook URL.
+func convertGoogleChat(get func(string) string, out *configfile.Channel, note func(string)) {
+	chatWebhook(out, note, "a Google Chat space webhook")
+	if get("googleChatUseTemplate") == "true" && get("googleChatTemplate") != "" {
+		note("Kuma's message template was not carried over, because Kuma's templates are written in another language")
+	}
 }
 
 // jsonField is one field withFields adds to a body.

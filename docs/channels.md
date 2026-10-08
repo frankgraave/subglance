@@ -502,6 +502,32 @@ well as from the body, so they go in the masked URL:
 Pushover accepts at most 1,024 characters in `message`, which a long
 quiet-hours summary can exceed; `{{summary}}` alone always fits.
 
+### Mattermost, Rocket.Chat and Google Chat
+
+Each of these takes a message on an incoming-webhook URL, and the URL is the
+credential:
+
+- **Mattermost**: **Integrations**, **Incoming Webhooks**, **Add Incoming
+  Webhook**, and pick the channel.
+- **Rocket.Chat**: **Administration**, **Integrations**, **New**,
+  **Incoming**, and pick the channel.
+- **Google Chat**, in a browser: open the space, then **Apps &
+  integrations** from the menu by its name, **Add webhooks**, and **Copy
+  link** on the new webhook.
+
+Use the URL as `url`, and this `body`:
+
+```json
+{ "text": "{{summary}}\n{{details}}" }
+```
+
+A message goes to the channel or space the webhook was made for. Mattermost
+and Rocket.Chat also take a `"channel"` field: a channel name (`"alerts"` in
+Mattermost, `"#alerts"` in Rocket.Chat) or `"@username"` for a direct
+message. The webhook has to allow it: in Mattermost it must not be locked to
+its channel, and in Rocket.Chat the integration must allow overriding the
+destination channel, or the message is refused.
+
 ## Which channels get added
 
 A new channel type is maintenance for as long as the upstream API exists, so
@@ -510,7 +536,7 @@ people who run SubGlance **demonstrably use it**. ntfy, Gotify and SMS Gateway
 for Android meet the first; Slack, Discord, Telegram, email and Twilio meet the
 second.
 
-For anything else (Teams, Matrix, Pushover and so on), use the `webhook`
+For anything else (Teams, Matrix, Pushover, Mattermost and so on), use the `webhook`
 channel. It posts the alert as a stable JSON object, described under
 [the webhook payload](#the-webhook-payload), or, with
 [a body of your own](#a-body-of-your-own), in the shape the service wants;

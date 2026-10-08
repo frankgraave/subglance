@@ -25,6 +25,7 @@ func TestWebhookBodiesAreTheDocumentedExamples(t *testing.T) {
 		"### Microsoft Teams": teamsBody,
 		"### Matrix":          matrixBody,
 		"### Pushover":        pushoverBody,
+		"### Mattermost, Rocket.Chat and Google Chat": chatBody,
 	} {
 		start := strings.Index(doc, "\n"+heading+"\n")
 		if start == -1 {
@@ -190,6 +191,83 @@ func TestPushoverBecomesAWebhookWithItsSettingsInTheBody(t *testing.T) {
 				}
 			}
 			cfg := fillIn(c.Config, map[string]string{"url": "https://api.pushover.net/1/messages.json?token=a&user=u"})
+			if err := notifier.NewWebhookSender(nil).Validate(cfg); err != nil {
+				t.Errorf("the filled-in channel is refused: %v", err)
+			}
+		})
+	}
+}
+
+func TestChatServicesBecomeAWebhookWithATextMessage(t *testing.T) {
+	cases := []struct {
+		name    string
+		config  string
+		url     string
+		channel any // the body's "channel", nil when it has none
+		notes   []string
+		absent  []string
+	}{
+		{"Mattermost with a channel", `{"type":"mattermost","mattermostWebhookUrl":"https://mm.example/hooks/kuma-secret",` +
+			`"mattermostchannel":"Ops-Alerts","mattermostusername":"Uptime Kuma","mattermosticonemo":":ok: :x:"}`,
+			"https://mm.example/hooks/abc", "ops-alerts",
+			[]string{"Mattermost incoming webhook", "own name and icon"}, nil},
+		{"Mattermost direct message", `{"type":"mattermost","mattermostWebhookUrl":"https://mm.example/hooks/kuma-secret","mattermostchannel":"@frank"}`,
+			"https://mm.example/hooks/abc", "@frank", []string{"Mattermost incoming webhook"}, []string{"own name and icon", "left out"}},
+		{"Mattermost without a channel", `{"type":"mattermost","mattermostWebhookUrl":"https://mm.example/hooks/kuma-secret"}`,
+			"https://mm.example/hooks/abc", nil, nil, []string{"own name and icon", "left out"}},
+		{"Mattermost channel by display name", `{"type":"mattermost","mattermostWebhookUrl":"https://mm.example/hooks/kuma-secret","mattermostchannel":"Ops Alerts"}`,
+			"https://mm.example/hooks/abc", nil, []string{`channel "Ops Alerts" is not a Mattermost channel name`}, nil},
+		{"Rocket.Chat with a channel", `{"type":"rocket.chat","rocketwebhookURL":"https://rc.example/hooks/kuma-secret",` +
+			`"rocketchannel":"#Alerts","rocketusername":"kuma","rocketiconemo":":ghost:"}`,
+			"https://rc.example/hooks/abc/def", "#Alerts", []string{"Rocket.Chat incoming integration", "own name and icon"}, nil},
+		{"Rocket.Chat room id", `{"type":"rocket.chat","rocketwebhookURL":"https://rc.example/hooks/kuma-secret","rocketchannel":"GENERAL"}`,
+			"https://rc.example/hooks/abc/def", "GENERAL", nil, []string{"own name and icon", "left out"}},
+		{"Mattermost channel with a leading #", `{"type":"mattermost","mattermostWebhookUrl":"https://mm.example/hooks/kuma-secret","mattermostchannel":"#Alerts"}`,
+			"https://mm.example/hooks/abc", "#alerts", []string{"Mattermost incoming webhook"}, []string{"left out"}},
+		{"Rocket.Chat channel beyond ASCII", `{"type":"rocket.chat","rocketwebhookURL":"https://rc.example/hooks/kuma-secret","rocketchannel":"#警報"}`,
+			"https://rc.example/hooks/abc/def", "#警報", nil, []string{"left out"}},
+		{"Rocket.Chat channel with a space", `{"type":"rocket.chat","rocketwebhookURL":"https://rc.example/hooks/kuma-secret","rocketchannel":"#ops alerts"}`,
+			"https://rc.example/hooks/abc/def", nil, []string{`channel "#ops alerts" is not a Rocket.Chat channel`}, nil},
+		{"Rocket.Chat channel that is not one", `{"type":"rocket.chat","rocketwebhookURL":"https://rc.example/hooks/kuma-secret","rocketchannel":"#a\"b"}`,
+			"https://rc.example/hooks/abc/def", nil, []string{`channel "#a\"b" is not a Rocket.Chat channel`}, nil},
+		{"Google Chat with a template", `{"type":"GoogleChat","googleChatWebhookURL":"https://chat.googleapis.com/v1/spaces/X/messages?key=k&token=kuma-secret",` +
+			`"googleChatUseTemplate":true,"googleChatTemplate":"{{ msg }}"}`,
+			"https://chat.googleapis.com/v1/spaces/X/messages?key=k&token=t", nil,
+			[]string{"Google Chat space webhook", "template was not carried over"}, []string{"own name and icon"}},
+		{"Google Chat template switched off", `{"type":"GoogleChat","googleChatWebhookURL":"https://chat.googleapis.com/v1/spaces/X/messages?key=k&token=kuma-secret",` +
+			`"googleChatUseTemplate":false,"googleChatTemplate":"{{ msg }}"}`,
+			"https://chat.googleapis.com/v1/spaces/X/messages?key=k&token=t", nil, nil, []string{"template"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c, notes := convertKuma(t, tc.config)
+			if c.Type != "webhook" || c.Config["url"] != configfile.Placeholder || len(c.Config) != 2 {
+				t.Errorf("channel = %+v", c)
+			}
+			var body map[string]any
+			if err := json.Unmarshal([]byte(c.Config["body"]), &body); err != nil {
+				t.Fatalf("body is not JSON: %v\n%s", err, c.Config["body"])
+			}
+			want := map[string]any{"text": "{{summary}}\n{{details}}"}
+			if tc.channel != nil {
+				want["channel"] = tc.channel
+			} else if c.Config["body"] != chatBody {
+				t.Errorf("body = %q, want the documented %q", c.Config["body"], chatBody)
+			}
+			if !maps.Equal(body, want) {
+				t.Errorf("body = %v, want %v", body, want)
+			}
+			for _, w := range append(tc.notes, "now a webhook channel that posts a text message") {
+				if !strings.Contains(notes, w) {
+					t.Errorf("notes = %q, want %q", notes, w)
+				}
+			}
+			for _, unwanted := range tc.absent {
+				if strings.Contains(notes, unwanted) {
+					t.Errorf("notes = %q, should not say %q", notes, unwanted)
+				}
+			}
+			cfg := fillIn(c.Config, map[string]string{"url": tc.url})
 			if err := notifier.NewWebhookSender(nil).Validate(cfg); err != nil {
 				t.Errorf("the filled-in channel is refused: %v", err)
 			}
