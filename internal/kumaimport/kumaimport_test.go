@@ -86,7 +86,8 @@ func TestConvertBothSchemas(t *testing.T) {
 
 			post, _ := monitorByName(res, "API POST")
 			if deref(post.Method) != "POST" || deref(post.ExpectedStatus) != "200-299,301" || deref(post.FollowRedirects) ||
-				post.Headers["X-Api-Key"] != configfile.Placeholder || deref(post.Body) != configfile.Placeholder {
+				post.Headers["X-Api-Key"] != configfile.Placeholder || deref(post.Body) != configfile.Placeholder ||
+				post.Headers["Content-Type"] != "application/json" || len(post.Headers) != 2 {
 				t.Errorf("API POST = %+v", post)
 			}
 			intranet, _ := monitorByName(res, "Intranet")

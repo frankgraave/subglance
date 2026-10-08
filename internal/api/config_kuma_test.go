@@ -87,6 +87,11 @@ func TestKumaConversionPassesTheImporter(t *testing.T) {
 			byName := map[string]bool{}
 			for _, m := range mons {
 				byName[m.Name] = m.Enabled
+				// The type Kuma sent with the body is stored as it is; the
+				// withheld key waits to be filled in, so it is not stored.
+				if m.Name == "API POST" && (len(m.Headers) != 1 || m.Headers["Content-Type"] != "application/json") {
+					t.Errorf("API POST stored headers = %v, want only Content-Type: application/json", m.Headers)
+				}
 			}
 			// Paused in Kuma stays paused; a monitor waiting for a header is
 			// paused until it is filled in; the rest run.
