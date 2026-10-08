@@ -375,7 +375,9 @@ silently renamed or truncated.
 Kuma. SubGlance's public pages have no password protection, so enabling one
 would make its contents public. The password is never written to the file or
 its report. Review the page before choosing whether to publish it without a
-password. Importing a converted file that contains `status_pages` requires an
+password. If that slug already names a public page on the destination, it is
+switched off before its monitor list is replaced, even if the replacement
+fails. Importing a converted file that contains `status_pages` requires an
 **administrator**; an editor's import is refused without writing anything.
 
 Custom CSS, footer text, analytics, logos, custom domains, tag and certificate

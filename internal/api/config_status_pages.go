@@ -226,7 +226,9 @@ func samePageMonitors(ex existingConfig, have []store.StatusPageEntry, want []co
 // A page created switched on is created switched off, given its monitors and
 // only then switched on, so a visitor never sees it half built, and a failure
 // in between leaves a draft rather than a published empty page. Running the
-// file again finds the draft by its slug and finishes it.
+// file again finds the draft by its slug and finishes it. An existing page
+// being disabled is switched off before its entries are replaced: a converted
+// password-protected page must never briefly expose its new monitor list.
 func (s *Server) applyPage(ctx context.Context, st pageStep, monitorIDs map[string]int64) error {
 	publish := st.page.Enabled
 	if st.id == 0 {
@@ -238,6 +240,12 @@ func (s *Server) applyPage(ctx context.Context, st pageStep, monitorIDs map[stri
 		}
 		st.id = created.ID
 		st.write = publish
+	} else if st.write && !publish {
+		st.page.ID = st.id
+		if _, err := s.db.UpdateStatusPage(ctx, st.page); err != nil {
+			return err
+		}
+		st.write = false
 	}
 	if st.monitors != nil {
 		in := make([]store.StatusPageEntryInput, len(st.monitors))

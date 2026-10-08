@@ -280,3 +280,36 @@ func TestImportedPageStaysADraftWhenItsMonitorsFail(t *testing.T) {
 		t.Error("a page whose monitors could not be set was published")
 	}
 }
+
+// The new list can contain monitors that were private in Kuma. Switching an
+// existing page off after replacing entries would briefly disclose them, and
+// a failed replacement would leave the page published against the file's
+// explicit enabled:false. A failure here models a monitor removed after the
+// import plan was validated.
+func TestImportDisablesExistingPageBeforeReplacingEntries(t *testing.T) {
+	srv, db := testServerWithDB(t)
+	ctx := t.Context()
+	page, err := db.CreateStatusPage(ctx, store.StatusPage{
+		Slug: "protected", Title: "Protected services", Enabled: true, Selection: store.StatusPageSelectMonitors,
+	})
+	must(t, err)
+	page.Enabled = false
+	err = srv.applyPage(ctx, pageStep{id: page.ID, page: page, write: true,
+		monitors: []configfile.StatusPageMonitor{{Monitor: "removed", Name: "Private service"}},
+	}, map[string]int64{"removed": 99999})
+	if err == nil {
+		t.Fatal("expected the missing monitor to refuse the entry replacement")
+	}
+	after, err := db.GetStatusPageBySlug(ctx, "protected")
+	must(t, err)
+	if after.Enabled {
+		t.Fatal("page stayed public until after its entries were replaced")
+	}
+	for _, path := range []string{"/status/protected", "/api/v1/status-pages/protected"} {
+		rec := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("GET %s = %d, want 404", path, rec.Code)
+		}
+	}
+}
