@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/frankgraave/subglance/internal/kumaimport"
+	"github.com/frankgraave/subglance/internal/store"
 )
 
 // A file converted from a real Kuma database must pass the importer as it
@@ -101,8 +102,19 @@ func TestKumaConversionPassesTheImporter(t *testing.T) {
 			if code != http.StatusOK || rep.Summary.Create != 0 || rep.Summary.Update != 0 {
 				t.Errorf("second dry run = %d %+v: %s", code, rep.Summary, body)
 			}
-			if !slices.ContainsFunc(res.Skipped, func(n kumaimport.Note) bool { return n.Type == "dns" }) {
-				t.Errorf("the DNS monitor is not listed as skipped: %v", res.Skipped)
+			// The DNS monitor is a dns monitor with Kuma's resolver.
+			if slices.ContainsFunc(res.Skipped, func(n kumaimport.Note) bool { return n.Type == "dns" }) {
+				t.Errorf("the DNS monitor was skipped: %v", res.Skipped)
+			}
+			var dns *store.Monitor
+			for i := range mons {
+				if mons[i].Name == "DNS example.com" {
+					dns = &mons[i]
+				}
+			}
+			if dns == nil || dns.Type != store.TypeDNS || dns.Target != "example.com" || !dns.Enabled ||
+				dns.DNS == nil || dns.DNS.RecordType != "A" || dns.DNS.Resolver != "1.1.1.1" || len(dns.DNS.Expected) != 0 {
+				t.Errorf("DNS example.com = %+v", dns)
 			}
 		})
 	}

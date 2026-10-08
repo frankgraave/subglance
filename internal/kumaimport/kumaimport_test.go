@@ -157,7 +157,7 @@ func TestEveryObjectIsAccountedFor(t *testing.T) {
 			if got := len(res.Document.Channels) + countKind(res.Skipped, "channel"); got != res.Channels {
 				t.Errorf("%d channels converted or skipped, %d in Kuma", got, res.Channels)
 			}
-			for _, name := range []string{"monitor/DNS example.com", "monitor/Container web", "monitor/Edge",
+			for _, name := range []string{"monitor/Container web", "monitor/Edge",
 				"monitor/Maintenance flag", "channel/Pushover", "status page/Public status"} {
 				if skipped[name] == "" {
 					t.Errorf("%s is not listed with a reason; skipped = %v", name, skipped)
@@ -197,7 +197,7 @@ func TestRenderWithholdsEveryCredential(t *testing.T) {
 				t.Error("the rendered file has no monitors")
 			}
 			if !bytes.Contains(out, []byte("# Not imported from Uptime Kuma:")) ||
-				!bytes.Contains(out, []byte(`monitor "DNS example.com" (dns): not converted yet; create a dns monitor for it by hand`)) {
+				!bytes.Contains(out, []byte(`monitor "Container web" (docker): SubGlance has no Docker container check`)) {
 				t.Errorf("the report is missing from the file:\n%s", out)
 			}
 		})

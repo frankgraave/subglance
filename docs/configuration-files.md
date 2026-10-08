@@ -294,6 +294,7 @@ check**. Nothing is left out without being named there.
 | HTTP(s) - Json Query | `http` with a `json_assertion`: `==`, `!=`, `<` and `>` on a plain path such as `data.items[0].status` |
 | TCP Port | `tcp`, `host:port` |
 | Ping | `ping` |
+| DNS: A, AAAA, CNAME, MX or TXT | `dns` with the same name, `record_type` and resolver; one *record equals* condition becomes the one `expected` value |
 | Push | `push`; Kuma's heartbeat interval becomes `push_interval_s` |
 | Heartbeat interval, retries, request timeout | `interval_s`, `retries`, `timeout_s` |
 | Accepted status codes, method, *Max. Redirects* | `expected_status`, `method`, `follow_redirects` (off when Kuma allowed none) |
@@ -327,6 +328,16 @@ addresses, recipients and chat ids come over as they are.
   case the field holds a string.
 - *Ignore TLS/SSL errors* has no equivalent. SubGlance verifies every
   certificate, so a self-signed or expired one fails the check.
+- A DNS monitor without conditions passes on any answer of its record type, as
+  in Kuma: `expected: []`. With one *record equals* condition, Kuma passed when
+  any record matched; a `dns` monitor wants exactly the expected A, AAAA or MX
+  records, so another record the name should have goes in `expected` too, and
+  each such monitor is listed. CNAME and TXT mean the same in both.
+- Kuma 2 tries a list of resolvers in turn; a `dns` monitor asks one. The first
+  is kept, with Kuma's port when it is not 53, and the rest are listed. A
+  resolver on a private address, such as a Pi-hole or AdGuard Home on the local
+  network, is listed as well: SubGlance asks it only when started with
+  [`--allow-private-targets`](operations.md#private-targets).
 - An email channel's Cc recipients become ordinary recipients. Bcc recipients
   are left out rather than shown to everyone, and listed.
 - A webhook channel receives [SubGlance's payload](channels.md#the-webhook-payload),
@@ -337,9 +348,11 @@ addresses, recipients and chat ids come over as they are.
 ### What does not come over
 
 Monitor types SubGlance has no check for (Docker, gRPC, MQTT, databases, game
-servers and the rest), Kuma DNS monitors (create them as `dns` monitors by
-hand), groups themselves, monitors in *Upside Down Mode*
-(imported as they are, they would report the opposite state), JSON queries that
+servers and the rest), DNS monitors on CAA, NS, PTR, SOA or SRV records, DNS
+monitors whose conditions are more than one *record equals* (a *contains* or
+an *or* has no counterpart in a list of expected values), groups themselves,
+monitors in *Upside Down Mode* (imported as they are, they would report the
+opposite state), JSON queries that
 use JSONata beyond a plain path, other authentication methods (NTLM, OAuth2,
 mTLS), notification types SubGlance has no channel for, status pages and
 maintenance windows. History stays in Kuma.
