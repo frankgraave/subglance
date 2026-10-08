@@ -107,14 +107,16 @@ func TestSMSTextWording(t *testing.T) {
 
 // TestSMSTextWithoutZoneNamesIt: without a channel zone the time is the
 // server's, and it says which zone that is.
+//
+// The expectation is read from the process zone rather than pinned by writing
+// time.Local: that variable is read by every time.Now() in the binary,
+// including other tests' goroutines, so assigning it is a data race.
 func TestSMSTextWithoutZoneNamesIt(t *testing.T) {
-	old := time.Local
-	time.Local = time.UTC
-	t.Cleanup(func() { time.Local = old })
-
-	got := smsText(smsAlert(state.EventIncidentConfirmed), "", smsSeptets)
-	if !strings.HasSuffix(got, "(since 12:03 UTC)") {
-		t.Errorf("text = %q, want the time with its zone", got)
+	a := smsAlert(state.EventIncidentConfirmed)
+	want := "(since " + a.StartedAt.In(time.Local).Format("15:04 MST") + ")"
+	got := smsText(a, "", smsSeptets)
+	if !strings.HasSuffix(got, want) {
+		t.Errorf("text = %q, want it to end in %q, the time with its zone", got, want)
 	}
 }
 

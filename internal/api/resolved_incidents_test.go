@@ -6,7 +6,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"os/exec"
+	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -169,60 +173,103 @@ func TestResolvedIncidentsAllowAWalkAtTheMaximumWindow(t *testing.T) {
 	}
 }
 
+// issuedCursorZoneEnv carries the zone into the child half of
+// TestResolvedIncidentsMaximumWindowIssuedCursor.
+const issuedCursorZoneEnv = "SUBGLANCE_TEST_ISSUED_CURSOR_ZONE"
+
 // Exercise issued cursors, not just a fabricated position. The local-time case
 // crosses different DST offsets at the two-year boundary: a calendar-day cap
 // must not consume the grace allowed to an elapsed-day window.
+//
+// Each zone is a fresh process started with TZ set, which is how a deployment
+// gets its zone, rather than an assignment to time.Local. That variable is
+// read by every time.Now() in the binary, including timers other tests leave
+// behind (the auth package's memory release fires on its own goroutine after a
+// login), so writing it here was a data race the race detector caught only
+// when the two happened to overlap.
 func TestResolvedIncidentsMaximumWindowIssuedCursor(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("TZ does not set the process zone on Windows")
+	}
 	for _, zone := range []string{"UTC", "America/New_York"} {
 		t.Run(zone, func(t *testing.T) {
-			t.Setenv("TZ", zone) // Also prevents this test from running in parallel.
-			location, err := time.LoadLocation(zone)
+			cmd := exec.Command(os.Args[0], "-test.run=^TestResolvedIncidentsIssuedCursorInZone$", "-test.v")
+			cmd.Env = append(os.Environ(), "TZ="+zone, issuedCursorZoneEnv+"="+zone)
+			out, err := cmd.CombinedOutput()
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("walk in %s failed (%v):\n%s", zone, err, out)
 			}
-			previous := time.Local
-			time.Local = location
-			t.Cleanup(func() { time.Local = previous })
-
-			synctest.Test(t, func(t *testing.T) {
-				time.Sleep(time.Until(time.Date(2026, time.March, 9, 12, 0, 0, 0, time.UTC)))
-				srv, db := testServerWithDB(t)
-				now := time.Now().Truncate(time.Second)
-				since := now.Add(-resolvedHistoryMaxDays * 24 * time.Hour)
-				recent := seedResolved(t, db, "recent", now.Add(-2*time.Hour), now.Add(-time.Hour))
-				edge := seedResolved(t, db, "edge", since.Add(-time.Hour), since.Add(time.Second))
-				seedResolved(t, db, "outside", since.Add(-2*time.Hour), since.Add(-time.Second))
-
-				first := getResolved(t, srv, url.Values{"days": {"730"}, "limit": {"1"}})
-				if len(first.Incidents) != 1 || first.Incidents[0].MonitorID != recent.ID ||
-					!first.HasMore || first.NextCursor == "" {
-					t.Fatalf("first page = %+v, want recent incident and a cursor", first)
-				}
-				cursor, err := parseResolvedCursor(first.NextCursor)
-				if err != nil || !cursor.Since.Equal(since) {
-					t.Fatalf("cursor lost the initial window: %+v, %v", cursor, err)
-				}
-
-				// A real continuation after the clock advances; the edge row
-				// would disappear if the floor were recomputed on page two.
-				time.Sleep(30 * time.Minute)
-				second := getResolved(t, srv, url.Values{"limit": {"1"}, "cursor": {first.NextCursor}})
-				if len(second.Incidents) != 1 || second.Incidents[0].MonitorID != edge.ID ||
-					second.HasMore || second.NextCursor != "" {
-					t.Fatalf("second page = %+v, want only the original boundary incident", second)
-				}
-
-				// Expiry remains bounded; the grace must not disable the cap.
-				time.Sleep(31 * time.Minute)
-				rec := httptest.NewRecorder()
-				authedHandler(srv).ServeHTTP(rec, httptest.NewRequest(http.MethodGet,
-					"/api/v1/incidents/resolved?cursor="+first.NextCursor, nil))
-				if rec.Code != http.StatusBadRequest {
-					t.Fatalf("expired maximum-window cursor: status = %d, want 400", rec.Code)
-				}
-			})
+			// A renamed child would match nothing and exit 0, which would
+			// pass this test without walking anything.
+			if !strings.Contains(string(out), "--- PASS: TestResolvedIncidentsIssuedCursorInZone") {
+				t.Fatalf("the child walk did not run in %s:\n%s", zone, out)
+			}
 		})
 	}
+}
+
+// TestResolvedIncidentsIssuedCursorInZone is the child half of
+// TestResolvedIncidentsMaximumWindowIssuedCursor, run in the zone that test
+// starts it in.
+func TestResolvedIncidentsIssuedCursorInZone(t *testing.T) {
+	zone := os.Getenv(issuedCursorZoneEnv)
+	if zone == "" {
+		t.Skip("child half of TestResolvedIncidentsMaximumWindowIssuedCursor")
+	}
+	location, err := time.LoadLocation(zone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Without this the New York case could quietly run in UTC and stop
+	// covering the DST crossing it exists for.
+	for _, at := range []time.Time{
+		time.Date(2026, time.January, 15, 12, 0, 0, 0, time.UTC),
+		time.Date(2026, time.July, 15, 12, 0, 0, 0, time.UTC),
+	} {
+		_, got := at.In(time.Local).Zone()
+		_, want := at.In(location).Zone()
+		if got != want {
+			t.Fatalf("process zone offset on %s = %d, want %s's %d", at.Format(time.DateOnly), got, zone, want)
+		}
+	}
+
+	synctest.Test(t, func(t *testing.T) {
+		time.Sleep(time.Until(time.Date(2026, time.March, 9, 12, 0, 0, 0, time.UTC)))
+		srv, db := testServerWithDB(t)
+		now := time.Now().Truncate(time.Second)
+		since := now.Add(-resolvedHistoryMaxDays * 24 * time.Hour)
+		recent := seedResolved(t, db, "recent", now.Add(-2*time.Hour), now.Add(-time.Hour))
+		edge := seedResolved(t, db, "edge", since.Add(-time.Hour), since.Add(time.Second))
+		seedResolved(t, db, "outside", since.Add(-2*time.Hour), since.Add(-time.Second))
+
+		first := getResolved(t, srv, url.Values{"days": {"730"}, "limit": {"1"}})
+		if len(first.Incidents) != 1 || first.Incidents[0].MonitorID != recent.ID ||
+			!first.HasMore || first.NextCursor == "" {
+			t.Fatalf("first page = %+v, want recent incident and a cursor", first)
+		}
+		cursor, err := parseResolvedCursor(first.NextCursor)
+		if err != nil || !cursor.Since.Equal(since) {
+			t.Fatalf("cursor lost the initial window: %+v, %v", cursor, err)
+		}
+
+		// A real continuation after the clock advances; the edge row
+		// would disappear if the floor were recomputed on page two.
+		time.Sleep(30 * time.Minute)
+		second := getResolved(t, srv, url.Values{"limit": {"1"}, "cursor": {first.NextCursor}})
+		if len(second.Incidents) != 1 || second.Incidents[0].MonitorID != edge.ID ||
+			second.HasMore || second.NextCursor != "" {
+			t.Fatalf("second page = %+v, want only the original boundary incident", second)
+		}
+
+		// Expiry remains bounded; the grace must not disable the cap.
+		time.Sleep(31 * time.Minute)
+		rec := httptest.NewRecorder()
+		authedHandler(srv).ServeHTTP(rec, httptest.NewRequest(http.MethodGet,
+			"/api/v1/incidents/resolved?cursor="+first.NextCursor, nil))
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expired maximum-window cursor: status = %d, want 400", rec.Code)
+		}
+	})
 }
 
 // A cursor may pin the window, but it may not widen it past the cap.
