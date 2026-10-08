@@ -49,6 +49,7 @@ type importReport struct {
 	Monitors     []importItem `json:"monitors"`
 	RoutingRules []importItem `json:"routing_rules"`
 	Maintenance  []importItem `json:"maintenance"`
+	StatusPages  []importItem `json:"status_pages"`
 	Summary      importCounts `json:"summary"`
 }
 
@@ -67,6 +68,7 @@ type importPlan struct {
 	monitors []monitorStep
 	rules    []ruleStep
 	windows  []windowStep
+	pages    []pageStep
 }
 
 type channelStep struct {
@@ -111,6 +113,8 @@ type existingConfig struct {
 	attached map[int64][]int64
 	rules    map[string]store.RoutingRule // by key=value
 	windows  []store.MaintenanceWindow
+	pages    map[string]store.StatusPage // by slug
+	entries  map[int64][]store.StatusPageEntry
 }
 
 func (s *Server) loadExisting(ctx context.Context) (existingConfig, error) {
@@ -164,8 +168,10 @@ func (s *Server) loadExisting(ctx context.Context) (existingConfig, error) {
 	for _, r := range rules {
 		ex.rules[r.TagKey+"="+r.TagValue] = r
 	}
-	ex.windows, err = s.db.ListMaintenance(ctx)
-	return ex, err
+	if ex.windows, err = s.db.ListMaintenance(ctx); err != nil {
+		return ex, err
+	}
+	return ex, s.loadPages(ctx, &ex)
 }
 
 // planImport validates doc against the instance and decides every write.
@@ -178,7 +184,7 @@ func (s *Server) planImport(ctx context.Context, doc configfile.Document) (impor
 	}
 	p := importPlan{report: importReport{
 		Channels: []importItem{}, Monitors: []importItem{},
-		RoutingRules: []importItem{}, Maintenance: []importItem{},
+		RoutingRules: []importItem{}, Maintenance: []importItem{}, StatusPages: []importItem{},
 	}}
 
 	// Keys a reference may name: every object in the file, plus every keyed
@@ -239,8 +245,14 @@ func (s *Server) planImport(ctx context.Context, doc configfile.Document) (impor
 		return importPlan{}, problemAt("maintenance",
 			"would bring this instance to %d maintenance windows; the limit is %d", n, maxMaintenanceWindows)
 	}
+	for i, sp := range doc.StatusPages {
+		if err := planPage(&p, ex, fmt.Sprintf("status_pages[%d]", i), sp, monitorKnown); err != nil {
+			return importPlan{}, err
+		}
+	}
 
-	for _, list := range [][]importItem{p.report.Channels, p.report.Monitors, p.report.RoutingRules, p.report.Maintenance} {
+	for _, list := range [][]importItem{p.report.Channels, p.report.Monitors, p.report.RoutingRules,
+		p.report.Maintenance, p.report.StatusPages} {
 		for _, it := range list {
 			switch it.Action {
 			case actionCreate:
@@ -773,7 +785,8 @@ func deref[T any](p *T) T {
 var errImportIncomplete = errors.New("import stopped part way")
 
 // applyImport performs a plan. Channels go first so monitors can be attached
-// to them, then monitors, then the rules and windows that refer to both.
+// to them, then monitors, then the rules, windows and status pages that refer
+// to them.
 //
 // The writes are not one transaction; each goes through the same store call
 // the API uses, so every invariant those calls keep still holds. The plan has
@@ -855,6 +868,17 @@ func (s *Server) applyImport(ctx context.Context, p *importPlan, pushURL func(to
 			w.MonitorID = monitorIDs[st.monitor]
 		}
 		if _, err := s.db.CreateMaintenance(ctx, w); err != nil {
+			return err
+		}
+	}
+
+	if len(p.pages) > 0 {
+		// The public pages cache what they render; a changed page shows at
+		// the next request, as after a change through the API.
+		defer s.publicPages.forget()
+	}
+	for _, st := range p.pages {
+		if err := s.applyPage(ctx, st, monitorIDs); err != nil {
 			return err
 		}
 	}

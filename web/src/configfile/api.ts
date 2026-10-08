@@ -9,7 +9,7 @@ export type ImportAction = "create" | "update" | "unchanged";
 
 /** What an import does, or would do, to one object. */
 export interface ImportItem {
-  /** Monitors and channels only. */
+  /** A monitor's or channel's key, or a status page's slug. */
   key?: string;
   /** The object's name; `key=value` for a routing rule. */
   name?: string;
@@ -28,15 +28,17 @@ export interface ImportReport {
   monitors: ImportItem[];
   routing_rules: ImportItem[];
   maintenance: ImportItem[];
+  status_pages: ImportItem[];
   summary: { create: number; update: number; unchanged: number; needs_secrets: number };
 }
 
-/** The four groups, in the order the server plans them and the report lists them. */
+/** The five groups, in the order the server plans them and the report lists them. */
 export const GROUPS = [
   ["channels", "Channels"],
   ["monitors", "Monitors"],
   ["routing_rules", "Routing rules"],
   ["maintenance", "Maintenance windows"],
+  ["status_pages", "Status pages"],
 ] as const;
 
 /** The server refuses a larger body with a 413; refusing it here saves the upload. */

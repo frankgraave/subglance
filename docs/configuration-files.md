@@ -1,7 +1,8 @@
 # Configuration files
 
 SubGlance can write its configuration to a YAML file and read it back:
-monitors, notification channels, routing rules and maintenance windows. Use it
+monitors, notification channels, routing rules, maintenance windows and status
+pages. Use it
 to move a setup to another instance, to keep it in a repository where changes
 show up as diffs, or to create forty monitors from a file instead of forty
 forms.
@@ -29,7 +30,9 @@ curl -H "Authorization: Bearer $TOKEN" \
 
 Export needs an editor or an administrator. The file lists every monitor,
 channel, routing rule and maintenance window. One-off maintenance windows that
-have already ended are left out: they are history, not configuration.
+have already ended are left out: they are history, not configuration. Status
+pages are administered by administrators only, so they are in the file when an
+administrator exports it, and left out when an editor does.
 
 ## Importing
 
@@ -61,8 +64,9 @@ Import follows three rules.
   whole file, and the error says where: `monitors[3].interval_s: interval_s
   must be between 20 and 86400`.
 - **Twice is the same as once.** Monitors and channels are matched by key,
-  routing rules by their tag pair, and maintenance windows by all of their
-  fields, so importing a file a second time changes nothing.
+  routing rules by their tag pair, maintenance windows by all of their
+  fields and status pages by their slug, so importing a file a second time
+  changes nothing.
 
 A field the file leaves out keeps its current value on an existing object, and
 gets the same default the API gives a new one. A hand-written file can
@@ -217,6 +221,22 @@ maintenance:
     weekdays: [2]
     local_time: "02:00"
     duration_minutes: 60
+status_pages:
+  - slug: acme
+    title: Acme services
+    description: The services customers use.
+    timezone: Europe/Amsterdam
+    language: en
+    accent: ""
+    hide_credit: false
+    indexable: false
+    enabled: true
+    selection: monitors
+    monitors:
+      - monitor: api-prod
+        name: Public API
+      - monitor: www-dns
+        name: Website
 ```
 
 Field names and allowed values are the ones the API uses; see
@@ -249,6 +269,21 @@ A few points specific to the file:
 - A maintenance window is identified by all of its fields. Editing a window in
   the file and importing it adds the edited window next to the old one; delete
   the old one in the interface.
+- A status page is identified by its `slug`, compared without regard to case.
+  Changing the slug in the file describes a second page; rename a page's
+  address in the interface. `monitors` lists the page's monitors in page
+  order, each by its monitor key and under the `name` visitors see; on a page
+  with `selection: tag` (and a `tag_key` and `tag_value`) it lists the tagged
+  monitors that have a public name. A `selection` given in the file brings its
+  tag pair with it, so `selection: monitors` clears the tag.
+- A status page that the import creates with `enabled: true` is filled with
+  its monitors before it is switched on, so it is never published empty.
+- Status pages need an administrator. An editor importing a file with
+  `status_pages` is refused whole, with nothing written, rather than having
+  the pages silently skipped.
+- A status page's logo is not in the file. It is an image, which does not
+  belong in a file meant to be read in a diff; upload it again after the
+  import.
 - The file is limited to 4 MiB.
 
 ## Coming from Uptime Kuma

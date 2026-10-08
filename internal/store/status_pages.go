@@ -425,6 +425,21 @@ func (db *DB) ListStatusPageEntries(ctx context.Context, pageID int64) ([]Status
 	return out, rows.Err()
 }
 
+// NormaliseStatusPageDisplayName trims the public name of a monitor on a
+// page. It returns the reason the name is refused, worded to follow "display
+// name ... ", or "" when the name is fine. Exported so a configuration file is
+// held to the same rule before anything is written.
+func NormaliseStatusPageDisplayName(name string) (string, string) {
+	name = strings.TrimSpace(name)
+	if n := utf8.RuneCountInString(name); n == 0 || n > maxStatusPageDisplayName {
+		return name, fmt.Sprintf("must be 1-%d characters", maxStatusPageDisplayName)
+	}
+	if strings.ContainsAny(name, "\n\r\t") {
+		return name, "must not contain line breaks or tabs"
+	}
+	return name, ""
+}
+
 // SetStatusPageEntries makes a page's entries equal to the list given, in
 // that order, in one transaction.
 //
@@ -440,12 +455,9 @@ func (db *DB) SetStatusPageEntries(ctx context.Context, pageID int64, entries []
 	}
 	seen := make(map[int64]bool, len(entries))
 	for i := range entries {
-		name := strings.TrimSpace(entries[i].DisplayName)
-		if n := utf8.RuneCountInString(name); n == 0 || n > maxStatusPageDisplayName {
-			return nil, invalidStatusPage("entries", "display name of monitor %d must be 1-%d characters", entries[i].MonitorID, maxStatusPageDisplayName)
-		}
-		if strings.ContainsAny(name, "\n\r\t") {
-			return nil, invalidStatusPage("entries", "display name of monitor %d must not contain line breaks or tabs", entries[i].MonitorID)
+		name, msg := NormaliseStatusPageDisplayName(entries[i].DisplayName)
+		if msg != "" {
+			return nil, invalidStatusPage("entries", "display name of monitor %d %s", entries[i].MonitorID, msg)
 		}
 		if seen[entries[i].MonitorID] {
 			return nil, invalidStatusPage("entries", "monitor %d is listed twice", entries[i].MonitorID)

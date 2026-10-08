@@ -39,7 +39,7 @@ function summary(report: ImportReport): string {
   if (create + update === 0) {
     return unchanged > 0
       ? "Everything in this file already matches this instance. There is nothing to import."
-      : "This file describes no monitors, channels, routing rules or maintenance windows.";
+      : "This file describes no monitors, channels, routing rules, maintenance windows or status pages.";
   }
   return `${parts.join(", ")}.`;
 }
@@ -119,8 +119,8 @@ function ExportPanel() {
   }
   return <Panel label="Export">
     <p className="panel-note">
-      Monitors, notification channels, routing rules and maintenance windows as one YAML file. History, users, API tokens and credentials
-      are not in it, so it is not a backup. <a href={docs}>Read about configuration files</a>.
+      Monitors, notification channels, routing rules, maintenance windows and, in an administrator&apos;s export, status pages as one
+      YAML file. History, users, API tokens and credentials are not in it, so it is not a backup. <a href={docs}>Read about configuration files</a>.
     </p>
     <div><button type="button" className="button" disabled={state === "busy"} onClick={() => void run()}>
       {state === "busy" ? "Exporting…" : "Download configuration"}

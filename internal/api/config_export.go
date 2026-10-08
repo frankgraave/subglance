@@ -24,7 +24,11 @@ import (
 // Credentials never leave through this function. Channel settings follow the
 // same allowlist as the masked API read (publicKeys), and request headers and
 // bodies are withheld whole. See configfile.Placeholder.
-func (s *Server) exportConfig(ctx context.Context, now time.Time) (configfile.Document, error) {
+//
+// Status pages are written only when withPages is set, which the handler
+// does for an administrator: the status page API is theirs alone, and an
+// export is a read of it like any other.
+func (s *Server) exportConfig(ctx context.Context, now time.Time, withPages bool) (configfile.Document, error) {
 	doc := configfile.Document{Version: configfile.Version}
 
 	channels, err := s.db.ListChannels(ctx)
@@ -106,6 +110,11 @@ func (s *Server) exportConfig(ctx context.Context, now time.Time) (configfile.Do
 			continue
 		}
 		doc.Maintenance = append(doc.Maintenance, exportMaintenance(w, monitorKeys))
+	}
+	if withPages {
+		if doc.StatusPages, err = s.exportStatusPages(ctx, monitorKeys); err != nil {
+			return doc, err
+		}
 	}
 	return doc, nil
 }
