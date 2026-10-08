@@ -21,8 +21,8 @@ func TestImportUptimeKuma(t *testing.T) {
 		!strings.Contains(out.String(), "key: shop-prod") {
 		t.Errorf("output = %.300s", out.String())
 	}
-	if !strings.Contains(report.String(), "Converted 12 of 16 monitors and 7 of 8 channels") ||
-		strings.Contains(out.String(), "Converted 12 of") {
+	if !strings.Contains(report.String(), "Converted 13 of 16 monitors and 7 of 8 channels") ||
+		strings.Contains(out.String(), "Converted 13 of") {
 		t.Errorf("report = %q", report.String())
 	}
 
