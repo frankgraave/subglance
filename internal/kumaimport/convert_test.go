@@ -229,3 +229,62 @@ func TestReportStaysInsideComments(t *testing.T) {
 		t.Errorf("parse: %v", err)
 	}
 }
+
+// Kuma sends a request body with the Content-Type of its Body Encoding,
+// which it sets itself rather than storing among the monitor's headers.
+// SubGlance sends a body with no type unless a header gives one, so the
+// importer writes that header: without it a JSON API that Kuma reached
+// answers 400 or 415 once the body is filled in.
+func TestBodyContentTypeComesOver(t *testing.T) {
+	const body = `{"ping": true}`
+	cases := []struct {
+		name    string
+		row     row
+		headers map[string]string
+		note    string
+	}{
+		{"default encoding is JSON", httpRow(row{"method": "POST", "body": body}),
+			map[string]string{"Content-Type": "application/json"}, ""},
+		{"JSON", httpRow(row{"method": "POST", "body": body, "http_body_encoding": "json"}),
+			map[string]string{"Content-Type": "application/json"}, ""},
+		{"form", httpRow(row{"method": "POST", "body": "a=1&b=2", "http_body_encoding": "form"}),
+			map[string]string{"Content-Type": "application/x-www-form-urlencoded"}, ""},
+		{"XML", httpRow(row{"method": "POST", "body": "<ping/>", "http_body_encoding": "xml"}),
+			map[string]string{"Content-Type": "text/xml; charset=utf-8"}, ""},
+		{"keyword monitor", httpRow(row{"type": "keyword", "keyword": "ok", "method": "POST", "body": body}),
+			map[string]string{"Content-Type": "application/json"}, ""},
+		{"no body", httpRow(row{"http_body_encoding": "json"}), nil, ""},
+		{"blank body", httpRow(row{"method": "POST", "body": " \n", "http_body_encoding": "xml"}), nil, ""},
+		{"the user's own header wins", httpRow(row{"method": "POST", "body": body,
+			"headers": `{"Content-Type": "application/vnd.api+json"}`}),
+			map[string]string{"Content-Type": configfile.Placeholder}, ""},
+		{"the user's own header in another case", httpRow(row{"method": "POST", "body": "<ping/>",
+			"http_body_encoding": "xml", "headers": `{"content-type": "application/soap+xml"}`}),
+			map[string]string{"content-type": configfile.Placeholder}, ""},
+		{"beside other headers", httpRow(row{"method": "POST", "body": body, "auth_method": "bearer"}),
+			map[string]string{"Authorization": configfile.Placeholder, "Content-Type": "application/json"},
+			"bearer authentication"},
+		{"an encoding from a later Kuma", httpRow(row{"method": "POST", "body": "x", "http_body_encoding": "yaml"}),
+			nil, `its body encoding "yaml" is not one the importer knows`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var res Result
+			m, ok := convertMonitor(tc.row, &res)
+			if !ok {
+				t.Fatalf("skipped: %s", notesOf(res))
+			}
+			if len(m.Headers) != len(tc.headers) {
+				t.Errorf("headers = %v, want %v", m.Headers, tc.headers)
+			}
+			for k, v := range tc.headers {
+				if got, ok := m.Headers[k]; !ok || got != v {
+					t.Errorf("headers = %v, want %v", m.Headers, tc.headers)
+				}
+			}
+			if got := notesOf(res); (tc.note == "") != (got == "") || !strings.Contains(got, tc.note) {
+				t.Errorf("notes = %q, want one containing %q", got, tc.note)
+			}
+		})
+	}
+}

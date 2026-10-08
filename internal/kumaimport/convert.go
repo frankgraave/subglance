@@ -244,6 +244,7 @@ func convertHTTP(m row, out *configfile.Monitor, res *Result, name, typ string) 
 	}
 	if strings.TrimSpace(m.str("body")) != "" {
 		out.Body = ptr(configfile.Placeholder)
+		bodyContentType(m.str("http_body_encoding"), out, note)
 	}
 
 	if m.bool("ignore_tls") {
@@ -284,6 +285,41 @@ func convertHTTP(m row, out *configfile.Monitor, res *Result, name, typ string) 
 		out.JSONAssertion = node
 	}
 	return true
+}
+
+// bodyEncodingTypes is the Content-Type Kuma sends with a request body, per
+// Body Encoding. Kuma sets it itself (server/model/monitor.js in 1.23 and
+// 2.5), so it is not in the monitor's headers; SubGlance sends a body with
+// no type unless a header gives one, and a JSON API behind a parser that
+// keys on the type answers 400 or 415 to it. "form" exists from 2.x on.
+var bodyEncodingTypes = map[string]string{
+	"":     "application/json",
+	"json": "application/json",
+	"form": "application/x-www-form-urlencoded",
+	"xml":  "text/xml; charset=utf-8",
+}
+
+// bodyContentType gives a monitor with a request body the Content-Type Kuma
+// sent with it. The value is written out rather than withheld: Kuma derived
+// it from the encoding, so it is not a secret of the user's. A Content-Type
+// in the monitor's own headers wins, as it did in Kuma, where those headers
+// are applied after its own; that header is already in out, withheld.
+func bodyContentType(encoding string, out *configfile.Monitor, note func(string)) {
+	for k := range out.Headers {
+		if strings.EqualFold(k, "Content-Type") {
+			return
+		}
+	}
+	typ, ok := bodyEncodingTypes[encoding]
+	if !ok {
+		note("its body encoding " + strconv.Quote(encoding) + " is not one the importer knows; " +
+			"add a Content-Type header with the type the server expects")
+		return
+	}
+	if out.Headers == nil {
+		out.Headers = map[string]string{}
+	}
+	out.Headers["Content-Type"] = typ
 }
 
 // addHeader adds a header whose value is withheld, as an export withholds
