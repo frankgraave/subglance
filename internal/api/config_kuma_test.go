@@ -56,6 +56,7 @@ func TestKumaConversionPassesTheImporter(t *testing.T) {
 				"ntfy-phone":       "password,topic",
 				"gotify":           "token",
 				"webhook-json":     "headers,url",
+				"pushover":         "url",
 				"api-post":         "body,headers.X-Api-Key",
 				"intranet":         "headers.Authorization",
 				"shop-prod":        "",
