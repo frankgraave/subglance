@@ -67,11 +67,11 @@ type Result struct {
 	// difference. Both are in the order the objects appear in Kuma.
 	Skipped []Note
 	Changed []Note
-	// Monitors, Channels and Windows count the rows read, imported or
+	// Monitors, Channels, Windows and StatusPages count the rows read, imported or
 	// not. WindowsConverted counts the Kuma windows that came over; one can
 	// become several SubGlance windows, one per monitor it covered.
-	Monitors, Channels, Windows int
-	WindowsConverted            int
+	Monitors, Channels, Windows, StatusPages int
+	WindowsConverted                         int
 }
 
 // ErrNotKuma means the file is an SQLite database without Kuma's tables.
@@ -194,6 +194,11 @@ type source struct {
 	tags          []row
 	monitorTags   []row
 	statusPages   []row
+	pageGroups    []row
+	pageMonitors  []row
+	pageDomains   []row
+	pageIncidents []row
+	pageWindows   []row
 	maintenance   []row
 	// monitorMaintenance links windows to the monitors they cover.
 	monitorMaintenance []row
@@ -206,15 +211,20 @@ type source struct {
 // queries names every statement the reader runs. Whole rows, never a column
 // list: see the package comment.
 var queries = map[string]string{
-	"monitor":              "SELECT * FROM monitor ORDER BY id",
-	"notification":         "SELECT * FROM notification ORDER BY id",
-	"monitor_notification": "SELECT * FROM monitor_notification ORDER BY id",
-	"tag":                  "SELECT * FROM tag ORDER BY id",
-	"monitor_tag":          "SELECT * FROM monitor_tag ORDER BY id",
-	"status_page":          "SELECT * FROM status_page ORDER BY id",
-	"maintenance":          "SELECT * FROM maintenance ORDER BY id",
-	"monitor_maintenance":  "SELECT * FROM monitor_maintenance ORDER BY id",
-	"setting":              "SELECT * FROM setting",
+	"monitor":                 "SELECT * FROM monitor ORDER BY id",
+	"notification":            "SELECT * FROM notification ORDER BY id",
+	"monitor_notification":    "SELECT * FROM monitor_notification ORDER BY id",
+	"tag":                     "SELECT * FROM tag ORDER BY id",
+	"monitor_tag":             "SELECT * FROM monitor_tag ORDER BY id",
+	"status_page":             "SELECT * FROM status_page ORDER BY id",
+	"group":                   `SELECT * FROM "group" ORDER BY id`,
+	"monitor_group":           "SELECT * FROM monitor_group ORDER BY id",
+	"status_page_cname":       "SELECT * FROM status_page_cname ORDER BY id",
+	"incident":                "SELECT * FROM incident ORDER BY id",
+	"maintenance_status_page": "SELECT * FROM maintenance_status_page ORDER BY id",
+	"maintenance":             "SELECT * FROM maintenance ORDER BY id",
+	"monitor_maintenance":     "SELECT * FROM monitor_maintenance ORDER BY id",
+	"setting":                 "SELECT * FROM setting",
 }
 
 func load(ctx context.Context, db *sql.DB) (source, error) {
@@ -254,6 +264,21 @@ func load(ctx context.Context, db *sql.DB) (source, error) {
 		return source{}, err
 	}
 	if src.statusPages, err = read("status_page"); err != nil {
+		return source{}, err
+	}
+	if src.pageGroups, err = read("group"); err != nil {
+		return source{}, err
+	}
+	if src.pageMonitors, err = read("monitor_group"); err != nil {
+		return source{}, err
+	}
+	if src.pageDomains, err = read("status_page_cname"); err != nil {
+		return source{}, err
+	}
+	if src.pageIncidents, err = read("incident"); err != nil {
+		return source{}, err
+	}
+	if src.pageWindows, err = read("maintenance_status_page"); err != nil {
 		return source{}, err
 	}
 	if src.maintenance, err = read("maintenance"); err != nil {
@@ -318,11 +343,12 @@ func readAll(ctx context.Context, db *sql.DB, query string) ([]row, error) {
 // cannot carry over becomes a Note instead.
 func convert(src source) Result {
 	res := Result{
-		Document: configfile.Document{Version: configfile.Version},
-		Schema:   src.schema,
-		Monitors: len(src.monitors),
-		Channels: len(src.notifications),
-		Windows:  len(src.maintenance),
+		Document:    configfile.Document{Version: configfile.Version},
+		Schema:      src.schema,
+		Monitors:    len(src.monitors),
+		Channels:    len(src.notifications),
+		Windows:     len(src.maintenance),
+		StatusPages: len(src.statusPages),
 	}
 
 	channelKeys := map[int64]string{} // Kuma notification id -> channel key
@@ -382,10 +408,8 @@ func convert(src source) Result {
 	}
 	convertWindows(src, monitorKeys, &res)
 
-	for _, p := range src.statusPages {
-		res.Skipped = append(res.Skipped, Note{Kind: "status page", Name: p.str("title"),
-			Reason: "status pages are not imported; recreate /status/" + p.str("slug") + " under Settings, Status pages"})
-	}
+	convertStatusPages(src, monitorKeys, &res)
+
 	return res
 }
 
