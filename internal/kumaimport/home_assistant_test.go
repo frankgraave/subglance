@@ -52,6 +52,12 @@ func TestHomeAssistantBecomesAWebhookToTheNotifyAction(t *testing.T) {
 			"", []string{"is not one SubGlance can post to"}, nil},
 		{"credentials in the address", `{"type":"HomeAssistant","homeAssistantUrl":"https://admin:hunter2@ha.example.org"}`,
 			"", []string{"carried a user name and password"}, []string{"hunter2"}},
+		{"credentials and a query in the address", `{"type":"HomeAssistant","homeAssistantUrl":"https://admin:hunter2@ha.example.org/?x=1"}`,
+			"", []string{"carried a user name and password"}, []string{"hunter2"}},
+		{"credentials in an address that does not parse", `{"type":"HomeAssistant","homeAssistantUrl":"https://admin:hunter2@ha.example.org:bad"}`,
+			"", []string{"Kuma's Home Assistant address is not one SubGlance can post to"}, []string{"hunter2"}},
+		{"a port with no host", `{"type":"HomeAssistant","homeAssistantUrl":"http://:8123"}`,
+			"", []string{`address "http://:8123" is not one SubGlance can post to`}, nil},
 		// Kuma's request escaped the braces in a path, and so does the
 		// url: they are a literal part of the path, not a placeholder.
 		{"braces in the path", `{"type":"HomeAssistant","homeAssistantUrl":"https://ha.example.org/{{x}}"}`,

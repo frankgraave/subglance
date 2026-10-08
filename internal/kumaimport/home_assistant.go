@@ -64,16 +64,24 @@ func homeAssistantURL(base, action string, note func(string)) (*url.URL, bool) {
 	// slashes. A query or fragment would have broken Kuma's request, so an
 	// address with one is not carried over.
 	u, err := url.Parse(base)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" ||
-		u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" {
-		note("Kuma's Home Assistant address " + strconv.Quote(base) + " is not one SubGlance can post to; " +
-			"fill in the url as " + haURLShape)
+	if err == nil && u.User != nil {
+		// A user name and password in the address are a credential: the
+		// whole address stays out of the file rather than half of it. This
+		// is checked first, so no later refusal quotes the address.
+		note("Kuma's Home Assistant address carried a user name and password; fill in the url as " + haURLShape)
 		return nil, false
 	}
-	if u.User != nil {
-		// A user name and password in the address are a credential: the
-		// whole address stays out of the file rather than half of it.
-		note("Kuma's Home Assistant address carried a user name and password; fill in the url as " + haURLShape)
+	// "http://:8123" parses with a Host but no Hostname, and posts nowhere.
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" ||
+		u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" {
+		// An address that did not parse can still hold a user name and
+		// password; one with an @ is not quoted.
+		shown := " "
+		if !strings.Contains(base, "@") {
+			shown = " " + strconv.Quote(base) + " "
+		}
+		note("Kuma's Home Assistant address" + shown + "is not one SubGlance can post to; " +
+			"fill in the url as " + haURLShape)
 		return nil, false
 	}
 
