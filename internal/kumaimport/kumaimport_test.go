@@ -5,20 +5,25 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/frankgraave/subglance/internal/configfile"
 )
 
 // The fixtures were written by Uptime Kuma itself, 1.23.16 and 2.5.5, through
 // its own socket API: eight channels, sixteen monitors (fifteen on 1.23, which
-// has no numeric JSON operators), tags, a group and a status page. Every
-// credential in them contains "kuma-secret". Heartbeats, statistics and the
-// user row were removed afterwards; nothing the converter reads was edited.
+// has no numeric JSON operators), tags, a group, a status page, the server
+// time zone Europe/Amsterdam, and fourteen maintenance windows covering every
+// schedule Kuma offers. Every credential in them contains "kuma-secret".
+// Heartbeats, statistics and the user row were removed afterwards; nothing
+// the converter reads was edited.
 var fixtures = []string{"kuma-1.23.16.db", "kuma-2.5.5.db"}
 
 func convertFixture(t *testing.T, name string) Result {
@@ -145,6 +150,45 @@ func TestConvertBothSchemas(t *testing.T) {
 	}
 }
 
+// The windows Kuma wrote come over as the windows its schedules describe.
+func TestConvertWindowsFromBothSchemas(t *testing.T) {
+	berlin, err := time.LoadLocation("Europe/Berlin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	move := time.Date(2096, 3, 1, 22, 0, 0, 0, berlin)
+	for _, fixture := range fixtures {
+		t.Run(fixture, func(t *testing.T) {
+			res := convertFixture(t, fixture)
+			var got []string
+			for _, m := range res.Document.Maintenance {
+				line := m.Name + " " + m.Monitor + m.TagKey + "=" + m.TagValue
+				if m.StartsAt != nil {
+					line += " " + m.StartsAt.Format(time.RFC3339) + "/" + m.EndsAt.Format(time.RFC3339)
+				} else {
+					line += " " + m.Timezone + " " + fmt.Sprint(m.Weekdays) + " " + m.LocalTime + " " + strconv.Itoa(m.DurationMinutes)
+				}
+				got = append(got, line)
+			}
+			want := []string{
+				"Nightly deploy shop-prod= Europe/Amsterdam [1 2 3 4 5] 02:00 60",
+				"Nightly deploy api-post= Europe/Amsterdam [1 2 3 4 5] 02:00 60",
+				"Weekend backup group=Edge America/New_York [0 6] 23:30 90",
+				"Daily rotate status-json= UTC [0 1 2 3 4 5 6] 04:00 15",
+				"Sunday cron postgres= Europe/Amsterdam [0] 03:30 45",
+				"Datacenter move postgres= " + move.UTC().Format(time.RFC3339) + "/" + move.Add(6*time.Hour).UTC().Format(time.RFC3339),
+				"Thursday reboot router= Europe/Amsterdam [4] 05:00 30",
+			}
+			if !slices.Equal(got, want) {
+				t.Errorf("windows:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+			}
+			if res.Windows != 14 || res.WindowsConverted != 6 {
+				t.Errorf("windows read %d, converted %d; want 14 and 6", res.Windows, res.WindowsConverted)
+			}
+		})
+	}
+}
+
 // Nothing falls away silently: every Kuma monitor and channel is either in
 // the document or in the skipped list, by name.
 func TestEveryObjectIsAccountedFor(t *testing.T) {
@@ -161,8 +205,16 @@ func TestEveryObjectIsAccountedFor(t *testing.T) {
 			if got := len(res.Document.Channels) + countKind(res.Skipped, "channel"); got != res.Channels {
 				t.Errorf("%d channels converted or skipped, %d in Kuma", got, res.Channels)
 			}
+			// A window can become several, one per monitor, so windows are
+			// counted by the Kuma windows that came over.
+			if got := res.WindowsConverted + countKind(res.Skipped, "maintenance"); got != res.Windows || res.Windows == 0 {
+				t.Errorf("%d maintenance windows converted or skipped, %d in Kuma", got, res.Windows)
+			}
 			for _, name := range []string{"monitor/Container web", "monitor/Edge",
-				"monitor/Maintenance flag", "status page/Public status"} {
+				"monitor/Maintenance flag", "status page/Public status", "maintenance/Every third day",
+				"maintenance/Monthly patch", "maintenance/Six-hourly cron", "maintenance/Past migration",
+				"maintenance/Manual hold", "maintenance/Paused window", "maintenance/Summer freeze",
+				"maintenance/Docker only"} {
 				if skipped[name] == "" {
 					t.Errorf("%s is not listed with a reason; skipped = %v", name, skipped)
 				}

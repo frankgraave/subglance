@@ -91,8 +91,9 @@ func importTo(args []string, out, report io.Writer) error {
 		return fmt.Errorf("write %s: %w", *dest, err)
 	}
 
-	_, err = fmt.Fprintf(report, "Converted %d of %d monitors and %d of %d channels from Uptime Kuma %s.\n",
-		len(res.Document.Monitors), res.Monitors, len(res.Document.Channels), res.Channels, res.Schema)
+	_, err = fmt.Fprintf(report, "Converted %d of %d monitors, %d of %d channels and %d of %d maintenance windows from Uptime Kuma %s.\n",
+		len(res.Document.Monitors), res.Monitors, len(res.Document.Channels), res.Channels,
+		res.WindowsConverted, res.Windows, res.Schema)
 	if err != nil {
 		return err
 	}

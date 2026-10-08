@@ -32,9 +32,9 @@ func TestKumaConversionPassesTheImporter(t *testing.T) {
 			if code != http.StatusOK {
 				t.Fatalf("dry run = %d: %s\n%s", code, body, file)
 			}
-			if !rep.DryRun || rep.Summary.Create != len(res.Document.Monitors)+len(res.Document.Channels) {
-				t.Errorf("dry run summary = %+v, want %d creates", rep.Summary,
-					len(res.Document.Monitors)+len(res.Document.Channels))
+			creates := len(res.Document.Monitors) + len(res.Document.Channels) + len(res.Document.Maintenance)
+			if !rep.DryRun || rep.Summary.Create != creates || len(res.Document.Maintenance) == 0 {
+				t.Errorf("dry run summary = %+v, want %d creates, maintenance among them", rep.Summary, creates)
 			}
 
 			code, rep, body = importYAML(t, srv, string(file), false)
@@ -96,6 +96,27 @@ func TestKumaConversionPassesTheImporter(t *testing.T) {
 			}
 			if !strings.Contains(pushURL, "/push/") {
 				t.Errorf("push_url = %q, want a new push URL", pushURL)
+			}
+
+			// The windows are on the monitors and the group tag they were
+			// converted for, in the zones Kuma ran them in.
+			windows, err := db.ListMaintenance(context.Background())
+			must(t, err)
+			ids := map[int64]string{}
+			for _, m := range mons {
+				ids[m.ID] = m.Name
+			}
+			var got []string
+			for _, w := range windows {
+				got = append(got, w.Name+"|"+ids[w.MonitorID]+"|"+w.TagKey+"="+w.TagValue+"|"+w.Timezone)
+			}
+			slices.Sort(got)
+			want := []string{"Daily rotate|Status JSON|=|UTC", "Datacenter move|Postgres|=|",
+				"Nightly deploy|API POST|=|Europe/Amsterdam", "Nightly deploy|Shop (prod)|=|Europe/Amsterdam",
+				"Sunday cron|Postgres|=|Europe/Amsterdam", "Thursday reboot|Router|=|Europe/Amsterdam",
+				"Weekend backup||group=Edge|America/New_York"}
+			if !slices.Equal(got, want) {
+				t.Errorf("windows = %v, want %v", got, want)
 			}
 
 			// Twice is the same as once, for a converted file too.

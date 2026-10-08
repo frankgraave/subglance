@@ -389,16 +389,10 @@ func convertTags(monitor string, tags []kumaTag, group string, res *Result) map[
 			note("tag " + strconv.Quote(name) + " has no letters or digits to make a key from and was left out")
 			return
 		}
-		// A SubGlance tag always has a value. A bare Kuma tag is a flag,
-		// and "yes" says that.
-		value = strings.Join(strings.Fields(value), " ")
-		if value == "" {
-			value = "yes"
-		}
-		if utf8.RuneCountInString(value) > maxTagValueLen {
-			value = string([]rune(value)[:maxTagValueLen])
+		if utf8.RuneCountInString(strings.Join(strings.Fields(value), " ")) > maxTagValueLen {
 			note("tag " + key + " was shortened to " + strconv.Itoa(maxTagValueLen) + " characters")
 		}
+		value = tagValue(value)
 		if cur, dup := out[key]; dup {
 			if cur != value {
 				note("tag " + key + " had more than one value; kept " + strconv.Quote(cur) + ", left out " + strconv.Quote(value))
@@ -418,6 +412,22 @@ func convertTags(monitor string, tags []kumaTag, group string, res *Result) map[
 		add(t.name, t.value)
 	}
 	return out
+}
+
+// tagValue makes a SubGlance tag value from a Kuma tag value or group name,
+// as the server stores it: spaces collapsed, at most maxTagValueLen
+// characters, and no space at either end, which the server would trim and a
+// maintenance window on the tag would then no longer match. A SubGlance tag
+// always has a value; a bare Kuma tag is a flag, and "yes" says that.
+func tagValue(s string) string {
+	v := strings.Join(strings.Fields(s), " ")
+	if utf8.RuneCountInString(v) > maxTagValueLen {
+		v = strings.TrimSpace(string([]rune(v)[:maxTagValueLen]))
+	}
+	if v == "" {
+		v = "yes"
+	}
+	return v
 }
 
 // tagKey makes a SubGlance tag key from a Kuma tag name: lowercase letters

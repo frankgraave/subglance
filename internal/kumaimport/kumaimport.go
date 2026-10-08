@@ -67,8 +67,11 @@ type Result struct {
 	// difference. Both are in the order the objects appear in Kuma.
 	Skipped []Note
 	Changed []Note
-	// Monitors and Channels count the rows read, imported or not.
-	Monitors, Channels int
+	// Monitors, Channels and Windows count the rows read, imported or
+	// not. WindowsConverted counts the Kuma windows that came over; one can
+	// become several SubGlance windows, one per monitor it covered.
+	Monitors, Channels, Windows int
+	WindowsConverted            int
 }
 
 // ErrNotKuma means the file is an SQLite database without Kuma's tables.
@@ -191,7 +194,13 @@ type source struct {
 	tags          []row
 	monitorTags   []row
 	statusPages   []row
-	maintenance   int
+	maintenance   []row
+	// monitorMaintenance links windows to the monitors they cover.
+	monitorMaintenance []row
+	settings           []row
+	// now decides which of Kuma's windows have ended. It is read once, so
+	// one conversion judges every window at the same instant.
+	now time.Time
 }
 
 // queries names every statement the reader runs. Whole rows, never a column
@@ -204,6 +213,8 @@ var queries = map[string]string{
 	"monitor_tag":          "SELECT * FROM monitor_tag ORDER BY id",
 	"status_page":          "SELECT * FROM status_page ORDER BY id",
 	"maintenance":          "SELECT * FROM maintenance ORDER BY id",
+	"monitor_maintenance":  "SELECT * FROM monitor_maintenance ORDER BY id",
+	"setting":              "SELECT * FROM setting",
 }
 
 func load(ctx context.Context, db *sql.DB) (source, error) {
@@ -217,7 +228,7 @@ func load(ctx context.Context, db *sql.DB) (source, error) {
 
 	// Kuma 2 moved its migrations to knex; 1.x patched the schema with its
 	// own SQL files and has no knex table.
-	src := source{schema: "1.x"}
+	src := source{schema: "1.x", now: time.Now()}
 	if tables["knex_migrations"] {
 		src.schema = "2.x"
 	}
@@ -245,11 +256,15 @@ func load(ctx context.Context, db *sql.DB) (source, error) {
 	if src.statusPages, err = read("status_page"); err != nil {
 		return source{}, err
 	}
-	windows, err := read("maintenance")
-	if err != nil {
+	if src.maintenance, err = read("maintenance"); err != nil {
 		return source{}, err
 	}
-	src.maintenance = len(windows)
+	if src.monitorMaintenance, err = read("monitor_maintenance"); err != nil {
+		return source{}, err
+	}
+	if src.settings, err = read("setting"); err != nil {
+		return source{}, err
+	}
 	return src, nil
 }
 
@@ -307,6 +322,7 @@ func convert(src source) Result {
 		Schema:   src.schema,
 		Monitors: len(src.monitors),
 		Channels: len(src.notifications),
+		Windows:  len(src.maintenance),
 	}
 
 	channelKeys := map[int64]string{} // Kuma notification id -> channel key
@@ -346,6 +362,7 @@ func convert(src source) Result {
 	}
 
 	taken = map[string]bool{}
+	monitorKeys := map[int64]string{} // Kuma monitor id -> monitor key
 	for _, m := range src.monitors {
 		id := int64(m.int("id"))
 		mon, ok := convertMonitor(m, &res)
@@ -360,16 +377,14 @@ func convert(src source) Result {
 		sort.Strings(mon.Channels)
 		mon.Key = configfile.DeriveKey(mon.Name, "monitor", func(k string) bool { return taken[k] })
 		taken[mon.Key] = true
+		monitorKeys[id] = mon.Key
 		res.Document.Monitors = append(res.Document.Monitors, mon)
 	}
+	convertWindows(src, monitorKeys, &res)
 
 	for _, p := range src.statusPages {
 		res.Skipped = append(res.Skipped, Note{Kind: "status page", Name: p.str("title"),
 			Reason: "status pages are not imported; recreate /status/" + p.str("slug") + " under Settings, Status pages"})
-	}
-	if src.maintenance > 0 {
-		res.Skipped = append(res.Skipped, Note{Kind: "maintenance",
-			Reason: strconv.Itoa(src.maintenance) + " maintenance window(s) are not imported; recreate them per monitor or tag"})
 	}
 	return res
 }
