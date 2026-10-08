@@ -303,6 +303,8 @@ check**. Nothing is left out without being named there.
 | Tags | `tags`; a tag without a value becomes `yes`, and a monitor inside a group gets the tag `group` with the group's name |
 | Notifications: Discord, Slack, Telegram, SMTP, ntfy, Gotify, Webhook | channels of the same type, assigned to the same monitors |
 | Notifications: Microsoft Teams, Matrix, Pushover, Mattermost, Rocket.Chat, Google Chat | `webhook` channels with [a body of their own](channels.md#a-body-of-your-own), the one the channel documentation gives for that service |
+| Maintenance: *Single Maintenance Window* | a one-off window, from and to the same wall-clock times in the window's time zone |
+| Maintenance: *Recurring - Day of Week*, *Recurring - Interval* of one day, and a *Cron Expression* that starts at one time of day on chosen weekdays (Kuma's default `30 3 * * *` is one) | a weekly window on the same weekdays, at the same time, for as long, in the same time zone |
 
 Credentials stay out of the file, exactly as in an export: webhook URLs, bot
 tokens, passwords, ntfy topics, header values and request bodies are written as
@@ -355,6 +357,18 @@ addresses, recipients and chat ids come over as they are.
   message lifetime are written into the body. Kuma's card tags, Matrix
   message template, Pushover title and separate recovery sound have no
   counterpart, and each one that was set is listed.
+- A maintenance window covers one monitor or one tag pair, so a Kuma window
+  on several monitors becomes one window per monitor, with the same name. A
+  window on a group covers the tag `group` its monitors were given, for the
+  group and every group inside it. A monitor it covered that did not come
+  over is listed.
+- A window set to Kuma's *Same as Server Timezone* gets the zone set under
+  Kuma's *Settings*, *General*. When none was set there, Kuma ran in its
+  host's zone, which its database does not record, so the window is placed
+  in UTC and listed: check its times.
+- Kuma runs a recurring window only inside its date range; a weekly window
+  has none. A window whose range has not ended comes over without it and is
+  listed. Its description is not carried over, and is listed too.
 - Mattermost, Rocket.Chat and Google Chat become webhooks that post a text
   message, as [the channel documentation](channels.md#mattermost-rocketchat-and-google-chat)
   describes, each listed with its incoming-webhook URL to fill in. A
@@ -365,8 +379,13 @@ addresses, recipients and chat ids come over as they are.
 
 ### What does not come over
 
-Monitor types SubGlance has no check for (Docker, gRPC, MQTT, databases, game
-servers and the rest), DNS monitors on CAA, NS, PTR, SOA or SRV records, DNS
+Maintenance windows switched on and off by hand, paused, or repeating on
+days of the month, every few days, or on a cron expression with more than
+one start a day; windows whose date range has ended; windows longer than
+SubGlance keeps (366 days for one-off, a day for weekly); and windows that
+cover none of the imported monitors. Monitor types SubGlance has no check
+for (Docker, gRPC, MQTT, databases, game servers and the rest), DNS monitors
+on CAA, NS, PTR, SOA or SRV records, DNS
 monitors whose conditions are more than one *record equals* (a *contains* or
 an *or* has no counterpart in a list of expected values), DNS monitors with
 no resolver (Kuma never ran their check) or with a TXT value that starts or
@@ -374,5 +393,5 @@ ends with a space (Kuma compared it exactly), groups themselves,
 monitors in *Upside Down Mode* (imported as they are, they would report the
 opposite state), JSON queries that
 use JSONata beyond a plain path, other authentication methods (NTLM, OAuth2,
-mTLS), notification types SubGlance has no channel for, status pages and
-maintenance windows. History stays in Kuma.
+mTLS), notification types SubGlance has no channel for, and status pages.
+History stays in Kuma.
