@@ -306,9 +306,11 @@ func TestWindowTargets(t *testing.T) {
 	src.monitors[2]["name"] = long
 	res = Result{}
 	convertWindows(src, keys, &res)
+	if len(res.Document.Maintenance) < 1 {
+		t.Fatalf("not converted: %s", notesOf(res))
+	}
 	want := strings.Repeat("g", 63)
-	if v := convertTags("CDN", nil, long, &Result{})["group"]; len(res.Document.Maintenance) < 1 ||
-		res.Document.Maintenance[0].TagValue != want || v != want {
+	if v := convertTags("CDN", nil, long, &Result{})["group"]; res.Document.Maintenance[0].TagValue != want || v != want {
 		t.Errorf("window tag %q, monitor tag %q, want %q", res.Document.Maintenance[0].TagValue, v, want)
 	}
 }
