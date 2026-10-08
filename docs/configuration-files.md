@@ -339,16 +339,20 @@ with a change to check**. Nothing is left out without being named there.
 | Tags | `tags`; a tag without a value becomes `yes`, and a monitor inside a group gets the tag `group` with the group's name |
 | Notifications: Discord, Slack, Telegram, SMTP, ntfy, Gotify, Webhook | channels of the same type, assigned to the same monitors |
 | Notifications: Microsoft Teams, Matrix, Pushover, Mattermost, Rocket.Chat, Google Chat | `webhook` channels with [a body of their own](channels.md#a-body-of-your-own), the one the channel documentation gives for that service |
+| Notifications: Twilio | `sms` channels with [`provider: twilio`](channels.md#twilio), the same account SID and sender |
 | Status pages | `status_pages`, with their slug, title, description, publication and indexing settings, footer credit visibility and ordered monitor list |
 | Maintenance: *Single Maintenance Window* | a one-off window, from and to the same wall-clock times in the window's time zone |
 | Maintenance: *Recurring - Day of Week*, *Recurring - Interval* of one day, and a *Cron Expression* that starts at one time of day on chosen weekdays (Kuma's default `30 3 * * *` is one) | a weekly window on the same weekdays, at the same time, for as long, in the same time zone |
 
 Credentials stay out of the file, exactly as in an export: webhook URLs, bot
-tokens, passwords, ntfy topics, header values and request bodies are written as
-`<fill in after import>`. The import creates those channels and monitors
-**switched off** and lists the missing values under `needs_secrets`. Fill them
-in, in the file or in the interface afterwards, and switch them on. Server
-addresses, recipients and chat ids come over as they are.
+tokens, passwords, ntfy topics, Twilio auth tokens, header values and request
+bodies are written as `<fill in after import>`. The import creates those
+channels and monitors **switched off** and lists the missing values under
+`needs_secrets`. Fill them in, in the file or in the interface afterwards, and
+switch them on. Server addresses, email recipients and chat ids come over as
+they are. Phone numbers do not: they are personal data, so an SMS channel's
+`numbers` is withheld too, and the report shows the number Kuma sent to in
+masked form (`+31 6 •••• 5678`).
 
 ### Status pages
 
@@ -417,6 +421,14 @@ separately; a status-page link does not become monitor coverage.
   given by host name, which may resolve to such an address.
 - An email channel's Cc recipients become ordinary recipients. Bcc recipients
   are left out rather than shown to everyone, and listed.
+- A Twilio channel signs in with the account SID and its auth token. When Kuma
+  signed in with an API key, its auth token field held the key's secret, which
+  does not work with the account SID, so fill in the account's own auth token;
+  each such channel is listed. A messaging service is not used, and is
+  listed. SubGlance sends at most `hourly_limit` alerts an hour (default 10) on
+  an SMS channel, [one text each](channels.md#one-message-160-characters). A
+  sender Twilio would refuse, such as a sender name of more than 11
+  characters, keeps the channel out of the file, with the reason.
 - A webhook channel receives [SubGlance's payload](channels.md#the-webhook-payload),
   not Kuma's. A custom body is not carried over, because Kuma's templates are
   written in another language; give the channel

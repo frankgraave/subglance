@@ -279,3 +279,92 @@ func TestKumaPasswordStatusPageImportsDisabled(t *testing.T) {
 		})
 	}
 }
+
+// A Kuma Twilio notification becomes an SMS channel the importer accepts as
+// it is: created switched off, with the auth token and the recipient left
+// to fill in, and still attached to the monitors that used it in Kuma.
+func TestKumaTwilioImportsAsAnSMSChannel(t *testing.T) {
+	for _, fixture := range []string{"kuma-1.23.16.db", "kuma-2.5.5.db"} {
+		t.Run(fixture, func(t *testing.T) {
+			ctx := t.Context()
+			original, err := os.ReadFile(filepath.Join("..", "kumaimport", "testdata", fixture))
+			must(t, err)
+			path := filepath.Join(t.TempDir(), "kuma.db")
+			must(t, os.WriteFile(path, original, 0o600))
+			source, err := sql.Open("sqlite", path)
+			must(t, err)
+			t.Cleanup(func() { _ = source.Close() })
+			sid := "AC" + strings.Repeat("0123456789abcdef", 2)
+			config := `{"name":"SMS on-call","type":"twilio","isDefault":false,"applyExisting":false,` +
+				`"twilioAccountSID":"` + sid + `","twilioAuthToken":"kuma-secret-twilio",` +
+				`"twilioFromNumber":"+12025550100","twilioToNumber":"+12025550123"}`
+			added, err := source.ExecContext(ctx,
+				"INSERT INTO notification (name, active, user_id, is_default, config) VALUES ('SMS on-call', 1, 1, 0, ?)", config)
+			must(t, err)
+			id, err := added.LastInsertId()
+			must(t, err)
+			_, err = source.ExecContext(ctx,
+				"INSERT INTO monitor_notification (monitor_id, notification_id) SELECT id, ? FROM monitor WHERE name = 'Shop (prod)'", id)
+			must(t, err)
+			must(t, source.Close())
+
+			res, err := kumaimport.Convert(ctx, path)
+			must(t, err)
+			file, err := kumaimport.Render(res)
+			must(t, err)
+			for _, leak := range []string{"kuma-secret-twilio", "2025550123"} {
+				if strings.Contains(string(file), leak) {
+					t.Errorf("the converted file contains %q:\n%s", leak, file)
+				}
+			}
+
+			srv, db := testServerWithDB(t)
+			if code, _, body := importYAML(t, srv, string(file), true); code != http.StatusOK {
+				t.Fatalf("dry run = %d: %s\n%s", code, body, file)
+			}
+			code, rep, body := importYAML(t, srv, string(file), false)
+			if code != http.StatusOK {
+				t.Fatalf("import = %d: %s", code, body)
+			}
+			var needs string
+			for _, it := range rep.Channels {
+				if it.Key == "sms-on-call" {
+					needs = strings.Join(it.NeedsSecrets, ",")
+				}
+			}
+			if needs != "auth_token,numbers" {
+				t.Errorf("sms-on-call needs_secrets = %q, want auth_token,numbers", needs)
+			}
+
+			chans, err := db.ListChannels(ctx)
+			must(t, err)
+			var sms store.Channel
+			for _, c := range chans {
+				if c.Name == "SMS on-call" {
+					sms = c
+				}
+			}
+			if sms.ID == 0 || sms.Type != store.ChannelSMS || sms.Enabled ||
+				sms.Config["provider"] != "twilio" || sms.Config["account_sid"] != sid ||
+				sms.Config["from"] != "+12025550100" || sms.Config["auth_token"] != "" || sms.Config["numbers"] != "" {
+				t.Errorf("stored channel = %+v", sms)
+			}
+			mons, err := db.ListMonitors(ctx)
+			must(t, err)
+			var linked bool
+			for _, m := range mons {
+				if m.Name != "Shop (prod)" {
+					continue
+				}
+				own, err := db.ListMonitorChannels(ctx, m.ID)
+				must(t, err)
+				for _, c := range own {
+					linked = linked || c.ID == sms.ID
+				}
+			}
+			if !linked {
+				t.Error("Shop (prod) is not attached to the SMS channel")
+			}
+		})
+	}
+}
