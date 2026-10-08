@@ -338,7 +338,7 @@ with a change to check**. Nothing is left out without being named there.
 | Paused | `enabled: false` |
 | Tags | `tags`; a tag without a value becomes `yes`, and a monitor inside a group gets the tag `group` with the group's name |
 | Notifications: Discord, Slack, Telegram, SMTP, ntfy, Gotify, Webhook | channels of the same type, assigned to the same monitors |
-| Notifications: Microsoft Teams, Matrix, Pushover, Mattermost, Rocket.Chat, Google Chat | `webhook` channels with [a body of their own](channels.md#a-body-of-your-own), the one the channel documentation gives for that service |
+| Notifications: Microsoft Teams, Matrix, Pushover, Mattermost, Rocket.Chat, Google Chat, Home Assistant | `webhook` channels with [a body of their own](channels.md#a-body-of-your-own), the one the channel documentation gives for that service |
 | Notifications: Twilio | `sms` channels with [`provider: twilio`](channels.md#twilio), the same account SID and sender |
 | Status pages | `status_pages`, with their slug, title, description, publication and indexing settings, footer credit visibility and ordered monitor list |
 | Maintenance: *Single Maintenance Window* | a one-off window, from and to the same wall-clock times in the window's time zone |
@@ -462,6 +462,16 @@ separately; a status-page link does not become monitor coverage.
   so the message still goes there. Kuma's sender name and icon and its
   Google Chat message template have no counterpart, and each one that was set
   is listed.
+- Home Assistant becomes a webhook that calls the same notify action, as
+  [the channel documentation](channels.md#home-assistant) describes. Its
+  address comes over, and the long-lived access token goes in an
+  `Authorization: Bearer` header to fill in. An action typed with `notify.`
+  in front, which Kuma's request could not reach, is written without it, and
+  listed. A Home Assistant on a private address or under a local name such as
+  `homeassistant.local` is listed with
+  [`--allow-private-targets`](operations.md#private-targets). Kuma's fixed
+  title "Uptime Kuma" and its data fields (monitor name, and status 0 or 1)
+  are not sent, so an automation that matched on them has to be changed.
 
 ### What does not come over
 

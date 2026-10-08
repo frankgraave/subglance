@@ -287,26 +287,11 @@ func TestKumaTwilioImportsAsAnSMSChannel(t *testing.T) {
 	for _, fixture := range []string{"kuma-1.23.16.db", "kuma-2.5.5.db"} {
 		t.Run(fixture, func(t *testing.T) {
 			ctx := t.Context()
-			original, err := os.ReadFile(filepath.Join("..", "kumaimport", "testdata", fixture))
-			must(t, err)
-			path := filepath.Join(t.TempDir(), "kuma.db")
-			must(t, os.WriteFile(path, original, 0o600))
-			source, err := sql.Open("sqlite", path)
-			must(t, err)
-			t.Cleanup(func() { _ = source.Close() })
 			sid := "AC" + strings.Repeat("0123456789abcdef", 2)
 			config := `{"name":"SMS on-call","type":"twilio","isDefault":false,"applyExisting":false,` +
 				`"twilioAccountSID":"` + sid + `","twilioAuthToken":"kuma-secret-twilio",` +
 				`"twilioFromNumber":"+12025550100","twilioToNumber":"+12025550123"}`
-			added, err := source.ExecContext(ctx,
-				"INSERT INTO notification (name, active, user_id, is_default, config) VALUES ('SMS on-call', 1, 1, 0, ?)", config)
-			must(t, err)
-			id, err := added.LastInsertId()
-			must(t, err)
-			_, err = source.ExecContext(ctx,
-				"INSERT INTO monitor_notification (monitor_id, notification_id) SELECT id, ? FROM monitor WHERE name = 'Shop (prod)'", id)
-			must(t, err)
-			must(t, source.Close())
+			path := kumaWithNotification(t, fixture, "SMS on-call", config)
 
 			res, err := kumaimport.Convert(ctx, path)
 			must(t, err)
@@ -364,6 +349,104 @@ func TestKumaTwilioImportsAsAnSMSChannel(t *testing.T) {
 			}
 			if !linked {
 				t.Error("Shop (prod) is not attached to the SMS channel")
+			}
+		})
+	}
+}
+
+// kumaWithNotification copies a Kuma fixture and adds one notification to
+// the copy, used by the monitor Shop (prod), as Kuma's own form would have
+// stored it. The fixture itself is left alone, so a new notification type
+// does not need the fixtures regenerated.
+func kumaWithNotification(t *testing.T, fixture, name, config string) string {
+	t.Helper()
+	ctx := t.Context()
+	original, err := os.ReadFile(filepath.Join("..", "kumaimport", "testdata", fixture))
+	must(t, err)
+	path := filepath.Join(t.TempDir(), "kuma.db")
+	must(t, os.WriteFile(path, original, 0o600))
+	source, err := sql.Open("sqlite", path)
+	must(t, err)
+	t.Cleanup(func() { _ = source.Close() })
+	added, err := source.ExecContext(ctx,
+		"INSERT INTO notification (name, active, user_id, is_default, config) VALUES (?, 1, 1, 0, ?)", name, config)
+	must(t, err)
+	id, err := added.LastInsertId()
+	must(t, err)
+	_, err = source.ExecContext(ctx,
+		"INSERT INTO monitor_notification (monitor_id, notification_id) SELECT id, ? FROM monitor WHERE name = 'Shop (prod)'", id)
+	must(t, err)
+	must(t, source.Close())
+	return path
+}
+
+// A Kuma Home Assistant notification becomes a webhook the importer accepts
+// as it is: created switched off with the token's header left to fill in,
+// its address and action carried over, and still attached to the monitors
+// that used it in Kuma.
+func TestKumaHomeAssistantImportsAsAWebhook(t *testing.T) {
+	for _, fixture := range []string{"kuma-1.23.16.db", "kuma-2.5.5.db"} {
+		t.Run(fixture, func(t *testing.T) {
+			ctx := t.Context()
+			config := `{"name":"Home","type":"HomeAssistant","isDefault":false,"applyExisting":false,` +
+				`"homeAssistantUrl":"https://ha.example.org:8123/","longLivedAccessToken":"kuma-secret-ha",` +
+				`"notificationService":"mobile_app_pixel"}`
+			path := kumaWithNotification(t, fixture, "Home", config)
+
+			res, err := kumaimport.Convert(ctx, path)
+			must(t, err)
+			file, err := kumaimport.Render(res)
+			must(t, err)
+			if strings.Contains(string(file), "kuma-secret-ha") {
+				t.Errorf("the converted file contains the access token:\n%s", file)
+			}
+
+			srv, db := testServerWithDB(t)
+			if code, _, body := importYAML(t, srv, string(file), true); code != http.StatusOK {
+				t.Fatalf("dry run = %d: %s\n%s", code, body, file)
+			}
+			code, rep, body := importYAML(t, srv, string(file), false)
+			if code != http.StatusOK {
+				t.Fatalf("import = %d: %s", code, body)
+			}
+			var needs string
+			for _, it := range rep.Channels {
+				if it.Key == "home" {
+					needs = strings.Join(it.NeedsSecrets, ",")
+				}
+			}
+			if needs != "headers" {
+				t.Errorf("home needs_secrets = %q, want headers", needs)
+			}
+
+			chans, err := db.ListChannels(ctx)
+			must(t, err)
+			var hook store.Channel
+			for _, c := range chans {
+				if c.Name == "Home" {
+					hook = c
+				}
+			}
+			if hook.ID == 0 || hook.Type != store.ChannelWebhook || hook.Enabled ||
+				hook.Config["url"] != "https://ha.example.org:8123/api/services/notify/mobile_app_pixel" ||
+				hook.Config["headers"] != "" || !strings.Contains(hook.Config["body"], `"title": "{{summary}}"`) {
+				t.Errorf("stored channel = %+v", hook)
+			}
+			mons, err := db.ListMonitors(ctx)
+			must(t, err)
+			var linked bool
+			for _, m := range mons {
+				if m.Name != "Shop (prod)" {
+					continue
+				}
+				own, err := db.ListMonitorChannels(ctx, m.ID)
+				must(t, err)
+				for _, c := range own {
+					linked = linked || c.ID == hook.ID
+				}
+			}
+			if !linked {
+				t.Error("Shop (prod) is not attached to the Home Assistant channel")
 			}
 		})
 	}

@@ -528,6 +528,29 @@ message. The webhook has to allow it: in Mattermost it must not be locked to
 its channel, and in Rocket.Chat the integration must allow overriding the
 destination channel, or the message is refused.
 
+### Home Assistant
+
+Home Assistant shows a message on a phone, or in its own notification list,
+through a notify action. Create a token under **User profile**, **Security**,
+**Long-lived access tokens**. Then:
+
+- `url`: `http://homeassistant.local:8123/api/services/notify/mobile_app_my_phone`
+- `headers`: `Authorization: Bearer <long-lived access token>`
+- `body`:
+
+```json
+{ "title": "{{summary}}", "message": "{{details}}" }
+```
+
+The last part of the URL is the action without `notify.` in front: search
+for "notify" in the **Actions** tab of Home Assistant's developer tools. A
+phone with the companion app has an action named after it, such as
+`mobile_app_my_phone`; `persistent_notification` puts the alert in Home
+Assistant's own notification list; and `notify` alone uses the first notify
+action Home Assistant finds. A Home Assistant on the local network is
+reached only when SubGlance is started with
+[`--allow-private-targets`](#servers-on-a-private-address).
+
 ## Which channels get added
 
 A new channel type is maintenance for as long as the upstream API exists, so

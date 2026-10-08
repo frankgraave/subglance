@@ -154,6 +154,8 @@ func convertChannel(n row, res *Result) (configfile.Channel, bool) {
 		convertRocketChat(get, &out, note)
 	case "GoogleChat":
 		convertGoogleChat(get, &out, note)
+	case "HomeAssistant":
+		convertHomeAssistant(get, &out, note)
 	case "twilio":
 		if reason := convertTwilio(get, &out, note); reason != "" {
 			return skip(reason)

@@ -26,6 +26,7 @@ func TestWebhookBodiesAreTheDocumentedExamples(t *testing.T) {
 		"### Matrix":          matrixBody,
 		"### Pushover":        pushoverBody,
 		"### Mattermost, Rocket.Chat and Google Chat": chatBody,
+		"### Home Assistant":                          homeAssistantBody,
 	} {
 		start := strings.Index(doc, "\n"+heading+"\n")
 		if start == -1 {
