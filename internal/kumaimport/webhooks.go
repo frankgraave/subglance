@@ -68,11 +68,13 @@ var (
 	pushoverSound  = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 	pushoverDevice = regexp.MustCompile(`^[A-Za-z0-9_-]{1,25}(,[A-Za-z0-9_-]{1,25})*$`)
 
-	// A Mattermost channel is named by its lowercase handle, a person by
-	// @ and a user name. A Rocket.Chat channel is #name, a person @name,
-	// and a room may also be given by its id.
-	mattermostChannel = regexp.MustCompile(`^@?[a-z0-9._-]{1,64}$`)
-	rocketChannel     = regexp.MustCompile(`^[#@]?[A-Za-z0-9._-]{1,64}$`)
+	// A Mattermost channel is named by its lowercase handle, with or
+	// without a leading # (Mattermost drops it), a person by @ and a user
+	// name. A Rocket.Chat channel is #name, a person @name, and a room may
+	// also be given by its id; a workspace can allow letters beyond ASCII
+	// in its channel names, so any letter or digit is accepted there.
+	mattermostChannel = regexp.MustCompile(`^[#@]?[a-z0-9._-]{1,64}$`)
+	rocketChannel     = regexp.MustCompile(`^[#@]?[\p{L}\p{M}\p{N}._-]{1,64}$`)
 )
 
 // convertTeams turns a Kuma Teams notification into a webhook. Its only

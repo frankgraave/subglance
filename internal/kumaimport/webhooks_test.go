@@ -222,6 +222,12 @@ func TestChatServicesBecomeAWebhookWithATextMessage(t *testing.T) {
 			"https://rc.example/hooks/abc/def", "#Alerts", []string{"Rocket.Chat incoming integration", "own name and icon"}, nil},
 		{"Rocket.Chat room id", `{"type":"rocket.chat","rocketwebhookURL":"https://rc.example/hooks/kuma-secret","rocketchannel":"GENERAL"}`,
 			"https://rc.example/hooks/abc/def", "GENERAL", nil, []string{"own name and icon", "left out"}},
+		{"Mattermost channel with a leading #", `{"type":"mattermost","mattermostWebhookUrl":"https://mm.example/hooks/kuma-secret","mattermostchannel":"#Alerts"}`,
+			"https://mm.example/hooks/abc", "#alerts", []string{"Mattermost incoming webhook"}, []string{"left out"}},
+		{"Rocket.Chat channel beyond ASCII", `{"type":"rocket.chat","rocketwebhookURL":"https://rc.example/hooks/kuma-secret","rocketchannel":"#警報"}`,
+			"https://rc.example/hooks/abc/def", "#警報", nil, []string{"left out"}},
+		{"Rocket.Chat channel with a space", `{"type":"rocket.chat","rocketwebhookURL":"https://rc.example/hooks/kuma-secret","rocketchannel":"#ops alerts"}`,
+			"https://rc.example/hooks/abc/def", nil, []string{`channel "#ops alerts" is not a Rocket.Chat channel`}, nil},
 		{"Rocket.Chat channel that is not one", `{"type":"rocket.chat","rocketwebhookURL":"https://rc.example/hooks/kuma-secret","rocketchannel":"#a\"b"}`,
 			"https://rc.example/hooks/abc/def", nil, []string{`channel "#a\"b" is not a Rocket.Chat channel`}, nil},
 		{"Google Chat with a template", `{"type":"GoogleChat","googleChatWebhookURL":"https://chat.googleapis.com/v1/spaces/X/messages?key=k&token=kuma-secret",` +
