@@ -119,8 +119,12 @@ func TestConvertBothSchemas(t *testing.T) {
 				t.Errorf("a monitor in a group did not get the group tag: %v", cdn.Tags)
 			}
 
-			if len(res.Document.Channels) != 7 {
-				t.Errorf("channels = %d, want 7", len(res.Document.Channels))
+			if len(res.Document.Channels) != 8 {
+				t.Errorf("channels = %d, want 8", len(res.Document.Channels))
+			}
+			po, _ := channelByName(res, "Pushover")
+			if po.Type != "webhook" || po.Config["url"] != configfile.Placeholder || po.Config["body"] != pushoverBody {
+				t.Errorf("pushover channel = %+v", po)
 			}
 			mail, _ := channelByName(res, "Mail admins")
 			if mail.Type != "email" || mail.Config["to"] != "ops@example.com, oncall@example.com" ||
@@ -158,7 +162,7 @@ func TestEveryObjectIsAccountedFor(t *testing.T) {
 				t.Errorf("%d channels converted or skipped, %d in Kuma", got, res.Channels)
 			}
 			for _, name := range []string{"monitor/Container web", "monitor/Edge",
-				"monitor/Maintenance flag", "channel/Pushover", "status page/Public status"} {
+				"monitor/Maintenance flag", "status page/Public status"} {
 				if skipped[name] == "" {
 					t.Errorf("%s is not listed with a reason; skipped = %v", name, skipped)
 				}

@@ -142,6 +142,12 @@ func convertChannel(n row, res *Result) (configfile.Channel, bool) {
 		} else {
 			note("SubGlance posts its own JSON payload, not Kuma's; a receiver written for Kuma's fields has to be changed")
 		}
+	case "teams":
+		convertTeams(get, &out, note)
+	case "matrix":
+		convertMatrix(get, &out, note)
+	case "pushover":
+		convertPushover(get, &out, note)
 	default:
 		return skip("SubGlance has no " + typ + " channel")
 	}

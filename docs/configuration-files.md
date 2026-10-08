@@ -302,6 +302,7 @@ check**. Nothing is left out without being named there.
 | Paused | `enabled: false` |
 | Tags | `tags`; a tag without a value becomes `yes`, and a monitor inside a group gets the tag `group` with the group's name |
 | Notifications: Discord, Slack, Telegram, SMTP, ntfy, Gotify, Webhook | channels of the same type, assigned to the same monitors |
+| Notifications: Microsoft Teams, Matrix, Pushover | `webhook` channels with [a body of their own](channels.md#a-body-of-your-own), the one the channel documentation gives for that service |
 
 Credentials stay out of the file, exactly as in an export: webhook URLs, bot
 tokens, passwords, ntfy topics, header values and request bodies are written as
@@ -345,6 +346,15 @@ addresses, recipients and chat ids come over as they are.
   not Kuma's. A custom body is not carried over, because Kuma's templates are
   written in another language; give the channel
   [a body of its own](channels.md#a-body-of-your-own).
+- Teams, Matrix and Pushover have no channel type of their own, so each
+  becomes a webhook built as [the channel documentation](channels.md#a-body-of-your-own)
+  describes, and is listed with the value to fill in: the Workflows URL for
+  Teams; an `Authorization: Bearer` header with the access token for Matrix,
+  whose room address comes over; and for Pushover a URL that carries the
+  application token and user key. Pushover's priority, sound, device and
+  message lifetime are written into the body. Kuma's card tags, Matrix
+  message template, Pushover title and separate recovery sound have no
+  counterpart, and each one that was set is listed.
 
 ### What does not come over
 
