@@ -316,9 +316,10 @@ docker run --rm -v "$PWD/data:/kuma:ro" ghcr.io/frankgraave/subglance:edge \
 ```
 
 Without `-o` the file goes to standard output and the summary to standard
-error. The file ends with two lists, as comments: what was **not imported**,
-each with its name and the reason, and what was **imported with a change to
-check**. Nothing is left out without being named there.
+error. The summary counts converted and total monitors, channels, maintenance
+windows and status pages. The file ends with two lists, as comments: what was
+**not imported**, each with its name and the reason, and what was **imported
+with a change to check**. Nothing is left out without being named there.
 
 ### What comes over
 
@@ -338,6 +339,7 @@ check**. Nothing is left out without being named there.
 | Tags | `tags`; a tag without a value becomes `yes`, and a monitor inside a group gets the tag `group` with the group's name |
 | Notifications: Discord, Slack, Telegram, SMTP, ntfy, Gotify, Webhook | channels of the same type, assigned to the same monitors |
 | Notifications: Microsoft Teams, Matrix, Pushover, Mattermost, Rocket.Chat, Google Chat | `webhook` channels with [a body of their own](channels.md#a-body-of-your-own), the one the channel documentation gives for that service |
+| Status pages | `status_pages`, with their slug, title, description, publication and indexing settings, footer credit visibility and ordered monitor list |
 | Maintenance: *Single Maintenance Window* | a one-off window, from and to the same wall-clock times in the window's time zone |
 | Maintenance: *Recurring - Day of Week*, *Recurring - Interval* of one day, and a *Cron Expression* that starts at one time of day on chosen weekdays (Kuma's default `30 3 * * *` is one) | a weekly window on the same weekdays, at the same time, for as long, in the same time zone |
 
@@ -347,6 +349,40 @@ tokens, passwords, ntfy topics, header values and request bodies are written as
 **switched off** and lists the missing values under `needs_secrets`. Fill them
 in, in the file or in the interface afterwards, and switch them on. Server
 addresses, recipients and chat ids come over as they are.
+
+### Status pages
+
+A page's `published` setting becomes `enabled`, `search_engine_index` becomes
+`indexable`, and `show_powered_by` becomes the inverse of `hide_credit`.
+Pages use `selection: monitors`. Only memberships in public Kuma status-page
+groups are included, flattened in group order and then monitor order; group
+headings do not come over. A monitor listed in more than one group appears
+only at its first position. Each entry refers to the converted monitor's key
+and uses its Kuma monitor name as the public name. Monitors that did not come
+over are left out of the page and listed in the conversion report.
+
+The converter validates pages before writing them, so a bad page does not
+make the whole configuration file impossible to import. Invalid pages are
+skipped with a note, including pages with invalid or reserved slugs (`api`,
+`assets`, `fonts` and `logos`). Slugs allow 1–63 lowercase letters, digits or
+dashes and must start with a letter or digit. Titles allow 1–120 characters
+and descriptions at most 500. Public monitor names must be 1–80 characters,
+without line breaks or tabs, and a page may contain at most 200 monitors.
+Entries that cannot meet these limits are skipped and listed, rather than
+silently renamed or truncated.
+
+**Password-protected pages are explicitly disabled**, even when published in
+Kuma. SubGlance's public pages have no password protection, so enabling one
+would make its contents public. The password is never written to the file or
+its report. Review the page before choosing whether to publish it without a
+password. Importing a converted file that contains `status_pages` requires an
+**administrator**; an editor's import is refused without writing anything.
+
+Custom CSS, footer text, analytics, logos, custom domains, tag and certificate
+expiry display settings, incidents and maintenance-to-page links do not come
+over. Each unsupported setting or relationship that was present is listed in
+the conversion report. A maintenance window's monitor coverage is converted
+separately; a status-page link does not become monitor coverage.
 
 ### What changes on the way
 
@@ -428,5 +464,5 @@ ends with a space (Kuma compared it exactly), groups themselves,
 monitors in *Upside Down Mode* (imported as they are, they would report the
 opposite state), JSON queries that
 use JSONata beyond a plain path, other authentication methods (NTLM, OAuth2,
-mTLS), notification types SubGlance has no channel for, and status pages.
-History stays in Kuma.
+mTLS), and notification types SubGlance has no channel for. History stays in
+Kuma.

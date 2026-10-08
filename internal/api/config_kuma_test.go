@@ -2,7 +2,11 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -32,9 +36,14 @@ func TestKumaConversionPassesTheImporter(t *testing.T) {
 			if code != http.StatusOK {
 				t.Fatalf("dry run = %d: %s\n%s", code, body, file)
 			}
-			creates := len(res.Document.Monitors) + len(res.Document.Channels) + len(res.Document.Maintenance)
+			creates := len(res.Document.Monitors) + len(res.Document.Channels) + len(res.Document.Maintenance) + len(res.Document.StatusPages)
 			if !rep.DryRun || rep.Summary.Create != creates || len(res.Document.Maintenance) == 0 {
 				t.Errorf("dry run summary = %+v, want %d creates, maintenance among them", rep.Summary, creates)
+			}
+
+			if res.StatusPages != 2 || len(res.Document.StatusPages) != 1 || len(rep.StatusPages) != 1 ||
+				rep.StatusPages[0].Key != "public" || rep.StatusPages[0].Action != actionCreate {
+				t.Fatalf("dry run pages = %+v, want public created from 2 source pages", rep.StatusPages)
 			}
 
 			code, rep, body = importYAML(t, srv, string(file), false)
@@ -87,6 +96,44 @@ func TestKumaConversionPassesTheImporter(t *testing.T) {
 				}
 			}
 
+			// Public groups become one ordered list of the imported monitors,
+			// referring to their configuration keys rather than Kuma's ids.
+			pages, err := db.ListStatusPages(context.Background())
+			must(t, err)
+			if len(pages) != 1 {
+				t.Fatalf("stored status pages = %+v, want only public", pages)
+			}
+			page := pages[0]
+			if page.Slug != "public" || page.Title != "Public status" || page.Description != "Shop and API status" ||
+				page.Selection != store.StatusPageSelectMonitors || page.TagKey != "" || page.TagValue != "" ||
+				!page.Enabled || !page.Indexable || !page.HideCredit || page.Timezone != "UTC" ||
+				page.Language != "en" || page.Accent != "" || page.Logo != nil {
+				t.Errorf("stored public page = %+v", page)
+			}
+			entries, err := db.ListStatusPageEntries(context.Background(), page.ID)
+			must(t, err)
+			keys, err := db.MonitorConfigKeys(context.Background())
+			must(t, err)
+			wantEntries := []struct{ key, name string }{
+				{"shop-prod", "Shop (prod)"}, {"api-post", "API POST"}, {"status-json", "Status JSON"},
+				{"postgres", "Postgres"}, {"router", "Router"},
+			}
+			if len(entries) != len(wantEntries) {
+				t.Fatalf("public page entries = %+v, want %d entries", entries, len(wantEntries))
+			}
+			publicKeys := map[string]bool{}
+			for i, entry := range entries {
+				want := wantEntries[i]
+				if keys[entry.MonitorID] != want.key || entry.DisplayName != want.name || entry.Position != i {
+					t.Errorf("public page entry %d = %+v (monitor key %q), want %s / %s", i, entry,
+						keys[entry.MonitorID], want.key, want.name)
+				}
+				if entry.PublicKey == "" || publicKeys[entry.PublicKey] {
+					t.Errorf("public page entry %d has an empty or reused public key: %+v", i, entry)
+				}
+				publicKeys[entry.PublicKey] = true
+			}
+
 			// The push monitor is issued a new URL, shown once.
 			var pushURL string
 			for _, it := range rep.Monitors {
@@ -124,6 +171,21 @@ func TestKumaConversionPassesTheImporter(t *testing.T) {
 			if code != http.StatusOK || rep.Summary.Create != 0 || rep.Summary.Update != 0 {
 				t.Errorf("second dry run = %d %+v: %s", code, rep.Summary, body)
 			}
+			if len(rep.StatusPages) != 1 || rep.StatusPages[0].Action != actionUnchanged {
+				t.Errorf("second dry run pages = %+v, want public unchanged", rep.StatusPages)
+			}
+			code, rep, body = importYAML(t, srv, string(file), false)
+			if code != http.StatusOK || rep.Summary.Create != 0 || rep.Summary.Update != 0 ||
+				len(rep.StatusPages) != 1 || rep.StatusPages[0].Action != actionUnchanged {
+				t.Errorf("second import = %d %+v / %+v: %s", code, rep.Summary, rep.StatusPages, body)
+			}
+			again, err := db.GetStatusPageBySlug(context.Background(), "public")
+			must(t, err)
+			againEntries, err := db.ListStatusPageEntries(context.Background(), again.ID)
+			must(t, err)
+			if again != page || !slices.Equal(againEntries, entries) {
+				t.Errorf("second import changed the page or its entry identities: %+v / %+v", again, againEntries)
+			}
 			// The DNS monitor is a dns monitor with Kuma's resolver.
 			if slices.ContainsFunc(res.Skipped, func(n kumaimport.Note) bool { return n.Type == "dns" }) {
 				t.Errorf("the DNS monitor was skipped: %v", res.Skipped)
@@ -137,6 +199,82 @@ func TestKumaConversionPassesTheImporter(t *testing.T) {
 			if dns == nil || dns.Type != store.TypeDNS || dns.Target != "example.com" || !dns.Enabled ||
 				dns.DNS == nil || dns.DNS.RecordType != "A" || dns.DNS.Resolver != "1.1.1.1" || len(dns.DNS.Expected) != 0 {
 				t.Errorf("DNS example.com = %+v", dns)
+			}
+		})
+	}
+}
+
+// Password protection has no counterpart on a SubGlance public page. A
+// converted page must stay private until an administrator publishes it.
+func TestKumaPasswordStatusPageImportsDisabled(t *testing.T) {
+	for _, fixture := range []string{"kuma-1.23.16.db", "kuma-2.5.5.db"} {
+		t.Run(fixture, func(t *testing.T) {
+			ctx := t.Context()
+			original, err := os.ReadFile(filepath.Join("..", "kumaimport", "testdata", fixture))
+			must(t, err)
+			path := filepath.Join(t.TempDir(), "kuma.db")
+			must(t, os.WriteFile(path, original, 0o600))
+			source, err := sql.Open("sqlite", path)
+			must(t, err)
+			t.Cleanup(func() { _ = source.Close() })
+			const password = "kuma-secret-page"
+			changed, err := source.ExecContext(ctx, "UPDATE status_page SET password = ?, published = 1 WHERE slug = 'public'", password)
+			must(t, err)
+			rows, err := changed.RowsAffected()
+			must(t, err)
+			if rows != 1 {
+				t.Fatalf("password fixture update affected %d rows, want 1", rows)
+			}
+			must(t, source.Close())
+
+			res, err := kumaimport.Convert(ctx, path)
+			must(t, err)
+			if len(res.Document.StatusPages) != 1 {
+				t.Fatalf("converted pages = %+v, want the disabled public page", res.Document.StatusPages)
+			}
+			converted := res.Document.StatusPages[0]
+			if converted.Slug != "public" || converted.Enabled == nil || *converted.Enabled {
+				t.Fatalf("password page is not explicitly disabled: %+v", converted)
+			}
+			file, err := kumaimport.Render(res)
+			must(t, err)
+			if strings.Contains(string(file), password) {
+				t.Fatal("the converted file or its report contains the page password")
+			}
+
+			srv, db := testServerWithDB(t)
+			code, _, body := importYAML(t, srv, string(file), true)
+			if code != http.StatusOK {
+				t.Fatalf("password page dry run = %d: %s", code, body)
+			}
+			pages, err := db.ListStatusPages(ctx)
+			must(t, err)
+			if len(pages) != 0 {
+				t.Fatalf("password page dry run wrote pages: %+v", pages)
+			}
+			code, rep, body := importYAML(t, srv, string(file), false)
+			if code != http.StatusOK || len(rep.StatusPages) != 1 || rep.StatusPages[0].Action != actionCreate {
+				t.Fatalf("password page import = %d %+v: %s", code, rep.StatusPages, body)
+			}
+			page, err := db.GetStatusPageBySlug(ctx, "public")
+			must(t, err)
+			if page.Enabled {
+				t.Fatal("import published a password-protected Kuma page")
+			}
+			entries, err := db.ListStatusPageEntries(ctx, page.ID)
+			must(t, err)
+			if len(entries) != 5 {
+				t.Errorf("disabled page entries = %+v, want its 5 converted monitors", entries)
+			}
+			for _, target := range []string{"/status/public", "/api/v1/status-pages/public"} {
+				rec := httptest.NewRecorder()
+				srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+				if rec.Code != http.StatusNotFound {
+					t.Errorf("GET %s = %d, want 404: %s", target, rec.Code, rec.Body)
+				}
+				if strings.Contains(rec.Body.String(), page.Title) || strings.Contains(rec.Body.String(), password) {
+					t.Errorf("GET %s discloses the protected page", target)
+				}
 			}
 		})
 	}

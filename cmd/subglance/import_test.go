@@ -18,10 +18,12 @@ func TestImportUptimeKuma(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !strings.HasPrefix(out.String(), "# Converted from an Uptime Kuma 2.x database") ||
-		!strings.Contains(out.String(), "key: shop-prod") {
+		!strings.Contains(out.String(), "key: shop-prod") ||
+		!strings.Contains(out.String(), "status_pages:") ||
+		!strings.Contains(out.String(), "slug: public") {
 		t.Errorf("output = %.300s", out.String())
 	}
-	if !strings.Contains(report.String(), "Converted 13 of 16 monitors, 8 of 8 channels and 6 of 14 maintenance windows") ||
+	if !strings.Contains(report.String(), "Converted 13 of 16 monitors, 8 of 8 channels, 6 of 14 maintenance windows and 1 of 2 status pages from Uptime Kuma 2.x.\n") ||
 		strings.Contains(out.String(), "Converted 13 of") {
 		t.Errorf("report = %q", report.String())
 	}
@@ -29,6 +31,7 @@ func TestImportUptimeKuma(t *testing.T) {
 	// -o after the path, the way people type it.
 	dest := filepath.Join(t.TempDir(), "kuma.yaml")
 	out.Reset()
+	report.Reset()
 	if err := importTo([]string{"uptime-kuma", fixture, "-o", dest}, &out, &report); err != nil {
 		t.Fatal(err)
 	}
@@ -36,8 +39,12 @@ func TestImportUptimeKuma(t *testing.T) {
 		t.Errorf("with -o, standard output got %d bytes", out.Len())
 	}
 	written, err := os.ReadFile(dest)
-	if err != nil || !bytes.Contains(written, []byte("key: shop-prod")) {
+	if err != nil || !bytes.Contains(written, []byte("key: shop-prod")) ||
+		!bytes.Contains(written, []byte("slug: public")) {
 		t.Errorf("-o file: %v %.200s", err, written)
+	}
+	if !strings.Contains(report.String(), "1 of 2 status pages from Uptime Kuma 2.x.") {
+		t.Errorf("-o report = %q", report.String())
 	}
 	// Placeholders only, but the file still says where messages go.
 	if st, _ := os.Stat(dest); st.Mode().Perm() != 0o600 {

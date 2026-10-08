@@ -19,9 +19,12 @@ import (
 
 // The fixtures were written by Uptime Kuma itself, 1.23.16 and 2.5.5, through
 // its own socket API: eight channels, sixteen monitors (fifteen on 1.23, which
-// has no numeric JSON operators), tags, a group, a status page, the server
+// has no numeric JSON operators), tags, a group, two status pages, the server
 // time zone Europe/Amsterdam, and fourteen maintenance windows covering every
-// schedule Kuma offers. Every credential in them contains "kuma-secret".
+// schedule Kuma offers. The public page has two sections, five supported
+// monitors, page branding, analytics, a custom domain, an incident and a
+// maintenance announcement; the other page uses the reserved slug "api".
+// Every credential in them contains "kuma-secret".
 // Heartbeats, statistics and the user row were removed afterwards; nothing
 // the converter reads was edited.
 var fixtures = []string{"kuma-1.23.16.db", "kuma-2.5.5.db"}
@@ -205,13 +208,16 @@ func TestEveryObjectIsAccountedFor(t *testing.T) {
 			if got := len(res.Document.Channels) + countKind(res.Skipped, "channel"); got != res.Channels {
 				t.Errorf("%d channels converted or skipped, %d in Kuma", got, res.Channels)
 			}
+			if got := len(res.Document.StatusPages) + countKind(res.Skipped, "status page"); got != res.StatusPages || res.StatusPages == 0 {
+				t.Errorf("%d status pages converted or skipped, %d in Kuma", got, res.StatusPages)
+			}
 			// A window can become several, one per monitor, so windows are
 			// counted by the Kuma windows that came over.
 			if got := res.WindowsConverted + countKind(res.Skipped, "maintenance"); got != res.Windows || res.Windows == 0 {
 				t.Errorf("%d maintenance windows converted or skipped, %d in Kuma", got, res.Windows)
 			}
 			for _, name := range []string{"monitor/Container web", "monitor/Edge",
-				"monitor/Maintenance flag", "status page/Public status", "maintenance/Every third day",
+				"monitor/Maintenance flag", "status page/API status", "maintenance/Every third day",
 				"maintenance/Monthly patch", "maintenance/Six-hourly cron", "maintenance/Past migration",
 				"maintenance/Manual hold", "maintenance/Paused window", "maintenance/Summer freeze",
 				"maintenance/Docker only"} {
