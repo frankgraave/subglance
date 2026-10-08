@@ -148,6 +148,21 @@ func (d Document) check() error {
 			}
 		}
 	}
+	// A slug's format is the instance's rule and is checked on import; here
+	// only its presence and uniqueness, which need no instance. Slugs compare
+	// without case, as the instance stores them.
+	slugs := map[string]bool{}
+	for i, p := range d.StatusPages {
+		path := fmt.Sprintf("status_pages[%d].slug", i)
+		slug := strings.ToLower(strings.TrimSpace(p.Slug))
+		switch {
+		case slug == "":
+			return problemf(path, "is required")
+		case slugs[slug]:
+			return problemf(path, "%q is used twice", slug)
+		}
+		slugs[slug] = true
+	}
 	return nil
 }
 

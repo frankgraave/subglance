@@ -1,6 +1,6 @@
 // Package configfile turns an instance's configuration into a YAML document
-// and back: monitors, channels, routing rules and maintenance windows, without
-// history, users or credentials.
+// and back: monitors, channels, routing rules, maintenance windows and status
+// pages, without history, users or credentials.
 //
 // The file is for moving a setup between instances and for keeping it in a
 // repository, where it can be diffed and edited with ordinary tools. It is not
@@ -51,6 +51,7 @@ type Document struct {
 	Channels     []Channel     `yaml:"channels,omitempty"`
 	RoutingRules []RoutingRule `yaml:"routing_rules,omitempty"`
 	Maintenance  []Maintenance `yaml:"maintenance,omitempty"`
+	StatusPages  []StatusPage  `yaml:"status_pages,omitempty"`
 }
 
 // Monitor is a monitor definition as it appears in a file.
@@ -192,4 +193,50 @@ type Maintenance struct {
 	Weekdays        []int  `yaml:"weekdays,omitempty"`
 	LocalTime       string `yaml:"local_time,omitempty"`
 	DurationMinutes int    `yaml:"duration_minutes,omitempty"`
+}
+
+// StatusPage is a public status page as it appears in a file. Its slug is its
+// key: the instance already keeps slugs unique without regard to case, and
+// the slug is the page's address, so it is the one name a person will not
+// change casually. A file cannot rename a slug; it would describe a second
+// page.
+//
+// Optional fields are pointers for the same reason as on Monitor: omitted
+// keeps the page's current value, and takes the default the API gives a new
+// page when there is none. Export writes every field.
+//
+// The logo is not carried. It is an image of up to 256 KB, which does not
+// belong in a file meant to be read in a diff; an imported page has none
+// until one is uploaded.
+type StatusPage struct {
+	Slug        string  `yaml:"slug"`
+	Title       string  `yaml:"title,omitempty"`
+	Description *string `yaml:"description,omitempty"`
+	Timezone    *string `yaml:"timezone,omitempty"`
+	Language    *string `yaml:"language,omitempty"`
+	Accent      *string `yaml:"accent,omitempty"`
+	HideCredit  *bool   `yaml:"hide_credit,omitempty"`
+	Indexable   *bool   `yaml:"indexable,omitempty"`
+	Enabled     *bool   `yaml:"enabled,omitempty"`
+
+	// Selection is "monitors" or "tag", and travels with the tag pair: when
+	// it is present, TagKey and TagValue are taken from the file as they
+	// are, and when it is omitted all three keep what the page has. A new
+	// page without one lists hand-picked monitors.
+	Selection *string `yaml:"selection,omitempty"`
+	TagKey    string  `yaml:"tag_key,omitempty"`
+	TagValue  string  `yaml:"tag_value,omitempty"`
+
+	// Monitors lists the page's monitors in page order, each under the name
+	// visitors see. On a tag page it names the tagged monitors that are
+	// shown. When present it replaces the page's list; `[]` empties it;
+	// omitted keeps it. Export always writes it.
+	Monitors []StatusPageMonitor `yaml:"monitors"`
+}
+
+// StatusPageMonitor is one monitor on a status page: the monitor's key and
+// the public name it is shown under.
+type StatusPageMonitor struct {
+	Monitor string `yaml:"monitor"`
+	Name    string `yaml:"name"`
 }

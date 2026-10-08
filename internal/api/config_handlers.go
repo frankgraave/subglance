@@ -31,8 +31,9 @@ var importMu sync.Mutex
 // It takes importMu because assigning keys is a write that an import running
 // at the same time could collide with.
 func (s *Server) handleExportConfig(w http.ResponseWriter, r *http.Request) {
+	user, _ := UserFromContext(r.Context())
 	importMu.Lock()
-	doc, err := s.exportConfig(r.Context(), time.Now())
+	doc, err := s.exportConfig(r.Context(), time.Now(), user.Role.CanAdmin())
 	importMu.Unlock()
 	if err != nil {
 		s.log.Error("export configuration", "error", err)
@@ -77,6 +78,14 @@ func (s *Server) handleImportConfig(w http.ResponseWriter, r *http.Request) {
 	doc, err := configfile.Parse(body)
 	if err != nil {
 		writeConfigProblem(w, err)
+		return
+	}
+	// Status pages are administered by administrators only. The whole file
+	// is refused rather than imported without its pages, because a report
+	// that quietly skipped them would read as if they had been imported.
+	if user, _ := UserFromContext(r.Context()); len(doc.StatusPages) > 0 && !user.Role.CanAdmin() {
+		writeProblem(w, http.StatusForbidden, fieldProblem("status_pages",
+			"only an administrator can import status pages; remove status_pages from the file, or import it as an administrator"))
 		return
 	}
 
