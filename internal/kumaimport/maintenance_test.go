@@ -299,15 +299,17 @@ func TestWindowTargets(t *testing.T) {
 	}
 
 	// A group whose name is longer than a tag value gets the value its
-	// monitors got.
-	long := strings.Repeat("g", 70) + " x"
+	// monitors got, without the space the cut leaves at the end: the server
+	// trims a tag value, and a window on the untrimmed one is refused.
+	long := strings.Repeat("g", 63) + " tail"
 	src, keys = windowSource([]row{windowRow(nil)}, map[int64][]int64{1: {3}})
 	src.monitors[2]["name"] = long
 	res = Result{}
 	convertWindows(src, keys, &res)
+	want := strings.Repeat("g", 63)
 	if v := convertTags("CDN", nil, long, &Result{})["group"]; len(res.Document.Maintenance) < 1 ||
-		res.Document.Maintenance[0].TagValue != v || len(v) != 64 {
-		t.Errorf("window tag %q, monitor tag %q", res.Document.Maintenance[0].TagValue, v)
+		res.Document.Maintenance[0].TagValue != want || v != want {
+		t.Errorf("window tag %q, monitor tag %q, want %q", res.Document.Maintenance[0].TagValue, v, want)
 	}
 }
 
@@ -335,11 +337,12 @@ func TestWindowCap(t *testing.T) {
 
 // A name longer than SubGlance keeps is cut on a character boundary.
 func TestWindowNameIsShortened(t *testing.T) {
-	res := convertOne(windowRow(row{"title": strings.Repeat("é", 70)}))
+	// 120 bytes ends in the middle of the 60th "é", which is dropped whole.
+	res := convertOne(windowRow(row{"title": "a" + strings.Repeat("é", 70)}))
 	if len(res.Document.Maintenance) != 1 {
 		t.Fatalf("not converted: %s", notesOf(res))
 	}
-	if name := res.Document.Maintenance[0].Name; len(name) != 120 || name != strings.Repeat("é", 60) {
+	if name := res.Document.Maintenance[0].Name; name != "a"+strings.Repeat("é", 59) {
 		t.Errorf("name = %q (%d bytes)", name, len(name))
 	}
 	if !strings.Contains(notesOf(res), "shortened to 120 bytes") {

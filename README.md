@@ -194,6 +194,10 @@ have them.
 - **`subglance reset-password`**: an owner locked out of their own instance
   sets a new password from the data directory, with the server stopped; see
   [Locked out](docs/operations.md#locked-out)
+- **Maintenance windows from Uptime Kuma**: `subglance import uptime-kuma`
+  converts Kuma's one-off, weekday, daily and weekly cron windows to
+  SubGlance windows on the same monitors and groups, in the same time zone;
+  see [Coming from Uptime Kuma](docs/configuration-files.md#coming-from-uptime-kuma)
 - **DNS record checks**: a `dns` monitor compares the A, AAAA, CNAME, MX or
   TXT records of a name with the values it expects, through the host's
   resolver or one set on the monitor, and `subglance import uptime-kuma`
