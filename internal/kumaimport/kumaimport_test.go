@@ -73,7 +73,7 @@ func TestConvertBothSchemas(t *testing.T) {
 				t.Fatal("Shop (prod) missing")
 			}
 			if shop.Key != "shop-prod" || shop.Type != "http" || shop.Target != "https://shop.example.com/health" ||
-				deref(shop.IntervalS) != 30 || deref(shop.Retries) != 3 || deref(shop.TimeoutS) != 24 ||
+				deref(shop.IntervalS) != 30 || deref(shop.Retries) != 4 || deref(shop.TimeoutS) != 24 ||
 				!deref(shop.Enabled) || deref(shop.ExpectedStatus) != "200-299" {
 				t.Errorf("Shop (prod) = %+v", shop)
 			}
@@ -115,8 +115,17 @@ func TestConvertBothSchemas(t *testing.T) {
 			if ping.Type != "ping" || ping.Target != "router.example.net" {
 				t.Errorf("ping monitor = %+v", ping)
 			}
+			// Shop (prod) is checked every 30s and retried every 60s, three
+			// times: Kuma alerted on the fourth failure, 180s after the
+			// first. SubGlance confirms on the fourth too, 90s in.
+			if notes := notesOf(res); !strings.Contains(notes, "Shop (prod)") ||
+				!strings.Contains(notes, "Kuma alerted 180s after the first failed check, retrying every 60s; "+
+					"SubGlance checks again at the 30s interval and alerts after 90s") {
+				t.Errorf("the changed time to an alert is not listed: %s", notes)
+			}
 			push, _ := monitorByName(res, "Nightly backup")
-			if push.Type != "push" || push.Target != "" || deref(push.PushIntervalS) != 86400 || push.IntervalS != nil {
+			if push.Type != "push" || push.Target != "" || deref(push.PushIntervalS) != 86400 || push.IntervalS != nil ||
+				deref(push.Retries) != 0 || push.PushGraceS != nil {
 				t.Errorf("push monitor = %+v", push)
 			}
 			old, _ := monitorByName(res, "Old site")

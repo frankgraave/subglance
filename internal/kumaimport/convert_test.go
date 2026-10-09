@@ -38,8 +38,8 @@ func TestMonitorBoundsAreClampedAndReported(t *testing.T) {
 			func(m configfile.Monitor) bool { return deref(m.IntervalS) == 20 }, "the interval was 5s"},
 		{"interval above a day", httpRow(row{"interval": int64(172800)}),
 			func(m configfile.Monitor) bool { return deref(m.IntervalS) == 86400 }, "the interval was 172800s"},
-		{"retries above 10", httpRow(row{"maxretries": int64(25)}),
-			func(m configfile.Monitor) bool { return deref(m.Retries) == 10 }, "retries was 25"},
+		{"retries above 9", httpRow(row{"maxretries": int64(25), "retry_interval": int64(60)}),
+			func(m configfile.Monitor) bool { return deref(m.Retries) == 10 }, "Kuma alerted on failed check 26"},
 		{"timeout above 120s", httpRow(row{"timeout": float64(300)}),
 			func(m configfile.Monitor) bool { return deref(m.TimeoutS) == 120 }, "the timeout was 300s"},
 		{"push interval below a minute", row{"id": int64(1), "name": "Job", "type": "push", "active": int64(1), "interval": int64(20)},
@@ -284,6 +284,89 @@ func TestBodyContentTypeComesOver(t *testing.T) {
 			}
 			if got := notesOf(res); (tc.note == "") != (got == "") || !strings.Contains(got, tc.note) {
 				t.Errorf("notes = %q, want one containing %q", got, tc.note)
+			}
+		})
+	}
+}
+
+// Kuma's maxretries counts the failed checks that stay pending before the
+// next one alerts; SubGlance's retries counts the failures that confirm. So
+// n retries in Kuma are n+1 here, and the time from the first failure to the
+// alert is compared and listed when the two cadences differ.
+func TestRetriesAlertAfterAsManyChecksAsInKuma(t *testing.T) {
+	cases := []struct {
+		name        string
+		row         row
+		retries     int
+		grace       int // 0: left to SubGlance's default
+		note, never string
+	}{
+		{"Kuma's default alerts on the first failure", httpRow(row{"maxretries": int64(0), "retry_interval": int64(60)}),
+			0, 0, "", ""},
+		{"three retries alert on the fourth failure", httpRow(row{"maxretries": int64(3), "retry_interval": int64(60)}),
+			4, 0, "", ""},
+		{"a retry interval of 0 is the interval", httpRow(row{"maxretries": int64(2), "retry_interval": int64(0)}),
+			3, 0, "", ""},
+		{"a negative count is none", httpRow(row{"maxretries": int64(-2)}),
+			0, 0, "", ""},
+		{"a faster retry interval changes the time to alert", httpRow(row{"maxretries": int64(3), "retry_interval": int64(20)}),
+			4, 0, "Kuma alerted 60s after the first failed check, retrying every 20s; SubGlance checks again at the 60s interval and alerts after 180s", ""},
+		{"the comparison uses the clamped interval", httpRow(row{"interval": int64(10), "maxretries": int64(1), "retry_interval": int64(20)}),
+			2, 0, "", "Kuma alerted"},
+		{"nine retries are the most", httpRow(row{"maxretries": int64(9), "retry_interval": int64(60)}),
+			10, 0, "", "confirms on check"},
+		{"more than nine are clamped", httpRow(row{"maxretries": int64(25), "retry_interval": int64(60)}),
+			10, 0, "Kuma alerted on failed check 26 (25 retries); SubGlance confirms on check 10 at the latest", ""},
+		{"a JSON query that alerted at once in Kuma", httpRow(row{"type": "json-query", "json_path": "ok", "expected_value": "true",
+			"maxretries": int64(2), "retry_interval": int64(60), "retry_only_on_status_code_failure": int64(1)}),
+			3, 0, "SubGlance waits for 3 failed checks either way", ""},
+		{"the JSON query option means nothing without retries", httpRow(row{"type": "json-query", "json_path": "ok", "expected_value": "true",
+			"maxretries": int64(0), "retry_only_on_status_code_failure": int64(1)}),
+			0, 0, "", "either way"},
+		{"the JSON query option means nothing on a plain HTTP monitor", httpRow(row{
+			"maxretries": int64(2), "retry_interval": int64(60), "retry_only_on_status_code_failure": int64(1)}),
+			3, 0, "", "either way"},
+		{"push retries become grace", row{"id": int64(1), "name": "Job", "type": "push", "active": int64(1),
+			"interval": int64(3600), "maxretries": int64(2), "retry_interval": int64(300)},
+			0, 600, "Kuma alerted 2 retries of 300s after a missed report; SubGlance alerts on the first, so push_grace_s is 600s", ""},
+		{"push retries without a retry interval wait the interval", row{"id": int64(1), "name": "Job", "type": "push", "active": int64(1),
+			"interval": int64(3600), "maxretries": int64(1), "retry_interval": int64(0)},
+			0, 3600, "push_grace_s is 3600s", ""},
+		{"push retries shorter than the default grace keep it", row{"id": int64(1), "name": "Job", "type": "push", "active": int64(1),
+			"interval": int64(3600), "maxretries": int64(2), "retry_interval": int64(30)},
+			0, 0, "", "push_grace_s"},
+		{"push retries of exactly the default grace keep it", row{"id": int64(1), "name": "Job", "type": "push", "active": int64(1),
+			"interval": int64(3600), "maxretries": int64(3), "retry_interval": int64(20)},
+			0, 0, "", "push_grace_s"},
+		{"push retries just past the default grace set it", row{"id": int64(1), "name": "Job", "type": "push", "active": int64(1),
+			"interval": int64(3600), "maxretries": int64(61), "retry_interval": int64(1)},
+			0, 61, "push_grace_s is 61s", ""},
+		{"push grace is clamped to SubGlance's maximum", row{"id": int64(1), "name": "Job", "type": "push", "active": int64(1),
+			"interval": int64(86400), "maxretries": int64(40), "retry_interval": int64(86400)},
+			0, maxPushGraceS, "push_grace_s is 2592000s", ""},
+		{"a push monitor without retries keeps the default grace", row{"id": int64(1), "name": "Job", "type": "push", "active": int64(1),
+			"interval": int64(3600), "maxretries": int64(0), "retry_interval": int64(300)},
+			0, 0, "", "push_grace_s"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var res Result
+			m, ok := convertMonitor(tc.row, &res)
+			if !ok {
+				t.Fatalf("skipped: %s", notesOf(res))
+			}
+			if m.Retries == nil || *m.Retries != tc.retries {
+				t.Errorf("retries = %v, want %d", deref(m.Retries), tc.retries)
+			}
+			if got := deref(m.PushGraceS); got != tc.grace {
+				t.Errorf("push_grace_s = %d, want %d", got, tc.grace)
+			}
+			notes := notesOf(res)
+			if tc.note != "" && !strings.Contains(notes, tc.note) {
+				t.Errorf("notes = %q, want one containing %q", notes, tc.note)
+			}
+			if tc.never != "" && strings.Contains(notes, tc.never) {
+				t.Errorf("notes = %q, want none containing %q", notes, tc.never)
 			}
 		})
 	}

@@ -35,7 +35,7 @@ env:
   # resolves to whatever the runner has newest, which makes builds
   # irreproducible and, worse, makes the vulnerability scan's result depend
   # on the day it ran. Bump this deliberately.
-  GO_VERSION: "1.26.8"
+  GO_VERSION: "1.26.9"
 
 jobs:
   test:

@@ -29,6 +29,9 @@ const (
 	minRepeatAfterS  = 60
 	maxRepeatAfterS  = 86400
 
+	defaultPushGraceS = 60
+	maxPushGraceS     = 30 * 24 * 60 * 60
+
 	maxTags        = 20
 	maxTagKeyLen   = 32
 	maxTagValueLen = 64
@@ -153,15 +156,7 @@ func convertMonitor(m row, res *Result) (configfile.Monitor, bool) {
 		out.IntervalS = ptr(interval)
 	}
 
-	retries := m.int("maxretries")
-	if retries > maxRetries {
-		note(fmt.Sprintf("retries was %d; SubGlance allows at most %d", retries, maxRetries))
-		retries = maxRetries
-	}
-	if retries < 0 {
-		retries = 0
-	}
-	out.Retries = ptr(retries)
+	convertRetries(m, &out, typ, interval, note)
 
 	// Kuma repeats an alert every resend_interval checks while a monitor is
 	// down; SubGlance repeats after a time. Zero is Kuma's default and means
@@ -183,6 +178,70 @@ func convertMonitor(m row, res *Result) (configfile.Monitor, bool) {
 		out.RepeatAfterS = ptr(s)
 	}
 	return out, true
+}
+
+// convertRetries carries Kuma's retries over so a failure alerts after as
+// many checks as it did there.
+//
+// The two settings count differently. Kuma's maxretries is how many failed
+// checks stay pending before the next one marks the monitor down and
+// notifies (server/model/monitor.js in 1.23 and 2.5): 3 alerts on the fourth
+// failure. SubGlance's retries is how many consecutive failures confirm an
+// incident: 3 alerts on the third. So n retries in Kuma are n+1 here, and
+// Kuma's default of 0, which alerts on the first failure, stays 0.
+//
+// Kuma rechecks a pending monitor every retry_interval seconds, the interval
+// when that is 0. SubGlance has no separate cadence for an unconfirmed
+// failure, so when the two differ the time to an alert changes, and that is
+// listed. A push monitor in SubGlance confirms the first missed report, so
+// Kuma's retries on one become grace instead.
+func convertRetries(m row, out *configfile.Monitor, typ string, interval int, note func(string)) {
+	n := max(m.int("maxretries"), 0)
+	out.Retries = ptr(0)
+	if n == 0 {
+		return
+	}
+	retryEvery := m.int("retry_interval")
+	if retryEvery <= 0 {
+		retryEvery = m.int("interval")
+	}
+	kumaWait := n * retryEvery
+
+	if typ == "push" {
+		// The wait is in the grace, so retries says what SubGlance does
+		// with a push monitor whatever the column holds: the first missed
+		// report confirms.
+		if kumaWait <= defaultPushGraceS {
+			// SubGlance's default grace already waits as long; going
+			// below it would page on ordinary cron drift.
+			return
+		}
+		grace := kumaWait
+		if grace > maxPushGraceS {
+			grace = maxPushGraceS
+		}
+		out.PushGraceS = ptr(grace)
+		note(fmt.Sprintf("Kuma alerted %d retries of %ds after a missed report; SubGlance alerts on the first, "+
+			"so push_grace_s is %ds", n, retryEvery, grace))
+		return
+	}
+
+	retries := n + 1
+	if retries > maxRetries {
+		note(fmt.Sprintf("Kuma alerted on failed check %d (%d retries); SubGlance confirms on check %d at the latest",
+			n+1, n, maxRetries))
+		retries = maxRetries
+	}
+	out.Retries = ptr(retries)
+
+	if wait := (retries - 1) * interval; wait != kumaWait {
+		note(fmt.Sprintf("Kuma alerted %ds after the first failed check, retrying every %ds; "+
+			"SubGlance checks again at the %ds interval and alerts after %ds", kumaWait, retryEvery, interval, wait))
+	}
+	if typ == "json-query" && m.bool("retry_only_on_status_code_failure") {
+		note(fmt.Sprintf("Kuma alerted at once when only the JSON query failed (Only retry if status code check fails); "+
+			"SubGlance waits for %d failed checks either way", retries))
+	}
 }
 
 // convertHTTP fills in the fields of the three HTTP-based Kuma types.

@@ -38,7 +38,7 @@ env:
   # Same pin, same reason, as ci.yml: a range resolves to whatever the runner
   # has newest, and a release must be reproducible from its tag. Keep this in
   # step with ci.yml so that what CI proved is what gets shipped.
-  GO_VERSION: "1.26.8"
+  GO_VERSION: "1.26.9"
   # Node is pinned to a patch too, for the same reason and one more: this
   # stage builds the dashboard that gets compiled into the binary, so an
   # unpinned minor can change the bundle a tag ships without a commit

@@ -332,7 +332,8 @@ with a change to check**. Nothing is left out without being named there.
 | Ping | `ping` |
 | DNS: A, AAAA, CNAME, MX or TXT | `dns` with the same name, `record_type` and resolver; one *record equals* condition becomes the one `expected` value |
 | Push | `push`; Kuma's heartbeat interval becomes `push_interval_s` |
-| Heartbeat interval, retries, request timeout | `interval_s`, `retries`, `timeout_s` |
+| Heartbeat interval, request timeout | `interval_s`, `timeout_s` |
+| Retries | `retries`, one more than in Kuma, so the alert comes on the same failed check (see below); on a push monitor, `push_grace_s` |
 | Accepted status codes, method, *Max. Redirects* | `expected_status`, `method`, `follow_redirects` (off when Kuma allowed none) |
 | Request headers and body, basic or bearer auth | `headers` and `body`, auth as an `Authorization` header, all with withheld values |
 | *Body Encoding* of a request body: JSON, x-www-form-urlencoded or XML | a `Content-Type` header with the type Kuma sent: `application/json`, `application/x-www-form-urlencoded` or `text/xml; charset=utf-8`, written out rather than withheld; a `Content-Type` among the monitor's own headers wins, as it did in Kuma |
@@ -397,6 +398,20 @@ separately; a status-page link does not become monitor coverage.
 - An interval below 20 seconds becomes 20, and values outside SubGlance's other
   limits (retries up to 10, timeout up to 120 seconds) are moved inside them.
   Each one is listed.
+- Kuma's *Retries* counts the failed checks that stay pending before the next
+  one alerts, so 3 alerts on the fourth failure; SubGlance's `retries` counts
+  the failures that confirm an incident, so 3 alerts on the third. A monitor
+  with *n* retries in Kuma gets `retries: n + 1`, at most 10, and Kuma's
+  default of 0 stays 0: both alert on the first failure. Kuma rechecks a
+  pending monitor every *Heartbeat Retry Interval*; SubGlance checks again at
+  the monitor's interval, so when the two differ the time from the first
+  failure to the alert changes, and the monitor is listed with both. A Json
+  Query monitor set to *Only retry if status code check fails* is listed too:
+  SubGlance waits for its retries whichever part failed.
+- A push monitor confirms the first missed report, whatever its `retries`.
+  Kuma waited its retries before alerting, so that wait, *n* times the retry
+  interval, becomes `push_grace_s` when it is longer than the default of 60
+  seconds, and is listed.
 - A push monitor gets a **new push URL**, shown once in the import report.
   Point the job that calls Kuma's push URL at it.
 - Kuma repeats an alert every *n* checks; SubGlance repeats after a time, so
