@@ -505,6 +505,11 @@ func TestDNSCheckerAcceptsALateAnswerToAnEarlierQuery(t *testing.T) {
 	}
 }
 
+// drainMarker is a datagram no DNS query can be: the silent resolver in
+// TestDNSCheckerBacksOffWhileTheResolverIsSilent stops counting when it
+// reads it.
+const drainMarker = "drain"
+
 // A resolver that never answers is asked again with a doubling wait, the way
 // stub resolvers back off, not flooded at a fixed rate; and the check still
 // fails as a timeout at its deadline.
@@ -518,10 +523,16 @@ func TestDNSCheckerBacksOffWhileTheResolverIsSilent(t *testing.T) {
 		mu       sync.Mutex
 		received int
 	)
+	counted := make(chan struct{})
 	go func() {
 		buf := make([]byte, 65535)
 		for {
-			if _, _, err := silent.ReadFrom(buf); err != nil {
+			n, _, err := silent.ReadFrom(buf)
+			if err != nil {
+				return
+			}
+			if string(buf[:n]) == drainMarker {
+				close(counted)
 				return
 			}
 			mu.Lock()
@@ -544,8 +555,22 @@ func TestDNSCheckerBacksOffWhileTheResolverIsSilent(t *testing.T) {
 		t.Errorf("gave up after %s, before the %s timeout", elapsed, m.Timeout)
 	}
 	// Sent at 0, 50, 150, 350 and 750 ms; a fixed 50 ms interval would
-	// have sent twenty.
-	time.Sleep(50 * time.Millisecond) // let the last datagram be read
+	// have sent twenty. A loopback socket hands datagrams out in the order
+	// they arrived, so once a marker sent after the check is read, every
+	// query the check sent has been counted.
+	marker, err := net.Dial("udp", silent.LocalAddr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = marker.Close() })
+	if _, err := marker.Write([]byte(drainMarker)); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-counted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the silent resolver never read the marker datagram")
+	}
 	mu.Lock()
 	defer mu.Unlock()
 	if received < 3 || received > 5 {
