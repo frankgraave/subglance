@@ -43,6 +43,28 @@ func listeningSince(r *Runner, at time.Time) {
 	r.pushListeningSince.Store(at.UnixNano())
 }
 
+// stopClockBeforeDeadline stops the runner's clock now, before the test
+// arranges a deadline about a second ahead, and returns the stopped moment.
+//
+// A test that drives Run needs the deadline to fall after the moment Run marks
+// itself listening; one that falls before it is a window that closed while
+// SubGlance was down, and the watchdog restarts it a full interval later
+// instead of reporting it. With the real clock that order is a race: Run
+// marks itself only after restoring incident state, and the deadline is
+// rounded down to a whole second when it is stored, so it can land a few
+// milliseconds after now. Under the race detector on a busy machine Run once
+// got there later, and the test waited for a beat that was 60 s away.
+//
+// Stopping the clock here makes Run's mark this moment however long Run
+// takes, and a deadline aimed a second past a later now stays later than it:
+// rounding down to a whole second takes off less than that second. Run still
+// makes the mark itself, so the tests keep proving that it does.
+func stopClockBeforeDeadline(r *Runner) time.Time {
+	at := time.Now()
+	r.now = func() time.Time { return at }
+	return at
+}
+
 func overdueBeats(t *testing.T, db *store.DB, id int64) []store.Heartbeat {
 	t.Helper()
 	beats, err := db.ListHeartbeats(context.Background(), id, 20)
@@ -183,6 +205,7 @@ func TestRunStartsListeningAndSkipsWindowsThatClosedWhileDown(t *testing.T) {
 	backdate(t, db, expired.ID, 2*time.Hour)
 	due := mustPushMonitor(t, db, 60, 0)
 	backdate(t, db, due.ID, 2*time.Hour)
+	start := stopClockBeforeDeadline(r)
 	reportedAt(t, r, due, time.Now().Add(-59*time.Second))
 
 	sub := bus.Subscribe()
@@ -205,8 +228,8 @@ func TestRunStartsListeningAndSkipsWindowsThatClosedWhileDown(t *testing.T) {
 			if e.Kind != events.KindHeartbeat || e.MonitorID != due.ID {
 				continue
 			}
-			if r.PushListeningSince().IsZero() {
-				t.Fatal("Run swept without recording when it started listening")
+			if got := r.PushListeningSince(); !got.Equal(start) {
+				t.Fatalf("Run swept with listening start %v, want its clock at the start, %v", got, start)
 			}
 			if got := overdueBeats(t, db, expired.ID); len(got) != 0 {
 				t.Fatalf("a window that closed before the start was reported: %+v", got)
