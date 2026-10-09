@@ -387,9 +387,11 @@ func TestWatchdogRunsUnderRun(t *testing.T) {
 	bus := events.NewBus(8)
 	r := newPushRunnerWithBus(t, db, bus)
 	m := mustPushMonitor(t, db, 60, 0)
-	// Due a second after Run starts. A deadline that passed before the
-	// start is not reported at all (SUB-209), so it cannot prove the
-	// watchdog runs.
+	// Due within a second after Run starts. A deadline that passed before
+	// the start is not reported at all (SUB-209), so it cannot prove the
+	// watchdog runs. The clock stops first so that "after Run starts" holds
+	// however long Run takes to start listening; see stopClockBeforeDeadline.
+	stopClockBeforeDeadline(r)
 	backdate(t, db, m.ID, 59*time.Second)
 
 	// Subscribe before Run starts, so the first sweep's beat cannot be missed
