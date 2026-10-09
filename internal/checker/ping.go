@@ -43,6 +43,24 @@ type PingChecker struct {
 	// id distinguishes our echo requests from other processes' on a shared
 	// raw socket.
 	id int
+
+	// every is how long a check waits for an answer before it sends the
+	// next echo request; zero means pingProbeInterval. Tests shorten it.
+	every time.Duration
+}
+
+// pingProbeInterval is the gap between echo requests within one check: the
+// default of ping(8), and what Uptime Kuma's checks wait as well, since they
+// run ping with a deadline.
+const pingProbeInterval = time.Second
+
+// pingConn is the part of *icmp.PacketConn a check uses, so the exchange can
+// be tested against a socket that loses packets on purpose.
+type pingConn interface {
+	WriteTo(b []byte, dst net.Addr) (int, error)
+	ReadFrom(b []byte) (int, net.Addr, error)
+	SetReadDeadline(t time.Time) error
+	SetWriteDeadline(t time.Time) error
 }
 
 type pingMode int
@@ -74,7 +92,13 @@ func NewPingChecker(guard *Guard) *PingChecker {
 	}
 }
 
-// Check sends one echo request and waits for a matching reply.
+// Check sends echo requests, one per probe interval, until one is answered
+// or the timeout runs out.
+//
+// Routers drop and rate-limit ICMP as a matter of course, so one lost packet
+// is not an outage. A check that sent a single request failed on it, and with
+// retries at 0 that was an alert; ping(8) with a deadline, which is how
+// Uptime Kuma checks, sends again every second instead.
 func (c *PingChecker) Check(ctx context.Context, m Monitor) Result {
 	start := time.Now()
 
@@ -106,20 +130,70 @@ func (c *PingChecker) Check(ctx context.Context, m Monitor) Result {
 	}
 	defer func() { _ = conn.Close() }()
 
-	if deadline, hasDeadline := ctx.Deadline(); hasDeadline {
-		_ = conn.SetDeadline(deadline)
+	return c.exchange(ctx, conn, addr, start)
+}
+
+// exchange sends a numbered echo request every probe interval and returns as
+// soon as any of them is answered.
+//
+// A reply to an earlier request still counts: a slow answer is an answer. The
+// latency is the round trip of the request that was answered, plus what the
+// check spent before its first request, so a first-try answer reports what a
+// single ping always did and a lost packet does not add a second to the
+// latency chart.
+//
+// The read deadline is the next send or the check's deadline, whichever is
+// sooner, so a cancelled check stops within one interval rather than at its
+// timeout.
+func (c *PingChecker) exchange(ctx context.Context, conn pingConn, addr netip.Addr, start time.Time) Result {
+	every := c.every
+	if every <= 0 {
+		every = pingProbeInterval
+	}
+	deadline, hasDeadline := ctx.Deadline()
+	if hasDeadline {
+		_ = conn.SetWriteDeadline(deadline)
 	}
 
-	seq := int(rand.N[uint32](1 << 15))
-	if err := c.send(conn, addr, seq); err != nil {
-		return classifyRequestError(start, ctx, err)
-	}
+	// sentAt[i] is when the request with sequence number first+i left. The
+	// first stays below 1<<15 and a check sends at most one request a second
+	// for at most two minutes, so the numbers never wrap.
+	first := int(rand.N[uint32](1 << 15))
+	var sentAt []time.Time
+	buf := make([]byte, 1500)
 
-	if err := c.awaitReply(ctx, conn, addr, seq); err != nil {
-		return classifyRequestError(start, ctx, err)
-	}
+	for {
+		if err := ctx.Err(); err != nil {
+			return classifyRequestError(start, ctx, err)
+		}
+		at := time.Now()
+		if err := c.send(conn, addr, first+len(sentAt)); err != nil {
+			return classifyRequestError(start, ctx, err)
+		}
+		sentAt = append(sentAt, at)
 
-	return ok(start, 0)
+		wait := at.Add(every)
+		if hasDeadline && deadline.Before(wait) {
+			wait = deadline
+		}
+		_ = conn.SetReadDeadline(wait)
+
+		i, err := c.awaitReply(ctx, conn, addr, first, len(sentAt), buf)
+		if err == nil {
+			res := ok(start, 0)
+			res.Latency = sentAt[0].Sub(start) + time.Since(sentAt[i])
+			return res
+		}
+		if !errors.Is(err, os.ErrDeadlineExceeded) {
+			return classifyRequestError(start, ctx, err)
+		}
+		if hasDeadline && !time.Now().Before(deadline) {
+			// The check's own deadline, not the end of an interval. Said
+			// as such, so the message does not depend on whether the
+			// context's timer or the socket's noticed first.
+			return classifyRequestError(start, ctx, context.DeadlineExceeded)
+		}
+	}
 }
 
 // resolve turns a hostname into an address the guard has approved.
@@ -182,7 +256,7 @@ func (c *PingChecker) listen(ipv4Target bool) (*icmp.PacketConn, error) {
 	}
 }
 
-func (c *PingChecker) send(conn *icmp.PacketConn, addr netip.Addr, seq int) error {
+func (c *PingChecker) send(conn pingConn, addr netip.Addr, seq int) error {
 	msgType := icmp.Type(ipv4.ICMPTypeEcho)
 	if !addr.Is4() {
 		msgType = ipv6.ICMPTypeEchoRequest
@@ -216,26 +290,28 @@ func (c *PingChecker) send(conn *icmp.PacketConn, addr netip.Addr, seq int) erro
 	return nil
 }
 
-// awaitReply reads until our echo reply arrives or the deadline passes.
+// awaitReply reads until a reply to one of the sent requests arrives or the
+// read deadline passes, and returns which request was answered.
 //
-// Replies from other pings on the host can land on this socket, so anything
-// that is not ours is skipped rather than treated as success — otherwise a
-// busy host would make every ping monitor pass regardless of the target.
-func (c *PingChecker) awaitReply(ctx context.Context, conn *icmp.PacketConn, addr netip.Addr, seq int) error {
+// The requests sent so far carry the sequence numbers first to
+// first+sent-1. Replies from other pings on the host can land on this
+// socket, so anything that is not ours is skipped rather than treated as
+// success — otherwise a busy host would make every ping monitor pass
+// regardless of the target.
+func (c *PingChecker) awaitReply(ctx context.Context, conn pingConn, addr netip.Addr, first, sent int, buf []byte) (int, error) {
 	proto := 1 // ICMPv4
 	if !addr.Is4() {
 		proto = 58 // ICMPv6
 	}
 
-	buf := make([]byte, 1500)
 	for {
 		if err := ctx.Err(); err != nil {
-			return err
+			return 0, err
 		}
 
 		n, peer, err := conn.ReadFrom(buf)
 		if err != nil {
-			return err
+			return 0, err
 		}
 
 		msg, err := icmp.ParseMessage(proto, buf[:n])
@@ -254,13 +330,13 @@ func (c *PingChecker) awaitReply(ctx context.Context, conn *icmp.PacketConn, add
 			if c.mode == pingModeRaw && body.ID != c.id {
 				continue
 			}
-			if body.Seq != seq {
+			if body.Seq < first || body.Seq >= first+sent {
 				continue
 			}
 			if !peerMatches(peer, addr) {
 				continue
 			}
-			return nil
+			return body.Seq - first, nil
 
 		case *icmp.DstUnreach:
 			// An ICMP error carries the header of the datagram that caused
@@ -268,22 +344,34 @@ func (c *PingChecker) awaitReply(ctx context.Context, conn *icmp.PacketConn, add
 			// unreachable" — which a raw socket also receives — would fail a
 			// healthy monitor. That is a false-alarm generator, so anything
 			// we cannot positively attribute to our own probe is ignored.
-			if !errorRefersToOurProbe(body.Data, addr, c.id, seq, c.mode) {
+			if !c.quotesOurProbe(body.Data, addr, first, sent) {
 				continue
 			}
-			return fmt.Errorf("destination unreachable")
+			return 0, fmt.Errorf("destination unreachable")
 
 		case *icmp.TimeExceeded:
-			if !errorRefersToOurProbe(body.Data, addr, c.id, seq, c.mode) {
+			if !c.quotesOurProbe(body.Data, addr, first, sent) {
 				continue
 			}
-			return fmt.Errorf("TTL exceeded in transit")
+			return 0, fmt.Errorf("TTL exceeded in transit")
 		}
 	}
 }
 
+// quotesOurProbe reports whether an ICMP error was caused by any of the
+// requests this check has sent. Such an error is the network's answer about
+// the target, not a lost packet, so it fails the check at once.
+func (c *PingChecker) quotesOurProbe(quoted []byte, addr netip.Addr, first, sent int) bool {
+	for seq := first; seq < first+sent; seq++ {
+		if errorRefersToOurProbe(quoted, addr, c.id, seq, c.mode) {
+			return true
+		}
+	}
+	return false
+}
+
 // errorRefersToOurProbe reports whether an ICMP error message was caused by
-// the echo request we sent.
+// the echo request with this sequence number.
 //
 // ICMP errors quote the offending datagram: the IP header plus at least the
 // first eight bytes of its payload, which for an echo request covers type,

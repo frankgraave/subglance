@@ -262,6 +262,14 @@ unprivileged socket first and falls back to the raw one; when neither is allowed
 the error names both fixes. If ICMP is blocked entirely on your network, a TCP
 check against a known port answers the same question more reliably.
 
+Routers drop and rate-limit ICMP routinely, so one lost packet is not a failed
+check. A ping check sends an echo request every second until one is answered
+or the monitor's timeout runs out, as `ping -w` does; a late reply to an
+earlier request counts too. The response time is that of the request that was
+answered, so a lost packet does not show up as a slower host. The check fails
+when the timeout passes without a reply, and at once when the network answers
+with an ICMP error such as *destination unreachable*.
+
 ### Checking a DNS record
 
 A domain move that went wrong, or a zone someone else now controls, usually
