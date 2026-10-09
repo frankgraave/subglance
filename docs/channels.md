@@ -551,6 +551,31 @@ action Home Assistant finds. A Home Assistant on the local network is
 reached only when SubGlance is started with
 [`--allow-private-targets`](#servers-on-a-private-address).
 
+### Signal
+
+Signal has no webhook of its own. [signal-cli-rest-api](https://github.com/bbernhard/signal-cli-rest-api)
+puts one in front of a Signal number you register or link to it, and runs
+beside SubGlance in Docker. Then:
+
+- `url`: `http://signal-api:8080/v2/send`
+- `body`:
+
+```json
+{ "message": "{{summary}}\n{{details}}", "number": "<Signal number>", "recipients": ["<recipient>"] }
+```
+
+`number` is the Signal number the API sends from and each recipient a phone
+number, both in international form (`+31612345678`); a group is its id, as
+`GET /v1/groups/<number>` lists it, starting with `group.`. Separate several
+recipients with commas, each between quotes.
+
+The API has no login of its own, so keep it off the internet: it is reached
+on the local network, which SubGlance does only when started with
+[`--allow-private-targets`](#servers-on-a-private-address). The numbers sit in
+the body, which is read back in full and exported as it is, unlike an SMS
+channel's numbers, which are masked; use an SMS channel when the people who
+can read channels should not see them.
+
 ## Which channels get added
 
 A new channel type is maintenance for as long as the upstream API exists, so
