@@ -334,6 +334,7 @@ with a change to check**. Nothing is left out without being named there.
 | Push | `push`; Kuma's heartbeat interval becomes `push_interval_s` |
 | Heartbeat interval, request timeout | `interval_s`, `timeout_s` |
 | Retries | `retries`, one more than in Kuma, so the alert comes on the same failed check (see below); on a push monitor, `push_grace_s` |
+| *Certificate Expiry Notification*, with the days under *Settings, Notifications* | `ssl_warn_days`, one more than the largest day listed, so the first notice comes on the same day (see below) |
 | Accepted status codes, method, *Max. Redirects* | `expected_status`, `method`, `follow_redirects` (off when Kuma allowed none) |
 | Request headers and body, basic or bearer auth | `headers` and `body`, auth as an `Authorization` header, all with withheld values |
 | *Body Encoding* of a request body: JSON, x-www-form-urlencoded or XML | a `Content-Type` header with the type Kuma sent: `application/json`, `application/x-www-form-urlencoded` or `text/xml; charset=utf-8`, written out rather than withheld; a `Content-Type` among the monitor's own headers wins, as it did in Kuma |
@@ -425,6 +426,21 @@ separately; a status-page link does not become monitor coverage.
   case the field holds a string.
 - *Ignore TLS/SSL errors* has no equivalent. SubGlance verifies every
   certificate, so a self-signed or expired one fails the check.
+- Kuma warns before a certificate expires when a monitor's *Certificate Expiry
+  Notification* is on, once for each day listed under *Settings,
+  Notifications, TLS Certificate Expiry* (7, 14 and 21 unless changed), when
+  that many days or fewer are left. SubGlance warns when fewer than
+  `ssl_warn_days` are left, so an HTTP monitor gets the largest listed day plus
+  one, at most 365, and the first notice comes on the same day. From then on
+  SubGlance keeps one notice open and reminds about it, instead of a new alert
+  at each listed day, and it judges the server's own certificate, not each one
+  in the chain. A monitor with the warning off, with *Ignore TLS/SSL errors* on,
+  or with no days listed keeps SubGlance's default of 14: `ssl_warn_days` has
+  no setting for never.
+- Kuma 2 also warns about the certificate of a *TCP Port* monitor whose *SMTP
+  Security* is secure TLS or STARTTLS. A `tcp` monitor reads no certificate,
+  so each one is listed: for secure TLS, an `ssl` monitor on the same host and
+  port keeps the warning; SubGlance has no STARTTLS check.
 - A DNS monitor without conditions passes on any answer of its record type, as
   in Kuma: `expected: []`. With one *record equals* condition, Kuma passed when
   any record matched; a `dns` monitor wants exactly the expected A, AAAA or MX

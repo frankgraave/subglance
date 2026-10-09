@@ -389,12 +389,15 @@ func convert(src source) Result {
 
 	taken = map[string]bool{}
 	monitorKeys := map[int64]string{} // Kuma monitor id -> monitor key
+	certDays := certWarnDays(src.settings)
 	for _, m := range src.monitors {
 		id := int64(m.int("id"))
 		mon, ok := convertMonitor(m, &res)
 		if !ok {
 			continue
 		}
+		typ := m.str("type")
+		convertCertWarning(m, &mon, typ, certDays, func(reason string) { changed(&res, "monitor", mon.Name, typ, reason) })
 		mon.Tags = convertTags(mon.Name, tags[id], groups[int64(m.int("parent"))], &res)
 		mon.Channels = links[id]
 		if mon.Channels == nil {
