@@ -508,3 +508,51 @@ func TestKumaPushRetriesImportAsGrace(t *testing.T) {
 		})
 	}
 }
+
+// Kuma warned about an expiring certificate at the days listed in its
+// settings; the import stores a warning that starts as early, and leaves the
+// default on a monitor whose certificate errors Kuma ignored.
+func TestKumaCertificateWarningImportsAsSSLWarnDays(t *testing.T) {
+	for _, fixture := range []string{"kuma-1.23.16.db", "kuma-2.5.5.db"} {
+		t.Run(fixture, func(t *testing.T) {
+			ctx := t.Context()
+			original, err := os.ReadFile(filepath.Join("..", "kumaimport", "testdata", fixture))
+			must(t, err)
+			path := filepath.Join(t.TempDir(), "kuma.db")
+			must(t, os.WriteFile(path, original, 0o600))
+			source, err := sql.Open("sqlite", path)
+			must(t, err)
+			t.Cleanup(func() { _ = source.Close() })
+			changed, err := source.ExecContext(ctx,
+				"UPDATE monitor SET expiry_notification = 1 WHERE name IN ('Shop (prod)', 'API POST')")
+			must(t, err)
+			if rows, err := changed.RowsAffected(); err != nil || rows != 2 {
+				t.Fatalf("fixture update affected %d rows (%v), want 2", rows, err)
+			}
+			_, err = source.ExecContext(ctx,
+				"INSERT INTO setting (key, value, type) VALUES ('tlsExpiryNotifyDays', '[7, 30]', 'general')")
+			must(t, err)
+			must(t, source.Close())
+
+			res, err := kumaimport.Convert(ctx, path)
+			must(t, err)
+			file, err := kumaimport.Render(res)
+			must(t, err)
+			srv, db := testServerWithDB(t)
+			if code, _, body := importYAML(t, srv, string(file), false); code != http.StatusOK {
+				t.Fatalf("import = %d: %s", code, body)
+			}
+			mons, err := db.ListMonitors(ctx)
+			must(t, err)
+			for name, want := range map[string]int{"Shop (prod)": 31, "API POST": 14, "Intranet": 14} {
+				i := slices.IndexFunc(mons, func(m store.Monitor) bool { return m.Name == name })
+				if i < 0 {
+					t.Fatalf("%s was not imported", name)
+				}
+				if got := mons[i].SSLWarnDays; got != want {
+					t.Errorf("%s ssl_warn_days = %d, want %d", name, got, want)
+				}
+			}
+		})
+	}
+}
