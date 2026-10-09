@@ -556,3 +556,78 @@ func TestKumaCertificateWarningImportsAsSSLWarnDays(t *testing.T) {
 		})
 	}
 }
+
+// Kuma 2 warned before the registration of a monitor's domain expired. The
+// import adds one domain monitor per domain, warning as early as Kuma did and
+// attached to every channel the Kuma monitors on that domain alerted through.
+func TestKumaDomainWarningImportsAsDomainMonitors(t *testing.T) {
+	ctx := t.Context()
+	original, err := os.ReadFile(filepath.Join("..", "kumaimport", "testdata", "kuma-2.5.5.db"))
+	must(t, err)
+	path := filepath.Join(t.TempDir(), "kuma.db")
+	must(t, os.WriteFile(path, original, 0o600))
+	source, err := sql.Open("sqlite", path)
+	must(t, err)
+	t.Cleanup(func() { _ = source.Close() })
+	changed, err := source.ExecContext(ctx,
+		"UPDATE monitor SET domain_expiry_notification = 1 WHERE name IN ('Shop (prod)', 'API POST', 'Router')")
+	must(t, err)
+	if rows, err := changed.RowsAffected(); err != nil || rows != 3 {
+		t.Fatalf("fixture update affected %d rows (%v), want 3", rows, err)
+	}
+	_, err = source.ExecContext(ctx,
+		"INSERT INTO setting (key, value, type) VALUES ('domainExpiryNotifyDays', '[10, 30]', 'general')")
+	must(t, err)
+	must(t, source.Close())
+
+	res, err := kumaimport.Convert(ctx, path)
+	must(t, err)
+	if res.DomainMonitors != 2 {
+		t.Fatalf("DomainMonitors = %d, want 2", res.DomainMonitors)
+	}
+	file, err := kumaimport.Render(res)
+	must(t, err)
+	srv, db := testServerWithDB(t)
+	if code, _, body := importYAML(t, srv, string(file), true); code != http.StatusOK {
+		t.Fatalf("dry run = %d: %s\n%s", code, body, file)
+	}
+	if code, _, body := importYAML(t, srv, string(file), false); code != http.StatusOK {
+		t.Fatalf("import = %d: %s", code, body)
+	}
+
+	mons, err := db.ListMonitors(ctx)
+	must(t, err)
+	want := map[string][]string{
+		"example.com registration": {"Discord ops", "Mail admins", "Slack alerts"},
+		"example.net registration": {"Gotify", "Pushover"},
+	}
+	found := 0
+	for _, m := range mons {
+		if m.Type != store.TypeDomain {
+			continue
+		}
+		found++
+		channels, ok := want[m.Name]
+		if !ok {
+			t.Errorf("unexpected domain monitor %q", m.Name)
+			continue
+		}
+		if m.DomainWarnDays != 31 || m.IntervalS != 86400 || !m.Enabled || m.Target != strings.TrimSuffix(m.Name, " registration") {
+			t.Errorf("%s = target %q, domain_warn_days %d, interval %ds, enabled %v; want its domain, 31, 86400s, true",
+				m.Name, m.Target, m.DomainWarnDays, m.IntervalS, m.Enabled)
+		}
+		own, err := db.ListMonitorChannels(ctx, m.ID)
+		must(t, err)
+		var names []string
+		for _, c := range own {
+			names = append(names, c.Name)
+		}
+		slices.Sort(names)
+		if !slices.Equal(names, channels) {
+			t.Errorf("%s channels = %v, want %v", m.Name, names, channels)
+		}
+	}
+	if found != len(want) {
+		t.Errorf("%d domain monitors imported, want %d", found, len(want))
+	}
+}

@@ -22,24 +22,31 @@ var kumaCertDays = []int{7, 14, 21}
 
 // certWarnDays reads the days before a certificate expires at which Kuma
 // warned, one warning per day listed. An empty list means Kuma never warned.
+func certWarnDays(settings []row) []int {
+	return notifyDays(settings, "tlsExpiryNotifyDays", kumaCertDays)
+}
+
+// notifyDays reads one of Kuma's lists of warning days: the days before
+// something expires at which Kuma warned, one warning per day listed. An
+// empty list means Kuma never warned.
 //
 // Kuma reads the setting as JSON and takes anything that is not a list, an
 // unreadable value included, as its default. It compares each entry with the
 // whole days left, so a string of digits counts as that number and a fraction
-// as the day below it. A day of 0 or less is never reached: Kuma skips a
-// certificate with no whole day left.
-func certWarnDays(settings []row) []int {
+// as the day below it. A day of 0 or less is never reached: Kuma skips
+// something with no whole day left.
+func notifyDays(settings []row, key string, def []int) []int {
 	for _, s := range settings {
-		if s.str("key") != "tlsExpiryNotifyDays" {
+		if s.str("key") != key {
 			continue
 		}
 		var raw any
 		if err := json.Unmarshal([]byte(s.str("value")), &raw); err != nil {
-			return kumaCertDays
+			return def
 		}
 		list, ok := raw.([]any)
 		if !ok {
-			return kumaCertDays
+			return def
 		}
 		days := []int{}
 		for _, v := range list {
@@ -62,7 +69,7 @@ func certWarnDays(settings []row) []int {
 		}
 		return days
 	}
-	return kumaCertDays
+	return def
 }
 
 // convertCertWarning carries Kuma's certificate expiry warning over, so a

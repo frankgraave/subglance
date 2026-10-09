@@ -92,8 +92,18 @@ func importTo(args []string, out, report io.Writer) error {
 	}
 
 	_, err = fmt.Fprintf(report, "Converted %d of %d monitors, %d of %d channels, %d of %d maintenance windows and %d of %d status pages from Uptime Kuma %s.\n",
-		len(res.Document.Monitors), res.Monitors, len(res.Document.Channels), res.Channels,
+		len(res.Document.Monitors)-res.DomainMonitors, res.Monitors, len(res.Document.Channels), res.Channels,
 		res.WindowsConverted, res.Windows, len(res.Document.StatusPages), res.StatusPages, res.Schema)
+	if err != nil {
+		return err
+	}
+	switch res.DomainMonitors {
+	case 0:
+	case 1:
+		_, err = fmt.Fprintln(report, "Added 1 domain monitor for Kuma's domain expiry warning.")
+	default:
+		_, err = fmt.Fprintf(report, "Added %d domain monitors for Kuma's domain expiry warnings.\n", res.DomainMonitors)
+	}
 	if err != nil {
 		return err
 	}

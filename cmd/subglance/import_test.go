@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,5 +77,39 @@ func TestImportRefusesBadArguments(t *testing.T) {
 	}
 	if now, _ := os.ReadFile(db); !bytes.Equal(now, orig) {
 		t.Error("the Kuma database was overwritten")
+	}
+}
+
+// Monitors added for Kuma's domain expiry warning are not Kuma monitors that
+// came over, so the summary counts them on a line of their own.
+func TestImportCountsAddedDomainMonitorsApart(t *testing.T) {
+	orig, err := os.ReadFile(filepath.Join("..", "..", "internal", "kumaimport", "testdata", "kuma-2.5.5.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "kuma.db")
+	if err := os.WriteFile(path, orig, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	source, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := source.Exec("UPDATE monitor SET domain_expiry_notification = 1 WHERE name IN ('Shop (prod)', 'Router')"); err != nil {
+		t.Fatal(err)
+	}
+	if err := source.Close(); err != nil {
+		t.Fatal(err)
+	}
+	var out, report bytes.Buffer
+	if err := importTo([]string{"uptime-kuma", path}, &out, &report); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(report.String(), "Converted 13 of 16 monitors,") ||
+		!strings.Contains(report.String(), "\nAdded 2 domain monitors for Kuma's domain expiry warnings.\n") {
+		t.Errorf("report = %q", report.String())
+	}
+	if !strings.Contains(out.String(), "key: example-com-registration") {
+		t.Errorf("output has no domain monitor for example.com: %.400s", out.String())
 	}
 }
