@@ -28,6 +28,7 @@ func TestWebhookBodiesAreTheDocumentedExamples(t *testing.T) {
 		"### Mattermost, Rocket.Chat and Google Chat": chatBody,
 		"### Home Assistant":                          homeAssistantBody,
 		"### Signal":                                  signalBody,
+		"### Bark":                                    barkBody,
 	} {
 		start := strings.Index(doc, "\n"+heading+"\n")
 		if start == -1 {

@@ -576,6 +576,24 @@ the body, which is read back in full and exported as it is, unlike an SMS
 channel's numbers, which are masked; use an SMS channel when the people who
 can read channels should not see them.
 
+### Bark
+
+[Bark](https://github.com/Finb/Bark) pushes a notification to an iPhone. The
+app shows a server address that ends in the phone's device key: the public
+`https://api.day.app/<device key>`, or that of a
+[bark-server](https://github.com/Finb/bark-server) you run yourself. The key
+is the credential, so it goes in the masked URL:
+
+- `url`: `https://api.day.app/<device key>`
+- `body`:
+
+```json
+{ "title": "{{summary}}", "body": "{{details}}" }
+```
+
+Bark also reads `"group"`, the heading it sorts pushes under in the app, and
+`"sound"`, one of the sound names the app lists, such as `"telegraph"`.
+
 ## Which channels get added
 
 A new channel type is maintenance for as long as the upstream API exists, so

@@ -346,6 +346,7 @@ with a change to check**. Nothing is left out without being named there.
 | Notifications: Microsoft Teams, Matrix, Pushover, Mattermost, Rocket.Chat, Google Chat, Home Assistant | `webhook` channels with [a body of their own](channels.md#a-body-of-your-own), the one the channel documentation gives for that service |
 | Notifications: Twilio | `sms` channels with [`provider: twilio`](channels.md#twilio), the same account SID and sender |
 | Notifications: Signal | `webhook` channels to the same [signal-cli-rest-api](channels.md#signal) address |
+| Notifications: Bark | `webhook` channels that [push to Bark](channels.md#bark), with the same group and sound |
 | Status pages | `status_pages`, with their slug, title, description, publication and indexing settings, footer credit visibility and ordered monitor list |
 | Maintenance: *Single Maintenance Window* | a one-off window, from and to the same wall-clock times in the window's time zone |
 | Maintenance: *Recurring - Day of Week*, *Recurring - Interval* of one day, and a *Cron Expression* that starts at one time of day on chosen weekdays (Kuma's default `30 3 * * *` is one) | a weekly window on the same weekdays, at the same time, for as long, in the same time zone |
@@ -556,6 +557,13 @@ separately; a status-page link does not become monitor coverage.
   numbers Kuma used in masked form. A signal-cli-rest-api on a private
   address or under a local name is listed with
   [`--allow-private-targets`](operations.md#private-targets).
+- Bark becomes a webhook that pushes to the same Bark server, as
+  [the channel documentation](channels.md#bark) describes, whichever of
+  Kuma's two API versions it used. The endpoint ends in the device key,
+  which is the credential, so the url is withheld; the report names the
+  server Kuma used, without the key, so a self-hosted bark-server is filled
+  in and not the public one. Kuma's group and sound come over in the body;
+  without a sound chosen, Kuma sent `telegraph`, and so does the webhook.
 
 ### What does not come over
 

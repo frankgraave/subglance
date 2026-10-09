@@ -158,6 +158,8 @@ func convertChannel(n row, res *Result) (configfile.Channel, bool) {
 		convertHomeAssistant(get, &out, note)
 	case "signal":
 		convertSignal(get, &out, note)
+	case "Bark":
+		convertBark(get, &out, note)
 	case "twilio":
 		if reason := convertTwilio(get, &out, note); reason != "" {
 			return skip(reason)
