@@ -92,6 +92,16 @@ func TestKumaConversionPassesTheImporter(t *testing.T) {
 				if m.Name == "API POST" && (len(m.Headers) != 1 || m.Headers["Content-Type"] != "application/json") {
 					t.Errorf("API POST stored headers = %v, want only Content-Type: application/json", m.Headers)
 				}
+				// Three retries in Kuma alert on the fourth failure, and so
+				// does a threshold of four here; Kuma's default of none
+				// alerts on the first, which a stored 0 does too.
+				wantRetries := 0
+				if m.Name == "Shop (prod)" {
+					wantRetries = 4
+				}
+				if m.Retries != wantRetries {
+					t.Errorf("%s stored retries = %d, want %d", m.Name, m.Retries, wantRetries)
+				}
 			}
 			// Paused in Kuma stays paused; a monitor waiting for a header is
 			// paused until it is filled in; the rest run.
@@ -452,6 +462,48 @@ func TestKumaHomeAssistantImportsAsAWebhook(t *testing.T) {
 			}
 			if !linked {
 				t.Error("Shop (prod) is not attached to the Home Assistant channel")
+			}
+		})
+	}
+}
+
+// Kuma retries a push monitor before alerting; SubGlance confirms the first
+// missed report. The wait comes over as grace, which the importer stores.
+func TestKumaPushRetriesImportAsGrace(t *testing.T) {
+	for _, fixture := range []string{"kuma-1.23.16.db", "kuma-2.5.5.db"} {
+		t.Run(fixture, func(t *testing.T) {
+			ctx := t.Context()
+			original, err := os.ReadFile(filepath.Join("..", "kumaimport", "testdata", fixture))
+			must(t, err)
+			path := filepath.Join(t.TempDir(), "kuma.db")
+			must(t, os.WriteFile(path, original, 0o600))
+			source, err := sql.Open("sqlite", path)
+			must(t, err)
+			t.Cleanup(func() { _ = source.Close() })
+			changed, err := source.ExecContext(ctx,
+				"UPDATE monitor SET maxretries = 2, retry_interval = 3600 WHERE name = 'Nightly backup'")
+			must(t, err)
+			if rows, err := changed.RowsAffected(); err != nil || rows != 1 {
+				t.Fatalf("fixture update affected %d rows (%v), want 1", rows, err)
+			}
+			must(t, source.Close())
+
+			res, err := kumaimport.Convert(ctx, path)
+			must(t, err)
+			file, err := kumaimport.Render(res)
+			must(t, err)
+			srv, db := testServerWithDB(t)
+			if code, _, body := importYAML(t, srv, string(file), false); code != http.StatusOK {
+				t.Fatalf("import = %d: %s", code, body)
+			}
+			mons, err := db.ListMonitors(ctx)
+			must(t, err)
+			i := slices.IndexFunc(mons, func(m store.Monitor) bool { return m.Name == "Nightly backup" })
+			if i < 0 {
+				t.Fatal("Nightly backup was not imported")
+			}
+			if m := mons[i]; m.PushIntervalS != 86400 || m.PushGraceS != 7200 {
+				t.Errorf("Nightly backup push window = %ds + %ds, want 86400s + 7200s", m.PushIntervalS, m.PushGraceS)
 			}
 		})
 	}
