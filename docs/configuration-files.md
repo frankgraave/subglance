@@ -459,8 +459,8 @@ separately; a status-page link does not become monitor coverage.
   the tag routing rules it matches, or to the default channel when that comes
   to none ([which monitors use a channel](channels.md#which-monitors-use-a-channel)),
   and to nobody on an instance with neither, as a fresh one is. Give it a
-  channel before switching Kuma off. A monitor that kept some still alerts
-  through those.
+  channel before switching Kuma off. A monitor that kept some keeps those
+  channels, which alert while they are enabled.
 - An email channel's Cc recipients become ordinary recipients. Bcc recipients
   are left out rather than shown to everyone, and listed.
 - A Twilio channel signs in with the account SID and its auth token. When Kuma

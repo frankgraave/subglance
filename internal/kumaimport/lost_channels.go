@@ -30,7 +30,7 @@ func noteLostChannels(lost []string, kept int, note func(string)) {
 	}
 	list := andList(names)
 	if kept > 0 {
-		note("Kuma also alerted through " + list + ", which did not come over; its alerts go to the channels that did")
+		note("Kuma also alerted through " + list + ", which did not come over; the channels that did stay attached, and alert while they are enabled")
 		return
 	}
 	note("none of the notifications Kuma alerted through came over (" + list + "), so it has no channels: " +

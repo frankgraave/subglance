@@ -42,7 +42,7 @@ func TestMonitorsNameTheNotificationsThatDidNotComeOver(t *testing.T) {
 		{"several skipped, named in link order", []int64{3, 2}, []string{},
 			`came over ("Phones" and "On-call")`},
 		{"some skipped", []int64{1, 2, 3}, []string{"ops-discord"},
-			`Kuma also alerted through "On-call" and "Phones", which did not come over; its alerts go to the channels that did`},
+			`Kuma also alerted through "On-call" and "Phones", which did not come over; the channels that did stay attached, and alert while they are enabled`},
 		{"the same skipped notification linked twice", []int64{1, 2, 2}, []string{"ops-discord"},
 			`Kuma also alerted through "On-call", which did not come over`},
 		{"a skipped notification without a name", []int64{4}, []string{}, `came over ("Kuma apprise")`},
@@ -183,7 +183,7 @@ func TestLostNotificationsInTheRenderedFile(t *testing.T) {
 			for _, want := range []string{
 				`#   - channel "On-call" (PagerDuty): SubGlance has no PagerDuty channel`,
 				`#   - monitor "Intranet" (http): none of the notifications Kuma alerted through came over ("On-call"), so it has no channels`,
-				`#   - monitor "Shop (prod)" (http): Kuma also alerted through "On-call", which did not come over; its alerts go to the channels that did`,
+				`#   - monitor "Shop (prod)" (http): Kuma also alerted through "On-call", which did not come over; the channels that did stay attached, and alert while they are enabled`,
 			} {
 				if !strings.Contains(file, want) {
 					t.Errorf("the file has no line\n%s\nreport:\n%s", want, notesOf(res))
