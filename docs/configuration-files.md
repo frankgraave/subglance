@@ -563,7 +563,8 @@ separately; a status-page link does not become monitor coverage.
   which is the credential, so the url is withheld; the report names the
   server Kuma used, without the key, so a self-hosted bark-server is filled
   in and not the public one. Kuma's group and sound come over in the body;
-  without a sound chosen, Kuma sent `telegraph`, and so does the webhook.
+  without a group or a sound chosen, Kuma sent `UptimeKuma` and `telegraph`,
+  and so does the webhook.
 
 ### What does not come over
 

@@ -27,6 +27,10 @@ var barkSound = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}(\.caf)?$`)
 // barkDefaultSound is the sound Kuma sent when none was chosen.
 const barkDefaultSound = "telegraph"
 
+// barkDefaultGroup is the group Kuma sent when none was chosen, with both
+// API versions, so pushes it imported keep arriving under that heading.
+const barkDefaultGroup = "UptimeKuma"
+
 // convertBark turns a Kuma Bark notification into a webhook that posts to
 // the same Bark server. Kuma either sent a GET with the text in the path
 // (API v1) or a JSON POST (v2) to its endpoint; bark-server takes a JSON
@@ -37,7 +41,8 @@ const barkDefaultSound = "telegraph"
 // holds it can push to the phone. So the url is withheld, and the report
 // names the server Kuma used, without the key, so that a self-hosted server
 // is filled in and not the public one. The group and the sound only say
-// how a push arrives, and come over in the body.
+// how a push arrives, and come over in the body, with the defaults Kuma
+// sent when either was left empty.
 func convertBark(get func(string) string, out *configfile.Channel, note func(string)) {
 	out.Type = "webhook"
 	out.Config["url"] = configfile.Placeholder
@@ -57,12 +62,14 @@ func convertBark(get func(string) string, out *configfile.Channel, note func(str
 		", with the device key the Bark app shows")
 
 	var extra []jsonField
-	if g := get("barkGroup"); g != "" {
-		if barkGroupOK(g) {
-			extra = append(extra, jsonField{"group", g})
-		} else {
-			note("the group " + strconv.Quote(g) + " has braces, control characters or more than 64 characters and was left out")
-		}
+	group := get("barkGroup")
+	if group == "" {
+		group = barkDefaultGroup
+	}
+	if barkGroupOK(group) {
+		extra = append(extra, jsonField{"group", group})
+	} else {
+		note("the group " + strconv.Quote(group) + " has braces, control characters or more than 64 characters and was left out")
 	}
 	sound := get("barkSound")
 	if sound == "" {
