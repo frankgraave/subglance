@@ -631,3 +631,43 @@ func TestKumaDomainWarningImportsAsDomainMonitors(t *testing.T) {
 		t.Errorf("%d domain monitors imported, want %d", found, len(want))
 	}
 }
+
+// Kuma 2 kept the response of a failed check unless the monitor said not to.
+// A monitor that said not to arrives with capture off, rather than with the
+// capture a new SubGlance monitor gets by default.
+func TestKumaSavedErrorResponseImportsAsCaptureResponse(t *testing.T) {
+	ctx := t.Context()
+	original, err := os.ReadFile(filepath.Join("..", "kumaimport", "testdata", "kuma-2.5.5.db"))
+	must(t, err)
+	path := filepath.Join(t.TempDir(), "kuma.db")
+	must(t, os.WriteFile(path, original, 0o600))
+	source, err := sql.Open("sqlite", path)
+	must(t, err)
+	t.Cleanup(func() { _ = source.Close() })
+	changed, err := source.ExecContext(ctx, "UPDATE monitor SET save_error_response = 0 WHERE name = 'API POST'")
+	must(t, err)
+	if rows, err := changed.RowsAffected(); err != nil || rows != 1 {
+		t.Fatalf("fixture update affected %d rows (%v), want 1", rows, err)
+	}
+	must(t, source.Close())
+
+	res, err := kumaimport.Convert(ctx, path)
+	must(t, err)
+	file, err := kumaimport.Render(res)
+	must(t, err)
+	srv, db := testServerWithDB(t)
+	if code, _, body := importYAML(t, srv, string(file), false); code != http.StatusOK {
+		t.Fatalf("import = %d: %s", code, body)
+	}
+	mons, err := db.ListMonitors(ctx)
+	must(t, err)
+	for name, want := range map[string]bool{"API POST": false, "Shop (prod)": true} {
+		i := slices.IndexFunc(mons, func(m store.Monitor) bool { return m.Name == name })
+		if i < 0 {
+			t.Fatalf("%s was not imported", name)
+		}
+		if got := mons[i].CaptureResponse; got != want {
+			t.Errorf("%s capture_response = %v, want %v", name, got, want)
+		}
+	}
+}

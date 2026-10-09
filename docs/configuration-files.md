@@ -339,6 +339,7 @@ with a change to check**. Nothing is left out without being named there.
 | Accepted status codes, method, *Max. Redirects* | `expected_status`, `method`, `follow_redirects` (off when Kuma allowed none) |
 | Request headers and body, basic or bearer auth | `headers` and `body`, auth as an `Authorization` header, all with withheld values |
 | *Body Encoding* of a request body: JSON, x-www-form-urlencoded or XML | a `Content-Type` header with the type Kuma sent: `application/json`, `application/x-www-form-urlencoded` or `text/xml; charset=utf-8`, written out rather than withheld; a `Content-Type` among the monitor's own headers wins, as it did in Kuma |
+| Kuma 2's *Save HTTP Error Response for Notifications* | `capture_response`, on or off as in Kuma, so a monitor whose responses Kuma did not keep does not start keeping them; a monitor that also kept passing responses, or had a *Response Max Length* of 0, below Kuma's 1024 or above SubGlance's 2048 bytes, is listed, because SubGlance keeps the first 2048 bytes of a failed check's response only |
 | Paused | `enabled: false` |
 | Tags | `tags`; a tag without a value becomes `yes`, and a monitor inside a group gets the tag `group` with the group's name |
 | Notifications: Discord, Slack, Telegram, SMTP, ntfy, Gotify, Webhook | channels of the same type, assigned to the same monitors |

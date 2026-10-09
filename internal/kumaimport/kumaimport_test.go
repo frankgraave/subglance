@@ -83,6 +83,13 @@ func TestConvertBothSchemas(t *testing.T) {
 			if !slices.Equal(shop.Channels, []string{"discord-ops", "mail-admins"}) {
 				t.Errorf("Shop channels = %v", shop.Channels)
 			}
+			// Kuma 2 kept the response of a failed check by default; 1.23 has
+			// no such setting, and the field is left out.
+			if wantSchema == "2.x" && (shop.CaptureResponse == nil || !*shop.CaptureResponse) {
+				t.Errorf("Shop capture_response = %v, want true", shop.CaptureResponse)
+			} else if wantSchema == "1.x" && shop.CaptureResponse != nil {
+				t.Errorf("Shop capture_response = %v, want it left out", *shop.CaptureResponse)
+			}
 
 			post, _ := monitorByName(res, "API POST")
 			if deref(post.Method) != "POST" || deref(post.ExpectedStatus) != "200-299,301" || deref(post.FollowRedirects) ||
