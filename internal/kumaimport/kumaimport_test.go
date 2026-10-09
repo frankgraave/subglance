@@ -212,7 +212,7 @@ func TestEveryObjectIsAccountedFor(t *testing.T) {
 			for _, n := range res.Skipped {
 				skipped[n.Kind+"/"+n.Name] = n.Reason
 			}
-			if got := len(res.Document.Monitors) + countKind(res.Skipped, "monitor"); got != res.Monitors {
+			if got := len(res.Document.Monitors) - res.DomainMonitors + countKind(res.Skipped, "monitor"); got != res.Monitors {
 				t.Errorf("%d monitors converted or skipped, %d in Kuma", got, res.Monitors)
 			}
 			if got := len(res.Document.Channels) + countKind(res.Skipped, "channel"); got != res.Channels {

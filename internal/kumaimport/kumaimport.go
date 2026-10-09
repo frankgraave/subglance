@@ -41,7 +41,7 @@ import (
 // Note is one line of the report: an object that was left out, or one that
 // was converted with a change the reader should know about.
 type Note struct {
-	Kind   string // "monitor", "channel", "status page", "maintenance"
+	Kind   string // "monitor", "channel", "status page", "maintenance", "domain warning"
 	Name   string
 	Type   string // Kuma's type, when the object has one
 	Reason string
@@ -72,6 +72,10 @@ type Result struct {
 	// become several SubGlance windows, one per monitor it covered.
 	Monitors, Channels, Windows, StatusPages int
 	WindowsConverted                         int
+	// DomainMonitors counts the domain monitors added for Kuma's domain
+	// expiry warning. They are the last ones in Document.Monitors, and no
+	// Kuma monitor became one, so they are not among the converted.
+	DomainMonitors int
 }
 
 // ErrNotKuma means the file is an SQLite database without Kuma's tables.
@@ -444,6 +448,9 @@ func convert(src source) Result {
 		monitorKeys[id] = mon.Key
 		res.Document.Monitors = append(res.Document.Monitors, mon)
 	}
+	added := convertDomainWarnings(src, links, taken, &res)
+	res.DomainMonitors = len(added)
+	res.Document.Monitors = append(res.Document.Monitors, added...)
 	convertWindows(src, monitorKeys, &res)
 
 	convertStatusPages(src, monitorKeys, &res)

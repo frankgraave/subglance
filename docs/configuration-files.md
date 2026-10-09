@@ -335,6 +335,7 @@ with a change to check**. Nothing is left out without being named there.
 | Heartbeat interval, request timeout | `interval_s`, `timeout_s` |
 | Retries | `retries`, one more than in Kuma, so the alert comes on the same failed check (see below); on a push monitor, `push_grace_s` |
 | *Certificate Expiry Notification*, with the days under *Settings, Notifications* | `ssl_warn_days`, one more than the largest day listed, so the first notice comes on the same day (see below) |
+| Kuma 2's *Domain Name Expiry Notification*, with the days under *Settings, Notifications* | one `domain` monitor per registered domain, with `domain_warn_days` one more than the largest day listed (see below) |
 | Accepted status codes, method, *Max. Redirects* | `expected_status`, `method`, `follow_redirects` (off when Kuma allowed none) |
 | Request headers and body, basic or bearer auth | `headers` and `body`, auth as an `Authorization` header, all with withheld values |
 | *Body Encoding* of a request body: JSON, x-www-form-urlencoded or XML | a `Content-Type` header with the type Kuma sent: `application/json`, `application/x-www-form-urlencoded` or `text/xml; charset=utf-8`, written out rather than withheld; a `Content-Type` among the monitor's own headers wins, as it did in Kuma |
@@ -451,6 +452,23 @@ separately; a status-page link does not become monitor coverage.
   in the chain. A monitor with the warning off, with *Ignore TLS/SSL errors* on,
   or with no days listed keeps SubGlance's default of 14: `ssl_warn_days` has
   no setting for never.
+- Kuma 2 warns before a domain's registration expires, from every monitor
+  whose *Domain Name Expiry Notification* is on, which it is by default. It
+  looks up the registered domain of the monitor's address (`example.com` for
+  `https://shop.example.com/`) once a day and notifies through that
+  monitor's notifications, once for each day listed under *Settings,
+  Notifications, Domain Name Expiry* (7, 14 and 21 unless changed). SubGlance
+  has a check of its own for this, so each such domain becomes one `domain`
+  monitor, named after it (`example.com registration`), checked once a day,
+  with `domain_warn_days` the largest listed day plus one, at most 365, and
+  the channels of every Kuma monitor on that domain. Each one is listed, with
+  the Kuma monitors it stands for, and the summary counts them apart from the
+  monitors that came over. A domain only paused monitors asked for comes over
+  switched off. An IP address or a local name had no such warning. A name
+  under a shared suffix such as `github.io`, for which Kuma looked up the
+  suffix's own domain, and an internationalised name, which a `domain` monitor
+  takes only in its `xn--` form, are listed instead; add those by hand. When
+  no day is listed, Kuma sent no warning and no monitor is added.
 - Kuma 2 also warns about the certificate of a *TCP Port* monitor whose *SMTP
   Security* is secure TLS or STARTTLS. A `tcp` monitor reads no certificate,
   so each one is listed: for secure TLS, an `ssl` monitor on the same host and
