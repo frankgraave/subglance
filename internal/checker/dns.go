@@ -142,7 +142,22 @@ type DNSChecker struct {
 	// systemServers returns the host's resolvers as host:port. Tests replace
 	// it with a fake server.
 	systemServers func() ([]string, error)
+
+	// retransmitAfter is how long the first transmission of a query waits
+	// for an answer before the query is sent again; zero means
+	// dnsRetransmitAfter. Tests shorten it.
+	retransmitAfter time.Duration
 }
+
+// dnsRetransmitAfter is how long a query waits for an answer before it is
+// sent again; each later wait is twice the one before.
+//
+// A datagram lost on the way to a resolver, or back, is ordinary, and every
+// stub resolver sends the query again rather than give up: RFC 1123 §6.1.3.3
+// requires it, and RFC 1035 §4.2.1 puts the interval at two to five seconds.
+// Two seconds, doubling, is what c-ares does by default, and so what Node's
+// resolver and an Uptime Kuma DNS monitor did.
+const dnsRetransmitAfter = 2 * time.Second
 
 // NewDNSChecker returns a checker that sends queries to a monitor's own
 // resolver only through the SSRF guard.
@@ -218,6 +233,7 @@ func (c *DNSChecker) Check(ctx context.Context, m Monitor) Result {
 
 	var (
 		answer dnsmessage.Message
+		lost   time.Duration
 		server string
 	)
 	for i, s := range servers {
@@ -230,7 +246,7 @@ func (c *DNSChecker) Check(ctx context.Context, m Monitor) Result {
 			share := time.Until(deadline) / time.Duration(len(servers)-i)
 			attempt, cancelAttempt = context.WithTimeout(ctx, share)
 		}
-		answer, err = exchange(attempt, dialer, s, name, qtype)
+		answer, lost, err = c.exchange(attempt, dialer, s, name, qtype)
 		cancelAttempt()
 		server = s
 		if err == nil || ctx.Err() != nil || i == len(servers)-1 {
@@ -241,6 +257,15 @@ func (c *DNSChecker) Check(ctx context.Context, m Monitor) Result {
 		return classifyResolverError(start, ctx, server, err)
 	}
 
+	res := judgeDNSAnswer(start, m, name, qtype, server, answer)
+	// The time before the transmission that was answered went to datagrams
+	// that were lost, not to the resolver, so it is not its response time.
+	res.Latency -= lost
+	return res
+}
+
+// judgeDNSAnswer compares a resolver's answer with what the monitor expects.
+func judgeDNSAnswer(start time.Time, m Monitor, name string, qtype dnsmessage.Type, server string, answer dnsmessage.Message) Result {
 	switch answer.RCode {
 	case dnsmessage.RCodeSuccess:
 	case dnsmessage.RCodeNameError:
@@ -298,21 +323,109 @@ func rcodeWord(rc dnsmessage.RCode) string {
 // enough not to fragment.
 const dnsUDPSize = 1232
 
-// exchange sends one query over UDP, and again over TCP when the answer did
-// not fit.
-func exchange(ctx context.Context, d *net.Dialer, server, name string, qtype dnsmessage.Type) (dnsmessage.Message, error) {
-	id, query, err := buildQuery(name, qtype)
-	if err != nil {
-		return dnsmessage.Message{}, err
+// exchange asks one resolver over UDP, sending the query again while no
+// answer comes, and asks again over TCP when the answer did not fit. lost is
+// the time between the first transmission and the one that was answered.
+func (c *DNSChecker) exchange(ctx context.Context, d *net.Dialer, server, name string, qtype dnsmessage.Type) (msg dnsmessage.Message, lost time.Duration, err error) {
+	every := c.retransmitAfter
+	if every <= 0 {
+		every = dnsRetransmitAfter
 	}
-	msg, err := exchangeOver(ctx, d, "udp", server, id, query, name, qtype)
+	msg, answered, lost, err := exchangeUDP(ctx, d, server, name, qtype, every)
 	if err != nil {
-		return msg, err
+		return msg, 0, err
 	}
 	if msg.Truncated {
-		return exchangeOver(ctx, d, "tcp", server, id, query, name, qtype)
+		msg, err = exchangeTCP(ctx, d, server, answered, name, qtype)
 	}
-	return msg, nil
+	return msg, lost, err
+}
+
+// dnsTransmission is one sending of a query: its ID, its bytes and when it
+// left.
+type dnsTransmission struct {
+	id    uint16
+	query []byte
+	at    time.Time
+}
+
+// exchangeUDP sends the query, and sends it again whenever the wait for an
+// answer runs out, doubling the wait each time, until an answer comes or the
+// context's deadline passes.
+//
+// Each transmission carries an ID of its own, and an answer to any of them is
+// accepted: a late answer is still an answer, and its ID says which
+// transmission it answers, so the response time is measured from that one.
+// The context's deadline is the bound; a resolver that refuses outright
+// (a closed port) ends the exchange at once, because only silence is worth
+// waiting out.
+func exchangeUDP(ctx context.Context, d *net.Dialer, server, name string, qtype dnsmessage.Type, every time.Duration) (dnsmessage.Message, dnsTransmission, time.Duration, error) {
+	conn, err := d.DialContext(ctx, "udp", server)
+	if err != nil {
+		return dnsmessage.Message{}, dnsTransmission{}, 0, err
+	}
+	defer func() { _ = conn.Close() }()
+	deadline, hasDeadline := ctx.Deadline()
+	if hasDeadline {
+		_ = conn.SetWriteDeadline(deadline)
+	}
+
+	var sent []dnsTransmission
+	wait := every
+	buf := make([]byte, 65535)
+	for {
+		if err := ctx.Err(); err != nil {
+			return dnsmessage.Message{}, dnsTransmission{}, 0, err
+		}
+		t, err := newTransmission(name, qtype, sent)
+		if err != nil {
+			return dnsmessage.Message{}, dnsTransmission{}, 0, err
+		}
+		t.at = time.Now()
+		if _, err := conn.Write(t.query); err != nil {
+			return dnsmessage.Message{}, dnsTransmission{}, 0, err
+		}
+		sent = append(sent, t)
+
+		next := t.at.Add(wait)
+		wait *= 2
+		if hasDeadline && deadline.Before(next) {
+			next = deadline
+		}
+		_ = conn.SetReadDeadline(next)
+
+		for {
+			n, err := conn.Read(buf)
+			if err != nil {
+				if errors.Is(err, os.ErrDeadlineExceeded) && (!hasDeadline || next.Before(deadline)) {
+					break // send again
+				}
+				return dnsmessage.Message{}, dnsTransmission{}, 0, err
+			}
+			// A datagram that answers none of this check's transmissions
+			// (a spoofing attempt, or an answer meant for someone else) is
+			// ignored rather than believed; the deadline still bounds the
+			// wait.
+			msg, i, perr := parseAnswerToAny(buf[:n], sent, name, qtype)
+			if perr == nil {
+				return msg, sent[i], sent[i].at.Sub(sent[0].at), nil
+			}
+		}
+	}
+}
+
+// newTransmission builds the query again with an ID no earlier transmission
+// of this exchange used, so an answer names the one it answers.
+func newTransmission(name string, qtype dnsmessage.Type, sent []dnsTransmission) (dnsTransmission, error) {
+	for {
+		id, query, err := buildQuery(name, qtype)
+		if err != nil {
+			return dnsTransmission{}, err
+		}
+		if !slices.ContainsFunc(sent, func(t dnsTransmission) bool { return t.id == id }) {
+			return dnsTransmission{id: id, query: query}, nil
+		}
+	}
 }
 
 func buildQuery(name string, qtype dnsmessage.Type) (uint16, []byte, error) {
@@ -348,8 +461,10 @@ func buildQuery(name string, qtype dnsmessage.Type) (uint16, []byte, error) {
 	return id, out, err
 }
 
-func exchangeOver(ctx context.Context, d *net.Dialer, network, server string, id uint16, query []byte, name string, qtype dnsmessage.Type) (dnsmessage.Message, error) {
-	conn, err := d.DialContext(ctx, network, server)
+// exchangeTCP asks the same question again over TCP, with the ID and query of
+// the transmission whose UDP answer did not fit.
+func exchangeTCP(ctx context.Context, d *net.Dialer, server string, t dnsTransmission, name string, qtype dnsmessage.Type) (dnsmessage.Message, error) {
+	conn, err := d.DialContext(ctx, "tcp", server)
 	if err != nil {
 		return dnsmessage.Message{}, err
 	}
@@ -358,42 +473,36 @@ func exchangeOver(ctx context.Context, d *net.Dialer, network, server string, id
 		_ = conn.SetDeadline(deadline)
 	}
 
-	var raw []byte
-	if network == "tcp" {
-		framed := make([]byte, 2+len(query))
-		binary.BigEndian.PutUint16(framed, uint16(len(query))) // #nosec G115 -- a built query is far below 64 KiB
-		copy(framed[2:], query)
-		if _, err := conn.Write(framed); err != nil {
-			return dnsmessage.Message{}, err
-		}
-		var size [2]byte
-		if _, err := io.ReadFull(conn, size[:]); err != nil {
-			return dnsmessage.Message{}, err
-		}
-		raw = make([]byte, binary.BigEndian.Uint16(size[:]))
-		if _, err := io.ReadFull(conn, raw); err != nil {
-			return dnsmessage.Message{}, err
-		}
-		return parseAnswer(raw, id, name, qtype)
-	}
-
-	if _, err := conn.Write(query); err != nil {
+	framed := make([]byte, 2+len(t.query))
+	binary.BigEndian.PutUint16(framed, uint16(len(t.query))) // #nosec G115 -- a built query is far below 64 KiB
+	copy(framed[2:], t.query)
+	if _, err := conn.Write(framed); err != nil {
 		return dnsmessage.Message{}, err
 	}
-	buf := make([]byte, 65535)
-	for {
-		n, err := conn.Read(buf)
-		if err != nil {
-			return dnsmessage.Message{}, err
-		}
-		// A datagram that is not the answer to this query (a late answer
-		// to an earlier one, or a spoofing attempt) is ignored rather than
-		// believed; the deadline still bounds the wait.
-		msg, perr := parseAnswer(buf[:n], id, name, qtype)
-		if perr == nil {
-			return msg, nil
-		}
+	var size [2]byte
+	if _, err := io.ReadFull(conn, size[:]); err != nil {
+		return dnsmessage.Message{}, err
 	}
+	raw := make([]byte, binary.BigEndian.Uint16(size[:]))
+	if _, err := io.ReadFull(conn, raw); err != nil {
+		return dnsmessage.Message{}, err
+	}
+	return parseAnswer(raw, t.id, name, qtype)
+}
+
+// parseAnswerToAny decodes a response to any of the transmissions sent and
+// says which one it answers.
+func parseAnswerToAny(raw []byte, sent []dnsTransmission, name string, qtype dnsmessage.Type) (dnsmessage.Message, int, error) {
+	if len(raw) < 2 {
+		return dnsmessage.Message{}, -1, errors.New("unreadable answer: too short")
+	}
+	id := binary.BigEndian.Uint16(raw[:2])
+	i := slices.IndexFunc(sent, func(t dnsTransmission) bool { return t.id == id })
+	if i < 0 {
+		return dnsmessage.Message{}, -1, errors.New("answer does not match the query")
+	}
+	msg, err := parseAnswer(raw, id, name, qtype)
+	return msg, i, err
 }
 
 // parseAnswer decodes a response and refuses one that does not answer the

@@ -312,6 +312,14 @@ host cannot be resolved; a resolver that stays silent past the monitor's
 timeout fails with `timeout`. An answer too large for one UDP datagram is
 asked again over TCP.
 
+A query or its answer lost on the way is not a failed check. When no answer
+has come after two seconds the check sends the query again, then waits twice
+as long before the next, until an answer arrives or the monitor's timeout runs
+out, as the resolver of the host itself does; a late answer to an earlier
+query counts too. The response time is that of the query that was answered,
+so a lost datagram does not show up as a slower resolver. A resolver that
+refuses the query outright is not asked again.
+
 ### Checking when a domain expires
 
 A domain whose registration lapses takes a site offline as completely as a

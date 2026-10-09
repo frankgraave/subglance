@@ -31,8 +31,17 @@ type fakeDNS struct {
 	// only the TCP retry can see them.
 	truncateUDP bool
 	// decoyFirst sends a datagram with the wrong query ID before the real
-	// answer, the shape of a late or spoofed reply.
+	// answer, the shape of a spoofed reply or one meant for someone else.
 	decoyFirst bool
+	// decoyOnly sends that datagram and never the real answer.
+	decoyOnly bool
+	// dropUDP is how many UDP queries go unanswered before one is answered,
+	// the shape of a datagram lost on the way.
+	dropUDP int
+	// lateFirst answers the first UDP query only after this long and leaves
+	// every later one unanswered: a slow answer that arrives after the
+	// query has been sent again.
+	lateFirst  time.Duration
 	udpQueries int
 	tcpQueries int
 }
@@ -153,8 +162,21 @@ func (f *fakeDNS) serveUDP(pc net.PacketConn) {
 			continue
 		}
 		f.mu.Lock()
-		decoy := f.decoyFirst
+		decoy := f.decoyFirst || f.decoyOnly
+		only := f.decoyOnly
+		drop := f.udpQueries <= f.dropUDP
+		late, nth := f.lateFirst, f.udpQueries
 		f.mu.Unlock()
+		if late > 0 {
+			if nth == 1 {
+				to := from
+				time.AfterFunc(late, func() { _, _ = pc.WriteTo(out, to) })
+			}
+			continue
+		}
+		if drop {
+			continue
+		}
 		if decoy {
 			// Another ID and other records: believed, it would fail the
 			// check, which is what makes the test bite.
@@ -170,6 +192,9 @@ func (f *fakeDNS) serveUDP(pc net.PacketConn) {
 			}
 			if wrong, err := fake.Pack(); err == nil {
 				_, _ = pc.WriteTo(wrong, from)
+			}
+			if only {
+				continue
 			}
 		}
 		_, _ = pc.WriteTo(out, from)
@@ -404,6 +429,152 @@ func TestDNSCheckerIgnoresAnAnswerWithAnotherID(t *testing.T) {
 	res := openChecker().Check(context.Background(), f.monitor("example.test", DNSRecordA, "192.0.2.1"))
 	if !res.OK {
 		t.Fatalf("check failed after a decoy datagram: %q", res.Error)
+	}
+}
+
+// An answer to no query this check sent is never believed, however long the
+// check keeps asking: the check times out rather than pass or mismatch.
+func TestDNSCheckerNeverBelievesAnAnswerWithAnotherID(t *testing.T) {
+	f := newFakeDNS(t)
+	f.add("example.test", a4("192.0.2.1"))
+	f.mu.Lock()
+	f.decoyOnly = true
+	f.mu.Unlock()
+
+	c := openChecker()
+	c.retransmitAfter = 50 * time.Millisecond
+	m := f.monitor("example.test", DNSRecordA, "192.0.2.1")
+	m.Timeout = 300 * time.Millisecond
+	res := c.Check(context.Background(), m)
+	if res.OK || res.Kind != FailTimeout {
+		t.Fatalf("got OK=%v kind=%q error=%q, want a timeout", res.OK, res.Kind, res.Error)
+	}
+}
+
+// A lost datagram is sent again, as every resolver does, instead of failing
+// the check. The response time is the answered query's, so a lost datagram
+// does not show up as a slower resolver.
+func TestDNSCheckerRetransmitsALostQuery(t *testing.T) {
+	f := newFakeDNS(t)
+	f.add("example.test", a4("192.0.2.1"))
+	f.mu.Lock()
+	f.dropUDP = 1
+	f.mu.Unlock()
+
+	const every = 300 * time.Millisecond
+	c := openChecker()
+	c.retransmitAfter = every
+	res := c.Check(context.Background(), f.monitor("example.test", DNSRecordA, "192.0.2.1"))
+	if !res.OK {
+		t.Fatalf("a lost query failed the check: kind=%q error=%q", res.Kind, res.Error)
+	}
+	if res.Latency >= every {
+		t.Errorf("latency %s includes the wait for the lost query (%s)", res.Latency, every)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.udpQueries != 2 {
+		t.Errorf("udp queries: %d, want 2", f.udpQueries)
+	}
+}
+
+// A slow answer is an answer: one that comes after the query was sent again
+// still passes the check, and its response time is measured from the query
+// it answers.
+func TestDNSCheckerAcceptsALateAnswerToAnEarlierQuery(t *testing.T) {
+	f := newFakeDNS(t)
+	f.add("example.test", a4("192.0.2.1"))
+	const late = 250 * time.Millisecond
+	f.mu.Lock()
+	f.lateFirst = late
+	f.mu.Unlock()
+
+	c := openChecker()
+	c.retransmitAfter = 50 * time.Millisecond
+	res := c.Check(context.Background(), f.monitor("example.test", DNSRecordA, "192.0.2.1"))
+	if !res.OK {
+		t.Fatalf("a late answer to the first query failed the check: kind=%q error=%q", res.Kind, res.Error)
+	}
+	if res.Latency < late {
+		t.Errorf("latency %s is shorter than the answered query took (%s)", res.Latency, late)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.udpQueries < 2 {
+		t.Errorf("udp queries: %d; the answer did not come after a retransmission", f.udpQueries)
+	}
+}
+
+// drainMarker is a datagram no DNS query can be: the silent resolver in
+// TestDNSCheckerBacksOffWhileTheResolverIsSilent stops counting when it
+// reads it.
+const drainMarker = "drain"
+
+// A resolver that never answers is asked again with a doubling wait, the way
+// stub resolvers back off, not flooded at a fixed rate; and the check still
+// fails as a timeout at its deadline.
+func TestDNSCheckerBacksOffWhileTheResolverIsSilent(t *testing.T) {
+	silent, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = silent.Close() })
+	var (
+		mu       sync.Mutex
+		received int
+	)
+	counted := make(chan struct{})
+	go func() {
+		buf := make([]byte, 65535)
+		for {
+			n, _, err := silent.ReadFrom(buf)
+			if err != nil {
+				return
+			}
+			if string(buf[:n]) == drainMarker {
+				close(counted)
+				return
+			}
+			mu.Lock()
+			received++
+			mu.Unlock()
+		}
+	}()
+
+	c := openChecker()
+	c.retransmitAfter = 50 * time.Millisecond
+	m := Monitor{Type: TypeDNS, Target: "example.test", Timeout: time.Second,
+		DNSRecordType: DNSRecordA, DNSResolver: silent.LocalAddr().String()}
+	start := time.Now()
+	res := c.Check(context.Background(), m)
+	elapsed := time.Since(start)
+	if res.OK || res.Kind != FailTimeout {
+		t.Fatalf("got OK=%v kind=%q error=%q, want a timeout", res.OK, res.Kind, res.Error)
+	}
+	if elapsed < m.Timeout {
+		t.Errorf("gave up after %s, before the %s timeout", elapsed, m.Timeout)
+	}
+	// Sent at 0, 50, 150, 350 and 750 ms; a fixed 50 ms interval would
+	// have sent twenty. A loopback socket hands datagrams out in the order
+	// they arrived, so once a marker sent after the check is read, every
+	// query the check sent has been counted.
+	marker, err := net.Dial("udp", silent.LocalAddr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = marker.Close() })
+	if _, err := marker.Write([]byte(drainMarker)); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-counted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the silent resolver never read the marker datagram")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if received < 3 || received > 5 {
+		t.Errorf("resolver received %d queries in %s, want 3 to 5 (a doubling wait from 50 ms)", received, m.Timeout)
 	}
 }
 
