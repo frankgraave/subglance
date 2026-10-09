@@ -352,10 +352,19 @@ func convert(src source) Result {
 	}
 
 	channelKeys := map[int64]string{} // Kuma notification id -> channel key
+	lostNames := map[int64]string{}   // Kuma notification id -> name, for one that did not come over
 	taken := map[string]bool{}
 	for _, n := range src.notifications {
+		before := len(res.Skipped)
 		ch, ok := convertChannel(n, &res)
 		if !ok {
+			// The name the skipped channel is reported under, so the
+			// monitors behind it name it the same way.
+			name := strings.TrimSpace(n.str("name"))
+			if len(res.Skipped) > before {
+				name = res.Skipped[len(res.Skipped)-1].Name
+			}
+			lostNames[int64(n.int("id"))] = name
 			continue
 		}
 		ch.Key = configfile.DeriveKey(ch.Name, "channel", func(k string) bool { return taken[k] })
@@ -365,10 +374,19 @@ func convert(src source) Result {
 	}
 
 	links := map[int64][]string{}
+	// lost lists, per Kuma monitor id, the notifications it alerted through
+	// that did not come over. A link to a notification that no longer
+	// exists is in neither list: Kuma's own query joins on the
+	// notification, so it alerted nobody through it either.
+	lost := map[int64][]string{}
+	lostSeen := map[[2]int64]bool{}
 	for _, l := range src.links {
-		if key, ok := channelKeys[int64(l.int("notification_id"))]; ok {
-			mid := int64(l.int("monitor_id"))
+		mid, nid := int64(l.int("monitor_id")), int64(l.int("notification_id"))
+		if key, ok := channelKeys[nid]; ok {
 			links[mid] = append(links[mid], key)
+		} else if name, ok := lostNames[nid]; ok && !lostSeen[[2]int64{mid, nid}] {
+			lostSeen[[2]int64{mid, nid}] = true
+			lost[mid] = append(lost[mid], name)
 		}
 	}
 	tagNames := map[int64]string{}
@@ -404,6 +422,7 @@ func convert(src source) Result {
 			mon.Channels = []string{}
 		}
 		sort.Strings(mon.Channels)
+		noteLostChannels(lost[id], len(mon.Channels), func(reason string) { changed(&res, "monitor", mon.Name, typ, reason) })
 		mon.Key = configfile.DeriveKey(mon.Name, "monitor", func(k string) bool { return taken[k] })
 		taken[mon.Key] = true
 		monitorKeys[id] = mon.Key
