@@ -345,6 +345,7 @@ with a change to check**. Nothing is left out without being named there.
 | Notifications: Discord, Slack, Telegram, SMTP, ntfy, Gotify, Webhook | channels of the same type, assigned to the same monitors |
 | Notifications: Microsoft Teams, Matrix, Pushover, Mattermost, Rocket.Chat, Google Chat, Home Assistant | `webhook` channels with [a body of their own](channels.md#a-body-of-your-own), the one the channel documentation gives for that service |
 | Notifications: Twilio | `sms` channels with [`provider: twilio`](channels.md#twilio), the same account SID and sender |
+| Notifications: Signal | `webhook` channels to the same [signal-cli-rest-api](channels.md#signal) address |
 | Status pages | `status_pages`, with their slug, title, description, publication and indexing settings, footer credit visibility and ordered monitor list |
 | Maintenance: *Single Maintenance Window* | a one-off window, from and to the same wall-clock times in the window's time zone |
 | Maintenance: *Recurring - Day of Week*, *Recurring - Interval* of one day, and a *Cron Expression* that starts at one time of day on chosen weekdays (Kuma's default `30 3 * * *` is one) | a weekly window on the same weekdays, at the same time, for as long, in the same time zone |
@@ -546,6 +547,15 @@ separately; a status-page link does not become monitor coverage.
   [`--allow-private-targets`](operations.md#private-targets). Kuma's fixed
   title "Uptime Kuma" and its data fields (monitor name, and status 0 or 1)
   are not sent, so an automation that matched on them has to be changed.
+- Signal becomes a webhook that posts to the same signal-cli-rest-api, as
+  [the channel documentation](channels.md#signal) describes. Its address
+  comes over, unless it carries a user name, a password or a query string,
+  which can hold a credential. The body names the sender's number and the
+  recipients, which are phone numbers, so it is withheld like an SMS
+  channel's `numbers`, and the report gives the body to fill in with the
+  numbers Kuma used in masked form. A signal-cli-rest-api on a private
+  address or under a local name is listed with
+  [`--allow-private-targets`](operations.md#private-targets).
 
 ### What does not come over
 

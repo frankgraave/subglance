@@ -26,7 +26,7 @@ func TestMonitorsNameTheNotificationsThatDidNotComeOver(t *testing.T) {
 	notifications := []row{
 		notificationRow(1, "Ops Discord", `{"type":"discord","discordWebhookUrl":"https://discord.example/x"}`),
 		notificationRow(2, "On-call", `{"type":"PagerDuty","pagerdutyIntegrationKey":"x"}`),
-		notificationRow(3, "Phones", `{"type":"signal","signalURL":"http://signal:8080"}`),
+		notificationRow(3, "Phones", `{"type":"line","lineChannelAccessToken":"x"}`),
 		notificationRow(4, "", `{"type":"apprise"}`),
 		notificationRow(5, "Night\nshift", `{"type":"opsgenie"}`),
 	}
