@@ -426,6 +426,20 @@ separately; a status-page link does not become monitor coverage.
   case the field holds a string.
 - *Ignore TLS/SSL errors* has no equivalent. SubGlance verifies every
   certificate, so a self-signed or expired one fails the check.
+- A few settings change how Kuma ran a check and have no SubGlance field, so
+  the monitor comes over without them and is listed with what that means:
+  a *Proxy* (SubGlance connects directly, so a site reachable only through
+  the proxy fails), and from Kuma 2 an *IP Family* of IPv4 or IPv6 only
+  (SubGlance uses whichever answers), the *cache buster* parameter (a cache
+  in front of the site can keep answering while the server behind it is
+  down), and a *TCP Port* monitor's *Expected TLS Alert* (a `tcp` monitor
+  passes whether or not the server still refuses a client without a
+  certificate). The proxy is named by protocol, host and port; its username
+  and password are not written.
+- Kuma shows a monitor inside a paused group as paused, but pausing a group
+  does not stop the monitors in it: Kuma 1.23 and 2.x keep checking them and
+  alerting. Such a monitor comes over enabled, as Kuma ran it, and is listed
+  with the paused group, so pause it if it should not run.
 - Kuma warns before a certificate expires when a monitor's *Certificate Expiry
   Notification* is on, once for each day listed under *Settings,
   Notifications, TLS Certificate Expiry* (7, 14 and 21 unless changed), when

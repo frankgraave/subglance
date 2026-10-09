@@ -203,6 +203,9 @@ type source struct {
 	// monitorMaintenance links windows to the monitors they cover.
 	monitorMaintenance []row
 	settings           []row
+	// proxies are Kuma's HTTP proxies, read for the address a monitor's
+	// check went through; their credentials are never written.
+	proxies []row
 	// now decides which of Kuma's windows have ended. It is read once, so
 	// one conversion judges every window at the same instant.
 	now time.Time
@@ -225,6 +228,7 @@ var queries = map[string]string{
 	"maintenance":             "SELECT * FROM maintenance ORDER BY id",
 	"monitor_maintenance":     "SELECT * FROM monitor_maintenance ORDER BY id",
 	"setting":                 "SELECT * FROM setting",
+	"proxy":                   "SELECT * FROM proxy ORDER BY id",
 }
 
 func load(ctx context.Context, db *sql.DB) (source, error) {
@@ -288,6 +292,9 @@ func load(ctx context.Context, db *sql.DB) (source, error) {
 		return source{}, err
 	}
 	if src.settings, err = read("setting"); err != nil {
+		return source{}, err
+	}
+	if src.proxies, err = read("proxy"); err != nil {
 		return source{}, err
 	}
 	return src, nil
@@ -399,10 +406,16 @@ func convert(src source) Result {
 		tags[mid] = append(tags[mid], kumaTag{name: tagNames[int64(mt.int("tag_id"))], value: mt.str("value")})
 	}
 	groups := map[int64]string{}
+	byID := map[int64]row{}
 	for _, m := range src.monitors {
+		byID[int64(m.int("id"))] = m
 		if m.str("type") == "group" {
 			groups[int64(m.int("id"))] = strings.TrimSpace(m.str("name"))
 		}
+	}
+	proxies := map[int64]row{}
+	for _, p := range src.proxies {
+		proxies[int64(p.int("id"))] = p
 	}
 
 	taken = map[string]bool{}
@@ -415,14 +428,17 @@ func convert(src source) Result {
 			continue
 		}
 		typ := m.str("type")
-		convertCertWarning(m, &mon, typ, certDays, func(reason string) { changed(&res, "monitor", mon.Name, typ, reason) })
+		note := func(reason string) { changed(&res, "monitor", mon.Name, typ, reason) }
+		convertCertWarning(m, &mon, typ, certDays, note)
+		noteCheckSettings(m, typ, proxies, note)
+		notePausedGroup(m, byID, note)
 		mon.Tags = convertTags(mon.Name, tags[id], groups[int64(m.int("parent"))], &res)
 		mon.Channels = links[id]
 		if mon.Channels == nil {
 			mon.Channels = []string{}
 		}
 		sort.Strings(mon.Channels)
-		noteLostChannels(lost[id], len(mon.Channels), func(reason string) { changed(&res, "monitor", mon.Name, typ, reason) })
+		noteLostChannels(lost[id], len(mon.Channels), note)
 		mon.Key = configfile.DeriveKey(mon.Name, "monitor", func(k string) bool { return taken[k] })
 		taken[mon.Key] = true
 		monitorKeys[id] = mon.Key
