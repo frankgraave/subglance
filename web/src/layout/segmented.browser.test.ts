@@ -42,6 +42,22 @@ const VIEW = ".mon-board button[aria-haspopup='dialog'][aria-label^='View']";
 const CONTROL = '.segmented[aria-label="Dashboard layout"]';
 const OPTION = `${CONTROL} .segmented-option`;
 
+/**
+ * The loaded list: rows, cards or compact lines, whichever layout draws it.
+ *
+ * Waited for before the View button, because there are two View buttons over
+ * the life of the page. While the first list is loading the dashboard draws
+ * a notice card that carries its own View button in the same header
+ * (SUB-242), and when the list arrives that card is replaced by the real one.
+ * A set-up that matched the notice's button and pressed it a moment later
+ * pressed a node that was no longer in the document: puppeteer threw "Node is
+ * detached from document" from this hook, which failed eight develop CI runs
+ * in four days. Once the list is on screen, the header that holds the button
+ * is the one the assertions below read.
+ */
+const LOADED =
+  "[data-testid^='monitor-row-'], [data-testid^='monitor-card-'], [data-testid^='monitor-line-']";
+
 let server: Server;
 let browser: Browser;
 let page: Page;
@@ -52,6 +68,7 @@ beforeAll(async () => {
   page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 900, deviceScaleFactor: 1 });
   await page.goto(server.url + "/", { waitUntil: "domcontentloaded" });
+  await page.waitForSelector(LOADED, { timeout: 15_000 });
   await (await page.waitForSelector(VIEW, { timeout: 15_000 }))!.click();
   await page.waitForSelector(OPTION, { timeout: 15_000 });
 }, 120_000);
