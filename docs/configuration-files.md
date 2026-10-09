@@ -452,6 +452,15 @@ separately; a status-page link does not become monitor coverage.
   network, is listed as well: SubGlance asks it only when started with
   [`--allow-private-targets`](operations.md#private-targets). So is a resolver
   given by host name, which may resolve to such an address.
+- A notification of a type SubGlance has no channel for is not imported, so
+  the monitors that alerted through it are listed too, each with the
+  notifications it lost. A monitor that kept none of them comes over with
+  `channels: []`, which in SubGlance means its alerts go to the channels of
+  the tag routing rules it matches, or to the default channel when that comes
+  to none ([which monitors use a channel](channels.md#which-monitors-use-a-channel)),
+  and to nobody on an instance with neither, as a fresh one is. Give it a
+  channel before switching Kuma off. A monitor that kept some keeps those
+  channels, which alert while they are enabled.
 - An email channel's Cc recipients become ordinary recipients. Bcc recipients
   are left out rather than shown to everyone, and listed.
 - A Twilio channel signs in with the account SID and its auth token. When Kuma
