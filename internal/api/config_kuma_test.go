@@ -540,6 +540,78 @@ func TestKumaSignalImportsAsAWebhook(t *testing.T) {
 	}
 }
 
+// A Kuma Bark notification becomes a webhook the importer accepts as it is:
+// created switched off with the url, which ends in the device key, left to
+// fill in, Kuma's group and sound in the body, and still attached to the
+// monitors that used it in Kuma. The key is not in the file.
+func TestKumaBarkImportsAsAWebhook(t *testing.T) {
+	const key = "kumaSecretDeviceKey42"
+	for _, fixture := range []string{"kuma-1.23.16.db", "kuma-2.5.5.db"} {
+		t.Run(fixture, func(t *testing.T) {
+			ctx := t.Context()
+			config := `{"name":"iPhone","type":"Bark","isDefault":false,"applyExisting":false,` +
+				`"barkEndpoint":"https://api.day.app/` + key + `","barkGroup":"Uptime","barkSound":"alarm"}`
+			path := kumaWithNotification(t, fixture, "iPhone", config)
+
+			res, err := kumaimport.Convert(ctx, path)
+			must(t, err)
+			file, err := kumaimport.Render(res)
+			must(t, err)
+			if strings.Contains(string(file), key) {
+				t.Errorf("the converted file contains the device key:\n%s", file)
+			}
+
+			srv, db := testServerWithDB(t)
+			if code, _, body := importYAML(t, srv, string(file), true); code != http.StatusOK {
+				t.Fatalf("dry run = %d: %s\n%s", code, body, file)
+			}
+			code, rep, body := importYAML(t, srv, string(file), false)
+			if code != http.StatusOK {
+				t.Fatalf("import = %d: %s", code, body)
+			}
+			var needs string
+			for _, it := range rep.Channels {
+				if it.Key == "iphone" {
+					needs = strings.Join(it.NeedsSecrets, ",")
+				}
+			}
+			if needs != "url" {
+				t.Errorf("iphone needs_secrets = %q, want url", needs)
+			}
+
+			chans, err := db.ListChannels(ctx)
+			must(t, err)
+			var hook store.Channel
+			for _, c := range chans {
+				if c.Name == "iPhone" {
+					hook = c
+				}
+			}
+			const wantBody = `{ "title": "{{summary}}", "body": "{{details}}", "group": "Uptime", "sound": "alarm" }` + "\n"
+			if hook.ID == 0 || hook.Type != store.ChannelWebhook || hook.Enabled ||
+				hook.Config["url"] != "" || hook.Config["body"] != wantBody {
+				t.Errorf("stored channel = %+v", hook)
+			}
+			mons, err := db.ListMonitors(ctx)
+			must(t, err)
+			var linked bool
+			for _, m := range mons {
+				if m.Name != "Shop (prod)" {
+					continue
+				}
+				own, err := db.ListMonitorChannels(ctx, m.ID)
+				must(t, err)
+				for _, c := range own {
+					linked = linked || c.ID == hook.ID
+				}
+			}
+			if !linked {
+				t.Error("Shop (prod) is not attached to the Bark channel")
+			}
+		})
+	}
+}
+
 // Kuma retries a push monitor before alerting; SubGlance confirms the first
 // missed report. The wait comes over as grace, which the importer stores.
 func TestKumaPushRetriesImportAsGrace(t *testing.T) {
