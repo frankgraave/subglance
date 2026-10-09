@@ -434,6 +434,7 @@ func convert(src source) Result {
 		typ := m.str("type")
 		note := func(reason string) { changed(&res, "monitor", mon.Name, typ, reason) }
 		convertCertWarning(m, &mon, typ, certDays, note)
+		convertResponseCapture(m, &mon, typ, note)
 		noteCheckSettings(m, typ, proxies, note)
 		notePausedGroup(m, byID, note)
 		mon.Tags = convertTags(mon.Name, tags[id], groups[int64(m.int("parent"))], &res)
