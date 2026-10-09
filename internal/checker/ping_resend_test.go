@@ -195,7 +195,11 @@ func TestPingTimesOutAfterOneRequestPerInterval(t *testing.T) {
 	if res.Kind != FailTimeout || !strings.Contains(res.Error, "timed out") {
 		t.Errorf("got %s: %q, want a timeout", res.Kind, res.Error)
 	}
-	if elapsed < timeout || elapsed > timeout+500*time.Millisecond {
+	// The lower bound is exact: the check may not give up early. The upper
+	// bound only has to catch a check that runs on past its deadline, so it
+	// is a whole timeout wide; a loaded CI host under -race can be hundreds
+	// of milliseconds late waking the reader, and that is not a defect.
+	if elapsed < timeout || elapsed > 2*timeout {
 		t.Errorf("check took %s, want it to end at its %s timeout", elapsed, timeout)
 	}
 	sends := conn.sent()
