@@ -27,7 +27,7 @@ func TestMonitorsNameTheNotificationsThatDidNotComeOver(t *testing.T) {
 		notificationRow(1, "Ops Discord", `{"type":"discord","discordWebhookUrl":"https://discord.example/x"}`),
 		notificationRow(2, "On-call", `{"type":"PagerDuty","pagerdutyIntegrationKey":"x"}`),
 		notificationRow(3, "Phones", `{"type":"line","lineChannelAccessToken":"x"}`),
-		notificationRow(4, "", `{"type":"apprise"}`),
+		notificationRow(4, "", `{"type":"PushDeer"}`),
 		notificationRow(5, "Night\nshift", `{"type":"opsgenie"}`),
 	}
 	const nobody = "tells nobody without either"
@@ -45,7 +45,7 @@ func TestMonitorsNameTheNotificationsThatDidNotComeOver(t *testing.T) {
 			`Kuma also alerted through "On-call" and "Phones", which did not come over; the channels that did stay attached, and alert while they are enabled`},
 		{"the same skipped notification linked twice", []int64{1, 2, 2}, []string{"ops-discord"},
 			`Kuma also alerted through "On-call", which did not come over`},
-		{"a skipped notification without a name", []int64{4}, []string{}, `came over ("Kuma apprise")`},
+		{"a skipped notification without a name", []int64{4}, []string{}, `came over ("Kuma PushDeer")`},
 		{"a name with a line break", []int64{5}, []string{}, `came over ("Night shift")`},
 		{"every notification came over", []int64{1}, []string{"ops-discord"}, ""},
 		{"no notifications in Kuma", nil, []string{}, ""},

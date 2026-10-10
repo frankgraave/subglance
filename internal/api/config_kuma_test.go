@@ -1041,3 +1041,78 @@ func TestKumaSavedErrorResponseImportsAsCaptureResponse(t *testing.T) {
 		}
 	}
 }
+
+// A Kuma Apprise notification becomes a webhook the importer accepts as it
+// is: created switched off with the url left to fill in, the Apprise API
+// body written out, and still attached to the monitors that used it in
+// Kuma. No part of the Apprise URL, which holds the target service's
+// credentials, is in the file.
+func TestKumaAppriseImportsAsAWebhook(t *testing.T) {
+	const secret = "kumaSecretAppriseToken42"
+	for _, fixture := range []string{"kuma-1.23.16.db", "kuma-2.5.5.db"} {
+		t.Run(fixture, func(t *testing.T) {
+			ctx := t.Context()
+			config := `{"name":"Apprise","type":"apprise","isDefault":false,"applyExisting":false,` +
+				`"appriseURL":"tgram://123456:` + secret + `/-1009876 lametric://` + secret + `@lametric.example.org","title":"Kuma"}`
+			path := kumaWithNotification(t, fixture, "Apprise", config)
+
+			res, err := kumaimport.Convert(ctx, path)
+			must(t, err)
+			file, err := kumaimport.Render(res)
+			must(t, err)
+			for _, unwanted := range []string{secret, "123456:", "1009876", "lametric.example.org"} {
+				if strings.Contains(string(file), unwanted) {
+					t.Errorf("the converted file contains %s:\n%s", unwanted, file)
+				}
+			}
+
+			srv, db := testServerWithDB(t)
+			if code, _, body := importYAML(t, srv, string(file), true); code != http.StatusOK {
+				t.Fatalf("dry run = %d: %s\n%s", code, body, file)
+			}
+			code, rep, body := importYAML(t, srv, string(file), false)
+			if code != http.StatusOK {
+				t.Fatalf("import = %d: %s", code, body)
+			}
+			var needs string
+			for _, it := range rep.Channels {
+				if it.Key == "apprise" {
+					needs = strings.Join(it.NeedsSecrets, ",")
+				}
+			}
+			if needs != "url" {
+				t.Errorf("apprise needs_secrets = %q, want url", needs)
+			}
+
+			chans, err := db.ListChannels(ctx)
+			must(t, err)
+			var hook store.Channel
+			for _, c := range chans {
+				if c.Name == "Apprise" {
+					hook = c
+				}
+			}
+			const wantBody = `{ "title": "{{summary}}", "body": "{{details}}" }` + "\n"
+			if hook.ID == 0 || hook.Type != store.ChannelWebhook || hook.Enabled ||
+				hook.Config["url"] != "" || hook.Config["body"] != wantBody {
+				t.Errorf("stored channel = %+v", hook)
+			}
+			mons, err := db.ListMonitors(ctx)
+			must(t, err)
+			var linked bool
+			for _, m := range mons {
+				if m.Name != "Shop (prod)" {
+					continue
+				}
+				own, err := db.ListMonitorChannels(ctx, m.ID)
+				must(t, err)
+				for _, c := range own {
+					linked = linked || c.ID == hook.ID
+				}
+			}
+			if !linked {
+				t.Error("Shop (prod) is not attached to the Apprise channel")
+			}
+		})
+	}
+}
