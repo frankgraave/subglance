@@ -646,6 +646,32 @@ should not see it. An Evolution API on the local network is reached only
 when SubGlance is started with
 [`--allow-private-targets`](#servers-on-a-private-address).
 
+### WhatsApp (OpenWA)
+
+[OpenWA](https://docs.open-wa.org/) is a third HTTP API in front of WhatsApp
+numbers, each linked in a session of its own, and runs beside SubGlance in
+Docker. Then:
+
+- `url`: `http://openwa:2785/api/sessions/<session>/messages/send-text`,
+  with the session's id, which `GET /api/sessions` lists
+- `headers`: `X-API-Key: <api key>`, a key whose role may send messages
+- `body`:
+
+```json
+{ "chatId": "<chat id>", "text": "{{summary}}\n{{details}}" }
+```
+
+`chatId` is a phone number in international form without the plus,
+followed by `@c.us` (`31612345678@c.us`), or a group's id, which ends in
+`@g.us`. A webhook posts to one chat; for a second chat, add a second
+channel with its own `chatId`.
+
+As with WAHA, the chat sits in the body, which is read back in full and
+exported as it is; use an SMS channel when the people who can read channels
+should not see it. An OpenWA on the local network is reached only when
+SubGlance is started with
+[`--allow-private-targets`](#servers-on-a-private-address).
+
 ## Which channels get added
 
 A new channel type is maintenance for as long as the upstream API exists, so
