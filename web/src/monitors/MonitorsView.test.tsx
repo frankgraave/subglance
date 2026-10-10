@@ -665,6 +665,48 @@ describe("the selection bar", () => {
     expect(toggle).toHaveBeenLastCalledWith("2", false);
   });
 
+  it("opens the selection's channels from the bar, only while something is selected", async () => {
+    const onDefault = make({ id: 3, name: "gamma", channels: [], rule_channels: [], default_channel: { id: 9, name: "Ops" } });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      Response.json({ channels: [{ id: 4, name: "Pager", type: "sms", config: {}, enabled: true }] }));
+    const change = vi.fn(async () => ({ total: 2, changed: 2, unchanged: 0, leftWithoutOwn: 0, channelEnabled: true, etag: "x" }));
+    render(<MonitorsView monitors={[...pair, onDefault]} onTagChange={vi.fn()} onChannelChange={change} />);
+    expect(screen.queryByRole("button", { name: /^Channels for/ })).toBeNull();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select alpha" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select gamma" }));
+    fireEvent.click(screen.getByRole("button", { name: "Channels for 2 selected" }));
+    const dialog = screen.getByRole("dialog", { name: "Channels for selected monitors" });
+    expect(await within(dialog).findByText("2 monitors selected, including any hidden by filters.")).toBeTruthy();
+    fireEvent.change(await within(dialog).findByRole("combobox", { name: "Channel" }), { target: { value: "4" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Preview change" }));
+    // gamma alerts through the default today; alpha's links were not read,
+    // so it is not counted as on the default.
+    expect(await within(dialog).findByText(/^1 monitor alerts through the default channel today/)).toBeTruthy();
+    expect(change).toHaveBeenCalledWith({ action: "add", monitor_ids: [1, 3], channel_id: 4 }, undefined);
+    vi.restoreAllMocks();
+  });
+
+  it("closes the channel drawer for good when its selection disappears", () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({ channels: [] }));
+    const view = render(<MonitorsView monitors={pair} onTagChange={vi.fn()} onChannelChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select alpha" }));
+    fireEvent.click(screen.getByRole("button", { name: "Channels for 1 selected" }));
+    expect(screen.getByRole("dialog", { name: "Channels for selected monitors" })).toBeTruthy();
+    view.rerender(<MonitorsView monitors={[pair[1]]} onTagChange={vi.fn()} onChannelChange={vi.fn()} />);
+    expect(screen.queryByRole("dialog", { name: "Channels for selected monitors" })).toBeNull();
+    // A new selection does not bring the old drawer back by itself.
+    view.rerender(<MonitorsView monitors={pair} onTagChange={vi.fn()} onChannelChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select beta" }));
+    expect(screen.queryByRole("dialog", { name: "Channels for selected monitors" })).toBeNull();
+    vi.restoreAllMocks();
+  });
+
+  it("offers no channel change to a reader who may not make one", () => {
+    render(<MonitorsView monitors={pair} onTagChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select all visible (2)" }));
+    expect(screen.queryByRole("button", { name: /^Channels for/ })).toBeNull();
+  });
+
   it("offers no bulk pause to a reader who may not pause", () => {
     render(<MonitorsView monitors={pair} onTagChange={vi.fn()} />);
     fireEvent.click(screen.getByRole("checkbox", { name: "Select all visible (2)" }));

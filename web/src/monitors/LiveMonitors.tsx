@@ -10,6 +10,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { createQueryClient } from "../live/queryClient";
 import { MonitorsView } from "./MonitorsView";
 import { changeTags, type TagOperation } from "./bulkTagsApi";
+import type { ChannelOperation } from "./bulkChannelsApi";
 import {
   checkMonitorNow,
   deleteMonitor,
@@ -321,6 +322,23 @@ export function LiveMonitors({
     return result;
   }, [queryClient]);
 
+  const onChannelChange = useCallback(async (operation: ChannelOperation, etag?: string) => {
+    // Fetched on first use, beside the lazy form that calls it: the entry
+    // bundle has no room for a request only a ticked selection can make. A
+    // failed chunk rejects here and the form shows it like any refusal.
+    const { changeChannels } = await import("./bulkChannelsApi");
+    const result = await changeChannels(operation, etag);
+    if (etag !== undefined) {
+      // The inventory's channel column, the notifications page's "who hears
+      // what" (it reads the same inventory) and any open detail page.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["monitors"] }),
+        queryClient.invalidateQueries({ queryKey: ["monitor-detail"] }),
+      ]);
+    }
+    return result;
+  }, [queryClient]);
+
   const onCreated = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: inventoryQueryKey });
   }, [queryClient]);
@@ -343,6 +361,7 @@ export function LiveMonitors({
       onEditClose={closeEdit}
       onCreated={onCreated}
       onTagChange={canWrite ? onTagChange : undefined}
+      onChannelChange={canWrite ? onChannelChange : undefined}
       busyIds={busyIds}
       checkingIds={checkingIds}
       checkResults={checkResults}

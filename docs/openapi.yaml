@@ -2090,6 +2090,123 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
       x-subglance-access: write
+  /api/v1/monitors/channels/preview:
+    post:
+      tags: [Channels]
+      operationId: previewMonitorChannelChange
+      summary: Preview adding or removing one channel on a selection
+      description: |
+        Counts what an add or remove of one channel would change on the own
+        channel links of the selected monitors, without writing. Returns a
+        strong ETag over the operation, the selection, every selected
+        monitor's current links and whether the channel is enabled.
+
+        The operation adds or removes one channel against the links stored at
+        write time; it never replaces a monitor's set, so a link the client
+        did not read cannot be detached by accident. Tag routing rules and
+        their exclusions are not touched. Selections hold 1–10000 unique
+        positive IDs; an unknown ID or channel rejects the whole request.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChannelOperationRequest'
+      responses:
+        '200':
+          description: Preview only; no link or monitor revision changed.
+          headers:
+            ETag:
+              description: Strong validator for this operation and the links it reads. Not a monitor ETag.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelOperationResult'
+        '400':
+          description: Invalid, oversized or trailing JSON, an unknown field or action, or an unknown channel.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          description: Could not read current links; never reported as an empty preview.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: write
+  /api/v1/monitors/channels:
+    post:
+      tags: [Channels]
+      operationId: changeMonitorChannels
+      summary: Commit a previewed channel change on a selection
+      description: |
+        Send the same body as the preview and its ETag in If-Match. One write
+        transaction: every changed monitor gets the new link set or none does.
+        Each changed monitor's revision advances, so an edit form holding an
+        older monitor ETag cannot put back the links it read; unchanged
+        monitors keep their revision. A changed selection, link or channel
+        enabled state returns 412: preview again and review the new counts.
+      parameters:
+        - name: If-Match
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: '^"channels-[a-f0-9]{64}"$'
+          description: The exact strong ETag returned by the channel preview.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChannelOperationRequest'
+      responses:
+        '200':
+          description: Committed counts. No fresh validator is issued for blind retries.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelOperationResult'
+        '400':
+          description: Invalid request, unknown channel, or malformed If-Match.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          description: The selection's links or the channel changed since the preview. Nothing was written.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '428':
+          description: If-Match is required. Preview before committing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Storage failure; all changes were rolled back.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: write
   /api/v1/monitors/preview:
     post:
       tags: [Monitors]
@@ -4852,6 +4969,45 @@ components:
           type: integer
           minimum: 0
           description: For apply, differing values replaced. For rename_key, destination values retained while removing the old key (including equal values). Zero for remove/rename_value.
+    ChannelOperationRequest:
+      type: object
+      additionalProperties: false
+      required: [action, monitor_ids, channel_id]
+      properties:
+        action:
+          type: string
+          enum: [add, remove]
+          description: Add the channel where a selected monitor lacks it, or remove it where one has it.
+        monitor_ids:
+          $ref: '#/components/schemas/TagSelection'
+        channel_id:
+          type: integer
+          format: int64
+          minimum: 1
+    ChannelOperationResult:
+      type: object
+      required: [total, changed, unchanged, left_without_own, channel_enabled]
+      additionalProperties: false
+      properties:
+        total:
+          type: integer
+          minimum: 0
+          description: Selected monitor count.
+        changed:
+          type: integer
+          minimum: 0
+          description: Monitors whose own links change.
+        unchanged:
+          type: integer
+          minimum: 0
+          description: Total minus changed, the monitors already in the asked-for state.
+        left_without_own:
+          type: integer
+          minimum: 0
+          description: For remove, changed monitors left with no channel of their own; they alert through matching tag routing rules, or else the default channel. Zero for add.
+        channel_enabled:
+          type: boolean
+          description: Whether the channel sends. A disabled channel still counts toward a monitor's route, keeping the default channel out, but delivers nothing.
     ConnectivitySettings:
       type: object
       additionalProperties: false

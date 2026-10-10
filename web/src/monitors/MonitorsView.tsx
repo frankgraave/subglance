@@ -3,7 +3,7 @@ import { registerNavigationCleanup } from "../shell/leaveGuard";
 import { Card, Panel } from "../components/Card";
 import { PlusIcon } from "../shell/icons";
 import { FilterField } from "../shell/FilterField";
-import { IconClock, IconList, IconPause, IconPlay, IconPulse } from "../components/icons";
+import { IconBell, IconClock, IconList, IconPause, IconPlay, IconPulse } from "../components/icons";
 import { useCompactViewport } from "../layout/useMediaQuery";
 import { Drawer } from "../components/Drawer";
 import { ConfirmDelete } from "../components/ConfirmDelete";
@@ -13,6 +13,8 @@ import { EmptyState } from "./EmptyState";
 import { MonitorInventoryHead, MonitorInventoryRow } from "./MonitorInventoryRow";
 import { LazyAddMonitor, LazyEditMonitorForm } from "./LazyMonitorForms";
 import { BulkTagDrawer, type TagChange } from "./BulkTagDrawer";
+import { BulkChannelDrawer } from "./BulkChannelDrawer";
+import type { ChannelChange } from "./bulkChannelsApi";
 import { liveTagSelection, sameTagSelection, tagFacets } from "./model";
 import type { TagSelection } from "./model";
 import { FilterPanel } from "./FilterPanel";
@@ -82,6 +84,8 @@ export type MonitorsViewProps = {
   onCreated?: () => void;
   /** Atomic tag preview/commit. Absent for viewers. */
   onTagChange?: TagChange;
+  /** Atomic add or remove of one channel on the selection. Absent for viewers. */
+  onChannelChange?: ChannelChange;
   /** Ids with a pause/resume in flight. */
   busyIds?: ReadonlySet<string>;
   /** Ids with a manual check in flight. */
@@ -121,6 +125,7 @@ export function MonitorsView({
   onEditClose,
   onCreated,
   onTagChange,
+  onChannelChange,
   busyIds = NO_SET,
   checkingIds = NO_SET,
   checkResults = NO_MAP,
@@ -152,6 +157,8 @@ export function MonitorsView({
   const [confirming, setConfirming] = useState<string | null>(null);
   const [tagOpen, setTagOpen] = useState(false);
   useEffect(() => registerNavigationCleanup(() => setTagOpen(false)), []);
+  const [channelOpen, setChannelOpen] = useState(false);
+  useEffect(() => registerNavigationCleanup(() => setChannelOpen(false)), []);
   const [selected, setSelected] = useState<ReadonlySet<string>>(NO_SET);
   const selectedIds = monitors.filter((m) => selected.has(m.id)).map((m) => m.id);
   const selectMonitor = useCallback((id: string, checked: boolean) => {
@@ -167,6 +174,9 @@ export function MonitorsView({
     setSelected(onTagChange === undefined ? NO_SET : new Set(selectedIds));
   }
   if (onTagChange === undefined && tagOpen) setTagOpen(false);
+  // Closed, not hidden, when the selection empties under it (its monitors
+  // deleted elsewhere): a flag left set would reopen it on the next tick.
+  if ((onChannelChange === undefined || selectedIds.length === 0) && channelOpen) setChannelOpen(false);
 
   const narrow = useCompactViewport();
   const choice = useMemo(
@@ -251,6 +261,12 @@ export function MonitorsView({
   const selectedMonitors = monitors.filter((m) => selected.has(m.id));
   const toPause = selectedMonitors.filter((m) => m.enabled && !busyIds.has(m.id));
   const toResume = selectedMonitors.filter((m) => !m.enabled && !busyIds.has(m.id));
+  /* Selected monitors alerting through the default today: an add ends that,
+     which the channel preview says. Unknown links count as not on it. */
+  const onDefault = selectedMonitors.filter((m) => {
+    const state = channels[m.id] ?? m.channels;
+    return state.known && state.fallback !== undefined;
+  }).length;
 
   return (
     <section className="mon-detail inv-screen" aria-label="Monitors">
@@ -471,6 +487,16 @@ export function MonitorsView({
               Resume {toResume.length}
             </button>
           )}
+          {/* Channels for the selection: like pause and resume it acts on
+              the ticked rows only, so it stands here rather than beside
+              Manage tags, whose renames reach the whole instance. */}
+          {onChannelChange !== undefined && selectedIds.length > 0 && (
+            <button type="button" className="button" aria-label={`Channels for ${selectedIds.length} selected`}
+              onClick={() => setChannelOpen(true)}>
+              <IconBell />
+              Channels
+            </button>
+          )}
           {selectedIds.length > 0 && <button type="button" className="button" onClick={() => setSelected(NO_SET)}>Clear selection</button>}
           {/* Drawn as the count under the header is: a count about the list
               is helper text, not a sentence in body ink beside the controls
@@ -547,6 +573,10 @@ export function MonitorsView({
       />
 
       {tagOpen && onTagChange && <BulkTagDrawer selectedIds={selectedIds} onChange={onTagChange} onClose={() => setTagOpen(false)} />}
+      {channelOpen && onChannelChange && (
+        <BulkChannelDrawer selectedIds={selectedIds} onDefault={onDefault} onChange={onChannelChange}
+          onClose={() => setChannelOpen(false)} />
+      )}
 
       {/*
        * Create, in a drawer over the inventory rather than on its own page.

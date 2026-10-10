@@ -1,4 +1,5 @@
-// tags-browser runs the production API, SQLite and embedded UI for tag proofs.
+// tags-browser runs the production API, SQLite and embedded UI for the
+// inventory selection proofs: tags, and channels for a selection.
 package main
 
 import (
@@ -61,6 +62,11 @@ func run() error {
 		if err != nil {
 			return err
 		}
+	}
+	// One channel, attached to nothing, for the selection's channel change.
+	if _, err := db.CreateChannel(ctx, store.Channel{Name: "Ops pager", Type: store.ChannelWebhook,
+		Config: map[string]string{"url": "https://example.com/hook"}, Enabled: true}); err != nil {
+		return err
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	server := httptest.NewServer(api.New(log, db).WithBus(events.NewBus(32)).Handler())
