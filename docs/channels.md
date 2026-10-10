@@ -594,6 +594,33 @@ is the credential, so it goes in the masked URL:
 Bark also reads `"group"`, the heading it sorts pushes under in the app, and
 `"sound"`, one of the sound names the app lists, such as `"telegraph"`.
 
+### WhatsApp (WAHA)
+
+[WAHA](https://waha.devlike.pro/) puts an HTTP API in front of a WhatsApp
+number you link to it by scanning a QR code, and runs beside SubGlance in
+Docker. Then:
+
+- `url`: `http://waha:3000/api/sendText`
+- `headers`: `X-Api-Key: <api key>`, the key WAHA was started with; leave it
+  out when WAHA runs without one
+- `body`:
+
+```json
+{ "session": "<session>", "chatId": "<chat id>", "text": "{{summary}}\n{{details}}" }
+```
+
+`session` is the WAHA session the number is linked in, `default` unless you
+made another. `chatId` is a phone number in international form without the
+plus, followed by `@c.us` (`31612345678@c.us`), or a group's id, which ends
+in `@g.us` and is listed by `GET /api/<session>/groups`.
+
+Keep WAHA off the internet: it is reached on the local network, which
+SubGlance does only when started with
+[`--allow-private-targets`](#servers-on-a-private-address). The chat sits in
+the body, which is read back in full and exported as it is, unlike an SMS
+channel's numbers, which are masked; use an SMS channel when the people who
+can read channels should not see the number.
+
 ## Which channels get added
 
 A new channel type is maintenance for as long as the upstream API exists, so

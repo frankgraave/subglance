@@ -347,6 +347,7 @@ with a change to check**. Nothing is left out without being named there.
 | Notifications: Twilio | `sms` channels with [`provider: twilio`](channels.md#twilio), the same account SID and sender |
 | Notifications: Signal | `webhook` channels to the same [signal-cli-rest-api](channels.md#signal) address |
 | Notifications: Bark | `webhook` channels that [push to Bark](channels.md#bark), with the same group and sound |
+| Notifications: WhatsApp (WAHA) | `webhook` channels to the same [WAHA](channels.md#whatsapp-waha) address |
 | Status pages | `status_pages`, with their slug, title, description, publication and indexing settings, footer credit visibility and ordered monitor list |
 | Maintenance: *Single Maintenance Window* | a one-off window, from and to the same wall-clock times in the window's time zone |
 | Maintenance: *Recurring - Day of Week*, *Recurring - Interval* of one day, and a *Cron Expression* that starts at one time of day on chosen weekdays (Kuma's default `30 3 * * *` is one) | a weekly window on the same weekdays, at the same time, for as long, in the same time zone |
@@ -565,6 +566,15 @@ separately; a status-page link does not become monitor coverage.
   in and not the public one. Kuma's group and sound come over in the body;
   without a group or a sound chosen, Kuma sent `UptimeKuma` and `telegraph`,
   and so does the webhook.
+- WhatsApp (WAHA) becomes a webhook that posts to the same WAHA server, as
+  [the channel documentation](channels.md#whatsapp-waha) describes. Its
+  address comes over, unless it carries a user name, a password or a query
+  string, which can hold a credential; an API key goes in an `X-Api-Key`
+  header to fill in. The body names the chat, which is a phone number or a
+  group, so it is withheld like an SMS channel's `numbers`, and the report
+  gives the body to fill in with the session Kuma used and the chat in masked
+  form. A WAHA on a private address or under a local name is listed with
+  [`--allow-private-targets`](operations.md#private-targets).
 
 ### What does not come over
 
