@@ -103,8 +103,13 @@ func openWAURL(raw, session string, note func(string)) (*url.URL, bool) {
 		note("Kuma had no OpenWA session; fill in the url as " + openWAURLShape)
 		return nil, false
 	}
-	u := base.JoinPath("api", "sessions")
-	u.RawPath = u.EscapedPath() + "/" + url.PathEscape(session) + "/messages/send-text"
-	u.Path += "/" + session + "/messages/send-text"
-	return u, true
+	// The endpoint is appended to the escaped path as Kuma appended it to
+	// the string: JoinPath would clean the path and fold a doubled slash
+	// inside it, which a reverse proxy can route on.
+	raw = strings.TrimRight(base.EscapedPath(), "/") + "/api/sessions/" + url.PathEscape(session) + "/messages/send-text"
+	// Both halves are escaped already, so unescaping cannot fail.
+	u := *base
+	u.Path, _ = url.PathUnescape(raw)
+	u.RawPath = raw
+	return &u, true
 }

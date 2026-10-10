@@ -40,6 +40,10 @@ func TestOpenWABecomesAWebhookToTheSameServer(t *testing.T) {
 			"https://wa.example.org/openwa/api/sessions/Main%20line%2F1/messages/send-text", false,
 			[]string{"the chat Kuma sent to (+31 6 •••• 5678)"},
 			[]string{"allow-private-targets", "fill in the url", "fill in the headers"}},
+		// Kuma dropped only the trailing slashes; a doubled slash inside
+		// the path is part of the address a proxy routes on.
+		{"a doubled slash inside the path", `{"type":"openwa","openwaApiUrl":"https://wa.example.org/proxy//openwa/","openwaSession":"ops"}`,
+			"https://wa.example.org/proxy//openwa/api/sessions/ops/messages/send-text", false, nil, nil},
 		{"a private address", `{"type":"openwa","openwaApiUrl":"http://192.168.1.7:2785","openwaSession":"ops","openwaChatId":"` + openWAChat + `"}`,
 			"http://192.168.1.7:2785/api/sessions/ops/messages/send-text", false,
 			[]string{"192.168.1.7 is private or reserved"}, nil},
