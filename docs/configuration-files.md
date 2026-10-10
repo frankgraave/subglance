@@ -348,6 +348,7 @@ with a change to check**. Nothing is left out without being named there.
 | Notifications: Signal | `webhook` channels to the same [signal-cli-rest-api](channels.md#signal) address |
 | Notifications: Bark | `webhook` channels that [push to Bark](channels.md#bark), with the same group and sound |
 | Notifications: WhatsApp (WAHA) | `webhook` channels to the same [WAHA](channels.md#whatsapp-waha) address |
+| Notifications: WhatsApp (Evolution) | `webhook` channels to the same [Evolution API](channels.md#whatsapp-evolution-api) address and instance |
 | Status pages | `status_pages`, with their slug, title, description, publication and indexing settings, footer credit visibility and ordered monitor list |
 | Maintenance: *Single Maintenance Window* | a one-off window, from and to the same wall-clock times in the window's time zone |
 | Maintenance: *Recurring - Day of Week*, *Recurring - Interval* of one day, and a *Cron Expression* that starts at one time of day on chosen weekdays (Kuma's default `30 3 * * *` is one) | a weekly window on the same weekdays, at the same time, for as long, in the same time zone |
@@ -574,6 +575,18 @@ separately; a status-page link does not become monitor coverage.
   group, so it is withheld like an SMS channel's `numbers`, and the report
   gives the body to fill in with the session Kuma used and the chat in masked
   form. A WAHA on a private address or under a local name is listed with
+  [`--allow-private-targets`](operations.md#private-targets).
+- WhatsApp (Evolution) becomes a webhook that posts to the same Evolution
+  API instance, as [the channel documentation](channels.md#whatsapp-evolution-api)
+  describes. Its address comes over with the instance name, unless it
+  carries a user name, a password or a query string; the token goes in an
+  `apikey` header to fill in. The body names the recipient, a phone number
+  or a group, so it is withheld as WAHA's is, and the report gives it to
+  fill in with the recipient in masked form. Kuma's custom message is a
+  Liquid template SubGlance does not read, so it is listed and not carried
+  over; the body sends the summary and details. Without an address Kuma
+  posted to a default host of its own, so the url is left to fill in. An
+  Evolution API on a private address or under a local name is listed with
   [`--allow-private-targets`](operations.md#private-targets).
 
 ### What does not come over

@@ -621,6 +621,31 @@ the body, which is read back in full and exported as it is, unlike an SMS
 channel's numbers, which are masked; use an SMS channel when the people who
 can read channels should not see the number.
 
+### WhatsApp (Evolution API)
+
+[Evolution API](https://doc.evolution-api.com/) also puts an HTTP API in
+front of WhatsApp numbers, each linked in an instance of its own, and runs
+beside SubGlance in Docker. Then:
+
+- `url`: `http://evolution-api:8080/message/sendText/<instance>`
+- `headers`: `apikey: <token>`, the instance's token or the API key
+  Evolution API was started with
+- `body`:
+
+```json
+{ "number": "<number>", "text": "{{summary}}\n{{details}}" }
+```
+
+`number` is a phone number in international form without the plus
+(`31612345678`), or a group's id, which ends in `@g.us` and is listed by
+`GET /group/fetchAllGroups/<instance>?getParticipants=false`.
+
+As with WAHA, the number sits in the body, which is read back in full and
+exported as it is; use an SMS channel when the people who can read channels
+should not see it. An Evolution API on the local network is reached only
+when SubGlance is started with
+[`--allow-private-targets`](#servers-on-a-private-address).
+
 ## Which channels get added
 
 A new channel type is maintenance for as long as the upstream API exists, so

@@ -59,7 +59,7 @@ func convertWAHA(get func(string) string, out *configfile.Channel, note func(str
 	if s := get("wahaSession"); s != "" {
 		used = append(used, "the session Kuma used ("+strconv.Quote(s)+")")
 	}
-	if chat := maskWAHAChat(get("wahaChatId")); chat != "" {
+	if chat := maskWhatsAppChat(get("wahaChatId")); chat != "" {
 		used = append(used, "the chat it sent to ("+chat+")")
 	}
 	if len(used) > 0 {
@@ -69,43 +69,56 @@ func convertWAHA(get func(string) string, out *configfile.Channel, note func(str
 }
 
 // wahaURL builds the address Kuma posted to, or notes why it does not come
-// over.
-//
-// Kuma dropped trailing slashes and appended /api/sendText to the text of
-// the address. A user name and password, or a query string, can hold a
-// credential for a proxy in front of WAHA, so an address with either stays
-// out of the file and is not quoted. A fragment would have swallowed the
-// path Kuma appended, so Kuma's request never reached WAHA's endpoint, and
-// an address with one is not carried over either.
+// over. Kuma dropped trailing slashes and appended /api/sendText to the text
+// of the address.
 func wahaURL(raw string, note func(string)) (*url.URL, bool) {
-	u, err := url.Parse(raw)
-	if err == nil && (u.User != nil || u.RawQuery != "") {
-		note("Kuma's WAHA address carried a user name, a password or a query string, which can hold a credential; " +
-			"fill in the url as " + wahaURLShape)
-		return nil, false
-	}
-	// "http://:3000" parses with a Host but no Hostname, and posts nowhere.
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" ||
-		u.Opaque != "" || u.Fragment != "" {
-		// An address that did not parse can still hold a credential; one
-		// with an @ or a ? is not quoted.
-		shown := " "
-		if !strings.ContainsAny(raw, "@?") {
-			shown = " " + strconv.Quote(raw) + " "
-		}
-		note("Kuma's WAHA address" + shown + "is not one SubGlance can post to; fill in the url as " + wahaURLShape)
+	u, ok := apiBaseURL("WAHA", raw, wahaURLShape, note)
+	if !ok {
 		return nil, false
 	}
 	return u.JoinPath("api", "sendText"), true
 }
 
-// maskWAHAChat writes Kuma's chat as the report shows it. A chat id is a
-// phone number, with or without @c.us after it, or a group, which ends in
+// apiBaseURL checks the address of a self-hosted API that Kuma appended a
+// path to, or notes why it does not come over; service names the API in the
+// note, and shape is the address to fill in instead.
+//
+// A user name and password, or a query string, can hold a credential for a
+// proxy in front of the API, so an address with either stays out of the
+// file and is not quoted. A fragment would have swallowed the path Kuma
+// appended, so Kuma's request never reached the API's endpoint, and an
+// address with one is not carried over either; it is not quoted, since a
+// fragment can hold a key as well.
+func apiBaseURL(service, raw, shape string, note func(string)) (*url.URL, bool) {
+	u, err := url.Parse(raw)
+	if err == nil && (u.User != nil || u.RawQuery != "") {
+		note("Kuma's " + service + " address carried a user name, a password or a query string, which can hold a credential; " +
+			"fill in the url as " + shape)
+		return nil, false
+	}
+	// "http://:3000" parses with a Host but no Hostname, and posts nowhere.
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" ||
+		u.Opaque != "" || u.Fragment != "" {
+		// An address that did not parse can still hold a credential, and
+		// so can a fragment; one with an @, a ? or a # is not quoted.
+		shown := " "
+		if !strings.ContainsAny(raw, "@?#") {
+			shown = " " + strconv.Quote(raw) + " "
+		}
+		note("Kuma's " + service + " address" + shown + "is not one SubGlance can post to; fill in the url as " + shape)
+		return nil, false
+	}
+	return u, true
+}
+
+// maskWhatsAppChat writes a WhatsApp chat Kuma sent to, through WAHA or
+// Evolution API, as the report shows it. A chat id is a phone number, with
+// or without @c.us or @s.whatsapp.net after it, or a group, which ends in
 // @g.us or, in the older form, is two numbers joined by a dash, the first
 // of them the phone number of whoever made the group. A phone number is
 // masked; a group is "a group", since its id can hold that number; anything
 // else is masked whole.
-func maskWAHAChat(raw string) string {
+func maskWhatsAppChat(raw string) string {
 	id := strings.Join(strings.Fields(raw), "")
 	if id == "" {
 		return ""
@@ -117,8 +130,8 @@ func maskWAHAChat(raw string) string {
 	case hasDomain && domain != "c.us" && domain != "s.whatsapp.net":
 		return "••••"
 	}
-	// WAHA writes a number as the country code and the number, without
-	// the plus; Kuma's form also showed it with 00 in front.
+	// WAHA and Evolution API write a number as the country code and the
+	// number, without the plus; Kuma's forms also show it with 00 in front.
 	if !strings.HasPrefix(local, "00") {
 		local = "+" + local
 	}

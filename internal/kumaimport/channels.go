@@ -162,6 +162,8 @@ func convertChannel(n row, res *Result) (configfile.Channel, bool) {
 		convertBark(get, &out, note)
 	case "waha":
 		convertWAHA(get, &out, note)
+	case "evolution":
+		convertEvolution(get, &out, note)
 	case "twilio":
 		if reason := convertTwilio(get, &out, note); reason != "" {
 			return skip(reason)
