@@ -195,10 +195,16 @@ func TestMaintenanceStreamSeparatesSampleAndCurrentWindow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = db.CreateMaintenance(ctx, store.MaintenanceWindow{Name: "deploy", MonitorID: m.ID, StartsAt: now, EndsAt: now.Add(time.Minute)})
+	w, err := db.CreateMaintenance(ctx, store.MaintenanceWindow{Name: "deploy", MonitorID: m.ID, StartsAt: now, EndsAt: now.Add(time.Minute)})
 	if err != nil {
 		t.Fatal(err)
 	}
+	// CreateMaintenance stamps its own wall clock as CreatedAt, and a window
+	// never covers an instant before it was created. When the clock crosses
+	// a second between the two time.Now calls, CreatedAt is a second after
+	// now, and a sample taken at now would fall outside the window. Take the
+	// sample at the creation instant, which is inside [StartsAt, EndsAt).
+	now = w.CreatedAt
 	bus := events.NewBus(8)
 	sub := bus.Subscribe()
 	defer sub.Close()
