@@ -1,5 +1,9 @@
 import { ReminderSummary } from "./ReminderSummary";
-import { useEffect, useId, useRef, useState } from "react";
+import { Suspense, useContext, useEffect, useId, useRef, useState } from "react";
+import { ErrorBoundary } from "../shell/ErrorBoundary";
+import { retryableLazy } from "../monitors/retryableLazy";
+import type { IncidentDeliveriesProps } from "./IncidentDeliveries";
+import { IncidentDeliveriesScope } from "./deliveriesScope";
 import { StatusChip } from "../components/Chip";
 import { IconBellOff } from "../components/icons";
 import { Value } from "../components/Value";
@@ -57,6 +61,34 @@ import type { Incident } from "../monitors/detail";
  * prevent is not merely discouraged here — it is unexpressible.
  */
 
+/*
+ * Where the incident's alerts went, fetched with its own chunk the first time
+ * a row opens: nobody needs it until then, and the entry bundle is at its
+ * budget. A chunk that fails to load takes down this panel only; see
+ * `LazyMonitorForms.tsx` for why a failed `lazy()` needs a boundary of its
+ * own and a fresh instance to retry with.
+ */
+const deliveriesChunk = retryableLazy<IncidentDeliveriesProps>(() =>
+  import("./IncidentDeliveries").then((module) => ({ default: module.IncidentDeliveries })),
+);
+
+function LazyIncidentDeliveries(props: IncidentDeliveriesProps) {
+  const [Deliveries, setDeliveries] = useState(deliveriesChunk.current);
+  return (
+    <ErrorBoundary
+      title="The notifications could not be loaded."
+      onRetry={() => {
+        const fresh = deliveriesChunk.renew();
+        setDeliveries(() => fresh);
+      }}
+    >
+      <Suspense fallback={<p className="inc-helper">Loading notifications…</p>}>
+        <Deliveries {...props} />
+      </Suspense>
+    </ErrorBoundary>
+  );
+}
+
 export type IncidentStoryItemProps = {
   incident: Incident;
   /** Now, in unix ms, for durations that are still running. */
@@ -99,6 +131,7 @@ export function IncidentStoryItem({
     if (linked) rowRef.current?.scrollIntoView?.({ block: "center" });
   }, [linked]);
   const detailId = useId();
+  const deliveriesInScope = useContext(IncidentDeliveriesScope);
 
   /*
    * The button appears on open *and* on acked-but-unresolved incidents, and is
@@ -384,6 +417,9 @@ export function IncidentStoryItem({
                */}
             </div>
           </div>
+          {deliveriesInScope ? (
+            <LazyIncidentDeliveries incidentId={incident.id} confirmed={incident.confirmed} />
+          ) : null}
         </div>
       ) : null}
     </li>

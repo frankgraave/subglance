@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -41,6 +42,12 @@ type Delivery struct {
 	// hours to end, rather than for a retry.
 	QuietHeld bool
 
+	// Suppressed is true once the delivery was closed without being sent:
+	// maintenance, quiet hours set to drop, the channel declining it, or
+	// another delivery carrying its news (see MergedInto). LastError says
+	// which.
+	Suppressed bool
+
 	NextAttemptAt time.Time
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
@@ -48,7 +55,43 @@ type Delivery struct {
 
 const deliveryColumns = `id, channel_id, monitor_id, incident_id, event,
 	payload_json, status, attempts, last_error, next_attempt_at, created_at, updated_at,
-	quiet_held`
+	quiet_held, suppressed`
+
+// The reasons a delivery is closed because another one carried its news.
+// FoldDigest and ReplaceWithRecovery write them into last_error, followed by
+// the id of the delivery that went out instead, and MergedInto reads them
+// back; one constant each, so the writer and the reader cannot drift apart.
+const (
+	foldedIntoDigest   = "sent in quiet-hours digest "
+	replacedByRecovery = "sent as part of recovery "
+)
+
+// Where a closed delivery's news went instead; see MergedInto.
+const (
+	MergedIntoDigest   = "digest"
+	MergedIntoRecovery = "recovery"
+)
+
+// MergedInto reports where a closed delivery's news went instead of being
+// sent on its own: MergedIntoDigest when quiet hours folded it into the
+// morning's digest, MergedIntoRecovery when the monitor came back before it
+// went out and the recovery carried both, and "" for any other delivery.
+//
+// Such a delivery was not lost, and a list of where an incident's alerts went
+// must not read as if it had been: its news reached the channel, or failed
+// to, with the delivery that carried it.
+func (d Delivery) MergedInto() string {
+	switch {
+	case !d.Suppressed:
+		return ""
+	case strings.HasPrefix(d.LastError, foldedIntoDigest):
+		return MergedIntoDigest
+	case strings.HasPrefix(d.LastError, replacedByRecovery):
+		return MergedIntoRecovery
+	default:
+		return ""
+	}
+}
 
 // EnqueueDelivery adds one notification to the outbox, due immediately.
 //
@@ -223,7 +266,7 @@ func (db *DB) ReplaceWithRecovery(ctx context.Context, recovery int64, payload s
 			UPDATE notif_outbox
 			   SET suppressed = 1, last_error = ?, updated_at = ?
 			 WHERE id = ? AND status = ? AND suppressed = 0`,
-			fmt.Sprintf("sent as part of recovery %d: the monitor was back up before this alert went out", recovery),
+			fmt.Sprintf(replacedByRecovery+"%d: the monitor was back up before this alert went out", recovery),
 			now, r.ID, OutboxPending); err != nil {
 			return fmt.Errorf("replace with recovery %d: %w", recovery, err)
 		}
@@ -457,7 +500,7 @@ func scanDelivery(s scanner) (Delivery, error) {
 	)
 	if err := s.Scan(&d.ID, &d.ChannelID, &d.MonitorID, &incidentID, &d.Event,
 		&d.Payload, &d.Status, &d.Attempts, &d.LastError,
-		&next, &created, &updated, &d.QuietHeld); err != nil {
+		&next, &created, &updated, &d.QuietHeld, &d.Suppressed); err != nil {
 		return Delivery{}, err
 	}
 

@@ -627,6 +627,28 @@
   margin-bottom: var(--space-2);
 }
 
+/*
+ * Where the incident's alerts went (SUB-217): a third section of the detail,
+ * under the timeline and the error and across both, because one line per
+ * channel names the channel and its outcome and wants the full width that a
+ * column of the grid would ration.
+ *
+ * It reuses the timeline's list, step and time column, so the clock readings
+ * here line up with the ones above them and the panel reads as a second
+ * timeline rather than a table with columns of its own. The rule above it is
+ * the one that separates the grid's two columns, laid horizontally.
+ */
+.inc-sent {
+  border-top: 1px solid var(--border);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+}
+
+/* The step's text side: what was sent where, and under it the reason. It
+   takes the rest of the line and lets an error wrap rather than push the
+   panel sideways. */
+.inc-sent-what { min-width: 0; overflow-wrap: anywhere; }
+
 .inc-tl {
   display: flex;
   flex-direction: column;

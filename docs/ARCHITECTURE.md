@@ -212,6 +212,7 @@ GET    /api/v1/monitors/{id}/latency     ?window=7d, stepped series for the char
 GET    /api/v1/incidents                 open incidents
 GET    /api/v1/incidents/resolved        resolved incidents, paged
 POST   /api/v1/incidents/{id}/ack
+GET    /api/v1/incidents/{id}/deliveries where its alerts went
 
 GET    /api/v1/channels
 POST   /api/v1/channels
