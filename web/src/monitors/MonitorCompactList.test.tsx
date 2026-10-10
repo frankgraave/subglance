@@ -86,7 +86,8 @@ describe("MonitorCompactList", () => {
       <MonitorCompactList
         monitors={[
           monitor("api", "down", {
-            error: "connection refused",
+            error: "dial tcp: connect: connection refused",
+            failureKind: "connection",
             latencyMs: null,
           }),
         ]}
@@ -94,11 +95,84 @@ describe("MonitorCompactList", () => {
     );
 
     const el = line("api");
-    // A red lamp plus a dash says "broken, no idea why". The row layout puts
-    // the reason in the latency slot for exactly this case and the dense
-    // layout has no excuse to be quieter (DESIGN.md §2.3).
-    expect(within(el).getByText("connection refused")).toBeTruthy();
-    expect(within(el).getByTitle("connection refused")).toBeTruthy();
+    // A red lamp plus a dash says "broken, no idea why" (DESIGN.md §2.3). The
+    // why is the failure kind in the incident row's words, in the row
+    // layout's chip, with the server's full message as its title (SUB-203).
+    const chip = el.querySelector(".mon-line-sub .mon-error") as HTMLElement;
+    expect(chip.textContent).toBe("connection refused");
+    expect(chip.title).toBe("dial tcp: connect: connection refused");
+    expect(chip.classList.contains("chip--state")).toBe(true);
+    // The chip stands before the address, in the same slot: the why is read
+    // first, and the address is the one that gives way.
+    const sub = el.querySelector(".mon-line-sub") as HTMLElement;
+    expect([...sub.children].map((child) => child.className)).toEqual([
+      "chip chip--state mon-error",
+      "mon-line-target",
+    ]);
+  });
+
+  it("leaves the latency slot to a latency", () => {
+    render(
+      <MonitorCompactList
+        monitors={[
+          monitor("api", "down", {
+            error: "dial tcp: connect: connection refused",
+            failureKind: "connection",
+            latencyMs: null,
+          }),
+        ]}
+      />,
+    );
+    // The raw error used to stand in for the number here, cut after eight
+    // letters at 64px. The slot now says what it says on every other line.
+    expect(numbers(line("api"))).toEqual(["—No latency data", "99.90%"]);
+  });
+
+  it("shows an unclassed failure's own message", () => {
+    render(
+      <MonitorCompactList
+        monitors={[monitor("api", "down", { error: "connection refused", latencyMs: null })]}
+      />,
+    );
+    // A failure the server did not class has no kind to translate, so its
+    // own message is still more than a red lamp alone.
+    const chip = line("api").querySelector(".mon-error") as HTMLElement;
+    expect(chip.textContent).toBe("connection refused");
+    expect(chip.title).toBe("connection refused");
+  });
+
+  it("says why an expiring monitor warns, as the row does", () => {
+    render(
+      <MonitorCompactList
+        monitors={[
+          monitor("tls", "expiring", {
+            error: "certificate expires in 6 days",
+            failureKind: "cert_expiry",
+          }),
+        ]}
+      />,
+    );
+    // The rows layout has named this since SUB-186; the compact line said
+    // nothing, because its own rule only covered `down`.
+    expect(line("tls").querySelector(".mon-error")!.textContent).toBe("certificate expiring");
+  });
+
+  it("says nothing for a failure still under its threshold", () => {
+    render(
+      <MonitorCompactList
+        monitors={[monitor("api", "warning", { error: "timeout", failureKind: "timeout" })]}
+      />,
+    );
+    expect(line("api").querySelector(".mon-error")).toBeNull();
+  });
+
+  it("redraws when only the kind changes", () => {
+    const down = (failureKind: string) =>
+      monitor("api", "down", { error: "i/o timeout", failureKind, latencyMs: null });
+    const { rerender } = render(<MonitorCompactList monitors={[down("connection")]} />);
+    rerender(<MonitorCompactList monitors={[down("timeout")]} />);
+    // The memo compares only what the line draws, and the kind is drawn.
+    expect(line("api").querySelector(".mon-error")!.textContent).toBe("timed out");
   });
 
   it("keeps the latency reading when a down monitor has no error text", () => {
@@ -108,9 +182,10 @@ describe("MonitorCompactList", () => {
       />,
     );
     // Down without a reason is possible — a check can fail on a status code
-    // and still have timed the response. The slot falls back to the number
-    // rather than going blank.
+    // and still have timed the response. The slot keeps the number, and no
+    // empty chip claims a why that is not there.
     expect(numbers(line("api"))[0]).toBe("40 ms");
+    expect(line("api").querySelector(".mon-error")).toBeNull();
   });
 
   it("gives a screen reader words where the eye gets an em dash", () => {

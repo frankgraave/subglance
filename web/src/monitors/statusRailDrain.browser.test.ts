@@ -605,8 +605,9 @@ describe("the status rail stops asserting when the stream dies", () => {
 
   it("drains the failure reason in every layout that prints one", async () => {
     /*
-     * `.mon-line-error` was already in connection.css's ink-drain block and
-     * `.mon-error` / `.mon-card-error` were not, so two of the three layouts
+     * The compact line's reason was already in connection.css's ink-drain
+     * block and `.mon-error` / `.mon-card-error` were not, so two of the three
+     * layouts
      * kept a full-strength red sentence asserting a live failure beside a
      * drained lamp. Checked as a *computed colour* rather than by reading the
      * stylesheet, because the question is which rule wins: the bare
@@ -616,7 +617,10 @@ describe("the status rail stops asserting when the stream dies", () => {
     for (const [layout, ready, selector] of [
       ["rows", "[data-testid^='monitor-row-']", ".mon-error"],
       ["cards", "[data-testid^='monitor-card-']", ".mon-card-error"],
-      ["compact", "[data-testid^='monitor-line-']", ".mon-line-error"],
+      // Since SUB-203 the compact line prints the row's chip, so the drain
+      // selector it relies on is `.mon-error` too; scoped to the line here so
+      // the check proves the compact layout drew one.
+      ["compact", "[data-testid^='monitor-line-']", "[data-testid^='monitor-line-'] .mon-error"],
     ] as const) {
       const page = await openDashboard(layout, ready, "dark");
       try {

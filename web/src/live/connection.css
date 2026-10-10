@@ -117,18 +117,19 @@
 /* The detail view carries the same attribute and inherits the same rules:
    the reasoning above is about what the screen is claiming, not about which
    screen is claiming it. */
-/* `.mon-error` and `.mon-card-error` joined `.mon-line-error` here (SUB-140).
-   All three print the failure reason in `var(--down)`, and only the compact
-   one was listed — so the rows and card layouts kept a full-strength red
-   sentence asserting a live failure while the lamp beside it had drained. The
-   specificity is what makes this work rather than the order: this selector
-   carries three classes plus an attribute against the bare `.mon-error`'s
-   one, so it wins wherever the two stylesheets land in the bundle. */
+/* `.mon-error` and `.mon-card-error` joined the compact line's reason here
+   (SUB-140). All three printed the failure reason in `var(--down)`, and only
+   the compact one was listed — so the rows and card layouts kept a
+   full-strength red sentence asserting a live failure while the lamp beside
+   it had drained. Since SUB-203 the compact line prints the row's chip, so
+   `.mon-error` covers both layouts. The specificity is what makes this work
+   rather than the order: this selector carries two classes plus an attribute
+   against the bare `.mon-error`'s one, so it wins wherever the two
+   stylesheets land in the bundle. */
 .mon-dashboard[data-conn="stale"] .mon-tab-count,
 .mon-dashboard[data-conn="stale"] .mon-line-num,
 .mon-dashboard[data-conn="stale"] .mon-error,
 .mon-dashboard[data-conn="stale"] .mon-card-error,
-.mon-dashboard[data-conn="stale"] .mon-line-error,
 .mon-detail[data-conn="stale"] .mon-detail-status,
 .mon-detail[data-conn="stale"] .mon-detail-window-value {
   color: var(--ink-3);
