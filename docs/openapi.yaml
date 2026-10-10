@@ -2481,6 +2481,70 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
       x-subglance-access: write
+  /api/v1/incidents/{id}/deliveries:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: The incident's numeric id.
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+        example: 7
+    get:
+      tags: [Incidents]
+      operationId: listIncidentDeliveries
+      summary: List where an incident's alerts went
+      description: |
+        Every alert about this incident, one entry per channel it was aimed
+        at, oldest first, with what became of it: delivered, failed after its
+        retries, still being retried, held for quiet hours, not sent (with the
+        reason), or merged into another delivery that carried its news.
+
+        Read from the notification outbox. A message about several monitors
+        at once is listed under each incident it names. Send test deliveries
+        and the notice about a failing channel are not alerts about the
+        incident and are not listed.
+
+        The outbox keeps delivered and skipped alerts for `window_days`;
+        failed ones are kept until they are read. `complete` is false when
+        the incident started before that window, so some of its deliveries
+        may be gone and a short list means less than it says. An error has
+        the channel's masked settings replaced by their masks, as on
+        `GET /api/v1/channels`.
+      responses:
+        '200':
+          description: The incident's deliveries.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentDeliveryList'
+        '400':
+          description: The incident id was not a positive integer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: invalid incident id
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: No such incident.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: incident not found
+        '500':
+          description: The deliveries could not be read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-subglance-access: read
   /api/v1/channels:
     get:
       tags: [Channels]
@@ -7087,6 +7151,96 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Incident'
+    IncidentDelivery:
+      type: object
+      description: One alert about an incident, aimed at one channel.
+      required: [id, channel_id, channel_name, channel_type, event, state, attempts, queued_at, ended_at, error, reason]
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 311
+        channel_id:
+          type: integer
+          format: int64
+          example: 2
+        channel_name:
+          type: string
+          description: Empty when the channel has since been deleted.
+          example: On-call Slack
+        channel_type:
+          type: string
+          description: Empty when the channel has since been deleted.
+          example: slack
+        event:
+          type: string
+          description: |
+            What the message said. `quiet_hours_digest` is the morning digest
+            that carried this incident among others.
+          enum: [incident_confirmed, incident_reminder, incident_resolved, quiet_hours_digest]
+          example: incident_confirmed
+        state:
+          type: string
+          description: |
+            `delivered`: the channel accepted it. `failed`: it gave up after
+            its retries. `retrying`: an attempt failed and another is due.
+            `queued`: waiting for its first attempt. `held`: waiting for the
+            channel's quiet hours to end. `not_sent`: closed without being
+            sent, for the reason in `reason`. `merged`: not sent on its own,
+            because the delivery named in `carried_by` carried its news.
+          enum: [delivered, failed, retrying, queued, held, not_sent, merged]
+          example: delivered
+        attempts:
+          type: integer
+          example: 1
+        queued_at:
+          type: string
+          format: date-time
+          example: '2026-01-01T14:04:00Z'
+        ended_at:
+          type: [string, 'null']
+          format: date-time
+          description: When it reached its final state; null while it is still going out.
+          example: '2026-01-01T14:04:01Z'
+        error:
+          type: string
+          description: The newest failure, on a failed or retrying delivery; empty otherwise.
+          example: ''
+        reason:
+          type: string
+          description: Why a `not_sent` delivery was not sent; empty otherwise.
+          example: ''
+        merged_into:
+          type: string
+          description: On a `merged` delivery, what carried it.
+          enum: [digest, recovery]
+        carried_by:
+          type: integer
+          format: int64
+          description: On a `merged` delivery, the id of the delivery that carried it, when known.
+    IncidentDeliveryList:
+      type: object
+      required: [incident_id, deliveries, window_days, complete]
+      properties:
+        incident_id:
+          type: integer
+          format: int64
+          example: 7
+        deliveries:
+          type: array
+          description: Oldest first.
+          items:
+            $ref: '#/components/schemas/IncidentDelivery'
+        window_days:
+          type: integer
+          description: How long the outbox keeps a delivered or skipped alert.
+          example: 30
+        complete:
+          type: boolean
+          description: |
+            False when the incident started before `window_days`, so some of
+            its deliveries may have been removed.
+          example: true
     ResolvedIncidentPage:
       type: object
       description: |

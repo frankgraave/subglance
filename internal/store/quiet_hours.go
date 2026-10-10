@@ -365,7 +365,7 @@ func (db *DB) FoldDigest(ctx context.Context, keep int64, event, payload string,
 			UPDATE notif_outbox
 			   SET suppressed = 1, quiet_held = 0,
 			       last_error = ?, updated_at = ?
-			 WHERE id = ?`, fmt.Sprintf("sent in quiet-hours digest %d", keep), now, id); err != nil {
+			 WHERE id = ?`, fmt.Sprintf(foldedIntoDigest+"%d", keep), now, id); err != nil {
 			return fmt.Errorf("fold digest: %w", err)
 		}
 	}
