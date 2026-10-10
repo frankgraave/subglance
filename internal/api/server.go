@@ -465,6 +465,8 @@ func (s *Server) routes() []route {
 		{http.MethodPost, "/api/v1/monitors/preview", accessWrite},
 		{http.MethodPost, "/api/v1/monitors/tags/preview", accessWrite},
 		{http.MethodPost, "/api/v1/monitors/tags", accessWrite},
+		{http.MethodPost, "/api/v1/monitors/channels/preview", accessWrite},
+		{http.MethodPost, "/api/v1/monitors/channels", accessWrite},
 		{http.MethodPatch, "/api/v1/monitors/{id}", accessWrite},
 		{http.MethodDelete, "/api/v1/monitors/{id}", accessWrite},
 		{http.MethodPost, "/api/v1/monitors/{id}/check", accessWrite},
@@ -672,6 +674,10 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 		return s.handlePreviewTags
 	case "POST /api/v1/monitors/tags":
 		return s.handleTransformTags
+	case "POST /api/v1/monitors/channels/preview":
+		return s.handlePreviewMonitorChannels
+	case "POST /api/v1/monitors/channels":
+		return s.handleChangeMonitorChannels
 	case "PATCH /api/v1/monitors/{id}":
 		return s.handlePatchMonitor
 	case "DELETE /api/v1/monitors/{id}":

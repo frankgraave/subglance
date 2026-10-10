@@ -103,6 +103,27 @@ and `PATCH /api/v1/monitors/{id}`, or the whole of
 conditional write as the other fields, and changing a monitor's channels by
 any route advances its `ETag`.
 
+### A channel for many monitors at once
+
+In **Monitors**, tick the monitors and choose **Channels** in the bar above
+the list. Pick **Add** or **Remove** and one channel, preview, then confirm.
+The change is one write: every selected monitor gets it or none does. It adds
+or removes that one channel and leaves each monitor's other channels and the
+tag routing rules alone, so a monitor whose channels differ from the rest
+keeps what it had.
+
+The preview counts the monitors that change and says when the change moves
+someone's alerts somewhere else: a remove that leaves monitors with no channel
+of their own (the matching rules, or else the default, take over), an add for
+monitors that alerted through the default (it no longer applies to them), or
+a disabled channel (it sends nothing, but still keeps the default out).
+
+Through the API, send `{"action": "add", "monitor_ids": [...], "channel_id": n}`
+(or `"remove"`) to `POST /api/v1/monitors/channels/preview`, then the same
+body to `POST /api/v1/monitors/channels` with the preview's `ETag` in
+`If-Match`. A 412 means a selected monitor's channels, or the channel itself,
+changed after the preview: preview again rather than retrying.
+
 ## ntfy
 
 Alerts are published with ntfy's JSON API: a `POST` to the server root with the

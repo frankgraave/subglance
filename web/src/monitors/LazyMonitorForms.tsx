@@ -2,6 +2,7 @@ import { Suspense, useState } from "react";
 import { ErrorBoundary } from "../shell/ErrorBoundary";
 import type { AddMonitorProps } from "./AddMonitor";
 import type { EditMonitorFormProps } from "./EditMonitorForm";
+import type { BulkChannelFormProps } from "./BulkChannelForm";
 import { retryableLazy } from "./retryableLazy";
 import type { RetryableLazy } from "./retryableLazy";
 
@@ -36,6 +37,12 @@ const addMonitorChunk = retryableLazy<AddMonitorProps>(() =>
 );
 const editMonitorFormChunk = retryableLazy<EditMonitorFormProps>(() =>
   import("./EditMonitorForm").then((module) => ({ default: module.EditMonitorForm })),
+);
+
+// The selection's channel change: a form few visits open, with its own
+// channel read, so it waits for its first use like the two above.
+const bulkChannelFormChunk = retryableLazy<BulkChannelFormProps>(() =>
+  import("./BulkChannelForm").then((module) => ({ default: module.BulkChannelForm })),
 );
 
 function FormLoading() {
@@ -73,4 +80,9 @@ export function LazyAddMonitor(props: AddMonitorProps) {
 /** `EditMonitorForm`, fetched on first use. */
 export function LazyEditMonitorForm(props: EditMonitorFormProps) {
   return <ChunkedForm chunk={editMonitorFormChunk} props={props} />;
+}
+
+/** `BulkChannelForm`, fetched on first use. */
+export function LazyBulkChannelForm(props: BulkChannelFormProps) {
+  return <ChunkedForm chunk={bulkChannelFormChunk} props={props} />;
 }
