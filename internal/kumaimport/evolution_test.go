@@ -67,10 +67,11 @@ func TestEvolutionBecomesAWebhookToTheSameServer(t *testing.T) {
 			"", false, []string{"Kuma's Evolution API address carried a user name, a password or a query string", evolutionURLShape}, []string{"hunter2"}},
 		{"a query in the address", `{"type":"evolution","evolutionApiUrl":"https://wa.example.org/?token=hunter2","evolutionInstanceName":"ops"}`,
 			"", false, []string{"carried a user name, a password or a query string"}, []string{"hunter2"}},
-		// Kuma appended its path after the fragment, so its request went
-		// to the address without one.
-		{"a fragment in the address", `{"type":"evolution","evolutionApiUrl":"https://wa.example.org/#x","evolutionInstanceName":"ops"}`,
-			"", false, []string{`Kuma's Evolution API address "https://wa.example.org/#x" is not one SubGlance can post to`}, nil},
+		// Kuma appended its path after the fragment, so its request never
+		// reached the API's endpoint. A fragment can hold a key, so the
+		// address is not quoted.
+		{"a fragment in the address", `{"type":"evolution","evolutionApiUrl":"https://wa.example.org/#apikey=hunter2","evolutionInstanceName":"ops"}`,
+			"", false, []string{"Kuma's Evolution API address is not one SubGlance can post to", evolutionURLShape}, []string{"hunter2", "wa.example.org/#"}},
 		{"an address without a scheme", `{"type":"evolution","evolutionApiUrl":"evolution:8080","evolutionInstanceName":"ops"}`,
 			"", false, []string{`address "evolution:8080" is not one SubGlance can post to`, evolutionURLShape}, nil},
 		// Without an address Kuma posted to a default host of its own; the

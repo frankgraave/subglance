@@ -87,7 +87,8 @@ func wahaURL(raw string, note func(string)) (*url.URL, bool) {
 // proxy in front of the API, so an address with either stays out of the
 // file and is not quoted. A fragment would have swallowed the path Kuma
 // appended, so Kuma's request never reached the API's endpoint, and an
-// address with one is not carried over either.
+// address with one is not carried over either; it is not quoted, since a
+// fragment can hold a key as well.
 func apiBaseURL(service, raw, shape string, note func(string)) (*url.URL, bool) {
 	u, err := url.Parse(raw)
 	if err == nil && (u.User != nil || u.RawQuery != "") {
@@ -98,10 +99,10 @@ func apiBaseURL(service, raw, shape string, note func(string)) (*url.URL, bool) 
 	// "http://:3000" parses with a Host but no Hostname, and posts nowhere.
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" ||
 		u.Opaque != "" || u.Fragment != "" {
-		// An address that did not parse can still hold a credential; one
-		// with an @ or a ? is not quoted.
+		// An address that did not parse can still hold a credential, and
+		// so can a fragment; one with an @, a ? or a # is not quoted.
 		shown := " "
-		if !strings.ContainsAny(raw, "@?") {
+		if !strings.ContainsAny(raw, "@?#") {
 			shown = " " + strconv.Quote(raw) + " "
 		}
 		note("Kuma's " + service + " address" + shown + "is not one SubGlance can post to; fill in the url as " + shape)

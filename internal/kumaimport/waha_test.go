@@ -58,10 +58,11 @@ func TestWAHABecomesAWebhookToTheSameServer(t *testing.T) {
 			"", false, []string{"carried a user name, a password or a query string"}, []string{"hunter2"}},
 		{"credentials in an address that does not parse", `{"type":"waha","wahaApiUrl":"https://admin:hunter2@wa.example.org:bad"}`,
 			"", false, []string{"Kuma's WAHA address is not one SubGlance can post to"}, []string{"hunter2"}},
-		// Kuma appended its path after the fragment, so its request went
-		// to the address without one.
-		{"a fragment in the address", `{"type":"waha","wahaApiUrl":"https://wa.example.org/#x"}`,
-			"", false, []string{`address "https://wa.example.org/#x" is not one SubGlance can post to`}, nil},
+		// Kuma appended its path after the fragment, so its request never
+		// reached WAHA's endpoint. A fragment can hold a key, so the
+		// address is not quoted.
+		{"a fragment in the address", `{"type":"waha","wahaApiUrl":"https://wa.example.org/#apikey=hunter2"}`,
+			"", false, []string{"Kuma's WAHA address is not one SubGlance can post to", wahaURLShape}, []string{"hunter2", "wa.example.org/#"}},
 		{"an address without a scheme", `{"type":"waha","wahaApiUrl":"waha:3000"}`,
 			"", false, []string{`address "waha:3000" is not one SubGlance can post to`, wahaURLShape}, nil},
 		{"a port with no host", `{"type":"waha","wahaApiUrl":"http://:3000"}`,
