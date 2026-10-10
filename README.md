@@ -91,7 +91,7 @@ explains it and how to choose other targets or turn it off.
 | **[Keyboard commands](docs/keyboard.md)** | Command menu, monitor search and actions, navigation, themes and focus behavior |
 | **[Installing SubGlance](docs/installation.md)** | Docker Compose, Docker, a downloaded binary with signature verification, building from source, running the tests |
 | **[Using SubGlance](docs/using-subglance.md)** | First run, your first monitor, authentication, the six check types, push monitors, how a failure becomes an alert, repeat alerts, the API |
-| **[Notification channels](docs/channels.md)** | The settings each of the eight channel types needs, the Delivery column, SMS limits, private addresses, the webhook payload, and webhook bodies for Teams, Matrix, Pushover, Mattermost, Rocket.Chat, Google Chat, Home Assistant, Signal, Bark and WhatsApp (WAHA, Evolution API and OpenWA) |
+| **[Notification channels](docs/channels.md)** | The settings each of the eight channel types needs, the Delivery column, SMS limits, private addresses, the webhook payload, and webhook bodies for Teams, Matrix, Pushover, Mattermost, Rocket.Chat, Google Chat, Home Assistant, Signal, Bark, WhatsApp (WAHA, Evolution API and OpenWA) and Apprise |
 | **[Configuration files](docs/configuration-files.md)** | Export and import monitors, channels, routing rules, maintenance windows and status pages as YAML, without credentials; convert an Uptime Kuma database |
 | **[Managing tags](docs/tags.md)** | Bulk assignment/removal, instance-wide renames, collision policy and conditional API writes |
 | **[Running SubGlance](docs/operations.md)** | The configuration table, worker sizing, metrics, shutdown, the dead man's switch, backup and restore |

@@ -350,6 +350,7 @@ with a change to check**. Nothing is left out without being named there.
 | Notifications: WhatsApp (WAHA) | `webhook` channels to the same [WAHA](channels.md#whatsapp-waha) address |
 | Notifications: WhatsApp (Evolution) | `webhook` channels to the same [Evolution API](channels.md#whatsapp-evolution-api) address and instance |
 | Notifications: WhatsApp (OpenWA) | `webhook` channels to the same [OpenWA](channels.md#whatsapp-openwa) address and session |
+| Notifications: Apprise | `webhook` channels to [Apprise API](channels.md#apprise), with the address left to fill in |
 | Status pages | `status_pages`, with their slug, title, description, publication and indexing settings, footer credit visibility and ordered monitor list |
 | Maintenance: *Single Maintenance Window* | a one-off window, from and to the same wall-clock times in the window's time zone |
 | Maintenance: *Recurring - Day of Week*, *Recurring - Interval* of one day, and a *Cron Expression* that starts at one time of day on chosen weekdays (Kuma's default `30 3 * * *` is one) | a weekly window on the same weekdays, at the same time, for as long, in the same time zone |
@@ -601,6 +602,15 @@ separately; a status-page link does not become monitor coverage.
   own. A custom message is listed and not carried over, as with Evolution
   API. An OpenWA on a private address or under a local name is listed with
   [`--allow-private-targets`](operations.md#private-targets).
+- Apprise becomes a webhook that posts a title and a body to
+  [Apprise API](channels.md#apprise), Apprise's HTTP server. Kuma ran the
+  `apprise` command itself, so there is no server address to carry over,
+  and the Apprise URL is the credentials of the service it sends to: the url
+  is withheld, and the report says to save the Apprise URL in Apprise API
+  under a key. It names the services the Apprise URL sent to by scheme alone
+  (`tgram://`, `lametric://`), and which of them SubGlance reaches without
+  Apprise. A title Kuma sent with every alert is listed and replaced by each
+  alert's summary.
 
 ### What does not come over
 

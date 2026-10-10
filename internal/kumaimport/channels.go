@@ -166,6 +166,8 @@ func convertChannel(n row, res *Result) (configfile.Channel, bool) {
 		convertEvolution(get, &out, note)
 	case "openwa":
 		convertOpenWA(get, &out, note)
+	case "apprise":
+		convertApprise(get, &out, note)
 	case "twilio":
 		if reason := convertTwilio(get, &out, note); reason != "" {
 			return skip(reason)

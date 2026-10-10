@@ -672,6 +672,34 @@ should not see it. An OpenWA on the local network is reached only when
 SubGlance is started with
 [`--allow-private-targets`](#servers-on-a-private-address).
 
+### Apprise
+
+[Apprise](https://github.com/caronc/apprise) sends one message to any of a
+hundred-odd services, each named by a URL of its own (`tgram://`,
+`lametric://`, `mailto://` and so on). Its HTTP server,
+[Apprise API](https://github.com/caronc/apprise-api), runs beside SubGlance
+in Docker and keeps those URLs under a key of your choosing, saved in its
+web interface or with `POST /add/<key>`. A webhook to that key reaches every
+service saved under it:
+
+- `url`: `http://apprise:8000/notify/<key>`
+- `body`:
+
+```json
+{ "title": "{{summary}}", "body": "{{details}}" }
+```
+
+Apprise API answers 424 when a service under the key did not take the
+message, so a failed delivery shows in the channel's Delivery column like
+any other. With `APPRISE_AUTH_REQUIRED=yes` it wants Basic Auth: put
+`Authorization: Basic <base64 of user:password>` in `headers`. The service
+URLs stay in Apprise API, so the body holds no credential. An Apprise API on
+the local network is reached only when SubGlance is started with
+[`--allow-private-targets`](#servers-on-a-private-address).
+
+A service SubGlance has a channel type for, or one this page gives a body
+for, needs no Apprise in between.
+
 ## Which channels get added
 
 A new channel type is maintenance for as long as the upstream API exists, so
