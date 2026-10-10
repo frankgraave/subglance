@@ -62,6 +62,12 @@ it("puts a refusal of the settings under the control the server named", async ()
   change("Expected values", "x");
   testIt(); await screen.findByText(/answered/);
   save();
-  await waitFor(() => expect(screen.getByLabelText("Expected values").getAttribute("aria-invalid")).toBe("true"));
-  expect(document.activeElement).toBe(screen.getByLabelText("Expected values"));
+  const values = screen.getByLabelText("Expected values");
+  // The fieldset is disabled while the save is in flight, so focus() in the
+  // rejection does nothing; an effect focuses the control once it unlocks,
+  // after the commit that marks it invalid. Wait for both, not one then a peek.
+  await waitFor(() => {
+    expect(values.getAttribute("aria-invalid")).toBe("true");
+    expect(document.activeElement).toBe(values);
+  });
 });
