@@ -20,18 +20,31 @@
  * The compact layout is held to the same words: its down lines carry the
  * row's chip at the head of the address slot (SUB-203), measured at the same
  * widths for a cut-off kind, an error in a number column or a taller line.
+ * It keeps its names whole too (SUB-254): it is not vetoed above the phone
+ * breakpoint, so it is also measured beside the rail at 641 and 700, the
+ * widths where rows have already given way, and its line goes to two lines
+ * exactly where its one-line columns would drop below their floor.
  *
  * Does not run with `npm test`: needs a built bundle and a browser.
  *
  * @vitest-environment node
  */
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { causeWords } from "../incidents/story";
 import type { ApiMonitor } from "../monitors/types";
 import { chromium, type Browser, type Page } from "./harness/browser";
 import { seedEstate, seedFailures } from "./harness/seed";
 import { serveBuild, type Server } from "./harness/server";
-import { RAIL_VETO_MAX_WIDTH, ROWS_NAME_FLOOR, SIDEBAR_VETO_MAX_WIDTH } from "./useMediaQuery";
+import {
+  RAIL_VETO_MAX_WIDTH,
+  RAIL_WIDTH,
+  ROWS_CHROME,
+  ROWS_NAME_FLOOR,
+  SIDEBAR_VETO_MAX_WIDTH,
+  SIDEBAR_WIDTH,
+} from "./useMediaQuery";
 
 const FAILURES = seedFailures();
 
@@ -61,6 +74,20 @@ const DOWN = ESTATE.filter((monitor) => monitor.status === "down");
  * under any class, the former `.mon-line-error` included, still fails.
  */
 const ERRORS = [...new Set(DOWN.map((monitor) => monitor.error!))];
+
+/*
+ * The list width at which a compact line keeps everything on one line, read
+ * from the token that documents the `@container` literal (`tokens.test.ts`
+ * holds the literal to the token). Read rather than repeated, so moving the
+ * rung moves the widths this test probes instead of leaving it measuring the
+ * old one.
+ */
+const COMPACT_LINE = (() => {
+  const tokens = readFileSync(fileURLToPath(new URL("../styles/tokens.css", import.meta.url)), "utf8");
+  const found = /--bp-compact-line:\s*(\d+)px;/.exec(tokens);
+  if (found === null) throw new Error("tokens.css declares no --bp-compact-line");
+  return Number(found[1]);
+})();
 
 let server: Server;
 let browser: Browser;
@@ -164,6 +191,12 @@ async function look(page: Page): Promise<Seen> {
 
 type SeenLines = {
   shown: number;
+  /** Lines whose address slot sits under the name rather than beside it. */
+  twoLine: number;
+  /** The narrowest name column on screen, in pixels. */
+  nameColumn: number;
+  /** The list's own width: what the container query measures. */
+  listWidth: number;
   clippedNames: string[];
   causes: { name: string; text: string; title: string; clipped: boolean }[];
   errorsInNumbers: number;
@@ -175,8 +208,14 @@ async function lookAtLines(page: Page): Promise<SeenLines> {
   return page.evaluate((errors) => {
     const lines = [...document.querySelectorAll<HTMLElement>(".mon-line")];
     const names = lines.map((line) => line.querySelector<HTMLElement>(".mon-line-name")!);
+    const below = (line: HTMLElement) =>
+      line.querySelector<HTMLElement>(".mon-line-sub")!.getBoundingClientRect().top >=
+      line.querySelector<HTMLElement>(".mon-line-name")!.getBoundingClientRect().bottom;
     return {
       shown: lines.length,
+      twoLine: lines.filter(below).length,
+      nameColumn: Math.min(...names.map((name) => name.getBoundingClientRect().width)),
+      listWidth: document.querySelector<HTMLElement>(".mon-line-stack")!.getBoundingClientRect().width,
       clippedNames: names
         .filter((name) => name.scrollWidth > name.clientWidth)
         .map((name) => `${(name.textContent ?? "").trim()} (${name.clientWidth} of ${name.scrollWidth}px)`),
@@ -245,20 +284,16 @@ describe("the seed estate on the dashboard", () => {
    * The compact layout says why in the row's chip too (SUB-203), at the head
    * of the address slot rather than in the latency slot, where the raw error
    * used to be cut after eight letters. Compact keeps its own veto at the
-   * phone breakpoint only, so it is measured at the same widths as rows,
-   * including the one where rows give way to cards.
-   *
-   * At that one, 820px beside the sidebar, the compact line is starved: its
-   * name column is 104px and five seed names are cut, the address slot is
-   * 114px and the widest seed kind needs 160. That is the layout's own debt
-   * (SUB-254), not the chip's, so the whole-chip promise is held wherever the
-   * names are whole, and the starved width is asserted as starved: once
-   * SUB-254 gives the names their room this test fails, and the exception
-   * goes with it rather than staying behind as a skip nobody revisits.
+   * phone breakpoint only, so it is measured at the same widths as rows and
+   * below the rows veto too: 820 beside the sidebar, 641 and 700 beside the
+   * rail, where it used to cut five seed names (SUB-254).
    */
-  const STARVED = new Set(["820 expanded"]);
+  const COMPACT_WIDTHS = {
+    expanded: [820, 1024, 1440],
+    collapsed: [641, 700, 820, 1024, 1440],
+  } as const;
   for (const sidebar of ["expanded", "collapsed"] as const) {
-    describe.each([820, 1024, 1440])(
+    describe.each(COMPACT_WIDTHS[sidebar])(
       `compact at %ipx beside the ${sidebar === "expanded" ? "sidebar" : "rail"}`,
       (width) => {
         it("names every failure in words, whole, on a line as tall as the rest", async () => {
@@ -280,11 +315,9 @@ describe("the seed estate on the dashboard", () => {
                 .map(({ name, text, title }) => ({ name, text, title }))
                 .sort((a, b) => a.name.localeCompare(b.name)),
             ).toEqual(want.sort((a, b) => a.name.localeCompare(b.name)));
-            if (STARVED.has(`${width} ${sidebar}`)) {
-              expect(seen.clippedNames, "the compact names have room here now: drop this width from STARVED").not.toEqual([]);
-              return;
-            }
             expect(seen.clippedNames).toEqual([]);
+            // Every line takes the same shape: all one line or all two.
+            expect([0, seen.shown]).toContain(seen.twoLine);
             // A classed failure is a few words, and they are never cut.
             const classed = new Set(DOWN.filter((monitor) => monitor.failure_kind).map((monitor) => monitor.name));
             expect(seen.causes.filter((cause) => classed.has(cause.name) && cause.clipped)).toEqual([]);
@@ -295,6 +328,44 @@ describe("the seed estate on the dashboard", () => {
       },
     );
   }
+
+  /*
+   * The compact line's own floor (SUB-254). Its one-line grid gives the name
+   * and the address slot rung 4 each before the fractions share out the rest;
+   * a list narrower than that puts the address slot under the name instead of
+   * cutting either. The list's width beside each navigation is the viewport
+   * less the navigation and the page's chrome, the same arithmetic the rows
+   * veto uses, so the probe lands one pixel either side of the rung.
+   */
+  it.each([
+    ["expanded", SIDEBAR_WIDTH],
+    ["collapsed", RAIL_WIDTH],
+  ] as const)("beside the %s navigation, a compact line is one line exactly where its columns reach their floor", async (sidebar, nav) => {
+    const one = nav + ROWS_CHROME + COMPACT_LINE;
+    const narrow = await openDashboard(one - 1, sidebar, "compact");
+    try {
+      const seen = await lookAtLines(narrow);
+      expect(seen.listWidth).toBe(COMPACT_LINE - 1);
+      expect(seen.twoLine, "the address slot is still beside a name below the rung").toBe(seen.shown);
+      expect(seen.clippedNames).toEqual([]);
+    } finally {
+      await narrow.close();
+    }
+    const wide = await openDashboard(one, sidebar, "compact");
+    try {
+      const seen = await lookAtLines(wide);
+      expect(seen.listWidth).toBe(COMPACT_LINE);
+      expect(seen.twoLine, "a line went to two lines although its columns have their floor").toBe(0);
+      expect(seen.clippedNames).toEqual([]);
+      // The name gets its floor at the first one-line width, and the chip
+      // beside the address is whole there.
+      expect(seen.nameColumn).toBeGreaterThanOrEqual(ROWS_NAME_FLOOR);
+      const classed = new Set(DOWN.filter((monitor) => monitor.failure_kind).map((monitor) => monitor.name));
+      expect(seen.causes.filter((cause) => classed.has(cause.name) && cause.clipped)).toEqual([]);
+    } finally {
+      await wide.close();
+    }
+  });
 
   it.each([
     ["expanded", SIDEBAR_VETO_MAX_WIDTH],

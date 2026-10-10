@@ -145,8 +145,9 @@ export function effectiveLayout(
    * Above the breakpoint, where the column beside the navigation cannot hold
    * the rows table's fixed columns and a name (SUB-149, SUB-194). Only rows
    * gives way here: its fixed columns take 440px before the name gets any.
-   * Compact has no fixed-width heartbeat and measured flush at the same
-   * width, so taking it away would be a veto with nothing to protect.
+   * Compact has no fixed-width heartbeat, and on a narrow list its line puts
+   * the address under the name instead of cutting it (SUB-254), so taking it
+   * away would trade the dense layout for cards with nothing to protect.
    */
   if (squeezed && preference === "rows") return "cards";
   return preference;
