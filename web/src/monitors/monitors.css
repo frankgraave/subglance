@@ -1199,6 +1199,12 @@
      distance from its neighbour as it is from the edge, or the group reads as
      looser than it is. */
   gap: var(--space-1h);
+  /* Every line decides between one line and two from the list's width
+     (SUB-254), not the window's: see `@container mon-lines` below. On the
+     list rather than on each line, because a down line's 2px status edge
+     leaves it 1px narrower inside than an up line, and a query on the line
+     would let the two take different shapes at that one pixel. */
+  container: mon-lines / inline-size;
 }
 
 .mon-line {
@@ -1228,9 +1234,61 @@
      to be 76 and 62 — two adjacent columns of the same kind of reading at two
      widths, which is the drift §2.14 exists to stop. Rung 2 (64) for both:
      the widest reading here is a latency, at 49px. */
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.2fr) var(--size-col-2) var(--size-col-2);
+  grid-template-columns:
+    minmax(var(--size-col-4), 1.1fr)
+    minmax(calc(var(--size-col-4) + var(--space-2)), 1.2fr)
+    var(--size-col-2) var(--size-col-2);
   align-items: center;
   gap: var(--space-3);
+}
+
+/*
+ * The narrow line: the why goes under the name (SUB-254).
+ *
+ * The one-line grid used to be `minmax(0, 1.1fr) minmax(0, 1.2fr)`, so below
+ * the rows veto its name column shrank with the window: 104px at 820 beside
+ * the sidebar and 103px at 641 beside the rail, with five of the 26 seed
+ * names cut, and an address slot of 114px that the widest seed kind (160px)
+ * did not fit.
+ *
+ * Handing the list to cards, as rows does, was measured and refused: at those
+ * widths a card is 221px tall and stands one to a row, so 26 monitors became
+ * 5460px of scrolling where two-line compact takes about a quarter of that.
+ * The layout exists for a screen of a hundred monitors; giving it up at a
+ * small laptop's width would be a veto against its own purpose.
+ *
+ * So the line keeps its density and spends height instead of the name: the
+ * name shares the first line with the two readings, which keep their columns
+ * so they still line up down the list, and the address slot, with the cause
+ * chip at its head, takes the whole second line. Every line in a list takes
+ * the same shape, so the list is still one height per line.
+ *
+ * 651px of list is where both elastic columns still reach their floors.
+ * The name's is rung 4 (168px, the rows table's and the inventory's floor for
+ * a name), which holds every seed name (the longest is 156px). The address
+ * slot's is rung 4 for the chip plus the 8px gap after it, because the chip
+ * is the one thing in the slot that must stay whole: the widest seed kind,
+ * "unexpected status code", is 160px, and at a bare 168 the gap pushed it
+ * into an ellipsis by a fraction of a pixel. A down line spends 143px before
+ * its body: its 2px status edge and 1px right border, 12px of padding each
+ * side, and the 104px status cell with its 12px gap. The body then needs
+ * 168 + 176 + 64 + 64 and three 12px gaps, 508px. The floors in the grid
+ * above say the same thing from the other side: above this width the
+ * fractions never hand either column less than its floor.
+ */
+@container mon-lines (width < 651px) {
+  .mon-line .panel-row-body {
+    grid-template-columns: minmax(0, 1fr) var(--size-col-2) var(--size-col-2);
+    /* The same 2px the row's `.mon-sub` keeps under its name. */
+    row-gap: var(--space-0h);
+  }
+
+  /* Placed, so the name and the two readings fill the first line by
+     themselves in source order. */
+  .mon-line .mon-line-sub {
+    grid-row: 2;
+    grid-column: 1 / -1;
+  }
 }
 
 /* Same rule as the row and the card: trouble warms the leading edge, and no

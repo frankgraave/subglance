@@ -96,8 +96,9 @@ describe("the viewport's veto", () => {
 
   it("gives rows way to cards beside the expanded sidebar, and nothing else", () => {
     // SUB-149: above the breakpoint the rows table still did not fit the
-    // column the expanded sidebar leaves. Compact measured flush there, and
-    // cards and the wall fit at every width, so they stay as chosen.
+    // column the expanded sidebar leaves. Compact goes to two lines there
+    // instead (SUB-254), and cards and the wall fit at every width, so they
+    // stay as chosen.
     expect(effectiveLayout("rows", false, true)).toBe("cards");
     expect(effectiveLayout("compact", false, true)).toBe("compact");
     expect(effectiveLayout("cards", false, true)).toBe("cards");

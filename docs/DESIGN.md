@@ -1569,8 +1569,22 @@ back at the first width where the name cell reaches rung 4 (168px) inside its
 padding. SUB-149 first stopped at 816px, where the table no longer scrolled
 the page sideways but the name had 86px: 25 of the 26 demo names ended in an
 ellipsis, and the rail at 641px gave the same 86px. A row that fits by cutting
-the name has not fitted; Cards wrap it instead. Compact measured flush and is
-left alone.
+the name has not fitted; Cards wrap it instead.
+
+Compact is not vetoed there, and keeps its names whole another way (SUB-254).
+Its line used to be measured only for sideways scroll, which it never caused,
+but its name column shrank with the window: 104px at 820 beside the sidebar and
+at 641 beside the rail, with five of the 26 demo names cut. Cards would fix
+that at the cost the layout exists to avoid — a card is 221px tall and stands
+one to a row there, so the demo estate would take 5460px of cards where two-line
+compact takes about 1500. So the line spends height instead of the name. Its one-line
+grid gives the name rung 4 (168px) and the address slot rung 4 plus a gap
+before the fractions share out the rest, and a list narrower than that, 651px
+(`--bp-compact-line`, a container query on the list, so every line takes the
+same shape), puts the address slot with its cause chip on a second line under
+the name. The name keeps the first line with the two readings, whose columns
+still line up down the list. A two-line compact line is 52px against 34px for
+one, still a quarter of a card.
 
 **A down row says why under its name** (SUB-194). The failure kind, in the
 incident row's chip and words (§8.6) — "connection refused", "timed out" —
@@ -1589,16 +1603,17 @@ stand: rung 2 cut it after eight letters, it was the one non-reading in a
 column of readings, and the name already identifies the monitor, so the
 address is the cheapest text on the line to lose. The chip drops to 1px block
 padding there, which makes it 16px, the line's own leading, so a down line is
-as tall as an up one. Below the rows veto the compact line is itself starved
-(820px beside the sidebar: a 104px name column, five seed names cut), so the
-chip clips there with them; that is the layout's debt, tracked in SUB-254, and
-the browser test asserts the width as starved until it is paid.
+as tall as an up one. On a narrow list the slot moves under the name with the
+chip still at its head, so a classed kind is whole at every width the layout
+is shown.
 
 `layout/dashboard-names.browser.test.ts` loads the seed estate at 820, 1024
 and 1440 beside either navigation and fails on a cut-off name, an error back
 in a number column, a cut-off kind, or rows that do not come back exactly
-where the name reaches its floor; and in the compact layout on a cut-off
-kind, an error in a number column, or a down line taller than an up one.
+where the name reaches its floor; and in the compact layout, also at 641 and
+700 beside the rail, on a cut-off name or kind, an error in a number column, a
+down line taller than an up one, or a line that is not on one line exactly
+from the width where its columns reach their floor.
 
 **The counts are the status filter (SUB-65).** At 200 monitors the question is
 almost never "show me everything", it is "show me the two that are down" — and
