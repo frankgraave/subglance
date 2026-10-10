@@ -3,6 +3,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createQueryClient } from "./queryClient";
+import { IncidentDeliveriesScope } from "../incidents/deliveriesScope";
 import { checkMonitorNow, deleteMonitor, setMonitorPaused, type CheckOutcome } from "../monitors/inventoryApi";
 import { ConfirmDelete } from "../components/ConfirmDelete";
 import { monitorDeleteConsequence } from "../monitors/inventory";
@@ -357,7 +358,9 @@ export function LiveMonitorDetailRoot(
   const [fallback] = useState(createQueryClient);
   return (
     <QueryClientProvider client={client ?? fallback}>
-      <LiveMonitorDetail {...rest} />
+      <IncidentDeliveriesScope.Provider value>
+        <LiveMonitorDetail {...rest} />
+      </IncidentDeliveriesScope.Provider>
     </QueryClientProvider>
   );
 }

@@ -67,6 +67,34 @@ const OPEN_INCIDENTS = {
   ],
 };
 
+/**
+ * Where the open row's alert went: one that arrived, and one that failed with
+ * the longest kind of error a delivery writes, an unbroken URL in a Go
+ * transport message, so the check below measures the wrap that matters.
+ */
+const DELIVERIES = {
+  incident_id: 42,
+  window_days: 30,
+  complete: true,
+  deliveries: [
+    {
+      id: 1, channel_id: 1, channel_name: "On-call Slack", channel_type: "slack",
+      event: "incident_confirmed", state: "delivered", attempts: 1,
+      queued_at: ago(7 * 3_600_000 + 4 * 60_000), ended_at: ago(7 * 3_600_000 + 4 * 60_000),
+      error: "", reason: "",
+    },
+    {
+      id: 2, channel_id: 2, channel_name: "Escalation webhook", channel_type: "webhook",
+      event: "incident_confirmed", state: "failed", attempts: 5,
+      queued_at: ago(7 * 3_600_000 + 4 * 60_000), ended_at: ago(6 * 3_600_000),
+      error:
+        'gave up after 5 attempts: Post "https://alerts.internal.example.com/…": ' +
+        "dial tcp 10.20.30.40:443: connect: connection refused",
+      reason: "",
+    },
+  ],
+};
+
 beforeAll(async () => {
   server = await serveBuild();
   browser = await chromium();
@@ -95,6 +123,14 @@ async function openExpanded(theme: "dark" | "light", width: number): Promise<Pag
         status: 200,
         contentType: "application/json; charset=utf-8",
         body: JSON.stringify(OPEN_INCIDENTS),
+      });
+      return;
+    }
+    if (/^\/api\/v1\/incidents\/\d+\/deliveries$/.test(new URL(req.url()).pathname)) {
+      void req.respond({
+        status: 200,
+        contentType: "application/json; charset=utf-8",
+        body: JSON.stringify(DELIVERIES),
       });
       return;
     }
@@ -894,4 +930,46 @@ describe("the expanded incident row", () => {
       await page.close();
     }
   }, 60_000);
+
+  for (const width of [1440, 390]) {
+    it(`draws the notifications as a second timeline inside the panel (${width}px)`, async () => {
+      const page = await openExpanded("dark", width);
+      try {
+        await page.waitForSelector(".inc-sent .inc-tl-step", { timeout: 15_000 });
+        const sent = (await page.evaluate(`(() => {
+          const row = document.querySelector(".inc-row");
+          const detail = row.querySelector(".inc-detail").getBoundingClientRect();
+          const firstTime = (sel) => row.querySelector(sel).getBoundingClientRect();
+          const steps = Array.from(row.querySelectorAll(".inc-sent .inc-tl-step"));
+          return {
+            lines: steps.length,
+            timelineX: Math.round(firstTime(".inc-detail-col .inc-tl-at").x),
+            sentX: Math.round(firstTime(".inc-sent .inc-tl-at").x),
+            insideRight: steps.every((s) => s.getBoundingClientRect().right <= detail.right + 1),
+            words: steps.map((s) => s.textContent),
+            documentOverflows: document.documentElement.scrollWidth > window.innerWidth + 1,
+          };
+        })()`)) as {
+          lines: number;
+          timelineX: number;
+          sentX: number;
+          insideRight: boolean;
+          words: string[];
+          documentOverflows: boolean;
+        };
+        expect(sent.lines, "one line per alert per channel").toBe(2);
+        expect(sent.words[0]).toMatch(/On-call Slack.*Delivered/);
+        expect(sent.words[1]).toMatch(/Escalation webhook.*Failed.*connection refused/);
+        expect(
+          sent.sentX,
+          "the notification times must stand in the timeline's time column, " +
+            "or the panel reads as two unrelated lists",
+        ).toBe(sent.timelineX);
+        expect(sent.insideRight, "a long delivery error must wrap inside the panel").toBe(true);
+        expect(sent.documentOverflows, "the list must never push the page sideways").toBe(false);
+      } finally {
+        await page.close();
+      }
+    }, 60_000);
+  }
 });

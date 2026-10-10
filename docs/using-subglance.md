@@ -593,6 +593,7 @@ GET    /api/v1/monitors/{id}/incidents     incident history
 
 GET    /api/v1/incidents                   every unresolved incident
 POST   /api/v1/incidents/{id}/ack          acknowledge — seen, being worked on
+GET    /api/v1/incidents/{id}/deliveries   where its alerts went, per channel
 
 GET    /api/v1/stream                      live check results and status changes (SSE)
 ```

@@ -547,6 +547,26 @@ export async function serveBuild(): Promise<Server> {
       return;
     }
 
+    // Where an opened incident's alerts went. One delivered alert per
+    // incident, so a layout check of an open row measures a real line.
+    const sent = url.pathname.match(/^\/api\/v1\/incidents\/([^/]+)\/deliveries$/);
+    if (sent) {
+      const incident = INCIDENTS.find((i) => String(i.id) === sent[1]);
+      const at = incident?.confirmed_at ?? incident?.started_at ?? new Date().toISOString();
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({
+        incident_id: Number(sent[1]),
+        window_days: 30,
+        complete: true,
+        deliveries: incident === undefined ? [] : [{
+          id: 1, channel_id: 1, channel_name: "On-call Slack", channel_type: "slack",
+          event: "incident_confirmed", state: "delivered", attempts: 1,
+          queued_at: at, ended_at: at, error: "", reason: "",
+        }],
+      }));
+      return;
+    }
+
     const incidents = url.pathname.match(/^\/api\/v1\/monitors\/([^/]+)\/incidents$/);
     if (incidents) {
       res.writeHead(200, { "content-type": "application/json; charset=utf-8" });

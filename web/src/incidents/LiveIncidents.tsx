@@ -12,6 +12,7 @@ import { useLiveMonitors } from "../live/useLiveMonitors";
 import type { LiveOptions } from "../live/useLiveMonitors";
 import { useNow } from "../live/useNow";
 import { IncidentsView } from "./IncidentsView";
+import { IncidentDeliveriesScope } from "./deliveriesScope";
 import {
   HISTORY_DAYS,
   ackIncident,
@@ -242,7 +243,9 @@ export function LiveIncidentsRoot(
   const [fallback] = useState(createQueryClient);
   return (
     <QueryClientProvider client={client ?? fallback}>
-      <LiveIncidents {...rest} />
+      <IncidentDeliveriesScope.Provider value>
+        <LiveIncidents {...rest} />
+      </IncidentDeliveriesScope.Provider>
     </QueryClientProvider>
   );
 }
