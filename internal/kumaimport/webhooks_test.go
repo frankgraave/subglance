@@ -30,6 +30,7 @@ func TestWebhookBodiesAreTheDocumentedExamples(t *testing.T) {
 		"### Signal":                                  signalBody,
 		"### Bark":                                    barkBody,
 		"### WhatsApp (WAHA)":                         wahaBody,
+		"### WhatsApp (Evolution API)":                evolutionBody,
 	} {
 		start := strings.Index(doc, "\n"+heading+"\n")
 		if start == -1 {
