@@ -1265,7 +1265,30 @@
   text-overflow: ellipsis;
 }
 
+/* The address slot, which carries the why ahead of the address on a line
+   that has one (SUB-203). The same arrangement as the row's `.mon-sub`: the
+   cause chip comes first and keeps its width, the address takes what is left
+   and is the one that clips. */
+.mon-line-sub {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The row's chip at the line's height. `.chip`'s 4px block padding makes it
+   22px, which fits the row's two-line name cell and would grow a compact
+   line past its neighbours. One pixel above and below the 12px caps plus the
+   1px dashed edge is 16px, the line's own leading (`--lead-helper`), so a
+   down line is exactly as tall as an up one. No rung is 1px; the guard
+   allows it below 4px. */
+.mon-line .mon-error {
+  padding: 1px var(--space-1);
+}
+
 .mon-line-target {
+  flex: 1 1 0;
+  min-width: 0;
   @apply face-mono;
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
@@ -1281,29 +1304,11 @@
   font-size: var(--type-helper);
   line-height: var(--lead-helper);
   color: var(--ink-2);
-  /* The latency slot holds an error message when a monitor is down, and one
-     long reason must not push the uptime column out of alignment. */
+  /* A reading never wraps or pushes the uptime column out of alignment. The
+     slot held a down monitor's error until SUB-203; it holds a latency or a
+     dash now, and keeps the guard. */
   min-width: 0;
   overflow: hidden;
-}
-
-/* The reason a monitor is down, in the slot where its latency would be.
-   Sans, not mono: this is prose, and the column's tabular alignment is
-   meaningless for it. */
-.mon-line-error {
-  display: block;
-  @apply face-sans;
-  /* Helper size from the type scale (SUB-67), which has since landed on
-     develop and is merged in here — so the fallback this rule carried while
-     the token did not exist yet is gone. */
-  font-size: var(--type-helper);
-  line-height: var(--lead-helper);
-  /* Down ink on the nested panel measures 4.49:1 in light. The rail/lamp
-     carries color; the failure sentence must remain readable. */
-  color: var(--ink-2);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* ── Add monitor ───────────────────────────────────────────────────────────

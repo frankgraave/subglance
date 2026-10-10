@@ -1,9 +1,9 @@
 import { memo } from "react";
 import { HeartbeatBar } from "../heartbeat/HeartbeatBar";
-import { causeWords } from "../incidents/story";
 import { describeTarget, formatLatency } from "./format";
 import { formatUptime } from "../format/format";
 import { Led } from "./Led";
+import { monitorCause } from "./monitorCause";
 import { MonitorLink } from "./MonitorLink";
 import { Unknown } from "./Unknown";
 import type { Monitor } from "./types";
@@ -55,10 +55,8 @@ function MonitorRowImpl({
   // A failure the server did not class falls back to its own message, which
   // the chip clips; the full message is in the title and on the monitor's page.
   // An expiring monitor says why in the same place: "certificate expiring".
-  const cause =
-    (status === "down" || status === "expiring" || status === "unknown") && error
-      ? (causeWords(monitor.failureKind) ?? error)
-      : null;
+  // The rule is shared with the compact layout, so the two cannot drift.
+  const cause = monitorCause(monitor);
 
   return (
     <tr

@@ -1313,8 +1313,8 @@ What happens when the connection is lost (`body[data-conn="stale"]`):
   it lit meant the loudest mark on the screen was the one mark still
   asserting.
 - Latency figures and the summary counts drop to `--ink-3`, and so does the
-  failure reason in every layout that prints one (`.mon-error`,
-  `.mon-card-error`, `.mon-line-error`).
+  failure reason in every layout that prints one (`.mon-error` in the rows
+  and compact layouts, `.mon-card-error` on a card).
 - Live check animations stop — they would be fiction.
 - A warm banner appears above the toolbar with a live "since" counter and a
   **Reconnect now** button.
@@ -1579,10 +1579,26 @@ error. The latency column keeps a latency: the error used to stand in for it,
 clipped to "unexpecte…" in 104px. A failure the server did not class shows
 its own message in the chip, which may clip; the full text is the first thing
 on the monitor's page. The row stays 58px, the same as an up row.
+
+**A down compact line says why in the same chip** (SUB-203), with the same
+rule (`monitors/monitorCause.ts`, which both layouts read): down, expiring and
+unknown name their kind, everything else says nothing. The line has one line,
+so the chip stands at the head of the address slot and the address takes what
+is left. That slot and not the latency slot, where the raw error used to
+stand: rung 2 cut it after eight letters, it was the one non-reading in a
+column of readings, and the name already identifies the monitor, so the
+address is the cheapest text on the line to lose. The chip drops to 1px block
+padding there, which makes it 16px, the line's own leading, so a down line is
+as tall as an up one. Below the rows veto the compact line is itself starved
+(820px beside the sidebar: a 104px name column, five seed names cut), so the
+chip clips there with them; that is the layout's debt, tracked in SUB-254, and
+the browser test asserts the width as starved until it is paid.
+
 `layout/dashboard-names.browser.test.ts` loads the seed estate at 820, 1024
 and 1440 beside either navigation and fails on a cut-off name, an error back
 in a number column, a cut-off kind, or rows that do not come back exactly
-where the name reaches its floor.
+where the name reaches its floor; and in the compact layout on a cut-off
+kind, an error in a number column, or a down line taller than an up one.
 
 **The counts are the status filter (SUB-65).** At 200 monitors the question is
 almost never "show me everything", it is "show me the two that are down" — and

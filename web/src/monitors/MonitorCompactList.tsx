@@ -6,6 +6,7 @@ import { MonitorGroup } from "./MonitorGroup";
 import { describeTarget, formatLatency } from "./format";
 import { formatUptime } from "../format/format";
 import { Led } from "./Led";
+import { monitorCause } from "./monitorCause";
 import { MonitorLink } from "./MonitorLink";
 import { partition, sectionsByTag } from "./model";
 import type { Monitor } from "./types";
@@ -40,12 +41,20 @@ import { Unknown } from "./Unknown";
  * at this density down, pending and paused were three hues of the same 20x7
  * pill. `up` stays wordless so the exception reads as the exception.
  *
- * **What it does not drop: the reason.** A down monitor has no latency to
- * report, so this layout borrows the row's rule and puts the error text in
- * that slot instead. Dropping it would leave a red lamp as the only signal —
- * colour alone (DESIGN.md §2.3), and a line that says something is broken
- * without saying what. The line is one line tall, so the text truncates with
- * an ellipsis and carries a `title` for the rest.
+ * **What it does not drop: the reason.** Dropping it would leave a red lamp
+ * as the only signal — colour alone (DESIGN.md §2.3), and a line that says
+ * something is broken without saying what. It is said the way the rows layout
+ * says it (SUB-194, SUB-203): the failure kind in the incident row's words,
+ * in its chip, at the head of the address slot, with the full error as the
+ * chip's title. The address takes what is left and is the one that clips.
+ *
+ * Not in the latency slot, where the raw error used to stand in for the
+ * number: at rung 2 (64px) it was cut after eight letters, it pushed the one
+ * column of readings out of type, and the same monitor said its why in two
+ * different places depending on the layout. The address slot is the widest
+ * slot on the line and the one whose loss costs least — the name already
+ * identifies the monitor — and it keeps the why on the line, so a down line
+ * is as tall as every other line.
  */
 
 export type MonitorCompactListProps = {
@@ -81,6 +90,7 @@ type CompactLineProps = {
 
 function CompactLineImpl({ monitor, onOpen, stale = false }: CompactLineProps) {
   const { name, status, latencyMs, uptime24h, error } = monitor;
+  const cause = monitorCause(monitor);
   return (
     <PanelRow
       className="mon-line"
@@ -102,13 +112,16 @@ function CompactLineImpl({ monitor, onOpen, stale = false }: CompactLineProps) {
         onOpen={onOpen}
         className="mon-line-name"
       />
-      <span className="mon-line-target">{describeTarget(monitor)}</span>
-      <span className="mon-line-num">
-        {status === "down" && error ? (
-          <span className="mon-line-error" title={error}>
-            {error}
+      <span className="mon-line-sub">
+        {cause === null ? null : (
+          <span className="chip chip--state mon-error" title={error}>
+            {cause}
           </span>
-        ) : latencyMs === null ? (
+        )}
+        <span className="mon-line-target">{describeTarget(monitor)}</span>
+      </span>
+      <span className="mon-line-num">
+        {latencyMs === null ? (
           <Unknown what="latency" />
         ) : (
           // The raw number goes in beside the formatted text so a measured
@@ -144,10 +157,12 @@ const CompactLine = memo(CompactLineImpl, (prev, next) => {
     a.target === b.target &&
     a.latencyMs === b.latencyMs &&
     a.uptime24h === b.uptime24h &&
-    // `error` is compared because the line now renders it. Leaving it out
-    // would pin a stale reason on screen for as long as the other five fields
-    // happened to stay equal.
-    a.error === b.error
+    // `error` and `failureKind` are compared because the line renders both:
+    // the kind as the chip's words, the error as its title and as the words
+    // when the server did not class the failure. Leaving either out would pin
+    // a stale reason on screen for as long as the other fields stayed equal.
+    a.error === b.error &&
+    a.failureKind === b.failureKind
   );
 });
 
