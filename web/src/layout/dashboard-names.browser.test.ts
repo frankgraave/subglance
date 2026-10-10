@@ -55,6 +55,12 @@ const ESTATE: ApiMonitor[] = seedEstate().map((monitor, i) => {
   };
 });
 const DOWN = ESTATE.filter((monitor) => monitor.status === "down");
+/*
+ * The raw failure texts on screen. A number slot is checked against these
+ * rather than for one class name, so an error put back in a number column
+ * under any class, the former `.mon-line-error` included, still fails.
+ */
+const ERRORS = [...new Set(DOWN.map((monitor) => monitor.error!))];
 
 let server: Server;
 let browser: Browser;
@@ -116,7 +122,7 @@ type Seen = {
 };
 
 async function look(page: Page): Promise<Seen> {
-  return page.evaluate(() => {
+  return page.evaluate((errors) => {
     const rows = [...document.querySelectorAll<HTMLElement>(".mon-row")];
     const cards = [...document.querySelectorAll<HTMLElement>(".mon-card")];
     // The name's own box: an ellipsis means it is narrower than what it holds.
@@ -144,12 +150,16 @@ async function look(page: Page): Promise<Seen> {
             clipped: chip ? chip.scrollWidth > chip.clientWidth : false,
           };
         }),
-      errorsInNumbers: document.querySelectorAll(".mon-cell--num .mon-error").length,
+      errorsInNumbers: [...document.querySelectorAll<HTMLElement>(".mon-cell--num")].filter(
+        (slot) =>
+          slot.querySelector(".mon-error") !== null ||
+          errors.some((error) => (slot.textContent ?? "").includes(error)),
+      ).length,
       rowHeights: [...new Set(rows.map((row) => Math.round(row.getBoundingClientRect().height)))],
       nameCell: cell ? cell.clientWidth - padding : 0,
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     };
-  });
+  }, ERRORS);
 }
 
 type SeenLines = {
@@ -162,7 +172,7 @@ type SeenLines = {
 };
 
 async function lookAtLines(page: Page): Promise<SeenLines> {
-  return page.evaluate(() => {
+  return page.evaluate((errors) => {
     const lines = [...document.querySelectorAll<HTMLElement>(".mon-line")];
     const names = lines.map((line) => line.querySelector<HTMLElement>(".mon-line-name")!);
     return {
@@ -181,11 +191,15 @@ async function lookAtLines(page: Page): Promise<SeenLines> {
             clipped: chip ? chip.scrollWidth > chip.clientWidth : false,
           };
         }),
-      errorsInNumbers: document.querySelectorAll(".mon-line-num .mon-error").length,
+      errorsInNumbers: [...document.querySelectorAll<HTMLElement>(".mon-line-num")].filter(
+        (slot) =>
+          slot.querySelector(".mon-error") !== null ||
+          errors.some((error) => (slot.textContent ?? "").includes(error)),
+      ).length,
       lineHeights: [...new Set(lines.map((line) => Math.round(line.getBoundingClientRect().height)))],
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     };
-  });
+  }, ERRORS);
 }
 
 describe("the seed estate on the dashboard", () => {
