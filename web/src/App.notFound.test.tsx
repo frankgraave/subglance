@@ -89,7 +89,11 @@ describe("an address that names no screen", () => {
     const heading = await screen.findByRole("heading", { level: 1, name: "Page not found" });
     expect(document.querySelector(".shell-topbar")!.contains(heading)).toBe(true);
     expect(document.querySelectorAll("h1")).toHaveLength(1);
-    expect(document.title).toBe("Page not found \u2014 SubGlance");
+    // Waited for, not sampled: the heading appears in the commit that resolves
+    // the session, and the tab is written by a passive effect after it. The
+    // session's fetch resolves outside act, so findByRole can return between
+    // the two and read the bare product name (CI on develop at 434bfb5).
+    await waitFor(() => expect(document.title).toBe("Page not found \u2014 SubGlance"));
     // The typed address is quoted, and stays in the bar.
     expect(screen.getByText("/this-does-not-exist")).toBeTruthy();
     expect(window.location.pathname).toBe("/this-does-not-exist");
