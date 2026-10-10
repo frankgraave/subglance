@@ -349,6 +349,7 @@ with a change to check**. Nothing is left out without being named there.
 | Notifications: Bark | `webhook` channels that [push to Bark](channels.md#bark), with the same group and sound |
 | Notifications: WhatsApp (WAHA) | `webhook` channels to the same [WAHA](channels.md#whatsapp-waha) address |
 | Notifications: WhatsApp (Evolution) | `webhook` channels to the same [Evolution API](channels.md#whatsapp-evolution-api) address and instance |
+| Notifications: WhatsApp (OpenWA) | `webhook` channels to the same [OpenWA](channels.md#whatsapp-openwa) address and session |
 | Status pages | `status_pages`, with their slug, title, description, publication and indexing settings, footer credit visibility and ordered monitor list |
 | Maintenance: *Single Maintenance Window* | a one-off window, from and to the same wall-clock times in the window's time zone |
 | Maintenance: *Recurring - Day of Week*, *Recurring - Interval* of one day, and a *Cron Expression* that starts at one time of day on chosen weekdays (Kuma's default `30 3 * * *` is one) | a weekly window on the same weekdays, at the same time, for as long, in the same time zone |
@@ -587,6 +588,18 @@ separately; a status-page link does not become monitor coverage.
   over; the body sends the summary and details. Without an address Kuma
   posted to a default host of its own, so the url is left to fill in. An
   Evolution API on a private address or under a local name is listed with
+  [`--allow-private-targets`](operations.md#private-targets).
+- WhatsApp (OpenWA) becomes a webhook that posts to the same OpenWA
+  session, as [the channel documentation](channels.md#whatsapp-openwa)
+  describes. Its address comes over with the session, unless it carries a
+  user name, a password or a query string; the API key goes in an
+  `X-API-Key` header to fill in. The body names the chat, so it is withheld
+  as WAHA's is, and the report gives it to fill in with the chat in masked
+  form. Kuma sent each alert to every chat in a comma-separated list and a
+  webhook posts to one, so with more than one chat the report says how many
+  there were and lists the others, masked, each to add as a channel of its
+  own. A custom message is listed and not carried over, as with Evolution
+  API. An OpenWA on a private address or under a local name is listed with
   [`--allow-private-targets`](operations.md#private-targets).
 
 ### What does not come over

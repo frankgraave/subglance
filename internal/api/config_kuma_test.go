@@ -762,6 +762,81 @@ func TestKumaEvolutionImportsAsAWebhook(t *testing.T) {
 	}
 }
 
+// A Kuma WhatsApp (OpenWA) notification becomes a webhook the importer
+// accepts as it is: created switched off with the body, which names a chat,
+// and the header with the API key left to fill in, its address and session
+// carried over, and still attached to the monitors that used it in Kuma.
+// Neither a chat nor the key is in the file.
+func TestKumaOpenWAImportsAsAWebhook(t *testing.T) {
+	const key = "kumaSecretOpenWAKey42"
+	for _, fixture := range []string{"kuma-1.23.16.db", "kuma-2.5.5.db"} {
+		t.Run(fixture, func(t *testing.T) {
+			ctx := t.Context()
+			config := `{"name":"WhatsApp OpenWA","type":"openwa","isDefault":false,"applyExisting":false,` +
+				`"openwaApiUrl":"https://wa.example.org/","openwaApiKey":"` + key + `",` +
+				`"openwaSession":"ops","openwaChatId":"31612345678@c.us,31687654321@c.us"}`
+			path := kumaWithNotification(t, fixture, "WhatsApp OpenWA", config)
+
+			res, err := kumaimport.Convert(ctx, path)
+			must(t, err)
+			file, err := kumaimport.Render(res)
+			must(t, err)
+			for _, secret := range []string{key, "612345678", "687654321"} {
+				if strings.Contains(string(file), secret) {
+					t.Errorf("the converted file contains %s:\n%s", secret, file)
+				}
+			}
+
+			srv, db := testServerWithDB(t)
+			if code, _, body := importYAML(t, srv, string(file), true); code != http.StatusOK {
+				t.Fatalf("dry run = %d: %s\n%s", code, body, file)
+			}
+			code, rep, body := importYAML(t, srv, string(file), false)
+			if code != http.StatusOK {
+				t.Fatalf("import = %d: %s", code, body)
+			}
+			var needs string
+			for _, it := range rep.Channels {
+				if it.Key == "whatsapp-openwa" {
+					needs = strings.Join(it.NeedsSecrets, ",")
+				}
+			}
+			if needs != "body,headers" {
+				t.Errorf("whatsapp-openwa needs_secrets = %q, want body,headers", needs)
+			}
+
+			chans, err := db.ListChannels(ctx)
+			must(t, err)
+			var hook store.Channel
+			for _, c := range chans {
+				if c.Name == "WhatsApp OpenWA" {
+					hook = c
+				}
+			}
+			if hook.ID == 0 || hook.Type != store.ChannelWebhook || hook.Enabled ||
+				hook.Config["url"] != "https://wa.example.org/api/sessions/ops/messages/send-text" || hook.Config["body"] != "" || hook.Config["headers"] != "" {
+				t.Errorf("stored channel = %+v", hook)
+			}
+			mons, err := db.ListMonitors(ctx)
+			must(t, err)
+			var linked bool
+			for _, m := range mons {
+				if m.Name != "Shop (prod)" {
+					continue
+				}
+				own, err := db.ListMonitorChannels(ctx, m.ID)
+				must(t, err)
+				for _, c := range own {
+					linked = linked || c.ID == hook.ID
+				}
+			}
+			if !linked {
+				t.Error("Shop (prod) is not attached to the WhatsApp OpenWA channel")
+			}
+		})
+	}
+}
+
 // Kuma retries a push monitor before alerting; SubGlance confirms the first
 // missed report. The wait comes over as grace, which the importer stores.
 func TestKumaPushRetriesImportAsGrace(t *testing.T) {
