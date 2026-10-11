@@ -14,8 +14,22 @@ export type TagResult = {
   changed: number;
   unchanged: number;
   collisions: number;
+  /** Configuration naming the old pair that a global rename moves with it. */
+  routing_rules: number;
+  maintenance_windows: number;
+  status_pages: number;
   etag?: string;
 };
+
+const COUNTS = [
+  "total",
+  "changed",
+  "unchanged",
+  "collisions",
+  "routing_rules",
+  "maintenance_windows",
+  "status_pages",
+] as const;
 
 /** Absence of a validator means preview, never an unconditional write. */
 export async function changeTags(
@@ -47,9 +61,7 @@ export async function changeTags(
   const body = (await res.json()) as TagResult | null;
   if (
     !body ||
-    ![body.total, body.changed, body.unchanged, body.collisions].every(
-      (value) => Number.isSafeInteger(value) && value >= 0,
-    ) ||
+    !COUNTS.every((k) => Number.isSafeInteger(body[k]) && body[k] >= 0) ||
     body.changed + body.unchanged !== body.total ||
     body.collisions > body.changed
   ) {
@@ -60,11 +72,10 @@ export async function changeTags(
   const validator = res.headers.get("ETag");
   if (etag === undefined && !validETag(validator))
     throw new Error("Missing or invalid tag preview validator; preview again.");
-  return {
-    total: body.total,
-    changed: body.changed,
-    unchanged: body.unchanged,
-    collisions: body.collisions,
-    ...(etag === undefined ? { etag: validator! } : {}),
-  };
+  // Only the known counts are passed on, never whatever else the body held.
+  const result = Object.fromEntries(
+    COUNTS.map((k) => [k, body[k]]),
+  ) as unknown as TagResult;
+  if (etag === undefined) result.etag = validator!;
+  return result;
 }

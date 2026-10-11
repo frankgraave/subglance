@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/frankgraave/subglance/internal/store"
@@ -174,5 +175,59 @@ func TestBulkTagsApplyPreviewCommitPreservesSettings(t *testing.T) {
 	stale := patchWithHeaders(t, s, monitorPath(a.ID), `{"name":"stale"}`, map[string]string{"If-Match": monitorETag(before)})
 	if stale.Code != 412 {
 		t.Fatalf("old monitor edit = %d, want 412", stale.Code)
+	}
+}
+
+func TestBulkTagsRenameReportsAndMovesRoutingRules(t *testing.T) {
+	s, db := testServerWithDB(t)
+	seedMonitor(t, db, store.Monitor{Name: "tagged", Type: "http", Target: "https://example.com", Tags: map[string]string{"env": "prod"}})
+	rule, err := db.CreateRoutingRule(t.Context(), store.RoutingRule{TagKey: "env", TagValue: "prod"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := `{"action":"rename_value","key":"env","value":"prod","new_value":"production"}`
+	preview := previewTags(t, s, body)
+	var counts struct {
+		RoutingRules       *int `json:"routing_rules"`
+		MaintenanceWindows *int `json:"maintenance_windows"`
+		StatusPages        *int `json:"status_pages"`
+	}
+	if err := json.Unmarshal(preview.Body.Bytes(), &counts); err != nil {
+		t.Fatal(err)
+	}
+	if counts.RoutingRules == nil || *counts.RoutingRules != 1 || counts.MaintenanceWindows == nil || *counts.MaintenanceWindows != 0 || counts.StatusPages == nil || *counts.StatusPages != 0 {
+		t.Fatalf("preview follower counts = %s; want routing_rules 1 and the other two present at 0", preview.Body.String())
+	}
+	if w := tagRequest(s, "", body, preview.Header().Get("ETag")); w.Code != 200 {
+		t.Fatalf("rename = %d: %s", w.Code, w.Body.String())
+	}
+	got, err := db.GetRoutingRule(t.Context(), rule.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.TagValue != "production" {
+		t.Fatalf("rule still names %s=%s after the rename", got.TagKey, got.TagValue)
+	}
+}
+
+func TestBulkTagsRenameOntoAnotherRulesPairIs409(t *testing.T) {
+	s, db := testServerWithDB(t)
+	m := seedMonitor(t, db, store.Monitor{Name: "tagged", Type: "http", Target: "https://example.com", Tags: map[string]string{"env": "prod"}})
+	for _, value := range []string{"prod", "production"} {
+		if _, err := db.CreateRoutingRule(t.Context(), store.RoutingRule{TagKey: "env", TagValue: value}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	body := `{"action":"rename_value","key":"env","value":"prod","new_value":"production"}`
+	w := tagRequest(s, "/preview", body, "")
+	if w.Code != http.StatusConflict {
+		t.Fatalf("preview = %d: %s; want 409", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "env=production") {
+		t.Fatalf("409 does not name the pair already taken: %s", w.Body.String())
+	}
+	after, _ := db.GetMonitor(t.Context(), m.ID)
+	if after.Tags["env"] != "prod" {
+		t.Fatalf("refused rename changed the monitor: %v", after.Tags)
 	}
 }
