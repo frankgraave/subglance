@@ -1015,8 +1015,10 @@ paths:
                 $ref: '#/components/schemas/User'
         '400':
           description: |
-            Malformed or unknown-field JSON, an email address without an `@`,
-            or a password that fails the strength rules.
+            Malformed or unknown-field JSON, a blank address or one without an
+            `@` (`field: email`), or a password that fails the strength rules
+            (`field: password`). The address is stored without the spaces
+            around it.
           content:
             application/json:
               schema:
@@ -3989,8 +3991,10 @@ paths:
         Administrators only. An omitted `role` defaults to `viewer`, which is
         least privilege: granting write access should be a deliberate act.
 
-        A duplicate email address is the common failure here and is reported as
-        a 400 — the caller's problem to fix, not a server fault.
+        The address is stored without the spaces around it, because sign-in
+        trims what it is given. An address another account already has, in
+        any case, is the common failure here and is reported as a 400 with
+        `field: email` — the caller's problem to fix, not a server fault.
       requestBody:
         required: true
         content:
@@ -4006,19 +4010,27 @@ paths:
                 $ref: '#/components/schemas/User'
         '400':
           description: |
-            Malformed or unknown-field JSON, an email address without an `@`,
-            an unknown role, a password that fails the strength rules, or an
-            address that is already in use.
+            Malformed or unknown-field JSON, or a refused field named in
+            `field`: a blank address or one without an `@` (`email`), an
+            address that is already in use (`email`), a password that fails
+            the strength rules (`password`), or an unknown role (`role`).
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
               example:
-                error: role must be admin, editor or viewer
+                error: an account with this email address already exists
+                field: email
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/ForbiddenAdmin'
+        '500':
+          description: The account could not be written.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
       x-subglance-access: admin
   /api/v1/users/{id}:
     parameters:

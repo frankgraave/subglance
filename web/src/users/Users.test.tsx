@@ -176,13 +176,18 @@ it("adds a viewer by default, and waits for a password of the minimum length", a
 
 it("keeps the form and its input when the server refuses a new account", async () => {
   mount(twoUsers, (_url, init) => init?.method === "POST"
-    ? json({ error: "could not create the account: email already in use" }, 400) : undefined);
+    ? json({ error: "an account with this email address already exists", field: "email" }, 400) : undefined);
   fireEvent.click(await screen.findByRole("button", { name: "Add user" }));
   fireEvent.change(screen.getByLabelText("Email"), { target: { value: "oncall@example.com" } });
   fireEvent.change(screen.getByLabelText("Password"), { target: { value: "correct-horse-battery" } });
   fireEvent.click(screen.getByRole("button", { name: "Add user" }));
-  expect((await screen.findByRole("alert")).textContent).toMatch(/already in use/);
-  expect((screen.getByLabelText("Email") as HTMLInputElement).value).toBe("oncall@example.com");
+  const refusal = await screen.findByRole("alert");
+  expect(refusal.textContent).toMatch(/already exists/);
+  const emailInput = screen.getByLabelText("Email") as HTMLInputElement;
+  expect(emailInput.value).toBe("oncall@example.com");
+  // The server names the field, so the refusal is tied to the address input.
+  expect(emailInput.getAttribute("aria-invalid")).toBe("true");
+  expect(emailInput.getAttribute("aria-describedby")).toBe(refusal.id);
 });
 
 // A role the page does not know would be offered back in the picker as
