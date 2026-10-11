@@ -604,6 +604,9 @@ func validateCreateMonitor(req createMonitorRequest) problem {
 	if _, p := normaliseMethod(req.Method); !p.ok() {
 		return p
 	}
+	if p := validateExpectedStatus(req.ExpectedStatus); !p.ok() {
+		return p
+	}
 	if p := validateKeywordMode(req.KeywordMode); !p.ok() {
 		return p
 	}
@@ -670,6 +673,19 @@ func validateTags(tags map[string]string) problem {
 func validateRequestHeaders(headers map[string]string) problem {
 	if msg := checker.RequestHeaderProblem(headers); msg != "" {
 		return fieldProblem("headers", msg)
+	}
+	return problem{}
+}
+
+// validateExpectedStatus refuses a status spec the checker cannot parse.
+// Saved, it would fail every http check before the request is made, as an
+// internal error, so the monitor would go down and alert about a server it
+// never contacted. The parser is the checker's own, so the API cannot accept
+// a spec the probe refuses or refuse one it reads. Empty means the default.
+func validateExpectedStatus(spec string) problem {
+	if _, err := checker.ParseStatusMatcher(spec); err != nil {
+		return fieldProblem("expected_status", "expected_status: "+err.Error()+
+			"; write codes, ranges or classes separated by commas, such as 200,204, 200-299 or 2xx")
 	}
 	return problem{}
 }
@@ -1526,6 +1542,11 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 		m.Method = method
 	}
 	if req.ExpectedStatus != nil {
+		// Judged only when sent, like headers: a monitor saved before the
+		// rule can still be renamed or paused without fixing it first.
+		if p := validateExpectedStatus(*req.ExpectedStatus); !p.ok() {
+			return p
+		}
 		m.ExpectedStatus = *req.ExpectedStatus
 	}
 	if req.Keyword != nil {

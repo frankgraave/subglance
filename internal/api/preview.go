@@ -165,6 +165,10 @@ func (s *Server) handlePreviewCheck(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
+	if p := validateExpectedStatus(req.ExpectedStatus); !p.ok() {
+		writeProblem(w, http.StatusBadRequest, p)
+		return
+	}
 	if p := validateMinTLSVersion(req.MinTLSVersion); !p.ok() {
 		writeProblem(w, http.StatusBadRequest, p)
 		return
