@@ -719,12 +719,21 @@ func (h *jobHeap) Pop() any {
 // A type with a floor of its own never goes below it, down or not: a domain
 // monitor's registry does not answer faster for an expired domain, and asking
 // it every minute is what gets an instance rate-limited.
+//
+// Nor does a monitor come due again before its slowest check could have
+// finished, with the same 20% margin the API keeps between a timeout and its
+// interval. A monitor is never run twice at once, so a dispatch inside a
+// check that is still running is skipped and logged as a warning; for a
+// monitor down on a 90-second timeout, the one-minute recovery cadence would
+// otherwise skip every other recheck for the length of the outage, and a
+// monitor stored before the API refused a timeout longer than its interval
+// would skip most of its checks for good.
 func (j Job) cadence() time.Duration {
 	interval := j.Interval
 	if j.Down {
 		interval = min(interval, time.Minute)
 	}
-	return max(interval, checker.MinInterval(j.Monitor.Type))
+	return max(interval, checker.MinInterval(j.Monitor.Type), j.Monitor.Timeout*5/4)
 }
 
 // SetDown applies a confirmed transition immediately, before the next reload.

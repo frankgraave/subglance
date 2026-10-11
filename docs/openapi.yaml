@@ -6260,7 +6260,10 @@ components:
           example: 60
         timeout_s:
           type: integer
-          description: How long a single probe may take.
+          description: |
+            How long a single probe may take. At most 80% of `interval_s` for
+            every type but `push`; a monitor stored before that rule may hold
+            more until either value is edited.
           minimum: 1
           maximum: 120
           default: 10
@@ -6506,7 +6509,13 @@ components:
           example: 60
         timeout_s:
           type: integer
-          description: 0 or omitted means the server default of 10.
+          description: |
+            0 or omitted means the server default of 10. At most 80% of the
+            interval the monitor is saved with, defaults included, for every
+            type but `push`: a monitor is never checked twice at once, so a
+            longer timeout would make the scheduler skip the next check. A
+            longer one is refused on `timeout_s`, or on `interval_s` when no
+            timeout is sent.
           minimum: 1
           maximum: 120
           example: 10
@@ -6695,10 +6704,18 @@ components:
           description: Must not be blank. Re-validated against the resulting type.
         interval_s:
           type: integer
+          description: |
+            Refused on `interval_s` when the monitor's timeout would be more
+            than 80% of it, unless `timeout_s` is sent too.
           minimum: 20
           maximum: 86400
         timeout_s:
           type: integer
+          description: |
+            At most 80% of the interval the monitor ends up with, for every
+            type but `push`. Judged only when `interval_s` or `timeout_s` is
+            sent, so a monitor stored before the rule can still be renamed or
+            paused.
           minimum: 1
           maximum: 120
         retries:

@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/netip"
 	"net/url"
@@ -600,6 +601,17 @@ func validateCreateMonitor(req createMonitorRequest) problem {
 	if req.TimeoutS != 0 && (req.TimeoutS < 1 || req.TimeoutS > 120) {
 		return fieldProblem("timeout_s", "timeout_s must be between 1 and 120")
 	}
+	// Judged on the values the monitor will be saved with, defaults
+	// included: a timeout alone can outrun the default interval.
+	effective := store.Monitor{Type: req.Type, IntervalS: req.IntervalS, TimeoutS: req.TimeoutS}
+	store.ApplyMonitorDefaults(&effective)
+	blame := "interval_s"
+	if req.TimeoutS != 0 {
+		blame = "timeout_s"
+	}
+	if p := validateTimeoutFits(req.Type, effective.IntervalS, effective.TimeoutS, blame); !p.ok() {
+		return p
+	}
 	// Creation used to skip these three entirely, so a bad method or an
 	// out-of-range ssl_warn_days only surfaced as a SQLite constraint error or,
 	// worse, as a monitor that failed every check forever.
@@ -736,6 +748,33 @@ func validateSSLWarnDays(days *int) problem {
 		return fieldProblem("ssl_warn_days", "ssl_warn_days must be between 1 and 365")
 	}
 	return problem{}
+}
+
+// validateTimeoutFits refuses a timeout longer than 80% of the interval the
+// monitor is checked at, the bound Uptime Kuma's form applies too.
+//
+// The scheduler never runs a monitor twice at once, so a check that may hang
+// for longer than the gap between checks cannot keep its schedule: every
+// dispatch that falls inside it is skipped, logged as a warning and counted
+// in subglance_checks_skipped_total, which reads as a worker pool falling
+// behind when no number of workers would help. The 20% margin leaves room
+// for the jitter and the queue wait between one check's start and the next.
+//
+// blame is the field the request changed: the timeout when it was sent, the
+// interval otherwise. A push monitor is never dialled, so neither value
+// means anything for it.
+func validateTimeoutFits(typ string, intervalS, timeoutS int, blame string) problem {
+	if typ == store.TypePush || timeoutS*5 <= intervalS*4 {
+		return problem{}
+	}
+	if blame == "interval_s" {
+		return fieldProblem("interval_s", fmt.Sprintf(
+			"interval_s must be at least %d for a %d-second timeout: a check may take up to its timeout, "+
+				"and the next one cannot start before it ends", (timeoutS*5+3)/4, timeoutS))
+	}
+	return fieldProblem("timeout_s", fmt.Sprintf(
+		"timeout_s must be at most %d for a %d-second interval (80%%): a check that may take longer "+
+			"than the time between checks cannot keep its schedule", intervalS*4/5, intervalS))
 }
 
 // validateRetries applies the range the column allows. Create skipped it
@@ -1570,6 +1609,17 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 			return fieldProblem("timeout_s", "timeout_s must be between 1 and 120")
 		}
 		m.TimeoutS = *req.TimeoutS
+	}
+	// Only when one of the pair is sent, so a monitor stored before the
+	// rule can still be renamed or paused without fixing it first.
+	if req.TimeoutS != nil {
+		if p := validateTimeoutFits(m.Type, m.IntervalS, m.TimeoutS, "timeout_s"); !p.ok() {
+			return p
+		}
+	} else if req.IntervalS != nil {
+		if p := validateTimeoutFits(m.Type, m.IntervalS, m.TimeoutS, "interval_s"); !p.ok() {
+			return p
+		}
 	}
 	if req.Retries != nil {
 		if p := validateRetries(req.Retries); !p.ok() {

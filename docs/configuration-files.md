@@ -411,8 +411,10 @@ separately; a status-page link does not become monitor coverage.
 ### What changes on the way
 
 - An interval below 20 seconds becomes 20, and values outside SubGlance's other
-  limits (retries up to 10, timeout up to 120 seconds) are moved inside them.
-  Each one is listed.
+  limits (retries up to 10, timeout up to 120 seconds and at most 80% of the
+  interval) are moved inside them. Each one is listed. Kuma's form keeps the
+  timeout within 80% of the interval too, so this mostly catches an interval
+  raised to 20 seconds: Kuma's default timeout of 48 seconds then becomes 16.
 - Kuma's *Retries* counts the failed checks that stay pending before the next
   one alerts, so 3 alerts on the fourth failure; SubGlance's `retries` counts
   the failures that confirm an incident, so 3 alerts on the third. A monitor

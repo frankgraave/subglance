@@ -529,7 +529,18 @@ are excluded; a window with no eligible checks has unknown uptime. See the
 [uptime policy](../README.md#warning-and-uptime) for rollups and sampling details.
 Confirmed Down checks use the shorter of the configured interval and 60 seconds,
 with the existing jitter and worker limits, until the incident closes — including
-the passing checks that close it.
+the passing checks that close it. A monitor whose timeout is over 48 seconds is
+rechecked no sooner than 1.25 times its timeout, so the next check never comes
+due while a hanging one may still be running.
+
+A monitor's timeout may be at most 80% of its interval: 48 seconds at the
+default interval of 60, 16 at the shortest of 20. A monitor is never checked
+twice at once, so a check that could hang for longer than the gap before the
+next one would make the scheduler skip that next one. Creating, editing or
+importing a monitor refuses the pair otherwise, naming `timeout_s`, or
+`interval_s` when only the interval changed. A monitor stored before this rule
+keeps its values until one of the two is edited, and is checked every 1.25
+times its timeout in the meantime.
 
 A blip that recovers before the threshold is recorded but never notified, in
 either direction. A monitor that oscillates rapidly is marked as flapping, and
