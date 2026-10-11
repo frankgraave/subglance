@@ -72,12 +72,14 @@ type importPlan struct {
 }
 
 type channelStep struct {
-	key         string
-	id          int64 // 0 when created
-	channel     store.Channel
-	write       bool
-	setKey      bool
-	quiet       *store.QuietHours
+	key     string
+	id      int64 // 0 when created
+	channel store.Channel
+	write   bool
+	setKey  bool
+	quiet   *store.QuietHours
+	// clearQuiet removes the channel's quiet hours.
+	clearQuiet  bool
 	makeDefault bool
 }
 
@@ -371,14 +373,25 @@ func (s *Server) planChannel(ctx context.Context, p *importPlan, ex existingConf
 		item.NeedsSecrets = missing
 	}
 
-	if c.QuietHours != nil {
-		q := store.QuietHours{ChannelID: existing.ID, Start: c.QuietHours.Start, End: c.QuietHours.End,
-			Timezone: c.QuietHours.Timezone, During: c.QuietHours.During}
+	window, windowSet, err := c.Quiet(sub(path, "quiet_hours"))
+	if err != nil {
+		return err
+	}
+	switch {
+	case window != nil:
+		q := store.QuietHours{ChannelID: existing.ID, Start: window.Start, End: window.End,
+			Timezone: window.Timezone, During: window.During}
 		if err := q.Validate(); err != nil {
 			return problemAt(sub(path, "quiet_hours"), "%s", err.Error())
 		}
 		if cur, ok := ex.quiet[existing.ID]; !found || !ok || cur != q {
 			step.quiet = &q
+			item.Changes = append(item.Changes, "quiet_hours")
+		}
+	case windowSet && found:
+		// `quiet_hours: null`: the channel delivers around the clock.
+		if _, ok := ex.quiet[existing.ID]; ok {
+			step.clearQuiet = true
 			item.Changes = append(item.Changes, "quiet_hours")
 		}
 	}
@@ -914,6 +927,12 @@ func (s *Server) applyChannel(ctx context.Context, st channelStep) (int64, error
 		q := *st.quiet
 		q.ChannelID = id
 		if err := s.db.SetQuietHours(ctx, q); err != nil {
+			return 0, err
+		}
+	}
+	if st.clearQuiet {
+		// Already gone is what the file asks for.
+		if err := s.db.ClearQuietHours(ctx, id); err != nil && !errors.Is(err, store.ErrNotFound) {
 			return 0, err
 		}
 	}

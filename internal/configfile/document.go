@@ -77,14 +77,19 @@ type Monitor struct {
 	RepeatAfterS      *int  `yaml:"repeat_after_s,omitempty"`
 
 	// HTTP only.
-	Method          *string           `yaml:"method,omitempty"`
-	ExpectedStatus  *string           `yaml:"expected_status,omitempty"`
-	Keyword         *string           `yaml:"keyword,omitempty"`
-	KeywordMode     *string           `yaml:"keyword_mode,omitempty"`
-	FollowRedirects *bool             `yaml:"follow_redirects,omitempty"`
-	CaptureResponse *bool             `yaml:"capture_response,omitempty"`
-	Headers         map[string]string `yaml:"headers,omitempty"`
-	Body            *string           `yaml:"body,omitempty"`
+	Method          *string `yaml:"method,omitempty"`
+	ExpectedStatus  *string `yaml:"expected_status,omitempty"`
+	Keyword         *string `yaml:"keyword,omitempty"`
+	KeywordMode     *string `yaml:"keyword_mode,omitempty"`
+	FollowRedirects *bool   `yaml:"follow_redirects,omitempty"`
+	CaptureResponse *bool   `yaml:"capture_response,omitempty"`
+	// Headers replaces the monitor's request headers when present; `{}`
+	// clears them. Omitted keeps what the monitor sends. Export writes it
+	// for every HTTP monitor, `{}` when there are none.
+	Headers Headers `yaml:"headers,omitempty"`
+	// Body replaces the request body when present; `""` clears it.
+	// Omitted keeps it. Export writes it for every HTTP monitor.
+	Body *string `yaml:"body,omitempty"`
 
 	// JSONAssertion is read through Assertion; see there for why it is a
 	// node. Export writes it for every HTTP monitor, null when there is none.
@@ -144,7 +149,9 @@ type Channel struct {
 	// instance already holds for that field; omitted keeps them all.
 	Config map[string]string `yaml:"config,omitempty"`
 
-	QuietHours *QuietHours `yaml:"quiet_hours,omitempty"`
+	// QuietHours is read through Quiet; see there for why it is a node.
+	// Export writes it for every channel, null when there are none.
+	QuietHours yaml.Node `yaml:"quiet_hours,omitempty"`
 }
 
 // QuietHours is a channel's daily quiet window.
@@ -154,6 +161,18 @@ type QuietHours struct {
 	Timezone string `yaml:"timezone"`
 	During   string `yaml:"during"`
 }
+
+// Headers is an HTTP monitor's request headers as they appear in a file.
+//
+// A type of its own for one reason: an empty map has to be written. With a
+// plain map, omitempty drops `{}` along with an absent map, so a monitor
+// without headers would export no `headers` key, and importing that file
+// would keep whatever headers the target monitor sends. The file has to say
+// "none" in a form the import acts on.
+type Headers map[string]string
+
+// IsZero leaves out an absent map only, never an empty one.
+func (h Headers) IsZero() bool { return h == nil }
 
 // RoutingRule routes monitors carrying a tag to channels. A rule is matched by
 // its tag pair, which the instance already keeps unique. A list that is present

@@ -50,10 +50,16 @@ func (s *Server) exportConfig(ctx context.Context, now time.Time, withPages bool
 			Enabled: ptr(c.Enabled), Default: c.IsDefault,
 			Config: exportChannelConfig(c.Config),
 		}
+		// Written for every channel, null when it has none, so importing
+		// the file removes quiet hours the target channel still has.
+		var window *configfile.QuietHours
 		if q, ok := quiet[c.ID]; ok {
-			out.QuietHours = &configfile.QuietHours{
+			window = &configfile.QuietHours{
 				Start: q.Start, End: q.End, Timezone: q.Timezone, During: q.During,
 			}
+		}
+		if out.QuietHours, err = configfile.QuietHoursNode(window); err != nil {
+			return doc, err
 		}
 		doc.Channels = append(doc.Channels, out)
 	}
@@ -161,14 +167,15 @@ func exportMonitor(m store.Monitor) configfile.Monitor {
 		out.KeywordMode = ptr(m.KeywordMode)
 		out.FollowRedirects = ptr(m.FollowRedirects)
 		out.CaptureResponse = ptr(m.CaptureResponse)
-		if len(m.Headers) > 0 {
-			// Header names are kept so the file still says which headers
-			// the check sends; the values are what authenticate it.
-			out.Headers = make(map[string]string, len(m.Headers))
-			for k := range m.Headers {
-				out.Headers[k] = configfile.Placeholder
-			}
+		// Both are written when empty too: `headers: {}` and `body: ""`
+		// remove what the target monitor sends, where an absent key would
+		// keep it. Header names are kept so the file still says which
+		// headers the check sends; the values are what authenticate it.
+		out.Headers = make(configfile.Headers, len(m.Headers))
+		for k := range m.Headers {
+			out.Headers[k] = configfile.Placeholder
 		}
+		out.Body = ptr("")
 		if m.Body != "" {
 			out.Body = ptr(configfile.Placeholder)
 		}
