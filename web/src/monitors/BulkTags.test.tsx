@@ -30,7 +30,15 @@ const monitors = [1, 2, 3].map((id) =>
   }),
 );
 const etag = `"tags-${"a".repeat(64)}"`;
-const counts = { total: 2, changed: 2, unchanged: 0, collisions: 0 };
+const counts = {
+  total: 2,
+  changed: 2,
+  unchanged: 0,
+  collisions: 0,
+  routing_rules: 0,
+  maintenance_windows: 0,
+  status_pages: 0,
+};
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -162,6 +170,8 @@ it("renames globally with explicit merge policy and invalidates dashboard and de
   client.setQueryData(["monitors", 100], [{ tags: { evn: "prod" } }]);
   client.setQueryData(["monitor-detail", "1"], { tags: { evn: "prod" } });
   client.setQueryData(["incidents", "open"], [{ reminder: { status: "scheduled" } }]);
+  client.setQueryData(["maintenance"], [{ tag_key: "evn", tag_value: "prod" }]);
+  client.setQueryData(["status-pages"], [{ tag_key: "evn", tag_value: "prod" }]);
   const request = vi
     .spyOn(globalThis, "fetch")
     .mockImplementation(
@@ -223,6 +233,8 @@ it("renames globally with explicit merge policy and invalidates dashboard and de
     true,
   );
   expect(client.getQueryState(["incidents", "open"])?.isInvalidated).toBe(true);
+  expect(client.getQueryState(["maintenance"])?.isInvalidated).toBe(true);
+  expect(client.getQueryState(["status-pages"])?.isInvalidated).toBe(true);
   client.clear();
 });
 

@@ -23,6 +23,15 @@ confirm. A value rename matches both the key and the old value, leaving other
 keys and values alone. Dashboard facets and grouping refresh without reloading
 the page. Tags have no registry: a key exists while a monitor carries it.
 
+A rename also moves the configuration that names the old pair: routing rules,
+maintenance windows that cover a tag, and status pages that list a tag. They
+change in the same step as the monitors, so a rule keeps routing, a window keeps
+holding alerts and a page keeps its monitors. A key rename moves every value
+under the key; a value rename moves only that pair. The preview says how many of
+each will follow. A rename that would give two routing rules the same pair is
+refused rather than merged, because each rule keeps its own exclusions: delete
+one of the two rules or move its channels first.
+
 ## API and concurrent changes
 
 Preview with `POST /api/v1/monitors/tags/preview`, then send the **same body** to
