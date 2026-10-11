@@ -188,6 +188,9 @@ The cost is that a lone failure is also delayed by up to that window, so set it
 to `0` to deliver every alert the instant it happens — sensible when you watch a
 handful of services and there is nothing to group. Recoveries are never held
 back: a grouped outage is summarised the moment its last member comes back.
+Reminders for outages that are still unanswered are grouped too, into one
+"3 monitors are still down", but kept apart from first alerts, so a new outage
+never arrives worded as a repeat.
 
 The default follows the check schedule rather than taste. Monitors on a
 60-second interval do not fail in the same second; they fail across the minute
