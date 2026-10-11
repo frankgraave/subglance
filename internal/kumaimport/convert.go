@@ -156,6 +156,7 @@ func convertMonitor(m row, res *Result) (configfile.Monitor, bool) {
 			interval = maxIntervalS
 		}
 		out.IntervalS = ptr(interval)
+		fitTimeout(&out, interval, note)
 	}
 
 	convertRetries(m, &out, typ, interval, note)
@@ -180,6 +181,21 @@ func convertMonitor(m row, res *Result) (configfile.Monitor, bool) {
 		out.RepeatAfterS = ptr(s)
 	}
 	return out, true
+}
+
+// fitTimeout lowers a timeout longer than 80% of the interval to that bound,
+// which the API refuses to exceed so a check cannot outlast the gap before
+// the next one. Kuma's form clamps to the same 80%, but an interval raised to
+// SubGlance's minimum, or a monitor edited through Kuma's API, can still
+// carry a longer one, and the file would then be refused as a whole.
+func fitTimeout(out *configfile.Monitor, interval int, note func(string)) {
+	if out.TimeoutS == nil {
+		return
+	}
+	if t, most := *out.TimeoutS, interval*4/5; t > most {
+		note(fmt.Sprintf("the timeout was %ds; SubGlance waits at most 80%% of the %ds interval, %ds", t, interval, most))
+		out.TimeoutS = ptr(most)
+	}
 }
 
 // convertRetries carries Kuma's retries over so a failure alerts after as
