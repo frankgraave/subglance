@@ -352,7 +352,25 @@ func convertHTTP(m row, out *configfile.Monitor, res *Result, name, typ string) 
 		}
 		out.JSONAssertion = node
 	}
+	// A HEAD response has no body, so a keyword or a JSON query has nothing
+	// to read: Kuma reported such a monitor down on every check (or, inverted,
+	// up whatever the page said), and SubGlance refuses the combination on
+	// import. The body check is what the monitor exists for, so the method
+	// gives way to it rather than the other way round.
+	if method == "HEAD" && (typ == "keyword" || typ == "json-query") {
+		out.Method = ptr("GET")
+		note("it sent HEAD, whose response has no body for its " + bodyCheckName(typ) + " to read; SubGlance sends GET")
+	}
 	return true
+}
+
+// bodyCheckName is the Kuma check that reads a response body, as a note
+// names it.
+func bodyCheckName(typ string) string {
+	if typ == "json-query" {
+		return "JSON query"
+	}
+	return "keyword"
 }
 
 // bodyEncodingTypes is the Content-Type Kuma sends with a request body, per

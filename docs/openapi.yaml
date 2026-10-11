@@ -5619,7 +5619,14 @@ components:
       example: '1.2'
     HttpMethod:
       type: string
-      description: The HTTP method used by an `http` monitor.
+      description: |
+        The HTTP method used by an `http` monitor. A HEAD response has no
+        body, so `HEAD` together with a body check (a `keyword` with
+        `keyword_mode` `must_contain` or `must_not_contain`, or a
+        `json_assertion`) is refused with a 400 whose `field` is `method`.
+        An update is judged on the monitor as it would be saved, and only
+        when it sends `method`, `type`, `keyword`, `keyword_mode` or
+        `json_assertion`.
       enum: [GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS]
       default: GET
     MonitorStatus:

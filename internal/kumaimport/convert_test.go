@@ -387,3 +387,32 @@ func TestHeaderNamesNetHTTPCannotSendAreLeftOut(t *testing.T) {
 		t.Errorf("notes = %q, want one naming the header that was left out", got)
 	}
 }
+
+// A HEAD response has no body, so a keyword or JSON query monitor that sent
+// HEAD comes over as GET, with a note, rather than as a file the import
+// refuses. HEAD on a plain http monitor stays HEAD.
+func TestHeadBodyChecksComeOverAsGet(t *testing.T) {
+	for typ, over := range map[string]row{
+		"keyword":    {"type": "keyword", "keyword": "ok", "method": "HEAD"},
+		"json-query": {"type": "json-query", "json_path": "status", "expected_value": "ok", "method": "head"},
+	} {
+		t.Run(typ, func(t *testing.T) {
+			var res Result
+			m, ok := convertMonitor(httpRow(over), &res)
+			if !ok {
+				t.Fatalf("skipped: %s", notesOf(res))
+			}
+			if deref(m.Method) != "GET" {
+				t.Errorf("method = %q, want GET", deref(m.Method))
+			}
+			if got := notesOf(res); !strings.Contains(got, "it sent HEAD") || !strings.Contains(got, "SubGlance sends GET") {
+				t.Errorf("notes = %q, want one saying HEAD became GET", got)
+			}
+		})
+	}
+	var res Result
+	m, ok := convertMonitor(httpRow(row{"method": "HEAD"}), &res)
+	if !ok || deref(m.Method) != "HEAD" || notesOf(res) != "" {
+		t.Errorf("plain http HEAD: ok=%v method=%q notes=%q, want HEAD unchanged and no note", ok, deref(m.Method), notesOf(res))
+	}
+}

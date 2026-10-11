@@ -190,6 +190,12 @@ The assertion runs after the status and keyword checks, on the same first
 1 MiB of the body. A larger body fails the assertion instead of being parsed
 in part.
 
+A keyword check and a JSON assertion both read the response body, and a `HEAD`
+response has none. A monitor that sends `HEAD` and also checks the body is
+refused with an error on `method`: the keyword would never be found, or never
+be absent, and the assertion would never have a document to read. Use `GET`
+for a monitor that checks what the page says.
+
 There is one assertion per monitor, and no boolean logic across several. If
 an endpoint needs more judgement than one field can carry, a small health
 route that does the judging and answers with one field is the better tool,
