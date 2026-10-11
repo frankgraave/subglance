@@ -143,9 +143,11 @@ func TestStopWritesHeldBatchesBeforeLaterAlerts(t *testing.T) {
 // TestAlertRaisedDuringTheFinalFlushWaitsForIt: an alert that arrives while
 // the stop is writing the held batches is neither held nor written ahead of
 // them. The clock is the seam: flush reads it just before its insert, so the
-// test raises a recovery at that moment, from another goroutine, and gives it
-// time to finish. Done right, the recovery waits on the lock until the stop
-// is over and then goes straight to the outbox, after the alert it closes.
+// test checks at that moment that the stop still holds the lock, and raises a
+// recovery from another goroutine. Done right, the recovery waits on the lock
+// until the stop is over and then goes straight to the outbox, after the
+// alert it closes. The lock check is what makes a regression fail every run:
+// the outbox order alone would depend on how fast that goroutine gets going.
 func TestAlertRaisedDuringTheFinalFlushWaitsForIt(t *testing.T) {
 	t.Parallel()
 
@@ -177,19 +179,16 @@ func TestAlertRaisedDuringTheFinalFlushWaitsForIt(t *testing.T) {
 	}
 
 	onFlushNow = func() {
+		if n.mu.TryLock() {
+			n.mu.Unlock()
+			t.Error("stop does not hold mu while it writes the held batches")
+		}
 		go func() {
 			defer close(raised)
 			if err := n.Enqueue(context.Background(), m, inc, state.EventIncidentResolved, clock.Now()); err != nil {
 				t.Errorf("enqueue recovery: %v", err)
 			}
 		}()
-		// Long enough for an Enqueue that is not kept waiting to finish
-		// (two reads and a map write); one that is waiting on the lock
-		// carries on once the stop returns.
-		select {
-		case <-raised:
-		case <-time.After(200 * time.Millisecond):
-		}
 	}
 	armed.Store(true)
 
