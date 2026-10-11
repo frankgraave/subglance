@@ -349,6 +349,10 @@ func TestBuildMaintenance(t *testing.T) {
 	if got := page.Entries[0].Days[HistoryDays-1].DownMinutes; got != 0 {
 		t.Errorf("down minutes today = %d, want 0: the outage was inside maintenance", got)
 	}
+	// Nor is it listed as an outage: the list and the day bar agree.
+	if len(page.Outages) != 0 {
+		t.Errorf("outages = %+v, want none: the only incident was inside maintenance", page.Outages)
+	}
 	if !page.Entries[0].InMaintenance || page.Entries[1].InMaintenance {
 		t.Fatalf("in_maintenance = %v, %v; want true, false", page.Entries[0].InMaintenance, page.Entries[1].InMaintenance)
 	}

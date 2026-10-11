@@ -5957,7 +5957,11 @@ components:
                   type: string
         outages:
           type: array
-          description: Confirmed outages in the last 14 days, newest first.
+          description: >-
+            Confirmed outages in the last 14 days, newest first. An incident
+            that ran entirely inside a maintenance window for its monitor is
+            left out, as it is from `days`; one that overlaps maintenance
+            only in part is listed with its recorded times.
           items:
             type: object
             required: [key, started_at, resolved_at, duration_s]
