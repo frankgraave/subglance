@@ -7093,6 +7093,7 @@ components:
           type: boolean
         headers:
           type: object
+          description: A name must be an HTTP token (no spaces, colons or other separators), a value must not contain a line break or another control character, and two names may not differ only in case; a map that breaks one of these is refused with a 400 whose `field` is `headers`, as on create and update.
           additionalProperties:
             type: string
         body:

@@ -150,6 +150,10 @@ func (s *Server) handlePreviewCheck(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
+	if p := validateRequestHeaders(req.Headers); !p.ok() {
+		writeProblem(w, http.StatusBadRequest, p)
+		return
+	}
 	// The same validators creation runs (monitors.go). Preview exists to tell
 	// you whether a monitor will work before you save it, so a request that
 	// previews green and then fails to save is the one outcome it may not

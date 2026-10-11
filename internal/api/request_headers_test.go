@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/frankgraave/subglance/internal/checker"
 	"github.com/frankgraave/subglance/internal/store"
 )
 
@@ -114,6 +115,24 @@ func TestImportRefusesHeadersThatCannotBeSent(t *testing.T) {
 			}
 			if mons, _ := db.ListMonitors(context.Background()); len(mons) != 0 {
 				t.Errorf("a refused file wrote %d monitors", len(mons))
+			}
+		})
+	}
+}
+
+// A preview runs the check it is given, so an unsendable header would come
+// back as a failed probe of a server that was never contacted. It is refused
+// the way create refuses it, before the prober runs.
+func TestPreviewRefusesHeadersThatCannotBeSent(t *testing.T) {
+	for name, tc := range badHeaders {
+		t.Run(name, func(t *testing.T) {
+			srv, _ := testServerWithDB(t)
+			prober := &fakeProber{result: checker.Result{OK: true}}
+			srv.WithProber(prober)
+			rec := preview(t, srv, `{"target":"https://example.com","headers":`+tc.json+`}`)
+			wantHeaderProblem(t, rec.Code, rec.Body.String(), tc.want)
+			if prober.callCount() != 0 {
+				t.Errorf("prober ran %d times for unsendable headers, want 0", prober.callCount())
 			}
 		})
 	}

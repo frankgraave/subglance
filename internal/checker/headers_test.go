@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -45,9 +46,9 @@ func TestRequestHeaderProblem(t *testing.T) {
 // If net/http ever loosens or tightens its rules, this is the test that says
 // so.
 func TestRequestHeaderProblemMatchesTheTransport(t *testing.T) {
-	reached := false
+	var reached atomic.Bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		reached = true
+		reached.Store(true)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
@@ -55,13 +56,13 @@ func TestRequestHeaderProblemMatchesTheTransport(t *testing.T) {
 		{"X-Api": "k"}, {"X-Tab": "a\tb"}, {"X-Empty": ""}, {"!#$%&'*+-.^_`|~": "v"},
 		{"X Api": "k"}, {"X-Api:": "k"}, {"": "k"}, {"X-Api": "a\nb"}, {"X-Api": "a\x00b"}, {"X-Api": "a\x7fb"}, {"Ünïcode": "v"}, {"X-Utf8": "café"},
 	} {
-		reached = false
+		reached.Store(false)
 		m := monitor(srv.URL)
 		m.Headers = h
 		res := testChecker().Check(context.Background(), m)
-		if accepted := RequestHeaderProblem(h) == ""; accepted != reached || accepted != res.OK {
+		if accepted := RequestHeaderProblem(h) == ""; accepted != reached.Load() || accepted != res.OK {
 			t.Errorf("%q: accepted = %v, but the server was reached = %v (check ok = %v, %s)",
-				h, accepted, reached, res.OK, res.Error)
+				h, accepted, reached.Load(), res.OK, res.Error)
 		}
 	}
 }
