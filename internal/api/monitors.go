@@ -569,7 +569,9 @@ func (s *Server) handleCreateMonitor(w http.ResponseWriter, r *http.Request) {
 }
 
 func validateCreateMonitor(req createMonitorRequest) problem {
-	if req.Name == "" {
+	// Trimmed, as PATCH does: a name of spaces is stored and then listed as
+	// a row with nothing to read or search for.
+	if strings.TrimSpace(req.Name) == "" {
 		return fieldProblem("name", "name is required")
 	}
 	// A push monitor has nothing to dial, so it has nothing to put in
@@ -614,6 +616,9 @@ func validateCreateMonitor(req createMonitorRequest) problem {
 		return p
 	}
 	if p := validateSSLWarnDays(req.SSLWarnDays); !p.ok() {
+		return p
+	}
+	if p := validateRetries(req.Retries); !p.ok() {
 		return p
 	}
 	if p := validateRecoveryThreshold(req.RecoveryThreshold); !p.ok() {
@@ -729,6 +734,19 @@ func validateSSLWarnDays(days *int) problem {
 	}
 	if *days < 1 || *days > 365 {
 		return fieldProblem("ssl_warn_days", "ssl_warn_days must be between 1 and 365")
+	}
+	return problem{}
+}
+
+// validateRetries applies the range the column allows. Create skipped it
+// once, so the database refused the value instead and the client was handed
+// a constraint error naming no field.
+func validateRetries(n *int) problem {
+	if n == nil {
+		return problem{}
+	}
+	if *n < 0 || *n > 10 {
+		return fieldProblem("retries", "retries must be between 0 and 10")
 	}
 	return problem{}
 }
@@ -1554,8 +1572,8 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 		m.TimeoutS = *req.TimeoutS
 	}
 	if req.Retries != nil {
-		if *req.Retries < 0 || *req.Retries > 10 {
-			return fieldProblem("retries", "retries must be between 0 and 10")
+		if p := validateRetries(req.Retries); !p.ok() {
+			return p
 		}
 		m.Retries = *req.Retries
 	}

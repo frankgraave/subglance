@@ -6485,7 +6485,7 @@ components:
       properties:
         name:
           type: string
-          description: Required and non-empty.
+          description: Required, and refused when it is only whitespace.
           example: Public website
         type:
           $ref: '#/components/schemas/MonitorType'
