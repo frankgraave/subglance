@@ -610,6 +610,9 @@ func validateCreateMonitor(req createMonitorRequest) problem {
 	if p := validateKeywordMode(req.KeywordMode); !p.ok() {
 		return p
 	}
+	if p := headBodyCheckProblem(req.Type, req.Method, req.Keyword, req.KeywordMode, req.JSONAssertion != nil); !p.ok() {
+		return p
+	}
 	if p := validateSSLWarnDays(req.SSLWarnDays); !p.ok() {
 		return p
 	}
@@ -798,6 +801,34 @@ func unknownTLSVersionProblem(label string) problem {
 	return fieldProblem("min_tls_version",
 		"min_tls_version must be one of "+strings.Join(checker.TLSVersions(), ", ")+
 			"; got "+strconv.Quote(label))
+}
+
+// headBodyCheckProblem refuses a HEAD http monitor that also checks the
+// response body. A HEAD response has no body (RFC 9110 section 9.3.2), so the
+// checker reads nothing: must_contain fails on every check against a server
+// that does send the keyword, must_not_contain passes whatever the server
+// says, and a JSON assertion reports invalid JSON forever. One is an outage
+// that is not there, the other a watch that can never fire. The keyword rule
+// is the checker's own (http.go): a mode other than absent_ok, with a keyword.
+// The problem names method because that is the setting that cannot carry a
+// body check; the keyword and the assertion are what the person wanted.
+func headBodyCheckProblem(typ, method, keyword, keywordMode string, hasAssertion bool) problem {
+	if typ != "http" || !strings.EqualFold(strings.TrimSpace(method), http.MethodHead) {
+		return problem{}
+	}
+	var check string
+	switch {
+	case keyword != "" && keywordMode == "must_contain":
+		check = "a keyword that must be present can never be found, so every check would fail"
+	case keyword != "" && keywordMode == "must_not_contain":
+		check = "a keyword that must be absent is never there, so the check could never fail"
+	case hasAssertion:
+		check = "a JSON assertion has no document to read, so every check would fail"
+	default:
+		return problem{}
+	}
+	return fieldProblem("method", "a HEAD response has no body: "+check+
+		"; use GET, or remove the body check")
 }
 
 // validateKeywordMode rejects modes the checker cannot act on.
@@ -1631,6 +1662,14 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 	// same mistake.
 	if m.JSONAssertion != nil && (len(req.JSONAssertion) > 0 || req.Type != nil) {
 		if p := jsonAssertionTypeProblem(m.Type); !p.ok() {
+			return p
+		}
+	}
+	// Judged on the merged monitor, and only when one of the settings it
+	// joins was sent: a HEAD monitor saved with a keyword before the rule can
+	// still be renamed or paused, and sending GET alone repairs it.
+	if req.Method != nil || req.Keyword != nil || req.KeywordMode != nil || len(req.JSONAssertion) > 0 || req.Type != nil {
+		if p := headBodyCheckProblem(m.Type, m.Method, m.Keyword, m.KeywordMode, m.JSONAssertion != nil); !p.ok() {
 			return p
 		}
 	}
