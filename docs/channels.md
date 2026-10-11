@@ -383,7 +383,11 @@ version may add one.
 When monitors fail inside one grouping window, the channel receives a single
 alert. `grouped_names` lists every monitor, oldest failure first, and
 `grouped_cause` is the cause when they all agree. `members` holds each
-monitor's own alert in the shape above. At the top level, `event`, `at`,
+monitor's own alert in the shape above. Reminders are grouped the same way but
+never with a first alert: a new outage and a repeat that fall in one window
+arrive as two messages, one titled "web is down" and one "2 monitors are still
+down" with `event` `incident_reminder`, so the event at the top always says what
+every member is. At the top level, `event`, `at`,
 `started_at`, `incident_id`, `monitor_name`, `monitor_type` and `target` repeat
 the first member's, and `monitor_id` is 0 since the alert is about more than one
 monitor. `cause`, `last_error` and `reminder_count` are not set at the top

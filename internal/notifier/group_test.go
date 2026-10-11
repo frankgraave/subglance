@@ -231,6 +231,131 @@ func TestRecoveriesDoNotJoinOutages(t *testing.T) {
 	}
 }
 
+// TestRemindersDoNotJoinFirstAlerts checks the split between new news and
+// repeated news. In one batch the first member decided the message's event, so
+// a new outage that shared a window with two reminders arrived as "3 monitors
+// are down" with event incident_reminder: an SMS said STILL DOWN about
+// something nobody had heard of, and an email threaded it under another
+// incident. Kept apart, the new outage reads as new and the reminders say
+// "still".
+func TestRemindersDoNotJoinFirstAlerts(t *testing.T) {
+	t.Parallel()
+
+	db := groupDB(t)
+	clock := newTestClock()
+	n := groupNotifier(t, db, clock, 90*time.Second)
+	ch := groupChannel(t, db, "ops")
+
+	for _, name := range []string{"api", "db"} {
+		m := groupMonitor(t, db, name, ch.ID)
+		inc := openIncident(t, db, m.ID, clock.Now().Add(-time.Hour), "connection refused")
+		if err := n.Enqueue(context.Background(), m, inc, state.EventIncidentReminder, clock.Now()); err != nil {
+			t.Fatalf("enqueue reminder for %s: %v", name, err)
+		}
+		clock.Advance(5 * time.Second)
+	}
+	web := groupMonitor(t, db, "web", ch.ID)
+	webInc := openIncident(t, db, web.ID, clock.Now(), "connection refused")
+	if err := n.Enqueue(context.Background(), web, webInc, state.EventIncidentConfirmed, clock.Now()); err != nil {
+		t.Fatalf("enqueue alert: %v", err)
+	}
+
+	clock.Advance(2 * time.Minute)
+	n.flushDue(context.Background())
+
+	rows, err := db.DueDeliveries(context.Background(), time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC), 500)
+	if err != nil {
+		t.Fatalf("read outbox: %v", err)
+	}
+	got := map[string]string{}
+	for _, row := range rows {
+		a, err := DecodeAlert(row.Payload)
+		if err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		for _, l := range leaves(a) {
+			if l.Event != a.Event {
+				t.Errorf("message %q (%s) carries a %s member, %s", a.Title(), a.Event, l.Event, l.MonitorName)
+			}
+		}
+		got[a.Event] = a.Title()
+	}
+	want := map[string]string{
+		string(state.EventIncidentConfirmed): "web is down",
+		string(state.EventIncidentReminder):  "2 monitors are still down",
+	}
+	if len(rows) != len(want) {
+		t.Fatalf("expected a message for the new outage and one for the reminders, got %d: %v", len(rows), got)
+	}
+	for event, title := range want {
+		if got[event] != title {
+			t.Errorf("%s message: title = %q, want %q", event, got[event], title)
+		}
+	}
+}
+
+// TestLoneReminderIsNotDressedUpAsAGroup is TestSingleAlertIsNotDressedUpAsAGroup
+// for a reminder: one monitor still down reads as it did before reminders had
+// batches of their own.
+func TestLoneReminderIsNotDressedUpAsAGroup(t *testing.T) {
+	t.Parallel()
+
+	db := groupDB(t)
+	clock := newTestClock()
+	n := groupNotifier(t, db, clock, 30*time.Second)
+
+	ch := groupChannel(t, db, "ops")
+	m := groupMonitor(t, db, "api", ch.ID)
+	inc := openIncident(t, db, m.ID, clock.Now().Add(-time.Hour), "connection refused")
+
+	if err := n.Enqueue(context.Background(), m, inc, state.EventIncidentReminder, clock.Now()); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	clock.Advance(time.Minute)
+	n.flushDue(context.Background())
+
+	alert := decodeOnlyDelivery(t, db)
+	if alert.Grouped() {
+		t.Fatal("a lone reminder must not be marked as grouped")
+	}
+	if got, want := alert.Title(), "api is still down"; got != want {
+		t.Fatalf("title changed for an ungrouped reminder: got %q, want %q", got, want)
+	}
+}
+
+// TestGroupedTitleSaysStillOnlyWhenEveryMemberIsAReminder: a message queued by
+// a version that batched reminders with first alerts can still be in the
+// outbox after an upgrade. Calling it "still down" would pass a new outage off
+// as a repeat, so a mixed batch keeps the plain wording.
+func TestGroupedTitleSaysStillOnlyWhenEveryMemberIsAReminder(t *testing.T) {
+	t.Parallel()
+
+	reminder := func(name string) Alert {
+		return Alert{MonitorName: name, Event: string(state.EventIncidentReminder)}
+	}
+	confirmed := Alert{MonitorName: "web", Event: string(state.EventIncidentConfirmed)}
+
+	cases := map[string]struct {
+		members []Alert
+		title   string
+		sms     string
+	}{
+		"reminders": {[]Alert{reminder("api"), reminder("db")}, "2 monitors are still down", "STILL DOWN 2 monitors: api, db"},
+		"mixed":     {[]Alert{reminder("api"), confirmed}, "2 monitors are down", "DOWN 2 monitors: api, web"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			a := Summarise(tc.members)
+			if got := a.Title(); got != tc.title {
+				t.Errorf("title = %q, want %q", got, tc.title)
+			}
+			if got := smsText(a, "", smsSeptets); got != tc.sms {
+				t.Errorf("sms = %q, want %q", got, tc.sms)
+			}
+		})
+	}
+}
+
 // TestSeparateChannelsStaySeparate: one channel may be a phone and another a
 // log. Merging across them would send one of them the wrong thing.
 func TestSeparateChannelsStaySeparate(t *testing.T) {

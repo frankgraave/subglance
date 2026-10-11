@@ -292,8 +292,8 @@ func (n *Notifier) Enqueue(ctx context.Context, m store.Monitor, inc store.Incid
 			// certificate's date: it would only make "3 monitors are down"
 			// out of one outage and two certificates.
 			n.flush(ctx, &pending{
-				key: GroupKey(ch.ID, alert.Down()), channel: ch.ID, monitorID: m.ID,
-				incidentID: alert.IncidentID, down: alert.Down(), alerts: []Alert{alert},
+				key: groupKey(ch.ID, kindOf(alert)), channel: ch.ID, monitorID: m.ID,
+				incidentID: alert.IncidentID, kind: kindOf(alert), alerts: []Alert{alert},
 			})
 			continue
 		}

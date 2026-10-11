@@ -534,6 +534,60 @@ func TestRecoveryInAnEarlierBatchDoesNotOvertake(t *testing.T) {
 	assertInOrder(t, r.deliveredTo(ch.Config["url"]), incAPI.ID)
 }
 
+// TestRecoveryDoesNotOvertakeAHeldReminder is the same order for a reminder,
+// which travels in a batch of its own. A recovery that joined a batch of
+// recoveries opened before the reminder must not go out first: the channel
+// would hear "api is back up" and then, a window later, "api is still down",
+// and its last word on the outage would be wrong.
+func TestRecoveryDoesNotOvertakeAHeldReminder(t *testing.T) {
+	db := groupDB(t)
+	ctx := context.Background()
+	ch := groupChannel(t, db, "ops")
+	early := groupMonitor(t, db, "early", ch.ID)
+	api := groupMonitor(t, db, "api", ch.ID)
+
+	clock := newTestClock()
+	start := clock.Now()
+	r := &receiver{clock: clock}
+	n := orderNotifier(t, db, clock, time.Minute, r)
+
+	// "early" recovers first and opens the batch of recoveries.
+	incEarly := openIncident(t, db, early.ID, start.Add(-10*time.Minute), "timeout")
+	if err := n.Enqueue(ctx, early, incEarly, state.EventIncidentResolved, start); err != nil {
+		t.Fatalf("enqueue early recovery: %v", err)
+	}
+	// api has been down for an hour; its reminder comes due inside that
+	// batch's window, and api recovers before the reminder's window closes.
+	incAPI := openIncident(t, db, api.ID, start.Add(-time.Hour), "timeout")
+	tick(t, n, clock, start.Add(40*time.Second))
+	if err := n.Enqueue(ctx, api, incAPI, state.EventIncidentReminder, clock.Now()); err != nil {
+		t.Fatalf("enqueue api reminder: %v", err)
+	}
+	tick(t, n, clock, start.Add(50*time.Second))
+	if err := n.Enqueue(ctx, api, incAPI, state.EventIncidentResolved, clock.Now()); err != nil {
+		t.Fatalf("enqueue api recovery: %v", err)
+	}
+	tick(t, n, clock, start.Add(10*time.Minute))
+
+	got := r.deliveredTo(ch.Config["url"])
+	last := -1
+	for i, g := range got {
+		for _, l := range leaves(g.alert) {
+			if l.IncidentID == incAPI.ID {
+				last = i
+			}
+		}
+	}
+	if last < 0 {
+		t.Fatalf("the channel heard nothing about api: %v", titles(got))
+	}
+	for _, l := range leaves(got[last].alert) {
+		if l.IncidentID == incAPI.ID && l.Down() {
+			t.Fatalf("the channel's last word on api is that it is down, after it recovered: %v", titles(got))
+		}
+	}
+}
+
 // TestShutdownWritesAlertsBeforeRecoveries: a restart writes every open batch
 // to the outbox. The outbox holds a recovery back only for an alert queued
 // before it, so the alert has to be written first, every time.

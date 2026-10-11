@@ -187,9 +187,13 @@ func smsText(a Alert, zone string, limit int) string {
 	case a.Digest:
 		status, name = "", DigestTitle(a)
 	case a.Grouped():
-		status = "DOWN"
-		if !a.Down() {
+		switch {
+		case !a.Down():
 			status = "UP"
+		case groupedReminder(a):
+			status = "STILL DOWN"
+		default:
+			status = "DOWN"
 		}
 		name = fmt.Sprintf("%d monitors:", len(a.GroupedNames))
 		reason = strings.Join(a.GroupedNames, ", ")

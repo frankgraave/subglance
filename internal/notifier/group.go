@@ -48,8 +48,9 @@ const GroupingDisabled time.Duration = -1
 // What it does not do is delay a recovery. A grouped outage ends with one
 // summary, but the summary is assembled the moment the last member resolves,
 // not after another window — nobody needs their good news rate-limited. The
-// one exception is a recovery whose own alert is still waiting in an open
-// batch: it waits for that batch to close, so it cannot arrive first (see due).
+// one exception is a recovery whose own alert or reminder is still waiting in
+// an open batch: it waits for that batch to close, so it cannot arrive first
+// (see due).
 type Grouper struct {
 	window time.Duration
 	now    func() time.Time
@@ -71,19 +72,64 @@ func newGrouper(window time.Duration, now func() time.Time) *Grouper {
 // enabled reports whether alerts are batched at all.
 func (g *Grouper) enabled() bool { return g.window > 0 }
 
-// GroupKey identifies the batch an alert belongs to.
-//
-// Keyed on the channel and the direction of the news. Two things deliberately
-// stay apart: deliveries to different channels, because one may be a phone and
-// the other a log, and down-alerts from recoveries, because "three things
-// broke and one came back" in a single message is a sentence nobody can act
-// on at 03:00.
-func GroupKey(channelID int64, down bool) string {
-	direction := "up"
-	if down {
-		direction = "down"
+// batchKind is the kind of news a batch carries. One message tells one kind,
+// because the fields at its top level (the event, the title, an SMS's status
+// word) can only say one thing about everything in it.
+type batchKind int
+
+// The kinds, in the order a channel hears them: a batch waits for a batch of
+// an earlier kind about the same incident, and a shutdown writes them in this
+// order (see due and sortBatches).
+const (
+	// kindAlert is a first alert: an outage nobody has been told about.
+	kindAlert batchKind = iota
+	// kindReminder repeats an alert about an outage the channel already
+	// heard of.
+	kindReminder
+	// kindRecovery is good news.
+	kindRecovery
+)
+
+// String names the kind in a batch key and in the log.
+func (k batchKind) String() string {
+	switch k {
+	case kindAlert:
+		return "down"
+	case kindReminder:
+		return "reminder"
+	default:
+		return "up"
 	}
-	return fmt.Sprintf("%d:%s", channelID, direction)
+}
+
+// kindOf sorts an alert into the batch kind it travels in.
+//
+// A reminder is down news, but it is not the same news as a first alert: one
+// says something new has broken, the other that something already known still
+// is. In one batch, whichever came first decided the message's event, so a new
+// outage could arrive as a "still down" repeat (and an SMS reading STILL DOWN),
+// or a repeat as a fresh "is down".
+func kindOf(a Alert) batchKind {
+	switch {
+	case !a.Down():
+		return kindRecovery
+	case state.Event(a.Event) == state.EventIncidentReminder:
+		return kindReminder
+	default:
+		return kindAlert
+	}
+}
+
+// groupKey identifies the batch an alert belongs to.
+//
+// Keyed on the channel and the kind of news. Three things deliberately stay
+// apart: deliveries to different channels, because one may be a phone and the
+// other a log; down-alerts from recoveries, because "three things broke and
+// one came back" in a single message is a sentence nobody can act on at 03:00;
+// and first alerts from reminders, because "is down" and "is still down" ask
+// for different things of the reader, and one message can only say one of them.
+func groupKey(channelID int64, kind batchKind) string {
+	return fmt.Sprintf("%d:%s", channelID, kind)
 }
 
 // Summarise renders one message for a batch of alerts.
@@ -169,14 +215,15 @@ type pending struct {
 	monitorID  int64
 	incidentID int64
 
-	// down is the direction of the news, the other half of the key.
-	down bool
+	// kind is the kind of news, the other half of the key.
+	kind batchKind
 }
 
 // Add records an alert against its batch and reports whether the batch is now
 // due to be sent.
 func (g *Grouper) add(batches map[string]*pending, channelID, monitorID int64, a Alert) *pending {
-	key := GroupKey(channelID, a.Down())
+	kind := kindOf(a)
+	key := groupKey(channelID, kind)
 
 	b, ok := batches[key]
 	if !ok {
@@ -185,7 +232,7 @@ func (g *Grouper) add(batches map[string]*pending, channelID, monitorID int64, a
 			channel:   channelID,
 			deadline:  g.now().Add(g.window),
 			monitorID: monitorID,
-			down:      a.Down(),
+			kind:      kind,
 		}
 		batches[key] = b
 	}
@@ -198,52 +245,74 @@ func (g *Grouper) add(batches map[string]*pending, channelID, monitorID int64, a
 
 // due reports the batches whose window has closed.
 //
-// A batch of recoveries also waits for its channel's batch of alerts when
-// that one carries an alert about the same incident and has not closed yet.
-// Without that, a recovery that joined a batch opened before its own alert
-// was sent first; with it, the two close together and go out alert first.
-// The wait is at most one window.
+// A batch also waits for a batch of an earlier kind on its channel that
+// carries news about one of the same incidents and has not gone out yet: a
+// recovery for the alert or the reminder it closes, a reminder for the first
+// alert it repeats. Without that, a recovery that joined a batch opened before
+// its own alert was sent first; with it, the two close together and go out in
+// order. Every batch waited for is open (or waiting itself on one that is), and
+// an open batch closes within one window, so the wait is at most one window.
 func (g *Grouper) due(batches map[string]*pending) []*pending {
 	now := g.now()
 	var out []*pending
-	for key, b := range batches {
-		if now.Before(b.deadline) || b.overtakes(batches[GroupKey(b.channel, true)], now) {
-			continue
+	// Earlier kinds first: a batch released on this pass is gone from the
+	// map by the time a later kind asks whether to wait for it, so whatever
+	// a batch finds there is still being held.
+	for _, kind := range []batchKind{kindAlert, kindReminder, kindRecovery} {
+		for key, b := range batches {
+			if b.kind != kind || now.Before(b.deadline) || b.waits(batches) {
+				continue
+			}
+			out = append(out, b)
+			delete(batches, key)
 		}
-		out = append(out, b)
-		delete(batches, key)
 	}
 	sortBatches(out)
 	return out
 }
 
-// overtakes reports whether b, a batch of recoveries, would go out before
-// alerts, a batch that is still open, while the two share an incident.
-func (b *pending) overtakes(alerts *pending, now time.Time) bool {
-	if b.down || alerts == nil || !now.Before(alerts.deadline) {
-		return false
-	}
-	open := map[int64]bool{}
-	for _, a := range alerts.alerts {
-		if a.IncidentID != 0 {
-			open[a.IncidentID] = true
-		}
-	}
-	for _, a := range b.alerts {
-		if open[a.IncidentID] {
+// waits reports whether b would go out before a batch of an earlier kind on its
+// channel, still held, that shares one of its incidents.
+func (b *pending) waits(batches map[string]*pending) bool {
+	for kind := kindAlert; kind < b.kind; kind++ {
+		if b.sharesIncident(batches[groupKey(b.channel, kind)]) {
 			return true
 		}
 	}
 	return false
 }
 
-// sortBatches orders batches by key, which puts each channel's alerts before
-// its recoveries ("down" sorts before "up"). The outbox keeps a channel's
-// messages in the order they are written, so this order is the one the
-// channel hears them in. It also lets a test rely on the order, and makes a
-// log read the same way twice.
+// sharesIncident reports whether b and other carry news about one incident.
+func (b *pending) sharesIncident(other *pending) bool {
+	if other == nil {
+		return false
+	}
+	held := map[int64]bool{}
+	for _, a := range other.alerts {
+		if a.IncidentID != 0 {
+			held[a.IncidentID] = true
+		}
+	}
+	for _, a := range b.alerts {
+		if held[a.IncidentID] {
+			return true
+		}
+	}
+	return false
+}
+
+// sortBatches orders each channel's batches by kind: alerts, then reminders,
+// then recoveries. The outbox keeps a channel's messages in the order they are
+// written, so this order is the one the channel hears them in. Channels are
+// ordered by id so a test can rely on the order, and a log reads the same way
+// twice.
 func sortBatches(batches []*pending) {
-	sort.Slice(batches, func(i, j int) bool { return batches[i].key < batches[j].key })
+	sort.Slice(batches, func(i, j int) bool {
+		if batches[i].channel != batches[j].channel {
+			return batches[i].channel < batches[j].channel
+		}
+		return batches[i].kind < batches[j].kind
+	})
 }
 
 // GroupedTitle renders the one-line summary for a batch.
@@ -253,6 +322,8 @@ func sortBatches(batches []*pending) {
 func GroupedTitle(a Alert) string {
 	verb := "are down"
 	switch {
+	case groupedReminder(a):
+		verb = "are still down"
 	case a.Down():
 	case a.ReplacesAlert:
 		verb = "were down and are back up"
@@ -260,6 +331,22 @@ func GroupedTitle(a Alert) string {
 		verb = "are back up"
 	}
 	return fmt.Sprintf("%d monitors %s", len(a.GroupedNames), verb)
+}
+
+// groupedReminder reports whether every alert in a batch is a reminder. Only
+// then does its title say "still": a batch is one kind since reminders were
+// kept apart from first alerts, but a row queued by an older version can still
+// mix the two, and calling a new outage a repeat would hide that it is new.
+func groupedReminder(a Alert) bool {
+	if len(a.Members) == 0 {
+		return false
+	}
+	for _, m := range a.Members {
+		if state.Event(m.Event) != state.EventIncidentReminder {
+			return false
+		}
+	}
+	return true
 }
 
 // GroupedBody lists the members, with the shared cause when there is one.
