@@ -91,12 +91,12 @@ func (b Builder) Build(ctx context.Context, p store.StatusPage, now time.Time) (
 			return Page{}, fmt.Errorf("read monitor %d: %w", se.MonitorID, err)
 		}
 
-		entry, incidents, err := b.entry(ctx, m, se, since, now, loc, windows, spans, announced)
+		entry, history, err := b.entry(ctx, m, se, since, now, loc, windows, spans, announced)
 		if err != nil {
 			return Page{}, err
 		}
 		page.Entries = append(page.Entries, entry)
-		page.Outages = append(page.Outages, Outages(se.PublicKey, incidents, now)...)
+		page.Outages = append(page.Outages, Outages(se.PublicKey, history.Incidents, history.Maintenance, now)...)
 	}
 
 	page.Summary = Summarise(page.Entries)
@@ -108,22 +108,24 @@ func (b Builder) Build(ctx context.Context, p store.StatusPage, now time.Time) (
 }
 
 // entry builds one monitor's row, and records the upcoming maintenance that
-// covers it in announced.
+// covers it in announced. It returns the history the row was drawn from, so
+// the page's outage list is judged on the same incidents and maintenance as
+// the row's day bar.
 func (b Builder) entry(ctx context.Context, m store.Monitor, se store.StatusPageEntry,
 	since, now time.Time, loc *time.Location, windows []store.MaintenanceWindow,
 	spans [][]store.MaintenanceSpan, announced map[spanKey][]string,
-) (Entry, []store.IncidentSpan, error) {
+) (Entry, History, error) {
 	live, err := b.live(ctx, m)
 	if err != nil {
-		return Entry{}, nil, err
+		return Entry{}, History{}, err
 	}
 	hours, err := b.DB.StatusHistoryHours(ctx, m.ID, since)
 	if err != nil {
-		return Entry{}, nil, err
+		return Entry{}, History{}, err
 	}
 	incidents, err := b.DB.ConfirmedIncidentSpans(ctx, m.ID, since)
 	if err != nil {
-		return Entry{}, nil, err
+		return Entry{}, History{}, err
 	}
 
 	var past []Span
@@ -149,6 +151,7 @@ func (b Builder) entry(ctx context.Context, m store.Monitor, se store.StatusPage
 		}
 	}
 
+	history := History{Hours: hours, Incidents: incidents, Maintenance: past}
 	return Entry{
 		Key:           se.PublicKey,
 		Name:          se.DisplayName,
@@ -162,8 +165,8 @@ func (b Builder) entry(ctx context.Context, m store.Monitor, se store.StatusPage
 		CertificateExpiring: live.Notice && PublicStatus(live) == StatusUp && m.Type != store.TypeDomain,
 		Uptime90d:           Uptime(hours),
 		Uptime30d:           UptimeFrom(hours, RecentSince(now, loc)),
-		Days:                Days(History{Hours: hours, Incidents: incidents, Maintenance: past}, now, loc),
-	}, incidents, nil
+		Days:                Days(history, now, loc),
+	}, history, nil
 }
 
 // live reads the facts PublicStatus decides on. Whether the last check

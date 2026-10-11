@@ -169,7 +169,16 @@ func UptimeFrom(hours []store.StatusHistoryHour, from time.Time) *float64 {
 
 // Outages lists the confirmed incidents that were running inside
 // OutageWindow before now, newest first, under the entry's public key.
-func Outages(key string, incidents []store.IncidentSpan, now time.Time) []Outage {
+//
+// An incident is listed only when some of it fell outside maintenance, the
+// rule Days applies to down_minutes. One that ran entirely inside the
+// monitor's maintenance is no outage on this page: the day bar shows that
+// day as up, uptime does not count it, and the operator's own channels were
+// not told either. One that overlaps maintenance only in part is listed with
+// its recorded start, end and duration, because those are what happened;
+// trimming them to the time outside maintenance would publish a start the
+// outage never had. A maintenance span with a zero End runs until now.
+func Outages(key string, incidents []store.IncidentSpan, maintenance []Span, now time.Time) []Outage {
 	from := now.Add(-OutageWindow)
 	out := []Outage{}
 	for _, inc := range incidents {
@@ -181,6 +190,13 @@ func Outages(key string, incidents []store.IncidentSpan, now time.Time) []Outage
 		// started is left out, and an end that has not happened leaves the
 		// outage open.
 		if inc.Start.After(now) {
+			continue
+		}
+		until := inc.End
+		if until.IsZero() || until.After(now) {
+			until = now
+		}
+		if len(subtract(Span{Start: inc.Start, End: until}, maintenance, now)) == 0 {
 			continue
 		}
 		o := Outage{Key: key, StartedAt: inc.Start.UTC()}

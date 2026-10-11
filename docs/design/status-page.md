@@ -60,7 +60,7 @@ Page-level lists:
 | List | Fields | Window |
 |---|---|---|
 | `maintenance` | `starts_at`, `ends_at`, `keys` (the entries it covers) | Running now, or starting within 7 days |
-| `outages` | `key`, `started_at`, `resolved_at` (or `null`), `duration_s` | Confirmed incidents in the last 14 days |
+| `outages` | `key`, `started_at`, `resolved_at` (or `null`), `duration_s` | Confirmed incidents in the last 14 days with time outside maintenance (§1.4) |
 
 ### 1.2 What never appears
 
@@ -140,6 +140,13 @@ Each of the 90 days gets one state, from the hourly rollup:
 Checks during maintenance are excluded, exactly as they are from uptime.
 `down_minutes` is the confirmed incident time that day, rounded up to whole
 minutes, so a visitor can tell a 2-minute blip from a lost afternoon.
+
+The outage list follows the same rule. An incident that ran entirely inside
+maintenance for its monitor is not listed: the day bar shows that day as up,
+and the operator's own channels were not alerted about it either, so a list
+that named it would contradict both. An incident that overlaps maintenance
+only in part is listed as it happened, with its recorded start, end and
+duration, rather than trimmed to the time outside the window.
 
 In the prototype every daily state has its own **height** as well as its own
 colour: down days draw at full height, degraded at three quarters, up at half

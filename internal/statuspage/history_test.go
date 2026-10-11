@@ -178,7 +178,7 @@ func TestOutagesDoNotPublishTheFuture(t *testing.T) {
 	future := store.IncidentSpan{Start: now.Add(time.Hour)}
 	endsAhead := store.IncidentSpan{Start: now.Add(-10 * time.Minute), End: now.Add(time.Hour)}
 
-	got := Outages("abc", []store.IncidentSpan{future, endsAhead}, now)
+	got := Outages("abc", []store.IncidentSpan{future, endsAhead}, nil, now)
 	if len(got) != 1 {
 		t.Fatalf("got %d outages, want 1: %+v", len(got), got)
 	}
@@ -195,7 +195,7 @@ func TestOutagesKeepTheLastFourteenDaysNewestFirst(t *testing.T) {
 	straddling := store.IncidentSpan{Start: now.Add(-15 * 24 * time.Hour), End: now.Add(-13 * 24 * time.Hour)}
 	open := store.IncidentSpan{Start: now.Add(-5 * time.Minute)}
 
-	got := Outages("abc", []store.IncidentSpan{old, straddling, open}, now)
+	got := Outages("abc", []store.IncidentSpan{old, straddling, open}, nil, now)
 	if len(got) != 2 {
 		t.Fatalf("got %d outages, want 2: %+v", len(got), got)
 	}
@@ -204,6 +204,57 @@ func TestOutagesKeepTheLastFourteenDaysNewestFirst(t *testing.T) {
 	}
 	if got[1].ResolvedAt == nil || got[1].DurationS != 2*24*3600 {
 		t.Errorf("resolved outage = %+v, want resolved, two days", got[1])
+	}
+}
+
+// TestOutagesLeaveOutIncidentsInsideMaintenance pins that the outage list
+// follows the day bar: an incident wholly inside the monitor's maintenance is
+// not downtime there, so it is not an outage here either. One that is only
+// partly covered is listed as it happened, with its recorded start, end and
+// duration rather than the part outside maintenance.
+func TestOutagesLeaveOutIncidentsInsideMaintenance(t *testing.T) {
+	window := Span{Start: now.Add(-3 * time.Hour), End: now.Add(-time.Hour)}
+	inside := store.IncidentSpan{Start: now.Add(-150 * time.Minute), End: now.Add(-120 * time.Minute)}
+	straddling := store.IncidentSpan{Start: now.Add(-70 * time.Minute), End: now.Add(-40 * time.Minute)}
+
+	got := Outages("abc", []store.IncidentSpan{inside, straddling}, []Span{window}, now)
+	if len(got) != 1 {
+		t.Fatalf("got %d outages, want 1 (the straddling one): %+v", len(got), got)
+	}
+	o := got[0]
+	if !o.StartedAt.Equal(straddling.Start) || o.ResolvedAt == nil || !o.ResolvedAt.Equal(straddling.End) || o.DurationS != 30*60 {
+		t.Errorf("straddling outage = %+v, want it unchanged: %s to %s, 1800s", o, straddling.Start, straddling.End)
+	}
+
+	// The same incident is downtime-free on the day bar, which is the rule
+	// the list now shares.
+	days := Days(History{Incidents: []store.IncidentSpan{inside}, Maintenance: []Span{window}}, now, amsterdam)
+	if d := days[HistoryDays-1]; d.DownMinutes != 0 {
+		t.Errorf("day with the covered incident = %+v, want 0 down minutes", d)
+	}
+}
+
+// TestOpenOutageInsideRunningMaintenance pins the open case: an incident that
+// is still open inside a running window is not listed while the window
+// covers all of it, and is listed, from its real start, once time outside
+// maintenance has passed.
+func TestOpenOutageInsideRunningMaintenance(t *testing.T) {
+	open := store.IncidentSpan{Start: now.Add(-20 * time.Minute)}
+
+	running := []Span{{Start: now.Add(-time.Hour), End: now.Add(time.Hour)}}
+	if got := Outages("abc", []store.IncidentSpan{open}, running, now); len(got) != 0 {
+		t.Errorf("open incident inside running maintenance listed: %+v", got)
+	}
+	// A span with no end runs until now, as in Days.
+	unending := []Span{{Start: now.Add(-time.Hour)}}
+	if got := Outages("abc", []store.IncidentSpan{open}, unending, now); len(got) != 0 {
+		t.Errorf("open incident inside open-ended maintenance listed: %+v", got)
+	}
+
+	ended := []Span{{Start: now.Add(-time.Hour), End: now.Add(-5 * time.Minute)}}
+	got := Outages("abc", []store.IncidentSpan{open}, ended, now)
+	if len(got) != 1 || got[0].ResolvedAt != nil || !got[0].StartedAt.Equal(open.Start) || got[0].DurationS != 20*60 {
+		t.Errorf("open incident after maintenance ended = %+v, want one open outage from its start, 1200s", got)
 	}
 }
 
