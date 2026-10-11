@@ -65,12 +65,19 @@ func TestCreateMonitorRefusesABlankName(t *testing.T) {
 	}
 }
 
+// The blank check trims; the stored name does not. A name keeps the spaces
+// it was given, as it does under PATCH.
 func TestCreateMonitorAcceptsANameWithSurroundingSpaces(t *testing.T) {
-	srv, _ := testServerWithDB(t)
+	srv, db := testServerWithDB(t)
 	rec := doJSON(t, srv, http.MethodPost, "/api/v1/monitors",
 		`{"name":" Public site ","type":"http","target":"https://example.com"}`)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201: %s", rec.Code, rec.Body.String())
+	}
+	mons, err := db.ListMonitors(context.Background())
+	must(t, err)
+	if len(mons) != 1 || mons[0].Name != " Public site " {
+		t.Errorf("stored %+v, want one monitor named %q", mons, " Public site ")
 	}
 }
 
