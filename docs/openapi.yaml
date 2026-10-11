@@ -1656,9 +1656,12 @@ paths:
       operationId: deleteMonitor
       summary: Delete a monitor
       description: |
-        Removes the monitor and, by cascade, its heartbeats, incidents and
-        channel assignments. The manual-check cooldown for the id is forgotten
-        so the in-memory table cannot grow without bound.
+        Removes the monitor and, by cascade, its heartbeats, incidents,
+        channel assignments and the notifications about it alone. A grouped
+        alert or digest that also names a monitor that remains is kept, so it
+        is still sent and still listed on that monitor's incident. The
+        manual-check cooldown for the id is forgotten so the in-memory table
+        cannot grow without bound.
 
         Deleting an id that does not exist is not an error: the endpoint is
         idempotent.
