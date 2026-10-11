@@ -42,7 +42,8 @@ Actions are `apply`, `remove`, `rename_key` and `rename_value`; exact schemas ar
 in [OpenAPI](openapi.yaml). Bodies are limited to 256 KiB; explicit selections
 to 10000 unique monitor IDs. Global renames have no matching-monitor cap.
 
-A 412 means relevant tags or matching monitors changed after the preview. Fetch
-a new preview and review it before confirming, rather than blindly retrying.
+A 412 means relevant tags, matching monitors or the configuration a rename
+moves changed after the preview. Fetch a new preview and review it before
+confirming, rather than blindly retrying.
 Every changed monitor receives a new revision; an older monitor-edit ETag
 cannot overwrite the tag operation. Unchanged monitors keep their revision.
