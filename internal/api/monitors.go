@@ -625,6 +625,9 @@ func validateCreateMonitor(req createMonitorRequest) problem {
 	if p := validateTags(req.Tags); !p.ok() {
 		return p
 	}
+	if p := validateRequestHeaders(req.Headers); !p.ok() {
+		return p
+	}
 	if req.JSONAssertion != nil {
 		if p := jsonAssertionTypeProblem(req.Type); !p.ok() {
 			return p
@@ -657,6 +660,16 @@ func validateCreateMonitor(req createMonitorRequest) problem {
 func validateTags(tags map[string]string) problem {
 	if _, err := store.NormaliseTags(tags); err != nil {
 		return fieldProblem("tags", err.Error())
+	}
+	return problem{}
+}
+
+// validateRequestHeaders refuses headers net/http would not send. Saved, they
+// would fail every check in the transport, before the target is contacted,
+// with an error that reads like a network outage.
+func validateRequestHeaders(headers map[string]string) problem {
+	if msg := checker.RequestHeaderProblem(headers); msg != "" {
+		return fieldProblem("headers", msg)
 	}
 	return problem{}
 }
@@ -1528,6 +1541,11 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 		m.FollowRedirects = *req.FollowRedirects
 	}
 	if req.Headers != nil {
+		// Only headers a request sends are judged, so an edit that leaves
+		// them out never fails over headers saved before they were checked.
+		if p := validateRequestHeaders(*req.Headers); !p.ok() {
+			return p
+		}
 		m.Headers = *req.Headers
 	}
 	if req.Body != nil {

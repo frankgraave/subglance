@@ -3,9 +3,11 @@ package kumaimport
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -295,8 +297,15 @@ func convertHTTP(m row, out *configfile.Monitor, res *Result, name, typ string) 
 		if err := json.Unmarshal([]byte(raw), &headers); err != nil {
 			return skip("its request headers are not a JSON object")
 		}
-		for k := range headers {
-			if k = strings.TrimSpace(k); k != "" {
+		// Sorted, so a file converted twice lists its notes in one order.
+		for _, k := range slices.Sorted(maps.Keys(headers)) {
+			switch k = strings.TrimSpace(k); {
+			case k == "":
+			case !checker.ValidHeaderName(k):
+				// Kuma could not send it either. Carried over, it would
+				// make SubGlance refuse the whole file.
+				note("its request header " + strconv.Quote(k) + " was left out, because a header name cannot contain spaces, colons or other separators")
+			default:
 				addHeader(out, k)
 			}
 		}

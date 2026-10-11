@@ -6569,7 +6569,7 @@ components:
           default: true
         headers:
           type: object
-          description: Extra request headers for `http` monitors. Sent only to the target's origin (scheme, host, port); a followed redirect to another origin gets none of them, except an http to https upgrade of the same host on the default ports.
+          description: Extra request headers for `http` monitors. Sent only to the target's origin (scheme, host, port); a followed redirect to another origin gets none of them, except an http to https upgrade of the same host on the default ports. A name must be an HTTP token (no spaces, colons or other separators), a value must not contain a line break or another control character, and two names may not differ only in case; a map that breaks one of these is refused with a 400 whose `field` is `headers`, because net/http would not send it and every check would fail before reaching the target.
           additionalProperties:
             type: string
           example:
@@ -6745,7 +6745,7 @@ components:
           type: boolean
         headers:
           type: object
-          description: Replaces the whole header map.
+          description: Replaces the whole header map, under the same rules as on create. Only a map in the request is checked, so an edit that leaves `headers` out is not refused over headers already stored.
           additionalProperties:
             type: string
         body:
@@ -7093,6 +7093,7 @@ components:
           type: boolean
         headers:
           type: object
+          description: A name must be an HTTP token (no spaces, colons or other separators), a value must not contain a line break or another control character, and two names may not differ only in case; a map that breaks one of these is refused with a 400 whose `field` is `headers`, as on create and update.
           additionalProperties:
             type: string
         body:

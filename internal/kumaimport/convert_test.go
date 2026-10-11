@@ -371,3 +371,19 @@ func TestRetriesAlertAfterAsManyChecksAsInKuma(t *testing.T) {
 		})
 	}
 }
+
+// A header name SubGlance would refuse is left out with a note rather than
+// carried over: one such header would make the import refuse the whole file.
+func TestHeaderNamesNetHTTPCannotSendAreLeftOut(t *testing.T) {
+	var res Result
+	m, ok := convertMonitor(httpRow(row{"headers": `{"X Api Key": "k", "X-Trace": "t", " ": "x"}`}), &res)
+	if !ok {
+		t.Fatalf("skipped: %s", notesOf(res))
+	}
+	if len(m.Headers) != 1 || m.Headers["X-Trace"] != configfile.Placeholder {
+		t.Errorf("headers = %v, want only X-Trace", m.Headers)
+	}
+	if got := notesOf(res); !strings.Contains(got, `its request header "X Api Key" was left out`) {
+		t.Errorf("notes = %q, want one naming the header that was left out", got)
+	}
+}
