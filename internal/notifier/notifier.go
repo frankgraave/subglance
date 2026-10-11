@@ -396,6 +396,14 @@ func (n *Notifier) flush(ctx context.Context, b *pending) {
 	}
 
 	if _, err := n.db.EnqueueDelivery(ctx, b.delivery(payload, state.Event(summary.Event), n.now())); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			// Every monitor in the batch was deleted while it waited for
+			// company. Their messages go with them, as their queued and
+			// sent ones do; that is not a failure to report.
+			n.log.Info("notification dropped: its monitors were deleted",
+				"channel_id", b.channel, "monitors", len(b.alerts))
+			return
+		}
 		n.log.Error("could not queue notification",
 			"channel_id", b.channel, "monitors", len(b.alerts), "error", err)
 		return

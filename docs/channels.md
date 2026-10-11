@@ -394,6 +394,11 @@ monitor. `cause`, `last_error` and `reminder_count` are not set at the top
 level: read each monitor's failure from its entry in `members`. A quiet-hours
 digest also lists its alerts in `members`.
 
+Deleting a monitor deletes the messages about it alone, queued or sent. A
+grouped message or a digest that also names a monitor that remains is kept:
+it is still sent if it was waiting, and it still shows on that monitor's
+incident as a channel it reached.
+
 `started_at` is `0001-01-01T00:00:00Z` when there is no outage behind the
 message: the **Send test** button, a backup notice and a digest. In a
 `channel_failing` message, `target` is the failing channel's name and type,

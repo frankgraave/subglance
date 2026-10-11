@@ -442,10 +442,24 @@ func ApplyMonitorDefaults(m *Monitor) {
 }
 
 // DeleteMonitor removes a monitor and, through ON DELETE CASCADE, its
-// heartbeats and incidents.
+// heartbeats, incidents and the messages that speak for it alone. A message
+// that also speaks for a monitor that still exists, a grouped alert or a
+// digest, is kept under that monitor in the same transaction (see
+// keepSharedDeliveries).
 func (db *DB) DeleteMonitor(ctx context.Context, id int64) error {
-	_, err := db.Writer.ExecContext(ctx, "DELETE FROM monitors WHERE id = ?", id)
+	tx, err := db.Writer.BeginTx(ctx, nil)
 	if err != nil {
+		return fmt.Errorf("delete monitor %d: %w", id, err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if err := keepSharedDeliveries(ctx, tx, id); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM monitors WHERE id = ?", id); err != nil {
+		return fmt.Errorf("delete monitor %d: %w", id, err)
+	}
+	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("delete monitor %d: %w", id, err)
 	}
 	return nil

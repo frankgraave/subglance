@@ -98,6 +98,15 @@ func (d Delivery) MergedInto() string {
 // It takes the payload already rendered. The queue stores what should be said,
 // not the ingredients to work it out later: a retry an hour after the fact has
 // to repeat the original message, not recompute a fresher one.
+//
+// The row is filed under d.MonitorID while that monitor exists. A grouped
+// alert waits for company before it is written, and its first monitor can be
+// deleted in that time; the row is then filed under the first other monitor
+// the payload speaks for (see keepSharedDeliveries), so the news about the
+// rest still goes out; its incident column likewise names the first incident
+// the payload names that still exists. When no monitor it speaks for is left,
+// nothing is written and ErrNotFound is reported: a deleted monitor takes its
+// own messages with it.
 func (db *DB) EnqueueDelivery(ctx context.Context, d Delivery) (Delivery, error) {
 	now := time.Now().Unix()
 	due := d.NextAttemptAt
@@ -110,23 +119,44 @@ func (db *DB) EnqueueDelivery(ctx context.Context, d Delivery) (Delivery, error)
 		incidentID = d.IncidentID
 	}
 
-	res, err := db.Writer.ExecContext(ctx, `
+	// A payload that is not JSON is searched as an empty object, since
+	// json_tree refuses a malformed document outright: such a row is filed
+	// under d.MonitorID or not at all. The incident column follows the same
+	// rule as the monitor's, and is left empty rather than refused when no
+	// incident it names is left: losing the link is better than losing the
+	// alert.
+	var id, owner int64
+	var incident sql.NullInt64
+	err := db.Writer.QueryRowContext(ctx, `
+		WITH p(payload) AS (SELECT ?),
+		     doc(json) AS (SELECT CASE WHEN json_valid(payload) THEN payload ELSE '{}' END FROM p)
 		INSERT INTO notif_outbox
 			(channel_id, monitor_id, incident_id, event, payload_json,
 			 status, attempts, next_attempt_at, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
-		d.ChannelID, d.MonitorID, incidentID, d.Event, d.Payload,
-		OutboxPending, due.Unix(), now, now)
+		SELECT ?, owner, CASE WHEN ? IS NULL THEN NULL ELSE COALESCE(
+		           (SELECT id FROM incidents WHERE id = ?),
+		           (`+incidentNamed+`)) END,
+		       ?, payload, ?, 0, ?, ?, ?
+		  FROM p, (SELECT COALESCE(
+		           (SELECT id FROM monitors WHERE id = ?),
+		           (`+monitorNamed+`)) AS owner)
+		 WHERE owner IS NOT NULL
+		RETURNING id, monitor_id, incident_id`,
+		d.Payload,
+		d.ChannelID, incidentID, incidentID, d.Event,
+		OutboxPending, due.Unix(), now, now,
+		d.MonitorID).Scan(&id, &owner, &incident)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Delivery{}, fmt.Errorf("enqueue delivery: %w: monitor %d and every monitor the message names are gone",
+			ErrNotFound, d.MonitorID)
+	}
 	if err != nil {
 		return Delivery{}, fmt.Errorf("enqueue delivery: %w", err)
 	}
 
-	id, err := res.LastInsertId()
-	if err != nil {
-		return Delivery{}, fmt.Errorf("last insert id: %w", err)
-	}
-
 	d.ID = id
+	d.MonitorID = owner
+	d.IncidentID = incident.Int64
 	d.Status = OutboxPending
 	d.NextAttemptAt = time.Unix(due.Unix(), 0).UTC()
 	d.CreatedAt = time.Unix(now, 0).UTC()
