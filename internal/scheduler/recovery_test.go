@@ -135,27 +135,33 @@ func TestCadenceLeavesRoomForTheTimeout(t *testing.T) {
 }
 
 // End to end: a check that runs as long as its timeout is not dispatched again
-// while it runs, so the scheduler skips nothing.
+// while it runs, so the scheduler skips nothing. It runs in a synctest bubble,
+// so the scheduler's timers and the check's delay move on a fake clock and the
+// dispatch count does not depend on how busy the machine is.
 func TestCheckLongerThanItsIntervalIsNotSkipped(t *testing.T) {
-	fake := &fakeChecker{delay: 120 * time.Millisecond}
-	j := job(1, 20*time.Millisecond)
-	j.Monitor.Timeout = 120 * time.Millisecond
+	synctest.Test(t, func(t *testing.T) {
+		fake := &fakeChecker{delay: 120 * time.Millisecond}
+		j := job(1, 20*time.Millisecond)
+		j.Monitor.Timeout = 120 * time.Millisecond
 
-	s := New(Options{
-		Registry:       staticRegistry(j),
-		Checkers:       map[checker.Type]checker.Checker{checker.TypeHTTP: fake},
-		OnResult:       func(Outcome) {},
-		JitterFraction: -1,
-		Log:            testLogger(),
+		s := New(Options{
+			Registry:       staticRegistry(j),
+			Checkers:       map[checker.Type]checker.Checker{checker.TypeHTTP: fake},
+			OnResult:       func(Outcome) {},
+			JitterFraction: -1,
+			Log:            testLogger(),
+		})
+		ctx, cancel := context.WithTimeout(t.Context(), 700*time.Millisecond)
+		defer cancel()
+		if err := s.Run(ctx); !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatal(err)
+		}
+
+		if n := s.SkippedChecks(); n != 0 {
+			t.Errorf("%d checks skipped; a monitor must not come due inside its own timeout", n)
+		}
+		if n := fake.callCount(); n < 2 {
+			t.Errorf("%d checks ran in 700ms on a 150ms cadence, want at least 2", n)
+		}
 	})
-	ctx, cancel := context.WithTimeout(context.Background(), 700*time.Millisecond)
-	defer cancel()
-	_ = s.Run(ctx)
-
-	if n := s.SkippedChecks(); n != 0 {
-		t.Errorf("%d checks skipped; a monitor must not come due inside its own timeout", n)
-	}
-	if n := fake.callCount(); n < 2 {
-		t.Errorf("%d checks ran in 700ms on a 150ms cadence, want at least 2", n)
-	}
 }
