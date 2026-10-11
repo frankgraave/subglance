@@ -93,6 +93,16 @@ type Notifier struct {
 	grouper *Grouper
 	batches map[string]*pending
 
+	// stopped is set by the final flush, under mu, in the same critical
+	// section that empties batches. From then on Enqueue writes straight to
+	// the outbox. Nothing is left to close a window once Run has returned,
+	// and the callers outlive it: the scheduler finishes its in-flight
+	// checks, the HTTP server drains push reports and a reminder sweep
+	// completes after the signal. An alert they raise is a real event whose
+	// incident is already marked confirmed, reminded or resolved, so the
+	// next start does not raise it again; held in memory it would be lost.
+	stopped bool
+
 	// counts holds the delivery counters /metrics serves, one set per
 	// channel type. Built once in New and never written after, so reading
 	// the map needs no lock; the counters themselves are atomic.
@@ -299,8 +309,10 @@ func (n *Notifier) Enqueue(ctx context.Context, m store.Monitor, inc store.Incid
 		}
 
 		b := n.grouper.add(n.batches, ch.ID, m.ID, alert)
-		if !n.grouper.enabled() {
-			// Grouping off: send it now and keep nothing.
+		if !n.grouper.enabled() || n.stopped {
+			// Grouping off, or the notifier has stopped and nothing would
+			// ever close this window: write it now and keep nothing. The
+			// outbox delivers it on the next start.
 			delete(n.batches, b.key)
 			n.flush(ctx, b)
 		}
@@ -325,24 +337,49 @@ func (n *Notifier) flushDue(ctx context.Context) {
 
 // flushAll writes out every pending batch regardless of its window.
 //
-// Used at shutdown. An alert that is sitting in a window when the process
-// stops must not be lost: it is already a real event, and the outbox is what
-// makes it survive a restart.
+// An alert that is sitting in a window when the process stops must not be
+// lost: it is already a real event, and the outbox is what makes it survive a
+// restart. Run calls stop for that; tests call this to close every window at
+// once and keep grouping afterwards.
 func (n *Notifier) flushAll(ctx context.Context) {
 	n.mu.Lock()
+	all := n.takeAll()
+	n.mu.Unlock()
+
+	for _, b := range all {
+		n.flush(ctx, b)
+	}
+}
+
+// stop is the final flush: it writes out every pending batch and turns
+// grouping off for whatever is enqueued after it (see stopped).
+//
+// The lock is held across the writes, not only across emptying the map. An
+// Enqueue that waited on it then writes after the batches it might follow,
+// so a recovery cannot reach the outbox ahead of the alert it closes. The
+// writes are a handful of local inserts, and Enqueue already writes under
+// this lock when grouping is off.
+func (n *Notifier) stop(ctx context.Context) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	n.stopped = true
+	for _, b := range n.takeAll() {
+		n.flush(ctx, b)
+	}
+}
+
+// takeAll empties batches and returns them in the order a channel hears them:
+// alerts, then reminders, then recoveries, since the outbox keeps a channel's
+// messages in the order they are written. The caller holds mu.
+func (n *Notifier) takeAll() []*pending {
 	var all []*pending
 	for key, b := range n.batches {
 		all = append(all, b)
 		delete(n.batches, key)
 	}
-	n.mu.Unlock()
-	// Alerts before recoveries: the outbox keeps a channel's messages in
-	// the order they are written.
 	sortBatches(all)
-
-	for _, b := range all {
-		n.flush(ctx, b)
-	}
+	return all
 }
 
 // flush turns one batch into one outbox row.
@@ -399,13 +436,14 @@ func (n *Notifier) Run(ctx context.Context) {
 
 		select {
 		case <-ctx.Done():
-			// Write out whatever is still inside its window. These
+			// Write out whatever is still inside its window, and
+			// everything enqueued from here on as it arrives. These
 			// are real events that have already happened; losing
 			// them to a restart would be the one failure mode the
 			// outbox exists to prevent. Use a fresh context, since
 			// the one that just ended cannot carry a write.
 			flushCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-			n.flushAll(flushCtx)
+			n.stop(flushCtx)
 			cancel()
 
 			n.log.Info("notifier stopped")
