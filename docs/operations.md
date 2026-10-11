@@ -546,6 +546,13 @@ that checks are still in flight and keeps the database open until they finish,
 because a check cannot outlive its own timeout and returning early would only
 trade a slow stop for a corrupted one.
 
+A clean stop loses no alert. One still waiting in its
+[grouping window](#alert-grouping) is written to the outbox when the stop
+begins, and one raised after that (by a check that finishes during the stop, a
+push report the server is still answering or a reminder already due) is written
+straight away rather than grouped. Whatever has not been delivered when
+SubGlance exits is sent on the next start.
+
 ## Watching the watcher
 
 SubGlance cannot report its own death. If the process is killed, runs out of
