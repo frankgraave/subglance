@@ -545,6 +545,12 @@ func planMonitor(p *importPlan, ex existingConfig, path string, m configfile.Mon
 	// than sent literally, and the monitor is paused until it is filled in.
 	var missing []string
 	if m.Headers != nil {
+		// The file's own names and values, by the rules a form is held to.
+		// A placeholder is a value net/http would send, so a withheld
+		// header is judged by its name.
+		if pr := validateRequestHeaders(m.Headers); !pr.ok() {
+			return monitorProblem(path, pr)
+		}
 		headers := map[string]string{}
 		for k, v := range m.Headers {
 			switch {
