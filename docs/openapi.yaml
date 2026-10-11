@@ -6529,8 +6529,11 @@ components:
         expected_status:
           type: string
           description: |
-            Acceptable HTTP status codes as a comma-separated list of values
-            and ranges.
+            Acceptable HTTP status codes as a comma-separated list of codes
+            (`204`), ranges (`200-299`) and classes (`2xx`), each between 100
+            and 599. Empty means the default. A value that does not parse is
+            refused with a 400 whose `field` is `expected_status`, because
+            every check would fail before the request was made.
           default: 200-299
           example: 200-299
         keyword:
@@ -6703,6 +6706,10 @@ components:
           $ref: '#/components/schemas/HttpMethod'
         expected_status:
           type: string
+          description: |
+            Under the same rules as on create. Only a value in the request is
+            checked, so an edit that leaves `expected_status` out is not
+            refused over a value already stored.
         keyword:
           type: string
         keyword_mode:
@@ -7070,6 +7077,9 @@ components:
           $ref: '#/components/schemas/HttpMethod'
         expected_status:
           type: string
+          description: |
+            A value that does not parse is refused with a 400 whose `field` is
+            `expected_status`, as on create and update, before any probe.
           example: 200-299
         keyword:
           type: string
