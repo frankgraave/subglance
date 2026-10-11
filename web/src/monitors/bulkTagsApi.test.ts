@@ -8,7 +8,15 @@ const op: TagOperation = {
   value: "prod",
 };
 const etag = `"tags-${"a".repeat(64)}"`;
-const counts = { total: 1, changed: 1, unchanged: 0, collisions: 0 };
+const counts = {
+  total: 1,
+  changed: 1,
+  unchanged: 0,
+  collisions: 0,
+  routing_rules: 0,
+  maintenance_windows: 0,
+  status_pages: 0,
+};
 afterEach(() => vi.restoreAllMocks());
 it.each([null, "", "*", 'W/"old"', '"other"'])(
   "refuses an unpaired preview validator %s",
@@ -29,6 +37,9 @@ it.each([
   { ...counts, unchanged: 2 },
   { ...counts, changed: 0.5 },
   { ...counts, collisions: 3 },
+  { ...counts, routing_rules: -1 },
+  { ...counts, status_pages: 0.5 },
+  { total: 1, changed: 1, unchanged: 0, collisions: 0 },
 ])("refuses malformed result %j rather than false success", async (body) => {
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(JSON.stringify(body), { headers: { ETag: etag } }),

@@ -9,7 +9,8 @@ import {
 } from "@testing-library/react";
 import { BulkTagDrawer, type TagChange } from "./BulkTagDrawer";
 const etag = `"tags-${"a".repeat(64)}"`;
-const result = { total: 2, changed: 1, unchanged: 1, collisions: 0, etag };
+const none = { routing_rules: 0, maintenance_windows: 0, status_pages: 0 };
+const result = { total: 2, changed: 1, unchanged: 1, collisions: 0, ...none, etag };
 afterEach(cleanup);
 it.each(["key", "value", "selection"])(
   "invalidates a completed preview when %s changes",
@@ -89,6 +90,7 @@ it("does not allow committing an empty preview and explains an oversized selecti
     changed: 0,
     unchanged: 1,
     collisions: 0,
+    ...none,
     etag,
   }));
   const view = render(
@@ -174,3 +176,90 @@ it.each(["remove", "rename_value"] as const)(
     );
   },
 );
+
+it("says which rules, windows and pages a rename moves before the confirm", async () => {
+  const moved = {
+    ...result,
+    routing_rules: 1,
+    maintenance_windows: 0,
+    status_pages: 2,
+  };
+  const change = vi.fn<TagChange>(async () => moved);
+  render(
+    <BulkTagDrawer selectedIds={[]} onChange={change} onClose={vi.fn()} />,
+  );
+  fireEvent.change(screen.getByRole("combobox", { name: "Action" }), {
+    target: { value: "rename_value" },
+  });
+  fireEvent.change(screen.getByRole("textbox", { name: "Tag key" }), {
+    target: { value: "env" },
+  });
+  fireEvent.change(screen.getByRole("textbox", { name: "Tag value" }), {
+    target: { value: "prod" },
+  });
+  fireEvent.change(screen.getByRole("textbox", { name: "New value" }), {
+    target: { value: "production" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Preview change" }));
+  await screen.findByRole("button", { name: "Confirm tag change" });
+  expect(
+    screen.getByText("Also moves to the new tag: 1 routing rule, 2 status pages."),
+  ).toBeTruthy();
+  // The confirm writes exactly what the preview said (same validator), so
+  // the result does not repeat the list.
+  fireEvent.click(screen.getByRole("button", { name: "Confirm tag change" }));
+  await waitFor(() =>
+    expect(document.activeElement?.textContent).toBe(
+      "Changed 1 monitors; 1 unchanged.",
+    ),
+  );
+});
+
+it("lets a rename that moves only configuration be confirmed", async () => {
+  // No monitor carries the old pair any more, but a page still names it:
+  // the rename is how that page gets pointed at the new tag.
+  const change = vi.fn<TagChange>(async () => ({
+    ...result,
+    total: 0,
+    changed: 0,
+    unchanged: 0,
+    status_pages: 1,
+  }));
+  render(
+    <BulkTagDrawer selectedIds={[]} onChange={change} onClose={vi.fn()} />,
+  );
+  fireEvent.change(screen.getByRole("combobox", { name: "Action" }), {
+    target: { value: "rename_key" },
+  });
+  fireEvent.change(screen.getByRole("textbox", { name: "Tag key" }), {
+    target: { value: "env" },
+  });
+  fireEvent.change(screen.getByRole("textbox", { name: "New key" }), {
+    target: { value: "stage" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Preview change" }));
+  const commit = await screen.findByRole("button", {
+    name: "Confirm tag change",
+  });
+  expect(screen.getByText("Also moves to the new tag: 1 status page.")).toBeTruthy();
+  expect((commit as HTMLButtonElement).disabled).toBe(false);
+  await waitFor(() => expect(document.activeElement).toBe(commit));
+});
+
+it("says nothing about followers for a selection-scoped change", async () => {
+  // Apply and remove never move configuration; a server bug reporting
+  // otherwise must not be repeated to the operator as a promise.
+  const change = vi.fn<TagChange>(async () => ({ ...result, routing_rules: 1 }));
+  render(
+    <BulkTagDrawer selectedIds={["1"]} onChange={change} onClose={vi.fn()} />,
+  );
+  fireEvent.change(screen.getByRole("textbox", { name: "Tag key" }), {
+    target: { value: "env" },
+  });
+  fireEvent.change(screen.getByRole("textbox", { name: "Tag value" }), {
+    target: { value: "prod" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Preview change" }));
+  await screen.findByRole("button", { name: "Confirm tag change" });
+  expect(screen.queryByText(/Also moves/)).toBeNull();
+});

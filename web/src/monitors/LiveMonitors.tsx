@@ -313,10 +313,14 @@ export function LiveMonitors({
     if (etag !== undefined) {
       // Dashboard (including inactive infinite-stale data) and inventory share
       // this prefix. Detail has its own key; SSE frames do not carry tags.
+      // A rename also moves the maintenance windows and status pages that
+      // named the old pair, and those lists would otherwise keep showing it.
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["monitors"] }),
         queryClient.invalidateQueries({ queryKey: ["monitor-detail"] }),
         queryClient.invalidateQueries({ queryKey: ["incidents", "open"] }),
+        queryClient.invalidateQueries({ queryKey: ["maintenance"] }),
+        queryClient.invalidateQueries({ queryKey: ["status-pages"] }),
       ]);
     }
     return result;

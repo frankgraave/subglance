@@ -74,6 +74,9 @@ func (s *Server) handleTagOperation(w http.ResponseWriter, r *http.Request, prev
 	case errors.Is(err, store.ErrTagPreviewChanged):
 		writeError(w, http.StatusPreconditionFailed, err.Error())
 		return
+	case errors.Is(err, store.ErrTagRenameRuleConflict):
+		writeError(w, http.StatusConflict, err.Error())
+		return
 	case err != nil:
 		s.log.Error("transform monitor tags", "error", err)
 		writeError(w, http.StatusInternalServerError, "could not change monitor tags")

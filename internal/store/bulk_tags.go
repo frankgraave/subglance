@@ -19,6 +19,11 @@ const MaxTagOperationIDs = 10000
 var ErrInvalidTagOperation = errors.New("invalid tag operation")
 var ErrTagPreviewChanged = errors.New("tags changed since the preview; review a new preview before saving")
 
+// ErrTagRenameRuleConflict refuses a rename that would give two routing rules
+// one tag pair. One rule per pair is a constraint (see ErrRoutingRuleExists),
+// and merging the two cannot keep each rule's own exclusions.
+var ErrTagRenameRuleConflict = errors.New("tag rename would give two routing rules the same tag")
+
 // TagOperation describes intent, never a stale replacement of a monitor's tags.
 // IDs are required for apply/remove and forbidden for global renames.
 type TagOperation struct {
@@ -32,11 +37,17 @@ type TagOperation struct {
 
 // TagOperationResult counts monitors, not individual tag rows. Collisions counts
 // keys whose existing value would be replaced (apply) or retained (rename_key).
+// RoutingRules, MaintenanceWindows and StatusPages count the configuration that
+// names the old pair and is renamed with it; they are zero for apply and remove,
+// which only touch the selection.
 type TagOperationResult struct {
-	Total      int `json:"total"`
-	Changed    int `json:"changed"`
-	Unchanged  int `json:"unchanged"`
-	Collisions int `json:"collisions"`
+	Total              int `json:"total"`
+	Changed            int `json:"changed"`
+	Unchanged          int `json:"unchanged"`
+	Collisions         int `json:"collisions"`
+	RoutingRules       int `json:"routing_rules"`
+	MaintenanceWindows int `json:"maintenance_windows"`
+	StatusPages        int `json:"status_pages"`
 }
 
 func (op TagOperation) normalised() (TagOperation, error) {
@@ -171,11 +182,26 @@ func (db *DB) TransformTags(ctx context.Context, raw TagOperation, expected stri
 		}
 		_ = encoder.Encode(relevant)
 	}
+	var follow tagFollowers
+	if global {
+		if follow, err = readTagFollowers(ctx, tx, op); err != nil {
+			return empty, "", err
+		}
+		// The followers are part of what the preview promised, so a rule,
+		// window or page that starts or stops naming the pair in between
+		// invalidates it like a monitor would.
+		_ = encoder.Encode(follow)
+	}
 	etag := fmt.Sprintf(`"tags-%x"`, hash.Sum(nil))
 	if !preview && expected != etag {
 		return empty, "", ErrTagPreviewChanged
 	}
-	result := TagOperationResult{Total: len(current)}
+	result := TagOperationResult{
+		Total:              len(current),
+		RoutingRules:       len(follow.Rules),
+		MaintenanceWindows: len(follow.Windows),
+		StatusPages:        len(follow.Pages),
+	}
 	changed := []tagOperationRow{}
 	for _, row := range current {
 		next := maps.Clone(row.Tags)
@@ -220,10 +246,169 @@ func (db *DB) TransformTags(ctx context.Context, raw TagOperation, expected stri
 			return empty, "", err
 		}
 	}
+	if err := follow.write(ctx, tx); err != nil {
+		return empty, "", err
+	}
 	if err := tx.Commit(); err != nil {
 		return empty, "", fmt.Errorf("commit tag operation: %w", err)
 	}
 	return result, etag, nil
+}
+
+// tagFollower is one piece of configuration that names a tag pair by value,
+// with the pair it names after the rename.
+type tagFollower struct {
+	ID    int64  `json:"id"`
+	Key   string `json:"key"`
+	Value string `json:"value"`
+	spec  string // A maintenance window's rewritten spec.
+}
+
+// tagFollowers is what a global rename has to carry along besides the
+// monitors. Routing rules, tag maintenance windows and tag status pages store
+// the pair itself rather than a reference to it, so a rename that left them
+// behind would quietly stop routing alerts, stop holding them in maintenance
+// and empty a public page.
+type tagFollowers struct {
+	Rules   []tagFollower `json:"rules"`
+	Windows []tagFollower `json:"windows"`
+	Pages   []tagFollower `json:"pages"`
+}
+
+// renamedPair reports the pair key=value becomes under a global rename. A key
+// rename keeps the value, as it does on a monitor.
+func (op TagOperation) renamedPair(key, value string) (string, string, bool) {
+	switch {
+	case op.Action == "rename_key" && key == op.Key:
+		return op.NewKey, value, true
+	case op.Action == "rename_value" && key == op.Key && value == op.Value:
+		return key, op.NewValue, true
+	}
+	return "", "", false
+}
+
+// readTagFollowers finds the configuration a global rename moves, inside the
+// rename's own transaction. It refuses a rename that would land a routing rule
+// on a pair another rule already has.
+func readTagFollowers(ctx context.Context, tx *sql.Tx, op TagOperation) (tagFollowers, error) {
+	f := tagFollowers{Rules: []tagFollower{}, Windows: []tagFollower{}, Pages: []tagFollower{}}
+	type pair struct{ key, value string }
+	kept := map[pair]bool{}
+	err := scanRows(ctx, tx, `SELECT id,tag_key,tag_value FROM routing_rules ORDER BY id`, func(rows *sql.Rows) error {
+		var id int64
+		var key, value string
+		if err := rows.Scan(&id, &key, &value); err != nil {
+			return err
+		}
+		if k, v, ok := op.renamedPair(key, value); ok {
+			f.Rules = append(f.Rules, tagFollower{ID: id, Key: k, Value: v})
+		} else {
+			kept[pair{key, value}] = true
+		}
+		return nil
+	})
+	if err != nil {
+		return f, fmt.Errorf("read routing rules for tag rename: %w", err)
+	}
+	// Original pairs are unique and both renames map distinct pairs to
+	// distinct pairs, so only a rule that stays put can be landed on.
+	for _, r := range f.Rules {
+		if kept[pair{r.Key, r.Value}] {
+			return f, fmt.Errorf("%w (%s=%s already has a rule); delete one of the two rules or move its channels first",
+				ErrTagRenameRuleConflict, r.Key, r.Value)
+		}
+	}
+	err = scanRows(ctx, tx, `SELECT id,spec FROM maintenance_windows WHERE monitor_id IS NULL ORDER BY id`, func(rows *sql.Rows) error {
+		var id int64
+		var spec string
+		if err := rows.Scan(&id, &spec); err != nil {
+			return err
+		}
+		// Rewrite only the two tag fields, so nothing else in the stored spec
+		// is re-encoded by this binary's idea of a window.
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(spec), &fields); err != nil {
+			return fmt.Errorf("maintenance window %d: %w", id, err)
+		}
+		var key, value string
+		if raw, ok := fields["tag_key"]; ok {
+			if err := json.Unmarshal(raw, &key); err != nil {
+				return fmt.Errorf("maintenance window %d: %w", id, err)
+			}
+		}
+		if raw, ok := fields["tag_value"]; ok {
+			if err := json.Unmarshal(raw, &value); err != nil {
+				return fmt.Errorf("maintenance window %d: %w", id, err)
+			}
+		}
+		k, v, ok := op.renamedPair(key, value)
+		if key == "" || !ok {
+			return nil
+		}
+		fields["tag_key"], _ = json.Marshal(k)
+		fields["tag_value"], _ = json.Marshal(v)
+		next, err := json.Marshal(fields)
+		if err != nil {
+			return fmt.Errorf("maintenance window %d: %w", id, err)
+		}
+		f.Windows = append(f.Windows, tagFollower{ID: id, Key: k, Value: v, spec: string(next)})
+		return nil
+	})
+	if err != nil {
+		return f, fmt.Errorf("read maintenance windows for tag rename: %w", err)
+	}
+	err = scanRows(ctx, tx, `SELECT id,tag_key,tag_value FROM status_pages WHERE selection='tag' ORDER BY id`, func(rows *sql.Rows) error {
+		var id int64
+		var key, value sql.NullString
+		if err := rows.Scan(&id, &key, &value); err != nil {
+			return err
+		}
+		if k, v, ok := op.renamedPair(key.String, value.String); key.Valid && ok {
+			f.Pages = append(f.Pages, tagFollower{ID: id, Key: k, Value: v})
+		}
+		return nil
+	})
+	if err != nil {
+		return f, fmt.Errorf("read status pages for tag rename: %w", err)
+	}
+	return f, nil
+}
+
+// write moves every follower to its new pair. A status page's updated_at
+// moves too, because what the page shows has changed.
+func (f tagFollowers) write(ctx context.Context, tx *sql.Tx) error {
+	for _, r := range f.Rules {
+		if _, err := tx.ExecContext(ctx, `UPDATE routing_rules SET tag_key=?,tag_value=? WHERE id=?`, r.Key, r.Value, r.ID); err != nil {
+			return fmt.Errorf("rename tag on routing rule %d: %w", r.ID, err)
+		}
+	}
+	for _, w := range f.Windows {
+		if _, err := tx.ExecContext(ctx, `UPDATE maintenance_windows SET spec=? WHERE id=?`, w.spec, w.ID); err != nil {
+			return fmt.Errorf("rename tag on maintenance window %d: %w", w.ID, err)
+		}
+	}
+	for _, p := range f.Pages {
+		if _, err := tx.ExecContext(ctx, `UPDATE status_pages SET tag_key=?,tag_value=?,updated_at=MAX(?,updated_at+1) WHERE id=?`,
+			p.Key, p.Value, time.Now().Unix(), p.ID); err != nil {
+			return fmt.Errorf("rename tag on status page %d: %w", p.ID, err)
+		}
+	}
+	return nil
+}
+
+// scanRows runs query in tx and hands each row to scan.
+func scanRows(ctx context.Context, tx *sql.Tx, query string, scan func(*sql.Rows) error) error {
+	rows, err := tx.QueryContext(ctx, query)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		if err := scan(rows); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
 }
 
 // ValidTagPreviewETag accepts only the strong validator this operation issues.

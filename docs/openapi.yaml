@@ -2014,6 +2014,12 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: A global rename would move a routing rule onto a tag pair another rule already has. Nothing was written.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '500':
           description: Could not read current tags; never reported as an empty preview.
           content:
@@ -2071,8 +2077,14 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: A global rename would move a routing rule onto a tag pair another rule already has. Nothing was written.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '412':
-          description: Relevant tags or matching monitors changed since preview. Nothing was written.
+          description: Relevant tags, matching monitors or the configuration a rename moves changed since preview. Nothing was written.
           content:
             application/json:
               schema:
@@ -4880,6 +4892,10 @@ components:
         reaches every monitor with that exact key AND old value, leaving other
         keys and values untouched. Keys are trimmed/lowercased; values are
         trimmed and case-sensitive. Global renames reject monitor_ids.
+        A global rename also moves every routing rule, tag maintenance window
+        and tag status page that names the old pair, in the same transaction,
+        so none of them is left matching nothing. A rename that would give two
+        routing rules one pair is refused with 409.
       oneOf:
         - type: object
           additionalProperties: false
@@ -4950,7 +4966,7 @@ components:
       example: prod
     TagOperationResult:
       type: object
-      required: [total, changed, unchanged, collisions]
+      required: [total, changed, unchanged, collisions, routing_rules, maintenance_windows, status_pages]
       additionalProperties: false
       properties:
         total:
@@ -4969,6 +4985,18 @@ components:
           type: integer
           minimum: 0
           description: For apply, differing values replaced. For rename_key, destination values retained while removing the old key (including equal values). Zero for remove/rename_value.
+        routing_rules:
+          type: integer
+          minimum: 0
+          description: Routing rules that name the old pair and move to the new one. Zero for apply/remove.
+        maintenance_windows:
+          type: integer
+          minimum: 0
+          description: Tag maintenance windows that name the old pair and move to the new one. Zero for apply/remove.
+        status_pages:
+          type: integer
+          minimum: 0
+          description: Tag status pages that name the old pair and move to the new one. Zero for apply/remove.
     ChannelOperationRequest:
       type: object
       additionalProperties: false

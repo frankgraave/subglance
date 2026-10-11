@@ -4,11 +4,33 @@ import { Drawer } from "../components/Drawer";
 import { Panel } from "../components/Card";
 import type { TagOperation, TagResult } from "./bulkTagsApi";
 import { Select } from "../components/Select";
+import { formatCount } from "../format/format";
 
 export type TagChange = (
   operation: TagOperation,
   etag?: string,
 ) => Promise<TagResult>;
+
+const FOLLOWERS = [
+  ["routing_rules", "routing rule"],
+  ["maintenance_windows", "maintenance window"],
+  ["status_pages", "status page"],
+] as const;
+
+/**
+ * What a global rename carries along besides the monitors ("1 routing rule,
+ * 2 status pages"), or null when it carries nothing. Rules, windows and
+ * pages store the pair itself, so the server moves them in the same
+ * transaction; saying so before the confirm is what lets the operator notice a
+ * status page about to change its subject.
+ */
+function followers(result: TagResult): string | null {
+  const parts = FOLLOWERS.filter(([key]) => result[key] > 0).map(
+    ([key, noun]) =>
+      `${formatCount(result[key])} ${noun}${result[key] > 1 ? "s" : ""}`,
+  );
+  return parts.join(", ") || null;
+}
 
 /** Preview is a separate decision from commit. No per-monitor write fan-out. */
 export function BulkTagDrawer({
@@ -62,6 +84,10 @@ export function BulkTagDrawer({
   const signature = JSON.stringify(operation);
   const currentPreview =
     preview?.signature === signature ? preview.result : null;
+  const moves = global && currentPreview && followers(currentPreview);
+  // A rename can move a rule, window or page on a pair no monitor carries
+  // yet; that is still a change worth confirming.
+  const nothingChanges = currentPreview?.changed === 0 && !moves;
   // Disabling a fieldset or removing Confirm drops browser focus to the page.
   // Keep keyboard users inside the dialog when an async operation settles.
   useEffect(() => {
@@ -71,9 +97,9 @@ export function BulkTagDrawer({
     }
     if (problem) errorRef.current?.focus();
     else if (saved) resultRef.current?.focus();
-    else if (currentPreview?.changed === 0) previewRef.current?.focus();
+    else if (nothingChanges) previewRef.current?.focus();
     else if (currentPreview) confirmRef.current?.focus();
-  }, [pending, problem, saved, currentPreview]);
+  }, [pending, problem, saved, currentPreview, nothingChanges]);
   const reset = () => {
     setPreview(null);
     setSaved(null);
@@ -257,11 +283,12 @@ export function BulkTagDrawer({
                     ? `${currentPreview.collisions} existing values will be replaced.`
                     : "Other keys and values stay unchanged."}
               </p>
+              {moves && <p>Also moves to the new tag: {moves}.</p>}
               <button
                 ref={confirmRef}
                 type="button"
                 className="button button--primary"
-                disabled={pending || currentPreview.changed === 0}
+                disabled={pending || nothingChanges}
                 onClick={() => void run(true)}
               >
                 Confirm tag change
