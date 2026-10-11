@@ -80,7 +80,11 @@ monitors:
 ```
 
 Lists work the same way: an omitted `channels` or `tags` leaves the current
-ones alone, and an empty one (`channels: []`, `tags: {}`) clears them.
+ones alone, and an empty one (`channels: []`, `tags: {}`) clears them. The
+same holds for a channel's `quiet_hours` (`quiet_hours: null` removes them)
+and an HTTP monitor's `headers` and `body` (`headers: {}` and `body: ""`
+remove them). An export writes these empty forms for an object that has none,
+so importing it makes the target match instead of keeping what it had.
 
 A push monitor created by an import is issued a new push URL. It is shown once,
 as `push_url` in the import report, exactly like the response that creates a
@@ -136,6 +140,7 @@ channels:
     enabled: true
     config:
       url: <fill in after import>
+    quiet_hours: null
   - key: on-call
     name: On call
     type: telegram
@@ -167,6 +172,7 @@ monitors:
     capture_response: true
     headers:
       Authorization: <fill in after import>
+    body: ""
     json_assertion:
       path: checks.db.status
       operator: equals
