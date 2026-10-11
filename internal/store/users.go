@@ -86,11 +86,25 @@ func (db *DB) CountUsers(ctx context.Context) (int, error) {
 	return n, nil
 }
 
+// ErrEmailInUse is returned when another account already has the address.
+// The column compares without case, so Ops@example.com and ops@example.com
+// are one address.
+var ErrEmailInUse = errors.New("store: an account with this email address already exists")
+
+// NormaliseEmail trims the spaces around an address before it is stored.
+// Sign-in, the setup form and reset-password all trim what they are given, so
+// an address stored with a space around it could never be signed in to; the
+// column's NOCASE collation takes care of case, not of spaces.
+func NormaliseEmail(email string) string { return strings.TrimSpace(email) }
+
 // CreateUser adds an account. The password is hashed here, never by the caller.
+// The address is stored trimmed (NormaliseEmail); one another account already
+// has is refused with ErrEmailInUse.
 func (db *DB) CreateUser(ctx context.Context, email, password string, role Role) (User, error) {
 	if !role.Valid() {
 		return User{}, fmt.Errorf("store: invalid role %q", role)
 	}
+	email = NormaliseEmail(email)
 
 	hash, err := auth.HashPassword(password)
 	if err != nil {
@@ -101,6 +115,9 @@ func (db *DB) CreateUser(ctx context.Context, email, password string, role Role)
 	res, err := db.Writer.ExecContext(ctx,
 		"INSERT INTO users (email, password_hash, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
 		email, hash, string(role), now, now)
+	if isUniqueViolation(err) {
+		return User{}, ErrEmailInUse
+	}
 	if err != nil {
 		return User{}, fmt.Errorf("insert user: %w", err)
 	}
@@ -135,6 +152,7 @@ func (db *DB) CreateFirstUser(ctx context.Context, email, password string, role 
 	if !role.Valid() {
 		return User{}, fmt.Errorf("store: invalid role %q", role)
 	}
+	email = NormaliseEmail(email)
 
 	hash, err := auth.HashPassword(password)
 	if err != nil {

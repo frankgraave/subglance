@@ -3,8 +3,10 @@ package api
 import (
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/frankgraave/subglance/internal/auth"
 	"github.com/frankgraave/subglance/internal/store"
 )
 
@@ -194,8 +196,9 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
-	if req.Email == "" || !containsAt(req.Email) {
-		writeError(w, http.StatusBadRequest, "a valid email address is required")
+	email := store.NormaliseEmail(req.Email)
+	if p := emailProblem(email); !p.ok() {
+		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
 
@@ -204,15 +207,24 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		role = store.RoleViewer // least privilege by default
 	}
 	if !role.Valid() {
-		writeError(w, http.StatusBadRequest, "role must be admin, editor or viewer")
+		writeProblem(w, http.StatusBadRequest, fieldProblem("role", "role must be admin, editor or viewer"))
+		return
+	}
+	if p := passwordProblem("password", req.Password); !p.ok() {
+		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
 
-	user, err := s.db.CreateUser(r.Context(), req.Email, req.Password, role)
-	if err != nil {
-		// A duplicate email is the common case here and is the user's problem
-		// to fix, not a server fault.
-		writeError(w, http.StatusBadRequest, "could not create the account: "+err.Error())
+	user, err := s.db.CreateUser(r.Context(), email, req.Password, role)
+	switch {
+	case errors.Is(err, store.ErrEmailInUse):
+		// The common refusal, and the caller's to fix: a 400 naming the
+		// field, in a sentence of its own rather than the database's.
+		writeProblem(w, http.StatusBadRequest, fieldProblem("email", "an account with this email address already exists"))
+		return
+	case err != nil:
+		s.log.Error("create user", "error", err)
+		writeError(w, http.StatusInternalServerError, "could not create the account")
 		return
 	}
 
@@ -310,6 +322,25 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	s.log.Info("user role changed", "user_id", id, "role", user.Role, "by", caller.ID)
 	writeJSON(w, http.StatusOK, toUserResponse(user))
+}
+
+// emailProblem refuses an address that is blank or has no @ between other
+// characters. The address is checked after NormaliseEmail, so one made only
+// of spaces is blank.
+func emailProblem(email string) problem {
+	if email == "" || !containsAt(email) {
+		return fieldProblem("email", "a valid email address is required")
+	}
+	return problem{}
+}
+
+// passwordProblem applies the password rules to the named field, in the
+// rule's own words without the package prefix.
+func passwordProblem(field, password string) problem {
+	if err := auth.ValidatePassword(password); err != nil {
+		return fieldProblem(field, strings.TrimPrefix(err.Error(), "auth: "))
+	}
+	return problem{}
 }
 
 func containsAt(s string) bool {

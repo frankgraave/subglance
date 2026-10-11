@@ -234,16 +234,17 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
-	if req.Email == "" || !strings.Contains(req.Email, "@") {
-		writeError(w, http.StatusBadRequest, "a valid email address is required")
+	email := store.NormaliseEmail(req.Email)
+	if p := emailProblem(email); !p.ok() {
+		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
-	if err := auth.ValidatePassword(req.Password); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+	if p := passwordProblem("password", req.Password); !p.ok() {
+		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
 
-	user, err := s.db.CreateFirstUser(ctx, req.Email, req.Password, store.RoleAdmin)
+	user, err := s.db.CreateFirstUser(ctx, email, req.Password, store.RoleAdmin)
 	switch {
 	case err == nil:
 	case errors.Is(err, store.ErrSetupComplete):
