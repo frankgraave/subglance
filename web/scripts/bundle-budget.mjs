@@ -316,8 +316,19 @@ const budgets = {
    * reading the new fields of the delivery record. No new dependency, and
    * no new query: it shares the notifications screen's channel list. 150
    * leaves 901 bytes.
+   *
+   * 150 -> 151 KiB gzip for SUB-279 (a refused quiet-hours window shown under
+   * the part it names). Develop at 8fdbab2 measures 153,539 bytes of entry JS
+   * (Node gzip, level 6, every script index.html loads), 61 under 150; this
+   * branch measures 153,872, 333 more and 272 over. That is the sentence
+   * placed under the start, end, zone or mode it is about instead of under
+   * the whole fieldset, only that control marked invalid and focused, the
+   * form's own check naming the same part the server would, and the data
+   * owner passing the server's field on. No new dependency. 151 leaves 752
+   * bytes; the notifications screen is the next candidate for a lazy chunk
+   * if the following fix does not fit.
    */
-  js: 150,
+  js: 151,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *

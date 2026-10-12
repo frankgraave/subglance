@@ -16,7 +16,8 @@ import {
 import type { Channel, ChannelType, FieldSpec, QuietHours } from "./channels";
 import type { ChannelInput } from "./channelsApi";
 import { QuietHoursField } from "./QuietHoursField";
-import { draftFrom, quietChange, quietProblem } from "./quietHours";
+import { draftFrom, quietChange, quietPart, quietProblem } from "./quietHours";
+import type { QuietPart, QuietRefusal } from "./quietHours";
 import { Select } from "../components/Select";
 import { FieldError } from "../components/FieldError";
 
@@ -61,7 +62,12 @@ export type ChannelFormProps = {
   onCancel?: () => void;
 };
 
-type Problem = { message: string; key: string | null } | null;
+/**
+ * What is refused and where it stands: under the control `key` names, or
+ * below the form when it names none. A quiet-hours refusal can also name the
+ * part of the window it is about.
+ */
+type Problem = { message: string; key: string | null; part?: QuietPart | null } | null;
 
 /** The problem key for the quiet-hours fields, which have no config key. */
 const QUIET = "quiet_hours";
@@ -133,6 +139,7 @@ export function ChannelForm({
   const [problem, setProblem] = useState<Problem>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const fieldRefs = useRef<Record<string, FieldControl | null>>({});
+  const quietRefs = useRef<Partial<Record<QuietPart, HTMLInputElement | null>>>({});
 
   const allSpecs = fieldsFor(type);
   // Fields tied to another field's value (an SMS provider's credentials) are
@@ -143,6 +150,12 @@ export function ChannelForm({
     setProblem({ message, key });
     if (key === "name") nameRef.current?.focus();
     else if (key !== null) fieldRefs.current[key]?.focus();
+  };
+
+  /** A refused window: the sentence under the part it names, which takes focus. */
+  const rejectQuiet = ({ message, part }: QuietRefusal) => {
+    setProblem({ message, key: QUIET, part });
+    if (part !== null) quietRefs.current[part]?.focus();
   };
 
   /** Whether this field currently accepts typing. */
@@ -239,7 +252,7 @@ export function ChannelForm({
     const quietNext = quietChange(storedQuiet, quiet);
     const quietError = quietNext ? quietProblem(quiet) : null;
     if (quietError !== null) {
-      setProblem({ message: quietError, key: QUIET });
+      rejectQuiet(quietError);
       return;
     }
 
@@ -259,10 +272,20 @@ export function ChannelForm({
          * in the wrong place. A field this form shows no input for, such as
          * a stored secret not being replaced, stays below the form, where it
          * can be read.
+         *
+         * A refused window arrives as `quiet_hours.<part>` (the data owner
+         * prefixes the second request's field, as an import report does) and
+         * stands under that part, so a zone the server's tzdata lacks is
+         * marked on the zone and not on the clock fields beside it.
          */
         const message =
           error instanceof Error ? error.message : "the channel could not be saved";
         const field = error instanceof ApiError ? error.field : null;
+        const part = quietPart(field);
+        if (part !== null && quiet.enabled) {
+          rejectQuiet({ message, part });
+          return;
+        }
         const spec = specs.find((s) => field === `config.${s.key}`);
         reject(
           message,
@@ -583,6 +606,10 @@ export function ChannelForm({
         }}
         stored={storedQuiet !== null}
         error={problem?.key === QUIET ? problem.message : null}
+        errorPart={problem?.key === QUIET ? (problem.part ?? null) : null}
+        controlRef={(part, node) => {
+          quietRefs.current[part] = node;
+        }}
       />
 
       {/*

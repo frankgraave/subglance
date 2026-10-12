@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { ApiError } from "../api/http";
 import { ChannelForm } from "./ChannelForm";
+import { QuietHoursField } from "./QuietHoursField";
 import { channelFromApi } from "./channels";
-import { draftFrom, quietChange, quietProblem } from "./quietHours";
+import { draftFrom, quietChange, quietPart, quietProblem } from "./quietHours";
 
 /*
  * Quiet hours in the channel form (SUB-124).
@@ -81,12 +83,54 @@ describe("quietProblem", () => {
   });
 
   it("refuses what the server would refuse", () => {
-    expect(quietProblem({ enabled: true, ...NIGHT, start: "" })).toMatch(/start and an end/);
-    expect(quietProblem({ enabled: true, ...NIGHT, end: "23:00" })).toMatch(/same minute/);
-    expect(quietProblem({ enabled: true, ...NIGHT, timezone: "Local" })).toMatch(/named timezone/);
-    expect(quietProblem({ enabled: true, ...NIGHT, timezone: "Mars/Olympus" })).toMatch(
+    expect(quietProblem({ enabled: true, ...NIGHT, start: "" })?.message).toMatch(/start and an end/);
+    expect(quietProblem({ enabled: true, ...NIGHT, end: "23:00" })?.message).toMatch(/same minute/);
+    expect(quietProblem({ enabled: true, ...NIGHT, timezone: "Local" })?.message).toMatch(
+      /named timezone/,
+    );
+    expect(quietProblem({ enabled: true, ...NIGHT, timezone: "Mars/Olympus" })?.message).toMatch(
       /not a timezone/,
     );
+  });
+
+  it("names the part the server would name for the same refusal", () => {
+    // internal/store/quiet_hours.go: a bad start is "start", a bad end and
+    // equal bounds are "end", a missing or unknown zone is "timezone".
+    const part = (over: Partial<typeof NIGHT>) =>
+      quietProblem({ enabled: true, ...NIGHT, ...over })?.part;
+    expect(part({ start: "" })).toBe("start");
+    expect(part({ end: "" })).toBe("end");
+    expect(part({ end: "23:00" })).toBe("end");
+    expect(part({ timezone: " " })).toBe("timezone");
+    expect(part({ timezone: "Mars/Olympus" })).toBe("timezone");
+  });
+});
+
+describe("QuietHoursField", () => {
+  it("shows a refusal about a part that is not on screen under the fieldset", () => {
+    // Off, the window draws no time or zone input to stand under; a refusal
+    // that names one must not vanish with it.
+    render(
+      <QuietHoursField
+        value={{ ...draftFrom(null), enabled: false }}
+        onChange={() => undefined}
+        stored={false}
+        error="unknown IANA timezone"
+        errorPart="timezone"
+      />,
+    );
+    expect(screen.getByRole("alert").textContent).toBe("unknown IANA timezone");
+  });
+});
+
+describe("quietPart", () => {
+  it("reads the part out of a quiet-hours field and nothing else", () => {
+    expect(quietPart("quiet_hours.timezone")).toBe("timezone");
+    expect(quietPart("quiet_hours.during")).toBe("during");
+    expect(quietPart("quiet_hours.colour")).toBeNull();
+    expect(quietPart("timezone")).toBeNull();
+    expect(quietPart("config.url")).toBeNull();
+    expect(quietPart(null)).toBeNull();
   });
 });
 
@@ -150,6 +194,74 @@ describe("ChannelForm quiet hours", () => {
     expect(onSave).not.toHaveBeenCalled();
     expect(screen.getByRole("alert").textContent).toMatch(/named timezone/);
     expect(screen.getByLabelText("Timezone").getAttribute("aria-invalid")).toBe("true");
+    // The zone is what is wrong; the clock fields beside it are not.
+    expect(screen.getByLabelText("From").getAttribute("aria-invalid")).toBeNull();
+    expect(screen.getByLabelText("Until").getAttribute("aria-invalid")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByLabelText("Timezone"));
+  });
+
+  it("puts a zone the server refused under the Timezone field", async () => {
+    /*
+     * The one refusal the browser cannot catch: a zone this browser knows
+     * and the server's tzdata does not. The data owner hands it on as
+     * `quiet_hours.timezone`; the sentence goes under that input, which is
+     * the only one marked and takes the focus, and nowhere else.
+     */
+    const onSave = vi
+      .fn()
+      .mockRejectedValue(
+        new ApiError(
+          400,
+          "The channel was saved, but its quiet hours were not: unknown IANA timezone.",
+          null,
+          "quiet_hours.timezone",
+        ),
+      );
+    render(<ChannelForm channel={email(NIGHT)} onSave={onSave} />);
+    fireEvent.change(screen.getByLabelText("Timezone"), {
+      target: { value: "America/Ciudad_Juarez" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    const zone = screen.getByLabelText("Timezone");
+    await waitFor(() => expect(zone.getAttribute("aria-invalid")).toBe("true"));
+    const described = (zone.getAttribute("aria-describedby") ?? "").split(" ");
+    const sentence = described
+      .map((id) => document.getElementById(id))
+      .find((el) => el?.classList.contains("field-error"));
+    expect(sentence?.textContent).toMatch(/unknown IANA timezone/);
+    expect(zone.closest(".field")?.contains(sentence ?? null)).toBe(true);
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(screen.getByLabelText("From").getAttribute("aria-invalid")).toBeNull();
+    expect(screen.getByLabelText("Until").getAttribute("aria-invalid")).toBeNull();
+    expect(document.activeElement).toBe(zone);
+  });
+
+  it("puts a refused mode under the two modes", async () => {
+    // A newer server's mode kept verbatim, refused by an older one.
+    const onSave = vi
+      .fn()
+      .mockRejectedValue(
+        new ApiError(400, "during must be hold or drop", null, "quiet_hours.during"),
+      );
+    render(<ChannelForm channel={email(NIGHT)} onSave={onSave} />);
+    fireEvent.click(screen.getByRole("radio", { name: /^Drop/ }));
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toBe("during must be hold or drop");
+    expect(screen.getByRole("group", { name: "During the window" }).contains(alert)).toBe(true);
+    expect(screen.getByLabelText("Timezone").getAttribute("aria-invalid")).toBeNull();
+  });
+
+  it("keeps a quiet-hours refusal below the form once the window is off", async () => {
+    // Nothing is left on screen to stand under; the sentence must still show.
+    const onSave = vi
+      .fn()
+      .mockRejectedValue(new ApiError(400, "channel has no quiet hours", null, "quiet_hours.start"));
+    render(<ChannelForm channel={email(NIGHT)} onSave={onSave} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: /hold this channel's alerts/i }));
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toBe("channel has no quiet hours");
   });
 
   it("does not re-check a stored window that is not being sent", async () => {

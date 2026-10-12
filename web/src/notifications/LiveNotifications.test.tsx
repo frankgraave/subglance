@@ -9,6 +9,7 @@ import {
   within,
 } from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
+import { ApiError } from "../api/http";
 import { LiveNotificationsRoot } from "./LiveNotifications";
 import { channelFromApi } from "./channels";
 import { inventoryFromApi } from "../monitors/inventory";
@@ -280,6 +281,42 @@ describe("LiveNotifications", () => {
     expect(alert.textContent).toMatch(/unknown IANA timezone/);
     expect(alert.textContent).toMatch(/would create a second channel/);
     expect(setQuiet.mock.calls[0][0]).toBe("9");
+  });
+
+  it("puts a window the server refused under the field it names", async () => {
+    // The server names the part (`timezone`); the form is told it as
+    // `quiet_hours.timezone` and puts the whole sentence under that field.
+    const create = vi.fn().mockResolvedValue(make({ id: 9 }));
+    const setQuiet = vi
+      .fn()
+      .mockRejectedValue(new ApiError(400, "unknown IANA timezone", null, "timezone"));
+    render(
+      <LiveNotificationsRoot
+        client={client()}
+        list={async () => []}
+        create={create}
+        setQuiet={setQuiet}
+        createOpen
+      />,
+    );
+    fireEvent.change(await screen.findByLabelText("Name"), {
+      target: { value: "Ops email" },
+    });
+    fireEvent.change(screen.getByLabelText(/recipient address/i), {
+      target: { value: "ops@example.com" },
+    });
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /hold this channel's alerts/i }),
+    );
+    fireEvent.change(screen.getByLabelText("Timezone"), {
+      target: { value: "Europe/Amsterdam" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^Add channel$/ }));
+    const alert = await screen.findByText(/quiet hours were not saved/);
+    expect(alert.textContent).toMatch(/would create a second channel/);
+    const zone = screen.getByLabelText("Timezone");
+    expect(zone.getAttribute("aria-invalid")).toBe("true");
+    expect(zone.closest(".field")?.contains(alert)).toBe(true);
   });
 
   it("creates a channel through the add drawer", async () => {

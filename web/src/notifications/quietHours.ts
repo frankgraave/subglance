@@ -18,6 +18,30 @@ export type QuietDraft = {
   during: string;
 };
 
+/**
+ * A part of the window a refusal can be about, by the server's name for it:
+ * the API's quiet-hours refusals carry one of these as their `field`.
+ */
+export type QuietPart = "start" | "end" | "timezone" | "during";
+
+/**
+ * A refused window: what is wrong, and which part it is about. A null part is
+ * a refusal about the window as a whole, which stands under the fieldset.
+ */
+export type QuietRefusal = { message: string; part: QuietPart | null };
+
+/**
+ * The part of the window a server field names, or null.
+ *
+ * The channel form hears a quiet-hours refusal as `quiet_hours.<part>`, the
+ * name a configuration import gives the same field, beside `config.<key>` for
+ * the channel's own settings.
+ */
+export function quietPart(field: string | null): QuietPart | null {
+  const part = /^quiet_hours\.(start|end|timezone|during)$/.exec(field ?? "")?.[1];
+  return (part as QuietPart | undefined) ?? null;
+}
+
 /** The form's starting point: the stored window, or hold overnight. */
 export function draftFrom(stored: QuietHours | null): QuietDraft {
   if (stored !== null) return { enabled: true, ...stored };
@@ -63,30 +87,41 @@ export function quietChange(
 }
 
 /**
- * The first problem the server would refuse, caught before anything is sent.
+ * The first problem the server would refuse, caught before anything is sent,
+ * and the part of the window it is about.
  *
  * Checked here rather than left to the server because the window is a second
  * request after the channel's own: a refusal that arrives after the channel was
  * created would leave a channel without the window its author asked for. The
- * server stays the authority and still validates everything.
+ * server stays the authority and still validates everything. Each refusal
+ * names the part the server would name for it, equal bounds included, so a
+ * sentence stands in one place whichever side caught it.
  */
-export function quietProblem(draft: QuietDraft): string | null {
+export function quietProblem(draft: QuietDraft): QuietRefusal | null {
   if (!draft.enabled) return null;
   const clock = /^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/;
-  if (!clock.test(draft.start) || !clock.test(draft.end)) {
-    return "Quiet hours need a start and an end time.";
+  for (const part of ["start", "end"] as const) {
+    if (!clock.test(draft[part])) {
+      return { message: "Quiet hours need a start and an end time.", part };
+    }
   }
   if (draft.start === draft.end) {
-    return "Quiet hours cannot start and end at the same minute.";
+    return { message: "Quiet hours cannot start and end at the same minute.", part: "end" };
   }
   const zone = draft.timezone.trim();
   if (zone === "" || zone === "Local") {
-    return "Quiet hours need a named timezone, such as Europe/Amsterdam: the server's own zone is not necessarily yours.";
+    return {
+      message: "Quiet hours need a named timezone, such as Europe/Amsterdam: the server's own zone is not necessarily yours.",
+      part: "timezone",
+    };
   }
   try {
     new Intl.DateTimeFormat("en", { timeZone: zone });
   } catch {
-    return `"${zone}" is not a timezone this browser recognises. Use an IANA name, such as Europe/Amsterdam.`;
+    return {
+      message: `"${zone}" is not a timezone this browser recognises. Use an IANA name, such as Europe/Amsterdam.`,
+      part: "timezone",
+    };
   }
   return null;
 }
