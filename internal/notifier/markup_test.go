@@ -106,6 +106,30 @@ func TestDiscordAlertTextCannotLink(t *testing.T) {
 	}
 }
 
+// A plain @here is no markup to encode, so it is the verbatim flag on the
+// sections carrying the alert's text that keeps Slack from making a mention
+// of it.
+func TestSlackAlertTextIsVerbatim(t *testing.T) {
+	a := markupAlert()
+	a.LastError = "@here @channel restore failed"
+	got := sentJSON(t, NewSlackSender(nil), func(url string) map[string]string {
+		return map[string]string{"url": url}
+	}, a)
+
+	blocks := got["blocks"].([]any)
+	text := func(i int) map[string]any {
+		return blocks[i].(map[string]any)["text"].(map[string]any)
+	}
+	if body := text(1)["text"].(string); !strings.Contains(body, "@here @channel restore failed") {
+		t.Errorf("body section = %q, want the mention text as typed", body)
+	}
+	for i, where := range []string{"title section", "body section"} {
+		if text(i)["verbatim"] != true {
+			t.Errorf("%s is not verbatim: %v", where, text(i))
+		}
+	}
+}
+
 func TestSlackText(t *testing.T) {
 	for in, want := range map[string]string{
 		"":                  "",
@@ -137,6 +161,12 @@ func TestDiscordText(t *testing.T) {
 		"https://a.example/*\n# h":   "https://a.example/*\n\\# h",
 		"$.status was \"*down*\"":    `$.status was "\*down\*"`,
 		"cert_expiry a__b__c _x_":    `cert_expiry a\_\_b\_\_c \_x\_`,
+		// A masked link right after an address is escaped, not carried
+		// along inside it; an IPv6 host keeps its brackets.
+		"https://good.example/x)[runbook](https://evil.example)": `https://good.example/x)\[runbook\](https://evil.example)`,
+		"https://[bad](https://evil.example)":                    `https://\[bad\](https://evil.example)`,
+		"http://[::1]:8080/health is down":                       "http://[::1]:8080/health is down",
+		"see http://[2001:db8::1].":                              "see http://[2001:db8::1].",
 	} {
 		if got := discordText(in); got != want {
 			t.Errorf("discordText(%q) = %q, want %q", in, got, want)

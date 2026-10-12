@@ -338,13 +338,17 @@ written by someone other than the operator: a push monitor's `msg`, the value
 a JSON assertion quotes from a response, a keyword, a DNS record. That text is
 sent so it reads as typed. In Slack, `&`, `<` and `>` go as `&amp;`, `&lt;`
 and `&gt;`, so a message saying `<!channel>` pings nobody and
-`<https://…|label>` is not a link. In a Discord description, markdown
-characters get a backslash, so `[label](https://…)` is not a masked link and
-`*`, `` ` ``, `~` and `|` show as typed; an address in the text is left whole
-and stays clickable, and an underscore inside a word, as in `cert_expiry`, is
-left alone because Discord does not act on it. Slack's own emphasis (`*`, `_`,
+`<https://…|label>` is not a link; the title and body are sent as
+`verbatim`, so a plain `@here` or `@channel` is no mention either. In a
+Discord description, markdown characters get a backslash, so
+`[label](https://…)` is not a masked link and `*`, `` ` ``, `~` and `|` show
+as typed; an address in the text is left whole and stays clickable, and an
+underscore inside a word, as in `cert_expiry`, is left alone because Discord
+does not act on it. Slack's own emphasis (`*`, `_`,
 `~`) has no escape, so a pair of asterisks can still make a word bold there.
-The links SubGlance adds itself are the only markup in either message.
+The links SubGlance adds itself are the only links with a label in either
+message; an address in the alert's own text shows as the address it is,
+whether or not the app makes it clickable.
 
 Telegram, ntfy, Gotify, email and SMS send plain text and need none of this.
 

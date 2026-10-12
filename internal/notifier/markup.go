@@ -37,7 +37,13 @@ func slackText(s string) string {
 // usually closes a sentence. The match is kept as it is, because a backslash
 // inside an address is part of the address once Discord has made it a link,
 // and the reader would follow a broken URL.
-var discordURL = regexp.MustCompile(`https?://[^\s<]+[^<.,:;"')\]\s]`)
+//
+// A run also ends at `[`, so `https://a.example/x)[label](https://b.example)`
+// keeps its address and leaves the masked link after it to be escaped as
+// text: taken whole, the run would carry that link through untouched. The
+// one place a bracket belongs in an address is an IPv6 host, as in
+// `http://[::1]:8080/`, which the first branch matches before any run.
+var discordURL = regexp.MustCompile(`https?://(?:\[[0-9A-Fa-f:.]+\](?:[:/?#][^\s<\[]*[^<.,:;"')\]\s\[])?|[^\s<\[]*[^<.,:;"')\]\s\[])`)
 
 // discordText makes text safe to place in a Discord embed description: a
 // backslash before each markdown character makes Discord draw that character
@@ -52,6 +58,11 @@ func discordText(s string) string {
 	lineStart := true
 	last := 0
 	for _, loc := range discordURL.FindAllStringIndex(s, -1) {
+		if s[loc[1]-1] == ']' && strings.HasPrefix(s[loc[1]:], "(") {
+			// `https://[bad](https://…)` is a label and a destination
+			// to Discord, not an IPv6 host: it is escaped as text.
+			continue
+		}
 		// An address follows, so where the text before it leaves off
 		// does not matter: the line has started once the address is in.
 		escapeDiscord(&b, s[last:loc[0]], lineStart)
