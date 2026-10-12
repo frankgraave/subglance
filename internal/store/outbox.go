@@ -107,6 +107,12 @@ func (d Delivery) MergedInto() string {
 // the payload names that still exists. When no monitor it speaks for is left,
 // nothing is written and ErrNotFound is reported: a deleted monitor takes its
 // own messages with it.
+//
+// A channel deleted in that wait is the same case from the other side, and is
+// reported as ErrUnknownChannel with nothing written: deleting a channel
+// already takes its queued messages, so the one that was still waiting goes
+// too. Without the check the insert fails on the foreign key, and a deliberate
+// deletion reads in the log as a database fault.
 func (db *DB) EnqueueDelivery(ctx context.Context, d Delivery) (Delivery, error) {
 	now := time.Now().Unix()
 	due := d.NextAttemptAt
@@ -141,12 +147,23 @@ func (db *DB) EnqueueDelivery(ctx context.Context, d Delivery) (Delivery, error)
 		           (SELECT id FROM monitors WHERE id = ?),
 		           (`+monitorNamed+`)) AS owner)
 		 WHERE owner IS NOT NULL
+		   AND EXISTS (SELECT 1 FROM notif_channels WHERE id = ?)
 		RETURNING id, monitor_id, incident_id`,
 		d.Payload,
 		d.ChannelID, incidentID, incidentID, d.Event,
 		OutboxPending, due.Unix(), now, now,
-		d.MonitorID).Scan(&id, &owner, &incident)
+		d.MonitorID, d.ChannelID).Scan(&id, &owner, &incident)
 	if errors.Is(err, sql.ErrNoRows) {
+		// Either the channel or every monitor is gone; say which, the
+		// channel first, since its absence alone is enough to write nothing.
+		var channel bool
+		if err := db.Writer.QueryRowContext(ctx,
+			`SELECT EXISTS (SELECT 1 FROM notif_channels WHERE id = ?)`, d.ChannelID).Scan(&channel); err != nil {
+			return Delivery{}, fmt.Errorf("enqueue delivery: %w", err)
+		}
+		if !channel {
+			return Delivery{}, fmt.Errorf("enqueue delivery: %w: %d", ErrUnknownChannel, d.ChannelID)
+		}
 		return Delivery{}, fmt.Errorf("enqueue delivery: %w: monitor %d and every monitor the message names are gone",
 			ErrNotFound, d.MonitorID)
 	}

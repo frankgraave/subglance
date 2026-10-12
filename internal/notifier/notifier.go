@@ -404,6 +404,13 @@ func (n *Notifier) flush(ctx context.Context, b *pending) {
 				"channel_id", b.channel, "monitors", len(b.alerts))
 			return
 		}
+		if errors.Is(err, store.ErrUnknownChannel) {
+			// The channel was deleted while the batch waited. Its queued
+			// messages went with it, and so does this one.
+			n.log.Info("notification dropped: its channel was deleted",
+				"channel_id", b.channel, "monitors", len(b.alerts))
+			return
+		}
 		n.log.Error("could not queue notification",
 			"channel_id", b.channel, "monitors", len(b.alerts), "error", err)
 		return

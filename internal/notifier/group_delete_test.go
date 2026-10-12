@@ -1,7 +1,10 @@
 package notifier
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -73,5 +76,44 @@ func TestGroupOfDeletedMonitorsIsDropped(t *testing.T) {
 	n.flushDue(context.Background())
 	if got := countDeliveries(t, db); got != 0 {
 		t.Errorf("queued %d deliveries for a deleted monitor, want none", got)
+	}
+}
+
+// A channel deleted while its batch waits takes the batch with it, as it takes
+// its queued messages. That is the operator's own action, not a fault: it is
+// logged as a drop, never as an ERROR carrying a SQLite constraint code.
+func TestGroupForADeletedChannelIsDroppedQuietly(t *testing.T) {
+	t.Parallel()
+
+	db := groupDB(t)
+	clock := newTestClock()
+	var logs bytes.Buffer
+	n := New(Options{
+		DB:          db,
+		Log:         slog.New(slog.NewTextHandler(&logs, nil)),
+		Now:         clock.Now,
+		GroupWindow: 90 * time.Second,
+	})
+	ch := groupChannel(t, db, "retired-channel")
+	m := groupMonitor(t, db, "still-here", ch.ID)
+	inc := openIncident(t, db, m.ID, clock.Now(), "timeout")
+	if err := n.Enqueue(context.Background(), m, inc, state.EventIncidentConfirmed, clock.Now()); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	if err := db.DeleteChannel(context.Background(), ch.ID); err != nil {
+		t.Fatalf("DeleteChannel: %v", err)
+	}
+	clock.Advance(2 * time.Minute)
+	n.flushDue(context.Background())
+
+	if got := countDeliveries(t, db); got != 0 {
+		t.Errorf("queued %d deliveries for a deleted channel, want none", got)
+	}
+	out := logs.String()
+	if strings.Contains(out, "level=ERROR") {
+		t.Errorf("a deleted channel was logged as an error:\n%s", out)
+	}
+	if !strings.Contains(out, "notification dropped: its channel was deleted") {
+		t.Errorf("the drop was not logged:\n%s", out)
 	}
 }
