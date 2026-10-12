@@ -33,21 +33,30 @@ func (s *SlackSender) Send(ctx context.Context, cfg map[string]string, a Alert) 
 		marker = ":red_circle:"
 	}
 
+	// Every field below is read as mrkdwn, the fallback text included, so
+	// the alert's own text goes in encoded; see slackText. Encoding stops
+	// <!channel>, but Slack also makes a mention of a plain @here or
+	// @channel unless the text object is verbatim, so the two sections
+	// that carry the alert's text are. The links section is not: its
+	// links are SubGlance's own.
+	title, body := slackText(a.Title()), slackText(a.Body())
 	payload := map[string]any{
-		"text": a.Title(),
+		"text": title,
 		"blocks": []map[string]any{
 			{
 				"type": "section",
-				"text": map[string]string{
-					"type": "mrkdwn",
-					"text": marker + " *" + a.Title() + "*",
+				"text": map[string]any{
+					"type":     "mrkdwn",
+					"text":     marker + " *" + title + "*",
+					"verbatim": true,
 				},
 			},
 			{
 				"type": "section",
-				"text": map[string]string{
-					"type": "mrkdwn",
-					"text": a.Body(),
+				"text": map[string]any{
+					"type":     "mrkdwn",
+					"text":     body,
+					"verbatim": true,
 				},
 			},
 		},

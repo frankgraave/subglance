@@ -331,6 +331,27 @@ How each channel carries the links:
 The address is added when the message is sent, not when the alert is queued,
 so an alert being retried after the setting changed links to the new address.
 
+## Text that is not markup
+
+Slack and Discord read a message as markup, and much of an alert's text was
+written by someone other than the operator: a push monitor's `msg`, the value
+a JSON assertion quotes from a response, a keyword, a DNS record. That text is
+sent so it reads as typed. In Slack, `&`, `<` and `>` go as `&amp;`, `&lt;`
+and `&gt;`, so a message saying `<!channel>` pings nobody and
+`<https://…|label>` is not a link; the title and body are sent as
+`verbatim`, so a plain `@here` or `@channel` is no mention either. In a
+Discord description, markdown characters get a backslash, so
+`[label](https://…)` is not a masked link and `*`, `` ` ``, `~` and `|` show
+as typed; an address in the text is left whole and stays clickable, and an
+underscore inside a word, as in `cert_expiry`, is left alone because Discord
+does not act on it. Slack's own emphasis (`*`, `_`,
+`~`) has no escape, so a pair of asterisks can still make a word bold there.
+The links SubGlance adds itself are the only links with a label in either
+message; an address in the alert's own text shows as the address it is,
+whether or not the app makes it clickable.
+
+Telegram, ntfy, Gotify, email and SMS send plain text and need none of this.
+
 ## The webhook payload
 
 A `webhook` channel sends one request per alert: a `POST`, or a `PUT` when
