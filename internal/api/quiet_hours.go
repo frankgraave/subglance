@@ -3,7 +3,6 @@ package api
 import (
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/frankgraave/subglance/internal/store"
 )
@@ -32,22 +31,15 @@ func (s *Server) handleSetQuietHours(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	q := store.QuietHours{
-		ChannelID: id,
-		Start:     strings.TrimSpace(req.Start),
-		End:       strings.TrimSpace(req.End),
-		Timezone:  strings.TrimSpace(req.Timezone),
-		During:    strings.TrimSpace(req.During),
-	}
-	if q.During == "" {
-		q.During = store.QuietHold
-	}
-	if err := q.Validate(); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+	q, err := store.NormaliseQuietHours(store.QuietHours{
+		ChannelID: id, Start: req.Start, End: req.End, Timezone: req.Timezone, During: req.During,
+	})
+	if err != nil {
+		writeProblem(w, http.StatusBadRequest, quietHoursProblem(err))
 		return
 	}
 
-	err := s.db.SetQuietHours(r.Context(), q)
+	err = s.db.SetQuietHours(r.Context(), q)
 	if errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "channel not found")
 		return
@@ -61,6 +53,17 @@ func (s *Server) handleSetQuietHours(w http.ResponseWriter, r *http.Request) {
 	s.log.Info("quiet hours set", "channel_id", id, "start", q.Start, "end", q.End,
 		"timezone", q.Timezone, "during", q.During)
 	writeJSON(w, http.StatusOK, q)
+}
+
+// quietHoursProblem turns the store's refusal into a problem on the field it
+// names. A refusal that is not a *store.QuietHoursError keeps its words and
+// blames no field rather than a guessed one.
+func quietHoursProblem(err error) problem {
+	var invalid *store.QuietHoursError
+	if errors.As(err, &invalid) {
+		return fieldProblem(invalid.Field, invalid.Msg)
+	}
+	return bodyProblem(err.Error())
 }
 
 // handleClearQuietHours removes a channel's quiet hours. Anything they were
