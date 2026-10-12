@@ -547,7 +547,7 @@ func (s *Server) handleCreateMonitor(w http.ResponseWriter, r *http.Request) {
 
 	created, err := s.db.CreateMonitor(r.Context(), m)
 	if errors.Is(err, store.ErrUnknownChannel) {
-		writeProblem(w, http.StatusBadRequest, unknownChannelProblem(err))
+		writeProblem(w, http.StatusBadRequest, unknownChannelProblem("channel_ids", err))
 		return
 	}
 	if err != nil {
@@ -1505,7 +1505,7 @@ func (s *Server) handlePatchMonitor(w http.ResponseWriter, r *http.Request) {
 		writeConflict(w, id)
 		return
 	case errors.Is(err, store.ErrUnknownChannel):
-		writeProblem(w, http.StatusBadRequest, unknownChannelProblem(err))
+		writeProblem(w, http.StatusBadRequest, unknownChannelProblem("channel_ids", err))
 		return
 	case errors.Is(err, sql.ErrNoRows):
 		// Deleted between the read and the write. For `If-Match: *` that is a
@@ -1534,14 +1534,16 @@ func (s *Server) handlePatchMonitor(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.describeMonitor(r, updated))
 }
 
-// unknownChannelProblem blames channel_ids for a channel that does not exist,
-// which in a form usually means it was deleted after the form was opened.
-func unknownChannelProblem(err error) problem {
+// unknownChannelProblem blames field for a channel that does not exist, which
+// in a form usually means it was deleted after the form was opened. Every
+// route that takes a channel id answers with it, so the store's own wording,
+// "store: unknown notification channel", never reaches a person.
+func unknownChannelProblem(field string, err error) problem {
 	msg := "a chosen channel does not exist; it may have been deleted"
 	if _, id, ok := strings.Cut(err.Error(), store.ErrUnknownChannel.Error()+": "); ok {
 		msg = "channel " + id + " does not exist; it may have been deleted"
 	}
-	return fieldProblem("channel_ids", msg)
+	return fieldProblem(field, msg)
 }
 
 // writeConflict reports that the monitor moved on since the caller read it.

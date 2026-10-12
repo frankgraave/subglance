@@ -50,7 +50,12 @@ func (s *Server) handleChannelOperation(w http.ResponseWriter, r *http.Request, 
 	}
 	result, etag, err := s.db.ChangeMonitorChannels(r.Context(), op, expected, preview)
 	switch {
-	case errors.Is(err, store.ErrInvalidChannelOperation), errors.Is(err, store.ErrUnknownChannel):
+	case errors.Is(err, store.ErrUnknownChannel):
+		// The inventory's dialog lists the channels it read when it opened;
+		// one deleted since is the usual way to get here.
+		writeProblem(w, http.StatusBadRequest, unknownChannelProblem("channel_id", err))
+		return
+	case errors.Is(err, store.ErrInvalidChannelOperation):
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	case errors.Is(err, sql.ErrNoRows):

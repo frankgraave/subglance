@@ -529,7 +529,7 @@ func (s *Server) handleSetMonitorChannels(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if errors.Is(err, store.ErrUnknownChannel) {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeProblem(w, http.StatusBadRequest, unknownChannelProblem("channel_ids", err))
 		return
 	}
 	if err != nil {
