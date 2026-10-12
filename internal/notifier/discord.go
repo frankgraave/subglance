@@ -50,9 +50,12 @@ func (s *DiscordSender) Send(ctx context.Context, cfg map[string]string, a Alert
 		colour = discordRed
 	}
 
+	// The description is read as markdown and the title is not, so only the
+	// description's text is escaped: a backslash in the title would show.
+	body := discordText(a.Body())
 	embed := map[string]any{
 		"title":       a.Title(),
-		"description": a.Body(),
+		"description": body,
 		"color":       colour,
 		"timestamp":   a.At.UTC().Format("2006-01-02T15:04:05Z"),
 	}
@@ -60,7 +63,7 @@ func (s *DiscordSender) Send(ctx context.Context, cfg map[string]string, a Alert
 	// incident; the description ends with both, named, for the monitor.
 	if link := primaryLink(a); link != "" {
 		embed["url"] = link
-		embed["description"] = a.Body() + "\n\n" + discordLinks(a)
+		embed["description"] = body + "\n\n" + discordLinks(a)
 	}
 
 	payload := map[string]any{

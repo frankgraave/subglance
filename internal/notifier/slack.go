@@ -33,21 +33,24 @@ func (s *SlackSender) Send(ctx context.Context, cfg map[string]string, a Alert) 
 		marker = ":red_circle:"
 	}
 
+	// Every field below is read as mrkdwn, the fallback text included, so
+	// the alert's own text goes in encoded; see slackText.
+	title, body := slackText(a.Title()), slackText(a.Body())
 	payload := map[string]any{
-		"text": a.Title(),
+		"text": title,
 		"blocks": []map[string]any{
 			{
 				"type": "section",
 				"text": map[string]string{
 					"type": "mrkdwn",
-					"text": marker + " *" + a.Title() + "*",
+					"text": marker + " *" + title + "*",
 				},
 			},
 			{
 				"type": "section",
 				"text": map[string]string{
 					"type": "mrkdwn",
-					"text": a.Body(),
+					"text": body,
 				},
 			},
 		},
