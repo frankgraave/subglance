@@ -401,13 +401,18 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	// Re-check the current password even though the caller is authenticated:
 	// it is what stops an unattended browser from becoming a permanent
 	// account takeover.
+	//
+	// The refusal names its field so a client can tell it from an expired
+	// session, which is the same status with no field, without matching the
+	// sentence.
 	valid, err := auth.VerifyPassword(req.CurrentPassword, user.PasswordHash)
 	if err != nil || !valid {
-		writeError(w, http.StatusUnauthorized, "current password is incorrect")
+		writeProblem(w, http.StatusUnauthorized,
+			fieldProblem("current_password", "current password is incorrect"))
 		return
 	}
-	if err := auth.ValidatePassword(req.NewPassword); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+	if p := passwordProblem("new_password", req.NewPassword); !p.ok() {
+		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
 

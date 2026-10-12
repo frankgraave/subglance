@@ -1377,19 +1377,29 @@ paths:
               schema:
                 type: string
         '400':
-          description: Malformed JSON, or the new password fails the strength rules.
+          description: |
+            Malformed JSON, or a new password that fails the strength rules
+            (`field: new_password`).
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              example:
+                error: 'password does not meet the minimum requirements: at least 12 characters'
+                field: new_password
         '401':
-          description: Not authenticated, or the supplied current password is incorrect.
+          description: |
+            Not authenticated, or the supplied current password is incorrect.
+            The second carries `field: current_password`; a missing or expired
+            session carries no `field`, which is how a client tells the two
+            apart without matching the sentence.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
               example:
                 error: current password is incorrect
+                field: current_password
         '500':
           description: The password could not be stored.
           content:

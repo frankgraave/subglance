@@ -53,7 +53,7 @@ it.each(["dark", "light"])("changes a password through the real browser fetcher,
     requests.push(JSON.parse(req.postData()!));
     const wrong = requests.length === 1;
     void req.respond({ status: wrong ? 401 : 204, contentType: "application/json",
-      ...(wrong ? { body: JSON.stringify({ error: "current password is incorrect" }) } : {}) });
+      ...(wrong ? { body: JSON.stringify({ error: "current password is incorrect", field: "current_password" }) } : {}) });
   });
   try {
     const beforeSearch = await page.$eval('input[type="search"]', (el) => ({

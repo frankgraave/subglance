@@ -18,7 +18,7 @@ function fill(current = "old passphrase") {
 it("uses the real password fetcher, keeps a wrong current password on its field, and retries without ending this session", async () => {
   const unauthorized = vi.fn();
   const stop = onUnauthorized(unauthorized);
-  const fetcher = vi.fn().mockResolvedValueOnce(json({ error: "current password is incorrect" }, 401))
+  const fetcher = vi.fn().mockResolvedValueOnce(json({ error: "current password is incorrect", field: "current_password" }, 401))
     .mockResolvedValueOnce(new Response(null, { status: 204 }));
   vi.stubGlobal("fetch", fetcher);
   render(<ChangePassword />);
@@ -108,6 +108,8 @@ it.each([
   [500, { error: "could not change the password" }, null],
   [400, { error: "unsupported field", field: "unknown" }, null],
   [401, { error: "authentication required" }, null],
+  // The sentence alone is not the signal: an untagged 401 is a lost session.
+  [401, { error: "current password is incorrect" }, null],
 ] as const)("renders real HTTP %s rejections and only expires genuinely unauthorized sessions", async (status, body, field) => {
   const unauthorized = vi.fn(); const stop = onUnauthorized(unauthorized);
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json(body, status)));

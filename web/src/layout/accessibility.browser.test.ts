@@ -103,7 +103,7 @@ async function openScreen(page: Page, screen: Screen, theme: string, incidentIdO
     if (url.origin !== origin) {
       void request.abort("blockedbyclient");
     } else if (screen.passwordError && url.pathname === "/api/v1/auth/password") {
-      void request.respond({ status: 401, contentType: "application/json", body: JSON.stringify({ error: "current password is incorrect" }) });
+      void request.respond({ status: 401, contentType: "application/json", body: JSON.stringify({ error: "current password is incorrect", field: "current_password" }) });
     } else if (screen.auth && url.pathname === "/api/v1/auth/me") {
       void request.respond({ status: 401, contentType: "application/json", body: '{"error":"unauthorized"}' });
     } else if (screen.auth && url.pathname === "/api/v1/setup") {
