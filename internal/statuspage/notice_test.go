@@ -13,7 +13,10 @@ import (
 func TestAnExpiringCertificateIsUpWithANote(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	f := seed(t, now)
-	const secretExpiry = "certificate expires in 6 days (on 2026-10-12)"
+	// The expiry date is read from the clock: a fixed date becomes today on
+	// the day it names, and today is printed on the page as its own date.
+	expiry := now.AddDate(0, 0, 6).Format(time.DateOnly)
+	secretExpiry := "certificate expires in 6 days (on " + expiry + ")"
 	if _, err := f.db.OpenNotice(t.Context(), f.monitor.ID, now.Add(-time.Hour), "cert_expiry", secretExpiry); err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +44,7 @@ func TestAnExpiringCertificateIsUpWithANote(t *testing.T) {
 	if !strings.Contains(html, `<span class="led-label">Up</span>`) {
 		t.Error("the lamp beside the note is not up")
 	}
-	for _, leak := range []string{secretExpiry, "2026-10-12", "6 days"} {
+	for _, leak := range []string{secretExpiry, expiry, "6 days"} {
 		if strings.Contains(html, leak) {
 			t.Errorf("the page publishes %q", leak)
 		}
@@ -50,7 +53,7 @@ func TestAnExpiringCertificateIsUpWithANote(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(raw), "2026-10-12") || !strings.Contains(string(raw), `"certificate_expiring":true`) {
+	if strings.Contains(string(raw), expiry) || !strings.Contains(string(raw), `"certificate_expiring":true`) {
 		t.Errorf("public JSON = %s, want the flag and no date", raw)
 	}
 }
@@ -67,8 +70,9 @@ func TestADomainNoticeIsUpWithoutTheCertificateNote(t *testing.T) {
 	if _, err := f.db.UpdateMonitor(t.Context(), m); err != nil {
 		t.Fatal(err)
 	}
+	expiry := now.AddDate(0, 0, 12).Format(time.DateOnly)
 	if _, err := f.db.OpenNotice(t.Context(), m.ID, now.Add(-time.Hour), "domain_expiry",
-		"domain registration of example.com expires in 12 days (on 2026-10-19)"); err != nil {
+		"domain registration of example.com expires in 12 days (on "+expiry+")"); err != nil {
 		t.Fatal(err)
 	}
 	f.beat(t, now.Add(-time.Minute), true, "up")
@@ -78,7 +82,7 @@ func TestADomainNoticeIsUpWithoutTheCertificateNote(t *testing.T) {
 		t.Fatalf("entry = status %q, certificate_expiring %v; want up and no certificate note", e.Status, e.CertificateExpiring)
 	}
 	html := render(t, page)
-	for _, leak := range []string{"Certificate expires soon", "2026-10-19", "12 days", "registration"} {
+	for _, leak := range []string{"Certificate expires soon", expiry, "12 days", "registration"} {
 		if strings.Contains(html, leak) {
 			t.Errorf("the page says %q", leak)
 		}

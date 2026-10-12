@@ -83,9 +83,11 @@ paths:
       operationId: createMaintenance
       summary: Schedule one-off or weekly maintenance
       description: |
-        Editors and administrators only. Choose exactly one monitor_id or an
-        exact tag_key/tag_value pair. One-off windows use absolute RFC3339
-        timestamps with offsets. Weekly windows use timezone, weekdays (Sunday
+        Editors and administrators only. Choose exactly one monitor_id or a
+        tag_key/tag_value pair. The pair is stored the way a monitor stores
+        its tags (key trimmed and lowercased, value trimmed), so `Env` and
+        `env` name one group; the name and timezone are stored trimmed.
+        One-off windows use absolute RFC3339 timestamps with offsets. Weekly windows use timezone, weekdays (Sunday
         is 0), local_time (HH:MM) and duration_minutes. Intervals include their
         start and exclude their end. Overlaps are a union. Missing DST times
         are skipped; repeated times start at the earlier occurrence only.
@@ -107,7 +109,20 @@ paths:
               schema:
                 $ref: '#/components/schemas/MaintenanceWindow'
         '400':
-          description: Invalid schedule, unknown field or schedule limit reached
+          description: |
+            Invalid schedule, unknown field or schedule limit reached. A
+            refusal about one setting names it in `field` (`name`,
+            `monitor_id`, `tag_key`, `tag_value`, `starts_at`, `ends_at`,
+            `timezone`, `weekdays`, `local_time`, `duration_minutes`); one
+            that spans settings, such as neither or both of a monitor and a
+            tag, has no `field`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: local_time must be HH:MM
+                field: local_time
         '401':
           description: Authentication required
         '403':
