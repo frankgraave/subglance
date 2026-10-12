@@ -123,12 +123,19 @@ var requiredConfigKey = map[string]string{
 // space or a slash in it fails on the form rather than as a 404 at 03:00.
 var ntfyTopic = regexp.MustCompile(`^[-_A-Za-z0-9]{1,64}$`)
 
-func validateChannel(req channelRequest) string {
-	if strings.TrimSpace(req.Name) == "" {
-		return "name is required"
+// channelNameProblem refuses a channel name that is blank or too long once
+// trimmed, which is the form it is stored in.
+func channelNameProblem(name string) problem {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fieldProblem("name", "name is required")
 	}
-	if len(req.Name) > 100 {
-		return "name must be 100 characters or fewer"
+	return nameLengthProblem(name)
+}
+
+func validateChannel(req channelRequest) string {
+	if p := channelNameProblem(req.Name); !p.ok() {
+		return p.msg
 	}
 
 	key, ok := requiredConfigKey[req.Type]
@@ -567,6 +574,9 @@ func (s *Server) handleSetMonitorChannels(w http.ResponseWriter, r *http.Request
 // Only a webhook's own settings carry a field so far: the notifier names the
 // key in the error, and nothing here reads it out of the sentence.
 func channelProblem(req channelRequest) problem {
+	if p := channelNameProblem(req.Name); !p.ok() {
+		return p
+	}
 	msg := validateChannel(req)
 	if msg == "" {
 		return problem{}

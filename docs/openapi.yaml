@@ -6553,7 +6553,11 @@ components:
       properties:
         name:
           type: string
-          description: Required, and refused when it is only whitespace.
+          description: |
+            Required, and refused when it is only whitespace. At most 100
+            characters, counted as characters rather than bytes: the name is
+            the subject of every alert about the monitor.
+          maxLength: 100
           example: Public website
         type:
           $ref: '#/components/schemas/MonitorType'
@@ -6756,7 +6760,9 @@ components:
       properties:
         name:
           type: string
-          description: Must not be blank.
+          description: |
+            Must not be blank. A new name is at most 100 characters; a name
+            saved before that limit is accepted back unchanged.
         type:
           $ref: '#/components/schemas/MonitorType'
           description: |
@@ -7769,8 +7775,10 @@ components:
       properties:
         name:
           type: string
-          description: Required, non-blank, at most 100 characters.
-          maxLength: 100
+          description: |
+            Required, non-blank, at most 100 characters once trimmed (counted
+            as characters, not bytes). Surrounding whitespace does not count,
+            so the raw value carries no maxLength.
           example: Ops Slack
         type:
           $ref: '#/components/schemas/ChannelType'
@@ -7905,8 +7913,10 @@ components:
       properties:
         name:
           type: string
-          description: Required, at most 100 characters. Used to tell tokens apart.
-          maxLength: 100
+          description: |
+            Required, non-blank, at most 100 characters once trimmed (counted
+            as characters, not bytes). Surrounding whitespace does not count,
+            so the raw value carries no maxLength. Used to tell tokens apart.
           example: ci-deploy
         expires_in:
           type: string

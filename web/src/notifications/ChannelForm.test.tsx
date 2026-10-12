@@ -310,6 +310,27 @@ describe("ChannelForm, webhook body", () => {
     expect(screen.getAllByRole("alert")).toHaveLength(1);
   });
 
+  it("puts a name the server refused under the Name field", async () => {
+    const onSave = vi
+      .fn()
+      .mockRejectedValue(
+        new ApiError(400, "name must be 100 characters or fewer", null, "name"),
+      );
+    render(<ChannelForm onSave={onSave} />);
+    fireEvent.change(screen.getByLabelText("Type"), { target: { value: "webhook" } });
+    const name = screen.getByLabelText("Name");
+    fireEvent.change(name, { target: { value: "Teams" } });
+    fireEvent.change(screen.getByLabelText("Endpoint URL"), {
+      target: { value: "https://h.example/hook" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /add channel/i }));
+    await waitFor(() => expect(name.getAttribute("aria-invalid")).toBe("true"));
+    const error = document.getElementById(name.getAttribute("aria-describedby") ?? "");
+    expect(error?.textContent).toContain("name must be 100 characters or fewer");
+    expect(document.activeElement).toBe(name);
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+  });
+
   it("keeps a refusal about no field it shows below the form", async () => {
     const onSave = vi
       .fn()

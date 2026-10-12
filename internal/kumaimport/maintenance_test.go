@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/frankgraave/subglance/internal/configfile"
 )
@@ -337,17 +338,32 @@ func TestWindowCap(t *testing.T) {
 	}
 }
 
-// A name longer than SubGlance keeps is cut on a character boundary.
+// A name longer than SubGlance keeps is cut to 120 characters, the limit
+// the store counts, so a name in multibyte letters keeps all of its room.
 func TestWindowNameIsShortened(t *testing.T) {
-	// 120 bytes ends in the middle of the 60th "é", which is dropped whole.
-	res := convertOne(windowRow(row{"title": "a" + strings.Repeat("é", 70)}))
+	res := convertOne(windowRow(row{"title": "a" + strings.Repeat("é", 130)}))
 	if len(res.Document.Maintenance) != 1 {
 		t.Fatalf("not converted: %s", notesOf(res))
 	}
-	if name := res.Document.Maintenance[0].Name; name != "a"+strings.Repeat("é", 59) {
-		t.Errorf("name = %q (%d bytes)", name, len(name))
+	if name := res.Document.Maintenance[0].Name; name != "a"+strings.Repeat("é", 119) {
+		t.Errorf("name = %q (%d characters)", name, utf8.RuneCountInString(name))
 	}
-	if !strings.Contains(notesOf(res), "shortened to 120 bytes") {
+	if !strings.Contains(notesOf(res), "shortened to 120 characters") {
+		t.Errorf("notes = %s", notesOf(res))
+	}
+}
+
+// A name that fits in characters but not in bytes is left alone.
+func TestWindowNameOfMultibyteLettersIsKept(t *testing.T) {
+	title := strings.Repeat("é", 120)
+	res := convertOne(windowRow(row{"title": title}))
+	if len(res.Document.Maintenance) != 1 {
+		t.Fatalf("not converted: %s", notesOf(res))
+	}
+	if name := res.Document.Maintenance[0].Name; name != title {
+		t.Errorf("name = %q, want it unchanged", name)
+	}
+	if strings.Contains(notesOf(res), "shortened") {
 		t.Errorf("notes = %s", notesOf(res))
 	}
 }
