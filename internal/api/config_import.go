@@ -338,13 +338,25 @@ func (s *Server) planChannel(ctx context.Context, p *importPlan, ex existingConf
 	var missing []string
 	if c.Config != nil || !found {
 		cfg := map[string]string{}
+		var held []string
 		for k, v := range c.Config {
 			switch {
 			case v != configfile.Placeholder:
 				cfg[k] = v
 			case found && existing.Type == next.Type && existing.Config[k] != "":
 				cfg[k] = existing.Config[k]
+				held = append(held, k)
 			default:
+				missing = append(missing, k)
+			}
+		}
+		// Nor when the file sends the channel somewhere else, the rule
+		// the PUT route holds a masked value to: a stored credential goes
+		// only to the destination it was saved for. Those values wait
+		// to be filled in, like a placeholder with nothing to resolve to.
+		if found && destinationChange(existing.Type, existing.Config, next.Type, cfg) != "" {
+			for _, k := range held {
+				delete(cfg, k)
 				missing = append(missing, k)
 			}
 		}

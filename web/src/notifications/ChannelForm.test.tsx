@@ -331,6 +331,60 @@ describe("ChannelForm, webhook body", () => {
     expect(screen.getAllByRole("alert")).toHaveLength(1);
   });
 
+  it("opens a stored secret the server will not keep, with the refusal under it", async () => {
+    // The server keeps a stored credential only for the destination it was
+    // saved for; an edit that moves the channel is refused on the credential.
+    const onSave = vi
+      .fn()
+      .mockRejectedValue(
+        new ApiError(
+          400,
+          "config.password must be entered again because config.host changed",
+          null,
+          "config.password",
+        ),
+      );
+    const mail = channelFromApi({
+      id: 3,
+      name: "Mail",
+      type: "email",
+      config: {
+        to: "ops@example.com",
+        from: "sg@example.com",
+        host: "smtp.example.com",
+        port: "587",
+        username: "sg",
+        password: "****cret",
+      },
+      enabled: true,
+    });
+    render(<ChannelForm channel={mail} onSave={onSave} />);
+    expect(screen.queryByLabelText("SMTP password (optional)")).toBeNull();
+    fireEvent.change(screen.getByLabelText("SMTP host (optional)"), {
+      target: { value: "smtp.elsewhere.example" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+
+    const field = await screen.findByLabelText("SMTP password (optional)");
+    await waitFor(() => expect(field.getAttribute("aria-invalid")).toBe("true"));
+    expect(field.getAttribute("type")).toBe("password");
+    expect((field as HTMLInputElement).value).toBe("");
+    const error = document.getElementById(field.getAttribute("aria-describedby") ?? "");
+    expect(error?.textContent).toContain("must be entered again because config.host changed");
+    await waitFor(() => expect(document.activeElement).toBe(field));
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+
+    // Typed again, the password goes with the new host.
+    onSave.mockResolvedValue(undefined);
+    fireEvent.change(field, { target: { value: "new-password" } });
+    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(2));
+    expect(onSave.mock.calls[1]?.[0].config).toMatchObject({
+      host: "smtp.elsewhere.example",
+      password: "new-password",
+    });
+  });
+
   it("keeps a refusal about no field it shows below the form", async () => {
     const onSave = vi
       .fn()

@@ -24,6 +24,13 @@ server without access control the topic name is the credential, since anyone
 who knows it can read the alerts and post fake ones. Use a topic nobody would
 guess, or an access token.
 
+A masked value that is saved back unchanged keeps what is stored, so editing a
+channel's name or recipients does not ask for its credentials again. Changing
+where the channel sends does: a new type, URL, SMTP host or port, or SMS
+provider. A stored credential is only ever sent to the destination it was
+saved for, so the edit is refused until the password, token or headers are
+typed again, and the form opens that field for it.
+
 Every channel has a **Send test** button, which delivers a real message and
 shows the exact error the far end returned.
 
