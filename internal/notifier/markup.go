@@ -28,6 +28,7 @@ var slackReplacer = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
 // a sentence. The run stops at `|` because inside `<…>` a pipe starts a
 // link's label, and an address that could carry one would let alert text
 // hide where a link goes. An IPv6 host keeps its brackets, as in discordURL.
+// A closing parenthesis the address opened is put back by slackLinkEnd.
 var slackURL = regexp.MustCompile(`(?i:https?)://(?:\[[0-9A-Fa-f:.]+\](?:[:/?#][^\s<>|]*[^\s<>|.,:;"')\]])?|[^\s<>|]*[^\s<>|.,:;"')\]])`)
 
 // slackText makes text safe to place in a Slack message: no mention, no
@@ -46,14 +47,28 @@ func slackText(s string) string {
 	b.Grow(len(s))
 	last := 0
 	for _, loc := range slackURL.FindAllStringIndex(s, -1) {
+		end := slackLinkEnd(s, loc[0], loc[1])
 		b.WriteString(slackReplacer.Replace(s[last:loc[0]]))
 		// The address holds no `<`, `>` or `|`, so only an `&` in it
 		// is encoded, which is how Slack itself writes one in a link.
-		b.WriteString("<" + slackReplacer.Replace(s[loc[0]:loc[1]]) + ">")
-		last = loc[1]
+		b.WriteString("<" + slackReplacer.Replace(s[loc[0]:end]) + ">")
+		last = end
 	}
 	b.WriteString(slackReplacer.Replace(s[last:]))
 	return b.String()
+}
+
+// slackLinkEnd extends the address s[start:end] over each closing
+// parenthesis that follows it and balances one opened inside it, so
+// `https://example.com/wiki/Status_(software)` links to the whole page while
+// the parenthesis closing `(see https://a.example/x)` stays text.
+func slackLinkEnd(s string, start, end int) int {
+	open := strings.Count(s[start:end], "(") - strings.Count(s[start:end], ")")
+	for end < len(s) && s[end] == ')' && open > 0 {
+		end++
+		open--
+	}
+	return end
 }
 
 // discordURL matches an address the way Discord's markdown finds a bare link

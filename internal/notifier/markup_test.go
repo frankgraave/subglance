@@ -162,12 +162,18 @@ func TestSlackText(t *testing.T) {
 		"&amp; stays typed": "&amp;amp; stays typed",
 		// An address becomes a link to itself; sentence punctuation
 		// after it stays outside, and an & in it is encoded.
-		"https://shop.example.com/health":    "<https://shop.example.com/health>",
-		"see https://a.example/x?a=1&b=2.":   "see <https://a.example/x?a=1&amp;b=2>.",
-		"(https://a.example/x), then":        "(<https://a.example/x>), then",
-		"HTTP://A.EXAMPLE/ down":             "<HTTP://A.EXAMPLE/> down",
-		"http://[::1]:8080/health is down":   "<http://[::1]:8080/health> is down",
-		"a https://a.example\nb http://b.ex": "a <https://a.example>\nb <http://b.ex>",
+		"https://shop.example.com/health":  "<https://shop.example.com/health>",
+		"see https://a.example/x?a=1&b=2.": "see <https://a.example/x?a=1&amp;b=2>.",
+		"(https://a.example/x), then":      "(<https://a.example/x>), then",
+		// A parenthesis the address opened is part of it; one it did
+		// not open closes the sentence around it.
+		"see https://example.com/wiki/Status_(software)":   "see <https://example.com/wiki/Status_(software)>",
+		"https://example.com/wiki/Status_(software).":      "<https://example.com/wiki/Status_(software)>.",
+		"(see https://example.com/wiki/Status_(software))": "(see <https://example.com/wiki/Status_(software)>)",
+		"https://a.example/f(x(y)) is down":                "<https://a.example/f(x(y))> is down",
+		"HTTP://A.EXAMPLE/ down":                           "<HTTP://A.EXAMPLE/> down",
+		"http://[::1]:8080/health is down":                 "<http://[::1]:8080/health> is down",
+		"a https://a.example\nb http://b.ex":               "a <https://a.example>\nb <http://b.ex>",
 		// A pipe ends the address, so alert text cannot give it a label.
 		"<https://evil.example|the runbook>": "&lt;<https://evil.example>|the runbook&gt;",
 		"https://evil.example|label":         "<https://evil.example>|label",
