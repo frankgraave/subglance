@@ -210,12 +210,17 @@ func (db *DB) GetQuietHours(ctx context.Context, channelID int64) (QuietHours, b
 // SetQuietHours creates or replaces a channel's quiet hours. It reports
 // ErrNotFound when the channel does not exist.
 //
+// The window is normalised here as well as by the API and the importer, so a
+// caller that hands over a padded time or no during gets the same window the
+// form and the file would have stored, not a refusal.
+//
 // Anything already held for the channel is released for re-evaluation in the
 // same transaction. A held delivery carries the end of the window that held
 // it; after an edit that moment may be hours away from the new end, and an
 // alert must not sit out a window nobody configured any more.
 func (db *DB) SetQuietHours(ctx context.Context, q QuietHours) error {
-	if err := q.Validate(); err != nil {
+	q, err := NormaliseQuietHours(q)
+	if err != nil {
 		return err
 	}
 

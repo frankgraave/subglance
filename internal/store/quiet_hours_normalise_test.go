@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"errors"
 	"testing"
 )
@@ -50,5 +51,34 @@ func TestQuietHoursRefusalNamesTheField(t *testing.T) {
 		if invalid.Error() != invalid.Msg || invalid.Msg == "" {
 			t.Errorf("%s: Error() = %q, Msg = %q", tc.name, invalid.Error(), invalid.Msg)
 		}
+	}
+}
+
+// TestSetQuietHoursNormalisesAtTheStore holds the store's own write to the
+// rule the API and the importer follow: a padded window with no during is
+// stored trimmed and as hold, not refused.
+func TestSetQuietHoursNormalisesAtTheStore(t *testing.T) {
+	ctx := context.Background()
+	db := openTestDB(t)
+
+	ch, err := db.CreateChannel(ctx, Channel{Name: "phone", Type: ChannelWebhook,
+		Config: map[string]string{"url": "https://example.com/hook"}, Enabled: true})
+	if err != nil {
+		t.Fatalf("create channel: %v", err)
+	}
+	if err := db.SetQuietHours(ctx, QuietHours{ChannelID: ch.ID, Start: " 23:00",
+		End: "07:00 ", Timezone: " Europe/Amsterdam"}); err != nil {
+		t.Fatalf("set a padded window with no during: %v", err)
+	}
+	got, ok, err := db.GetQuietHours(ctx, ch.ID)
+	want := QuietHours{ChannelID: ch.ID, Start: "23:00", End: "07:00", Timezone: "Europe/Amsterdam", During: QuietHold}
+	if err != nil || !ok || got != want {
+		t.Fatalf("stored %+v ok=%v err=%v, want %+v", got, ok, err, want)
+	}
+
+	var invalid *QuietHoursError
+	if err := db.SetQuietHours(ctx, QuietHours{ChannelID: ch.ID, Start: "23:00", End: "23:00",
+		Timezone: "UTC"}); !errors.As(err, &invalid) || invalid.Field != "end" {
+		t.Fatalf("equal bounds through the store: %v, want a refusal naming end", err)
 	}
 }
