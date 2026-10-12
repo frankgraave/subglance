@@ -1,7 +1,7 @@
 import { useId } from "react";
 import { Checkbox, Radio } from "../components/Choice";
 import { knownTimezones } from "./quietHours";
-import type { QuietDraft } from "./quietHours";
+import type { QuietDraft, QuietPart } from "./quietHours";
 import { FieldError } from "../components/FieldError";
 
 /**
@@ -24,6 +24,14 @@ import { FieldError } from "../components/FieldError";
  * sleep in. A datalist offers every IANA name the browser knows without a
  * four-hundred-row select, and the server's validation stays the authority.
  *
+ * **A refusal stands under the part it is about.** The server names the part
+ * of a window it refused (`start`, `end`, `timezone`, `during`), and so does
+ * the form's own check, so the sentence goes under that control, which alone
+ * is marked invalid. Marking all three inputs for a zone the server lacks
+ * sent a reader to the clock fields, which were right. A refusal that names
+ * no part still stands under the fieldset and marks every input, because it
+ * may be about any of them.
+ *
  * Controlled: the form owns the values, so it can send one request for the
  * channel and one for its window and compare against what was loaded.
  */
@@ -35,6 +43,14 @@ export type QuietHoursFieldProps = {
   stored: boolean;
   /** A problem with these fields, shown beneath them. */
   error?: string | null;
+  /**
+   * The part of the window `error` is about. The sentence then stands under
+   * that control and only that control is marked invalid; without one it
+   * stands under the fieldset.
+   */
+  errorPart?: QuietPart | null;
+  /** Receives each time and zone input, so the form can focus a refused one. */
+  controlRef?: (part: QuietPart, node: HTMLInputElement | null) => void;
   /**
    * A sentence about what a window costs on this kind of channel. It joins
    * the help text, which the checkbox is described by, so it is read out at
@@ -48,12 +64,32 @@ export function QuietHoursField({
   onChange,
   stored,
   error = null,
+  errorPart = null,
+  controlRef,
   caveat,
 }: QuietHoursFieldProps) {
   const ids = useId();
   const set = (patch: Partial<QuietDraft>) => onChange({ ...value, ...patch });
   const zones = value.enabled ? knownTimezones() : [];
-  const described = error !== null ? `${ids}-help ${ids}-error` : `${ids}-help`;
+  // A part that is not on screen cannot hold the sentence; the fieldset can.
+  const part = error !== null && value.enabled ? errorPart : null;
+  const whole = error !== null && part === null;
+  const errorId = (at: QuietPart | null) => `${ids}-error${at === null ? "" : `-${at}`}`;
+  /** What a time or zone input is described by and whether it is refused. */
+  const state = (at: QuietPart) => {
+    const refused = whole || part === at;
+    return {
+      "aria-describedby": refused ? `${ids}-help ${errorId(whole ? null : at)}` : `${ids}-help`,
+      ...(refused ? { "aria-invalid": true as const } : {}),
+    };
+  };
+  /** The sentence under one part, when it is the part refused. */
+  const refusal = (at: QuietPart) =>
+    part === at && (
+      <FieldError id={errorId(at)}>
+        {error}
+      </FieldError>
+    );
 
   return (
     <fieldset className="field nt-quiet">
@@ -81,9 +117,10 @@ export function QuietHoursField({
                 required
                 value={value.start}
                 onChange={(event) => set({ start: event.target.value })}
-                aria-describedby={described}
-                {...(error !== null ? { "aria-invalid": true as const } : {})}
+                ref={(node) => controlRef?.("start", node)}
+                {...state("start")}
               />
+              {refusal("start")}
             </div>
             <div className="field">
               <label className="field-label" htmlFor={`${ids}-end`}>
@@ -97,9 +134,10 @@ export function QuietHoursField({
                 required
                 value={value.end}
                 onChange={(event) => set({ end: event.target.value })}
-                aria-describedby={described}
-                {...(error !== null ? { "aria-invalid": true as const } : {})}
+                ref={(node) => controlRef?.("end", node)}
+                {...state("end")}
               />
+              {refusal("end")}
             </div>
             <div className="field field-wide">
               <label className="field-label" htmlFor={`${ids}-zone`}>
@@ -114,10 +152,11 @@ export function QuietHoursField({
                 list={zones.length > 0 ? `${ids}-zones` : undefined}
                 value={value.timezone}
                 onChange={(event) => set({ timezone: event.target.value })}
-                aria-describedby={described}
-                {...(error !== null ? { "aria-invalid": true as const } : {})}
+                ref={(node) => controlRef?.("timezone", node)}
+                {...state("timezone")}
                 placeholder="Europe/Amsterdam"
               />
+              {refusal("timezone")}
               {zones.length > 0 && (
                 <datalist id={`${ids}-zones`}>
                   {zones.map((zone) => (
@@ -137,6 +176,7 @@ export function QuietHoursField({
               value="hold"
               checked={value.during === "hold"}
               onChange={() => set({ during: "hold" })}
+              {...(part === "during" ? { "aria-describedby": errorId("during") } : {})}
             >
               Hold, then send one digest when the window ends
             </Radio>
@@ -145,9 +185,11 @@ export function QuietHoursField({
               value="drop"
               checked={value.during === "drop"}
               onChange={() => set({ during: "drop" })}
+              {...(part === "during" ? { "aria-describedby": errorId("during") } : {})}
             >
               Drop — nobody is told, not even afterwards
             </Radio>
+            {refusal("during")}
           </fieldset>
         </>
       )}
@@ -161,8 +203,8 @@ export function QuietHoursField({
         {caveat !== undefined && ` ${caveat}`}
       </p>
 
-      {error !== null && (
-        <FieldError id={`${ids}-error`}>
+      {whole && (
+        <FieldError id={errorId(null)}>
           {error}
         </FieldError>
       )}

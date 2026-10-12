@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
+import { ApiError } from "../api/http";
 import { createQueryClient } from "../live/queryClient";
 import { NotificationsView } from "./NotificationsView";
 import { fetchInventory, inventoryQueryKey } from "../monitors/inventoryApi";
@@ -336,6 +337,10 @@ export function LiveNotifications({
        * it is not: pressing "Add channel" again would create a second one.
        * The message says so, and the list is refreshed either way so the
        * channel that does exist is on screen.
+       *
+       * The server names the part of the window it refused (`timezone`); it
+       * is passed on as `quiet_hours.timezone` so the form can tell it from
+       * a field of the channel's own and put the sentence under that part.
        */
       if (quiet !== undefined) {
         try {
@@ -344,10 +349,16 @@ export function LiveNotifications({
           await queryClient.invalidateQueries({ queryKey: channelsQueryKey });
           const reason =
             error instanceof Error ? error.message : "the server refused them";
-          throw new Error(
+          const message =
             id === null
               ? `The channel was added, but its quiet hours were not saved: ${reason}. Close this form and set them with Edit; adding it again would create a second channel.`
-              : `The channel was saved, but its quiet hours were not: ${reason}.`,
+              : `The channel was saved, but its quiet hours were not: ${reason}.`;
+          if (!(error instanceof ApiError)) throw new Error(message);
+          throw new ApiError(
+            error.status,
+            message,
+            error.retryAfter,
+            error.field === null ? null : `quiet_hours.${error.field}`,
           );
         }
       }
