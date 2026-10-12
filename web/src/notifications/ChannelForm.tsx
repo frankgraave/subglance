@@ -36,7 +36,9 @@ import { FieldError } from "../components/FieldError";
  * its own mask as "unchanged" — so echoing the mask is what leaves the stored
  * credential alone. Sending an empty string would wipe it; omitting the key
  * would fail validation for Slack, Discord, Telegram and webhook, whose only
- * required field *is* the secret.
+ * required field *is* the secret. The server keeps a mask only while the
+ * channel keeps its destination; an edit that moves it is refused on the
+ * credential, and the form opens that field for the value to be typed again.
  *
  * **Masked phone numbers get the same treatment as a secret.** An SMS
  * channel's numbers reach an editor or viewer as `+31 6 •••• 5678`. They are
@@ -139,6 +141,12 @@ export function ChannelForm({
   const [problem, setProblem] = useState<Problem>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const fieldRefs = useRef<Record<string, FieldControl | null>>({});
+  /*
+   * The field to focus when its control first renders. A refusal arrives
+   * after an await, where React commits on its own schedule: a microtask
+   * queued beside the state update runs before the input exists.
+   */
+  const focusOnMount = useRef<string | null>(null);
   const quietRefs = useRef<Partial<Record<QuietPart, HTMLInputElement | null>>>({});
 
   const allSpecs = fieldsFor(type);
@@ -291,6 +299,24 @@ export function ChannelForm({
           return;
         }
         const spec = specs.find((s) => field === `config.${s.key}`);
+        /*
+         * A stored value the server will not keep — it is only sent to the
+         * destination it was saved for, and the edit moved the channel — is
+         * refused by name. Its control opens for typing, as Replace would
+         * open it, so the sentence stands under the input that takes the
+         * new value and focus lands there.
+         */
+        if (
+          spec !== undefined &&
+          spec.control !== "checkbox" &&
+          storedSecret(spec) &&
+          !(spec.key in replacing)
+        ) {
+          focusOnMount.current = spec.key;
+          setReplacing((current) => ({ ...current, [spec.key]: "" }));
+          setProblem({ message, key: spec.key });
+          return;
+        }
         reject(
           message,
           spec !== undefined && spec.control !== "checkbox" && accepting(spec)
@@ -310,6 +336,10 @@ export function ChannelForm({
       className: "input",
       ref: (node: FieldControl | null) => {
         fieldRefs.current[spec.key] = node;
+        if (node !== null && focusOnMount.current === spec.key) {
+          focusOnMount.current = null;
+          node.focus();
+        }
       },
       ...(invalid
         ? {

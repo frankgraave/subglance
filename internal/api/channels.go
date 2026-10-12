@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -319,10 +320,16 @@ func (s *Server) handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 	// This follows the same deny-by-default rule as the mask itself: any
 	// field that was masked on read can come back as its mask, which is
 	// exactly the set of fields that are not public.
+	//
+	// Restored only while the channel still sends where it did: see
+	// channel_destination.go. The keys are collected first and checked
+	// after, because the destination can itself be a restored mask.
+	var held []string
 	if req.Config != nil {
 		for k, v := range req.Config {
 			if !publicKeys[k] && v == maskValue(existing.Config[k]) && existing.Config[k] != "" {
 				req.Config[k] = existing.Config[k]
+				held = append(held, k)
 			}
 		}
 		// The same for phone numbers, which have a mask of their own: an
@@ -333,10 +340,16 @@ func (s *Server) handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 		// Then the numbers have to be typed again.
 		if existing.Type == store.ChannelSMS && req.Type == store.ChannelSMS &&
 			existing.Config[smsNumbersKey] != "" &&
-			strings.TrimSpace(req.Config["country_code"]) == strings.TrimSpace(existing.Config["country_code"]) &&
+			sameCountryCode(existing.Config, req.Config) &&
 			req.Config[smsNumbersKey] == smsNumbersView(existing.Config, false) {
 			req.Config[smsNumbersKey] = existing.Config[smsNumbersKey]
+			held = append(held, smsNumbersKey)
 		}
+	}
+	if moved := destinationChange(existing.Type, existing.Config, req.Type, req.Config); moved != "" && len(held) > 0 {
+		slices.Sort(held)
+		writeProblem(w, http.StatusBadRequest, heldCredentialProblem(held[0], moved))
+		return
 	}
 
 	if p := channelProblem(req); !p.ok() {

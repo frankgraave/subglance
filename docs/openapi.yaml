@@ -2872,6 +2872,14 @@ paths:
         credential is preserved — otherwise every round trip would silently
         destroy it.
 
+        That holds only while the channel keeps its destination: its type, and
+        per type `url` (webhook, Discord, Slack, ntfy, Gotify), `host` and
+        `port` (email), or `provider` and `url` (SMS). An edit that changes
+        the destination and sends a mask for any other value is refused with
+        a 400 whose `field` names that value (`config.password`), and nothing
+        is stored: a credential the caller was never shown is not sent to a
+        server the caller has just chosen. Typing the value again is accepted.
+
         `enabled` is left as-is when the field is omitted.
 
         The destination host is checked against the SSRF guard on edit exactly

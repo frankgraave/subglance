@@ -327,6 +327,12 @@ func (s *Server) planChannel(ctx context.Context, p *importPlan, ex existingConf
 		if c.Type != "" {
 			next.Type = c.Type
 		}
+		// A type change keeps nothing of the old settings: they were saved
+		// for the old type's destination, and another type would read
+		// them as its own (a Slack URL as a webhook's).
+		if c.Config == nil && next.Type != existing.Type {
+			return problemAt(sub(path, "config"), "must be given when type changes: the stored settings belong to %s", existing.Type)
+		}
 	}
 	if c.Enabled != nil {
 		next.Enabled = *c.Enabled
@@ -338,15 +344,33 @@ func (s *Server) planChannel(ctx context.Context, p *importPlan, ex existingConf
 	var missing []string
 	if c.Config != nil || !found {
 		cfg := map[string]string{}
+		var held []string
 		for k, v := range c.Config {
 			switch {
 			case v != configfile.Placeholder:
 				cfg[k] = v
 			case found && existing.Type == next.Type && existing.Config[k] != "":
 				cfg[k] = existing.Config[k]
+				held = append(held, k)
 			default:
 				missing = append(missing, k)
 			}
+		}
+		// Nor when the file sends the channel somewhere else, the rule
+		// the PUT route holds a masked value to: a stored credential goes
+		// only to the destination it was saved for. Those values wait
+		// to be filled in, like a placeholder with nothing to resolve to.
+		if found && destinationChange(existing.Type, existing.Config, next.Type, cfg) != "" {
+			for _, k := range held {
+				delete(cfg, k)
+				missing = append(missing, k)
+			}
+		} else if slices.Contains(held, smsNumbersKey) && !sameCountryCode(existing.Config, cfg) {
+			// Numbers without a country code are read under the channel's
+			// own, so under a new one the same digits reach someone else:
+			// the PUT route keeps masked numbers only under the same code.
+			delete(cfg, smsNumbersKey)
+			missing = append(missing, smsNumbersKey)
 		}
 		next.Config = cfg
 	}
