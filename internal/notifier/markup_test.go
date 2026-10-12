@@ -67,7 +67,9 @@ func TestSlackAlertTextCannotPingOrLink(t *testing.T) {
 	if want := "R&amp;D &lt;api&gt; *beta* is down"; texts["text"] != want {
 		t.Errorf("fallback text = %q, want %q", texts["text"], want)
 	}
-	if want := "&lt;!channel&gt; restore failed, see &lt;https://evil.example|the runbook&gt;"; !strings.Contains(texts["body section"], want) {
+	// The address in the hostile link becomes a link to itself, with its
+	// label left beside it as text: the reader sees where it goes.
+	if want := "&lt;!channel&gt; restore failed, see &lt;<https://evil.example>|the runbook&gt;"; !strings.Contains(texts["body section"], want) {
 		t.Errorf("body section = %q, want it to contain %q", texts["body section"], want)
 	}
 	// SubGlance's own links are markup on purpose and stay links.
@@ -130,6 +132,25 @@ func TestSlackAlertTextIsVerbatim(t *testing.T) {
 	}
 }
 
+// The verbatim sections stop Slack from linking a bare address, so the
+// monitor's target is sent as an explicit link and stays clickable, with
+// the sections still verbatim.
+func TestSlackAlertTargetIsALink(t *testing.T) {
+	a := markupAlert()
+	a.MonitorType, a.Target = "http", "https://shop.example.com/health?a=1&b=2"
+	got := sentJSON(t, NewSlackSender(nil), func(url string) map[string]string {
+		return map[string]string{"url": url}
+	}, a)
+
+	body := got["blocks"].([]any)[1].(map[string]any)["text"].(map[string]any)
+	if want := "<https://shop.example.com/health?a=1&amp;b=2>\n"; !strings.HasPrefix(body["text"].(string), want) {
+		t.Errorf("body section = %q, want it to start with %q", body["text"], want)
+	}
+	if body["verbatim"] != true {
+		t.Errorf("body section is not verbatim: %v", body)
+	}
+}
+
 func TestSlackText(t *testing.T) {
 	for in, want := range map[string]string{
 		"":                  "",
@@ -139,6 +160,21 @@ func TestSlackText(t *testing.T) {
 		"<@U024BE7LH>":      "&lt;@U024BE7LH&gt;",
 		"*bold* _it_ ~s~":   "*bold* _it_ ~s~",
 		"&amp; stays typed": "&amp;amp; stays typed",
+		// An address becomes a link to itself; sentence punctuation
+		// after it stays outside, and an & in it is encoded.
+		"https://shop.example.com/health":    "<https://shop.example.com/health>",
+		"see https://a.example/x?a=1&b=2.":   "see <https://a.example/x?a=1&amp;b=2>.",
+		"(https://a.example/x), then":        "(<https://a.example/x>), then",
+		"HTTP://A.EXAMPLE/ down":             "<HTTP://A.EXAMPLE/> down",
+		"http://[::1]:8080/health is down":   "<http://[::1]:8080/health> is down",
+		"a https://a.example\nb http://b.ex": "a <https://a.example>\nb <http://b.ex>",
+		// A pipe ends the address, so alert text cannot give it a label.
+		"<https://evil.example|the runbook>": "&lt;<https://evil.example>|the runbook&gt;",
+		"https://evil.example|label":         "<https://evil.example>|label",
+		"https://a.example/<!channel>":       "<https://a.example/>&lt;!channel&gt;",
+		// Not an address: no link.
+		"ftp://files.example": "ftp://files.example",
+		"http:// is down":     "http:// is down",
 	} {
 		if got := slackText(in); got != want {
 			t.Errorf("slackText(%q) = %q, want %q", in, got, want)

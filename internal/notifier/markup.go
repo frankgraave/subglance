@@ -23,13 +23,37 @@ import (
 // up as literal entities.
 var slackReplacer = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
 
+// slackURL matches an http or https address in alert text: a run up to
+// whitespace, `<`, `>` or `|`, not ending in punctuation that usually closes
+// a sentence. The run stops at `|` because inside `<…>` a pipe starts a
+// link's label, and an address that could carry one would let alert text
+// hide where a link goes. An IPv6 host keeps its brackets, as in discordURL.
+var slackURL = regexp.MustCompile(`(?i:https?)://(?:\[[0-9A-Fa-f:.]+\](?:[:/?#][^\s<>|]*[^\s<>|.,:;"')\]])?|[^\s<>|]*[^\s<>|.,:;"')\]])`)
+
 // slackText makes text safe to place in a Slack message: no mention, no
-// link and no channel reference can be written with it. Slack's emphasis
-// characters are left alone, because mrkdwn has no escape for them; a stray
-// asterisk can make a word bold, which is not worth inventing a workaround
-// for.
+// labelled link and no channel reference can be written with it. Slack's
+// emphasis characters are left alone, because mrkdwn has no escape for them;
+// a stray asterisk can make a word bold, which is not worth inventing a
+// workaround for.
+//
+// An address in the text is written as an explicit link, `<https://…>`, which
+// Slack draws as the address itself. The sections that carry alert text are
+// verbatim, so that a plain @here is no mention, and verbatim also stops
+// Slack from linking a bare address: without the brackets a monitor's own
+// target would arrive as text the reader cannot click.
 func slackText(s string) string {
-	return slackReplacer.Replace(s)
+	var b strings.Builder
+	b.Grow(len(s))
+	last := 0
+	for _, loc := range slackURL.FindAllStringIndex(s, -1) {
+		b.WriteString(slackReplacer.Replace(s[last:loc[0]]))
+		// The address holds no `<`, `>` or `|`, so only an `&` in it
+		// is encoded, which is how Slack itself writes one in a link.
+		b.WriteString("<" + slackReplacer.Replace(s[loc[0]:loc[1]]) + ">")
+		last = loc[1]
+	}
+	b.WriteString(slackReplacer.Replace(s[last:]))
+	return b.String()
 }
 
 // discordURL matches an address the way Discord's markdown finds a bare link
