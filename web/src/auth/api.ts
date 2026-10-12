@@ -68,11 +68,10 @@ export async function login(email: string, password: string): Promise<User> {
 
 /**
  * Changes only this user's password; the server rotates the caller's cookie.
- * The existing endpoint uses an untagged 401 for a wrong current password as
- * well as for an expired session. Do not send that known validation answer
- * through apiFetch's blanket sign-out signal. All other 401s still report it.
- * Keep the legacy message match here, not in the form; tagged errors need no
- * wording match. This exception is specific to this endpoint.
+ * A wrong current password is a 401 like an expired session, told apart by
+ * its `field`. Do not send that validation answer through apiFetch's blanket
+ * sign-out signal; every other 401 still reports it. The UI ships in the same
+ * binary as the server, so no untagged legacy answer needs matching by text.
  */
 export async function changePassword(current: string, next: string, signal?: AbortSignal): Promise<void> {
   const res = await fetch("/api/v1/auth/password", {
@@ -86,10 +85,7 @@ export async function changePassword(current: string, next: string, signal?: Abo
   if (res.ok) return;
   const error = await readError(res);
   signal?.throwIfAborted();
-  const wrongCurrent = error.field === "current_password" ||
-    (error.status === 401 && error.field === null && error.message === "current password is incorrect");
-  if (res.status === 401 && !wrongCurrent) reportUnauthorized();
-  if (wrongCurrent) throw new ApiError(error.status, error.message, error.retryAfter, "current_password");
+  if (res.status === 401 && error.field !== "current_password") reportUnauthorized();
   throw error;
 }
 
