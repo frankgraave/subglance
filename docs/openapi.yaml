@@ -3025,11 +3025,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/QuietHours'
         '400':
-          description: An invalid id, malformed JSON, or a window that fails validation.
+          description: |
+            An invalid id, malformed JSON, or a window that fails validation.
+            A validation failure names the value in `field`: `start` or `end`
+            for a time that is not `HH:MM`, `end` when the two are equal,
+            `timezone` for a blank, `Local` or unknown zone, `during` for a
+            mode other than `hold` or `drop`. Values are trimmed first.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              example:
+                error: end must be HH:MM
+                field: end
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':

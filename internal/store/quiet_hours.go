@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -32,30 +33,69 @@ type QuietHours struct {
 	During    string `json:"during"`
 }
 
-// Validate reports the first problem with a quiet-hours definition.
+// QuietHoursError is a refused quiet-hours definition, naming the request
+// field it is about ("start", "end", "timezone" or "during") so a form or an
+// import report can put the message beside the value that caused it. Error
+// returns the message alone, so the words a client reads are the ones they
+// were before the field was named.
+type QuietHoursError struct {
+	Field string
+	Msg   string
+}
+
+func (e *QuietHoursError) Error() string { return e.Msg }
+
+func invalidQuiet(field, msg string) error {
+	return &QuietHoursError{Field: field, Msg: msg}
+}
+
+// NormaliseQuietHours trims the four strings, gives an empty During the
+// default, and validates the result. Every way a window enters the store goes
+// through it, so a file and a form are held to one rule: an import that
+// refused a window without `during` which the API stored as hold made the
+// same window valid in one place and invalid in the other.
+//
+// The default is hold because it is the only mode that cannot lose an alert.
+func NormaliseQuietHours(q QuietHours) (QuietHours, error) {
+	q.Start = strings.TrimSpace(q.Start)
+	q.End = strings.TrimSpace(q.End)
+	q.Timezone = strings.TrimSpace(q.Timezone)
+	q.During = strings.TrimSpace(q.During)
+	if q.During == "" {
+		q.During = QuietHold
+	}
+	if err := q.Validate(); err != nil {
+		return QuietHours{}, err
+	}
+	return q, nil
+}
+
+// Validate reports the first problem with a quiet-hours definition, as a
+// *QuietHoursError.
 func (q QuietHours) Validate() error {
 	start, err := parseClock(q.Start)
 	if err != nil {
-		return fmt.Errorf("start must be HH:MM")
+		return invalidQuiet("start", "start must be HH:MM")
 	}
 	end, err := parseClock(q.End)
 	if err != nil {
-		return fmt.Errorf("end must be HH:MM")
+		return invalidQuiet("end", "end must be HH:MM")
 	}
 	if start == end {
 		// Equal bounds would mean either "never" or "always", and a
 		// channel that is always quiet is a channel that is off. Disabling
-		// a channel already has its own switch.
-		return fmt.Errorf("start and end must differ")
+		// a channel already has its own switch. The end is named because
+		// the start is usually the bound typed first.
+		return invalidQuiet("end", "start and end must differ")
 	}
 	if q.Timezone == "" || q.Timezone == "Local" {
-		return fmt.Errorf("timezone must be an explicit IANA name")
+		return invalidQuiet("timezone", "timezone must be an explicit IANA name")
 	}
 	if _, err := time.LoadLocation(q.Timezone); err != nil {
-		return fmt.Errorf("unknown IANA timezone")
+		return invalidQuiet("timezone", "unknown IANA timezone")
 	}
 	if q.During != QuietHold && q.During != QuietDrop {
-		return fmt.Errorf("during must be hold or drop")
+		return invalidQuiet("during", "during must be hold or drop")
 	}
 	return nil
 }

@@ -86,6 +86,11 @@ and an HTTP monitor's `headers` and `body` (`headers: {}` and `body: ""`
 remove them). An export writes these empty forms for an object that has none,
 so importing it makes the target match instead of keeping what it had.
 
+Inside `quiet_hours`, `during` may be left out: it defaults to `hold`, as it
+does when the window is set through the API, because that is the mode that
+cannot lose an alert. A refused window is reported at the value that is wrong,
+for example `channels[1].quiet_hours.timezone`.
+
 A push monitor created by an import is issued a new push URL. It is shown once,
 as `push_url` in the import report, exactly like the response that creates a
 push monitor through the API. Update the job that pings it.

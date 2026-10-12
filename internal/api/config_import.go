@@ -379,10 +379,16 @@ func (s *Server) planChannel(ctx context.Context, p *importPlan, ex existingConf
 	}
 	switch {
 	case window != nil:
-		q := store.QuietHours{ChannelID: existing.ID, Start: window.Start, End: window.End,
-			Timezone: window.Timezone, During: window.During}
-		if err := q.Validate(); err != nil {
-			return problemAt(sub(path, "quiet_hours"), "%s", err.Error())
+		// The PUT route's own rule, so a file is held to what a form is:
+		// trimmed values, and an omitted `during` stored as hold.
+		q, err := store.NormaliseQuietHours(store.QuietHours{ChannelID: existing.ID,
+			Start: window.Start, End: window.End, Timezone: window.Timezone, During: window.During})
+		if err != nil {
+			at := sub(path, "quiet_hours")
+			if pr := quietHoursProblem(err); pr.field != "" {
+				at = sub(at, pr.field)
+			}
+			return problemAt(at, "%s", err.Error())
 		}
 		if cur, ok := ex.quiet[existing.ID]; !found || !ok || cur != q {
 			step.quiet = &q
