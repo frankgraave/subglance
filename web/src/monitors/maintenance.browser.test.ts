@@ -11,6 +11,7 @@ import axe from "axe-core";
 import { chromium, type Browser } from "../layout/harness/browser";
 import { maintenanceCleanup } from "../layout/harness/maintenanceCleanup";
 import { THEME_STORAGE_KEY } from "../theme/theme";
+import { BACKDROP, LUMINANCE, OVER_BACKDROP } from "../layout/harness/contrast";
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 let dir: string, child: ChildProcess, lines: Interface, browser: Browser;
 let fixture: { url: string; session: string; ids: number[] };
@@ -222,5 +223,59 @@ it.each([["dark",375],["light",375],["dark",1440],["light",1440]] as const)("mai
    expect(audit.violations,`hover=${hovered}`).toEqual([]);
    await button!.evaluate(el=>el.getAnimations().forEach(animation=>animation.finish()));
   }
+ } finally {await context.close();}
+});
+
+// The real server names the field it refuses; the form stands the refusal
+// under that input, and it is measured there the way field-refusals measures
+// the settings cards: words at 4.5:1, the glyph at 3:1, axe on both.
+it.each([["dark",375],["light",375],["dark",1440],["light",1440]] as const)("an unknown timezone is refused under the Timezone field: %s %ipx", async(theme,width)=>{
+ const context=await browser.createBrowserContext();const page=await context.newPage();
+ page.setDefaultTimeout(5_000);
+ try {
+  await context.setCookie({name:"subglance_session",value:fixture.session,domain:new URL(fixture.url).hostname,path:"/",httpOnly:true,sameSite:"Strict"});
+  await page.setViewport({width,height:1000});
+  await page.emulateMediaFeatures([{name:"prefers-reduced-motion",value:"reduce"}]);
+  await page.evaluateOnNewDocument((key,value)=>localStorage.setItem(key,value),THEME_STORAGE_KEY,theme);
+  await page.goto(`${fixture.url}/monitors`,{waitUntil:"domcontentloaded"});
+  await (await page.waitForSelector('::-p-aria(Maintenance[role="button"])'))!.click();
+  await page.waitForSelector('.maintenance input[name="name"]');
+  await page.type('.maintenance input[name="name"]',"Patch night");
+  await page.select('.maintenance select[name="monitor_id"]',String(fixture.ids[0]));
+  await page.select('.maintenance select[name="schedule"]',"weekly");
+  await page.$eval('.maintenance input[name="timezone"]',(el)=>(el as HTMLInputElement).value="Mars/Olympus");
+  await page.click('.maintenance button[type="submit"]');
+  await page.waitForSelector('.maintenance .field-error',{visible:true});
+  const placed=await page.evaluate(()=>{
+   const box=document.querySelector<HTMLInputElement>('.maintenance input[name="timezone"]')!;
+   const refusal=document.querySelector('.maintenance .field-error')!;
+   return {text:refusal.textContent,beside:refusal.closest(".field")===box.closest(".field"),invalid:box.getAttribute("aria-invalid"),
+    describedBy:box.getAttribute("aria-describedby")?.split(" ")[0]===refusal.id,focused:document.activeElement===box,
+    alerts:document.querySelectorAll('.maintenance [role="alert"]').length};
+  });
+  expect(placed).toEqual({text:"unknown IANA timezone",beside:true,invalid:"true",describedBy:true,focused:true,alerts:1});
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  const seen=await page.evaluate(`((scope) => {
+   const luminance = ${LUMINANCE};
+   const backdrop = ${BACKDROP};
+   const over = ${OVER_BACKDROP};
+   const ratio = (a, b) => { const x = luminance(a); const y = luminance(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+   return [...document.querySelectorAll(scope + " .field-error")].map((el) => {
+    const svg = el.querySelector(":scope > svg");
+    const words = over(el, getComputedStyle(el).color);
+    const mark = svg && over(svg, getComputedStyle(svg).stroke === "none" ? getComputedStyle(svg).color : getComputedStyle(svg).stroke);
+    return { words: words ? ratio(words, backdrop(el)) : 0, glyph: mark ? ratio(mark, backdrop(svg)) : 0 };
+   });
+  })(".maintenance")`) as {words:number;glyph:number}[];
+  expect(seen).toHaveLength(1);
+  expect(seen[0].words).toBeGreaterThanOrEqual(4.5);
+  expect(seen[0].glyph).toBeGreaterThanOrEqual(3);
+  await page.evaluate(axe.source);
+  const audit=await page.evaluate(async()=> (window as unknown as {axe:typeof axe}).axe.run({include:[[".maintenance .field-error"],['.maintenance [aria-invalid="true"]']]},{runOnly:{type:"tag",values:["wcag2a","wcag2aa","wcag21aa"]}}));
+  expect(audit.violations).toEqual([]);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  if(process.env.MAINTENANCE_BROWSER_PROOF_DIR){await mkdir(process.env.MAINTENANCE_BROWSER_PROOF_DIR,{recursive:true});await page.screenshot({path:join(process.env.MAINTENANCE_BROWSER_PROOF_DIR,`maintenance-refusal-${theme}-${width}.png`),fullPage:true});}
+  // Nothing was scheduled, so the list a later case starts from is unchanged.
+  expect(await page.evaluate(async()=>fetch("/api/v1/maintenance").then(r=>r.json()).then(body=>body.maintenance.length))).toBe(0);
  } finally {await context.close();}
 });
