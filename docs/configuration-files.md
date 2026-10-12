@@ -115,7 +115,10 @@ so exporting and re-importing on the same instance changes nothing. A channel
 whose file gives it another destination (another type, URL, SMTP host or port,
 or SMS provider) does not keep its stored credentials: they are only sent to
 the destination they were saved for, so its placeholders are treated as having
-nothing to keep. On an
+nothing to keep. An SMS channel whose `country_code` changes does not keep its
+stored `numbers` either, since a number written without a country code would
+reach someone else under the new one. A file that changes a channel's `type`
+must give its `config` too: the stored settings belong to the old type. On an
 instance that has nothing to keep, the object is created without the value and
 **switched off**, and the report lists the field under `needs_secrets`. A
 channel without its token, or a check without its authorization header, would

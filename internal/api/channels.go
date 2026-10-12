@@ -340,7 +340,7 @@ func (s *Server) handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 		// Then the numbers have to be typed again.
 		if existing.Type == store.ChannelSMS && req.Type == store.ChannelSMS &&
 			existing.Config[smsNumbersKey] != "" &&
-			strings.TrimSpace(req.Config["country_code"]) == strings.TrimSpace(existing.Config["country_code"]) &&
+			sameCountryCode(existing.Config, req.Config) &&
 			req.Config[smsNumbersKey] == smsNumbersView(existing.Config, false) {
 			req.Config[smsNumbersKey] = existing.Config[smsNumbersKey]
 			held = append(held, smsNumbersKey)

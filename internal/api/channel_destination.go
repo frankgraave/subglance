@@ -71,3 +71,10 @@ func heldCredentialProblem(key, moved string) problem {
 	return fieldProblem("config."+key, "config."+key+" must be entered again because "+moved+
 		" changed: a stored value is only sent to the destination it was saved for")
 }
+
+// sameCountryCode reports whether two SMS configs read a number written
+// without a country code alike. Stored numbers are kept for an edit or an
+// import only under the code they were saved with.
+func sameCountryCode(from, to map[string]string) bool {
+	return strings.TrimSpace(from["country_code"]) == strings.TrimSpace(to["country_code"])
+}

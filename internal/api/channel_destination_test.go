@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/frankgraave/subglance/internal/configfile"
 	"github.com/frankgraave/subglance/internal/store"
 )
 
@@ -221,5 +222,90 @@ func TestImportDoesNotCarryAStoredCredentialToANewDestination(t *testing.T) {
 		if c.Enabled {
 			t.Error("a channel waiting for its password is enabled")
 		}
+	}
+}
+
+// TestImportKeepsStoredValuesOnlyWhereTheyWereSaved holds an import to the
+// two rules a stored value lives by besides the destination: SMS numbers are
+// kept only under the country code they were saved with, and a type change
+// does not inherit the old type's settings by leaving config out.
+func TestImportKeepsStoredValuesOnlyWhereTheyWereSaved(t *testing.T) {
+	sms := map[string]string{"provider": "android-gateway", "url": "http://phone.example:8080",
+		"username": "sms", "password": "phone-pass", "country_code": "+31", "numbers": "06 1234 5678"}
+	smsFile := func(key, countryCode string) string {
+		return "version: 1\nchannels:\n  - key: " + key + "\n    name: Ops\n    type: sms\n    config:\n" +
+			"      provider: android-gateway\n      url: http://phone.example:8080\n      username: sms\n" +
+			"      password: \"" + configfile.Placeholder + "\"\n      country_code: \"" + countryCode + "\"\n" +
+			"      numbers: \"" + configfile.Placeholder + "\"\n"
+	}
+	cases := map[string]struct {
+		typ       string
+		cfg       map[string]string
+		file      func(key string) string
+		wantField string            // a refused file names this path
+		wantNeeds string            // otherwise the channel waits for these
+		wantKept  map[string]string // stored values the import must leave as they were
+	}{
+		"a new country code drops the stored numbers": {
+			typ: store.ChannelSMS, cfg: sms,
+			file:      func(key string) string { return smsFile(key, "+32") },
+			wantNeeds: "numbers",
+			wantKept:  map[string]string{"password": "phone-pass", "country_code": "+32", "numbers": ""},
+		},
+		"the same country code, spaced, keeps them": {
+			typ: store.ChannelSMS, cfg: sms,
+			file:     func(key string) string { return smsFile(key, " +31 ") },
+			wantKept: map[string]string{"password": "phone-pass", "numbers": "06 1234 5678"},
+		},
+		"a type change without config is refused": {
+			typ: store.ChannelSlack, cfg: map[string]string{"url": secretSlackURL},
+			file: func(key string) string {
+				return "version: 1\nchannels:\n  - key: " + key + "\n    name: Ops\n    type: webhook\n"
+			},
+			wantField: "channels[0].config",
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			srv, db := testServerWithDB(t)
+			ch := seedChannel(t, db, tc.typ, maps.Clone(tc.cfg))
+			doc, err := configfile.Parse([]byte(exportYAML(t, srv)))
+			must(t, err)
+			if len(doc.Channels) != 1 {
+				t.Fatalf("export has %d channels, want 1", len(doc.Channels))
+			}
+			file := tc.file(doc.Channels[0].Key)
+
+			for _, dryRun := range []bool{true, false} {
+				code, rep, body := importYAML(t, srv, file, dryRun)
+				if tc.wantField != "" {
+					wantStatusProblem(t, code, body, tc.wantField, "type changes")
+					continue
+				}
+				if code != http.StatusOK {
+					t.Fatalf("import (dry run %v) = %d: %s", dryRun, code, body)
+				}
+				if len(rep.Channels) != 1 || strings.Join(rep.Channels[0].NeedsSecrets, ",") != tc.wantNeeds {
+					t.Errorf("dry run %v: channels = %+v, want needs_secrets %q\n%s", dryRun, rep.Channels, tc.wantNeeds, body)
+				}
+			}
+
+			stored, err := db.GetChannel(context.Background(), ch.ID)
+			must(t, err)
+			if tc.wantField != "" {
+				if stored.Type != tc.typ || !maps.Equal(stored.Config, tc.cfg) {
+					t.Errorf("a refused file changed the channel: %s %v", stored.Type, stored.Config)
+				}
+				return
+			}
+			for k, want := range tc.wantKept {
+				if got := stored.Config[k]; got != want {
+					t.Errorf("config.%s = %q, want %q", k, got, want)
+				}
+			}
+			if stored.Enabled != (tc.wantNeeds == "") {
+				t.Errorf("enabled = %v with needs_secrets %q", stored.Enabled, tc.wantNeeds)
+			}
+		})
 	}
 }
