@@ -687,9 +687,9 @@ func monitorChanges(before, after store.Monitor) []string {
 }
 
 func planRule(p *importPlan, ex existingConfig, path string, r configfile.RoutingRule) error {
-	key, value, err := store.NormaliseRoutingTag(r.TagKey, r.TagValue)
-	if err != nil {
-		return problemAt(sub(path, "tag_key"), "%s", err.Error())
+	key, value, pr := routingTagProblem(r.TagKey, r.TagValue)
+	if !pr.ok() {
+		return problemAt(sub(path, pr.field), "%s", pr.msg)
 	}
 	for _, planned := range p.rules {
 		if planned.rule.TagKey == key && planned.rule.TagValue == value {

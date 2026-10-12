@@ -67,12 +67,28 @@ func decodeRoutingRule(w http.ResponseWriter, r *http.Request) (store.RoutingRul
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return store.RoutingRule{}, false
 	}
-	key, value, err := store.NormaliseRoutingTag(req.TagKey, req.TagValue)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+	key, value, pr := routingTagProblem(req.TagKey, req.TagValue)
+	if !pr.ok() {
+		writeProblem(w, http.StatusBadRequest, pr)
 		return store.RoutingRule{}, false
 	}
 	return store.RoutingRule{TagKey: key, TagValue: value, ChannelIDs: req.ChannelIDs}, true
+}
+
+// routingTagProblem normalises a rule's tag pair and, when it is refused,
+// names the half that is wrong. The key is checked on its own first, with a
+// stand-in value, as maintenance windows and status pages check theirs: one
+// tag rule refuses both halves, so without that step a missing value would be
+// blamed on the key. A configuration file's rules are held to the same check.
+func routingTagProblem(key, value string) (string, string, problem) {
+	if _, _, err := store.NormaliseRoutingTag(key, "-"); err != nil {
+		return "", "", fieldProblem("tag_key", err.Error())
+	}
+	k, v, err := store.NormaliseRoutingTag(key, value)
+	if err != nil {
+		return "", "", fieldProblem("tag_value", err.Error())
+	}
+	return k, v, problem{}
 }
 
 // writeRoutingRuleError maps the store's refusals to statuses. It reports
@@ -84,7 +100,7 @@ func (s *Server) writeRoutingRuleError(w http.ResponseWriter, err error, action 
 	case errors.Is(err, store.ErrRoutingRuleExists):
 		writeError(w, http.StatusConflict, "a routing rule for this tag already exists; add the channels to that rule")
 	case errors.Is(err, store.ErrUnknownChannel):
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeProblem(w, http.StatusBadRequest, unknownChannelProblem("channel_ids", err))
 	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, "routing rule not found")
 	default:

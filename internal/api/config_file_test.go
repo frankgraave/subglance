@@ -411,6 +411,11 @@ func TestImportRejectsInvalidFilesAndWritesNothing(t *testing.T) {
 		"future format": {"version: 9\n", "version"},
 		"duplicate rule": {"version: 1\nrouting_rules:\n  - tag_key: env\n    tag_value: prod\n" +
 			"  - tag_key: env\n    tag_value: prod\n", "routing_rules[1]"},
+		// A rule's tag is checked as the routing rule API checks it: the key
+		// alone first, so a refusal of the value names the value.
+		"rule without a value": {"version: 1\nrouting_rules:\n  - tag_key: env\n", "routing_rules[0].tag_value"},
+		"rule with a bad key": {"version: 1\nrouting_rules:\n  - tag_key: has space\n    tag_value: x\n",
+			"routing_rules[0].tag_key"},
 		"bad window": {"version: 1\nmaintenance:\n  - name: W\n    tag_key: env\n    tag_value: prod\n" +
 			"    timezone: Local\n", "maintenance[0].timezone"},
 	}

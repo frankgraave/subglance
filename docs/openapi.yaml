@@ -1983,11 +1983,14 @@ paths:
         '400':
           description: |
             An invalid monitor id, malformed or unknown-field JSON, or a
-            channel id that does not exist.
+            channel id that does not exist (`field: channel_ids`).
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              example:
+                error: channel 42 does not exist; it may have been deleted
+                field: channel_ids
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -2167,7 +2170,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/ChannelOperationResult'
         '400':
-          description: Invalid, oversized or trailing JSON, an unknown field or action, or an unknown channel.
+          description: |
+            Invalid, oversized or trailing JSON, an unknown field or action,
+            or an unknown channel (`field: channel_id`).
           content:
             application/json:
               schema:
@@ -2219,7 +2224,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/ChannelOperationResult'
         '400':
-          description: Invalid request, unknown channel, or malformed If-Match.
+          description: |
+            Invalid request, an unknown channel (`field: channel_id`), or a
+            malformed If-Match.
           content:
             application/json:
               schema:
@@ -3130,11 +3137,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/RoutingRule'
         '400':
-          description: Malformed JSON, an invalid tag, or an unknown channel id.
+          description: |
+            Malformed JSON, an invalid tag, or an unknown channel id. A tag
+            refusal names the half at fault (`field: tag_key` or
+            `field: tag_value`; the key is checked on its own first), and an
+            unknown channel names `channel_ids`.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              example:
+                error: 'tag "env" must have a value; a bare tag is not a tag'
+                field: tag_value
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -3174,7 +3188,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/RoutingRule'
         '400':
-          description: An invalid id, malformed JSON, an invalid tag, or an unknown channel id.
+          description: |
+            An invalid id, malformed JSON, an invalid tag (`field: tag_key`
+            or `field: tag_value`), or an unknown channel id
+            (`field: channel_ids`).
           content:
             application/json:
               schema:
