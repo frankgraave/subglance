@@ -13,7 +13,8 @@ the Monitors page. The API offers the same operations:
 Use a monitor ID for one monitor, or an exact tag key/value pair for a group.
 The pair is stored the way a monitor stores its tags — key trimmed and
 lowercased, value trimmed — so `Env=prod` and `env=prod` are one group. A
-refused request names the setting at fault in the error's `field`.
+refusal about one setting names it in the error's `field`; one that spans
+settings, such as neither or both of a monitor and a tag, has no `field`.
 Tag membership is evaluated when a check or notification is processed. Adding a
 monitor to the tag group includes it in the next decision; removing it ends its
 participation. Overlapping windows form a union: cancelling one does not cancel
