@@ -7777,8 +7777,8 @@ components:
           type: string
           description: |
             Required, non-blank, at most 100 characters once trimmed (counted
-            as characters, not bytes).
-          maxLength: 100
+            as characters, not bytes). Surrounding whitespace does not count,
+            so the raw value carries no maxLength.
           example: Ops Slack
         type:
           $ref: '#/components/schemas/ChannelType'
@@ -7915,8 +7915,8 @@ components:
           type: string
           description: |
             Required, non-blank, at most 100 characters once trimmed (counted
-            as characters, not bytes). Used to tell tokens apart.
-          maxLength: 100
+            as characters, not bytes). Surrounding whitespace does not count,
+            so the raw value carries no maxLength. Used to tell tokens apart.
           example: ci-deploy
         expires_in:
           type: string

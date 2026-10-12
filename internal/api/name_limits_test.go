@@ -174,3 +174,36 @@ func TestImportAcceptsNamesOfMultibyteLettersUpToTheLimit(t *testing.T) {
 		t.Errorf("stored %d monitors, %d channels", len(mons), len(chans))
 	}
 }
+
+// TestOpenAPITrimmedNameRequestsSetNoRawLimit keeps the document from
+// refusing what the server takes. A channel's and a token's name are trimmed
+// before they are measured, so "  " + 100 characters + "  " is accepted; a
+// maxLength on the request schema counts the raw value and would make that
+// request a contract violation. The bound lives in the description instead.
+func TestOpenAPITrimmedNameRequestsSetNoRawLimit(t *testing.T) {
+	spec := loadSpec(t)
+	for _, schemaName := range []string{"ChannelRequest", "CreateTokenRequest"} {
+		node, ok := spec.Components.Schemas[schemaName]
+		if !ok {
+			t.Fatalf("spec has no components.schemas.%s", schemaName)
+		}
+		var schema struct {
+			Properties struct {
+				Name struct {
+					MaxLength *int `yaml:"maxLength"`
+				} `yaml:"name"`
+			} `yaml:"properties"`
+		}
+		if err := node.Decode(&schema); err != nil {
+			t.Fatalf("decode %s: %v", schemaName, err)
+		}
+		if schema.Properties.Name.MaxLength != nil {
+			t.Errorf("%s.name sets maxLength %d on the raw value, but the server trims before it counts",
+				schemaName, *schema.Properties.Name.MaxLength)
+		}
+	}
+
+	srv, _ := testServerWithDB(t)
+	mustStatus(t, doJSON(t, srv, http.MethodPost, "/api/v1/tokens", `{"name":"  `+fullName+`  "}`),
+		http.StatusCreated, "create with a full-length name and surrounding spaces")
+}
