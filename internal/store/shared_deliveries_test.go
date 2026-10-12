@@ -156,3 +156,45 @@ func TestEnqueueDeliveryFilesAGroupUnderAMonitorThatRemains(t *testing.T) {
 		t.Errorf("queued %d deliveries, want only the one that still speaks for web", len(due))
 	}
 }
+
+// A batch can also outlive its channel. Deleting a channel takes its queued
+// messages, so the one still waiting is not written either, and the refusal
+// names the channel rather than surfacing as a foreign-key failure.
+func TestEnqueueDeliveryForADeletedChannelWritesNothing(t *testing.T) {
+	ctx := context.Background()
+	db := openTestDB(t)
+	api := seedMonitor(t, db, "api")
+	kept := healthChannel(t, db, "kept")
+	gone := healthChannel(t, db, "gone")
+	if err := db.DeleteChannel(ctx, gone); err != nil {
+		t.Fatalf("DeleteChannel: %v", err)
+	}
+
+	_, err := db.EnqueueDelivery(ctx, Delivery{ChannelID: gone, MonitorID: api, Event: "incident_confirmed",
+		Payload: groupedPayload([2]int64{api, 0})})
+	if !errors.Is(err, ErrUnknownChannel) || errors.Is(err, ErrNotFound) {
+		t.Fatalf("EnqueueDelivery to a deleted channel = %v, want ErrUnknownChannel", err)
+	}
+	// The channel is checked before the monitors: with both gone, the
+	// channel is the reason given.
+	if err := db.DeleteMonitor(ctx, api); err != nil {
+		t.Fatalf("DeleteMonitor: %v", err)
+	}
+	_, err = db.EnqueueDelivery(ctx, Delivery{ChannelID: gone, MonitorID: api, Event: "incident_confirmed", Payload: "{}"})
+	if !errors.Is(err, ErrUnknownChannel) {
+		t.Errorf("EnqueueDelivery with channel and monitor gone = %v, want ErrUnknownChannel", err)
+	}
+	// A channel that exists still gets ErrNotFound for monitors that do not.
+	_, err = db.EnqueueDelivery(ctx, Delivery{ChannelID: kept, MonitorID: api, Event: "incident_confirmed", Payload: "{}"})
+	if !errors.Is(err, ErrNotFound) || errors.Is(err, ErrUnknownChannel) {
+		t.Errorf("EnqueueDelivery for a deleted monitor = %v, want ErrNotFound", err)
+	}
+
+	due, err := db.DueDeliveries(ctx, time.Now().Add(time.Second), 10)
+	if err != nil {
+		t.Fatalf("DueDeliveries: %v", err)
+	}
+	if len(due) != 0 {
+		t.Errorf("queued %d deliveries, want none", len(due))
+	}
+}
