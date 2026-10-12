@@ -216,3 +216,19 @@ func TestStatusPagesAreAdminOnly(t *testing.T) {
 		}
 	}
 }
+
+// Saving a page's services after one of its monitors was deleted names that
+// monitor in the API's words; the Services form shows the message as is, and
+// "store: unknown monitor: 4242" is not a sentence for a person.
+func TestStatusPageEntriesNameADeletedMonitor(t *testing.T) {
+	srv, _ := testServerWithDB(t)
+	mustStatus(t, doJSON(t, srv, http.MethodPost, "/api/v1/status-pages",
+		`{"slug":"acme","title":"Acme","selection":"monitors"}`), http.StatusCreated, "create page")
+
+	rec := doJSON(t, srv, http.MethodPut, "/api/v1/status-pages/acme/entries",
+		`{"entries":[{"monitor_id":4242,"display_name":"API"}]}`)
+	wantStatusProblem(t, rec.Code, rec.Body.String(), "entries", "monitor 4242 does not exist; it may have been deleted")
+	if strings.Contains(rec.Body.String(), "store:") {
+		t.Errorf("refusal carries the store's prefix: %s", rec.Body.String())
+	}
+}

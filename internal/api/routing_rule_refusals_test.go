@@ -64,3 +64,29 @@ func TestAssigningAnUnknownChannelNamesTheField(t *testing.T) {
 	rec = channelOpRequest(srv, "/preview", `{"action":"add","monitor_ids":[`+id+`],"channel_id":4242}`, "")
 	wantStatusProblem(t, rec.Code, rec.Body.String(), "channel_id", want)
 }
+
+// Excluding a monitor from a rule names which of the two is missing, as the
+// API document promises, in the API's words rather than "store: not found:".
+func TestExcludingFromAMissingRuleOrMonitorSaysWhichIsMissing(t *testing.T) {
+	srv, db := testServerWithDB(t)
+	m := seedMonitor(t, db, store.Monitor{Name: "site", Type: "http", Target: "https://example.com",
+		IntervalS: 60, TimeoutS: 10, Enabled: true})
+	if rec := doJSON(t, srv, http.MethodPost, "/api/v1/routing-rules",
+		`{"tag_key":"env","tag_value":"prod"}`); rec.Code != http.StatusCreated {
+		t.Fatalf("setup: status = %d: %s", rec.Code, rec.Body.String())
+	}
+	for name, tc := range map[string]struct{ path, want string }{
+		"missing monitor": {"/api/v1/routing-rules/1/exclusions/4242", "monitor 4242 does not exist"},
+		"missing rule":    {"/api/v1/routing-rules/99/exclusions/" + itoa(m.ID), "routing rule 99 does not exist"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			rec := doJSON(t, srv, http.MethodPut, tc.path, "")
+			if rec.Code != http.StatusNotFound {
+				t.Fatalf("status = %d, want 404: %s", rec.Code, rec.Body.String())
+			}
+			if got := decodeErrorResponse(t, rec).Error; got != tc.want {
+				t.Errorf("error = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
