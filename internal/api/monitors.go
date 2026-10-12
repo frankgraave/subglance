@@ -1539,11 +1539,17 @@ func (s *Server) handlePatchMonitor(w http.ResponseWriter, r *http.Request) {
 // route that takes a channel id answers with it, so the store's own wording,
 // "store: unknown notification channel", never reaches a person.
 func unknownChannelProblem(field string, err error) problem {
-	msg := "a chosen channel does not exist; it may have been deleted"
-	if _, id, ok := strings.Cut(err.Error(), store.ErrUnknownChannel.Error()+": "); ok {
-		msg = "channel " + id + " does not exist; it may have been deleted"
+	return fieldProblem(field, missingIDMessage(err, store.ErrUnknownChannel, "channel"))
+}
+
+// missingIDMessage words a store error of the form "<sentinel>: <id>" for a
+// person: "monitor 42 does not exist; it may have been deleted". Without an
+// id it still says what is missing, never the sentinel's own text.
+func missingIDMessage(err, sentinel error, what string) string {
+	if _, id, ok := strings.Cut(err.Error(), sentinel.Error()+": "); ok && id != "" {
+		return what + " " + id + " does not exist; it may have been deleted"
 	}
-	return fieldProblem(field, msg)
+	return "a chosen " + what + " does not exist; it may have been deleted"
 }
 
 // writeConflict reports that the monitor moved on since the caller read it.

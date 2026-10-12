@@ -3289,6 +3289,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              example:
+                error: monitor 42 does not exist
         '500':
           description: The exclusion could not be stored.
           content:
@@ -4622,8 +4624,9 @@ paths:
           description: |
             Malformed or unknown-field JSON, a missing `entries` list, a
             missing or too long display name, a monitor listed twice, more
-            than 200 entries, or an unknown monitor id. Carries
-            `field: entries` for all but malformed or unknown-field JSON.
+            than 200 entries, or an unknown monitor id ("monitor 42 does not
+            exist; it may have been deleted"). Carries `field: entries` for
+            all but malformed or unknown-field JSON.
           content:
             application/json:
               schema:

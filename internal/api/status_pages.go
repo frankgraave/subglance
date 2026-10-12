@@ -140,7 +140,9 @@ func (s *Server) writeStatusPageError(w http.ResponseWriter, err error, action s
 	case errors.Is(err, store.ErrStatusPageSlugTaken):
 		writeProblem(w, http.StatusConflict, fieldProblem("slug", "another status page already uses this slug"))
 	case errors.Is(err, store.ErrUnknownMonitor):
-		writeProblem(w, http.StatusBadRequest, fieldProblem("entries", err.Error()))
+		// Usually a monitor deleted after the form was opened; the store's
+		// own wording, "store: unknown monitor: 42", is not for a person.
+		writeProblem(w, http.StatusBadRequest, fieldProblem("entries", missingIDMessage(err, store.ErrUnknownMonitor, "monitor")))
 	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, "status page not found")
 	default:

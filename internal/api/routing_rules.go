@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/frankgraave/subglance/internal/store"
 )
@@ -165,8 +166,9 @@ func (s *Server) handleExcludeMonitorFromRule(w http.ResponseWriter, r *http.Req
 	err := s.db.ExcludeMonitorFromRule(r.Context(), id, monitorID)
 	if errors.Is(err, store.ErrNotFound) {
 		// The store names which one is missing; a client needs to know
-		// whether to reload its rules or its monitors.
-		writeError(w, http.StatusNotFound, err.Error())
+		// whether to reload its rules or its monitors. Only that name is
+		// passed on, not the store's "store: not found" around it.
+		writeError(w, http.StatusNotFound, missingRuleOrMonitor(err))
 		return
 	}
 	if err != nil {
@@ -195,6 +197,15 @@ func (s *Server) handleIncludeMonitorInRule(w http.ResponseWriter, r *http.Reque
 	}
 	s.log.Info("monitor included in routing rule again", "rule_id", id, "monitor_id", monitorID)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// missingRuleOrMonitor words the store's "store: not found: routing rule 7"
+// as "routing rule 7 does not exist".
+func missingRuleOrMonitor(err error) string {
+	if _, what, ok := strings.Cut(err.Error(), store.ErrNotFound.Error()+": "); ok && what != "" {
+		return what + " does not exist"
+	}
+	return "the routing rule or the monitor does not exist"
 }
 
 func ruleID(w http.ResponseWriter, r *http.Request) (int64, bool) {
