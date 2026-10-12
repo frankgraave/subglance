@@ -749,11 +749,26 @@ func planWindow(p *importPlan, ex existingConfig, path string, w configfile.Main
 			win.MonitorID = target.ID
 		}
 	}
-	if err := check.Validate(); err != nil {
-		return problemAt(path, "%s", err.Error())
+	normal, err := store.NormaliseMaintenance(check)
+	if err != nil {
+		var invalid *store.MaintenanceError
+		if !errors.As(err, &invalid) {
+			return problemAt(path, "%s", err.Error())
+		}
+		switch invalid.Field {
+		case "":
+			return problemAt(path, "%s", invalid.Msg)
+		case "monitor_id":
+			// A file names its monitor by key, never by id.
+			return problemAt(sub(path, "monitor"), "%s", invalid.Msg)
+		}
+		return problemAt(sub(path, invalid.Field), "%s", invalid.Msg)
 	}
+	// Compare and store the window in the form the API stores it, so a file
+	// that writes a tag as "Env" matches the "env" window already here.
+	win.Name, win.Timezone, win.TagKey, win.TagValue = normal.Name, normal.Timezone, normal.TagKey, normal.TagValue
 
-	item := importItem{Name: w.Name, Action: actionCreate}
+	item := importItem{Name: win.Name, Action: actionCreate}
 	if w.Monitor == "" || onInstance {
 		for _, cur := range ex.windows {
 			if sameWindow(cur, win) {

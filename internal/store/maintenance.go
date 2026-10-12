@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 	_ "time/tzdata" // Recurrence must also work in a minimal container.
+	"unicode/utf8"
 )
 
 var ErrMaintenanceLimit = errors.New("at most 200 maintenance windows")
@@ -30,54 +31,138 @@ type MaintenanceWindow struct {
 	CreatedAt       time.Time `json:"created_at"`
 }
 
-func (w MaintenanceWindow) Validate() error {
-	if strings.TrimSpace(w.Name) == "" || len(w.Name) > 120 {
-		return fmt.Errorf("name must contain 1–120 bytes")
+// MaintenanceError is one refused maintenance window. Field names the
+// setting at fault in the spelling the API uses ("tag_key", "local_time"), so
+// a form can put the message beside the input that caused it; it is empty
+// when the refusal spans settings, as "choose exactly one monitor or tag
+// pair" does. Error returns the message alone, so the words a client sees
+// are the ones they were before the field was named.
+type MaintenanceError struct {
+	Field string
+	Msg   string
+}
+
+func (e *MaintenanceError) Error() string { return e.Msg }
+
+func invalidMaintenance(field, format string, args ...any) error {
+	return &MaintenanceError{Field: field, Msg: fmt.Sprintf(format, args...)}
+}
+
+// maxMaintenanceName is counted in characters, as the API schema and the
+// form's own limit count it: a byte limit refused a name both had accepted.
+const maxMaintenanceName = 120
+
+// NormaliseMaintenance trims the name and time zone and puts a tag pair into
+// the form a monitor stores it in, then validates the result. A tag is
+// matched by its exact stored value, so a window has to be stored the way
+// the monitor carries it; refusing "Env" where a monitor saves "env" made a
+// window that could be typed in no form except the one the server wanted.
+func NormaliseMaintenance(w MaintenanceWindow) (MaintenanceWindow, error) {
+	w.Name = strings.TrimSpace(w.Name)
+	w.Timezone = strings.TrimSpace(w.Timezone)
+	w.TagKey = strings.TrimSpace(w.TagKey)
+	w.TagValue = strings.TrimSpace(w.TagValue)
+	if w.TagKey != "" {
+		key, value, err := normaliseMaintenanceTag(w.TagKey, w.TagValue)
+		if err != nil {
+			return w, err
+		}
+		w.TagKey, w.TagValue = key, value
 	}
-	if w.MonitorID < 0 || (w.MonitorID > 0) == (w.TagKey != "") {
-		return fmt.Errorf("choose exactly one monitor or tag pair")
+	return w, w.Validate()
+}
+
+// normaliseMaintenanceTag applies the monitor tag rules to a window's pair.
+// The key is checked on its own first, with a stand-in value, so a refusal
+// names the input that is actually wrong.
+func normaliseMaintenanceTag(key, value string) (string, string, error) {
+	if _, _, err := NormaliseRoutingTag(key, "-"); err != nil {
+		return "", "", invalidMaintenance("tag_key", "%s", err.Error())
+	}
+	k, v, err := NormaliseRoutingTag(key, value)
+	if err != nil {
+		return "", "", invalidMaintenance("tag_value", "%s", err.Error())
+	}
+	return k, v, nil
+}
+
+// Validate checks a window as it is stored. It does not trim or lowercase:
+// NormaliseMaintenance does that before a window is saved, and a stored
+// window that is not in normal form is refused rather than quietly read as
+// some other tag. Every refusal is a *MaintenanceError.
+func (w MaintenanceWindow) Validate() error {
+	if strings.TrimSpace(w.Name) == "" || utf8.RuneCountInString(w.Name) > maxMaintenanceName {
+		return invalidMaintenance("name", "name must contain 1–%d characters", maxMaintenanceName)
+	}
+	if w.MonitorID < 0 {
+		return invalidMaintenance("monitor_id", "monitor_id must be a positive id")
+	}
+	if (w.MonitorID > 0) == (w.TagKey != "") {
+		if w.MonitorID == 0 && w.TagValue != "" {
+			return invalidMaintenance("tag_key", "tag_value requires tag_key")
+		}
+		return invalidMaintenance("", "choose exactly one monitor or tag pair")
 	}
 	if w.TagKey != "" {
-		tags, err := NormaliseTags(map[string]string{w.TagKey: w.TagValue})
+		key, value, err := normaliseMaintenanceTag(w.TagKey, w.TagValue)
 		if err != nil {
 			return err
 		}
-		if tags[w.TagKey] != w.TagValue {
-			return fmt.Errorf("use a normalized tag key and value")
+		if key != w.TagKey {
+			return invalidMaintenance("tag_key", "use a normalized tag key and value")
+		}
+		if value != w.TagValue {
+			return invalidMaintenance("tag_value", "use a normalized tag key and value")
 		}
 	} else if w.TagValue != "" {
-		return fmt.Errorf("tag_value requires tag_key")
+		return invalidMaintenance("tag_value", "tag_value requires tag_key")
 	}
 	if w.Timezone == "" {
-		if w.StartsAt.IsZero() || !w.EndsAt.After(w.StartsAt) || w.EndsAt.Sub(w.StartsAt) > 366*24*time.Hour {
-			return fmt.Errorf("one-off window requires starts_at before ends_at, at most 366 days apart")
+		return w.validateOneOff()
+	}
+	return w.validateWeekly()
+}
+
+func (w MaintenanceWindow) validateOneOff() error {
+	switch {
+	case len(w.Weekdays) > 0 || w.LocalTime != "" || w.DurationMinutes != 0:
+		return invalidMaintenance("timezone", "recurrence requires timezone")
+	case w.StartsAt.IsZero():
+		return invalidMaintenance("starts_at", "one-off window requires starts_at before ends_at, at most 366 days apart")
+	case !w.EndsAt.After(w.StartsAt) || w.EndsAt.Sub(w.StartsAt) > 366*24*time.Hour:
+		return invalidMaintenance("ends_at", "one-off window requires starts_at before ends_at, at most 366 days apart")
+	}
+	return nil
+}
+
+func (w MaintenanceWindow) validateWeekly() error {
+	if w.Timezone == "Local" {
+		return invalidMaintenance("timezone", "use an explicit IANA timezone")
+	}
+	if _, err := time.LoadLocation(w.Timezone); err != nil {
+		return invalidMaintenance("timezone", "unknown IANA timezone")
+	}
+	if !w.StartsAt.IsZero() {
+		return invalidMaintenance("starts_at", "weekly windows cannot have absolute start/end times")
+	}
+	if !w.EndsAt.IsZero() {
+		return invalidMaintenance("ends_at", "weekly windows cannot have absolute start/end times")
+	}
+	if _, err := time.Parse("15:04", w.LocalTime); err != nil || len(w.LocalTime) != 5 {
+		return invalidMaintenance("local_time", "local_time must be HH:MM")
+	}
+	if len(w.Weekdays) == 0 || len(w.Weekdays) > 7 {
+		return invalidMaintenance("weekdays", "choose weekdays and a duration of 1–1440 minutes")
+	}
+	if w.DurationMinutes < 1 || w.DurationMinutes > 1440 {
+		return invalidMaintenance("duration_minutes", "choose weekdays and a duration of 1–1440 minutes")
+	}
+	seen := map[int]bool{}
+	for _, d := range w.Weekdays {
+		if d < 0 || d > 6 || seen[d] {
+			return invalidMaintenance("weekdays", "weekdays must be unique integers from 0 to 6")
 		}
-		if len(w.Weekdays) > 0 || w.LocalTime != "" || w.DurationMinutes != 0 {
-			return fmt.Errorf("recurrence requires timezone")
-		}
-	} else {
-		if w.Timezone == "Local" {
-			return fmt.Errorf("use an explicit IANA timezone")
-		}
-		if _, err := time.LoadLocation(w.Timezone); err != nil {
-			return fmt.Errorf("unknown IANA timezone")
-		}
-		if !w.StartsAt.IsZero() || !w.EndsAt.IsZero() {
-			return fmt.Errorf("weekly windows cannot have absolute start/end times")
-		}
-		if _, err := time.Parse("15:04", w.LocalTime); err != nil || len(w.LocalTime) != 5 {
-			return fmt.Errorf("local_time must be HH:MM")
-		}
-		if len(w.Weekdays) == 0 || len(w.Weekdays) > 7 || w.DurationMinutes < 1 || w.DurationMinutes > 1440 {
-			return fmt.Errorf("choose weekdays and a duration of 1–1440 minutes")
-		}
-		seen := map[int]bool{}
-		for _, d := range w.Weekdays {
-			if d < 0 || d > 6 || seen[d] {
-				return fmt.Errorf("weekdays must be unique integers from 0 to 6")
-			}
-			seen[d] = true
-		}
+		seen[d] = true
 	}
 	return nil
 }
@@ -203,7 +288,8 @@ func (w MaintenanceWindow) startOn(y int, m time.Month, d int, loc *time.Locatio
 }
 
 func (db *DB) CreateMaintenance(ctx context.Context, w MaintenanceWindow) (MaintenanceWindow, error) {
-	if err := w.Validate(); err != nil {
+	w, err := NormaliseMaintenance(w)
+	if err != nil {
 		return w, err
 	}
 	if w.MonitorID > 0 {

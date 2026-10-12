@@ -412,7 +412,7 @@ func TestImportRejectsInvalidFilesAndWritesNothing(t *testing.T) {
 		"duplicate rule": {"version: 1\nrouting_rules:\n  - tag_key: env\n    tag_value: prod\n" +
 			"  - tag_key: env\n    tag_value: prod\n", "routing_rules[1]"},
 		"bad window": {"version: 1\nmaintenance:\n  - name: W\n    tag_key: env\n    tag_value: prod\n" +
-			"    timezone: Local\n", "maintenance[0]"},
+			"    timezone: Local\n", "maintenance[0].timezone"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

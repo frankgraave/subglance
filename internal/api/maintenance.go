@@ -38,8 +38,9 @@ func (s *Server) handleCreateMaintenance(w http.ResponseWriter, r *http.Request)
 		writeError(w, 400, "id and created_at are server-managed")
 		return
 	}
-	if err := req.Validate(); err != nil {
-		writeError(w, 400, err.Error())
+	req, err := store.NormaliseMaintenance(req)
+	if err != nil {
+		writeMaintenanceProblem(w, err)
 		return
 	}
 	created, err := s.db.CreateMaintenance(r.Context(), req)
@@ -58,6 +59,18 @@ func (s *Server) handleCreateMaintenance(w http.ResponseWriter, r *http.Request)
 	}
 	writeJSON(w, 201, created)
 }
+
+// writeMaintenanceProblem answers a refused window with a 400 that names the
+// field at fault, when there is one.
+func writeMaintenanceProblem(w http.ResponseWriter, err error) {
+	var invalid *store.MaintenanceError
+	if errors.As(err, &invalid) {
+		writeProblem(w, http.StatusBadRequest, problem{field: invalid.Field, msg: invalid.Msg})
+		return
+	}
+	writeError(w, http.StatusBadRequest, err.Error())
+}
+
 func (s *Server) handleDeleteMaintenance(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil || id <= 0 {
