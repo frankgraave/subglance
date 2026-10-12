@@ -423,3 +423,56 @@ func TestHeadBodyChecksComeOverAsGet(t *testing.T) {
 		t.Errorf("plain http HEAD: ok=%v method=%q notes=%q, want HEAD unchanged and no note", ok, deref(m.Method), notesOf(res))
 	}
 }
+
+// A monitor name longer than SubGlance keeps is cut to 100 characters and
+// the report says so; one that fits in characters but not in bytes is kept.
+func TestMonitorNameIsShortenedToTheLimit(t *testing.T) {
+	cases := []struct {
+		name, from, want string
+		cut              bool
+	}{
+		{"too long", "a" + strings.Repeat("é", 120), "a" + strings.Repeat("é", 99), true},
+		{"multibyte, fits", strings.Repeat("é", 100), strings.Repeat("é", 100), false},
+		{"cut before a space", strings.Repeat("x", 99) + " tail", strings.Repeat("x", 99), true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			res := convert(source{monitors: []row{httpRow(row{"name": tc.from})}})
+			if len(res.Document.Monitors) != 1 {
+				t.Fatalf("not converted: %s", notesOf(res))
+			}
+			if got := res.Document.Monitors[0].Name; got != tc.want {
+				t.Errorf("name = %q, want %q", got, tc.want)
+			}
+			if noted := strings.Contains(notesOf(res), "the name was shortened to 100 characters"); noted != tc.cut {
+				t.Errorf("shortened note = %v, want %v: %s", noted, tc.cut, notesOf(res))
+			}
+		})
+	}
+}
+
+// A channel name is cut the same way, in characters rather than bytes.
+func TestChannelNameIsShortenedToTheLimit(t *testing.T) {
+	config := `{"type":"discord","discordWebhookUrl":"https://discord.example/x"}`
+	for _, tc := range []struct {
+		name, from, want string
+		cut              bool
+	}{
+		{"too long", strings.Repeat("ü", 101), strings.Repeat("ü", 100), true},
+		{"multibyte, fits", strings.Repeat("ü", 100), strings.Repeat("ü", 100), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			res := convert(source{monitors: []row{httpRow(nil)},
+				notifications: []row{notificationRow(1, tc.from, config)}})
+			if len(res.Document.Channels) != 1 {
+				t.Fatalf("not converted: %s", notesOf(res))
+			}
+			if got := res.Document.Channels[0].Name; got != tc.want {
+				t.Errorf("name = %q (%d characters), want %d", got, len([]rune(got)), len([]rune(tc.want)))
+			}
+			if noted := strings.Contains(notesOf(res), "the name was shortened to 100 characters"); noted != tc.cut {
+				t.Errorf("shortened note = %v, want %v: %s", noted, tc.cut, notesOf(res))
+			}
+		})
+	}
+}

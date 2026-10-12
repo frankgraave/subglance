@@ -127,8 +127,11 @@ func convertDomainWarnings(src source, links map[int64][]string, taken map[strin
 	var out []configfile.Monitor
 	for _, domain := range order {
 		w := byDomain[domain]
+		// A domain may run to 253 characters; the name is cut to fit, and
+		// the report says so.
+		name, cut := shortName(domain + " registration")
 		mon := configfile.Monitor{
-			Name:           domain + " registration",
+			Name:           name,
 			Type:           "domain",
 			Target:         domain,
 			Enabled:        ptr(w.active),
@@ -145,6 +148,9 @@ func convertDomainWarnings(src source, links map[int64][]string, taken map[strin
 		taken[mon.Key] = true
 
 		note := func(reason string) { changed(res, "monitor", mon.Name, "", reason) }
+		if cut {
+			note(nameShortened)
+		}
 		note(fmt.Sprintf("added to keep Kuma's domain expiry warning for %s: Kuma warned with %d days or fewer left, "+
 			"this domain monitor warns with fewer than %d", andList(w.monitors), warn-1, warn))
 		if capped {

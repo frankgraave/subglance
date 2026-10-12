@@ -575,6 +575,9 @@ func validateCreateMonitor(req createMonitorRequest) problem {
 	if strings.TrimSpace(req.Name) == "" {
 		return fieldProblem("name", "name is required")
 	}
+	if p := nameLengthProblem(req.Name); !p.ok() {
+		return p
+	}
 	// A push monitor has nothing to dial, so it has nothing to put in
 	// target. Requiring one anyway would force every client to invent a
 	// placeholder, and a column full of invented placeholders is worse than
@@ -1575,6 +1578,14 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 	if req.Name != nil {
 		if strings.TrimSpace(*req.Name) == "" {
 			return fieldProblem("name", "name cannot be empty")
+		}
+		// Only a new name is measured. A monitor saved before the limit
+		// existed keeps its name through every other edit, and through an
+		// import of its own export, which sends the name back unchanged.
+		if *req.Name != m.Name {
+			if p := nameLengthProblem(*req.Name); !p.ok() {
+				return p
+			}
 		}
 		m.Name = *req.Name
 	}

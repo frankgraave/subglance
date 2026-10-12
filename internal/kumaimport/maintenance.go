@@ -18,7 +18,7 @@ const (
 	// maxWindows is the most windows one instance keeps, so no file can
 	// bring more.
 	maxWindows = 200
-	// maxWindowName is in bytes, as the store counts it.
+	// maxWindowName is in characters, as the store counts it.
 	maxWindowName = 120
 	// maxWeeklyMinutes is the longest a weekly window lasts.
 	maxWeeklyMinutes = 24 * 60
@@ -110,13 +110,9 @@ func convertWindows(src source, monitorKeys map[int64]string, res *Result) {
 			window.Timezone = zone
 		}
 
-		if len(name) > maxWindowName {
-			cut := name[:maxWindowName]
-			for !utf8.ValidString(cut) {
-				cut = cut[:len(cut)-1]
-			}
-			name = strings.TrimSpace(cut)
-			notes = append(notes, "the name was shortened to "+strconv.Itoa(maxWindowName)+" bytes")
+		if utf8.RuneCountInString(name) > maxWindowName {
+			name = strings.TrimSpace(string([]rune(name)[:maxWindowName]))
+			notes = append(notes, "the name was shortened to "+strconv.Itoa(maxWindowName)+" characters")
 		}
 		window.Name = name
 

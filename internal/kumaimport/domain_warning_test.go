@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/frankgraave/subglance/internal/configfile"
 )
@@ -226,5 +227,26 @@ func TestDomainWarnDaysAreTheirOwnSetting(t *testing.T) {
 	}
 	if got := notifyDays(domainSetting(`{"days": 30}`), "domainExpiryNotifyDays", kumaDomainDays); !slices.Equal(got, []int{7, 14, 21}) {
 		t.Errorf("a setting that is not a list = %v, want Kuma's default", got)
+	}
+}
+
+// A registrable domain under a long public suffix can make an added
+// monitor's name longer than SubGlance keeps; it is cut to fit, and the
+// report says so, while the target keeps the whole domain.
+func TestDomainMonitorNameIsShortenedToTheLimit(t *testing.T) {
+	domain := strings.Repeat("d", 63) + ".fujikawaguchiko.yamanashi.jp"
+	res := convert(source{monitors: []row{warned(portRow(row{"hostname": "www." + domain}))}})
+	added := domainMonitors(res)
+	if len(added) != 1 {
+		t.Fatalf("domain monitors = %+v, want one; notes: %s", added, notesOf(res))
+	}
+	if added[0].Target != domain {
+		t.Errorf("target = %q, want %q", added[0].Target, domain)
+	}
+	if n := utf8.RuneCountInString(added[0].Name); n != maxName {
+		t.Errorf("name = %q (%d characters), want %d", added[0].Name, n, maxName)
+	}
+	if !strings.Contains(notesOf(res), "the name was shortened to 100 characters") {
+		t.Errorf("notes = %s", notesOf(res))
 	}
 }

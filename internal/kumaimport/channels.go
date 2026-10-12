@@ -4,13 +4,9 @@ import (
 	"encoding/json"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/frankgraave/subglance/internal/configfile"
 )
-
-// maxChannelName is the channel name limit the API enforces.
-const maxChannelName = 100
 
 // convertChannel converts one row of Kuma's notification table.
 //
@@ -55,9 +51,9 @@ func convertChannel(n row, res *Result) (configfile.Channel, bool) {
 		res.Skipped = append(res.Skipped, Note{Kind: "channel", Name: name, Type: typ, Reason: reason})
 		return configfile.Channel{}, false
 	}
-	if utf8.RuneCountInString(name) > maxChannelName {
-		name = string([]rune(name)[:maxChannelName])
-		note("the name was shortened to " + strconv.Itoa(maxChannelName) + " characters")
+	if short, cut := shortName(name); cut {
+		name = short
+		note(nameShortened)
 	}
 
 	out := configfile.Channel{Name: name, Enabled: ptr(n.bool("active")), Config: map[string]string{}}

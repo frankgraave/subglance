@@ -37,6 +37,10 @@ const (
 	maxTags        = 20
 	maxTagKeyLen   = 32
 	maxTagValueLen = 64
+
+	// maxName is the longest monitor or channel name, in characters. Kuma
+	// allows 150 for a monitor and 255 for a notification.
+	maxName = 100
 )
 
 // unsupportedType explains, per Kuma monitor type, why it does not come over.
@@ -74,6 +78,17 @@ func changed(res *Result, kind, name, typ, reason string) {
 	res.Changed = append(res.Changed, Note{Kind: kind, Name: name, Type: typ, Reason: reason})
 }
 
+// shortName cuts a name to maxName characters, and reports whether it did.
+func shortName(name string) (string, bool) {
+	if utf8.RuneCountInString(name) <= maxName {
+		return name, false
+	}
+	return strings.TrimSpace(string([]rune(name)[:maxName])), true
+}
+
+// nameShortened is the note a shortened name leaves in the report.
+var nameShortened = "the name was shortened to " + strconv.Itoa(maxName) + " characters"
+
 // convertMonitor converts one Kuma monitor row, or reports why it cannot.
 func convertMonitor(m row, res *Result) (configfile.Monitor, bool) {
 	typ := m.str("type")
@@ -99,6 +114,11 @@ func convertMonitor(m row, res *Result) (configfile.Monitor, bool) {
 	if m.bool("upside_down") {
 		skipMonitor(res, name, typ, "upside-down mode has no SubGlance equivalent; imported as is, it would report the opposite state")
 		return configfile.Monitor{}, false
+	}
+
+	if short, cut := shortName(name); cut {
+		name = short
+		note(nameShortened)
 	}
 
 	out := configfile.Monitor{Name: name, Enabled: ptr(m.bool("active"))}

@@ -286,6 +286,10 @@ export function ChannelForm({
           rejectQuiet({ message, part });
           return;
         }
+        if (field === "name") {
+          reject(message, "name");
+          return;
+        }
         const spec = specs.find((s) => field === `config.${s.key}`);
         reject(
           message,

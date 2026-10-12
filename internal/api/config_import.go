@@ -361,8 +361,8 @@ func (s *Server) planChannel(ctx context.Context, p *importPlan, ex existingConf
 			req.Config[k] = v
 		}
 	}
-	if msg := validateChannel(req); msg != "" {
-		return problemAt(path, "%s", msg)
+	if pr := channelProblem(req); !pr.ok() {
+		return apiProblemAt(path, pr)
 	}
 	if len(missing) == 0 {
 		if msg := s.checkChannelTarget(ctx, req); msg != "" {
@@ -510,7 +510,7 @@ func planMonitor(p *importPlan, ex existingConfig, path string, m configfile.Mon
 			create.JSONAssertion = assertionWire(a)
 		}
 		if pr := validateCreateMonitor(create); !pr.ok() {
-			return monitorProblem(path, pr)
+			return apiProblemAt(path, pr)
 		}
 		next = store.Monitor{
 			Name: m.Name, Type: m.Type, Target: m.Target, Retries: 2,
@@ -543,7 +543,7 @@ func planMonitor(p *importPlan, ex existingConfig, path string, m configfile.Mon
 		patch.JSONAssertion = raw
 	}
 	if pr := applyMonitorPatch(&next, patch); !pr.ok() {
-		return monitorProblem(path, pr)
+		return apiProblemAt(path, pr)
 	}
 
 	// Headers and body are withheld on export. A placeholder keeps what the
@@ -555,7 +555,7 @@ func planMonitor(p *importPlan, ex existingConfig, path string, m configfile.Mon
 		// A placeholder is a value net/http would send, so a withheld
 		// header is judged by its name.
 		if pr := validateRequestHeaders(m.Headers); !pr.ok() {
-			return monitorProblem(path, pr)
+			return apiProblemAt(path, pr)
 		}
 		headers := map[string]string{}
 		for k, v := range m.Headers {
@@ -610,8 +610,8 @@ func planMonitor(p *importPlan, ex existingConfig, path string, m configfile.Mon
 	return nil
 }
 
-// monitorProblem places an API validation problem inside the file.
-func monitorProblem(path string, pr problem) *configfile.Problem {
+// apiProblemAt places an API validation problem inside the file.
+func apiProblemAt(path string, pr problem) *configfile.Problem {
 	if pr.field != "" {
 		path = sub(path, pr.field)
 	}

@@ -125,6 +125,19 @@ it("shows the server's reason when a create is refused", async () => {
   expect(screen.getAllByRole("alert")).toHaveLength(1);
 });
 
+it("marks the name field when the server refuses the name", async () => {
+  mount("admin", (_url, init) => init?.method === "POST"
+    ? json({ error: "name must be 100 characters or fewer", field: "name" }, 400) : undefined);
+  const name = await screen.findByLabelText("Token name");
+  fireEvent.change(name, { target: { value: "x" } });
+  fireEvent.click(screen.getByRole("button", { name: "Create token" }));
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toBe("name must be 100 characters or fewer");
+  expect(name.getAttribute("aria-invalid")).toBe("true");
+  expect(name.getAttribute("aria-describedby")).toBe(alert.id);
+  expect(screen.getAllByRole("alert")).toHaveLength(1);
+});
+
 it("sorts an expired token after the live ones", async () => {
   const expired = { id: 4, name: "old-ci", prefix: "sgp_0ld0ld", role: "editor", created_at: "2020-01-01T00:00:00Z", expires_at: "2020-02-01T00:00:00Z" };
   mount("admin", (url, init) => String(url) === "/api/v1/tokens" && !init?.method

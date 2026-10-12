@@ -82,12 +82,15 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
+	// Trimmed and measured as a channel's name is: a name of spaces is a
+	// row in the token list with nothing to tell it apart by.
+	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
-		writeError(w, http.StatusBadRequest, "name is required")
+		writeProblem(w, http.StatusBadRequest, fieldProblem("name", "name is required"))
 		return
 	}
-	if len(req.Name) > 100 {
-		writeError(w, http.StatusBadRequest, "name must be 100 characters or fewer")
+	if p := nameLengthProblem(req.Name); !p.ok() {
+		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
 
