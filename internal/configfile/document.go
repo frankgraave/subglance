@@ -112,6 +112,9 @@ type Monitor struct {
 	// a push monitor created by an import is issued a new one.
 	PushIntervalS *int `yaml:"push_interval_s,omitempty"`
 	PushGraceS    *int `yaml:"push_grace_s,omitempty"`
+	// PushTimezone counts a whole-day window on an IANA zone's clock; ""
+	// counts elapsed time. Export writes it for every push monitor.
+	PushTimezone *string `yaml:"push_timezone,omitempty"`
 
 	// Tags replaces the monitor's tags when present; `{}` clears them.
 	// Omitted keeps what the instance has. Export always writes it.

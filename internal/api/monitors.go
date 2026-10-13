@@ -90,6 +90,9 @@ type monitorResponse struct {
 	// PushGraceS how late it may be. Both omitted for non-push monitors.
 	PushIntervalS int `json:"push_interval_s,omitempty"`
 	PushGraceS    int `json:"push_grace_s,omitempty"`
+	// PushTimezone is the IANA zone a whole-day push window is counted
+	// in. Omitted when the window counts elapsed time.
+	PushTimezone string `json:"push_timezone,omitempty"`
 
 	// PushWaiting says why a push monitor whose status is "pending" is
 	// waiting although it has reported before: "resumed" when nothing has
@@ -280,6 +283,9 @@ type createMonitorRequest struct {
 	Tags              map[string]string `json:"tags"`
 	PushIntervalS     *int              `json:"push_interval_s"`
 	PushGraceS        *int              `json:"push_grace_s"`
+	// PushTimezone counts a whole-day push window on this IANA zone's
+	// clock. Omitted or empty counts elapsed time.
+	PushTimezone *string `json:"push_timezone"`
 	// JSONAssertion is optional; omitted or null means none.
 	JSONAssertion *jsonAssertionWire `json:"json_assertion"`
 	// DNS is required for a dns monitor and refused for every other type.
@@ -541,6 +547,9 @@ func (s *Server) handleCreateMonitor(w http.ResponseWriter, r *http.Request) {
 		if req.PushGraceS != nil {
 			m.PushGraceS = *req.PushGraceS
 		}
+		if req.PushTimezone != nil {
+			m.PushTimezone = strings.TrimSpace(*req.PushTimezone)
+		}
 	}
 
 	m.ChannelIDs = req.ChannelIDs
@@ -597,6 +606,15 @@ func validateCreateMonitor(req createMonitorRequest) problem {
 	}
 	if p := validatePushWindow(req.Type, req.PushIntervalS, req.PushGraceS); !p.ok() {
 		return p
+	}
+	if req.PushTimezone != nil {
+		interval := 0
+		if req.PushIntervalS != nil {
+			interval = *req.PushIntervalS
+		}
+		if p := validatePushTimezone(req.Type, interval, *req.PushTimezone); !p.ok() {
+			return p
+		}
 	}
 	if req.IntervalS != 0 && (req.IntervalS < 20 || req.IntervalS > 86400) {
 		return fieldProblem("interval_s", "interval_s must be between 20 and 86400")
@@ -1197,6 +1215,7 @@ func (s *Server) describeMonitor(r *http.Request, m store.Monitor) monitorRespon
 		PushTokenPrefix: m.PushTokenPrefix,
 		PushIntervalS:   m.PushIntervalS,
 		PushGraceS:      m.PushGraceS,
+		PushTimezone:    m.PushTimezone,
 	}
 
 	ctx := r.Context()
@@ -1404,6 +1423,9 @@ type patchMonitorRequest struct {
 	// The token itself is not patchable; see UpdateMonitor.
 	PushIntervalS *int `json:"push_interval_s"`
 	PushGraceS    *int `json:"push_grace_s"`
+	// PushTimezone replaces the zone a whole-day window is counted in; ""
+	// clears it, so the window counts elapsed time again.
+	PushTimezone *string `json:"push_timezone"`
 
 	// JSONAssertion replaces the assertion when present; `null` removes it.
 	// Raw, because a pointer cannot tell an omitted key from an explicit
@@ -1792,6 +1814,16 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 			m.PushGraceS = *req.PushGraceS
 		}
 		if p := validatePushRange(m.PushIntervalS, m.PushGraceS); !p.ok() {
+			return p
+		}
+	}
+	// Checked whenever the interval or the zone moved: a stored zone and a
+	// new hourly interval are as contradictory as the two sent together.
+	if req.PushTimezone != nil || req.PushIntervalS != nil {
+		if req.PushTimezone != nil {
+			m.PushTimezone = strings.TrimSpace(*req.PushTimezone)
+		}
+		if p := validatePushTimezone(m.Type, m.PushIntervalS, m.PushTimezone); !p.ok() {
 			return p
 		}
 	}

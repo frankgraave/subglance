@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -297,6 +298,35 @@ func validatePushRange(interval, grace int) problem {
 	if grace < 0 || grace > store.MaxPushGraceS {
 		return fieldProblem("push_grace_s",
 			"push_grace_s must be between 0 and "+strconv.Itoa(store.MaxPushGraceS))
+	}
+	return problem{}
+}
+
+// validatePushTimezone checks a push monitor's zone against its interval.
+//
+// The zone moves a deadline to the same wall-clock time a whole number of days
+// later, so it means nothing for an interval of hours: an hourly job does not
+// keep a time of day. Refusing the pair, rather than ignoring the zone, keeps
+// a setting from being saved that the watchdog would never read.
+//
+// Callers check it when push_timezone was sent, and a PATCH also when the
+// interval moved. Sending the field at all for another type is refused, as
+// push_grace_s is, even empty: it is a setting that type does not have.
+func validatePushTimezone(typ string, interval int, zone string) problem {
+	if typ != store.TypePush {
+		return fieldProblem("push_timezone", "push_timezone applies only to push monitors")
+	}
+	zone = strings.TrimSpace(zone)
+	if zone == "" {
+		return problem{}
+	}
+	if _, err := store.LoadPushTimezone(zone); err != nil {
+		return fieldProblem("push_timezone", "push_timezone: "+err.Error())
+	}
+	if !store.PushIntervalIsWholeDays(interval) {
+		return fieldProblem("push_timezone",
+			"push_timezone needs push_interval_s in whole days (86400 for a daily job); "+
+				"an interval of hours or minutes is counted in elapsed time")
 	}
 	return problem{}
 }
