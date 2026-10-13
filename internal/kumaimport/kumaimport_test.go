@@ -124,10 +124,12 @@ func TestConvertBothSchemas(t *testing.T) {
 			}
 			// Shop (prod) is checked every 30s and retried every 60s, three
 			// times: Kuma alerted on the fourth failure, 180s after the
-			// first. SubGlance confirms on the fourth too, 90s in.
+			// first. SubGlance confirms on the fourth too, 90s in, since a
+			// failing monitor is rechecked at its interval when that is
+			// under a minute.
 			if notes := notesOf(res); !strings.Contains(notes, "Shop (prod)") ||
 				!strings.Contains(notes, "Kuma alerted 180s after the first failed check, retrying every 60s; "+
-					"SubGlance checks again at the 30s interval and alerts after 90s") {
+					"SubGlance rechecks a failing monitor every 30s and alerts after 90s") {
 				t.Errorf("the changed time to an alert is not listed: %s", notes)
 			}
 			push, _ := monitorByName(res, "Nightly backup")

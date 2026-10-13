@@ -6612,7 +6612,10 @@ components:
             "no false alarms" in numeric form. Omitted means 2, or 0 for a
             `domain` monitor: an expiry date read off the registry is not a
             blip, and a registry that does not answer is `unknown` rather
-            than a failure.
+            than a failure. A failing monitor is rechecked every
+            `min(interval_s, 60)` seconds, so the alert comes
+            `(retries - 1) × min(interval_s, 60)` seconds after the first
+            failure, not `retries - 1` intervals.
           minimum: 0
           maximum: 10
         recovery_threshold:

@@ -604,7 +604,7 @@ func (r *Runner) jobs(ctx context.Context) ([]scheduler.Job, error) {
 			Monitor:      toCheckerMonitor(m),
 			Interval:     time.Duration(m.IntervalS) * time.Second,
 			NeverChecked: checked != nil && !seen,
-			Down:         r.engine.Status(m.ID).Confirmed(),
+			Failing:      r.engine.Status(m.ID).Failing(),
 		})
 	}
 
@@ -806,10 +806,12 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 		r.log.Warn("check failed while this host could not reach any connectivity target; not counted as an outage",
 			"monitor", o.Monitor.Name, "error", o.Result.Error)
 	}
-	// A recovering monitor keeps the fast outage cadence: the passes that
+	// A failing monitor is rechecked on the failure cadence from its first
+	// failed check, so retries confirm an outage in minutes rather than in
+	// intervals, and a recovering one keeps that cadence: the passes that
 	// close its incident should come at the pace the failures did, not at
-	// the relaxed healthy interval.
-	r.sch.SetDown(o.Monitor.ID, final.To.Confirmed())
+	// the relaxed healthy interval. See scheduler.Cadence.
+	r.sch.SetFailing(o.Monitor.ID, final.To.Failing())
 
 	var captureReason store.CaptureReason
 	hb.Response, captureReason = snapshotToStore(o.Result, tr.SnapshotsSpent, tr.Flapping)
