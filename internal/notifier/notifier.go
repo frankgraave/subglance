@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/frankgraave/subglance/internal/checker"
+	"github.com/frankgraave/subglance/internal/mutelink"
 	"github.com/frankgraave/subglance/internal/state"
 	"github.com/frankgraave/subglance/internal/store"
 )
@@ -127,6 +128,10 @@ type Notifier struct {
 	// baseURL is the address the instance is reached at, from ParseBaseURL,
 	// or "" when alerts carry no links.
 	baseURL string
+
+	// muteLinks signs the link that mutes an incident from its alert, or
+	// is nil when alerts carry none.
+	muteLinks *mutelink.Signer
 }
 
 // Options configures New.
@@ -170,6 +175,11 @@ type Options struct {
 	// incident and to the monitor; empty sends every message without links,
 	// exactly as before links existed.
 	BaseURL string
+
+	// MuteLinks signs the link in an alert that mutes its incident's
+	// repeat alerts without signing in. Used only with BaseURL; nil sends
+	// no such link.
+	MuteLinks *mutelink.Signer
 }
 
 // New builds a Notifier with the standard set of channels.
@@ -227,6 +237,7 @@ func New(opts Options) *Notifier {
 		unreported: make(map[int64]time.Time),
 		rewritten:  make(map[int64]bool),
 		baseURL:    opts.BaseURL,
+		muteLinks:  opts.MuteLinks,
 	}
 }
 
@@ -595,7 +606,12 @@ func (n *Notifier) attempt(ctx context.Context, d store.Delivery) error {
 	// Links are added here, at the last moment, rather than stored with
 	// the alert: what is in the outbox stays the alert itself, and a
 	// retry after the address changed links to where SubGlance is now.
-	err = n.send(sendCtx, sender, ch.Config, withLinks(alert, n.baseURL))
+	//
+	// The mute link is signed for this channel and runs from this send,
+	// so a retry carries a link that works for as long as the first would
+	// have from the moment it arrives.
+	linked := withMuteLink(withLinks(alert, n.baseURL), n.baseURL, n.muteLinks, ch.ID, n.now())
+	err = n.send(sendCtx, sender, ch.Config, linked)
 	if err == nil {
 		n.count(ch.Type, outcomeDelivered)
 		if err := n.db.MarkDelivered(ctx, d.ID); err != nil {

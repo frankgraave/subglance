@@ -4391,6 +4391,97 @@ paths:
               schema:
                 type: string
       x-subglance-access: public
+  /mute/{token}:
+    parameters:
+      - name: token
+        in: path
+        required: true
+        description: |
+          The signed token from the `mute_url` of an alert. It names one
+          incident and the channel the alert went to, and stops working when
+          the incident ends or 24 hours after the alert was sent. It is the
+          credential, and it authorises muting that incident and nothing else.
+        schema:
+          type: string
+        example: 312.4.1791090000.Qm9n5o1C3QxW2r8pZ0yVfA
+    get:
+      tags: [Incidents]
+      operationId: getMuteLinkPage
+      summary: Show what a mute link would do (public HTML)
+      description: |
+        The page an alert's **Mute repeat alerts** link opens: the monitor,
+        when it went down, and one button that posts back to the same
+        address. Opening it changes nothing, so a link previewer in a chat
+        app cannot mute an incident. Served only when `--base-url` is set;
+        see docs/channels.md. Answers are never cached.
+      security: []
+      responses:
+        '200':
+          description: |
+            The page: a button while the incident can be muted, or a line
+            saying it is already muted or already over.
+          content:
+            text/html:
+              schema:
+                type: string
+        '404':
+          description: |
+            The link does not work: changed, cut short, signed by another
+            key, or its incident or channel is gone. One fixed page that
+            names nothing.
+          content:
+            text/html:
+              schema:
+                type: string
+        '410':
+          description: The link was genuine but its 24 hours are over.
+          content:
+            text/html:
+              schema:
+                type: string
+        '503':
+          description: The incident could not be read; nothing was changed.
+          content:
+            text/html:
+              schema:
+                type: string
+      x-subglance-access: public
+    post:
+      tags: [Incidents]
+      operationId: muteFromLink
+      summary: Mute an incident's repeat alerts from an alert link
+      description: |
+        The page's button. The same effect as
+        `POST /api/v1/incidents/{id}/ack`, for the incident the token names.
+        Muting an incident that is already muted changes nothing and says
+        so; an incident that is over is left as it is.
+      security: []
+      responses:
+        '200':
+          description: The incident's repeat alerts are muted, or were already, or it is over.
+          content:
+            text/html:
+              schema:
+                type: string
+        '404':
+          description: The link does not work; see the GET.
+          content:
+            text/html:
+              schema:
+                type: string
+        '410':
+          description: The link was genuine but its 24 hours are over.
+          content:
+            text/html:
+              schema:
+                type: string
+        '503':
+          description: The incident could not be muted; nothing was changed.
+          content:
+            text/html:
+              schema:
+                type: string
+      x-subglance-access: public
   /api/v1/status-pages:
     get:
       tags: [Status pages]

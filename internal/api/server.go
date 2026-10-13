@@ -18,6 +18,7 @@ import (
 	"github.com/frankgraave/subglance/internal/buildinfo"
 	"github.com/frankgraave/subglance/internal/connectivity"
 	"github.com/frankgraave/subglance/internal/events"
+	"github.com/frankgraave/subglance/internal/mutelink"
 	"github.com/frankgraave/subglance/internal/statuspage"
 	"github.com/frankgraave/subglance/internal/store"
 	"github.com/frankgraave/subglance/internal/trustedproxy"
@@ -69,6 +70,10 @@ type Server struct {
 	// tester sends a real message through a channel, for the test button.
 	// Nil disables that endpoint, on the same principle as the others.
 	tester ChannelTester
+
+	// muteLinks checks the links in alerts that mute an incident without a
+	// session. Nil answers every such link as one that does not work.
+	muteLinks *mutelink.Signer
 
 	// targetGuard vets a channel's destination when the channel is saved,
 	// so a target that can never be delivered to is refused while the
@@ -349,6 +354,15 @@ func (s *Server) routes() []route {
 		// issue a GET.
 		{http.MethodGet, "/api/v1/push/{token}", accessPublic},
 		{http.MethodPost, "/api/v1/push/{token}", accessPublic},
+
+		// The link in an alert that mutes its incident's repeat alerts.
+		// Public for the same reason as the push URL: whoever reads the
+		// alert on a phone holds no session, and the signed token in the
+		// path authorises one thing on one incident (mute_link.go). The
+		// GET only shows what the POST would do, so a link previewer
+		// cannot mute anything.
+		{http.MethodGet, mutePathPattern, accessPublic},
+		{http.MethodPost, mutePathPattern, accessPublic},
 
 		// Public status pages. Public because that is what they are for: a
 		// page an operator switched on is published to people without an
@@ -767,6 +781,11 @@ func (s *Server) handlerFor(rt route) http.HandlerFunc {
 	case "POST /api/v1/instance/reset":
 		return s.handleResetInstance
 
+	case "GET " + mutePathPattern:
+		return s.handleMutePage
+	case "POST " + mutePathPattern:
+		return s.handleMute
+
 	case " " + webUIPattern:
 		return s.handleWebUI
 	}
@@ -945,7 +964,8 @@ func (s *Server) withLogging(next http.Handler) http.Handler {
 
 // redactPath removes credentials that travel in the URL path.
 //
-// One route has that shape: a push URL, where the token IS the path. The rest
+// Two routes have that shape: a push URL, where the token IS the path, and
+// the mute link in an alert. The rest
 // of the code is careful never to store that token in the clear — only its
 // hash — which made writing it to the log the single hole in otherwise
 // deliberate handling. Debug logging is a documented, supported setting, so
@@ -954,9 +974,12 @@ func (s *Server) withLogging(next http.Handler) http.Handler {
 // A monitor's target URL is not redacted and should not be: a target is
 // something being watched, not something that proves the right to report.
 func redactPath(path string) string {
-	const pushPrefix = "/api/v1/push/"
-	if strings.HasPrefix(path, pushPrefix) && len(path) > len(pushPrefix) {
-		return pushPrefix + "{token}"
+	// The mute link in an alert has the same shape: its token is the
+	// credential.
+	for _, prefix := range []string{"/api/v1/push/", mutelink.PathPrefix} {
+		if strings.HasPrefix(path, prefix) && len(path) > len(prefix) {
+			return prefix + "{token}"
+		}
 	}
 	return path
 }
