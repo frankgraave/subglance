@@ -281,6 +281,7 @@ export function Dashboard({
        */}
       <Card
         className="mon-board"
+        listHead
         title="Monitors"
         icon={<IconList />}
         lead={

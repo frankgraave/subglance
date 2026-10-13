@@ -30,6 +30,7 @@ export function DashboardNotice({
     <section className="mon-dashboard">
       <Card
         className="mon-board"
+        listHead
         title="Monitors"
         icon={<IconList />}
         action={

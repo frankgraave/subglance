@@ -65,15 +65,19 @@
  * take the second, at the card's right edge. The text filter is in the
  * Filter sheet. The action group's own box is dissolved so its children
  * join the header's lines in markup order, and focus moves the way the eye
- * does. Every control is the 36px phone control height. The literal is the
- * breakpoint rung (AGENTS.md).
+ * does. Every control is the 36px phone control height, with a 44px target
+ * around it (card.css). The literal is the breakpoint rung (AGENTS.md).
  */
 @media (max-width: 640px) {
   .mon-detail > .inv-board > .card-head > .card-head-action { display: contents; }
   .inv-board > .card-head > .card-head-lead { flex: 1 1 0; }
+  /* 8px, not the desktop 6px: each button's 44px target reaches 4px past
+     its face, and two neighbours 6px apart would share 2px of it (card.css,
+     `.card--list`). */
   .inv-board > .card-head .bulk-tags-actions {
     flex: 1 1 100%;
     justify-content: flex-end;
+    gap: var(--space-2);
   }
   .inv-head-button { height: var(--control-h); }
   .inv-head-icon { width: var(--control-h); }

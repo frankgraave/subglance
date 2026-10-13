@@ -777,6 +777,14 @@
       <tbody>
       <tr>
         <td class="sg-cell-swatch">
+          <span class="sg-bar" style="width: var(--size-target)"></span>
+        </td>
+        <td><code>--size-target</code></td>
+        <td class="sg-value"><code>44px</code></td>
+        <td class="sg-why">The touch target a phone list-header control takes around its face: 44px, the Apple HIG minimum and WCAG 2.5.5 (AAA). Nothing is drawn at this size. <details class="sg-more"><summary>more</summary>The face stays `--control-h`, the height the headers were measured against, and the difference is an unpainted hit area (`.card--list` in card.css), so the thumb gets 44px without the header row growing on four screens.</details></td>
+      </tr>
+      <tr>
+        <td class="sg-cell-swatch">
           <span class="sg-bar" style="width: var(--size-square-compact)"></span>
         </td>
         <td><code>--size-square-compact</code></td>

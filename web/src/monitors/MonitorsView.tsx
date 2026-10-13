@@ -340,6 +340,7 @@ export function MonitorsView({
        */}
       <Card
         className="inv-board"
+        listHead
         title="Configured monitors"
         icon={<IconList />}
         headingLevel={2}

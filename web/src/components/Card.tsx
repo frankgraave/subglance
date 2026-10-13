@@ -69,6 +69,14 @@ export type CardProps = {
    * so the level has to fit where the card sits rather than always being h2.
    */
   headingLevel?: 1 | 2 | 3 | 4;
+  /**
+   * The header holds the controls of the list this card holds: its tabs,
+   * filter, Filter, Sort or View, and its list actions. On a phone each
+   * button there keeps its 36px face and takes a 44px target around it
+   * (`card--list` in card.css, DESIGN.md §8.4). A prop rather than a class
+   * the caller writes, because the style lives with the card (SUB-171).
+   */
+  listHead?: boolean;
   className?: string;
   /** Marks the card's own region for assistive technology. */
   "aria-label"?: string;
@@ -82,6 +90,7 @@ export function Card({
   note,
   children,
   headingLevel = 2,
+  listHead = false,
   className,
   "aria-label": ariaLabel,
 }: CardProps) {
@@ -93,7 +102,7 @@ export function Card({
   const headingId = useId();
   return (
     <section
-      className={className ? `card ${className}` : "card"}
+      className={["card", listHead ? "card--list" : null, className].filter(Boolean).join(" ")}
       aria-labelledby={headingId}
       {...(ariaLabel ? { "aria-label": ariaLabel } : {})}
     >

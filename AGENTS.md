@@ -82,6 +82,12 @@ are `ListTabs` (`web/src/monitors/ListTabs.tsx`), a list's Filter panel is
 `FilterPanel` (`web/src/monitors/FilterPanel.tsx`), and a button that names
 one current choice and opens a radio list — Sort, History — is
 `ChoiceControl` (`web/src/monitors/ChoiceControl.tsx`).
+On a phone a header control is drawn at 36px (`--control-h`) and pressed
+at 44px (`--size-target`): a card whose header holds its list's controls
+takes `Card`'s `listHead` prop, which gives every button there an unpainted
+44px hit area and spaces neighbours 8px apart so the areas do not overlap. A new list
+card takes the prop; do not grow the face to 44px instead. The list-headers
+browser test hit-tests that square at 390px (DESIGN.md §8.4).
 `layout/list-headers.browser.test.ts` measures every list screen at 390, 820
 and 1440px and fails when anything stands between the masthead and its
 first card, when its header does not start directly under the masthead, is

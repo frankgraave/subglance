@@ -201,6 +201,7 @@ export function NotificationsView({
 
       <Card
         className="nt-card"
+        listHead
         icon={<IconSend />}
         /*
          * `Channels (2)`, not "Channels" over "2 channels, 1 disabled".
