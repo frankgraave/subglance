@@ -144,5 +144,11 @@ func ntfyActions(a Alert) []map[string]string {
 	if a.MonitorURL != "" {
 		actions = append(actions, map[string]string{"action": "view", "label": "Monitor", "url": a.MonitorURL})
 	}
+	// "view", not "http": the link opens a page with the button on it, so
+	// pressing this cannot mute anything by itself. ntfy allows three
+	// actions, and this is the third.
+	if a.MuteURL != "" {
+		actions = append(actions, map[string]string{"action": "view", "label": "Mute", "url": a.MuteURL})
+	}
 	return actions
 }

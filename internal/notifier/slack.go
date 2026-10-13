@@ -91,5 +91,8 @@ func slackLinks(a Alert) string {
 	if a.MonitorURL != "" {
 		parts = append(parts, "<"+a.MonitorURL+"|Open the monitor>")
 	}
+	if a.MuteURL != "" {
+		parts = append(parts, "<"+a.MuteURL+"|"+MuteLabel+">")
+	}
 	return strings.Join(parts, " · ")
 }

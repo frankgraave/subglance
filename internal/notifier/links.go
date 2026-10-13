@@ -6,6 +6,10 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/frankgraave/subglance/internal/mutelink"
+	"github.com/frankgraave/subglance/internal/state"
 )
 
 // Links back to SubGlance.
@@ -105,6 +109,52 @@ func withLinks(a Alert, base string) Alert {
 	return a
 }
 
+// MuteLabel is what every channel calls the mute link, so the words on a
+// phone match the button on the page it opens.
+const MuteLabel = "Mute repeat alerts"
+
+// withMuteLink returns the alert with MuteURL filled in, for an alert that
+// reached the channel channelID at now. It needs both the address
+// (withLinks) and a signer; without either, or for an alert with nothing
+// to mute, the alert comes back unchanged.
+//
+// The members of a grouped alert or a digest get a link each, for a
+// receiver that reads the webhook payload; the message itself has one link
+// to the incidents screen, where each can be muted.
+func withMuteLink(a Alert, base string, signer *mutelink.Signer, channelID int64, now time.Time) Alert {
+	if base == "" || signer == nil {
+		return a
+	}
+	if len(a.Members) > 0 {
+		members := make([]Alert, len(a.Members))
+		for i, m := range a.Members {
+			members[i] = withMuteLink(m, base, signer, channelID, now)
+		}
+		a.Members = members
+		return a
+	}
+	if !mutable(a) {
+		return a
+	}
+	token := signer.Token(a.IncidentID, channelID, now.Add(mutelink.Lifetime))
+	a.MuteURL = base + mutelink.PathPrefix + token
+	return a
+}
+
+// mutable reports whether an alert is about one open incident whose repeat
+// alerts can still be muted: a first alert or a reminder. A recovery ends
+// the incident, and an alert about SubGlance itself has none.
+func mutable(a Alert) bool {
+	if a.IncidentID == 0 || a.MonitorID == 0 || a.Digest {
+		return false
+	}
+	switch state.Event(a.Event) {
+	case state.EventIncidentConfirmed, state.EventIncidentReminder:
+		return true
+	}
+	return false
+}
+
 // linkLines is the links as text for a channel that sends plain text, one
 // per line, or "" when there are none.
 func linkLines(a Alert) string {
@@ -114,6 +164,9 @@ func linkLines(a Alert) string {
 	}
 	if a.MonitorURL != "" {
 		lines = append(lines, "Monitor: "+a.MonitorURL)
+	}
+	if a.MuteURL != "" {
+		lines = append(lines, MuteLabel+": "+a.MuteURL)
 	}
 	return strings.Join(lines, "\n")
 }

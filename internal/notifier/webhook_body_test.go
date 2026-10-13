@@ -96,6 +96,7 @@ func TestWebhookBodyFillsEveryPlaceholder(t *testing.T) {
 	a := hostileAlert()
 	a.IncidentURL = "https://status.example.com/incidents#incident-312"
 	a.MonitorURL = "https://status.example.com/monitors/7"
+	a.MuteURL = "https://status.example.com/mute/312.4.1791090000.tag"
 	names := WebhookPlaceholderNames()
 	parts := make([]string, len(names))
 	for i, n := range names {
@@ -111,7 +112,7 @@ func TestWebhookBodyFillsEveryPlaceholder(t *testing.T) {
 		"monitor_name": a.MonitorName, "monitor_type": "http", "target": a.Target, "cause": "timeout",
 		"last_error": a.LastError, "started_at": "2026-10-02T03:12:40Z", "at": "2026-10-02T03:14:10Z",
 		"txn_id":       "txn-1",
-		"incident_url": a.IncidentURL, "monitor_url": a.MonitorURL,
+		"incident_url": a.IncidentURL, "monitor_url": a.MonitorURL, "mute_url": a.MuteURL,
 	}
 	for _, n := range names {
 		w, ok := want[n]

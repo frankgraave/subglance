@@ -39,6 +39,7 @@ import (
 	"github.com/frankgraave/subglance/internal/housekeeping"
 	"github.com/frankgraave/subglance/internal/logging"
 	"github.com/frankgraave/subglance/internal/monitor"
+	"github.com/frankgraave/subglance/internal/mutelink"
 	"github.com/frankgraave/subglance/internal/notifier"
 	"github.com/frankgraave/subglance/internal/store"
 	"github.com/frankgraave/subglance/internal/watchdog"
@@ -221,12 +222,24 @@ func run(args []string, logOut io.Writer) error {
 	// alerts. It only writes to the outbox on that path; the delivery
 	// itself happens in its own goroutine below, which is what keeps a
 	// slow webhook from delaying a check.
+	// The key that signs the mute link in an alert. Only with --base-url:
+	// without an address there is no link to sign, and no key file is
+	// written into the data directory for nothing.
+	var muteLinks *mutelink.Signer
+	if cfg.BaseURL != "" {
+		muteLinks, err = mutelink.Load(cfg.DataDir, secretKey)
+		if err != nil {
+			return fmt.Errorf("mute links: %w", err)
+		}
+	}
+
 	notify := notifier.New(notifier.Options{
 		DB:          db,
 		Log:         log,
 		Guard:       guard,
 		GroupWindow: cfg.NotifierGroupWindow(),
 		BaseURL:     cfg.BaseURL,
+		MuteLinks:   muteLinks,
 	})
 
 	canary, err := newCanary(openCtx, cfg, db, notify, log)
@@ -282,6 +295,8 @@ func run(args []string, logOut io.Writer) error {
 		// The address alerts link to, shown read-only on the settings
 		// page so an administrator can see what the links say.
 		WithBaseURL(cfg.BaseURL).
+		// The same signer the notifier writes the links with.
+		WithMuteLinks(muteLinks).
 		// The same guard the notifier delivers through, so the save-time
 		// refusal and the delivery-time refusal cannot disagree about
 		// what --allow-private-targets permits. A channel the operator

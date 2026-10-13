@@ -97,5 +97,8 @@ func discordLinks(a Alert) string {
 	if a.MonitorURL != "" {
 		parts = append(parts, "[Open the monitor]("+a.MonitorURL+")")
 	}
+	if a.MuteURL != "" {
+		parts = append(parts, "["+MuteLabel+"]("+a.MuteURL+")")
+	}
 	return strings.Join(parts, " · ")
 }

@@ -331,6 +331,47 @@ How each channel carries the links:
 The address is added when the message is sent, not when the alert is queued,
 so an alert being retried after the setting changed links to the new address.
 
+## Muting repeat alerts from the alert
+
+With `--base-url` set, an alert about an open incident (the first alert and
+every reminder) carries a third link, **Mute repeat alerts**. It does what the
+**Mute repeat alerts** button on the incidents screen does, without signing in:
+SubGlance sends no more reminders about that incident, and still sends the
+alert when the monitor is back up.
+
+Following the link changes nothing by itself. It opens a page that names the
+monitor and when it went down, with one button; only pressing the button mutes.
+Slack, Teams, mail scanners and chat apps open the links in a message to draw
+a preview or check it, and a link that acted when it was opened would mute
+the incident before anyone had read the alert.
+
+| Type | Mute link |
+|---|---|
+| `webhook` | `mute_url` in the payload, and `{{mute_url}}` for a body of your own |
+| `slack`, `discord` | After the other links, "Mute repeat alerts" |
+| `telegram`, `email`, `gotify` | A third line after the message, `Mute repeat alerts:` |
+| `ntfy` | A third button, **Mute**, which opens the page |
+| `sms` | None: a second link does not fit in one message of 160 characters |
+
+A recovery, a message about SubGlance itself, and the top of a grouped alert or
+a quiet-hours summary carry no mute link; each member of a grouped alert has
+its own in the webhook payload, and the incidents screen it links to mutes any
+of them.
+
+A link works for one incident, from the alert it came in, until the incident
+is over or for 24 hours after it was sent, whichever comes first. Following it
+again after muting says the alert is already muted and changes nothing. A link
+that was cut short or changed, or one sent to a channel that has since been
+removed, opens a page saying it does not work; removing a channel is how to
+take back a link that reached the wrong chat.
+
+The link is signed, not stored. With `--secret-key` set, the signing key is
+derived from it; without one, SubGlance creates `mute-link.key` in the data
+directory, readable by its owner only. Changing `--secret-key`, or deleting
+that file, stops every mute link already sent from working; nothing else
+depends on it. A backup does not include the file, so after a restore onto a
+new data directory the links sent before it no longer work either.
+
 ## Text that is not markup
 
 Slack and Discord read a message as markup, and much of an alert's text was
@@ -393,6 +434,7 @@ its `method` says so. Every request carries a `User-Agent` starting with
 | `replaces_alert` | Set on a recovery whose alert never reached this channel: see below |
 | `notice` | Set on an alert about a certificate that expires soon, not an outage: see below |
 | `incident_url`, `monitor_url` | Links to the incident and the monitor in SubGlance; left out unless `--base-url` is set (see [links back to SubGlance](#links-back-to-subglance)). A grouped alert or a digest has an `incident_url` to the incidents screen at the top and each member's own links in `members` |
+| `mute_url` | A page that mutes this incident's repeat alerts without signing in; on a first alert or a reminder only, and left out unless `--base-url` is set (see [muting repeat alerts from the alert](#muting-repeat-alerts-from-the-alert)). In a grouped alert or a digest, only in `members` |
 
 A monitor's alerts carry `incident_confirmed` (it is down), `incident_reminder`
 (it is still down and nobody has acknowledged it) or `incident_resolved` (it is
@@ -480,6 +522,7 @@ above, so a webhook without one is unchanged.
 | `{{cause}}`, `{{last_error}}` | Why the check failed; empty in a grouped alert |
 | `{{started_at}}`, `{{at}}` | When the outage began and when this alert fired, RFC 3339 in UTC; `{{started_at}}` is empty when there is no outage behind the message |
 | `{{incident_url}}`, `{{monitor_url}}` | Links to the incident and the monitor in SubGlance; empty unless `--base-url` is set. For a grouped alert or a digest, `{{incident_url}}` is the incidents screen and `{{monitor_url}}` is empty |
+| `{{mute_url}}` | The page that mutes this incident's repeat alerts; empty unless `--base-url` is set, on a recovery, and for a grouped alert or a digest |
 | `{{txn_id}}` | An id that is the same on every retry of one alert and differs between alerts. The only placeholder the `url` may use |
 
 A placeholder is replaced by its value and nothing else: there are no

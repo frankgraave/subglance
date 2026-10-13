@@ -97,6 +97,13 @@ type Alert struct {
 	// existed.
 	IncidentURL string `json:"incident_url,omitempty"`
 	MonitorURL  string `json:"monitor_url,omitempty"`
+
+	// MuteURL opens a page that mutes the incident's repeat alerts without
+	// signing in (internal/mutelink). Set at send time, beside the links
+	// above, on an alert about one open incident: a first alert or a
+	// reminder. A recovery, a grouped alert's top level and a message about
+	// SubGlance itself have nothing to mute and carry none.
+	MuteURL string `json:"mute_url,omitempty"`
 }
 
 // Grouped reports whether this alert covers more than one monitor.
