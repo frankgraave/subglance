@@ -364,7 +364,7 @@ export function MonitorDetail({
         <p className="mon-detail-target">
           {push === undefined
             ? target
-            : describePushWindow(push.intervalS, push.graceS)}
+            : describePushWindow(push.intervalS, push.graceS, push.timezone)}
         </p>
         {/*
          * The reason, on its own line and only when there is one.

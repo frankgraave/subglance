@@ -6512,6 +6512,14 @@ components:
             failure. Added to `push_interval_s`, not subtracted from it: an
             hourly job with 300 seconds of grace is late at 65 minutes.
           example: 300
+        push_timezone:
+          type: string
+          description: |
+            Push monitors only: the IANA zone whose clock a whole-day window
+            is counted on. The deadline is the same wall-clock time
+            `push_interval_s` days after the last report, in this zone, plus
+            `push_grace_s`. Omitted when the window counts elapsed time.
+          example: Europe/Amsterdam
         push_waiting:
           type: string
           enum: [resumed, restarted]
@@ -6558,6 +6566,7 @@ components:
             properties:
               push_interval_s: false
               push_grace_s: false
+              push_timezone: false
       properties:
         name:
           type: string
@@ -6758,6 +6767,20 @@ components:
           maximum: 2592000
           default: 60
           example: 300
+        push_timezone:
+          type: string
+          description: |
+            Push monitors only, and only with a `push_interval_s` of whole days
+            (a multiple of 86400): the IANA zone the job's schedule runs on,
+            such as `Europe/Amsterdam`. The deadline is then the same
+            wall-clock time that many days after the last report, plus
+            `push_grace_s`, so a daily job on local time is not an hour late
+            the night the clocks go back. A reading that happens twice that
+            night is its second occurrence, and one skipped the night the
+            clocks go forward is moved past the gap. Omitted or empty counts
+            elapsed time. `Local` and unknown zones are refused, as is any
+            value with an interval that is not whole days.
+          example: Europe/Amsterdam
       additionalProperties: false
     PatchMonitorRequest:
       type: object
@@ -6918,6 +6941,14 @@ components:
           description: Push monitors only.
           minimum: 0
           maximum: 2592000
+        push_timezone:
+          type: string
+          description: |
+            Push monitors only. Replaces the zone a whole-day window is counted
+            in; send `""` to count elapsed time again. Checked against the
+            interval the monitor ends up with, so shortening a zoned daily
+            window to hours is refused unless the same request clears the
+            zone.
       additionalProperties: false
     Heartbeat:
       type: object

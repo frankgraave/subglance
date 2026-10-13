@@ -17,6 +17,8 @@ import { channelIdsFromText, channelIdsText } from "./channelChoice";
 import type { Channel } from "../notifications/channels";
 import { validRepeat, REPEAT_ERROR } from "./repeat";
 import { isPush } from "./push";
+import { PushClockField } from "./PushClockField";
+import { pushIntervalTakesZone } from "./pushClock";
 import { TlsFloorField } from "./TlsFloorField";
 import { TLS_FLOOR_UNSET } from "./tlsFloor";
 import type { PreviewResult, PreviewState } from "./preview";
@@ -63,6 +65,11 @@ export type AddMonitorValues = {
   pushIntervalS: number;
   /** Push monitors only: how late that report may be, in seconds. */
   pushGraceS: number;
+  /**
+   * Push monitors only: the IANA zone a whole-day window is counted in, or
+   * empty for elapsed time. Sent only while the interval is whole days.
+   */
+  pushTimezone: string;
   repeatAfterS: number;
   /** Passing checks in a row that close a confirmed incident. Not for push. */
   recoveryThreshold: number;
@@ -126,6 +133,7 @@ const FIELD_CONTROL: Record<string, string> = {
   keyword_mode: "keyword",
   push_interval_s: "push-interval",
   push_grace_s: "push-grace",
+  push_timezone: "push-timezone",
   repeat_after_s: "repeat",
   recovery_threshold: "recovery",
   min_tls_version: "min-tls",
@@ -226,6 +234,9 @@ const DEFAULTS: AddMonitorValues = {
   // visible before it is committed: silent grace is how a monitor ends up
   // alerting a minute later than its owner expects.
   pushGraceS: 60,
+  // Elapsed time, the server's default. Not the browser's zone: a job
+  // scheduled in UTC given a local zone would be due an hour early in spring.
+  pushTimezone: "",
   repeatAfterS: 900,
   // The server default, shown so the delay before "resolved" is visible.
   recoveryThreshold: 2,
@@ -592,8 +603,7 @@ export function AddMonitorForm({
               invalidProps("push-grace", `${ids}-push-grace-help`))}
             <p id={`${ids}-push-grace-help`} className="field-help">
               Silence past the interval plus this is a failure. A backup that
-              usually takes a few minutes longer needs room here, and a daily
-              job on local time reports an hour late the night the clocks go back.
+              usually takes a few minutes longer needs room here.
             </p>
             <ControlRefusal
               control="push-grace"
@@ -603,6 +613,32 @@ export function AddMonitorForm({
             />
           </div>
         </div>
+      )}
+
+      {/*
+       * Only for an interval of whole days, where it changes the deadline: an
+       * hourly job keeps no time of day, and the server refuses a zone beside
+       * one. Hidden rather than disabled, like the target for a push monitor,
+       * and a zone left in it is not sent once it is hidden.
+       */}
+      {push && pushIntervalTakesZone(values.pushIntervalS) && (
+        <PushClockField
+          id={`${ids}-push-timezone`}
+          value={values.pushTimezone}
+          onChange={(pushTimezone) => {
+            setLocalError(null);
+            setValues((v) => ({ ...v, pushTimezone }));
+          }}
+          invalid={badControl === "push-timezone"}
+          errorId={badControl === "push-timezone" ? `${ids}-field-error` : undefined}
+        >
+          <ControlRefusal
+            control="push-timezone"
+            badControl={badControl}
+            rejection={rejection}
+            ids={ids}
+          />
+        </PushClockField>
       )}
 
       {/*

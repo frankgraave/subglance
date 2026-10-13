@@ -92,6 +92,11 @@ type Monitor struct {
 	PushIntervalS int
 	PushGraceS    int
 
+	// PushTimezone is the IANA zone whose clock a push monitor's job runs
+	// on, such as Europe/Amsterdam. Empty counts the window in elapsed
+	// time. Set only for an interval of whole days; see PushDeadline.
+	PushTimezone string
+
 	// Tags are key/value pairs such as `env` -> `prod`. See tags.go for the
 	// shape and the normalisation rules; nil and empty mean the same thing.
 	Tags map[string]string
@@ -179,7 +184,7 @@ const monitorColumns = `
 	min_tls_version, push_token_prefix, push_interval_s, push_grace_s,
 	json_path, json_operator, json_expected, resumed_at,
 	dns_record_type, dns_expected_json, dns_resolver, domain_warn_days,
-	created_at, updated_at`
+	push_timezone, created_at, updated_at`
 
 // queryMonitors runs a monitor SELECT with a caller-supplied WHERE clause.
 //
@@ -264,6 +269,7 @@ func scanMonitor(s scanner) (Monitor, error) {
 		dnsWant     sql.NullString
 		dnsResolver sql.NullString
 		domainWarn  sql.NullInt64
+		pushZone    sql.NullString
 		created     int64
 		updated     int64
 	)
@@ -276,7 +282,7 @@ func scanMonitor(s scanner) (Monitor, error) {
 		&minTLS, &pushPrefix, &pushEvery, &pushGrace,
 		&jsonPath, &jsonOp, &jsonWant, &resumed,
 		&dnsType, &dnsWant, &dnsResolver, &domainWarn,
-		&created, &updated,
+		&pushZone, &created, &updated,
 	)
 	if err != nil {
 		return Monitor{}, err
@@ -290,6 +296,7 @@ func scanMonitor(s scanner) (Monitor, error) {
 	m.PushTokenPrefix = pushPrefix.String
 	m.PushIntervalS = int(pushEvery.Int64)
 	m.PushGraceS = int(pushGrace.Int64)
+	m.PushTimezone = pushZone.String
 	if jsonPath.Valid && jsonOp.Valid {
 		m.JSONAssertion = &JSONAssertion{Path: jsonPath.String, Operator: jsonOp.String, Expected: jsonWant.String}
 	}
@@ -369,8 +376,8 @@ func (db *DB) CreateMonitor(ctx context.Context, m Monitor) (Monitor, error) {
 			min_tls_version, push_token_hash, push_token_prefix, push_interval_s, push_grace_s,
 			json_path, json_operator, json_expected,
 			dns_record_type, dns_expected_json, dns_resolver, domain_warn_days,
-			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			push_timezone, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		m.Name, m.Type, m.Target, m.IntervalS, m.TimeoutS, m.Retries, m.RecoveryThreshold,
 		m.Method, m.ExpectedStatus, nullString(m.Keyword), m.KeywordMode, m.FollowRedirects,
 		headersJSON, nullString(m.Body), m.SSLWarnDays, m.Enabled, m.CaptureResponse, m.RepeatAfterS,
@@ -378,7 +385,7 @@ func (db *DB) CreateMonitor(ctx context.Context, m Monitor) (Monitor, error) {
 		nullInt(m.PushIntervalS), pushGraceValue(m),
 		jsonPath, jsonOp, jsonWant,
 		dnsType, dnsWant, dnsResolver, domainWarnColumn(m),
-		now, now,
+		pushTimezoneColumn(m), now, now,
 	)
 	if err != nil {
 		return Monitor{}, fmt.Errorf("insert monitor: %w", err)
@@ -1055,6 +1062,16 @@ func domainWarnColumn(m Monitor) any {
 	return m.DomainWarnDays
 }
 
+// pushTimezoneColumn is a push monitor's zone, NULL when it counts elapsed
+// time and for every other type: the schema refuses an empty string, so "no
+// zone" has one spelling.
+func pushTimezoneColumn(m Monitor) any {
+	if m.Type != TypePush {
+		return nil
+	}
+	return nullString(m.PushTimezone)
+}
+
 func nullInt(i int) any {
 	if i == 0 {
 		return nil
@@ -1164,6 +1181,7 @@ func (db *DB) updateMonitor(ctx context.Context, m Monitor, expected []int64) (M
 		nullInt(m.PushIntervalS), pushGraceValue(m),
 		jsonPath, jsonOp, jsonWant,
 		dnsType, dnsWant, dnsResolver, domainWarnColumn(m),
+		pushTimezoneColumn(m),
 		m.Enabled, next,
 		next, m.ID,
 	}
@@ -1251,6 +1269,7 @@ const updateMonitorSetClause = `
 		json_path = ?, json_operator = ?, json_expected = ?,
 		dns_record_type = ?, dns_expected_json = ?, dns_resolver = ?,
 		domain_warn_days = ?,
+		push_timezone = ?,
 		` + resumedAtSQL + `,
 		updated_at = MAX(?, updated_at + 1)
 	WHERE id = ?`

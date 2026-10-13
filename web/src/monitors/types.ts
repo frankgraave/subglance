@@ -55,6 +55,11 @@ export type PushWindow = {
   /** How late it may be before silence counts as a failure, in seconds. */
   graceS: number;
   /**
+   * The IANA zone a whole-day window is counted in. Absent when the window
+   * counts elapsed time.
+   */
+  timezone?: string;
+  /**
    * The first few characters of the push token, kept so two push monitors
    * can be told apart. The token itself is never readable again.
    */
@@ -199,6 +204,8 @@ export type ApiMonitor = {
   /** Push monitors only; omitted for every other type. */
   push_interval_s?: number;
   push_grace_s?: number;
+  /** Push only: the zone a whole-day window is counted in. */
+  push_timezone?: string;
   push_token_prefix?: string;
   /** Push only: why a monitor that has reported before is waiting again. */
   push_waiting?: string;
@@ -303,6 +310,9 @@ function pushFromApi(api: ApiMonitor): PushWindow | undefined {
   return {
     intervalS: api.push_interval_s ?? 0,
     graceS: api.push_grace_s ?? 0,
+    ...(typeof api.push_timezone === "string" && api.push_timezone !== ""
+      ? { timezone: api.push_timezone }
+      : {}),
     tokenPrefix: api.push_token_prefix ?? "",
     // Only the two words the server sends; anything else is dropped rather
     // than rendered as a reason nobody wrote.

@@ -437,21 +437,34 @@ interval, so an hourly job with five minutes of grace is late at 65 minutes. It
 defaults to 60 seconds rather than 0, because cron drifts and a zero tolerance
 turns ordinary jitter into a 3am alert.
 
-A job that runs at a fixed *local* time needs more room than that once a year.
-The window is counted in elapsed time, and on the night the clocks go back at
-the end of daylight saving time, a job scheduled for 06:00 local time runs an
-hour later than its interval: 25 hours after the previous run for a daily job,
-169 for a weekly one. A daily job with 60 seconds of grace therefore
-goes down at about 05:01 and recovers when it reports at 06:00; a weekly job
-does the same in the week of the change. It happens to every job on a
-local-time schedule (cron on a host with a local `TZ`, the Synology, Unraid or
-Windows task scheduler), on the last Sunday of October in the EU and the first
-Sunday of November in the US. The spring change shortens the gap by an hour
-instead (23 hours for a daily job, 167 for a weekly one) and raises no alert,
-and a job scheduled in UTC is never affected. To avoid
-the false alarm, schedule the job in UTC, or give it at least an hour of grace
-at the cost of hearing about a genuinely missed run an hour later on every
-other day.
+A job that runs at a fixed *local* time keeps its local time, not its distance
+in hours. On the night the clocks go back at the end of daylight saving time, a
+job scheduled for 06:00 runs 25 hours after the previous run (169 for a weekly
+job), and the night they go forward, 23 (167). Counted in elapsed time, a daily
+job with 60 seconds of grace would go down at about 05:01 that October night and
+recover when it reports at 06:00. It happens to every job on a local-time
+schedule (cron on a host with a local `TZ`, the Synology, Unraid or Windows task
+scheduler), on the last Sunday of October in the EU and the first Sunday of
+November in the US.
+
+So tell the monitor which clock the job runs on. With `push_timezone` set to an
+IANA zone, an interval of whole days is counted on that clock: the deadline is
+the same local time one day (or seven, or however many) after the last report,
+plus grace.
+
+```bash
+curl -b jar -X POST http://localhost:8080/api/v1/monitors \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Nightly backup","type":"push","push_interval_s":86400,"push_grace_s":300,"push_timezone":"Europe/Amsterdam"}'
+```
+
+In the form it is *Runs on the clock of*, shown once the interval is in days.
+The zone only applies to whole days, and an interval of hours with a zone is
+refused: an hourly job keeps no time of day, so elapsed time is already right
+for it. A job scheduled in UTC needs no zone either. Two readings a clock skips
+or repeats are settled on the late side: a job at 02:30 is on time at either
+02:30 the night the clocks go back, and is due at 03:30 the night 02:30 does not
+happen.
 
 Two kinds of silence are not held against a job, because SubGlance could not
 have heard it:

@@ -139,6 +139,8 @@ export type MonitorPatch = {
   recovery_threshold?: number;
   push_interval_s?: number;
   push_grace_s?: number;
+  /** An IANA zone, or `""` to count the window in elapsed time again. */
+  push_timezone?: string;
   name?: string;
   interval_s?: number;
   timeout_s?: number;

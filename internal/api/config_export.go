@@ -194,6 +194,7 @@ func exportMonitor(m store.Monitor) configfile.Monitor {
 	case store.TypePush:
 		out.PushIntervalS = ptr(m.PushIntervalS)
 		out.PushGraceS = ptr(m.PushGraceS)
+		out.PushTimezone = ptr(m.PushTimezone)
 	}
 	return out
 }

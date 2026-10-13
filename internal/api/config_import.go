@@ -470,7 +470,7 @@ func monitorPatch(m configfile.Monitor) patchMonitorRequest {
 		FollowRedirects: m.FollowRedirects, SSLWarnDays: m.SSLWarnDays,
 		RepeatAfterS: m.RepeatAfterS, Enabled: m.Enabled, CaptureResponse: m.CaptureResponse,
 		MinTLSVersion: m.MinTLSVersion, PushIntervalS: m.PushIntervalS, PushGraceS: m.PushGraceS,
-		DomainWarnDays: m.DomainWarnDays,
+		PushTimezone: m.PushTimezone, DomainWarnDays: m.DomainWarnDays,
 	}
 	if m.Name != "" {
 		req.Name = &m.Name
@@ -525,7 +525,7 @@ func planMonitor(p *importPlan, ex existingConfig, path string, m configfile.Mon
 			KeywordMode: deref(m.KeywordMode), FollowRedirects: m.FollowRedirects,
 			SSLWarnDays: m.SSLWarnDays, RepeatAfterS: m.RepeatAfterS, Enabled: m.Enabled,
 			CaptureResponse: m.CaptureResponse, MinTLSVersion: tls, Tags: m.Tags,
-			PushIntervalS: m.PushIntervalS, PushGraceS: m.PushGraceS,
+			PushIntervalS: m.PushIntervalS, PushGraceS: m.PushGraceS, PushTimezone: m.PushTimezone,
 			DNS: dnsFromFile(m.DNS), DomainWarnDays: m.DomainWarnDays,
 		}
 		if a, set, err := m.Assertion(sub(path, "json_assertion")); err != nil {

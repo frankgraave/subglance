@@ -224,6 +224,7 @@ monitors:
     enabled: true
     push_interval_s: 86400
     push_grace_s: 600
+    push_timezone: Europe/Amsterdam
     tags: {}
     channels: []
 routing_rules:
@@ -279,6 +280,10 @@ A few points specific to the file:
 - `domain_warn_days` is written for every `domain` monitor. A new domain
   monitor without it warns 30 days ahead; an import that leaves it out of an
   existing one keeps what the monitor has.
+- `push_timezone` is written for every `push` monitor, `""` when its window
+  counts elapsed time. It needs a `push_interval_s` of whole days, as in the
+  API; an import that leaves it out of an existing push monitor keeps what the
+  monitor has.
 - `default: true` on a channel makes it the instance default. An import never
   clears the default, so a file that does not mention one leaves it as it is.
 - A reference (`channels`, `exclude`, a maintenance window's `monitor`) may name

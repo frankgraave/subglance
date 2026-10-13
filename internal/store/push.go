@@ -63,8 +63,82 @@ func pushGraceValue(m Monitor) any {
 // late at 65 minutes, not at 60. Subtracting instead would mean that raising
 // the tolerance made the monitor stricter, which nobody expects of a setting
 // called "grace".
+//
+// With a PushTimezone and an interval of whole days, the interval is counted
+// on that zone's clock instead: the deadline is the same wall-clock time that
+// many days after last, plus grace. A job scheduled at a fixed local time keeps
+// its local time, not its distance in seconds, so the night the clocks go back
+// it runs 25 hours after the previous run and the night they go forward 23.
+// Counting elapsed time would call it an hour late once a year. A zone that
+// does not load, or an interval that is not whole days, falls back to elapsed
+// time: the API refuses both, and a deadline is never worth failing a sweep
+// over.
 func (m Monitor) PushDeadline(last time.Time) time.Time {
-	return last.Add(time.Duration(m.PushIntervalS+m.PushGraceS) * time.Second)
+	grace := time.Duration(m.PushGraceS) * time.Second
+	if loc, days, ok := m.pushClock(); ok {
+		return dayAtSameClock(last.In(loc), days).Add(grace)
+	}
+	return last.Add(time.Duration(m.PushIntervalS)*time.Second + grace)
+}
+
+// pushClock reports the zone and the number of days a push window is counted
+// in, and false when it is counted in elapsed seconds.
+func (m Monitor) pushClock() (*time.Location, int, bool) {
+	if m.PushTimezone == "" || !PushIntervalIsWholeDays(m.PushIntervalS) {
+		return nil, 0, false
+	}
+	loc, err := LoadPushTimezone(m.PushTimezone)
+	if err != nil {
+		return nil, 0, false
+	}
+	return loc, m.PushIntervalS / secondsPerDay, true
+}
+
+const secondsPerDay = 24 * 60 * 60
+
+// PushIntervalIsWholeDays reports whether a push interval can be counted on a
+// zone's clock: a positive whole number of days.
+func PushIntervalIsWholeDays(intervalS int) bool {
+	return intervalS > 0 && intervalS%secondsPerDay == 0
+}
+
+// LoadPushTimezone resolves a push monitor's zone. "Local" is refused as it is
+// for a maintenance window: it is the server's zone, which says nothing about
+// the clock of the machine the job runs on, and it changes when the server
+// moves.
+func LoadPushTimezone(name string) (*time.Location, error) {
+	if name == "" || name == "Local" {
+		return nil, errors.New("use an explicit IANA timezone such as Europe/Amsterdam")
+	}
+	loc, err := time.LoadLocation(name)
+	if err != nil {
+		return nil, fmt.Errorf("unknown IANA timezone %q", name)
+	}
+	return loc, nil
+}
+
+// dayAtSameClock is the moment `days` days after t that reads the same on t's
+// wall clock, in t's zone.
+//
+// Two readings are not one moment, and this is a deadline, so each must come
+// out on the later side, where erring costs detection time rather than a
+// false alarm:
+//
+//   - A reading that happens twice, the night the clocks go back, is its
+//     second occurrence. A job at 02:30 runs at one of the two, and either is
+//     on time.
+//   - A reading that never happens, the night the clocks go forward, is the
+//     moment as far past the gap as the reading is past its start: 02:30
+//     becomes 03:30. A job scheduled inside the gap runs after it, if at all.
+//
+// time.Date documents both cases as unspecified, and its implementation makes
+// exactly these choices. TestPushDeadlineAmbiguousAndMissingReadings pins
+// them, so a Go release that changes them fails a test instead of moving a
+// deadline.
+func dayAtSameClock(t time.Time, days int) time.Time {
+	y, mo, d := t.Date()
+	h, mi, s := t.Clock()
+	return time.Date(y, mo, d+days, h, mi, s, t.Nanosecond(), t.Location())
 }
 
 // PushWindowReason says why a push monitor's current window starts where it
