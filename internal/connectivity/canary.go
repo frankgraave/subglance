@@ -15,6 +15,24 @@
 // that belong to nobody being monitored. If every one of them fails too, the
 // failure is the host's, not the monitor's.
 //
+// # The resolver round
+//
+// The addresses are dialled by address, so a broken local resolver cannot
+// fail that round, and a working one is not needed for it to pass. That makes
+// it blind to the other way a host loses the internet: the uplink is fine and
+// the resolver is not (a Pi-hole restarting, an upstream that stopped
+// answering). Then every monitor on a host name fails on its lookup while the
+// address round passes.
+//
+// So a failure whose lookup got no answer gets a second round: a few
+// reference names are looked up through this host's own resolver. If the
+// address round passed and none of the names gets an answer either, the
+// failure is the resolver's, not the monitor's. A name that does not exist is
+// an answer; only silence, a refusal or a server failure counts against the
+// resolver. Its episode is kept apart from the address round's, with its own
+// start and its own notice when it ends, because the two say different things
+// to whoever reads them.
+//
 // # When it runs
 //
 // Only when an incident is about to be confirmed on a network error. A host
@@ -23,19 +41,19 @@
 // phones out on a timer. One round is shared by every monitor that asks within
 // CacheFor, so twenty monitors failing together cost one round, not twenty.
 //
-// While the host is offline, Run re-probes on a timer until a round passes.
-// That is still traffic during a suspected outage only, and it is the only way
-// to say when the outage ended: nothing else runs the canary once checks start
-// passing again.
+// While the host is offline, or its resolver is not answering, Run re-probes
+// on a timer until a round passes. That is still traffic during a suspected
+// outage only, and it is the only way to say when the outage ended: nothing
+// else runs the canary once checks start passing again.
 //
 // # Which way it errs
 //
 // A canary that fails when the host is fine would hide a real outage, and a
 // missed outage is worse than a false one. So the host is only called offline
-// when every target fails, and the caller only consults the canary for
-// failures that a dead uplink could explain: DNS, connection and timeout.
-// A status code or a missing keyword proves the target answered, and is never
-// suppressed.
+// when every target fails, its resolver only when every name fails, and the
+// caller only consults the canary for failures that a dead uplink or resolver
+// could explain: DNS, connection and timeout. A status code or a missing
+// keyword proves the target answered, and is never suppressed.
 //
 // # Changing it while it runs
 //
@@ -52,6 +70,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"slices"
 	"strconv"
 	"strings"
@@ -65,6 +84,11 @@ import (
 // and a working one cannot be required for it to pass.
 var DefaultTargets = []string{"1.1.1.1:53", "9.9.9.9:53"}
 
+// DefaultNames are the reference names of the resolver round: two names run
+// by independent operators, so that one of them being withdrawn or blocked
+// cannot make a working resolver look broken.
+var DefaultNames = []string{"one.one.one.one", "dns.quad9.net"}
+
 const (
 	// DefaultCacheFor is how long one round's answer is reused. Monitors on
 	// a 60-second interval that fail together fail across a few seconds, and
@@ -73,12 +97,13 @@ const (
 
 	// DefaultTimeout bounds one dial. A TCP handshake to a public anycast
 	// resolver takes tens of milliseconds; three seconds is generous
-	// without holding a check worker for long.
+	// without holding a check worker for long. It bounds one lookup of the
+	// resolver round too.
 	DefaultTimeout = 3 * time.Second
 
 	// MaxTargets bounds the list. Every round dials all of them at once,
 	// and the list can be set over the API; a handful of independent
-	// addresses is all the check needs.
+	// addresses is all the check needs. It bounds the reference names too.
 	MaxTargets = 16
 )
 
@@ -86,11 +111,22 @@ const (
 // substitute one that never touches the network.
 type DialFunc func(ctx context.Context, network, address string) (net.Conn, error)
 
+// LookupFunc resolves a host name through this host's own resolver and
+// reports what went wrong, if anything. Tests substitute one that never
+// touches the network.
+type LookupFunc func(ctx context.Context, name string) error
+
 // Options configures New.
 type Options struct {
 	// Targets are host:port addresses dialled over TCP. At least one is
 	// required.
 	Targets []string
+
+	// Names are the host names the resolver round looks up. Empty means
+	// there is no resolver round: a lookup that got no answer counts
+	// against its monitor unless the address round says the host is
+	// offline.
+	Names []string
 
 	// Disabled builds a canary that never dials and never reports the host
 	// offline until Configure turns it on. The zero value is on.
@@ -105,10 +141,16 @@ type Options struct {
 	// when the first passing one did. Optional.
 	OnRestored func(from, to time.Time)
 
-	// Dial and Now are for tests. Zero means a plain net.Dialer and
-	// time.Now.
-	Dial DialFunc
-	Now  func() time.Time
+	// OnResolverRestored is the same for the resolver round: called once
+	// per episode in which the resolver answered none of the names, when
+	// it answers one again. Optional.
+	OnResolverRestored func(from, to time.Time)
+
+	// Dial, Lookup and Now are for tests. Zero means a plain net.Dialer,
+	// the host's resolver and time.Now.
+	Dial   DialFunc
+	Lookup LookupFunc
+	Now    func() time.Time
 }
 
 // Settings are the parts of a Canary that can change while it runs.
@@ -120,14 +162,27 @@ type Settings struct {
 	Targets []string
 }
 
+// episode is what one kind of round last found: when it ran, whether
+// everything it tried failed, and since when that has been so.
+type episode struct {
+	checkedAt time.Time
+	down      bool
+	since     time.Time
+}
+
 // Canary probes the configured targets and remembers the answer briefly.
 // It is safe for concurrent use.
 type Canary struct {
-	cacheFor   time.Duration
-	timeout    time.Duration
-	onRestored func(from, to time.Time)
-	dial       DialFunc
-	now        func() time.Time
+	cacheFor           time.Duration
+	timeout            time.Duration
+	onRestored         func(from, to time.Time)
+	onResolverRestored func(from, to time.Time)
+	dial               DialFunc
+	lookup             LookupFunc
+	now                func() time.Time
+	// names is fixed for the canary's life: it is set by a flag or a
+	// variable, never through the API.
+	names []string
 
 	// probeMu serialises rounds, so concurrent callers wait for the round
 	// in flight and read its answer instead of starting their own.
@@ -138,27 +193,33 @@ type Canary struct {
 	enabled bool
 	// generation changes on every Configure. A round records the one it
 	// started under and is discarded if it no longer matches.
-	generation   uint64
-	checkedAt    time.Time
-	offline      bool
-	offlineSince time.Time
+	generation uint64
+	address    episode
+	resolver   episode
 }
 
-// New builds a Canary. It returns an error for an empty target list or an
-// address that is not host:port, so a typo is a startup error rather than a
-// canary that always fails and silences every outage.
+// New builds a Canary. It returns an error for an empty target list, an
+// address that is not host:port or a name that cannot be looked up, so a typo
+// is a startup error rather than a canary that always fails and silences
+// every outage.
 func New(opts Options) (*Canary, error) {
 	if err := ValidateTargets(opts.Targets); err != nil {
 		return nil, err
 	}
+	if err := ValidateNames(opts.Names); err != nil {
+		return nil, err
+	}
 	c := &Canary{
-		targets:    append([]string(nil), opts.Targets...),
-		enabled:    !opts.Disabled,
-		cacheFor:   opts.CacheFor,
-		timeout:    opts.Timeout,
-		onRestored: opts.OnRestored,
-		dial:       opts.Dial,
-		now:        opts.Now,
+		targets:            append([]string(nil), opts.Targets...),
+		names:              append([]string(nil), opts.Names...),
+		enabled:            !opts.Disabled,
+		cacheFor:           opts.CacheFor,
+		timeout:            opts.Timeout,
+		onRestored:         opts.OnRestored,
+		onResolverRestored: opts.OnResolverRestored,
+		dial:               opts.Dial,
+		lookup:             opts.Lookup,
+		now:                opts.Now,
 	}
 	if c.cacheFor <= 0 {
 		c.cacheFor = DefaultCacheFor
@@ -169,13 +230,28 @@ func New(opts Options) (*Canary, error) {
 	if c.dial == nil {
 		c.dial = (&net.Dialer{}).DialContext
 	}
+	if c.lookup == nil {
+		c.lookup = systemLookup
+	}
 	if c.now == nil {
 		c.now = time.Now
 	}
 	return c, nil
 }
 
-// ParseTargets splits a comma-separated list, dropping blanks.
+// systemLookup asks this host's resolver for a name's addresses. The name is
+// made absolute first, so a search domain in resolv.conf cannot turn one
+// lookup into several, or into a lookup of some other name.
+func systemLookup(ctx context.Context, name string) error {
+	if !strings.HasSuffix(name, ".") {
+		name += "."
+	}
+	_, err := net.DefaultResolver.LookupNetIP(ctx, "ip", name)
+	return err
+}
+
+// ParseTargets splits a comma-separated list, dropping blanks. It splits the
+// reference names too.
 func ParseTargets(s string) []string {
 	var out []string
 	for _, t := range strings.Split(s, ",") {
@@ -215,11 +291,66 @@ func ValidateTargets(targets []string) error {
 	return nil
 }
 
+// ValidateNames reports whether every reference name is a host name the
+// resolver can be asked for. An empty list is valid: it turns the resolver
+// round off.
+//
+// An address is refused rather than accepted: looking one up never asks the
+// resolver anything, so it would always answer and the round could never
+// find the resolver down.
+func ValidateNames(names []string) error {
+	if len(names) > MaxTargets {
+		return fmt.Errorf("%d connectivity names are set; at most %d are allowed", len(names), MaxTargets)
+	}
+	for _, n := range names {
+		if _, err := netip.ParseAddr(n); err == nil {
+			return fmt.Errorf("connectivity name %q is an address; the resolver check needs a host name to look up", n)
+		}
+		if !hostName(n) {
+			return fmt.Errorf("connectivity name %q is not a host name", n)
+		}
+	}
+	return nil
+}
+
+// hostName reports whether s is a host name: dot-separated labels of letters,
+// digits, hyphens and underscores, none starting or ending with a hyphen, at
+// most 253 characters, with an optional final dot.
+func hostName(s string) bool {
+	s = strings.TrimSuffix(s, ".")
+	if s == "" || len(s) > 253 {
+		return false
+	}
+	for _, label := range strings.Split(s, ".") {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		if strings.ContainsFunc(label, notLabelRune) {
+			return false
+		}
+	}
+	return true
+}
+
+// notLabelRune reports whether r cannot appear in a host name's label.
+func notLabelRune(r rune) bool {
+	switch {
+	case 'a' <= r && r <= 'z', 'A' <= r && r <= 'Z', '0' <= r && r <= '9', r == '-', r == '_':
+		return false
+	}
+	return true
+}
+
 // Targets returns the configured addresses.
 func (c *Canary) Targets() []string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return append([]string(nil), c.targets...)
+}
+
+// Names returns the reference names of the resolver round.
+func (c *Canary) Names() []string {
+	return append([]string(nil), c.names...)
 }
 
 // Enabled reports whether the canary is switched on.
@@ -240,12 +371,12 @@ func (c *Canary) Settings() Settings {
 // even when the canary is being turned off, so it can never be turned back on
 // with a list it would refuse.
 //
-// Any change forgets the current answer and ends an offline episode without
-// the restored callback: nothing was reached, so there is nothing to report,
-// and a round against the old targets must not stand for the new ones. A
-// round in flight is discarded when it finishes. Configuring the same
-// settings again changes nothing, so an unrelated save cannot cut an episode
-// short.
+// Any change forgets the current answers, of both rounds, and ends an
+// episode without the restored callback: nothing was reached, so there is
+// nothing to report, and a round against the old targets must not stand for
+// the new ones. A round in flight is discarded when it finishes. Configuring
+// the same settings again changes nothing, so an unrelated save cannot cut an
+// episode short.
 func (c *Canary) Configure(s Settings) error {
 	if err := ValidateTargets(s.Targets); err != nil {
 		return err
@@ -258,9 +389,8 @@ func (c *Canary) Configure(s Settings) error {
 	c.enabled = s.Enabled
 	c.targets = append([]string(nil), s.Targets...)
 	c.generation++
-	c.checkedAt = time.Time{}
-	c.offline = false
-	c.offlineSince = time.Time{}
+	c.address = episode{}
+	c.resolver = episode{}
 	return nil
 }
 
@@ -268,33 +398,65 @@ func (c *Canary) Configure(s Settings) error {
 // running a round first if the last one is older than CacheFor. A disabled
 // canary answers false without dialling.
 func (c *Canary) Offline(ctx context.Context) bool {
+	return c.ask(ctx, &c.address, c.round)
+}
+
+// ResolverDown reports whether this host's resolver answered none of the
+// reference names in the most recent resolver round, running one first if
+// the last is older than CacheFor. A disabled canary, or one with no names,
+// answers false without looking anything up.
+//
+// It says nothing about the uplink. A host with no connection at all fails
+// this round too, so the caller asks Offline first and only asks this when
+// the host is online: an unplugged cable is reported as that, not as a
+// resolver fault.
+func (c *Canary) ResolverDown(ctx context.Context) bool {
+	if len(c.names) == 0 {
+		return false
+	}
+	return c.ask(ctx, &c.resolver, c.resolverRound)
+}
+
+// ask answers from e when its last round is fresh, and runs one otherwise.
+func (c *Canary) ask(ctx context.Context, e *episode, round func(context.Context) bool) bool {
 	if !c.Enabled() {
 		return false
 	}
-	if offline, fresh := c.cached(); fresh {
-		return offline
+	if down, fresh := c.cached(e); fresh {
+		return down
 	}
 
 	c.probeMu.Lock()
 	defer c.probeMu.Unlock()
 	// A round may have finished while this caller waited for the lock.
-	if offline, fresh := c.cached(); fresh {
-		return offline
+	if down, fresh := c.cached(e); fresh {
+		return down
 	}
-	return c.round(ctx)
+	return round(ctx)
 }
 
 // OfflineSince reports when the current offline episode began, or false when
 // the host is not known to be offline.
 func (c *Canary) OfflineSince() (time.Time, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.offlineSince, c.offline
+	return c.downSince(&c.address)
 }
 
-// Run re-probes every CacheFor while the host is offline, so the end of an
-// episode is noticed and reported even when no check asks. It does nothing
-// while the host is online. It returns when ctx is cancelled.
+// ResolverDownSince reports when the resolver stopped answering, or false
+// when it is not known to have.
+func (c *Canary) ResolverDownSince() (time.Time, bool) {
+	return c.downSince(&c.resolver)
+}
+
+func (c *Canary) downSince(e *episode) (time.Time, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return e.since, e.down
+}
+
+// Run re-probes every CacheFor while the host is offline or its resolver is
+// not answering, so the end of an episode is noticed and reported even when
+// no check asks. It does nothing while both are fine. It returns when ctx is
+// cancelled.
 func (c *Canary) Run(ctx context.Context) {
 	t := time.NewTicker(c.cacheFor)
 	defer t.Stop()
@@ -308,24 +470,31 @@ func (c *Canary) Run(ctx context.Context) {
 	}
 }
 
-// Sweep runs one round if the host is currently believed offline. It is what
-// Run calls on each tick, exported so tests need not wait on a ticker.
+// Sweep runs one round of each kind that is currently believed down. It is
+// what Run calls on each tick, exported so tests need not wait on a ticker.
 func (c *Canary) Sweep(ctx context.Context) {
-	if _, offline := c.OfflineSince(); !offline {
+	_, offline := c.OfflineSince()
+	_, resolverDown := c.ResolverDownSince()
+	if !offline && !resolverDown {
 		return
 	}
 	c.probeMu.Lock()
 	defer c.probeMu.Unlock()
-	c.round(ctx)
+	if offline {
+		c.round(ctx)
+	}
+	if resolverDown {
+		c.resolverRound(ctx)
+	}
 }
 
-func (c *Canary) cached() (offline, fresh bool) {
+func (c *Canary) cached(e *episode) (down, fresh bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.checkedAt.IsZero() || c.now().Sub(c.checkedAt) >= c.cacheFor {
+	if e.checkedAt.IsZero() || c.now().Sub(e.checkedAt) >= c.cacheFor {
 		return false, false
 	}
-	return c.offline, true
+	return e.down, true
 }
 
 // round dials every target concurrently and records the answer. The caller
@@ -337,8 +506,26 @@ func (c *Canary) round(ctx context.Context) bool {
 	if !enabled {
 		return false
 	}
-
 	reached := c.anyReachable(ctx, targets)
+	return c.settle(ctx, generation, &c.address, reached, c.onRestored)
+}
+
+// resolverRound looks up every reference name concurrently and records the
+// answer. The caller holds probeMu.
+func (c *Canary) resolverRound(ctx context.Context) bool {
+	c.mu.Lock()
+	generation, enabled := c.generation, c.enabled
+	c.mu.Unlock()
+	if !enabled || len(c.names) == 0 {
+		return false
+	}
+	answered := c.anyAnswered(ctx, c.names)
+	return c.settle(ctx, generation, &c.resolver, answered, c.onResolverRestored)
+}
+
+// settle records what a round found in its episode, and reports whether
+// everything it tried failed.
+func (c *Canary) settle(ctx context.Context, generation uint64, e *episode, reached bool, onRestored func(from, to time.Time)) bool {
 	// A round cut short by shutdown says nothing about the network, and
 	// must not start or end an episode.
 	if ctx.Err() != nil {
@@ -349,23 +536,23 @@ func (c *Canary) round(ctx context.Context) bool {
 	c.mu.Lock()
 	if c.generation != generation {
 		// Configure ran while this round dialled: its answer is about
-		// targets that are no longer the ones configured.
+		// settings that are no longer the ones configured.
 		c.mu.Unlock()
 		return false
 	}
-	wasOffline, since := c.offline, c.offlineSince
-	c.checkedAt = at
-	c.offline = !reached
+	wasDown, since := e.down, e.since
+	e.checkedAt = at
+	e.down = !reached
 	switch {
-	case !reached && !wasOffline:
-		c.offlineSince = at
+	case !reached && !wasDown:
+		e.since = at
 	case reached:
-		c.offlineSince = time.Time{}
+		e.since = time.Time{}
 	}
 	c.mu.Unlock()
 
-	if reached && wasOffline && c.onRestored != nil {
-		c.onRestored(since, at)
+	if reached && wasDown && onRestored != nil {
+		onRestored(since, at)
 	}
 	return !reached
 }
@@ -391,4 +578,38 @@ func (c *Canary) anyReachable(ctx context.Context, targets []string) bool {
 		}
 	}
 	return reached
+}
+
+func (c *Canary) anyAnswered(ctx context.Context, names []string) bool {
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+
+	results := make(chan bool, len(names))
+	for _, name := range names {
+		go func() {
+			results <- Answered(c.lookup(ctx, name))
+		}()
+	}
+	answered := false
+	for range names {
+		if <-results {
+			answered = true
+		}
+	}
+	return answered
+}
+
+// Answered reports whether a lookup got an answer from the resolver.
+//
+// A name that does not exist is an answer: the resolver is working. That
+// matters twice. A filtering resolver that blocks a reference name must not
+// make every DNS failure on this host look like the resolver's, and a
+// monitor whose own domain has expired gets NXDOMAIN, which is a real outage
+// that the resolver round must never be asked to explain.
+func Answered(err error) bool {
+	if err == nil {
+		return true
+	}
+	var dnsErr *net.DNSError
+	return errors.As(err, &dnsErr) && dnsErr.IsNotFound
 }

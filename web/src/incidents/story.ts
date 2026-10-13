@@ -163,6 +163,9 @@ const CAUSE_WORDS: Record<string, string> = {
   // SubGlance rather than "this host", because the reader is looking at a
   // browser on some other machine, and "this host" would point at theirs.
   local_network: "SubGlance could not reach its connectivity targets",
+  // The same, when the targets answered and the server's own resolver did
+  // not: its lookups, not its uplink, are what failed.
+  local_dns: "SubGlance's DNS resolver did not answer",
 };
 
 export function causeWords(cause: string | undefined): string | null {

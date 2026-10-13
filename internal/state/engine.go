@@ -168,11 +168,22 @@ type Observation struct {
 	// speaks to whether a new incident is the host's fault; it does not
 	// retract one that was confirmed while the host could still see out.
 	LocalNetwork bool
+
+	// LocalDNS narrows LocalNetwork down to the host's resolver: the uplink
+	// answered, and the resolver answered none of the connectivity check's
+	// reference names. It is treated exactly as LocalNetwork and only
+	// changes the cause recorded, to CauseLocalDNS. It is ignored without
+	// LocalNetwork.
+	LocalDNS bool
 }
 
 // CauseLocalNetwork is the cause recorded for a failure that LocalNetwork
 // explains, in place of the checker's own classification.
 const CauseLocalNetwork = "local_network"
+
+// CauseLocalDNS is the cause recorded for a failure that LocalDNS explains:
+// this host's resolver, not its uplink, was what failed.
+const CauseLocalDNS = "local_dns"
 
 // Transition describes what the engine decided about one observation.
 type Transition struct {
@@ -389,7 +400,7 @@ func (e *Engine) Observe(o Observation) Transition {
 	case o.OK:
 		e.observeSuccess(ms, &t, o)
 	case o.LocalNetwork && !ms.status.Confirmed():
-		observeLocalNetwork(ms, &t)
+		observeLocalNetwork(ms, &t, o.LocalDNS)
 	default:
 		e.observeFailure(ms, &t, o)
 	}
@@ -492,10 +503,13 @@ func (e *Engine) observeFailure(ms *monitorState, t *Transition, o Observation) 
 // confirmed — and nothing else moves: no streak, no incident, no flip for the
 // flapping window. An incident that was already open and unconfirmed stays
 // open, so its start time survives if the target turns out to be down too.
-func observeLocalNetwork(ms *monitorState, t *Transition) {
+func observeLocalNetwork(ms *monitorState, t *Transition, dns bool) {
 	ms.status = StatusWarning
 	t.To = StatusWarning
 	t.Cause = CauseLocalNetwork
+	if dns {
+		t.Cause = CauseLocalDNS
+	}
 }
 
 // WouldConfirm reports whether one more failure would confirm an incident for

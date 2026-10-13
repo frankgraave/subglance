@@ -24,16 +24,23 @@ const POLL_MS = 15_000;
  */
 const TRUST_MS = 45_000;
 
+/** What the server has lost, and since when (epoch milliseconds). */
+export interface HostProblem {
+  /** `offline`: no outbound connection. `resolver`: no answer from its DNS resolver. */
+  kind: "offline" | "resolver";
+  since: number;
+}
+
 /**
- * When the server's own connection went, or null when it has not (or when
- * that is not known right now).
+ * What the server's own connection has lost and since when, or null when
+ * nothing (or when that is not known right now).
  *
  * Null on every doubtful path — the check switched off, the endpoint missing
  * or failing, an answer older than TRUST_MS — because this drives a sentence
  * that explains away warnings. Wrongly telling someone their monitors are
  * fine and the server is the problem is the dangerous direction of the two.
  */
-export function useHostOfflineSince(): number | null {
+export function useHostProblem(): HostProblem | null {
   const query = useQuery({
     queryKey: connectivityKey,
     queryFn: ({ signal }) => fetchConnectivity(signal),
@@ -42,7 +49,11 @@ export function useHostOfflineSince(): number | null {
   const now = useNow();
   const data = query.data;
   if (data === undefined || query.isError || now - query.dataUpdatedAt > TRUST_MS) return null;
-  return data.offline ? data.offlineSince : null;
+  if (data.offline && data.offlineSince !== null) return { kind: "offline", since: data.offlineSince };
+  if (data.resolverDown && data.resolverDownSince !== null) {
+    return { kind: "resolver", since: data.resolverDownSince };
+  }
+  return null;
 }
 
 /**
@@ -56,7 +67,23 @@ export function formatSince(since: number, now: number): string {
   return sameDay(since, now) ? formatClock(since) : formatDayTime(since);
 }
 
-/** The sentence, shared by the dashboard banner and the status wall. */
-export function hostOfflineText(since: number, now: number): string {
-  return `No outbound connection since ${formatSince(since, now)}`;
+/**
+ * The sentence, shared by the dashboard banner and the status wall.
+ *
+ * The resolver's names SubGlance rather than "this host", for the reason
+ * `causeWords` gives for `local_network`: the reader is at a browser on some
+ * other machine, and "this host" would point at theirs.
+ */
+export function hostProblemText(problem: HostProblem, now: number): string {
+  const since = formatSince(problem.since, now);
+  return problem.kind === "offline"
+    ? `No outbound connection since ${since}`
+    : `SubGlance's DNS resolver has not answered since ${since}`;
+}
+
+/** What the held warnings are, worded for the kind of problem. */
+export function hostProblemHeld(problem: HostProblem): string {
+  return problem.kind === "offline"
+    ? "failed network checks are held as warnings, not outages"
+    : "failed lookups are held as warnings, not outages";
 }

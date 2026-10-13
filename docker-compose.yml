@@ -94,6 +94,10 @@ services:
       # docs/operations.md.
       # SUBGLANCE_CONNECTIVITY_CHECK: "true"
       # SUBGLANCE_CONNECTIVITY_TARGETS: "1.1.1.1:53,9.9.9.9:53"
+      # When a check's own lookup gets no answer, these names are looked up
+      # through this host's resolver; if none answers while the targets do,
+      # the failure is the resolver's. Empty looks up none.
+      # SUBGLANCE_CONNECTIVITY_NAMES: "one.one.one.one,dns.quad9.net"
       #
       # Notification channel configuration — webhook URLs, bot tokens, SMTP
       # passwords — is stored in SQLite. **Unset, as it is here, means those

@@ -115,7 +115,7 @@ func (a Alert) Down() bool {
 		entries := digestEntries(a)
 		return digestStillDown(entries) > 0 || digestNoticeOpen(entries)
 	}
-	if a.Event == EventLocalNetworkRestored {
+	if a.Event == EventLocalNetworkRestored || a.Event == EventLocalDNSRestored {
 		// The notice arrives when the connection is back: good news.
 		return false
 	}
@@ -139,6 +139,9 @@ func (a Alert) Title() string {
 	}
 	if a.Event == EventLocalNetworkRestored {
 		return "SubGlance is back online"
+	}
+	if a.Event == EventLocalDNSRestored {
+		return "SubGlance's DNS resolver is answering again"
 	}
 	if a.Event == EventChannelFailing {
 		return fmt.Sprintf("SubGlance cannot deliver alerts to %s", a.Target)
@@ -180,6 +183,13 @@ func (a Alert) Body() string {
 	if a.Event == EventLocalNetworkRestored {
 		return fmt.Sprintf("SubGlance could not reach the internet for %s, from %s to %s.\n"+
 			"Checks that failed on a network error in that time were not counted as outages.",
+			durationWords(a.At.Sub(a.StartedAt)),
+			a.StartedAt.UTC().Format("2006-01-02 15:04 UTC"), a.At.UTC().Format("15:04 UTC"))
+	}
+	if a.Event == EventLocalDNSRestored {
+		return fmt.Sprintf("The DNS resolver of the host SubGlance runs on answered none of its lookups for %s, from %s to %s, "+
+			"while the host could still reach the internet.\n"+
+			"Checks that failed on a DNS lookup in that time were not counted as outages.",
 			durationWords(a.At.Sub(a.StartedAt)),
 			a.StartedAt.UTC().Format("2006-01-02 15:04 UTC"), a.At.UTC().Format("15:04 UTC"))
 	}

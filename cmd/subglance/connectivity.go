@@ -37,23 +37,36 @@ func newCanary(ctx context.Context, cfg config.Config, db *store.DB, notify *not
 		log.Info("connectivity check is off: a failure of this host's own network will count against every monitor",
 			"source", resolved.Enabled.Source)
 	}
+	// The names are not part of the settings API, so the switch alone
+	// decides whether they are looked up: a canary turned on through the
+	// API looks up the ones the flags and variables named.
+	names := connectivity.ParseTargets(cfg.ConnectivityNames)
+	if connectivity.ValidateNames(names) != nil {
+		// Only reachable with the check turned off by a flag or variable,
+		// as above: then nothing is looked up, and nothing can turn it on.
+		names = nil
+	}
 	return connectivity.New(connectivity.Options{
-		Targets:    targets,
-		Disabled:   !resolved.Enabled.Value,
-		OnRestored: localNetworkNotice(notify, log),
+		Targets:            targets,
+		Names:              names,
+		Disabled:           !resolved.Enabled.Value,
+		OnRestored:         localNetworkNotice(notify, log, notifier.LocalNetworkNotice),
+		OnResolverRestored: localNetworkNotice(notify, log, notifier.LocalDNSNotice),
 	})
 }
 
 // localNetworkNotice returns the callback the canary calls once the host can
-// reach its connectivity targets again after it could not.
-func localNetworkNotice(notify *notifier.Notifier, log *slog.Logger) func(from, to time.Time) {
+// reach its connectivity targets, or get an answer from its resolver, again
+// after it could not. build makes the notice for that kind of episode.
+func localNetworkNotice(notify *notifier.Notifier, log *slog.Logger, build func(from, to time.Time) notifier.Alert) func(from, to time.Time) {
 	return func(from, to time.Time) {
-		log.Warn("outbound connectivity restored", "offline_since", from, "duration", to.Sub(from).Round(time.Second))
+		notice := build(from, to)
+		log.Warn("connectivity restored", "event", notice.Event, "since", from, "duration", to.Sub(from).Round(time.Second))
 		// The canary calls this from a check or its own sweep, neither of
 		// which should be held up by a slow channel, and neither of whose
 		// contexts should cut the notice short.
 		go func() {
-			err := notify.SendNotice(context.Background(), notifier.LocalNetworkNotice(from, to))
+			err := notify.SendNotice(context.Background(), notice)
 			switch {
 			case err == nil:
 			case errors.Is(err, notifier.ErrNoticeNotSent):

@@ -218,6 +218,14 @@ type Config struct {
 	// of them fails.
 	ConnectivityTargets string
 
+	// ConnectivityNames is a comma-separated list of host names looked up
+	// through this host's resolver when a check failed on a lookup that got
+	// no answer and the targets above did answer. When none of them gets
+	// an answer either, the failure is recorded as the resolver's. Empty
+	// turns that lookup off, and the targets keep working. It goes on and
+	// off with ConnectivityCheck.
+	ConnectivityNames string
+
 	// ConnectivityCheckPinnedBy and ConnectivityTargetsPinnedBy name the
 	// flag or environment variable that set the field above them, or are
 	// empty when neither did. A pinned value wins over the one saved
@@ -249,6 +257,15 @@ func (c Config) ConnectivityTargetList() []string {
 		return nil
 	}
 	return connectivity.ParseTargets(c.ConnectivityTargets)
+}
+
+// ConnectivityNameList returns ConnectivityNames as a list, or nil when the
+// check is off or the list is empty.
+func (c Config) ConnectivityNameList() []string {
+	if !c.ConnectivityCheck {
+		return nil
+	}
+	return connectivity.ParseTargets(c.ConnectivityNames)
 }
 
 // BackupSecret returns the secret access key, reading the file form when that
@@ -329,6 +346,7 @@ func defaults() Config {
 		BackupKeep:          backup.DefaultKeep,
 		ConnectivityCheck:   true,
 		ConnectivityTargets: strings.Join(connectivity.DefaultTargets, ","),
+		ConnectivityNames:   strings.Join(connectivity.DefaultNames, ","),
 	}
 }
 
@@ -378,6 +396,12 @@ func Load(args []string) (Config, error) {
 	c.ConnectivityCheckPinnedBy = envSetBy("SUBGLANCE_CONNECTIVITY_CHECK")
 	c.ConnectivityTargets = envStr("SUBGLANCE_CONNECTIVITY_TARGETS", c.ConnectivityTargets)
 	c.ConnectivityTargetsPinnedBy = envSetBy("SUBGLANCE_CONNECTIVITY_TARGETS")
+	// Set and empty means no names, unlike the other variables, where empty
+	// means unset: an empty list is a setting here, the one that turns the
+	// resolver lookup off.
+	if v, ok := os.LookupEnv("SUBGLANCE_CONNECTIVITY_NAMES"); ok {
+		c.ConnectivityNames = v
+	}
 	if err := env.err(); err != nil {
 		return Config{}, err
 	}
@@ -434,6 +458,9 @@ func Load(args []string) (Config, error) {
 			"--connectivity-targets at all, and record the failure as its own if not")
 	fs.StringVar(&c.ConnectivityTargets, "connectivity-targets", c.ConnectivityTargets,
 		"comma-separated host:port addresses the connectivity check dials over TCP")
+	fs.StringVar(&c.ConnectivityNames, "connectivity-names", c.ConnectivityNames,
+		"comma-separated host names the connectivity check looks up through this host's resolver "+
+			"when a check's own lookup got no answer (empty = do not look up any)")
 
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
@@ -524,6 +551,9 @@ func (c Config) validate() error {
 	if c.ConnectivityCheck {
 		if err := connectivity.ValidateTargets(connectivity.ParseTargets(c.ConnectivityTargets)); err != nil {
 			return fmt.Errorf("invalid connectivity-targets: %w (or turn the check off with --connectivity-check=false)", err)
+		}
+		if err := connectivity.ValidateNames(connectivity.ParseTargets(c.ConnectivityNames)); err != nil {
+			return fmt.Errorf("invalid connectivity-names: %w (or set it empty to look up no names)", err)
 		}
 	}
 	if c.WatchdogURL != "" {

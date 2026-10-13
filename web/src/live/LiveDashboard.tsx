@@ -8,7 +8,7 @@ import { Dashboard } from "../monitors/Dashboard";
 import { WatchdogNotice } from "../watchdog/Watchdog";
 import { HostOfflineNotice } from "../connectivity/HostOffline";
 import { ChannelFailingNotice } from "../notifications/ChannelFailingNotice";
-import { hostOfflineText, useHostOfflineSince } from "../connectivity/offlineState";
+import { hostProblemText, useHostProblem } from "../connectivity/offlineState";
 import { ConnectionBadge } from "./ConnectionBadge";
 import { useLiveMonitors } from "./useLiveMonitors";
 import { useNow } from "./useNow";
@@ -80,8 +80,8 @@ export function LiveDashboard({
   //
   // Withheld while the stream is down: then this browser cannot vouch for
   // anything the server says, and "connection lost" is the whole story.
-  const hostOnlineState = useHostOfflineSince();
-  const hostOfflineSince = status === "offline" ? null : hostOnlineState;
+  const hostState = useHostProblem();
+  const hostProblem = status === "offline" ? null : hostState;
 
   const newest = monitors.reduce<number | null>(
     (max, m) =>
@@ -120,9 +120,9 @@ export function LiveDashboard({
         instance={instance}
         stale={status === "offline"}
         hostOffline={
-          hostOfflineSince === null
+          hostProblem === null
             ? undefined
-            : hostOfflineText(hostOfflineSince, now)
+            : hostProblemText(hostProblem, now)
         }
         onExit={onExitWall}
         notice={notice}
@@ -167,7 +167,7 @@ export function LiveDashboard({
             now={now}
             onReconnect={reconnect}
           />
-          <HostOfflineNotice since={hostOfflineSince} />
+          <HostOfflineNotice problem={hostProblem} />
           <ChannelFailingNotice onOpen={onOpenNotifications} />
         </>
       }

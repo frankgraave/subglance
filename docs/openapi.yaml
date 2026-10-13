@@ -305,6 +305,13 @@ paths:
         outbound connection since 03:12" once instead of showing every
         affected monitor as its own problem.
 
+        The targets are dialled by address, so they cannot tell when only
+        this host's DNS resolver has stopped answering. For a failure whose
+        own lookup got no answer, SubGlance also looks up a few reference
+        names through that resolver; when the targets answer and none of the
+        names does, the failure is kept as a warning with the cause
+        `local_dns`, and `resolver_down` reports it here.
+
         Requires any authenticated role. Reading it never dials anything: it
         reports what the most recent round found. Rounds run only when a
         check is about to confirm on a network error, and every 30 seconds
@@ -324,7 +331,7 @@ paths:
               schema:
                 type: object
                 additionalProperties: false
-                required: [enabled, offline, offline_since]
+                required: [enabled, offline, offline_since, resolver_down, resolver_down_since]
                 properties:
                   enabled:
                     type: boolean
@@ -336,10 +343,19 @@ paths:
                     type: [string, 'null']
                     format: date-time
                     description: When the first failing round of the current episode ran, in UTC; null while online.
+                  resolver_down:
+                    type: boolean
+                    description: True when the targets answered but this host's resolver answered none of the reference names in the most recent resolver round. Always false while `offline` is true, and while the check is off.
+                  resolver_down_since:
+                    type: [string, 'null']
+                    format: date-time
+                    description: When the resolver was first found not answering in the current episode, in UTC; null otherwise.
               example:
                 enabled: true
                 offline: true
                 offline_since: '2026-09-29T01:12:04Z'
+                resolver_down: false
+                resolver_down_since: null
         '401':
           $ref: '#/components/responses/Unauthorized'
         '503':
@@ -6405,7 +6421,9 @@ components:
             What kind of failure `error` describes, so a list can name it in
             a few words: a FailureKind of the failing heartbeat, or
             `local_network` when this host could reach none of its
-            connectivity targets either, or the open incident's cause when
+            connectivity targets either, `local_dns` when it could but its
+            resolver answered none of the connectivity check's reference
+            names, or the open incident's cause when
             `error` fell back to the incident's last error. Omitted when
             `error` has no classification.
           example: timeout

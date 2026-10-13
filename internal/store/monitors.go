@@ -765,6 +765,12 @@ func (db *DB) CountSnapshotsSince(ctx context.Context, monitorID int64, since ti
 // state.CauseLocalNetwork; store does not import state, so it is repeated here.
 const FailureKindLocalNetwork = "local_network"
 
+// FailureKindLocalDNS is the failure kind of a heartbeat recorded while the
+// host's resolver answered none of the connectivity check's reference names.
+// It matches state.CauseLocalDNS, and is left out of a restored streak for the
+// same reason as FailureKindLocalNetwork.
+const FailureKindLocalDNS = "local_dns"
+
 // CountFailedHeartbeatsSince reports how many failed heartbeats a monitor has
 // recorded since a given moment.
 //
@@ -778,9 +784,10 @@ const FailureKindLocalNetwork = "local_network"
 // startup read an unbounded number of rows. Only the distance to the failure
 // threshold is meaningful, and that is a small number.
 //
-// Failures filed under FailureKindLocalNetwork are left out: they happened
-// while the host itself was offline, the state engine did not count them
-// towards the streak, and a restart must not count them either.
+// Failures filed under FailureKindLocalNetwork or FailureKindLocalDNS are left
+// out: they happened while the host itself was offline or without a resolver,
+// the state engine did not count them towards the streak, and a restart must
+// not count them either.
 func (db *DB) CountFailedHeartbeatsSince(ctx context.Context, monitorID int64, since time.Time, limit int) (int, error) {
 	if limit <= 0 {
 		return 0, nil
@@ -790,9 +797,9 @@ func (db *DB) CountFailedHeartbeatsSince(ctx context.Context, monitorID int64, s
 		SELECT count(*) FROM (
 			SELECT 1
 			FROM heartbeats
-			WHERE monitor_id = ? AND ts >= ? AND ok = 0 AND failure_kind != ?
+			WHERE monitor_id = ? AND ts >= ? AND ok = 0 AND failure_kind NOT IN (?, ?)
 			LIMIT ?
-		)`, monitorID, since.Unix(), FailureKindLocalNetwork, limit).Scan(&n)
+		)`, monitorID, since.Unix(), FailureKindLocalNetwork, FailureKindLocalDNS, limit).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("count failed heartbeats for monitor %d: %w", monitorID, err)
 	}
@@ -811,7 +818,8 @@ func (db *DB) CountFailedHeartbeatsSince(ctx context.Context, monitorID int64, s
 //
 // The count is capped by limit, like CountFailedHeartbeatsSince, and the time
 // is zero when there is no such failure. Failures filed under
-// FailureKindLocalNetwork are left out for the same reason as there.
+// FailureKindLocalNetwork or FailureKindLocalDNS are left out for the same
+// reason as there.
 func (db *DB) FailedStreakAfterLastPass(ctx context.Context, monitorID int64, since time.Time, limit int) (int, time.Time, error) {
 	if limit <= 0 {
 		return 0, time.Time{}, nil
@@ -824,14 +832,14 @@ func (db *DB) FailedStreakAfterLastPass(ctx context.Context, monitorID int64, si
 		SELECT count(*), min(ts) FROM (
 			SELECT ts
 			FROM heartbeats
-			WHERE monitor_id = ? AND ts >= ? AND ok = 0 AND failure_kind != ?
+			WHERE monitor_id = ? AND ts >= ? AND ok = 0 AND failure_kind NOT IN (?, ?)
 			  AND ts > coalesce((
 				SELECT max(ts) FROM heartbeats
 				WHERE monitor_id = ? AND ts >= ? AND ok = 1
 			  ), 0)
 			ORDER BY ts DESC
 			LIMIT ?
-		)`, monitorID, since.Unix(), FailureKindLocalNetwork, monitorID, since.Unix(), limit).Scan(&n, &first)
+		)`, monitorID, since.Unix(), FailureKindLocalNetwork, FailureKindLocalDNS, monitorID, since.Unix(), limit).Scan(&n, &first)
 	if err != nil {
 		return 0, time.Time{}, fmt.Errorf("count failed streak for monitor %d: %w", monitorID, err)
 	}

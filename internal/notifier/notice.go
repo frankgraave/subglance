@@ -23,6 +23,13 @@ const EventBackupFailed = "backup_failed"
 // not counted as outages of their monitors, and this is where that is said.
 const EventLocalNetworkRestored = "local_network_restored"
 
+// EventLocalDNSRestored is the event of the notice sent when this host's
+// resolver answers again after a spell in which it answered none of the
+// connectivity check's reference names while the host could still reach its
+// targets. It is a separate event from EventLocalNetworkRestored because it
+// points somewhere else: at the resolver, not the uplink.
+const EventLocalDNSRestored = "local_dns_restored"
+
 // ErrNoticeNotSent means a notice had nowhere to go right now: no default
 // channel, the default channel is disabled, or it is inside its quiet hours.
 // The caller decides whether to try again later.
@@ -36,6 +43,19 @@ func LocalNetworkNotice(from, to time.Time) Alert {
 		Target:      "Outbound connectivity",
 		Event:       EventLocalNetworkRestored,
 		Cause:       "local_network",
+		StartedAt:   from,
+		At:          to,
+	}
+}
+
+// LocalDNSNotice builds the notice for a spell without a working resolver
+// that ran from from to to.
+func LocalDNSNotice(from, to time.Time) Alert {
+	return Alert{
+		MonitorName: "SubGlance",
+		Target:      "DNS resolver",
+		Event:       EventLocalDNSRestored,
+		Cause:       "local_dns",
 		StartedAt:   from,
 		At:          to,
 	}
