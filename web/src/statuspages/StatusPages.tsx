@@ -92,7 +92,7 @@ function SettingsForm({ page, onSaved, onLogo, onCancel }: {
   const described = (field: string, help = false) => [help ? `${id}-${field}-help` : "", fieldError(field) ? `${id}-${field}-error` : ""]
     .filter(Boolean).join(" ") || undefined;
   const input = (field: keyof StatusPageSettings, help = false) => ({
-    id: `${id}-${field}`, className: "input input--inset", "aria-describedby": described(field, help),
+    id: `${id}-${field}`, className: "input", "aria-describedby": described(field, help),
     "aria-invalid": fieldError(field) ? true : undefined,
   });
   const ready = draft.title.trim() !== "" && draft.slug.trim() !== "" &&
@@ -192,7 +192,7 @@ function SettingsForm({ page, onSaved, onLogo, onCancel }: {
     </Checkbox>
     {general && error && <FieldError>{error.message}</FieldError>}
     <div className="button-row">
-      <button className="button-solid" type="submit" disabled={!ready || saving}>
+      <button className="button button--primary" type="submit" disabled={!ready || saving}>
         {saving ? "Saving…" : page ? "Save settings" : "Create page"}
       </button>
       <button className="button" type="button" onClick={onCancel}>Cancel</button>
@@ -345,7 +345,7 @@ function ServicesForm({ page, monitors, onSaved, onCancel }: {
           return <li key={entry.monitor_id} className="control-row">
             <div className="field control-row-main">
               <label className="field-label" htmlFor={`${id}-${entry.monitor_id}`}>Public name for {monitor}</label>
-              <input className="input input--inset" id={`${id}-${entry.monitor_id}`} value={entry.display_name} maxLength={80}
+              <input className="input" id={`${id}-${entry.monitor_id}`} value={entry.display_name} maxLength={80}
                 autoComplete="off" ref={(node) => { if (node) inputs.current.set(entry.monitor_id, node); else inputs.current.delete(entry.monitor_id); }}
                 aria-invalid={invalid ? true : undefined} aria-describedby={invalid ? `${id}-error` : undefined}
                 onChange={(event) => change(draft.map((item) => item.monitor_id === entry.monitor_id
@@ -366,7 +366,7 @@ function ServicesForm({ page, monitors, onSaved, onCancel }: {
     {candidates.length > 0 && <div className="control-row">
       <div className="field control-row-main">
         <label className="field-label" htmlFor={`${id}-add`}>Add a monitor</label>
-        <Select className="input input--inset" id={`${id}-add`} value={adding} onChange={(event) => setAdding(event.target.value)}>
+        <Select className="input" id={`${id}-add`} value={adding} onChange={(event) => setAdding(event.target.value)}>
           <option value="">Choose a monitor</option>
           {candidates.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
         </Select>
@@ -375,7 +375,7 @@ function ServicesForm({ page, monitors, onSaved, onCancel }: {
     </div>}
     {error && <FieldError id={`${id}-error`}>{error}</FieldError>}
     <div className="button-row">
-      <button className="button-solid" type="submit" disabled={saving || !dirty}>{saving ? "Saving…" : "Save services"}</button>
+      <button className="button button--primary" type="submit" disabled={saving || !dirty}>{saving ? "Saving…" : "Save services"}</button>
       <button className="button" type="button" onClick={onCancel}>Cancel</button>
     </div>
   </form>;

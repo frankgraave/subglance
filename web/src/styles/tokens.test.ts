@@ -3765,3 +3765,77 @@ describe("a select or file input is Select or FileInput, never a loose element",
     ).toEqual(['[type="file"]', "::file-selector-button", "::-webkit-file-upload-button"]);
   });
 });
+
+/*
+ * One primary button and one field (DESIGN.md §7.1, §7.2).
+ *
+ * There were two of each. `.button-solid` was an always-filled primary on the
+ * sign-in screen and the settings cards, beside `.button--primary`, which
+ * fills on hover, in the drawers; `.input--inset` filled the sign-in and
+ * settings fields with the canvas while the drawers' fields took the surface.
+ * The same save looked different on two screens and a field changed colour
+ * between them. Both pairs are one class now, and this refuses the retired
+ * names anywhere under web/src, plus any stylesheet other than controls.css
+ * giving `.input` a fill of its own, which is how a second field would come
+ * back under a new name.
+ */
+describe("one primary button and one field", () => {
+  const RETIRED = /(?<![\w-])(?:button-solid|input--inset)(?![\w-])/g;
+  const CONTROLS_CSS = join(webSrc, "components", "controls.css");
+  /** A block whose selector names `.input` (or one of its modifiers). */
+  const NAMES_INPUT = /\.input(?:--[\w-]+)?(?![\w-])/;
+  const FILL = /(?:^|;)\s*background(?:-color)?\s*:/;
+
+  function retired(source: string): string[] {
+    return [...stripComments(source).matchAll(RETIRED)].map((m) => m[0]);
+  }
+
+  function inputFills(css: string): string[] {
+    return declarationBlocks(css)
+      .filter(({ selector, body }) => NAMES_INPUT.test(selector) && FILL.test(body))
+      .map(({ selector }) => selector);
+  }
+
+  it("writes neither retired class anywhere", () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      for (const hit of retired(readFileSync(file, "utf8"))) {
+        offenders.push(`${relative(repoRoot, file)}: ${hit}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("fills a field only in controls.css", () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles(webSrc)) {
+      if (!file.endsWith(".css") || file === CONTROLS_CSS) continue;
+      for (const selector of inputFills(readFileSync(file, "utf8"))) {
+        offenders.push(`${relative(repoRoot, file)}: ${selector}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("finds the one fill where it is meant to be", () => {
+    // A scan that stopped matching would pass the test above vacuously.
+    expect(inputFills(readFileSync(CONTROLS_CSS, "utf8"))).toEqual([".input"]);
+    expect(stripComments(readFileSync(CONTROLS_CSS, "utf8"))).toMatch(/\.button--primary\s*\{/);
+  });
+
+  it("bites on each form in a fixture", () => {
+    expect(retired(`
+      <button className="button-solid">
+      <input className="input input--inset" />
+      <b className="button-solid-ish" />
+      /* .input--inset in a comment */
+    `)).toEqual(["button-solid", "input--inset"]);
+    expect(inputFills(`
+      .a .input { background: var(--surface); }
+      .input--sunk { background-color: var(--canvas); }
+      .b .input { padding: 0; }
+      .input-group { background: var(--surface); }
+      .c > .input:first-child { color: var(--ink); background-color: red; }
+    `)).toEqual([".a .input", ".input--sunk", ".c > .input:first-child"]);
+  });
+});

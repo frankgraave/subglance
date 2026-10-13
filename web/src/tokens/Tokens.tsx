@@ -92,7 +92,7 @@ function CreateForm({ role, onCreated }: { role: string; onCreated: (token: stri
       <div className="control-row">
         <div className="field">
           <label className="field-label" htmlFor={`${id}-name`}>Token name</label>
-          <input className="input input--inset" id={`${id}-name`} value={name} maxLength={100} autoComplete="off" spellCheck={false}
+          <input className="input" id={`${id}-name`} value={name} maxLength={100} autoComplete="off" spellCheck={false}
             placeholder="grafana" aria-describedby={error?.field === "name" ? `${id}-error` : undefined}
             aria-invalid={error?.field === "name" ? true : undefined} onChange={(event) => setName(event.target.value)} />
         </div>
@@ -105,14 +105,14 @@ function CreateForm({ role, onCreated }: { role: string; onCreated: (token: stri
         </div>
         <div className="field">
           <label className="field-label" htmlFor={`${id}-expiry`}>Expires</label>
-          <Select className="input input--inset" id={`${id}-expiry`} value={expiry} onChange={(event) => setExpiry(event.target.value)}>
+          <Select className="input" id={`${id}-expiry`} value={expiry} onChange={(event) => setExpiry(event.target.value)}>
             {EXPIRY.map(([value, label]) => <option key={label} value={value}>{label}</option>)}
           </Select>
         </div>
       </div>
       <p className="panel-note" id={`${id}-role-help`}>{ROLE_HELP[scope]}</p>
       {error && !roleError && <FieldError id={`${id}-error`}>{error.message}</FieldError>}
-      <div><button className="button-solid" type="submit" disabled={!name.trim() || saving}>{saving ? "Creating…" : "Create token"}</button></div>
+      <div><button className="button button--primary" type="submit" disabled={!name.trim() || saving}>{saving ? "Creating…" : "Create token"}</button></div>
     </form>
   );
 }

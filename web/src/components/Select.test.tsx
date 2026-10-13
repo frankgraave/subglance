@@ -12,7 +12,7 @@ describe("Select", () => {
     render(
       <label>
         Expires
-        <Select className="input input--inset" value="" onChange={onChange}>
+        <Select className="input" value="" onChange={onChange}>
           <option value="">Never</option>
           <option value="720h">30 days</option>
         </Select>
@@ -20,7 +20,7 @@ describe("Select", () => {
     );
     const select = screen.getByRole("combobox", { name: "Expires" }) as HTMLSelectElement;
     expect(select.tagName).toBe("SELECT");
-    expect(select.className).toBe("input input--inset select");
+    expect(select.className).toBe("input select");
     fireEvent.change(select, { target: { value: "720h" } });
     expect(onChange).toHaveBeenCalledTimes(1);
   });

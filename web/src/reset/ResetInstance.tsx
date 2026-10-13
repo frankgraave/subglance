@@ -77,7 +77,7 @@ export function ResetInstanceCard() {
           <div className="field">
             <label className="field-label" htmlFor={`${id}-confirm`}>Type <code className="phrase">{RESET_PHRASE}</code> to enable the button</label>
             <input
-              id={`${id}-confirm`} className="input input--inset" type="text" value={typed} disabled={busy}
+              id={`${id}-confirm`} className="input" type="text" value={typed} disabled={busy}
               autoComplete="off" spellCheck={false} autoCapitalize="off"
               aria-describedby={`${id}-state`}
               onChange={(event) => { setTyped(event.target.value); setDone(null); setError(null); }}
