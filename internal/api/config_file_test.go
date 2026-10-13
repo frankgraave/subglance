@@ -407,7 +407,7 @@ func TestImportRejectsInvalidFilesAndWritesNothing(t *testing.T) {
 		"unknown channel": {"version: 1\nmonitors:\n  - key: a\n    name: A\n    type: tcp\n" +
 			"    target: a.example.com:1\n    channels: [nope]\n", "monitors[0].channels[0]"},
 		"unknown type":  {"version: 1\nmonitors:\n  - key: a\n    name: A\n    type: gopher\n    target: x\n", "monitors[0].type"},
-		"bad channel":   {"version: 1\nchannels:\n  - key: c\n    name: C\n    type: fax\n", "channels[0]"},
+		"bad channel":   {"version: 1\nchannels:\n  - key: c\n    name: C\n    type: fax\n", "channels[0].type"},
 		"future format": {"version: 9\n", "version"},
 		"duplicate rule": {"version: 1\nrouting_rules:\n  - tag_key: env\n    tag_value: prod\n" +
 			"  - tag_key: env\n    tag_value: prod\n", "routing_rules[1]"},

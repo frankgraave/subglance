@@ -552,3 +552,82 @@ describe("ChannelForm, SMS", () => {
     expect(screen.queryByText(/defeats the reason/)).toBeNull();
   });
 });
+
+/*
+ * Every channel rule on the server now names the input it is about, not
+ * only a webhook's settings. The form already places any `config.<key>`
+ * field; these pin that the refusals a person actually meets on the other
+ * types land under their input, mark only that input and take the focus.
+ */
+describe("ChannelForm, server refusals by field", () => {
+  function refuse(message: string, field: string) {
+    return vi.fn().mockRejectedValue(new ApiError(400, message, null, field));
+  }
+
+  function expectUnder(control: HTMLElement, text: string) {
+    expect(control.getAttribute("aria-invalid")).toBe("true");
+    const error = document.getElementById(control.getAttribute("aria-describedby") ?? "");
+    expect(error?.textContent).toContain(text);
+    expect(document.activeElement).toBe(control);
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(document.querySelectorAll('[aria-invalid="true"]')).toHaveLength(1);
+  }
+
+  it("puts a refused Slack URL under the URL", async () => {
+    const onSave = refuse("config.url must use http or https", "config.url");
+    render(<ChannelForm onSave={onSave} />);
+    fireEvent.change(screen.getByLabelText("Type"), { target: { value: "slack" } });
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Ops" } });
+    const url = screen.getByLabelText("Incoming webhook URL");
+    fireEvent.change(url, { target: { value: "hooks.slack.com/services/x" } });
+    fireEvent.click(screen.getByRole("button", { name: /add channel/i }));
+    await waitFor(() => expect(url.getAttribute("aria-invalid")).toBe("true"));
+    expectUnder(url, "must use http or https");
+  });
+
+  it("puts a refused ntfy topic under the topic", async () => {
+    const onSave = refuse(
+      "config.topic may contain only letters, digits, - and _ (at most 64)",
+      "config.topic",
+    );
+    render(<ChannelForm onSave={onSave} />);
+    fireEvent.change(screen.getByLabelText("Type"), { target: { value: "ntfy" } });
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Phone" } });
+    const topic = screen.getByLabelText("Topic");
+    fireEvent.change(topic, { target: { value: "has space" } });
+    fireEvent.click(screen.getByRole("button", { name: /add channel/i }));
+    await waitFor(() => expect(topic.getAttribute("aria-invalid")).toBe("true"));
+    expectUnder(topic, "may contain only letters");
+  });
+
+  it("puts a refused phone number under the numbers", async () => {
+    const onSave = refuse(
+      'config.numbers: number "0612345678" has no country code',
+      "config.numbers",
+    );
+    render(<ChannelForm channel={sms("+31 6 1234 5678")} onSave={onSave} />);
+    const numbers = screen.getByLabelText("Phone numbers");
+    fireEvent.change(numbers, { target: { value: "0612345678" } });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    await waitFor(() => expect(numbers.getAttribute("aria-invalid")).toBe("true"));
+    expectUnder(numbers, "has no country code");
+  });
+
+  it("puts a blocked destination under the server address", async () => {
+    const onSave = refuse(
+      "config.url is not an allowed destination: 10.0.0.5 is a private address " +
+        "(start SubGlance with --allow-private-targets or SUBGLANCE_ALLOW_PRIVATE_TARGETS=true " +
+        "to send to internal addresses)",
+      "config.url",
+    );
+    render(<ChannelForm onSave={onSave} />);
+    fireEvent.change(screen.getByLabelText("Type"), { target: { value: "gotify" } });
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Home" } });
+    const url = screen.getByLabelText("Server URL");
+    fireEvent.change(url, { target: { value: "http://10.0.0.5" } });
+    fireEvent.change(screen.getByLabelText("Application token"), { target: { value: "tok" } });
+    fireEvent.click(screen.getByRole("button", { name: /add channel/i }));
+    await waitFor(() => expect(url.getAttribute("aria-invalid")).toBe("true"));
+    expectUnder(url, "--allow-private-targets");
+  });
+});

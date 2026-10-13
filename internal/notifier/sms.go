@@ -118,52 +118,63 @@ func NewSMSSender(guard *checker.Guard) *SMSSender {
 // ValidateSMSConfig checks an SMS channel's settings. The API calls it when a
 // channel is saved, so the message lands on the form; Validate calls it again
 // before every send.
+//
+// Every refusal names the config key it is about (ConfigKey), so the form can
+// put the sentence under that input. The sentence itself is unchanged by it.
 func ValidateSMSConfig(cfg map[string]string) error {
+	if _, err := normalizeCountryCode(cfg["country_code"]); err != nil {
+		return onKey("country_code", err)
+	}
 	if _, err := smsRecipients(cfg); err != nil {
-		return err
+		return onKey("numbers", err)
 	}
 	switch strings.TrimSpace(cfg["provider"]) {
 	case SMSProviderAndroidGateway:
 		if err := validateHTTPSURL(strings.TrimSpace(cfg["url"]), "url"); err != nil {
-			return &configError{err.Error() + " (the address the app shows, such as http://192.168.1.50:8080)"}
+			return onKey("url", &configError{err.Error() + " (the address the app shows, such as http://192.168.1.50:8080)"})
 		}
 		if strings.TrimSpace(cfg["username"]) == "" || cfg["password"] == "" {
-			return &configError{"username and password are required (the app shows both under Local Server)"}
+			// One sentence for the pair, blamed on the half that is missing.
+			key := "username"
+			if strings.TrimSpace(cfg["username"]) != "" {
+				key = "password"
+			}
+			return onKey(key, &configError{"username and password are required (the app shows both under Local Server)"})
 		}
 	case SMSProviderTwilio:
 		if !twilioAccountSID.MatchString(strings.TrimSpace(cfg["account_sid"])) {
-			return &configError{"account_sid does not look like a Twilio account SID (AC followed by 32 characters)"}
+			return onKey("account_sid", &configError{"account_sid does not look like a Twilio account SID (AC followed by 32 characters)"})
 		}
 		if strings.TrimSpace(cfg["auth_token"]) == "" {
-			return &configError{"auth_token is required"}
+			return onKey("auth_token", &configError{"auth_token is required"})
 		}
 		from := strings.TrimSpace(cfg["from"])
 		switch {
 		case from == "":
-			return &configError{"from is required (a Twilio number, or a sender name of up to 11 letters and digits)"}
+			return onKey("from", &configError{"from is required (a Twilio number, or a sender name of up to 11 letters and digits)"})
 		case strings.HasPrefix(from, "+"):
 			if !e164.MatchString(from) {
-				return &configError{fmt.Sprintf("from %q is not a phone number in international form", from)}
+				return onKey("from", &configError{fmt.Sprintf("from %q is not a phone number in international form", from)})
 			}
 		case !twilioSenderID.MatchString(from) || !strings.ContainsFunc(from, isASCIILetter):
-			return &configError{"from must be a number such as +14155550100, or a sender name of up to 11 letters, digits and spaces"}
+			return onKey("from", &configError{"from must be a number such as +14155550100, or a sender name of up to 11 letters, digits and spaces"})
 		}
 	case "":
-		return &configError{"provider is required: android-gateway or twilio"}
+		return onKey("provider", &configError{"provider is required: android-gateway or twilio"})
 	default:
-		return &configError{fmt.Sprintf("provider %q is not supported: use android-gateway or twilio", cfg["provider"])}
+		return onKey("provider", &configError{fmt.Sprintf("provider %q is not supported: use android-gateway or twilio", cfg["provider"])})
 	}
 	if _, err := smsHourlyLimit(cfg); err != nil {
-		return err
+		return onKey("hourly_limit", err)
 	}
 	switch strings.TrimSpace(cfg["recoveries"]) {
 	case "", "true", "false":
 	default:
-		return &configError{"recoveries must be true or false"}
+		return onKey("recoveries", &configError{"recoveries must be true or false"})
 	}
 	if tz := strings.TrimSpace(cfg["timezone"]); tz != "" {
 		if _, err := time.LoadLocation(tz); err != nil || tz == "Local" {
-			return &configError{fmt.Sprintf("timezone %q is not an IANA time zone such as Europe/Amsterdam", tz)}
+			return onKey("timezone", &configError{fmt.Sprintf("timezone %q is not an IANA time zone such as Europe/Amsterdam", tz)})
 		}
 	}
 	return nil
