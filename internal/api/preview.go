@@ -51,6 +51,9 @@ type previewRequest struct {
 	// what someone is previewing when they set it, so a preview that
 	// ignored it would answer a question nobody asked.
 	MinTLSVersion *string `json:"min_tls_version"`
+	// TrustedCertSHA256 is the pin the form holds. A preview that ignored
+	// it would fail on the very certificate the user just chose to trust.
+	TrustedCertSHA256 *string `json:"trusted_cert_sha256"`
 	// Tags do not affect a probe — nothing is stored and nothing is
 	// grouped. They are accepted and validated anyway so that a form can
 	// preview the draft it holds without stripping fields first: the
@@ -84,6 +87,10 @@ type previewResponse struct {
 	Error      string `json:"error,omitempty"`
 
 	CertExpiry *time.Time `json:"cert_expiry,omitempty"`
+
+	// Certificate is the certificate the check was presented, when it
+	// failed for want of trust and pinning it would let it pass.
+	Certificate *certificateWire `json:"certificate,omitempty"`
 
 	// DomainExpiry is a domain's registration expiry date, when the
 	// registry gave one.
@@ -177,6 +184,11 @@ func (s *Server) handlePreviewCheck(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
+	pin, p := parseTrustedCert(req.TrustedCertSHA256, typ, target)
+	if !p.ok() {
+		writeProblem(w, http.StatusBadRequest, p)
+		return
+	}
 	if p := validateSSLWarnDays(req.SSLWarnDays); !p.ok() {
 		writeProblem(w, http.StatusBadRequest, p)
 		return
@@ -250,6 +262,8 @@ func (s *Server) handlePreviewCheck(w http.ResponseWriter, r *http.Request) {
 		// button feel slow.
 		Retries: 1,
 		Enabled: false,
+
+		TrustedCertSHA256: pin,
 	}
 	if req.FollowRedirects != nil {
 		m.FollowRedirects = *req.FollowRedirects
@@ -290,6 +304,8 @@ func (s *Server) handlePreviewCheck(w http.ResponseWriter, r *http.Request) {
 		Type:       typ,
 		Target:     target,
 		Tags:       tags,
+
+		Certificate: certificateToWire(res.Certificate),
 	}
 	if !res.CertExpiry.IsZero() {
 		expiry := res.CertExpiry

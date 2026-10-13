@@ -182,9 +182,15 @@ func exportMonitor(m store.Monitor) configfile.Monitor {
 		out.JSONAssertion = exportAssertion(m.JSONAssertion)
 		out.SSLWarnDays = ptr(m.SSLWarnDays)
 		out.MinTLSVersion = ptr(checker.TLSVersionLabel(m.MinTLSVersion))
+		// Written "" too, on every monitor that can carry a pin, so an
+		// import of the file removes a pin the file does not have.
+		if pinCarrier(m.Type, m.Target) {
+			out.TrustedCertSHA256 = ptr(m.TrustedCertSHA256)
+		}
 	case "ssl":
 		out.SSLWarnDays = ptr(m.SSLWarnDays)
 		out.MinTLSVersion = ptr(checker.TLSVersionLabel(m.MinTLSVersion))
+		out.TrustedCertSHA256 = ptr(m.TrustedCertSHA256)
 	case store.TypeDNS:
 		if w := dnsCheckToWire(m.DNS); w != nil {
 			out.DNS = &configfile.DNSCheck{RecordType: w.RecordType, Expected: w.Expected, Resolver: w.Resolver}

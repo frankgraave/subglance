@@ -7,6 +7,7 @@ package monitor
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -117,6 +118,10 @@ type Options struct {
 	// AllowPrivateTargets disables the SSRF guard. See config.Config.
 	AllowPrivateTargets bool
 
+	// Roots is the trust store https and ssl checks verify against; nil is
+	// the host's. See checker.ExtraRoots.
+	Roots *x509.CertPool
+
 	// Workers caps concurrent checks. Zero lets the scheduler decide.
 	Workers int
 
@@ -163,7 +168,7 @@ func New(opts Options) *Runner {
 	}
 
 	guard := checker.NewGuard(opts.AllowPrivateTargets)
-	httpChecker := checker.NewHTTPChecker(checker.HTTPOptions{Guard: guard})
+	httpChecker := checker.NewHTTPChecker(checker.HTTPOptions{Guard: guard, Roots: opts.Roots})
 
 	reminderInterval := opts.ReminderInterval
 	if reminderInterval <= 0 {
@@ -190,7 +195,7 @@ func New(opts Options) *Runner {
 		Checkers: map[checker.Type]checker.Checker{
 			checker.TypeHTTP: httpChecker,
 			checker.TypeTCP:  checker.NewTCPChecker(guard),
-			checker.TypeSSL:  checker.NewSSLChecker(guard),
+			checker.TypeSSL:  checker.NewSSLCheckerWithRoots(guard, opts.Roots),
 			checker.TypePing: checker.NewPingChecker(guard),
 			checker.TypeDNS:  checker.NewDNSChecker(guard),
 
@@ -664,6 +669,8 @@ func toCheckerMonitor(m store.Monitor) checker.Monitor {
 
 		RecoveryThreshold: m.RecoveryThreshold,
 		DomainWarnDays:    m.DomainWarnDays,
+		TrustedCertSHA256: m.TrustedCertSHA256,
+		TrustedCertAt:     m.TrustedCertAt,
 	}
 	if m.DNS != nil {
 		cm.DNSRecordType = m.DNS.RecordType

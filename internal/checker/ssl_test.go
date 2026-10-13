@@ -109,7 +109,7 @@ func startTLSServer(t *testing.T, cert tls.Certificate) string {
 // loopback, with a controllable clock.
 func sslCheckerTrusting(pool *x509.CertPool, now time.Time) *SSLChecker {
 	c := NewSSLChecker(NewGuard(true))
-	c.rootsForTest = pool
+	c.roots = pool
 	if !now.IsZero() {
 		c.now = func() time.Time { return now }
 	}
@@ -310,7 +310,7 @@ func TestSSLCheckRespectsGuard(t *testing.T) {
 	addr := startTLSServer(t, cert)
 
 	c := NewSSLChecker(NewGuard(false)) // guard on
-	c.rootsForTest = pool
+	c.roots = pool
 
 	res := c.Check(context.Background(), Monitor{
 		Type: TypeSSL, Target: addr, Timeout: 5 * time.Second,

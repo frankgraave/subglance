@@ -35,14 +35,22 @@ type SSLChecker struct {
 	// now is overridable so tests can reason about expiry without waiting.
 	now func() time.Time
 
-	// rootsForTest replaces the system trust store. Only tests set it; in
-	// production a nil pool means x509 uses the host's roots, which is what
-	// users expect a monitoring tool to judge their certificates against.
-	rootsForTest *x509.CertPool
+	// roots is the trust store certificates are judged against. Nil means
+	// the host's own, which is what users expect a monitoring tool to judge
+	// their certificates against; an instance with an extra CA passes the
+	// host's roots plus that CA (see ExtraRoots), and tests pass their own.
+	roots *x509.CertPool
 }
 
-// NewSSLChecker returns a checker that enforces the SSRF guard at dial time.
+// NewSSLChecker returns a checker that enforces the SSRF guard at dial time
+// and trusts the host's trust store.
 func NewSSLChecker(guard *Guard) *SSLChecker {
+	return NewSSLCheckerWithRoots(guard, nil)
+}
+
+// NewSSLCheckerWithRoots is NewSSLChecker judging certificates against roots
+// instead; nil is the host's trust store.
+func NewSSLCheckerWithRoots(guard *Guard, roots *x509.CertPool) *SSLChecker {
 	if guard == nil {
 		guard = NewGuard(false) // fail closed
 	}
@@ -50,6 +58,7 @@ func NewSSLChecker(guard *Guard) *SSLChecker {
 		dialer:     &net.Dialer{Control: guard.ControlFunc()},
 		now:        time.Now,
 		ocspClient: newOCSPClient(),
+		roots:      roots,
 	}
 }
 
@@ -129,11 +138,27 @@ func (c *SSLChecker) Check(ctx context.Context, m Monitor) Result {
 		return res
 	}
 
-	chains, err := verifyChain(host, certs, now, c.rootsForTest)
+	if m.TrustedCertSHA256 != "" {
+		// The pin is the trust decision, so neither the chain nor the host
+		// name is asked about; there is no issuer to ask OCSP about either.
+		if err := checkPin(certs, m.TrustedCertSHA256, m.TrustedCertAt, now); err != nil {
+			res.OK = false
+			res.Kind = FailTLS
+			res.Error = err.Error()
+			// The server's certificate now, offered so it can be trusted
+			// in turn once someone has checked that the change is theirs.
+			res.Certificate = certificateInfo(leaf)
+			return res
+		}
+		return expiringNotice(res, leaf, m, now)
+	}
+
+	chains, err := verifyChain(host, certs, now, c.roots)
 	if err != nil {
 		res.OK = false
 		res.Kind = FailTLS
 		res.Error = err.Error()
+		res.Certificate = offerPin(certs, c.roots, now)
 		return res
 	}
 
@@ -148,10 +173,18 @@ func (c *SSLChecker) Check(ctx context.Context, m Monitor) Result {
 		}
 	}
 
-	// A certificate that is valid but about to expire passes, marked as
-	// expiring. A warning nobody reads is how certificates expire on a
-	// Sunday, so it still opens an incident and alerts; it just does not
-	// count as downtime, because the service is up. See Result.Expiring.
+	return expiringNotice(res, leaf, m, now)
+}
+
+// expiringNotice marks a passing result whose certificate expires inside the
+// monitor's warning window.
+//
+// A certificate that is valid but about to expire passes, marked as
+// expiring. A warning nobody reads is how certificates expire on a Sunday, so
+// it still opens an incident and alerts; it just does not count as downtime,
+// because the service is up. See Result.Expiring. A pinned certificate gets
+// the same notice: trusting it says nothing about how long it lasts.
+func expiringNotice(res Result, leaf *x509.Certificate, m Monitor, now time.Time) Result {
 	if m.SSLWarnDays > 0 {
 		remaining := leaf.NotAfter.Sub(now)
 		if remaining < time.Duration(m.SSLWarnDays)*24*time.Hour {
@@ -159,10 +192,8 @@ func (c *SSLChecker) Check(ctx context.Context, m Monitor) Result {
 			res.Kind = FailCertExpiry
 			res.Error = fmt.Sprintf("certificate expires in %d days (on %s)",
 				int(remaining.Hours()/24), leaf.NotAfter.Format(time.DateOnly))
-			return res
 		}
 	}
-
 	return res
 }
 

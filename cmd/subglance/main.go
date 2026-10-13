@@ -234,10 +234,16 @@ func run(args []string, logOut io.Writer) error {
 		return err
 	}
 
+	roots, err := extraRoots(cfg, log)
+	if err != nil {
+		return err
+	}
+
 	runner := monitor.New(monitor.Options{
 		DB:                  db,
 		Log:                 log,
 		AllowPrivateTargets: cfg.AllowPrivateTargets,
+		Roots:               roots,
 		Workers:             cfg.CheckWorkers,
 		Bus:                 bus,
 		Connectivity:        canary,

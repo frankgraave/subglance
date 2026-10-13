@@ -98,6 +98,10 @@ type Monitor struct {
 	// HTTP and SSL.
 	SSLWarnDays   *int    `yaml:"ssl_warn_days,omitempty"`
 	MinTLSVersion *string `yaml:"min_tls_version,omitempty"`
+	// TrustedCertSHA256 is the fingerprint of the one certificate an ssl
+	// or https monitor trusts besides the trust store; "" removes a pin.
+	// Export writes it for every ssl and https monitor.
+	TrustedCertSHA256 *string `yaml:"trusted_cert_sha256,omitempty"`
 
 	// DNS only: the record a dns monitor compares. Export writes it for
 	// every dns monitor; an import that leaves it out keeps what the

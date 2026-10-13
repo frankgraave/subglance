@@ -191,6 +191,7 @@ monitors:
       expected: up
     ssl_warn_days: 14
     min_tls_version: "1.2"
+    trusted_cert_sha256: ""
     tags:
       env: prod
     channels: [ops-slack, on-call]
@@ -460,8 +461,13 @@ separately; a status-page link does not become monitor coverage.
   the string. SubGlance compares typed values: an expected value that reads as
   a number, `true`, `false` or `null` is written as that value, and listed, in
   case the field holds a string.
-- *Ignore TLS/SSL errors* has no equivalent. SubGlance verifies every
-  certificate, so a self-signed or expired one fails the check.
+- *Ignore TLS/SSL errors* has no equivalent: a monitor that accepts any
+  certificate does not notice when something else answers. A self-signed
+  certificate fails the check until it is trusted on the monitor, and a
+  private CA until it is added with `--extra-ca-file`; see
+  [A self-signed certificate, or a CA of your own](using-subglance.md#a-self-signed-certificate-or-a-ca-of-your-own).
+  An expired certificate fails either way. The report lists every monitor
+  this applies to.
 - A few settings change how Kuma ran a check and have no SubGlance field, so
   the monitor comes over without them and is listed with what that means:
   a *Proxy* (SubGlance connects directly, so a site reachable only through

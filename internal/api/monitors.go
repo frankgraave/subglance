@@ -51,6 +51,12 @@ type monitorResponse struct {
 	// and one that says "1.2" does not.
 	MinTLSVersion string `json:"min_tls_version,omitempty"`
 
+	// TrustedCertSHA256 is the fingerprint of the one certificate this
+	// monitor trusts besides the trust store, and TrustedCertAt when it was
+	// trusted. Both omitted without a pin.
+	TrustedCertSHA256 string     `json:"trusted_cert_sha256,omitempty"`
+	TrustedCertAt     *time.Time `json:"trusted_cert_at,omitempty"`
+
 	Status     string     `json:"status"` // up, pending, warning, down, recovering, expiring, or unknown
 	LastCheck  *time.Time `json:"last_check,omitempty"`
 	LatencyMS  int        `json:"latency_ms,omitempty"`
@@ -280,6 +286,9 @@ type createMonitorRequest struct {
 	Enabled           *bool             `json:"enabled"`
 	CaptureResponse   *bool             `json:"capture_response"`
 	MinTLSVersion     *string           `json:"min_tls_version"`
+	// TrustedCertSHA256 pins one certificate an ssl or https monitor
+	// trusts besides the trust store. Omitted or empty pins none.
+	TrustedCertSHA256 *string           `json:"trusted_cert_sha256"`
 	Tags              map[string]string `json:"tags"`
 	PushIntervalS     *int              `json:"push_interval_s"`
 	PushGraceS        *int              `json:"push_grace_s"`
@@ -519,6 +528,8 @@ func (s *Server) handleCreateMonitor(w http.ResponseWriter, r *http.Request) {
 	if req.MinTLSVersion != nil {
 		m.MinTLSVersion, _ = checker.ParseTLSVersion(*req.MinTLSVersion)
 	}
+	// Validated above as well.
+	_ = applyTrustedCert(&m, req.TrustedCertSHA256)
 	// Already validated above by validateCreateMonitor; normalising again
 	// here rather than storing the raw map keeps the stored keys canonical
 	// without the validator having to hand a value back.
@@ -661,6 +672,9 @@ func validateCreateMonitor(req createMonitorRequest) problem {
 		return p
 	}
 	if p := validateMinTLSVersion(req.MinTLSVersion); !p.ok() {
+		return p
+	}
+	if _, p := parseTrustedCert(req.TrustedCertSHA256, req.Type, req.Target); !p.ok() {
 		return p
 	}
 	if p := validateTargetForType(req.Type, req.Target); !p.ok() {
@@ -1208,6 +1222,8 @@ func (s *Server) describeMonitor(r *http.Request, m store.Monitor) monitorRespon
 		RepeatAfterS:    m.RepeatAfterS,
 		MinTLSVersion:   checker.TLSVersionLabel(m.MinTLSVersion),
 
+		TrustedCertSHA256: m.TrustedCertSHA256,
+
 		Status:    "pending",
 		Tags:      m.Tags,
 		CreatedAt: m.CreatedAt,
@@ -1216,6 +1232,11 @@ func (s *Server) describeMonitor(r *http.Request, m store.Monitor) monitorRespon
 		PushIntervalS:   m.PushIntervalS,
 		PushGraceS:      m.PushGraceS,
 		PushTimezone:    m.PushTimezone,
+	}
+
+	if !m.TrustedCertAt.IsZero() {
+		at := m.TrustedCertAt
+		resp.TrustedCertAt = &at
 	}
 
 	ctx := r.Context()
@@ -1413,6 +1434,9 @@ type patchMonitorRequest struct {
 	// set earlier — whereas on create it is indistinguishable from not
 	// sending the field at all.
 	MinTLSVersion *string `json:"min_tls_version"`
+	// TrustedCertSHA256 replaces the pinned certificate; "" removes it.
+	// Sending the pin the monitor already has keeps the time it was set.
+	TrustedCertSHA256 *string `json:"trusted_cert_sha256"`
 	// Tags replaces the whole set, like Headers. Sending `{}` clears them;
 	// omitting the field leaves them alone.
 	Tags *map[string]string `json:"tags"`
@@ -1836,5 +1860,8 @@ func applyMonitorPatch(m *store.Monitor, req patchMonitorRequest) problem {
 			return p
 		}
 	}
-	return problem{}
+	// Last, on the type and target the monitor ends up with: a pin is
+	// refused on a monitor that cannot use one, and dropped from one that
+	// stopped being able to.
+	return applyTrustedCert(m, req.TrustedCertSHA256)
 }

@@ -72,6 +72,12 @@ type Config struct {
 	// SubGlance into an SSRF proxy into the host network (see SUB-18).
 	AllowPrivateTargets bool
 
+	// ExtraCAFile is a PEM file of certificate authorities that checks trust
+	// besides the host's trust store: a private CA whose certificates live
+	// for a day cannot be pinned one by one. Empty adds none. The file is
+	// read at start, and a file holding no certificate refuses the start.
+	ExtraCAFile string
+
 	// RawRetention is how long individual heartbeats are kept before being
 	// folded into hourly buckets. Zero means keep them forever.
 	//
@@ -371,6 +377,7 @@ func Load(args []string) (Config, error) {
 	c.WatchdogURL = envStr("SUBGLANCE_WATCHDOG_URL", c.WatchdogURL)
 	c.WatchdogInterval = env.dur("SUBGLANCE_WATCHDOG_INTERVAL", c.WatchdogInterval)
 	c.AllowPrivateTargets = env.bool("SUBGLANCE_ALLOW_PRIVATE_TARGETS", c.AllowPrivateTargets)
+	c.ExtraCAFile = envStr("SUBGLANCE_EXTRA_CA_FILE", c.ExtraCAFile)
 	c.BaseURL = envStr("SUBGLANCE_BASE_URL", c.BaseURL)
 	c.RawRetention = env.dur("SUBGLANCE_RAW_RETENTION", c.RawRetention)
 	c.RawRetentionPinnedBy = envSetBy("SUBGLANCE_RAW_RETENTION")
@@ -419,6 +426,8 @@ func Load(args []string) (Config, error) {
 		"how often to ping the watchdog URL")
 	fs.BoolVar(&c.AllowPrivateTargets, "allow-private-targets", c.AllowPrivateTargets,
 		"allow monitoring private/loopback addresses (SSRF risk, off by default)")
+	fs.StringVar(&c.ExtraCAFile, "extra-ca-file", c.ExtraCAFile,
+		"PEM file of certificate authorities checks trust besides the system trust store (empty = none)")
 	fs.StringVar(&c.BaseURL, "base-url", c.BaseURL,
 		"the address SubGlance is reached at, such as https://status.example.com, so alerts link "+
 			"to the incident and the monitor (empty = alerts carry no links)")
