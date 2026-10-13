@@ -7203,11 +7203,16 @@ components:
             $ref: '#/components/schemas/UptimeWindow'
     FailureKind:
       type: string
-      description: What class of problem a failed check hit. Absent when the check succeeded.
+      description: |
+        What class of problem a failed check hit. Absent when the check succeeded.
+        `local_network` and `local_dns` mark a failure recorded while this host
+        could reach none of its connectivity targets, or while its resolver
+        answered none of the reference names: the monitor's target was not at
+        fault, so the check is kept as a warning and confirms no incident.
       enum:
         [dns, dns_mismatch, connection, tls, timeout, status, keyword, assertion,
          cert_expiry, domain_expiry, unknown, internal, push_overdue,
-         push_reported]
+         push_reported, local_network, local_dns]
       example: timeout
     PreviewCheckRequest:
       type: object

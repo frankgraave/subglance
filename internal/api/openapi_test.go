@@ -10,6 +10,9 @@ import (
 	"testing"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/frankgraave/subglance/internal/checker"
+	"github.com/frankgraave/subglance/internal/store"
 )
 
 // specPath is the OpenAPI document that documents this package's routes.
@@ -318,4 +321,45 @@ func TestOpenAPIHasNoDuplicateKeys(t *testing.T) {
 		}
 	}
 	walk(&root, "")
+}
+
+// TestOpenAPIFailureKindEnumCoversWrittenKinds keeps the FailureKind enum in
+// step with the kinds the code writes to a heartbeat. A heartbeat carries the
+// checker's kinds and, while this host's own network or resolver is down, the
+// store's local kinds; a client that validates against the schema rejects any
+// heartbeat whose kind the enum leaves out.
+func TestOpenAPIFailureKindEnumCoversWrittenKinds(t *testing.T) {
+	spec := loadSpec(t)
+
+	node, ok := spec.Components.Schemas["FailureKind"]
+	if !ok {
+		t.Fatal("components.schemas has no FailureKind")
+	}
+	var schema struct {
+		Enum []string `yaml:"enum"`
+	}
+	if err := node.Decode(&schema); err != nil {
+		t.Fatalf("decode FailureKind: %v", err)
+	}
+	listed := make(map[string]bool, len(schema.Enum))
+	for _, v := range schema.Enum {
+		listed[v] = true
+	}
+
+	written := []string{
+		string(checker.FailDNS), string(checker.FailConnection),
+		string(checker.FailTLS), string(checker.FailTimeout),
+		string(checker.FailStatus), string(checker.FailKeyword),
+		string(checker.FailAssertion), string(checker.FailCertExpiry),
+		string(checker.FailInternal), string(checker.FailDNSMismatch),
+		string(checker.FailDomainExpiry), string(checker.FailUnknown),
+		string(checker.FailPushOverdue), string(checker.FailPushReported),
+		store.FailureKindLocalNetwork, store.FailureKindLocalDNS,
+	}
+	for _, kind := range written {
+		if !listed[kind] {
+			t.Errorf("FailureKind enum is missing %q, which a heartbeat can carry; enum is %v",
+				kind, schema.Enum)
+		}
+	}
 }
