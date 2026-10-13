@@ -592,7 +592,8 @@ export function AddMonitorForm({
               invalidProps("push-grace", `${ids}-push-grace-help`))}
             <p id={`${ids}-push-grace-help`} className="field-help">
               Silence past the interval plus this is a failure. A backup that
-              usually takes a few minutes longer needs room here.
+              usually takes a few minutes longer needs room here, and a daily
+              job on local time reports an hour late the night the clocks go back.
             </p>
             <ControlRefusal
               control="push-grace"
