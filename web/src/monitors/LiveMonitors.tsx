@@ -58,6 +58,8 @@ export type LiveMonitorsProps = {
   onCreateOpenChange?: (open: boolean) => void;
   /** False for a viewer: every write control disappears rather than failing. */
   canWrite?: boolean;
+  /** Keeps the list's filters and sort on the history entry. */
+  keepView?: boolean;
 };
 
 export function LiveMonitors({
@@ -71,6 +73,7 @@ export function LiveMonitors({
   createOpen = false,
   onCreateOpenChange,
   canWrite = true,
+  keepView = false,
 }: LiveMonitorsProps) {
   const queryClient = useQueryClient();
 
@@ -373,6 +376,7 @@ export function LiveMonitors({
       createOpen={canWrite && createOpen}
       onCreateOpenChange={canWrite ? onCreateOpenChange : undefined}
       canScheduleMaintenance={canWrite}
+      keepView={keepView}
     />
     </>
   );

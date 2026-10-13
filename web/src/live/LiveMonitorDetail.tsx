@@ -39,6 +39,8 @@ export type LiveMonitorDetailProps = LiveOptions & {
   /** Heartbeat width for environments without layout, such as jsdom. */
   beatWidth?: number;
   onBack?: () => void;
+  /** The back control's words; see `MonitorDetail`. */
+  backLabel?: string;
   /** Ack seam for tests; defaults to the real endpoint. */
   ack?: typeof ackIncident;
   check?: typeof checkMonitorNow;
@@ -54,6 +56,7 @@ export function LiveMonitorDetail({
   id,
   beatWidth,
   onBack,
+  backLabel = "All monitors",
   ack = ackIncident,
   check = checkMonitorNow,
   pause = setMonitorPaused,
@@ -238,8 +241,8 @@ export function LiveMonitorDetail({
       // would list incidents for a monitor that no longer exists.
       queryClient.removeQueries({ queryKey: resolvedIncidentsQueryPrefix });
       // The page is about a monitor that no longer exists. Staying would show
-      // "does not exist" as though something had gone wrong; the dashboard is
-      // where the back control already goes.
+      // "does not exist" as though something had gone wrong; the list the
+      // back control names is where it goes instead.
       if (monitorId === id) onBack?.();
     },
     onError: (error, monitorId) => noteActionError(monitorId, "delete", error),
@@ -261,8 +264,8 @@ export function LiveMonitorDetail({
     return (
       <section className="mon-detail mon-detail--missing">
         <nav className="mon-detail-nav">
-          <button type="button" className="mon-detail-back" onClick={onBack}>
-            <span aria-hidden="true">←</span> All monitors
+          <button type="button" className="mon-detail-back" aria-label={backLabel} onClick={onBack}>
+            <span aria-hidden="true">←</span> {backLabel}
           </button>
         </nav>
         {/* Still a titled page while the name is unknown: the masthead
@@ -321,6 +324,7 @@ export function LiveMonitorDetail({
       error={detail.error instanceof Error ? detail.error : null}
       loaded={detail.data !== undefined}
       onBack={onBack}
+      backLabel={backLabel}
       beatWidth={beatWidth}
       /*
        * Anything other than a confirmed live stream is stale. The monitor can

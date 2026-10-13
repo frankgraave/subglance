@@ -1,5 +1,6 @@
 import type { RefObject } from "react";
 import { useState } from "react";
+import { isString, useEntryState } from "../shell/entryView";
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { createQueryClient } from "./queryClient";
@@ -47,6 +48,11 @@ export type LiveDashboardProps = LiveOptions & {
   onOpenNotifications?: () => void;
   /** Route-change focus target, forwarded to the wall's own `<main>`. */
   mainRef?: RefObject<HTMLElement | null>;
+  /**
+   * Keeps the list's filters on the history entry, so returning from a
+   * monitor's page finds them as they were (`shell/entryView.ts`).
+   */
+  keepView?: boolean;
 };
 
 export function LiveDashboard({
@@ -61,9 +67,10 @@ export function LiveDashboard({
   onAddMonitor,
   onOpenNotifications,
   mainRef,
+  keepView = false,
   ...live
 }: LiveDashboardProps) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useEntryState(keepView ? "dashboard" : null, "query", "", isString);
   const { monitors, status, loading, error, announcement, reconnect } =
     useLiveMonitors(live);
   const now = useNow();
@@ -151,6 +158,7 @@ export function LiveDashboard({
       stale={status === "offline"}
       onOpenMonitor={onOpenMonitor}
       onAddMonitor={onAddMonitor}
+      keepView={keepView}
       banner={
         <>
           <ConnectionBadge

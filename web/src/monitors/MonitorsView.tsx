@@ -3,6 +3,7 @@ import { registerNavigationCleanup } from "../shell/leaveGuard";
 import { Card, Panel } from "../components/Card";
 import { PlusIcon } from "../shell/icons";
 import { FilterField } from "../shell/FilterField";
+import { isString, isTagSelection, oneOf, useEntryState } from "../shell/entryView";
 import { IconBell, IconClock, IconList, IconPause, IconPlay, IconPulse } from "../components/icons";
 import { useCompactViewport } from "../layout/useMediaQuery";
 import { Drawer } from "../components/Drawer";
@@ -19,10 +20,16 @@ import { liveTagSelection, sameTagSelection, tagFacets } from "./model";
 import type { TagSelection } from "./model";
 import { FilterPanel } from "./FilterPanel";
 import { SortControl } from "./SortControl";
-import { applyInventoryChoice, inventoryFilterGroups } from "./inventoryFilter";
+import {
+  applyInventoryChoice,
+  INVENTORY_PAUSED,
+  INVENTORY_TYPES,
+  inventoryFilterGroups,
+} from "./inventoryFilter";
 import { MaintenanceDrawer } from "./MaintenanceDrawer";
 import {
   describeInventory,
+  INVENTORY_SORTS,
   monitorDeleteConsequence,
   sortInventory,
 } from "./inventory";
@@ -104,7 +111,18 @@ export type MonitorsViewProps = {
    * question anybody on the rota asks.
    */
   canScheduleMaintenance?: boolean;
+  /**
+   * Keeps the filters and the sort on the history entry, so coming back to
+   * this list from a monitor's page finds it as it was left
+   * (`shell/entryView.ts`).
+   */
+  keepView?: boolean;
 };
+
+/* What a saved choice may be: the values the controls offer, and "" for all. */
+const isTypeChoice = oneOf(["", ...INVENTORY_TYPES.map((t) => t.value)]);
+const isPausedChoice = oneOf(["", ...INVENTORY_PAUSED.map((p) => p.value)]);
+const isSort = oneOf<InventorySort>(INVENTORY_SORTS.map((s) => s.value));
 
 const NO_SET: ReadonlySet<string> = new Set();
 const NO_MAP = {};
@@ -133,26 +151,33 @@ export function MonitorsView({
   createOpen = false,
   onCreateOpenChange,
   canScheduleMaintenance = false,
+  keepView = false,
 }: MonitorsViewProps) {
-  const [query, setQuery] = useState("");
-  const [type, setType] = useState<string>("");
+  /* Kept on the history entry, as the dashboard's are: returning from a
+     monitor's page finds the list as it was left, a fresh visit starts
+     unfiltered. */
+  const view = keepView ? "monitors" : null;
+  const [query, setQuery] = useEntryState(view, "query", "", isString);
+  const [type, setType] = useEntryState<string>(view, "type", "", isTypeChoice);
   /** "" = every monitor, "active", "paused". The default shows everything,
    *  which is precisely where this page differs from the dashboard. */
-  const [pausedFilter, setPausedFilter] = useState<string>("");
+  const [pausedFilter, setPausedFilter] = useEntryState<string>(view, "paused", "", isPausedChoice);
   /*
    * Name by default, where the list used to arrive in the order monitors were
    * created. Creation order is an accident of history: nobody looks for
    * "Docs" by remembering it was the fourth one added.
    */
-  const [sort, setSort] = useState<InventorySort>("name");
+  const [sort, setSort] = useEntryState<InventorySort>(view, "sort", "name", isSort);
   /* The dashboard's tag filters, from the same component and the same rule
      for a selection whose tag has since vanished. */
-  const [tags, setTags] = useState<TagSelection>({});
+  const [tags, setTags] = useEntryState<TagSelection>(view, "tags", {}, isTagSelection);
   const facets = useMemo(() => tagFacets(monitors), [monitors]);
   const liveTags = useMemo(() => liveTagSelection(facets, tags), [facets, tags]);
   // Pruned, not only masked, as on the dashboard: a pair kept in state would
-  // filter again by itself when its value came back.
-  if (!sameTagSelection(tags, liveTags)) setTags(liveTags);
+  // filter again by itself when its value came back. Not while the first
+  // load is out: an empty list then says nothing about which tags exist, and
+  // pruning against it would drop a choice kept on the history entry.
+  if (!loading && !sameTagSelection(tags, liveTags)) setTags(liveTags);
   const [maintenanceOpen, setMaintenanceOpen] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [tagOpen, setTagOpen] = useState(false);

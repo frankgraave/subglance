@@ -17,6 +17,7 @@ import { LiveNotificationsRoot } from "./notifications/LiveNotifications";
 import { createQueryClient } from "./live/queryClient";
 import { ErrorBoundary } from "./shell/ErrorBoundary";
 import { useRoute } from "./shell/useRoute";
+import { backLabel } from "./shell/listOrigin";
 import { MONITORS_PATH, routePath } from "./shell/route";
 import type { NavRoute } from "./shell/Sidebar";
 import { useDocumentTitle } from "./shell/documentTitle";
@@ -66,7 +67,7 @@ export default function App() {
   } = useShellPreferences(window.localStorage);
   const [addOpen, setAddOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
-  const { route, navigate } = useRoute();
+  const { route, navigate, origin, backToList } = useRoute();
   const workbenchOpen = route.name === "workbench";
   /*
    * One query client for both screens, created here rather than inside each
@@ -113,11 +114,10 @@ export default function App() {
    * the table cell behind it instead (measured in Chromium). Going back and
    * opening the next monitor is the quickest thing an operator does here, so
    * the list has to be clickable the moment it is on screen.
+   *
+   * It goes to the list the page was opened from — the dashboard or the
+   * inventory — and to the inventory when there is none (`listOrigin.ts`).
    */
-  const showDashboard = useCallback(
-    () => navigate({ name: "dashboard" }),
-    [navigate],
-  );
   /*
    * Navigation from the rail and the phone drawer.
    *
@@ -456,6 +456,7 @@ export default function App() {
           <LiveMonitorsRoot
             client={queryClient}
             onOpen={openMonitor}
+            keepView
             createOpen={route.create}
             onCreateOpenChange={setCreateOpen}
             /* A viewer is shown no write controls at all rather than controls
@@ -471,7 +472,8 @@ export default function App() {
           <LiveMonitorDetailRoot
             client={queryClient}
             id={route.id}
-            onBack={showDashboard}
+            onBack={backToList}
+            backLabel={backLabel(origin)}
             canWrite={session.state === "signedIn" && canWrite(session.user)}
           />
         ) : (
@@ -495,6 +497,7 @@ export default function App() {
             onCardColumnsChange={setCardColumns}
             onOpenMonitor={openMonitor}
             onOpenNotifications={() => goTo("notifications")}
+            keepView
             /* The empty dashboard's one next step opens the same form the
                Monitors card does, at its own address. A viewer gets no
                button: the server would refuse the save. */

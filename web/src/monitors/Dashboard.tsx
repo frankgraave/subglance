@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId } from "react";
 import type { ReactNode } from "react";
 import { useCompactViewport } from "../layout/useMediaQuery";
 import { Card } from "../components/Card";
@@ -10,6 +10,7 @@ import {
   type LayoutId,
 } from "../shell/preferences";
 import { FilterField } from "../shell/FilterField";
+import { isString, isTagSelection, oneOf, useEntryState } from "../shell/entryView";
 import { DashboardFilter } from "./DashboardFilter";
 import { DashboardView } from "./DashboardView";
 import { MonitorCardList } from "./MonitorCardList";
@@ -27,7 +28,7 @@ import {
   tagFacets,
 } from "./model";
 import { StatusTabs } from "./StatusTabs";
-import type { TagSelection } from "./model";
+import { SUMMARY_ORDER, type TagSelection } from "./model";
 import type { Monitor, MonitorStatus } from "./types";
 
 /**
@@ -119,7 +120,19 @@ export type DashboardProps = {
    * reader who may add a monitor; see EmptyState for what a viewer reads.
    */
   onAddMonitor?: () => void;
+  /**
+   * Keeps the status tab, tags and grouping on the history entry, so coming
+   * back to this list from a monitor's page finds it as it was left
+   * (`shell/entryView.ts`). Set by the app; the workbench draws fixtures and
+   * has no entry of its own.
+   */
+  keepView?: boolean;
 };
+
+/** A saved status tab: one of the statuses, or All. */
+const isStatusTab = oneOf<MonitorStatus | null>([...SUMMARY_ORDER, null]);
+const isGroupKey = (value: unknown): value is string | null =>
+  value === null || isString(value);
 
 export function Dashboard({
   monitors,
@@ -135,6 +148,7 @@ export function Dashboard({
   stale = false,
   onOpenMonitor,
   onAddMonitor,
+  keepView = false,
 }: DashboardProps) {
   const searchId = useId();
   // Hooks cannot be skipped, so the query is always subscribed to and the
@@ -147,18 +161,21 @@ export function Dashboard({
   const summary = summarise(monitors);
   // Local state, not a prop: unlike the search query, which the data owner
   // wants (it drives the empty-state copy and will drive the command palette),
-  // the status chip is a momentary way of looking at the list on screen. It
-  // deliberately does not survive a remount — coming back to a dashboard that
-  // silently hides 198 of 200 monitors is how an outage gets missed.
-  const [status, setStatus] = useState<MonitorStatus | null>(null);
-  // Tag choices are local for the same reason, and for one more: the facets
-  // themselves come from the data, so a selection kept across a reload could
-  // name a key that no monitor carries any more.
-  const [tags, setTags] = useState<TagSelection>({});
+  // the status tab is a way of looking at the list on screen. It is kept on
+  // the history entry and nowhere else: returning to this entry from a
+  // monitor's page finds the tab as it was left, while arriving afresh (the
+  // rail, a new tab) starts on All — a dashboard that silently still hides
+  // 198 of 200 monitors an hour later is how an outage gets missed.
+  const view = keepView ? "dashboard" : null;
+  const [status, setStatus] = useEntryState<MonitorStatus | null>(view, "status", null, isStatusTab);
+  // Tag choices are kept the same way. The facets themselves come from the
+  // data, so a saved selection can name a key no monitor carries any more;
+  // the pruning below drops it, as it drops one that vanishes on screen.
+  const [tags, setTags] = useEntryState<TagSelection>(view, "tags", {}, isTagSelection);
   // Grouping is one axis at a time: "by environment" and "by customer" are two
-  // arrangements of the same rows, not two that can be layered. Local and not
-  // persisted, like the other view controls on this screen.
-  const [groupKey, setGroupKey] = useState<string | null>(null);
+  // arrangements of the same rows, not two that can be layered. Kept on the
+  // entry like the other view controls on this screen.
+  const [groupKey, setGroupKey] = useEntryState<string | null>(view, "group", null, isGroupKey);
   // Facets are derived from the unfiltered list, never from the visible one.
   // Narrowing the options as you choose would make the second dropdown lose
   // the values the first one just excluded, and there would be no way back.

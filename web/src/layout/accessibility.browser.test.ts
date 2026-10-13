@@ -281,9 +281,11 @@ describe("the accessibility gate itself", () => {
 
       // Remount through real navigation so React itself allocates different
       // useId values, as inserting another Card does in a combined branch.
+      // Opened by its address, so the way back is the inventory, where the
+      // breadcrumb goes; its rows link the monitor the same way.
       const back = await page.waitForSelector(".mon-detail-back", { visible: true });
       await back!.click();
-      const monitor = await page.waitForSelector('[data-testid="monitor-row-1"] .mon-name', { visible: true });
+      const monitor = await page.waitForSelector("main a[href='/monitors/1']", { visible: true });
       await monitor!.click();
       await page.waitForSelector(".mon-detail-windows", { visible: true });
       await page.waitForSelector(".inc-sub", { visible: true });

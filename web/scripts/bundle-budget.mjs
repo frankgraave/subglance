@@ -327,8 +327,18 @@ const budgets = {
    * owner passing the server's field on. No new dependency. 151 leaves 752
    * bytes; the notifications screen is the next candidate for a lazy chunk
    * if the following fix does not fit.
+   *
+   * 151 -> 152 KiB gzip for SUB-202 (a monitor page's back control returns to
+   * the list it was opened from). Develop at 1ef545d measures 153,994 bytes
+   * of entry JS (Node gzip, level 6, every script index.html loads), 630
+   * under 151; this branch measures 154,833, 839 more and 209 over. That is
+   * the origin recorded on the history entry and the traversal back to it,
+   * the label that names the list, and each list's view (status tab, filters,
+   * sort) kept on its own entry and validated when read back. It is shell
+   * and list code every screen loads, so a lazy chunk would not move it. No
+   * new dependency. 152 leaves 815 bytes.
    */
-  js: 151,
+  js: 152,
   /*
    * 12 -> 13 kB gzip, raised deliberately for SUB-34 (the incidents screen).
    *
