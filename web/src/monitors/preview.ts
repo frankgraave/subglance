@@ -47,6 +47,26 @@ export type PreviewRequest = {
   dns?: DnsCheck;
   /** Domain monitors only: days of warning before the registration expires. */
   domain_warn_days?: number;
+  /**
+   * The one certificate the form trusts besides the trust store, as a failed
+   * preview's `certificate.sha256` gave it. Sent so Test it can be pressed on
+   * the certificate about to be trusted, before anything is saved.
+   */
+  trusted_cert_sha256?: string;
+};
+
+/**
+ * The certificate a failed check was presented, when nothing in the trust
+ * store vouches for it (self-signed, or from a CA this host does not know) or
+ * when it is not the one a pin names, and trusting it would let the check
+ * pass. `sha256` is the value to send back as `trusted_cert_sha256`.
+ */
+export type OfferedCertificate = {
+  subject: string;
+  issuer: string;
+  not_before: string;
+  not_after: string;
+  sha256: string;
 };
 
 /** POST /api/v1/monitors/preview, as the server returns it. */
@@ -60,6 +80,8 @@ export type PreviewResult = {
   cert_expiry?: string;
   /** The registration expiry date a domain check read. */
   domain_expiry?: string;
+  /** Present only on a failure a pin would turn into a pass. */
+  certificate?: OfferedCertificate;
   /** What was really probed, after the server's inference. May differ. */
   type: string;
   target: string;
@@ -121,7 +143,38 @@ export function fingerprintPreview(req: PreviewRequest): PreviewFingerprint {
     req.dns ?? null,
     // Nor, for a domain, about another warning window.
     req.domain_warn_days ?? null,
+    // Nor about a certificate trusted or no longer trusted since: a failure
+    // the pin turns into a pass is the very thing this field changes.
+    req.trusted_cert_sha256 ?? "",
   ]);
+}
+
+/** Said after a failed result that offers its certificate, in both forms. */
+export const CERTIFICATE_OFFERED = "The certificate it presented is shown below, to compare and trust.";
+
+/**
+ * Whether a monitor of this type and target can trust a certificate: an ssl
+ * monitor, or an http monitor of an https address. The server's rule
+ * (`pinCarrier`), repeated so a form neither offers a pin it would refuse nor
+ * sends one the save would drop.
+ *
+ * A type not chosen yet is the server's to infer (`inferType`): an https://
+ * address and a bare host name become https checks, a host with a port a TCP
+ * one, and anything else is refused before a pin would matter.
+ */
+export function carriesPin(type: string, target: string): boolean {
+  const address = target.trim().toLowerCase();
+  switch (type) {
+    case "ssl":
+      return true;
+    case "http":
+      return address.startsWith("https://");
+    case "":
+      if (address.includes("://")) return address.startsWith("https://");
+      return address !== "" && !/:\d+$/.test(address) && !/[\s/?#]/.test(address);
+    default:
+      return false;
+  }
 }
 
 /** Probes a target without creating anything. */

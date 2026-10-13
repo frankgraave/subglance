@@ -187,6 +187,10 @@ export type ApiMonitor = {
   dns?: { record_type: string; expected: string[]; resolver?: string };
   /** Detail read only, domain monitors only. */
   domain_warn_days?: number;
+  /** The one certificate an ssl or https monitor trusts besides the trust store. */
+  trusted_cert_sha256?: string;
+  /** When that certificate was trusted. */
+  trusted_cert_at?: string;
   enabled: boolean;
   status: "up" | "pending" | "warning" | "down" | "recovering" | "expiring" | "unknown";
   /** The passing streak; the server sends it only with `recovering`. */

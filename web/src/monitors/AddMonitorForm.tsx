@@ -22,7 +22,8 @@ import { pushIntervalTakesZone } from "./pushClock";
 import { TlsFloorField } from "./TlsFloorField";
 import { TLS_FLOOR_UNSET } from "./tlsFloor";
 import type { PreviewResult, PreviewState } from "./preview";
-import { describePreview, suggestName } from "./preview";
+import { CERTIFICATE_OFFERED, carriesPin, describePreview, suggestName } from "./preview";
+import { CertificateTrust } from "./CertificateTrust";
 import { JSON_HELP, JSON_OPERATORS } from "./jsonAssertion";
 import { DNS_EMPTY_HELP, DNS_EXPECTED_HELP, DNS_EXPECTED_PLACEHOLDER, DNS_RECORD_TYPES, DNS_RESOLVER_HELP } from "./dnsCheck";
 import { Select } from "../components/Select";
@@ -98,6 +99,11 @@ export type AddMonitorValues = {
    * an array so ticking a box and unticking it again reads as no change.
    */
   channelIds: string;
+  /**
+   * The one certificate to trust besides the trust store, as a failed Test
+   * it offered it, or "" for none. Set only by "Trust this certificate".
+   */
+  trustedCertSHA256: string;
 };
 
 /**
@@ -147,6 +153,7 @@ const FIELD_CONTROL: Record<string, string> = {
   "dns.resolver": "dns-resolver",
   domain_warn_days: "domain-warn",
   channel_ids: "channels",
+  trusted_cert_sha256: "trusted-cert",
 };
 
 /**
@@ -198,6 +205,9 @@ function domainProblem(values: AddMonitorValues): { field: string; message: stri
   }
   return null;
 }
+
+/** The part of the values that decides which server a test talks to. */
+const addressOf = (values: AddMonitorValues) => `${values.type} ${values.target.trim()}`;
 
 export type AddMonitorFormProps = {
   /** Runs a preview. The caller reports the outcome back through `preview`. */
@@ -254,6 +264,7 @@ const DEFAULTS: AddMonitorValues = {
   // login and a card, which is more lead time than a certificate needs.
   domainWarnDays: "30",
   channelIds: "",
+  trustedCertSHA256: "",
 };
 
 export function AddMonitorForm({
@@ -296,6 +307,8 @@ export function AddMonitorForm({
    * the field the way a server rejection is placed.
    */
   const [localError, setLocalError] = useState<Rejection | null>(null);
+  /** The type and address the last Test it was pressed with. */
+  const [testedAddress, setTestedAddress] = useState<string | null>(null);
   const dirty = repeatText !== "900" || (typedName ?? "") !== "" ||
     Object.keys(DEFAULTS).some((key) => values[key as keyof AddMonitorValues] !== DEFAULTS[key as keyof AddMonitorValues]);
   useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
@@ -463,6 +476,33 @@ export function AddMonitorForm({
     control?.focus();
     return false;
   };
+
+  /*
+   * Trusting a certificate, or no longer trusting it, tests again at once
+   * with the new setting: the answer to "does it pass now?" is the next thing
+   * anyone wants, and a result left over from before the change would be
+   * evidence about a check this form no longer describes.
+   */
+  const test = (tested: AddMonitorValues) => {
+    if (!durationsAllowed()) return;
+    setTestedAddress(addressOf(tested));
+    onPreview(tested);
+  };
+  const retest = (trustedCertSHA256: string) => {
+    setValues((v) => ({ ...v, trustedCertSHA256 }));
+    test({ ...effective, trustedCertSHA256 });
+  };
+  /*
+   * Offered only while the address and type are the ones that were tested:
+   * the result stays on screen after the address is edited, and trusting a
+   * certificate one host presented on a monitor of another would pin
+   * something that host never showed.
+   */
+  const offered =
+    preview.phase === "done" && !preview.result.ok && testedAddress === addressOf(values) &&
+    carriesPin(preview.result.type, preview.result.target)
+      ? preview.result.certificate
+      : undefined;
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -964,7 +1004,7 @@ export function AddMonitorForm({
           <button
             type="button"
             className="button"
-            onClick={() => { if (durationsAllowed()) onPreview(effective); }}
+            onClick={() => test(effective)}
             // Deliberately NOT disabled while a probe is in flight. A check can
             // take the full timeout, and the most common reason to press this
             // twice is that the typo became obvious the moment the first one
@@ -1007,6 +1047,22 @@ export function AddMonitorForm({
       <div role="status" aria-live="polite" className="result-region">
         <PreviewNotice preview={preview} placed={badControl !== null} />
       </div>
+
+      {/* Outside the live region: the result sentence says a certificate can
+          be trusted, and reading out five facts and a warning with it would
+          bury the answer to the question that was asked. */}
+      {!push && (
+        <CertificateTrust
+          trusted={carriesPin(values.type, values.target) ? values.trustedCertSHA256 : ""}
+          offered={offered}
+          onTrust={retest}
+          onStop={() => retest("")}
+          stopId={`${ids}-trusted-cert`}
+          error={<ControlRefusal control="trusted-cert" badControl={badControl} rejection={rejection} ids={ids} />}
+          errorId={badControl === "trusted-cert" ? `${ids}-field-error` : undefined}
+          disabled={saving}
+        />
+      )}
 
       {/*
        * Whatever could not be placed. A rate limit, a network failure and a
@@ -1086,6 +1142,7 @@ function PreviewSummary({ result }: { result: PreviewResult }) {
       }
     >
       {describePreview(result)}{" "}
+      {!result.ok && result.certificate !== undefined && <>{CERTIFICATE_OFFERED}{" "}</>}
       <span className="add-result-kind">
         {/* What it decided to check, spelled out. This is the field the form
             stopped asking for, so it has to be visible somewhere before the

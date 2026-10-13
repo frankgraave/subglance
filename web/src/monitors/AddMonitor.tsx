@@ -11,6 +11,7 @@ import { dnsFrom } from "./dnsCheck";
 import type { DnsCheck } from "./dnsCheck";
 import {
   ApiError,
+  carriesPin,
   createMonitor,
   fingerprintPreview,
   previewCheck,
@@ -243,15 +244,18 @@ function bodyFor(
       ...channels,
     };
   }
+  // The server infers the type for a preview, but creating a monitor
+  // requires one. Reusing what the preview resolved is why the preview
+  // echoes it: the alternative is a second copy of the inference rules in
+  // TypeScript, drifting from the Go one.
+  const type = resolvedType(values, state);
+  const target = resolvedTarget(values, state);
   return {
     ...channels,
     name: values.name.trim() !== "" ? values.name.trim() : values.target.trim(),
-    // The server infers the type for a preview, but creating a monitor
-    // requires one. Reusing what the preview resolved is why the preview
-    // echoes it: the alternative is a second copy of the inference rules in
-    // TypeScript, drifting from the Go one.
-    type: resolvedType(values, state),
-    target: resolvedTarget(values, state),
+    type,
+    target,
+    ...pinField(values, type, target),
     repeat_after_s: values.repeatAfterS,
     interval_s: values.intervalS,
     timeout_s: values.timeoutS,
@@ -287,6 +291,18 @@ function httpFields(values: AddMonitorValues): {
       ? { keyword: values.keyword, keyword_mode: values.keywordMode }
       : {}),
   };
+}
+
+/**
+ * The trusted certificate, sent only when there is one and only for a monitor
+ * that can carry it: a pin set on an https address and left behind when the
+ * type became TCP must not come back as a refusal about a control that is no
+ * longer on screen.
+ */
+function pinField(values: AddMonitorValues, type: string, target: string): { trusted_cert_sha256?: string } {
+  return values.trustedCertSHA256 !== "" && carriesPin(type, target)
+    ? { trusted_cert_sha256: values.trustedCertSHA256 }
+    : {};
 }
 
 /** The warning threshold, sent only for a domain monitor, as dns is. */
@@ -340,6 +356,7 @@ function previewRequestFor(values: AddMonitorValues): PreviewRequest {
     ...jsonAssertionField(values),
     ...dnsField(values),
     ...domainField(values),
+    ...pinField(values, values.type, values.target),
   };
 }
 
