@@ -49,6 +49,24 @@ describe("Card", () => {
     expect(heading.tagName).toBe("H3");
   });
 
+  it("marks a card headed by its list's controls, and only that card", () => {
+    // `listHead` is what gives a phone header's buttons their 44px target
+    // (card.css, DESIGN.md §8.4); a card without it keeps its own classes.
+    const { container } = render(
+      <>
+        <Card title="Monitors" icon={<svg />} className="mon-board" listHead>
+          <Panel>body</Panel>
+        </Card>
+        <Card title="Uptime" icon={<svg />} className="mon-uptime">
+          <Panel>body</Panel>
+        </Card>
+      </>,
+    );
+    const [listed, plain] = [...container.querySelectorAll("section")];
+    expect(listed!.className).toBe("card card--list mon-board");
+    expect(plain!.className).toBe("card mon-uptime");
+  });
+
   it("defaults to h2 but does not hard-code it", () => {
     // A card's title is a real entry in the document outline, so the level has
     // to follow where the card sits. A component that always emits h2 forces

@@ -1971,7 +1971,8 @@ would leave, and a View button that names the current arrangement
 card, each with its own way to drop it. On a phone the text filter moves
 into the Filter sheet, both buttons become square glyphs at the control
 height (36px, `--control-h`, the rung every phone control here is drawn
-at), and both panels slide up from the bottom edge.
+at) with a 44px target around each (§8.4), and both panels slide up from
+the bottom edge.
 
 **The monitors inventory heads its card the same way (SUB-207)**, with one
 difference: it keeps its visible title, "Configured monitors" over its
@@ -2029,6 +2030,24 @@ filter, a type or a paused state are groups in the list's Filter panel
 
 One glyph stands for one kind of choice: the funnel for anything that
 narrows, the sort arrows for an order, the clock for a window of time.
+
+**On a phone, a header control is drawn at 36px and pressed at 44px
+(SUB-216).** Every button in a list's header — the dashboard, the
+inventory, the incidents screen and the channels — keeps its 36px face
+(`--control-h`) and takes a 44 x 44px target (`--size-target`), the Apple
+HIG thumb size and WCAG 2.5.5 (AAA). The target is an unpainted box
+centred on the button (`Card`'s `listHead`, drawn in `card.css`), so nothing on screen
+changes size: the header rows keep the height they were measured at on four
+screens, and the thumb gets the room. 36px alone already clears WCAG 2.5.8
+(24px); 44px is the size a thumb lands on without aiming.
+
+Targets do not overlap. Each reaches 4px past its face, so neighbours in a
+phone header stand 8px apart (`--space-2`) rather than the desktop's 6px,
+which would have let two targets share 2px and sent a press between them to
+whichever came later in the markup. `layout/list-headers.browser.test.ts`
+hit-tests the 44px square around every phone header control at 390px and
+fails when a point in it finds the header or the neighbour, or when a glyph
+button's face is not 36px.
 
 ---
 

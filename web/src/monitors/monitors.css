@@ -327,8 +327,8 @@
 /*
  * Phone: the tabs scroll sideways under the menu and title, Filter and View
  * are square icon buttons at the control height (36px, the rung every phone
- * control here is drawn at; the 44px in the design is not a rung), and both
- * panels are sheets from the bottom edge. The literal width is the
+ * control here is drawn at) with a 44px target around each (`.card--list`
+ * in card.css), and both panels are sheets from the bottom edge. The literal width is the
  * breakpoint rung: a custom property never matches in a media query
  * (AGENTS.md).
  */

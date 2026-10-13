@@ -58,6 +58,39 @@
 }
 
 /*
+ * A list's header on a phone: a 36px face, a 44px target (DESIGN.md §8.4).
+ *
+ * `.card--list` is a card headed by the controls of the list it holds
+ * (`Card`'s `listHead`): the dashboard's monitors, the inventory, the
+ * incidents and the channels. On a
+ * phone each button there keeps the `--control-h` face the headers were
+ * measured against and takes a `--size-target` square to be pressed by: an
+ * unpainted box centred on the button, never smaller than the button itself.
+ * Growing the face instead would add 8px to every header row on four
+ * screens; the thumb needs the room, the eye does not.
+ *
+ * Targets must not overlap, or a press between two buttons lands on
+ * whichever is later in the markup. Two neighbours each reach
+ * (44 - 36) / 2 = 4px past their face, so the gap between them is 8px, the
+ * card header's own gap; the 6px action gap would let them overlap by 2px.
+ * A panel hanging from a button is excluded: its controls are not in the
+ * header's row. The literal width is the breakpoint rung (AGENTS.md).
+ */
+@media (max-width: 640px) {
+  .card--list > .card-head > .card-head-action { gap: var(--space-2); }
+  .card--list > .card-head > .card-head-action .button:not(.menu-panel *) { position: relative; }
+  .card--list > .card-head > .card-head-action .button:not(.menu-panel *)::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--size-target));
+    height: max(100%, var(--size-target));
+    translate: -50% -50%;
+  }
+}
+
+/*
  * The title takes the text face, at the card size and the middle weight, in
  * sentence case.
  *

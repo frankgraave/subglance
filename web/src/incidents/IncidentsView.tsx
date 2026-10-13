@@ -386,6 +386,7 @@ export function IncidentsView({
        */}
       <Card
         className={headed ? "inc-board inc-board--listed" : "inc-board"}
+        listHead
         title="Open and resolved incidents"
         icon={<IconAlert />}
         headingLevel={2}

@@ -226,6 +226,13 @@
   /* Control height. Not a spacing step: it is the height a row of interactive
      chrome settles on, and stating it beats padding chosen to reach it. */
   --control-h: 36px;
+  /* The touch target a phone list-header control takes around its face:
+     44px, the Apple HIG minimum and WCAG 2.5.5 (AAA). Nothing is drawn at
+     this size. The face stays `--control-h`, the height the headers were
+     measured against, and the difference is an unpainted hit area
+     (`.card--list` in card.css), so the thumb gets 44px without the header
+     row growing on four screens. */
+  --size-target: 44px;
   /* The square a compact icon-only control occupies: the brand mark, an icon
      segment, an action in a dense list row.
 

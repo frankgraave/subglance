@@ -288,6 +288,86 @@ describe("dashboard header", () => {
   });
 });
 
+describe("phone header targets", () => {
+  /*
+   * On a phone every control in a list's header keeps its 36px face
+   * (`--control-h`) and takes a 44 x 44px target (`--size-target`), the
+   * Apple HIG thumb size and WCAG 2.5.5 (AAA): the face stays the one the
+   * headers were measured against, the thumb gets the room (SUB-216,
+   * DESIGN.md §8.4).
+   *
+   * Measured the way a tap lands: the browser's own hit test at the corners
+   * and edges of the 44px square around each control's centre must find
+   * that control. A target that is too small finds the header behind it; two
+   * targets that overlap find the neighbour, so a gap too narrow for two
+   * grown targets fails here too.
+   */
+  const PHONE = [
+    { name: "dashboard", path: "/", ready: "[data-testid^='monitor-row-'], [data-testid^='monitor-card-']", header: ".mon-board > .card-head" },
+    { name: "monitors", path: "/monitors", ready: ".inv-list > li", header: ".inv-board > .card-head" },
+    { name: "incidents", path: "/incidents", ready: ".inc-line", header: ".inc-board > .card-head" },
+    { name: "notifications", path: "/notifications", ready: ".inv-row", header: ".nt-card > .card-head" },
+  ];
+
+  it.each(PHONE)("$name: every header control has a 44px target around its 36px face at 390px", async ({ path, ready, header }) => {
+    const page = await open(path, ready, 390);
+    try {
+      const seen = await page.evaluate((sel: string) => {
+        const head = document.querySelector(sel)!;
+        const probe = document.createElement("div");
+        probe.style.width = "var(--size-target)";
+        probe.style.height = "var(--control-h)";
+        document.body.append(probe);
+        const target = probe.getBoundingClientRect().width;
+        const face = probe.getBoundingClientRect().height;
+        probe.remove();
+        return {
+          target,
+          face,
+          controls: [...head.querySelectorAll(".card-head-action button")]
+            .filter((el) => el.getBoundingClientRect().width > 1)
+            .map((el) => {
+              const r = el.getBoundingClientRect();
+              const cx = r.left + r.width / 2;
+              const cy = r.top + r.height / 2;
+              // One pixel inside the square: the hit test rounds a point to
+              // the nearest whole pixel, and the far edge of a box belongs to
+              // its neighbour, so a probe half a pixel in lands on the next
+              // button's target. Two pixels short of 44 still fails.
+              const h = target / 2 - 1;
+              const points = [
+                [cx - h, cy - h], [cx, cy - h], [cx + h, cy - h],
+                [cx - h, cy], [cx + h, cy],
+                [cx - h, cy + h], [cx, cy + h], [cx + h, cy + h],
+              ];
+              const misses = points
+                .filter(([x, y]) => {
+                  const hit = document.elementFromPoint(x!, y!);
+                  return hit === null || !el.contains(hit);
+                })
+                .map(([x, y]) => `${Math.round(x! - cx)},${Math.round(y! - cy)}`);
+              const glyphOnly = (el.textContent ?? "").trim() === "";
+              return { name: el.getAttribute("aria-label") ?? el.textContent ?? "", width: r.width, height: r.height, glyphOnly, misses };
+            }),
+        };
+      }, header);
+      expect(seen.target, "--size-target").toBe(44);
+      expect(seen.face, "--control-h").toBe(36);
+      expect(seen.controls.length, "controls in the header").toBeGreaterThanOrEqual(1);
+      for (const control of seen.controls) {
+        expect(control.misses, `${control.name}: points of its 44px target that miss it`).toEqual([]);
+        if (control.glyphOnly) {
+          // The face does not grow: only the target does.
+          expect(control.width, `${control.name}: face width`).toBe(seen.face);
+          expect(control.height, `${control.name}: face height`).toBe(seen.face);
+        }
+      }
+    } finally {
+      await page.close();
+    }
+  });
+});
+
 describe("notifications header", () => {
   it.each([320, 390, 820, 1440])("reads in focus order at %ipx", async (width) => {
     /*
