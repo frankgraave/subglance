@@ -248,10 +248,12 @@ assessed samples divided by successful plus confirmed-down samples. Warnings
 are excluded from both counts, including when a later check confirms the
 incident; confirmation never rewrites earlier checks. This is a sample ratio,
 not elapsed time. Checks while a monitor is failing (Warning, Down or
-Recovering) run every `min(configured interval, 60s)` with normal jitter and
-worker limits, so a failure is confirmed in minutes rather than intervals and
-sampling is more frequent during a long-interval monitor's outage. A pass
-during Warning, or the end of the incident, restores the configured interval.
+Recovering) run every `min(configured interval, 60s)`, but never sooner than
+1.25 times the monitor's timeout or a `domain` monitor's six-hour floor, with
+normal jitter and worker limits, so a failure is confirmed in minutes rather
+than intervals and sampling is more frequent during a long-interval monitor's
+outage. A pass during Warning, or the end of the incident, restores the
+configured interval.
 
 History recorded before assessment was introduced keeps its raw results and
 rollups, but is excluded as legacy: those records cannot prove confirmation.

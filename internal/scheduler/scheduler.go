@@ -166,6 +166,8 @@ type Scheduler struct {
 
 	mu    sync.Mutex
 	queue *jobHeap
+	// failingSeq counts SetFailing calls, under mu. See queueItem.failingSeq.
+	failingSeq uint64
 	// inFlight guards against a slow monitor being scheduled twice. A check
 	// that takes longer than its interval must not stack up.
 	inFlight map[int64]bool
@@ -515,6 +517,13 @@ func (s *Scheduler) Reload(ctx context.Context) error {
 // Existing monitors keep their scheduled time, so editing one monitor's name
 // does not reset the whole schedule and cause a synchronised burst of checks.
 func (s *Scheduler) reload(ctx context.Context) error {
+	// The registry is read without the lock, so a check can finish and
+	// call SetFailing while it is being read. Remember where the sequence
+	// stood: a SetFailing after this point is newer than the snapshot.
+	s.mu.Lock()
+	readFrom := s.failingSeq
+	s.mu.Unlock()
+
 	jobs, err := s.registry.Jobs(ctx)
 	if err != nil {
 		return err
@@ -541,7 +550,14 @@ func (s *Scheduler) reload(ctx context.Context) error {
 		}
 
 		if old, ok := existing[job.Monitor.ID]; ok {
-			item := &queueItem{job: job, next: old.next}
+			// An outcome reported after the registry was read wins over
+			// the snapshot: otherwise a monitor that failed during the
+			// read would go back to its full interval until its next
+			// check, delaying the confirmation the failure cadence is for.
+			if old.failingSeq > readFrom {
+				job.Failing = old.job.Failing
+			}
+			item := &queueItem{job: job, next: old.next, failingSeq: old.failingSeq}
 			// A shortened interval must take effect now rather than after the
 			// old, longer wait has elapsed.
 			if job.cadence() != old.job.cadence() {
@@ -681,9 +697,15 @@ func (s *Scheduler) CheckerFor(t checker.Type) (checker.Checker, bool) {
 
 // queueItem is one monitor waiting for its turn.
 type queueItem struct {
-	job   Job
-	next  time.Time
-	index int
+	job  Job
+	next time.Time
+	// failingSeq is the scheduler's failingSeq when SetFailing last
+	// reported on this monitor; zero if it never has. Reload compares it
+	// with the value it saw before reading the registry, so a check
+	// outcome that lands while the registry is being read is not undone
+	// by the older snapshot.
+	failingSeq uint64
+	index      int
 }
 
 // jobHeap is a min-heap ordered by next run time, so finding the next monitor
@@ -716,7 +738,10 @@ func (h *jobHeap) Pop() any {
 	return item
 }
 
-// FailureRecheck is the longest a failing monitor waits for its next check.
+// FailureRecheck caps a failing monitor's interval. It is a cap, not the
+// effective wait: Cadence applies the checker type's floor and the timeout
+// margin after it, so a domain monitor or one with a timeout over 48 seconds
+// is rechecked less often than this.
 const FailureRecheck = time.Minute
 
 // Cadence is how long a monitor waits between checks: its interval, or, while
@@ -767,6 +792,8 @@ func (s *Scheduler) SetFailing(id int64, failing bool) {
 		if item.job.Monitor.ID != id {
 			continue
 		}
+		s.failingSeq++
+		item.failingSeq = s.failingSeq
 		if item.job.Failing == failing {
 			return
 		}

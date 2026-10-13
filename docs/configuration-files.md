@@ -438,10 +438,11 @@ separately; a status-page link does not become monitor coverage.
   with *n* retries in Kuma gets `retries: n + 1`, at most 10, and Kuma's
   default of 0 stays 0: both alert on the first failure. Kuma rechecks a
   pending monitor every *Heartbeat Retry Interval*; SubGlance rechecks a
-  failing monitor every `min(interval, 60 s)`, so when the two differ the time
-  from the first failure to the alert changes, and the monitor is listed with
-  both. A monitor on an interval of a minute or more that Kuma retried every
-  minute alerts at the same time here. A Json
+  failing monitor every `min(interval, 60 s)`, but no sooner than 1.25 times
+  its timeout, so when the two differ the time from the first failure to the
+  alert changes, and the monitor is listed with both. A monitor on an interval
+  of a minute or more, with a timeout of 48 seconds or less, that Kuma retried
+  every minute alerts at the same time here. A Json
   Query monitor set to *Only retry if status code check fails* is listed too:
   SubGlance waits for its retries whichever part failed.
 - A push monitor confirms the first missed report, whatever its `retries`.

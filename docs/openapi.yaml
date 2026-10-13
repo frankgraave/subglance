@@ -6613,9 +6613,13 @@ components:
             `domain` monitor: an expiry date read off the registry is not a
             blip, and a registry that does not answer is `unknown` rather
             than a failure. A failing monitor is rechecked every
-            `min(interval_s, 60)` seconds, so the alert comes
-            `(retries - 1) × min(interval_s, 60)` seconds after the first
-            failure, not `retries - 1` intervals.
+            `min(interval_s, 60)` seconds, but no sooner than
+            `1.25 × timeout_s`, and a `domain` monitor no sooner than its
+            six-hour floor. The alert therefore comes `retries - 1` of those
+            rechecks after the first failure, not `retries - 1` intervals;
+            0 and 1 both alert on the first failure. A `push` monitor is
+            never rechecked and ignores this field: its first missed or
+            failed report confirms the incident.
           minimum: 0
           maximum: 10
         recovery_threshold:

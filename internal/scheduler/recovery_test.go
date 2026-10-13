@@ -165,3 +165,45 @@ func TestCheckLongerThanItsIntervalIsNotSkipped(t *testing.T) {
 		}
 	})
 }
+
+// A check can finish while Reload is reading the registry. The registry's
+// snapshot was taken before the failure, so it says the monitor is passing;
+// the failure reported in between must win, or the monitor goes back to its
+// full interval and the retries that confirm the outage come intervals apart.
+func TestReloadDoesNotUndoAFailureReportedDuringTheRead(t *testing.T) {
+	now := time.Now()
+	var s *Scheduler
+	stale := Job{Monitor: checker.Monitor{ID: 1}, Interval: 5 * time.Minute}
+	reads := 0
+	registry := RegistryFunc(func(context.Context) ([]Job, error) {
+		reads++
+		if reads == 2 {
+			// The outcome lands after the snapshot below was taken.
+			s.SetFailing(1, true)
+		}
+		return []Job{stale}, nil
+	})
+	s = New(Options{Registry: registry, Now: func() time.Time { return now }, JitterFraction: -1, Log: testLogger()})
+	if err := s.Reload(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Reload(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	item := (*s.queue)[0]
+	if !item.job.Failing {
+		t.Fatal("reload cleared a failure reported while the registry was read")
+	}
+	if got := item.next.Sub(now); got != FailureRecheck {
+		t.Fatalf("next check in %v, want the %v failure cadence", got, FailureRecheck)
+	}
+
+	// Once the registry has caught up, its snapshot is authoritative again:
+	// a later read that says passing is newer than the failure.
+	if err := s.Reload(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if (*s.queue)[0].job.Failing {
+		t.Fatal("a failure reported before the read outlived a registry that says passing")
+	}
+}
