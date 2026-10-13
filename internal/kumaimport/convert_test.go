@@ -299,7 +299,9 @@ func TestBodyContentTypeComesOver(t *testing.T) {
 // Kuma's maxretries counts the failed checks that stay pending before the
 // next one alerts; SubGlance's retries counts the failures that confirm. So
 // n retries in Kuma are n+1 here, and the time from the first failure to the
-// alert is compared and listed when the two cadences differ.
+// alert is compared and listed when the two cadences differ. SubGlance's side
+// of that comparison is its failure cadence, the shorter of the interval and a
+// minute, so a Kuma monitor retried every minute matches without a note.
 func TestRetriesAlertAfterAsManyChecksAsInKuma(t *testing.T) {
 	cases := []struct {
 		name        string
@@ -317,7 +319,13 @@ func TestRetriesAlertAfterAsManyChecksAsInKuma(t *testing.T) {
 		{"a negative count is none", httpRow(row{"maxretries": int64(-2)}),
 			0, 0, "", ""},
 		{"a faster retry interval changes the time to alert", httpRow(row{"maxretries": int64(3), "retry_interval": int64(20)}),
-			4, 0, "Kuma alerted 60s after the first failed check, retrying every 20s; SubGlance checks again at the 60s interval and alerts after 180s", ""},
+			4, 0, "Kuma alerted 60s after the first failed check, retrying every 20s; SubGlance rechecks a failing monitor every 60s and alerts after 180s", ""},
+		{"a minute's retry on a long interval is SubGlance's own pace", httpRow(row{"interval": int64(300), "maxretries": int64(2), "retry_interval": int64(60)}),
+			3, 0, "", "Kuma alerted"},
+		{"a long interval retried at itself alerts sooner here", httpRow(row{"interval": int64(300), "maxretries": int64(2), "retry_interval": int64(0)}),
+			3, 0, "Kuma alerted 600s after the first failed check, retrying every 300s; SubGlance rechecks a failing monitor every 60s and alerts after 120s", ""},
+		{"a long timeout paces the recheck", httpRow(row{"interval": int64(300), "timeout": float64(90), "maxretries": int64(2), "retry_interval": int64(60)}),
+			3, 0, "SubGlance rechecks a failing monitor every 112.5s and alerts after 225s", ""},
 		{"the comparison uses the clamped interval", httpRow(row{"interval": int64(10), "maxretries": int64(1), "retry_interval": int64(20)}),
 			2, 0, "", "Kuma alerted"},
 		{"nine retries are the most", httpRow(row{"maxretries": int64(9), "retry_interval": int64(60)}),

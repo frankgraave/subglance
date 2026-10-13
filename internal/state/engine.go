@@ -79,6 +79,14 @@ func (s Status) Confirmed() bool {
 	return s == StatusDown || s == StatusRecovering
 }
 
+// Failing reports whether a status belongs to a failure that is still open,
+// confirmed or not: warning, down, or recovering. The scheduler rechecks a
+// failing monitor on its failure cadence, so an unconfirmed failure is
+// confirmed or cleared at the pace a confirmed one is checked.
+func (s Status) Failing() bool {
+	return s == StatusWarning || s.Confirmed()
+}
+
 // Event is what happened at a transition, from the notifier's point of view.
 type Event string
 

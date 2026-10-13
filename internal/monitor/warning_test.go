@@ -55,7 +55,7 @@ func TestWarningLifecycle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(jobs) != 1 || jobs[0].Down != !recoverWarning {
+			if len(jobs) != 1 || jobs[0].Failing != !recoverWarning {
 				t.Fatalf("runner did not expose recovery cadence: %+v", jobs)
 			}
 			if stats.Total != 1 {

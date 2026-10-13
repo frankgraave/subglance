@@ -44,8 +44,11 @@ const firstCheckDelay = 2 * time.Second
 
 // Job is one monitor as the scheduler sees it.
 type Job struct {
-	// Down enables recovery checks without changing the configured interval.
-	Down     bool
+	// Failing puts the monitor on the failure cadence (see Cadence) without
+	// changing its configured interval. It is set from the first failed check
+	// that is not yet confirmed until the incident closes: Warning, Down and
+	// Recovering in the state engine's terms.
+	Failing  bool
 	Monitor  checker.Monitor
 	Interval time.Duration
 
@@ -163,6 +166,8 @@ type Scheduler struct {
 
 	mu    sync.Mutex
 	queue *jobHeap
+	// failingSeq counts SetFailing calls, under mu. See queueItem.failingSeq.
+	failingSeq uint64
 	// inFlight guards against a slow monitor being scheduled twice. A check
 	// that takes longer than its interval must not stack up.
 	inFlight map[int64]bool
@@ -512,6 +517,13 @@ func (s *Scheduler) Reload(ctx context.Context) error {
 // Existing monitors keep their scheduled time, so editing one monitor's name
 // does not reset the whole schedule and cause a synchronised burst of checks.
 func (s *Scheduler) reload(ctx context.Context) error {
+	// The registry is read without the lock, so a check can finish and
+	// call SetFailing while it is being read. Remember where the sequence
+	// stood: a SetFailing after this point is newer than the snapshot.
+	s.mu.Lock()
+	readFrom := s.failingSeq
+	s.mu.Unlock()
+
 	jobs, err := s.registry.Jobs(ctx)
 	if err != nil {
 		return err
@@ -538,7 +550,14 @@ func (s *Scheduler) reload(ctx context.Context) error {
 		}
 
 		if old, ok := existing[job.Monitor.ID]; ok {
-			item := &queueItem{job: job, next: old.next}
+			// An outcome reported after the registry was read wins over
+			// the snapshot: otherwise a monitor that failed during the
+			// read would go back to its full interval until its next
+			// check, delaying the confirmation the failure cadence is for.
+			if old.failingSeq > readFrom {
+				job.Failing = old.job.Failing
+			}
+			item := &queueItem{job: job, next: old.next, failingSeq: old.failingSeq}
 			// A shortened interval must take effect now rather than after the
 			// old, longer wait has elapsed.
 			if job.cadence() != old.job.cadence() {
@@ -678,9 +697,15 @@ func (s *Scheduler) CheckerFor(t checker.Type) (checker.Checker, bool) {
 
 // queueItem is one monitor waiting for its turn.
 type queueItem struct {
-	job   Job
-	next  time.Time
-	index int
+	job  Job
+	next time.Time
+	// failingSeq is the scheduler's failingSeq when SetFailing last
+	// reported on this monitor; zero if it never has. Reload compares it
+	// with the value it saw before reading the registry, so a check
+	// outcome that lands while the registry is being read is not undone
+	// by the older snapshot.
+	failingSeq uint64
+	index      int
 }
 
 // jobHeap is a min-heap ordered by next run time, so finding the next monitor
@@ -713,48 +738,72 @@ func (h *jobHeap) Pop() any {
 	return item
 }
 
-// cadence keeps already-fast monitors fast. Recovery uses the same queue,
-// jitter and bounded workers as ordinary checks.
+// FailureRecheck caps a failing monitor's interval. It is a cap, not the
+// effective wait: Cadence applies the checker type's floor and the timeout
+// margin after it, so a domain monitor or one with a timeout over 48 seconds
+// is rechecked less often than this.
+const FailureRecheck = time.Minute
+
+// Cadence is how long a monitor waits between checks: its interval, or, while
+// it is failing, the shorter of the interval and FailureRecheck.
+// Already-fast monitors stay fast. A failure uses the same queue, jitter and
+// bounded workers as ordinary checks.
 //
-// A type with a floor of its own never goes below it, down or not: a domain
-// monitor's registry does not answer faster for an expired domain, and asking
-// it every minute is what gets an instance rate-limited.
+// Failing starts at the first failed check, not at confirmation. The failure
+// threshold (retries) is evidence that a failure is real, and it should not
+// also be a wait: rechecked at a five-minute interval, three retries alerted
+// ten minutes after the first failure, while the one-minute pace began only
+// once the alert had gone out. Rechecking an unconfirmed failure every minute
+// confirms it in (retries - 1) minutes, and a pass in between puts the monitor
+// back on its interval. The cadence then holds until the incident closes, so
+// the passes that close it come at the pace the failures did.
+//
+// A type with a floor of its own never goes below it, failing or not: a
+// domain monitor's registry does not answer faster for an expired domain, and
+// asking it every minute is what gets an instance rate-limited.
 //
 // Nor does a monitor come due again before its slowest check could have
 // finished, with the same 20% margin the API keeps between a timeout and its
 // interval. A monitor is never run twice at once, so a dispatch inside a
 // check that is still running is skipped and logged as a warning; for a
-// monitor down on a 90-second timeout, the one-minute recovery cadence would
+// monitor failing on a 90-second timeout, the one-minute failure cadence would
 // otherwise skip every other recheck for the length of the outage, and a
 // monitor stored before the API refused a timeout longer than its interval
 // would skip most of its checks for good.
-func (j Job) cadence() time.Duration {
-	interval := j.Interval
-	if j.Down {
-		interval = min(interval, time.Minute)
+func Cadence(typ checker.Type, interval, timeout time.Duration, failing bool) time.Duration {
+	if failing {
+		interval = min(interval, FailureRecheck)
 	}
-	return max(interval, checker.MinInterval(j.Monitor.Type), j.Monitor.Timeout*5/4)
+	return max(interval, checker.MinInterval(typ), timeout*5/4)
 }
 
-// SetDown applies a confirmed transition immediately, before the next reload.
-// Repeated results do not postpone an already scheduled check.
-func (s *Scheduler) SetDown(id int64, down bool) {
+func (j Job) cadence() time.Duration {
+	return Cadence(j.Monitor.Type, j.Interval, j.Monitor.Timeout, j.Failing)
+}
+
+// SetFailing applies a failing or passing check's cadence immediately, before
+// the next reload. A monitor that starts failing is brought forward only when
+// that is sooner than its scheduled check; one that stops failing goes back to
+// its interval from now. Repeated results do not postpone a scheduled check.
+func (s *Scheduler) SetFailing(id int64, failing bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, item := range *s.queue {
 		if item.job.Monitor.ID != id {
 			continue
 		}
-		if item.job.Down == down {
+		s.failingSeq++
+		item.failingSeq = s.failingSeq
+		if item.job.Failing == failing {
 			return
 		}
 		previousCadence := item.job.cadence()
-		item.job.Down = down
+		item.job.Failing = failing
 		if item.job.cadence() == previousCadence {
 			return // Already-fast monitors keep their existing due time.
 		}
 		next := s.nextRun(s.now(), item.job.cadence())
-		if !down || next.Before(item.next) {
+		if !failing || next.Before(item.next) {
 			item.next = next
 		}
 		heap.Init(s.queue)

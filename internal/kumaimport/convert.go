@@ -10,11 +10,13 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/frankgraave/subglance/internal/checker"
 	"github.com/frankgraave/subglance/internal/configfile"
+	"github.com/frankgraave/subglance/internal/scheduler"
 )
 
 // The bounds SubGlance's API enforces, restated so a converted value lands
@@ -229,10 +231,11 @@ func fitTimeout(out *configfile.Monitor, interval int, note func(string)) {
 // Kuma's default of 0, which alerts on the first failure, stays 0.
 //
 // Kuma rechecks a pending monitor every retry_interval seconds, the interval
-// when that is 0. SubGlance has no separate cadence for an unconfirmed
-// failure, so when the two differ the time to an alert changes, and that is
-// listed. A push monitor in SubGlance confirms the first missed report, so
-// Kuma's retries on one become grace instead.
+// when that is 0. SubGlance has no setting for it: a failing monitor is
+// rechecked on the scheduler's failure cadence, the shorter of the interval
+// and a minute (scheduler.Cadence). When the two paces differ the time to an
+// alert changes, and that is listed. A push monitor in SubGlance confirms the
+// first missed report, so Kuma's retries on one become grace instead.
 func convertRetries(m row, out *configfile.Monitor, typ string, interval int, note func(string)) {
 	n := max(m.int("maxretries"), 0)
 	out.Retries = ptr(0)
@@ -272,14 +275,29 @@ func convertRetries(m row, out *configfile.Monitor, typ string, interval int, no
 	}
 	out.Retries = ptr(retries)
 
-	if wait := (retries - 1) * interval; wait != kumaWait {
+	// A timeout left unset gets SubGlance's default of 10s, which is too
+	// short to pace any recheck, so zero stands in for it.
+	timeout := 0
+	if out.TimeoutS != nil {
+		timeout = *out.TimeoutS
+	}
+	recheck := scheduler.Cadence(checker.Type(out.Type), time.Duration(interval)*time.Second,
+		time.Duration(timeout)*time.Second, true)
+	if wait := time.Duration(retries-1) * recheck; wait != time.Duration(kumaWait)*time.Second {
 		note(fmt.Sprintf("Kuma alerted %ds after the first failed check, retrying every %ds; "+
-			"SubGlance checks again at the %ds interval and alerts after %ds", kumaWait, retryEvery, interval, wait))
+			"SubGlance rechecks a failing monitor every %ss and alerts after %ss",
+			kumaWait, retryEvery, seconds(recheck), seconds(wait)))
 	}
 	if typ == "json-query" && m.bool("retry_only_on_status_code_failure") {
 		note(fmt.Sprintf("Kuma alerted at once when only the JSON query failed (Only retry if status code check fails); "+
 			"SubGlance waits for %d failed checks either way", retries))
 	}
+}
+
+// seconds writes a duration in whole seconds, or with the fraction a recheck
+// paced by a long timeout can have (1.25 times 90 seconds is 112.5).
+func seconds(d time.Duration) string {
+	return strconv.FormatFloat(d.Seconds(), 'f', -1, 64)
 }
 
 // convertHTTP fills in the fields of the three HTTP-based Kuma types.

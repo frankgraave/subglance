@@ -556,11 +556,30 @@ Only confirmed downtime affects uptime: successful assessed checks divided by
 successful plus confirmed-down checks. Warning and unclassified legacy samples
 are excluded; a window with no eligible checks has unknown uptime. See the
 [uptime policy](../README.md#warning-and-uptime) for rollups and sampling details.
-Confirmed Down checks use the shorter of the configured interval and 60 seconds,
-with the existing jitter and worker limits, until the incident closes — including
-the passing checks that close it. A monitor whose timeout is over 48 seconds is
-rechecked no sooner than 1.25 times its timeout, so the next check never comes
-due while a hanging one may still be running.
+A failing monitor is rechecked every `min(interval, 60 s)`, or slower where
+one of the floors below applies, from its first failed check until the
+incident closes: through `warning`, `down` and
+`recovering`, with the existing jitter and worker limits. The threshold is
+evidence that a failure is real, not a wait, so the time from the first failed
+check to the alert is
+
+```text
+max(retries − 1, 0) × recheck
+```
+
+where `recheck` is `min(interval, 60 s)` unless a floor below raises it, plus
+up to 10% jitter per recheck: two minutes for a five-minute monitor with
+`retries: 3`, 40 seconds for a 20-second one, and immediately at `retries` 0
+or 1. A pass during `warning` closes the unconfirmed incident and puts the
+monitor back on its interval, counted from that pass. The passing checks that
+close a confirmed incident come at the same recheck pace.
+
+Two things slow the recheck down. A monitor whose timeout is over 48 seconds
+is rechecked no sooner than 1.25 times its timeout, so the next check never
+comes due while a hanging one may still be running. A `domain` monitor keeps
+its six-hour floor: a registry does not answer faster for an expired domain.
+Push monitors are not rechecked at all; they confirm on the first missed
+report.
 
 A monitor's timeout may be at most 80% of its interval: 48 seconds at the
 default interval of 60, 16 at the shortest of 20. A monitor is never checked

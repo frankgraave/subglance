@@ -647,6 +647,14 @@ to skip — usually two or three extra round trips to the server. Nothing got
 slower: the chart now measures what a new visitor waits for. Latency recorded
 before and after the upgrade is not directly comparable.
 
+Coming from `v0.1.0-rc6` or earlier, a monitor with an interval over 60
+seconds alerts sooner. A failure that is not confirmed yet is now rechecked
+every minute instead of at the monitor's interval, so a five-minute monitor
+with `retries: 3` alerts about two minutes after its first failed check rather
+than ten. A brief blip that used to fall between two checks can now reach the
+threshold; raise `retries` (up to 10) on a monitor that should wait longer.
+See [How a failure becomes an alert](using-subglance.md#how-a-failure-becomes-an-alert).
+
 ## Backup and restore
 
 > [!WARNING]

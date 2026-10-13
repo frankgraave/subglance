@@ -195,6 +195,20 @@ func TestConfirmedCoversRecovering(t *testing.T) {
 	}
 }
 
+// Failing is what the scheduler reads to pick the failure cadence. It starts
+// at the first unconfirmed failure, which is the point: retries are evidence,
+// not a wait. An expiring certificate passes its checks, so it is not failing.
+func TestFailingCoversWarning(t *testing.T) {
+	for s, want := range map[Status]bool{
+		StatusUnknown: false, StatusUp: false, StatusExpiring: false,
+		StatusWarning: true, StatusDown: true, StatusRecovering: true,
+	} {
+		if got := s.Failing(); got != want {
+			t.Errorf("%q.Failing() = %v, want %v", s, got, want)
+		}
+	}
+}
+
 // Recovery is what the API reads to say "Recovering (1 of 2)". It must report
 // the streak only while the monitor is recovering, so an up or down monitor is
 // never shown with a stale count.
