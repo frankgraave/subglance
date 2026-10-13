@@ -259,7 +259,7 @@ func untrustedCertificate(err error, target *url.URL, roots *x509.CertPool, now 
 // someone who set the option expects a CA to be trusted, and starting without
 // it would show up only as every check behind that CA failing.
 func ExtraRoots(path string) (*x509.CertPool, int, error) {
-	data, err := os.ReadFile(path) // #nosec G304 -- an operator-supplied start-up setting
+	data, err := os.ReadFile(path) //nolint:gosec // operator-supplied CA file path, read once at start
 	if err != nil {
 		return nil, 0, fmt.Errorf("read extra CA file: %w", err)
 	}
