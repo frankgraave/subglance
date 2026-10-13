@@ -124,10 +124,11 @@ masked wherever it appears, and any URL left keeps its scheme and host and
 loses its path and query. The host is what tells "connection refused" on one
 server from another; the path is what grants access.
 
-Errors stored by a version that did not do this are rewritten once, at the
-first start after the upgrade. The old text can survive in the file's free
-pages until the database is compacted; a backup holds live rows only, so one
-taken after that start has none of it.
+Errors stored by a version that did not do this are rewritten at every start,
+so the first start after the upgrade cleans them, and so does the next start
+after an older version has run against the same file again. The old text can
+survive in the file's free pages until the database is compacted; a backup
+holds live rows only, so one taken after that start has none of it.
 
 Does **not** protect against:
 

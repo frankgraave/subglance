@@ -4,14 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strconv"
-	"time"
 )
-
-// settingDeliveryErrorsRedacted records that the stored delivery errors have
-// been rewritten without channel credentials, so the rewrite runs once per
-// database rather than on every start.
-const settingDeliveryErrorsRedacted = "notifier.delivery_errors_redacted"
 
 // The rows a delivery error is stored in, with the key that names each one.
 //
@@ -34,8 +27,11 @@ const (
 
 // RedactDeliveryErrors rewrites every stored delivery error through redact,
 // with the configuration of the channel it belongs to, and reports how many
-// rows changed. It does the work once per database: a second call finds the
-// mark it left and returns zero.
+// rows changed. It runs at every start rather than once per database: an
+// older version started against the same file, after a downgrade or from a
+// second copy left running, writes errors in full again, and a mark saying
+// the work was done would keep the next start from cleaning them. A pass
+// over rows that are already clean writes nothing.
 //
 // It exists for the rows written before delivery errors were redacted at the
 // source. Those carry a Slack, Discord or webhook URL in full, and waiting for
@@ -62,14 +58,6 @@ func (db *DB) RedactDeliveryErrors(ctx context.Context, redact func(msg string, 
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	done, err := readSetting(ctx, tx, settingDeliveryErrorsRedacted)
-	if err != nil {
-		return 0, err
-	}
-	if done != nil {
-		return 0, nil
-	}
-
 	configs, err := db.channelConfigs(ctx, tx)
 	if err != nil {
 		return 0, err
@@ -92,12 +80,6 @@ func (db *DB) RedactDeliveryErrors(ctx context.Context, redact func(msg string, 
 		changed += len(plan)
 	}
 
-	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
-		ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-		settingDeliveryErrorsRedacted, strconv.Itoa(changed), time.Now().Unix()); err != nil {
-		return 0, fmt.Errorf("record delivery error redaction: %w", err)
-	}
 	if err := tx.Commit(); err != nil {
 		return 0, fmt.Errorf("redact delivery errors: %w", err)
 	}

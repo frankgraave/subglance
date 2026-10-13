@@ -16,7 +16,7 @@ func (c *cutSecret) redact(msg string, _ map[string]string) string {
 	return strings.ReplaceAll(msg, "secret", "****")
 }
 
-func TestRedactDeliveryErrorsRunsOnceAndLeavesOwnReasonsAlone(t *testing.T) {
+func TestRedactDeliveryErrorsRepeatsAndLeavesOwnReasonsAlone(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 
@@ -110,17 +110,36 @@ func TestRedactDeliveryErrorsRunsOnceAndLeavesOwnReasonsAlone(t *testing.T) {
 		t.Errorf("channel failure last_error = %q", got)
 	}
 
-	// Once per database: a row written with the secret afterwards is the
-	// notifier's to keep clean, and a second start reads nothing.
-	if err := db.MarkFailed(ctx, retrying.ID, "secret again"); err != nil {
-		t.Fatal(err)
-	}
+	// A second start over rows that are already clean reads them and writes
+	// nothing.
 	again := &cutSecret{}
 	n, err = db.RedactDeliveryErrors(ctx, again.redact)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 0 || again.calls != 0 {
-		t.Errorf("second run changed %d rows with %d calls, want none", n, again.calls)
+	if n != 0 || again.calls != 3 {
+		t.Errorf("second run changed %d rows with %d calls, want 0 rows and 3 calls", n, again.calls)
+	}
+
+	// Every start, not once per database: a row an older version writes in
+	// full after the first pass, after a downgrade or from a second copy,
+	// is cleaned by the next start.
+	if err := db.MarkFailed(ctx, retrying.ID, "secret again"); err != nil {
+		t.Fatal(err)
+	}
+	third := &cutSecret{}
+	n, err = db.RedactDeliveryErrors(ctx, third.redact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Errorf("run after a full-text write changed %d rows, want 1", n)
+	}
+	d, err := db.GetDelivery(ctx, retrying.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(d.LastError, "secret") {
+		t.Errorf("row written after the first pass kept its secret: %q", d.LastError)
 	}
 }

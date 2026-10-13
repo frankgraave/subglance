@@ -179,9 +179,11 @@ func run(args []string, logOut io.Writer) error {
 	reportChannelEncryption(log, db.ChannelEncryption())
 
 	// Errors stored before delivery errors were redacted where they are
-	// written still carry webhook URLs in full. Rewritten once, before the
-	// notifier or the API reads them; a failure is logged rather than fatal,
-	// because the rows are only text, and the next start tries again.
+	// written still carry webhook URLs in full. Rewritten at every start,
+	// before the notifier or the API reads them, so that rows an older
+	// version wrote after a downgrade are cleaned too; a failure is logged
+	// rather than fatal, because the rows are only text, and the next start
+	// tries again.
 	if n, err := db.RedactDeliveryErrors(openCtx, notifier.RedactError); err != nil {
 		log.Error("could not remove channel credentials from stored delivery errors", "error", err)
 	} else if n > 0 {
