@@ -1078,6 +1078,19 @@ from the screen:
   the shell reads it from the shared monitor list through a selector, so a
   heartbeat does not re-render the shell.
 
+  The page's back control returns to the list the monitor was opened from
+  and says which: "← Dashboard" from the dashboard, "← All monitors" from
+  the inventory. Reached any other way — a pasted link, an alert, a new
+  tab, the command menu on another screen — there is no list to return to,
+  and it goes to `/monitors`, where the breadcrumb goes, so the page's two
+  "up" controls never disagree. It used to go to the dashboard whatever the
+  way in, under a label that said "All monitors" and beside a breadcrumb
+  that said Monitors. The origin is kept on the history entry, not in the
+  URL, so a shared link stays the bare `/monitors/{id}`; and returning is a
+  traversal back to the list's own entry, which carries the list's status
+  tab, filters and sort, so the list comes back as it was left. Arriving at
+  a list afresh, from the rail, still starts it unfiltered.
+
   The title used to be the first thing in the content, at the page role
   (24/32). On a list screen that made three layers before the first card —
   the masthead, the page toolbar, then the title — while the masthead had

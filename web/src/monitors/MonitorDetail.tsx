@@ -88,8 +88,14 @@ export type MonitorDetailProps = {
    * is a failed first load and nothing is drawn under it.
    */
   loaded?: boolean;
-  /** Returns to the dashboard. */
+  /** Returns to the list the page was opened from. */
   onBack?: () => void;
+  /**
+   * The back control's words: the list it returns to, "Dashboard" or "All
+   * monitors". A label that names the destination is the only kind a reader
+   * can trust before pressing it.
+   */
+  backLabel?: string;
   /** Heartbeat width for environments without layout, such as jsdom. */
   beatWidth?: number;
   /**
@@ -226,6 +232,7 @@ export function MonitorDetail({
   error = null,
   loaded = false,
   onBack,
+  backLabel = "All monitors",
   beatWidth = DETAIL_BEAT_WIDTH,
   stale = false,
   onAck,
@@ -269,12 +276,14 @@ export function MonitorDetail({
       {/*
        * A real button, not a link styled as one, and not the browser's Back.
        * Arriving here from a pasted URL means there is nothing to go back
-       * *to*; this always lands on the dashboard, which is the only place the
-       * control claims to go.
+       * *to*; then it lands on the inventory, where the breadcrumb goes, and
+       * otherwise on the list the page was opened from. Its words say which,
+       * so it never claims a place it does not go. Named in the markup
+       * (AGENTS.md): the arrow is drawn, not read.
        */}
       <nav className="mon-detail-nav">
-        <button type="button" className="mon-detail-back" onClick={onBack}>
-          <span aria-hidden="true">←</span> All monitors
+        <button type="button" className="mon-detail-back" aria-label={backLabel} onClick={onBack}>
+          <span aria-hidden="true">←</span> {backLabel}
         </button>
       </nav>
 
