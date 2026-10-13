@@ -70,9 +70,12 @@ it("drops a group whose commands a read-only session does not get", async () => 
 it("names the keys that drive it, and the close button keeps its name", async () => {
   render(<CommandMenu {...props()} />);
   const keys = [...document.querySelectorAll(".command-keys kbd")].map((k) => k.textContent);
-  expect(keys).toEqual(["\u2191", "\u2193", "Enter"]);
+  expect(keys).toEqual(["\u2191", "\u2193", "Enter", "Esc"]);
   expect(document.querySelector(".command-keys")?.getAttribute("aria-hidden")).toBe("true");
   const close = screen.getByRole("button", { name: "Close command menu" });
   expect(close.getAttribute("aria-keyshortcuts")).toBe("Escape");
-  expect(close.querySelector("kbd")?.textContent).toBe("Esc");
+  // Its visible label is the start of its name (WCAG 2.5.3), so the keycap
+  // that used to sit inside it stands with the other hints.
+  expect(close.textContent?.trim()).toBe("Close");
+  expect(close.querySelector("kbd")).toBeNull();
 });

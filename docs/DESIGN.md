@@ -1842,9 +1842,12 @@ never jumps back over a heading. A monitor's option carries its lamp and its
 status as a word ("Down · https://…"): the word is what a screen reader hears
 and a colour-blind reader reads, and because it is searched text, typing "down"
 narrows the list to monitors that are. A footer names the keys (↑ ↓ to move,
-Enter to select, Esc on the close button); the hints are hidden from assistive
+Enter to select, Esc to close); the hints are hidden from assistive
 technology, which the combobox role already tells how the menu is driven, and
-from phones, which have no keyboard to press them with.
+from phones, which have no keyboard to press them with. The Esc keycap stands
+with the hints rather than inside the Close button: text drawn inside a control
+is part of its visible label, and that label has to be part of the button's
+accessible name (WCAG 2.5.3), which is "Close command menu", not "Close Esc".
 
 Open a monitor by name or target, pause/resume it, add a monitor, navigate to
 Dashboard/Monitors/Incidents/Notifications/Settings, or choose light/dark/system
