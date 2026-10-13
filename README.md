@@ -21,7 +21,7 @@ everything is running, what is broken, and since when.
 > **Status: early development.** The engine works end to end — monitors are
 > scheduled, checked, confirmed into incidents, streamed to a live dashboard and
 > delivered to a human over eight notification channels. The latest release is
-> **`v0.1.0-rc5`**, a signed release candidate with binaries for five platforms;
+> **`v0.1.0-rc6`**, a signed release candidate with binaries for five platforms;
 > the `:edge` image carries everything merged since, listed under
 > [newer than the latest release](#newer-than-the-latest-release).
 
@@ -90,7 +90,7 @@ explains it and how to choose other targets or turn it off.
 |---|---|
 | **[Keyboard commands](docs/keyboard.md)** | Command menu, monitor search and actions, navigation, themes and focus behavior |
 | **[Installing SubGlance](docs/installation.md)** | Docker Compose, Docker, a downloaded binary with signature verification, building from source, running the tests |
-| **[Using SubGlance](docs/using-subglance.md)** | First run, your first monitor, authentication, the six check types, push monitors, how a failure becomes an alert, repeat alerts, the API |
+| **[Using SubGlance](docs/using-subglance.md)** | First run, your first monitor, authentication, the seven check types, push monitors, how a failure becomes an alert, repeat alerts, the API |
 | **[Notification channels](docs/channels.md)** | The settings each of the eight channel types needs, the Delivery column, SMS limits, private addresses, the webhook payload, and webhook bodies for Teams, Matrix, Pushover, Mattermost, Rocket.Chat, Google Chat, Home Assistant, Signal, Bark, WhatsApp (WAHA, Evolution API and OpenWA) and Apprise |
 | **[Configuration files](docs/configuration-files.md)** | Export and import monitors, channels, routing rules, maintenance windows and status pages as YAML, without credentials; convert an Uptime Kuma database |
 | **[Managing tags](docs/tags.md)** | Bulk assignment/removal, instance-wide renames, collision policy and conditional API writes |
@@ -114,7 +114,7 @@ what has not reached a release yet is listed under
 | REST API v1 + OpenAPI 3.1 specification | ✅ Working |
 | Authentication — sessions, API tokens, three roles | ✅ Working |
 | Dashboard, monitor detail, incidents, monitors, notifications screens | ✅ Working |
-| Signed multi-platform release builds | ✅ Working (`v0.1.0-rc5`) |
+| Signed multi-platform release builds | ✅ Working (`v0.1.0-rc6`) |
 | Maintenance windows — one-off and weekly, by monitor or tag | ✅ Working |
 | Public status pages | ✅ Working |
 | Configuration files — YAML export and import | ✅ Working |
@@ -187,25 +187,9 @@ what has not reached a release yet is listed under
 
 ### Newer than the latest release
 
-These work on the `:edge` image, which follows `develop`, but arrived after
-`v0.1.0-rc5` was tagged: the release archives and the `:0.1.0-rc5` image do not
-have them.
-
-- **`subglance reset-password`**: an owner locked out of their own instance
-  sets a new password from the data directory, with the server stopped; see
-  [Locked out](docs/operations.md#locked-out)
-- **Maintenance windows from Uptime Kuma**: `subglance import uptime-kuma`
-  converts Kuma's one-off, weekday, daily and weekly cron windows to
-  SubGlance windows on the same monitors and groups, in the same time zone;
-  see [Coming from Uptime Kuma](docs/configuration-files.md#coming-from-uptime-kuma)
-- **DNS record checks**: a `dns` monitor compares the A, AAAA, CNAME, MX or
-  TXT records of a name with the values it expects, through the host's
-  resolver or one set on the monitor, and `subglance import uptime-kuma`
-  converts Kuma's DNS monitors to them; see
-  [Checking a DNS record](docs/using-subglance.md#checking-a-dns-record)
-- **Domain expiry checks**: a `domain` monitor reads a domain's registration
-  expiry date over RDAP and warns a set number of days ahead; see
-  [Checking when a domain expires](docs/using-subglance.md#checking-when-a-domain-expires)
+Nothing yet: everything listed as working above is in `v0.1.0-rc6`, its
+release archives and the `:0.1.0-rc6` image. Work merged after that tag is
+listed here until the next release carries it.
 
 ### Not working yet
 
