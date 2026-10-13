@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"errors"
 	"html/template"
@@ -178,11 +179,19 @@ func (s *Server) muteTarget(ctx context.Context, claim mutelink.Claim) (muteTarg
 	if err != nil {
 		return muteTarget{}, err
 	}
-	name := ""
-	if m, err := s.db.GetMonitor(ctx, inc.MonitorID); err == nil {
-		name = m.Name
+	// A monitor read that fails is the same answer as an incident read
+	// that fails: the page cannot say what it would mute, so it mutes
+	// nothing. Deleting a monitor deletes its incidents, so a monitor that
+	// is gone here was deleted between the two reads, and the link reads
+	// as one that does not work.
+	m, err := s.db.GetMonitor(ctx, inc.MonitorID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return muteTarget{}, store.ErrNotFound
 	}
-	return muteTarget{incident: inc, monitor: name}, nil
+	if err != nil {
+		return muteTarget{}, err
+	}
+	return muteTarget{incident: inc, monitor: m.Name}, nil
 }
 
 // muteNotWorking is the one answer for a link this instance did not sign as

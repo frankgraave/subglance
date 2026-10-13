@@ -201,6 +201,61 @@ func TestMuteLinkThatDoesNotWork(t *testing.T) {
 	}
 }
 
+// TestMuteLinkWhenTheMonitorCannotBeRead covers a store that answers for the
+// incident but not for its monitor: the page must not mute on a read that
+// failed, and says it cannot answer rather than drawing a page without the
+// monitor.
+func TestMuteLinkWhenTheMonitorCannotBeRead(t *testing.T) {
+	f := newMuteFixture(t)
+	link := f.link(time.Now().Add(time.Hour))
+
+	// Reading a monitor needs this column; reading the incident, the
+	// channel and muting do not.
+	if _, err := f.db.Writer.ExecContext(t.Context(), "ALTER TABLE monitors RENAME COLUMN dns_resolver TO dns_resolver_gone"); err != nil {
+		t.Fatal(err)
+	}
+	for _, method := range []string{http.MethodGet, http.MethodPost} {
+		rec := f.follow(t, method, link)
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Errorf("%s with an unreadable monitor: status %d, want 503: %s", method, rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), "Nothing was changed") {
+			t.Errorf("%s with an unreadable monitor does not say nothing changed:\n%s", method, rec.Body.String())
+		}
+	}
+	if f.acked(t) {
+		t.Fatal("the button muted the incident although its monitor could not be read")
+	}
+}
+
+// TestMuteLinkWhenTheMonitorIsGone covers a monitor deleted between the
+// incident read and the monitor read. Deleting a monitor takes its incidents
+// with it, so the link is one that no longer works, not a store fault.
+func TestMuteLinkWhenTheMonitorIsGone(t *testing.T) {
+	f := newMuteFixture(t)
+	link := f.link(time.Now().Add(time.Hour))
+
+	// Leave the incident behind as if the read had raced the deletion.
+	ctx := t.Context()
+	for _, q := range []string{"PRAGMA foreign_keys = OFF", "DELETE FROM monitors WHERE id = ?", "PRAGMA foreign_keys = ON"} {
+		var args []any
+		if strings.Contains(q, "?") {
+			args = append(args, f.incident.MonitorID)
+		}
+		if _, err := f.db.Writer.ExecContext(ctx, q, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, method := range []string{http.MethodGet, http.MethodPost} {
+		if rec := f.follow(t, method, link); rec.Code != http.StatusNotFound {
+			t.Errorf("%s with the monitor gone: status %d, want 404: %s", method, rec.Code, rec.Body.String())
+		}
+	}
+	if f.acked(t) {
+		t.Fatal("the button muted an incident whose monitor is gone")
+	}
+}
+
 func TestMuteLinkExpired(t *testing.T) {
 	f := newMuteFixture(t)
 	link := f.link(time.Now().Add(-time.Second))
