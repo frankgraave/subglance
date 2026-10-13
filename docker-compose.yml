@@ -56,6 +56,12 @@ services:
       # SubGlance into an SSRF proxy into whatever this container can reach.
       # Turn it on only if you mean to monitor services on your own network.
       # SUBGLANCE_ALLOW_PRIVATE_TARGETS: "false"
+      # A PEM file of certificate authorities checks trust besides the system
+      # trust store, for services behind a CA of your own. Mount it read-only:
+      #   volumes:
+      #     - ./my-ca.pem:/etc/subglance/ca.pem:ro
+      # A single self-signed certificate is better trusted on its monitor.
+      # SUBGLANCE_EXTRA_CA_FILE: /etc/subglance/ca.pem
       # Behind a reverse proxy, name it here so the login rate limiter sees the
       # real client address instead of the proxy's. Empty means no forwarding
       # header is believed at all, which is the safe default: X-Forwarded-For

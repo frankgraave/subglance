@@ -56,7 +56,7 @@ func TestMonitorBoundsAreClampedAndReported(t *testing.T) {
 		{"no redirects", httpRow(row{"maxredirects": int64(0)}),
 			func(m configfile.Monitor) bool { return m.FollowRedirects != nil && !*m.FollowRedirects }, ""},
 		{"ignore TLS", httpRow(row{"ignore_tls": int64(1)}),
-			func(m configfile.Monitor) bool { return true }, "always verifies the certificate"},
+			func(m configfile.Monitor) bool { return m.TrustedCertSHA256 == nil }, "until it is trusted on the monitor"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -93,6 +93,17 @@ type Monitor struct {
 	// green for a server no browser will open.
 	MinTLSVersion uint16
 
+	// TrustedCertSHA256 pins the one certificate this monitor trusts besides
+	// those the trust store vouches for, as CertFingerprint writes it. Empty
+	// trusts the trust store alone. Only https and ssl monitors carry one;
+	// see trust.go for why this is a pin and not a switch that turns
+	// verification off.
+	//
+	// TrustedCertAt is when the pin was set, so a check that is presented
+	// another certificate can say since when the trusted one was trusted.
+	TrustedCertSHA256 string
+	TrustedCertAt     time.Time
+
 	// DNS-specific. DNSRecordType is one of DNSRecordTypes. DNSExpected
 	// lists the values the answer must hold; empty means any record of the
 	// type passes. DNSResolver is host or host:port, empty for the host's
@@ -224,6 +235,13 @@ type Result struct {
 	// it. The runner asks the connectivity check whether the resolver is
 	// down for every name only for these failures.
 	ResolverFailed bool
+
+	// Certificate is the certificate a failed check was presented, when the
+	// failure is that it is not trusted and trusting it — pinning it on the
+	// monitor — would let the check pass: self-signed, from a CA this host
+	// does not know, or not the one a pin names. Nil otherwise, including
+	// for an expired certificate, which a pin would not fix.
+	Certificate *CertificateInfo
 
 	// Response holds the beginning of the failed response, when the monitor
 	// asked for it and the check got far enough to have one. Nil on success

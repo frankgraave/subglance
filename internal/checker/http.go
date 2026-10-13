@@ -75,6 +75,10 @@ type HTTPChecker struct {
 	// setting, including the one that gives each check a fresh connection.
 	minVersionMu      sync.Mutex
 	minVersionClients map[uint16]*http.Client
+
+	// roots is what certificates are verified against; nil is the host's
+	// trust store. See HTTPOptions.Roots.
+	roots *x509.CertPool
 }
 
 // HTTPOptions configures NewHTTPChecker.
@@ -86,6 +90,11 @@ type HTTPOptions struct {
 	// block unknown agents are a real support burden, and an honest agent
 	// string lets an admin see who is polling them.
 	UserAgent string
+
+	// Roots replaces the host's trust store for certificate verification.
+	// Nil keeps the host's. An instance with an extra CA passes the host's
+	// roots plus that CA; see ExtraRoots.
+	Roots *x509.CertPool
 }
 
 // NewHTTPChecker returns a checker whose every check opens its own connection.
@@ -130,10 +139,11 @@ func NewHTTPChecker(opts HTTPOptions) *HTTPChecker {
 		// Stated rather than left to the default so that the https path and
 		// the ssl path negotiate on identical terms; a monitor that asks for
 		// another floor gets its own transport in Check.
-		TLSClientConfig: &tls.Config{MinVersion: minTLSVersion}, //nolint:gosec // minTLSVersion is TLS 1.2
+		TLSClientConfig: &tls.Config{MinVersion: minTLSVersion, RootCAs: opts.Roots}, //nolint:gosec // minTLSVersion is TLS 1.2
 	}
 
 	c := &HTTPChecker{
+		roots:             opts.Roots,
 		guard:             opts.Guard,
 		ua:                opts.UserAgent,
 		transport:         transport,
@@ -332,6 +342,10 @@ func (c *HTTPChecker) check(ctx context.Context, m Monitor, scope *headerScope) 
 		scoped.CheckRedirect = scope.checkRedirect
 		client = &scoped
 	}
+	if m.TrustedCertSHA256 != "" && target.Scheme == "https" {
+		// Last, so it wraps whichever redirect policy was chosen above.
+		client = c.pinnedClient(client, m, target)
+	}
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -345,7 +359,11 @@ func (c *HTTPChecker) check(ctx context.Context, m Monitor, scope *headerScope) 
 		if res, handled := classifyTLSHandshakeError(start, err, m); handled {
 			return res
 		}
-		return classifyRequestError(start, ctx, err)
+		res := classifyRequestError(start, ctx, err)
+		if res.Kind == FailTLS {
+			res.Certificate = untrustedCertificate(err, target, c.roots, time.Now())
+		}
+		return res
 	}
 	// Closed without reading the rest: the connection is never reused, so
 	// there is nothing to drain it for, and reading on would only spend the
@@ -593,6 +611,44 @@ func (c *HTTPChecker) minVersionClient(v uint16) *http.Client {
 	return cl
 }
 
+// pinnedClient returns base's settings with verification handed to the
+// monitor's pin. It is built per check rather than cached: the hook carries
+// the monitor's own pin and the hop the check is on, and with keep-alive off
+// a transport holds no connections worth keeping between checks.
+func (c *HTTPChecker) pinnedClient(base *http.Client, m Monitor, target *url.URL) *http.Client {
+	tr := c.transport
+	if t, ok := base.Transport.(*http.Transport); ok {
+		tr = t
+	}
+	tr = tr.Clone()
+	if tr.TLSClientConfig == nil {
+		tr.TLSClientConfig = &tls.Config{MinVersion: minTLSVersion} //nolint:gosec // minTLSVersion is TLS 1.2
+	}
+
+	// The handshake does not say which request it belongs to, so the check
+	// tracks it: the monitored URL first, then each redirect hop as it is
+	// followed. One check sends one request at a time.
+	hop := &pinHop{}
+	hop.set(target)
+	follow := base.CheckRedirect
+	checkRedirect := func(req *http.Request, via []*http.Request) error {
+		if follow != nil {
+			if err := follow(req, via); err != nil {
+				return err
+			}
+		}
+		hop.set(req.URL)
+		return nil
+	}
+
+	// crypto/tls's own verification is replaced, not skipped:
+	// VerifyConnection runs regardless, and checks the pin on the monitored
+	// origin and the ordinary chain on every other one (see pinnedVerifier).
+	tr.TLSClientConfig.InsecureSkipVerify = true //nolint:gosec // verified in VerifyConnection
+	tr.TLSClientConfig.VerifyConnection = pinnedVerifier(m, originOf(target), hop, c.roots)
+	return &http.Client{Transport: tr, CheckRedirect: checkRedirect}
+}
+
 // classifyRequestError turns a transport error into a FailureKind.
 //
 // "Monitor is down" is not useful on its own. A DNS failure, a refused
@@ -621,6 +677,13 @@ func classifyRequestError(start time.Time, ctx context.Context, err error) Resul
 	}
 	if errors.Is(err, context.Canceled) {
 		return fail(start, FailInternal, "check cancelled")
+	}
+
+	// A pinned monitor presented another certificate. Its sentence says so
+	// itself; describeCertProblem would call it an unknown authority.
+	var pinErr *pinMismatchError
+	if errors.As(err, &pinErr) {
+		return fail(start, FailTLS, "%s", pinErr.Error())
 	}
 
 	// Go wraps verification failures in CertificateVerificationError, which

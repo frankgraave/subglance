@@ -370,7 +370,9 @@ func convertHTTP(m row, out *configfile.Monitor, res *Result, name, typ string) 
 	}
 
 	if m.bool("ignore_tls") {
-		note("Kuma ignored certificate errors here; SubGlance always verifies the certificate, so a self-signed or expired one fails the check")
+		note("Kuma ignored certificate errors here; SubGlance verifies the certificate, so a self-signed one fails " +
+			"until it is trusted on the monitor (trusted_cert_sha256) or its CA is added with --extra-ca-file, " +
+			"and an expired one fails regardless")
 	}
 
 	if t := m.int("timeout"); t > 0 {

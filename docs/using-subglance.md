@@ -399,6 +399,63 @@ us which versions it would have accepted, so the message says what SubGlance
 insisted on, not what the server offers. Send `""` in a PATCH to take the floor
 back off and return to the default.
 
+## A self-signed certificate, or a CA of your own
+
+SubGlance verifies every certificate against the host's trust store. A router,
+a NAS, a hypervisor's web interface or a service behind a private CA presents a
+certificate nothing there vouches for, so its `http` and `ssl` checks fail with
+`certificate signed by unknown authority` while the service works. There are two
+ways to say what to trust instead. There is no switch that turns verification
+off: a monitor that accepts any certificate keeps passing when something else
+answers on the address, which is the one thing it was set up to notice.
+
+**Trust one certificate on one monitor.** When a preview or a manual check
+fails because nothing vouches for the certificate — self-signed, or from a CA
+this host does not know — its result carries the certificate it was offered as
+`certificate`: who it is for, who issued it, when it expires and its SHA-256
+fingerprint. Setting that fingerprint as the monitor's `trusted_cert_sha256`
+pins it. Compare it with the fingerprint the service shows on its own
+certificate page first: whatever answered the check is what gets trusted. From
+then on:
+
+- the check passes while the server presents exactly that certificate, whatever
+  the host name in it and whoever signed it;
+- `ssl_warn_days` still applies, so a pinned certificate that is about to expire
+  is reported as expiring, and one that has expired fails;
+- a different certificate fails the check with `certificate changed since it
+  was trusted on 2026-10-11` and its new fingerprint. A reinstall or an update
+  that generates a new self-signed certificate does this too: the failed check
+  offers the new certificate, to be trusted in turn.
+
+The pin is accepted on an `ssl` monitor or an `http` monitor of an `https`
+address. Colons and case are optional, and `""` removes it:
+
+```sh
+curl -X PATCH http://localhost:8080/api/v1/monitors/3 \
+  -H 'Content-Type: application/json' \
+  -d '{"trusted_cert_sha256":"3F:9A:…:C2"}'
+```
+
+The pin covers the monitored host only. A redirect to another host is verified
+the ordinary way, so trusting a router's certificate does not also trust
+whatever it redirects to. A certificate that fails for another reason — a
+publicly trusted one for a different host name, or a chain the server sent
+without its intermediate — is not offered: every other client trips over those
+too, and a pin would only hide them.
+
+**Trust a CA for the whole instance.** A private CA that issues certificates for
+a day at a time (smallstep's default) cannot be pinned one certificate at a
+time. Point `--extra-ca-file` (`SUBGLANCE_EXTRA_CA_FILE`) at a PEM file holding
+the CA certificate, or several; checks trust them beside the system trust store,
+so public certificates keep passing. The file is read at start, and a file that
+cannot be read or holds no certificate stops the start rather than leaving
+every check behind that CA to fail. With the official image, mount it read-only:
+
+```sh
+docker run -v ./my-ca.pem:/etc/subglance/ca.pem:ro \
+  -e SUBGLANCE_EXTRA_CA_FILE=/etc/subglance/ca.pem …
+```
+
 ## Push monitors
 
 The four types above all look inward from outside. Anything without a reachable

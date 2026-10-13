@@ -97,6 +97,14 @@ type Monitor struct {
 	// time. Set only for an interval of whole days; see PushDeadline.
 	PushTimezone string
 
+	// TrustedCertSHA256 is the fingerprint of the one certificate an https
+	// or ssl monitor trusts besides the trust store, as
+	// checker.CertFingerprint writes it; empty trusts the trust store alone.
+	// TrustedCertAt is when it was pinned, zero without a pin. Stored as
+	// NULL for every other type.
+	TrustedCertSHA256 string
+	TrustedCertAt     time.Time
+
 	// Tags are key/value pairs such as `env` -> `prod`. See tags.go for the
 	// shape and the normalisation rules; nil and empty mean the same thing.
 	Tags map[string]string
@@ -184,7 +192,7 @@ const monitorColumns = `
 	min_tls_version, push_token_prefix, push_interval_s, push_grace_s,
 	json_path, json_operator, json_expected, resumed_at,
 	dns_record_type, dns_expected_json, dns_resolver, domain_warn_days,
-	push_timezone, created_at, updated_at`
+	push_timezone, trusted_cert_sha256, trusted_cert_at, created_at, updated_at`
 
 // queryMonitors runs a monitor SELECT with a caller-supplied WHERE clause.
 //
@@ -270,6 +278,8 @@ func scanMonitor(s scanner) (Monitor, error) {
 		dnsResolver sql.NullString
 		domainWarn  sql.NullInt64
 		pushZone    sql.NullString
+		trustedCert sql.NullString
+		trustedAt   sql.NullInt64
 		created     int64
 		updated     int64
 	)
@@ -282,7 +292,7 @@ func scanMonitor(s scanner) (Monitor, error) {
 		&minTLS, &pushPrefix, &pushEvery, &pushGrace,
 		&jsonPath, &jsonOp, &jsonWant, &resumed,
 		&dnsType, &dnsWant, &dnsResolver, &domainWarn,
-		&pushZone, &created, &updated,
+		&pushZone, &trustedCert, &trustedAt, &created, &updated,
 	)
 	if err != nil {
 		return Monitor{}, err
@@ -297,6 +307,10 @@ func scanMonitor(s scanner) (Monitor, error) {
 	m.PushIntervalS = int(pushEvery.Int64)
 	m.PushGraceS = int(pushGrace.Int64)
 	m.PushTimezone = pushZone.String
+	m.TrustedCertSHA256 = trustedCert.String
+	if trustedAt.Valid {
+		m.TrustedCertAt = time.Unix(trustedAt.Int64, 0).UTC()
+	}
 	if jsonPath.Valid && jsonOp.Valid {
 		m.JSONAssertion = &JSONAssertion{Path: jsonPath.String, Operator: jsonOp.String, Expected: jsonWant.String}
 	}
@@ -376,8 +390,8 @@ func (db *DB) CreateMonitor(ctx context.Context, m Monitor) (Monitor, error) {
 			min_tls_version, push_token_hash, push_token_prefix, push_interval_s, push_grace_s,
 			json_path, json_operator, json_expected,
 			dns_record_type, dns_expected_json, dns_resolver, domain_warn_days,
-			push_timezone, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			push_timezone, trusted_cert_sha256, trusted_cert_at, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		m.Name, m.Type, m.Target, m.IntervalS, m.TimeoutS, m.Retries, m.RecoveryThreshold,
 		m.Method, m.ExpectedStatus, nullString(m.Keyword), m.KeywordMode, m.FollowRedirects,
 		headersJSON, nullString(m.Body), m.SSLWarnDays, m.Enabled, m.CaptureResponse, m.RepeatAfterS,
@@ -385,7 +399,7 @@ func (db *DB) CreateMonitor(ctx context.Context, m Monitor) (Monitor, error) {
 		nullInt(m.PushIntervalS), pushGraceValue(m),
 		jsonPath, jsonOp, jsonWant,
 		dnsType, dnsWant, dnsResolver, domainWarnColumn(m),
-		pushTimezoneColumn(m), now, now,
+		pushTimezoneColumn(m), trustedCertColumn(m), trustedCertAtColumn(m), now, now,
 	)
 	if err != nil {
 		return Monitor{}, fmt.Errorf("insert monitor: %w", err)
@@ -1080,6 +1094,29 @@ func pushTimezoneColumn(m Monitor) any {
 	return nullString(m.PushTimezone)
 }
 
+// trustedCertColumn is an http or ssl monitor's pinned fingerprint, NULL
+// without one and for every other type: a pin left behind by a change of type
+// would mean nothing to a tcp check, and the schema refuses it.
+func trustedCertColumn(m Monitor) any {
+	if m.Type != "http" && m.Type != "ssl" {
+		return nil
+	}
+	return nullString(m.TrustedCertSHA256)
+}
+
+// trustedCertAtColumn is when the pin was set, NULL exactly when
+// trustedCertColumn is. A pin without a time is stamped now rather than
+// refused: the time only words a later failure.
+func trustedCertAtColumn(m Monitor) any {
+	if trustedCertColumn(m) == nil {
+		return nil
+	}
+	if m.TrustedCertAt.IsZero() {
+		return time.Now().Unix()
+	}
+	return m.TrustedCertAt.Unix()
+}
+
 func nullInt(i int) any {
 	if i == 0 {
 		return nil
@@ -1190,6 +1227,7 @@ func (db *DB) updateMonitor(ctx context.Context, m Monitor, expected []int64) (M
 		jsonPath, jsonOp, jsonWant,
 		dnsType, dnsWant, dnsResolver, domainWarnColumn(m),
 		pushTimezoneColumn(m),
+		trustedCertColumn(m), trustedCertAtColumn(m),
 		m.Enabled, next,
 		next, m.ID,
 	}
@@ -1278,6 +1316,7 @@ const updateMonitorSetClause = `
 		dns_record_type = ?, dns_expected_json = ?, dns_resolver = ?,
 		domain_warn_days = ?,
 		push_timezone = ?,
+		trusted_cert_sha256 = ?, trusted_cert_at = ?,
 		` + resumedAtSQL + `,
 		updated_at = MAX(?, updated_at + 1)
 	WHERE id = ?`

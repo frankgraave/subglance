@@ -53,6 +53,10 @@ type checkResponse struct {
 
 	CertExpiry *time.Time `json:"cert_expiry,omitempty"`
 
+	// Certificate is the certificate the check was presented, when it
+	// failed for want of trust and pinning it would let it pass.
+	Certificate *certificateWire `json:"certificate,omitempty"`
+
 	// DomainExpiry is a domain's registration expiry date, when the
 	// registry gave one.
 	DomainExpiry *time.Time `json:"domain_expiry,omitempty"`
@@ -141,6 +145,8 @@ func (s *Server) handleCheckMonitor(w http.ResponseWriter, r *http.Request) {
 		Kind:       string(res.Kind),
 		Error:      res.Error,
 		Recorded:   m.Enabled,
+
+		Certificate: certificateToWire(res.Certificate),
 	}
 	if !res.CertExpiry.IsZero() {
 		expiry := res.CertExpiry
