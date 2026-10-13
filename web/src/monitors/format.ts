@@ -97,9 +97,13 @@ export function describeTarget(monitor: Monitor): string {
   return `expects a report every ${formatDuration(monitor.push.intervalS)}`;
 }
 
-/** The push window spelled out: interval and how late is still acceptable. */
-export function describePushWindow(intervalS: number, graceS: number): string {
-  const every = `Expected every ${formatDuration(intervalS)}`;
+/**
+ * The push window spelled out: interval, the clock it is counted on when that
+ * is a zone's, and how late is still acceptable.
+ */
+export function describePushWindow(intervalS: number, graceS: number, timezone?: string): string {
+  const clock = timezone ? ` on ${timezone} time` : "";
+  const every = `Expected every ${formatDuration(intervalS)}${clock}`;
   return graceS > 0
     ? `${every}, ${formatDuration(graceS)} grace`
     : `${every}, no grace`;

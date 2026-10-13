@@ -22,6 +22,8 @@ import { JSON_HELP, JSON_OPERATORS, assertionFrom, expectedProblem, expectedText
 import { DNS_EMPTY_HELP, DNS_EXPECTED_HELP, DNS_RECORD_TYPES, DNS_RESOLVER_HELP, dnsExpectedText, dnsFrom } from "./dnsCheck";
 import { Select } from "../components/Select";
 import { FieldError } from "../components/FieldError";
+import { PushClockField } from "./PushClockField";
+import { pushIntervalTakesZone, pushZoneFor } from "./pushClock";
 
 export type EditMonitorFormProps = {
   /** Values and validator must come from the same detail response. */
@@ -88,6 +90,7 @@ function valuesFor(monitor: InventoryMonitor): Record<string, string> {
   if (monitor.push) {
     values.push_interval_s = String(monitor.push.intervalS);
     values.push_grace_s = String(monitor.push.graceS);
+    values.push_timezone = monitor.push.timezone ?? "";
   } else {
     // Absence is no opinion, not a pinned default. Keep it in the draft so
     // selecting no opinion can deliberately clear a previously stored floor.
@@ -227,6 +230,10 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
       parsed.json_assertion = assertionFrom(values.json_path, values.json_operator, values.json_expected);
     }
     if ("dns_record_type" in values) parsed.dns = dnsFrom(values.dns_record_type, values.dns_expected, values.dns_resolver);
+    // The zone box is hidden for an interval that is not whole days, and the
+    // server refuses a zone beside one, so what is sent is "" then: a stored
+    // zone is cleared by the same save that makes the window hourly.
+    if ("push_timezone" in values) parsed.push_timezone = pushZoneFor(values.push_interval_s, values.push_timezone);
     const patch: MonitorPatch = {};
     for (const key of Object.keys(values)) {
       // The three json_ controls are one API field: a change to any of them
@@ -238,6 +245,10 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
     // Normalised no-ops need no write; zero, false and empty remain explicit.
     if (parsed.name === monitor.name) delete patch.name;
     if (tagsToText(tags) === initial.tags) delete patch.tags;
+    // Compared after trimming and after the interval had its say, so a zone
+    // the interval no longer takes is cleared even though the box is untouched.
+    delete patch.push_timezone;
+    if ("push_timezone" in values && parsed.push_timezone !== initial.push_timezone) patch.push_timezone = parsed.push_timezone as string;
     const request: PreviewRequest = { ...(withoutHttp(monitor.type) ? {} : monitor.checkSettings), type: monitor.type, target: values.target?.trim() ?? "" };
     for (const key of CHECK_FIELDS) if (key in parsed) Object.assign(request, { [key]: parsed[key] });
     // Preview has no stored assertion to clear: absence means none.
@@ -304,6 +315,12 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
       <p className="field-help">Check type: {monitor.type.toUpperCase()}. Check type stays fixed to preserve this monitor’s identity and push token.</p>
       {field("target")}
       <div className="field-grid">{field("interval_s")}{field("timeout_s")}{field("recovery_threshold")}{field("push_interval_s")}{field("push_grace_s")}</div>
+      {"push_timezone" in values && pushIntervalTakesZone(values.push_interval_s) && (
+        <PushClockField id={`${ids}-push_timezone`} value={values.push_timezone} onChange={(value) => update("push_timezone", value)}
+          invalid={problem?.field === "push_timezone"} errorId={problem?.field === "push_timezone" ? `${ids}-error` : undefined}>
+          {problem?.field === "push_timezone" && <FieldError id={`${ids}-error`}>{problem.message}</FieldError>}
+        </PushClockField>
+      )}
       {"recovery_threshold" in values && <p className="field-help">An open incident closes, and “resolved” is sent, only after this many passing checks in a row. 1 closes on the first pass.</p>}
       {!monitor.push && <>
         {field("method")}{field("expected_status")}{field("keyword")}{field("keyword_mode")}

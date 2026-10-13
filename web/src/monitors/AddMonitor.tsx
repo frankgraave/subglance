@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { confirmLeave, registerLeaveGuard } from "../shell/leaveGuard";
 import { AddMonitorForm } from "./AddMonitorForm";
 import { isPush } from "./push";
+import { pushZoneFor } from "./pushClock";
 import type { AddMonitorValues } from "./AddMonitorForm";
 import { PushUrlReveal } from "./PushUrlReveal";
 import { assertionFrom, expectedProblem } from "./jsonAssertion";
@@ -234,6 +235,10 @@ function bodyFor(
       type: "push",
       push_interval_s: values.pushIntervalS,
       push_grace_s: values.pushGraceS,
+      // Left out when empty, the same request as before the field existed.
+      ...(pushZoneFor(values.pushIntervalS, values.pushTimezone) !== ""
+        ? { push_timezone: pushZoneFor(values.pushIntervalS, values.pushTimezone) }
+        : {}),
       repeat_after_s: values.repeatAfterS,
       ...channels,
     };
