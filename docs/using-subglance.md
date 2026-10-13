@@ -439,14 +439,16 @@ turns ordinary jitter into a 3am alert.
 
 A job that runs at a fixed *local* time needs more room than that once a year.
 The window is counted in elapsed time, and on the night the clocks go back at
-the end of daylight saving time, a job scheduled for 06:00 local time runs 25
-hours after the previous one. A daily job with 60 seconds of grace therefore
+the end of daylight saving time, a job scheduled for 06:00 local time runs an
+hour later than its interval: 25 hours after the previous run for a daily job,
+169 for a weekly one. A daily job with 60 seconds of grace therefore
 goes down at about 05:01 and recovers when it reports at 06:00; a weekly job
 does the same in the week of the change. It happens to every job on a
 local-time schedule (cron on a host with a local `TZ`, the Synology, Unraid or
 Windows task scheduler), on the last Sunday of October in the EU and the first
-Sunday of November in the US. The spring change shortens the gap to 23 hours
-and raises no alert, and a job scheduled in UTC is never affected. To avoid
+Sunday of November in the US. The spring change shortens the gap by an hour
+instead (23 hours for a daily job, 167 for a weekly one) and raises no alert,
+and a job scheduled in UTC is never affected. To avoid
 the false alarm, schedule the job in UTC, or give it at least an hour of grace
 at the cost of hearing about a genuinely missed run an hour later on every
 other day.
