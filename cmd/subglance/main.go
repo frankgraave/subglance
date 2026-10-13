@@ -178,6 +178,18 @@ func run(args []string, logOut io.Writer) error {
 	log.Info("database ready", "path", db.Path())
 	reportChannelEncryption(log, db.ChannelEncryption())
 
+	// Errors stored before delivery errors were redacted where they are
+	// written still carry webhook URLs in full. Rewritten at every start,
+	// before the notifier or the API reads them, so that rows an older
+	// version wrote after a downgrade are cleaned too; a failure is logged
+	// rather than fatal, because the rows are only text, and the next start
+	// tries again.
+	if n, err := db.RedactDeliveryErrors(openCtx, notifier.RedactError); err != nil {
+		log.Error("could not remove channel credentials from stored delivery errors", "error", err)
+	} else if n > 0 {
+		log.Info("removed channel credentials from stored delivery errors", "rows", n)
+	}
+
 	// Tell the operator plainly when the instance has no account yet. There is
 	// no seeded user and no default password to change — an instance exposed
 	// before setup has no credentials to guess — but that only helps if the

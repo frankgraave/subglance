@@ -17,8 +17,11 @@ type ChannelFailure struct {
 	// FailedAt is when the first delivery of this spell gave up. Later
 	// failures in the same spell leave it alone.
 	FailedAt time.Time
-	// LastError is the newest failure's message, as the transport wrote it.
-	// It can carry the channel's credentials: redact it before showing it.
+	// LastError is the newest failure's message. The notifier takes the
+	// channel's credentials out before it is written, and
+	// RedactDeliveryErrors out of rows written before it did; readers
+	// redact it again anyway, because a row from a concurrent older
+	// binary would not have been.
 	LastError string
 
 	// NoticedAt is when the notice about this spell went out through another
