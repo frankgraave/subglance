@@ -62,7 +62,12 @@ it.each([
     await page.evaluateOnNewDocument((themeKey, themeValue) => localStorage.setItem(themeKey, themeValue), THEME_STORAGE_KEY, theme);
     for (const layout of ["rows", "cards", "compact", "wall"]) {
       await page.evaluateOnNewDocument((key, value) => localStorage.setItem(key, value), LAYOUT_STORAGE_KEY, layout);
-      await page.goto(fixture.url, { waitUntil: "domcontentloaded" });
+      // A new address per layout, so each one arrives on a fresh history
+      // entry. Going to the address the page is already on reloads the same
+      // entry, which keeps the dashboard's status tab: the Warning tab pressed
+      // for the previous layout would still be pressed, and the click below
+      // would release it.
+      await page.goto(`${fixture.url}/?visit=${layout}`, { waitUntil: "domcontentloaded" });
       await page.waitForSelector('[data-status="warning"] .led, .led[data-status="warning"]');
       const ax = await page.accessibility.snapshot();
       expect(JSON.stringify(ax)).toMatch(/"name":"(?:Warning|WARNING)"/);
