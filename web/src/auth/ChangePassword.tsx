@@ -62,7 +62,7 @@ export function ChangePassword() {
         <div className="field" key={field}>
           <label className="field-label" htmlFor={`${id}-${field}`}>{label}</label>
           <input
-            className="input input--inset" id={`${id}-${field}`} name={field} type="password"
+            className="input" id={`${id}-${field}`} name={field} type="password"
             value={values[field]} required disabled={saving}
             autoComplete={field === "current_password" ? "current-password" : "new-password"}
             onChange={(event) => {
@@ -88,7 +88,7 @@ export function ChangePassword() {
         <FieldError>{rejection.message}</FieldError>
       )}
       <div>
-        <button className="button-solid" disabled={saving || incomplete} type="submit">
+        <button className="button button--primary" disabled={saving || incomplete} type="submit">
           {saving ? "Changing password…" : "Change password"}
         </button>
       </div>

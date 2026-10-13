@@ -1691,6 +1691,16 @@ See `docs/mockups/components.html` for a working version of everything below.
 | `ghost` | Cancel, close, anything that takes the user back |
 | `danger` | Delete and other irreversible actions |
 
+**There is one primary button, `.button--primary`, and its fill arrives on
+hover.** The sign-in form, the settings cards' saves and the drawers' forms all
+wear it. There used to be a second, always-filled primary (`.button-solid`) on
+the sign-in screen and the settings cards, beside the hover-fill one in the
+drawers, so the same action, a save, looked different depending on which
+screen it was on, and the always-filled one is the wallpaper this section
+warns about. The single variant has the accent edge at rest, which is what
+marks it as the primary among its neighbours, and white on `--accent` under
+the pointer (5.25:1, §2.8). `tokens.test.ts` refuses the retired class.
+
 **Destructive is a red bin, not a red fill.** A bright red button sitting on
 screen permanently becomes wallpaper — and then somebody clicks it by accident.
 A worded Delete is `DangerButton` (`web/src/components/DangerButton.tsx`): the
@@ -1736,6 +1746,32 @@ default. Every required field costs installs.
   moved off the words. `FieldError.test.tsx` refuses the class written by hand
   or restyled in a feature stylesheet, and `layout/field-refusals.browser.test.ts`
   drives every settings card with a field to a refusal and measures both.
+- **One field, one fill.** Every text field, select and textarea is `.input`,
+  filled with `--canvas`: sunk one step below whatever holds it, a card, a
+  settings panel or a drawer. The drawers used to fill theirs with `--surface`
+  and the sign-in card and settings with `--canvas` (`.input--inset`), so a
+  field changed colour between two screens. The fill was chosen by measuring
+  both candidates on all three backdrops (Chromium, composited, 1440px):
+
+  | Backdrop | Theme | `--canvas`: fill / edge on fill | `--surface`: fill / edge on fill |
+  |---|---|---|---|
+  | sign-in card | light | 1.04:1 / 1.54:1 | 1.00:1 / 1.59:1 |
+  | settings panel | light | 1.01:1 / 1.54:1 | 1.04:1 / 1.59:1 |
+  | drawer | light | 1.01:1 / 1.54:1 | 1.04:1 / 1.59:1 |
+  | sign-in card | dark | 1.08:1 / 1.23:1 | 1.09:1 / 1.04:1 |
+  | settings panel | dark | 1.14:1 / 1.23:1 | 1.09:1 / 1.01:1 |
+  | drawer | dark | 1.25:1 / 1.23:1 | 1.10:1 / 1.12:1 |
+
+  "Fill" is the field's fill against its backdrop; "edge on fill" is the
+  control border against the field's own fill. Light cannot decide: on white
+  neither fill parts from the card by more than 1.04:1 and the border carries
+  the shape the same way for both. Dark decides: on `--surface` the border
+  all but vanishes into the fill (1.01:1 on a settings panel), so the field
+  reads as a lighter smudge with no outline, while on `--canvas` the border
+  holds 1.23:1 against the fill wherever the field stands, and the typed text
+  gains contrast too (16.4:1 against 13.2:1). The placeholder is `--ink-4`
+  on every field (§9). `tokens.test.ts` refuses `.input--inset`, and any other
+  stylesheet giving `.input` a fill of its own.
 - Units (`sec`, `ms`) belong in an addon on the field, not in the label.
 - A length of time is a number and a unit (`DurationField`). A stored value
   loads in the largest unit that holds it exactly, so 900 seconds reads

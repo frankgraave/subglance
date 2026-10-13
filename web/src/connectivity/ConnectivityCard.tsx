@@ -95,7 +95,7 @@ function ConnectivityForm({ data, outcome, setOutcome }: {
       </div>
       <div className="field">
         <label className="field-label" htmlFor={`${id}-targets`}>Addresses to dial</label>
-        <textarea className="input input--inset input--code" id={`${id}-targets`} rows={3}
+        <textarea className="input input--code" id={`${id}-targets`} rows={3}
           spellCheck={false} autoComplete="off" autoCapitalize="off" value={text}
           disabled={targetsPinned || saving} aria-invalid={targetsError ? true : undefined}
           aria-describedby={describe(`${id}-targets-help`, targetsError)}
@@ -116,7 +116,7 @@ function ConnectivityForm({ data, outcome, setOutcome }: {
       {enabledPinned && targetsPinned
         ? <p className="panel-note">Both settings are fixed by the server's configuration.</p>
         : <div>
-          <button className="button-solid" type="submit" disabled={!changed || saving}>
+          <button className="button button--primary" type="submit" disabled={!changed || saving}>
             {saving ? "Saving…" : "Save connectivity check"}
           </button>
         </div>}

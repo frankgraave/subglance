@@ -58,7 +58,21 @@
   font-size: var(--type-nozoom);
   line-height: var(--lead-nozoom);
   color: var(--ink);
-  background: var(--surface);
+  /*
+   * Sunk into whatever holds it: the canvas, one step below the card, the
+   * settings panel and the drawer. One fill for every field, chosen by
+   * measurement rather than by taste (DESIGN.md §7.2). In the dark theme a
+   * field on `--surface` lost its own edge — the control border measured
+   * 1.01:1 against that fill on a settings panel, so the field read as a
+   * lighter smudge with no outline — while on the canvas the same border
+   * clears 1.23:1 on its inner side wherever the field sits. In the light
+   * theme neither fill parts from a white card or panel (1.04:1 at best) and
+   * the border carries the shape alike for both, so light could not decide.
+   *
+   * `background-color`, not the shorthand: `Select` paints its caret with
+   * `background-image`, which the shorthand would reset.
+   */
+  background-color: var(--canvas);
   border: 1px solid var(--border-control);
   border-radius: var(--r-sm);
   transition: border-color var(--dur-hover) var(--ease), box-shadow var(--dur-hover) var(--ease);
@@ -71,17 +85,9 @@
   }
 }
 
+/* `--ink-4`, the one placeholder ink (DESIGN.md §9): an example of what to
+   type, never the instruction itself, which is the label's job. */
 .input::placeholder { color: var(--ink-4); }
-
-/*
- * A field sunk into its panel: the canvas behind it rather than the surface.
- * The sign-in card and the settings cards' forms draw their fields this way,
- * the drawers' forms do not. Its placeholder keeps the base layer's ink, as
- * these fields always have: one placeholder ink for every field is a visual
- * change rather than a move, and is not made here.
- */
-.input--inset { background: var(--canvas); }
-.input--inset::placeholder { color: revert-layer; }
 
 /*
  * A field that sits inside a sentence rather than in a form column: the
@@ -225,8 +231,14 @@
 
 .button:disabled { opacity: .5; cursor: not-allowed; }
 
-/* The fill arrives on hover, so a permanently green button on screen does not
-   become wallpaper that gets clicked by accident (§7.1). */
+/*
+ * The one primary button, on every screen: the drawers' forms, the settings
+ * cards' saves and the sign-in form alike. The fill arrives on hover, so a
+ * permanently filled button on screen does not become wallpaper that gets
+ * clicked by accident (DESIGN.md §7.1). There is no always-filled variant:
+ * a second primary that some forms wore and others did not meant the same
+ * action, a save, looked different on two screens.
+ */
 .button--primary {
   border-color: var(--accent-border);
   /* Ink and fill must switch together. Fading from the light surface while
@@ -349,47 +361,6 @@
  */
 .icon-button.button--danger:hover:not(:disabled),
 .icon-button.button--danger:focus-visible { color: var(--down); }
-
-/*
- * The one loud button: a form whose whole job is one action — sign in, save
- * this card. Elsewhere the primary action fills only on hover
- * (.button--primary), because a permanently filled button becomes wallpaper
- * (DESIGN.md §7.1).
- */
-.button-solid {
-  min-height: var(--control-h);
-  padding: var(--space-2) var(--space-4);
-  font: inherit;
-  font-size: var(--type-body);
-  line-height: var(--lead-body);
-  font-weight: var(--weight-strong);
-  /* White on the accent, not the theme's canvas on status green. That swap
-     is what §2.8 is for: a filled primary button is a control, and painting
-     it --up made "the button" and "the monitor is healthy" the same colour.
-     White on --accent is 5.25:1 and identical in both themes. */
-  color: var(--accent-ink);
-  background: var(--accent);
-  /* The same hue one step lighter, which is what keeps a filled control
-     looking crisp rather than printed on. */
-  border: 1px solid var(--accent-border);
-  border-radius: var(--r-sm);
-  cursor: pointer;
-  transition: opacity var(--dur-hover) var(--ease);
-}
-
-.button-solid:hover:not(:disabled) { opacity: .9; }
-
-.button-solid:disabled {
-  /* Dimmed rather than hidden: the button is the answer to "what do I do
-     here", and removing it while a field is empty leaves the question open. */
-  opacity: .5;
-  cursor: not-allowed;
-}
-
-.button-solid:focus-visible {
-  outline: var(--outline-w) solid var(--accent-border);
-  outline-offset: var(--outline-offset);
-}
 
 /* What happened after a form's last action, in a live region that takes no
    room until it has something to say. */

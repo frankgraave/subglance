@@ -97,7 +97,7 @@ function AmountField({ label, unit, offLabel, restore, draft, onChange, disabled
       <legend className="field-label">{label}</legend>
       <div className="control-row">
         <input
-          className="input input--inset retention-days" type="number" min={min} step="1" inputMode="numeric"
+          className="input retention-days" type="number" min={min} step="1" inputMode="numeric"
           aria-label={`${label}, in ${unit}`} aria-describedby={help} aria-invalid={error ? true : undefined}
           value={draft.off ? "" : draft.value} disabled={draft.off}
           // A dash, not an empty box: switched off, the amount does not apply,
@@ -159,7 +159,7 @@ function RunAtField({ data, value, onChange, disabled, error }: {
   return (
     <div className="field">
       <label className="field-label" htmlFor={id}>Run the daily pass at</label>
-      <input className="input input--inset retention-time" id={id} type="time" step="60" required value={value}
+      <input className="input retention-time" id={id} type="time" step="60" required value={value}
         disabled={disabled || pin.source === "pinned"} aria-invalid={error ? true : undefined}
         aria-describedby={`${id}-help${error ? ` ${id}-error` : ""}`} onChange={(event) => onChange(event.target.value)} />
       <p className="panel-note" id={`${id}-help`}>
@@ -292,7 +292,7 @@ function RetentionForm({ data, canAdmin, outcome, setOutcome }: {
       {rejection && !rejection.field && <FieldError>{rejection.message}</FieldError>}
       {canAdmin && (
         <div>
-          <button className="button-solid" type="submit" disabled={!changed || !valid || saving || !previewReady}>
+          <button className="button button--primary" type="submit" disabled={!changed || !valid || saving || !previewReady}>
             {saving ? "Saving…" : "Save retention"}
           </button>
         </div>

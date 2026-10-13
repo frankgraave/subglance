@@ -176,7 +176,7 @@ describe("class ownership (SUB-173)", () => {
     // A scanner that stops finding classes would pass the next test
     // vacuously; these are the ones SUB-173 moved.
     const homes = classHomes();
-    for (const name of ["button", "icon-button", "input", "field", "field-label", "stack", "button-solid", "warn-note", "sr-only"]) {
+    for (const name of ["button", "icon-button", "input", "field", "field-label", "stack", "button--primary", "warn-note", "sr-only"]) {
       expect([...(homes.get(name) ?? [])], name).toContain("components");
     }
   });

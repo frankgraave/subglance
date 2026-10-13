@@ -193,6 +193,13 @@ glyph in red, because a red sentence fails 4.5:1 on a settings panel.
 `FieldError.test.tsx` refuses the class written or restyled anywhere else, and
 `layout/field-refusals.browser.test.ts` fails on a settings card with a field
 whose refusal it has not measured. The reasoning is in DESIGN.md §7.2.
+There is one primary button and one field. A form's main action is
+`button button--primary`, which fills on hover, on the sign-in screen and in a
+settings card as much as in a drawer; a text field, select or textarea is
+`.input`, which fills with `--canvas` wherever it stands. Do not bring back an
+always-filled primary or a second field fill for one screen: `tokens.test.ts`
+refuses `.button-solid`, `.input--inset` and a stylesheet that gives `.input`
+a fill of its own. The measurement behind the fill is in DESIGN.md §7.2.
 A dropdown is `Select` and a file chooser is `FileInput`, both from
 `web/src/components/`, never a hand-written `<select>` or
 `<input type="file">`; `tokens.test.ts` refuses either elsewhere. Give

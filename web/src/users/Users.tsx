@@ -66,7 +66,7 @@ function CreateForm({ onCreated, onCancel }: { onCreated: (account: Account) => 
       <div className="control-row">
         <div className="field">
           <label className="field-label" htmlFor={`${id}-email`}>Email</label>
-          <input className="input input--inset" id={`${id}-email`} type="email" value={email} autoComplete="off" spellCheck={false}
+          <input className="input" id={`${id}-email`} type="email" value={email} autoComplete="off" spellCheck={false}
             aria-describedby={fieldError("email")} aria-invalid={fieldError("email") ? true : undefined}
             onChange={(event) => setEmail(event.target.value)} />
         </div>
@@ -74,7 +74,7 @@ function CreateForm({ onCreated, onCancel }: { onCreated: (account: Account) => 
           <label className="field-label" htmlFor={`${id}-password`}>Password</label>
           {/* new-password, so a browser offers to generate one rather than
               filling in the administrator's own. */}
-          <input className="input input--inset" id={`${id}-password`} type="password" value={password} autoComplete="new-password"
+          <input className="input" id={`${id}-password`} type="password" value={password} autoComplete="new-password"
             aria-describedby={[`${id}-password-help`, fieldError("password")].filter(Boolean).join(" ")}
             aria-invalid={fieldError("password") ? true : undefined}
             onChange={(event) => setPassword(event.target.value)} />
@@ -91,7 +91,7 @@ function CreateForm({ onCreated, onCancel }: { onCreated: (account: Account) => 
       <p className="panel-note" id={`${id}-role-help`}>{ROLE_HELP[role]}</p>
       {error && <FieldError id={`${id}-error`}>{error.message}</FieldError>}
       <div className="button-row">
-        <button className="button-solid" type="submit" disabled={!ready || saving}>{saving ? "Adding…" : "Add user"}</button>
+        <button className="button button--primary" type="submit" disabled={!ready || saving}>{saving ? "Adding…" : "Add user"}</button>
         <button className="button" type="button" onClick={onCancel}>Cancel</button>
       </div>
     </form>

@@ -77,7 +77,7 @@ export function CredentialsForm({
         </label>
         <input
           id={`${ids}-email`}
-          className="input input--inset"
+          className="input"
           type="email"
           name="email"
           value={email}
@@ -113,7 +113,7 @@ export function CredentialsForm({
         </label>
         <input
           id={`${ids}-password`}
-          className="input input--inset"
+          className="input"
           type="password"
           name="password"
           value={password}
@@ -176,7 +176,7 @@ export function CredentialsForm({
         </FieldError>
       )}
 
-      <button className="button-solid" type="submit" disabled={disabled}>
+      <button className="button button--primary" type="submit" disabled={disabled}>
         {submitting
           ? setup
             ? "Creating your account\u2026"

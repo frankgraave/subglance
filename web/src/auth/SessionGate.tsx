@@ -64,7 +64,7 @@ export function SessionGate({
             <FieldError>
               {session.message}
             </FieldError>
-            <button className="button-solid" type="button" onClick={onRetry}>
+            <button className="button button--primary" type="button" onClick={onRetry}>
               Try again
             </button>
           </div>
