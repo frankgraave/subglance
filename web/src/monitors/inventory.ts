@@ -67,6 +67,10 @@ export type InventoryMonitor = Monitor & {
   dns?: DnsCheck;
   /** Detail read only, domain monitors only: days of warning before expiry. */
   domainWarnDays?: number;
+  /** The pinned certificate's fingerprint; absent when there is none. */
+  trustedCertSHA256?: string;
+  /** When it was trusted, as the API sent it. */
+  trustedCertAt?: string;
   checkSettings?: Omit<PreviewRequest, "type" | "target" | "timeout_s">;
 };
 
@@ -97,6 +101,8 @@ export function inventoryFromApi(api: ApiMonitor & {
     ...(api.json_assertion !== undefined ? { jsonAssertion: api.json_assertion } : {}),
     ...(api.dns !== undefined ? { dns: api.dns } : {}),
     ...(api.domain_warn_days !== undefined ? { domainWarnDays: api.domain_warn_days } : {}),
+    ...(api.trusted_cert_sha256 !== undefined ? { trustedCertSHA256: api.trusted_cert_sha256 } : {}),
+    ...(api.trusted_cert_at !== undefined ? { trustedCertAt: api.trusted_cert_at } : {}),
     checkSettings: Object.fromEntries(
       (["method", "expected_status", "keyword", "keyword_mode", "follow_redirects", "headers", "body", "ssl_warn_days", "min_tls_version"] as const)
         .filter((key) => api[key] !== undefined).map((key) => [key, api[key]]),

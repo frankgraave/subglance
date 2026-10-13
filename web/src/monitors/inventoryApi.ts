@@ -157,6 +157,8 @@ export type MonitorPatch = {
   min_tls_version?: string;
   /** Replaces the assertion; `null` removes it. */
   json_assertion?: JsonAssertion | null;
+  /** Pins one certificate by its SHA-256 fingerprint; `""` removes the pin. */
+  trusted_cert_sha256?: string;
   /** Replaces a dns monitor's record, values and resolver as a whole. */
   dns?: DnsCheck;
   /** A domain monitor's days of warning before its registration expires. */

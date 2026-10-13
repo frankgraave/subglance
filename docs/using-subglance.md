@@ -409,14 +409,16 @@ ways to say what to trust instead. There is no switch that turns verification
 off: a monitor that accepts any certificate keeps passing when something else
 answers on the address, which is the one thing it was set up to notice.
 
-**Trust one certificate on one monitor.** When a preview or a manual check
-fails because nothing vouches for the certificate — self-signed, or from a CA
-this host does not know — its result carries the certificate it was offered as
-`certificate`: who it is for, who issued it, when it expires and its SHA-256
-fingerprint. Setting that fingerprint as the monitor's `trusted_cert_sha256`
-pins it. Compare it with the fingerprint the service shows on its own
-certificate page first: whatever answered the check is what gets trusted. From
-then on:
+**Trust one certificate on one monitor.** When **Test it** fails on an `ssl`
+monitor or an `https` address because nothing vouches for the certificate —
+self-signed, or from a CA this host does not know — the form shows the
+certificate the server presented: who it is for, who issued it, when it expires
+and its SHA-256 fingerprint, with a **Trust this certificate** button. Compare
+the fingerprint with the one the service shows on its own certificate page
+before pressing it: whatever answered the test is what gets trusted. Pressing it
+tests again with the certificate trusted, and saving the monitor stores the pin.
+The edit form shows a trusted certificate with the day it was trusted and a
+**Stop trusting** button, which tests again without it. From then on:
 
 - the check passes while the server presents exactly that certificate, whatever
   the host name in it and whoever signed it;
@@ -427,8 +429,11 @@ then on:
   that generates a new self-signed certificate does this too: the failed check
   offers the new certificate, to be trusted in turn.
 
-The pin is accepted on an `ssl` monitor or an `http` monitor of an `https`
-address. Colons and case are optional, and `""` removes it:
+Over the API, a failed preview (`POST /api/v1/monitors/preview`) or manual
+check (`POST /api/v1/monitors/{id}/check`) carries the same facts as
+`certificate`, and the monitor's `trusted_cert_sha256` takes its `sha256`. The
+pin is accepted on an `ssl` monitor or an `http` monitor of an `https` address.
+Colons and case are optional, and `""` removes it:
 
 ```sh
 curl -X PATCH http://localhost:8080/api/v1/monitors/3 \

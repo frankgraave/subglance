@@ -11,7 +11,8 @@ import type { DurationUnit } from "./duration";
 import { validRepeat, REPEAT_ERROR } from "./repeat";
 import { DOMAIN_INTERVAL_MESSAGE, DOMAIN_MIN_INTERVAL_S, DOMAIN_WARN_DAYS_MESSAGE } from "./checkTypeChange";
 import { tagsToText, textToTags } from "./tags";
-import { ApiError, describePreview, fingerprintPreview, previewCheck } from "./preview";
+import { ApiError, CERTIFICATE_OFFERED, carriesPin, describePreview, fingerprintPreview, previewCheck } from "./preview";
+import { CertificateTrust } from "./CertificateTrust";
 import type { PreviewRequest, PreviewState } from "./preview";
 import { confirmLeave, registerLeaveGuard } from "../shell/leaveGuard";
 import { TlsFloorField } from "./TlsFloorField";
@@ -39,7 +40,7 @@ export type EditMonitorFormProps = {
 type Problem = { message: string; field?: string } | null;
 // These edits require a preview to save. TLS-only saves retain the existing
 // contract, but a TLS change must still invalidate any preview already shown.
-const CHECK_FIELDS = new Set(["target", "timeout_s", "method", "expected_status", "keyword", "keyword_mode", "follow_redirects", "headers", "body", "ssl_warn_days", "json_assertion", "dns", "domain_warn_days"]);
+const CHECK_FIELDS = new Set(["target", "timeout_s", "method", "expected_status", "keyword", "keyword_mode", "follow_redirects", "headers", "body", "ssl_warn_days", "json_assertion", "dns", "domain_warn_days", "trusted_cert_sha256"]);
 /**
  * The control a server problem field belongs to. `json_assertion.expected`
  * is the `json_expected` control; the bare `json_assertion` (wrong monitor
@@ -118,6 +119,10 @@ function valuesFor(monitor: InventoryMonitor): Record<string, string> {
     if (monitor.type === "domain" && monitor.domainWarnDays !== undefined) {
       values.domain_warn_days = String(monitor.domainWarnDays);
     }
+    // Every read carries the pin when there is one, so absent is none. Kept
+    // for an http monitor of an http:// address too, whose target may be
+    // edited to https:// and then trust a certificate.
+    if (monitor.type === "ssl" || monitor.type === "http") values.trusted_cert_sha256 = monitor.trustedCertSHA256 ?? "";
     // The detail read sends the HTTP settings for every type; a DNS query
     // and a registry lookup read none of them, so neither is offered them.
     for (const [key, value] of Object.entries(withoutHttp(monitor.type) ? {} : monitor.checkSettings ?? {})) {
@@ -190,7 +195,10 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
     );
   };
 
-  const validated = (): { patch: MonitorPatch; request: PreviewRequest } | null => {
+  const validated = (draft = values): { patch: MonitorPatch; request: PreviewRequest } | null => {
+    // A retest after trusting a certificate validates the values it is about
+    // to set, before the state holding them has re-rendered.
+    const values = draft;
     setProblem(null);
     if (!values.name.trim()) { reject("A monitor needs a name — it is how you find it in this list.", "name"); return null; }
     if (!monitor.push && !values.target.trim()) { reject("A target is required.", "target"); return null; }
@@ -257,11 +265,17 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
     // PATCH, in contrast, keeps the explicit empty string from the draft.
     if (values.min_tls_version) request.min_tls_version = values.min_tls_version;
     else delete request.min_tls_version;
+    // A pin goes with the probe only where the server reads one. One set and
+    // then left behind by an edit to an http:// address is hidden with its
+    // block, so it is not saved either; the server drops a stored one itself.
+    const pins = carriesPin(monitor.type, request.target);
+    if (!pins || !request.trusted_cert_sha256) delete request.trusted_cert_sha256;
+    if (!pins && patch.trusted_cert_sha256) delete patch.trusted_cert_sha256;
     return { patch, request };
   };
 
-  const runPreview = () => {
-    const draft = validated(); if (!draft || saving || conflict) return;
+  const runPreview = (current = values) => {
+    const draft = validated(current); if (!draft || saving || conflict) return;
     inFlight.current?.abort();
     const controller = new AbortController(); inFlight.current = controller;
     setPreview({ phase: "checking" });
@@ -272,6 +286,20 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
       setPreview({ phase: "idle" }); explain(error);
     });
   };
+  /*
+   * Trusting a certificate, or no longer trusting one, tests again at once
+   * with the new setting: whether it passes now is the next question, and a
+   * save of a changed pin needs a test of it anyway.
+   */
+  const retest = (pin: string) => {
+    const next = { ...values, trusted_cert_sha256: pin };
+    setValues(next);
+    if (!conflict) setProblem(null);
+    runPreview(next);
+  };
+  const pinShown = "trusted_cert_sha256" in values && carriesPin(monitor.type, values.target ?? "");
+  const offered = pinShown && preview.phase === "done" && !preview.result.ok ? preview.result.certificate : undefined;
+
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (busy.current || conflict) return;
@@ -379,11 +407,17 @@ export function EditMonitorForm({ monitor, onSave, onCancel, onReload, loadChann
     {problem && !problem.field && <FieldError>{problem.message}</FieldError>}
     <div role="status" aria-live="polite">
       {preview.phase === "checking" && <p className="result">Checking…</p>}
-      {preview.phase === "done" && <p className={`result ${preview.result.ok ? "result--good" : "result--bad"}`}>{describePreview(preview.result)}</p>}
+      {preview.phase === "done" && <p className={`result ${preview.result.ok ? "result--good" : "result--bad"}`}>{describePreview(preview.result)}{offered !== undefined && ` ${CERTIFICATE_OFFERED}`}</p>}
     </div>
+    {pinShown && <CertificateTrust trusted={values.trusted_cert_sha256}
+      trustedAt={values.trusted_cert_sha256 === initial.trusted_cert_sha256 ? monitor.trustedCertAt : undefined}
+      offered={offered} onTrust={retest} onStop={() => retest("")} stopId={`${ids}-trusted_cert_sha256`}
+      error={problem?.field === "trusted_cert_sha256" && <FieldError id={`${ids}-error`}>{problem.message}</FieldError>}
+      errorId={problem?.field === "trusted_cert_sha256" ? `${ids}-error` : undefined}
+      disabled={saving || conflict} />}
     {saving && <p className="field-help">A save in progress may still complete if you close this form.</p>}
     <div className="button-row">
-      {!monitor.push && <button className="button" type="button" onClick={runPreview} disabled={saving || conflict}>{preview.phase === "checking" ? "Testing…" : "Test it"}</button>}
+      {!monitor.push && <button className="button" type="button" onClick={() => runPreview()} disabled={saving || conflict}>{preview.phase === "checking" ? "Testing…" : "Test it"}</button>}
       <button className="button button--primary" type="submit" disabled={saving || conflict}>{saving ? "Saving…" : "Save changes"}</button>
       {conflict && onReload && <button className="button" type="button" onClick={onReload}>Reload latest settings</button>}
       {onCancel && <button className="button button--quiet" type="button" onClick={() => { if (confirmLeave(form.current)) onCancel(); }}>Cancel</button>}
