@@ -595,7 +595,7 @@ func (n *Notifier) attempt(ctx context.Context, d store.Delivery) error {
 	// Links are added here, at the last moment, rather than stored with
 	// the alert: what is in the outbox stays the alert itself, and a
 	// retry after the address changed links to where SubGlance is now.
-	err = sender.Send(sendCtx, ch.Config, withLinks(alert, n.baseURL))
+	err = n.send(sendCtx, sender, ch.Config, withLinks(alert, n.baseURL))
 	if err == nil {
 		n.count(ch.Type, outcomeDelivered)
 		if err := n.db.MarkDelivered(ctx, d.ID); err != nil {
@@ -710,7 +710,7 @@ func (n *Notifier) Test(ctx context.Context, ch store.Channel) error {
 
 	sendCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()
-	if err := sender.Send(sendCtx, ch.Config, alert); err != nil {
+	if err := n.send(sendCtx, sender, ch.Config, alert); err != nil {
 		return err
 	}
 	// A test that arrived proves the channel delivers again, which is what

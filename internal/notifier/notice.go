@@ -86,5 +86,5 @@ func (n *Notifier) SendNotice(ctx context.Context, a Alert) error {
 	}
 	sendCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()
-	return sender.Send(sendCtx, ch.Config, a)
+	return n.send(sendCtx, sender, ch.Config, a)
 }

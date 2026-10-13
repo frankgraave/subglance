@@ -183,7 +183,9 @@ func (n *Notifier) reportFailure(ctx context.Context, ch store.Channel, f store.
 			continue
 		}
 		sendCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
-		err = sender.Send(sendCtx, via.Config, notice)
+		// Redacted with the config of the channel that was tried, not the
+		// one that is failing: it is via's URL that this error carries.
+		err = n.send(sendCtx, sender, via.Config, notice)
 		cancel()
 		if err != nil {
 			n.log.Warn("could not send a failure notice, trying the next channel",

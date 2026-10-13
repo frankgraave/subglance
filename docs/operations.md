@@ -251,6 +251,13 @@ subglance --secret-key-previous OLD --secret-key NEW
 To turn encryption off on purpose, pass the current key as `--secret-key-previous`
 with no `--secret-key`; every row is written back as plain text.
 
+A delivery that fails does not undo this. The error it leaves in the log and in
+the database has the channel's credentials taken out first; a URL in it keeps
+its host, so "connection refused" still says which server. Errors stored by an
+older version are rewritten once at the next start; to clear the old text from
+the file's free pages as well, compact the database afterwards (see
+[compacting](#running-a-pass-now-and-compacting)).
+
 See [SECURITY.md](../SECURITY.md) for the threat model.
 
 ### Trusted proxies

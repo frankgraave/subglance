@@ -115,6 +115,20 @@ without the key. The values are sealed with AES-256-GCM, a fresh random nonce
 per write, and the ciphertext is authenticated — an edited value is refused, not
 decrypted into something a notifier would then send to.
 
+The same secrets stay out of the two places a failed delivery writes to: the
+log, and the error stored with the delivery and the channel. Go's HTTP client
+puts the whole request URL in a transport error, and for Slack, Discord and a
+plain webhook that URL is the credential, so every error is cleaned where the
+sender returns it, before anything logs or stores it: each configured secret is
+masked wherever it appears, and any URL left keeps its scheme and host and
+loses its path and query. The host is what tells "connection refused" on one
+server from another; the path is what grants access.
+
+Errors stored by a version that did not do this are rewritten once, at the
+first start after the upgrade. The old text can survive in the file's free
+pages until the database is compacted; a backup holds live rows only, so one
+taken after that start has none of it.
+
 Does **not** protect against:
 
 - anyone who can read the key file, or the environment of the running process;

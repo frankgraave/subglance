@@ -2,6 +2,7 @@ package notifier
 
 import (
 	"cmp"
+	"context"
 	"regexp"
 	"slices"
 	"strings"
@@ -84,12 +85,16 @@ const minRedactLen = 4
 
 // RedactError takes a channel's credentials out of a delivery error.
 //
-// The notifier stores errors as the transport wrote them, and Go's HTTP
-// client writes the whole request URL into every one: Post
-// "https://hooks.slack.com/services/…": dial tcp …. For Slack, Discord
-// and a plain webhook that URL is the credential, which the config mask
-// exists to keep from anybody reading the channel list, viewers included,
-// and from whoever reads the channel_failing notice in another channel.
+// Go's HTTP client writes the whole request URL into every transport
+// error: Post "https://hooks.slack.com/services/…": dial tcp …. For Slack,
+// Discord and a plain webhook that URL is the credential, which the config
+// mask exists to keep from anybody reading the channel list, viewers
+// included, from whoever reads the channel_failing notice in another
+// channel, and from the log and the database file. The notifier runs every
+// sender's error through here before it logs or stores it (see
+// redactSendError); the API and the notice run stored text through it again
+// on the way out, which changes nothing on a clean row and still covers one
+// an older version wrote.
 //
 // Two passes, because either alone has a gap. Every masked config value is
 // replaced by its own mask wherever it appears, which catches a token
@@ -181,4 +186,54 @@ func trimURL(raw string) string {
 		return scheme + "://" + host + tail
 	}
 	return scheme + "://" + host + "/…"
+}
+
+// redactedError is a delivery error with the channel's credentials taken out of
+// its text.
+//
+// The cause stays reachable through Unwrap so that errors.As still finds a
+// *Retryable and errors.Is still recognises a refused private address: what
+// kind of failure it was decides whether the delivery is retried, and that
+// must not change because the message was cleaned. Only the text is replaced.
+// Anything that logs or stores the error reads Error(), which is redacted;
+// printing an unwrapped cause would undo that, and nothing here does.
+type redactedError struct {
+	msg   string
+	cause error
+}
+
+func (e *redactedError) Error() string { return e.msg }
+func (e *redactedError) Unwrap() error { return e.cause }
+
+// redactSendError takes a channel's credentials out of the error its sender
+// returned, before the error is logged, stored in the outbox or the channel's
+// failure record, or handed back to whoever pressed Send test.
+//
+// It runs where the error is born rather than where it is read, because the
+// readers kept multiplying: the API redacted on the way out, the
+// channel_failing notice did too, and the log and the database columns,
+// which nobody reads through either of them, kept the Slack or Discord URL in
+// full. A database encrypted with --secret-key then held the same URL in plain
+// text one column over from the sealed config, and in every backup of it.
+//
+// An error with nothing to take out is returned as it is.
+func redactSendError(err error, cfg map[string]string) error {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	clean := RedactError(msg, cfg)
+	if clean == msg {
+		return err
+	}
+	return &redactedError{msg: clean, cause: err}
+}
+
+// send hands an alert to a channel's sender and returns its error with the
+// channel's credentials taken out. Every path that sends goes through here —
+// a queued delivery, a test message, a notice to the default channel and the
+// notice about a failing channel — so that none of them is the one that logs
+// a webhook URL.
+func (n *Notifier) send(ctx context.Context, sender Sender, cfg map[string]string, a Alert) error {
+	return redactSendError(sender.Send(ctx, cfg, a), cfg)
 }
