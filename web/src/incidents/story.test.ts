@@ -139,10 +139,10 @@ describe("the cause, in words a person would use", () => {
     const go = (path: string) => readFileSync(join(repoRoot, path), "utf8");
     const checker = go("internal/checker/checker.go");
     const kinds = [...checker.matchAll(/\bFailureKind = "([a-z_]+)"/g)].map((m) => m[1]);
-    const local = /FailureKindLocalNetwork = "([a-z_]+)"/.exec(go("internal/store/monitors.go"));
+    const local = [...go("internal/store/monitors.go").matchAll(/\bFailureKindLocal\w+ = "([a-z_]+)"/g)].map((m) => m[1]);
     expect(kinds.length, "no FailureKind constants found in checker.go").toBeGreaterThan(5);
-    expect(local, "FailureKindLocalNetwork not found in store/monitors.go").not.toBeNull();
-    for (const kind of [...kinds, local![1]]) {
+    expect(local, "the runner's local failure kinds not found in store/monitors.go").toEqual(["local_network", "local_dns"]);
+    for (const kind of [...kinds, ...local]) {
       const words = causeWords(kind);
       expect(words === kind ? null : words, `no words for failure kind "${kind}"`).not.toBeNull();
     }

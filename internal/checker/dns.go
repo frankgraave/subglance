@@ -230,6 +230,7 @@ func (c *DNSChecker) Check(ctx context.Context, m Monitor) Result {
 	if err != nil {
 		return fail(start, FailInternal, "%v", err)
 	}
+	system := strings.TrimSpace(m.DNSResolver) == ""
 
 	var (
 		answer dnsmessage.Message
@@ -254,10 +255,17 @@ func (c *DNSChecker) Check(ctx context.Context, m Monitor) Result {
 		}
 	}
 	if err != nil {
-		return classifyResolverError(start, ctx, server, err)
+		res := classifyResolverError(start, ctx, server, err)
+		// Asked of this host's own resolver, no answer may be the
+		// resolver's fault rather than the record's; see
+		// Result.ResolverFailed. A monitor's own resolver is what it
+		// watches, and its silence is that monitor's outage.
+		res.ResolverFailed = system && (res.Kind == FailTimeout || res.Kind == FailDNS)
+		return res
 	}
 
 	res := judgeDNSAnswer(start, m, name, qtype, server, answer)
+	res.ResolverFailed = system && (answer.RCode == dnsmessage.RCodeServerFailure || answer.RCode == dnsmessage.RCodeRefused)
 	// The time before the transmission that was answered went to datagrams
 	// that were lost, not to the resolver, so it is not its response time.
 	res.Latency -= lost

@@ -156,3 +156,18 @@ func TestLocalNetworkTransitions(t *testing.T) {
 		})
 	}
 }
+
+// A failure the resolver explains is held exactly like one the uplink
+// explains, and only its cause differs. Without LocalNetwork, LocalDNS is
+// ignored: it narrows a held failure down, it never holds one by itself.
+func TestLocalDNSIsHeldUnderItsOwnCause(t *testing.T) {
+	e := New(Options{})
+	tr := e.Observe(Observation{MonitorID: 1, Kind: "dns", FailureThreshold: 1, LocalNetwork: true, LocalDNS: true})
+	if tr.To != StatusWarning || tr.Notify || tr.Cause != CauseLocalDNS || tr.ConsecutiveFails != 0 {
+		t.Fatalf("resolver-held failure: %+v, want a warning under %q with no streak", tr, CauseLocalDNS)
+	}
+	tr = e.Observe(Observation{MonitorID: 2, Kind: "dns", FailureThreshold: 1, LocalDNS: true})
+	if tr.To != StatusDown || !tr.Notify || tr.Cause != "dns" {
+		t.Fatalf("LocalDNS alone held a failure back: %+v", tr)
+	}
+}

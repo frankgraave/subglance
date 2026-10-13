@@ -765,7 +765,7 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 	// streak it reports decides whether this result's response snapshot is
 	// worth storing. Observe only touches in-memory state, so moving it ahead
 	// of the heartbeat write changes nothing about what either one decides.
-	localNetwork := r.localNetworkFailure(ctx, o)
+	localNetwork, localDNS := r.localNetworkFailure(ctx, o)
 	obs := state.Observation{
 		MonitorID:        o.Monitor.ID,
 		OK:               o.Result.OK,
@@ -774,6 +774,7 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 		Error:            o.Result.Error,
 		FailureThreshold: o.Monitor.Retries,
 		LocalNetwork:     localNetwork,
+		LocalDNS:         localDNS,
 		Expiring:         o.Result.OK && o.Result.Expiring,
 
 		RecoveryThreshold: o.Monitor.RecoveryThreshold,
@@ -799,9 +800,14 @@ func (r *Runner) recordOutcome(o scheduler.Outcome) error {
 		hb.FailureKind = ""
 		hb.Error = ""
 	}
-	if localNetwork {
+	switch {
+	case localDNS:
 		// The bar keeps the checker's error text, which is what actually
 		// happened, but is filed under the cause that explains it.
+		hb.FailureKind = store.FailureKindLocalDNS
+		r.log.Warn("check failed while this host's resolver answered none of the connectivity names; not counted as an outage",
+			"monitor", o.Monitor.Name, "error", o.Result.Error)
+	case localNetwork:
 		hb.FailureKind = store.FailureKindLocalNetwork
 		r.log.Warn("check failed while this host could not reach any connectivity target; not counted as an outage",
 			"monitor", o.Monitor.Name, "error", o.Result.Error)
@@ -937,7 +943,8 @@ func (r *Runner) recordUnknown(ctx context.Context, o scheduler.Outcome) error {
 }
 
 // localNetworkFailure reports whether a failed check is explained by the host
-// having lost its own network, and so must not confirm an incident.
+// having lost its own network, and so must not confirm an incident; dns
+// narrows that down to the host's resolver.
 //
 // The canary is only asked when all three hold, in this order so the cheap
 // questions come first:
@@ -952,19 +959,31 @@ func (r *Runner) recordUnknown(ctx context.Context, o scheduler.Outcome) error {
 //
 // Only then does it dial, and the answer is shared by every monitor that asks
 // within the canary's cache window.
-func (r *Runner) localNetworkFailure(ctx context.Context, o scheduler.Outcome) bool {
+//
+// With the uplink up, a failure whose lookup got no answer from this host's
+// resolver gets one more question: is the resolver answering anything? Only
+// such a failure is asked about. A name that does not exist (NXDOMAIN) is an
+// answer, and an expired domain is a real outage the resolver must never be
+// blamed for.
+func (r *Runner) localNetworkFailure(ctx context.Context, o scheduler.Outcome) (local, dns bool) {
 	if r.canary == nil || o.Result.OK {
-		return false
+		return false, false
 	}
 	switch o.Result.Kind {
 	case checker.FailDNS, checker.FailConnection, checker.FailTimeout:
 	default:
-		return false
+		return false, false
 	}
 	if !r.engine.WouldConfirm(o.Monitor.ID, o.Monitor.Retries) {
-		return false
+		return false, false
 	}
-	return r.canary.Offline(ctx)
+	if r.canary.Offline(ctx) {
+		return true, false
+	}
+	if o.Result.ResolverFailed && r.canary.ResolverDown(ctx) {
+		return true, true
+	}
+	return false, false
 }
 
 // snapshotToStore decides whether this result's captured response is worth a

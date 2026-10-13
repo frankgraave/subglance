@@ -207,6 +207,9 @@ func smsText(a Alert, zone string, limit int) string {
 	case a.Event == EventLocalNetworkRestored:
 		status, name = "ONLINE", "SubGlance"
 		tail = fmt.Sprintf(" again after %s without a connection", smsDuration(a.At.Sub(a.StartedAt)))
+	case a.Event == EventLocalDNSRestored:
+		status, name = "ONLINE", "SubGlance DNS"
+		tail = fmt.Sprintf(" again after %s without an answer", smsDuration(a.At.Sub(a.StartedAt)))
 	default:
 		name = a.MonitorName
 		reason = a.LastError

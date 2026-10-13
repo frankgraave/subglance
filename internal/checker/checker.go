@@ -218,6 +218,13 @@ type Result struct {
 	// CheckedAt is when the probe started.
 	CheckedAt time.Time
 
+	// ResolverFailed marks a failure whose lookup of the target's name got
+	// no usable answer from this host's resolver: no reply, SERVFAIL or a
+	// refusal. A name that does not exist is an answer and does not set
+	// it. The runner asks the connectivity check whether the resolver is
+	// down for every name only for these failures.
+	ResolverFailed bool
+
 	// Response holds the beginning of the failed response, when the monitor
 	// asked for it and the check got far enough to have one. Nil on success
 	// and on every failure that never reached a response — a DNS failure has

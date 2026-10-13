@@ -7,7 +7,7 @@ import type { EventSourceLike } from "../live/connection";
 import { disabledWatchdog } from "../watchdog/fixtures";
 import { parseConnectivity } from "./api";
 import { formatSince } from "./offlineState";
-import { offlineConnectivity, onlineConnectivity } from "./fixtures";
+import { offlineConnectivity, onlineConnectivity, resolverDownConnectivity } from "./fixtures";
 
 const clients: QueryClient[] = [];
 
@@ -150,14 +150,76 @@ describe("the host-offline line", () => {
   });
 });
 
+const RESOLVER = /SubGlance's DNS resolver has not answered since/;
+
+describe("the resolver line", () => {
+  it("names the resolver, not the connection, when only lookups fail", async () => {
+    dashboard(resolverDownConnectivity);
+    const line = await screen.findByText(RESOLVER);
+    expect(screen.getAllByText(RESOLVER)).toHaveLength(1);
+    expect(screen.queryByText(SENTENCE)).toBeNull();
+    const region = line.closest("[role]");
+    expect(region?.getAttribute("role")).toBe("status");
+    expect(region?.textContent).toContain("failed lookups are held as warnings, not outages");
+  });
+
+  it.each([
+    ["switched off", { ...resolverDownConnectivity, enabled: false }],
+    ["down without a time", { ...resolverDownConnectivity, resolver_down_since: null }],
+    ["claimed beside an offline host", { ...offlineConnectivity, resolver_down: true, resolver_down_since: "2026-09-29T01:12:04Z" }],
+  ])("says nothing when the resolver answer is %s", async (_name, body) => {
+    const { client } = dashboard(body);
+    await waitFor(() => expect(client.getQueryState(["connectivity"])?.fetchStatus).toBe("idle"));
+    await screen.findAllByText("api");
+    expect(screen.queryByText(RESOLVER)).toBeNull();
+    expect(screen.queryByText(SENTENCE)).toBeNull();
+  });
+
+  it("rides the status wall's meta line", async () => {
+    dashboard(resolverDownConnectivity, { layout: "wall" });
+    const meta = await screen.findByText(RESOLVER);
+    expect(meta.closest(".wall-meta")).not.toBeNull();
+  });
+});
+
 describe("parseConnectivity", () => {
-  it("accepts the two documented states", () => {
-    expect(parseConnectivity(onlineConnectivity)).toEqual({ enabled: true, offline: false, offlineSince: null });
+  const answering = { resolverDown: false, resolverDownSince: null };
+
+  it("accepts the three documented states", () => {
+    expect(parseConnectivity(onlineConnectivity)).toEqual({
+      enabled: true,
+      offline: false,
+      offlineSince: null,
+      ...answering,
+    });
     expect(parseConnectivity(offlineConnectivity)).toEqual({
       enabled: true,
       offline: true,
       offlineSince: Date.parse("2026-09-29T01:12:04Z"),
+      ...answering,
     });
+    expect(parseConnectivity(resolverDownConnectivity)).toEqual({
+      enabled: true,
+      offline: false,
+      offlineSince: null,
+      resolverDown: true,
+      resolverDownSince: Date.parse("2026-09-29T01:12:04Z"),
+    });
+  });
+
+  it("reads a server from before the resolver fields as one whose resolver answers", () => {
+    expect(parseConnectivity({ enabled: true, offline: false, offline_since: null })).toEqual({
+      enabled: true,
+      offline: false,
+      offlineSince: null,
+      ...answering,
+    });
+  });
+
+  it("refuses a resolver answer it cannot vouch for", () => {
+    expect(parseConnectivity({ ...onlineConnectivity, resolver_down: "yes" })).toBeNull();
+    expect(parseConnectivity({ ...onlineConnectivity, resolver_down_since: "2026-09-29T01:12:04Z" })).toBeNull();
+    expect(parseConnectivity({ ...resolverDownConnectivity, resolver_down_since: "soon" })).toBeNull();
   });
 
   it("refuses an online answer that still carries a time", () => {

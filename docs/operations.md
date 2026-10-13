@@ -45,6 +45,7 @@ five-minute dead man's switch, or LAN monitoring, and having neither.
 | `--watchdog-interval` | `SUBGLANCE_WATCHDOG_INTERVAL` | `5m` | How often to ping that URL |
 | `--connectivity-check` | `SUBGLANCE_CONNECTIVITY_CHECK` | `true` | Before confirming an outage on a network error, check whether this host can reach anything at all. See [When this host loses its own connection](#when-this-host-loses-its-own-connection) |
 | `--connectivity-targets` | `SUBGLANCE_CONNECTIVITY_TARGETS` | `1.1.1.1:53,9.9.9.9:53` | `host:port` addresses that check dials over TCP; the host counts as offline only when all of them fail |
+| `--connectivity-names` | `SUBGLANCE_CONNECTIVITY_NAMES` | `one.one.one.one,dns.quad9.net` | Host names that check looks up through this host's resolver after a check's own lookup got no answer; the resolver counts as down only when none of them gets one. Empty looks up none. See [When the resolver stops answering](#when-the-resolver-stops-answering) |
 | `--raw-retention` | `SUBGLANCE_RAW_RETENTION` | unset: `720h` (30d), or the settings page | How long raw heartbeats are kept before being rolled up into hourly buckets. Minimum `24h`; `0` = forever. Setting it locks the settings page field |
 | `--rollup-retention` | `SUBGLANCE_ROLLUP_RETENTION` | unset: `0` (forever), or the settings page | How long hourly buckets and resolved incidents are kept (`0` = forever). Setting it locks the settings page field |
 | `--retention-run-at` | `SUBGLANCE_RETENTION_RUN_AT` | unset: `03:30`, or the settings page | Time of day, `HH:MM` in the server's time zone, at which the daily retention pass runs. A pass missed while the server was down runs at the next start. Setting it locks the settings page field |
@@ -340,6 +341,49 @@ variable wins over what is saved there, and the API refuses to change a
 setting one of them fixes, naming it — so leave both unset if you want to
 manage the check from Settings or the API. The card shows a fixed setting
 read-only, with the flag or variable that fixes it.
+
+#### When the resolver stops answering
+
+The targets are dialled by address, so they answer even when the resolver
+this host uses — often a Pi-hole or AdGuard box for the whole network — has
+stopped answering. Then every monitor on a host name fails on its lookup while
+the targets look fine. To catch that case too, a failure whose own lookup got
+**no answer** (silence, `SERVFAIL` or a refusal from this host's resolver) gets
+one more question before it confirms an incident: SubGlance looks up the
+reference names, by default `one.one.one.one` and `dns.quad9.net`, through the
+same resolver. **This is outbound traffic too:** a lookup of each name, sent to
+your resolver and by it to whatever it asks upstream, only at that moment and
+then every 30 seconds while the resolver stays silent.
+
+When the targets answer and **none** of the names does, the failure is the
+resolver's, not the monitor's: it is kept as a warning with the cause
+`local_dns`, no incident is confirmed, and it does not count against uptime.
+The dashboard and the status wall say "SubGlance's DNS resolver has not
+answered since 03:12", `GET /api/v1/connectivity` reports `resolver_down`, and
+when the resolver answers again one notice goes to the default channel saying
+for how long it did not.
+
+What it does not catch, on purpose:
+
+- A name that does not exist is an answer. A monitor whose domain has expired
+  gets `NXDOMAIN` and confirms its incident as before; so does one whose name
+  a filtering resolver blocks.
+- A failure on a monitor's own resolver (a DNS monitor with a resolver set)
+  is that monitor's outage, and is never put down to this host's.
+- If even one reference name gets an answer, nothing is held back. A
+  resolver that blocks the reference names answers them (with `NXDOMAIN` or a
+  sinkhole address), so it cannot make a real outage look like the
+  resolver's; pick names your resolver does not block, and that no monitor
+  depends on.
+- A monitor that reaches its target by address never looks anything up, and
+  is measured as usual while the resolver is down.
+
+To pick your own names, set `SUBGLANCE_CONNECTIVITY_NAMES=router.lan,example.org`
+(host names, not addresses: an address is never sent to the resolver). To keep
+the targets but look up no names, set it empty:
+`SUBGLANCE_CONNECTIVITY_NAMES=`. The names follow the connectivity check's
+switch, including the one under Settings; they are not set from Settings
+themselves.
 
 ## Which build is this
 

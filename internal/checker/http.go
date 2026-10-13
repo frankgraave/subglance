@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"strings"
 	"sync"
@@ -301,7 +302,8 @@ func (c *HTTPChecker) check(ctx context.Context, m Monitor, scope *headerScope) 
 		body = strings.NewReader(m.Body)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, m.Target, body)
+	lookup := &lookupWatch{}
+	req, err := http.NewRequestWithContext(httptrace.WithClientTrace(ctx, lookup.trace()), method, m.Target, body)
 	if err != nil {
 		return fail(start, FailInternal, "build request: %v", err)
 	}
@@ -333,6 +335,9 @@ func (c *HTTPChecker) check(ctx context.Context, m Monitor, scope *headerScope) 
 
 	resp, err := client.Do(req)
 	if err != nil {
+		if dnsErr := lookup.failure(); dnsErr != nil && !errors.Is(err, context.Canceled) {
+			return classifyLookupError(start, dnsErr)
+		}
 		// A negotiation that failed over ciphers or versions is a TLS fault,
 		// not a network one. classifyRequestError sees only the net.OpError
 		// underneath and would report "connection failed", which sends the
@@ -602,19 +607,20 @@ func classifyRequestError(start time.Time, ctx context.Context, err error) Resul
 			unwrapMessage(err))
 	}
 
+	// A lookup is asked before the deadline is, because a lookup that got
+	// no answer before the check ran out of time is a DNS failure: reported
+	// as "timed out", it sent whoever was paged to the site instead of to
+	// the resolver. A cancelled check is still a cancelled check.
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) && !errors.Is(err, context.Canceled) {
+		return classifyLookupError(start, dnsErr)
+	}
+
 	if errors.Is(err, context.DeadlineExceeded) || ctx.Err() == context.DeadlineExceeded {
 		return fail(start, FailTimeout, "timed out after %s", time.Since(start).Truncate(time.Millisecond))
 	}
 	if errors.Is(err, context.Canceled) {
 		return fail(start, FailInternal, "check cancelled")
-	}
-
-	var dnsErr *net.DNSError
-	if errors.As(err, &dnsErr) {
-		if dnsErr.IsNotFound {
-			return fail(start, FailDNS, "DNS lookup failed: host %s not found", dnsErr.Name)
-		}
-		return fail(start, FailDNS, "DNS lookup failed: %s", dnsErr.Err)
 	}
 
 	// Go wraps verification failures in CertificateVerificationError, which

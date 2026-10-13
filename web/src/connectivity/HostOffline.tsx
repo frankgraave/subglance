@@ -1,8 +1,9 @@
 import { useNow } from "../live/useNow";
-import { hostOfflineText } from "./offlineState";
+import { hostProblemHeld, hostProblemText, type HostProblem } from "./offlineState";
 
 /**
- * The dashboard's line for "this server lost its own connection" (SUB-151).
+ * The dashboard's line for "this server lost its own connection" (SUB-151),
+ * or its own DNS resolver.
  *
  * Design reasoning:
  *
@@ -22,22 +23,22 @@ import { hostOfflineText } from "./offlineState";
  * 3. **`role="status"`, polite, and always mounted.** A live region only
  *    announces changes to a region that already existed, so the empty one is
  *    rendered while online, the same as ConnectionBadge.
- * 4. **Only what the endpoint vouches for.** See useHostOfflineSince.
+ * 4. **Only what the endpoint vouches for.** See useHostProblem.
+ * 5. **One look for both losses.** A silent resolver is the same kind of
+ *    statement as a dead uplink — the server, not the monitors — so it wears
+ *    the same line; only the words change.
  */
-export function HostOfflineNotice({ since }: { since: number | null }) {
+export function HostOfflineNotice({ problem }: { problem: HostProblem | null }) {
   const now = useNow();
-  if (since === null) {
+  if (problem === null) {
     return <div role="status" aria-live="polite" className="sr-only" />;
   }
   return (
     <div role="status" aria-live="polite" className="conn-badge" data-state="host-offline">
       <span className="conn-badge-dot" aria-hidden="true" />
       <span>
-        {hostOfflineText(since, now)}
-        <span className="conn-badge-age">
-          {" "}
-          · failed network checks are held as warnings, not outages
-        </span>
+        {hostProblemText(problem, now)}
+        <span className="conn-badge-age"> · {hostProblemHeld(problem)}</span>
       </span>
     </div>
   );

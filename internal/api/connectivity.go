@@ -40,15 +40,23 @@ type connectivityResponse struct {
 	// OfflineSince is when the first failing round of the current episode
 	// ran; null while online.
 	OfflineSince *time.Time `json:"offline_since"`
+	// ResolverDown is true when this host could reach its targets but its
+	// resolver answered none of the reference names in the most recent
+	// round. Always false while Offline is true: a host without a
+	// connection is reported as that, not as a resolver fault.
+	ResolverDown bool `json:"resolver_down"`
+	// ResolverDownSince is when the resolver was first found not
+	// answering in the current episode; null otherwise.
+	ResolverDownSince *time.Time `json:"resolver_down_since"`
 }
 
 // handleConnectivity reports whether this host can currently reach its
 // connectivity targets.
 //
-// It exists for the dashboard (SUB-151): while the host is offline, every
-// monitor whose check failed on a network error is a warning filed under
-// local_network, and twenty amber rows with no sentence above them read as
-// twenty separate problems. This is the sentence.
+// It exists for the dashboard: while the host is offline, every monitor whose
+// check failed on a network error is a warning filed under local_network (or
+// local_dns, when it was the resolver), and twenty amber rows with no
+// sentence above them read as twenty separate problems. This is the sentence.
 //
 // Reading it never dials anything. It reports the state the last round left
 // behind, so polling it cannot turn the canary into the periodic outbound
@@ -65,6 +73,10 @@ func (s *Server) handleConnectivity(w http.ResponseWriter, _ *http.Request) {
 			at := since.UTC()
 			resp.Offline = true
 			resp.OfflineSince = &at
+		} else if since, down := s.connectivity.ResolverDownSince(); down {
+			at := since.UTC()
+			resp.ResolverDown = true
+			resp.ResolverDownSince = &at
 		}
 	}
 	writeJSON(w, http.StatusOK, resp)

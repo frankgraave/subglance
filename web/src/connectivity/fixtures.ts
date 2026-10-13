@@ -1,10 +1,22 @@
 // Wire bodies for GET /api/v1/connectivity, for tests and the browser harness.
-export const onlineConnectivity = { enabled: true, offline: false, offline_since: null };
+export const onlineConnectivity = {
+  enabled: true,
+  offline: false,
+  offline_since: null,
+  resolver_down: false,
+  resolver_down_since: null,
+};
 
 export const offlineConnectivity = {
-  enabled: true,
+  ...onlineConnectivity,
   offline: true,
   offline_since: "2026-09-29T01:12:04Z",
+};
+
+export const resolverDownConnectivity = {
+  ...onlineConnectivity,
+  resolver_down: true,
+  resolver_down_since: "2026-09-29T01:12:04Z",
 };
 
 // Wire bodies for GET /api/v1/settings/connectivity (SUB-168): the defaults,

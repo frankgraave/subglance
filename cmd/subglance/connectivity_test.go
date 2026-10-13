@@ -68,3 +68,20 @@ func TestNewCanaryPinnedOffWithUnusableTargets(t *testing.T) {
 		t.Fatal("the canary is on with the check turned off by a flag")
 	}
 }
+
+// The reference names come from the flags and variables, and follow the
+// switch: a canary built from the defaults looks up the default names, and
+// one told to look up none has none.
+func TestNewCanaryTakesTheNames(t *testing.T) {
+	db := openConnectivityDB(t)
+	if got := buildCanary(t, db).Names(); !reflect.DeepEqual(got, connectivity.DefaultNames) {
+		t.Fatalf("names = %v, want %v", got, connectivity.DefaultNames)
+	}
+	if got := buildCanary(t, db, "--connectivity-names=").Names(); len(got) != 0 {
+		t.Fatalf("names = %v, want none", got)
+	}
+	// Turned off by a flag, an unusable list is never judged and never used.
+	if got := buildCanary(t, db, "--connectivity-check=false", "--connectivity-names=1.1.1.1").Names(); len(got) != 0 {
+		t.Fatalf("names = %v with the check pinned off and an unusable list", got)
+	}
+}

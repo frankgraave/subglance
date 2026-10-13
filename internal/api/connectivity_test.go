@@ -52,9 +52,11 @@ func (c *steppingClock) advance(d time.Duration) {
 }
 
 type connectivityBody struct {
-	Enabled      bool       `json:"enabled"`
-	Offline      bool       `json:"offline"`
-	OfflineSince *time.Time `json:"offline_since"`
+	Enabled           bool       `json:"enabled"`
+	Offline           bool       `json:"offline"`
+	OfflineSince      *time.Time `json:"offline_since"`
+	ResolverDown      bool       `json:"resolver_down"`
+	ResolverDownSince *time.Time `json:"resolver_down_since"`
 }
 
 func getConnectivity(t *testing.T, h http.Handler) (connectivityBody, *httptest.ResponseRecorder) {
@@ -73,8 +75,8 @@ func getConnectivity(t *testing.T, h http.Handler) (connectivityBody, *httptest.
 	}
 	// The documented shape exactly: a new field is a decision about what a
 	// viewer may read, and must be made in the spec, not slipped in here.
-	if len(raw) != 3 {
-		t.Fatalf("want exactly enabled, offline, offline_since; got %s", rec.Body.String())
+	if len(raw) != 5 {
+		t.Fatalf("want exactly enabled, offline, offline_since, resolver_down, resolver_down_since; got %s", rec.Body.String())
 	}
 	var body connectivityBody
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
@@ -176,5 +178,58 @@ func TestConnectivityUnwiredIsUnavailable(t *testing.T) {
 	}
 	if got := rec.Header().Get("Cache-Control"); got != "private, no-store" {
 		t.Fatalf("Cache-Control = %q", got)
+	}
+}
+
+// silentResolver answers no lookup while silent.
+type silentResolver struct{ silent atomic.Bool }
+
+func (r *silentResolver) lookup(_ context.Context, name string) error {
+	if r.silent.Load() {
+		return &net.DNSError{Err: "i/o timeout", Name: name, IsTimeout: true}
+	}
+	return nil
+}
+
+// The uplink answers and the resolver does not: the endpoint says resolver,
+// not offline, and clears when the resolver answers again.
+func TestConnectivityReportsASilentResolver(t *testing.T) {
+	srv, _ := testServerWithDB(t)
+	network := &switchableNet{}
+	network.up.Store(true)
+	resolver := &silentResolver{}
+	resolver.silent.Store(true)
+	start := time.Date(2026, 10, 11, 3, 12, 0, 0, time.UTC)
+	clock := &steppingClock{t: start}
+	canary, err := connectivity.New(connectivity.Options{
+		Targets: []string{"gateway.internal:443"},
+		Names:   []string{"ref.internal"},
+		Dial:    network.dial,
+		Lookup:  resolver.lookup,
+		Now:     clock.now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.WithConnectivity(canary)
+	h := authedHandler(srv)
+
+	if canary.Offline(context.Background()) || !canary.ResolverDown(context.Background()) {
+		t.Fatal("want the host online and its resolver down")
+	}
+	clock.advance(5 * time.Minute)
+	body, rec := getConnectivity(t, h)
+	if body.Offline || body.OfflineSince != nil || !body.ResolverDown ||
+		body.ResolverDownSince == nil || !body.ResolverDownSince.Equal(start) {
+		t.Fatalf("silent resolver: %+v, want resolver_down since %s and online", body, start)
+	}
+	if strings.Contains(rec.Body.String(), "internal") {
+		t.Fatalf("response names a reference name or target: %s", rec.Body.String())
+	}
+
+	resolver.silent.Store(false)
+	canary.Sweep(context.Background())
+	if body, _ = getConnectivity(t, h); body.ResolverDown || body.ResolverDownSince != nil {
+		t.Fatalf("after the resolver answered: %+v", body)
 	}
 }

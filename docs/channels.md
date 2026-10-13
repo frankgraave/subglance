@@ -385,7 +385,7 @@ its `method` says so. Every request carries a `User-Agent` starting with
 | `incident_id` | The incident the alert belongs to; left out when there is none |
 | `started_at` | When the outage began: the first failed check, not the confirmation |
 | `at` | When this alert fired |
-| `cause` | The failure kind: `dns`, `connection`, `tls`, `timeout`, `status`, `keyword`, `assertion`, `cert_expiry`, `push_overdue`, `push_reported`, `local_network` or `internal` |
+| `cause` | The failure kind: `dns`, `connection`, `tls`, `timeout`, `status`, `keyword`, `assertion`, `cert_expiry`, `push_overdue`, `push_reported`, `local_network`, `local_dns` or `internal` |
 | `last_error` | The checker's message for the latest failure |
 | `reminder_count` | Which repeat of an unanswered alert this is; left out on the first |
 | `grouped_names`, `grouped_cause`, `members` | Set when several alerts were sent as one: see below |
@@ -407,7 +407,7 @@ acknowledged it, and `incident_resolved` once a check sees a certificate that no
 longer expires soon. `cause` is `cert_expiry`, and `last_error` says how many
 days are left. A notice is never grouped with outages. An expired certificate is
 an outage like any other: `incident_confirmed` without `notice`. Messages about SubGlance itself carry `backup_failed`,
-`local_network_restored` or `channel_failing`, with `monitor_id` 0 and
+`local_network_restored`, `local_dns_restored` or `channel_failing`, with `monitor_id` 0 and
 `monitor_name` `SubGlance`; a quiet-hours summary carries `quiet_hours_digest`. Ignore an
 `event` you do not recognise rather than treating it as an outage: a newer
 version may add one.

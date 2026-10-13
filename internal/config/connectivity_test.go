@@ -124,3 +124,41 @@ func TestConnectivityPinsNameWhatSetThem(t *testing.T) {
 		t.Fatalf("targets pin = %+v, want router-b:80 by --connectivity-targets", p.Targets)
 	}
 }
+
+// The reference names default to two independent ones, can be emptied to
+// look up none, and refuse an address or a malformed name at startup.
+func TestConnectivityNames(t *testing.T) {
+	c, err := Load(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.ConnectivityNameList(); !reflect.DeepEqual(got, connectivity.DefaultNames) {
+		t.Fatalf("names = %v, want %v", got, connectivity.DefaultNames)
+	}
+
+	t.Setenv("SUBGLANCE_CONNECTIVITY_NAMES", "")
+	if c, err = Load(nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := c.ConnectivityNameList(); len(got) != 0 {
+		t.Fatalf("an empty SUBGLANCE_CONNECTIVITY_NAMES left names %v", got)
+	}
+
+	if c, err = Load([]string{"--connectivity-names=router.lan"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := c.ConnectivityNameList(); !reflect.DeepEqual(got, []string{"router.lan"}) {
+		t.Fatalf("names = %v, want the flag's", got)
+	}
+
+	for _, bad := range []string{"1.1.1.1", "router.lan:53", "-x.example"} {
+		t.Setenv("SUBGLANCE_CONNECTIVITY_NAMES", bad)
+		if _, err := Load(nil); err == nil || !strings.Contains(err.Error(), "connectivity-names") {
+			t.Fatalf("Load accepted name %q: %v", bad, err)
+		}
+	}
+	// Off means the names are not used, so they are not judged either.
+	if _, err := Load([]string{"--connectivity-check=false"}); err != nil {
+		t.Fatalf("names were validated with the check off: %v", err)
+	}
+}
