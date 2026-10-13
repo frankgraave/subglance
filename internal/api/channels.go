@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"maps"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -134,17 +135,24 @@ func channelNameProblem(name string) problem {
 	return nameLengthProblem(name)
 }
 
-func validateChannel(req channelRequest) string {
+// validateChannel refuses a channel the notifier could not deliver through,
+// naming the request field the refusal is about.
+//
+// Each sentence already starts with the key it is about; the field carries
+// the same name on the wire, so a form can put the sentence under the input
+// that has to change rather than below the whole form, and never has to
+// read the key back out of the wording.
+func validateChannel(req channelRequest) problem {
 	if p := channelNameProblem(req.Name); !p.ok() {
-		return p.msg
+		return p
 	}
 
 	key, ok := requiredConfigKey[req.Type]
 	if !ok {
-		return "type must be one of webhook, discord, slack, telegram, email, ntfy, gotify, sms"
+		return fieldProblem("type", "type must be one of webhook, discord, slack, telegram, email, ntfy, gotify, sms")
 	}
 	if strings.TrimSpace(req.Config[key]) == "" {
-		return "config." + key + " is required for a " + req.Type + " channel"
+		return fieldProblem("config."+key, "config."+key+" is required for a "+req.Type+" channel")
 	}
 
 	// A webhook target is a URL we will fetch on the user's behalf, so it has
@@ -156,32 +164,40 @@ func validateChannel(req channelRequest) string {
 	if key == "url" || (req.Type == store.ChannelNtfy && strings.TrimSpace(req.Config["url"]) != "") {
 		u, err := url.Parse(req.Config["url"])
 		if err != nil {
-			return "config.url is not a valid URL"
+			return fieldProblem("config.url", "config.url is not a valid URL")
 		}
 		if u.Scheme != "http" && u.Scheme != "https" {
-			return "config.url must use http or https"
+			return fieldProblem("config.url", "config.url must use http or https")
 		}
 		if u.Host == "" {
-			return "config.url must include a host"
+			return fieldProblem("config.url", "config.url must include a host")
 		}
 	}
 
-	if msg := validatePushChannel(req); msg != "" {
-		return msg
+	if p := validatePushChannel(req); !p.ok() {
+		return p
 	}
 
-	for k, v := range req.Config {
+	// Sorted, so a request with two over-long values is always blamed on
+	// the same one.
+	for _, k := range slices.Sorted(maps.Keys(req.Config)) {
 		// A webhook's body template is the one value that is a document
 		// rather than a setting, and has a ceiling of its own, checked
 		// with the template.
 		if req.Type == store.ChannelWebhook && k == "body" {
 			continue
 		}
-		if len(k) > 64 || len(v) > 2048 {
-			return "config keys must be 64 characters or fewer and values 2048 or fewer"
+		const msg = "config keys must be 64 characters or fewer and values 2048 or fewer"
+		switch {
+		case len(k) > 64:
+			// A key that long is no input on any form, so nothing is
+			// blamed for it but the request.
+			return bodyProblem(msg)
+		case len(req.Config[k]) > 2048:
+			return fieldProblem("config."+k, msg)
 		}
 	}
-	return ""
+	return problem{}
 }
 
 func (s *Server) handleListChannels(w http.ResponseWriter, r *http.Request) {
@@ -249,12 +265,12 @@ func (s *Server) handleCreateChannel(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
-	if p := channelProblem(req); !p.ok() {
+	if p := validateChannel(req); !p.ok() {
 		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
-	if msg := s.checkChannelTarget(r.Context(), req); msg != "" {
-		writeError(w, http.StatusBadRequest, msg)
+	if p := s.checkChannelTarget(r.Context(), req); !p.ok() {
+		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
 
@@ -352,7 +368,7 @@ func (s *Server) handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if p := channelProblem(req); !p.ok() {
+	if p := validateChannel(req); !p.ok() {
 		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
@@ -360,8 +376,8 @@ func (s *Server) handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 	// this check existed, or before the operator dropped
 	// --allow-private-targets, must not be able to keep a blocked target
 	// alive simply because it is being updated rather than created.
-	if msg := s.checkChannelTarget(r.Context(), req); msg != "" {
-		writeError(w, http.StatusBadRequest, msg)
+	if p := s.checkChannelTarget(r.Context(), req); !p.ok() {
+		writeProblem(w, http.StatusBadRequest, p)
 		return
 	}
 
@@ -580,70 +596,52 @@ func (s *Server) handleSetMonitorChannels(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]any{"channels": out})
 }
 
-// channelProblem is validateChannel's verdict with the request field it is
-// about, when the validator knows it, so the form can put the sentence under
-// the control that has to change rather than below the whole form.
-//
-// Only a webhook's own settings carry a field so far: the notifier names the
-// key in the error, and nothing here reads it out of the sentence.
-func channelProblem(req channelRequest) problem {
-	if p := channelNameProblem(req.Name); !p.ok() {
-		return p
-	}
-	msg := validateChannel(req)
-	if msg == "" {
-		return problem{}
-	}
-	if req.Type == store.ChannelWebhook {
-		// Only when the webhook check is what refused it: an earlier rule,
-		// such as the URL's scheme, says something else and stays global.
-		err := notifier.ValidateWebhookConfig(req.Config)
-		if key := notifier.ConfigKey(err); key != "" && msg == "config."+err.Error() {
-			return fieldProblem("config."+key, msg)
-		}
-	}
-	return bodyProblem(msg)
-}
-
 // validatePushChannel checks the settings ntfy, Gotify, SMS and webhook need
 // beyond their required key. The notifier validates the same things again before every
 // send; checking here as well is what puts the message on the form.
-func validatePushChannel(req channelRequest) string {
+func validatePushChannel(req channelRequest) problem {
 	cfg := req.Config
 	switch req.Type {
 	case store.ChannelNtfy:
 		if !ntfyTopic.MatchString(strings.TrimSpace(cfg["topic"])) {
-			return "config.topic may contain only letters, digits, - and _ (at most 64)"
+			return fieldProblem("config.topic", "config.topic may contain only letters, digits, - and _ (at most 64)")
 		}
 		if raw := strings.TrimSpace(cfg["url"]); raw != "" {
 			if u, err := url.Parse(raw); err == nil && (u.Path != "" && u.Path != "/" || u.RawQuery != "" || u.Fragment != "") {
-				return "config.url must name the ntfy server, not a topic or other path"
+				return fieldProblem("config.url", "config.url must name the ntfy server, not a topic or other path")
 			}
 		}
 		if cfg["token"] != "" && strings.TrimSpace(cfg["token"]) == "" {
-			return "config.token must not be only whitespace"
+			return fieldProblem("config.token", "config.token must not be only whitespace")
 		}
 		if cfg["token"] != "" && (cfg["username"] != "" || cfg["password"] != "") {
-			return "config.token cannot be combined with config.username and config.password"
+			// The sentence leads with the token, so that is the input it
+			// stands under: one of the two ways in has to go.
+			return fieldProblem("config.token", "config.token cannot be combined with config.username and config.password")
 		}
 		if (cfg["username"] == "") != (cfg["password"] == "") {
-			return "config.username and config.password must be set together"
+			// Blamed on the half that is missing, which is the one to type.
+			missing := "config.password"
+			if cfg["username"] == "" {
+				missing = "config.username"
+			}
+			return fieldProblem(missing, "config.username and config.password must be set together")
 		}
 	case store.ChannelWebhook:
 		// The method, the headers and the body template, with the rules
 		// the sender applies before every delivery.
 		if err := notifier.ValidateWebhookConfig(cfg); err != nil {
-			return "config." + err.Error()
+			return notifierProblem(err)
 		}
 	case store.ChannelSMS:
 		// One rule set, shared with the sender, so the form and the
 		// delivery cannot disagree about what a valid number is.
 		if err := notifier.ValidateSMSConfig(cfg); err != nil {
-			return "config." + err.Error()
+			return notifierProblem(err)
 		}
 	case store.ChannelGotify:
 		if strings.TrimSpace(cfg["token"]) == "" {
-			return "config.token is required for a gotify channel"
+			return fieldProblem("config.token", "config.token is required for a gotify channel")
 		}
 		for _, key := range []string{"priority_down", "priority_up"} {
 			raw := strings.TrimSpace(cfg[key])
@@ -651,9 +649,21 @@ func validatePushChannel(req channelRequest) string {
 				continue
 			}
 			if n, err := strconv.Atoi(raw); err != nil || n < 0 || n > 10 {
-				return "config." + key + " must be a whole number from 0 to 10"
+				return fieldProblem("config."+key, "config."+key+" must be a whole number from 0 to 10")
 			}
 		}
 	}
-	return ""
+	return problem{}
+}
+
+// notifierProblem is a notifier validation error as an API refusal: the
+// sentence prefixed with "config.", as the key it starts with is a config
+// key, and the field the notifier names (notifier.ConfigKey). A rule that is
+// not about one key stays a refusal of the request.
+func notifierProblem(err error) problem {
+	msg := "config." + err.Error()
+	if key := notifier.ConfigKey(err); key != "" {
+		return fieldProblem("config."+key, msg)
+	}
+	return bodyProblem(msg)
 }

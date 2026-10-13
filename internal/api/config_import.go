@@ -385,12 +385,12 @@ func (s *Server) planChannel(ctx context.Context, p *importPlan, ex existingConf
 			req.Config[k] = v
 		}
 	}
-	if pr := channelProblem(req); !pr.ok() {
+	if pr := validateChannel(req); !pr.ok() {
 		return apiProblemAt(path, pr)
 	}
 	if len(missing) == 0 {
-		if msg := s.checkChannelTarget(ctx, req); msg != "" {
-			return problemAt(path, "%s", msg)
+		if pr := s.checkChannelTarget(ctx, req); !pr.ok() {
+			return apiProblemAt(path, pr)
 		}
 	} else {
 		next.Enabled = false

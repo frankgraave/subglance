@@ -50,17 +50,19 @@ func TestWebhookBodyTemplateIsValidatedOnSave(t *testing.T) {
 
 // TestWebhookConfigRefusalNamesItsField: the form puts a refused template
 // under the Body field, which it can only do when the 400 says which field
-// it was. A rule that is not about one webhook setting names none.
+// it was. An earlier rule about the URL names the URL, not the template, and
+// a rule that is not about one setting names none.
 func TestWebhookConfigRefusalNamesItsField(t *testing.T) {
 	srv, _ := testServerWithDB(t)
 	cases := map[string]struct {
 		cfg   map[string]string
 		field string
 	}{
-		"body":    {map[string]string{"url": "https://example.com/hook", "body": `{"text": "{{monitor}}"}`}, "config.body"},
-		"method":  {map[string]string{"url": "https://example.com/hook", "method": "DELETE"}, "config.method"},
-		"headers": {map[string]string{"url": "https://example.com/hook", "headers": "Authorization"}, "config.headers"},
-		"scheme":  {map[string]string{"url": "ftp://example.com/hook", "body": `{"text": "{{monitor}}"}`}, ""},
+		"body":     {map[string]string{"url": "https://example.com/hook", "body": `{"text": "{{monitor}}"}`}, "config.body"},
+		"method":   {map[string]string{"url": "https://example.com/hook", "method": "DELETE"}, "config.method"},
+		"headers":  {map[string]string{"url": "https://example.com/hook", "headers": "Authorization"}, "config.headers"},
+		"scheme":   {map[string]string{"url": "ftp://example.com/hook", "body": `{"text": "{{monitor}}"}`}, "config.url"},
+		"long key": {map[string]string{"url": "https://example.com/hook", strings.Repeat("k", 65): "v"}, ""},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

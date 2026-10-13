@@ -89,7 +89,8 @@ so importing it makes the target match instead of keeping what it had.
 Inside `quiet_hours`, `during` may be left out: it defaults to `hold`, as it
 does when the window is set through the API, because that is the mode that
 cannot lose an alert. A refused window is reported at the value that is wrong,
-for example `channels[1].quiet_hours.timezone`.
+for example `channels[1].quiet_hours.timezone`, and so is a refused channel
+setting, for example `channels[0].config.url`.
 
 A push monitor created by an import is issued a new push URL. It is shown once,
 as `push_url` in the import report, exactly like the response that creates a

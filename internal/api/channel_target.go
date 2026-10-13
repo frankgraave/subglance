@@ -138,7 +138,8 @@ func channelTarget(req channelRequest) (field, host string) {
 }
 
 // checkChannelTarget refuses a channel whose destination the guard blocks,
-// returning a validation message naming the offending field.
+// with the request field it is about, so a form puts the sentence under the
+// address to change.
 //
 // # Why this exists on top of the delivery-time guard
 //
@@ -174,14 +175,14 @@ func channelTarget(req channelRequest) (field, host string) {
 // that has not been provisioned yet — and refusing the save would make this
 // convenience layer a new way for a flaky resolver to block configuration.
 // Anything genuinely unreachable fails at delivery, visibly, in the outbox.
-func (s *Server) checkChannelTarget(ctx context.Context, req channelRequest) string {
+func (s *Server) checkChannelTarget(ctx context.Context, req channelRequest) problem {
 	if s.targetGuard == nil {
-		return ""
+		return problem{}
 	}
 
 	field, host := channelTarget(req)
 	if field == "" || host == "" {
-		return ""
+		return problem{}
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, channelTargetLookupTimeout)
@@ -189,17 +190,18 @@ func (s *Server) checkChannelTarget(ctx context.Context, req channelRequest) str
 
 	err := s.targetGuard.CheckHost(ctx, host)
 	if err == nil {
-		return ""
+		return problem{}
 	}
 	if !errors.Is(err, checker.ErrPrivateTarget) {
 		// Resolution trouble, not a refusal. See above.
-		return ""
+		return problem{}
 	}
 
 	// The field name leads, matching every other validation message in this
 	// package: an error that says only "blocked address" leaves a form with
-	// four inputs and no indication of which one to fix.
-	return field + " is not an allowed destination: " + err.Error() +
-		" (start SubGlance with --allow-private-targets or SUBGLANCE_ALLOW_PRIVATE_TARGETS=true" +
-		" to send to internal addresses)"
+	// four inputs and no indication of which one to fix. The same name goes
+	// in the field, for a client that places the sentence by it.
+	return fieldProblem(field, field+" is not an allowed destination: "+err.Error()+
+		" (start SubGlance with --allow-private-targets or SUBGLANCE_ALLOW_PRIVATE_TARGETS=true"+
+		" to send to internal addresses)")
 }

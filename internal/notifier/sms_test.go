@@ -519,27 +519,40 @@ func TestValidateSMSConfig(t *testing.T) {
 			t.Errorf("ValidateSMSConfig(%v) = %v", cfg, err)
 		}
 	}
-	bad := map[string]map[string]string{
-		"no provider":       gateway(func(c map[string]string) { delete(c, "provider") }),
-		"unknown provider":  gateway(func(c map[string]string) { c["provider"] = "bird" }),
-		"gateway no url":    gateway(func(c map[string]string) { delete(c, "url") }),
-		"gateway ftp url":   gateway(func(c map[string]string) { c["url"] = "ftp://phone" }),
-		"gateway no pass":   gateway(func(c map[string]string) { delete(c, "password") }),
-		"token in SID":      twilio(func(c map[string]string) { c["account_sid"] = "0123456789abcdef" }),
-		"no token":          twilio(func(c map[string]string) { c["auth_token"] = "" }),
-		"no from":           twilio(func(c map[string]string) { c["from"] = "" }),
-		"long sender name":  twilio(func(c map[string]string) { c["from"] = "SubGlanceAlerts" }),
-		"digits-only name":  twilio(func(c map[string]string) { c["from"] = "12345" }),
-		"limit zero":        twilio(func(c map[string]string) { c["hourly_limit"] = "0" }),
-		"limit too high":    twilio(func(c map[string]string) { c["hourly_limit"] = "101" }),
-		"recoveries yes":    twilio(func(c map[string]string) { c["recoveries"] = "yes" }),
-		"bad zone":          gateway(func(c map[string]string) { c["timezone"] = "Mars/Olympus" }),
-		"no numbers":        gateway(func(c map[string]string) { c["numbers"] = "" }),
-		"national, no code": gateway(func(c map[string]string) { c["numbers"] = "0612345678" }),
+	// Each refusal names the key it is about, which is the input the form
+	// puts the sentence under (ConfigKey).
+	bad := map[string]struct {
+		cfg map[string]string
+		key string
+	}{
+		"no provider":       {gateway(func(c map[string]string) { delete(c, "provider") }), "provider"},
+		"unknown provider":  {gateway(func(c map[string]string) { c["provider"] = "bird" }), "provider"},
+		"gateway no url":    {gateway(func(c map[string]string) { delete(c, "url") }), "url"},
+		"gateway ftp url":   {gateway(func(c map[string]string) { c["url"] = "ftp://phone" }), "url"},
+		"gateway no pass":   {gateway(func(c map[string]string) { delete(c, "password") }), "password"},
+		"token in SID":      {twilio(func(c map[string]string) { c["account_sid"] = "0123456789abcdef" }), "account_sid"},
+		"no token":          {twilio(func(c map[string]string) { c["auth_token"] = "" }), "auth_token"},
+		"no from":           {twilio(func(c map[string]string) { c["from"] = "" }), "from"},
+		"long sender name":  {twilio(func(c map[string]string) { c["from"] = "SubGlanceAlerts" }), "from"},
+		"digits-only name":  {twilio(func(c map[string]string) { c["from"] = "12345" }), "from"},
+		"short number from": {twilio(func(c map[string]string) { c["from"] = "+12" }), "from"},
+		"limit zero":        {twilio(func(c map[string]string) { c["hourly_limit"] = "0" }), "hourly_limit"},
+		"limit too high":    {twilio(func(c map[string]string) { c["hourly_limit"] = "101" }), "hourly_limit"},
+		"recoveries yes":    {twilio(func(c map[string]string) { c["recoveries"] = "yes" }), "recoveries"},
+		"bad zone":          {gateway(func(c map[string]string) { c["timezone"] = "Mars/Olympus" }), "timezone"},
+		"no numbers":        {gateway(func(c map[string]string) { c["numbers"] = "" }), "numbers"},
+		"gateway no user":   {gateway(func(c map[string]string) { delete(c, "username") }), "username"},
+		"bad country code":  {gateway(func(c map[string]string) { c["country_code"] = "abc" }), "country_code"},
+		"national, no code": {gateway(func(c map[string]string) { c["numbers"] = "0612345678" }), "numbers"},
 	}
-	for name, cfg := range bad {
-		if err := ValidateSMSConfig(cfg); err == nil {
-			t.Errorf("%s: accepted %v", name, cfg)
+	for name, tc := range bad {
+		err := ValidateSMSConfig(tc.cfg)
+		if err == nil {
+			t.Errorf("%s: accepted %v", name, tc.cfg)
+			continue
+		}
+		if got := ConfigKey(err); got != tc.key {
+			t.Errorf("%s: refusal names key %q, want %q (%v)", name, got, tc.key, err)
 		}
 	}
 }

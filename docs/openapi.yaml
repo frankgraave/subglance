@@ -2827,13 +2827,22 @@ paths:
             Malformed or unknown-field JSON, a missing or over-long name, an
             unknown type, a missing required config key, a config value that is
             not a valid http/https URL, a destination host the SSRF guard
-            refuses, or over-long config keys or values.
+            refuses, a setting the channel type's rules refuse, or over-long
+            config keys or values.
+
+            A refusal about one value names it in `field`: `name`, `type`, or
+            `config.<key>` for a config value (`config.url`, `config.topic`,
+            `config.numbers`, `config.host` for a blocked SMTP relay, ...). A
+            rule about a pair names the half that is missing or has to change
+            (`config.password` when only a username is set). Malformed JSON and
+            an over-long config key carry no `field`.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
               example:
                 error: config.url is required for a slack channel
+                field: config.url
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -2917,11 +2926,17 @@ paths:
               schema:
                 $ref: '#/components/schemas/Channel'
         '400':
-          description: An invalid id, malformed JSON, or a channel that fails validation.
+          description: |
+            An invalid id, malformed JSON, or a channel that fails validation.
+            A validation refusal names the value in `field` exactly as on
+            create (`config.url`, `config.topic`, ...).
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              example:
+                error: config.url must use http or https
+                field: config.url
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
