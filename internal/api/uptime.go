@@ -56,7 +56,8 @@ func (s *Server) handleMonitorUptime(w http.ResponseWriter, r *http.Request) {
 	for _, spec := range requested {
 		d, err := parseUptimeWindow(spec)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
+			// Only a requested window can fail: the standard ones are constants.
+			writeProblem(w, http.StatusBadRequest, fieldProblem("window", err.Error()))
 			return
 		}
 

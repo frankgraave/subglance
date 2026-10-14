@@ -8,7 +8,7 @@ import "net/http"
 // The field exists because a message alone cannot be placed. A form that only
 // receives "an http monitor needs a target starting with http:// or https://"
 // has two options: render it in a global region far from the input that caused
-// it, or guess the input by matching on the server\'s wording. The second is
+// it, or guess the input by matching on the server's wording. The second is
 // worse than it looks — it keeps working until someone rewords a message, and
 // then it fails silently, because the text still renders, just in the wrong
 // place. Nothing catches that.
@@ -18,8 +18,10 @@ import "net/http"
 // "no problem"; a problem always has a message, and may have a field.
 type problem struct {
 	// field is the JSON name from the request body, for example "target" or
-	// "ssl_warn_days" — the name the client sent, not the Go field, because
-	// the client is what has to find the input again.
+	// "ssl_warn_days", or the name of a query parameter, for example "limit"
+	// or "window" — the name the client sent, not the Go field, because the
+	// client is what has to find the input again. A path parameter such as a
+	// monitor id is not named: it is part of the address, not an input.
 	field string
 	msg   string
 }
@@ -27,7 +29,7 @@ type problem struct {
 // ok reports whether the value represents a passing validation.
 func (p problem) ok() bool { return p.msg == "" }
 
-// fieldProblem rejects a named request field.
+// fieldProblem rejects a named request field or query parameter.
 func fieldProblem(field, msg string) problem {
 	return problem{field: field, msg: msg}
 }

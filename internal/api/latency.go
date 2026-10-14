@@ -75,7 +75,7 @@ func (s *Server) handleMonitorLatency(w http.ResponseWriter, r *http.Request) {
 	}
 	window, ok := latencyWindows[spec]
 	if !ok {
-		writeError(w, http.StatusBadRequest, errLatencyWindow.Error())
+		writeProblem(w, http.StatusBadRequest, fieldProblem("window", errLatencyWindow.Error()))
 		return
 	}
 	step := latencyStep(window)
