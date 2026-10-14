@@ -339,6 +339,18 @@ that do not share a failure with your monitors. To turn the check off, set
 `SUBGLANCE_CONNECTIVITY_CHECK=false`; then an outage of this host is reported
 as an outage of every monitor, as it was before this check existed.
 
+A target's host has to be an address or a name a resolver will look up — the
+same rule as a monitor's target (see [Using SubGlance](using-subglance.md)):
+no empty label (`exa..mple.com`), no label that starts or ends with a hyphen,
+no digits and dots that are not an IPv4 address (`999.1.1.1`), no `.onion`
+name, and an internationalised name in its `xn--` form. A target that breaks
+it fails every dial without sending anything, so a list made only of such
+targets would call this host offline in every round and hold back every real
+outage. The flag, the variable, the Settings page and the API all refuse one
+and say why. A list saved on the Settings page before this rule still loads,
+so an upgrade does not stop the server; the startup log names the target that
+cannot be looked up.
+
 An administrator can make the same two changes on the **Settings** page,
 under *Connectivity check* (one `host:port` per line, with a button that puts
 the default addresses back), or over the API with
@@ -389,7 +401,9 @@ What it does not catch, on purpose:
   is measured as usual while the resolver is down.
 
 To pick your own names, set `SUBGLANCE_CONNECTIVITY_NAMES=router.lan,example.org`
-(host names, not addresses: an address is never sent to the resolver). To keep
+(host names, not addresses: an address is never sent to the resolver; and,
+as for the targets, names a resolver will look up — `x.onion` or `999.1.1.1`
+would never be asked about, so the round could not tell anything). To keep
 the targets but look up no names, set it empty:
 `SUBGLANCE_CONNECTIVITY_NAMES=`. The names follow the connectivity check's
 switch, including the one under Settings; they are not set from Settings

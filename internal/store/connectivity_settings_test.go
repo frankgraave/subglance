@@ -76,13 +76,30 @@ func TestConnectivitySettingsSaveAndResolve(t *testing.T) {
 func TestConnectivitySettingsRefuseABadList(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
-	for _, bad := range [][]string{{}, {"gateway"}, {"gateway:0"}, {"gate,way:53"}} {
+	for _, bad := range [][]string{{}, {"gateway"}, {"gateway:0"}, {"gate,way:53"}, {"exa..mple.com:443"}} {
 		if _, err := db.SaveConnectivity(ctx, ConnectivityChange{Targets: bad}); err == nil {
 			t.Fatalf("saved %q", bad)
 		}
 	}
 	if v, _ := db.ConnectivityVersion(ctx); v != 0 {
 		t.Fatalf("a refused save moved the version to %d", v)
+	}
+}
+
+// A list saved before hosts were held to the resolver's rule still loads:
+// refusing it would stop the server starting after an upgrade.
+func TestConnectivitySettingsLoadAListSavedBeforeTheHostRule(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	if err := db.putSetting(ctx, settingConnectivityTargets, "exa..mple.com:443,gateway:53"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := db.ResolveConnectivity(ctx, ConnectivityPins{})
+	if err != nil {
+		t.Fatalf("ResolveConnectivity refused a saved list: %v", err)
+	}
+	if want := []string{"exa..mple.com:443", "gateway:53"}; !reflect.DeepEqual(got.Targets.Value, want) {
+		t.Fatalf("targets = %v, want %v", got.Targets.Value, want)
 	}
 }
 

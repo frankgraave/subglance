@@ -441,7 +441,12 @@ paths:
         are required, including when the check is turned off, so it can never
         be turned back on with a list it would refuse. Addresses on private
         networks are allowed: the check only completes a TCP handshake, and
-        the operator's own gateway is a sensible target.
+        the operator's own gateway is a sensible target. A host name the
+        resolver would refuse without asking a server (an empty label, a
+        label that starts or ends with a hyphen, digits and dots that are not
+        an IPv4 address, a `.onion` or non-ASCII name) is refused: every dial
+        to it fails without sending anything, so it would make this host look
+        offline during every real outage.
 
         A field set by a flag or environment variable cannot be changed here
         (`409`). With `If-Match` set to the `ETag` from GET, the save is
@@ -5916,7 +5921,9 @@ components:
             Host or IP address of the resolver to ask, with an optional port
             (53 assumed). Omitted means the resolver of the host SubGlance
             runs on. A resolver set here is dialled through the same
-            private-address guard as every target.
+            private-address guard as every target. A host name is held to the
+            same rule as a monitor's target hostname (see `type`): one the
+            resolver would refuse without asking a server is refused here.
           example: 1.1.1.1
     CertFingerprint:
       type: string

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -221,6 +222,16 @@ func TestValidateTargets(t *testing.T) {
 		{"canary-a:0", false},
 		{"canary-a:dns", false},
 		{"canary-a:70000", false},
+		// A host the resolver refuses without asking: every dial fails
+		// before a packet is sent, so the canary would call the host
+		// offline in every round.
+		{"exa..mple.com:443", false},
+		{"-canary.example:443", false},
+		{"999.1.1.1:53", false},
+		{"canary.onion:443", false},
+		{"b\u00fccher.example:443", false},
+		{"canary-a:53, exa..mple.com:443", false},
+		{"xn--bcher-kva.example:443", true},
 	} {
 		err := ValidateTargets(ParseTargets(tc.in))
 		if (err == nil) != tc.ok {
@@ -229,5 +240,36 @@ func TestValidateTargets(t *testing.T) {
 	}
 	if _, err := New(Options{}); err == nil {
 		t.Fatal("New accepted an empty target list")
+	}
+}
+
+// The refusal names the target and the reason, because it reaches the
+// operator as a startup error or a settings-page message.
+func TestValidateTargetsSaysWhyAHostCannotBeLookedUp(t *testing.T) {
+	err := ValidateTargets([]string{"canary-a:53", "exa..mple.com:443"})
+	if err == nil || !strings.Contains(err.Error(), `"exa..mple.com:443"`) || !strings.Contains(err.Error(), "empty label") {
+		t.Fatalf("err = %v, want the target and the empty label named", err)
+	}
+}
+
+// A list saved before hosts were held to the resolver's rule is read back
+// with the shape check alone, so an upgrade cannot stop the server starting:
+// New and Configure take it, and still refuse what was never a target.
+func TestValidateSavedTargetsChecksTheShapeOnly(t *testing.T) {
+	legacy := []string{"exa..mple.com:443", "canary-a:53"}
+	if err := ValidateSavedTargets(legacy); err != nil {
+		t.Fatalf("ValidateSavedTargets(%q) = %v, want ok", legacy, err)
+	}
+	c, err := New(Options{Targets: legacy})
+	if err != nil {
+		t.Fatalf("New refused a saved list: %v", err)
+	}
+	if err := c.Configure(Settings{Enabled: true, Targets: []string{"999.1.1.1:53"}}); err != nil {
+		t.Fatalf("Configure refused a saved list: %v", err)
+	}
+	for _, bad := range [][]string{nil, {"canary-a"}, {"canary-a:0"}, {"gate,way:53"}} {
+		if err := ValidateSavedTargets(bad); err == nil {
+			t.Errorf("ValidateSavedTargets(%q) accepted a list that is not host:port", bad)
+		}
 	}
 }
