@@ -27,8 +27,7 @@ type resetResponse struct {
 // accounts and settings. See store.ResetInstance for exactly what goes.
 func (s *Server) handleResetInstance(w http.ResponseWriter, r *http.Request) {
 	var req resetRequest
-	if err := decodeJSON(w, r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	if !readJSON(w, r, &req) {
 		return
 	}
 	if req.Confirm != resetPhrase {

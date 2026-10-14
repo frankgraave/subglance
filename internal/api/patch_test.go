@@ -194,7 +194,7 @@ func TestPatchMonitorValidatesMergedResult(t *testing.T) {
 			name: "unknown field",
 			seed: store.Monitor{Name: "e", Type: "http", Target: "https://example.com", Enabled: true},
 			body: `{"interval_seconds": 60}`,
-			want: "invalid JSON",
+			want: `unknown field "interval_seconds"`,
 		},
 		{
 			name: "keyword mode outside the schema check",

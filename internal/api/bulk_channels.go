@@ -2,9 +2,7 @@ package api
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 
 	"github.com/frankgraave/subglance/internal/store"
@@ -35,17 +33,10 @@ func (s *Server) handleChannelOperation(w http.ResponseWriter, r *http.Request, 
 			return
 		}
 	}
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 256<<10))
 	// An unknown field is refused rather than ignored: a client that sent
 	// "channel_ids" expecting a replacement must not get an add of nothing.
-	decoder.DisallowUnknownFields()
 	var op store.ChannelOperation
-	if err := decoder.Decode(&op); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
-		return
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		writeError(w, http.StatusBadRequest, "expected exactly one JSON object")
+	if !readJSONLimit(w, r, maxBulkJSONBody, &op) {
 		return
 	}
 	result, etag, err := s.db.ChangeMonitorChannels(r.Context(), op, expected, preview)

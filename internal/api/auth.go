@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net"
 	"net/http"
@@ -230,8 +229,7 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req loginRequest
-	if err := decodeJSON(w, r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	if !readJSON(w, r, &req) {
 		return
 	}
 	email := store.NormaliseEmail(req.Email)
@@ -284,8 +282,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req loginRequest
-	if err := decodeJSON(w, r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	if !readJSON(w, r, &req) {
 		return
 	}
 
@@ -393,8 +390,7 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req changePasswordRequest
-	if err := decodeJSON(w, r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	if !readJSON(w, r, &req) {
 		return
 	}
 
@@ -522,15 +518,4 @@ func peerIP(r *http.Request) string {
 		return r.RemoteAddr
 	}
 	return host
-}
-
-func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
-	// A bounded reader keeps a hostile client from making us allocate its way
-	// to an out-of-memory kill.
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(dst); err != nil {
-		return err
-	}
-	return nil
 }

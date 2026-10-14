@@ -78,8 +78,7 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 	user, _ := UserFromContext(r.Context())
 
 	var req createTokenRequest
-	if err := decodeJSON(w, r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	if !readJSON(w, r, &req) {
 		return
 	}
 	// Trimmed and measured as a channel's name is: a name of spaces is a
@@ -195,8 +194,7 @@ type createUserRequest struct {
 // handleCreateUser adds an account. Admin only.
 func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	var req createUserRequest
-	if err := decodeJSON(w, r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	if !readJSON(w, r, &req) {
 		return
 	}
 	email := store.NormaliseEmail(req.Email)
@@ -287,8 +285,7 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req updateUserRequest
-	if err := decodeJSON(w, r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	if !readJSON(w, r, &req) {
 		return
 	}
 	if req.Role == nil {

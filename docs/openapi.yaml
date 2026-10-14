@@ -16,7 +16,17 @@ info:
     against the server's route table by an automated drift test.
 
     Timestamps are RFC 3339 / ISO 8601 in UTC. Errors always share one shape:
-    a JSON object with a single `error` string.
+    a JSON object with an `error` string and, when the refusal is about one
+    request field, a `field` naming it (see the `Error` schema).
+
+    A JSON request body is one JSON object and nothing after it, with no
+    field the operation does not document, of at most 1 MiB (256 KiB for the
+    bulk tag and channel operations). A larger body is answered with 413. A
+    value of the wrong JSON type is refused with 400 and `field` set to its
+    name, written as a dotted path inside a nested object (`dns.expected`,
+    `json_assertion.path`): for example `interval_s must be a whole number,
+    not a string`. A body that is not JSON, is empty, holds a second value
+    or carries an unknown field is refused with 400 and no `field`.
   license:
     name: AGPL-3.0-only
     identifier: AGPL-3.0-only
@@ -129,6 +139,8 @@ paths:
           description: Write role required
         '404':
           description: Monitor not found
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
   /api/v1/maintenance/{id}:
     parameters:
       - name: id
@@ -493,6 +505,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '500':
           description: |
             The settings could not be saved, or were saved but could not be
@@ -664,6 +678,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '500':
           description: The settings could not be saved.
           content:
@@ -867,6 +883,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/ForbiddenAdmin'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '500':
           description: The reset failed and was rolled back. Nothing was deleted.
           content:
@@ -1062,6 +1080,8 @@ paths:
                 $ref: '#/components/schemas/Error'
               example:
                 error: setup has already been completed
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '500':
           description: The account could not be created, or was created but sign-in failed.
           content:
@@ -1118,6 +1138,8 @@ paths:
                 $ref: '#/components/schemas/Error'
               example:
                 error: invalid email or password
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '429':
           description: |
             Too many failed attempts for this email address or IP within the
@@ -1416,6 +1438,8 @@ paths:
               example:
                 error: current password is incorrect
                 field: current_password
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '500':
           description: The password could not be stored.
           content:
@@ -1525,6 +1549,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
       x-subglance-access: write
   /api/v1/monitors/{id}:
     parameters:
@@ -1687,6 +1713,8 @@ paths:
                 error: >-
                   monitor 1 was modified by someone else; fetch it again and
                   reapply your change
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '500':
           description: The monitor could not be loaded.
           content:
@@ -2013,6 +2041,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '500':
           description: The assignment could not be stored or read back.
           content:
@@ -2052,7 +2082,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/TagOperationResult'
         '400':
-          description: Invalid, oversized or trailing JSON, invalid operation or resulting tag limit exceeded.
+          description: Invalid or trailing JSON, invalid operation or resulting tag limit exceeded.
           content:
             application/json:
               schema:
@@ -2069,6 +2099,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '500':
           description: Could not read current tags; never reported as an empty preview.
           content:
@@ -2115,7 +2147,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/TagOperationResult'
         '400':
-          description: Invalid request or resulting tags, oversized body, or malformed If-Match.
+          description: Invalid request or resulting tags, or malformed If-Match.
           content:
             application/json:
               schema:
@@ -2138,6 +2170,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '428':
           description: If-Match is required. Preview before committing.
           content:
@@ -2187,8 +2221,8 @@ paths:
                 $ref: '#/components/schemas/ChannelOperationResult'
         '400':
           description: |
-            Invalid, oversized or trailing JSON, an unknown field or action,
-            or an unknown channel (`field: channel_id`).
+            Invalid or trailing JSON, an unknown field or action, or an
+            unknown channel (`field: channel_id`).
           content:
             application/json:
               schema:
@@ -2199,6 +2233,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '500':
           description: Could not read current links; never reported as an empty preview.
           content:
@@ -2259,6 +2295,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '428':
           description: If-Match is required. Preview before committing.
           content:
@@ -2333,6 +2371,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '429':
           description: This user ran a preview within the last three seconds.
           headers:
@@ -2847,6 +2887,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '500':
           description: The channel could not be stored.
           content:
@@ -2943,6 +2985,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/ChannelNotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '500':
           description: The channel could not be loaded or stored.
           content:
@@ -3090,6 +3134,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/ChannelNotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '500':
           description: The quiet hours could not be stored.
           content:
@@ -3198,6 +3244,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '500':
           description: The rule could not be stored.
           content:
@@ -3251,6 +3299,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '500':
           description: The rule could not be stored.
           content:
@@ -3629,6 +3679,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '500':
           description: The token could not be created.
           content:
@@ -4116,6 +4168,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/ForbiddenAdmin'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '500':
           description: The account could not be written.
           content:
@@ -4186,6 +4240,8 @@ paths:
                 $ref: '#/components/schemas/Error'
               example:
                 error: user not found
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '500':
           description: The role could not be changed.
           content:
@@ -4573,6 +4629,8 @@ paths:
               example:
                 error: another status page already uses this slug
                 field: slug
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '500':
           description: The page could not be stored.
           content:
@@ -4687,6 +4745,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '500':
           description: The page could not be updated.
           content:
@@ -4770,6 +4830,8 @@ paths:
           $ref: '#/components/responses/ForbiddenAdmin'
         '404':
           $ref: '#/components/responses/StatusPageNotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '500':
           description: The entries could not be stored.
           content:
@@ -5057,6 +5119,16 @@ components:
             $ref: '#/components/schemas/Error'
           example:
             error: status page not found
+    PayloadTooLarge:
+      description: |
+        The request body is larger than the operation reads: 1 MiB, or 256 KiB
+        for the bulk tag and channel operations. Nothing was changed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: the request body is larger than 1 MiB
     PublicStatusPageLimited:
       description: |
         Too many requests from this address, or in total. `Retry-After`
@@ -5541,8 +5613,9 @@ components:
         the request body, and it carries the JSON name that was sent, so a
         client can place the message next to the input that caused it instead
         of matching on the wording of `error`. Anything not about a single
-        field — malformed JSON, a rate limit, a missing session, a server
-        failure — omits it.
+        field — malformed JSON, an unknown field, a rate limit, a missing
+        session, a server failure — omits it. A value of the wrong JSON type
+        is about one field and names it.
       required: [error]
       properties:
         error:

@@ -261,8 +261,7 @@ func (s *Server) handleGetChannel(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCreateChannel(w http.ResponseWriter, r *http.Request) {
 	var req channelRequest
-	if err := decodeJSON(w, r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	if !readJSON(w, r, &req) {
 		return
 	}
 	if p := validateChannel(req); !p.ok() {
@@ -312,8 +311,7 @@ func (s *Server) handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req channelRequest
-	if err := decodeJSON(w, r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	if !readJSON(w, r, &req) {
 		return
 	}
 
@@ -545,8 +543,7 @@ func (s *Server) handleSetMonitorChannels(w http.ResponseWriter, r *http.Request
 	}
 
 	var req setMonitorChannelsRequest
-	if err := decodeJSON(w, r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	if !readJSON(w, r, &req) {
 		return
 	}
 

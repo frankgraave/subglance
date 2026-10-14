@@ -30,8 +30,7 @@ func (s *Server) handleListMaintenance(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) handleCreateMaintenance(w http.ResponseWriter, r *http.Request) {
 	var req store.MaintenanceWindow
-	if err := decodeJSON(w, r, &req); err != nil {
-		writeError(w, 400, "invalid JSON: "+err.Error())
+	if !readJSON(w, r, &req) {
 		return
 	}
 	if req.ID != 0 || !req.CreatedAt.IsZero() {

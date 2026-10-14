@@ -26,8 +26,7 @@ func (s *Server) handleSetQuietHours(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req quietHoursRequest
-	if err := decodeJSON(w, r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+	if !readJSON(w, r, &req) {
 		return
 	}
 
