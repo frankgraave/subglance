@@ -62,6 +62,36 @@ func TestValidateTargetForType(t *testing.T) {
 		// with surrounding whitespace is a paste, not a mistake.
 		{name: "ping host with surrounding whitespace", typ: "ping", target: "  example.com  "},
 		{name: "ping ipv6", typ: "ping", target: "2001:db8::1"},
+
+		// A hostname the resolver refuses without asking a server. Saved, it
+		// failed every check as "host not found", which reads as an outage of
+		// a real host instead of a typo in the form. The full rule is tested
+		// in internal/checker; these prove every type applies it.
+		{name: "http empty label", typ: "http", target: "https://exa..mple.com/health", wantErr: true, wantMsg: "empty label"},
+		{name: "http bad character", typ: "http", target: "https://exa!mple.com/", wantErr: true, wantMsg: `contains "!"`},
+		{name: "http leading hyphen", typ: "http", target: "http://-example.com", wantErr: true, wantMsg: "starts with a hyphen"},
+		{name: "http short ipv4", typ: "http", target: "http://10.0.1/", wantErr: true, wantMsg: "not a valid IP address"},
+		{name: "tcp empty label", typ: "tcp", target: "exa..mple.com:443", wantErr: true, wantMsg: "empty label"},
+		{name: "tcp out-of-range octet", typ: "tcp", target: "999.1.1.1:80", wantErr: true, wantMsg: "not a valid IP address"},
+		{name: "tcp trailing hyphen", typ: "tcp", target: "db-.example.com:5432", wantErr: true, wantMsg: "ends with a hyphen"},
+		{name: "ssl bad character", typ: "ssl", target: "exa!mple.com", wantErr: true, wantMsg: `contains "!"`},
+		{name: "ssl url with empty label", typ: "ssl", target: "https://exa..mple.com/path", wantErr: true, wantMsg: "empty label"},
+		{name: "ping empty label", typ: "ping", target: "exa_mple..com", wantErr: true, wantMsg: "empty label"},
+		{name: "ping leading hyphen", typ: "ping", target: "-x.com", wantErr: true, wantMsg: "starts with a hyphen"},
+		// tcp, ssl and ping hand the name to the resolver as written, and it
+		// does not convert an internationalised name; net/http does.
+		{name: "tcp unicode host", typ: "tcp", target: "b\u00fccher.de:443", wantErr: true, wantMsg: "xn--"},
+		{name: "ssl unicode host", typ: "ssl", target: "b\u00fccher.de", wantErr: true, wantMsg: "xn--"},
+		{name: "ping unicode host", typ: "ping", target: "b\u00fccher.de", wantErr: true, wantMsg: "xn--"},
+		{name: "http unicode host", typ: "http", target: "https://b\u00fccher.de/"},
+		{name: "tcp punycode host", typ: "tcp", target: "xn--bcher-kva.de:443"},
+		// Kept: shapes that look odd and work.
+		{name: "tcp single label", typ: "tcp", target: "db:5432"},
+		{name: "tcp underscore", typ: "tcp", target: "my_service.internal:8080"},
+		{name: "ssl trailing dot", typ: "ssl", target: "example.com.:443"},
+		{name: "http bracketed ipv6", typ: "http", target: "http://[2001:db8::1]:8080/"},
+		{name: "http ipv6 with zone", typ: "http", target: "http://[fe80::1%25eth0]/"},
+		{name: "ping localhost", typ: "ping", target: "localhost"},
 	}
 
 	for _, tc := range tests {

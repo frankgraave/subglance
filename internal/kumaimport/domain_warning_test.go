@@ -184,22 +184,32 @@ func TestDomainWarningsAreOnePerDomain(t *testing.T) {
 func TestDomainWarningsThatCannotComeOverAreListed(t *testing.T) {
 	cases := []struct {
 		name, host, note string
+		// url, when set, makes the monitor an http one on that URL instead
+		// of a port monitor on host.
+		url string
 	}{
 		{"a shared suffix directly under a TLD", "frank.github.io",
-			`domain warning "Gateway" (port): Kuma warned before the registration of github.io expired, the domain of the shared suffix`},
+			`domain warning "Gateway" (port): Kuma warned before the registration of github.io expired, the domain of the shared suffix`, ""},
 		{"a shared suffix under a two-label suffix", "shop.myspreadshop.co.uk",
-			"Kuma warned before the registration of myspreadshop.co.uk expired"},
-		{"an internationalised name", "bücher.example",
-			"Kuma warned before the registration of bücher.example expired; a domain monitor takes the name in the xn-- form"},
+			"Kuma warned before the registration of myspreadshop.co.uk expired", ""},
+		// An http monitor: net/http converts an internationalised hostname
+		// itself, so the monitor comes over; a port monitor on one does not,
+		// because the TCP check hands the name to the resolver as written.
+		{"an internationalised name", "", "Kuma warned before the registration of bücher.example expired; " +
+			"a domain monitor takes the name in the xn-- form", "https://bücher.example/"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			res := convert(source{monitors: []row{warned(portRow(row{"hostname": tc.host}))}})
+			r := portRow(row{"hostname": tc.host})
+			if tc.url != "" {
+				r = httpRow(row{"url": tc.url})
+			}
+			res := convert(source{monitors: []row{warned(r)}})
 			if added := domainMonitors(res); len(added) != 0 {
 				t.Errorf("domain monitors = %+v, want none", added)
 			}
 			if len(res.Document.Monitors) != 1 {
-				t.Errorf("the port monitor itself did not come over: %s", notesOf(res))
+				t.Errorf("the monitor itself did not come over: %s", notesOf(res))
 			}
 			var found bool
 			for _, n := range res.Skipped {

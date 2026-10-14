@@ -119,7 +119,13 @@ func TestMonitorTargetWhitespace(t *testing.T) {
 					}
 				})
 			}
-			valid := []string{shape("example.invalid"), shape("localhost"), shape("example.invalid."), shape("münchen.invalid"), shape("192.0.2.1"), shape("[2001:db8::1]")}
+			valid := []string{shape("example.invalid"), shape("localhost"), shape("example.invalid."), shape("xn--mnchen-3ya.invalid"), shape("192.0.2.1"), shape("[2001:db8::1]")}
+			// Letters outside ASCII are not whitespace. net/http converts an
+			// internationalised hostname itself; the other types hand it to
+			// the resolver as written and ask for the xn-- form instead.
+			if typ == "http" {
+				valid = append(valid, shape("münchen.invalid"))
+			}
 			if typ != "http" {
 				valid = append(valid, " \t\u00a0"+shape("example.invalid")+"\u2003\u3000\n")
 			}
