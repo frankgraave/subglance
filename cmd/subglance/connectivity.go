@@ -27,11 +27,18 @@ func newCanary(ctx context.Context, cfg config.Config, db *store.DB, notify *not
 		return nil, fmt.Errorf("connectivity settings: %w", err)
 	}
 	targets := resolved.Targets.Value
-	if !resolved.Enabled.Value && connectivity.ValidateTargets(targets) != nil {
+	if !resolved.Enabled.Value && connectivity.ValidateSavedTargets(targets) != nil {
 		// Only reachable with the check turned off by a flag or variable,
 		// which is the one case Load does not judge the targets: they are
 		// never dialled, and the pin keeps the API from turning it on.
 		targets = connectivity.DefaultTargets
+	} else if err := connectivity.ValidateTargets(targets); err != nil {
+		// A list saved through the settings API before hosts were held
+		// to the resolver's rule. It still runs, so an upgrade does not
+		// stop the server, but that target fails every dial without
+		// sending a packet, and the operator should hear which one.
+		log.Warn("a connectivity target cannot be looked up and will never be reached; change it under Settings",
+			"error", err, "source", resolved.Targets.Source)
 	}
 	if !resolved.Enabled.Value {
 		log.Info("connectivity check is off: a failure of this host's own network will count against every monitor",

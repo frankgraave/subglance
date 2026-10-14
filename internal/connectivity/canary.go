@@ -77,6 +77,8 @@ import (
 	"sync"
 	"time"
 	"unicode"
+
+	"github.com/frankgraave/subglance/internal/checker"
 )
 
 // DefaultTargets are two independent public resolvers, dialled over TCP by
@@ -203,7 +205,7 @@ type Canary struct {
 // is a startup error rather than a canary that always fails and silences
 // every outage.
 func New(opts Options) (*Canary, error) {
-	if err := ValidateTargets(opts.Targets); err != nil {
+	if err := ValidateSavedTargets(opts.Targets); err != nil {
 		return nil, err
 	}
 	if err := ValidateNames(opts.Names); err != nil {
@@ -262,8 +264,28 @@ func ParseTargets(s string) []string {
 	return out
 }
 
-// ValidateTargets reports whether every target is a dialable host:port.
+// ValidateTargets reports whether every target is a dialable host:port whose
+// host the resolver would at least ask about. It judges a list being set, by
+// a flag, a variable or the settings API.
+//
+// The host rule is checker.ResolvableHost, the one a monitor's target is held
+// to. A name that breaks it (two dots in a row, a leading hyphen, 999.1.1.1)
+// fails its dial before a packet is sent, every time. A canary whose every
+// target fails like that calls the host offline in every round and so holds
+// back every network-error incident: the one way this package must never err.
 func ValidateTargets(targets []string) error {
+	return validateTargets(targets, true)
+}
+
+// ValidateSavedTargets is ValidateTargets without the host rule. A list saved
+// through the settings API before the rule existed is read back with it, so
+// an upgrade cannot stop the server from starting; such a list still runs,
+// and the startup log says which target cannot be looked up.
+func ValidateSavedTargets(targets []string) error {
+	return validateTargets(targets, false)
+}
+
+func validateTargets(targets []string, resolvable bool) error {
 	if len(targets) == 0 {
 		return errors.New("no connectivity targets are set")
 	}
@@ -287,6 +309,11 @@ func ValidateTargets(targets []string) error {
 		if n, err := strconv.Atoi(port); err != nil || n < 1 || n > 65535 {
 			return fmt.Errorf("connectivity target %q: port must be a number from 1 to 65535", t)
 		}
+		if resolvable {
+			if err := checker.ResolvableHost(host); err != nil {
+				return fmt.Errorf("connectivity target %q: %w", t, err)
+			}
+		}
 	}
 	return nil
 }
@@ -297,7 +324,11 @@ func ValidateTargets(targets []string) error {
 //
 // An address is refused rather than accepted: looking one up never asks the
 // resolver anything, so it would always answer and the round could never
-// find the resolver down.
+// find the resolver down. A name the resolver refuses without asking is
+// refused for the same reason, by checker.ResolvableHost: 999.1.1.1 fails as
+// "no such host", which reads as an answer, so the round could never find the
+// resolver down; x.onion fails as no answer at all, so the round would find
+// it down in every round and hold back every DNS failure.
 func ValidateNames(names []string) error {
 	if len(names) > MaxTargets {
 		return fmt.Errorf("%d connectivity names are set; at most %d are allowed", len(names), MaxTargets)
@@ -306,39 +337,11 @@ func ValidateNames(names []string) error {
 		if _, err := netip.ParseAddr(n); err == nil {
 			return fmt.Errorf("connectivity name %q is an address; the resolver check needs a host name to look up", n)
 		}
-		if !hostName(n) {
-			return fmt.Errorf("connectivity name %q is not a host name", n)
+		if err := checker.ResolvableHost(n); err != nil {
+			return fmt.Errorf("connectivity name %q is not a host name the resolver can look up: %w", n, err)
 		}
 	}
 	return nil
-}
-
-// hostName reports whether s is a host name: dot-separated labels of letters,
-// digits, hyphens and underscores, none starting or ending with a hyphen, at
-// most 253 characters, with an optional final dot.
-func hostName(s string) bool {
-	s = strings.TrimSuffix(s, ".")
-	if s == "" || len(s) > 253 {
-		return false
-	}
-	for _, label := range strings.Split(s, ".") {
-		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
-			return false
-		}
-		if strings.ContainsFunc(label, notLabelRune) {
-			return false
-		}
-	}
-	return true
-}
-
-// notLabelRune reports whether r cannot appear in a host name's label.
-func notLabelRune(r rune) bool {
-	switch {
-	case 'a' <= r && r <= 'z', 'A' <= r && r <= 'Z', '0' <= r && r <= '9', r == '-', r == '_':
-		return false
-	}
-	return true
 }
 
 // Targets returns the configured addresses.
@@ -378,7 +381,7 @@ func (c *Canary) Settings() Settings {
 // the same settings again changes nothing, so an unrelated save cannot cut an
 // episode short.
 func (c *Canary) Configure(s Settings) error {
-	if err := ValidateTargets(s.Targets); err != nil {
+	if err := ValidateSavedTargets(s.Targets); err != nil {
 		return err
 	}
 	c.mu.Lock()

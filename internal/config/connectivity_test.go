@@ -64,7 +64,7 @@ func TestConnectivityCheckSources(t *testing.T) {
 // A mistyped target is a startup error. A canary that can never connect would
 // call the host offline during every real outage and hide all of them.
 func TestConnectivityTargetsAreValidated(t *testing.T) {
-	for _, bad := range []string{"gateway", "gateway:dns", ",", "gateway:0"} {
+	for _, bad := range []string{"gateway", "gateway:dns", ",", "gateway:0", "exa..mple.com:443", "999.1.1.1:53"} {
 		t.Run(bad, func(t *testing.T) {
 			t.Setenv("SUBGLANCE_CONNECTIVITY_TARGETS", bad)
 			_, err := Load(nil)
@@ -151,7 +151,7 @@ func TestConnectivityNames(t *testing.T) {
 		t.Fatalf("names = %v, want the flag's", got)
 	}
 
-	for _, bad := range []string{"1.1.1.1", "router.lan:53", "-x.example"} {
+	for _, bad := range []string{"1.1.1.1", "router.lan:53", "-x.example", "999.1.1.1", "router.onion"} {
 		t.Setenv("SUBGLANCE_CONNECTIVITY_NAMES", bad)
 		if _, err := Load(nil); err == nil || !strings.Contains(err.Error(), "connectivity-names") {
 			t.Fatalf("Load accepted name %q: %v", bad, err)

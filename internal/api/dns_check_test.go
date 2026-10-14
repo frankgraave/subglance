@@ -89,6 +89,8 @@ func TestCreateDNSMonitorRefusals(t *testing.T) {
 		{"value of the wrong shape", `{"name":"a","type":"dns","target":"example.com","dns":{"record_type":"A","expected":["2001:db8::1"]}}`, "dns.expected"},
 		{"value listed twice", `{"name":"a","type":"dns","target":"example.com","dns":{"record_type":"CNAME","expected":["Shop.example.com","shop.example.com."]}}`, "dns.expected"},
 		{"resolver as a URL", `{"name":"a","type":"dns","target":"example.com","dns":{"record_type":"A","resolver":"https://dns.example/dns-query"}}`, "dns.resolver"},
+		{"resolver with an empty label", `{"name":"a","type":"dns","target":"example.com","dns":{"record_type":"A","resolver":"ns1..example.com"}}`, "dns.resolver"},
+		{"resolver of digits that is no address", `{"name":"a","type":"dns","target":"example.com","dns":{"record_type":"A","resolver":"999.1.1.1:53"}}`, "dns.resolver"},
 		{"dns settings on an http monitor", `{"name":"a","type":"http","target":"https://example.com","dns":{"record_type":"A"}}`, "dns"},
 		{"target is a URL", `{"name":"a","type":"dns","target":"https://example.com/","dns":{"record_type":"A"}}`, "target"},
 		{"target has a port", `{"name":"a","type":"dns","target":"example.com:53","dns":{"record_type":"A"}}`, "target"},

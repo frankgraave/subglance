@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"log/slog"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/frankgraave/subglance/internal/config"
@@ -83,5 +85,42 @@ func TestNewCanaryTakesTheNames(t *testing.T) {
 	// Turned off by a flag, an unusable list is never judged and never used.
 	if got := buildCanary(t, db, "--connectivity-check=false", "--connectivity-names=1.1.1.1").Names(); len(got) != 0 {
 		t.Fatalf("names = %v with the check pinned off and an unusable list", got)
+	}
+}
+
+// A list saved through the settings API before hosts were held to the
+// resolver's rule still starts the server, and the log names the target that
+// will never be reached, so the operator learns why the check cannot work.
+func TestNewCanaryWarnsAboutASavedTargetThatCannotBeLookedUp(t *testing.T) {
+	db := openConnectivityDB(t)
+	if _, err := db.Writer.ExecContext(context.Background(),
+		`INSERT INTO settings (key, value, updated_at) VALUES ('connectivity.targets', 'exa..mple.com:443,gateway:53', 0)`); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var logged bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&logged, nil))
+	c, err := newCanary(context.Background(), cfg, db, notifier.New(notifier.Options{DB: db, Log: log}), log)
+	if err != nil {
+		t.Fatalf("a saved list stopped the canary from being built: %v", err)
+	}
+	if want := []string{"exa..mple.com:443", "gateway:53"}; !reflect.DeepEqual(c.Targets(), want) {
+		t.Fatalf("targets = %v, want the saved %v", c.Targets(), want)
+	}
+	if out := logged.String(); !strings.Contains(out, "level=WARN") || !strings.Contains(out, "exa..mple.com:443") {
+		t.Fatalf("log = %q, want a warning naming the target", out)
+	}
+
+	// A usable saved list starts without a word about it.
+	db = openConnectivityDB(t)
+	logged.Reset()
+	if _, err := newCanary(context.Background(), cfg, db, notifier.New(notifier.Options{DB: db, Log: log}), log); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(logged.String(), "cannot be looked up") {
+		t.Fatalf("log = %q, want no warning for the default targets", logged.String())
 	}
 }

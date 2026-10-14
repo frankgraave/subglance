@@ -175,6 +175,13 @@ func dnsResolver(raw string, m row) (resolver string, notes []string, skip strin
 	if !isAddr && !checker.ValidDNSName(first) {
 		return "", nil, "its resolver " + strconv.Quote(first) + " is not an IP address or a host name"
 	}
+	// The API refuses a resolver the lookup would refuse, so one that came
+	// over would fail the whole file instead of this monitor.
+	if !isAddr {
+		if err := checker.ResolvableHost(first); err != nil {
+			return "", nil, "its resolver cannot be looked up: " + err.Error()
+		}
+	}
 
 	port := m.int("port")
 	if port == 0 {

@@ -315,7 +315,11 @@ type of one name and compares the answer with the values it expects:
   one in `/etc/resolv.conf`. Set one, such as `1.1.1.1` or the zone's own name
   server, to see past a local cache. A resolver set on the monitor is reached
   through the same private-address guard as every target; the host's own is
-  not, because inside a container it is a loopback address.
+  not, because inside a container it is a loopback address. A resolver given
+  by name follows the hostname rule above (an `xn--` form for an
+  internationalised name, no `exa..mple.com`, no `999.1.1.1`), and is refused
+  on `dns.resolver` otherwise: it is looked up before it is asked, and a name
+  the lookup refuses would read as a resolver that never answers.
 
 For A, AAAA, CNAME and MX the answer must hold exactly the expected values, in
 any order: an extra address is what a hijacked zone looks like. For TXT each

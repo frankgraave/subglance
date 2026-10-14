@@ -95,6 +95,13 @@ func validateDNSResolver(resolver string) problem {
 	if host == "" {
 		return bad("dns.resolver has no host")
 	}
+	// A resolver named by a host is looked up before it is asked anything,
+	// so a name the lookup refuses outright (two dots in a row, 999.1.1.1)
+	// would fail every check as "no answer", reading as a resolver outage
+	// rather than as the typo it is.
+	if err := checker.ResolvableHost(host); err != nil {
+		return bad("dns.resolver: " + err.Error())
+	}
 	return problem{}
 }
 

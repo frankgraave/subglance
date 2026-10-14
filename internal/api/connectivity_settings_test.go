@@ -138,6 +138,7 @@ func TestConnectivitySettingsRefuseBadInput(t *testing.T) {
 		"port out of range": `{"targets":["gateway:0"]}`,
 		"blank entry":       `{"targets":["gateway:443","  "]}`,
 		"comma in host":     `{"targets":["gate,way:443"]}`,
+		"unresolvable host": `{"targets":["gateway:443","exa..mple.com:443"]}`,
 		"too many":          `{"targets":[` + strings.Join(tooMany, ",") + `]}`,
 		"unknown field":     `{"targets":["gateway:443"],"interval":5}`,
 		"null list":         `{"targets":null}`,

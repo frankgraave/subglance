@@ -255,6 +255,14 @@ func TestValidateNames(t *testing.T) {
 		{"exämple.org", false},
 		{"has space.example", false},
 		{strings.Repeat("a", 64) + ".example", false},
+		// Names the resolver refuses without asking. 999.1.1.1 fails as
+		// "no such host", which reads as an answer, so the round could
+		// never find the resolver down; an onion name fails as no answer,
+		// so it would find it down every time.
+		{"999.1.1.1", false},
+		{"10.0.1", false},
+		{"canary.onion", false},
+		{"one.one.one.one, canary.onion", false},
 	} {
 		err := ValidateNames(ParseTargets(tc.in))
 		if (err == nil) != tc.ok {

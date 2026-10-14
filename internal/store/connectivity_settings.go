@@ -146,7 +146,9 @@ func storedConnectivity(ctx context.Context, q rowQuerier) (enabled *bool, targe
 	}
 	if raw != nil {
 		targets = connectivity.ParseTargets(*raw)
-		if err := connectivity.ValidateTargets(targets); err != nil {
+		// Shape only: a list saved before the host rule existed must
+		// still load, or an upgrade would stop the server starting.
+		if err := connectivity.ValidateSavedTargets(targets); err != nil {
 			return nil, nil, fmt.Errorf("setting %s: %w", settingConnectivityTargets, err)
 		}
 	}

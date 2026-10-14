@@ -124,6 +124,8 @@ func TestDNSMonitorsThatCannotComeOver(t *testing.T) {
 			"is not an IPv6 address"},
 		{"resolver that is a URL", dnsRow(row{"dns_resolve_server": "https://dns.example/dns-query"}), "is not an IP address or a host name"},
 		{"resolver port out of range", dnsRow(row{"port": int64(70000)}), "is not a port"},
+		{"resolver the lookup refuses", dnsRow(row{"dns_resolve_server": "-ns1.example.com"}), "its resolver cannot be looked up: "},
+		{"resolver of digits that is no address", dnsRow(row{"dns_resolve_server": "999.1.1.1"}), "its resolver cannot be looked up: "},
 		{"A equals with a resolver that cannot come over", dnsRow(row{"dns_resolve_server": "https://dns.example/dns-query",
 			"conditions": cond("equals", "93.184.215.14")}), "is not an IP address or a host name"},
 		{"MX equals with a port out of range", dnsRow(row{"dns_resolve_type": "MX", "port": int64(70000),
