@@ -26,7 +26,10 @@ info:
     name, written as a dotted path inside a nested object (`dns.expected`,
     `json_assertion.path`): for example `interval_s must be a whole number,
     not a string`. A body that is not JSON, is empty, holds a second value
-    or carries an unknown field is refused with 400 and no `field`.
+    or carries an unknown field is refused with 400 and no `field`. When it
+    is not JSON (malformed, empty or cut short), the refusal says where
+    parsing stopped: `invalid JSON at byte 8: the request body ends before
+    the JSON value does`.
   license:
     name: AGPL-3.0-only
     identifier: AGPL-3.0-only
