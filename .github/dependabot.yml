@@ -62,16 +62,17 @@ updates:
     open-pull-requests-limit: 2
     # The golang and node tags are the exact versions ci.yml tests and
     # release.yml ships, and this ecosystem cannot see those two files: left
-    # alone it moved the image to a Go and a Node no CI job ran. A new Go
-    # minor (1.27) or Node major (26) is a deliberate upgrade of all four
-    # files, so it is not proposed here. A Go patch or a release in the same
-    # Node line still is, because that is how a security fix arrives;
+    # alone it moved the image to a Go and a Node no CI job ran. A new minor
+    # or major of either (Go 1.27, Node 24.22 or 26) is a deliberate upgrade
+    # of all four files, so it is not proposed here. A patch of either still
+    # is, because that is how a security fix arrives;
     # internal/buildinfo/toolchain_test.go keeps that PR red until the
-    # workflows carry the same version.
+    # workflows carry the same version. TestDependabotProposesOnlyToolchainPatches
+    # in the same package holds these two rules in place.
     ignore:
       - dependency-name: golang
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
       - dependency-name: node
-        update-types: ["version-update:semver-major"]
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
     commit-message:
       prefix: "chore"
