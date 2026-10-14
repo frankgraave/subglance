@@ -104,6 +104,29 @@ To build the image yourself, `docker build -t subglance .` — the Dockerfile
 builds the dashboard and the binary from source, so Go and Node are only needed
 inside the build.
 
+### Verifying the image
+
+Every image the workflow pushes, `:edge` as much as a version tag, is signed
+with [cosign](https://docs.sigstore.dev/), keylessly, against the identity of
+the workflow that built it, as the release archives are. To check an image
+before running it:
+
+```sh
+cosign verify ghcr.io/frankgraave/subglance:edge \
+  --certificate-identity-regexp '^https://github\.com/frankgraave/subglance/\.github/workflows/docker\.yml@refs/(heads/develop|tags/v.+)$' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+This needs cosign 3 or newer: the signature is stored as a Sigstore bundle
+attached to the image, which older releases do not look for by default.
+
+The pattern accepts the image workflow, `docker.yml`, running on `develop` or
+on a version tag, and nothing else in this repository. To accept only release
+builds, end it at `@refs/tags/v.+$` instead. The signature is on the digest,
+so it covers every tag that points at the same build, and `cosign verify`
+prints that digest: pin it (`ghcr.io/frankgraave/subglance@sha256:…`) to run
+exactly what you verified.
+
 ## With a downloaded binary
 
 Every tagged release publishes one archive per platform on the
