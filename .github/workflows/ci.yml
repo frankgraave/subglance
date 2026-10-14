@@ -36,6 +36,11 @@ env:
   # irreproducible and, worse, makes the vulnerability scan's result depend
   # on the day it ran. Bump this deliberately.
   GO_VERSION: "1.26.9"
+  # The exact Node release.yml builds the shipped dashboard with, and the
+  # Dockerfile's web stage too; a major range here tested a Node that neither
+  # artefact is built with. internal/buildinfo/toolchain_test.go keeps the
+  # three in step.
+  NODE_VERSION: "24.21.0"
 
 jobs:
   test:
@@ -203,7 +208,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: "24"
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: web/package-lock.json
 

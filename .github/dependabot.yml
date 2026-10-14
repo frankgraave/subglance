@@ -60,5 +60,18 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 2
+    # The golang and node tags are the exact versions ci.yml tests and
+    # release.yml ships, and this ecosystem cannot see those two files: left
+    # alone it moved the image to a Go and a Node no CI job ran. A new Go
+    # minor (1.27) or Node major (26) is a deliberate upgrade of all four
+    # files, so it is not proposed here. A Go patch or a release in the same
+    # Node line still is, because that is how a security fix arrives;
+    # internal/buildinfo/toolchain_test.go keeps that PR red until the
+    # workflows carry the same version.
+    ignore:
+      - dependency-name: golang
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "chore"
